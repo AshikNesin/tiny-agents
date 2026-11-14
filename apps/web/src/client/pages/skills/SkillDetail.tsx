@@ -3,7 +3,7 @@
  * reference, so it stays read-only; description and body are editable, bot
  * assignment toggles PATCH immediately.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Trash2 } from "lucide-react";
@@ -27,51 +27,29 @@ import { ErrorState } from "@groot/ui/empty-state";
 import { PageLayout } from "@groot/shell/components/layout/PageLayout";
 import { Section } from "@groot/shell/components/layout/Section";
 import { Streamdown } from "streamdown";
-import type { BotListEntry } from "../../../shared/api/bots";
-import type { Skill } from "../../../shared/api/skills";
-import { skillsApi } from "../../lib/skills-api";
-import { botsApi } from "../../lib/bots-api";
+import { useBotChoices } from "../../queries/bot-choices";
+import { useSetSkill, useSkill, useSkillMutations } from "../../queries/skills";
 import { SkillFileList } from "../../components/skills/SkillFileList";
 import { LeaveGuard } from "../../components/LeaveGuard";
 import { errorMessage } from "../../lib/errors";
 
 export function SkillDetail({ id }: { id: string }) {
   const navigate = useNavigate();
-  const [skill, setSkill] = useState<Skill | null>(null);
-  const [bots, setBots] = useState<BotListEntry[] | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const { data: skill, loadError, refresh } = useSkill(id);
+  const setSkill = useSetSkill(id);
+  const mutations = useSkillMutations();
+  const bots = useBotChoices().data ?? null;
   const [form, setForm] = useState({ description: "", body: "" });
+  // The form takes the skill as it loads for this id; later answers (a
+  // save's) set it themselves, and a bot toggle leaves unsaved edits alone.
+  const [formFor, setFormFor] = useState<string | null>(null);
+  if (skill && formFor !== id) {
+    setFormFor(id);
+    setForm({ description: skill.description, body: skill.body });
+  }
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-
-  const refresh = useCallback(async () => {
-    try {
-      const loaded = await skillsApi.get(id);
-      setSkill(loaded);
-      setForm({ description: loaded.description, body: loaded.body });
-      setLoadError(null);
-    } catch (error) {
-      setLoadError(errorMessage(error, "Failed to load skill"));
-    }
-  }, [id]);
-
-  useEffect(() => {
-    setSkill(null);
-    setLoadError(null);
-    void refresh();
-  }, [refresh]);
-
-  useEffect(() => {
-    let cancelled = false;
-    botsApi
-      .list()
-      .then((list) => !cancelled && setBots(list))
-      .catch(() => !cancelled && setBots([]));
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   if (loadError) {
     return (
@@ -105,9 +83,9 @@ export function SkillDetail({ id }: { id: string }) {
   const save = async () => {
     setSaving(true);
     try {
-      const updated = await skillsApi.update(id, {
-        description: form.description.trim(),
-        body: form.body,
+      const updated = await mutations.update.mutateAsync({
+        id,
+        input: { description: form.description.trim(), body: form.body },
       });
       setSkill(updated);
       setForm({ description: updated.description, body: updated.body });
@@ -126,9 +104,9 @@ export function SkillDetail({ id }: { id: string }) {
       : [...previous, botId];
     setSkill({ ...skill, botIds });
     try {
-      setSkill(await skillsApi.update(id, { botIds }));
+      setSkill(await mutations.update.mutateAsync({ id, input: { botIds } }));
     } catch (error) {
-      setSkill((current) => (current ? { ...current, botIds: previous } : current));
+      setSkill((current) => ({ ...current, botIds: previous }));
       toast.error(errorMessage(error, "Failed to update bots"));
     }
   };
@@ -136,7 +114,7 @@ export function SkillDetail({ id }: { id: string }) {
   const remove = async () => {
     setDeleting(true);
     try {
-      await skillsApi.remove(id);
+      await mutations.remove.mutateAsync(id);
       toast.success("Skill deleted");
       navigate("/skills");
     } catch (error) {

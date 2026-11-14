@@ -10,6 +10,7 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { GrootUIProvider } from "@groot/ui";
 import { CreateSkillDialog } from "@/components/skills/CreateSkillDialog";
 import type { Skill } from "../../../../apps/web/src/shared/api/skills";
+import { AppQueryProvider } from "../../query-provider";
 
 const createMock = vi.fn();
 
@@ -42,9 +43,11 @@ function skill(partial: Partial<Skill> = {}): Skill {
 
 function mount() {
   return render(
-    <GrootUIProvider>
-      <CreateSkillDialog open onOpenChange={() => {}} onCreated={() => {}} />
-    </GrootUIProvider>,
+    <AppQueryProvider>
+      <GrootUIProvider>
+        <CreateSkillDialog open onOpenChange={() => {}} onCreated={() => {}} />
+      </GrootUIProvider>
+    </AppQueryProvider>,
   );
 }
 

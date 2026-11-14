@@ -702,6 +702,32 @@ Data fetching settles on one rule:
 - **Zustand** only for live stores: the bot list with its patches, chat
   sessions and the code list.
 
+Step 5.2 moved Tasks, Routines, Skills and Memory onto React Query
+(`apps/web/src/client/queries/`), keeping what each page did:
+
+| Page         | Reads                                                                                       | While loading / on failure                                                                                             | Refetches                                                                                                                                                          | Optimistic                                                    | Overlapping answers before                                              |
+| ------------ | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Tasks        | `GET /tasks` on mount                                                                       | "Loading…"; "Couldn't load tasks" with Retry, over a loaded list too (tab counts keep it), shown until a retry answers | after add (once the box clears), tick (before the "Task completed" toast; after the error toast when it fails), Undo, delete (after its toast), save (after close) | the tick flips at once; a failed write's refetch puts it back | none guarded: they landed in arrival order                              |
+| Routines     | the routines and 10 recent runs on mount, landing together; the editor's bots on every open | skeleton; "Couldn't load routines" with Retry. The editor keeps the last bot list; a failed read offers none           | after each card action, before its toast (the card's busy state covers both); after save, once the editor closed. Each bot list that lands picks the landing bot   | none                                                          | none guarded                                                            |
+| Skills       | `GET /skills` on mount                                                                      | "Loading…"; "Couldn't load skills" with Retry; search shows once a non-empty list loaded                               | never: a create opens the new skill                                                                                                                                | none                                                          | none guarded                                                            |
+| Skill detail | the skill on mount and on another id (loading again); the bots once per mount               | "Loading…"; "Couldn't load skill" with Back and Retry. A failed bot read shows "No bots yet"                           | never: a save shows its answer and resets the form; a bot tick keeps unsaved edits                                                                                 | the bot tick, replaced by the answer, put back on failure     | the bot read dropped after unmount; an older id's skill could land last |
+| Memory       | the store's `loadBots`, then each bot's memories, landing together; each bot's switch once  | skeleton; "Couldn't load memories" with Retry. A switch that cannot be read shows on                                   | after a switch or delete (before its toast), after save (once closed); the switches are never read again                                                           | the switch flips at once, back on failure                     | `loadBots` keeps the newest list (store); memories in arrival order     |
+
+None refetched on focus, reconnect or a timer, retried a failed read or
+write, or showed a previous visit's data. So each resource overrides the
+shell's defaults (`RESOURCE_QUERY`, `RESOURCE_MUTATION`): `staleTime: 0` and
+`gcTime: 0` (every mount fetches and shows its loading state), no
+`retry` (the app's one mutation retry included), no focus or reconnect
+refetch, and `networkMode: "always"` (offline fails with the offline
+sentence instead of pausing). React Query clears a query's error when a retry
+starts with no data yet, so `useResource` keeps the last failure until an
+answer lands. Writes are plain mutations; the page refetches at the point it
+always did, never earlier, and the skill writes only mark the library stale.
+The one difference is race-only: a refresh cancels a fetch still in flight,
+so the newest request's answer is the one shown, where overlapping requests
+used to land in arrival order. The bot editor's skill list (`BotDialog`)
+stays with the bot editor.
+
 Duplicated client code becomes one piece each:
 
 - Past chats become a read-only mode of the chat session.

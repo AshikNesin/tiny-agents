@@ -5,7 +5,7 @@
  * vs "Added manually"), supersession, and expiry. Deleted rows never come
  * back (the server tombstones the text), so the page's delete is final.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Brain, Pencil, Plus, Search, Trash2 } from "lucide-react";
@@ -33,9 +33,14 @@ import { formatRelativeTime } from "@groot/shell/lib/date.utils";
 import { Switch } from "../../components/ui/switch";
 import type { BotListEntry } from "../../../shared/api/bots";
 import type { MemoryCategory, MemoryRecord } from "../../../shared/api/memories";
-import { botsApi, CATEGORY_ORDER } from "../../lib/bots-api";
+import { CATEGORY_ORDER } from "../../lib/bots-api";
 import { errorMessage } from "../../lib/errors";
-import { useBotsStore } from "../../store/bots";
+import {
+  useMemories,
+  useMemoryEnabled,
+  useMemoryMutations,
+  useSetMemoryEnabled,
+} from "../../queries/memory";
 
 const CATEGORY_LABELS: Record<MemoryCategory, string> = {
   preference: "Preferences",
@@ -64,10 +69,12 @@ function groupMemories(rows: MemoryRecord[]): MemoryGroup[] {
 }
 
 export function MemoryPage() {
-  const [bots, setBots] = useState<BotListEntry[] | null>(null);
-  const [memoryEnabled, setMemoryEnabled] = useState<Record<string, boolean | undefined>>({});
-  const [memories, setMemories] = useState<Record<string, MemoryRecord[]>>({});
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const { data, loadError, refresh } = useMemories();
+  const bots = data?.bots ?? null;
+  const memories = useMemo(() => data?.memories ?? {}, [data]);
+  const memoryEnabled = useMemoryEnabled(bots ?? []);
+  const setMemoryEnabled = useSetMemoryEnabled();
+  const mutations = useMemoryMutations();
   const [query, setQuery] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [editor, setEditor] = useState<{
@@ -77,40 +84,6 @@ export function MemoryPage() {
   } | null>(null);
   const [archivedOpen, setArchivedOpen] = useState<Record<string, boolean>>({});
   const confirm = useConfirm();
-
-  const refresh = useCallback(async () => {
-    try {
-      // One list for the whole app: the store's, reloaded so a bot made
-      // elsewhere shows up here too. loadBots resolves with the list that
-      // actually landed — even when a concurrent load (app mount, the SSE
-      // feed's refresh) superseded this one — so the page never snapshots a
-      // stale store and shows "No bots yet" forever (issue #119).
-      const list = await useBotsStore.getState().loadBots();
-      const lists = await Promise.all(list.map((bot) => botsApi.listMemories(bot.id)));
-      setBots(list);
-      setMemories(Object.fromEntries(list.map((bot, i) => [bot.id, lists[i].memories])));
-      setLoadError(null);
-    } catch (error) {
-      setLoadError(errorMessage(error, "Failed to load memories"));
-    }
-  }, []);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
-
-  // The list endpoint carries no memoryEnabled, so each bot's switch reads
-  // the full bot once and lives in local state afterwards.
-  useEffect(() => {
-    if (bots === null) return;
-    for (const bot of bots) {
-      if (bot.id in memoryEnabled) continue;
-      botsApi
-        .get(bot.id)
-        .then((full) => setMemoryEnabled((prev) => ({ ...prev, [bot.id]: full.memoryEnabled })))
-        .catch(() => setMemoryEnabled((prev) => ({ ...prev, [bot.id]: true })));
-    }
-  }, [bots, memoryEnabled]);
 
   const act = async (id: string, action: () => Promise<unknown>, pending: string) => {
     setBusyId(id + pending);
@@ -127,9 +100,9 @@ export function MemoryPage() {
   };
 
   const toggleMemory = (botId: string, on: boolean) => {
-    setMemoryEnabled((prev) => ({ ...prev, [botId]: on }));
-    void act(botId, () => botsApi.update(botId, { memoryEnabled: on }), "toggle").then((ok) => {
-      if (!ok) setMemoryEnabled((prev) => ({ ...prev, [botId]: !on }));
+    setMemoryEnabled(botId, on);
+    void act(botId, () => mutations.setEnabled.mutateAsync({ botId, on }), "toggle").then((ok) => {
+      if (!ok) setMemoryEnabled(botId, !on);
     });
   };
 
@@ -141,7 +114,7 @@ export function MemoryPage() {
       destructive: true,
     });
     if (!confirmed) return;
-    if (await act(memory.id, () => botsApi.deleteMemory(memory.id), "remove")) {
+    if (await act(memory.id, () => mutations.remove.mutateAsync(memory.id), "remove")) {
       toast.success("Memory deleted");
     }
   };
@@ -470,6 +443,7 @@ function MemoryEditor({
   const [restore, setRestore] = useState(false);
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const { create, update } = useMemoryMutations();
 
   // The form resets per dialog open so a create never inherits the
   // previously edited memory's values.
@@ -496,18 +470,18 @@ function MemoryEditor({
         // leave any automatically captured expiry unchanged.
         const clearExpiry =
           restore && editor.memory.until !== null && new Date(editor.memory.until) <= new Date();
-        await botsApi.updateMemory(editor.memory.id, {
-          text: trimmed,
-          category,
-          ...(clearExpiry ? { until: null } : {}),
-          ...(restore ? { restore: true } : {}),
+        await update.mutateAsync({
+          id: editor.memory.id,
+          input: {
+            text: trimmed,
+            category,
+            ...(clearExpiry ? { until: null } : {}),
+            ...(restore ? { restore: true } : {}),
+          },
         });
         toast.success("Memory saved");
       } else {
-        await botsApi.createMemory(editor.botId, {
-          text: trimmed,
-          category,
-        });
+        await create.mutateAsync({ botId: editor.botId, input: { text: trimmed, category } });
         toast.success("Memory added");
       }
       await onSaved();

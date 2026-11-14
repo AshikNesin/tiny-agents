@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   CalendarDays,
@@ -28,7 +28,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { cn } from "@groot/ui/lib/utils";
 import { PageLayout } from "@groot/shell/components/layout/PageLayout";
 import type { Task, TaskUpdateBody } from "../../../shared/api/tasks";
-import { tasksApi } from "../../lib/tasks-api";
+import { useSetTask, useTaskMutations, useTasks } from "../../queries/tasks";
 import { formatRelativeTime } from "@groot/shell/lib/date.utils";
 import { errorMessage } from "../../lib/errors";
 import { parseQuickTask } from "../../lib/task-quick-add";
@@ -97,24 +97,12 @@ function toLocalInput(iso: string | null): string {
 }
 
 export function Tasks() {
-  const [tasks, setTasks] = useState<Task[] | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const { data: tasks, loadError, refresh } = useTasks();
+  const setTask = useSetTask();
+  const mutations = useTaskMutations();
   const [tab, setTab] = useState<Tab>("today");
   const [editing, setEditing] = useState<Task | null>(null);
   const [quick, setQuick] = useState("");
-
-  const refresh = useCallback(async () => {
-    try {
-      setTasks(await tasksApi.list());
-      setLoadError(null);
-    } catch (error) {
-      setLoadError(errorMessage(error, "Failed to load tasks"));
-    }
-  }, []);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
 
   const todayEnd = useMemo(() => endOfLocalDay(), []);
 
@@ -152,7 +140,7 @@ export function Tasks() {
     // box wins over the tab's default due date (#97).
     const parsed = parseQuickTask(text);
     try {
-      await tasksApi.create({
+      await mutations.create.mutateAsync({
         title: parsed.title,
         ...(parsed.priority ? { priority: parsed.priority } : {}),
         // Otherwise quick-add files the task where it was typed: today's tab
@@ -170,9 +158,9 @@ export function Tasks() {
   const toggle = async (task: Task) => {
     const status = task.status === "done" ? "todo" : "done";
     // Optimistic flip; revert on failure.
-    setTasks((prev) => prev?.map((t) => (t.id === task.id ? { ...t, status } : t)) ?? prev);
+    setTask(task.id, { status });
     try {
-      await tasksApi.update(task.id, { status });
+      await mutations.update.mutateAsync({ id: task.id, input: { status } });
       await refresh();
       // Completing drops the row from the list; make that one tap to take back.
       if (status === "done") {
@@ -181,8 +169,8 @@ export function Tasks() {
           action: {
             label: "Undo",
             onClick: () =>
-              void tasksApi
-                .update(task.id, { status: task.status })
+              void mutations.update
+                .mutateAsync({ id: task.id, input: { status: task.status } })
                 .then(refresh)
                 .catch(() => toast.error("Couldn't undo")),
           },
@@ -196,7 +184,7 @@ export function Tasks() {
 
   const remove = async (id: string) => {
     try {
-      await tasksApi.remove(id);
+      await mutations.remove.mutateAsync(id);
       toast.success("Task deleted");
       await refresh();
     } catch (error) {
@@ -425,6 +413,7 @@ function TaskEditor({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [loadedId, setLoadedId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const { update } = useTaskMutations();
 
   if (task && task.id !== loadedId) {
     setLoadedId(task.id);
@@ -449,7 +438,7 @@ function TaskEditor({
       dueAt: form.due ? new Date(form.due).toISOString() : null,
     };
     try {
-      await tasksApi.update(task.id, input);
+      await update.mutateAsync({ id: task.id, input });
       toast.success("Task saved");
       await onSaved();
     } catch (error) {

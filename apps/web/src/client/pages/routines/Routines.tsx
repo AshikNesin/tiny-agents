@@ -5,7 +5,7 @@
  * A run that could not do its job shows as "Needs attention" in amber, and
  * a routine the app paused after blocked runs says why (issue #87).
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -48,12 +48,11 @@ import { useConfirm } from "@groot/ui/primitives";
 import { PageLayout } from "@groot/shell/components/layout/PageLayout";
 import { Section } from "@groot/shell/components/layout/Section";
 import { Switch } from "../../components/ui/switch";
-import type { BotListEntry } from "../../../shared/api/bots";
 import type { Routine, RoutineRun, Schedule } from "../../../shared/api/routines";
-import { botsApi } from "../../lib/bots-api";
 import { landingBotId } from "../../lib/last-bot";
 import { markdownToPlainText } from "../../lib/plain-text";
-import { routinesApi } from "../../lib/routines-api";
+import { useBotChoices } from "../../queries/bot-choices";
+import { useRoutineMutations, useRoutines } from "../../queries/routines";
 import {
   MAX_INTERVAL_MINUTES,
   MAX_NAME_CHARS,
@@ -100,29 +99,15 @@ function formatDuration(seconds: number): string {
 }
 
 export function Routines() {
-  const [routines, setRoutines] = useState<Routine[] | null>(null);
-  const [runs, setRuns] = useState<RoutineRun[] | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const { data, loadError, refresh } = useRoutines();
+  const routines = data?.routines ?? null;
+  const runs = data?.runs ?? null;
+  const mutations = useRoutineMutations();
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<Routine | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const confirm = useConfirm();
   const navigate = useNavigate();
-
-  const refresh = useCallback(async () => {
-    try {
-      const [list, recent] = await Promise.all([routinesApi.list(), routinesApi.recentRuns(10)]);
-      setRoutines(list);
-      setRuns(recent.runs);
-      setLoadError(null);
-    } catch (error) {
-      setLoadError(errorMessage(error, "Failed to load routines"));
-    }
-  }, []);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
 
   const upcoming = useMemo(
     () =>
@@ -156,14 +141,14 @@ export function Routines() {
       destructive: true,
     });
     if (!confirmed) return;
-    if (await act(routine.id, () => routinesApi.remove(routine.id), "remove")) {
+    if (await act(routine.id, () => mutations.remove.mutateAsync(routine.id), "remove")) {
       toast.success("Routine deleted");
     }
   };
 
   // A run posts into the bot's chat, so point there.
   const runNow = (routine: Routine) =>
-    act(routine.id, () => routinesApi.runNow(routine.id), "run").then((ok) => {
+    act(routine.id, () => mutations.runNow.mutateAsync(routine.id), "run").then((ok) => {
       if (!ok) return;
       toast.success("Run started", {
         description: `${routine.botName} replies in its chat.`,
@@ -235,12 +220,12 @@ export function Routines() {
                   onDelete={() => void remove(routine)}
                   onRunNow={() => void runNow(routine)}
                   onResume={() =>
-                    void act(routine.id, () => routinesApi.resume(routine.id), "resume")
+                    void act(routine.id, () => mutations.resume.mutateAsync(routine.id), "resume")
                   }
                   onToggle={(enabled) =>
                     void act(
                       routine.id,
-                      () => routinesApi.update(routine.id, { enabled }),
+                      () => mutations.update.mutateAsync({ id: routine.id, input: { enabled } }),
                       "toggle",
                     )
                   }
@@ -589,23 +574,21 @@ function RoutineEditor({
   onOpenChange: (open: boolean) => void;
   onSaved: () => void | Promise<void>;
 }) {
-  const [bots, setBots] = useState<BotListEntry[] | null>(null);
+  const choices = useBotChoices({ enabled: open });
+  const bots = choices.data ?? null;
+  const { create, update } = useRoutineMutations();
   const [form, setForm] = useState<EditorForm>(() => defaultForm());
   const [saving, setSaving] = useState(false);
   const [loadedId, setLoadedId] = useState<string | null>(null);
 
+  // Each list that lands while the editor is open (every read is a new
+  // array): a new routine starts on the bot you chat with most recently.
   useEffect(() => {
-    if (!open) return;
-    void botsApi
-      .list()
-      .then((list) => {
-        setBots(list);
-        // A new routine starts on the bot you chat with most recently.
-        const pick = landingBotId(list);
-        if (pick) setForm((current) => (current.botId ? current : { ...current, botId: pick }));
-      })
-      .catch(() => setBots([]));
-  }, [open]);
+    if (!open || !bots) return;
+    const pick = landingBotId(bots);
+    if (pick) setForm((current) => (current.botId ? current : { ...current, botId: pick }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- a list landing picks, not the editor opening on the last one
+  }, [bots]);
 
   useEffect(() => {
     if (!open) return;
@@ -662,8 +645,8 @@ function RoutineEditor({
         prompt: form.prompt.trim(),
         schedule: compiled.schedule,
       };
-      if (routine) await routinesApi.update(routine.id, base);
-      else await routinesApi.create(base);
+      if (routine) await update.mutateAsync({ id: routine.id, input: base });
+      else await create.mutateAsync(base);
       toast.success(routine ? "Routine saved" : "Routine created");
       await onSaved();
     } catch (error) {
