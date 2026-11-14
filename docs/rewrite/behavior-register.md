@@ -28,12 +28,12 @@ Legend:
 | S6  | Auto-review counts a guest's messages as the owner's. YOLO's `ownerTurn` checks the author; the reviewer does not                                                                                     | `reviewer.ts:156`                                              | Fix         | Fix         |
 | S7  | SSRF gaps. `checkPublicUrl` misses CGNAT and IPv4-mapped IPv6, and wrongly blocks `10.example.com`. The browser redirect check runs after the page loads. `http_request` has a DNS-rebinding window   | `public-url.ts:19-31`, `browser-chromium.ts:151`, `web.ts:199` | Fix         | Fix         |
 | S8  | Any account without a `guests` row is an owner. `addGuest` creates the user, then the guest row, in two statements                                                                                    | `people.service.ts:253`                                        | Fix         | Fix         |
-| S9  | A bot can overwrite any skill assigned to it, including a GitHub import shared with other bots                                                                                                        | `skills.store.ts:451`                                          | Preserve    | Preserve    |
-| S10 | The routines toolkit lists every bot's routines and can update or delete any routine id                                                                                                               | `routines.toolkit-store.ts:318-346`                            | Preserve    | Preserve    |
+| S9  | A bot can overwrite any skill assigned to it, including a GitHub import shared with other bots                                                                                                        | `skills.store.ts:60-68`                                        | Preserve    | Preserve    |
+| S10 | The routines toolkit lists every bot's routines and can update or delete any routine id                                                                                                               | `routines.toolkit-store.ts:95-121`                             | Preserve    | Preserve    |
 | S11 | The local vault's KV entry stores its policy digest next to the ciphertext. List and describe paths open with that stored digest, so policy binding holds only on resolve, reveal and admin describe  | `backends/local.ts:53-136`                                     | Fix with Q4 | Fix with Q4 |
-| S12 | Any bot can steer, adopt or read the status of any Code thread id                                                                                                                                     | `code.bots.ts:433-502`                                         | Preserve    | Preserve    |
+| S12 | Any bot can steer, adopt or read the status of any Code thread id                                                                                                                                     | `code.bots.ts:133-191`                                         | Preserve    | Preserve    |
 | S13 | Avatars load from api.dicebear.com with the bot's name in the URL                                                                                                                                     | `components/BotAvatar.tsx:13`                                  | Preserve    | Preserve    |
-| S14 | `resolveAttachments` accepts any existing upload id. Ownership is enforced only by the route guard                                                                                                    | `uploads.attach.ts:504`                                        | Preserve    | Preserve    |
+| S14 | `resolveAttachments` accepts any existing upload id. Ownership is enforced only by the route guard                                                                                                    | `uploads.attach.ts:78`                                         | Preserve    | Preserve    |
 
 ## C: correctness and data
 
@@ -82,3 +82,16 @@ Legend:
 | U12 | A guest briefly renders owner pages until `/people/me` answers. A failed `/people/me` means owner                                             | Preserve | Preserve |
 | U13 | The client never notices harnesses added after boot. A failed `/code/status` sets `[]` for good                                               | Preserve | Preserve |
 | U14 | Deleting a bot or a past chat leaves its conversations orphaned in `agent.db`                                                                 | Preserve | Preserve |
+
+## Found while pinning (Phase 0.5)
+
+Rows the characterization tests turned up. They are pinned with the row they
+came from and preserved unless the owner decides otherwise.
+
+| ID  | Today                                                                                                                                       | Pinned in     | Rec.                                  | Owner |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------- | ------------------------------------- | ----- |
+| C25 | A routine run moved back from `failed` to `awaiting` (C10) keeps the `finishedAt` of its failure                                            | `c10.test.ts` | Preserve                              |       |
+| C26 | A wait removed before its first push is armed still gets that push (`approval.requested`), not only the reminder (wider than C14)           | `c14.test.ts` | Preserve                              |       |
+| C27 | A bot that adopts another bot's Code thread (S12) gets its own hand-off row, so both bots may get the finish                                | `s12.test.ts` | Preserve                              |       |
+| U15 | The turn budget never reads the Delivery ledger: after a restart a turn can send 3 more messages (U6)                                       | `u6.test.ts`  | Preserve                              |       |
+| U16 | `skills.store.ts` says a GitHub import "is never overwritten from a conversation"; that holds only while it is not assigned to the bot (S9) | `s9.test.ts`  | Preserve (fix the comment in Phase 4) |       |
