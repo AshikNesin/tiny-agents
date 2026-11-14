@@ -8,7 +8,7 @@ import type { Context as PiContext } from "@earendil-works/pi-ai";
 import { afterAll, beforeAll, describe } from "vite-plus/test";
 import { fauxAssistantMessage, fauxText, fauxToolCall } from "../../../packages/agent/src/testing";
 import { createTestApp } from "../helpers";
-import { tasks } from "../../../apps/web/src/server/db";
+import { botMessages, tasks } from "../../../apps/web/src/server/db";
 import { startSettledPipeline } from "../../../apps/web/src/server/api/bots/bots.settled";
 import {
   authToken,
@@ -30,11 +30,18 @@ const textOf = (message: PiContext["messages"][number]): string =>
 
 /** The scripted model: one tool round for `/tool NAME {json}`, then an echo. */
 function script(context: PiContext) {
-  const last = context.messages.at(-1);
-  if (last?.role === "toolResult")
-    return fauxAssistantMessage(fauxText(`Tool said: ${textOf(last)}`));
-  const user = [...context.messages].reverse().find((m) => m.role === "user");
-  const text = user ? textOf(user) : "";
+  const messages = context.messages;
+  let userAt = -1;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i]!.role === "user") {
+      userAt = i;
+      break;
+    }
+  }
+  const text = userAt >= 0 ? textOf(messages[userAt]!) : "";
+  // One round per user message: once its tool answered, say what it said.
+  const result = messages.slice(userAt + 1).find((m) => m.role === "toolResult");
+  if (result) return fauxAssistantMessage(fauxText(`Tool said: ${textOf(result)}`));
   const tool = /\/tool (\S+) (\{.*\})\s*$/s.exec(text);
   if (tool) {
     return {
@@ -241,6 +248,90 @@ describe("golden: turns that wait on the owner", () => {
     await r.http("list", "/api/v1/bots");
     await r.http("tasks", "/api/v1/tasks");
     await r.sse("stream", `/api/v1/bots/${bot.id}/stream`, snapshotDone);
+  });
+
+  goldenFlow("queue-steer-and-withdraw-while-waiting", setup, async (r) => {
+    const bot = await r.http("create", "/api/v1/bots", {
+      method: "POST",
+      json: { ...BOT, name: "Busy" },
+    });
+    await r.http("send", `/api/v1/bots/${bot.id}/messages`, {
+      method: "POST",
+      json: { requestId: "golden-busy-0001", text: improve("Water plants") },
+    });
+    await waitFor(bot.id, "an approval waiting", (row) => row.approvals === 1);
+    const send = (name: string, requestId: string, text: string, whenBusy?: string) =>
+      r.http(name, `/api/v1/bots/${bot.id}/messages`, {
+        method: "POST",
+        json: { requestId, text, ...(whenBusy ? { whenBusy } : {}) },
+      });
+    await send("queue a follow-up", "golden-busy-0002", "after that, thanks");
+    await send("queue one to withdraw", "golden-busy-0003", "never mind this");
+    await send("steer", "golden-busy-0004", "also make it weekly", "steer");
+    const frames = await r.sse("stream while busy", `/api/v1/bots/${bot.id}/stream`, snapshotDone);
+    await r.http("withdraw the queued one", `/api/v1/bots/${bot.id}/messages/golden-busy-0003`, {
+      method: "DELETE",
+    });
+    await r.http("approve", `/api/v1/bots/${bot.id}/approvals/${waitingTask(frames)}`, {
+      method: "POST",
+      json: { decision: "approved" },
+    });
+    await waitFor(
+      bot.id,
+      "the follow-up answered",
+      (row) => !row.replying && row.lastMessagePreview === "Echo: after that, thanks",
+    );
+    await r.sse("stream after both runs", `/api/v1/bots/${bot.id}/stream`, snapshotDone);
+    await r.http("withdraw after it ran", `/api/v1/bots/${bot.id}/messages/golden-busy-0002`, {
+      method: "DELETE",
+    });
+  });
+
+  goldenFlow("bot-to-bot-and-mentions", setup, async (r) => {
+    const host = await r.http("create the host", "/api/v1/bots", {
+      method: "POST",
+      json: { ...BOT, name: "Host", toolPermissions: { message_bot: "allow" } },
+    });
+    const helper = await r.http("create the helper", "/api/v1/bots", {
+      method: "POST",
+      json: { ...BOT, name: "Helper" },
+    });
+    await r.http("host messages the helper", `/api/v1/bots/${host.id}/messages`, {
+      method: "POST",
+      json: {
+        requestId: "golden-b2b-00001",
+        text: `/tool message_bot ${JSON.stringify({ to: "Helper", text: "what is 2+2?" })}`,
+      },
+    });
+    await waitFor(
+      helper.id,
+      "the helper answered",
+      (row) => !row.replying && row.lastMessagePreview !== null,
+    );
+    await waitFor(host.id, "the relay answered", (row) =>
+      String(row.lastMessagePreview ?? "").startsWith("Echo: **Reply from Helper:**"),
+    );
+    await r.sse("host chat", `/api/v1/bots/${host.id}/stream`, snapshotDone);
+    await r.sse("helper chat", `/api/v1/bots/${helper.id}/stream`, snapshotDone);
+
+    await r.http("owner mentions the helper", `/api/v1/bots/${host.id}/messages`, {
+      method: "POST",
+      json: { requestId: "golden-b2b-00002", text: "@Helper say hi", mentions: [helper.id] },
+    });
+    await waitFor(
+      helper.id,
+      "the helper answered the mention",
+      (row) => String(row.lastMessagePreview ?? "").includes("say hi") && !row.replying,
+    );
+    await until(async () => {
+      const { db } = await import("../../../apps/web/src/server/db");
+      const rows = await db.select().from(botMessages);
+      return rows.length === 2 && rows.every((row) => row.answeredAt !== null);
+    }, "both deliveries answered");
+    await waitFor(host.id, "the host settled", (row) => !row.replying);
+    await r.sse("host chat after the mention", `/api/v1/bots/${host.id}/stream`, snapshotDone);
+    await r.http("list", "/api/v1/bots");
+    await r.db("deliveries", [botMessages]);
   });
   void settledWith;
 });

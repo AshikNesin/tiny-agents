@@ -1,0 +1,275 @@
+[
+  {
+    "http": "create",
+    "method": "POST",
+    "path": "/api/v1/bots",
+    "status": 201,
+    "body": {
+      "success": true,
+      "data": {
+        "id": "<id1>",
+        "name": "Busy",
+        "description": "",
+        "systemPrompt": "Be brief.",
+        "modelId": "test-model",
+        "conversationId": "99",
+        "chatStartedAt": "2026-11-06T06:30:00.000Z",
+        "lastReadAt": null,
+        "lastActivityAt": "2026-11-06T06:30:00.000Z",
+        "lastMessagePreview": null,
+        "toolPermissions": {},
+        "memoryEnabled": true,
+        "autoReview": false,
+        "yoloByDefault": false,
+        "memoryCapturedThrough": null,
+        "pinnedAt": null,
+        "browserProfile": "shared",
+        "createdAt": "2026-11-06T06:30:00.000Z",
+        "updatedAt": "2026-11-06T06:30:00.000Z",
+        "skillIds": [],
+        "connectionIds": [],
+        "connectionCapabilities": [],
+        "guestIds": []
+      }
+    }
+  },
+  {
+    "http": "send",
+    "method": "POST",
+    "path": "/api/v1/bots/<id1>/messages",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "submitted": true
+      }
+    }
+  },
+  {
+    "http": "queue a follow-up",
+    "method": "POST",
+    "path": "/api/v1/bots/<id1>/messages",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "submitted": true
+      }
+    }
+  },
+  {
+    "http": "queue one to withdraw",
+    "method": "POST",
+    "path": "/api/v1/bots/<id1>/messages",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "submitted": true
+      }
+    }
+  },
+  {
+    "http": "steer",
+    "method": "POST",
+    "path": "/api/v1/bots/<id1>/messages",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "submitted": true
+      }
+    }
+  },
+  {
+    "sse": "stream while busy",
+    "path": "/api/v1/bots/<id1>/stream",
+    "frames": [
+      {
+        "type": "snapshot",
+        "state": {
+          "messages": [
+            {
+              "id": "e106",
+              "role": "user",
+              "text": "/tool create_task {\"title\":\"Water plants\"}",
+              "requestId": "golden-busy-0001",
+              "status": "done",
+              "createdAt": 1793946600000
+            },
+            {
+              "id": "e110",
+              "role": "assistant",
+              "text": "",
+              "toolCalls": [
+                {
+                  "id": "<id2>",
+                  "name": "create_task",
+                  "args": {
+                    "title": "Water plants"
+                  },
+                  "status": "awaiting_approval",
+                  "taskId": 111
+                }
+              ],
+              "status": "done",
+              "model": "test-model",
+              "createdAt": 1793946600000
+            }
+          ],
+          "busy": true,
+          "queued": [
+            {
+              "requestId": "golden-busy-0002",
+              "mode": "followUp",
+              "text": "after that, thanks"
+            },
+            {
+              "requestId": "golden-busy-0003",
+              "mode": "followUp",
+              "text": "never mind this"
+            },
+            {
+              "requestId": "golden-busy-0004",
+              "mode": "steer",
+              "text": "also make it weekly"
+            }
+          ],
+          "hasMore": false,
+          "cursor": "e106"
+        }
+      },
+      {
+        "type": "routine-runs",
+        "runs": []
+      },
+      {
+        "type": "yolo",
+        "on": false
+      }
+    ]
+  },
+  {
+    "http": "withdraw the queued one",
+    "method": "DELETE",
+    "path": "/api/v1/bots/<id1>/messages/golden-busy-0003",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "withdrawn": true
+      }
+    }
+  },
+  {
+    "http": "approve",
+    "method": "POST",
+    "path": "/api/v1/bots/<id1>/approvals/111",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "decided": "approved"
+      }
+    }
+  },
+  {
+    "sse": "stream after both runs",
+    "path": "/api/v1/bots/<id1>/stream",
+    "frames": [
+      {
+        "type": "snapshot",
+        "state": {
+          "messages": [
+            {
+              "id": "e106",
+              "role": "user",
+              "text": "/tool create_task {\"title\":\"Water plants\"}",
+              "requestId": "golden-busy-0001",
+              "status": "done",
+              "createdAt": 1793946600000
+            },
+            {
+              "id": "e110",
+              "role": "assistant",
+              "text": "",
+              "toolCalls": [
+                {
+                  "id": "<id2>",
+                  "name": "create_task",
+                  "args": {
+                    "title": "Water plants"
+                  },
+                  "status": "done",
+                  "output": "Created task [<id3>] Water plants · medium · todo",
+                  "durationMs": "<ms>",
+                  "approval": "approved"
+                }
+              ],
+              "status": "done",
+              "model": "test-model",
+              "createdAt": 1793946600000
+            },
+            {
+              "id": "e118",
+              "role": "user",
+              "text": "also make it weekly",
+              "requestId": "golden-busy-0004",
+              "status": "done",
+              "createdAt": 1793946600000
+            },
+            {
+              "id": "e120",
+              "role": "assistant",
+              "text": "Echo: also make it weekly",
+              "status": "done",
+              "model": "test-model",
+              "createdAt": 1793946600000
+            },
+            {
+              "id": "e121",
+              "role": "user",
+              "text": "after that, thanks",
+              "requestId": "golden-busy-0002",
+              "status": "done",
+              "createdAt": 1793946600000
+            },
+            {
+              "id": "e123",
+              "role": "assistant",
+              "text": "Echo: after that, thanks",
+              "status": "done",
+              "model": "test-model",
+              "createdAt": 1793946600000
+            }
+          ],
+          "busy": false,
+          "queued": [],
+          "hasMore": false,
+          "cursor": "e106"
+        }
+      },
+      {
+        "type": "routine-runs",
+        "runs": []
+      },
+      {
+        "type": "yolo",
+        "on": false
+      }
+    ]
+  },
+  {
+    "http": "withdraw after it ran",
+    "method": "DELETE",
+    "path": "/api/v1/bots/<id1>/messages/golden-busy-0002",
+    "status": 409,
+    "body": {
+      "success": false,
+      "error": {
+        "code": "CONFLICT",
+        "message": "Message is no longer queued"
+      }
+    }
+  }
+]
