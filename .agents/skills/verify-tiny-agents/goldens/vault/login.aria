@@ -1,0 +1,85 @@
+# http://localhost:<port>/vault/items/verify-login-fixed
+- complementary "Sidebar":
+  - link "tiny-agents":
+    - /url: /chats
+  - button "Search"
+  - button "Collapse sidebar"
+  - navigation "Primary":
+    - link "Tasks":
+      - /url: /tasks
+    - link "Terminal":
+      - /url: /terminal
+    - link "Computer":
+      - /url: /computer
+    - link "Browser":
+      - /url: /browser
+  - region "Bots":
+    - heading "Bots" [level=2]
+    - button "New bot"
+    - paragraph: No bots yet.
+  - button "Account and navigation": D Demo User
+- main:
+  - heading "Verify login fixed" [level=1]
+  - text: Local Login · verify-login-fixed
+  - heading "Values" [level=2]
+  - paragraph: Values never leave the vault except to you, here, or into the page or request a bot is approved for.
+  - list:
+    - listitem:
+      - paragraph: Username
+      - paragraph: user-fixed
+      - button "Reveal"
+      - button "Copy"
+      - button "Edit"
+    - listitem:
+      - paragraph: Password
+      - paragraph: ••••••••••
+      - button "Reveal"
+      - button "Copy"
+      - button "Edit"
+  - button "One-time password"
+  - button "Notes"
+  - heading "Who may use it" [level=2]
+  - text: "On"
+  - switch "Let bots use this item" [checked]
+  - text: Handle
+  - textbox "Handle":
+    - /placeholder: github
+    - text: verify-login-fixed
+  - paragraph: The only name bots see, e.g. github. Lowercase letters, digits and dashes.
+  - text: Fills only on
+  - textbox "Fills only on":
+    - /placeholder: https://github.com
+    - text: https://login.example.com
+  - paragraph: Exact origins, one per line (https://github.com). Subdomains don't count. Left empty on a new item, the item's websites are used.
+  - text: Approval
+  - combobox "Approval": Ask once per chat
+  - paragraph: Approvals expire after 10 minutes.
+  - paragraph: Use in routines
+  - paragraph: Allow it in routines and messages from other bots (you're still asked when it needs approval).
+  - switch "Use in routines"
+  - text: Bots
+  - paragraph: Which bots may use it.
+  - checkbox "Every bot" [checked]
+  - text: Every bot Tools
+  - textbox "Tools":
+    - /placeholder: browser_fill_secret, browser_enter_code, computer_fill_secret
+  - paragraph: "Empty: browser_fill_secret, browser_enter_code, computer_fill_secret. Add run_command to pass it to sandbox commands as an env var (every use asks; the command can reach only the hosts above)."
+  - text: When to use
+  - textbox "When to use"
+  - paragraph: A hint for the bot, e.g. “for the work GitHub account”.
+  - button "Save"
+  - heading "Activity" [level=2]
+  - text: "1"
+  - list:
+    - listitem:
+      - paragraph: created · vault_ui
+      - paragraph: local
+      - text: a few seconds ago
+  - heading "Danger zone" [level=2]
+  - paragraph: Delete item
+  - paragraph: Unlink it (bots lose it, the value stays in the backend) or delete it there too.
+  - button "Delete"
+- region "Notifications alt+T":
+  - list:
+    - listitem: Saved
+    - listitem: Saved

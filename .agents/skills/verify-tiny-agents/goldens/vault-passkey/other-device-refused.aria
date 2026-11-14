@@ -1,0 +1,12 @@
+# http://localhost:<port>/vault/items/verify-pk-key-fixed
+- region "Notifications alt+T":
+  - list:
+    - listitem: "The operation either timed out or was not allowed. See: https://www.w3.org/TR/webauthn-2/#sctn-privacy-considerations-client."
+- dialog "Confirm it's you":
+  - heading "Confirm it's you" [level=2]
+  - paragraph: Changing or revealing vault items needs your password again. You stay confirmed for 5 minutes.
+  - text: Password
+  - textbox "Password"
+  - button "Use a passkey"
+  - button "Confirm" [disabled]
+  - button "Close"

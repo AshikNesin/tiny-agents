@@ -10,6 +10,7 @@ import { stripAttachmentNotes } from "@tiny-agents/agent";
 import { stripPeerEnvelope } from "@tiny-agents/agent/peer-envelope";
 import { db, botChats } from "../../db";
 import type { SideCaller } from "./side-call";
+import { app } from "../../app-root";
 
 /** Longest stored title; also the provisional (first message) title's cap. */
 export const CHAT_TITLE_MAX = 80;
@@ -29,14 +30,12 @@ export interface ChatTitler {
   sideCaller: SideCaller;
 }
 
-let titler: ChatTitler | undefined;
-
 /**
  * Boot wiring (entry.node.ts), so the Past-chat recorder can name chats
  * without carrying the port. Unset (tests, faux mode) means no title calls.
  */
 export function setChatTitler(next: ChatTitler | undefined): void {
-  titler = next;
+  app().chatTitler = next;
 }
 
 function oneLine(text: string): string {
@@ -96,7 +95,7 @@ export function cleanTitle(raw: string): string | null {
 export async function titlePastChat(
   chatId: string,
   input: { botName: string; botModelId: string | null; messages: ReadonlyArray<TitleMessage> },
-  deps: ChatTitler | undefined = titler,
+  deps: ChatTitler | undefined = app().chatTitler,
 ): Promise<void> {
   if (!deps) return;
   try {

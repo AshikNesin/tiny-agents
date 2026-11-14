@@ -1,0 +1,9 @@
+# http://localhost:<port>/chats/<id1>
+- region "Notifications alt+T"
+- dialog "notes-fixed.txt":
+  - heading "notes-fixed.txt" [level=2]
+  - paragraph: Extracted text only. Download the original to open it.
+  - text: alpha line fixed beta line
+  - link "Download":
+    - /url: /api/v1/uploads/<id2>/content
+  - button "Close"

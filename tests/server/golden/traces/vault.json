@@ -1,0 +1,585 @@
+[
+  {
+    "http": "overview",
+    "method": "GET",
+    "path": "/api/v1/vault",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "backends": [
+          {
+            "name": "local",
+            "configured": true,
+            "read": {
+              "state": "ready",
+              "detail": "Encrypted with SECRETS_KEY"
+            },
+            "write": {
+              "state": "ready",
+              "detail": "Encrypted with SECRETS_KEY"
+            },
+            "capabilities": {
+              "create": true,
+              "update": true,
+              "delete": true,
+              "reveal": true
+            }
+          }
+        ],
+        "primaryBackend": "local",
+        "items": [],
+        "unlinked": [],
+        "kindDefaults": {
+          "login": ["browser_fill_secret", "browser_enter_code", "computer_fill_secret"],
+          "card": ["browser_fill_secret"],
+          "identity": [],
+          "api_key": ["http_request", "mcp"]
+        }
+      }
+    }
+  },
+  {
+    "http": "step up with a wrong password",
+    "method": "POST",
+    "path": "/api/v1/vault/step-up",
+    "status": 401,
+    "body": {
+      "success": false,
+      "error": {
+        "code": "UNAUTHORIZED",
+        "message": "Wrong password"
+      }
+    }
+  },
+  {
+    "http": "create without step-up",
+    "method": "POST",
+    "path": "/api/v1/vault/items",
+    "status": 403,
+    "body": {
+      "success": false,
+      "error": {
+        "code": "FORBIDDEN",
+        "message": "Confirm it's you first (step-up required)",
+        "details": {
+          "code": "step_up_required"
+        }
+      }
+    }
+  },
+  {
+    "http": "create",
+    "method": "POST",
+    "path": "/api/v1/vault/items",
+    "status": 201,
+    "body": {
+      "success": true,
+      "data": {
+        "id": "<id1>",
+        "handle": "bank",
+        "kind": "login",
+        "backend": "local",
+        "audience": "bots",
+        "label": "Bank",
+        "username": "me@example.com",
+        "origins": ["https://bank.example.com"],
+        "hosts": [],
+        "inject": null,
+        "tools": [],
+        "effectiveTools": ["browser_fill_secret", "browser_enter_code", "computer_fill_secret"],
+        "bots": null,
+        "approval": "per_conversation",
+        "effectiveApproval": "per_conversation",
+        "allowUnattended": false,
+        "whenToUse": null,
+        "card": null,
+        "hasTotp": false,
+        "disabled": false,
+        "field": null,
+        "lastUsedAt": null,
+        "lastUsedBy": null,
+        "createdAt": "2026-11-06T06:30:00.000Z",
+        "updatedAt": "2026-11-06T06:30:00.000Z"
+      }
+    }
+  },
+  {
+    "http": "create the same handle",
+    "method": "POST",
+    "path": "/api/v1/vault/items",
+    "status": 409,
+    "body": {
+      "success": false,
+      "error": {
+        "code": "CONFLICT",
+        "message": "Handle \"bank\" is taken"
+      }
+    }
+  },
+  {
+    "http": "overview after",
+    "method": "GET",
+    "path": "/api/v1/vault",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "backends": [
+          {
+            "name": "local",
+            "configured": true,
+            "read": {
+              "state": "ready",
+              "detail": "Encrypted with SECRETS_KEY"
+            },
+            "write": {
+              "state": "ready",
+              "detail": "Encrypted with SECRETS_KEY"
+            },
+            "capabilities": {
+              "create": true,
+              "update": true,
+              "delete": true,
+              "reveal": true
+            }
+          }
+        ],
+        "primaryBackend": "local",
+        "items": [
+          {
+            "id": "<id1>",
+            "handle": "bank",
+            "kind": "login",
+            "backend": "local",
+            "audience": "bots",
+            "label": "Bank",
+            "username": "me@example.com",
+            "origins": ["https://bank.example.com"],
+            "hosts": [],
+            "inject": null,
+            "tools": [],
+            "effectiveTools": ["browser_fill_secret", "browser_enter_code", "computer_fill_secret"],
+            "bots": null,
+            "approval": "per_conversation",
+            "effectiveApproval": "per_conversation",
+            "allowUnattended": false,
+            "whenToUse": null,
+            "card": null,
+            "hasTotp": false,
+            "disabled": false,
+            "field": null,
+            "lastUsedAt": null,
+            "lastUsedBy": null,
+            "createdAt": "2026-11-06T06:30:00.000Z",
+            "updatedAt": "2026-11-06T06:30:00.000Z"
+          }
+        ],
+        "unlinked": [],
+        "kindDefaults": {
+          "login": ["browser_fill_secret", "browser_enter_code", "computer_fill_secret"],
+          "card": ["browser_fill_secret"],
+          "identity": [],
+          "api_key": ["http_request", "mcp"]
+        }
+      }
+    }
+  },
+  {
+    "http": "detail",
+    "method": "GET",
+    "path": "/api/v1/vault/items/bank",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "item": {
+          "id": "<id1>",
+          "handle": "bank",
+          "kind": "login",
+          "backend": "local",
+          "audience": "bots",
+          "label": "Bank",
+          "username": "me@example.com",
+          "origins": ["https://bank.example.com"],
+          "hosts": [],
+          "inject": null,
+          "tools": [],
+          "effectiveTools": ["browser_fill_secret", "browser_enter_code", "computer_fill_secret"],
+          "bots": null,
+          "approval": "per_conversation",
+          "effectiveApproval": "per_conversation",
+          "allowUnattended": false,
+          "whenToUse": null,
+          "card": null,
+          "hasTotp": false,
+          "disabled": false,
+          "field": null,
+          "lastUsedAt": null,
+          "lastUsedBy": null,
+          "createdAt": "2026-11-06T06:30:00.000Z",
+          "updatedAt": "2026-11-06T06:30:00.000Z"
+        },
+        "title": "Bank",
+        "urls": ["https://bank.example.com/login"],
+        "fields": ["username", "password"],
+        "stale": false,
+        "capabilities": {
+          "create": true,
+          "update": true,
+          "delete": true,
+          "reveal": true
+        },
+        "events": [
+          {
+            "id": "<id2>",
+            "at": "2026-11-06T06:30:00.000Z",
+            "itemId": "<id1>",
+            "handle": "bank",
+            "botId": null,
+            "conversationId": null,
+            "taskId": null,
+            "tool": "vault_ui",
+            "target": "local",
+            "outcome": "created",
+            "reason": null,
+            "unattended": false
+          }
+        ]
+      }
+    }
+  },
+  {
+    "http": "reveal",
+    "method": "POST",
+    "path": "/api/v1/vault/items/bank/reveal",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "field": "password",
+        "value": "hunter2"
+      }
+    }
+  },
+  {
+    "http": "change the password",
+    "method": "PATCH",
+    "path": "/api/v1/vault/items/bank",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "id": "<id1>",
+        "handle": "bank",
+        "kind": "login",
+        "backend": "local",
+        "audience": "bots",
+        "label": "Bank",
+        "username": "me@example.com",
+        "origins": ["https://bank.example.com"],
+        "hosts": [],
+        "inject": null,
+        "tools": [],
+        "effectiveTools": ["browser_fill_secret", "browser_enter_code", "computer_fill_secret"],
+        "bots": null,
+        "approval": "per_conversation",
+        "effectiveApproval": "per_conversation",
+        "allowUnattended": false,
+        "whenToUse": null,
+        "card": null,
+        "hasTotp": false,
+        "disabled": false,
+        "field": null,
+        "lastUsedAt": null,
+        "lastUsedBy": null,
+        "createdAt": "2026-11-06T06:30:00.000Z",
+        "updatedAt": "2026-11-06T06:30:00.000Z"
+      }
+    }
+  },
+  {
+    "http": "tighten the policy",
+    "method": "PUT",
+    "path": "/api/v1/vault/items/bank",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "id": "<id1>",
+        "handle": "bank",
+        "kind": "login",
+        "backend": "local",
+        "audience": "bots",
+        "label": "Bank",
+        "username": "me@example.com",
+        "origins": [],
+        "hosts": [],
+        "inject": null,
+        "tools": [],
+        "effectiveTools": ["browser_fill_secret", "browser_enter_code", "computer_fill_secret"],
+        "bots": null,
+        "approval": "every_use",
+        "effectiveApproval": "every_use",
+        "allowUnattended": false,
+        "whenToUse": null,
+        "card": null,
+        "hasTotp": false,
+        "disabled": false,
+        "field": null,
+        "lastUsedAt": null,
+        "lastUsedBy": null,
+        "createdAt": "2026-11-06T06:30:00.000Z",
+        "updatedAt": "2026-11-06T06:30:00.000Z"
+      }
+    }
+  },
+  {
+    "http": "detail after",
+    "method": "GET",
+    "path": "/api/v1/vault/items/bank",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "item": {
+          "id": "<id1>",
+          "handle": "bank",
+          "kind": "login",
+          "backend": "local",
+          "audience": "bots",
+          "label": "Bank",
+          "username": "me@example.com",
+          "origins": [],
+          "hosts": [],
+          "inject": null,
+          "tools": [],
+          "effectiveTools": ["browser_fill_secret", "browser_enter_code", "computer_fill_secret"],
+          "bots": null,
+          "approval": "every_use",
+          "effectiveApproval": "every_use",
+          "allowUnattended": false,
+          "whenToUse": null,
+          "card": null,
+          "hasTotp": false,
+          "disabled": false,
+          "field": null,
+          "lastUsedAt": null,
+          "lastUsedBy": null,
+          "createdAt": "2026-11-06T06:30:00.000Z",
+          "updatedAt": "2026-11-06T06:30:00.000Z"
+        },
+        "title": "Bank",
+        "urls": ["https://bank.example.com/login"],
+        "fields": ["username", "password"],
+        "stale": false,
+        "capabilities": {
+          "create": true,
+          "update": true,
+          "delete": true,
+          "reveal": true
+        },
+        "events": [
+          {
+            "id": "<id3>",
+            "at": "2026-11-06T06:30:00.000Z",
+            "itemId": "<id1>",
+            "handle": "bank",
+            "botId": null,
+            "conversationId": null,
+            "taskId": null,
+            "tool": "vault_ui",
+            "target": "local",
+            "outcome": "updated",
+            "reason": "policy",
+            "unattended": false
+          },
+          {
+            "id": "<id4>",
+            "at": "2026-11-06T06:30:00.000Z",
+            "itemId": "<id1>",
+            "handle": "bank",
+            "botId": null,
+            "conversationId": null,
+            "taskId": null,
+            "tool": "vault_ui",
+            "target": "local",
+            "outcome": "updated",
+            "reason": "values: password",
+            "unattended": false
+          },
+          {
+            "id": "<id5>",
+            "at": "2026-11-06T06:30:00.000Z",
+            "itemId": "<id1>",
+            "handle": "bank",
+            "botId": null,
+            "conversationId": null,
+            "taskId": null,
+            "tool": "vault_ui",
+            "target": "password",
+            "outcome": "revealed",
+            "reason": null,
+            "unattended": false
+          },
+          {
+            "id": "<id2>",
+            "at": "2026-11-06T06:30:00.000Z",
+            "itemId": "<id1>",
+            "handle": "bank",
+            "botId": null,
+            "conversationId": null,
+            "taskId": null,
+            "tool": "vault_ui",
+            "target": "local",
+            "outcome": "created",
+            "reason": null,
+            "unattended": false
+          }
+        ]
+      }
+    }
+  },
+  {
+    "db": "vault rows",
+    "tables": {
+      "vault_items": [
+        {
+          "id": "<id1>",
+          "handle": "bank",
+          "kind": "login",
+          "backend": "local",
+          "audience": "bots",
+          "field": null,
+          "label": "Bank",
+          "username": "me@example.com",
+          "originsJson": "[]",
+          "hostsJson": "[]",
+          "injectJson": null,
+          "toolsJson": "[]",
+          "botsJson": null,
+          "approval": "every_use",
+          "allowUnattended": false,
+          "whenToUse": null,
+          "cardMetaJson": null,
+          "hasTotp": false,
+          "disabled": false,
+          "lastUsedAt": null,
+          "lastUsedBy": null,
+          "createdAt": "2026-11-06T06:30:00.000Z",
+          "updatedAt": "2026-11-06T06:30:00.000Z"
+        }
+      ],
+      "vault_audit_events": [
+        {
+          "id": "<id2>",
+          "at": "2026-11-06T06:30:00.000Z",
+          "itemId": "<id1>",
+          "handle": "bank",
+          "botId": null,
+          "conversationId": null,
+          "taskId": null,
+          "tool": "vault_ui",
+          "target": "local",
+          "outcome": "created",
+          "reason": null,
+          "unattended": false
+        },
+        {
+          "id": "<id5>",
+          "at": "2026-11-06T06:30:00.000Z",
+          "itemId": "<id1>",
+          "handle": "bank",
+          "botId": null,
+          "conversationId": null,
+          "taskId": null,
+          "tool": "vault_ui",
+          "target": "password",
+          "outcome": "revealed",
+          "reason": null,
+          "unattended": false
+        },
+        {
+          "id": "<id4>",
+          "at": "2026-11-06T06:30:00.000Z",
+          "itemId": "<id1>",
+          "handle": "bank",
+          "botId": null,
+          "conversationId": null,
+          "taskId": null,
+          "tool": "vault_ui",
+          "target": "local",
+          "outcome": "updated",
+          "reason": "values: password",
+          "unattended": false
+        },
+        {
+          "id": "<id3>",
+          "at": "2026-11-06T06:30:00.000Z",
+          "itemId": "<id1>",
+          "handle": "bank",
+          "botId": null,
+          "conversationId": null,
+          "taskId": null,
+          "tool": "vault_ui",
+          "target": "local",
+          "outcome": "updated",
+          "reason": "policy",
+          "unattended": false
+        }
+      ]
+    }
+  },
+  {
+    "http": "delete and purge",
+    "method": "DELETE",
+    "path": "/api/v1/vault/items/bank?purge=true",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "deleted": true
+      }
+    }
+  },
+  {
+    "http": "overview at the end",
+    "method": "GET",
+    "path": "/api/v1/vault",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "backends": [
+          {
+            "name": "local",
+            "configured": true,
+            "read": {
+              "state": "ready",
+              "detail": "Encrypted with SECRETS_KEY"
+            },
+            "write": {
+              "state": "ready",
+              "detail": "Encrypted with SECRETS_KEY"
+            },
+            "capabilities": {
+              "create": true,
+              "update": true,
+              "delete": true,
+              "reveal": true
+            }
+          }
+        ],
+        "primaryBackend": "local",
+        "items": [],
+        "unlinked": [],
+        "kindDefaults": {
+          "login": ["browser_fill_secret", "browser_enter_code", "computer_fill_secret"],
+          "card": ["browser_fill_secret"],
+          "identity": [],
+          "api_key": ["http_request", "mcp"]
+        }
+      }
+    }
+  }
+]

@@ -1,0 +1,29 @@
+# http://localhost:<port>/chats/<id1>
+- region "Notifications alt+T"
+- dialog "Edit Built Bot fixed":
+  - heading "Edit Built Bot fixed" [level=2]
+  - paragraph: Prompt and model changes apply from the next turn; history is kept.
+  - tablist:
+    - tab "Profile" [selected]
+    - tab "Tools"
+    - tab "Skills"
+    - tab "Sharing"
+  - tabpanel "Profile":
+    - text: Name
+    - textbox "Name":
+      - /placeholder: e.g. Research helper
+      - text: Built Bot fixed
+    - text: Description
+    - textbox "Description":
+      - /placeholder: One line, shown under the name
+      - text: Made by the bot-builder e2e
+    - text: Model
+    - button "Test Model (faux)"
+    - text: System prompt
+    - textbox "System prompt":
+      - /placeholder: Who is this bot? How should it reply?
+      - text: You help the owner with the bot-builder e2e.
+  - button "Delete bot"
+  - button "Cancel"
+  - button "Save changes"
+  - button "Close"

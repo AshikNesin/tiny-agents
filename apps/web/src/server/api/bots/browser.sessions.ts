@@ -14,6 +14,7 @@ import {
 } from "@tiny-agents/agent/browser";
 import { sandboxConnection, sandboxEndpoint, unquoteEnv } from "./sandbox-host";
 import { appEnv, type AppEnv } from "../../env";
+import { app } from "../../app-root";
 
 /**
  * Browser transport for the deploy model: chromium runs on the sandbox VM
@@ -44,11 +45,9 @@ export function browserLiveViewHint(env: AppEnv = appEnv()): string | undefined 
   return undefined;
 }
 
-let instance: BrowserSessions | undefined;
-
-/** The process's manager, created on first use from the env. */
+/** The process's manager (`app().browserSessions`), created on first use from the env. */
 export function getBrowserSessions(env: AppEnv = appEnv()): BrowserSessions {
-  return (instance ??= createBrowserSessions({
+  return (app().browserSessions ??= createBrowserSessions({
     profilesDir: env.BROWSER_PROFILES_DIR ?? undefined,
     idleMinutes: env.BROWSER_IDLE_MINUTES ? Number(env.BROWSER_IDLE_MINUTES) : undefined,
     scale: Number(env.BROWSER_SCALE) === 1 ? 1 : 2,
@@ -59,5 +58,5 @@ export function getBrowserSessions(env: AppEnv = appEnv()): BrowserSessions {
 
 /** Route and toolkit tests inject their own; pass undefined to rebuild from the env. */
 export function setBrowserSessionsForTests(fake: BrowserSessions | undefined): void {
-  instance = fake;
+  app().browserSessions = fake;
 }

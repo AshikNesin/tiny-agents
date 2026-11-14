@@ -1,0 +1,44 @@
+# http://localhost:<port>/chats/<id1>/history/<id2>
+- complementary "Sidebar":
+  - link "tiny-agents":
+    - /url: /chats
+  - button "Search"
+  - button "Collapse sidebar"
+  - navigation "Primary":
+    - link "Tasks":
+      - /url: /tasks
+    - link "Terminal":
+      - /url: /terminal
+    - link "Computer":
+      - /url: /computer
+    - link "Browser":
+      - /url: /browser
+  - region "Bots":
+    - heading "Bots" [level=2]
+    - button "New bot"
+    - list:
+      - listitem:
+        - link "Verify Bot fixed":
+          - /url: /chats/<id1>
+        - button "Verify Bot fixed actions"
+  - button "Account and navigation": D Demo User
+- main:
+  - button "Back to current chat"
+  - heading "Verify Bot fixed hello fixed" [level=1]
+  - button "Chat history"
+  - button "Past chat actions"
+  - region "Messages":
+    - log:
+      - text: Today
+      - paragraph: hello fixed
+      - button "Copy message"
+      - time: 06:30 AM
+      - paragraph: "Echo: hello fixed"
+      - button "Copy message"
+      - time: 06:30 AM
+  - button "Jump to the latest message": Scroll to end
+  - paragraph: Past chat · hello fixed
+  - paragraph: Nov 6 · 2 messages · ended when you started a new chat
+  - button "Current chat"
+  - button "Continue this chat"
+- region "Notifications alt+T"

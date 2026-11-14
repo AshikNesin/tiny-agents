@@ -58,6 +58,8 @@ import { VncView } from "./browser/VncView";
 
 const WIDTH_KEY = "tiny-agents:browser-panel-width";
 const DEFAULT_WIDTH = 640;
+/** A guest's viewer never resizes the browser window. */
+const keepSize = async () => undefined;
 
 export function BrowserPanel({
   bot,
@@ -185,6 +187,7 @@ export function BrowserPanel({
 
           <div className="flex shrink-0 items-center gap-1">
             {mode === "vnc" &&
+              !guest &&
               (humanDrives ? (
                 <Button
                   size="sm"
@@ -211,7 +214,7 @@ export function BrowserPanel({
                   <span className={handoffLabel}>Take control</span>
                 </Button>
               ))}
-            {mode === "vnc" && humanDrives && (
+            {mode === "vnc" && humanDrives && !guest && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -252,20 +255,22 @@ export function BrowserPanel({
                 </Link>
               </Button>
             )}
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => void resetProfile()}
-              aria-label="Reset browser profile"
-              title={
-                sharedProfile
-                  ? "Close the shared browser and wipe its profile (every bot on it)"
-                  : "Close the browser and wipe its profile"
-              }
-              data-testid="browser-reset"
-            >
-              <RotateCcw className="size-3.5" />
-            </Button>
+            {!guest && (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => void resetProfile()}
+                aria-label="Reset browser profile"
+                title={
+                  sharedProfile
+                    ? "Close the shared browser and wipe its profile (every bot on it)"
+                    : "Close the browser and wipe its profile"
+                }
+                data-testid="browser-reset"
+              >
+                <RotateCcw className="size-3.5" />
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="icon-sm"
@@ -280,7 +285,14 @@ export function BrowserPanel({
 
         <div className="relative min-h-0 flex-1 overflow-hidden" data-testid="browser-viewport">
           {mode === "vnc" && (
-            <VncView ref={vncRef} botId={bot.id} interactive={humanDrives} onState={setVncState} />
+            <VncView
+              ref={vncRef}
+              botId={bot.id}
+              interactive={humanDrives && !guest}
+              // A guest watches at the browser's size; only the owner fits it (S2).
+              resize={guest ? keepSize : undefined}
+              onState={setVncState}
+            />
           )}
           {mode === "vnc" && vncState !== "live" && (
             <div className="absolute inset-0 flex items-center justify-center gap-2 bg-background/70 text-xs text-muted-foreground">
@@ -334,9 +346,11 @@ export function BrowserPanel({
                 </span>
               }
               action={
-                <Button size="sm" onClick={() => void openBrowser()} data-testid="browser-open">
-                  Try again
-                </Button>
+                guest ? undefined : (
+                  <Button size="sm" onClick={() => void openBrowser()} data-testid="browser-open">
+                    Try again
+                  </Button>
+                )
               }
               className="h-full py-6"
             />
@@ -347,9 +361,11 @@ export function BrowserPanel({
               title="No browser is open."
               description={`The browser also opens when ${bot.name} first uses it.`}
               action={
-                <Button size="sm" onClick={() => void openBrowser()} data-testid="browser-open">
-                  Open browser
-                </Button>
+                guest ? undefined : (
+                  <Button size="sm" onClick={() => void openBrowser()} data-testid="browser-open">
+                    Open browser
+                  </Button>
+                )
               }
               className="h-full py-6"
             />

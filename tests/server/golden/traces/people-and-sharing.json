@@ -1,0 +1,298 @@
+[
+  {
+    "http": "create a bot",
+    "method": "POST",
+    "path": "/api/v1/bots",
+    "status": 201,
+    "body": {
+      "success": true,
+      "data": {
+        "id": "<id1>",
+        "name": "Shared",
+        "description": "",
+        "systemPrompt": "Be brief.",
+        "modelId": "test-model",
+        "conversationId": "16",
+        "chatStartedAt": "2026-11-06T06:30:00.000Z",
+        "lastReadAt": null,
+        "lastActivityAt": "2026-11-06T06:30:00.000Z",
+        "lastMessagePreview": null,
+        "toolPermissions": {},
+        "memoryEnabled": true,
+        "autoReview": false,
+        "yoloByDefault": false,
+        "memoryCapturedThrough": null,
+        "pinnedAt": null,
+        "browserProfile": "shared",
+        "createdAt": "2026-11-06T06:30:00.000Z",
+        "updatedAt": "2026-11-06T06:30:00.000Z",
+        "skillIds": [],
+        "connectionIds": [],
+        "connectionCapabilities": [],
+        "guestIds": []
+      }
+    }
+  },
+  {
+    "http": "me",
+    "method": "GET",
+    "path": "/api/v1/people/me",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "guest": false
+      }
+    }
+  },
+  {
+    "http": "add a guest",
+    "method": "POST",
+    "path": "/api/v1/people",
+    "status": 201,
+    "body": {
+      "success": true,
+      "data": {
+        "id": 2,
+        "email": "priya-golden@example.com",
+        "name": "Priya",
+        "createdAt": "2026-11-06T06:30:00.000Z",
+        "botIds": []
+      }
+    }
+  },
+  {
+    "http": "add the same email",
+    "method": "POST",
+    "path": "/api/v1/people",
+    "status": 409,
+    "body": {
+      "success": false,
+      "error": {
+        "code": "CONFLICT",
+        "message": "User with this email already exists"
+      }
+    }
+  },
+  {
+    "http": "list",
+    "method": "GET",
+    "path": "/api/v1/people",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "guests": [
+          {
+            "id": 2,
+            "email": "priya-golden@example.com",
+            "name": "Priya",
+            "createdAt": "2026-11-06T06:30:00.000Z",
+            "botIds": []
+          }
+        ]
+      }
+    }
+  },
+  {
+    "http": "share the bot",
+    "method": "PATCH",
+    "path": "/api/v1/bots/<id1>",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "id": "<id1>",
+        "name": "Shared",
+        "description": "",
+        "systemPrompt": "Be brief.",
+        "modelId": "test-model",
+        "conversationId": "16",
+        "chatStartedAt": "2026-11-06T06:30:00.000Z",
+        "lastReadAt": null,
+        "lastActivityAt": "2026-11-06T06:30:00.000Z",
+        "lastMessagePreview": null,
+        "toolPermissions": {},
+        "memoryEnabled": true,
+        "autoReview": false,
+        "yoloByDefault": false,
+        "memoryCapturedThrough": null,
+        "pinnedAt": null,
+        "browserProfile": "shared",
+        "createdAt": "2026-11-06T06:30:00.000Z",
+        "updatedAt": "2026-11-06T06:30:00.000Z",
+        "skillIds": [],
+        "connectionIds": [],
+        "connectionCapabilities": [],
+        "guestIds": [2]
+      }
+    }
+  },
+  {
+    "http": "guest: me",
+    "method": "GET",
+    "path": "/api/v1/people/me",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "guest": true
+      }
+    }
+  },
+  {
+    "http": "guest: bots",
+    "method": "GET",
+    "path": "/api/v1/bots",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": [
+        {
+          "id": "<id1>",
+          "conversationId": "16",
+          "name": "Shared",
+          "description": "",
+          "modelId": "test-model",
+          "lastMessagePreview": null,
+          "lastActivityAt": "2026-11-06T06:30:00.000Z",
+          "lastReadAt": null,
+          "unread": false,
+          "replying": false,
+          "approvals": 0,
+          "questions": 0,
+          "pinnedAt": null
+        }
+      ]
+    }
+  },
+  {
+    "http": "guest: the bot",
+    "method": "GET",
+    "path": "/api/v1/bots/<id1>",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "id": "<id1>",
+        "name": "Shared",
+        "description": "",
+        "systemPrompt": "Be brief.",
+        "modelId": "test-model",
+        "conversationId": "16",
+        "chatStartedAt": "2026-11-06T06:30:00.000Z",
+        "lastReadAt": null,
+        "lastActivityAt": "2026-11-06T06:30:00.000Z",
+        "lastMessagePreview": null,
+        "toolPermissions": {},
+        "memoryEnabled": true,
+        "autoReview": false,
+        "yoloByDefault": false,
+        "memoryCapturedThrough": null,
+        "pinnedAt": null,
+        "browserProfile": "shared",
+        "createdAt": "2026-11-06T06:30:00.000Z",
+        "updatedAt": "2026-11-06T06:30:00.000Z",
+        "skillIds": [],
+        "connectionIds": [],
+        "connectionCapabilities": [],
+        "guestIds": [2]
+      }
+    }
+  },
+  {
+    "http": "guest: tasks",
+    "method": "GET",
+    "path": "/api/v1/tasks",
+    "status": 403,
+    "body": {
+      "success": false,
+      "error": {
+        "code": "FORBIDDEN",
+        "message": "Only the owner can do that"
+      }
+    }
+  },
+  {
+    "http": "guest: edit the bot",
+    "method": "PATCH",
+    "path": "/api/v1/bots/<id1>",
+    "status": 403,
+    "body": {
+      "success": false,
+      "error": {
+        "code": "FORBIDDEN",
+        "message": "Only the owner can do that"
+      }
+    }
+  },
+  {
+    "http": "guest: yolo",
+    "method": "PUT",
+    "path": "/api/v1/bots/<id1>/yolo",
+    "status": 403,
+    "body": {
+      "success": false,
+      "error": {
+        "code": "FORBIDDEN",
+        "message": "Only the owner can do that"
+      }
+    }
+  },
+  {
+    "http": "guest: drive the browser",
+    "method": "POST",
+    "path": "/api/v1/bots/<id1>/browser/driver",
+    "status": 403,
+    "body": {
+      "success": false,
+      "error": {
+        "code": "FORBIDDEN",
+        "message": "Only the owner can do that"
+      }
+    }
+  },
+  {
+    "db": "sharing",
+    "tables": {
+      "guests": [
+        {
+          "userId": 2,
+          "createdAt": "2026-11-06T06:30:00.000Z"
+        }
+      ],
+      "bot_guests": [
+        {
+          "botId": "<id1>",
+          "userId": 2,
+          "lastReadAt": null,
+          "createdAt": "2026-11-06T06:30:00.000Z"
+        }
+      ]
+    }
+  },
+  {
+    "http": "remove the guest",
+    "method": "DELETE",
+    "path": "/api/v1/people/2",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "removed": true
+      }
+    }
+  },
+  {
+    "http": "list after",
+    "method": "GET",
+    "path": "/api/v1/people",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "guests": []
+      }
+    }
+  }
+]

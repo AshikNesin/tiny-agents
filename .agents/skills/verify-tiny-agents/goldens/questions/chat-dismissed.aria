@@ -1,0 +1,83 @@
+# http://localhost:<port>/chats/<id1>
+- complementary "Sidebar":
+  - link "tiny-agents":
+    - /url: /chats
+  - button "Search"
+  - button "Collapse sidebar"
+  - navigation "Primary":
+    - link "Tasks":
+      - /url: /tasks
+    - link "Terminal":
+      - /url: /terminal
+    - link "Computer":
+      - /url: /computer
+    - link "Browser":
+      - /url: /browser
+  - region "Bots":
+    - heading "Bots" [level=2]
+    - button "New bot"
+    - list:
+      - listitem:
+        - link "Ask Bot fixed":
+          - /url: /chats/<id1>
+          - text: "Ask Bot fixed now Echo: Just use React fixed"
+        - button "Ask Bot fixed actions"
+  - button "Account and navigation": D Demo User
+- main:
+  - heading "Ask Bot fixed menu" [level=1]:
+    - button "Ask Bot fixed menu": Ask Bot fixed
+  - button "Open live view"
+  - button "Start a new chat"
+  - region "Messages":
+    - log:
+      - text: Today
+      - paragraph: /ask fixed
+      - button "Copy message"
+      - time: 06:30 AM
+      - text: New messages
+      - button "Asked you 3 questions" [expanded]
+      - term: Which stack should the project use?
+      - definition: React
+      - term: Which extras do you want?
+      - definition: Auth, Tests
+      - term: Anything else I should know?
+      - definition: Ship it Friday fixed
+      - paragraph: "Echo: The owner answered your questions:"
+      - paragraph: "Q: Which stack should the project use? A: React"
+      - paragraph: "Q: Which extras do you want? A: Auth; Tests"
+      - paragraph: "Q: Anything else I should know? A: Ship it Friday fixed"
+      - button "Copy message"
+      - time: 06:30 AM
+      - paragraph: /ask fixed
+      - button "Copy message"
+      - time: 06:30 AM
+      - button "Asked you 3 questions"
+      - paragraph: "Echo: The owner answered your questions:"
+      - paragraph: "Q: Which stack should the project use? A: Svelte"
+      - paragraph: "Q: Which extras do you want? A: (skipped)"
+      - paragraph: "Q: Anything else I should know? A: skip fixed"
+      - button "Copy message"
+      - time: 06:30 AM
+      - paragraph: /ask fixed
+      - button "Copy message"
+      - time: 06:30 AM
+      - button "Asked you 3 questions dismissed by you"
+      - paragraph: "Echo: The owner dismissed these questions without answering (a message from them may follow). Don't ask them again: go by their message, or continue on your best judgment and say which assumptions you made."
+      - button "Copy message"
+      - time: 06:30 AM
+      - paragraph: /ask fixed
+      - button "Copy message"
+      - time: 06:30 AM
+      - button "Asked you 3 questions dismissed by you"
+      - paragraph: Just use React fixed
+      - button "Copy message"
+      - time: 06:30 AM
+      - paragraph: "Echo: Just use React fixed"
+      - button "Copy message"
+      - time: 06:30 AM
+  - button "Jump to the latest message": Scroll to end
+  - textbox "Message Ask Bot fixed"
+  - button "Add files or mention a bot"
+  - button "Model": Test Model (faux)
+  - button "Send message" [disabled]
+- region "Notifications alt+T"

@@ -1,0 +1,349 @@
+[
+  {
+    "http": "create",
+    "method": "POST",
+    "path": "/api/v1/bots",
+    "status": 201,
+    "body": {
+      "success": true,
+      "data": {
+        "id": "<id1>",
+        "name": "Turner",
+        "description": "Says it back",
+        "systemPrompt": "Be brief.",
+        "modelId": "test-model",
+        "conversationId": "9",
+        "chatStartedAt": "2026-11-06T06:30:00.000Z",
+        "lastReadAt": null,
+        "lastActivityAt": "2026-11-06T06:30:00.000Z",
+        "lastMessagePreview": null,
+        "toolPermissions": {},
+        "memoryEnabled": true,
+        "autoReview": false,
+        "yoloByDefault": false,
+        "memoryCapturedThrough": null,
+        "pinnedAt": null,
+        "browserProfile": "shared",
+        "createdAt": "2026-11-06T06:30:00.000Z",
+        "updatedAt": "2026-11-06T06:30:00.000Z",
+        "skillIds": [],
+        "connectionIds": [],
+        "connectionCapabilities": [],
+        "guestIds": []
+      }
+    }
+  },
+  {
+    "http": "send",
+    "method": "POST",
+    "path": "/api/v1/bots/<id1>/messages",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "submitted": true
+      }
+    }
+  },
+  {
+    "http": "list after the reply",
+    "method": "GET",
+    "path": "/api/v1/bots",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": [
+        {
+          "id": "<id1>",
+          "conversationId": "9",
+          "name": "Turner",
+          "description": "Says it back",
+          "modelId": "test-model",
+          "lastMessagePreview": "Echo: hello there",
+          "lastActivityAt": "2026-11-06T06:30:00.000Z",
+          "lastReadAt": null,
+          "unread": true,
+          "replying": false,
+          "approvals": 0,
+          "questions": 0,
+          "pinnedAt": null
+        }
+      ]
+    }
+  },
+  {
+    "http": "history without a cursor",
+    "method": "GET",
+    "path": "/api/v1/bots/<id1>/messages",
+    "status": 400,
+    "body": {
+      "success": false,
+      "error": {
+        "code": "VALIDATION_ERROR",
+        "message": "Validation failed",
+        "details": {
+          "before": ["Invalid input: expected string, received undefined"]
+        }
+      }
+    }
+  },
+  {
+    "http": "history before e100",
+    "method": "GET",
+    "path": "/api/v1/bots/<id1>/messages?before=e100&limit=10",
+    "status": 400,
+    "body": {
+      "success": false,
+      "error": {
+        "code": "BAD_REQUEST",
+        "message": "Unknown message cursor"
+      }
+    }
+  },
+  {
+    "sse": "stream",
+    "path": "/api/v1/bots/<id1>/stream",
+    "frames": [
+      {
+        "type": "snapshot",
+        "state": {
+          "messages": [
+            {
+              "id": "e16",
+              "role": "user",
+              "text": "hello there",
+              "requestId": "golden-turn-0001",
+              "status": "done",
+              "createdAt": 1793946600000
+            },
+            {
+              "id": "e20",
+              "role": "assistant",
+              "text": "Echo: hello there",
+              "status": "done",
+              "model": "test-model",
+              "createdAt": 1793946600000
+            }
+          ],
+          "busy": false,
+          "queued": [],
+          "hasMore": false,
+          "cursor": "e16"
+        }
+      },
+      {
+        "type": "routine-runs",
+        "runs": []
+      },
+      {
+        "type": "yolo",
+        "on": false
+      }
+    ]
+  },
+  {
+    "http": "history before the newest",
+    "method": "GET",
+    "path": "/api/v1/bots/<id1>/messages?before=e20",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "messages": [
+          {
+            "id": "e16",
+            "role": "user",
+            "text": "hello there",
+            "requestId": "golden-turn-0001",
+            "status": "done",
+            "createdAt": 1793946600000
+          }
+        ],
+        "hasMore": false
+      }
+    }
+  },
+  {
+    "http": "retry the same send",
+    "method": "POST",
+    "path": "/api/v1/bots/<id1>/messages",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "submitted": true
+      }
+    }
+  },
+  {
+    "http": "mark read",
+    "method": "POST",
+    "path": "/api/v1/bots/<id1>/read",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "id": "<id1>",
+        "name": "Turner",
+        "description": "Says it back",
+        "systemPrompt": "Be brief.",
+        "modelId": "test-model",
+        "conversationId": "9",
+        "chatStartedAt": "2026-11-06T06:30:00.000Z",
+        "lastReadAt": "2026-11-06T06:30:00.000Z",
+        "lastActivityAt": "2026-11-06T06:30:00.000Z",
+        "lastMessagePreview": "hello there",
+        "toolPermissions": {},
+        "memoryEnabled": true,
+        "autoReview": false,
+        "yoloByDefault": false,
+        "memoryCapturedThrough": null,
+        "pinnedAt": null,
+        "browserProfile": "shared",
+        "createdAt": "2026-11-06T06:30:00.000Z",
+        "updatedAt": "2026-11-06T06:30:00.000Z",
+        "skillIds": [],
+        "connectionIds": [],
+        "connectionCapabilities": [],
+        "guestIds": []
+      }
+    }
+  },
+  {
+    "http": "list after read",
+    "method": "GET",
+    "path": "/api/v1/bots",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": [
+        {
+          "id": "<id1>",
+          "conversationId": "9",
+          "name": "Turner",
+          "description": "Says it back",
+          "modelId": "test-model",
+          "lastMessagePreview": "hello there",
+          "lastActivityAt": "2026-11-06T06:30:00.000Z",
+          "lastReadAt": "2026-11-06T06:30:00.000Z",
+          "unread": false,
+          "replying": false,
+          "approvals": 0,
+          "questions": 0,
+          "pinnedAt": null
+        }
+      ]
+    }
+  },
+  {
+    "http": "abort while idle",
+    "method": "POST",
+    "path": "/api/v1/bots/<id1>/abort",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "aborted": true
+      }
+    }
+  },
+  {
+    "http": "withdraw unknown",
+    "method": "DELETE",
+    "path": "/api/v1/bots/<id1>/messages/nope-nope-nope",
+    "status": 404,
+    "body": {
+      "success": false,
+      "error": {
+        "code": "NOT_FOUND",
+        "message": "Message not found"
+      }
+    }
+  },
+  {
+    "http": "send empty",
+    "method": "POST",
+    "path": "/api/v1/bots/<id1>/messages",
+    "status": 400,
+    "body": {
+      "success": false,
+      "error": {
+        "code": "VALIDATION_ERROR",
+        "message": "Validation failed",
+        "details": {
+          "requestId": ["requestId is required"]
+        }
+      }
+    }
+  },
+  {
+    "sse": "stream after the retry",
+    "path": "/api/v1/bots/<id1>/stream",
+    "frames": [
+      {
+        "type": "snapshot",
+        "state": {
+          "messages": [
+            {
+              "id": "e16",
+              "role": "user",
+              "text": "hello there",
+              "requestId": "golden-turn-0001",
+              "status": "done",
+              "createdAt": 1793946600000
+            },
+            {
+              "id": "e20",
+              "role": "assistant",
+              "text": "Echo: hello there",
+              "status": "done",
+              "model": "test-model",
+              "createdAt": 1793946600000
+            }
+          ],
+          "busy": false,
+          "queued": [],
+          "hasMore": false,
+          "cursor": "e16"
+        }
+      },
+      {
+        "type": "routine-runs",
+        "runs": []
+      },
+      {
+        "type": "yolo",
+        "on": false
+      }
+    ]
+  },
+  {
+    "db": "after the turn",
+    "tables": {
+      "bots": [
+        {
+          "id": "<id1>",
+          "name": "Turner",
+          "description": "Says it back",
+          "systemPrompt": "Be brief.",
+          "modelId": "test-model",
+          "conversationId": "9",
+          "chatStartedAt": "2026-11-06T06:30:00.000Z",
+          "lastReadAt": "2026-11-06T06:30:00.000Z",
+          "lastActivityAt": "2026-11-06T06:30:00.000Z",
+          "lastMessagePreview": "hello there",
+          "toolPermissions": "{}",
+          "memoryEnabled": true,
+          "autoReview": false,
+          "yoloByDefault": false,
+          "memoryCapturedThrough": null,
+          "pinnedAt": null,
+          "browserProfile": "shared",
+          "createdAt": "2026-11-06T06:30:00.000Z",
+          "updatedAt": "2026-11-06T06:30:00.000Z"
+        }
+      ],
+      "bot_messages": []
+    }
+  }
+]

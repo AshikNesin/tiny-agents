@@ -16,6 +16,7 @@ import { Label } from "@groot/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@groot/ui/select";
 import { connectionsApi, type Connection, type TestResult } from "../../lib/connections-api";
 import { connectionAuth } from "../../lib/connection-auth";
+import { useStepUp } from "../vault/StepUp";
 import { errorMessage } from "./connection-status";
 
 type AuthType = "none" | "header" | "oauth";
@@ -121,24 +122,30 @@ export function AddConnectionDialog({
     }
   };
 
+  const { run } = useStepUp();
   // Runs in the click itself: an OAuth sign-in opens its popup before the
   // first await, then waits for the connection to exist.
   const save = () => {
     if (!canSave) return;
     setSaving(true);
-    const created = connectionsApi.create({
-      name: form.name.trim(),
-      url: form.url.trim(),
-      authType: form.authType,
-      ...(form.authType === "header"
-        ? { headerName: form.headerName.trim() || "x-api-key", secret: form.secret }
-        : {}),
-      ...(form.authType === "oauth" && form.clientId.trim()
-        ? {
-            clientId: form.clientId.trim(),
-            ...(form.clientSecret ? { clientSecret: form.clientSecret } : {}),
-          }
-        : {}),
+    const created = run(() =>
+      connectionsApi.create({
+        name: form.name.trim(),
+        url: form.url.trim(),
+        authType: form.authType,
+        ...(form.authType === "header"
+          ? { headerName: form.headerName.trim() || "x-api-key", secret: form.secret }
+          : {}),
+        ...(form.authType === "oauth" && form.clientId.trim()
+          ? {
+              clientId: form.clientId.trim(),
+              ...(form.clientSecret ? { clientSecret: form.clientSecret } : {}),
+            }
+          : {}),
+      }),
+    ).then((connection) => {
+      if (!connection) throw new Error("Confirm it's you to add a connection");
+      return connection;
     });
     const signIn =
       form.authType === "oauth"

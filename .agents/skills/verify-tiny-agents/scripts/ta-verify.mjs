@@ -11,6 +11,9 @@
  *       --prod     build (`pnpm build`) and run the production bundle
  *                  (`node dist/server/bundle.js`, NODE_ENV=production, built client,
  *                  Secure cookies, no Vite) instead of the dev server
+ *       --fixed-clock  freeze the server's and the browser's clock at FIXED_NOW
+ *                  (faux mode only; scheduled routines never come due), pin the name
+ *                  stamp, UTC, en-US and reduced motion: two runs give the same ARIA
  *       --shelley  start a keyless Shelley (`-predictable-only`) for this run and set
  *                  SHELLEY_URL, so /code and bots' code_* tools are reachable. Binary:
  *                  $TA_VERIFY_SHELLEY_BIN, else `shelley` on PATH, else copied out of
@@ -51,7 +54,9 @@ const DEMO = { email: "demo@example.com", password: "demo@example.com" }; // git
 const [command, ...rest] = process.argv.slice(2);
 const flags = {};
 const positional = [];
-const BOOLEAN_FLAGS = new Set(["sandbox", "empty", "shelley", "prod"]);
+const BOOLEAN_FLAGS = new Set(["sandbox", "empty", "shelley", "prod", "fixed-clock"]);
+/** The instant `--fixed-clock` freezes at: the server tests' FIXED_NOW (tests/test-clock.ts). */
+const FIXED_NOW = "2026-11-06T06:30:00.000Z";
 for (let i = 0; i < rest.length; i++) {
   const name = rest[i].slice(2);
   if (rest[i].startsWith("--") && BOOLEAN_FLAGS.has(name)) flags[name] = true;
@@ -347,6 +352,9 @@ function serverEnv(run) {
     UPLOADS_DIR: path.join(run.stateDir, "uploads"),
     TINY_AGENTS_FAUX: "1",
     TINY_AGENTS_FAUX_TOKENS_PER_SECOND: "6",
+    ...(run.fixedNow
+      ? { TINY_AGENTS_FIXED_NOW: run.fixedNow, TZ: "UTC", LANG: "en_US.UTF-8" }
+      : {}),
     // Every journey signs in from 127.0.0.1: lift the 20-per-15-minutes login limit.
     AUTH_RATE_LIMIT_MAX: "1000",
     // Per-run key for vault items and connection secrets (scaffolding, dies with the run).
@@ -412,6 +420,7 @@ async function up() {
     sandboxPort: flags.sandbox ? sandboxPort() : undefined,
     empty: !!flags.empty,
     prod: !!flags.prod,
+    fixedNow: flags["fixed-clock"] ? FIXED_NOW : undefined,
     jwtKey: flags.prod ? randomBytes(32).toString("hex") : undefined,
     shelleyPort: flags.shelley ? port + 1000 : undefined,
     shelleyUrl: flags.shelley ? `http://127.0.0.1:${port + 1000}` : undefined,
@@ -598,6 +607,7 @@ async function drive() {
           TA_VERIFY_EVIDENCE: run.evidenceDir,
           TA_VERIFY_RUN: run.id,
           TA_VERIFY_ADMIN_KEY: run.adminKey,
+          ...(run.fixedNow ? { TA_VERIFY_FIXED_NOW: run.fixedNow } : {}),
           TA_VERIFY_CAPS: [
             run.sandbox && "sandbox",
             run.empty && "empty",

@@ -18,6 +18,8 @@ import { db, botGuests, guests, users } from "../../db";
 export interface LiveGrant {
   userId: number;
   botId?: string;
+  /** A guest's viewer: it may watch the desktop but its input never reaches it (S2). */
+  viewOnly?: boolean;
 }
 
 interface Held {

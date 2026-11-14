@@ -17,8 +17,15 @@ new bot (or press "New chat") before sharing it.
 ## What a guest can do
 
 - Chat with the bots shared with them, answer approval cards and Questions,
-  watch and drive the bot's browser and computer, attach files.
-- Use the whole **Code** page (every Shelley conversation).
+  watch the bot's browser and computer, attach files. Watching only: a
+  guest can't take control, start, resize or reset them, and the VNC bridge
+  drops a guest viewer's keys, clicks and clipboard, because a shared
+  browser holds the owner's logins.
+- Use the **Code** page: read, start and work in every thread. The harness
+  host stays the owner's: a guest can't browse or choose directories, find
+  files, upload, make worktrees, move a thread, open file assets or pick the
+  no-prompts (bypass) mode. The page hides those controls for a guest and the
+  routes refuse them.
 - Change their theme, password and passkeys.
 
 Everything else is the owner's: other bots, bot settings, New chat and Chat
@@ -36,13 +43,14 @@ it is listed.
   answer only when someone talks to it, asks for something or @mentions it,
   and otherwise reply exactly `[skip]`. Those replies are hidden in the chat
   and don't touch the sidebar preview or unread badge.
-- It works with the tools you allowed, for either of you.
+- It works with the tools you allowed, for either of you, except that it
+  cannot create bots or change its own instructions there.
 - **Vault:** every use asks, even for items set to "allowed", and only the
   owner can approve it.
 - **Memory is off** while the bot is shared: nothing from the chat is captured,
   and memories are not injected.
-- Pushover pushes stay the owner's. A guest has their own unread marker per
-  shared bot.
+- Pushover pushes stay the owner's, and a guest having the chat open does not
+  hold them back. A guest has their own unread marker per shared bot.
 
 ## Data
 

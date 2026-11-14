@@ -1,0 +1,227 @@
+[
+  {
+    "http": "create a bot",
+    "method": "POST",
+    "path": "/api/v1/bots",
+    "status": 201,
+    "body": {
+      "success": true,
+      "data": {
+        "id": "<id1>",
+        "name": "Skilled",
+        "description": "",
+        "systemPrompt": "Be brief.",
+        "modelId": "test-model",
+        "conversationId": "9",
+        "chatStartedAt": "2026-11-06T06:30:00.000Z",
+        "lastReadAt": null,
+        "lastActivityAt": "2026-11-06T06:30:00.000Z",
+        "lastMessagePreview": null,
+        "toolPermissions": {},
+        "memoryEnabled": true,
+        "autoReview": false,
+        "yoloByDefault": false,
+        "memoryCapturedThrough": null,
+        "pinnedAt": null,
+        "browserProfile": "shared",
+        "createdAt": "2026-11-06T06:30:00.000Z",
+        "updatedAt": "2026-11-06T06:30:00.000Z",
+        "skillIds": [],
+        "connectionIds": [],
+        "connectionCapabilities": [],
+        "guestIds": []
+      }
+    }
+  },
+  {
+    "http": "preview a paste",
+    "method": "POST",
+    "path": "/api/v1/skills/preview",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "name": "haiku",
+        "description": "Write haiku",
+        "body": "Write in 5-7-5.",
+        "files": [],
+        "warnings": [],
+        "exists": false
+      }
+    }
+  },
+  {
+    "http": "create",
+    "method": "POST",
+    "path": "/api/v1/skills",
+    "status": 201,
+    "body": {
+      "success": true,
+      "data": {
+        "id": "<id2>",
+        "name": "haiku",
+        "description": "Write haiku",
+        "body": "Write in 5-7-5.",
+        "files": [],
+        "source": "manual",
+        "sourceUrl": null,
+        "botIds": ["<id1>"],
+        "createdAt": "2026-11-06T06:30:00.000Z",
+        "updatedAt": "2026-11-06T06:30:00.000Z"
+      }
+    }
+  },
+  {
+    "http": "create a duplicate",
+    "method": "POST",
+    "path": "/api/v1/skills",
+    "status": 409,
+    "body": {
+      "success": false,
+      "error": {
+        "code": "CONFLICT",
+        "message": "A skill named \"haiku\" exists"
+      }
+    }
+  },
+  {
+    "http": "list",
+    "method": "GET",
+    "path": "/api/v1/skills",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": [
+        {
+          "id": "<id2>",
+          "name": "haiku",
+          "description": "Write haiku",
+          "body": "Write in 5-7-5.",
+          "files": [],
+          "source": "manual",
+          "sourceUrl": null,
+          "botIds": ["<id1>"],
+          "createdAt": "2026-11-06T06:30:00.000Z",
+          "updatedAt": "2026-11-06T06:30:00.000Z"
+        }
+      ]
+    }
+  },
+  {
+    "http": "get",
+    "method": "GET",
+    "path": "/api/v1/skills/<id2>",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "id": "<id2>",
+        "name": "haiku",
+        "description": "Write haiku",
+        "body": "Write in 5-7-5.",
+        "files": [],
+        "source": "manual",
+        "sourceUrl": null,
+        "botIds": ["<id1>"],
+        "createdAt": "2026-11-06T06:30:00.000Z",
+        "updatedAt": "2026-11-06T06:30:00.000Z"
+      }
+    }
+  },
+  {
+    "http": "edit",
+    "method": "PATCH",
+    "path": "/api/v1/skills/<id2>",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "id": "<id2>",
+        "name": "haiku",
+        "description": "Haiku, always",
+        "body": "Write in 5-7-5.",
+        "files": [],
+        "source": "manual",
+        "sourceUrl": null,
+        "botIds": [],
+        "createdAt": "2026-11-06T06:30:00.000Z",
+        "updatedAt": "2026-11-06T06:30:00.000Z"
+      }
+    }
+  },
+  {
+    "http": "bot after unassign",
+    "method": "GET",
+    "path": "/api/v1/bots/<id1>",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "id": "<id1>",
+        "name": "Skilled",
+        "description": "",
+        "systemPrompt": "Be brief.",
+        "modelId": "test-model",
+        "conversationId": "9",
+        "chatStartedAt": "2026-11-06T06:30:00.000Z",
+        "lastReadAt": null,
+        "lastActivityAt": "2026-11-06T06:30:00.000Z",
+        "lastMessagePreview": null,
+        "toolPermissions": {},
+        "memoryEnabled": true,
+        "autoReview": false,
+        "yoloByDefault": false,
+        "memoryCapturedThrough": null,
+        "pinnedAt": null,
+        "browserProfile": "shared",
+        "createdAt": "2026-11-06T06:30:00.000Z",
+        "updatedAt": "2026-11-06T06:30:00.000Z",
+        "skillIds": [],
+        "connectionIds": [],
+        "connectionCapabilities": [],
+        "guestIds": []
+      }
+    }
+  },
+  {
+    "db": "skills",
+    "tables": {
+      "skills": [
+        {
+          "id": "<id2>",
+          "name": "haiku",
+          "description": "Haiku, always",
+          "body": "Write in 5-7-5.",
+          "files": "[]",
+          "source": "manual",
+          "sourceUrl": null,
+          "createdAt": "2026-11-06T06:30:00.000Z",
+          "updatedAt": "2026-11-06T06:30:00.000Z"
+        }
+      ],
+      "bot_skills": []
+    }
+  },
+  {
+    "http": "delete",
+    "method": "DELETE",
+    "path": "/api/v1/skills/<id2>",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "deleted": true
+      }
+    }
+  },
+  {
+    "http": "list after",
+    "method": "GET",
+    "path": "/api/v1/skills",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": []
+    }
+  }
+]

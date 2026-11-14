@@ -1,0 +1,217 @@
+/**
+ * Characterization of behavior-register row C19: unbounded in-memory maps
+ * (worker session books and logs, `ToolProxy.results`, client cursors,
+ * Claude Code runtimes, Shelley `working`). Nothing ever removes an entry.
+ * Preserve: this pins today's behavior, quirk included; change it only with
+ * a signed-off register row.
+ *
+ * Each case pins what the public API shows: an entry still answers after
+ * the thing it tracked has ended. Claude Code runtimes
+ * (`packages/code/src/drivers/claude-code/driver.ts`, `runtimes`/`loaded`)
+ * are dropped only when a thread's create fails, and nothing outside the
+ * driver can see them, so they are not pinned here.
+ */
+import { afterEach, describe, expect, it } from "vite-plus/test";
+import {
+  CodingBook,
+  DEFAULT_CODING_LIMITS,
+  DEFAULT_TIMINGS,
+  SessionBook,
+  type QueryFactory,
+  type ResumeResult,
+} from "../../../packages/claude-worker/src/index";
+import type { CodingDeps } from "../../../packages/claude-worker/src/coding";
+import {
+  connectWorker,
+  type WebSocketLike,
+  type WorkerClock,
+  type WorkerConnection,
+} from "../../../packages/claude-worker/src/client";
+import {
+  createShelleyStream,
+  type ShelleyStream,
+} from "../../../packages/code/src/drivers/shelley/stream";
+
+const closers: Array<() => void> = [];
+afterEach(() => {
+  for (const close of closers.splice(0)) close();
+});
+
+describe("C19: the Claude worker's books", () => {
+  it("keep every bot session, its event log and its tool results after the process is evicted", async () => {
+    const factory: QueryFactory = async (ctx) => {
+      for await (const turn of ctx.turns) {
+        ctx.publish({ type: "turn_end", turnId: turn.turnId, stopReason: "end_turn" });
+      }
+    };
+    const book = new SessionBook(factory, { ...DEFAULT_TIMINGS, idleEvictMs: 1_000 });
+    const ids = ["s1", "s2", "s3"];
+    // Each turn comes after the last process went idle, so it is evicted first.
+    for (const [index, id] of ids.entries()) {
+      const session = await book.runTurn(
+        { sessionId: id, model: "claude-sonnet-4-6", tools: [] },
+        { turnId: `t-${id}`, text: "hi" },
+        index * 5_000,
+      );
+      expect(session.settleTool(`toolu_${id}`, { content: "done" })).toBe(true);
+    }
+
+    // The last process is evicted too, an hour later.
+    book.sweep(60 * 60_000);
+    expect(book.liveProcesses()).toBe(0);
+
+    for (const id of ids) {
+      const session = book.get(id);
+      expect(session?.alive).toBe(false);
+      // The log still holds the session's events.
+      expect(session?.log.replay(0).length).toBeGreaterThan(0);
+      // ToolProxy.results still holds the settled result: a second settle is refused.
+      expect(book.settle(id, `toolu_${id}`, { content: "again" })).toBe(false);
+    }
+  });
+
+  it("keep every coding session after it is closed", () => {
+    const deps = {
+      limits: DEFAULT_CODING_LIMITS,
+      now: () => 0,
+      env: {},
+    } as unknown as CodingDeps;
+    const book = new CodingBook(deps);
+    for (const id of ["c1", "c2", "c3"]) book.ensure(id, { cwd: "/tmp" }).close();
+    expect(book.list().map((session) => session.id)).toEqual(["c1", "c2", "c3"]);
+    expect(book.get("c1")?.log.lastSeq).toBeGreaterThan(0);
+  });
+});
+
+describe("C19: the worker connection's cursors", () => {
+  it("resume every session it ever saw on each reconnect; nothing untracks one", async () => {
+    const sockets: Array<WebSocketLike & { sent: Array<Record<string, unknown>>; drop(): void }> =
+      [];
+    const socketFor = (): WebSocketLike => {
+      const handlers = new Map<string, Array<(...args: unknown[]) => void>>();
+      const emit = (event: string, ...args: unknown[]) =>
+        (handlers.get(event) ?? []).forEach((listener) => listener(...args));
+      const reply = (frame: Record<string, unknown>) => emit("message", JSON.stringify(frame));
+      const socket = {
+        readyState: 0,
+        sent: [] as Array<Record<string, unknown>>,
+        on(event: string, listener: (...args: unknown[]) => void) {
+          handlers.set(event, [...(handlers.get(event) ?? []), listener]);
+        },
+        send(data: string) {
+          const frame = JSON.parse(data) as Record<string, unknown>;
+          socket.sent.push(frame);
+          if (frame.type === "resume") {
+            const result: ResumeResult = { known: true, gap: false, firstSeq: 1, lastSeq: 1 };
+            reply({ type: "reply", requestId: frame.requestId, ok: true, result });
+          }
+        },
+        close() {
+          if (socket.readyState === 3) return;
+          socket.readyState = 3;
+          emit("close");
+        },
+        drop() {
+          socket.close();
+        },
+        emitFrame: reply,
+      };
+      sockets.push(socket);
+      queueMicrotask(() => {
+        socket.readyState = 1;
+        emit("open");
+        reply({ type: "welcome", bootId: "boot-1" });
+      });
+      return socket;
+    };
+    let now = 0;
+    let timers: Array<{ at: number; fn: () => void }> = [];
+    const clock: WorkerClock = {
+      now: () => now,
+      schedule(fn, ms) {
+        const timer = { at: now + ms, fn };
+        timers.push(timer);
+        return () => void (timers = timers.filter((item) => item !== timer));
+      },
+    };
+    const connection: WorkerConnection = connectWorker(
+      async () => ({ url: "ws://worker", token: "t" }),
+      {
+        sessions: { event: "event", resume: "resume", join: "start" },
+        socket: socketFor,
+        clock,
+        onMessage: () => undefined,
+      },
+    );
+    closers.push(() => connection.close());
+    const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
+    const resumed = (index: number) =>
+      sockets[index]!.sent.filter((frame) => frame.type === "resume").map((f) => f.sessionId);
+
+    await settle();
+    connection.track("s1");
+    connection.track("s2");
+    // A session nobody tracked sends an event: it gets a cursor too.
+    (sockets[0] as unknown as { emitFrame(frame: object): void }).emitFrame({
+      type: "event",
+      sessionId: "s3",
+      seq: 1,
+    });
+    expect(resumed(0)).toEqual(["s1", "s2"]);
+
+    // Three tunnel blips later, every session is resumed on every new socket.
+    for (let blip = 1; blip <= 3; blip++) {
+      sockets.at(-1)!.drop();
+      now += 60_000;
+      const due = timers.filter((timer) => timer.at <= now);
+      timers = timers.filter((timer) => timer.at > now);
+      due.forEach((timer) => timer.fn());
+      await settle();
+      expect(sockets).toHaveLength(blip + 1);
+      expect(resumed(blip)).toEqual(["s1", "s2", "s3"]);
+    }
+  });
+});
+
+describe("C19: Shelley's `working` map", () => {
+  it("still holds a conversation that left Shelley's list, so its late turn end fires", async () => {
+    const encoder = new TextEncoder();
+    let push: ((frame: object) => void) | undefined;
+    let rows = [{ conversation_id: "c1", working: false }];
+    const fetch = async (url: string) => {
+      if (url.endsWith("/api/stream2")) {
+        const body = new ReadableStream<Uint8Array>({
+          start(controller) {
+            push = (frame) =>
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify(frame)}\n\n`));
+          },
+        });
+        return new Response(body, { headers: { "Content-Type": "text/event-stream" } });
+      }
+      return Response.json({ conversations: rows });
+    };
+    const stream: ShelleyStream = createShelleyStream({
+      deps: { config: { url: "http://shelley" }, fetch },
+      logger: { info: () => undefined, warn: () => undefined, error: () => undefined },
+      listDebounceMs: 1,
+    });
+    closers.push(() => stream.stop());
+    const ends: string[] = [];
+    stream.onTurnEnd((end) => void ends.push(end.conversationId));
+    const lists: number[] = [];
+    stream.onList(() => void lists.push(stream.list()?.length ?? -1));
+    stream.start();
+    await expect.poll(() => lists).toEqual([1]);
+
+    push!({ conversation_id: "c1", conversation_state: { working: true } });
+    // Shelley drops the conversation (deleted); the list is read again without it.
+    rows = [];
+    push!({ conversation_list_patch: [{ op: "remove", path: "/0" }] });
+    await expect.poll(() => lists).toEqual([1, 0]);
+    expect(stream.list()).toEqual([]);
+
+    // Its remembered `working: true` outlived it.
+    push!({ conversation_id: "c1", conversation_state: { working: false } });
+    await expect.poll(() => ends).toEqual(["c1"]);
+  });
+});

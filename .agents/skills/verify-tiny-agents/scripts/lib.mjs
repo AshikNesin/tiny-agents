@@ -25,8 +25,15 @@ export const DEMO = { email: "demo@example.com", password: "demo@example.com" };
 const BASE = process.env.TA_VERIFY_URL;
 const EVIDENCE = process.env.TA_VERIFY_EVIDENCE;
 
-/** A unique suffix per drive: the instance DB outlives a single journey. */
-export const stamp = Date.now().toString(36);
+/**
+ * A frozen run (`up --fixed-clock`): the browser's clock and the name stamp
+ * are pinned too, with UTC, en-US and no animation, so two runs of a
+ * journey write the same ARIA snapshots.
+ */
+const FIXED_NOW = process.env.TA_VERIFY_FIXED_NOW;
+
+/** A unique suffix per drive: the instance DB outlives a single journey. Pinned on a frozen run. */
+export const stamp = FIXED_NOW ? "fixed" : Date.now().toString(36);
 
 async function launch() {
   const headless = process.env.TA_VERIFY_HEADED !== "1";
@@ -161,7 +168,9 @@ export async function journey(feature, fn, { signIn = true, requires = [] } = {}
   const context = await browser.newContext({
     baseURL: BASE,
     viewport: { width: 1280, height: 860 },
+    ...(FIXED_NOW ? { timezoneId: "UTC", locale: "en-US", reducedMotion: "reduce" } : {}),
   });
+  if (FIXED_NOW) await context.clock.setFixedTime(new Date(FIXED_NOW));
   // The instance is a Vite dev server: its HMR client would push live updates,
   // even full reloads, into the page when anything in the checkout changes
   // mid-drive. Serve a no-op client instead (CSS injection still works). Do NOT

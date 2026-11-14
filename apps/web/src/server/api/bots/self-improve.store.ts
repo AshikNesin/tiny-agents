@@ -5,8 +5,8 @@
  * it.
  *
  * Writes happen only in the owner's own turns (the same rule as `remember`):
- * a routine run or another bot's message is refused even when the owner set
- * the tool to Always allow, and the `askOnly` flag means there is no "always
+ * a routine run, another bot's message or a chat shared with guests is
+ * refused even when the owner set the tool to Always allow, and the `askOnly` flag means there is no "always
  * allow" in the first place — every change waits for the owner in chat.
  *
  * Every applied change appends a full-snapshot `prompt_revisions` row before
@@ -32,12 +32,15 @@ export function createInstructionsStore(
     },
 
     async update(conversationId, input) {
-      const refuse = (status: "disabled" | "unattended") => ({ status });
+      const refuse = (status: "disabled" | "unattended" | "shared") => ({ status });
       const owner = await conversationOwner(conversationId);
       if (!owner) return refuse("disabled");
       // A runtime that can't be read counts as unattended (refuses, never allows).
       const reader: ChatReader = { readChat: (ref) => runtime().readChat(ref) };
       if (await isUnattended(conversationId, reader, owner)) return refuse("unattended");
+      // A guest's turn reads as attended, and a guest can answer the card,
+      // so a shared chat never changes the prompt (as bot-builder; S1).
+      if (owner.bot.shared) return refuse("shared");
 
       const bot = await db.query.bots.findFirst({
         where: eq(bots.conversationId, String(conversationId)),

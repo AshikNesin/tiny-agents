@@ -10,6 +10,7 @@ import { createShelleyHarness } from "@tiny-agents/code/server";
 import { testHost } from "@tiny-agents/code/testing";
 import { api, createTestApp } from "../helpers";
 import { authToken, eventually, resetAppTables } from "../fixtures";
+import { db, guests } from "../../../apps/web/src/server/db";
 import { createCodeHub, setCodeHub } from "../../../apps/web/src/server/api/code/code.hub";
 import { isFollowed, markSeen } from "../../../apps/web/src/server/api/code/code.store";
 import { startFakeShelley, type FakeShelley } from "./shelley/fake-shelley";
@@ -237,7 +238,9 @@ describe("Code API", () => {
 
     // Over the route's own limit (not the app's 1 MB default): a worded 413,
     // before the body is read or forwarded.
-    const forwarded = shelley.seen.length;
+    // Count only uploads: the stream's background list refresh may land meanwhile.
+    const uploadsSeen = () => shelley.seen.filter((r) => r.method === "POST").length;
+    const forwarded = uploadsSeen();
     const oversized = await app.request("/api/v1/code/uploads/shelley?filename=big.bin", {
       method: "POST",
       headers: {
@@ -251,7 +254,7 @@ describe("Code API", () => {
     expect(((await oversized.json()) as { error: { message: string } }).error.message).toBe(
       "Uploads are limited to 25 MB",
     );
-    expect(shelley.seen.length).toBe(forwarded);
+    expect(uploadsSeen()).toBe(forwarded);
     // Bigger than the app's 1 MB API default, within the route's 25 MB.
     const midsize = await app.request("/api/v1/code/uploads/shelley?filename=log.txt", {
       method: "POST",
@@ -287,5 +290,79 @@ describe("Code API", () => {
     await read((s) => s.includes("Working"));
     await reader.cancel();
     expect(text).toContain('"type":"partial"');
+  });
+});
+
+describe("Code API for a guest (S3)", () => {
+  let guestToken = "";
+  beforeAll(async () => {
+    guestToken = await authToken("code-guest@example.com", 4242);
+  });
+  const asGuest = <T = unknown>(path: string, init: { method?: string; json?: unknown } = {}) =>
+    api<T>(app, `/api/v1/code${path}`, { ...init, token: guestToken });
+
+  beforeEach(async () => {
+    await db.insert(guests).values({ userId: 4242 }).onConflictDoNothing();
+  });
+
+  it("keeps the harness host to the owner: no browsing, finding, repos, worktrees, uploads or cwd moves", async () => {
+    for (const [method, path] of [
+      ["GET", "/harnesses/fake/directories"],
+      ["GET", "/harnesses/fake/validate-cwd?path=/"],
+      ["GET", "/harnesses/fake/find-files?q=x"],
+      ["GET", "/harnesses/fake/repos"],
+      ["POST", "/harnesses/fake/worktrees"],
+      ["POST", "/uploads/fake?filename=x.txt"],
+      ["POST", "/threads/fake:t1/cwd"],
+    ] as const) {
+      expect((await asGuest(path, { method })).status, `${method} ${path}`).toBe(403);
+    }
+    expect((await get("/harnesses/fake/directories")).status).not.toBe(403);
+  });
+
+  it("refuses a guest bypass mode, a chosen directory and file assets", async () => {
+    const create = (json: Record<string, unknown>) =>
+      asGuest("/threads", { method: "POST", json: { instanceId: "fake", message: "hi", ...json } });
+    expect((await create({ permissionMode: "bypassPermissions" })).status).toBe(403);
+    expect((await create({ cwd: "/etc" })).status).toBe(403);
+    expect(
+      (
+        await asGuest("/threads/fake:t1/settings", {
+          method: "POST",
+          json: { permissionMode: "bypassPermissions" },
+        })
+      ).status,
+    ).toBe(403);
+    expect((await asGuest("/harnesses/fake/asset?ref=file%3A%2Fetc%2Fpasswd")).status).toBe(403);
+    expect((await asGuest("/harnesses/fake/asset?ref=%2Fetc%2Fpasswd")).status).toBe(403);
+    // A message's own image is the harness's to answer, not refused for the guest.
+    expect((await asGuest("/harnesses/fake/asset?ref=img%3Aabc%3A0%3A0")).status).not.toBe(403);
+  });
+
+  it("describes each harness to a guest without the owner-only controls", async () => {
+    type Caps = {
+      threads: { changeCwd: boolean };
+      settings: { permissionModes: string[] };
+      workspace: { browse: boolean; findFiles: boolean; uploads: boolean; worktrees: boolean };
+    };
+    const status = await asGuest<{ harnesses: Array<{ id: string; capabilities: Caps }> }>(
+      "/status",
+    );
+    for (const { capabilities } of status.body.data!.harnesses) {
+      expect(capabilities.threads.changeCwd).toBe(false);
+      expect(capabilities.settings.permissionModes).not.toContain("bypassPermissions");
+      expect(capabilities.workspace).toMatchObject({
+        browse: false,
+        findFiles: false,
+        uploads: false,
+        worktrees: false,
+      });
+    }
+  });
+
+  it("still lets a guest read and work in threads", async () => {
+    expect((await asGuest("/status")).status).toBe(200);
+    expect((await asGuest("/threads")).status).toBe(200);
+    expect((await asGuest("/harnesses/fake/models")).status).not.toBe(403);
   });
 });

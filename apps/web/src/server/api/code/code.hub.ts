@@ -20,6 +20,7 @@ import {
   type ThreadSummary,
 } from "@tiny-agents/code/server";
 import { seenMap } from "./code.store";
+import { app } from "../../app-root";
 
 type HubChange = "list" | "status";
 
@@ -188,15 +189,14 @@ export function createCodeHub(options: HubOptions): CodeHub {
   };
 }
 
-let hub: CodeHub | undefined;
-
-/** The process's hub; undefined until boot (or when no harness is configured). */
+/** The process's hub (`app().codeHub`); undefined until boot (or when no harness is configured). */
 export function codeHub(): CodeHub | undefined {
-  return hub;
+  return app().codeHub;
 }
 
 export function setCodeHub(next: CodeHub | undefined): CodeHub | undefined {
-  hub?.stop();
-  hub = next;
-  return hub;
+  const root = app();
+  root.codeHub?.stop();
+  root.codeHub = next;
+  return next;
 }

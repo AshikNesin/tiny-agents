@@ -1,0 +1,29 @@
+# http://localhost:<port>/jobs/routine-fire/<id1>
+- complementary "Sidebar":
+  - link "tiny-agents":
+    - /url: /chats
+  - button "Search"
+  - button "Collapse sidebar"
+  - navigation "Primary":
+    - link "Tasks":
+      - /url: /tasks
+    - link "Terminal":
+      - /url: /terminal
+    - link "Computer":
+      - /url: /computer
+    - link "Browser":
+      - /url: /browser
+  - region "Bots":
+    - heading "Bots" [level=2]
+    - button "New bot"
+    - list:
+      - listitem:
+        - link "Jobs Bot fixed":
+          - /url: /chats/<id2>
+        - button "Jobs Bot fixed actions"
+  - button "Account and navigation": D Demo User
+- main:
+  - button "Back to Jobs"
+  - paragraph: Job Not Found
+  - paragraph: "Job not found: <id1>"
+- region "Notifications alt+T"

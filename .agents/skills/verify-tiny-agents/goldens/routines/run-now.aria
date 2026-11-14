@@ -1,0 +1,47 @@
+# http://localhost:<port>/routines
+- complementary "Sidebar":
+  - link "tiny-agents":
+    - /url: /chats
+  - button "Search"
+  - button "Collapse sidebar"
+  - navigation "Primary":
+    - link "Tasks":
+      - /url: /tasks
+    - link "Terminal":
+      - /url: /terminal
+    - link "Computer":
+      - /url: /computer
+    - link "Browser":
+      - /url: /browser
+  - region "Bots":
+    - heading "Bots" [level=2]
+    - button "New bot"
+    - list:
+      - listitem:
+        - link "Routine Bot fixed":
+          - /url: /chats/<id1>
+        - button "Routine Bot fixed actions"
+  - button "Account and navigation": D Demo User
+- main:
+  - heading "Routines" [level=1]
+  - text: "Run any bot on a schedule: once, daily, weekly, or on an interval. Times are in IST."
+  - button "New routine"
+  - heading "Schedules" [level=2]
+  - text: 1 total · 0 enabled
+  - paragraph: verify-routine-fixed
+  - paragraph: Routine Bot fixed · Every 15 minutes
+  - paragraph: Paused
+  - switch "Resume verify-routine-fixed"
+  - button "Run now"
+  - button "Edit"
+  - button "Delete"
+  - heading "Recent runs" [level=2]
+  - list:
+    - listitem:
+      - text: awaiting verify-routine-fixed manual
+      - paragraph: Fri, 06 Nov 2026, 12:00 IST
+- region "Notifications alt+T":
+  - list:
+    - listitem:
+      - text: Run started Routine Bot fixed replies in its chat.
+      - button "Open chat"

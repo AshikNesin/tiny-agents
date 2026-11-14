@@ -6,6 +6,7 @@ import { logger } from "@groot/core/logger";
 import * as connectionsService from "./connections.service";
 import { getConnectionManager } from "./connections.manager";
 import { clientMetadata, clientMetadataUrl } from "./oauth";
+import { assertStepUp, requireStepUp } from "../vault/vault.stepup";
 import {
   callToolSchema,
   createConnectionSchema,
@@ -73,7 +74,10 @@ router.post("/connections/test", async (c) => {
   return ok(c, await connectionsService.test(await parseBody(c, testConnectionSchema)));
 });
 
-router.post("/connections", async (c) => {
+// Where a connection points and the secret it sends need a fresh step-up
+// (S4), as a model account's do: a stolen session must not re-point a stored
+// header secret at its own host.
+router.post("/connections", requireStepUp, async (c) => {
   const payload = await parseBody(c, createConnectionSchema);
   return ok(c, await connectionsService.create(payload), 201);
 });
@@ -84,10 +88,13 @@ router.get("/connections/:id", async (c) => {
 
 router.patch("/connections/:id", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
-  return ok(c, await connectionsService.update(id, await parseBody(c, updateConnectionSchema)));
+  const payload = await parseBody(c, updateConnectionSchema);
+  const { name: _name, botIds: _botIds, ...reach } = payload;
+  if (Object.values(reach).some((value) => value !== undefined)) assertStepUp(c);
+  return ok(c, await connectionsService.update(id, payload));
 });
 
-router.delete("/connections/:id", async (c) => {
+router.delete("/connections/:id", requireStepUp, async (c) => {
   await connectionsService.remove(parseStringParam(c.req.param("id"), "id"));
   return ok(c, { deleted: true });
 });

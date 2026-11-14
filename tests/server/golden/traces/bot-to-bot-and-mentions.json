@@ -1,0 +1,509 @@
+[
+  {
+    "http": "create the host",
+    "method": "POST",
+    "path": "/api/v1/bots",
+    "status": 201,
+    "body": {
+      "success": true,
+      "data": {
+        "id": "<id1>",
+        "name": "Host",
+        "description": "",
+        "systemPrompt": "Be brief.",
+        "modelId": "test-model",
+        "conversationId": "124",
+        "chatStartedAt": "2026-11-06T06:30:00.000Z",
+        "lastReadAt": null,
+        "lastActivityAt": "2026-11-06T06:30:00.000Z",
+        "lastMessagePreview": null,
+        "toolPermissions": {
+          "message_bot": "allow"
+        },
+        "memoryEnabled": true,
+        "autoReview": false,
+        "yoloByDefault": false,
+        "memoryCapturedThrough": null,
+        "pinnedAt": null,
+        "browserProfile": "shared",
+        "createdAt": "2026-11-06T06:30:00.000Z",
+        "updatedAt": "2026-11-06T06:30:00.000Z",
+        "skillIds": [],
+        "connectionIds": [],
+        "connectionCapabilities": [],
+        "guestIds": []
+      }
+    }
+  },
+  {
+    "http": "create the helper",
+    "method": "POST",
+    "path": "/api/v1/bots",
+    "status": 201,
+    "body": {
+      "success": true,
+      "data": {
+        "id": "<id2>",
+        "name": "Helper",
+        "description": "",
+        "systemPrompt": "Be brief.",
+        "modelId": "test-model",
+        "conversationId": "131",
+        "chatStartedAt": "2026-11-06T06:30:00.000Z",
+        "lastReadAt": null,
+        "lastActivityAt": "2026-11-06T06:30:00.000Z",
+        "lastMessagePreview": null,
+        "toolPermissions": {},
+        "memoryEnabled": true,
+        "autoReview": false,
+        "yoloByDefault": false,
+        "memoryCapturedThrough": null,
+        "pinnedAt": null,
+        "browserProfile": "shared",
+        "createdAt": "2026-11-06T06:30:00.000Z",
+        "updatedAt": "2026-11-06T06:30:00.000Z",
+        "skillIds": [],
+        "connectionIds": [],
+        "connectionCapabilities": [],
+        "guestIds": []
+      }
+    }
+  },
+  {
+    "http": "host messages the helper",
+    "method": "POST",
+    "path": "/api/v1/bots/<id1>/messages",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "submitted": true
+      }
+    }
+  },
+  {
+    "sse": "host chat",
+    "path": "/api/v1/bots/<id1>/stream",
+    "frames": [
+      {
+        "type": "snapshot",
+        "state": {
+          "messages": [
+            {
+              "id": "e138",
+              "role": "user",
+              "text": "/tool message_bot {\"to\":\"Helper\",\"text\":\"what is 2+2?\"}",
+              "requestId": "golden-b2b-00001",
+              "status": "done",
+              "createdAt": 1793946600000
+            },
+            {
+              "id": "e142",
+              "role": "assistant",
+              "text": "",
+              "toolCalls": [
+                {
+                  "id": "<id3>",
+                  "name": "message_bot",
+                  "args": {
+                    "to": "Helper",
+                    "text": "what is 2+2?"
+                  },
+                  "status": "done",
+                  "output": "Message delivered for Helper. The reply arrives here as \"Reply from Helper\" - do not message them back just to acknowledge it.",
+                  "durationMs": "<ms>"
+                }
+              ],
+              "status": "done",
+              "model": "test-model",
+              "createdAt": 1793946600000
+            },
+            {
+              "id": "e153",
+              "role": "assistant",
+              "text": "Tool said: Message delivered for Helper. The reply arrives here as \"Reply from Helper\" - do not message them back just to acknowledge it.",
+              "status": "done",
+              "model": "test-model",
+              "createdAt": 1793946600000
+            },
+            {
+              "id": "e154",
+              "role": "user",
+              "text": "**Reply from Helper:** Echo: **Message from Host (bot):** what is 2+2?",
+              "requestId": "botmsg-reply-<id4>",
+              "peer": {
+                "kind": "reply",
+                "name": "Helper"
+              },
+              "status": "done",
+              "createdAt": 1793946600000
+            },
+            {
+              "id": "e157",
+              "role": "assistant",
+              "text": "Echo: **Reply from Helper:** Echo: **Message from Host (bot):** what is 2+2?",
+              "status": "done",
+              "model": "test-model",
+              "createdAt": 1793946600000
+            }
+          ],
+          "busy": false,
+          "queued": [],
+          "hasMore": false,
+          "cursor": "e138"
+        }
+      },
+      {
+        "type": "routine-runs",
+        "runs": []
+      },
+      {
+        "type": "yolo",
+        "on": false
+      }
+    ]
+  },
+  {
+    "sse": "helper chat",
+    "path": "/api/v1/bots/<id2>/stream",
+    "frames": [
+      {
+        "type": "snapshot",
+        "state": {
+          "messages": [
+            {
+              "id": "e144",
+              "role": "user",
+              "text": "**Message from Host (bot):** what is 2+2?",
+              "requestId": "botmsg-pi:<id5>:143",
+              "peer": {
+                "kind": "message",
+                "name": "Host"
+              },
+              "status": "done",
+              "createdAt": 1793946600000
+            },
+            {
+              "id": "e151",
+              "role": "assistant",
+              "text": "Echo: **Message from Host (bot):** what is 2+2?",
+              "status": "done",
+              "model": "test-model",
+              "createdAt": 1793946600000
+            }
+          ],
+          "busy": false,
+          "queued": [],
+          "hasMore": false,
+          "cursor": "e144"
+        }
+      },
+      {
+        "type": "routine-runs",
+        "runs": []
+      },
+      {
+        "type": "yolo",
+        "on": false
+      }
+    ]
+  },
+  {
+    "http": "owner mentions the helper",
+    "method": "POST",
+    "path": "/api/v1/bots/<id1>/messages",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "submitted": true
+      }
+    }
+  },
+  {
+    "sse": "host chat after the mention",
+    "path": "/api/v1/bots/<id1>/stream",
+    "frames": [
+      {
+        "type": "snapshot",
+        "state": {
+          "messages": [
+            {
+              "id": "e138",
+              "role": "user",
+              "text": "/tool message_bot {\"to\":\"Helper\",\"text\":\"what is 2+2?\"}",
+              "requestId": "golden-b2b-00001",
+              "status": "done",
+              "createdAt": 1793946600000
+            },
+            {
+              "id": "e142",
+              "role": "assistant",
+              "text": "",
+              "toolCalls": [
+                {
+                  "id": "<id3>",
+                  "name": "message_bot",
+                  "args": {
+                    "to": "Helper",
+                    "text": "what is 2+2?"
+                  },
+                  "status": "done",
+                  "output": "Message delivered for Helper. The reply arrives here as \"Reply from Helper\" - do not message them back just to acknowledge it.",
+                  "durationMs": "<ms>"
+                }
+              ],
+              "status": "done",
+              "model": "test-model",
+              "createdAt": 1793946600000
+            },
+            {
+              "id": "e153",
+              "role": "assistant",
+              "text": "Tool said: Message delivered for Helper. The reply arrives here as \"Reply from Helper\" - do not message them back just to acknowledge it.",
+              "status": "done",
+              "model": "test-model",
+              "createdAt": 1793946600000
+            },
+            {
+              "id": "e154",
+              "role": "user",
+              "text": "**Reply from Helper:** Echo: **Message from Host (bot):** what is 2+2?",
+              "requestId": "botmsg-reply-<id4>",
+              "peer": {
+                "kind": "reply",
+                "name": "Helper"
+              },
+              "status": "done",
+              "createdAt": 1793946600000
+            },
+            {
+              "id": "e157",
+              "role": "assistant",
+              "text": "Echo: **Reply from Helper:** Echo: **Message from Host (bot):** what is 2+2?",
+              "status": "done",
+              "model": "test-model",
+              "createdAt": 1793946600000
+            },
+            {
+              "id": "e160",
+              "role": "user",
+              "text": "@Helper say hi",
+              "requestId": "golden-b2b-00002",
+              "status": "done",
+              "createdAt": 1793946600000
+            },
+            {
+              "id": "e166",
+              "role": "assistant",
+              "text": "Echo: @Helper say hi",
+              "status": "done",
+              "model": "test-model",
+              "createdAt": 1793946600000
+            },
+            {
+              "id": "e168",
+              "role": "user",
+              "text": "**Reply from Helper:** Echo: [From the owner, in Host's chat] @Helper say hi",
+              "requestId": "botmsg-reply-<id6>",
+              "peer": {
+                "kind": "reply",
+                "name": "Helper"
+              },
+              "status": "done",
+              "createdAt": 1793946600000
+            },
+            {
+              "id": "e171",
+              "role": "assistant",
+              "text": "Echo: **Reply from Helper:** Echo: [From the owner, in Host's chat] @Helper say hi",
+              "status": "done",
+              "model": "test-model",
+              "createdAt": 1793946600000
+            }
+          ],
+          "busy": false,
+          "queued": [],
+          "hasMore": false,
+          "cursor": "e138"
+        }
+      },
+      {
+        "type": "routine-runs",
+        "runs": []
+      },
+      {
+        "type": "yolo",
+        "on": false
+      }
+    ]
+  },
+  {
+    "http": "list",
+    "method": "GET",
+    "path": "/api/v1/bots",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": [
+        {
+          "id": "<id7>",
+          "conversationId": "2",
+          "name": "Improver",
+          "description": "",
+          "modelId": "test-model",
+          "lastMessagePreview": "Tool said: Created task [<id8>] Book flights · medium · todo",
+          "lastActivityAt": "2026-11-06T06:30:00.000Z",
+          "lastReadAt": null,
+          "unread": true,
+          "replying": false,
+          "approvals": 0,
+          "questions": 0,
+          "pinnedAt": null
+        },
+        {
+          "id": "<id9>",
+          "conversationId": "20",
+          "name": "Denied",
+          "description": "",
+          "modelId": "test-model",
+          "lastMessagePreview": "Tool said: The owner denied this create_task call. Do not retry it unless asked.",
+          "lastActivityAt": "2026-11-06T06:30:00.000Z",
+          "lastReadAt": null,
+          "unread": true,
+          "replying": false,
+          "approvals": 0,
+          "questions": 0,
+          "pinnedAt": null
+        },
+        {
+          "id": "<id10>",
+          "conversationId": "38",
+          "name": "Asker",
+          "description": "",
+          "modelId": "test-model",
+          "lastMessagePreview": "Tool said: The owner dismissed these questions without answering (a message from them may follow). Don't ask them again:",
+          "lastActivityAt": "2026-11-06T06:30:00.000Z",
+          "lastReadAt": null,
+          "unread": true,
+          "replying": false,
+          "approvals": 0,
+          "questions": 0,
+          "pinnedAt": null
+        },
+        {
+          "id": "<id11>",
+          "conversationId": "65",
+          "name": "Yolo",
+          "description": "",
+          "modelId": "test-model",
+          "lastMessagePreview": "Tool said: Created task [<id12>] Buy milk · medium · todo",
+          "lastActivityAt": "2026-11-06T06:30:00.000Z",
+          "lastReadAt": null,
+          "unread": true,
+          "replying": false,
+          "approvals": 0,
+          "questions": 0,
+          "pinnedAt": null
+        },
+        {
+          "id": "<id13>",
+          "conversationId": "82",
+          "name": "Tasker",
+          "description": "",
+          "modelId": "test-model",
+          "lastMessagePreview": "Tool said: Created task [<id14>] Call mom · medium · todo",
+          "lastActivityAt": "2026-11-06T06:30:00.000Z",
+          "lastReadAt": null,
+          "unread": true,
+          "replying": false,
+          "approvals": 0,
+          "questions": 0,
+          "pinnedAt": null
+        },
+        {
+          "id": "<id15>",
+          "conversationId": "99",
+          "name": "Busy",
+          "description": "",
+          "modelId": "test-model",
+          "lastMessagePreview": "Echo: after that, thanks",
+          "lastActivityAt": "2026-11-06T06:30:00.000Z",
+          "lastReadAt": null,
+          "unread": true,
+          "replying": false,
+          "approvals": 0,
+          "questions": 0,
+          "pinnedAt": null
+        },
+        {
+          "id": "<id1>",
+          "conversationId": "124",
+          "name": "Host",
+          "description": "",
+          "modelId": "test-model",
+          "lastMessagePreview": "Echo: **Reply from Helper:** Echo: [From the owner, in Host's chat] @Helper say hi",
+          "lastActivityAt": "2026-11-06T06:30:00.000Z",
+          "lastReadAt": null,
+          "unread": true,
+          "replying": false,
+          "approvals": 0,
+          "questions": 0,
+          "pinnedAt": null
+        },
+        {
+          "id": "<id2>",
+          "conversationId": "131",
+          "name": "Helper",
+          "description": "",
+          "modelId": "test-model",
+          "lastMessagePreview": "Echo: [From the owner, in Host's chat] @Helper say hi",
+          "lastActivityAt": "2026-11-06T06:30:00.000Z",
+          "lastReadAt": null,
+          "unread": true,
+          "replying": false,
+          "approvals": 0,
+          "questions": 0,
+          "pinnedAt": null
+        }
+      ]
+    }
+  },
+  {
+    "db": "deliveries",
+    "tables": {
+      "bot_messages": [
+        {
+          "id": "<id4>",
+          "fromBotId": "<id1>",
+          "toBotId": "<id2>",
+          "conversationId": "131",
+          "replyToBotId": "<id1>",
+          "kind": "relay",
+          "requestId": "botmsg-pi:<id5>:143",
+          "sourceKey": "pi:<id5>:143",
+          "text": "what is 2+2?",
+          "deliveredAt": "2026-11-06T06:30:00.000Z",
+          "answeredAt": "2026-11-06T06:30:00.000Z",
+          "answerReplyAt": "2026-11-06T06:30:00.000Z",
+          "createdAt": "2026-11-06T06:30:00.000Z"
+        },
+        {
+          "id": "<id6>",
+          "fromBotId": null,
+          "toBotId": "<id2>",
+          "conversationId": "131",
+          "replyToBotId": "<id1>",
+          "kind": "relay",
+          "requestId": "mention-golden-b2b-00002-<id2>",
+          "sourceKey": null,
+          "text": "@Helper say hi",
+          "deliveredAt": "2026-11-06T06:30:00.000Z",
+          "answeredAt": "2026-11-06T06:30:00.000Z",
+          "answerReplyAt": "2026-11-06T06:30:00.000Z",
+          "createdAt": "2026-11-06T06:30:00.000Z"
+        }
+      ]
+    }
+  }
+]

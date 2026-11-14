@@ -1,0 +1,194 @@
+# http://localhost:<port>/chats/<id1>
+- region "Notifications alt+T"
+- dialog "Edit Review Bot fixed":
+  - heading "Edit Review Bot fixed" [level=2]
+  - paragraph: Prompt and model changes apply from the next turn; history is kept.
+  - tablist:
+    - tab "Profile"
+    - tab "Tools" [selected]
+    - tab "Skills"
+    - tab "Sharing"
+  - tabpanel "Tools":
+    - searchbox "Search tools"
+    - text: 10 allow · 21 ask
+    - button "Allow read-only"
+    - button "Ask for everything"
+    - paragraph:
+      - text: Every bot has these tools.
+      - strong: Allow
+      - text: runs a tool unattended,
+      - strong: Ask
+      - text: waits for your approval,
+      - strong: "Off"
+      - text: hides it from this bot.
+    - paragraph: Auto-review
+    - paragraph: A classifier approves low-risk Ask actions you clearly asked for, so they run without a card. Anything else still asks you, and so do vault use and Ask (always) tools.
+    - switch "Auto-review" [checked]
+    - paragraph: YOLO mode by default
+    - paragraph: "Every new chat with this bot starts with YOLO mode on: Ask tools run without a card. Vault use, turns you did not start and routines still ask. You can turn it off in any chat."
+    - switch "YOLO mode by default"
+    - button "Memory 2 tools · 2 ask" [expanded]
+    - radiogroup "All Memory tools":
+      - radio "Allow"
+      - radio "Ask" [checked]
+      - radio "Off"
+    - paragraph: Save a memory
+    - paragraph: Remember a fact about the owner
+    - radiogroup "Save a memory permission":
+      - radio "Allow"
+      - radio "Ask" [checked]
+      - radio "Off"
+    - paragraph: Forget a memory
+    - paragraph: Forget a fact about the owner
+    - radiogroup "Forget a memory permission":
+      - radio "Allow"
+      - radio "Ask" [checked]
+      - radio "Off"
+    - button "Self-improve 1 tool · 1 ask" [expanded]
+    - paragraph: Update own instructions
+    - paragraph: Edit this bot's system prompt
+    - radiogroup "Update own instructions permission":
+      - radio "Ask (always)" [checked]
+      - radio "Off"
+    - button "Bot builder 1 tool · 1 ask" [expanded]
+    - paragraph: Create a new bot
+    - paragraph: Create a new bot
+    - radiogroup "Create a new bot permission":
+      - radio "Ask (always)" [checked]
+      - radio "Off"
+    - button "Tasks 5 tools · 1 allow · 4 ask" [expanded]
+    - text: Mixed
+    - radiogroup "All Tasks tools":
+      - radio "Allow"
+      - radio "Ask"
+      - radio "Off"
+    - paragraph: Add a task
+    - paragraph: Create a task
+    - radiogroup "Add a task permission":
+      - radio "Allow"
+      - radio "Ask" [checked]
+      - radio "Off"
+    - paragraph: List tasks
+    - paragraph: List tasks
+    - radiogroup "List tasks permission":
+      - radio "Allow" [checked]
+      - radio "Ask"
+      - radio "Off"
+    - paragraph: Update a task
+    - paragraph: Update a task
+    - radiogroup "Update a task permission":
+      - radio "Allow"
+      - radio "Ask" [checked]
+      - radio "Off"
+    - paragraph: Complete a task
+    - paragraph: Mark a task done
+    - radiogroup "Complete a task permission":
+      - radio "Allow"
+      - radio "Ask" [checked]
+      - radio "Off"
+    - paragraph: Delete a task
+    - paragraph: Delete a task
+    - radiogroup "Delete a task permission":
+      - radio "Allow"
+      - radio "Ask" [checked]
+      - radio "Off"
+    - button "Routines 6 tools · 2 allow · 4 ask" [expanded]
+    - text: Mixed
+    - radiogroup "All Routines tools":
+      - radio "Allow"
+      - radio "Ask"
+      - radio "Off"
+    - paragraph: Create a routine
+    - paragraph: Create a routine
+    - radiogroup "Create a routine permission":
+      - radio "Allow"
+      - radio "Ask" [checked]
+      - radio "Off"
+    - paragraph: List routines
+    - paragraph: List routines
+    - radiogroup "List routines permission":
+      - radio "Allow" [checked]
+      - radio "Ask"
+      - radio "Off"
+    - paragraph: Update a routine
+    - paragraph: Update a routine
+    - radiogroup "Update a routine permission":
+      - radio "Allow"
+      - radio "Ask" [checked]
+      - radio "Off"
+    - paragraph: Delete a routine
+    - paragraph: Delete a routine
+    - radiogroup "Delete a routine permission":
+      - radio "Allow"
+      - radio "Ask" [checked]
+      - radio "Off"
+    - paragraph: Run a routine now
+    - paragraph: Run a routine now
+    - radiogroup "Run a routine now permission":
+      - radio "Allow"
+      - radio "Ask" [checked]
+      - radio "Off"
+    - paragraph: Report this routine run blocked
+    - paragraph: Flag a routine run that can't do its job
+    - radiogroup "Report this routine run blocked permission":
+      - radio "Allow" [checked]
+      - radio "Ask"
+      - radio "Off"
+    - button "Web Set TINYFISH_API_KEY to enable web search." [disabled]
+    - button "Vault 1 tool · 1 allow" [expanded]
+    - paragraph: List vault items
+    - paragraph: List the vault items the bot may use (handles only)
+    - radiogroup "List vault items permission":
+      - radio "Allow" [checked]
+      - radio "Ask"
+      - radio "Off"
+    - button "Sandbox Set SANDBOX_HOST to enable the sandbox." [disabled]
+    - button "Attachments 3 tools · 3 allow" [expanded]
+    - radiogroup "All Attachments tools":
+      - radio "Allow" [checked]
+      - radio "Ask"
+      - radio "Off"
+    - paragraph: List attachments
+    - paragraph: List the files attached in this chat
+    - radiogroup "List attachments permission":
+      - radio "Allow" [checked]
+      - radio "Ask"
+      - radio "Off"
+    - paragraph: Read an attachment
+    - paragraph: Read an attached file's contents
+    - radiogroup "Read an attachment permission":
+      - radio "Allow" [checked]
+      - radio "Ask"
+      - radio "Off"
+    - paragraph: Search an attachment
+    - paragraph: Search an attached file
+    - radiogroup "Search an attachment permission":
+      - radio "Allow" [checked]
+      - radio "Ask"
+      - radio "Off"
+    - button "Browser 10 tools · 2 allow · 8 ask"
+    - text: Mixed
+    - radiogroup "All Browser tools":
+      - radio "Allow"
+      - radio "Ask"
+      - radio "Off"
+    - button "Code Set SHELLEY_URL, or turn on the Claude plan on the sandbox, to hand coding work to a coding agent." [disabled]
+    - button "Computer Set SANDBOX_HOST to give bots a computer on the sandbox VM." [disabled]
+    - button "Questions 1 tool · 1 allow" [expanded]
+    - paragraph: Ask you questions
+    - paragraph: Ask you clarifying questions and wait for your answers
+    - radiogroup "Ask you questions permission":
+      - radio "Allow" [checked]
+      - radio "Ask"
+      - radio "Off"
+    - button "Bots 1 tool · 1 ask" [expanded]
+    - paragraph: Message another bot
+    - paragraph: Send a message to another bot
+    - radiogroup "Message another bot permission":
+      - radio "Allow"
+      - radio "Ask" [checked]
+      - radio "Off"
+  - button "Delete bot"
+  - button "Cancel"
+  - button "Save changes"
+  - button "Close"

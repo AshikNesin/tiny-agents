@@ -56,6 +56,14 @@ and column; see the vault's [local backend](./vault.md#local-fallback) for the
 format and `pnpm secrets:rotate`. A value that no longer opens (a changed key)
 puts the connection in `error` with the reason; re-enter the secret.
 
+Where a connection points and what it sends are guarded like a model
+account's: adding a connection, deleting it, and changing its URL, header
+name, secret or `secretRef` need a fresh vault step-up (`X-Vault-Step-Up`,
+403 `step_up_required` without one). Renaming and choosing bots don't. A URL
+that moves to another host drops the stored header secret and reference
+unless the same change sends a new one, so a stored secret never follows the
+URL somewhere else.
+
 ## Header secrets from the vault
 
 A header-auth connection can read its header value from a [vault](./vault.md)
@@ -63,4 +71,5 @@ item instead of the stored encrypted value: `PATCH /api/v1/connections/:id`
 with `{ "secretRef": "<handle>" }` (null goes back to the stored value;
 setting a new `secret` clears the reference). The value is resolved when the
 connection connects, audited, and scrubbed from logs; the item must allow the
-`mcp` tool (API keys do by default) and be switched on.
+`mcp` tool (API keys do by default), be switched on, and be a bots item: an
+app credential (a model account's key) is refused.

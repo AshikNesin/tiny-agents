@@ -92,7 +92,12 @@ router.post("/bots/:id/computer/vnc-ticket", async (c) => {
   const profile = await botProfile(id);
   const live = requireSessions().get(profile);
   if (!live?.desktop.vnc) throw Boom.notFound("No desktop is running for this bot yet.");
-  const ticket = issueComputerVncTicket({ userId: requireUser(c).userId, botId: id, profile });
+  const ticket = issueComputerVncTicket({
+    userId: requireUser(c).userId,
+    botId: id,
+    profile,
+    viewOnly: c.get("viewer").guest,
+  });
   live.lastActivity = Date.now();
   return ok(c, {
     // Relative so the client keeps the page's scheme and host behind proxies.

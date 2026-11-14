@@ -1,0 +1,457 @@
+[
+  {
+    "http": "chat models",
+    "method": "GET",
+    "path": "/api/v1/models",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "models": [
+          {
+            "id": "test-model",
+            "name": "Test Model",
+            "providerId": "faux",
+            "providerName": "Faux",
+            "providerKind": "faux",
+            "upstreamId": "test-model",
+            "type": "chat",
+            "engine": "pi",
+            "contextWindow": 128000,
+            "maxOutputTokens": 16384,
+            "vision": false,
+            "reasoning": true,
+            "enabled": true,
+            "available": true
+          },
+          {
+            "id": "test-model-2",
+            "name": "Test Model 2",
+            "providerId": "faux",
+            "providerName": "Faux",
+            "providerKind": "faux",
+            "upstreamId": "test-model-2",
+            "type": "chat",
+            "engine": "pi",
+            "contextWindow": 128000,
+            "maxOutputTokens": 16384,
+            "vision": false,
+            "reasoning": false,
+            "enabled": true,
+            "available": true
+          }
+        ],
+        "defaultModelId": "test-model",
+        "canAnswer": true,
+        "providers": [
+          {
+            "id": "faux",
+            "name": "Faux",
+            "kind": "faux",
+            "status": "ok",
+            "enabled": true,
+            "modelCount": 2
+          }
+        ]
+      }
+    }
+  },
+  {
+    "http": "accounts",
+    "method": "GET",
+    "path": "/api/v1/models/providers",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "accounts": [],
+        "templates": [
+          {
+            "id": "anthropic",
+            "label": "Anthropic",
+            "kind": "anthropic",
+            "baseUrl": "https://api.anthropic.com"
+          },
+          {
+            "id": "openai",
+            "label": "OpenAI",
+            "kind": "openai-responses",
+            "baseUrl": "https://api.openai.com/v1"
+          },
+          {
+            "id": "gemini",
+            "label": "Gemini",
+            "kind": "gemini",
+            "baseUrl": "https://generativelanguage.googleapis.com/v1beta"
+          },
+          {
+            "id": "openrouter",
+            "label": "OpenRouter",
+            "kind": "openai-chat",
+            "baseUrl": "https://openrouter.ai/api/v1",
+            "aggregator": true
+          },
+          {
+            "id": "cloudflare-ai-gateway",
+            "label": "Cloudflare AI Gateway",
+            "kind": "cloudflare-ai-gateway",
+            "baseUrl": null,
+            "aggregator": true
+          },
+          {
+            "id": "groq",
+            "label": "Groq",
+            "kind": "openai-chat",
+            "baseUrl": "https://api.groq.com/openai/v1"
+          },
+          {
+            "id": "deepseek",
+            "label": "DeepSeek",
+            "kind": "openai-chat",
+            "baseUrl": "https://api.deepseek.com"
+          },
+          {
+            "id": "mistral",
+            "label": "Mistral",
+            "kind": "openai-chat",
+            "baseUrl": "https://api.mistral.ai/v1"
+          },
+          {
+            "id": "together",
+            "label": "Together",
+            "kind": "openai-chat",
+            "baseUrl": "https://api.together.xyz/v1",
+            "aggregator": true
+          },
+          {
+            "id": "zai",
+            "label": "z.ai",
+            "kind": "openai-chat",
+            "baseUrl": "https://api.z.ai/api/paas/v4"
+          },
+          {
+            "id": "zai-coding",
+            "label": "z.ai Coding Plan",
+            "kind": "openai-chat",
+            "baseUrl": "https://api.z.ai/api/coding/paas/v4"
+          },
+          {
+            "id": "ollama",
+            "label": "Ollama",
+            "kind": "openai-chat",
+            "baseUrl": "http://localhost:11434/v1",
+            "keyless": true,
+            "privateNetwork": true
+          },
+          {
+            "id": "claude-plan",
+            "label": "Claude plan",
+            "kind": "claude-plan",
+            "baseUrl": null,
+            "keyless": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "http": "roles",
+    "method": "GET",
+    "path": "/api/v1/models/roles",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "roles": {
+          "bot_default": {
+            "modelId": "test-model",
+            "fallback": true
+          },
+          "memory_capture": {
+            "modelId": "test-model",
+            "fallback": true
+          },
+          "chat_title": {
+            "modelId": "test-model",
+            "fallback": true
+          },
+          "vision": {
+            "modelId": null,
+            "fallback": true
+          },
+          "classifier": {
+            "modelId": null,
+            "fallback": true
+          }
+        }
+      }
+    }
+  },
+  {
+    "http": "set a role",
+    "method": "PUT",
+    "path": "/api/v1/models/roles",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "roles": {
+          "bot_default": {
+            "modelId": "test-model",
+            "fallback": true
+          },
+          "memory_capture": {
+            "modelId": "test-model",
+            "fallback": true
+          },
+          "chat_title": {
+            "modelId": "test-model",
+            "fallback": true
+          },
+          "vision": {
+            "modelId": null,
+            "fallback": true
+          },
+          "classifier": {
+            "modelId": null,
+            "fallback": true
+          }
+        }
+      }
+    }
+  },
+  {
+    "http": "roles after",
+    "method": "GET",
+    "path": "/api/v1/models/roles",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "roles": {
+          "bot_default": {
+            "modelId": "test-model",
+            "fallback": true
+          },
+          "memory_capture": {
+            "modelId": "test-model",
+            "fallback": true
+          },
+          "chat_title": {
+            "modelId": "test-model",
+            "fallback": true
+          },
+          "vision": {
+            "modelId": null,
+            "fallback": true
+          },
+          "classifier": {
+            "modelId": null,
+            "fallback": true
+          }
+        }
+      }
+    }
+  },
+  {
+    "http": "add an account without step-up",
+    "method": "POST",
+    "path": "/api/v1/models/providers",
+    "status": 403,
+    "body": {
+      "success": false,
+      "error": {
+        "code": "FORBIDDEN",
+        "message": "Confirm it's you first (step-up required)",
+        "details": {
+          "code": "step_up_required"
+        }
+      }
+    }
+  },
+  {
+    "http": "capabilities",
+    "method": "GET",
+    "path": "/api/v1/capabilities",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "capabilities": [
+          {
+            "id": "questions",
+            "kind": "toolkit",
+            "name": "Questions",
+            "description": "Asks you clarifying questions mid-reply",
+            "tools": [
+              {
+                "name": "ask_owner",
+                "label": "Asked you questions",
+                "askLabel": "ask you questions",
+                "description": "Ask you clarifying questions and wait for your answers",
+                "readOnly": true
+              }
+            ]
+          },
+          {
+            "id": "bots",
+            "kind": "toolkit",
+            "name": "Bots",
+            "description": "Message other bots",
+            "tools": [
+              {
+                "name": "message_bot",
+                "label": "Messaged bot",
+                "askLabel": "message another bot",
+                "description": "Send a message to another bot"
+              }
+            ]
+          },
+          {
+            "id": "tasks",
+            "kind": "toolkit",
+            "name": "Tasks",
+            "description": "Create and manage your tasks",
+            "tools": [
+              {
+                "name": "create_task",
+                "label": "Added task",
+                "askLabel": "add a task",
+                "description": "Create a task"
+              },
+              {
+                "name": "list_tasks",
+                "label": "Listed tasks",
+                "askLabel": "list tasks",
+                "description": "List tasks",
+                "readOnly": true
+              },
+              {
+                "name": "update_task",
+                "label": "Updated task",
+                "askLabel": "update a task",
+                "description": "Update a task"
+              },
+              {
+                "name": "complete_task",
+                "label": "Completed task",
+                "askLabel": "complete a task",
+                "description": "Mark a task done"
+              },
+              {
+                "name": "delete_task",
+                "label": "Deleted task",
+                "askLabel": "delete a task",
+                "description": "Delete a task"
+              }
+            ]
+          },
+          {
+            "id": "routines",
+            "kind": "toolkit",
+            "name": "Routines",
+            "description": "Schedule recurring or one-time routines for the owner",
+            "tools": [
+              {
+                "name": "create_routine",
+                "label": "Created routine",
+                "askLabel": "create a routine",
+                "description": "Create a routine"
+              },
+              {
+                "name": "list_routines",
+                "label": "Listed routines",
+                "askLabel": "list routines",
+                "description": "List routines",
+                "readOnly": true
+              },
+              {
+                "name": "update_routine",
+                "label": "Updated routine",
+                "askLabel": "update a routine",
+                "description": "Update a routine"
+              },
+              {
+                "name": "delete_routine",
+                "label": "Deleted routine",
+                "askLabel": "delete a routine",
+                "description": "Delete a routine"
+              },
+              {
+                "name": "run_routine_now",
+                "label": "Ran routine now",
+                "askLabel": "run a routine now",
+                "description": "Run a routine now"
+              },
+              {
+                "name": "report_routine_blocked",
+                "label": "Reported the routine blocked",
+                "askLabel": "report this routine run blocked",
+                "description": "Flag a routine run that can't do its job",
+                "readOnly": true,
+                "unattendedOnly": true
+              }
+            ]
+          },
+          {
+            "id": "skills",
+            "kind": "skills",
+            "name": "Skills",
+            "description": "Reusable instructions from your skill library",
+            "tools": [
+              {
+                "name": "load_skill",
+                "label": "Using skill",
+                "askLabel": "use a skill",
+                "description": "Load a skill",
+                "readOnly": true
+              },
+              {
+                "name": "read_skill_file",
+                "label": "Read skill file",
+                "askLabel": "read a skill file",
+                "description": "Read a skill's file",
+                "readOnly": true
+              },
+              {
+                "name": "save_skill",
+                "label": "Saved skill",
+                "askLabel": "save a skill",
+                "description": "Save a workflow as a skill",
+                "askOnly": true
+              }
+            ]
+          },
+          {
+            "id": "memory",
+            "kind": "toolkit",
+            "name": "Memory",
+            "description": "Long-term memories this bot keeps about the owner",
+            "tools": [
+              {
+                "name": "remember",
+                "label": "Saved memory",
+                "askLabel": "save a memory",
+                "description": "Remember a fact about the owner"
+              },
+              {
+                "name": "forget",
+                "label": "Forgot memory",
+                "askLabel": "forget a memory",
+                "description": "Forget a fact about the owner"
+              }
+            ]
+          },
+          {
+            "id": "today",
+            "kind": "toolkit",
+            "name": "Today",
+            "description": "Today's date in the owner's timezone",
+            "auto": true,
+            "tools": []
+          }
+        ]
+      }
+    }
+  }
+]

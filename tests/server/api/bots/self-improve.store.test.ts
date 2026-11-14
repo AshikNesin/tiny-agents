@@ -7,7 +7,8 @@ import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { eq } from "drizzle-orm";
 import { createInstructionsStore } from "../../../../apps/web/src/server/api/bots/self-improve.store";
-import { bots, db, promptRevisions, routines } from "../../../../apps/web/src/server/db";
+import { users } from "@groot/core/database/schema";
+import { botGuests, bots, db, promptRevisions, routines } from "../../../../apps/web/src/server/db";
 import { resetAppTables, seedBot as seedBotRow } from "../../fixtures";
 
 /** Who sent the conversation's latest user message (what `isUnattended` reads). */
@@ -27,6 +28,26 @@ async function seedBot(systemPrompt = "You are a helpful assistant.") {
 }
 
 describe("createInstructionsStore", () => {
+  it("refuses in a chat shared with guests, leaving the prompt and history untouched (S1)", async () => {
+    const { botId, conversationId } = await seedBot("Original.");
+    const [user] = await db
+      .insert(users)
+      .values({ email: `${randomUUID()}@example.com`, password: "x" })
+      .returning();
+    await db.insert(botGuests).values({ botId, userId: user!.id });
+    await expect(store.update(conversationId, { instructions: "Guest's rules." })).resolves.toEqual(
+      {
+        status: "shared",
+      },
+    );
+    expect(await store.read(conversationId)).toBe("Original.");
+    expect(
+      await db.query.promptRevisions.findMany({ where: eq(promptRevisions.botId, botId) }),
+    ).toHaveLength(0);
+    await db.delete(botGuests);
+    await db.delete(users).where(eq(users.id, user!.id));
+  });
+
   it("replaces the prompt on the owner's turn and records a revision", async () => {
     const { botId, conversationId } = await seedBot();
     const result = await store.update(conversationId, { instructions: "You are a pirate." });

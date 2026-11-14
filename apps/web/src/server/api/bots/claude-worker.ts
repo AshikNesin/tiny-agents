@@ -15,9 +15,9 @@ import {
   createSandboxClaudeWorker,
   type ClaudeWorkerLocator,
 } from "@tiny-agents/agent/claude-worker";
-import type { SandboxConnection } from "@tiny-agents/agent/sandbox";
 import { sandboxConnection } from "./sandbox-host";
 import { appEnv, type AppEnv } from "../../env";
+import { app } from "../../app-root";
 
 /** Packages the worker loads from its own `node_modules` on the sandbox. */
 const WORKER_EXTERNALS = ["@anthropic-ai/claude-agent-sdk", "ws", "zod"];
@@ -50,8 +50,6 @@ async function claudeWorkerScript(): Promise<string> {
   return bundleFromSource();
 }
 
-let shared: { connection: SandboxConnection; locator: ClaudeWorkerLocator } | undefined;
-
 /**
  * The process's one worker locator: bot chats (the Claude plan engine) and
  * the Code page's Claude Code harness share the worker on the sandbox and
@@ -60,11 +58,12 @@ let shared: { connection: SandboxConnection; locator: ClaudeWorkerLocator } | un
 export function sharedClaudeWorkerLocator(env: AppEnv = appEnv()): ClaudeWorkerLocator | undefined {
   const connection = sandboxConnection(env);
   if (!connection) return undefined;
-  if (shared?.connection !== connection) {
-    shared = {
+  const root = app();
+  if (root.claudeWorker?.connection !== connection) {
+    root.claudeWorker = {
       connection,
       locator: createSandboxClaudeWorker({ connection, script: claudeWorkerScript }),
     };
   }
-  return shared.locator;
+  return root.claudeWorker.locator;
 }

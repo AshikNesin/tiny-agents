@@ -102,9 +102,14 @@ router.get("/bots/:id/stream", async (c) => {
   // Before the stream opens (unknown bot) this is a normal API error.
   const bot = await botsService.getBot(id);
   // The stream ends when the bot moves to another chat; the client reconnects onto it.
-  return openSse<BotStreamEvent>(c, async (sse) => sse.onClose(await followBotChat(bot, sse)), {
-    botId: bot.id,
-  });
+  // Only the owner's open chat counts as watched: a guest following it must
+  // not hold back the owner's pushes (S2).
+  const watched = !c.get("viewer").guest;
+  return openSse<BotStreamEvent>(
+    c,
+    async (sse) => sse.onClose(await followBotChat(bot, sse, undefined, { watched })),
+    { botId: bot.id },
+  );
 });
 
 // ── Bots CRUD ─────────────────────────────────────────────────────────

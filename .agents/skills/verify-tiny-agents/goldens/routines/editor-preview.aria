@@ -1,0 +1,33 @@
+# http://localhost:<port>/routines
+- region "Notifications alt+T"
+- dialog "New routine":
+  - heading "New routine" [level=2]
+  - paragraph: Times are read in IST. The preview shows the next 3 runs before you save.
+  - text: Bot
+  - combobox "Bot": Routine Bot fixed
+  - text: Prompt
+  - textbox "Prompt":
+    - /placeholder: What should the bot do each run?
+    - text: say the thing
+  - text: Name (optional)
+  - textbox "Name (optional)":
+    - /placeholder: say the thing
+    - text: verify-routine-fixed
+  - text: Schedule
+  - tablist:
+    - tab "Once"
+    - tab "Daily"
+    - tab "Weekly"
+    - tab "Interval" [selected]
+    - tab "Cron"
+  - spinbutton "Interval minutes": "15"
+  - paragraph: Every 15 minutes, 15 to 1440 allowed.
+  - paragraph: Preview
+  - paragraph: Every 15 minutes
+  - list:
+    - listitem: Fri, 06 Nov 2026, 12:15 IST
+    - listitem: Fri, 06 Nov 2026, 12:30 IST
+    - listitem: Fri, 06 Nov 2026, 12:45 IST
+  - button "Cancel"
+  - button "Create"
+  - button "Close"

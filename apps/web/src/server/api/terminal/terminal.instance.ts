@@ -6,20 +6,20 @@
  */
 import { createTerminalService, type TerminalService } from "@tiny-agents/agent/terminal";
 import { sandboxConnection } from "../bots/sandbox-host";
-
-let instance: TerminalService | undefined;
+import { app } from "../../app-root";
 
 export function getTerminalService(): TerminalService {
-  if (instance) return instance;
+  const existing = app().terminalService;
+  if (existing) return existing;
   // The process's one sandbox connection: execs and attaches share the
   // pooled SSH connection with the toolkits, the browser and the computer.
   const service = createTerminalService({ connection: sandboxConnection() });
   // An unconfigured sandbox yields a service that reports `unconfigured`;
   // nothing below throws on it, so no test reset needs to distinguish.
-  return (instance = service);
+  return (app().terminalService = service);
 }
 
 /** Route/WS tests inject a fake; pass undefined to restore production. */
 export function setTerminalServiceForTests(fake: TerminalService | undefined): void {
-  instance = fake;
+  app().terminalService = fake;
 }

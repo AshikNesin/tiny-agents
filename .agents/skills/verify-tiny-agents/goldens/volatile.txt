@@ -1,0 +1,35 @@
+# ARIA snapshots a frozen clock cannot pin (aria-goldens.mjs skips them on check).
+# Each was seen to differ between two frozen runs of the same code.
+# Taken while the faux reply streams (6 tokens/s): the text is cut wherever it got to.
+chat-attachments/enlarged
+chat-attachments/file-read
+chat-attachments/image-only
+chat-attachments/refused
+chat-attachments/sent-image
+message-steering/held-after-reload
+message-steering/stopped
+questions/dismissed
+self-improve/read-more
+tool-permissions/denied
+yolo/auto-approved
+# The sidebar's unread badge, the "New messages" divider or a relay landing
+# races the snapshot.
+bot-to-bot/menu-mention
+bot-to-bot/relayed
+shared-bots/guest-chat
+shared-bots/guest-view
+# A toast ("Saved") or a job's live state still on screen.
+vault/deleted
+vault/unlinked
+jobs/detail-failed
+# Seen on a third frozen run: the sidebar's preview line catches a reply
+# mid-stream or the other person's message first.
+message-steering/steer-answered
+shared-bots/owner-sees-guest
+shared-bots/owner-shared-chat
+# The job's detail page still loading its logs.
+jobs/detail-created
+# The bot list on a skill depends on bots earlier journeys in the same group
+# leave behind (journeys share one instance).
+skills/created
+skills/edited-preview

@@ -14,6 +14,7 @@ import { ConfirmProvider } from "@groot/ui/primitives";
 import { BrowserPanel } from "@/components/BrowserPanel";
 import { botsApi, type Bot, type BrowserStatus } from "@/lib/bots-api";
 import { createRfb } from "@/lib/novnc";
+import { usePeopleStore } from "@/store/people";
 
 const fakes = vi.hoisted(() => ({ rfbs: [] as FakeRfb[] }));
 
@@ -154,6 +155,30 @@ describe("BrowserPanel", () => {
     expect(screen.getByTestId("browser-driver").textContent).toBe("Surfer drives");
     expect(screen.getByTestId("browser-takeover")).toBeEnabled();
     expect(screen.queryByTestId("browser-paste")).not.toBeInTheDocument();
+  });
+
+  it("lets a guest watch only: no take control, paste, reset, open or window fit (S2)", async () => {
+    usePeopleStore.setState({ guest: true });
+    onTestFinished(() => usePeopleStore.setState({ guest: null }));
+    const api = mockApi(vncStatus());
+    render(<BrowserPanel bot={bot} onClose={vi.fn()} />);
+    await connected();
+
+    expect(latestRfb().viewOnly).toBe(true);
+    expect(screen.queryByTestId("browser-takeover")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("browser-paste")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("browser-reset")).not.toBeInTheDocument();
+    expect(screen.getByTestId("browser-fullscreen")).toBeInTheDocument();
+    expect(api.resize).not.toHaveBeenCalled();
+  });
+
+  it("offers a guest no way to open a closed browser (S2)", async () => {
+    usePeopleStore.setState({ guest: true });
+    onTestFinished(() => usePeopleStore.setState({ guest: null }));
+    mockApi(vncStatus({ active: false, mode: null, driver: null, url: null }));
+    render(<BrowserPanel bot={bot} onClose={vi.fn()} />);
+    expect(await screen.findByText("No browser is open.")).toBeInTheDocument();
+    expect(screen.queryByTestId("browser-open")).not.toBeInTheDocument();
   });
 
   it("titles the card and labels its tools", async () => {

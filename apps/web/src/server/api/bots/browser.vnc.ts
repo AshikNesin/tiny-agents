@@ -23,6 +23,8 @@ interface Ticket {
   botId: string;
   /** The bot's browser (its profile) and tab. */
   target: BrowserTarget;
+  /** A guest's ticket: watch only (S2). */
+  viewOnly?: boolean;
 }
 
 interface PageTicket {

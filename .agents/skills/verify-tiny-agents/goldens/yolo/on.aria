@@ -1,0 +1,42 @@
+# http://localhost:<port>/chats/<id1>
+- complementary "Sidebar":
+  - link "tiny-agents":
+    - /url: /chats
+  - button "Search"
+  - button "Collapse sidebar"
+  - navigation "Primary":
+    - link "Tasks":
+      - /url: /tasks
+    - link "Terminal":
+      - /url: /terminal
+    - link "Computer":
+      - /url: /computer
+    - link "Browser":
+      - /url: /browser
+  - region "Bots":
+    - heading "Bots" [level=2]
+    - button "New bot"
+    - list:
+      - listitem:
+        - link "Yolo Bot fixed":
+          - /url: /chats/<id1>
+        - button "Yolo Bot fixed actions"
+  - button "Account and navigation": D Demo User
+- main:
+  - heading "Yolo Bot fixed menu" [level=1]:
+    - button "Yolo Bot fixed menu": Yolo Bot fixed
+  - button "Open live view"
+  - button "Start a new chat" [disabled]
+  - region "Messages":
+    - log:
+      - paragraph: Yolo Bot fixed
+      - paragraph: Say hi to start the conversation.
+  - button "Jump to the latest message": Scroll to end
+  - status:
+    - text: "YOLO on: tools run without asking (vault items still ask)"
+    - button "Turn off"
+  - textbox "Message Yolo Bot fixed"
+  - button "Add files or mention a bot"
+  - button "Model": Test Model (faux)
+  - button "Send message" [disabled]
+- region "Notifications alt+T"

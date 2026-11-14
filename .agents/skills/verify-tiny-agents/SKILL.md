@@ -131,12 +131,13 @@ by the skill; remove old ones under `data/verify-evidence/` by hand.
 
 ## Helpers
 
-| File                    | Invocation                                      | Purpose                                                                            |
-| ----------------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------- |
-| `scripts/ta-verify.mjs` | `ta-verify.mjs up\|doctor\|drive\|down\|status` | lifecycle + journey runner                                                         |
-| `scripts/lib.mjs`       | imported by journeys                            | browser, login, step/proof/cleanup, API helper                                     |
-| `journeys/*.mjs`        | `ta-verify.mjs drive journeys/<f>.mjs`          | one end-to-end recipe per feature                                                  |
-| `scripts/full-pass.sh`  | `full-pass.sh`                                  | every journey on six fresh parallel runs, plus a `--prod` smoke run, then teardown |
+| File                       | Invocation                                      | Purpose                                                                            |
+| -------------------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `scripts/ta-verify.mjs`    | `ta-verify.mjs up\|doctor\|drive\|down\|status` | lifecycle + journey runner                                                         |
+| `scripts/lib.mjs`          | imported by journeys                            | browser, login, step/proof/cleanup, API helper                                     |
+| `journeys/*.mjs`           | `ta-verify.mjs drive journeys/<f>.mjs`          | one end-to-end recipe per feature                                                  |
+| `scripts/full-pass.sh`     | `full-pass.sh`                                  | every journey on six fresh parallel runs, plus a `--prod` smoke run, then teardown |
+| `scripts/aria-goldens.mjs` | `aria-goldens.mjs save\|check <evidence-run>`   | save or compare a frozen run's ARIA snapshots with `goldens/` (ids numbered)       |
 
 Full pass: run `scripts/full-pass.sh`. By hand it is `up --sandbox --shelley` →
 `doctor` → `drive $S/journeys/*.mjs` → `down`, then `up --empty` → `drive` the
@@ -144,6 +145,18 @@ Full pass: run `scripts/full-pass.sh`. By hand it is `up --sandbox --shelley` �
 one instance can sign in for every journey; a login that still gets 429 fails
 with that message, not as "stuck on /login". With several agents or terminals,
 always pass `--run <id>`: `current` is whichever run started last.
+Without a sandbox, Shelley or Cloudflare keys, `full-pass.sh --no-infra` runs
+every journey that needs none of them.
+
+**Frozen runs and ARIA goldens.** `up --fixed-clock` freezes the server's and
+the browser's clock at the server tests' `FIXED_NOW` (faux mode only), pins the
+name `stamp`, UTC, en-US and reduced motion, so two runs of a journey write the
+same ARIA snapshots. `full-pass.sh --aria check` drives the no-infra journeys
+that way (not the two that wait for a scheduled fire) and compares each
+snapshot with `goldens/<journey>/` (`--aria save` records them). The rewrite
+(`docs/rewrite/PLAN.md`) keeps them unchanged; a signed-off UI change records
+its journey again.
+
 Keep this map honest with `/maintain-verification-skill`. CI never drives the
 journeys, but `tests/client/verify-journey-routes.test.ts` (part of
 `pnpm test:client`) fails when a journey or recipe names a page or settings

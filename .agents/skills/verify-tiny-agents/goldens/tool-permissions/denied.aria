@@ -1,0 +1,46 @@
+# http://localhost:<port>/chats/<id1>
+- complementary "Sidebar":
+  - link "tiny-agents":
+    - /url: /chats
+  - button "Search"
+  - button "Collapse sidebar"
+  - navigation "Primary":
+    - link "Tasks":
+      - /url: /tasks
+    - link "Terminal":
+      - /url: /terminal
+    - link "Computer":
+      - /url: /computer
+    - link "Browser":
+      - /url: /browser
+  - region "Bots":
+    - heading "Bots" [level=2]
+    - button "New bot"
+    - list:
+      - listitem:
+        - link "Perm Bot fixed":
+          - /url: /chats/<id1>
+          - text: "Perm Bot fixed now Echo: The owner denied this browsersnapshot call. Do not retry it unless asked."
+        - button "Perm Bot fixed actions"
+  - button "Account and navigation": D Demo User
+- main:
+  - heading "Perm Bot fixed menu" [level=1]:
+    - button "Perm Bot fixed menu": Perm Bot fixed
+  - button "Open live view"
+  - button "Start a new chat"
+  - region "Messages":
+    - log:
+      - text: Today
+      - paragraph: /browse 1 deny fixed
+      - button "Copy message"
+      - time: 06:30 AM
+      - button "Read the page denied by you <duration>"
+      - paragraph: "Echo: The owner denied this browser_snapshot call. Do not retry it unless asked."
+      - button "Copy message"
+      - time: 06:30 AM
+  - button "Jump to the latest message": Scroll to end
+  - textbox "Message Perm Bot fixed"
+  - button "Add files or mention a bot"
+  - button "Model": Test Model (faux)
+  - button "Send message" [disabled]
+- region "Notifications alt+T"

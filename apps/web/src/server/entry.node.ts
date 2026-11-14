@@ -47,6 +47,7 @@ import { attachTerminalWs } from "./api/terminal/terminal.ws";
 import { startCode } from "./api/code/code.boot";
 import { isAssetRequest } from "./static-assets";
 import { processChannel, startUpdates, SUPERVISED_ENV } from "./api/system/updates.service";
+import { installFixedClock } from "./fixed-clock";
 
 /**
  * Node entry: SQLite on disk, uploads on the local filesystem, jobs on a
@@ -57,6 +58,8 @@ import { processChannel, startUpdates, SUPERVISED_ENV } from "./api/system/updat
  */
 
 if (existsSync(".env")) process.loadEnvFile(".env");
+// Deterministic verify runs only (faux mode): see fixed-clock.ts.
+const fixedNow = installFixedClock(process.env);
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const isProduction = process.env.NODE_ENV === "production";
@@ -290,6 +293,7 @@ async function main(): Promise<void> {
         server.listen(port, "0.0.0.0", resolve);
       });
       logger.info(`Server is running on http://localhost:${port}`);
+      if (fixedNow) logger.warn(`Clock frozen at ${fixedNow} (TINY_AGENTS_FIXED_NOW, faux mode)`);
     },
     stop: async () => {
       markShuttingDown();

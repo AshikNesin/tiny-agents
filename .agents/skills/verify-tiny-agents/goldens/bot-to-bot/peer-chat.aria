@@ -1,0 +1,52 @@
+# http://localhost:<port>/chats/<id1>
+- complementary "Sidebar":
+  - link "tiny-agents":
+    - /url: /chats
+  - button "Search"
+  - button "Collapse sidebar"
+  - navigation "Primary":
+    - link "Tasks":
+      - /url: /tasks
+    - link "Terminal":
+      - /url: /terminal
+    - link "Computer":
+      - /url: /computer
+    - link "Browser":
+      - /url: /browser
+  - region "Bots":
+    - heading "Bots" [level=2]
+    - button "New bot"
+    - list:
+      - listitem:
+        - link "Relay Peer fixed":
+          - /url: /chats/<id1>
+          - text: "Relay Peer fixed Echo: [From the owner, in Relay Host fixed's chat] what do you think @Relay Peer fixed ping fixed"
+        - button "Relay Peer fixed actions"
+      - listitem:
+        - link "Relay Host fixed, replying":
+          - /url: /chats/<id2>
+          - text: "Relay Host fixed now Echo: what do you think @Relay Peer fixed ping fixed"
+          - status "Replying"
+        - button "Relay Host fixed actions"
+  - button "Account and navigation": D Demo User
+- main:
+  - heading "Relay Peer fixed menu" [level=1]:
+    - button "Relay Peer fixed menu": Relay Peer fixed
+  - button "Open live view"
+  - button "Start a new chat"
+  - region "Messages":
+    - log:
+      - text: Today
+      - paragraph: You · in Relay Host fixed's chat
+      - button "Copy message"
+      - paragraph: what do you think @Relay Peer fixed ping fixed
+      - text: New messages
+      - paragraph: "Echo: [From the owner, in Relay Host fixed's chat] what do you think @Relay Peer fixed ping fixed"
+      - button "Copy message"
+      - time: 06:30 AM
+  - button "Jump to the latest message": Scroll to end
+  - textbox "Message Relay Peer fixed"
+  - button "Add files or mention a bot"
+  - button "Model": Test Model (faux)
+  - button "Send message" [disabled]
+- region "Notifications alt+T"

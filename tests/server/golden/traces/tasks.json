@@ -1,0 +1,215 @@
+[
+  {
+    "http": "create without a title",
+    "method": "POST",
+    "path": "/api/v1/tasks",
+    "status": 400,
+    "body": {
+      "success": false,
+      "error": {
+        "code": "VALIDATION_ERROR",
+        "message": "Validation failed",
+        "details": {
+          "title": ["Title is required"]
+        }
+      }
+    }
+  },
+  {
+    "http": "create",
+    "method": "POST",
+    "path": "/api/v1/tasks",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "id": "<id1>",
+        "title": "Renew passport",
+        "description": "",
+        "status": "todo",
+        "priority": "high",
+        "dueAt": "2026-11-10T03:30:00.000Z",
+        "completedAt": null,
+        "createdAt": "2026-11-06T06:30:00.000Z",
+        "updatedAt": "2026-11-06T06:30:00.000Z"
+      }
+    }
+  },
+  {
+    "http": "create another",
+    "method": "POST",
+    "path": "/api/v1/tasks",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "id": "<id2>",
+        "title": "Plan trip",
+        "description": "",
+        "status": "todo",
+        "priority": "medium",
+        "dueAt": null,
+        "completedAt": null,
+        "createdAt": "2026-11-06T06:30:00.000Z",
+        "updatedAt": "2026-11-06T06:30:00.000Z"
+      }
+    }
+  },
+  {
+    "http": "list",
+    "method": "GET",
+    "path": "/api/v1/tasks",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": [
+        {
+          "id": "<id2>",
+          "title": "Plan trip",
+          "description": "",
+          "status": "todo",
+          "priority": "medium",
+          "dueAt": null,
+          "completedAt": null,
+          "createdAt": "2026-11-06T06:30:00.000Z",
+          "updatedAt": "2026-11-06T06:30:00.000Z"
+        },
+        {
+          "id": "<id1>",
+          "title": "Renew passport",
+          "description": "",
+          "status": "todo",
+          "priority": "high",
+          "dueAt": "2026-11-10T03:30:00.000Z",
+          "completedAt": null,
+          "createdAt": "2026-11-06T06:30:00.000Z",
+          "updatedAt": "2026-11-06T06:30:00.000Z"
+        }
+      ]
+    }
+  },
+  {
+    "http": "complete",
+    "method": "PATCH",
+    "path": "/api/v1/tasks/<id1>",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "id": "<id1>",
+        "title": "Renew passport",
+        "description": "",
+        "status": "done",
+        "priority": "high",
+        "dueAt": "2026-11-10T03:30:00.000Z",
+        "completedAt": "2026-11-06T06:30:00.000Z",
+        "createdAt": "2026-11-06T06:30:00.000Z",
+        "updatedAt": "2026-11-06T06:30:00.000Z"
+      }
+    }
+  },
+  {
+    "http": "complete again",
+    "method": "PATCH",
+    "path": "/api/v1/tasks/<id1>",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "id": "<id1>",
+        "title": "Renew passport",
+        "description": "",
+        "status": "done",
+        "priority": "high",
+        "dueAt": "2026-11-10T03:30:00.000Z",
+        "completedAt": "2026-11-06T06:30:00.000Z",
+        "createdAt": "2026-11-06T06:30:00.000Z",
+        "updatedAt": "2026-11-06T06:30:00.000Z"
+      }
+    }
+  },
+  {
+    "http": "reopen",
+    "method": "PATCH",
+    "path": "/api/v1/tasks/<id1>",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "id": "<id1>",
+        "title": "Renew passport",
+        "description": "",
+        "status": "todo",
+        "priority": "high",
+        "dueAt": "2026-11-10T03:30:00.000Z",
+        "completedAt": null,
+        "createdAt": "2026-11-06T06:30:00.000Z",
+        "updatedAt": "2026-11-06T06:30:00.000Z"
+      }
+    }
+  },
+  {
+    "http": "edit",
+    "method": "PATCH",
+    "path": "/api/v1/tasks/<id2>",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "id": "<id2>",
+        "title": "Plan the trip",
+        "description": "Japan, two weeks",
+        "status": "todo",
+        "priority": "medium",
+        "dueAt": null,
+        "completedAt": null,
+        "createdAt": "2026-11-06T06:30:00.000Z",
+        "updatedAt": "2026-11-06T06:30:00.000Z"
+      }
+    }
+  },
+  {
+    "http": "delete",
+    "method": "DELETE",
+    "path": "/api/v1/tasks/<id2>",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "deleted": true
+      }
+    }
+  },
+  {
+    "http": "delete again",
+    "method": "DELETE",
+    "path": "/api/v1/tasks/<id2>",
+    "status": 404,
+    "body": {
+      "success": false,
+      "error": {
+        "code": "NOT_FOUND",
+        "message": "Task not found"
+      }
+    }
+  },
+  {
+    "db": "tasks",
+    "tables": {
+      "tasks": [
+        {
+          "id": "<id1>",
+          "title": "Renew passport",
+          "description": "",
+          "status": "todo",
+          "priority": "high",
+          "dueAt": "2026-11-10T03:30:00.000Z",
+          "completedAt": null,
+          "sourceKey": null,
+          "createdAt": "2026-11-06T06:30:00.000Z",
+          "updatedAt": "2026-11-06T06:30:00.000Z"
+        }
+      ]
+    }
+  }
+]

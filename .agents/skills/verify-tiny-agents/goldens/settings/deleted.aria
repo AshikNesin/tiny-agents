@@ -1,0 +1,50 @@
+# http://localhost:<port>/settings/configuration
+- main:
+  - link "Back to tiny-agents":
+    - /url: /chats
+  - button "Search (⌘K)"
+  - complementary:
+    - combobox "Search settings"
+    - navigation "Settings sections":
+      - text: Personal
+      - list:
+        - listitem:
+          - link "Account":
+            - /url: /settings/account
+        - listitem:
+          - link "Appearance":
+            - /url: /settings/appearance
+        - listitem:
+          - link "Security":
+            - /url: /settings/security
+      - text: App
+      - list:
+        - listitem:
+          - link "Models":
+            - /url: /settings/models
+        - listitem:
+          - link "Notifications":
+            - /url: /settings/notifications
+        - listitem:
+          - link "People":
+            - /url: /settings/people
+        - listitem:
+          - link "Configuration":
+            - /url: /settings/configuration
+        - listitem:
+          - link "Updates":
+            - /url: /settings/updates
+  - main:
+    - heading "Configuration" [level=1]
+    - text: App-wide settings, shared by every user. Application configuration stored as JSON.
+    - button "Refresh"
+    - button "Add setting"
+    - searchbox "Search settings…"
+    - paragraph: No settings yet.
+    - paragraph: No setting selected
+    - paragraph: Choose a setting from the list to edit its value.
+- region "Notifications alt+T":
+  - list:
+    - listitem: Setting deleted successfully
+- button "Feedback":
+  - img

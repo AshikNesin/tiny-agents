@@ -1,0 +1,55 @@
+[
+  {
+    "http": "settings",
+    "method": "GET",
+    "path": "/api/v1/notifications/settings",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "settings": {
+          "events": {},
+          "quietHours": {
+            "enabled": false,
+            "start": "22:00",
+            "end": "07:00",
+            "timezone": "Asia/Kolkata",
+            "urgentBypass": false
+          },
+          "device": "",
+          "longRunMinutes": 5,
+          "coalesceSeconds": 30,
+          "reminderMinutes": 15,
+          "throttle": {
+            "perHour": 30,
+            "perBotPerMinute": 5
+          }
+        },
+        "events": [
+          {
+            "event": "system.started",
+            "label": "App started",
+            "description": "A silent ping when the server boots in production.",
+            "category": "system",
+            "defaultEnabled": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "http": "status",
+    "method": "GET",
+    "path": "/api/v1/notifications/status",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "channel": "pushover",
+        "state": "not_configured",
+        "requiredEnv": ["PUSHOVER_API_TOKEN", "PUSHOVER_USER_KEY"],
+        "devices": []
+      }
+    }
+  }
+]
