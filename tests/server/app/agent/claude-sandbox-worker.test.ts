@@ -24,7 +24,7 @@ import {
   workerPackageJson,
 } from "../../../../packages/agent/src/engines/claude-code/sandbox-setup";
 import { createSandboxClaudeWorker } from "../../../../packages/agent/src/engines/claude-code/sandbox-worker";
-import { ClaudeCodeEngine } from "../../../../packages/agent/src/engines/claude-code/engine";
+import { ClaudePlan } from "../../../../packages/agent/src/engines/claude-code/plan";
 import {
   FORBIDDEN_BACKEND_FLAGS,
   FORBIDDEN_OVERRIDE_KEYS,
@@ -243,8 +243,8 @@ describe("the engine's worker choice", () => {
   };
 
   it("uses the sandbox worker with nothing but the kill switch set", async () => {
-    const engine = new ClaudeCodeEngine({
-      plan: () => ({ enabled: true, fallback: "pause" }),
+    const engine = new ClaudePlan({
+      state: () => ({ enabled: true, fallback: "pause" }),
       worker: sandbox,
     });
     expect(engine.status()).toEqual({
@@ -258,7 +258,7 @@ describe("the engine's worker choice", () => {
   });
 
   it("is unconfigured without a sandbox", () => {
-    const engine = new ClaudeCodeEngine({});
+    const engine = new ClaudePlan({});
     expect(engine.status()).toMatchObject({ configured: false, mode: "none" });
   });
 });

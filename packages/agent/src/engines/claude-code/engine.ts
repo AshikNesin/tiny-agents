@@ -48,15 +48,10 @@ import type {
   WithdrawOutcome,
 } from "../../types";
 import { WaitTracker } from "../../waiting";
-import { loadHistory } from "../pi";
+import { loadHistory } from "../../conversation-store";
 import { ClaudeWorkerClient, type ToolUseCall, type WebSocketLike } from "./client";
 import { pauseMessage } from "./errors";
-import {
-  noWorkerLocator,
-  type ClaudeAccountStatus,
-  type ClaudeWorkerLocator,
-  type ClaudeWorkerMode,
-} from "./sandbox-worker";
+import { noWorkerLocator, type ClaudeWorkerLocator } from "./sandbox-worker";
 import { claudeToolApi } from "./tools";
 import {
   admittedRequestId,
@@ -266,7 +261,7 @@ export class ClaudeCodeEngine implements AgentEngine {
   }
 
   /** The conversation leaves the Claude plan for good: its turns run on pi from now on. */
-  async leave(ref: ConversationRef): Promise<void> {
+  private async leave(ref: ConversationRef): Promise<void> {
     const session = this.sessions.get(ref);
     if (!session || session.surface === "pi") return;
     session.surface = "pi";
@@ -282,14 +277,18 @@ export class ClaudeCodeEngine implements AgentEngine {
    * it. Retrying a request id never admits it twice. A steer cannot join a
    * running Claude Code turn (the worker runs one turn at a time), so it
    * waits like a follow-up. `unavailable`: the plan is off and the fallback
-   * is the gateway, so the runtime hands the message to pi. With the
-   * `pause` fallback the message is admitted and answered with a pause.
+   * is the gateway, so the conversation leaves the Claude plan for good and
+   * the runtime hands the message to pi. With the `pause` fallback the
+   * message is admitted and answered with a pause.
    */
   async submit(ref: ConversationRef, input: EngineSubmission): Promise<"accepted" | "unavailable"> {
     const session = this.sessions.get(ref);
     if (!session || session.surface !== "claude") return "unavailable";
     const { enabled, fallback } = this.plan();
-    if (!enabled && fallback === "gateway") return "unavailable";
+    if (!enabled && fallback === "gateway") {
+      await this.leave(ref);
+      return "unavailable";
+    }
     const paused = enabled
       ? undefined
       : pauseMessage("The Claude plan is turned off (Settings → Models).");
@@ -420,34 +419,6 @@ export class ClaudeCodeEngine implements AgentEngine {
         this.listeners.delete(entry);
       },
     };
-  }
-
-  status(): {
-    enabled: boolean;
-    fallback: ClaudeEngineFallback;
-    configured: boolean;
-    mode: ClaudeWorkerMode;
-    workerHost?: string;
-  } {
-    const plan = this.plan();
-    const locator = this.locator();
-    return {
-      enabled: plan.enabled,
-      fallback: plan.fallback,
-      configured: locator.mode !== "none",
-      mode: locator.mode,
-      ...(locator.host ? { workerHost: locator.host } : {}),
-    };
-  }
-
-  /** Whether Claude Code is installed and signed in where the worker runs. No secrets. */
-  account(): Promise<ClaudeAccountStatus> {
-    return this.locator().account();
-  }
-
-  /** Set the worker up ahead of the first turn when the engine is on. */
-  prepare(): void {
-    if (this.plan().enabled) this.locator().prepare();
   }
 
   /** The sandbox worker, or none when no sandbox is configured. */

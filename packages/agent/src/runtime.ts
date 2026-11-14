@@ -34,22 +34,15 @@ import { createModelCatalog, type ModelCatalog } from "./model-catalog";
 import { EMPTY_MODEL_CONFIG, type CredentialResolver, type ModelConfig } from "./providers/config";
 import { buildProviders } from "./providers/kinds";
 import { gateExtension, PiEngine } from "./engines/pi";
-import {
-  ConversationNotFoundError,
-  type AgentEngine,
-  type ClaudePlanState,
-  type CompiledConversation,
-  type EngineSubmission,
-} from "./engine";
+import { ConversationStore } from "./conversation-store";
+import type { AgentEngine, CompiledConversation, EngineSubmission } from "./engine";
 import type { WebSocketLike } from "./engines/claude-code/client";
 import { ClaudeCodeEngine } from "./engines/claude-code/engine";
-import type {
-  ClaudeAccountStatus,
-  ClaudeWorkerLocator,
-} from "./engines/claude-code/sandbox-worker";
+import { ClaudePlan, claudePlanState } from "./engines/claude-code/plan";
+import type { ClaudeWorkerLocator } from "./engines/claude-code/sandbox-worker";
 import { claudeToolSurface } from "./engines/claude-code/tools";
 import { ToolGate } from "./gate";
-import { compilePolicy, YoloDoc } from "./policy";
+import { compilePolicy } from "./policy";
 import {
   createQuestionsCapability,
   QuestionNotPendingError,
@@ -154,16 +147,18 @@ export interface AgentRuntimeOptions {
  * The single owner of pi-durable in tiny-agents (PRD §7.2). One instance per
  * process, opened at boot before the HTTP server accepts requests.
  *
- * It owns the store (the pi-durable harness, its lock, and every
- * conversation's documents: permissions, YOLO, Owner waits), the capability
- * registry, the Tool gate, and the merged bot activity. Turns run on an
- * `AgentEngine` it picks per conversation (ADR 0014): the Claude plan
- * engine while it runs the conversation, pi otherwise.
+ * It owns the conversation store (the pi-durable harness, and every
+ * conversation's agent, documents and reply tasks), the store lock, the
+ * Owner waits, the capability registry, the Tool gate, and the merged bot
+ * activity. Turns run on an `AgentEngine` it picks per conversation (ADR
+ * 0014): the Claude plan engine while it runs the conversation, pi
+ * otherwise. It calls engines only through that interface; what the Claude
+ * plan has apart from conversations is `claudePlan`.
  */
 export class AgentRuntime {
-  readonly #harness: Harness;
-  readonly #pi: PiEngine;
-  readonly #claude: ClaudeCodeEngine;
+  readonly #store: ConversationStore;
+  readonly #pi: AgentEngine;
+  readonly #claude: AgentEngine;
   readonly #engines: readonly AgentEngine[];
   readonly #gate: ToolGate;
   readonly #models: MutableModels;
@@ -207,16 +202,12 @@ export class AgentRuntime {
     this.#catalog = createModelCatalog(config, this.#models);
   }
 
-  /** The Claude plan account's switch and fallback, as the engine reads them per turn. */
-  #claudePlan(): ClaudePlanState {
-    const plan = this.#catalog.claudePlan();
-    return {
-      enabled: plan?.enabled ?? false,
-      fallback:
-        plan?.fallbackModelId && this.#catalog.route(plan.fallbackModelId) ? "gateway" : "pause",
-      ...(plan?.maxTurns ? { maxTurns: plan.maxTurns } : {}),
-    };
-  }
+  /**
+   * The Claude plan apart from any conversation: its switch and fallback
+   * (from the catalog), whether its worker is set up and signed in, and
+   * setting the worker up ahead of the first turn. No secrets.
+   */
+  readonly claudePlan: ClaudePlan;
 
   private constructor(
     harness: Harness,
@@ -233,12 +224,18 @@ export class AgentRuntime {
     claudeConnect?: (url: string, token: string) => WebSocketLike,
     onReport?: (error: unknown) => void,
   ) {
-    this.#harness = harness;
+    this.#store = new ConversationStore(harness, {
+      onReplying: (ref) => this.#busyChanged(ref),
+    });
     this.#gate = gate;
-    this.#pi = new PiEngine(harness, { onBusy: (ref) => this.#busyChanged(ref) });
+    this.#pi = new PiEngine(this.#store);
+    this.claudePlan = new ClaudePlan({
+      state: () => claudePlanState(this.#catalog),
+      ...(claudeWorker ? { worker: claudeWorker } : {}),
+    });
     this.#claude = new ClaudeCodeEngine({
       harness,
-      plan: () => this.#claudePlan(),
+      plan: () => this.claudePlan.state(),
       ...(legacyPath ? { legacyPath } : {}),
       worker: claudeWorker,
       ...(claudeConnect ? { connect: claudeConnect } : {}),
@@ -319,7 +316,7 @@ export class AgentRuntime {
       });
       // The pi engine is built once the harness is open; its calls only
       // run after that (resume() comes last).
-      let pi: PiEngine | undefined;
+      let pi: AgentEngine | undefined;
       const userMessages = async (id: number) => (pi ? pi.userMessages(id) : []);
       for (const capability of capabilities) {
         registry.install(gateExtension(capability.extension, gate, userMessages));
@@ -356,10 +353,12 @@ export class AgentRuntime {
       harness.closed.then((end) => {
         if (end.reason === "failed" && !opened.#closed) options.onFatal?.(end.error);
       });
-      await opened.#pi.start();
-      await opened.#claude.start();
-      opened.#busy = new Set(opened.#pi.busyConversations());
-      harness.resume();
+      await opened.#store.start();
+      for (const engine of opened.#engines) await engine.start();
+      // The Claude plan starts idle (its turns do not survive a restart):
+      // what replies now is what the store's task graph shows.
+      opened.#busy = new Set(opened.#store.replyingConversations());
+      opened.#store.resume();
       return opened;
     } catch (error) {
       // A failed open is reported by this rejection, not also via onFatal.
@@ -370,21 +369,6 @@ export class AgentRuntime {
       lock?.release();
       throw error;
     }
-  }
-
-  /** Kill switch, fallback, and whether a worker URL is configured. No secrets. */
-  claudeCodeStatus(): ReturnType<ClaudeCodeEngine["status"]> {
-    return this.#claude.status();
-  }
-
-  /** Whether Claude Code is installed and signed in on the worker's machine. No secrets. */
-  claudeCodeAccount(): Promise<ClaudeAccountStatus> {
-    return this.#claude.account();
-  }
-
-  /** Start setting up the sandbox worker (when the engine is on), so the first turn is quick. */
-  prepareClaudeCode(): void {
-    this.#claude.prepare();
   }
 
   /**
@@ -416,8 +400,8 @@ export class AgentRuntime {
     const compiled = this.#compile(config);
     // Every conversation has its durable pi conversation: the store of its
     // documents, and the transcript a Claude plan conversation falls back onto.
-    const ref = await this.#pi.create(compiled);
-    await this.#claude.configure(ref, compiled);
+    const ref = await this.#store.create(compiled);
+    await this.#configureEngines(ref, compiled);
     return ref;
   }
 
@@ -426,14 +410,16 @@ export class AgentRuntime {
    * request; history is kept.
    */
   async configure(ref: ConversationRef, config: BotAgentConfig): Promise<void> {
-    await this.#configureEngines(ref, this.#compile(config));
+    const compiled = this.#compile(config);
+    await this.#store.configure(ref, compiled);
+    await this.#configureEngines(ref, compiled);
   }
 
   // ── YOLO mode (issue #151) ────────────────────────────────────────────
 
   /** Whether the conversation's YOLO mode is on. */
   async yolo(ref: ConversationRef): Promise<boolean> {
-    return (await this.#readYolo(ref)).on;
+    return (await this.#store.yolo(ref)).on;
   }
 
   /**
@@ -450,31 +436,11 @@ export class AgentRuntime {
     on: boolean,
     by?: number,
   ): Promise<{ on: boolean; approved: number[] }> {
-    await this.#conversation(ref);
-    await this.#harness.commit(async (tx) => {
-      const doc = await tx.doc(YoloDoc, ref as ConversationId);
-      doc.on = on;
-      if (on) {
-        doc.since = Date.now();
-        if (by !== undefined) doc.by = by;
-        else delete doc.by;
-      } else {
-        delete doc.since;
-        delete doc.by;
-      }
-    }, ctx);
+    await this.#store.setYolo(ref, on, by);
     const approved = on
       ? await this.#gate.approveWaiting(ref, by, () => this.#engineFor(ref).userMessages(ref))
       : [];
     return { on, approved };
-  }
-
-  async #readYolo(ref: ConversationRef): Promise<{ on: boolean; by?: number }> {
-    await this.#conversation(ref);
-    return this.#harness.commit(async (tx) => {
-      const doc = await tx.doc(YoloDoc, ref as ConversationId);
-      return doc.on ? { on: true, ...(doc.by !== undefined ? { by: doc.by } : {}) } : { on: false };
-    }, ctx);
   }
 
   /**
@@ -586,7 +552,7 @@ export class AgentRuntime {
    * referencing an attachment older than that gets the not-found result.
    */
   attachmentIds(ref: ConversationRef): Promise<string[]> {
-    return this.#pi.attachmentIds(ref);
+    return this.#store.attachmentIds(ref);
   }
 
   /**
@@ -614,7 +580,7 @@ export class AgentRuntime {
     taskId: number,
   ): Promise<{ conversation: ConversationRef; request: CredentialRequest; expiresAt: number }> {
     try {
-      return await this.#harness.commit((tx) => readPendingRequest(tx, taskId), ctx);
+      return await this.#store.harness.commit((tx) => readPendingRequest(tx, taskId), ctx);
     } catch (error) {
       credentialRequestNotPending(error, taskId);
     }
@@ -623,7 +589,7 @@ export class AgentRuntime {
   /** Settle a credential request with the owner's outcome (never values). */
   async settleCredentialRequest(taskId: number, outcome: CredentialRequestOutcome): Promise<void> {
     try {
-      await this.#harness.commit((tx) => settleRequest(tx, taskId, outcome), ctx);
+      await this.#store.harness.commit((tx) => settleRequest(tx, taskId, outcome), ctx);
     } catch (error) {
       credentialRequestNotPending(error, taskId);
     }
@@ -646,7 +612,7 @@ export class AgentRuntime {
     answers: OwnerAnswer[] | null,
   ): Promise<void> {
     try {
-      await this.#harness.commit((tx) => recordAnswers(tx, ref, taskId, answers), ctx);
+      await this.#store.harness.commit((tx) => recordAnswers(tx, ref, taskId, answers), ctx);
     } catch (error) {
       questionNotPending(error, taskId);
     }
@@ -674,9 +640,8 @@ export class AgentRuntime {
   async submit(ref: ConversationRef, input: EngineSubmission): Promise<void> {
     const engine = this.#engineFor(ref);
     if ((await engine.submit(ref, input)) === "accepted") return;
-    // The engine cannot run the turn and its fallback is the gateway: the
-    // conversation moves onto its pi transcript for good (ADR 0008).
-    await this.#claude.leave(ref);
+    // The engine cannot run the turn and its fallback is the gateway: it let
+    // the conversation go, which moves onto its pi transcript for good (ADR 0008).
     await this.#pi.submit(ref, input);
   }
 
@@ -691,9 +656,7 @@ export class AgentRuntime {
    * already part of the running reply, and a settled one is done.
    */
   withdraw(ref: ConversationRef, requestId: string): Promise<WithdrawOutcome> {
-    return this.#claude.runs(ref)
-      ? this.#claude.withdraw(ref, requestId)
-      : this.#pi.withdraw(ref, requestId);
+    return this.#engineFor(ref).withdraw(ref, requestId);
   }
 
   isBusy(ref: ConversationRef): boolean {
@@ -798,21 +761,15 @@ export class AgentRuntime {
 
   // ── Lifecycle ─────────────────────────────────────────────────────────
 
-  /** Stop the engines, close the Harness (waits for running task code) and release the lock. */
+  /** Stop the engines, close the store (waits for running task code) and release the lock. */
   async close(): Promise<void> {
     if (this.#closed) return;
     this.#closed = true;
     await Promise.allSettled(this.#engines.map((engine) => engine.close()));
     try {
-      await this.#harness.close(ctx);
+      await this.#store.close();
     } finally {
       this.#lock?.release();
     }
-  }
-
-  /** The conversation's durable record; throws `ConversationNotFoundError`. */
-  async #conversation(ref: ConversationRef): Promise<void> {
-    const conversation = await this.#harness.conversation(ref as ConversationId, ctx);
-    if (!conversation) throw new ConversationNotFoundError(ref);
   }
 }

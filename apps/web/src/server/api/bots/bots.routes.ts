@@ -35,13 +35,13 @@ function parseTaskId(value: string | undefined): number {
 // ── Models ────────────────────────────────────────────────────────────
 
 router.get("/claude-code/status", (c) => {
-  return ok(c, getAgentRuntime().claudeCodeStatus());
+  return ok(c, getAgentRuntime().claudePlan.status());
 });
 
 // Is Claude Code installed and signed in where the worker runs? The first
 // call on a sandbox starts installing it; the client polls while it does.
 router.get("/claude-code/account", async (c) => {
-  return ok(c, await getAgentRuntime().claudeCodeAccount());
+  return ok(c, await getAgentRuntime().claudePlan.account());
 });
 
 router.get("/models", (c) => {
