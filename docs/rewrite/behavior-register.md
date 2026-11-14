@@ -57,7 +57,7 @@ Legend:
 | C16 | Settling re-runs when wait counts change after the idle edge, bumping the memory-capture counter twice and rewriting the list. Only on a Claude plan conversation stopped while a call waits for approval (pinned: idle with the approval still counted, then idle again); a plain turn and pi give one idle event | `bots.settled.ts:123`, `runtime.ts:255,399`            | Preserve (pin with golden) | Preserve (pin with golden) |
 | C17 | The Code harness set is fixed at boot. Turning the Claude plan on later needs a restart, and the client's code store never notices                                                                                                                                                                                 | `code.registry.ts:97`, `store/code.ts`                 | Preserve                   | Preserve                   |
 | C18 | Terminal idle close never happens while output is chatty. Backpressure stacks `drain` listeners                                                                                                                                                                                                                    | `terminal.ws.ts:310,330`                               | Preserve                   | Preserve                   |
-| C19 | Unbounded in-memory maps: worker session books and logs, `ToolProxy.results`, client cursors, Claude Code runtimes, Shelley `working`                                                                                                                                                                              | several                                                | Preserve                   | Preserve                   |
+| C19 | Unbounded in-memory maps: worker session books (each session keeps its capped log), `ToolProxy.results`, client cursors, Claude Code runtimes (private, not pinned), Shelley `working`                                                                                                                             | several                                                | Preserve                   | Preserve                   |
 | C20 | The `sandbox` toolkit offers its tools even with no sandbox configured, contrary to ADR 0004                                                                                                                                                                                                                       | `sandbox.ts:373`                                       | Preserve                   | Preserve                   |
 | C21 | A memory edit on the Memory page bypasses ledger dedupe. `history()` writes expirations during a GET                                                                                                                                                                                                               | `memories.service.ts:186`, `memories.ledger.ts:382`    | Preserve                   | Preserve                   |
 | C22 | A computer takeover that times out leaves the driver `human`, so the desktop never idle-closes                                                                                                                                                                                                                     | `computer-sessions.ts:263,407`                         | Preserve                   | Preserve                   |
@@ -66,22 +66,22 @@ Legend:
 
 ## U: product behavior, kept on purpose unless you say otherwise
 
-| ID  | Today                                                                                                                                         | Rec.     | Owner    |
-| --- | --------------------------------------------------------------------------------------------------------------------------------------------- | -------- | -------- |
-| U1  | Routines are always in IST, while the `today` toolkit uses env `TZ`                                                                           | Preserve | Preserve |
-| U2  | `isUnread` is `lastActivityAt > lastReadAt` with a preview, so the owner's own send marks the bot unread until `/read`                        | Preserve | Preserve |
-| U3  | The sidebar preview in a shared chat includes `Name: `. A tool-only last reply clears the preview to null. The image hint mixes counts        | Preserve | Preserve |
-| U4  | `GET /bots/:id/messages` without `before` returns 400 (recorded by P1)                                                                        | Preserve | Preserve |
-| U5  | `message_bot` resolves the target name exactly and case-sensitively, while bot-name uniqueness is case-insensitive                            | Preserve | Preserve |
-| U6  | The turn budget (3 messages) is in memory and resets on every idle                                                                            | Preserve | Preserve |
-| U7  | A missed recurring slot collapses the backlog. Once-routines always fire, however late. A failed submit disarms the routine, even for Run now | Preserve | Preserve |
-| U8  | The memory watermark is per bot. It carries across New chat and continue                                                                      | Preserve | Preserve |
-| U9  | Continuing a past chat restores `chatStartedAt`, so interim routine cards show in both chats                                                  | Preserve | Preserve |
-| U10 | The faux dev runtime runs dry after 1000 responses; the test runtime after 500                                                                | Preserve | Preserve |
-| U11 | Browser screenshots are allowed while the owner drives; computer screenshots are refused                                                      | Preserve | Preserve |
-| U12 | A guest briefly renders owner pages until `/people/me` answers. A failed `/people/me` means owner                                             | Preserve | Preserve |
-| U13 | The client never notices harnesses added after boot. A failed `/code/status` sets `[]` for good                                               | Preserve | Preserve |
-| U14 | Deleting a bot or a past chat leaves its conversations orphaned in `agent.db`                                                                 | Preserve | Preserve |
+| ID  | Today                                                                                                                                                  | Rec.     | Owner    |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | -------- | -------- |
+| U1  | Routines are always in IST, while the `today` toolkit uses env `TZ`                                                                                    | Preserve | Preserve |
+| U2  | `isUnread` is `lastActivityAt > lastReadAt` with a preview, so the owner's own send marks the bot unread until `/read`                                 | Preserve | Preserve |
+| U3  | The sidebar preview in a shared chat includes `Name: `. A tool-only last reply clears the preview to null. The image hint mixes counts                 | Preserve | Preserve |
+| U4  | `GET /bots/:id/messages` without `before` returns 400 (recorded by P1)                                                                                 | Preserve | Preserve |
+| U5  | `message_bot` resolves the target name exactly and case-sensitively, while bot-name uniqueness is case-insensitive                                     | Preserve | Preserve |
+| U6  | The turn budget (3 messages) is in memory and resets on every idle                                                                                     | Preserve | Preserve |
+| U7  | A missed recurring slot collapses the backlog. Once-routines always fire, however late. A failed submit disarms the routine, even for Run now          | Preserve | Preserve |
+| U8  | The memory watermark is per bot. It carries across New chat and continue                                                                               | Preserve | Preserve |
+| U9  | Continuing a past chat restores `chatStartedAt`, so interim routine cards show in both chats                                                           | Preserve | Preserve |
+| U10 | The faux dev runtime runs dry after 1000 responses; the test runtime after 500                                                                         | Preserve | Preserve |
+| U11 | Browser screenshots are allowed while the owner drives; computer screenshots are refused                                                               | Preserve | Preserve |
+| U12 | A guest briefly renders owner pages until `/people/me` answers. A failed `/people/me` means owner                                                      | Preserve | Preserve |
+| U13 | The client never notices harnesses added after boot. A failed `/code/status` sets `[]` until the app shell remounts (sign out and in without a reload) | Preserve | Preserve |
+| U14 | Deleting a bot or a past chat leaves its conversations orphaned in `agent.db`                                                                          | Preserve | Preserve |
 
 ## Found while pinning (Phase 0.5)
 
