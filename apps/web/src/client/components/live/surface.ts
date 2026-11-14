@@ -72,7 +72,7 @@ export interface PageItem extends LiveItem {
 }
 
 /** The chat's panel: one bot's browser or desktop, beside the conversation. */
-interface LivePanelSurface<S extends PanelStatus> {
+export interface LivePanelSurface<S extends PanelStatus> {
   /** The card's title (the live view's tabs replace it when the chat has both). */
   title: string;
   width: {
@@ -123,7 +123,7 @@ interface LivePanelSurface<S extends PanelStatus> {
 }
 
 /** The page: every browser or desktop on the VM, a tab each. */
-interface LivePageSurface<L, I extends PageItem> {
+export interface LivePageSurface<L, I extends PageItem> {
   title: string;
   description: string;
   /** Where the selected tab is remembered. */
