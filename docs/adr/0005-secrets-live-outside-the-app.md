@@ -1,7 +1,9 @@
 # 0005 — Secrets bots use live outside the app; the model only sees handles
 
 - Status: accepted (amended by [0015](0015-one-secrets-subsystem.md): the vault also
-  holds the app's own credentials, as `app` items)
+  holds the app's own credentials, as `app` items; amended by
+  [0017](0017-local-is-the-only-vault-backend.md): the 1Password Connect backend
+  is removed, `local` is the only backend)
 - Date: 2026-10-29
 - Issue: #56
 

@@ -90,7 +90,6 @@ const KNOWN_ABSENT_PATHS = new Set([
   "steps.md",
   "extract.json",
   ".claude.json",
-  "1password-credentials.json",
   "sync-report.json",
   "users/validate.json",
   "compose.override.yml",

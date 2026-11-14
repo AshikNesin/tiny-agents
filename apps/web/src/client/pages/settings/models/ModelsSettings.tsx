@@ -300,7 +300,7 @@ function accountSummary(account: Account, accounts: Account[]): string {
     ? `through ${accounts.find((a) => a.id === account.viaProviderId)?.name ?? "a gateway"}`
     : hostOf(account.baseUrl);
   const key = account.credential
-    ? `${account.credential.hint ?? "key"} · ${account.credential.backend === "local" ? "local" : "1Password"}`
+    ? `${account.credential.hint ?? "key"} · ${account.credential.backend}`
     : undefined;
   const count = `${account.models.length} model${account.models.length === 1 ? "" : "s"}`;
   const checked = account.checkedAt

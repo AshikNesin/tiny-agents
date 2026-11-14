@@ -1,8 +1,8 @@
 /**
  * The `local` vault backend (issue #56): values sealed with SECRETS_KEY
  * (`crypto/secret-box.ts`, purpose `vault-local`) in the app's KV store.
- * The fallback when no external manager is configured, and where connection
- * header secrets move when the owner turns them into vault items.
+ * Where every vault item lives, including connection header secrets that move
+ * here when the owner turns them into vault items.
  *
  * Each item is bound to its KV key and to the digest of its row's policy
  * (issue #179): reads pass the digest computed from the row, so widening an
@@ -22,7 +22,6 @@ import {
   type SecretBinding,
 } from "../../../crypto/secret-box";
 import { parseTotp, totpCode } from "../vault.totp";
-import { cardBrand } from "./onepassword-mapping";
 import {
   BackendError,
   type BackendItemSummary,
@@ -30,6 +29,18 @@ import {
   type ValueField,
   type VaultBackend,
 } from "./types";
+
+/** A card's brand from its number's prefix. */
+function cardBrand(number: string): string {
+  const digits = number.replace(/\D/g, "");
+  if (digits.startsWith("4")) return "Visa";
+  if (/^(5[1-5]|2[2-7])/.test(digits)) return "Mastercard";
+  if (/^3[47]/.test(digits)) return "Amex";
+  if (/^6(011|5)/.test(digits)) return "Discover";
+  if (digits.startsWith("35")) return "JCB";
+  if (/^3(0[0-5]|[68])/.test(digits)) return "Diners";
+  return "Card";
+}
 
 interface StoredItem {
   kind: VaultKind;

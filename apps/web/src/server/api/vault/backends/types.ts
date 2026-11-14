@@ -6,7 +6,7 @@
  */
 import type { SecretValue, VaultKind } from "@tiny-agents/agent";
 
-export type BackendName = "onepassword-connect" | "local";
+export type BackendName = "local";
 
 /** Value fields an item can carry, across kinds. */
 export type ValueField =
@@ -27,11 +27,8 @@ export type ValueField =
 
 export interface BackendStatus {
   state: "ready" | "unconfigured" | "error";
-  /** `token_overscoped`, `unauthorized`, `unreachable`, … */
   code?: string;
   detail?: string;
-  /** Vault titles the token can see that it must not (the guard's finding). */
-  extraVaults?: string[];
 }
 
 /** What a backend says about an item without any value. */

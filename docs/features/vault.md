@@ -4,23 +4,25 @@ Bots use the owner's secrets **without the model ever seeing them** (issue
 #56). The model only knows opaque **handles** (`github`, `amex`, `openai`).
 A value is resolved at the tool boundary, in the server process, at use
 time, and goes straight into one sink: a browser field (over CDP), an HTTP
-header on a request the server makes, or an MCP connection header. tiny-agents
-is not the system of record: values live in **1Password** (through a
-self-hosted Connect server, reading one dedicated vault), or in the `local`
-fallback backend. The app database holds references and policy only.
+header on a request the server makes, or an MCP connection header. Values live
+in the `local` backend, sealed with `SECRETS_KEY`; the item rows hold
+references and policy only. The backend sits behind a `VaultBackend` port
+(`apps/web/src/server/api/vault/backends/types.ts`) so an external manager can
+be added later.
 
 Code: `packages/agent/src/vault.ts` (the port), `packages/agent/src/redact.ts`,
 `packages/agent/src/toolkits/{vault,browser,browser-fill,web}.ts`, and
 `apps/web/src/server/api/vault/`. UI: `apps/web/src/client/pages/vault/`.
-Decision record: [ADR 0005](../adr/0005-secrets-live-outside-the-app.md).
+Decision records: [ADR 0005](../adr/0005-secrets-live-outside-the-app.md),
+amended by [ADR 0017](../adr/0017-local-is-the-only-vault-backend.md).
 
 ## How a use flows
 
 ```
 model ── handle ──▶ sink tool ── gate (tool permission + item policy + approval) ──▶ VaultBroker.use
-                                                                                       │ read-only token
+                                                                                       │
                                                                                        ▼
-                       redactor ◀── value ── backend (1Password Connect | local) ──▶ sink (page / header)
+                       redactor ◀── value ── backend (local) ──▶ sink (page / header)
 ```
 
 1. **Discover.** `vault_list` returns handles and metadata (label, kind,
@@ -131,8 +133,7 @@ one sink where model-written code holds the secret, so it is the strictest:
 - The command runs **confined**: in a transient systemd unit (`sudo
   systemd-run`) with `NoNewPrivileges=yes` (so sudo no longer works inside
   it), `IPAddressDeny=any` plus `IPAddressAllow=` the allowed hosts' current
-  addresses (no loopback, so no Chrome DevTools port; no tailnet, so no
-  Connect server), no unix sockets, and a read-only `/etc/hosts` holding only
+  addresses (no loopback, so no Chrome DevTools port; no tailnet), no unix sockets, and a read-only `/etc/hosts` holding only
   the allowed names, so there is no DNS to tunnel through. Output is scrubbed
   like every tool result.
 
@@ -172,9 +173,8 @@ Typed values exist only in that request's memory.
 
 ## Vault UI and routes
 
-`/vault` lists items by kind (Logins, Cards, Contacts, API keys), 1Password
-items not linked yet, and the backends' status (including the scoping guard's
-finding and token expiry warnings 14 days ahead). Items can be created
+`/vault` lists items by kind (Logins, Cards, Contacts, API keys), backend
+items not linked yet, and the backend's status. Items can be created
 (login, card, contact, API key), linked, edited, revealed, copied and
 deleted.
 
@@ -214,101 +214,11 @@ also masks fields named `password`, `secret`, `cvc`, `cardNumber`, `totp`,
 `otp` and `authorization`. Redaction is the backstop; the main control is that
 no code path hands a value to anything but a sink.
 
-## Backends
+## Backend
 
-### 1Password Connect (primary)
+### Local
 
-Connect decrypts inside your own infrastructure, so 1Password stays
-zero-knowledge, and its access tokens are scoped per vault and expire.
-
-1. In 1Password, create a vault named **tiny-agents** holding only the items
-   bots may use (plus OTP fields where a bot should do 2FA). Your
-   Personal/Private vault is never exposed: 1Password does not let Connect
-   servers access the built-in Personal, Private or Employee vaults or the
-   default Shared vault.
-2. On 1Password.com → Developer → **Connect servers**, create a server with
-   access to **only** that vault and download `1password-credentials.json`.
-3. Issue two tokens for it, both limited to that vault and set to expire
-   (30, 90 or 180 days):
-   - `OP_CONNECT_TOKEN` — **read** (the agent runtime resolves with it);
-   - `OP_CONNECT_ADMIN_TOKEN` — **read + write** (only the Vault UI's
-     routes load it; no agent tool ever does).
-4. Set on the app: `OP_CONNECT_HOST`, `OP_CONNECT_VAULT_ID` (the vault's
-   UUID), and both tokens. Redeploy.
-5. Open **Vault**: the 1Password card must say **Ready · 1 vault visible**.
-
-**Scoping guard.** For each token the backend calls `GET /v1/vaults` before
-its first use and at least every 6 hours after (the Vault page re-checks when
-it loads). Unless the list is
-**exactly** the pinned vault, the backend reports `token_overscoped`, names
-the extra vaults, and refuses every use; the app still boots. Every path is
-pinned to `OP_CONNECT_VAULT_ID`, and an item whose `vault.id` differs is
-refused.
-
-**Rotation.** Values: change them in 1Password (or the Vault UI); the next
-use picks them up — nothing is cached. Tokens: issue a new one, update the
-env var, redeploy, revoke the old one. The Vault page warns 14 days before a
-token's `exp` claim (when the token carries one).
-
-#### Deploying Connect: a separate host on the tailnet (recommended)
-
-Run Connect as its **own app on a different host**, reachable **only over
-Tailscale**. The app already reaches the sandbox VM over the tailnet
-(`SANDBOX_HOST`), so this adds no new kind of network path, and it keeps the
-blast radius small: a compromise of the app host doesn't hand over
-`1password-credentials.json`, and a compromise of the Connect host doesn't
-hand over the tokens (Connect needs both to decrypt anything). Traffic is
-WireGuard-encrypted, so Connect's plain HTTP port is fine inside the tailnet.
-
-- Bind Connect's port to the host's Tailscale address only (or front it with
-  `tailscale serve`); give it no public domain.
-- Tailscale ACLs are default-deny: grant **only the app's node** access to
-  Connect's port, and give the sandbox VM no rule to it. Model-chosen
-  commands run on that VM and must never reach Connect.
-- If the tailnet or Connect is down, vault uses fail closed (`vault_locked`)
-  and everything else keeps working.
-
-```jsonc
-// Tailscale policy (excerpt): only the app talks to Connect.
-{
-  "tagOwners": { "tag:op-connect": ["autogroup:admin"] },
-  "grants": [
-    // The app's node (today tagged tag:codevm) → Connect's API port.
-    { "src": ["tag:codevm"], "dst": ["tag:op-connect"], "ip": ["tcp:8080"] },
-  ],
-  // No rule names tag:tiny-agents-vm as a source for tag:op-connect.
-}
-```
-
-```yaml
-# docker-compose.yml on the Connect host. Pin both images by digest.
-services:
-  op-connect-api:
-    image: 1password/connect-api:<version>@sha256:<digest>
-    ports: ["100.x.y.z:8080:8080"] # the host's Tailscale IP only
-    volumes:
-      - ./1password-credentials.json:/home/opuser/.op/1password-credentials.json:ro
-      - connect-data:/home/opuser/.op/data
-    restart: unless-stopped
-  op-connect-sync:
-    image: 1password/connect-sync:<version>@sha256:<digest>
-    volumes:
-      - ./1password-credentials.json:/home/opuser/.op/1password-credentials.json:ro
-      - connect-data:/home/opuser/.op/data
-    restart: unless-stopped
-volumes:
-  connect-data: {}
-```
-
-Then `OP_CONNECT_HOST=http://op-connect.<tailnet>.ts.net:8080` on the app.
-
-The simpler alternative is a Coolify service on the **app's internal
-network** (no public domain, not reachable from the sandbox VM). It works the
-same way; the credentials file and the tokens then sit on one host.
-
-### Local (fallback)
-
-Without `OP_CONNECT_HOST`, new items go to the `local` backend: values sealed
+Items go to the `local` backend: values sealed
 in the app's KV store by `apps/web/src/server/crypto/secret-box.ts`. It's
 fully writable from the Vault UI.
 
@@ -328,22 +238,6 @@ fully writable from the Vault UI.
 - **Rotation.** Move the old key to `SECRETS_KEY_PREVIOUS`, set a new
   `SECRETS_KEY` and run `pnpm secrets:rotate`. It re-seals local items and
   connection secrets under the new key; then remove `SECRETS_KEY_PREVIOUS`.
-
-### Field mapping (1Password)
-
-| Kind     | Category         | Fields                                                                |
-| -------- | ---------------- | --------------------------------------------------------------------- |
-| login    | `LOGIN`          | purpose `USERNAME` / `PASSWORD` / `NOTES`, an `OTP` field, `urls[]`   |
-| card     | `CREDIT_CARD`    | `ccnum`, `expiry` (MONTH_YEAR, `YYYYMM`), `cvv`, `cardholder`, `type` |
-| identity | `IDENTITY`       | `firstname`, `email`, `defphone`, `address`                           |
-| api_key  | `API_CREDENTIAL` | `credential`, `username`                                              |
-
-The Connect reference doesn't document the `CREDIT_CARD` / `IDENTITY` field
-ids; the mapping uses 1Password's template ids with a label fallback, pinned
-in `tests/server/api/vault/`. **Confirm them** by fetching an item made in
-the 1Password app (`GET /v1/vaults/{vault}/items/{id}`) when first setting
-up, along with the `MONTH_YEAR` value format. Edits keep fields the mapping
-doesn't model (read-modify-write of the whole item).
 
 ## Limits (v1)
 

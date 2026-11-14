@@ -31,19 +31,14 @@ interface BackendStatus {
   state: "ready" | "unconfigured" | "error";
   code?: string;
   detail?: string;
-  extraVaults?: string[];
 }
 
 export interface VaultBackendView {
-  name: "onepassword-connect" | "local";
+  name: "local";
   configured: boolean;
   read: BackendStatus;
   write?: BackendStatus;
   capabilities?: { create: boolean; update: boolean; delete: boolean; reveal: boolean };
-  host?: string;
-  vaultId?: string;
-  readTokenExpiresAt?: string | null;
-  writeTokenExpiresAt?: string | null;
 }
 
 export interface VaultItem {

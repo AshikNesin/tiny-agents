@@ -38,11 +38,6 @@ const appEnvSchema = z.object({
   DATA_DIR: z.string().optional(),
   /** pi-durable agent store: a plain path or a `file:` URL. Default: see `agentDbPath()`. */
   AGENT_DB_PATH: z.string().optional(),
-  /** 1Password Connect (issue #56). Without a host the vault uses the local backend only. */
-  OP_CONNECT_HOST: z.string().optional(),
-  OP_CONNECT_VAULT_ID: z.string().optional(),
-  OP_CONNECT_TOKEN: z.string().optional(),
-  OP_CONNECT_ADMIN_TOKEN: z.string().optional(),
   /**
    * Shelley coding agent the Code page drives (e.g. `http://my-vm:9999` over
    * Tailscale). Unset = the Code page says it is not configured.

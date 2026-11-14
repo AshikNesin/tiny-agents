@@ -370,7 +370,7 @@ export const vaultItems = sqliteTable("vault_items", {
   handle: text("handle").notNull().unique(),
   /** login | card | identity | api_key */
   kind: text("kind").notNull(),
-  /** onepassword-connect | local */
+  /** local */
   backend: text("backend").notNull(),
   /**
    * Who uses the value: `bots` (listed to bots, used through their tools,
@@ -378,7 +378,7 @@ export const vaultItems = sqliteTable("vault_items", {
    * key; never listed to bots or resolved through their tools).
    */
   audience: text("audience").notNull().default("bots"),
-  /** Backend item id (Connect item id; the vault is pinned in env). */
+  /** Backend item id. */
   externalId: text("external_id").notNull(),
   /** api_key: which field holds the key (default: the credential/password field). */
   field: text("field"),

@@ -260,7 +260,7 @@ export function VaultItemDetail({ handle }: { handle: string }) {
   const { item, capabilities } = detail;
   const missing = FIELDS_BY_KIND[item.kind].filter((field) => !detail.fields.includes(field));
   const readOnlyNote = !capabilities.update
-    ? `Read-only here: edit it in ${item.backend === "onepassword-connect" ? "1Password" : "the source app"}.`
+    ? "Read-only here: edit it in the source app."
     : undefined;
 
   return (
@@ -274,11 +274,7 @@ export function VaultItemDetail({ handle }: { handle: string }) {
             : ""}
         </span>
       }
-      titleAdornment={
-        <Badge variant="outline">
-          {item.backend === "onepassword-connect" ? "1Password" : "Local"}
-        </Badge>
-      }
+      titleAdornment={<Badge variant="outline">Local</Badge>}
       backTo="/vault"
       maxWidth="4xl"
     >

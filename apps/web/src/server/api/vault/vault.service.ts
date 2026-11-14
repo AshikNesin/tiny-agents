@@ -145,9 +145,6 @@ export async function backendStatus(name: BackendName, force = false): Promise<B
     detail: (error as Error).message,
   }));
   statusCache.set(name, { at: Date.now(), status });
-  if (status.code === "token_overscoped") {
-    logger.error({ backend: name, extraVaults: status.extraVaults }, "Vault token is overscoped");
-  }
   return status;
 }
 

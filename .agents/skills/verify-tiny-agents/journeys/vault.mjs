@@ -61,13 +61,12 @@ await journey("vault", async ({ page, context, step, proof, cleanup, api, stamp 
     await expect(page.getByRole("heading", { name: heading })).toBeVisible();
   };
 
-  await step("open Vault from the account menu: Local ready, 1Password not set up", async () => {
+  await step("open Vault from the account menu: Local ready", async () => {
     await page.getByRole("button", { name: "Account and navigation" }).click();
     await page.getByRole("menuitem", { name: "Vault" }).click();
     await expect(page).toHaveURL(/\/vault$/);
     await expect(page.getByRole("heading", { name: "Vault", exact: true })).toBeVisible();
     await expect(page.getByText("Encrypted with SECRETS_KEY")).toBeVisible();
-    await expect(page.getByText("Not set up")).toBeVisible();
     await expect(page.getByRole("button", { name: "New item" })).toBeEnabled();
   });
   await proof("backends");
