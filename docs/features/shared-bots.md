@@ -21,7 +21,11 @@ new bot (or press "New chat") before sharing it.
   guest can't take control, start, resize or reset them, and the VNC bridge
   drops a guest viewer's keys, clicks and clipboard, because a shared
   browser holds the owner's logins.
-- Use the whole **Code** page (every Shelley conversation).
+- Use the **Code** page: read, start and work in every thread. The harness
+  host stays the owner's: a guest can't browse or choose directories, find
+  files, upload, make worktrees, move a thread, open file assets or pick the
+  no-prompts (bypass) mode. The page hides those controls for a guest and the
+  routes refuse them.
 - Change their theme, password and passkeys.
 
 Everything else is the owner's: other bots, bot settings, New chat and Chat

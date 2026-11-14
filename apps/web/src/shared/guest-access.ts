@@ -54,7 +54,29 @@ export const GUEST_ACCESS: Record<string, GuestFeature> = {
       { methods: ["DELETE"], upload: /^$/, reach: "uploaded" },
     ],
   },
-  code: { page: "/code", api: [{ methods: "*", path: /^\/code(\/.*)?$/ }] },
+  // Threads, yes; the harness host, no (S3): a guest can't browse or
+  // validate directories, find files, list repos, make worktrees, upload
+  // files or change a thread's directory. The routes refuse bypass mode, a
+  // chosen cwd and file assets for a guest too.
+  code: {
+    page: "/code",
+    api: [
+      {
+        methods: READ,
+        path: /^\/code\/(status|events|threads(\/search|\/by-title\/[^/]+)?|threads\/[^/]+(\/(events|usage))?)$/,
+      },
+      { methods: ["POST"], path: /^\/code\/threads$/ },
+      {
+        methods: ["POST"],
+        path: /^\/code\/threads\/[^/]+\/(seen|messages|interrupt|requests\/[^/]+|recover|queued\/[^/]+\/[^/]+|jobs\/[^/]+\/kill|settings|archive|rename|fork)$/,
+      },
+      { methods: ["DELETE"], path: /^\/code\/threads\/[^/]+$/ },
+      {
+        methods: READ,
+        path: /^\/code\/harnesses\/[^/]+\/(models|skills|asset|diffs(\/[^/]+\/(files|file))?)$/,
+      },
+    ],
+  },
 };
 
 /** A `/bots/<id>` path: the bot id, then the rest of the path. */

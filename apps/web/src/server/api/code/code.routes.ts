@@ -21,6 +21,7 @@ import {
   type HarnessInstance,
   type ThreadSummary,
 } from "@tiny-agents/code/server";
+import type { Capabilities } from "@tiny-agents/code/contracts";
 import { openSse } from "../bots/bots.sse";
 import { codeHub, type CodeHub } from "./code.hub";
 import { follow, markSeen, seenMap } from "./code.store";
@@ -95,13 +96,37 @@ function passthrough(upstream: Response): Response {
   return new Response(upstream.body, { status: 200, headers });
 }
 
-function describe(instance: HarnessInstance) {
+/**
+ * What a guest's Code page may offer (S3): the host's directories, files,
+ * uploads and worktrees and the no-prompts mode are the owner's, so the page
+ * hides those controls; the routes refuse them anyway.
+ */
+function guestCapabilities(caps: Capabilities): Capabilities {
+  return {
+    ...caps,
+    threads: { ...caps.threads, changeCwd: false },
+    settings: {
+      ...caps.settings,
+      permissionModes: caps.settings.permissionModes.filter((m) => m !== "bypassPermissions"),
+    },
+    workspace: {
+      ...caps.workspace,
+      findFiles: false,
+      uploads: false,
+      browse: false,
+      worktrees: false,
+    },
+  };
+}
+
+function describe(instance: HarnessInstance, guest: boolean) {
+  const capabilities = instance.capabilities();
   return {
     id: instance.id,
     kind: instance.kind,
     label: instance.label,
     status: instance.status(),
-    capabilities: instance.capabilities(),
+    capabilities: guest ? guestCapabilities(capabilities) : capabilities,
     commands: instance.commands?.() ?? [],
   };
 }
@@ -110,7 +135,10 @@ function describe(instance: HarnessInstance) {
 
 router.get("/code/status", (c) => {
   const current = codeHub();
-  return ok(c, { harnesses: current ? current.instances().map(describe) : [] });
+  const guest = c.get("viewer").guest;
+  return ok(c, {
+    harnesses: current ? current.instances().map((instance) => describe(instance, guest)) : [],
+  });
 });
 
 /** One SSE per open Code page: harness status and the merged thread list. */
@@ -198,8 +226,25 @@ const createSchema = z.object({
   attachments: refs,
 });
 
+/**
+ * What a guest may not do on the Code page (S3): run without permission
+ * prompts, or pick a working directory (directory choice is the owner's, as
+ * is browsing the host; see GUEST_ACCESS).
+ */
+function guardGuest(
+  c: AppContext,
+  change: { cwd?: string | null; permissionMode?: string | null },
+): void {
+  if (!c.get("viewer").guest) return;
+  if (change.permissionMode === "bypassPermissions") {
+    throw Boom.forbidden("Only the owner can turn off permission prompts.");
+  }
+  if (change.cwd) throw Boom.forbidden("Only the owner can choose a working directory.");
+}
+
 router.post("/code/threads", async (c) => {
   const body = await parseBody(c, createSchema);
+  guardGuest(c, body);
   const instance = hub().instance(body.instanceId);
   if (!instance) throw Boom.notFound("No such harness");
   const caps = instance.capabilities();
@@ -316,6 +361,7 @@ const settingsSchema = z.strictObject({
 router.post("/code/threads/:id/settings", async (c) => {
   const { instance, nativeId } = thread(c);
   const change = await parseBody(c, settingsSchema);
+  guardGuest(c, { permissionMode: change.permissionMode });
   if (
     change.permissionMode &&
     !instance.capabilities().settings.permissionModes.includes(change.permissionMode)
@@ -425,6 +471,11 @@ router.post("/code/uploads/:instance", uploadBodyLimit, async (c) => {
 router.get("/code/harnesses/:instance/asset", async (c) => {
   const instance = harness(c);
   const ref = query(c, "ref")!;
+  // A file ref names any path on the harness host; a guest sees only a
+  // message's own images (S3).
+  if (c.get("viewer").guest && !ref.startsWith("img:")) {
+    throw Boom.forbidden("Only the owner can open files from the harness host.");
+  }
   return passthrough(await run(() => need(instance, "asset", "serve files")(ref)));
 });
 
