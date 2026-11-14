@@ -31,13 +31,16 @@ afterEach(async () => {
   await Promise.all(servers.splice(0).map((s) => new Promise((r) => s.close(r))));
 });
 
-/** A server on 127.0.0.1 that records the paths it was asked for. */
+/**
+ * A server on 127.0.0.1 that records the pages it was asked for (not the
+ * favicon a browser fetches on its own after a page loads).
+ */
 async function serve(
   handler: (path: string) => { status?: number; headers?: Record<string, string>; body?: string },
 ) {
   const hits: string[] = [];
   const server = createServer((req, res) => {
-    hits.push(req.url ?? "");
+    if (req.url !== "/favicon.ico") hits.push(req.url ?? "");
     const reply = handler(req.url ?? "");
     res.writeHead(reply.status ?? 200, reply.headers);
     res.end(reply.body ?? "");
@@ -173,17 +176,32 @@ function fakeChrome() {
     return went;
   }
 
-  /** A tab whose `goto` follows `redirects`, each hop asked of the guard. */
-  function tab(frameId: string, redirects: Record<string, string> = {}): Page {
+  /**
+   * A tab whose `goto` follows `redirects`, each hop asked of the guard. Its
+   * DevTools methods in `silent` never answer (a busy renderer answers no
+   * `Page.*` call; the browser process answers `Target.*`).
+   */
+  function tab(
+    frameId: string,
+    redirects: Record<string, string> = {},
+    silent: string[] = ["Page.getFrameTree"],
+  ): Page {
     let current = "about:blank";
     const page = {
       once: () => undefined,
       context: () => ({
         newCDPSession: async () => ({
-          send: async () => ({ frameTree: { frame: { id: frameId } } }),
+          send: (method: string) =>
+            silent.includes(method)
+              ? new Promise(() => undefined)
+              : Promise.resolve({
+                  frameTree: { frame: { id: frameId } },
+                  targetInfo: { targetId: frameId, type: "page" },
+                }),
           detach: async () => undefined,
         }),
       }),
+      keyboard: { press: async () => undefined },
       url: () => current,
       goto: async (start: string) => {
         const chain: string[] = [];
@@ -212,7 +230,40 @@ function fakeChrome() {
 
 /** Names the fake DNS knows: nip.io-style names answer the address they spell. */
 const fakeDns = async (host: string) =>
-  host.endsWith(".nip.io") ? [host.slice(0, -".nip.io".length)] : ["93.184.216.34"];
+  host.endsWith(".nip.io")
+    ? [host.slice(0, -".nip.io".length)]
+    : host === "nas.lan"
+      ? ["192.168.1.10"]
+      : ["93.184.216.34"];
+const settle = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+describe("refusesNavigation's name checks (S7b)", () => {
+  const exempt = (...hosts: string[]) => new Set(hosts);
+
+  it("lets a name through when the private address it resolves to is exempt", async () => {
+    expect(await refusesNavigation("http://nas.lan/", exempt("192.168.1.10"), fakeDns)).toBe(false);
+    expect(await refusesNavigation("http://nas.lan/", exempt(), fakeDns)).toBe(true);
+  });
+
+  it("matches an exempt name written with a trailing dot", async () => {
+    expect(await refusesNavigation("http://nas.lan./", exempt("nas.lan"), fakeDns)).toBe(false);
+    expect(await refusesNavigation("http://nas.lan./", exempt(), fakeDns)).toBe(true);
+  });
+
+  it("without a resolver (the VM transport) checks literals and local names only", async () => {
+    expect(await refusesNavigation("http://127.0.0.1.nip.io/", exempt(), null)).toBe(false);
+    expect(await refusesNavigation("http://router/", exempt(), null)).toBe(false);
+    expect(await refusesNavigation("http://127.0.0.1/", exempt(), null)).toBe(true);
+    expect(await refusesNavigation("http://localhost/", exempt(), null)).toBe(true);
+  });
+
+  it("leaves a name whose lookup takes too long to the browser", async () => {
+    const started = Date.now();
+    const stuck = () => new Promise<string[]>(() => undefined);
+    expect(await refusesNavigation("http://slow.example/", exempt(), stuck)).toBe(false);
+    expect(Date.now() - started).toBeLessThan(10_000);
+  }, 15_000);
+});
 
 describe("browser navigation guard (S7b)", () => {
   it("refuses a redirect hop to a private address before its request is sent", async () => {
@@ -280,6 +331,42 @@ describe("browser navigation guard (S7b)", () => {
     expect(await chrome.request("owner-tab", "http://127.0.0.1:8080/router")).toBe(true);
   });
 
+  it("lets a tab through again once no agent holds it, and guards it again when one does", async () => {
+    const chrome = fakeChrome();
+    const guard = await navigationGuard(chrome.browser, { resolveHost: fakeDns });
+    const session = pageSession(chrome.tab("tab-1"), open, { close: async () => {}, guard });
+    await session.navigate("https://public.example/");
+    chrome.popup("tab-1", "popup-1");
+    expect(await chrome.request("tab-1", "http://192.168.1.1/")).toBe(false);
+    // Let go of (closeTab blanks the browser's first tab and releases it): the owner's LAN pages load.
+    session.release?.();
+    await settle(0);
+    expect(await chrome.request("tab-1", "http://192.168.1.1/")).toBe(true);
+    expect(await chrome.request("popup-1", "http://192.168.1.1/")).toBe(true);
+    // An agent acts on it again: guarded again.
+    await session.press("Enter");
+    expect(await chrome.request("tab-1", "http://192.168.1.1/")).toBe(false);
+  });
+
+  it("asks the browser process, not the renderer, for the tab's frame (a busy page can't hang it)", async () => {
+    const chrome = fakeChrome();
+    const guard = await navigationGuard(chrome.browser, { resolveHost: fakeDns });
+    // `Page.getFrameTree` never answers, as on a renderer stuck in a loop.
+    const session = pageSession(chrome.tab("busy-1"), open, { close: async () => {}, guard });
+    expect(await session.navigate("https://public.example/")).toMatchObject({ status: 200 });
+    expect(await chrome.request("busy-1", "http://127.0.0.1/")).toBe(false);
+  });
+
+  it("fails the action with a clear error when the browser doesn't answer at all", async () => {
+    const chrome = fakeChrome();
+    const guard = await navigationGuard(chrome.browser, { resolveHost: fakeDns });
+    const page = chrome.tab("gone-1", {}, ["Page.getFrameTree", "Target.getTargetInfo"]);
+    const session = pageSession(page, open, { close: async () => {}, guard });
+    await expect(session.press("Enter")).rejects.toThrow(/not responding/);
+    await expect(session.navigate("https://public.example/")).rejects.toThrow(/not responding/);
+    expect(chrome.sent).toEqual([]);
+  }, 20_000);
+
   it("refuses to navigate without a guard", async () => {
     const chrome = fakeChrome();
     const session = pageSession(chrome.tab("tab-1"), open, { close: async () => {} });
@@ -316,6 +403,9 @@ describe("browser navigation guard (S7b)", () => {
       }
       if (path === "/popup") return html(`<script>window.open("${T}/popup")</script>hi`);
       if (path === "/popup-hop") return html(`<script>window.open("/hop")</script>hi`);
+      if (path === "/spin") {
+        return html(`<script>setTimeout(() => { for (;;) {} }, 50)</script>spinning`);
+      }
       return html("ok");
     });
     const browser = await chromium.launch({ executablePath: chromiumPath, args: ["--no-sandbox"] });
@@ -329,7 +419,43 @@ describe("browser navigation guard (S7b)", () => {
     const S = `http://localhost:${site.port}`;
     return { browser, page, session, target, site, S };
   }
-  const settle = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+  it.skipIf(!chromiumPath)(
+    "in real Chromium, a page stuck in a loop doesn't hang guarding its tab",
+    async () => {
+      const { browser, session, S } = await realChrome();
+      try {
+        await session.navigate(`${S}/spin`);
+        const page = await browser.newPage();
+        await page.goto(`${S}/spin`);
+        await settle(300); // the loop has started
+        const guard = await navigationGuard(browser);
+        const started = Date.now();
+        expect(await guard.watch(page, new Set(["localhost"]))).toEqual(expect.any(String));
+        expect(Date.now() - started).toBeLessThan(5_000);
+      } finally {
+        await browser.close();
+      }
+    },
+    30_000,
+  );
+
+  it.skipIf(!chromiumPath)(
+    "in real Chromium, a released tab loads the owner's private pages again",
+    async () => {
+      const { browser, page, session, target, S } = await realChrome();
+      try {
+        await session.navigate(`${S}/`);
+        await expect(page.goto(`http://127.0.0.1:${target.port}/agent`)).rejects.toThrow();
+        session.release?.();
+        await settle(100);
+        await page.goto(`http://127.0.0.1:${target.port}/owner`);
+        expect(target.hits).toEqual(["/owner"]);
+      } finally {
+        await browser.close();
+      }
+    },
+    30_000,
+  );
 
   it.skipIf(!chromiumPath)(
     "in real Chromium, a public page's redirect to 127.0.0.1 never reaches it",

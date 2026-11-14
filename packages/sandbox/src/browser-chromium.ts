@@ -93,8 +93,8 @@ export function pageSession(
     vnc?: BrowserVnc;
     /**
      * The browser's navigation guard (`navigationGuard`): every tab the
-     * session drives is watched for its whole life. Without one (stub pages
-     * in tests) `navigate` refuses to run.
+     * session drives is watched while the session holds it. Without one
+     * (stub pages in tests) `navigate` refuses to run.
      */
     guard?: NavigationGuard;
   },
@@ -107,17 +107,20 @@ export function pageSession(
   let page = initialPage;
   let closing = false;
   claimed.add(page);
-  /** Guard the tab before the agent acts on it (once per tab). */
+  /** Guard the tab before the agent acts on it (once while held). */
   const watch = (target: Page) => guard?.watch(target, exempt);
   void watch(page)?.catch(() => undefined);
 
+  // Never waits on the tab: a hand-back must not hang on a busy page. The
+  // next action waits for the guard instead (`guarded`).
   const switchTo = async (next: Page) => {
     if (next === page) return;
     claimed.delete(page);
+    guard?.unwatch(page); // no agent holds it any more
     claimed.add(next);
     page = next;
     follow(next);
-    await watch(next);
+    void watch(next)?.catch(() => undefined);
   };
   /** Run an action on the current tab once it is guarded. */
   const guarded = async <T>(action: (current: Page) => Promise<T>): Promise<T> => {
@@ -210,9 +213,13 @@ export function pageSession(
       // and the model would pay for pixels it cannot use.
       data: (await page.screenshot({ type: "jpeg", quality: 60, scale: "css" })).toString("base64"),
     }),
+    release: () => {
+      guard?.unwatch(page);
+    },
     close: async () => {
       closing = true;
       claimed.delete(page);
+      guard?.unwatch(page);
       await teardown.close(page);
     },
   };

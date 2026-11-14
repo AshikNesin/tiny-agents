@@ -242,7 +242,9 @@ export function createRemoteCdpTransport(options: RemoteCdpTransportOptions): Br
       };
 
       return pageSession(page, open, {
-        guard: await navigationGuard(browser),
+        // Chrome resolves names on the VM, so this server's DNS answers
+        // say nothing about where it connects: literals and local names only.
+        guard: await navigationGuard(browser, { resolveHost: null }),
         vnc,
         onDisconnect: (listener) => {
           // Already gone before anyone could listen: report it after the
