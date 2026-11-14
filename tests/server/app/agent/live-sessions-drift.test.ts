@@ -2,7 +2,9 @@
  * Where the browser and computer session managers differ (the drift kept by
  * `LiveSessions` options, docs/rewrite/README.md §4.2). Each test pins one
  * difference that no other suite pinned, recorded on the two separate
- * managers before they became instances of one generic.
+ * managers before they became instances of one generic. The last block pins
+ * microtask order too (where the driver is checked, when each call settles):
+ * the rewrite keeps today's behavior, races included.
  */
 import { describe, expect, it } from "vite-plus/test";
 import {
@@ -382,6 +384,255 @@ describe("live sessions drift: the driver", () => {
       "The owner is driving the browser; wait and retry, or continue without the browser.",
     );
     await browsers.closeAll();
+  });
+});
+
+/** Runs `fn` after `n` microtask hops, so a test can land a call between a manager's awaits. */
+async function afterTicks(n: number, fn: () => unknown): Promise<void> {
+  for (let i = 0; i < n; i++) await Promise.resolve();
+  fn();
+}
+
+const TICKS = [0, 1, 2, 3, 4, 5, 6, 7];
+
+describe("live sessions drift: where the driver is checked", () => {
+  it("computer: a read and an action started in the same tick as a takeover request still run", async () => {
+    for (const joinOpen of [false, true]) {
+      const time = manualClock();
+      const fake = fakeComputer();
+      const sessions = createComputerSessions({
+        transport: fake.transport,
+        humanDriverWaitMs: 1_000,
+        clock: time.clock,
+      });
+      const release = joinOpen ? fake.holdOpens() : undefined;
+      if (!joinOpen) await sessions.acquire("shared");
+      const outcomes: string[] = [];
+      void sessions.readTurn("shared").then(
+        () => outcomes.push("read ok"),
+        (error: Error) => outcomes.push(`read ${error.name}`),
+      );
+      void sessions.actionTurn("shared").then(
+        () => outcomes.push("act ran"),
+        (error: Error) => outcomes.push(`act ${error.name}`),
+      );
+      const takeover = sessions
+        .requestTakeover("shared", "x", 50)
+        .then((outcome) => outcomes.push(`takeover ${outcome}`));
+      release?.();
+      await tick();
+      expect(outcomes, `joinOpen=${joinOpen}`).toEqual(["read ok", "act ran"]);
+      time.set(50);
+      await takeover;
+      expect(outcomes).toEqual(["read ok", "act ran", "takeover timeout"]);
+      await sessions.closeAll();
+    }
+  });
+
+  it("computer: the driver check runs at the same microtask as before", async () => {
+    const reads: string[] = [];
+    const acts: string[] = [];
+    for (const n of TICKS) {
+      const fake = fakeComputer();
+      const sessions = createComputerSessions({ transport: fake.transport });
+      await sessions.acquire("shared");
+      const read = sessions.readTurn("shared").then(
+        () => "ok",
+        () => "refused",
+      );
+      await afterTicks(n, () => sessions.setDriver("shared", "human"));
+      reads.push(await read);
+      await sessions.setDriver("shared", "agent");
+      let acted = false;
+      void sessions.actionTurn("shared").then(() => (acted = true));
+      await afterTicks(n, () => sessions.setDriver("shared", "human"));
+      await tick();
+      acts.push(acted ? "ran" : "waited");
+      await sessions.closeAll();
+    }
+    // A takeover in the same tick as the call (n = 0) beats the check; one hop later does not.
+    expect({ reads, acts }).toEqual({
+      reads: ["refused", "ok", "ok", "ok", "ok", "ok", "ok", "ok"],
+      acts: ["waited", "ran", "ran", "ran", "ran", "ran", "ran", "ran"],
+    });
+  });
+
+  it("browser: the driver checks run at the same microtask as before", async () => {
+    const reads: string[] = [];
+    const acts: string[] = [];
+    for (const n of TICKS) {
+      const sessions = createBrowserSessions({
+        profilesDir: PROFILES,
+        transport: browserTransport(async () =>
+          browserSession({ openTab: async () => browserSession() }),
+        ),
+      });
+      const one = { profile: "p1", tab: "t1" };
+      const two = { profile: "p1", tab: "t2" };
+      await sessions.acquire(one);
+      await sessions.acquire(two);
+      const read = sessions.readTurn(two);
+      await afterTicks(n, () => sessions.setDriver(one, "human"));
+      const front = (await read).browser.front;
+      reads.push(front ?? "none");
+      await sessions.setDriver(one, "agent");
+      const browser = sessions.get(one)!;
+      browser.front = undefined;
+      let acted = false;
+      const act = sessions.actionTurn(two).then(() => (acted = true));
+      await afterTicks(n, () => sessions.setDriver(one, "human"));
+      await tick();
+      acts.push(`${acted ? "ran" : "waited"}:${browser.front ?? "none"}`);
+      await sessions.setDriver(one, "agent");
+      await act;
+      await sessions.closeAll();
+    }
+    // The browser checks after the open and the agent's tab: three hops in.
+    expect({ reads, acts }).toEqual({
+      reads: ["none", "none", "none", "t2", "t2", "t2", "t2", "t2"],
+      acts: [
+        "waited:none",
+        "waited:none",
+        "waited:none",
+        "ran:t2",
+        "ran:t2",
+        "ran:t2",
+        "ran:t2",
+        "ran:t2",
+      ],
+    });
+  });
+
+  it("each call settles at the same microtask as before", async () => {
+    /** Microtask hops until `promise` settles. */
+    const hops = async (promise: Promise<unknown>): Promise<number> => {
+      let settled = false;
+      promise.then(
+        () => (settled = true),
+        () => (settled = true),
+      );
+      for (let i = 0; i < 100; i++) {
+        if (settled) return i;
+        await Promise.resolve();
+      }
+      return -1;
+    };
+
+    const fake = fakeComputer();
+    const computers = createComputerSessions({ transport: fake.transport });
+    const computer: Record<string, number> = {};
+    computer.acquire = await hops(computers.acquire("shared"));
+    computer.acquireLive = await hops(computers.acquire("shared"));
+    computer.start = await hops(computers.start("shared"));
+    computer.readTurn = await hops(computers.readTurn("shared"));
+    computer.actionTurn = await hops(computers.actionTurn("shared"));
+    computer.takeOver = await hops(computers.setDriver("shared", "human"));
+    computer.readRefused = await hops(computers.readTurn("shared"));
+    computer.handBack = await hops(computers.setDriver("shared", "agent"));
+    const takeover = computers.requestTakeover("shared", "x", 60_000);
+    await tick();
+    const back = computers.setDriver("shared", "agent");
+    computer.takeoverAnswered = await hops(takeover);
+    await back;
+    computer.close = await hops(computers.close("shared"));
+    computer.closeAll = await hops(computers.closeAll());
+
+    const browsers = createBrowserSessions({
+      profilesDir: PROFILES,
+      transport: browserTransport(async () =>
+        browserSession({ openTab: async () => browserSession() }),
+      ),
+    });
+    const one = { profile: "p1", tab: "t1" };
+    const two = { profile: "p1", tab: "t2" };
+    const browser: Record<string, number> = {};
+    // A fresh open is left out: its hops include the dynamic `import()` of node:fs.
+    await browsers.acquire(one);
+    browser.acquireLive = await hops(browsers.acquire(one));
+    browser.acquireTab = await hops(browsers.acquire(two));
+    browser.start = await hops(browsers.start(one));
+    browser.readTurn = await hops(browsers.readTurn(two));
+    browser.actionTurn = await hops(browsers.actionTurn(one));
+    browser.takeOver = await hops(browsers.setDriver(one, "human"));
+    browser.handBack = await hops(browsers.setDriver(one, "agent"));
+    browser.closeTab = await hops(browsers.closeTab(two));
+    browser.close = await hops(browsers.close(one));
+    browser.closeAll = await hops(browsers.closeAll());
+    expect({ computer, browser }).toEqual({
+      computer: {
+        acquire: 9,
+        acquireLive: 1,
+        start: 3,
+        readTurn: 2,
+        actionTurn: 2,
+        takeOver: 1,
+        readRefused: 2,
+        handBack: 1,
+        takeoverAnswered: 2,
+        close: 3,
+        closeAll: 3,
+      },
+      browser: {
+        acquireLive: 3,
+        acquireTab: 8,
+        start: 6,
+        readTurn: 6,
+        actionTurn: 6,
+        takeOver: 1,
+        handBack: 2,
+        closeTab: 3,
+        close: 4,
+        closeAll: 3,
+      },
+    });
+  });
+
+  it("browser: the idle sweep does not wake an action waiting on a hand-back in progress", async () => {
+    const time = manualClock();
+    const log: string[] = [];
+    let finishAdopt!: () => void;
+    const tab = (name: string): BrowserSession =>
+      browserSession({
+        close: async () => void log.push(`${name}:close`),
+        focus: async () => void log.push(`${name}:focus`),
+        adoptActiveTab: () => {
+          log.push(`${name}:adopt`);
+          return new Promise<void>((resolve) => (finishAdopt = resolve));
+        },
+        openTab: async () => tab("t2"),
+      });
+    const sessions = createBrowserSessions({
+      profilesDir: PROFILES,
+      transport: browserTransport(async () => tab("t1")),
+      idleMinutes: 1,
+      humanDriverWaitMs: 600_000,
+      clock: time.clock,
+    });
+    const a = { profile: "p", tab: "a" };
+    const b = { profile: "p", tab: "b" };
+    await sessions.acquire(a);
+    await sessions.acquire(b);
+    await sessions.setDriver(a, "human");
+    const act = sessions.actionTurn(b).then(() => void log.push("act resolved"));
+    await tick();
+    time.set(5 * 60_000);
+    const handBack = sessions.setDriver(a, "agent").then(() => void log.push("handback resolved"));
+    time.sweep(); // the browser idled out while the owner drove; the hand-back is still adopting
+    await tick();
+    log.push("adopt done");
+    finishAdopt();
+    await handBack;
+    await act;
+    // The sweep closed the browser, but the action still woke only with the hand-back.
+    expect(log).toEqual([
+      "t1:adopt",
+      "t1:close",
+      "adopt done",
+      "t2:focus",
+      "handback resolved",
+      "act resolved",
+    ]);
+    await sessions.closeAll();
   });
 });
 

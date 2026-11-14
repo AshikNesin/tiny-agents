@@ -84,8 +84,13 @@ export interface LiveSessionsOptions<U extends LiveSurface, S extends LiveEntry>
   touchOnOpen: boolean;
   /** A hand-back (any non-takeover driver set) counts as activity. */
   touchOnHandBack: boolean;
-  /** An open waits for a close in progress on the profile (a wipe never races a launch). */
+  /**
+   * An open waits for a close in progress on the profile (a wipe never races
+   * a launch). Only such closes are tracked; untracked ones run inline.
+   */
   openWaitsForClose: boolean;
+  /** The idle sweep wakes hand-back waiters of the session it closes. */
+  sweepReleases: boolean;
   /** A close with wipe that cancels an open also wipes as the open lands (errors ignored). */
   wipeCancelledOpen: boolean;
   /** Whether a surface's failing `close()` fails `close`/`dispose`. */
@@ -98,6 +103,16 @@ export interface LiveSessionsOptions<U extends LiveSurface, S extends LiveEntry>
   ownerDriving(kind: "read" | "act"): Error;
   /** Bookkeeping cleared whenever waiters are released (before they wake). */
   onRelease?(entry: S): void;
+}
+
+/**
+ * What a read or action works on, around the driver check. Each instance
+ * keeps its own await shape: no `pick` means no await between the open and
+ * the check, and a `finish` that returns nothing adds none after it.
+ */
+interface LiveTurn<S, T> {
+  pick?: (entry: S) => Promise<T>;
+  finish?: (picked: T) => Promise<void> | void;
 }
 
 export interface LiveSessions<S extends LiveEntry> {
@@ -114,19 +129,21 @@ export interface LiveSessions<S extends LiveEntry> {
   driver(profile: string): LiveDriver | undefined;
   /** The owner (or a bot's request) takes the wheel; the session if live. */
   takeOver(profile: string): S | undefined;
-  /** Back to the bot; `beforeRelease` runs before waiters wake, only if the owner was driving. */
-  handBack(profile: string, beforeRelease?: (entry: S) => Promise<void>): Promise<void>;
   /**
-   * A read: open, `pick` what it works on, then refuse while the owner
-   * drives unless `allowWhileHuman`.
+   * Back to the bot. Returns the session when the owner was driving it; its
+   * waiters wake at once, or with `wake: false` when the caller `release`s.
    */
-  read<T>(
-    profile: string,
-    pick: (entry: S) => Promise<T>,
-    opts: { allowWhileHuman: boolean },
-  ): Promise<T>;
-  /** An action: open, `pick`, then wait while the owner drives (bounded). */
-  act<T>(profile: string, pick: (entry: S) => Promise<T>): Promise<T>;
+  handBack(profile: string, wake?: boolean): S | undefined;
+  /** Wake every waiter on this session's hand-back. */
+  release(entry: S): void;
+  /**
+   * A read: open, `pick` what it works on, refuse while the owner drives
+   * unless `allowWhileHuman`, then `finish`. The driver is checked right
+   * after `pick` settles (right after the open without one).
+   */
+  read<T = S>(profile: string, turn: LiveTurn<S, T> & { allowWhileHuman: boolean }): Promise<T>;
+  /** An action: open, `pick`, wait while the owner drives (bounded), then `finish`. */
+  act<T = S>(profile: string, turn?: LiveTurn<S, T>): Promise<T>;
   /** Resolves true when the owner hands back, false after `ms`. */
   waitForHandBack(entry: S, ms: number): Promise<boolean>;
   /** The session died under the app: forget it (if still current) so the next call reopens. */
@@ -146,6 +163,11 @@ interface Opening<S> {
   readonly phase: LivePhase;
   /** A close arrived meanwhile: the opened session closes at once. */
   cancel(wipe: boolean): void;
+}
+
+/** Settles when `promise` does, one step later: the browser awaited its close in an async step of its own. */
+async function settle(promise: Promise<void>): Promise<void> {
+  await promise;
 }
 
 export function createLiveSessions<U extends LiveSurface, S extends LiveEntry>(
@@ -170,7 +192,7 @@ export function createLiveSessions<U extends LiveSurface, S extends LiveEntry>(
         if (entry.driver === "human") continue; // an open takeover is activity
         if (entry.lastActivity < now - entry.idleMs) {
           live.delete(key);
-          release(entry);
+          if (options.sweepReleases) release(entry);
           void options
             .surfaceOf(entry)
             .close()
@@ -216,12 +238,37 @@ export function createLiveSessions<U extends LiveSurface, S extends LiveEntry>(
       .catch(() => {});
   }
 
-  async function dispose(profile: string, entry: S): Promise<void> {
+  function dispose(profile: string, entry: S): Promise<void> {
     entry.driver = "agent";
     release(entry);
     if (live.get(profile) === entry) live.delete(profile);
     const closed = options.surfaceOf(entry).close();
-    await (options.closeErrors === "swallow" ? closed.catch(() => {}) : closed);
+    return options.closeErrors === "swallow" ? closed.catch(() => {}) : settle(closed);
+  }
+
+  /** Close the profile's session (one still opening too) and forget its last error. */
+  async function closeProfile(profile: string, wipe: boolean): Promise<void> {
+    const pending = opening.get(profile);
+    if (pending) {
+      pending.cancel(wipe);
+      await pending.promise.catch(() => undefined);
+    }
+    const entry = live.get(profile);
+    if (entry) await dispose(profile, entry);
+    openErrors.delete(profile);
+    if (wipe) await options.wipe(profile);
+  }
+
+  /** `closeProfile`, recorded while it runs so an open on the profile waits for it. */
+  async function closeTracked(profile: string, wipe: boolean): Promise<void> {
+    const done = closeProfile(profile, wipe);
+    const settled = done.catch(() => undefined);
+    closing.set(profile, settled);
+    try {
+      await done;
+    } finally {
+      if (closing.get(profile) === settled) closing.delete(profile);
+    }
   }
 
   function open(profile: string): Promise<S> {
@@ -307,56 +354,46 @@ export function createLiveSessions<U extends LiveSurface, S extends LiveEntry>(
       entry.lastActivity = clock.now();
       return entry;
     },
-    async handBack(profile, beforeRelease) {
+    handBack(profile, wake = true) {
       const entry = live.get(profile);
-      if (!entry) return;
+      if (!entry) return undefined;
       const released = entry.driver === "human";
       entry.driver = "agent";
       if (options.touchOnHandBack) entry.lastActivity = clock.now();
-      if (!released) return;
-      if (beforeRelease) await beforeRelease(entry);
-      release(entry);
+      if (!released) return undefined;
+      if (wake) release(entry);
+      return entry;
     },
-    async read(profile, pick, { allowWhileHuman }) {
+    release,
+    async read<T>(
+      profile: string,
+      { pick, finish, allowWhileHuman }: LiveTurn<S, T> & { allowWhileHuman: boolean },
+    ) {
       const entry = await open(profile);
-      const picked = await pick(entry);
+      const picked = pick ? await pick(entry) : (entry as unknown as T);
       if (!allowWhileHuman && entry.driver === "human") throw options.ownerDriving("read");
+      const finishing = finish?.(picked);
+      if (finishing) await finishing;
       return picked;
     },
-    async act(profile, pick) {
+    async act<T>(profile: string, { pick, finish }: LiveTurn<S, T> = {}) {
       const entry = await open(profile);
-      const picked = await pick(entry);
+      const picked = pick ? await pick(entry) : (entry as unknown as T);
       const deadline = clock.now() + options.humanDriverWaitMs;
       while (entry.driver === "human") {
         const left = deadline - clock.now();
         if (left <= 0) throw options.ownerDriving("act");
         await waitForHandBack(entry, left);
       }
+      const finishing = finish?.(picked);
+      if (finishing) await finishing;
       return picked;
     },
     waitForHandBack,
     drop,
     dispose,
-    async close(profile, { wipe = false } = {}) {
-      const done = (async () => {
-        const pending = opening.get(profile);
-        if (pending) {
-          pending.cancel(wipe);
-          await pending.promise.catch(() => undefined);
-        }
-        const entry = live.get(profile);
-        if (entry) await dispose(profile, entry);
-        openErrors.delete(profile);
-        if (wipe) await options.wipe(profile);
-      })();
-      const settled = done.catch(() => undefined);
-      closing.set(profile, settled);
-      try {
-        await done;
-      } finally {
-        if (closing.get(profile) === settled) closing.delete(profile);
-      }
-    },
+    close: (profile, { wipe = false } = {}) =>
+      options.openWaitsForClose ? closeTracked(profile, wipe) : closeProfile(profile, wipe),
     async closeAll() {
       for (const pending of opening.values()) pending.cancel(false);
       await Promise.allSettled([...opening.values()].map((pending) => pending.promise));

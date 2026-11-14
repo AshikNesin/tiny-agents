@@ -238,6 +238,7 @@ export function createComputerSessions(options: ComputerSessionsOptions): Comput
     touchOnOpen: true,
     touchOnHandBack: true,
     openWaitsForClose: false,
+    sweepReleases: true,
     wipeCancelledOpen: true,
     closeErrors: "swallow",
     closedWhileOpening: "The computer was closed while it was starting.",
@@ -266,15 +267,17 @@ export function createComputerSessions(options: ComputerSessionsOptions): Comput
     },
     openState: (profile) => live.openState(profile),
     profiles: () => live.profiles(),
-    readTurn: (profile) => live.read(profile, async (entry) => entry, { allowWhileHuman: false }),
-    async actionTurn(profile) {
-      const entry = await live.act(profile, async (entry) => entry);
-      entry.lastActivity = clock.now();
-      return entry;
-    },
+    // No `pick`: the driver is checked as soon as the open resolves.
+    readTurn: (profile) => live.read(profile, { allowWhileHuman: false }),
+    actionTurn: (profile) =>
+      live.act(profile, {
+        finish: (entry) => {
+          entry.lastActivity = clock.now();
+        },
+      }),
     async setDriver(profile, driver) {
       if (driver === "human") live.takeOver(profile);
-      else await live.handBack(profile);
+      else live.handBack(profile);
     },
     async requestTakeover(profile, reason, ms) {
       const entry = await live.open(profile);

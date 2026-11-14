@@ -251,13 +251,16 @@ export function createBrowserSessions(options: BrowserSessionsOptions = {}): Bro
       const dir = profileDir(key);
       const { mkdirSync } = await import("node:fs");
       mkdirSync(dir, { recursive: true });
-      return (await transport())(dir, {
+      const session = await (
+        await transport()
+      )(dir, {
         viewportWidth: options.viewportWidth ?? 1280,
         viewportHeight: options.viewportHeight ?? 800,
         allowedPrivateHosts: options.allowedPrivateHosts,
         scale: options.scale === 1 ? 1 : 2,
         onPhase,
       });
+      return session;
     },
     enter: (session, base) => ({ session, tabs: new Map(), ...base }),
     surfaceOf: (entry) => entry.session,
@@ -270,6 +273,8 @@ export function createBrowserSessions(options: BrowserSessionsOptions = {}): Bro
     touchOnOpen: false,
     touchOnHandBack: false,
     openWaitsForClose: true,
+    // A hand-back wakes its waiters only after adopting the owner's tab; the sweep must not wake them first.
+    sweepReleases: false,
     wipeCancelledOpen: false,
     closeErrors: "throw",
     closedWhileOpening: "The browser was closed while it was opening.",
@@ -319,7 +324,10 @@ export function createBrowserSessions(options: BrowserSessionsOptions = {}): Bro
   }
 
   async function acquire(target: BrowserTarget): Promise<LiveBrowserTab> {
-    return tabOf(await live.open(target.profile), target);
+    const entry = await live.open(target.profile);
+    const tab = await tabIn(target.profile, entry, target.tab);
+    entry.lastActivity = clock.now();
+    return { browser: entry, session: tab };
   }
 
   /**
@@ -351,33 +359,34 @@ export function createBrowserSessions(options: BrowserSessionsOptions = {}): Bro
     openState: (target) => live.openState(target.profile),
     get: (target) => live.peek(target.profile),
     profiles: () => live.profiles(),
-    async readTurn(target) {
-      const tab = await live.read(target.profile, (entry) => tabOf(entry, target), {
+    readTurn: (target) =>
+      live.read(target.profile, {
         allowWhileHuman: true,
-      });
-      await bringToFront(tab, target.tab);
-      return tab;
-    },
-    async actionTurn(target) {
-      const tab = await live.act(target.profile, (entry) => tabOf(entry, target));
-      await bringToFront(tab, target.tab);
-      return tab;
-    },
+        pick: (entry) => tabOf(entry, target),
+        finish: (tab) => bringToFront(tab, target.tab),
+      }),
+    actionTurn: (target) =>
+      live.act(target.profile, {
+        pick: (entry) => tabOf(entry, target),
+        finish: (tab) => bringToFront(tab, target.tab),
+      }),
     async setDriver(target, driver) {
       if (driver === "human") {
         live.takeOver(target.profile);
         return;
       }
+      // Waiters wake only once the agent adopted the owner's tab (`release` below).
+      const entry = live.handBack(target.profile, false);
+      if (!entry) return;
       // The owner may have opened or switched tabs while driving; the agent
       // they hand back to continues from whichever tab they left in front.
-      await live.handBack(target.profile, async (entry) => {
-        entry.front = undefined;
-        const tab = entry.tabs.get(target.tab);
-        if (tab) {
-          await tab.adoptActiveTab?.().catch(() => {});
-          entry.front = target.tab;
-        }
-      });
+      entry.front = undefined;
+      const tab = entry.tabs.get(target.tab);
+      if (tab) {
+        await tab.adoptActiveTab?.().catch(() => {});
+        entry.front = target.tab;
+      }
+      live.release(entry);
     },
     close: (target, { wipeProfile = false } = {}) =>
       live.close(target.profile, { wipe: wipeProfile }),
