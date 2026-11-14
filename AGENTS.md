@@ -7,7 +7,7 @@ and `pnpm verify:static` runs the gates CI runs. Guides start at
 
 ## Rules and their enforcers
 
-R1 to R12 are lint rules in `scripts/lint/boundaries.ts`, run by `pnpm check`.
+R1 to R13 are lint rules in `scripts/lint/boundaries.ts`, run by `pnpm check`.
 
 | Rule                                                                                     | Enforcer                                          |
 | ---------------------------------------------------------------------------------------- | ------------------------------------------------- |
@@ -35,6 +35,7 @@ R1 to R12 are lint rules in `scripts/lint/boundaries.ts`, run by `pnpm check`.
 | Each kind of resource a bot owns is in `BOT_RESOURCES`.                                  | `tests/server/api/bot-resources.test.ts`          |
 | Only the session guard throws `sessionInvalid()`.                                        | R9                                                |
 | Server module state lives in the App root.                                               | R12                                               |
+| API wire types live in `apps/web/src/shared/api/`; a client `*-api.ts` declares none.    | R13                                               |
 | A status column is a typed machine; its writes guard on it.                              | `tests/server/api/state-machines.test.ts`         |
 | Verify journeys and recipes name real pages and settings sections.                       | `tests/client/verify-journey-routes.test.ts`      |
 | Turn each operator correction into a row here.                                           | Judgment, see below                               |

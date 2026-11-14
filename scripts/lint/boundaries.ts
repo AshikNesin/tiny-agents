@@ -325,6 +325,13 @@ const BOUNDARY_RULES: BoundaryRule[] = [
     enabled: true,
   },
   {
+    id: "R13",
+    kind: "plugin",
+    scope: "apps/web/src/client/lib/*-api.ts",
+    rule: "repo/no-api-type-exports",
+    enabled: true,
+  },
+  {
     id: "R12",
     kind: "plugin",
     scope: `${SERVER}/**/*.ts`,
