@@ -9,6 +9,7 @@ import { db, botMessages, bots } from "../../db";
 import { conversationRef } from "./bots.conversation";
 import { createDeliveries, type DeliveryRuntime } from "./bots.delivery";
 import { conversationOwner } from "./bots.owner";
+import { app } from "../../app-root";
 
 /** Why a delivery was refused (the bots toolkit's reasons). */
 type DeliverReason = "unknown_bot" | "self" | "loop" | "budget";
@@ -30,10 +31,9 @@ export interface TurnBudget {
   reset(conversationId: number): void;
 }
 
-/** One budget per runtime: the messaging store charges it, the settled pipeline resets it. */
-const turnBudgets = new WeakMap<object, TurnBudget>();
-
+/** One budget per runtime (`app().turnBudgets`): the messaging store charges it, the settled pipeline resets it. */
 export function turnBudgetOf(rt: object): TurnBudget {
+  const turnBudgets = app().turnBudgets;
   let budget = turnBudgets.get(rt);
   if (!budget) {
     const sendsThisTurn = new Map<number, number>();

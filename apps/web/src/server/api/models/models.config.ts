@@ -20,6 +20,7 @@ import {
 } from "@tiny-agents/agent";
 import { db, modelRoles, models, providers, vaultItems, type ProviderRow } from "../../db";
 import { resolveProviderSecret } from "../vault/vault.service";
+import { app } from "../../app-root";
 
 const parseObject = (raw: string | null | undefined): Record<string, unknown> => {
   if (!raw) return {};
@@ -135,24 +136,23 @@ export const vaultCredentials: CredentialResolver = {
 
 // ── Live updates ────────────────────────────────────────────────────────
 
-let target: Pick<AgentRuntime, "applyModelConfig"> | undefined;
-const listeners = new Set<() => void>();
-
-/** Bind the runtime that `reloadModels` updates (boot, tests). */
+/** Bind the runtime that `reloadModels` updates (`app().modelRuntime`; boot, tests). */
 export function bindModelRuntime(runtime: Pick<AgentRuntime, "applyModelConfig"> | undefined) {
-  target = runtime;
+  app().modelRuntime = runtime;
 }
 
-/** Listen for committed model changes (`/events` sends `models.changed`). */
+/** Listen for committed model changes (`app().modelListeners`; `/events` sends `models.changed`). */
 export function onModelsChanged(listener: () => void): () => void {
+  const listeners = app().modelListeners;
   listeners.add(listener);
   return () => listeners.delete(listener);
 }
 
 /** After a commit: hand the runtime the new snapshot and tell the pickers. */
 export async function reloadModels(): Promise<void> {
+  const target = app().modelRuntime;
   if (target) target.applyModelConfig(await loadModelConfig());
-  for (const listener of listeners) {
+  for (const listener of app().modelListeners) {
     try {
       listener();
     } catch {

@@ -4,10 +4,11 @@
  * Notifications about a run ending skip a bot whose chat the owner is
  * watching.
  */
-const viewers = new Map<string, number>();
+import { app } from "../../app-root";
 
-/** Count one open chat stream for `botId`; returns the (idempotent) release. */
+/** Count one open chat stream for `botId` (`app().botViewers`); returns the (idempotent) release. */
 export function watchBot(botId: string): () => void {
+  const viewers = app().botViewers;
   viewers.set(botId, (viewers.get(botId) ?? 0) + 1);
   let released = false;
   return () => {
@@ -20,5 +21,5 @@ export function watchBot(botId: string): () => void {
 }
 
 export function isBotWatched(botId: string): boolean {
-  return (viewers.get(botId) ?? 0) > 0;
+  return (app().botViewers.get(botId) ?? 0) > 0;
 }

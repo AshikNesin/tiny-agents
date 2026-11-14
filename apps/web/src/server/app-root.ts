@@ -1,12 +1,19 @@
-import type { AgentRuntime } from "@tiny-agents/agent";
+import { WaitTracker, type AgentRuntime, type BotMessagingStore } from "@tiny-agents/agent";
 import type { BrowserSessions } from "@tiny-agents/agent/browser";
 import type { ClaudeWorkerLocator } from "@tiny-agents/agent/claude-worker";
 import type { HostKeyStore, SandboxConnection } from "@tiny-agents/agent/sandbox";
 import type { TerminalService } from "@tiny-agents/agent/terminal";
 import type { ComputerSessions } from "@tiny-agents/agent/computer";
+import type { UpdateStatus } from "../shared/local-updates";
+import type { TurnBudget } from "./api/bots/bots.messaging";
+import type { BotChatEvent } from "./api/bots/bots.events";
+import type { SseStream } from "./api/bots/bots.sse";
 import type { ChatTitler } from "./api/bots/chats.title";
 import type { CodeHub } from "./api/code/code.hub";
 import type { ConnectionManager } from "./api/connections/connections.manager";
+import type { HeldLiveAccess } from "./api/people/live-access";
+import type { VaultAlertSink } from "./api/vault/vault.alerts";
+import type { SupervisorChannel } from "./api/system/updates.service";
 
 /**
  * The composition root (docs/rewrite/DECISIONS.md, D8): the app's long-lived
@@ -38,9 +45,58 @@ export interface App {
   claudeWorker?: { connection: SandboxConnection; locator: ClaudeWorkerLocator };
   /** The terminal's tmux service (`getTerminalService`). */
   terminalService?: TerminalService;
+  /** Calls waiting on the owner, shared by the approval gate and the browser and computer toolkits (`bots.runtime.ts`). */
+  ownerWaits: WaitTracker;
+  /** One bot messaging store per runtime, so a reopened runtime gets its own (`botsCapability`). */
+  botMessagingStores: WeakMap<AgentRuntime, BotMessagingStore>;
+  /** One bot-to-bot send budget per runtime (`turnBudgetOf`, bots.messaging.ts). */
+  turnBudgets: WeakMap<object, TurnBudget>;
+  /** Open chat streams per bot id (`watchBot`, bots.viewers.ts). */
+  botViewers: Map<string, number>;
+  /** Each bot's chat-event listeners (`onBotChatEvent`, bots.events.ts). */
+  botChatListeners: Map<string, Set<(event: BotChatEvent) => void>>;
+  /** Every SSE response still open, so shutdown can end them (`openSse`, bots.sse.ts). */
+  openSseStreams: Set<SseStream<never>>;
+  /** A deleted bot's releases still running in the background (`releaseBot`, bot-resources.ts). */
+  backgroundBotReleases: Set<Promise<void>>;
+  /** Live connections held under a grant, closed when it is revoked (`holdLiveAccess`). */
+  liveAccess: Set<HeldLiveAccess>;
+  /** The Vault's step-up tokens and whose they are (`issueStepUp`, vault.stepup.ts). */
+  vaultStepUps: Map<string, { userId: number; expiresAt: number }>;
+  /** Where vault alerts go (`setVaultAlertSink`); unset drops them. */
+  vaultAlertSink?: VaultAlertSink;
+  /** Credential requests a submit is filling right now (`submitRequest`, vault.requests.service.ts). */
+  submittingRequests: Set<number>;
+  /** The runtime `reloadModels` hands new model config to (`bindModelRuntime`). */
+  modelRuntime?: Pick<AgentRuntime, "applyModelConfig">;
+  /** Listeners for committed model changes (`onModelsChanged`). */
+  modelListeners: Set<() => void>;
+  /** The IPC channel to the `pnpm local` supervisor (`startUpdates`); unset when not supervised. */
+  updatesChannel?: SupervisorChannel;
+  /** The supervisor's last update status, null before it sent one (`updateView`). */
+  updateStatus: UpdateStatus | null;
+  /** Stops listening to the supervisor channel (`startUpdates`). */
+  updatesUnlisten: () => void;
 }
 
-const current: App = { runtime: undefined, runtimeReady: false, sandboxConnections: new Map() };
+const current: App = {
+  runtime: undefined,
+  runtimeReady: false,
+  sandboxConnections: new Map(),
+  ownerWaits: new WaitTracker(),
+  botMessagingStores: new WeakMap(),
+  turnBudgets: new WeakMap(),
+  botViewers: new Map(),
+  botChatListeners: new Map(),
+  openSseStreams: new Set(),
+  backgroundBotReleases: new Set(),
+  liveAccess: new Set(),
+  vaultStepUps: new Map(),
+  submittingRequests: new Set(),
+  modelListeners: new Set(),
+  updateStatus: null,
+  updatesUnlisten: () => {},
+};
 
 /** The app's services, as boot (or a test) set them. */
 export function app(): App {

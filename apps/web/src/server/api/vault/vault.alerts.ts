@@ -5,20 +5,20 @@
  * imports the notification stack. Without a sink alerts are dropped; the
  * audit log still holds every event.
  */
+import { app } from "../../app-root";
+
 export type VaultAlertKind = "revealed" | "deleted" | "refused";
 
 export type VaultAlertSink = (kind: VaultAlertKind, title: string, message: string) => void;
 
-let sink: VaultAlertSink | undefined;
-
-/** Connect the alerts to their destination (boot, tests). Returns the disconnect. */
+/** Connect the alerts to their destination (`app().vaultAlertSink`; boot, tests). Returns the disconnect. */
 export function setVaultAlertSink(next: VaultAlertSink | undefined): () => void {
-  sink = next;
+  app().vaultAlertSink = next;
   return () => {
-    if (sink === next) sink = undefined;
+    if (app().vaultAlertSink === next) app().vaultAlertSink = undefined;
   };
 }
 
 export function vaultAlert(kind: VaultAlertKind, title: string, message: string): void {
-  sink?.(kind, title, message);
+  app().vaultAlertSink?.(kind, title, message);
 }

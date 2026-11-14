@@ -8,6 +8,7 @@
  */
 import { logger } from "@groot/core/logger";
 import type { RoutineRunCard } from "../../../shared/bot-stream";
+import { app } from "../../app-root";
 
 export type BotChatEvent =
   /** The bot's row names another conversation now: its chat streams end and reopen there. */
@@ -19,10 +20,9 @@ export type BotChatEvent =
 
 type Listener = (event: BotChatEvent) => void;
 
-const listeners = new Map<string, Set<Listener>>();
-
-/** Follow one bot's chat events. Returns the unsubscribe. */
+/** Follow one bot's chat events (`app().botChatListeners`). Returns the unsubscribe. */
 export function onBotChatEvent(botId: string, listener: Listener): () => void {
+  const listeners = app().botChatListeners;
   let set = listeners.get(botId);
   if (!set) listeners.set(botId, (set = new Set()));
   set.add(listener);
@@ -35,7 +35,7 @@ export function onBotChatEvent(botId: string, listener: Listener): () => void {
 /** Tell the bot's followers. A failing listener is logged; the others still hear it. */
 export function publishBotChatEvent(botId: string, event: BotChatEvent): void {
   // A copy: a listener may unsubscribe (or subscribe another) while it runs.
-  for (const listener of Array.from(listeners.get(botId) ?? [])) {
+  for (const listener of Array.from(app().botChatListeners.get(botId) ?? [])) {
     try {
       listener(event);
     } catch (error) {

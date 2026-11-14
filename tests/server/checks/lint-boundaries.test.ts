@@ -555,6 +555,45 @@ const FIXTURES: Record<string, Fixture> = {
     source: 'import { db } from "@groot/core/database";\nexport const d = db;\n',
     rules: [],
   },
+  "apps/web/src/server/api/bots/r12-let-fail.ts": {
+    source: "let count = 0;\nexport const bump = () => ++count;\n",
+    rules: ["R12"],
+    mentions: "apps/web/src/server/app-root.ts",
+  },
+  "apps/web/src/server/r12-export-let-fail.ts": {
+    source: "export let current: string | undefined;\nexport let a = 1,\n  b = 2;\n",
+    rules: ["R12", "R12", "R12"],
+    mentions: "docs/rewrite/DECISIONS.md D8",
+  },
+  "apps/web/src/server/api/vault/r12-collections-fail.ts": {
+    source:
+      "const a = new Map<string, number>();\nexport const b = new Set<string>();\nconst c = new WeakMap<object, number>() as WeakMap<object, number>;\nconst d = (new WeakSet<object>());\nexport const all = [a, c, d];\n",
+    rules: ["R12", "R12", "R12", "R12"],
+  },
+  "apps/web/src/server/api/r12-pass.ts": {
+    source:
+      "const LIMIT = 3;\nconst LIST = [1, 2];\nconst seen = [...new Set(LIST)];\nexport const counter = () => {\n  let n = 0;\n  const hits = new Map<number, number>();\n  return () => hits.set((n += LIMIT), seen.length);\n};\nfor (let i = 0; i < 1; i++) void i;\n",
+    rules: [],
+  },
+  // Allowlisted by file and name: the file's other state still fails.
+  "apps/web/src/server/crypto/secret-box.ts": {
+    source:
+      "const derived = new Map<string, string>();\nlet other = 0;\nexport const keys = () => [derived, other++];\n",
+    rules: ["R12"],
+  },
+  "apps/web/src/server/api/uploads/uploads.prepare.ts": {
+    source:
+      "let processor: Promise<number> | undefined;\nexport const load = () => (processor ??= Promise.resolve(1));\n",
+    rules: [],
+  },
+  "apps/web/src/server/api/vault/r12-allowlisted-name-elsewhere-fail.ts": {
+    source: "const derived = new Map<string, string>();\nexport const d = derived;\n",
+    rules: ["R12"],
+  },
+  "apps/web/src/client/r12-elsewhere-pass.ts": {
+    source: "let open = false;\nexport const toggle = () => (open = !open);\n",
+    rules: [],
+  },
 };
 
 type Diagnostic = { filename: string; message: string; help?: string };

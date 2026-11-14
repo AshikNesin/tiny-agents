@@ -21,7 +21,12 @@ type BoundaryRule = {
   enabled: boolean;
 } & (
   | { kind: "import"; scope: Scope; restrict: ImportRestriction }
-  | { kind: "plugin"; scope: string; rule: `repo/${string}`; options?: Record<string, string> }
+  | {
+      kind: "plugin";
+      scope: string;
+      rule: `repo/${string}`;
+      options?: Record<string, string | readonly string[]>;
+    }
 );
 
 const R2_ALLOWED = ["async_hooks", "buffer"];
@@ -56,6 +61,42 @@ const DRIVER_HOMES = [
   // A file lock for the agent store, not the app database.
   "packages/agent/src/lock.ts",
 ];
+
+/**
+ * R12's allowlist, `<file under apps/web/src/server>:<name>`: module state
+ * that stays out of the App root (docs/rewrite/DECISIONS.md D8). It only
+ * shrinks; Phase 1 of docs/rewrite/PLAN.md moves the rest into `App`.
+ */
+const SERVER = "apps/web/src/server";
+const R12_ALLOWED = [
+  // Caches: derived from durable state, safe to lose, rebuilt on a miss.
+  "crypto/secret-box.ts:derived", // HKDF keys derived from the master secret
+  "api/vault/vault.service.ts:statusCache", // backend health, TTL-bound
+  "api/vault/vault.service.ts:appValues", // resolved app credentials, TTL-bound
+  "api/vault/vault.admin.service.ts:adminBackends", // backends built from config on first use
+  "api/vault/vault.admin.service.ts:candidatesCache", // backend item listing, TTL-bound
+  "api/vault/backends/index.ts:backends", // backends built from config on first use
+  "api/uploads/uploads.extraction.ts:cache", // extracted attachment text
+  "api/uploads/uploads.prepare.ts:processor", // the image processor, loaded once
+  "api/bots/sandbox-host.ts:keyFiles", // SANDBOX_SSH_KEY_FILE contents, read once per path
+  "api/ws/upgrade.ts:upgradePatterns", // per-server upgrade paths, keyed weakly by the server
+  "db/index.ts:connections", // the driver behind each db instance, keyed weakly
+  // The extraction queue: work state of one module, drained on idle; moves with the uploads re-cut.
+  "api/uploads/uploads.extraction.ts:runner",
+  "api/uploads/uploads.extraction.ts:jobs",
+  "api/uploads/uploads.extraction.ts:cancelled",
+  "api/uploads/uploads.extraction.ts:active",
+  "api/uploads/uploads.extraction.ts:idle",
+  "api/uploads/uploads.extraction.ts:markIdle",
+  // The entry's Sentry slot, set before the App root exists.
+  "entry.node.ts:captureException",
+  // Constants: Sets never written after they are built.
+  "api/bots/rfb-view-only.ts:FORWARD",
+  "api/bots/memories.store.ts:GENERIC_WORDS",
+  "api/uploads/uploads.sniff.ts:TEXT_EXTENSIONS",
+  "api/uploads/uploads.service.ts:ALLOWED_EXTENSIONS",
+  "api/routines/routines.runs.ts:CREDENTIAL_TOOLS",
+].map((entry) => `${SERVER}/${entry}`);
 
 const BOUNDARY_RULES: BoundaryRule[] = [
   {
@@ -251,6 +292,15 @@ const BOUNDARY_RULES: BoundaryRule[] = [
       "scripts/lint/repo-plugin.mjs",
       "tests/**",
     ],
+    enabled: true,
+  },
+  {
+    id: "R12",
+    kind: "plugin",
+    scope: `${SERVER}/**/*.ts`,
+    rule: "repo/no-module-state",
+    options: { allow: R12_ALLOWED },
+    except: ["**/*.test.ts"],
     enabled: true,
   },
 ];

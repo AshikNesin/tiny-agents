@@ -108,6 +108,50 @@ const staticString = (node, lookup) => {
 
 const MODULE_SCOPES = new Set(["module", "global"]);
 
+const MODULE_STATE_MESSAGE =
+  "R12: module state belongs in the App root (apps/web/src/server/app-root.ts); see docs/rewrite/DECISIONS.md D8";
+
+const COLLECTIONS = new Set(["Map", "Set", "WeakMap", "WeakSet"]);
+
+const WRAPPERS = new Set([
+  "ParenthesizedExpression",
+  "TSAsExpression",
+  "TSSatisfiesExpression",
+  "TSNonNullExpression",
+  "TSTypeAssertion",
+]);
+
+const unwrapped = (node) => (WRAPPERS.has(node.type) ? unwrapped(node.expression) : node);
+
+const isCollection = (node) => {
+  const target = node && unwrapped(node);
+  return (
+    target?.type === "NewExpression" &&
+    target.callee.type === "Identifier" &&
+    COLLECTIONS.has(target.callee.name)
+  );
+};
+
+/** The names a declarator binds: `a`, or each name in `{ a, b: [c] }`. */
+const boundNames = (pattern) => {
+  switch (pattern?.type) {
+    case "Identifier":
+      return [pattern.name];
+    case "ObjectPattern":
+      return pattern.properties.flatMap((p) =>
+        boundNames(p.type === "RestElement" ? p.argument : p.value),
+      );
+    case "ArrayPattern":
+      return pattern.elements.flatMap(boundNames);
+    case "RestElement":
+      return boundNames(pattern.argument);
+    case "AssignmentPattern":
+      return boundNames(pattern.left);
+    default:
+      return [];
+  }
+};
+
 const FUNCTIONS = new Set(["FunctionDeclaration", "FunctionExpression", "ArrowFunctionExpression"]);
 
 export default {
@@ -128,6 +172,32 @@ export default {
               restricted.test(String(source.value))
             )
               context.report({ node, message });
+          },
+        };
+      },
+    },
+    "no-module-state": {
+      meta: { schema: [{ type: "object" }] },
+      create(context) {
+        const file = context.filename.replaceAll("\\", "/");
+        const allowed = new Set(
+          (context.options[0]?.allow ?? []).flatMap((entry) => {
+            const at = entry.lastIndexOf(":");
+            return file === entry.slice(0, at) || file.endsWith(`/${entry.slice(0, at)}`)
+              ? [entry.slice(at + 1)]
+              : [];
+          }),
+        );
+        return {
+          VariableDeclaration(node) {
+            const parent =
+              node.parent.type === "ExportNamedDeclaration" ? node.parent.parent : node.parent;
+            if (parent.type !== "Program") return;
+            for (const declarator of node.declarations) {
+              if (node.kind === "const" && !isCollection(declarator.init)) continue;
+              if (boundNames(declarator.id).every((name) => allowed.has(name))) continue;
+              context.report({ node: declarator, message: MODULE_STATE_MESSAGE });
+            }
           },
         };
       },

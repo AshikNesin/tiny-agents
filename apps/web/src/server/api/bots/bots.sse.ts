@@ -14,6 +14,7 @@ import type { AppContext } from "@groot/core/types";
 import { requireUser } from "@groot/core/utils/controller.utils";
 import { holdLiveAccess } from "../people/live-access";
 import type { PingEvent, StreamErrorEvent } from "../../../shared/bot-stream";
+import { app } from "../../app-root";
 
 const HEARTBEAT_MS = 25_000;
 
@@ -41,9 +42,6 @@ export interface SseStream<E> {
   readonly closed: boolean;
 }
 
-/** Every SSE response still open, so shutdown can end them. */
-const openStreams = new Set<SseStream<never>>();
-
 const encoder = new TextEncoder();
 
 /**
@@ -60,6 +58,8 @@ export function openSse<E>(
   start: (sse: SseStream<E>) => void | Promise<void>,
   options: { botId?: string } = {},
 ): Response {
+  // Every SSE response still open (`app().openSseStreams`), so shutdown can end them.
+  const openStreams = app().openSseStreams;
   let controller: ReadableStreamDefaultController<Uint8Array> | undefined;
   const listeners: (() => void)[] = [];
   let closed = false;
@@ -149,6 +149,7 @@ function endSseOnError(sse: SseStream<StreamErrorEvent>, error: unknown): void {
  * process (the durable conversation resumes there).
  */
 export function endAllSse(): void {
+  const openStreams = app().openSseStreams;
   for (const sse of openStreams) sse.end();
   openStreams.clear();
 }
