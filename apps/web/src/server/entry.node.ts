@@ -48,6 +48,7 @@ import { startCode } from "./api/code/code.boot";
 import { isAssetRequest } from "./static-assets";
 import { processChannel, startUpdates, SUPERVISED_ENV } from "./api/system/updates.service";
 import { installFixedClock } from "./fixed-clock";
+import { rearmRoutinesOnBoot } from "./api/routines/routines.arming";
 
 /**
  * Node entry: SQLite on disk, uploads on the local filesystem, jobs on a
@@ -169,6 +170,7 @@ async function main(): Promise<void> {
   let sideCaller: SideCaller | undefined;
   add({
     name: "agent runtime",
+    needs: ["sandbox connection"],
     start: async () => {
       runtime = await openRuntime();
       sideCaller = fauxMode() ? undefined : createSideCaller(runtime);
@@ -178,15 +180,24 @@ async function main(): Promise<void> {
 
   // Browsers drive agent work, so they close before the runtime and after
   // everything that could still ask for a page.
-  add({ name: "browser sessions", stop: () => closeAllBrowserSessions() });
+  add({
+    name: "browser sessions",
+    needs: ["agent runtime"],
+    stop: () => closeAllBrowserSessions(),
+  });
   // Desktops on the VM stop with the app; one left by a crash is reattached
   // by the next launch for its profile.
-  add({ name: "computer sessions", stop: () => closeAllComputerSessions() });
+  add({
+    name: "computer sessions",
+    needs: ["agent runtime"],
+    stop: () => closeAllComputerSessions(),
+  });
 
   // Remote MCP connections: install cached tools now, connect in the
   // background (never blocks /health or boot).
   add({
     name: "mcp connections",
+    needs: ["agent runtime"],
     start: () =>
       getConnectionManager()
         .start(runtime)
@@ -202,6 +213,7 @@ async function main(): Promise<void> {
   let unsetVaultAlerts = () => {};
   add({
     name: "notifications",
+    needs: ["agent runtime"],
     start: () => {
       notifications = startNotifications(runtime);
       notificationService.start();
@@ -228,6 +240,7 @@ async function main(): Promise<void> {
   // After the agent runtime: it stops a deleted bot's chat that resume() picked back up.
   add({
     name: "bot release sweep",
+    needs: ["agent runtime"],
     start: () =>
       void sweepBotReleases(runtime).catch((error: unknown) =>
         logger.warn({ error }, "Bot release sweep failed"),
@@ -242,6 +255,7 @@ async function main(): Promise<void> {
   let stopSettled = () => {};
   add({
     name: "settled conversations",
+    needs: ["agent runtime", "notifications"],
     start: () => {
       stopSettled = startSettledPipeline(
         runtime,
@@ -251,12 +265,22 @@ async function main(): Promise<void> {
     stop: () => stopSettled(),
   });
 
+  // Armed routines whose fire job is gone get it back (routines.arming.ts),
+  // in the background like the settling sweeps just above, and before the
+  // job workers that run those jobs.
+  add({
+    name: "routine re-arm",
+    needs: ["agent runtime"],
+    start: () => void rearmRoutinesOnBoot(),
+  });
+
   // Code (issue #143, ADR 0011): one live connection per coding agent
   // (Shelley, Claude Code); hand-off finishes go into bots' chats and
   // followed threads push. Empty without a configured harness.
   let stopCode = () => {};
   add({
     name: "code",
+    needs: ["agent runtime"],
     start: () => {
       stopCode = startCode(runtime);
     },
@@ -267,6 +291,7 @@ async function main(): Promise<void> {
   // names the chat that ended. Faux mode keeps the first-message titles.
   add({
     name: "chat titles",
+    needs: ["agent runtime"],
     start: () => {
       setChatTitler(sideCaller && { sideCaller });
     },
@@ -281,6 +306,7 @@ async function main(): Promise<void> {
   let terminalWs!: ReturnType<typeof attachTerminalWs>;
   add({
     name: "http server",
+    needs: ["agent runtime", "settled conversations", "code"],
     start: async () => {
       server = isProduction ? await createProductionServer() : await createDevServer();
       // VNC viewers for bot browsers and terminal tabs connect over WebSocket
@@ -311,6 +337,7 @@ async function main(): Promise<void> {
 
   add({
     name: "job workers",
+    needs: ["agent runtime", "routine re-arm"],
     start: async () => {
       if (config.jobs.enabled) await startWorkers();
       else logger.info("Job queue disabled (config.jobs.enabled = false)");
@@ -321,6 +348,7 @@ async function main(): Promise<void> {
   // A silent startup ping in production.
   add({
     name: "startup ping",
+    needs: ["notifications"],
     start: () => {
       if (isProduction) notificationService.notify(systemStarted(env.NODE_ENV));
     },
@@ -332,6 +360,7 @@ async function main(): Promise<void> {
   let stopUpdates = () => {};
   add({
     name: "local updates",
+    needs: ["http server", "job workers"],
     start: () => {
       stopUpdates = startUpdates(processChannel(process.env[SUPERVISED_ENV] === "1"));
     },

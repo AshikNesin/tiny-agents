@@ -16,10 +16,10 @@ import { db, jobs, routineRuns, routines } from "../../../../apps/web/src/server
 import {
   ROUTINE_FIRE_JOB,
   rearmRoutines,
+  rearmRoutinesOnBoot,
 } from "../../../../apps/web/src/server/api/routines/routines.arming";
 import { registerRoutineJobs } from "../../../../apps/web/src/server/api/routines/routines.jobs";
 import { runRequestId } from "../../../../apps/web/src/server/api/routines/routines.runs";
-import { routineRunsStep } from "../../../../apps/web/src/server/api/routines/routines.watcher";
 import type { AgentRuntime } from "../../../../packages/agent/src/index";
 import {
   closeAppRuntime,
@@ -240,11 +240,11 @@ describe("re-arming routines on boot", () => {
     expect(job!.data).toMatchObject({ scheduledFor: row.nextRunAt!.toISOString() });
   });
 
-  it("the boot path re-arms: the routine runs step's sweep queues the missing jobs", async () => {
+  it("the boot path re-arms: the boot's re-arm part queues the missing jobs", async () => {
     const slot = new Date(Date.now() + 30 * MINUTE);
     const routine = await seedArmed({ kind: "interval", minutes: 60 }, slot);
 
-    await routineRunsStep(rt).sweep?.();
+    await rearmRoutinesOnBoot();
 
     await vi.waitFor(async () => {
       expect((await routineRow(routine.id)).pendingJobId).toBeTypeOf("string");

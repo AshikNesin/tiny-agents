@@ -25,6 +25,26 @@ afterEach(() => {
 });
 
 describe("lifecycle", () => {
+  it("refuses a part added before a part it needs, and keeps the declared order", async () => {
+    const { lifecycle, events, part } = harness();
+    lifecycle.add(part("db"));
+    expect(() => lifecycle.add(part("jobs", { needs: ["runtime"] }))).toThrow(
+      'Part "jobs" needs "runtime", which must be added before it',
+    );
+    lifecycle.add(part("runtime", { needs: ["db"] }));
+    lifecycle.add(part("jobs", { needs: ["db", "runtime"] }));
+    await lifecycle.start();
+    await lifecycle.stop("test");
+    expect(events).toEqual([
+      "start db",
+      "start runtime",
+      "start jobs",
+      "stop jobs",
+      "stop runtime",
+      "stop db",
+    ]);
+  });
+
   it("starts parts in order and stops them in reverse", async () => {
     const { lifecycle, events, part } = harness();
     lifecycle.add(part("runtime"));

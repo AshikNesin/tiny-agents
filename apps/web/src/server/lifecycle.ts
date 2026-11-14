@@ -6,9 +6,15 @@
  * stop is logged and the next stop still runs, and the whole stop has a
  * deadline, so a hung part can never keep the process alive. The first
  * signal stops; a second signal exits at once.
+ *
+ * A part names the parts it `needs`: they must be registered before it, so
+ * they start first and stop after it. Registering a part before something it
+ * needs throws, so the boot order is checked, not only commented.
  */
 export interface LifecyclePart {
   name: string;
+  /** Parts that must start before this one and stop after it (registered earlier). */
+  needs?: readonly string[];
   start?(): Promise<unknown> | unknown;
   stop?(): Promise<unknown> | unknown;
 }
@@ -130,6 +136,11 @@ export function createLifecycle(options: LifecycleOptions): Lifecycle {
 
   return {
     add(part) {
+      for (const need of part.needs ?? []) {
+        if (!parts.some((earlier) => earlier.name === need)) {
+          throw new Error(`Part "${part.name}" needs "${need}", which must be added before it`);
+        }
+      }
       parts.push(part);
     },
     start,
