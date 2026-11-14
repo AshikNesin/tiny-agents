@@ -18,7 +18,6 @@ import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import {
   defineDoc,
   type ConversationId,
-  type Cursor,
   type EntryRecord,
   type Harness,
   type ToolExecutionResult,
@@ -37,20 +36,19 @@ import {
 } from "../../engine";
 import { ToolGate } from "../../gate";
 import { finishedToolRow, liveToolRow, type ToolCallRow } from "../../tool-call-row";
-import { pageBefore } from "../../transcript";
+import { gateUserMessages, windowChat } from "../../transcript";
 import type {
   ChatEvent,
   ChatMessage,
-  ChatPage,
   ChatState,
   ChatSubscription,
   ChatToolCall,
   ConversationRef,
-  LastMessage,
   QueuedMessage,
   WithdrawOutcome,
 } from "../../types";
 import { WaitTracker } from "../../waiting";
+import { loadHistory } from "../pi";
 import { ClaudeWorkerClient, type ToolUseCall, type WebSocketLike } from "./client";
 import { pauseMessage } from "./errors";
 import {
@@ -64,7 +62,6 @@ import {
   admittedRequestId,
   claudeMessages,
   claudeRecordOf,
-  gateUserMessages,
   legacyEntries,
   legacyFileSchema,
   replyEntry,
@@ -87,9 +84,6 @@ const NOT_CONFIGURED = "This bot's settings are not loaded yet. Send your messag
 
 /** Claude plan calls are numbered from here per conversation, apart from pi's task ids. */
 const TASK_ID_BASE = 2_000_000_000;
-
-/** Entries read per storage page when loading a transcript. */
-const HISTORY_PAGE = 500;
 
 /** Newest entries an admit searches for its request id, inside the admitting commit. */
 const ADMIT_LOOKBACK = 200;
@@ -394,19 +388,6 @@ export class ClaudeCodeEngine implements AgentEngine {
       : "not_found";
   }
 
-  async lastMessage(ref: ConversationRef): Promise<LastMessage | undefined> {
-    const state = await this.read(ref);
-    for (let i = state.messages.length - 1; i >= 0; i--) {
-      const message = state.messages[i];
-      if (!message || (message.role !== "user" && message.role !== "assistant")) continue;
-      const text =
-        message.role === "assistant" && message.error ? `⚠ ${message.error}` : message.text;
-      if (!text) continue;
-      return { role: message.role, text, createdAt: message.createdAt };
-    }
-    return undefined;
-  }
-
   /** The conversation's user messages, newest first, as the Tool gate reads them. */
   async userMessages(ref: ConversationRef) {
     const session = this.sessions.get(ref);
@@ -419,14 +400,10 @@ export class ClaudeCodeEngine implements AgentEngine {
     return this.state(session, await this.messages(ref, session));
   }
 
-  async page(
-    ref: ConversationRef,
-    { before, limit }: { before: string; limit: number },
-  ): Promise<ChatPage | undefined> {
-    const session = this.require(ref);
-    return pageBefore(await this.messages(ref, session), before, limit);
-  }
-
+  /**
+   * Unlike pi's stream, each change is a whole snapshot, windowed afresh to
+   * the newest messages (the window's start does not stay put).
+   */
   async watch(
     ref: ConversationRef,
     listener: (events: ChatEvent[]) => void | Promise<void>,
@@ -909,13 +886,10 @@ export class ClaudeCodeEngine implements AgentEngine {
     });
   }
 
+  /** A transcript that fits its window is sent whole, with no `hasMore` or `cursor`. */
   private state(session: ClaudeSession, messages: ChatMessage[], window?: number): ChatState {
-    const queued = this.queued(session);
-    if (!window || messages.length <= window) {
-      return { messages, busy: session.busy, queued };
-    }
-    const shown = messages.slice(-window);
-    return { messages: shown, busy: session.busy, queued, hasMore: true, cursor: shown[0]?.id };
+    const state = { messages, busy: session.busy, queued: this.queued(session) };
+    return window && messages.length > window ? windowChat(state, window)! : state;
   }
 
   /** Messages waiting for their turn, as the owner's held messages (a peer delivery is not one). */
@@ -954,18 +928,7 @@ export class ClaudeCodeEngine implements AgentEngine {
   private async load(ref: ConversationRef): Promise<ClaudeRecord[]> {
     const conversation = await this.harness.conversation(ref as ConversationId, ctx);
     if (!conversation) return [];
-    const records: ClaudeRecord[] = [];
-    let cursor: Cursor | undefined;
-    do {
-      // eslint-disable-next-line react-doctor/async-await-in-loop -- pages in order
-      const page = await conversation.entries({ order: "ascending" }, HISTORY_PAGE, cursor, ctx);
-      for (const entry of page.items) {
-        const record = this.recordOf(entry);
-        if (record) records.push(record);
-      }
-      cursor = page.next;
-    } while (cursor !== undefined);
-    return records;
+    return (await loadHistory(conversation)).flatMap((entry) => this.recordOf(entry) ?? []);
   }
 
   /** A stored entry as a record; one that does not fit its shape is reported and skipped. */

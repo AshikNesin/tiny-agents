@@ -57,6 +57,7 @@ import {
   recordAnswers,
 } from "./toolkits/questions";
 import { finishedReplyOf } from "./replies";
+import { lastMessageOf, pageBefore } from "./transcript";
 import type {
   ActivityChange,
   BotAgentConfig,
@@ -703,8 +704,9 @@ export class AgentRuntime {
     return [...this.#busy];
   }
 
-  lastMessage(ref: ConversationRef): Promise<LastMessage | undefined> {
-    return this.#engineFor(ref).lastMessage(ref);
+  /** The newest user or assistant message with something to show (the Bot list preview). */
+  async lastMessage(ref: ConversationRef): Promise<LastMessage | undefined> {
+    return lastMessageOf((await this.readChat(ref)).messages);
   }
 
   /**
@@ -734,11 +736,11 @@ export class AgentRuntime {
    * history above a windowed stream's snapshot. Undefined when `before` is
    * not (or no longer) in the transcript.
    */
-  readChatPage(
+  async readChatPage(
     ref: ConversationRef,
-    query: { before: string; limit: number },
+    { before, limit }: { before: string; limit: number },
   ): Promise<ChatPage | undefined> {
-    return this.#engineFor(ref).page(ref, query);
+    return pageBefore((await this.readChat(ref)).messages, before, limit);
   }
 
   /**

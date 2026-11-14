@@ -17,7 +17,7 @@
 import type { EntryRecord } from "@earendil-works/pi-durable";
 import { z } from "zod";
 import { toJson } from "../../durable-json";
-import type { GateUserMessage } from "../../policy";
+import { NO_REPLY } from "../../transcript";
 import type { ChatMessage, ChatToolCall, ChatToolStatus } from "../../types";
 
 const CLAUDE_USER_ENTRY = "claude.user";
@@ -27,9 +27,6 @@ const CLAUDE_WITHDRAWN_ENTRY = "claude.withdrawn";
 /** How a reply cut off by an app restart reads: the turn did not survive it (ADR 0014). */
 const APP_RESTARTED =
   "The app restarted and this reply was cut off. Send your message again to continue.";
-
-/** How an admitted message that never got a turn reads (the wording pi uses). */
-const NO_REPLY = "No reply was produced for this message.";
 
 const peerSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("reply"), name: z.string().min(1) }),
@@ -292,18 +289,6 @@ function replyMessage(reply: ClaudeReply, live: boolean): ChatMessage {
     ...(reply.model ? { model: reply.model } : {}),
     createdAt: reply.createdAt,
   };
-}
-
-/** The transcript's user messages, newest first, as the Tool gate reads them. */
-export function gateUserMessages(messages: readonly ChatMessage[]): GateUserMessage[] {
-  return messages
-    .filter((message) => message.role === "user")
-    .reverse()
-    .map((message) => ({
-      text: message.text,
-      peer: message.peer !== undefined,
-      ...(message.author ? { author: message.author.id } : {}),
-    }));
 }
 
 // ── The one-time import of `<agent.db>.claude.json` ────────────────────────

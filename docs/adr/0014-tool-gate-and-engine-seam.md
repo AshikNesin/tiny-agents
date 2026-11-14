@@ -53,8 +53,10 @@ YOLO state after every configure, and have `setYolo` write both engines.
   api (memos, conversation documents, details) that fails clearly on anything
   that needs a pi-durable task.
 - **`AgentEngine` is a per-conversation interface:** `configure(ref,
-  compiled)`, `runs(ref)`, `submit`, `abort`, `read`, `page`, `watch`,
-  `lastMessage`, `userMessages`, `busy` and `close`. `PiEngine` owns
+  compiled)`, `runs(ref)`, `submit`, `abort`, `read`, `watch`,
+  `userMessages`, `busy` and `close`. The runtime derives pages, the Bot list
+  preview and Finished replies from `read`, the same way for both engines
+  (rewrite step 2.2). `PiEngine` owns
   everything pi-specific (the durable conversation's agent and permissions,
   submit, withdraw, the chat projection, history paging, the task-graph busy
   watch). `ClaudeCodeEngine` implements the same interface.
