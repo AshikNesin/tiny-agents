@@ -1,0 +1,502 @@
+{
+  "$comment": "The rewrite's retired-paths list (docs/rewrite/PLAN.md, step 6.1). `pnpm check:old-modules` (scripts/check-old-modules.ts) fails when a retired path exists or is imported, a retired symbol is declared, a retired module singleton is back, a retired pattern matches, or a narrowed module (DECISIONS.md D13) grows back. `replacedBy` is a repo path that must exist.",
+  "paths": [
+    {
+      "path": "apps/web/src/server/api/bots/browser.routes.ts",
+      "replacedBy": "apps/web/src/server/api/live/live.routes.ts",
+      "note": "the per-bot browser router: one profile-addressed live router plus per-bot aliases",
+      "step": "4.3"
+    },
+    {
+      "path": "apps/web/src/server/api/bots/browser.page.routes.ts",
+      "replacedBy": "apps/web/src/server/api/live/live.routes.ts",
+      "note": "the Browser page's profile router",
+      "step": "4.3"
+    },
+    {
+      "path": "apps/web/src/server/api/bots/computer.routes.ts",
+      "replacedBy": "apps/web/src/server/api/live/live.routes.ts",
+      "note": "the per-bot computer router",
+      "step": "4.3"
+    },
+    {
+      "path": "apps/web/src/server/api/bots/computer.page.routes.ts",
+      "replacedBy": "apps/web/src/server/api/live/live.routes.ts",
+      "note": "the Computer page's profile router",
+      "step": "4.3"
+    },
+    {
+      "path": "packages/agent/src/providers",
+      "replacedBy": "packages/models/src",
+      "note": "provider kinds, config, discovery, test calls and Workers AI",
+      "step": "3.3"
+    },
+    {
+      "path": "packages/agent/src/model-catalog.ts",
+      "replacedBy": "packages/models/src/model-catalog.ts",
+      "step": "3.3"
+    },
+    {
+      "path": "packages/agent/src/ssh",
+      "replacedBy": "packages/sandbox/src/ssh",
+      "step": "3.4"
+    },
+    {
+      "path": "packages/agent/src/terminal",
+      "replacedBy": "packages/sandbox/src/terminal",
+      "step": "3.4"
+    },
+    {
+      "path": "packages/agent/src/testing-ssh-server.ts",
+      "replacedBy": "packages/sandbox/src/testing-ssh-server.ts",
+      "step": "3.4"
+    },
+    {
+      "path": "packages/agent/src/vault-target.ts",
+      "replacedBy": "packages/sandbox/src/vault-target.ts",
+      "step": "3.4"
+    },
+    {
+      "path": "packages/agent/src/toolkits/browser-sessions.ts",
+      "replacedBy": "packages/sandbox/src/live-sessions.ts",
+      "note": "the browser session manager: a thin LiveSessions instance in packages/sandbox/src/browser-sessions.ts (D13)",
+      "step": "3.4, 3.5"
+    },
+    {
+      "path": "packages/agent/src/toolkits/computer-sessions.ts",
+      "replacedBy": "packages/sandbox/src/live-sessions.ts",
+      "note": "the computer session manager: a thin LiveSessions instance in packages/sandbox/src/computer-sessions.ts (D13)",
+      "step": "3.4, 3.5"
+    },
+    {
+      "path": "packages/agent/src/toolkits/browser-chromium.ts",
+      "replacedBy": "packages/sandbox/src/browser-chromium.ts",
+      "step": "3.4"
+    },
+    {
+      "path": "packages/agent/src/toolkits/browser-fill.ts",
+      "replacedBy": "packages/sandbox/src/browser-fill.ts",
+      "step": "3.4"
+    },
+    {
+      "path": "packages/agent/src/toolkits/browser-guard.ts",
+      "replacedBy": "packages/sandbox/src/browser-guard.ts",
+      "step": "3.4"
+    },
+    {
+      "path": "packages/agent/src/toolkits/browser-remote-cdp.ts",
+      "replacedBy": "packages/sandbox/src/browser-remote-cdp.ts",
+      "step": "3.4"
+    },
+    {
+      "path": "packages/agent/src/toolkits/browser-vm-setup.ts",
+      "replacedBy": "packages/sandbox/src/vm-stack.ts",
+      "note": "the browser's VM stack, now a VmStack spec in packages/sandbox/src/browser-vm-setup.ts",
+      "step": "3.4, 3.6"
+    },
+    {
+      "path": "packages/agent/src/toolkits/computer-vm-setup.ts",
+      "replacedBy": "packages/sandbox/src/vm-stack.ts",
+      "note": "the computer's VM stack, now a VmStack spec in packages/sandbox/src/computer-vm-setup.ts",
+      "step": "3.4, 3.6"
+    },
+    {
+      "path": "packages/agent/src/toolkits/computer-x11.ts",
+      "replacedBy": "packages/sandbox/src/computer-x11.ts",
+      "step": "3.4"
+    },
+    {
+      "path": "packages/agent/src/toolkits/public-url.ts",
+      "replacedBy": "packages/sandbox/src/public-url.ts",
+      "step": "3.4"
+    },
+    {
+      "path": "tests/server/app/agent/claude-persist.test.ts",
+      "replacedBy": "tests/server/app/agent/engine-contract.test.ts",
+      "note": "the old JSON transcript's persistence suite; the engine contract covers the durable entries and the one-time import",
+      "step": "2.4"
+    }
+  ],
+  "symbols": [
+    {
+      "symbol": "setAgentRuntimeForTests",
+      "replacedBy": "tests/server/fixtures/runtime.ts",
+      "note": "tests install a runtime with useTestRuntime() over the App root",
+      "step": "1.1, 1.4"
+    },
+    {
+      "symbol": "withGatePlan",
+      "replacedBy": "packages/agent/src/toolkit.ts",
+      "note": "a tool's gate plan is the `gate` field of its tool() registration, not a WeakMap",
+      "step": "3.1, 3.2"
+    },
+    {
+      "symbol": "browserVaultToolInfos",
+      "replacedBy": "packages/agent/src/toolkit.ts",
+      "note": "the hand-kept ToolInfo lists; each tool is declared once with tool()",
+      "step": "3.2"
+    },
+    {
+      "symbol": "persistPath",
+      "replacedBy": "packages/agent/src/engines/claude-code/transcript.ts",
+      "note": "the Claude plan's JSON transcript file; its messages are durable claude.* entries (ADR 0018)",
+      "step": "2.4"
+    },
+    {
+      "symbol": "claudeCodeStatus",
+      "replacedBy": "packages/agent/src/engines/claude-code/plan.ts",
+      "note": "runtime.claudePlan.status()",
+      "step": "2.5"
+    },
+    {
+      "symbol": "claudeCodeAccount",
+      "replacedBy": "packages/agent/src/engines/claude-code/plan.ts",
+      "note": "runtime.claudePlan.account()",
+      "step": "2.5"
+    },
+    {
+      "symbol": "prepareClaudeCode",
+      "replacedBy": "packages/agent/src/engines/claude-code/plan.ts",
+      "note": "runtime.claudePlan.prepare()",
+      "step": "2.5"
+    },
+    {
+      "symbol": "PiEngineOptions",
+      "replacedBy": "packages/agent/src/conversation-store.ts",
+      "note": "PiEngine's extras (create, configure, attachment ids, the task graph) moved into the runtime's conversation store",
+      "step": "2.5"
+    }
+  ],
+  "moduleState": [
+    {
+      "file": "apps/web/src/server/api/bots/bots.runtime.ts",
+      "names": ["runtime", "ready", "ownerWaits", "messagingStores"],
+      "replacedBy": "apps/web/src/server/app-root.ts",
+      "note": "the runtime singleton and its ready flag (App.runtime, App.runtimeReady), owner waits, messaging stores",
+      "step": "1.1, 1.2, 1.4"
+    },
+    {
+      "file": "apps/web/src/server/api/bots/bots.messaging.ts",
+      "names": ["turnBudgets"],
+      "replacedBy": "apps/web/src/server/app-root.ts",
+      "note": "the turn-budget WeakMap (App.turnBudgets)",
+      "step": "1.4"
+    },
+    {
+      "file": "apps/web/src/server/api/bots/bots.events.ts",
+      "names": ["listeners"],
+      "replacedBy": "apps/web/src/server/app-root.ts",
+      "note": "the event bus (App.botChatListeners)",
+      "step": "1.2"
+    },
+    {
+      "file": "apps/web/src/server/api/bots/bots.viewers.ts",
+      "names": ["viewers"],
+      "replacedBy": "apps/web/src/server/app-root.ts",
+      "note": "App.botViewers",
+      "step": "1.2"
+    },
+    {
+      "file": "apps/web/src/server/api/bots/bots.sse.ts",
+      "names": ["openStreams"],
+      "replacedBy": "apps/web/src/server/app-root.ts",
+      "note": "the SSE set (App.openSseStreams)",
+      "step": "1.2"
+    },
+    {
+      "file": "apps/web/src/server/api/bots/bot-resources.ts",
+      "names": ["backgroundReleases"],
+      "replacedBy": "apps/web/src/server/app-root.ts",
+      "note": "App.backgroundBotReleases",
+      "step": "1.2"
+    },
+    {
+      "file": "apps/web/src/server/api/bots/chats.title.ts",
+      "names": ["titler"],
+      "replacedBy": "apps/web/src/server/app-root.ts",
+      "note": "the chat titler (App.chatTitler)",
+      "step": "1.2, 1.4"
+    },
+    {
+      "file": "apps/web/src/server/api/bots/browser.sessions.ts",
+      "names": ["instance"],
+      "replacedBy": "apps/web/src/server/app-root.ts",
+      "note": "App.browserSessions",
+      "step": "1.2"
+    },
+    {
+      "file": "apps/web/src/server/api/bots/computer.sessions.ts",
+      "names": ["instance"],
+      "replacedBy": "apps/web/src/server/app-root.ts",
+      "note": "App.computerSessions",
+      "step": "1.2"
+    },
+    {
+      "file": "apps/web/src/server/api/bots/claude-worker.ts",
+      "names": ["shared"],
+      "replacedBy": "apps/web/src/server/app-root.ts",
+      "note": "the Claude worker (App.claudeWorker)",
+      "step": "1.2"
+    },
+    {
+      "file": "apps/web/src/server/api/bots/sandbox-host.ts",
+      "names": ["hostKeys", "connections"],
+      "replacedBy": "apps/web/src/server/app-root.ts",
+      "note": "App.sandboxHostKeys, App.sandboxConnections",
+      "step": "1.2"
+    },
+    {
+      "file": "apps/web/src/server/api/code/code.hub.ts",
+      "names": ["hub"],
+      "replacedBy": "apps/web/src/server/app-root.ts",
+      "note": "App.codeHub",
+      "step": "1.2"
+    },
+    {
+      "file": "apps/web/src/server/api/connections/connections.manager.ts",
+      "names": ["manager"],
+      "replacedBy": "apps/web/src/server/app-root.ts",
+      "note": "App.connectionManager",
+      "step": "1.2"
+    },
+    {
+      "file": "apps/web/src/server/api/models/models.config.ts",
+      "names": ["target", "listeners"],
+      "replacedBy": "apps/web/src/server/app-root.ts",
+      "note": "App.modelRuntime, App.modelListeners",
+      "step": "1.2"
+    },
+    {
+      "file": "apps/web/src/server/api/people/live-access.ts",
+      "names": ["held"],
+      "replacedBy": "apps/web/src/server/app-root.ts",
+      "note": "App.liveAccess",
+      "step": "1.2"
+    },
+    {
+      "file": "apps/web/src/server/api/system/updates.service.ts",
+      "names": ["channel", "status", "unlisten"],
+      "replacedBy": "apps/web/src/server/app-root.ts",
+      "note": "App.updatesChannel, App.updateStatus, App.updatesUnlisten",
+      "step": "1.2"
+    },
+    {
+      "file": "apps/web/src/server/api/terminal/terminal.instance.ts",
+      "names": ["instance"],
+      "replacedBy": "apps/web/src/server/app-root.ts",
+      "note": "App.terminalService",
+      "step": "1.2"
+    },
+    {
+      "file": "apps/web/src/server/api/vault/vault.alerts.ts",
+      "names": ["sink"],
+      "replacedBy": "apps/web/src/server/app-root.ts",
+      "note": "App.vaultAlertSink",
+      "step": "1.2"
+    },
+    {
+      "file": "apps/web/src/server/api/vault/vault.requests.service.ts",
+      "names": ["submitting"],
+      "replacedBy": "apps/web/src/server/app-root.ts",
+      "note": "App.submittingRequests",
+      "step": "1.2"
+    },
+    {
+      "file": "apps/web/src/server/api/vault/vault.stepup.ts",
+      "names": ["tokens"],
+      "replacedBy": "apps/web/src/server/app-root.ts",
+      "note": "the step-up ticket store (App.vaultStepUps)",
+      "step": "1.2"
+    }
+  ],
+  "definedOnlyIn": [
+    {
+      "symbols": [
+        "userMessagesOf",
+        "gateUserMessages",
+        "lastMessageOf",
+        "deriveChat",
+        "chatState",
+        "windowChat",
+        "pageBefore",
+        "diffChat"
+      ],
+      "file": "packages/agent/src/transcript.ts",
+      "scope": "packages/agent/src/**",
+      "replacedBy": "packages/agent/src/transcript.ts",
+      "note": "the engines' second copies of the chat projection, user messages, last message, windowing and diffing",
+      "step": "2.2"
+    },
+    {
+      "symbols": ["loadHistory"],
+      "file": "packages/agent/src/conversation-store.ts",
+      "scope": "packages/agent/src/**",
+      "replacedBy": "packages/agent/src/conversation-store.ts",
+      "note": "the pi engine's own history reader",
+      "step": "2.2, 2.5"
+    },
+    {
+      "symbols": ["shQuote", "shellQuote", "bashScript", "bash"],
+      "file": "packages/sandbox/src/shell.ts",
+      "scope": "{packages,apps}/**",
+      "replacedBy": "packages/sandbox/src/shell.ts",
+      "note": "the four shell-quoting and script-wrapping helpers",
+      "step": "3.6"
+    }
+  ],
+  "patterns": [
+    {
+      "pattern": "^\\s+messages: ChatMessage\\[\\];",
+      "flags": "m",
+      "files": ["packages/agent/src/engines/claude-code/**"],
+      "what": "the Claude plan's in-memory transcript (a session's `messages` field)",
+      "replacedBy": "packages/agent/src/engines/claude-code/transcript.ts",
+      "step": "2.4"
+    },
+    {
+      "pattern": "\\b(writeFile|mkdir)\\b",
+      "files": ["packages/agent/src/engines/claude-code/engine.ts"],
+      "what": "the Claude plan engine writing its JSON transcript file",
+      "replacedBy": "packages/agent/src/engines/claude-code/transcript.ts",
+      "step": "2.4"
+    },
+    {
+      "pattern": "\\.claude\\.json",
+      "files": ["packages/**", "apps/**"],
+      "except": [
+        "packages/agent/src/runtime.ts",
+        "packages/agent/src/engines/claude-code/engine.ts",
+        "packages/agent/src/engines/claude-code/transcript.ts"
+      ],
+      "what": "the old `<agent.db>.claude.json` transcript store outside its one-time importer (ADR 0018)",
+      "replacedBy": "packages/agent/src/engines/claude-code/transcript.ts",
+      "step": "2.4"
+    },
+    {
+      "pattern": "^export (type|interface)\\b",
+      "flags": "m",
+      "files": ["apps/web/src/client/lib/*-api.ts"],
+      "what": "a hand-copied wire type in a client API module (also lint R13)",
+      "replacedBy": "apps/web/src/shared/api",
+      "step": "5.1"
+    },
+    {
+      "pattern": "'\\\\+''",
+      "files": ["packages/**", "apps/**"],
+      "except": ["packages/sandbox/src/shell.ts"],
+      "what": "a shell single-quote escape written outside the one shell module",
+      "replacedBy": "packages/sandbox/src/shell.ts",
+      "step": "3.6"
+    },
+    {
+      "pattern": "\\bbotsApi\\.pastChat(History)?\\(",
+      "files": ["apps/web/src/client/**"],
+      "except": ["apps/web/src/client/store/chats.ts"],
+      "what": "a past chat's own fetching state; a past chat is a chat session (openPast)",
+      "replacedBy": "apps/web/src/client/store/chats.ts",
+      "step": "5.4"
+    }
+  ],
+  "narrowed": [
+    {
+      "file": "apps/web/src/server/api/bots/bots.service.ts",
+      "role": "bot CRUD, links, pin and the read marker; no chat action (D13, 4.1)",
+      "noDeclarationsExportedBy": "apps/web/src/server/api/bots/chats.service.ts",
+      "forbid": [
+        {
+          "pattern": "\\.(submit|abort|withdraw|decideApproval|setYolo|answerQuestions|dismissQuestions|readChatPage|readChat|pendingApprovals|pendingQuestions)\\(",
+          "why": "a chat action on the runtime belongs in chats.service.ts"
+        },
+        {
+          "pattern": "from \"\\./(chats\\.service|chats\\.history|bots\\.chat|bots\\.delivery)\"",
+          "why": "the chat modules depend on bots.service.ts, not the other way round"
+        }
+      ]
+    },
+    {
+      "file": "packages/sandbox/src/browser-sessions.ts",
+      "role": "a thin LiveSessions instance; the manager logic is live-sessions.ts's (D13, 3.5)",
+      "require": [
+        {
+          "pattern": "\\bcreateLiveSessions[<(]",
+          "why": "the browser manager is a LiveSessions instance"
+        }
+      ],
+      "forbid": [
+        {
+          "pattern": "\\b(setTimeout|setInterval|clearTimeout|clearInterval)\\b",
+          "why": "the idle sweep and the driver wait are LiveSessions'"
+        },
+        { "pattern": "\\bnew Promise\\b", "why": "hand-back waits are LiveSessions'" },
+        {
+          "pattern": "new (Weak)?Map<string,\\s*(Live|Opening)",
+          "why": "the registry of live and opening sessions is LiveSessions'"
+        },
+        {
+          "pattern": "\\b(handBacks|sweeper|openErrors|opening|closing)\\s*=",
+          "why": "the old manager's own state is LiveSessions'"
+        }
+      ]
+    },
+    {
+      "file": "packages/sandbox/src/computer-sessions.ts",
+      "role": "a thin LiveSessions instance; the manager logic is live-sessions.ts's (D13, 3.5)",
+      "require": [
+        {
+          "pattern": "\\bcreateLiveSessions[<(]",
+          "why": "the computer manager is a LiveSessions instance"
+        }
+      ],
+      "forbid": [
+        {
+          "pattern": "\\b(setTimeout|setInterval|clearTimeout|clearInterval)\\b",
+          "why": "the idle sweep and the driver wait are LiveSessions'"
+        },
+        { "pattern": "\\bnew Promise\\b", "why": "hand-back waits are LiveSessions'" },
+        {
+          "pattern": "new (Weak)?Map<string,\\s*(Live|Opening)",
+          "why": "the registry of live and opening sessions is LiveSessions'"
+        },
+        {
+          "pattern": "\\b(handBacks|sweeper|openErrors|opening|closing)\\s*=",
+          "why": "the old manager's own state is LiveSessions'"
+        }
+      ]
+    },
+    {
+      "file": "apps/web/src/client/components/BrowserPanel.tsx",
+      "role": "the shared LivePanel on the browser's surface (5.5)",
+      "require": [{ "pattern": "<LivePanel\\b", "why": "the panel renders LivePanel" }],
+      "forbid": [{ "pattern": "\\buse[A-Z]\\w*\\(", "why": "a panel's state lives in LivePanel" }]
+    },
+    {
+      "file": "apps/web/src/client/components/ComputerPanel.tsx",
+      "role": "the shared LivePanel on the computer's surface (5.5)",
+      "require": [{ "pattern": "<LivePanel\\b", "why": "the panel renders LivePanel" }],
+      "forbid": [{ "pattern": "\\buse[A-Z]\\w*\\(", "why": "a panel's state lives in LivePanel" }]
+    },
+    {
+      "file": "apps/web/src/client/pages/browser/Browser.tsx",
+      "role": "the shared LivePage on the browser's surface (5.5)",
+      "require": [{ "pattern": "<LivePage\\b", "why": "the page renders LivePage" }],
+      "forbid": [{ "pattern": "\\buse[A-Z]\\w*\\(", "why": "a page's state lives in LivePage" }]
+    },
+    {
+      "file": "apps/web/src/client/pages/computer/Computer.tsx",
+      "role": "the shared LivePage on the computer's surface (5.5)",
+      "require": [{ "pattern": "<LivePage\\b", "why": "the page renders LivePage" }],
+      "forbid": [{ "pattern": "\\buse[A-Z]\\w*\\(", "why": "a page's state lives in LivePage" }]
+    }
+  ],
+  "deprecated": {
+    "package": "@tiny-agents/agent",
+    "root": "packages/agent/src/index.ts",
+    "subpaths": [
+      "@tiny-agents/agent/sandbox",
+      "@tiny-agents/agent/terminal",
+      "@tiny-agents/agent/browser",
+      "@tiny-agents/agent/computer"
+    ],
+    "note": "Re-exports of @tiny-agents/models and @tiny-agents/sandbox (3.3, 3.4), kept for outside importers until a major removes them. Nothing in this repo may import them."
+  }
+}

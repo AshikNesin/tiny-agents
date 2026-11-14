@@ -29,6 +29,7 @@ export const gates = [
   { name: "Dead code", run: "pnpm check:dead" },
   { name: "Design tokens", run: "pnpm check:tokens" },
   { name: "pnpm policy", run: "pnpm check:pnpm-policy" },
+  { name: "Old modules", run: "pnpm check:old-modules" },
   { name: "Migrations are up to date with the schema", run: migrationsMatchSchema },
   {
     name: "Applied migrations unchanged",
