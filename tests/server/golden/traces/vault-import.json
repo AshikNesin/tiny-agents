@@ -1,0 +1,319 @@
+[
+  {
+    "note": "import",
+    "value": {
+      "values": {
+        "moved": ["<id1>", "<id2>"],
+        "alreadyMoved": [],
+        "unreadable": [],
+        "failed": []
+      },
+      "connections": {
+        "moved": ["golden-conn"],
+        "failed": []
+      }
+    }
+  },
+  {
+    "db": "migrated rows",
+    "tables": {
+      "vault_values": [
+        {
+          "id": "<id1>",
+          "policy": "cuu0p2z7zWUBKlOf5l8rXSSEKgxv1IHmk6eU7DFg1GA",
+          "createdAt": "2026-11-06T06:30:00.000Z",
+          "updatedAt": "2026-11-06T06:30:00.000Z"
+        },
+        {
+          "id": "<id2>",
+          "policy": "",
+          "createdAt": "2026-11-06T06:30:00.000Z",
+          "updatedAt": "2026-11-06T06:30:00.000Z"
+        },
+        {
+          "id": "<id3>",
+          "policy": "Nfw-FMF-y3MjokrZOlyx7VGUjkK6ISXlGFTdsf6MsSk",
+          "createdAt": "2026-11-06T06:30:00.000Z",
+          "updatedAt": "2026-11-06T06:30:00.000Z"
+        }
+      ],
+      "vault_items": [
+        {
+          "id": "<id4>",
+          "handle": "shop",
+          "kind": "login",
+          "backend": "local",
+          "audience": "bots",
+          "externalId": "<id1>",
+          "field": null,
+          "label": "Shop",
+          "username": null,
+          "originsJson": "[\"https://shop.example.com\"]",
+          "hostsJson": "[]",
+          "injectJson": null,
+          "toolsJson": "[]",
+          "botsJson": null,
+          "approval": "per_conversation",
+          "allowUnattended": false,
+          "whenToUse": null,
+          "cardMetaJson": null,
+          "hasTotp": false,
+          "disabled": false,
+          "lastUsedAt": null,
+          "lastUsedBy": null,
+          "createdAt": "2026-11-06T06:30:00.000Z",
+          "updatedAt": "2026-11-06T06:30:00.000Z"
+        },
+        {
+          "id": "<id5>",
+          "handle": "mcp-alpha",
+          "kind": "api_key",
+          "backend": "local",
+          "audience": "bots",
+          "externalId": "<id3>",
+          "field": "value",
+          "label": "MCP connection: Alpha",
+          "username": null,
+          "originsJson": "[]",
+          "hostsJson": "[\"alpha.example.com\"]",
+          "injectJson": null,
+          "toolsJson": "[\"mcp\"]",
+          "botsJson": "[]",
+          "approval": "per_conversation",
+          "allowUnattended": false,
+          "whenToUse": null,
+          "cardMetaJson": null,
+          "hasTotp": false,
+          "disabled": false,
+          "lastUsedAt": null,
+          "lastUsedBy": null,
+          "createdAt": "2026-11-06T06:30:00.000Z",
+          "updatedAt": "2026-11-06T06:30:00.000Z"
+        }
+      ],
+      "connections": [
+        {
+          "id": "golden-conn",
+          "name": "Alpha",
+          "slug": "alpha",
+          "url": "https://alpha.example.com/mcp",
+          "transport": "streamable-http",
+          "authType": "header",
+          "headerName": "x-api-key",
+          "secretEnc": null,
+          "oauthEnc": null,
+          "toolsCache": "[]",
+          "disabledTools": "[]",
+          "secretRef": null,
+          "secretItemId": "<id5>",
+          "createdAt": "2026-11-06T06:30:00.000Z",
+          "updatedAt": "2026-11-06T06:30:00.000Z"
+        }
+      ],
+      "vault_audit_events": [
+        {
+          "id": "<id6>",
+          "at": "2026-11-06T06:30:00.000Z",
+          "itemId": "<id5>",
+          "handle": "mcp-alpha",
+          "botId": null,
+          "conversationId": null,
+          "taskId": null,
+          "tool": "vault_import",
+          "target": "mcp:alpha",
+          "outcome": "created",
+          "reason": "values: value",
+          "unattended": false
+        }
+      ]
+    }
+  },
+  {
+    "note": "left in KV",
+    "value": []
+  },
+  {
+    "http": "overview",
+    "method": "GET",
+    "path": "/api/v1/vault",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "backends": [
+          {
+            "name": "local",
+            "configured": true,
+            "read": {
+              "state": "ready",
+              "detail": "Encrypted with SECRETS_KEY"
+            },
+            "write": {
+              "state": "ready",
+              "detail": "Encrypted with SECRETS_KEY"
+            },
+            "capabilities": {
+              "create": true,
+              "update": true,
+              "delete": true,
+              "reveal": true
+            }
+          }
+        ],
+        "primaryBackend": "local",
+        "items": [
+          {
+            "id": "<id5>",
+            "handle": "mcp-alpha",
+            "kind": "api_key",
+            "backend": "local",
+            "audience": "bots",
+            "label": "MCP connection: Alpha",
+            "username": null,
+            "origins": [],
+            "hosts": ["alpha.example.com"],
+            "inject": null,
+            "tools": ["mcp"],
+            "effectiveTools": ["mcp"],
+            "bots": [],
+            "approval": "per_conversation",
+            "effectiveApproval": "per_conversation",
+            "allowUnattended": false,
+            "whenToUse": null,
+            "card": null,
+            "hasTotp": false,
+            "disabled": false,
+            "field": "value",
+            "lastUsedAt": null,
+            "lastUsedBy": null,
+            "createdAt": "2026-11-06T06:30:00.000Z",
+            "updatedAt": "2026-11-06T06:30:00.000Z"
+          },
+          {
+            "id": "<id4>",
+            "handle": "shop",
+            "kind": "login",
+            "backend": "local",
+            "audience": "bots",
+            "label": "Shop",
+            "username": null,
+            "origins": ["https://shop.example.com"],
+            "hosts": [],
+            "inject": null,
+            "tools": [],
+            "effectiveTools": ["browser_fill_secret", "browser_enter_code", "computer_fill_secret"],
+            "bots": null,
+            "approval": "per_conversation",
+            "effectiveApproval": "per_conversation",
+            "allowUnattended": false,
+            "whenToUse": null,
+            "card": null,
+            "hasTotp": false,
+            "disabled": false,
+            "field": null,
+            "lastUsedAt": null,
+            "lastUsedBy": null,
+            "createdAt": "2026-11-06T06:30:00.000Z",
+            "updatedAt": "2026-11-06T06:30:00.000Z"
+          }
+        ],
+        "unlinked": [
+          {
+            "backend": "local",
+            "externalId": "<id2>",
+            "title": "Old",
+            "kind": "login",
+            "urls": ["https://shop.example.com"],
+            "username": null,
+            "card": null
+          }
+        ],
+        "kindDefaults": {
+          "login": ["browser_fill_secret", "browser_enter_code", "computer_fill_secret"],
+          "card": ["browser_fill_secret"],
+          "identity": [],
+          "api_key": ["http_request", "mcp"]
+        }
+      }
+    }
+  },
+  {
+    "http": "the connection's item",
+    "method": "GET",
+    "path": "/api/v1/vault/items/mcp-alpha",
+    "status": 200,
+    "body": {
+      "success": true,
+      "data": {
+        "item": {
+          "id": "<id5>",
+          "handle": "mcp-alpha",
+          "kind": "api_key",
+          "backend": "local",
+          "audience": "bots",
+          "label": "MCP connection: Alpha",
+          "username": null,
+          "origins": [],
+          "hosts": ["alpha.example.com"],
+          "inject": null,
+          "tools": ["mcp"],
+          "effectiveTools": ["mcp"],
+          "bots": [],
+          "approval": "per_conversation",
+          "effectiveApproval": "per_conversation",
+          "allowUnattended": false,
+          "whenToUse": null,
+          "card": null,
+          "hasTotp": false,
+          "disabled": false,
+          "field": "value",
+          "lastUsedAt": null,
+          "lastUsedBy": null,
+          "createdAt": "2026-11-06T06:30:00.000Z",
+          "updatedAt": "2026-11-06T06:30:00.000Z"
+        },
+        "title": "MCP connection: Alpha",
+        "urls": [],
+        "fields": ["value"],
+        "stale": false,
+        "capabilities": {
+          "create": true,
+          "update": true,
+          "delete": true,
+          "reveal": true
+        },
+        "events": [
+          {
+            "id": "<id6>",
+            "at": "2026-11-06T06:30:00.000Z",
+            "itemId": "<id5>",
+            "handle": "mcp-alpha",
+            "botId": null,
+            "conversationId": null,
+            "taskId": null,
+            "tool": "vault_import",
+            "target": "mcp:alpha",
+            "outcome": "created",
+            "reason": "values: value",
+            "unattended": false
+          }
+        ]
+      }
+    }
+  },
+  {
+    "note": "again",
+    "value": {
+      "values": {
+        "moved": [],
+        "alreadyMoved": [],
+        "unreadable": [],
+        "failed": []
+      },
+      "connections": {
+        "moved": [],
+        "failed": []
+      }
+    }
+  }
+]

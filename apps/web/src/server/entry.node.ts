@@ -38,6 +38,7 @@ import { getConnectionManager } from "./api/connections/connections.manager";
 import { startSettledPipeline } from "./api/bots/bots.settled";
 import { sweepBotReleases } from "./api/bots/bot-resources";
 import { setVaultAlertSink } from "./api/vault/vault.alerts";
+import { importStoredSecrets } from "./api/vault/vault.import";
 import { setChatTitler } from "./api/bots/chats.title";
 import { createSideCaller, type SideCaller } from "./api/bots/side-call";
 import { attachBrowserVnc } from "./api/bots/browser.vnc";
@@ -163,6 +164,19 @@ async function main(): Promise<void> {
   // The one SSH connection to the sandbox: first in, so it stops last, after
   // the runtime, the browsers and the desktops ran their teardown over it.
   add({ name: "sandbox connection", stop: () => closeSandboxConnections() });
+
+  // Secrets an older version kept in the KV store or on a connection row move
+  // into the vault's tables (Q4) before anything resolves one. Never fails boot.
+  add({
+    name: "vault import",
+    start: () => {
+      try {
+        importStoredSecrets();
+      } catch (error) {
+        logger.error({ error }, "Moving stored secrets into the vault failed");
+      }
+    },
+  });
 
   let runtime!: AgentRuntime;
   // Side-calls (memory capture, chat titles) run on the opened runtime's
