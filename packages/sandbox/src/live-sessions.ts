@@ -399,7 +399,10 @@ export function createLiveSessions<U extends LiveSurface, S extends LiveEntry>(
       await Promise.allSettled([...opening.values()].map((pending) => pending.promise));
       const entries = [...live.entries()];
       live.clear();
-      await Promise.allSettled(entries.map(([profile, entry]) => dispose(profile, entry)));
+      // Async per entry, so a close() that throws synchronously rejects only its own
+      // entry and every other session is still released and closed (as the old
+      // browser manager's async closeEntry did).
+      await Promise.allSettled(entries.map(async ([profile, entry]) => dispose(profile, entry)));
       openErrors.clear();
       if (sweeper !== undefined) {
         clock.clearInterval(sweeper);

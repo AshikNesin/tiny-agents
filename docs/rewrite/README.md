@@ -340,10 +340,12 @@ Each difference between the two old copies is one option, pinned by
 Unified with no option, because no caller can tell: what `peek` returns
 during an open (nothing, for both), when `onDisconnect` is registered, and
 the order of forgetting and releasing on a close. Neither manager emits
-events. One accepted difference: the computer's `closeAll` used to release
-every desktop before closing any, so a `close()` that throws synchronously
-(no transport does) left none unreleased; now each desktop is released just
-before its own close.
+events. One accepted difference, reachable only by a `close()` that throws
+synchronously (no transport does): the computer's `closeAll` used to release
+every desktop first and then reject on that throw; now, as the browser's
+always did, each close runs in its own async step, so the throw rejects only
+that entry, every other desktop is still released and closed, and `closeAll`
+resolves.
 
 ### 4.3 Models (`@tiny-agents/models`, new package, pi-ai only)
 

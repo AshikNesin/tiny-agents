@@ -223,6 +223,28 @@ describe("live sessions drift: closing", () => {
     await sessions.closeAll();
   });
 
+  it("browser: closeAll survives a close() that throws synchronously and still closes the rest", async () => {
+    const closed: string[] = [];
+    let opened = 0;
+    const sessions = createBrowserSessions({
+      profilesDir: PROFILES,
+      transport: browserTransport(async () => {
+        const n = ++opened;
+        return browserSession({
+          close: (() => {
+            if (n === 1) throw new Error("sync");
+            closed.push(`b${n}`);
+            return Promise.resolve();
+          }) as BrowserSession["close"],
+        });
+      }),
+    });
+    await sessions.acquire({ profile: "p1", tab: "t1" });
+    await sessions.acquire({ profile: "p2", tab: "t1" });
+    await expect(sessions.closeAll()).resolves.toBeUndefined();
+    expect(closed).toEqual(["b2"]);
+  });
+
   it("computer: a failing close of the desktop is swallowed and the wipe still runs", async () => {
     const wiped: string[] = [];
     const transport: ComputerTransport = {
