@@ -1,0 +1,5 @@
+bash -c 'PROFILE='\''profiles/it'\''\'\'''\''s a; touch pwned #'\''
+if [ -s "$PROFILE/.desktop-pids" ]; then
+  for P in $(cat "$PROFILE/.desktop-pids"); do kill -- "-$P" 2>/dev/null || true; kill "$P" 2>/dev/null || true; done
+fi
+rm -f "$PROFILE/.desktop-pids" "$PROFILE/.desktop" "$PROFILE/.desktop-env"'

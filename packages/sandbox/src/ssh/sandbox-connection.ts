@@ -46,6 +46,7 @@ import {
 } from "./connection";
 import { ChannelPtyStream, type PtySize, type PtyStream } from "./pty-stream";
 import { readCapped, writeAtomic } from "./sftp";
+import { EXIT_NO_STATUS } from "../shell";
 
 export interface SandboxExecOptions {
   /** Written to the command's stdin, which is then closed (closed empty when unset). */
@@ -383,7 +384,7 @@ function collect(
     const result = (code: number | null | undefined): SandboxExecResult => ({
       stdout: Buffer.concat(stdout.chunks),
       stderr: Buffer.concat(stderr.chunks).toString("utf8"),
-      exitCode: code ?? 255,
+      exitCode: code ?? EXIT_NO_STATUS,
       truncated,
     });
     const settle = (finish: () => void) => {

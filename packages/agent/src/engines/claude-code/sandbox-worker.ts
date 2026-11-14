@@ -15,6 +15,7 @@ import type { Duplex } from "node:stream";
 import { isSubscriptionLogin, parseAuthStatus, LOGIN_HINT } from "@tiny-agents/claude-worker";
 import {
   createForwardingServer,
+  failureDetail,
   SandboxTimeoutError,
   type SandboxConnection,
 } from "@tiny-agents/sandbox";
@@ -108,7 +109,7 @@ async function execOn(
   }
   const out = result.stdout.toString("utf8");
   if (result.exitCode === 0) return out.trim();
-  const detail = (result.stderr || out).trim().slice(-800);
+  const detail = failureDetail(result, 800);
   throw new Error(`Could not ${label} on the sandbox${detail ? `: ${detail}` : ""}`);
 }
 

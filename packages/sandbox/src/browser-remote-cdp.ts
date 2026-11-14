@@ -17,16 +17,8 @@ import { chromium } from "playwright-core";
 import { SandboxTimeoutError } from "./ssh/connection";
 import type { SandboxConnection } from "./ssh/sandbox-connection";
 import { pageSession } from "./browser-chromium";
-import {
-  installStackCommand,
-  LAUNCH_BUDGET_MS,
-  launchStackCommand,
-  type LaunchedStack,
-  parseLaunchOutput,
-  stackReadyCommand,
-  teardownStackCommand,
-  wipeProfileCommand,
-} from "./browser-vm-setup";
+import { failureDetail } from "./shell";
+import { browserVmStack, launchedStack } from "./browser-vm-setup";
 import type {
   BrowserSession,
   BrowserTransport,
@@ -39,14 +31,6 @@ export interface RemoteCdpTransportOptions {
   connection: SandboxConnection;
 }
 
-/** First-run install budget: apt update + TigerVNC + the Chrome .deb. */
-const INSTALL_TIMEOUT_MS = 10 * 60_000;
-/**
- * The launch script ends by itself within its budget and says why it failed;
- * the margin covers a fresh SSH dial. Giving up sooner would leave the script
- * running on the VM, and a bare timeout would hide its message.
- */
-const LAUNCH_TIMEOUT_MS = LAUNCH_BUDGET_MS + 20_000;
 /** A stalled link must not hang the viewer's resize request. */
 const RESIZE_TIMEOUT_MS = 10_000;
 
@@ -171,11 +155,7 @@ export function createRemoteCdpTransport(options: RemoteCdpTransportOptions): Br
   const { connection } = options;
 
   /** Run one command; resolves with its trimmed stdout, rejects on a nonzero exit. */
-  const exec = async (
-    command: string,
-    timeoutMs = 15_000,
-    label = command.slice(0, 80),
-  ): Promise<string> => {
+  const exec = async (command: string, timeoutMs: number, label: string): Promise<string> => {
     let result;
     try {
       // Backgrounded commands never close the channel; settle after exit.
@@ -186,9 +166,10 @@ export function createRemoteCdpTransport(options: RemoteCdpTransportOptions): Br
     }
     const text = result.stdout.toString("utf8");
     if (result.exitCode === 0) return text.trim();
-    const detail = (result.stderr || text).trim().slice(-600);
+    const detail = failureDetail(result, 600);
     throw new Error(`VM exec failed (${result.exitCode}): ${label}${detail ? `\n${detail}` : ""}`);
   };
+  const stack = browserVmStack(exec);
 
   const openBrowser = async (
     profileDir: string,
@@ -196,36 +177,16 @@ export function createRemoteCdpTransport(options: RemoteCdpTransportOptions): Br
   ): Promise<BrowserSession> => {
     const scale = open.scale === 1 ? 1 : 2;
 
-    const ready = await exec(stackReadyCommand(), 15_000, "check the browser stack");
-    if (ready !== "ready") {
-      open.onPhase?.("installing");
-      await exec(installStackCommand(), INSTALL_TIMEOUT_MS, "install the browser stack");
-    }
+    await stack.ensureInstalled(() => open.onPhase?.("installing"));
     open.onPhase?.("starting");
-
-    const launchStack = async (): Promise<LaunchedStack> => {
-      try {
-        return parseLaunchOutput(
-          await exec(
-            launchStackCommand({
-              profileDir,
-              width: open.viewportWidth,
-              height: open.viewportHeight,
-              scale,
-            }),
-            LAUNCH_TIMEOUT_MS,
-            "start the browser",
-          ),
-        );
-      } catch (error) {
-        // A launch that broke after starting Xtigervnc or Chrome (a dropped
-        // connection, an unreadable report) leaves them running with nothing
-        // to stop them.
-        await exec(teardownStackCommand(profileDir), 15_000, "stop the browser").catch(() => {});
-        throw error;
-      }
-    };
-    const launched = await launchStack();
+    const launched = launchedStack(
+      await stack.launch({
+        profileDir,
+        width: open.viewportWidth,
+        height: open.viewportHeight,
+        scale,
+      }),
+    );
 
     const live = new Set<Duplex>();
     let server: Server | undefined;
@@ -235,7 +196,7 @@ export function createRemoteCdpTransport(options: RemoteCdpTransportOptions): Br
       for (const tunnel of live) tunnel.destroy();
       live.clear();
       server?.close();
-      await exec(teardownStackCommand(profileDir), 15_000, "stop the browser").catch(() => {});
+      await stack.stop(profileDir).catch(() => {});
     };
 
     /** A forward to a VM-local port, closed with the session. */
@@ -303,8 +264,6 @@ export function createRemoteCdpTransport(options: RemoteCdpTransportOptions): Br
   };
 
   return Object.assign(openBrowser, {
-    wipe: async (profileDir: string) => {
-      await exec(wipeProfileCommand(profileDir), 30_000, "reset the profile");
-    },
+    wipe: (profileDir: string) => stack.wipe(profileDir),
   });
 }

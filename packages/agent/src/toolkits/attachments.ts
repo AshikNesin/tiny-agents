@@ -13,7 +13,7 @@ import { createHash } from "node:crypto";
 import { Type } from "@earendil-works/pi-ai";
 import type { ToolExecutionResult } from "@earendil-works/pi-durable";
 import type { Capability } from "../capabilities";
-import type { SandboxConnection } from "@tiny-agents/sandbox";
+import { shQuote, type SandboxConnection } from "@tiny-agents/sandbox";
 import { defineToolkit, tool } from "../toolkit";
 
 export type AttachmentStatus = "none" | "pending" | "ready" | "failed" | "unsupported";
@@ -453,8 +453,7 @@ export function createAttachmentsToolkit(
         ).replace(/^~\//, "");
         const dir = dest.includes("/") ? dest.slice(0, dest.lastIndexOf("/")) : "";
         try {
-          if (dir)
-            await sandbox.exec(`mkdir -p '${dir.replace(/'/g, `'\\''`)}'`, { timeoutMs: 30_000 });
+          if (dir) await sandbox.exec(`mkdir -p ${shQuote(dir)}`, { timeoutMs: 30_000 });
           await sandbox.writeFile(dest, original.bytes);
         } catch (error) {
           return fail(

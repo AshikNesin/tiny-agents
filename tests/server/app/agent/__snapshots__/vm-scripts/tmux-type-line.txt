@@ -1,0 +1,1 @@
+LC_ALL=C.UTF-8 tmux -L ta-terminal send-keys -t ta-term-3 -l 'echo "it'\''s $HOME"' \; send-keys -t ta-term-3 Enter

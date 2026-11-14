@@ -1,0 +1,32 @@
+bash -c 'set -e
+if [ -d /opt/tiny-agents/claude-worker ] && [ -w /opt/tiny-agents/claude-worker ]; then DIR=/opt/tiny-agents/claude-worker; else DIR="$HOME/.tiny-agents/claude-worker"; fi
+NODE=""
+if [ -x "$DIR/node/bin/node" ]; then NODE="$DIR/node/bin/node";
+elif command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then
+  M="$(node -p '\''process.versions.node.split(".")[0]'\'' 2>/dev/null || echo 0)"
+  if [ "$M" -ge 20 ] 2>/dev/null; then NODE="$(command -v node)"; fi
+fi
+CLAUDE="$DIR/node_modules/.bin/claude"
+mkdir -p "$DIR"
+[ -f "$DIR/.stack-v1" ] && [ -n "$NODE" ] && [ -x "$CLAUDE" ] && { echo ready; exit 0; }
+exec 9>"$DIR/install.lock"
+flock 9
+[ -f "$DIR/.stack-v1" ] && [ -n "$NODE" ] && [ -x "$CLAUDE" ] && { echo ready; exit 0; }
+if [ -z "$NODE" ]; then
+  case "$(uname -s)" in Linux) OS=linux ;; Darwin) OS=darwin ;; *) echo "Unsupported sandbox OS: $(uname -s)" >&2; exit 1 ;; esac
+  case "$(uname -m)" in x86_64|amd64) ARCH=x64 ;; aarch64|arm64) ARCH=arm64 ;; *) echo "Unsupported sandbox CPU: $(uname -m)" >&2; exit 1 ;; esac
+  TMP="$(mktemp -d)"
+  curl -fsSL "https://nodejs.org/dist/v24.22.2/node-v24.22.2-$OS-$ARCH.tar.gz" | tar -xz -C "$TMP"
+  rm -rf "$DIR/node"
+  mv "$TMP/node-v24.22.2-$OS-$ARCH" "$DIR/node"
+  rm -rf "$TMP"
+  NODE="$DIR/node/bin/node"
+fi
+NODEBIN="$(dirname "$NODE")"
+NPM="$NODEBIN/npm"; [ -x "$NPM" ] || NPM="$(command -v npm)"
+printf '\''%s\n'\'' '\''{"name":"tiny-agents-claude-worker","private":true,"type":"module","dependencies":{"@anthropic-ai/claude-agent-sdk":"0.3.318","@anthropic-ai/claude-code":"2.1.318","ws":"8.22.0","zod":"4.6.7"}}'\'' > "$DIR/package.json"
+cd "$DIR"
+PATH="$NODEBIN:$PATH" "$NPM" install --omit=dev --no-audit --no-fund --loglevel=error
+[ -x "$CLAUDE" ] || { echo "Claude Code did not install (no $CLAUDE)" >&2; exit 1; }
+rm -f "$DIR"/.stack-*; touch "$DIR/.stack-v1"
+echo installed'

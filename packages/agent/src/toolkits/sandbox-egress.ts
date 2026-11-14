@@ -22,13 +22,19 @@
  * never a file, never ssh `AcceptEnv`. Everything here is a pure string
  * builder so it can be tested without a VM.
  */
-import { shQuote } from "@tiny-agents/sandbox";
+import { bashScript, exitWith, shQuote } from "@tiny-agents/sandbox";
 
 /** Exit code the wrapper uses for "the VM can't confine commands". */
 export const CONFINE_UNAVAILABLE = 97;
 
 /** Exit code when the secrets didn't arrive on stdin. */
-export const SECRETS_MISSING = 96;
+const SECRETS_MISSING = 96;
+
+/** What a confined command's exit code can say besides its own status. */
+export const CONFINED_EXITS = {
+  confineUnavailable: CONFINE_UNAVAILABLE,
+  secretsMissing: SECRETS_MISSING,
+};
 
 /** Most secrets one command may carry. */
 export const MAX_COMMAND_SECRETS = 4;
@@ -108,7 +114,7 @@ function secretPrelude(envNames: readonly string[]): string {
   return envNames
     .map(
       (name, index) =>
-        `IFS= read -r TA_S${index} || exit ${SECRETS_MISSING}\nexport ${name}="$TA_S${index}"; unset TA_S${index}`,
+        `IFS= read -r TA_S${index} || ${exitWith(SECRETS_MISSING)}\nexport ${name}="$TA_S${index}"; unset TA_S${index}`,
     )
     .join("\n");
 }
@@ -129,7 +135,7 @@ export interface ConfinedCommandOptions {
  * stderr and the exit code.
  */
 export function confinedCommand(options: ConfinedCommandOptions): string {
-  return `bash -c ${shQuote(confinedScript(options))}`;
+  return bashScript(confinedScript(options));
 }
 
 /** The script `confinedCommand` runs, unwrapped (tests run it with stub tools). */
@@ -140,8 +146,8 @@ export function confinedScript(options: ConfinedCommandOptions): string {
     .filter(Boolean)
     .join("\n");
   const script = [
-    `command -v systemd-run >/dev/null 2>&1 || { echo "Confined commands need systemd on the sandbox VM." >&2; exit ${CONFINE_UNAVAILABLE}; }`,
-    `sudo -n true 2>/dev/null || { echo "Confined commands need passwordless sudo on the sandbox VM." >&2; exit ${CONFINE_UNAVAILABLE}; }`,
+    `command -v systemd-run >/dev/null 2>&1 || ${exitWith(CONFINE_UNAVAILABLE, "Confined commands need systemd on the sandbox VM.")}`,
+    `sudo -n true 2>/dev/null || ${exitWith(CONFINE_UNAVAILABLE, "Confined commands need passwordless sudo on the sandbox VM.")}`,
     'TA_HOSTS="$(mktemp)"',
     "printf '127.0.0.1 localhost\\n::1 localhost\\n' > \"$TA_HOSTS\"",
     `TA_ALLOW=${shQuote(cidrs.join(" "))}`,

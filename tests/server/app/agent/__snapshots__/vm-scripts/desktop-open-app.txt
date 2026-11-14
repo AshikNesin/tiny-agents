@@ -1,0 +1,15 @@
+bash -c 'PROFILE='\''.tiny-agents/computer-profiles/bot-1'\''
+[ -f "$PROFILE/.desktop-env" ] || { echo "The desktop is not running" >&2; exit 97; }
+. "$PROFILE/.desktop-env"
+[ -S "/tmp/.X11-unix/X${DISPLAY#:}" ] || { echo "The desktop is not running" >&2; exit 97; }
+ID='\''org.gnome.Calc'\''
+F=""
+for D in "${XDG_DATA_HOME:-$HOME/.local/share}/applications" "$HOME/.local/share/applications" /usr/local/share/applications /usr/share/applications; do
+  [ -f "$D/$ID.desktop" ] && { F="$D/$ID.desktop"; break; }
+done
+[ -n "$F" ] || { echo "No application $ID" >&2; exit 95; }
+if command -v gtk-launch >/dev/null 2>&1; then
+  setsid -f gtk-launch "$ID" </dev/null >/dev/null 2>&1
+else
+  setsid -f gio launch "$F" </dev/null >/dev/null 2>&1
+fi'

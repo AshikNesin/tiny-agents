@@ -14,7 +14,7 @@
  */
 import { SandboxTimeoutError } from "./ssh/connection";
 import type { SandboxConnection } from "./ssh/sandbox-connection";
-import { shQuote } from "./browser-vm-setup";
+import { bashScript, exitSentinel, exitWith, failureDetail, shQuote } from "./shell";
 import {
   DesktopGoneError,
   WindowMismatchError,
@@ -29,14 +29,9 @@ import {
 } from "./computer-sessions";
 import {
   COMPUTER_PROFILES_DIR,
-  computerStackReadyCommand,
+  computerVmStack,
   DESKTOP_ENV_FILE,
-  DESKTOP_LAUNCH_BUDGET_MS,
-  installComputerStackCommand,
-  launchDesktopCommand,
-  parseDesktopLaunch,
-  teardownDesktopCommand,
-  wipeDesktopCommand,
+  launchedDesktop,
 } from "./computer-vm-setup";
 
 /** Exit code of a tool exec whose desktop is gone (no env file, no X server). */
@@ -45,6 +40,13 @@ export const DESKTOP_GONE_EXIT = 97;
 export const WINDOW_MISMATCH_EXIT = 96;
 /** Exit code of `openApp` for an unknown desktop entry. */
 const NO_SUCH_APP_EXIT = 95;
+
+/** What a tool exec's exit code can say besides success and failure. */
+const DESKTOP_EXITS = {
+  desktopGone: DESKTOP_GONE_EXIT,
+  windowMismatch: WINDOW_MISMATCH_EXIT,
+  noSuchApp: NO_SUCH_APP_EXIT,
+};
 
 const BUTTONS: Record<MouseButton, number> = { left: 1, middle: 2, right: 3 };
 const SCROLL_BUTTONS: Record<ScrollDirection, number> = { up: 4, down: 5, left: 6, right: 7 };
@@ -62,12 +64,12 @@ export function desktopProfileDir(profile: string): string {
 export function desktopCommand(profileDir: string, body: string): string {
   const script = [
     `PROFILE=${shQuote(profileDir)}`,
-    `[ -f "$PROFILE/${DESKTOP_ENV_FILE}" ] || { echo "The desktop is not running" >&2; exit ${DESKTOP_GONE_EXIT}; }`,
+    `[ -f "$PROFILE/${DESKTOP_ENV_FILE}" ] || ${exitWith(DESKTOP_GONE_EXIT, "The desktop is not running")}`,
     `. "$PROFILE/${DESKTOP_ENV_FILE}"`,
-    `[ -S "/tmp/.X11-unix/X\${DISPLAY#:}" ] || { echo "The desktop is not running" >&2; exit ${DESKTOP_GONE_EXIT}; }`,
+    `[ -S "/tmp/.X11-unix/X\${DISPLAY#:}" ] || ${exitWith(DESKTOP_GONE_EXIT, "The desktop is not running")}`,
     body,
-  ].join("\n");
-  return `bash -c ${shQuote(script)}`;
+  ];
+  return bashScript(script);
 }
 
 const int = (value: number, name: string) => {
@@ -200,7 +202,7 @@ export function openAppBody(id: string): string {
     'for D in "${XDG_DATA_HOME:-$HOME/.local/share}/applications" "$HOME/.local/share/applications" /usr/local/share/applications /usr/share/applications; do',
     '  [ -f "$D/$ID.desktop" ] && { F="$D/$ID.desktop"; break; }',
     "done",
-    `[ -n "$F" ] || { echo "No application $ID" >&2; exit ${NO_SUCH_APP_EXIT}; }`,
+    `[ -n "$F" ] || ${exitWith(NO_SUCH_APP_EXIT, "No application $ID")}`,
     "if command -v gtk-launch >/dev/null 2>&1; then",
     '  setsid -f gtk-launch "$ID" </dev/null >/dev/null 2>&1',
     "else",
@@ -227,7 +229,7 @@ export function typeSecretBody(binding: WindowBinding): string {
     `WANT_CLASS=${shQuote(binding.windowClass.toLowerCase())}`,
     `WANT_TITLE=${shQuote((binding.title ?? "").toLowerCase())}`,
     'WID="$(xdotool getactivewindow 2>/dev/null || true)"',
-    `[ -n "$WID" ] || { echo "no window" >&2; exit ${WINDOW_MISMATCH_EXIT}; }`,
+    `[ -n "$WID" ] || ${exitWith(WINDOW_MISMATCH_EXIT, "no window")}`,
     'HEX="$(printf "0x%08x" "$WID")"',
     `CLASS="$(wmctrl -l -x | awk -v id="$HEX" '$1 == id { print $3; exit }')"`,
     'TITLE="$(xdotool getwindowname "$WID" 2>/dev/null || true)"',
@@ -236,7 +238,7 @@ export function typeSecretBody(binding: WindowBinding): string {
     "MATCH=0",
     'case ".$LC_CLASS." in *".$WANT_CLASS."*) MATCH=1 ;; esac',
     'if [ "$MATCH" = 1 ] && [ -n "$WANT_TITLE" ]; then case "$LC_TITLE" in *"$WANT_TITLE"*) ;; *) MATCH=0 ;; esac; fi',
-    `[ "$MATCH" = 1 ] || { echo "$CLASS — $TITLE" >&2; exit ${WINDOW_MISMATCH_EXIT}; }`,
+    `[ "$MATCH" = 1 ] || ${exitWith(WINDOW_MISMATCH_EXIT, "$CLASS — $TITLE")}`,
     typeBody(),
   ].join("\n");
 }
@@ -300,9 +302,6 @@ interface ExecResult {
   code: number;
 }
 
-/** First-run install budget: apt update + XFCE + the X11 tools. */
-const INSTALL_TIMEOUT_MS = 15 * 60_000;
-const LAUNCH_TIMEOUT_MS = DESKTOP_LAUNCH_BUDGET_MS + 20_000;
 const TOOL_TIMEOUT_MS = 30_000;
 const MAX_OUTPUT_BYTES = 12 * 1024 * 1024;
 
@@ -338,47 +337,31 @@ export function createX11ComputerTransport(
   const ok = async (command: string, what: string, opts?: Parameters<typeof run>[1]) => {
     const result = await run(command, opts);
     if (result.code === 0) return result.stdout;
-    const detail = (result.stderr || result.stdout.toString("utf8")).trim().slice(-600);
+    const detail = failureDetail(result, 600);
     throw new Error(
       `Could not ${what} on the VM (exit ${result.code})${detail ? `: ${detail}` : ""}`,
     );
   };
+  const stack = computerVmStack(
+    async (command, timeoutMs, label) => (await ok(command, label, { timeoutMs })).toString("utf8"),
+    extra,
+  );
 
   return {
     async open(profile, open) {
       const dir = desktopProfileDir(profile);
-      const ready = (await ok(computerStackReadyCommand(extra), "check the desktop stack"))
-        .toString("utf8")
-        .trim();
-      if (ready !== "ready") {
-        open.onPhase?.("installing");
-        await ok(installComputerStackCommand(extra), "install the desktop stack", {
-          timeoutMs: INSTALL_TIMEOUT_MS,
-        });
-      }
+      await stack.ensureInstalled(() => open.onPhase?.("installing"));
       open.onPhase?.("starting");
-      let launched;
-      try {
-        launched = parseDesktopLaunch(
-          (
-            await ok(
-              launchDesktopCommand({
-                profileDir: dir,
-                width: open.width,
-                height: open.height,
-                browserProfileDir: options.browserProfilesDir
-                  ? `${options.browserProfilesDir.replace(/\/$/, "")}/${profile}`
-                  : undefined,
-              }),
-              "start the desktop",
-              { timeoutMs: LAUNCH_TIMEOUT_MS },
-            )
-          ).toString("utf8"),
-        );
-      } catch (error) {
-        await run(teardownDesktopCommand(dir)).catch(() => {});
-        throw error;
-      }
+      const launched = launchedDesktop(
+        await stack.launch({
+          profileDir: dir,
+          width: open.width,
+          height: open.height,
+          browserProfileDir: options.browserProfilesDir
+            ? `${options.browserProfilesDir.replace(/\/$/, "")}/${profile}`
+            : undefined,
+        }),
+      );
 
       let closed = false;
       const listeners: (() => void)[] = [];
@@ -388,23 +371,27 @@ export function createX11ComputerTransport(
         for (const listener of listeners.splice(0)) listener();
       };
 
-      /** One tool exec against this desktop. */
-      const tool = async (body: string, what: string, stdin?: string): Promise<ExecResult> => {
+      /**
+       * One tool exec against this desktop. A window mismatch or a missing
+       * app comes back as its `exit`, for the one tool that expects it.
+       */
+      const tool = async (
+        body: string,
+        what: string,
+        stdin?: string,
+      ): Promise<ExecResult & { exit: "ok" | "windowMismatch" | "noSuchApp" }> => {
         if (closed) throw new DesktopGoneError();
         const result = await run(desktopCommand(dir, body), { stdin });
-        if (result.code === DESKTOP_GONE_EXIT) {
+        const exit = exitSentinel(result.code, DESKTOP_EXITS);
+        if (exit === "desktopGone") {
           gone();
           throw new DesktopGoneError();
         }
-        if (
-          result.code !== 0 &&
-          result.code !== WINDOW_MISMATCH_EXIT &&
-          result.code !== NO_SUCH_APP_EXIT
-        ) {
+        if (exit === "failed") {
           const detail = result.stderr.trim().slice(-400);
           throw new Error(`Could not ${what}${detail ? `: ${detail}` : ""}`);
         }
-        return result;
+        return { ...result, exit };
       };
       const text = async (body: string, what: string) =>
         (await tool(body, what)).stdout.toString("utf8");
@@ -455,7 +442,7 @@ export function createX11ComputerTransport(
         },
         async openApp(id) {
           const result = await tool(openAppBody(id), "open the application");
-          if (result.code === NO_SUCH_APP_EXIT) {
+          if (result.exit === "noSuchApp") {
             throw new Error(`No application "${id}". Use computer_list_apps for the ids.`);
           }
         },
@@ -467,7 +454,7 @@ export function createX11ComputerTransport(
         },
         async typeSecret(value, binding) {
           const result = await tool(typeSecretBody(binding), "type", value);
-          if (result.code === WINDOW_MISMATCH_EXIT) {
+          if (result.exit === "windowMismatch") {
             throw new WindowMismatchError(result.stderr.trim().slice(0, 200));
           }
         },
@@ -478,13 +465,13 @@ export function createX11ComputerTransport(
         async close() {
           closed = true;
           listeners.length = 0;
-          await run(teardownDesktopCommand(dir)).catch(() => {});
+          await stack.stop(dir).catch(() => {});
         },
       };
       return desktop;
     },
     async wipe(profile) {
-      await ok(wipeDesktopCommand(desktopProfileDir(profile)), "reset the computer");
+      await stack.wipe(desktopProfileDir(profile));
     },
   };
 }

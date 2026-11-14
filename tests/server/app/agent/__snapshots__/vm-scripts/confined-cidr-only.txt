@@ -1,0 +1,18 @@
+bash -c 'command -v systemd-run >/dev/null 2>&1 || { echo "Confined commands need systemd on the sandbox VM." >&2; exit 97; }
+sudo -n true 2>/dev/null || { echo "Confined commands need passwordless sudo on the sandbox VM." >&2; exit 97; }
+TA_HOSTS="$(mktemp)"
+printf '\''127.0.0.1 localhost\n::1 localhost\n'\'' > "$TA_HOSTS"
+TA_ALLOW='\''10.0.0.0/8'\''
+chmod 644 "$TA_HOSTS"
+sudo -n systemd-run --quiet --wait --pipe --collect \
+  --uid="$(id -u)" --gid="$(id -g)" --working-directory="$HOME" \
+  -E HOME="$HOME" -E USER="$(id -un)" -E PATH="$PATH" -E LANG=C.UTF-8 \
+  -p NoNewPrivileges=yes -p PrivateDevices=yes -p IPAddressDeny=any \
+  ${TA_ALLOW:+-p "IPAddressAllow=$TA_ALLOW"} \
+  -p "RestrictAddressFamilies=AF_INET AF_INET6" \
+  -p "BindReadOnlyPaths=$TA_HOSTS:/etc/hosts" \
+  -p RuntimeMaxSec=1 \
+  -- sh -c '\''npm ci'\''
+TA_CODE=$?
+rm -f "$TA_HOSTS"
+exit "$TA_CODE"'

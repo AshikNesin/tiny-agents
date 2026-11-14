@@ -1,0 +1,5 @@
+bash -c 'if [ -f "$HOME/.tiny-agents/browser-stack-v1" ] && command -v Xtigervnc >/dev/null 2>&1 && command -v google-chrome-stable >/dev/null 2>&1; then
+  echo ready
+else
+  echo missing
+fi'

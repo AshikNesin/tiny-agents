@@ -1,0 +1,14 @@
+bash -c 'set -e
+if [ -d /opt/tiny-agents/claude-worker ] && [ -w /opt/tiny-agents/claude-worker ]; then DIR=/opt/tiny-agents/claude-worker; else DIR="$HOME/.tiny-agents/claude-worker"; fi
+NODE=""
+if [ -x "$DIR/node/bin/node" ]; then NODE="$DIR/node/bin/node";
+elif command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then
+  M="$(node -p '\''process.versions.node.split(".")[0]'\'' 2>/dev/null || echo 0)"
+  if [ "$M" -ge 20 ] 2>/dev/null; then NODE="$(command -v node)"; fi
+fi
+CLAUDE="$DIR/node_modules/.bin/claude"
+mkdir -p "$DIR"
+cat > "$DIR/worker.mjs.tmp"
+mv "$DIR/worker.mjs.tmp" "$DIR/worker.mjs"
+printf '\''%s\n'\'' '\''abc'\''\'\'''\''123'\'' > "$DIR/worker.sha"
+echo uploaded'

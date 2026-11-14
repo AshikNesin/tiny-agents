@@ -1,0 +1,192 @@
+bash -c 'set -e
+PROFILE='\''.tiny-agents/computer-profiles/it'\''\'\'''\''s'\''
+mkdir -p "$PROFILE" "$HOME/.tiny-agents"
+PROFILE="$(cd "$PROFILE" && pwd)"
+BROWSER_PROFILE='\''profiles/it'\''\'\'''\''s a; touch pwned #'\''
+mkdir -p "$BROWSER_PROFILE" "$PROFILE/bin" "$PROFILE/data/applications"
+BROWSER_PROFILE="$(cd "$BROWSER_PROFILE" && pwd)"
+printf '\''%s\n'\'' "$BROWSER_PROFILE" > "$PROFILE/browser-profile"
+cat > "$PROFILE/bin/google-chrome-stable" <<'\''TA_CHROME_EOF'\''
+#!/bin/sh
+HERE="$(cd "$(dirname "$0")/.." && pwd)"
+B="$(cat "$HERE/browser-profile")"
+mkdir -p "$B"
+if [ -s "$B/.stack-pids" ]; then
+  PIDS="$(cat "$B/.stack-pids")"
+  rm -f "$B/.stack-pids"
+  kill $PIDS 2>/dev/null || true
+  for _ in $(seq 50); do
+    ALIVE=""
+    for P in $PIDS; do kill -0 "$P" 2>/dev/null && ALIVE=1; done
+    [ -z "$ALIVE" ] && break
+    sleep 0.2
+  done
+fi
+for C in /usr/bin/google-chrome-stable /usr/bin/google-chrome /usr/bin/chromium; do
+  [ -x "$C" ] && exec "$C" --user-data-dir="$B" --no-first-run --no-default-browser-check --password-store=basic "$@"
+done
+echo "Chrome is not installed on the VM" >&2
+exit 1
+TA_CHROME_EOF
+chmod 755 "$PROFILE/bin/google-chrome-stable"
+for N in google-chrome chromium chromium-browser; do ln -sf google-chrome-stable "$PROFILE/bin/$N"; done
+for F in google-chrome.desktop chromium.desktop chromium-browser.desktop; do
+  if [ -f "/usr/share/applications/$F" ]; then
+    sed -E "s#^(Exec|TryExec)=[^ ]+#\1=$PROFILE/bin/google-chrome-stable#" "/usr/share/applications/$F" > "$PROFILE/data/applications/$F"
+  fi
+done
+exec 8>"$HOME/.tiny-agents/browser-launch.lock"
+flock -w 25 8 || { echo "Gave up after 25s waiting for another browser or desktop to finish starting on the VM" >&2; exit 1; }
+if [ -s "$PROFILE/.desktop" ] && [ -s "$PROFILE/.desktop-env" ]; then
+  OLD_DISP="$(sed -n '\''s/.*display=\([0-9]*\).*/\1/p'\'' "$PROFILE/.desktop")"
+  OLD_VNC="$(sed -n '\''s/.*vnc=\([0-9]*\).*/\1/p'\'' "$PROFILE/.desktop")"
+  OLD_SIZE="$(sed -n '\''s/.*size=\([0-9x]*\).*/\1/p'\'' "$PROFILE/.desktop")"
+  OLD_X="$(head -n 1 "$PROFILE/.desktop-pids" 2>/dev/null || true)"
+  if [ -n "$OLD_DISP" ] && [ -n "$OLD_VNC" ] && [ "$OLD_SIZE" = "1024x767" ] && [ -n "$OLD_X" ] && kill -0 "$OLD_X" 2>/dev/null && [ -S "/tmp/.X11-unix/X$OLD_DISP" ] && DISPLAY=":$OLD_DISP" wmctrl -m >/dev/null 2>&1; then
+    echo "ok display=$OLD_DISP vnc=$OLD_VNC reused=1"
+    exit 0
+  fi
+fi
+if [ -s "$PROFILE/.desktop-pids" ]; then
+  for P in $(cat "$PROFILE/.desktop-pids"); do kill -- "-$P" 2>/dev/null || true; kill "$P" 2>/dev/null || true; done
+fi
+rm -f "$PROFILE/.desktop-pids" "$PROFILE/.desktop" "$PROFILE/.desktop-env"
+sleep 0.3
+VNC="$(python3 -c '\''import socket
+s = socket.socket()
+s.bind(("127.0.0.1", 0))
+print(s.getsockname()[1])
+s.close()'\'')"
+DISP=""
+for n in $(seq 90 189); do
+  [ -e "/tmp/.X11-unix/X$n" ] && continue
+  [ -e "/tmp/.X$n-lock" ] && continue
+  DISP="$n"; break
+done
+[ -n "$DISP" ] || { echo "No free X display on the VM" >&2; exit 1; }
+CONF="$PROFILE/config"
+mkdir -p "$CONF/xfce4/xfconf/xfce-perchannel-xml" "$CONF/autostart"
+[ -f "$CONF/xfce4/xfconf/xfce-perchannel-xml"/xfce4-panel.xml ] || cat > "$CONF/xfce4/xfconf/xfce-perchannel-xml"/xfce4-panel.xml <<'\''TA_XFCE_EOF'\''
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xfce4-panel" version="1.0">
+  <property name="configver" type="int" value="2"/>
+  <property name="panels" type="array">
+    <value type="int" value="1"/>
+    <property name="dark-mode" type="bool" value="false"/>
+    <property name="panel-1" type="empty">
+      <property name="position" type="string" value="p=8;x=0;y=0"/>
+      <property name="length" type="uint" value="100"/>
+      <property name="position-locked" type="bool" value="true"/>
+      <property name="size" type="uint" value="30"/>
+      <property name="plugin-ids" type="array">
+        <value type="int" value="1"/>
+        <value type="int" value="2"/>
+        <value type="int" value="3"/>
+        <value type="int" value="4"/>
+      </property>
+    </property>
+  </property>
+  <property name="plugins" type="empty">
+    <property name="plugin-1" type="string" value="applicationsmenu"/>
+    <property name="plugin-2" type="string" value="tasklist"/>
+    <property name="plugin-3" type="string" value="separator">
+      <property name="expand" type="bool" value="true"/>
+      <property name="style" type="uint" value="0"/>
+    </property>
+    <property name="plugin-4" type="string" value="clock"/>
+  </property>
+</channel>
+TA_XFCE_EOF
+[ -f "$CONF/xfce4/xfconf/xfce-perchannel-xml"/xfwm4.xml ] || cat > "$CONF/xfce4/xfconf/xfce-perchannel-xml"/xfwm4.xml <<'\''TA_XFCE_EOF'\''
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xfwm4" version="1.0">
+  <property name="general" type="empty">
+    <property name="use_compositing" type="bool" value="false"/>
+    <property name="workspace_count" type="int" value="1"/>
+  </property>
+</channel>
+TA_XFCE_EOF
+[ -f "$CONF/xfce4/xfconf/xfce-perchannel-xml"/xfce4-session.xml ] || cat > "$CONF/xfce4/xfconf/xfce-perchannel-xml"/xfce4-session.xml <<'\''TA_XFCE_EOF'\''
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xfce4-session" version="1.0">
+  <property name="general" type="empty">
+    <property name="SaveOnExit" type="bool" value="false"/>
+    <property name="PromptOnLogout" type="bool" value="false"/>
+  </property>
+  <property name="startup" type="empty">
+    <property name="screensaver" type="empty">
+      <property name="enabled" type="bool" value="false"/>
+    </property>
+  </property>
+</channel>
+TA_XFCE_EOF
+[ -f "$CONF/xfce4/xfconf/xfce-perchannel-xml"/xfce4-screensaver.xml ] || cat > "$CONF/xfce4/xfconf/xfce-perchannel-xml"/xfce4-screensaver.xml <<'\''TA_XFCE_EOF'\''
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xfce4-screensaver" version="1.0">
+  <property name="saver" type="empty">
+    <property name="enabled" type="bool" value="false"/>
+    <property name="mode" type="int" value="0"/>
+  </property>
+  <property name="lock" type="empty">
+    <property name="enabled" type="bool" value="false"/>
+  </property>
+</channel>
+TA_XFCE_EOF
+[ -f "$CONF/xfce4/xfconf/xfce-perchannel-xml"/xfce4-power-manager.xml ] || cat > "$CONF/xfce4/xfconf/xfce-perchannel-xml"/xfce4-power-manager.xml <<'\''TA_XFCE_EOF'\''
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xfce4-power-manager" version="1.0">
+  <property name="xfce4-power-manager" type="empty">
+    <property name="dpms-enabled" type="bool" value="false"/>
+    <property name="blank-on-ac" type="int" value="0"/>
+    <property name="lock-screen-suspend-hibernate" type="bool" value="false"/>
+  </property>
+</channel>
+TA_XFCE_EOF
+[ -f "$CONF/autostart/xfce4-power-manager.desktop" ] || printf '\''[Desktop Entry]\nHidden=true\n'\'' > "$CONF/autostart/xfce4-power-manager.desktop"
+[ -f "$CONF/autostart/xscreensaver.desktop" ] || printf '\''[Desktop Entry]\nHidden=true\n'\'' > "$CONF/autostart/xscreensaver.desktop"
+[ -f "$CONF/autostart/xfce4-screensaver.desktop" ] || printf '\''[Desktop Entry]\nHidden=true\n'\'' > "$CONF/autostart/xfce4-screensaver.desktop"
+[ -f "$CONF/autostart/light-locker.desktop" ] || printf '\''[Desktop Entry]\nHidden=true\n'\'' > "$CONF/autostart/light-locker.desktop"
+mkdir -p "$PROFILE/cache" "$PROFILE/data"
+XLOG="$PROFILE/.xvnc.log"
+SLOG="$PROFILE/.session.log"
+stop_started() { for P in $(cat "$PROFILE/.desktop-pids" 2>/dev/null); do kill -- "-$P" 2>/dev/null || true; kill "$P" 2>/dev/null || true; done; rm -f "$PROFILE/.desktop-pids"; }
+setsid nohup Xtigervnc ":$DISP" -geometry 1024x767 -depth 24 -rfbport "$VNC" -localhost -nolisten tcp -SecurityTypes None -AlwaysShared -desktop tiny-agents-computer </dev/null >"$XLOG" 2>&1 8>&- &
+echo "$!" > "$PROFILE/.desktop-pids"
+XWAIT=$((SECONDS + 10))
+while [ ! -S "/tmp/.X11-unix/X$DISP" ] && [ "$SECONDS" -lt "$XWAIT" ]; do sleep 0.1; done
+if [ ! -S "/tmp/.X11-unix/X$DISP" ]; then
+  echo "The display server did not start on the VM within 10s" >&2
+  tail -n 20 "$XLOG" >&2 || true
+  stop_started
+  exit 1
+fi
+DISPLAY=":$DISP" setsid nohup vncconfig -nowin </dev/null >"$PROFILE/.vncconfig.log" 2>&1 8>&- &
+echo "$!" >> "$PROFILE/.desktop-pids"
+BUS="$(DISPLAY=":$DISP" dbus-launch --sh-syntax 8>&-)"
+eval "$BUS"
+[ -n "${DBUS_SESSION_BUS_PID:-}" ] && echo "$DBUS_SESSION_BUS_PID" >> "$PROFILE/.desktop-pids"
+cat > "$PROFILE/.desktop-env" <<TA_ENV_EOF
+export DISPLAY=":$DISP"
+export XDG_CONFIG_HOME="$CONF"
+export XDG_CACHE_HOME="$PROFILE/cache"
+export XDG_DATA_HOME="$PROFILE/data"
+export PATH="$PROFILE/bin:\$PATH"
+export DBUS_SESSION_BUS_ADDRESS='\''${DBUS_SESSION_BUS_ADDRESS:-}'\''
+TA_ENV_EOF
+( . "$PROFILE/.desktop-env" && exec setsid nohup xfce4-session </dev/null >"$SLOG" 2>&1 8>&- ) &
+echo "$!" >> "$PROFILE/.desktop-pids"
+UP=0
+WMWAIT=$((SECONDS + 30))
+while [ "$SECONDS" -lt "$WMWAIT" ]; do
+  DISPLAY=":$DISP" wmctrl -m >/dev/null 2>&1 && { UP=1; break; }
+  sleep 0.2
+done
+if [ "$UP" != 1 ]; then
+  echo "The desktop did not start on the VM within 30s" >&2
+  tail -n 20 "$XLOG" "$SLOG" >&2 || true
+  stop_started
+  rm -f "$PROFILE/.desktop-env"
+  exit 1
+fi
+echo "display=$DISP vnc=$VNC size=1024x767" > "$PROFILE/.desktop"
+echo "ok display=$DISP vnc=$VNC"'

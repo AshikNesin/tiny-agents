@@ -1,0 +1,8 @@
+bash -c 'PROFILE='\''profiles/it'\''\'\'''\''s a; touch pwned #'\''
+[ -f "$PROFILE/.desktop-env" ] || { echo "The desktop is not running" >&2; exit 97; }
+. "$PROFILE/.desktop-env"
+[ -S "/tmp/.X11-unix/X${DISPLAY#:}" ] || { echo "The desktop is not running" >&2; exit 97; }
+F="$(mktemp /tmp/ta-shot-XXXXXX.jpg)"
+scrot -o -p -q 80 "$F" >/dev/null 2>&1 || { rm -f "$F"; echo "scrot failed" >&2; exit 1; }
+cat "$F"
+rm -f "$F"'

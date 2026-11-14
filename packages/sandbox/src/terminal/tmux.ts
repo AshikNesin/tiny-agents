@@ -12,6 +12,8 @@
  * *server* itself starts UTF-8. Verified live against tiny-agents-vm
  * (tmux 3.4, locale C.utf8 present).
  */
+import { EXIT_COMMAND_NOT_FOUND, shQuote } from "../shell";
+
 const LC_ALL = "LC_ALL=C.UTF-8";
 
 /** Dedicated tmux socket: the owner's own tmux server is never touched. */
@@ -124,7 +126,7 @@ export function newSessionCommand(name: SessionName, cols: number, rows: number)
  * the shell stays when the command ends. `-l` sends the text literally.
  */
 export function typeLineCommand(name: SessionName, line: string): string {
-  const literal = `'${line.replaceAll("'", `'\\''`)}'`;
+  const literal = shQuote(line);
   return tmux(`send-keys -t ${name} -l ${literal}`) + ` \\; send-keys -t ${name} Enter`;
 }
 
@@ -196,7 +198,8 @@ export function parseSessionList(
   stderr: string,
   exitCode: number,
 ): ParsedSessionList {
-  if (exitCode === 127 || NOT_FOUND.test(stderr)) return { kind: "tmux-missing" };
+  if (exitCode === EXIT_COMMAND_NOT_FOUND || NOT_FOUND.test(stderr))
+    return { kind: "tmux-missing" };
   if (exitCode !== 0) {
     if (NO_SERVER.test(stderr)) return { kind: "ok", sessions: [] };
     return { kind: "error", message: stderr.trim() || `tmux ls exited ${exitCode}` };

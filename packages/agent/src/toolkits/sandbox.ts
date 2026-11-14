@@ -27,15 +27,16 @@ import { VAULT_RULE, VaultError, type VaultBroker, type VaultItemMeta } from "..
 import {
   checkEnvName,
   commandHosts,
-  CONFINE_UNAVAILABLE,
+  CONFINED_EXITS,
   confinedCommand,
   MAX_COMMAND_SECRETS,
   parseEgressList,
-  SECRETS_MISSING,
   type EgressEntry,
 } from "./sandbox-egress";
 import {
+  exitSentinel,
   SandboxTimeoutError,
+  shQuote,
   type SandboxConnection,
   type SandboxExecResult,
 } from "@tiny-agents/sandbox";
@@ -266,7 +267,7 @@ export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capab
       // The whole command runs as one sh -c argument, so chains (&&, ;) stay
       // inside the detached session and the redirect covers every step.
       const detach = (command: string) =>
-        `setsid nohup sh -c ${shellQuote(command)} > /tmp/ta-detached-$$.log 2>&1 < /dev/null & printf '%s' "$!"`;
+        `setsid nohup sh -c ${shQuote(command)} > /tmp/ta-detached-$$.log 2>&1 < /dev/null & printf '%s' "$!"`;
       const shaped = args.detached ? detach(args.command) : args.command;
       const run = (allow: EgressEntry[] | undefined, secretEnv?: string[], stdin?: string) =>
         exec(allow ? confinedCommand({ command: shaped, allow, secretEnv, timeoutSecs }) : shaped, {
@@ -296,15 +297,18 @@ export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capab
         } else {
           result = await run(egress.entries.length > 0 ? egress.entries : undefined);
         }
-        if (result.exitCode === CONFINE_UNAVAILABLE) {
+        // Read whether or not the command was confined: an unconfined command
+        // that exits 97 reads as a VM that cannot confine.
+        const exit = exitSentinel(result.exitCode, CONFINED_EXITS);
+        if (exit === "confineUnavailable") {
           return fail(
             `The sandbox VM can't confine commands (it needs systemd and passwordless sudo):\n${result.output}`,
           );
         }
-        if (result.exitCode === SECRETS_MISSING && args.secrets?.length) {
+        if (exit === "secretsMissing" && args.secrets?.length) {
           return fail("The secrets did not reach the command. Nothing ran.");
         }
-        if (result.exitCode !== 0) {
+        if (exit !== "ok") {
           return {
             output: [{ type: "text", text: `exit ${result.exitCode}\n${result.output}` }],
             isError: true,
@@ -391,11 +395,6 @@ export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capab
           ? undefined
           : "Set SANDBOX_HOST to enable the sandbox.",
   });
-}
-
-/** POSIX single-quoting for embedding one argument in a remote shell line. */
-function shellQuote(value: string): string {
-  return `'` + value.replace(/'/g, `'\\''`) + `'`;
 }
 
 /** Drop a trailing partial UTF-8 rune so a capped slice still validates as text. */

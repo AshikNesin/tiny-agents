@@ -18,7 +18,7 @@
  * here reads it.
  */
 import { FORBIDDEN_BACKEND_FLAGS, FORBIDDEN_OVERRIDE_KEYS } from "@tiny-agents/claude-worker";
-import { shQuote } from "@tiny-agents/sandbox";
+import { bashScript, shQuote } from "@tiny-agents/sandbox";
 
 /** Bump when the install steps or the pins change so existing sandboxes re-run them. */
 export const CLAUDE_WORKER_STACK_VERSION = "v1";
@@ -42,10 +42,6 @@ const BAKED_WORKER_DIR = "/opt/tiny-agents/claude-worker";
 
 const MARKER = `.stack-${CLAUDE_WORKER_STACK_VERSION}`;
 const START_WAIT_SECONDS = 20;
-
-function bash(script: string): string {
-  return `bash -c ${shQuote(script)}`;
-}
 
 /**
  * Shared prelude: picks `DIR`, `NODE` (empty when none is usable) and
@@ -87,7 +83,7 @@ export function workerPackageJson(): string {
  */
 export function installWorkerCommand(): string {
   const node = CLAUDE_WORKER_NODE_VERSION;
-  return bash(
+  return bashScript(
     [
       "set -e",
       ...PRELUDE,
@@ -123,7 +119,7 @@ export function installWorkerCommand(): string {
  * worker from an older app is noticed and restarted.
  */
 export function uploadWorkerCommand(sha: string): string {
-  return bash(
+  return bashScript(
     [
       "set -e",
       ...PRELUDE,
@@ -151,7 +147,7 @@ export function uploadWorkerCommand(sha: string): string {
  */
 export function ensureWorkerCommand(sha: string, port: number): string {
   const expected = shQuote(sha);
-  return bash(
+  return bashScript(
     [
       "set -e",
       ...PRELUDE,
@@ -213,7 +209,7 @@ export function parseEnsureOutput(output: string): EnsureResult {
  * Claude Code is not installed yet. Reads only what the CLI reports.
  */
 export function authStatusCommand(): string {
-  return bash(
+  return bashScript(
     [
       ...PRELUDE,
       '[ -x "$CLAUDE" ] || exit 0',
@@ -224,7 +220,7 @@ export function authStatusCommand(): string {
 
 /** Stop the worker (tests and the reset path). */
 export function stopWorkerCommand(): string {
-  return bash(
+  return bashScript(
     [
       ...PRELUDE,
       'PID="$(cat "$DIR/worker.pid" 2>/dev/null || true)"',
