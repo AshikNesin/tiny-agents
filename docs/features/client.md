@@ -139,6 +139,17 @@ wire-type rule in [`AGENTS.md`](../../AGENTS.md).
   can call `bindQueryClientToSession(client)` instead.
 - Feature hooks (e.g. `useTodos`) own the query and its key; mutations run
   through `useAction` (below), which invalidates the keys it is given.
+- tiny-agents' request/response pages (Tasks, Routines, Skills, Memory) read
+  through `apps/web/src/client/queries/`: one module per area owns its keys,
+  and `useResource(key, fetch, fallback)` (`queries/resource.ts`) returns
+  `{ data, loadError, refresh }`. It overrides the defaults so a page behaves
+  as it did before React Query: fetched on every mount with no cache from a
+  previous visit, no retry, no focus or reconnect refetch, offline failing at
+  once, and the load error kept while a retry runs. Writes are mutations with
+  no retry; the page awaits `refresh()` where its refetch belongs. The live
+  stores (the bot list, chat sessions, the code list) stay in Zustand. The
+  behavior each page keeps is the table in
+  [the rewrite design §4.5](../rewrite/README.md).
 
 ## Mutation feedback
 

@@ -23,7 +23,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@groot/ui/tabs";
 import { DataField, DataFields } from "@groot/ui/display";
 import { Streamdown } from "streamdown";
 import type { Skill, SkillPreview } from "../../../shared/api/skills";
-import { skillsApi } from "../../lib/skills-api";
+import { useSkillMutations } from "../../queries/skills";
 import { SkillFileList } from "./SkillFileList";
 import { errorMessage } from "../../lib/errors";
 
@@ -51,6 +51,7 @@ export function ImportSkillDialog({
   const [preview, setPreview] = useState<SkillPreview | null>(null);
   const [loading, setLoading] = useState(false);
   const [installing, setInstalling] = useState(false);
+  const mutations = useSkillMutations();
 
   useEffect(() => {
     if (open) {
@@ -68,8 +69,8 @@ export function ImportSkillDialog({
     try {
       const parsed =
         mode === "paste"
-          ? await skillsApi.preview({ source: "paste", content })
-          : await skillsApi.preview({ source: "github", url: url.trim() });
+          ? await mutations.preview.mutateAsync({ source: "paste", content })
+          : await mutations.preview.mutateAsync({ source: "github", url: url.trim() });
       setPreview(parsed);
     } catch (error) {
       toast.error(errorMessage(error, "Failed to preview skill"));
@@ -82,7 +83,7 @@ export function ImportSkillDialog({
     if (!preview) return;
     setInstalling(true);
     try {
-      const skill = await skillsApi.create({
+      const skill = await mutations.create.mutateAsync({
         name: preview.name,
         description: preview.description,
         body: preview.body,

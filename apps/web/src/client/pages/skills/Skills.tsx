@@ -3,7 +3,7 @@
  * /skills/:id. Both routes render this component (see App.tsx), so the id param
  * picks the view.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Plus, Search, Sparkles } from "lucide-react";
 import { Button } from "@groot/ui/button";
@@ -15,11 +15,10 @@ import { cn } from "@groot/ui/lib/utils";
 import { PageLayout } from "@groot/shell/components/layout/PageLayout";
 import { formatRelativeTime } from "@groot/shell/lib/date.utils";
 import type { Skill } from "../../../shared/api/skills";
-import { skillsApi } from "../../lib/skills-api";
+import { useSkills } from "../../queries/skills";
 import { CreateSkillDialog } from "../../components/skills/CreateSkillDialog";
 import { ImportSkillDialog } from "../../components/skills/ImportSkillDialog";
 import { SkillDetail } from "./SkillDetail";
-import { errorMessage } from "../../lib/errors";
 
 export function SkillsPage() {
   const { id } = useParams();
@@ -28,24 +27,10 @@ export function SkillsPage() {
 
 function SkillsList() {
   const navigate = useNavigate();
-  const [skills, setSkills] = useState<Skill[] | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const { data: skills, loadError, refresh } = useSkills();
   const [query, setQuery] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
-
-  const refresh = useCallback(async () => {
-    try {
-      setSkills(await skillsApi.list());
-      setLoadError(null);
-    } catch (error) {
-      setLoadError(errorMessage(error, "Failed to load skills"));
-    }
-  }, []);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
 
   const filtered = useMemo(() => {
     if (!skills) return null;

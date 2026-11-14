@@ -15,7 +15,7 @@ import { Input } from "@groot/ui/input";
 import { Textarea } from "@groot/ui/textarea";
 import { Label } from "@groot/ui/label";
 import type { Skill } from "../../../shared/api/skills";
-import { skillsApi } from "../../lib/skills-api";
+import { useSkillMutations } from "../../queries/skills";
 import { errorMessage } from "../../lib/errors";
 
 const NAME_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
@@ -42,6 +42,7 @@ export function CreateSkillDialog({
 }) {
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const { create: createSkill } = useSkillMutations();
   /** Fields the user has interacted with — errors show only after that. */
   const [touched, setTouched] = useState({ name: false, description: false });
 
@@ -69,7 +70,7 @@ export function CreateSkillDialog({
     }
     setSaving(true);
     try {
-      const skill = await skillsApi.create({
+      const skill = await createSkill.mutateAsync({
         name,
         description: form.description.trim(),
         body: form.body,

@@ -12,6 +12,7 @@ import { MemoryRouter } from "react-router-dom";
 import { MemoryPage } from "@/pages/memory/Memory";
 import { GrootUIProvider } from "@groot/ui";
 import type { MemoryRecord } from "../../../apps/web/src/shared/api/memories";
+import { AppQueryProvider } from "../query-provider";
 
 const listMock = vi.fn();
 const getMock = vi.fn();
@@ -73,11 +74,13 @@ function loadPage(rows: Record<string, MemoryRecord[]> = {}) {
 function mount() {
   return render(
     <React.StrictMode>
-      <MemoryRouter>
-        <GrootUIProvider>
-          <MemoryPage />
-        </GrootUIProvider>
-      </MemoryRouter>
+      <AppQueryProvider>
+        <MemoryRouter>
+          <GrootUIProvider>
+            <MemoryPage />
+          </GrootUIProvider>
+        </MemoryRouter>
+      </AppQueryProvider>
     </React.StrictMode>,
   );
 }

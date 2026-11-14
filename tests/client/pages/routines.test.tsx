@@ -11,6 +11,7 @@ import { MemoryRouter } from "react-router-dom";
 import { Routines } from "@/pages/routines/Routines";
 import { GrootUIProvider } from "@groot/ui";
 import type { Routine, RoutineRun } from "../../../apps/web/src/shared/api/routines";
+import { AppQueryProvider } from "../query-provider";
 
 vi.mock("@/lib/bots-api", () => ({
   botsApi: {
@@ -88,11 +89,13 @@ function loadPage(routines: Routine[] = [routine], runs: RoutineRun[] = [run]) {
 function mount() {
   return render(
     <React.StrictMode>
-      <MemoryRouter>
-        <GrootUIProvider>
-          <Routines />
-        </GrootUIProvider>
-      </MemoryRouter>
+      <AppQueryProvider>
+        <MemoryRouter>
+          <GrootUIProvider>
+            <Routines />
+          </GrootUIProvider>
+        </MemoryRouter>
+      </AppQueryProvider>
     </React.StrictMode>,
   );
 }

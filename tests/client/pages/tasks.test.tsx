@@ -11,6 +11,7 @@ import { MemoryRouter } from "react-router-dom";
 import { GrootUIProvider } from "@groot/ui";
 import { Tasks } from "@/pages/tasks/Tasks";
 import type { Task } from "../../../apps/web/src/shared/api/tasks";
+import { AppQueryProvider } from "../query-provider";
 
 const listMock = vi.fn();
 const createMock = vi.fn();
@@ -58,11 +59,13 @@ function task(overrides: Partial<Task>): Task {
 
 function mount() {
   return render(
-    <MemoryRouter>
-      <GrootUIProvider>
-        <Tasks />
-      </GrootUIProvider>
-    </MemoryRouter>,
+    <AppQueryProvider>
+      <MemoryRouter>
+        <GrootUIProvider>
+          <Tasks />
+        </GrootUIProvider>
+      </MemoryRouter>
+    </AppQueryProvider>,
   );
 }
 
