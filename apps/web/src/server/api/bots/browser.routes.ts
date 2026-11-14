@@ -95,7 +95,12 @@ router.post("/bots/:id/browser/vnc-ticket", async (c) => {
   await getBrowserSessions()
     .start(target)
     .catch(() => {});
-  const ticket = issueVncTicket({ userId: requireUser(c).userId, botId: id, target });
+  const ticket = issueVncTicket({
+    userId: requireUser(c).userId,
+    botId: id,
+    target,
+    viewOnly: c.get("viewer").guest,
+  });
   live.lastActivity = Date.now();
   return ok(c, {
     // Relative so the client keeps the page's scheme and host behind proxies.

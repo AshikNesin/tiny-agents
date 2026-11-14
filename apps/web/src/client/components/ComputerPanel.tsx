@@ -42,6 +42,7 @@ import {
   useLiveView,
   usePanelWidth,
 } from "../lib/live-view";
+import { useIsGuest } from "../store/people";
 import { VncView } from "./browser/VncView";
 
 const WIDTH_KEY = "tiny-agents:computer-panel-width";
@@ -57,6 +58,7 @@ export function ComputerPanel({
   /** The live view's Browser / Computer switch, in place of the title, when the chat has both. */
   tabs?: ReactNode;
 }) {
+  const guest = useIsGuest();
   const { width, startResize } = usePanelWidth(WIDTH_KEY, DEFAULT_WIDTH);
   const view = useLiveView<ComputerStatus, ComputerStatus>({
     kind: "computer",
@@ -153,6 +155,7 @@ export function ComputerPanel({
 
           <div className="flex shrink-0 items-center gap-1">
             {live &&
+              !guest &&
               (humanDrives ? (
                 <Button
                   size="sm"
@@ -181,7 +184,7 @@ export function ComputerPanel({
                   <span className={handoffLabel}>Take control</span>
                 </Button>
               ))}
-            {live && humanDrives && (
+            {live && humanDrives && !guest && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -222,7 +225,7 @@ export function ComputerPanel({
                 </Link>
               </Button>
             )}
-            {status?.configured && (
+            {status?.configured && !guest && (
               <Button
                 variant="ghost"
                 size="icon-sm"
@@ -271,7 +274,7 @@ export function ComputerPanel({
               ref={vncRef}
               botId={bot.id}
               kind="computer"
-              interactive={humanDrives}
+              interactive={humanDrives && !guest}
               onState={setVncState}
             />
           )}
@@ -322,9 +325,11 @@ export function ComputerPanel({
                 </span>
               }
               action={
-                <Button size="sm" onClick={() => void openComputer()} data-testid="computer-open">
-                  Try again
-                </Button>
+                guest ? undefined : (
+                  <Button size="sm" onClick={() => void openComputer()} data-testid="computer-open">
+                    Try again
+                  </Button>
+                )
               }
               className="h-full py-6"
             />
@@ -335,9 +340,11 @@ export function ComputerPanel({
               title="The computer is off."
               description={`It also starts when ${bot.name} first uses it.`}
               action={
-                <Button size="sm" onClick={() => void openComputer()} data-testid="computer-open">
-                  Open computer
-                </Button>
+                guest ? undefined : (
+                  <Button size="sm" onClick={() => void openComputer()} data-testid="computer-open">
+                    Open computer
+                  </Button>
+                )
               }
               className="h-full py-6"
             />

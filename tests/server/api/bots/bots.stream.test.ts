@@ -118,6 +118,15 @@ describe("followBotChat", () => {
     expect(isBotWatched(bot.id)).toBe(false);
   });
 
+  it("does not count a guest's follow as watched, so the owner still gets pushes (S2)", async () => {
+    const bot = await seedBot({ conversationId: "613" });
+    const stop = await followBotChat(bot, recorder().sink, createFakeRuntime(), {
+      watched: false,
+    });
+    expect(isBotWatched(bot.id)).toBe(false);
+    stop();
+  });
+
   it("holds a card or a YOLO switch that lands while starting until the first state is out", async () => {
     const bot = await seedBot({ conversationId: "604" });
     const read = deferred<boolean>();

@@ -38,12 +38,13 @@ export const GUEST_ACCESS: Record<string, GuestFeature> = {
       },
     ],
   },
+  // Watch only (S2): a shared bot's browser or desktop holds the owner's
+  // logins, so a guest may open the view but not start, resize or drive it,
+  // and the VNC bridge drops a guest viewer's input.
   liveViews: {
     api: [
-      {
-        methods: [...READ, "POST"],
-        bot: /^\/(browser|computer)(\/(start|vnc-ticket|resize|driver))?$/,
-      },
+      { methods: READ, bot: /^\/(browser|computer)$/ },
+      { methods: ["POST"], bot: /^\/(browser|computer)\/vnc-ticket$/ },
     ],
   },
   uploads: {

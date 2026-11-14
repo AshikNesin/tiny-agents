@@ -227,6 +227,35 @@ describe("VNC WebSocket bridge", () => {
     await vi.waitFor(() => expect(vm.destroyed).toBe(true));
   });
 
+  it("relays a guest's picture requests but never its input (S2)", async () => {
+    const vm = fakeVm();
+    vm.stream.push(Buffer.from("RFB 003.008\n"));
+    await openLive(async () => vm.stream);
+    await listen();
+
+    const ticket = issueVncTicket({ userId: 1, botId: BOT, target: TARGET, viewOnly: true });
+    const ws = connect(port, ticketPath(ticket));
+    sockets.push(ws);
+    expect(await nextMessage(ws)).toBe("RFB 003.008\n");
+
+    const key = Buffer.from([4, 1, 0, 0, 0, 0, 0, 0x61]);
+    const pointer = Buffer.from([5, 1, 0, 10, 0, 10]);
+    const update = Buffer.from([3, 1, 0, 0, 0, 0, 0, 100, 0, 100]);
+    ws.send(
+      Buffer.concat([Buffer.from("RFB 003.008\n"), Buffer.from([1, 1]), key, pointer, update]),
+    );
+    const expected = Buffer.concat([Buffer.from("RFB 003.008\n"), Buffer.from([1, 1]), update]);
+    await vi.waitFor(() => expect(vm.received()).toBe(expected.toString()));
+
+    // Something it cannot frame closes the viewer instead of reaching the desktop.
+    const closed = new Promise<number>((resolve) =>
+      ws.addEventListener("close", (e) => resolve(e.code), { once: true }),
+    );
+    ws.send(Buffer.from([99, 0, 0, 0]));
+    expect(await closed).toBe(1008);
+    expect(vm.received()).toBe(expected.toString());
+  });
+
   it("closes the viewer when the VM stream ends", async () => {
     const vm = fakeVm();
     vm.stream.push(Buffer.from("hi"));

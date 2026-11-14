@@ -91,3 +91,19 @@ describe("guest access table", () => {
     }
   });
 });
+
+describe("live views are watch-only for guests (S2)", () => {
+  it("admits the status and the viewer ticket, and nothing that starts, sizes or drives", () => {
+    for (const kind of ["browser", "computer"]) {
+      expect(matchGuestRoute("GET", `${BOT}/${kind}`)).toBeDefined();
+      expect(matchGuestRoute("POST", `${BOT}/${kind}/vnc-ticket`)).toBeDefined();
+      for (const verb of ["start", "resize", "driver"]) {
+        expect(
+          matchGuestRoute("POST", `${BOT}/${kind}/${verb}`),
+          `${kind}/${verb}`,
+        ).toBeUndefined();
+      }
+      expect(matchGuestRoute("DELETE", `${BOT}/${kind}/profile`)).toBeUndefined();
+    }
+  });
+});

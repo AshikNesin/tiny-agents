@@ -17,7 +17,10 @@ new bot (or press "New chat") before sharing it.
 ## What a guest can do
 
 - Chat with the bots shared with them, answer approval cards and Questions,
-  watch and drive the bot's browser and computer, attach files.
+  watch the bot's browser and computer, attach files. Watching only: a
+  guest can't take control, start, resize or reset them, and the VNC bridge
+  drops a guest viewer's keys, clicks and clipboard, because a shared
+  browser holds the owner's logins.
 - Use the whole **Code** page (every Shelley conversation).
 - Change their theme, password and passkeys.
 
@@ -42,8 +45,8 @@ it is listed.
   owner can approve it.
 - **Memory is off** while the bot is shared: nothing from the chat is captured,
   and memories are not injected.
-- Pushover pushes stay the owner's. A guest has their own unread marker per
-  shared bot.
+- Pushover pushes stay the owner's, and a guest having the chat open does not
+  hold them back. A guest has their own unread marker per shared bot.
 
 ## Data
 

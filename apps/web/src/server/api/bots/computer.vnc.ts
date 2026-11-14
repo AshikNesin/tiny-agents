@@ -22,6 +22,8 @@ interface BotTicket {
   botId: string;
   /** The bot's desktop profile. */
   profile: string;
+  /** A guest's ticket: watch only (S2). */
+  viewOnly?: boolean;
 }
 
 interface PageTicket {

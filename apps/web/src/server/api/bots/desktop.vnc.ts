@@ -10,13 +10,15 @@
  * bridge (../ws/upgrade.ts). Each kind caps its viewers per bot, pings, and
  * stops reading the VM while a slow viewer has 4 MB queued. An open viewer is
  * held as its ticket's live access (../people/live-access.ts): removing the
- * guest, or unsharing the bot, closes it with 1008.
+ * guest, or unsharing the bot, closes it with 1008. A view-only ticket (a
+ * guest's) relays only the viewer's picture requests, never its input (S2).
  */
 import type { IncomingMessage, Server } from "node:http";
 import type { Duplex } from "node:stream";
 import { WebSocketServer, type WebSocket } from "ws";
 import { logger } from "@groot/core/logger";
 import { holdLiveAccess, type LiveGrant } from "../people/live-access";
+import { createRfbViewOnlyFilter, RfbViewOnlyError } from "./rfb-view-only";
 import { isOriginAllowed, onUpgrade, rejectUpgrade, type TicketStore } from "../ws/upgrade";
 
 const MAX_VIEWERS_PER_BOT = 4;
@@ -77,7 +79,7 @@ export function attachVncBridge<T extends LiveGrant>(
     wss.handleUpgrade(req, socket, head, (ws) => {
       viewers.set(botId, (viewers.get(botId) ?? 0) + 1);
       const release = holdLiveAccess(ticket, () => revoke(ws));
-      void bridge(ws, target, botId, options.kind).finally(() => {
+      void bridge(ws, target, botId, options.kind, ticket.viewOnly === true).finally(() => {
         release();
         const left = (viewers.get(botId) ?? 1) - 1;
         if (left > 0) viewers.set(botId, left);
@@ -107,7 +109,9 @@ async function bridge(
   target: VncTarget,
   botId: string,
   kind: string,
+  viewOnly: boolean,
 ): Promise<void> {
+  const filter = viewOnly ? createRfbViewOnlyFilter() : undefined;
   let stream: Duplex;
   try {
     stream = await target.openStream();
@@ -148,11 +152,22 @@ async function bridge(
     ws.on("message", (data) => {
       // A closing viewer (revoked, say) no longer reaches the desktop.
       if (ws.readyState !== ws.OPEN) return;
-      const bytes = Array.isArray(data)
+      const raw = Array.isArray(data)
         ? Buffer.concat(data)
         : Buffer.isBuffer(data)
           ? data
           : Buffer.from(data);
+      let bytes = raw;
+      if (filter) {
+        try {
+          bytes = filter.push(raw);
+        } catch (error) {
+          if (!(error instanceof RfbViewOnlyError)) throw error;
+          ws.close(1008, "View only");
+          return;
+        }
+        if (bytes.length === 0) return;
+      }
       if (!stream.write(bytes)) {
         ws.pause();
         stream.once("drain", () => ws.resume());

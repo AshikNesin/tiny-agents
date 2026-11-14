@@ -43,6 +43,7 @@ export async function followBotChat(
   bot: FollowedBot,
   sink: BotChatSink,
   rt: BotStreamRuntime = getAgentRuntime(),
+  options: { watched?: boolean } = {},
 ): Promise<() => void> {
   const stops: (() => void)[] = [];
   const stop = () => {
@@ -59,7 +60,7 @@ export async function followBotChat(
   let held: BotStreamEvent[] | null = [];
   const send = (event: BotStreamEvent) => (held ? held.push(event) : sink.write(event));
   try {
-    stops.push(watchBot(bot.id));
+    if (options.watched !== false) stops.push(watchBot(bot.id));
     stops.push(
       onBotChatEvent(bot.id, (event) => {
         if (event.type === "chat-changed") sink.end();
