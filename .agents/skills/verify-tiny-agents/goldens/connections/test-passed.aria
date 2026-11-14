@@ -1,0 +1,27 @@
+# http://localhost:<port>/connections
+- region "Notifications alt+T"
+- dialog "Add connection":
+  - heading "Add connection" [level=2]
+  - paragraph: Connect a remote MCP server for your bots.
+  - text: Name
+  - textbox "Name":
+    - /placeholder: e.g. GitHub
+    - text: Verify MCP fixed
+  - text: URL
+  - textbox "URL":
+    - /placeholder: https://example.com/mcp
+    - text: http://127.0.0.1:<port>/mcp
+  - text: Authentication
+  - combobox "Authentication type": API key or header
+  - text: Header name
+  - textbox "Header name": x-api-key
+  - text: Secret
+  - textbox "Secret": key-fixed-c0nn
+  - paragraph: Streamable HTTP · 2 tools found
+  - list:
+    - listitem: echo · read-only
+    - listitem: reset
+  - button "Test connection"
+  - button "Cancel"
+  - button "Save"
+  - button "Close"

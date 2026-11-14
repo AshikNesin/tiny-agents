@@ -1,6 +1,0 @@
-# http://localhost:3310/chats/<id1>
-- region "Notifications alt+T"
-- menu "Past Bot fixed menu":
-    - menuitem "Chat history"
-    - separator
-    - 'menuitem "plan the trip fixed Nov 6 · 2 messages Echo: plan the trip fixed"'

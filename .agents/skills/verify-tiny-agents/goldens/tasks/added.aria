@@ -1,0 +1,37 @@
+# http://localhost:<port>/tasks
+- complementary "Sidebar":
+  - link "tiny-agents":
+    - /url: /chats
+  - button "Search"
+  - button "Collapse sidebar"
+  - navigation "Primary":
+    - link "Tasks":
+      - /url: /tasks
+    - link "Terminal":
+      - /url: /terminal
+    - link "Computer":
+      - /url: /computer
+    - link "Browser":
+      - /url: /browser
+  - region "Bots":
+    - heading "Bots" [level=2]
+    - button "New bot"
+    - paragraph: No bots yet.
+  - button "Account and navigation": D Demo User
+- main:
+  - heading "Tasks" [level=1]
+  - text: Your to-dos. Bots can manage these from chat too.
+  - tablist "Task filters":
+    - tab "Today1" [selected]
+    - tab "Upcoming0"
+    - tab "Completed0"
+  - textbox "New task title":
+    - /placeholder: Add a task for today (try “tomorrow 5pm !high”)
+  - button "Add task" [disabled]: Add
+  - list:
+    - listitem:
+      - button "Complete \"Verify task fixed\""
+      - button "Verify task fixed Today":
+        - paragraph: Verify task fixed
+        - text: Today
+- region "Notifications alt+T"

@@ -1,0 +1,27 @@
+# http://localhost:<port>/chats
+- complementary "Sidebar":
+  - link "tiny-agents":
+    - /url: /chats
+  - button "Search"
+  - button "Collapse sidebar"
+  - navigation "Primary":
+    - link "Tasks":
+      - /url: /tasks
+    - link "Terminal":
+      - /url: /terminal
+    - link "Computer":
+      - /url: /computer
+    - link "Browser":
+      - /url: /browser
+  - region "Bots":
+    - heading "Bots" [level=2]
+    - button "New bot"
+    - paragraph: No bots yet.
+  - button "Account and navigation": V Verify Owner fixed
+- main:
+  - heading "Create your first bot" [level=2]
+  - paragraph: Every contact here is an AI agent you chat with. Pick a persona and a model, and it remembers the whole conversation.
+  - button "Create your first bot"
+- region "Notifications alt+T":
+  - list:
+    - listitem: Account created Signed in as owner-fixed@example.com.

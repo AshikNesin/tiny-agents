@@ -1,0 +1,39 @@
+# http://localhost:<port>/chats/<id1>
+- complementary "Sidebar":
+  - link "tiny-agents":
+    - /url: /chats
+  - button "Search"
+  - button "Collapse sidebar"
+  - navigation "Primary":
+    - link "Tasks":
+      - /url: /tasks
+    - link "Terminal":
+      - /url: /terminal
+    - link "Computer":
+      - /url: /computer
+    - link "Browser":
+      - /url: /browser
+  - region "Bots":
+    - heading "Bots" [level=2]
+    - button "New bot"
+    - list:
+      - listitem:
+        - link "Routine Bot fixed":
+          - /url: /chats/<id1>
+        - button "Routine Bot fixed actions"
+  - button "Account and navigation": D Demo User
+- main:
+  - heading "Routine Bot fixed menu" [level=1]:
+    - button "Routine Bot fixed menu": Routine Bot fixed
+  - button "Open live view"
+  - button "Start a new chat" [disabled]
+  - region "Messages":
+    - log:
+      - text: Today
+      - button "verify-routine-fixed done 12:00"
+  - button "Jump to the latest message": Scroll to end
+  - textbox "Message Routine Bot fixed"
+  - button "Add files or mention a bot"
+  - button "Model": Test Model (faux)
+  - button "Send message" [disabled]
+- region "Notifications alt+T"

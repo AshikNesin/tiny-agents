@@ -1,0 +1,98 @@
+# http://localhost:<port>/vault/items/verify-pk-key-fixed
+- complementary "Sidebar":
+  - link "tiny-agents":
+    - /url: /chats
+  - button "Search"
+  - button "Collapse sidebar"
+  - navigation "Primary":
+    - link "Tasks":
+      - /url: /tasks
+    - link "Terminal":
+      - /url: /terminal
+    - link "Computer":
+      - /url: /computer
+    - link "Browser":
+      - /url: /browser
+  - region "Bots":
+    - heading "Bots" [level=2]
+    - button "New bot"
+    - paragraph: No bots yet.
+  - button "Account and navigation": V Vault Owner fixed
+- main:
+  - heading "Passkey key fixed" [level=1]
+  - text: Local API key · verify-pk-key-fixed
+  - heading "Values" [level=2]
+  - paragraph: Values never leave the vault except to you, here, or into the page or request a bot is approved for.
+  - list:
+    - listitem:
+      - paragraph: Key
+      - paragraph: ••••••••••
+      - button "Reveal"
+      - button "Copy"
+      - button "Edit"
+  - button "Username"
+  - button "Notes"
+  - heading "Who may use it" [level=2]
+  - text: "On"
+  - switch "Let bots use this item" [checked]
+  - text: Handle
+  - textbox "Handle":
+    - /placeholder: github
+    - text: verify-pk-key-fixed
+  - paragraph: The only name bots see, e.g. github. Lowercase letters, digits and dashes.
+  - text: Sent only to
+  - textbox "Sent only to":
+    - /placeholder: api.example.com
+    - text: api.example.com
+  - paragraph: Hostnames the key may go to, one per line (api.openai.com).
+  - text: Header
+  - textbox "Header":
+    - /placeholder: Authorization
+  - text: Format
+  - textbox "Format":
+    - /placeholder: "Bearer {value}"
+  - paragraph: "{value} is replaced by the key."
+  - text: Approval
+  - combobox "Approval": Ask once per chat
+  - paragraph: Approvals expire after 10 minutes.
+  - paragraph: Use in routines
+  - paragraph: Allow it in routines and messages from other bots (you're still asked when it needs approval).
+  - switch "Use in routines"
+  - text: Bots
+  - paragraph: Which bots may use it.
+  - checkbox "Every bot" [checked]
+  - text: Every bot Tools
+  - textbox "Tools":
+    - /placeholder: http_request, mcp
+  - paragraph: "Empty: http_request, mcp. Add run_command to pass it to sandbox commands as an env var (every use asks; the command can reach only the hosts above)."
+  - text: When to use
+  - textbox "When to use"
+  - paragraph: A hint for the bot, e.g. “for the work GitHub account”.
+  - button "Save"
+  - heading "Activity" [level=2]
+  - text: "4"
+  - list:
+    - listitem:
+      - paragraph: updated · vault_ui
+      - paragraph: local
+      - paragraph: "values: value"
+      - text: a few seconds ago
+    - listitem:
+      - paragraph: revealed · vault_ui
+      - paragraph: value
+      - text: a few seconds ago
+    - listitem:
+      - paragraph: revealed · vault_ui
+      - paragraph: value
+      - text: a few seconds ago
+    - listitem:
+      - paragraph: created · vault_ui
+      - paragraph: local
+      - text: a few seconds ago
+  - heading "Danger zone" [level=2]
+  - paragraph: Delete item
+  - paragraph: Unlink it (bots lose it, the value stays in the backend) or delete it there too.
+  - button "Delete"
+- region "Notifications alt+T":
+  - list:
+    - listitem: Key saved

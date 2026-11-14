@@ -1,0 +1,62 @@
+# http://localhost:<port>/chats/<id1>
+- complementary "Sidebar":
+  - link "tiny-agents":
+    - /url: /chats
+  - button "Search"
+  - button "Collapse sidebar"
+  - navigation "Primary":
+    - link "Tasks":
+      - /url: /tasks
+    - link "Terminal":
+      - /url: /terminal
+    - link "Computer":
+      - /url: /computer
+    - link "Browser":
+      - /url: /browser
+  - region "Bots":
+    - heading "Bots" [level=2]
+    - button "New bot"
+    - list:
+      - listitem:
+        - link "Builder Bot fixed":
+          - /url: /chats/<id1>
+          - text: "Builder Bot fixed now Echo: /newbot Built Bot fixed"
+        - button "Builder Bot fixed actions"
+      - listitem:
+        - link "Built Bot fixed":
+          - /url: /chats/<id2>
+        - button "Built Bot fixed actions"
+  - button "Account and navigation": D Demo User
+- main:
+  - heading "Builder Bot fixed menu" [level=1]:
+    - button "Builder Bot fixed menu": Builder Bot fixed
+  - button "Open live view"
+  - button "Start a new chat"
+  - region "Messages":
+    - log:
+      - text: Today
+      - paragraph: /newbot Built Bot fixed
+      - button "Copy message"
+      - time: 06:30 AM
+      - button "Created bot “Built Bot fixed” denied by you <duration>"
+      - paragraph: "Echo: The owner denied this create_bot call. Do not retry it unless asked."
+      - button "Copy message"
+      - time: 06:30 AM
+      - paragraph: /newbot Built Bot fixed
+      - button "Copy message"
+      - time: 06:30 AM
+      - button "Created bot “Built Bot fixed” <duration>" [expanded]
+      - text: Input
+      - code: "{ \"name\": \"Built Bot fixed\", \"description\": \"Made by the bot-builder e2e\", \"instructions\": \"You help the owner with the bot-builder e2e.\" }"
+      - text: Output
+      - code: "Created bot \"Built Bot fixed\" on test-model. The owner can open it at /chats/<id2>. You can message it with message_bot(to: \"Built Bot fixed\", text)."
+      - paragraph: "Echo: /newbot Built Bot fixed"
+      - button "Copy message"
+      - time: 06:30 AM
+  - button "Jump to the latest message": Scroll to end
+  - textbox "Message Builder Bot fixed"
+  - button "Add files or mention a bot"
+  - button "Model": Test Model (faux)
+  - button "Send message" [disabled]
+  - paragraph: Type @ to tag another bot
+- region "Notifications alt+T"

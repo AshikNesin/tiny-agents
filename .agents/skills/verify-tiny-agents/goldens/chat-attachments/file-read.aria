@@ -1,0 +1,63 @@
+# http://localhost:<port>/chats/<id1>
+- complementary "Sidebar":
+  - link "tiny-agents":
+    - /url: /chats
+  - button "Search"
+  - button "Collapse sidebar"
+  - navigation "Primary":
+    - link "Tasks":
+      - /url: /tasks
+    - link "Terminal":
+      - /url: /terminal
+    - link "Computer":
+      - /url: /computer
+    - link "Browser":
+      - /url: /browser
+  - region "Bots":
+    - heading "Bots" [level=2]
+    - button "New bot"
+    - list:
+      - listitem:
+        - link "Attach Bot fixed, replying":
+          - /url: /chats/<id1>
+          - text: "Attach Bot fixed now Echo: [image attached: only-fixed.png, 320x200 (<id2>)] (The owner attached image(s); call seeimage"
+          - status "Replying"
+        - button "Attach Bot fixed actions"
+  - button "Account and navigation": D Demo User
+- main:
+  - heading "Attach Bot fixed menu" [level=1]:
+    - button "Attach Bot fixed menu": Attach Bot fixed
+  - button "Open live view"
+  - button "Start a new chat"
+  - region "Messages":
+    - log:
+      - text: Today
+      - button "Enlarge shot-fixed.png":
+        - img "shot-fixed.png"
+      - paragraph: what is this fixed?
+      - button "Copy message"
+      - time: 06:30 AM
+      - paragraph: "Echo: what is this fixed?"
+      - paragraph: "[image attached: shot-fixed.png, 320x200 (<id3>)] (The owner attached image(s); call see_image with an id above to view.)"
+      - button "Copy message"
+      - time: 06:30 AM
+      - button "Enlarge only-fixed.png":
+        - img "only-fixed.png"
+      - paragraph: "Echo: [image attached: only-fixed.png, 320x200 (<id2>)] (The owner attached image(s); call see_image with an id above to view.)"
+      - button "Copy message"
+      - time: 06:30 AM
+      - button "Preview notes-fixed.txt": notes-fixed.txt 3 lines
+      - link "Download notes-fixed.txt":
+        - /url: /api/v1/uploads/<id4>/content
+      - paragraph: read the notes fixed
+      - button "Copy message"
+      - time: 06:30 AM
+      - paragraph: "Echo: read the notes fixed"
+      - paragraph: "[file attached: notes-fixed.txt (id <id4>), text/plain, 1 KB, 3 lines, status: ready] alpha line fixed be"
+  - button "Jump to the latest message": Scroll to end
+  - textbox "Message Attach Bot fixed"
+  - button "Add files or mention a bot"
+  - button "Model": Test Model (faux)
+  - button "Stop generating"
+  - paragraph: Enter steers · Alt+Enter queues · Esc stops
+- region "Notifications alt+T"

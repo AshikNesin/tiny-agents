@@ -1,0 +1,9 @@
+# http://localhost:<port>/chats/<id1>/history/<id2>
+- region "Notifications alt+T":
+  - list:
+    - listitem: Chat continued. The one you left is in Chat history.
+- alertdialog "Delete this chat?":
+  - heading "Delete this chat?" [level=2]
+  - paragraph: "\"plan the trip fixed\" is removed from Past Bot fixed's chat history. This can't be undone."
+  - button "Cancel"
+  - button "Delete"

@@ -1,0 +1,56 @@
+# http://localhost:<port>/memory
+- complementary "Sidebar":
+  - link "tiny-agents":
+    - /url: /chats
+  - button "Search"
+  - button "Collapse sidebar"
+  - navigation "Primary":
+    - link "Tasks":
+      - /url: /tasks
+    - link "Terminal":
+      - /url: /terminal
+    - link "Computer":
+      - /url: /computer
+    - link "Browser":
+      - /url: /browser
+  - region "Bots":
+    - heading "Bots" [level=2]
+    - button "New bot"
+    - paragraph: No bots yet.
+  - button "Account and navigation": D Demo User
+- main:
+  - heading "Memory" [level=1]
+  - text: What each bot remembers about you. Bots learn from chats; you can add, edit, or remove anything.
+  - searchbox "Search memories"
+  - paragraph: No bots yet
+  - paragraph: Create a bot first; its memories will appear here.
+- region "Notifications alt+T"
+- dialog "Tell us more":
+  - heading "Tell us more" [level=2]
+  - button "Close":
+    - img
+  - radiogroup "Feedback type":
+    - radio "Report an issue":
+      - img
+      - text: Issue
+    - radio "Request a feature":
+      - img
+      - text: Feature request
+    - radio "Something else" [checked]:
+      - img
+      - text: Other
+  - textbox "Your feedback":
+    - /placeholder: What's on your mind? (paste screenshots with Ctrl+V)
+  - textbox "Email (optional)":
+    - /placeholder: Email (optional, only visible to the team)
+  - button "Screenshot this page":
+    - img
+  - button "Attach images":
+    - img
+  - button "Record this page (up to 5 minutes)":
+    - img
+  - button "Record a voice note (up to 5 minutes)":
+    - img
+  - button "Send Ctrl+↵" [disabled]
+  - text: Powered by FeedbackBee
+  - status

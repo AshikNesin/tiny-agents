@@ -1,0 +1,47 @@
+# http://localhost:<port>/chats/<id1>
+- complementary "Sidebar":
+  - link "tiny-agents":
+    - /url: /chats
+  - button "Search"
+  - button "Collapse sidebar"
+  - navigation "Primary":
+    - link "Tasks":
+      - /url: /tasks
+    - link "Terminal":
+      - /url: /terminal
+    - link "Computer":
+      - /url: /computer
+    - link "Browser":
+      - /url: /browser
+  - region "Bots":
+    - heading "Bots" [level=2]
+    - button "New bot"
+    - paragraph: Pinned
+    - list:
+      - listitem:
+        - link "Renamed Bot fixed":
+          - /url: /chats/<id1>
+        - button "Renamed Bot fixed actions"
+    - paragraph: Recent
+    - list:
+      - listitem:
+        - link "Other Bot fixed":
+          - /url: /chats/<id2>
+        - button "Other Bot fixed actions"
+  - button "Account and navigation": D Demo User
+- main:
+  - heading "Renamed Bot fixed menu" [level=1]:
+    - button "Renamed Bot fixed menu": Renamed Bot fixed
+  - button "Open live view"
+  - button "Start a new chat" [disabled]
+  - region "Messages":
+    - log:
+      - paragraph: Renamed Bot fixed
+      - paragraph: Plans trips fixed
+  - button "Jump to the latest message": Scroll to end
+  - textbox "Message Renamed Bot fixed"
+  - button "Add files or mention a bot"
+  - button "Model": Test Model (faux)
+  - button "Send message" [disabled]
+  - paragraph: Type @ to tag another bot
+- region "Notifications alt+T"
