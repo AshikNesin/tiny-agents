@@ -299,6 +299,10 @@ export const codeHandoffs = sqliteTable(
     /** The hand-off machine (shared/machines/handoff.ts). */
     status: text("status").$type<HandoffStatus>().notNull(),
     createdAt: createdAt(),
+    /**
+     * When its turn end was recorded, or, while a follow-up runs, when that
+     * reopened it: a reconnect owes only a turn that ended after the reopen.
+     */
     finishedAt: ms("finished_at"),
   },
   (t) => [

@@ -149,7 +149,10 @@ async function startOnce(
   }
   const row = await startedHandoff(input.idempotencyKey, threadIdOf(instance.id, nativeId));
   await follow(instance.id, nativeId);
-  void codeHub()?.refresh(instance.id);
+  const hub = codeHub();
+  void hub?.refresh(instance.id);
+  // A turn that ended before the row was running found nothing to report to.
+  hub?.handedOff(row.threadId);
   return toRecord(row);
 }
 

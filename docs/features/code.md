@@ -142,6 +142,16 @@ a follow-up is armed to report back before the harness hears it. Claude Code
 hand-offs start in Accept edits; anything else they ask (commands, questions)
 waits for the owner on the Code page.
 
+Known limits (register row C7):
+
+- A start whose `createThread` call fails after the harness already made the
+  thread (a client timeout, say) drops its claim, so a replay of that tool
+  call can make a second thread. Harnesses take no idempotency key to prevent
+  it.
+- A finish that can never be delivered (its bot's chat keeps refusing the
+  submit) is retried, and logged, every 30 seconds for as long as the app
+  runs. Deleting the bot removes it.
+
 ## How it works
 
 - **Contract:** `packages/code/src/contracts`:

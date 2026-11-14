@@ -22,6 +22,19 @@ never synced from the boilerplate.
 2. `pnpm db:generate --name add_posts` (the name is optional).
 3. Review the SQL. SQLite's `ALTER TABLE` is limited, so drizzle-kit may emit
    a create-copy-drop sequence for column changes; check it preserves data.
+   Two traps in that sequence:
+   - Its `PRAGMA foreign_keys=OFF` does nothing: the migrator runs each
+     migration in one transaction, where SQLite ignores the pragma. So the
+     `DROP TABLE` of a table other tables reference runs with foreign keys
+     on, and **cascade-deletes their rows** (`ON DELETE cascade`) or fails
+     (`restrict`). Before rebuilding a parent table with children, keep the
+     children: copy them aside and back in the same migration, or recreate
+     the child table without its foreign key around the rebuild.
+     `0013_code_handoff_finishes` is safe only because its child table is
+     created empty just before.
+   - A column added in the same change as a rebuild is read from the old
+     table in the copy (`INSERT … SELECT "new_column"`), which fails. Add
+     the column in a migration of its own.
 4. Apply locally: `pnpm dev` or `pnpm db:migrate`.
 5. Commit the schema change and `apps/web/drizzle/` together, with a changeset
    (`apps/web/drizzle` is a managed surface).

@@ -11,7 +11,9 @@
  * - A follow-up arms its hand-off before the harness hears it, and a
  *   thread's sends run one at a time.
  */
+import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
+import { codeHandoffs, db } from "../../../apps/web/src/server/db";
 import type { AgentRuntime } from "../../../packages/agent/src/index";
 import type { TurnOutcome } from "@tiny-agents/code/contracts";
 import { submitToBot } from "../../../apps/web/src/server/api/bots/bots.conversation";
@@ -234,6 +236,26 @@ describe("hand-off starts (C7b: one thread per tool call)", () => {
     harness.createThread = create;
     expect(ok(await codeStore.start(startInput(bot, "start-3"))).threadId).toBe("fake:t1");
   });
+
+  it("delivers the finish of a start whose turn ends before its thread is recorded", async () => {
+    const bot = await seedBot();
+    watch();
+    hub.start();
+    // A fast harness: the first turn ends, and the watcher hears it, while
+    // the start is still `starting`. No reconnect follows.
+    const create = harness.createThread.bind(harness);
+    harness.createThread = async (input) => {
+      const made = await create(input);
+      harness.outcomes.set(made.nativeId, ended("Built.", 1));
+      harness.endTurn(made.nativeId);
+      await settle();
+      return made;
+    };
+    ok(await codeStore.start(startInput(bot, "start-4")));
+    await eventually(async () => expect(await finishesIn(bot)).toHaveLength(1));
+    expect((await finishesIn(bot))[0]).toContain("Built.");
+    expect(await runningHandoffs()).toEqual([]);
+  });
 });
 
 describe("hand-off follow-ups (C7c: sends wait for their reopen)", () => {
@@ -319,5 +341,44 @@ describe("hand-off follow-ups (C7c: sends wait for their reopen)", () => {
     expect(await finishHandoffOnce(running!.id)).toBe(true);
     await expect(send("refused", 4)).rejects.toThrow("the harness refused it");
     expect(await runningHandoffs()).toEqual([]);
+  });
+
+  it("never owes again, on a reconnect after a follow-up, a turn that ended before it", async () => {
+    const bot = await seedBot();
+    // A hand-off finished before the upgrade: no finish row records its turn.
+    const handoff = await recordHandoff({
+      botId: bot.id,
+      idempotencyKey: "old-1",
+      task: "fix login",
+      threadId: "fake:tOld",
+    });
+    await db
+      .update(codeHandoffs)
+      .set({
+        status: "finished",
+        createdAt: new Date(Date.now() - 60_000),
+        finishedAt: new Date(Date.now() - 30_000),
+      })
+      .where(eq(codeHandoffs.id, handoff.id));
+    harness.outcomes.set("tOld", { ...ended("Login fixed.", 1), endedAt: Date.now() - 40_000 });
+    watch();
+    hub.start();
+
+    await codeStore.send({
+      conversationId: Number(bot.conversationId),
+      idempotencyKey: "f-old",
+      threadId: "fake:tOld",
+      message: "also logout",
+    });
+    // A reconnect before the follow-up's turn starts reads the old outcome.
+    harness.emit({ type: "connected" });
+    await settle();
+    expect(await finishesIn(bot)).toEqual([]);
+    expect(await runningHandoffs()).toHaveLength(1);
+
+    harness.outcomes.set("tOld", ended("Logout fixed too.", 2));
+    harness.endTurn("tOld");
+    await eventually(async () => expect(await finishesIn(bot)).toHaveLength(1));
+    expect((await finishesIn(bot))[0]).toContain("Logout fixed too.");
   });
 });

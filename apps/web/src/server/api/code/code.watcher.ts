@@ -26,6 +26,7 @@ import { relayText } from "../bots/bots.delivery";
 import { codeUpdate } from "../notifications/notifications.events";
 import type { CodeHub } from "./code.hub";
 import {
+  endsHandoff,
   isFollowed,
   markFinishDelivered,
   oweFinish,
@@ -138,6 +139,15 @@ export function startCodeWatcher(deps: WatcherDeps): () => void {
     }
   }
 
+  /** Owe the finish of a turn that ended while nothing was listening for it. */
+  async function catchUp(instance: HarnessInstance, nativeId: string, handoffs: ThreadHandoff[]) {
+    const outcome = await instance.outcome(nativeId);
+    if (outcome.working) return;
+    const ended = outcome.endedAt ?? 0;
+    const due = handoffs.filter((h) => endsHandoff(h, ended));
+    if (due.length > 0) await deliverFinished(instance, due, outcome);
+  }
+
   /** Hand-offs of this instance whose turn ended while it was unreachable. */
   async function reconcile(instance: HarnessInstance) {
     const byThread = new Map<string, { nativeId: string; handoffs: ThreadHandoff[] }>();
@@ -150,16 +160,18 @@ export function startCodeWatcher(deps: WatcherDeps): () => void {
     }
     for (const [threadId, { nativeId, handoffs }] of byThread) {
       try {
-        const outcome = await instance.outcome(nativeId);
-        if (outcome.working) continue;
-        // Only a turn that ended after the hand-off started counts.
-        const ended = outcome.endedAt ?? 0;
-        const due = handoffs.filter((h) => ended >= h.createdAt.getTime());
-        if (due.length > 0) await deliverFinished(instance, due, outcome);
+        await catchUp(instance, nativeId, handoffs);
       } catch (error) {
         logError(error, threadId, "reconcile");
       }
     }
+  }
+
+  /** A start recorded its thread: its turn may have ended before the row was running. */
+  async function onHandoff(threadId: string) {
+    const target = hub.resolve(threadId);
+    const handoffs = await runningHandoffs([threadId]);
+    if (target && handoffs.length > 0) await catchUp(target.instance, target.nativeId, handoffs);
   }
 
   /** The harness wants the owner mid-turn (Shelley's message_user, a Claude approval). */
@@ -199,8 +211,12 @@ export function startCodeWatcher(deps: WatcherDeps): () => void {
       );
     }
   });
+  const offHandoff = hub.onHandoff((threadId) => {
+    void onHandoff(threadId).catch((error: unknown) => logError(error, threadId, "start catch-up"));
+  });
   return () => {
     off();
+    offHandoff();
     clearInterval(timer);
   };
 }

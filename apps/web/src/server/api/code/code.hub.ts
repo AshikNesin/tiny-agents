@@ -53,6 +53,12 @@ export interface CodeHub {
   serial<T>(key: string, work: () => Promise<T>): Promise<T>;
   onChange(listener: (change: HubChange) => void): () => void;
   onEvent(listener: (event: HubEvent) => void): () => void;
+  /**
+   * A bot's hand-off now runs on this thread (a start recorded its thread):
+   * the watcher checks whether its turn already ended meanwhile.
+   */
+  handedOff(threadId: string): void;
+  onHandoff(listener: (threadId: string) => void): () => void;
 }
 
 export interface HubOptions {
@@ -73,6 +79,7 @@ export function createCodeHub(options: HubOptions): CodeHub {
   const queues = new Map<string, Promise<unknown>>();
   const changeListeners = new Set<(change: HubChange) => void>();
   const eventListeners = new Set<(event: HubEvent) => void>();
+  const handoffListeners = new Set<(threadId: string) => void>();
   const unsubscribers: Array<() => void> = [];
   let running = false;
 
@@ -205,6 +212,13 @@ export function createCodeHub(options: HubOptions): CodeHub {
     onEvent(listener) {
       eventListeners.add(listener);
       return () => eventListeners.delete(listener);
+    },
+    handedOff(threadId) {
+      emit(handoffListeners, threadId);
+    },
+    onHandoff(listener) {
+      handoffListeners.add(listener);
+      return () => handoffListeners.delete(listener);
     },
   };
 }

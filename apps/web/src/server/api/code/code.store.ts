@@ -271,17 +271,30 @@ export async function findHandoff(
 /**
  * Mark a hand-off running again (the bot sent a follow-up), so its next
  * finish is delivered. A hand-off still running is left as it is.
+ * `finishedAt` becomes the reopen time, so a reconnect before the new turn
+ * starts never owes the turn that ended before it again (`endsHandoff`).
  */
 export async function reopenHandoff(id: string): Promise<void> {
   await db
     .update(codeHandoffs)
-    .set({ status: "running", finishedAt: null })
+    .set({ status: "running", finishedAt: new Date() })
     .where(
       and(
         eq(codeHandoffs.id, id),
         inArray(codeHandoffs.status, handoffMachine.sourcesOf("running")),
       ),
     );
+}
+
+/**
+ * Whether a turn that ended at `endedAt` (harness time, ms) is this running
+ * hand-off's to report: it ended after the hand-off started or, once a
+ * follow-up reopened it, after the reopen.
+ */
+export function endsHandoff(handoff: CodeHandoff, endedAt: number): boolean {
+  return handoff.finishedAt
+    ? endedAt > handoff.finishedAt.getTime()
+    : endedAt >= handoff.createdAt.getTime();
 }
 
 /** Running hand-offs of these threads (all when omitted). */

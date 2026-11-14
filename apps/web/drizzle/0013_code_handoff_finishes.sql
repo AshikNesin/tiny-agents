@@ -11,6 +11,10 @@ CREATE TABLE `code_handoff_finishes` (
 --> statement-breakpoint
 CREATE UNIQUE INDEX `code_handoff_finishes_request_id_unique` ON `code_handoff_finishes` (`request_id`);--> statement-breakpoint
 CREATE INDEX `code_handoff_finishes_delivered_idx` ON `code_handoff_finishes` (`delivered_at`);--> statement-breakpoint
+-- Drizzle runs each migration in one transaction, where SQLite ignores
+-- PRAGMA foreign_keys: the DROP below runs with foreign keys on and
+-- cascade-deletes code_handoff_finishes rows. Safe here only because that
+-- table was created empty above (docs/guides/database-migrations.md).
 PRAGMA foreign_keys=OFF;--> statement-breakpoint
 CREATE TABLE `__new_code_handoffs` (
 	`id` text PRIMARY KEY NOT NULL,
