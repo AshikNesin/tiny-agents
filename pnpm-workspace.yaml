@@ -20,7 +20,7 @@ trustPolicyExclude:
   - semver@6.3.1
 # Non-interactive CI builders (Heroku): when a restored node_modules is
 # incompatible with the current store/lockfile, pnpm wants to purge and
-# recreate it, but the purge confirmation requires a TTY and aborts with
+# recreate it — but the purge confirmation requires a TTY and aborts with
 # ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY (exit 1, killing the build).
 # Auto-confirm module-dir purges instead.
 confirmModulesPurge: false

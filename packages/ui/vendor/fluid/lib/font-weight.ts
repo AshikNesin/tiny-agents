@@ -7,7 +7,7 @@
 // `wght` widens the text, and a tighter (higher) `opsz` pulls it back.
 //
 // The compensation is per-glyph, so any residual multiplies with label
-// length: calibrate against a CORPUS of realistic strings (4–40 chars,
+// length — calibrate against a CORPUS of realistic strings (4–40 chars,
 // mixed/caps/lowercase-heavy at 13px), minimizing the worst-case |delta|
 // centered on zero, never against a single baseline string. Measured against
 // the 400/opsz-14 baseline: semibold holds every corpus string within
@@ -16,7 +16,7 @@
 // (−1.6px at 38 chars) on selection.
 //
 // Setting `opsz` explicitly here overrides `font-optical-sizing: auto`, which
-// is intended: we want weight, not font-size, to drive optical size.
+// is intended — we want weight, not font-size, to drive optical size.
 export const fontWeights = {
   normal: "'wght' 400, 'opsz' 14",
   semibold: "'wght' 550, 'opsz' 18",

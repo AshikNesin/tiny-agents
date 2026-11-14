@@ -155,7 +155,7 @@ function ModelChip({
 
 /**
  * The composer, styled after the Code page's: one Fluid InputMessage frame
- * holding the textarea and a toolbar: "+" (files, mention a bot), the
+ * holding the textarea and a toolbar — "+" (files, mention a bot), the
  * model chip, Queue while a reply runs, and one round button that is Stop
  * while the bot replies with nothing typed, and Send (steer) otherwise.
  */

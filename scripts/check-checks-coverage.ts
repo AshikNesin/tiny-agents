@@ -8,8 +8,8 @@
  *  1. An owned source root stops existing (renamed or deleted), so the map
  *     claims ownership of source that is no longer there.
  *  2. A declared test area stops existing or holds no tests. A renamed test
- *     area silently unschedules every suite under it: those tests fall to
- *     drift in sync, and nothing turns red.
+ *     area silently unschedules every suite under it — those tests fall to
+ *     drift in sync — and nothing turns red.
  *
  * It also holds the static gates to one list, `scripts/gates.mjs`, so local
  * runs and CI can't drift apart:
@@ -94,7 +94,7 @@ for (const area of areas) {
   if (!existsSync(join(ROOT, area))) {
     failures.push({
       kind: "area-missing",
-      detail: `Declared test area "${area}" does not exist on disk. Rename or remove it in .groot/lib/patterns.ts TEST_AREA_OWNERSHIP: until then every suite under it classifies as drift in sync.`,
+      detail: `Declared test area "${area}" does not exist on disk. Rename or remove it in .groot/lib/patterns.ts TEST_AREA_OWNERSHIP — until then every suite under it classifies as drift in sync.`,
     });
     continue;
   }

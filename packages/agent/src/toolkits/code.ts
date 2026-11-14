@@ -141,7 +141,7 @@ function rules(harnesses: CodeHarnessRecord[]): string {
 
 function presentHandoff(h: CodeHandoffRecord): string {
   const where = h.cwd ? ` in ${h.cwd}` : "";
-  return `[${h.threadId}] ${h.harness}: ${h.title ?? "(untitled)"} · ${h.status}${where} · ${h.url} · ${h.task.slice(0, 120)}`;
+  return `[${h.threadId}] ${h.harness}: ${h.title ?? "(untitled)"} · ${h.status}${where} · ${h.url} — ${h.task.slice(0, 120)}`;
 }
 
 /** A bare id (from `shelley_*`) belongs to Shelley. */
@@ -176,7 +176,7 @@ export function createCodeToolkit(options: CodeToolkitOptions): Capability {
       output: [
         {
           type: "text",
-          text: `${handoff.harness} started ${handoff.title ? `"${handoff.title}" ` : "a thread "}(${handoff.threadId}). Link: ${handoff.url}. Its outcome will arrive here as "Reply from ${handoff.harness}". Do not poll.`,
+          text: `${handoff.harness} started ${handoff.title ? `"${handoff.title}" ` : "a thread "}(${handoff.threadId}). Link: ${handoff.url}. Its outcome will arrive here as "Reply from ${handoff.harness}" — do not poll.`,
         },
       ],
       // The chat renders the call as a card linking to the Code page.
@@ -334,7 +334,7 @@ export function createCodeToolkit(options: CodeToolkitOptions): Capability {
           ? result
               .map(
                 (m) =>
-                  `${m.id}${m.name && m.name !== m.id ? ` (${m.name})` : ""}${m.isDefault ? ", default" : ""}`,
+                  `${m.id}${m.name && m.name !== m.id ? ` (${m.name})` : ""}${m.isDefault ? " — default" : ""}`,
               )
               .join("\n")
           : "No ready models.",

@@ -37,15 +37,15 @@ The rules are enforced by `pnpm check:tokens` (see
 | Class / component                         | Treatment                                                                | Use for                                     |
 | ----------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------- |
 | `Text variant="title"`                    | `font-heading text-base leading-snug font-medium`                        | Card and dialog titles, standalone headings |
-| `Text variant="body"`                     | `text-sm` (14px)                                                         | Body, labels, buttons, data: the default    |
+| `Text variant="body"`                     | `text-sm` (14px)                                                         | Body, labels, buttons, data — the default   |
 | `Text variant="meta"`                     | `text-xs text-muted-foreground`                                          | Timestamps, counts, helper copy             |
 | `Text variant="code"` / `monoClass`       | `font-mono text-[0.9em]`                                                 | Inline ids, cron expressions, tokens        |
 | `Text variant="stat"` / `statClass`       | `text-xl font-semibold tabular-nums`                                     | Standalone metric values (not headings)     |
-| `PageLayout` h1 / `h1Class`               | `text-xl font-semibold sm:text-2xl`                                      | Routed-page title: the only `<h1>`          |
+| `PageLayout` h1 / `h1Class`               | `text-xl font-semibold sm:text-2xl`                                      | Routed-page title — the only `<h1>`         |
 | `Text variant="display"` / `displayClass` | `text-3xl font-semibold leading-tight`                                   | Marketing/display moments (auth panels)     |
 | `metaLabelClass`                          | `text-[11px] font-medium uppercase tracking-wider text-muted-foreground` | Column headers, dl labels, stat captions    |
 
-Content text is 14px (`text-sm`): 16px+ is reserved for titles and display.
+Content text is 14px (`text-sm`) — 16px+ is reserved for titles and display.
 `CardTitle` uses the `title` classes; `DialogTitle` differs only in
 `leading-none`. `Section` renders its title at body size
 (`text-sm font-medium`). `Text` also takes a `tone` (`default`, `muted`,
@@ -171,7 +171,7 @@ on the common cases.
 | Scrolling dialog content   | `DialogBody` between `DialogHeader` and `DialogFooter` (header and footer stay pinned)                                                                                   | a hand-rolled `overflow-y-auto` wrapper                                                                                                              |
 | A breadcrumb trail         | `<Breadcrumbs page={name}><Link to="/parent">Parent</Link></Breadcrumbs>` (`@groot/ui/breadcrumb`): children are the ancestor links, `page` the current page             | composing `BreadcrumbList` / `BreadcrumbItem` / `BreadcrumbSeparator` by hand (a separator nested inside an item is invalid list markup)             |
 | Icon sizing                | `size-4` / `size-3.5`                                                                                                                                                    | `h-4 w-4`                                                                                                                                            |
-| Icon spacing in a button   | nothing: `Button` already sets `gap`                                                                                                                                     | `mr-2` on the icon                                                                                                                                   |
+| Icon spacing in a button   | nothing — `Button` already sets `gap`                                                                                                                                    | `mr-2` on the icon                                                                                                                                   |
 | Any text treatment         | `Text` / `metaLabelClass` / `monoClass` from `@groot/ui`                                                                                                                 | ad-hoc `text-*` sizes, `tracking-*`, `font-bold`, inline `font-mono` at full size                                                                    |
 | Hover state                | instant color change                                                                                                                                                     | `transition-colors` / `transition-all` on hover                                                                                                      |
 | Key-value data (read-only) | `DataField` + `DataFields` (the display counterpart of the form `Field`)                                                                                                 | hand-rolled `<dl>`/`<dt>`/`<dd>` with ad-hoc label classes                                                                                           |
@@ -198,7 +198,7 @@ tokens when a feature needs one.
 | 4   | Never `font-bold`; `font-semibold` is the max weight                                   | yes                          |
 | 5   | Related text groups closer together than their parent group                            | no                           |
 | 6   | Optical spacing around text (vertical < horizontal)                                    | no                           |
-| 7   | No color transitions on hover: instant color change                                    | yes (outside `@groot/ui`)    |
+| 7   | No color transitions on hover — instant color change                                   | yes (outside `@groot/ui`)    |
 | 8   | Borders and shadows don't combine; prefer `ring-1 ring-foreground/10`                  | no                           |
 | 9   | Concentric border radii (outer = inner + padding)                                      | no                           |
 | 10  | Icons optically sized to and aligned with the first line of text (`size-4`/`size-3.5`) | icon-sizing rule             |
@@ -206,7 +206,7 @@ tokens when a feature needs one.
 | 12  | Sticky elements separated from content with `border`, not shadow                       | no                           |
 | 13  | Collapsing content keeps its size during animation                                     | no                           |
 | 14  | Never stack layer cards on top of one another                                          | no                           |
-| 15  | Never conditionally render dialogs: control with `open` prop                           | no                           |
+| 15  | Never conditionally render dialogs — control with `open` prop                          | no                           |
 
 Rules marked _no_ are conventions enforced by review and the `groot-dls`
 skill, not mechanical patterns.
@@ -225,10 +225,10 @@ catches `--no-verify` commits.
 | `raw-palette-color`       | `text-gray-500`, `bg-red-100`, …                       | `packages/shell/src/index.css`                           |
 | `hand-rolled-card`        | a line with `rounded-*`, `border` and `bg-card`        | `card.tsx`                                               |
 | `raw-table-element`       | `<table>`, `<thead>`, `<tbody>`                        | `table.tsx`                                              |
-| `redundant-icon-margin`   | `mr-*`/`ml-*` on an icon inside a gap-spaced component | -                                                        |
-| `legacy-icon-sizing`      | square `h-N w-N`                                       | -                                                        |
+| `redundant-icon-margin`   | `mr-*`/`ml-*` on an icon inside a gap-spaced component | —                                                        |
+| `legacy-icon-sizing`      | square `h-N w-N`                                       | —                                                        |
 | `tracking-modified`       | `tracking-tight` … `tracking-widest`                   | `typography.tsx` (`metaLabelClass`)                      |
-| `font-bold`               | `font-bold`                                            | -                                                        |
+| `font-bold`               | `font-bold`                                            | —                                                        |
 | `transition-colors-hover` | `transition-colors`, `transition-all`                  | `packages/ui/src/` and `vendor/` (primitives own motion) |
 | `inline-mono-full-step`   | `font-mono text-sm` (or `base`, `lg`, `xl`)            | `typography.tsx`, `command.tsx`, `CommandPalette.tsx`    |
 

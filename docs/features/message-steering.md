@@ -41,7 +41,7 @@ DELETE /bots/:id/messages/:requestId → AgentRuntime.withdraw
   [routines](./routines.md)), so a fire never queues behind, or steers into,
   the owner's reply.
 - Withdrawal outcomes: `withdrawn` (200), `already_placed` / `settled`
-  (409: the message is already part of the conversation), `not_found`
+  (409 — the message is already part of the conversation), `not_found`
   (404). Re-withdrawing a withdrawn input stays `withdrawn`, not 409.
 
 ## Semantics worth knowing

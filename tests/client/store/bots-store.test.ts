@@ -59,7 +59,7 @@ function deferredList() {
   return resolve;
 }
 
-describe("bots store: activity feed", () => {
+describe("bots store — activity feed", () => {
   beforeEach(() => {
     listeners.clear();
     useBotsStore.getState().disconnectActivity();
@@ -175,7 +175,7 @@ describe("bots store: activity feed", () => {
   });
 });
 
-describe("bots store: full bots", () => {
+describe("bots store — full bots", () => {
   beforeEach(() => {
     useBotsStore.setState({ fullBots: {}, bots: [listEntry("b1", "7")] });
     chatSessions.store.setState({ sessions: {} });
@@ -244,7 +244,7 @@ describe("bots store: full bots", () => {
   });
 });
 
-describe("bots store: loadBots resolves with the landed list (issue #119)", () => {
+describe("bots store — loadBots resolves with the landed list (issue #119)", () => {
   beforeEach(() => {
     listeners.clear();
     useBotsStore.getState().disconnectActivity();
@@ -289,7 +289,7 @@ describe("bots store: loadBots resolves with the landed list (issue #119)", () =
   it("resolves the page's load across three overlapping generations (prod repro)", async () => {
     // Mount, page and SSE refresh can overlap: gen1 (the page) registers a
     // waiter on gen2, then gen3 supersedes gen2 before gen2 lands. Only the
-    // newest request settles waiters: gen1's waiter on gen2 would be
+    // newest request settles waiters — gen1's waiter on gen2 would be
     // stranded and the Memory page's skeleton would never resolve (prod).
     const answerGen1 = deferredList();
     const answerGen2 = deferredList();

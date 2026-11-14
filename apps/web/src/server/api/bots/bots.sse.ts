@@ -1,6 +1,6 @@
 /**
  * Server-sent events plumbing shared by the chat stream and the app-wide
- * activity feed. SSE responses must never be compressed or buffered: the
+ * activity feed. SSE responses must never be compressed or buffered — the
  * headers below tell proxies so, and each event is enqueued on the response
  * body as soon as it is written, so the connection stays open and live.
  *

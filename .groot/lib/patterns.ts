@@ -27,7 +27,7 @@ export const IMMUTABLE_EXCLUSIONS: readonly string[] = [
   "*.key",
   "secrets/**",
 
-  // Sync tooling state: must NEVER be overwritten with the boilerplate's
+  // Sync tooling state — must NEVER be overwritten with the boilerplate's
   // own values (would corrupt this project's last_sync baseline).
   // Project-only docs live here too and must not be clobbered by the
   // boilerplate's copies.
@@ -131,10 +131,10 @@ export const SYNC_PATTERNS: readonly string[] = [
   "postcss.config.js",
   "components.json",
 
-  // Deployment config (railpack): shared by all downstream apps.
+  // Deployment config (railpack) — shared by all downstream apps.
   "railpack.json",
 
-  // Sync tooling: keep the sync tool itself up to date.
+  // Sync tooling — keep the sync tool itself up to date.
   // State files (boilerplate-sync.json, sync-report.json) and project-only
   // docs (feature-request.md, repo-drift.md) are guarded by
   // IMMUTABLE_EXCLUSIONS so only the tool's _code_ syncs.

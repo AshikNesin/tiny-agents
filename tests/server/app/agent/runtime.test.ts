@@ -240,7 +240,7 @@ describe("AgentRuntime", () => {
         expect(chat.state().queued[0].mode).toBe("followUp");
 
         // The first run answers, then the follow-up places and starts the
-        // next one, both messages end up answered in order.
+        // next one — both messages end up answered in order.
         await until(
           () =>
             !chat.state().busy &&

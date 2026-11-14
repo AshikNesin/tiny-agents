@@ -7,7 +7,7 @@
  * task-scoped `tiny.questions` document holding the questions, publishes
  * `{ question: "pending", questions }` details the chat renders the
  * questionnaire from, and resumes when the host records the owner's answers
- * or dismissal (`AgentRuntime.answerQuestions`): also after a restart. The
+ * or dismissal (`AgentRuntime.answerQuestions`) — also after a restart. The
  * runtime installs this capability itself, since it owns the document.
  * A conversation nobody watches (a routine's, issue #63) gets no wait: the
  * call returns at once and the model carries on without the answers.

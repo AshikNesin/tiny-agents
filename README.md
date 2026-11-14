@@ -1,6 +1,6 @@
 # tiny-agents
 
-A messenger-style app where every contact is an AI bot you chat with: built
+A messenger-style app where every contact is an AI bot you chat with — built
 on [pi-durable](https://earendil.com/posts/pi-durable/) for durable
 conversations (survive refreshes, crashes, redeploys) and the
 [groot](https://github.com/AshikNesin/groot) boilerplate (Hono + React 19 +
@@ -77,17 +77,17 @@ it. Short version:
 
 ## Layout
 
-- `packages/agent`: the only module that touches pi-durable (excluded from
+- `packages/agent` — the only module that touches pi-durable (excluded from
   groot sync; app-shaped API so pi-durable churn stays contained). The
   Claude plan client lives under `src/engines/claude-code/`. The sandbox
   connection, terminal, browser, computer and Claude worker, which do not
   use pi-durable, are subpaths (`@tiny-agents/agent/sandbox` and so on; see
   [docs/README.md](docs/README.md#tiny-agentsagent-entry-points))
-- `packages/claude-worker`: loopback daemon that drives Claude Code. It
+- `packages/claude-worker` — loopback daemon that drives Claude Code. It
   does not run inside the tiny-agents process
-- `packages/code`, the Code page's harness adapters: one contract every
+- `packages/code` — the Code page's harness adapters: one contract every
   coding agent plugs into (Shelley, Claude Code), with the built-in drivers
-- `apps/web`: app code (bots API + SSE under `src/server/api/bots`, chat UI
+- `apps/web` — app code (bots API + SSE under `src/server/api/bots`, chat UI
   under `src/client`); everything else is the groot boilerplate, synced via
   `pnpm groot:sync` and never edited here
 - `app.db` (Drizzle, schema in `apps/web/src/server/db/schema.ts`) and
@@ -106,7 +106,7 @@ pnpm test:e2e     # Playwright (runs on the faux provider)
 
 Coolify (Railpack, health check `/health`, one volume at `/app/data`, SQLite
 `DATABASE_URL=file:/app/data/app.db`, `AGENT_DB_PATH=/app/data/agent.db`).
-**Disable rolling updates** (consistent container naming): pi-durable allows
+**Disable rolling updates** (consistent container naming) — pi-durable allows
 only one process per agent store. In-flight replies resume after boot.
 
 Migrations apply on boot. Uploads live next to the database

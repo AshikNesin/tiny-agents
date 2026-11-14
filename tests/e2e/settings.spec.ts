@@ -15,7 +15,7 @@ test.describe("App settings (authenticated)", () => {
     await page.goto("/settings/configuration");
     const key = `e2e.setting.${Date.now()}`;
 
-    // Create: the editor should open with the new setting auto-selected
+    // Create — the editor should open with the new setting auto-selected
     await page.getByRole("button", { name: /add setting/i }).click();
     await page.getByPlaceholder(/featureflags/i).fill(key);
     await page.getByRole("button", { name: /^create$/i }).click();
@@ -36,7 +36,7 @@ test.describe("App settings (authenticated)", () => {
     await expect(page.getByLabel("Description")).toHaveValue("created by e2e test");
     await expect(page.locator(".cm-content")).toContainText('"enabled": true');
 
-    // Delete via the confirm dialog: the list should drop the entry
+    // Delete via the confirm dialog — the list should drop the entry
     await page.getByRole("button", { name: /^delete$/i }).click();
     await page.getByRole("alertdialog").getByRole("button", { name: "Delete" }).click();
     await expect(page.getByText(/no setting selected/i)).toBeVisible();

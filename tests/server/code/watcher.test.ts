@@ -1,6 +1,6 @@
 /**
  * Turn ends for any harness (issue #143, ADR 0011): a bot's hand-off gets
- * its finish once (live, or reconciled after a reconnect) and followed
+ * its finish once — live, or reconciled after a reconnect — and followed
  * threads push only when nobody is looking.
  */
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
@@ -101,7 +101,7 @@ describe("Code watcher", () => {
     expect(delivered[0]!.text).toContain("(/code/fake%3AtH)");
     expect(delivered[0]!.text).toContain("All tests pass.");
     expect(await runningHandoffs()).toHaveLength(0);
-    // Handed off here (followed? no): hand-offs alone do not push.
+    // Handed off here (followed? no) — hand-offs alone do not push.
     expect(pushed).toHaveLength(0);
   });
 

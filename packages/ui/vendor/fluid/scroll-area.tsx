@@ -1,6 +1,6 @@
 "use client";
 
-// Adapted from Lina by SameerJS6 (https://lina.sameer.sh): lina-radix
+// Adapted from Lina by SameerJS6 (https://lina.sameer.sh) — lina-radix
 // scroll-area. Changes from the original: Lina's gradient-only ScrollMask is
 // dropped, the scrollbar is restyled to the shape system,
 // and tw-animate-css visibility classes are swapped for a plain opacity
@@ -36,7 +36,7 @@ const ScrollbarVisibleContext = createContext<boolean>(true);
 
 // How long the scrollbar lingers after the last scroll event before fading.
 // Hover hide is
-// immediate: the fade classes add their own 160ms grace.
+// immediate — the fade classes add their own 160ms grace.
 const SCROLL_LINGER_MS = 600;
 
 type Orientation = "vertical" | "horizontal" | "both";
@@ -104,7 +104,7 @@ const ScrollArea = forwardRef<ComponentRef<typeof ScrollAreaPrimitive.Root>, Scr
               data-slot="scroll-area"
               // type="always" keeps the scrollbar mounted whenever content
               // overflows; show/hide is OUR opacity fade (see ScrollBar), not
-              // Radix's hover Presence, which never reveals on scroll and
+              // Radix's hover Presence — which never reveals on scroll and
               // unmounts through layers that a CSS transition can't outlive.
               type="always"
               onPointerEnter={() => setHovering(true)}
@@ -148,12 +148,12 @@ const ScrollBar = forwardRef<
       orientation={orientation}
       data-slot="scroll-area-scrollbar"
       // Visibility is OUR hover/scroll state (ScrollbarVisibleContext), not
-      // Radix's type="hover" machinery, which never reveals on scroll and
+      // Radix's type="hover" machinery — which never reveals on scroll and
       // unmounts through Presence layers a CSS transition can't outlive.
       // data-visible drives the fade; Radix's own data-state stays "visible"
       // under the Root's type="always" and is ignored.
       data-visible={visible ? "" : undefined}
-      // Scrollbar show/hide is plain CSS opacity matching the cue fade:
+      // Scrollbar show/hide is plain CSS opacity matching the cue fade —
       // 160ms in, 120ms out (exits faster, per the animation guidelines);
       // spring tokens are Motion configs and don't apply here.
       className={cn(
@@ -178,7 +178,7 @@ const ScrollBar = forwardRef<
       <ScrollAreaPrimitive.ScrollAreaThumb
         data-slot="scroll-area-thumb"
         className={cn(
-          // Fixed surface-relative overlay ramp (8 → 12 → 16%): same tint
+          // Fixed surface-relative overlay ramp (8 → 12 → 16%) — same tint
           // direction as the menu hover/active tokens, one notch stronger.
           "relative bg-[rgb(var(--overlay)/0.08)] transition-[background-color,width,height] duration-160 ease-in-out",
           "group-hover/scrollbar:bg-[rgb(var(--overlay)/0.12)] active:!bg-[rgb(var(--overlay)/0.16)]",

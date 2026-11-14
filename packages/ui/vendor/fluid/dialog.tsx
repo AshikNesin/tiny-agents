@@ -34,7 +34,7 @@ function Dialog({
   ...props
 }: DialogPrimitive.DialogProps) {
   // Internal state always tracks changes, and the consumer's onOpenChange is
-  // notified alongside it: a listener must not replace state handling, or an
+  // notified alongside it — a listener must not replace state handling, or an
   // uncontrolled dialog with an onOpenChange prop could never open. The Root
   // below is always controlled by `open`, so defaultOpen seeds our state
   // instead of being forwarded.
@@ -54,9 +54,9 @@ function Dialog({
   );
 }
 
-// Trigger and Close compose either way: `render={<Button/>}` (the
+// Trigger and Close compose either way — `render={<Button/>}` (the
 // library's composition API, shared with DropdownTrigger) or Radix-style
-// `asChild` with a single child element, so one snippet works everywhere.
+// `asChild` with a single child element — so one snippet works everywhere.
 interface DialogSlotProps extends Omit<
   ComponentPropsWithoutRef<typeof DialogPrimitive.Trigger>,
   "asChild"
@@ -97,14 +97,14 @@ DialogClose.displayName = "DialogClose";
 
 interface DialogContentProps extends ComponentPropsWithoutRef<typeof DialogPrimitive.Content> {
   /** Width: sm 400, lg 540, xl 880 (each one notch narrower in compact
-   *  regions). `xl` is the canvas for composed layouts: a sidebar beside
-   *  a panel, which usually pair it with `className="p-0"` and a fixed
+   *  regions). `xl` is the canvas for composed layouts — a sidebar beside
+   *  a panel — which usually pair it with `className="p-0"` and a fixed
    *  height. */
   size?: "sm" | "lg" | "xl";
   /** Portal target. When set, the overlay and panel render inside this element
    *  (positioned `absolute`) instead of covering the viewport (`fixed`). Pair
-   *  with a `position: relative; overflow: hidden` container, and usually
-   *  `<Dialog modal={false}>`: to scope a dialog to a bounded region, e.g. a
+   *  with a `position: relative; overflow: hidden` container — and usually
+   *  `<Dialog modal={false}>` — to scope a dialog to a bounded region, e.g. a
    *  docs preview. Defaults to the document body / full-viewport behaviour. */
   container?: HTMLElement | null;
   /** The ✕ in the top-right corner. Drop it when the content has its own
@@ -136,7 +136,7 @@ const DialogContent = forwardRef<HTMLDivElement, DialogContentProps>(
     const shape = useShape();
     const substrate = useSurface();
     const dialogLevel = Math.min(substrate + DIALOG_OFFSET, 8);
-    // The size ladder narrows the dialog one notch in compact regions:
+    // The size ladder narrows the dialog one notch in compact regions —
     // width only, the padding stays put (see /docs/sizes).
     const compact = useSize().variant === "compact";
     const [mounted, setMounted] = useState(false);
@@ -147,7 +147,7 @@ const DialogContent = forwardRef<HTMLDivElement, DialogContentProps>(
 
     // Fallback release for the deferred unmount: onAnimationComplete on the
     // panel is the primary signal, but rAF-driven animation callbacks can
-    // stall in throttled/background tabs: leaving an invisible full-screen
+    // stall in throttled/background tabs — leaving an invisible full-screen
     // overlay (and Radix's scroll lock) in place. Both exit tweens run at
     // spring.slow.exit, so the fallback tracks that tier.
     useEffect(() => {
@@ -230,7 +230,7 @@ const DialogTitle = forwardRef<
   HTMLHeadingElement,
   ComponentPropsWithoutRef<typeof DialogPrimitive.Title>
 >(({ className, ...props }, ref) => {
-  // The title role of the type scale, see /docs/sizes.
+  // The title role of the type scale — see /docs/sizes.
   const compact = useSizeVariant() === "compact";
   return (
     <DialogPrimitive.Title

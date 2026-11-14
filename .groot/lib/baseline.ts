@@ -72,7 +72,7 @@ export async function readBaselineInfo(projectRoot: string): Promise<BaselineInf
  * child repo as `refs/groot/baseline`.
  *
  * Objects already exist in the clone, so the snapshot tree is assembled purely
- * from `mode/sha/path` triples via a temporary index: no content is re-read
+ * from `mode/sha/path` triples via a temporary index — no content is re-read
  * or re-hashed. The temporary export ref created in the clone is deleted
  * afterwards, whether the clone is owned or a reused local checkout.
  */

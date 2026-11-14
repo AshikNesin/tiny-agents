@@ -680,7 +680,7 @@ export function createComputerToolkit(options: ComputerToolkitOptions = {}): Cap
               : windows
                   .map(
                     (w) =>
-                      `${w.id}${w.active ? " (active)" : ""} ${w.windowClass}: ${w.title.slice(0, 200)}`,
+                      `${w.id}${w.active ? " (active)" : ""} ${w.windowClass} — ${w.title.slice(0, 200)}`,
                   )
                   .join("\n");
           return { output: [{ type: "text", text }] };
@@ -704,7 +704,7 @@ export function createComputerToolkit(options: ComputerToolkitOptions = {}): Cap
               {
                 type: "text",
                 text: apps.length
-                  ? apps.map((a) => `${a.id}: ${a.name}`).join("\n")
+                  ? apps.map((a) => `${a.id} — ${a.name}`).join("\n")
                   : "No applications found.",
               },
             ],
@@ -920,5 +920,5 @@ export function createComputerToolkit(options: ComputerToolkitOptions = {}): Cap
 /** What a computer vault use is bound to, as its approval card shows it. */
 export function windowTarget(windowClass: string, title?: string): string {
   const clean = (value: string) => value.replace(/\s+/g, " ").trim();
-  return title?.trim() ? `${clean(windowClass)}: “${clean(title)}”` : clean(windowClass);
+  return title?.trim() ? `${clean(windowClass)} — “${clean(title)}”` : clean(windowClass);
 }

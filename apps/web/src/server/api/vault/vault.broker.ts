@@ -2,7 +2,7 @@
  * The app's `VaultBroker` (issue #56): what the agent toolkits are given.
  * Tool calls know their conversation, not their bot, so this resolves the
  * bot (for per-bot item scoping and the approval card) and whether the turn
- * is unattended: a routine run or another bot's message. It never exposes a
+ * is unattended — a routine run or another bot's message. It never exposes a
  * write.
  */
 import type { VaultBroker, VaultUse } from "@tiny-agents/agent";

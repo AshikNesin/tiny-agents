@@ -7,7 +7,7 @@ import {
 } from "../../../.groot/lib/package-json-merge";
 
 /**
- * Deterministic package.json merge: what sync's reconcile step uses for the
+ * Deterministic package.json merge — what sync's reconcile step uses for the
  * root package.json instead of `git merge-file`, so project-owned keys never
  * raise conflict markers. A malformed package.json breaks the whole
  * toolchain, so this logic must be airtight.

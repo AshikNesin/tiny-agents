@@ -50,7 +50,7 @@ The capability ids a bot's conversation selects (`botToolkits`, `bot-toolkits.ts
 _Avoid_: toolset, capabilities (for harnesses that word means something else)
 
 **Harness**:
-A coding agent tiny-agents drives but does not implement (Shelley, Claude Code) plugged into the Code page through one adapter contract (`HarnessInstance`, `packages/code`). An instance is one configured harness (`shelley`, `claude-code`); a thread is addressed `<instance>:<native id>`. The harness owns the transcript; tiny-agents keeps only the thread index (ADR 0011).
+A coding agent tiny-agents drives but does not implement — Shelley, Claude Code — plugged into the Code page through one adapter contract (`HarnessInstance`, `packages/code`). An instance is one configured harness (`shelley`, `claude-code`); a thread is addressed `<instance>:<native id>`. The harness owns the transcript; tiny-agents keeps only the thread index (ADR 0011).
 _Avoid_: provider (model providers), backend, engine (bot engines)
 
 **Capability**:

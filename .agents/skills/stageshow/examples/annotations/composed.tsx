@@ -58,7 +58,7 @@ export function CollectionStudy({ width }: { width: number }) {
             <div className="an-invoice-balance-head" data-target="usage-invoice-field"><span>Amount due</span><span className="an-invoice-live"><i className="an-invoice-status-dot" data-ready={s.phase === 3 || undefined} /><States align="start" value={s.phase === 3 ? 'ready' : 'waiting'} states={{ waiting: 'Awaiting usage', ready: 'Live usage' }} /></span></div>
             <div className="an-invoice-total"><States align="start" value={s.phase === 3 ? 'amount' : 'empty'} states={{ empty: '$0.00', amount: '$189.00' }} /></div>
           </div>
-          <div className="an-invoice-lines">{rows.map(row => <div key={row.name}><span>{row.name}</span><States align="end" value={s.phase === 3 ? 'amount' : 'empty'} states={{ empty: '-', amount: row.amount }} /></div>)}</div>
+          <div className="an-invoice-lines">{rows.map(row => <div key={row.name}><span>{row.name}</span><States align="end" value={s.phase === 3 ? 'amount' : 'empty'} states={{ empty: '—', amount: row.amount }} /></div>)}</div>
         </section>
         <section className="an-usage-monitor" style={compact ? { left: 16, top: 400, width: Math.min(228, width - 92) } : { left: width - 278, top: 28, width: 228 }}>
           <header><strong>Usage</strong><span>October</span></header>

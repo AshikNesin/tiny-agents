@@ -73,6 +73,11 @@ const SESSION_INVALID_NAMES = new Set(["sessionInvalid", "SESSION_INVALID"]);
 const SESSION_INVALID_MESSAGE =
   "R9: only the session guard (packages/core/src/session/index.ts) throws sessionInvalid() or sets the SESSION_INVALID code, because the client signs the owner out on it. For a wrong password, passkey or other credential failure, throw a plain Boom.unauthorized.";
 
+// Typed in the source, not written as an escape: an escape is the opt-out.
+const EM_DASH = "\u2014";
+const EM_DASH_MESSAGE =
+  'R10: no em dash in UI copy: it reads as machine-written. Use a period, colon, comma or parentheses, and "-" for an empty value. If one is really needed (a quoted title, a typographic convention), write it as \\u2014.';
+
 const staticString = (node, lookup) => {
   switch (node.type) {
     case "Literal":
@@ -274,6 +279,18 @@ export default {
           }
         };
         return { TSAsExpression: check, TSTypeAssertion: check };
+      },
+    },
+    "no-em-dash-copy": {
+      create(context) {
+        const check = (node, raw) => {
+          if (raw.includes(EM_DASH)) context.report({ node, message: EM_DASH_MESSAGE });
+        };
+        return {
+          Literal: (node) => typeof node.value === "string" && check(node, node.raw),
+          TemplateElement: (node) => check(node, node.value.raw),
+          JSXText: (node) => check(node, node.raw ?? node.value),
+        };
       },
     },
     "no-never-cast": {

@@ -50,8 +50,8 @@ interface BotsState {
 
   /**
    * Refresh `bots` from the server. Resolves with the list that actually
-   * landed, including when a newer load superseded this one (then the
-   * newer list, once it lands), so a caller that awaits and snapshots
+   * landed — including when a newer load superseded this one (then the
+   * newer list, once it lands) — so a caller that awaits and snapshots
    * (the Memory page) never reads a stale store. Fire-and-forget callers
    * ignore the value.
    */
@@ -114,8 +114,8 @@ function settleWaiters(
 
 /**
  * A superseded request may itself carry waiters (promised its outcome by an
- * even older caller). They will never be settled by it, only the newest
- * request settles, so carry them forward to the newest generation before
+ * even older caller). They will never be settled by it — only the newest
+ * request settles — so carry them forward to the newest generation before
  * awaiting it; three overlapping loads (mount, page, SSE) otherwise strand
  * the oldest caller's promise forever.
  */
@@ -316,7 +316,7 @@ export const useBotsStore = create<BotsState>((set, get) => {
     markRead: (botId) => {
       // The durable marker lives on the bot row (server lastReadAt); it is
       // frozen into chat state as `unreadFrom` at connect time, so there is
-      // nothing to advance here, just clear the badge and persist.
+      // nothing to advance here — just clear the badge and persist.
       patchBot(botId, { unread: false });
       void botsApi.read(botId).catch(() => undefined);
     },

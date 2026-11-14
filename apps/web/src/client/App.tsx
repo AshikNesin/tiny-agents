@@ -56,7 +56,7 @@ const SHELL_CONFIG: ShellConfig = {
   login: {
     tagline: "Your team of always-on agents.",
     description:
-      "Every contact is an AI bot you chat with: durable conversations that survive refreshes, crashes and redeploys.",
+      "Every contact is an AI bot you chat with. Durable conversations that survive refreshes, crashes and redeploys.",
     features: [
       {
         icon: BotMessageSquare,

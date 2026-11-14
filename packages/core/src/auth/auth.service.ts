@@ -73,7 +73,7 @@ export async function createUser(data: CreateUserDTO): Promise<PublicUser> {
   return user!;
 }
 
-/** True once any account exists: first-run setup is closed from then on. */
+/** True once any account exists — first-run setup is closed from then on. */
 export async function hasAnyUser(): Promise<boolean> {
   const [row] = await db.select({ id: users.id }).from(users).limit(1);
   return row !== undefined;
@@ -82,7 +82,7 @@ export async function hasAnyUser(): Promise<boolean> {
 /**
  * First-run setup: create the very first account. Refused once any account
  * exists. Two racing requests can both insert (no transactions in core), so
- * whoever is not the lowest id removes its own row and is refused: exactly
+ * whoever is not the lowest id removes its own row and is refused — exactly
  * one setup wins. The route signs the account in with `startSession`.
  */
 export async function setupFirstUser(data: CreateUserDTO): Promise<PublicUser> {

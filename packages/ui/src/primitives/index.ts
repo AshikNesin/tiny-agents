@@ -1,5 +1,5 @@
 /**
- * Composed primitives: Radix-backed building blocks (ports of shadcn
+ * Composed primitives — Radix-backed building blocks (ports of shadcn
  * components) that are NOT direct re-exports of the Radix surface. Import via
  *
  *   import { AlertDialog } from "@groot/ui/primitives";

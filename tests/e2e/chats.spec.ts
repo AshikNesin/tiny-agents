@@ -82,7 +82,7 @@ test.describe("Chats", () => {
   });
 });
 
-test.describe("Chats: new chat", () => {
+test.describe("Chats — new chat", () => {
   test("starting a new chat clears the current transcript", async ({ page }) => {
     await page.goto("/login");
     await page.getByLabel("Email", { exact: true }).fill("demo@example.com");
@@ -121,7 +121,7 @@ test.describe("Chats: new chat", () => {
   });
 });
 
-test.describe("Chats: past chats (issue #101)", () => {
+test.describe("Chats — past chats (issue #101)", () => {
   test("read, continue and delete a chat that New chat left behind", async ({ page }) => {
     await page.goto("/login");
     await page.getByLabel("Email", { exact: true }).fill("demo@example.com");
@@ -188,7 +188,7 @@ test.describe("Chats: past chats (issue #101)", () => {
   });
 });
 
-test.describe("Chats: attachments (issue #17)", () => {
+test.describe("Chats — attachments (issue #17)", () => {
   test("attach an image, send, render, survive reload", async ({ page }) => {
     await page.goto("/login");
     await page.getByLabel("Email", { exact: true }).fill("demo@example.com");
@@ -279,7 +279,7 @@ test.describe("Chats: attachments (issue #17)", () => {
   });
 });
 
-test.describe("Chats: steering (issue #9)", () => {
+test.describe("Chats — steering (issue #9)", () => {
   test("sending mid-reply queues a steer that survives a reload and can be cancelled", async ({
     page,
   }) => {
@@ -307,7 +307,7 @@ test.describe("Chats: steering (issue #9)", () => {
 
     // A long message streams slowly (the faux model runs at 6 tokens/s), so
     // the bot is verifiably busy. With nothing typed the one action button
-    // is Stop; typing turns it into Steer, never both at once.
+    // is Stop; typing turns it into Steer — never both at once.
     const longMessage = Array.from({ length: 80 }, (_, i) => `word${i}`).join(" ");
     const composer = page.getByPlaceholder(/(?:ask|message) steer bot/i);
     await composer.fill(longMessage);

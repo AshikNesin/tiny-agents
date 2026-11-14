@@ -16,8 +16,8 @@ Research findings (2026-09-22):
 - Kumo: 55 releases, 12 in the last 90 days, 3.9k stars, MIT, actively
   developed (latest 2.14.0).
 - Its primitive layer, Base UI, hit 1.0 stable in Dec 2025 (now 1.8.0,
-  MUI-org maintained): the pre-1.0 risk from 0001's analysis has expired.
-- Kumo's toolchain is Vite+/Oxlint/Oxfmt: same as groot's.
+  MUI-org maintained) — the pre-1.0 risk from 0001's analysis has expired.
+- Kumo's toolchain is Vite+/Oxlint/Oxfmt — same as groot's.
 - Tree-shaking is good (~44 KB gzipped for a single-button app).
 - Caveat: Kumo _patch_ releases sometimes change visuals (borderless table
   rows, trigger colors shipped in patches) and components get deprecated
@@ -34,7 +34,7 @@ layer, no prop adapters. When Kumo is the choice, use it as Kumo.
 
 - `@groot/ui` shrinks to what Kumo genuinely does not ship: form wiring
   (react-hook-form + zod over Kumo inputs) and project-specific composites
-  (`StatusBadge`, `EmptyState`-style), each must justify its existence
+  (`StatusBadge`, `EmptyState`-style) — each must justify its existence
   against "just use Kumo's".
 - Icons: Phosphor (`@phosphor-icons/react`, Kumo's peer dep) replaces
   lucide-react.

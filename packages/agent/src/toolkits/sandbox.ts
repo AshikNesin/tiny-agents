@@ -1,13 +1,13 @@
 /**
  * The `sandbox` toolkit (issue #19): a keyless shell on the shared sandbox
  * VM over Tailscale SSH. The tailnet is the authentication (no keys, no
- * passwords: the tagged node identity is what the ACL accepts). The
+ * passwords — the tagged node identity is what the ACL accepts). The
  * toolkit takes the app's one `SandboxConnection` (`ssh/sandbox-connection`),
  * which owns the dial, the pool, the retry rule and host keys; tests
  * substitute an in-memory one.
  *
  * Replay: `read_file` is pure (`safe`); `run_command` and `write_file`
- * have side effects and stay `unsafe`: the approval gate's start-marked
+ * have side effects and stay `unsafe` — the approval gate's start-marked
  * memo (`approvals.ts`) then reports "interrupted" on a crash instead of
  * re-running a command or a write.
  *
@@ -91,7 +91,7 @@ export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capab
 
   /**
    * The connection, or why there is none. Never fall through to a default
-   * host: an unset one would dial localhost, the app server itself.
+   * host: an unset one would dial localhost — the app server itself.
    */
   const sandbox = (): SandboxConnection => {
     if (!connection) throw new Error("Sandbox is not configured: set SANDBOX_HOST on the server.");
@@ -224,7 +224,7 @@ export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capab
       name: "run_command",
       description:
         "Run a shell command on the sandbox VM and return stdout, stderr and the exit code. " +
-        "One command string per call; chain with && or ; for steps. " +
+        "One command string per call — chain with && or ; for steps. " +
         "Set detached:true for long builds or servers: the command keeps running after this call returns." +
         (broker
           ? " To give the command an API key, pass secrets: [{handle, env}] with a vault handle that allows run_command; " +
@@ -334,7 +334,7 @@ export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capab
               type: "text",
               text: looksUtf8(trimPartialRune(file.bytes))
                 ? file.bytes.toString("utf8")
-                : `[binary file, ${file.size} bytes]; inspect with run_command (file, hexdump -C | head)`,
+                : `[binary file, ${file.size} bytes] — inspect with run_command (file, hexdump -C | head)`,
             },
           ],
           details: { truncated: file.truncated },

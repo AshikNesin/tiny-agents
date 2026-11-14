@@ -13,7 +13,7 @@ test.describe("Storage page (authenticated)", () => {
     await page.waitForURL(/\/(chats|tasks)/);
   });
 
-  // Only cleans up after interrupted runs: successful deletes now prune
+  // Only cleans up after interrupted runs — successful deletes now prune
   // their directories (asserted in the folder lifecycle test below).
   test.afterEach(() => {
     rmSync("local/uploads", { recursive: true, force: true });
@@ -33,7 +33,7 @@ test.describe("Storage page (authenticated)", () => {
     await page.goto("/storage");
     const folderName = await createFolder(page);
 
-    // Open the folder: the driver seeds it with a ".keep" placeholder file
+    // Open the folder — the driver seeds it with a ".keep" placeholder file
     await page.getByRole("cell", { name: folderName, exact: true }).getByRole("button").click();
     await expect(page.getByRole("cell", { name: ".keep", exact: true })).toBeVisible();
 

@@ -1,4 +1,4 @@
-// Class name utility: reuse the single implementation from @groot/ui.
+// Class name utility — reuse the single implementation from @groot/ui.
 export { cn } from "@groot/ui/lib/utils";
 
 // Format bytes to human readable format

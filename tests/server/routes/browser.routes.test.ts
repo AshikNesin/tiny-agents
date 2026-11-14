@@ -1,6 +1,6 @@
 /**
  * Browser routes (issue #24): status, start, VNC ticket, resize, driver and
- * profile reset: against the app's Hono stack with a live fake session
+ * profile reset — against the app's Hono stack with a live fake session
  * injected into the toolkit's session map (the same seam the production
  * toolkit uses).
  */

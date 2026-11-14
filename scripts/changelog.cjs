@@ -4,7 +4,7 @@
  * Wraps @changesets/changelog-github with graceful degradation:
  *
  *   - When the GitHub GraphQL API is reachable: full enrichment (commit/PR
- *     links, author attribution): identical output to changelog-github.
+ *     links, author attribution) — identical output to changelog-github.
  *   - When GraphQL fails (e.g. undici "Premature close" on CI runners):
  *     plain entries with just the commit SHA and summary, so releases are
  *     NEVER blocked by a transient or sustained API outage.

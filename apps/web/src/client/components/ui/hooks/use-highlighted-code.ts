@@ -6,7 +6,7 @@ type Highlighter = NonNullable<Awaited<ReturnType<typeof loadHighlighter>>>;
 type GrammarState = Parameters<Highlighter["highlight"]>[1];
 
 /**
- * Highlights `value` as `language` and returns one React node per line:
+ * Highlights `value` as `language` and returns one React node per line —
  * render each inside a `CodeBlockLine`. Until the language has loaded (or for
  * an unknown language) the lines come back as plain strings.
  *

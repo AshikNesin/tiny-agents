@@ -3,7 +3,7 @@
  *
  * `package.json` is the highest-risk file to hand to an LLM editor: it changes
  * in every boilerplate release (so it conflicts often) and a malformed result
- * (a trailing comma, a duplicate key, an unbalanced brace) breaks the whole
+ * — a trailing comma, a duplicate key, an unbalanced brace — breaks the whole
  * toolchain. This module merges it programmatically so the result is always
  * valid JSON, built from parsed objects.
  *
@@ -69,13 +69,13 @@ export function mergeObject3Way(
     const inBase = k in base;
     const ourVal = ours[k];
     if (!inBase) {
-      // Net-new in ours (or both sides added it): keep ours.
+      // Net-new in ours (or both sides added it) — keep ours.
       result[k] = ourVal;
     } else if (ourVal === base[k] || deepEqual(ourVal, base[k])) {
-      // Unchanged locally: adopt theirs, including upstream deletion.
+      // Unchanged locally — adopt theirs, including upstream deletion.
       if (k in theirs) result[k] = theirs[k];
     } else {
-      // Changed locally: local wins.
+      // Changed locally — local wins.
       result[k] = ourVal;
     }
   }
@@ -134,14 +134,14 @@ export function mergePackageJson(
     }
   }
 
-  // Start from a verbatim copy of ours, every project-owned key is untouched.
+  // Start from a verbatim copy of ours — every project-owned key is untouched.
   const result: Record<string, unknown> = { ...ours };
 
   for (const key of PACKAGE_JSON_MERGE_KEYS) {
     const sectionInOurs = key in ours;
     const sectionInBase = key in base;
 
-    // Local deleted the whole section after base had it: respect the deletion.
+    // Local deleted the whole section after base had it — respect the deletion.
     if (!sectionInOurs && sectionInBase) {
       delete result[key];
       continue;

@@ -5,7 +5,7 @@ import { createContext, useContext } from "react";
 type ShapeVariant = "pill" | "rounded";
 
 interface ShapeClasses {
-  /** The variant these classes belong to: handy for conditionals. */
+  /** The variant these classes belong to — handy for conditionals. */
   variant: ShapeVariant;
   item: string;
   bg: string;

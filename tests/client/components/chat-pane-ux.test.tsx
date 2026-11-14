@@ -131,7 +131,7 @@ beforeEach(() => {
   localStorage.clear();
 });
 
-describe("ChatPane composer: Enter behavior by pointer type", () => {
+describe("ChatPane composer — Enter behavior by pointer type", () => {
   it("sends on Enter with a fine (desktop) pointer", async () => {
     seedStore();
     const composer = renderPane();
@@ -235,7 +235,7 @@ describe("ChatPane transcript", () => {
   });
 });
 
-describe("ChatPane composer: one action button", () => {
+describe("ChatPane composer — one action button", () => {
   function renderBusy(busy: boolean) {
     seedStore();
     const composer = renderPane();

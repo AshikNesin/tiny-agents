@@ -22,7 +22,7 @@ packages/core/src/                 # Boilerplate (synced)
 ├── middlewares/                   # request logger, admin key, rate limit, error handler
 └── utils/                         # ok()/noContent(), parseBody()/parseQuery()/parseId(), password
 
-packages/jobs/src/server/          # queue, transitions, tick (runner), worker, dashboard API, see features/jobs.md
+packages/jobs/src/server/          # queue, transitions, tick (runner), worker, dashboard API — see features/jobs.md
 
 apps/web/src/server/               # App-owned (not synced)
 ├── app.ts                         # registerJobHandlers() + createWebApp()
@@ -241,6 +241,6 @@ throws `ApiError`), `@groot/ui` primitives. See [Client](../features/client.md).
 | One entry                 | Runtime-specific code lives only in `entry.node.ts`                 |
 | Feature isolation         | A feature is one folder: schema, service, routes, jobs              |
 | Parse at the edge         | Zod on every body, query and param; services receive typed data     |
-| One envelope              | `ok()` / `noContent()` / thrown `Boom`, never hand-built JSON       |
+| One envelope              | `ok()` / `noContent()` / thrown `Boom` — never hand-built JSON      |
 | The database is the queue | Jobs, schedules, logs, kv are tables, not services                  |
 | Boring persistence        | Query builder, generated migrations; no transactions in `packages/` |

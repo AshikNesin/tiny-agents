@@ -141,7 +141,7 @@ fi
 if pnpm install --frozen-lockfile >/tmp/orb-pnpm-install.log 2>&1; then
   log "pnpm install ok ($(tail -1 /tmp/orb-pnpm-install.log))"
 else
-  log "pnpm install FAILED: last lines:"
+  log "pnpm install FAILED — last lines:"
   tail -30 /tmp/orb-pnpm-install.log >&2
   exit 1
 fi

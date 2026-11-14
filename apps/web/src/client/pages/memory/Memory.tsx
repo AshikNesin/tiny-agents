@@ -86,8 +86,8 @@ export function MemoryPage() {
     try {
       // One list for the whole app: the store's, reloaded so a bot made
       // elsewhere shows up here too. loadBots resolves with the list that
-      // actually landed, even when a concurrent load (app mount, the SSE
-      // feed's refresh) superseded this one, so the page never snapshots a
+      // actually landed — even when a concurrent load (app mount, the SSE
+      // feed's refresh) superseded this one — so the page never snapshots a
       // stale store and shows "No bots yet" forever (issue #119).
       const list = await useBotsStore.getState().loadBots();
       const lists = await Promise.all(list.map((bot) => botsApi.listMemories(bot.id)));

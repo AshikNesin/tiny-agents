@@ -39,13 +39,13 @@ The sync tool uses full-tree snapshot reconciliation (v5) and only escalates
 true conflicts:
 
 1. **Reads config** from `.groot/boilerplate-sync.json`
-2. **Acquires boilerplate**: reuses a clean `~/Code/groot` checkout (fast-forwarded to its default branch) when available, otherwise clones to a temp directory (with tags for version resolution)
-3. **Builds a baseline snapshot**: a parentless git commit of every synced file at the last-sync state, stored as `refs/groot/baseline`. Rebuilt from the checkout when missing, making sync self-healing
+2. **Acquires boilerplate** — reuses a clean `~/Code/groot` checkout (fast-forwarded to its default branch) when available, otherwise clones to a temp directory (with tags for version resolution)
+3. **Builds a baseline snapshot** — a parentless git commit of every synced file at the last-sync state, stored as `refs/groot/baseline`. Rebuilt from the checkout when missing, making sync self-healing
 4. **Reconciles the full file tree** across three trees: ours (working tree), base (baseline snapshot), theirs (boilerplate HEAD). Categorizes each file using pattern matching (micromatch)
 5. **Three-way merges** every locally-modified synced file (base = baseline, ours = local, theirs = groot)
 6. **Extracts changelog** between synced version and latest version
 7. **Applies** auto-apply (unmodified), clean 3-way merges, and safe deletions (removed upstream + unmodified locally), refusing to overwrite files with uncommitted git changes unless `--force`
-8. **Advances state**: updates the baseline ref and `boilerplate-sync.json` last, so a crash mid-apply never loses state
+8. **Advances state** — updates the baseline ref and `boilerplate-sync.json` last, so a crash mid-apply never loses state
 9. **Writes conflict markers** for files that genuinely conflict and records them in `.groot/needs-review/manifest.json`
 10. **Writes sync report** (`sync-report.json`) for CI consumption
 
@@ -86,7 +86,7 @@ object), and `groot:resolve` then treats it like any other file.
 > or `pi` + /login).
 
 When you are operating inside an agent session (e.g. Droid) you may instead
-resolve the manifest's files directly with your own editing tools: the
+resolve the manifest's files directly with your own editing tools — the
 manifest gives you each file, its conflict count, and the upstream commit
 messages explaining the change.
 
@@ -95,8 +95,8 @@ messages explaining the change.
 Push child-repo bug fixes back to the boilerplate. Upstream is sync with the
 sides swapped (`planUpstream` in `.groot/lib/engine.ts`):
 
-1. **Finds changed synced files**, every synced file modified locally since the last sync, against the same base sync uses (baseline snapshot, else groot at `last_sync.commit`)
-2. **Three-way merges onto groot HEAD**: groot's changes since the last sync are kept; overlapping edits are listed as conflicts and left out (sync first, then upstream); files groot deleted are skipped
+1. **Finds changed synced files** — every synced file modified locally since the last sync, against the same base sync uses (baseline snapshot, else groot at `last_sync.commit`)
+2. **Three-way merges onto groot HEAD** — groot's changes since the last sync are kept; overlapping edits are listed as conflicts and left out (sync first, then upstream); files groot deleted are skipped
 3. **Shows the clean candidates** with diff stats against groot HEAD
 4. **Interactive selection** of which files to upstream (`--all` takes every clean one)
 5. **Creates PR on groot** via GitHub CLI (`gh`), re-merging onto a fresh clone first
@@ -115,12 +115,12 @@ Groot uses [changesets](https://github.com/changesets/changesets) for automated 
 
 | Category           | Paths                                                                                                                                                                 |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Workspace Packages | `packages/**` (ui, shell, core, jobs, ai: the whole kit ships to children)                                                                                            |
+| Workspace Packages | `packages/**` (ui, shell, core, jobs, ai — the whole kit ships to children)                                                                                           |
 | App Config Files   | `apps/*/package.json`, `apps/*/tsconfig.json`                                                                                                                         |
-| Tests (mirrors)    | Ownership-declared, see the table below: a test syncs when the source it exercises syncs                                                                              |
+| Tests (mirrors)    | Ownership-declared, see the table below — a test syncs when the source it exercises syncs                                                                             |
 | Test Setup         | `tests/server/setup.ts`                                                                                                                                               |
 | Infrastructure     | `*.config.*`, `tsconfig.json`, `tsconfig.base.json`, `.github/workflows/**`, `.vite-hooks/**`, `.gitleaks.toml`, `scripts/**`, `postcss.config.js`, `components.json` |
-| Sync Tooling       | `.groot/**` (code only: state files are immutable, see below)                                                                                                         |
+| Sync Tooling       | `.groot/**` (code only — state files are immutable, see below)                                                                                                        |
 | Agent Skills       | `.agents/skills/**`                                                                                                                                                   |
 | Documentation      | `docs/**`                                                                                                                                                             |
 | Deployment Config  | `railpack.json`                                                                                                                                                       |
@@ -159,7 +159,7 @@ is missing on disk or holds no test files.
 
 | Category            | Paths                                                                                       |
 | ------------------- | ------------------------------------------------------------------------------------------- |
-| App Source          | `apps/web/src/**` (routes, entries, `config.ts`, `db/schema.ts`, both sides)                |
+| App Source          | `apps/web/src/**` (routes, entries, `config.ts`, `db/schema.ts` — both sides)               |
 | App Migrations      | `apps/web/drizzle/**` (generated by drizzle-kit from the app schema; also immutable, below) |
 | App Entry           | `apps/web/index.html` (downstream branding)                                                 |
 | Project-Local Tests | `tests/server/app/**`, `tests/e2e/**`                                                       |
@@ -180,13 +180,13 @@ These files are NEVER synced, even if removed from config:
 
 Each file changed in groot since the last sync lands in exactly one bucket:
 
-| Bucket          | Meaning                                                    | Action                                 |
-| --------------- | ---------------------------------------------------------- | -------------------------------------- |
-| **Auto-apply**  | New locally, or unmodified locally since last sync         | Copied automatically                   |
-| **Auto-merged** | Modified locally but the 3-way merge is clean (no overlap) | Merged result written automatically    |
-| **Conflict**    | Modified locally with overlapping changes                  | Markers written + recorded in manifest |
-| **Drift**       | Changed in groot but matches no sync pattern (new surface) | Listed only: adopt manually if desired |
-| **Skipped**     | Immutable (security) or app-specific paths                 | Ignored (counts only in output)        |
+| Bucket          | Meaning                                                    | Action                                  |
+| --------------- | ---------------------------------------------------------- | --------------------------------------- |
+| **Auto-apply**  | New locally, or unmodified locally since last sync         | Copied automatically                    |
+| **Auto-merged** | Modified locally but the 3-way merge is clean (no overlap) | Merged result written automatically     |
+| **Conflict**    | Modified locally with overlapping changes                  | Markers written + recorded in manifest  |
+| **Drift**       | Changed in groot but matches no sync pattern (new surface) | Listed only — adopt manually if desired |
+| **Skipped**     | Immutable (security) or app-specific paths                 | Ignored (counts only in output)         |
 
 Only **Conflict** files need attention, and `pnpm groot:resolve` handles those
 with the pi coding agent. Clean 3-way merges no longer require manual review.

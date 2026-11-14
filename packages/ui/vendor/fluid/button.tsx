@@ -34,7 +34,7 @@ const buttonVariants = cva(
         tertiary: "text-foreground",
         ghost: "text-muted-foreground hover:text-foreground",
       },
-      // The two-step size ladder shared by every control, see /docs/sizes.
+      // The two-step size ladder shared by every control — see /docs/sizes.
       // default = 36px control height, compact = 28px for dense surfaces.
       size: {
         default: "h-9 px-4 text-[length:var(--fs-body,13px)] leading-[var(--lh-body,20px)] gap-1.5",
@@ -104,7 +104,7 @@ interface ButtonProps
 /* Press effect: the surface layer sits 1px inside the button and a
    same-color box-shadow spread fills it back out to the full bounds.
    Pressing collapses the spread, shrinking the surface by exactly 1px per
-   side at any width: a scale would warp (2% of a 400px button is 8px
+   side at any width — a scale would warp (2% of a 400px button is 8px
    sideways but under 1px vertically). Primary's fills are opaque
    color-mix()es. Secondary's are see-through (--tint), so it takes on the
    surface or tinted banner under it; its fill and spread ring still never
@@ -163,7 +163,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     // asChild: the user's element becomes the root, but the button's internal
     // structure (bg layer, content wrapper, spinner, icons) must survive. Slot
     // requires exactly one child, so instead of Slottable we clone the user's
-    // element with our internals as its children: the element's own children
+    // element with our internals as its children — the element's own children
     // become the label inside the content wrapper.
     // `render` is the same thing written the Base UI way: its element is the
     // root and the children, when given, are the label (otherwise the
@@ -247,7 +247,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
               {/* text-box only applies to block containers, so the trim lives
                   on the label span (a blockified flex item), not the flex root.
                   The button's height is fixed (h-*), so this doesn't change
-                  layout: it just centers the cap-to-baseline box optically. */}
+                  layout — it just centers the cap-to-baseline box optically. */}
               <span className="[text-box:trim-both_cap_alphabetic]">{label}</span>
               {TrailingIcon && (
                 <TrailingIcon
@@ -275,7 +275,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
           shape.button,
           className,
         )}
-        // asChild roots (e.g. an anchor) don't take the disabled attribute:
+        // asChild roots (e.g. an anchor) don't take the disabled attribute —
         // Slot would spread it onto the element as invalid HTML.
         disabled={asChildElement ? undefined : disabled || loading}
         style={style}

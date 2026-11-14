@@ -6,7 +6,7 @@
  * zero-knowledge. Every path is pinned to the dedicated vault from env; an
  * item whose `vault.id` differs is refused. The guard (`status()`) lists the
  * vaults the token can see and refuses every use unless that list is exactly
- * the pinned vault: a token that can see another vault is never used.
+ * the pinned vault — a token that can see another vault is never used.
  */
 import { SecretValue } from "@tiny-agents/agent";
 import { parseTotp, totpCode } from "../vault.totp";

@@ -1,5 +1,5 @@
 /**
- * Groot sync engine: full-tree snapshot reconciliation.
+ * Groot sync engine — full-tree snapshot reconciliation.
  *
  * Instead of diffing upstream commits (fragile: depends on JSON state and on
  * old commits staying reachable), every run reconciles the union of synced
@@ -120,7 +120,7 @@ export async function runSync(projectRoot: string, opts: SyncOptions): Promise<S
 
   try {
     const cloneDir = repo.dir;
-    // Independent reads on the clone: run concurrently.
+    // Independent reads on the clone — run concurrently.
     const [targetCommit, latestVersion, base] = await Promise.all([
       resolveCommit(cloneDir, "HEAD"),
       resolveLatestVersion(cloneDir),
@@ -177,7 +177,7 @@ export async function runSync(projectRoot: string, opts: SyncOptions): Promise<S
           else if (action === "skip-app") result.skipped.appSpecific.push(file);
         }
       } catch {
-        /* report-only, never block the sync */
+        /* report-only — never block the sync */
       }
     }
 
@@ -224,7 +224,7 @@ export async function runSync(projectRoot: string, opts: SyncOptions): Promise<S
             // path the kit only just grew to own has no base while the child
             // may have tracked it all along. When this repo's own history shows
             // the path was tracked and it is gone now, that is a deliberate
-            // local deletion, not an adoption: honor it instead of
+            // local deletion, not an adoption — honor it instead of
             // resurrecting a file the child chose to drop. Tracked-and-present
             // files never reach this branch (reconcile already returned
             // identical or merged above); this catches ours-missing only.
@@ -260,7 +260,7 @@ export async function runSync(projectRoot: string, opts: SyncOptions): Promise<S
           case "kept-local-deletion": {
             // The baseline (a snapshot of groot's tree) says this file was synced
             // but it's gone locally. That's usually an intentional delete, but
-            // the baseline is built from groot's tree, not this repo's history:
+            // the baseline is built from groot's tree, not this repo's history —
             // a file a prior sync wrote into the working tree but never committed
             // (then swept, e.g. by `git clean -fd`) is indistinguishable from a
             // deliberate delete without consulting this repo's own history. Honor
@@ -326,7 +326,7 @@ async function applyChanges(
     }
   }
 
-  // Each write/delete targets a unique path: fan out concurrently.
+  // Each write/delete targets a unique path — fan out concurrently.
   await Promise.all(
     writes.map(async ({ file, content, executable }) => {
       const dest = join(projectRoot, file);
@@ -466,7 +466,7 @@ async function writeSyncReport(projectRoot: string, result: SyncResult): Promise
 /**
  * What a child's change does to groot. Groot is the side being written
  * (ours = groot HEAD), the child's copy is the incoming change (theirs), and
- * the last sync is the base, so groot's changes since then are kept and
+ * the last sync is the base — so groot's changes since then are kept and
  * overlapping edits surface as conflicts instead of being reverted.
  */
 export type UpstreamOutcome =

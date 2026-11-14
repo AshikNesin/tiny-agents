@@ -75,7 +75,7 @@ const create = async (a: Act<Beat>) => {
 function Terminal({ on, fill, layout }: { on: boolean; fill?: boolean; layout: Layout }) {
   const wide = layout === 'wide'
   return (
-    <Window chrome="terminal" lights="grey" title={wide ? 'demo - zsh' : undefined} className="rb-term" body={{ 'data-crop': '' }} data-on={on || undefined} data-fill={fill || undefined} data-layout={layout}>
+    <Window chrome="terminal" lights="grey" title={wide ? 'demo — zsh' : undefined} className="rb-term" body={{ 'data-crop': '' }} data-on={on || undefined} data-fill={fill || undefined} data-layout={layout}>
       <div className="ss-term rb-term__body">
         <Prompt path="~/demo">halite create shop</Prompt>
         <div className="rb-out" style={{ ['--i' as string]: 0 }}>

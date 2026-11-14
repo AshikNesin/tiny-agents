@@ -56,10 +56,10 @@ Non-secret settings (rate limits, job tuning, ...) are derived from these in
 [Config](./reference/config.md#env-vs-config) covers that split and what adding
 a variable involves.
 
-The table above covers the core (groot) variables. tiny-agents adds its own:
+The table above covers the core (groot) variables. tiny-agents adds its own —
 the sandbox VM, the browser and computer toolkits, the secrets key, 1Password
 Connect, TinyFish web search, the faux model, `AUTH_RATE_LIMIT_MAX` for test
-servers, each with a comment in
+servers — each with a comment in
 [`.env.example`](../.env.example), validated in `apps/web/src/server/env.ts`.
 All are optional in development.
 
@@ -82,7 +82,7 @@ Generate secrets with `openssl rand -base64 48 | tr -d '/+=' | cut -c1-48`.
 ## Local development
 
 ```bash
-pnpm dev                 # https://tiny-agents.localhost (portless): migrates + seeds first
+pnpm dev                 # https://tiny-agents.localhost (portless) — migrates + seeds first
 PORTLESS=0 pnpm dev      # http://localhost:3000
 ```
 

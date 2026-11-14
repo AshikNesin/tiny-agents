@@ -245,7 +245,7 @@ export interface ChatMessage {
   /**
    * Trusted attribution for a cross-bot delivery (user role only): set by
    * the delivery pipeline, never by the owner's composer. A text that merely
-   * looks like an envelope has no `peer` and renders as a plain bubble:
+   * looks like an envelope has no `peer` and renders as a plain bubble —
    * the parser alone must never attribute a card (cubic: spoofing).
    */
   peer?:
@@ -272,7 +272,7 @@ export interface ChatMessage {
 /**
  * An input durably queued while the conversation is busy: a steer joins the
  * running reply after its current tool round; a follow-up starts the next one.
- * Owner messages only: cross-bot deliveries (peer entries) never queue here.
+ * Owner messages only — cross-bot deliveries (peer entries) never queue here.
  */
 export interface QueuedMessage {
   /** Host request id: what withdrawal (the transcript's cancel) addresses. */

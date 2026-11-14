@@ -26,10 +26,10 @@ ENV DEBIAN_FRONTEND=noninteractive \
 # Packages over HTTPS, with retries. The base image's sources are plain HTTP
 # (http://deb.debian.org), so a caching proxy on the path (Docker's or
 # Colima's network layer, a VPN, a corporate network) or a mirror mid-sync
-# can serve a .deb that fails apt's hash check: the "Hash Sum mismatch"
+# can serve a .deb that fails apt's hash check — the "Hash Sum mismatch"
 # build failure. TLS pins the stream; retries ride out flaky fetches. The
 # base image ships no CA bundle, so the one bootstrap install below still
-# runs over HTTP: everything after it, including tzdata and the desktop,
+# runs over HTTP — everything after it, including tzdata and the desktop,
 # goes over HTTPS.
 RUN printf 'Acquire::Retries "5";\n' > /etc/apt/apt.conf.d/80-retries \
  && apt-get update -qq \

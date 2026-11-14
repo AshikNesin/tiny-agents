@@ -137,7 +137,7 @@ function newBotFacts(args: Record<string, unknown>): ApprovalFact[] {
 
 /** An approval card's sentences. */
 export interface ApprovalText {
-  /** `<bot> wants to <ask>: “<summary>”`. */
+  /** `<bot> wants to <ask> — “<summary>”`. */
   title: string;
   /** Labelled lines the owner must read before approving; only create_bot has them. */
   facts?: ApprovalFact[];

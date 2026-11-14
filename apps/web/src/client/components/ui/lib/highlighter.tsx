@@ -3,7 +3,7 @@ import { createHighlighterCore, type GrammarState, type HighlighterCore } from "
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 
 /**
- * Lazy shiki highlighter for `@groot/ui/code-block` (JS regex engine: no
+ * Lazy shiki highlighter for `@groot/ui/code-block` (JS regex engine — no
  * WASM). Languages and the two github themes load on first use, so nothing
  * from shiki enters a bundle until a code block actually renders.
  *

@@ -1,4 +1,4 @@
-# 0005: Secrets bots use live outside the app; the model only sees handles
+# 0005 — Secrets bots use live outside the app; the model only sees handles
 
 - Status: accepted (amended by [0015](0015-one-secrets-subsystem.md): the vault also
   holds the app's own credentials, as `app` items)
@@ -10,7 +10,7 @@
 Bots need the owner's website logins, payment cards, 2FA codes and API keys
 to do real work. Two things must hold at once: the model (and its provider,
 gateway logs and transcripts) never sees a value, and tiny-agents doesn't
-become the system of record for the owner's credentials: losing the app's
+become the system of record for the owner's credentials — losing the app's
 volume must not leak them, and rotating one must not need an app change.
 
 ## Decision
@@ -34,7 +34,7 @@ volume must not leak them, and rotating one must not need an app change.
 - **Item-level approval** on top of tool permissions: logins and keys ask
   once per chat by default, cards on every use (no override), approvals
   expire after 10 minutes, and unattended runs (routines, peer bots) are
-  refused unless the item allows them: cards never.
+  refused unless the item allows them — cards never.
 - A process-wide **redactor** scrubs every resolved value (and its
   encodings) from tool results, transcripts, logs and Sentry, as a backstop.
 - When no item exists, a **credential request** sheet lets the owner type
@@ -43,7 +43,7 @@ volume must not leak them, and rotating one must not need an app change.
 
 ## Consequences
 
-- A value can still reach a site the item allows: that site then has it.
+- A value can still reach a site the item allows — that site then has it.
   Exact-origin binding, checked twice (and once more inside the page), is
   the guard against prompt-injected phishing; it can't help against a
   compromised destination.
@@ -61,11 +61,11 @@ volume must not leak them, and rotating one must not need an app change.
 
 ## Alternatives considered
 
-- **Storing values in the app database**: makes tiny-agents the system of
+- **Storing values in the app database** — makes tiny-agents the system of
   record and a single volume theft a full leak.
-- **Bitwarden Password Manager**: no supported REST path to decrypted items
+- **Bitwarden Password Manager** — no supported REST path to decrypted items
   (`bw serve` is unauthenticated once unlocked); a CLI adapter remains a
   later option. **Bitwarden Secrets Manager** has REST but no login items.
-- **OpenBao / Vault**: fully self-hosted REST, but not zero-knowledge and
+- **OpenBao / Vault** — fully self-hosted REST, but not zero-knowledge and
   no login/card item model.
-- **1Password Service Accounts**: SDK/CLI only, no REST, and request quotas.
+- **1Password Service Accounts** — SDK/CLI only, no REST, and request quotas.

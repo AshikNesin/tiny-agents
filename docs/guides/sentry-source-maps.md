@@ -59,8 +59,8 @@ than relying on the fallbacks.
 
 ## Troubleshooting
 
-- **Nothing uploaded**: the token or `SENTRY_ORG` is missing at build time,
+- **Nothing uploaded** — the token or `SENTRY_ORG` is missing at build time,
   or the token lacks scopes.
-- **Still bundled paths**: the runtime release does not match the uploaded
+- **Still bundled paths** — the runtime release does not match the uploaded
   release (`SENTRY_RELEASE` differs or is unset on one side), or processing is
   still in progress.

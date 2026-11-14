@@ -112,7 +112,7 @@ const exercised = fixtureImports();
 for (const rule of PACKAGES) {
   const { targets, wildcards } = readManifest(rule);
   for (const key of wildcards) {
-    console.error(`${rule.manifest}: wildcard export "${key}": list entrypoints explicitly`);
+    console.error(`${rule.manifest}: wildcard export "${key}" — list entrypoints explicitly`);
     failed = true;
   }
 

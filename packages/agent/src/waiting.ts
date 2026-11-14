@@ -6,7 +6,7 @@
  * renders a card from, and waits on the document until the host writes the
  * owner's response. pi-durable 1.3 cannot park a task until an external
  * event, so the call stays running while it waits; after a restart it re-runs
- * (it is `replay: "safe"`), finds the same document and keeps waiting, or
+ * (it is `replay: "safe"`), finds the same document and keeps waiting — or
  * acts on a response already recorded.
  *
  * Revisit once pi-durable ships an external wake/resume (`Harness.wake()`).

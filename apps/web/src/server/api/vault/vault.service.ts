@@ -2,8 +2,8 @@
  * The vault's policy, audit and read path (issue #56).
  *
  * `VaultItem` rows hold references and policy; values stay in the backend
- * and are fetched per use. Every attempted use by a bot or connection:
- * refusals and denials included: writes a `VaultAuditEvent` without any
+ * and are fetched per use. Every attempted use by a bot or connection —
+ * refusals and denials included — writes a `VaultAuditEvent` without any
  * value. An `app` item (a model provider's key, issue #179) audits refusals
  * and failures only, and its value is cached in memory for a few minutes, so
  * every model call neither writes a row nor reaches the backend. This module

@@ -5,10 +5,10 @@ storage adapter. Two adapters ship; the runtime entry injects one through
 `bootstrap({ storage })` and the rest of the code uses `storage` from
 `@groot/core/storage`.
 
-| Adapter                                  | File                                  | Used by                                                                                                                                   |
-| ---------------------------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `localStorage(root = "./local/uploads")` | `packages/core/src/storage/node.ts`   | `entry.node.ts`: plain files on disk, content type from the extension, empty folders pruned on delete, a key that escapes the root throws |
-| `memoryStorage()`                        | `packages/core/src/storage/memory.ts` | `tests/server/setup.ts`                                                                                                                   |
+| Adapter                                  | File                                  | Used by                                                                                                                                    |
+| ---------------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `localStorage(root = "./local/uploads")` | `packages/core/src/storage/node.ts`   | `entry.node.ts` — plain files on disk, content type from the extension, empty folders pruned on delete, a key that escapes the root throws |
+| `memoryStorage()`                        | `packages/core/src/storage/memory.ts` | `tests/server/setup.ts`                                                                                                                    |
 
 `localStorage` and `uploadsRoot` are Node-only, so they are imported from
 `@groot/core/storage/node`, not the barrel.
@@ -196,10 +196,10 @@ in-memory fake of the API.
 
 ## Troubleshooting
 
-- **429**: rate limits; tune `config.rateLimits.storage` / `.upload`.
-- **413 on upload**: larger than 100 MB (`MAX_UPLOAD_BYTES` in `storage.routes.ts`).
+- **429** — rate limits; tune `config.rateLimits.storage` / `.upload`.
+- **413 on upload** — larger than 100 MB (`MAX_UPLOAD_BYTES` in `storage.routes.ts`).
   A route of your own that takes big bodies declares its limit the same way,
   with `routeBodyLimit()`; otherwise the app's 1 MB API limit applies.
-- **"Storage is not configured"**: the entry did not pass `storage` to
+- **"Storage is not configured"** — the entry did not pass `storage` to
   `bootstrap()`.
-- **Download prints binary**: it streams raw bytes; use `curl -o file`.
+- **Download prints binary** — it streams raw bytes; use `curl -o file`.

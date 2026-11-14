@@ -222,6 +222,19 @@ const BOUNDARY_RULES: BoundaryRule[] = [
       ],
     },
   },
+  // UI copy: strings and JSX text in code that renders the app's screens.
+  ...[
+    "apps/web/src/client/**",
+    "packages/shell/src/**",
+    "packages/jobs/src/client/**",
+    "packages/ui/src/**",
+  ].map((scope): BoundaryRule => ({
+    id: "R10",
+    kind: "plugin",
+    scope,
+    rule: "repo/no-em-dash-copy",
+    enabled: true,
+  })),
   {
     id: "R9",
     kind: "plugin",

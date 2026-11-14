@@ -1,4 +1,4 @@
-# 0015, One secrets subsystem: the vault holds the app's own credentials too
+# 0015 — One secrets subsystem: the vault holds the app's own credentials too
 
 - Status: accepted (amends [0005](0005-secrets-live-outside-the-app.md))
 - Date: 2026-11-07

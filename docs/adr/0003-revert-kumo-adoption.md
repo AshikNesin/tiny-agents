@@ -10,8 +10,8 @@
 A migration spike (branches `feat/kumo-migration` and `spike/kumo-adoption`,
 now deleted) was run to validate ADR 0002's adoption of `@cloudflare/kumo`
 directly. The spike did not produce a positive result, invalidating 0002's
-core bet. Kumo never landed on `main`: no Kumo dependency or code exists
-here, so the revert is purely a decision-record correction, not a code
+core bet. Kumo never landed on `main` — no Kumo dependency or code exists
+here — so the revert is purely a decision-record correction, not a code
 revert.
 
 ## Decision
@@ -26,6 +26,6 @@ revert.
 
 - The conventions layer (`@groot/ui` typography, gate rules, composition
   components from ADR 0001) remains the system of record.
-- Maintenance burden of the component layer returns to this repo: the
+- Maintenance burden of the component layer returns to this repo — the
   constraint that drove 0002 ("owner does not want to maintain UI
   components") is consciously overruled by the failed spike.

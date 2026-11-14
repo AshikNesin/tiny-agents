@@ -2,7 +2,7 @@
  * Remote MCP servers as capabilities (issue #1 D8–D14).
  *
  * - `connectMcp` opens an MCP client over Streamable HTTP, falling back to
- *   legacy HTTP+SSE (remote transports only: the app never spawns local
+ *   legacy HTTP+SSE (remote transports only — the app never spawns local
  *   servers), optionally signed in through an OAuth provider (the MCP SDK runs
  *   discovery, PKCE, registration and refresh).
  * - `createMcpCapability` turns a server's tool list into a pi-durable
@@ -99,7 +99,7 @@ async function listAllTools(client: Client): Promise<McpToolInfo[]> {
 
 /**
  * Connect, initialize and list tools. Throws the SDK's `UnauthorizedError`
- * when the server needs (re)authorization: the provider's
+ * when the server needs (re)authorization — the provider's
  * `redirectToAuthorization` has then been called with the consent URL.
  */
 export async function connectMcp(options: ConnectMcpOptions): Promise<McpConnection> {

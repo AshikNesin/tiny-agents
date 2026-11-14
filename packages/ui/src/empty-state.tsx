@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { cn } from "./lib/utils";
 
 /**
- * Canonical empty / error state: the single source of truth for "there is
+ * Canonical empty / error state — the single source of truth for "there is
  * nothing here" and "we couldn't load this" surfaces.
  *
  * If you need to render an empty list, a failed fetch, or a "nothing selected"

@@ -1,7 +1,7 @@
 /**
  * Typed client for the Vault routes (issue #56). Writes, reveals and copies
  * carry a step-up token: the owner confirms it's them (password or passkey)
- * and the token lives in this module's memory only (never storage) for
+ * and the token lives in this module's memory only — never storage — for
  * its five minutes.
  */
 import { startAuthentication } from "@simplewebauthn/browser";

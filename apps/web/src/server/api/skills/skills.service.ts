@@ -1,6 +1,6 @@
 /**
  * The shared skill library (issue #1 D5/D6): CRUD, bot assignment and
- * import previews (paste or GitHub). Assignment needs no agent reconfigure:
+ * import previews (paste or GitHub). Assignment needs no agent reconfigure —
  * the `skills` capability reads a bot's skills from app.db on every request.
  */
 import { asc, eq, inArray } from "drizzle-orm";

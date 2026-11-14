@@ -1,4 +1,4 @@
-# 0016: Models are owner data
+# 0016 — Models are owner data
 
 - Status: accepted (amends [0008](0008-claude-code-engine.md) and
   [0014](0014-tool-gate-and-engine-seam.md))

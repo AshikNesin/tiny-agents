@@ -462,7 +462,7 @@ function busyFromGraph(value: TaskGraphWatch["value"]): Set<ConversationRef> {
 }
 
 /**
- * Every stored entry of a conversation, ascending: the full transcript, not
+ * Every stored entry of a conversation, ascending — the full transcript, not
  * just what the model still sees after resets/compactions. Paged so a long
  * conversation never loads in one storage read.
  */

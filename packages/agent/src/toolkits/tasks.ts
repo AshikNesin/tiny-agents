@@ -10,7 +10,7 @@
  *
  * The key is the durable tool task's identity, not the model's tool call id:
  * `callId` comes from the provider and is only unique within one assistant
- * message: OpenAI-compatible upstreams may send short ids ("call_0") or none
+ * message — OpenAI-compatible upstreams may send short ids ("call_0") or none
  * at all (pi-ai stores ""), which would collide across turns and bots. The
  * tool task id is what re-executes on replay, but it is a per-store counter,
  * so it is salted with the conversation's persisted UUIDv7 (`pi.provider`):
@@ -79,7 +79,7 @@ function present(t: TaskRecord): string {
   const bits = [t.title];
   if (t.dueAt) bits.push(`due ${t.dueAt.slice(0, 16).replace("T", " ")}`);
   bits.push(t.priority, t.status);
-  if (t.description) bits.push(`${t.description.slice(0, 120)}`);
+  if (t.description) bits.push(`— ${t.description.slice(0, 120)}`);
   return `[${t.id}] ${bits.join(" · ")}`;
 }
 

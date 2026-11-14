@@ -146,7 +146,7 @@ function createFactory(statusCode: number) {
 
 /**
  * Boom-style error factory namespace. Every method returns an `HttpError`
- * instance, just throw it.
+ * instance — just throw it.
  */
 export const Boom = {
   /** 400 Bad Request */

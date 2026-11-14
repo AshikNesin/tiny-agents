@@ -1,7 +1,7 @@
 /**
  * The Code page transcript (issue #143, ADR 0011): one renderer per row
  * kind and tool kind of the harness contract, so a developer reads a turn
- * the same way whichever harness ran it: the command and its live output,
+ * the same way whichever harness ran it — the command and its live output,
  * the diff an edit made, the subagent it started, the plan it keeps, and
  * the approvals it waits on.
  */

@@ -6,7 +6,7 @@ import { apiClient } from "@groot/shell/lib/api";
 import type { FileInfo, UploadFilesResult } from "@groot/core/storage/storage.schema";
 
 /** Aliases of the core wire types in `@groot/core/storage` (type-only
- *  imports, erased at build): kept under the names clients already import. */
+ *  imports, erased at build) — kept under the names clients already import. */
 export type StorageFile = FileInfo;
 export type UploadResult = UploadFilesResult;
 

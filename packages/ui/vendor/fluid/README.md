@@ -2,13 +2,13 @@
 
 Source: <https://www.fluidfunctionalism.com/docs/command-menu> (shadcn registry
 `https://www.fluidfunctionalism.com/r/command-menu.json` and its registry
-dependencies), MIT, see [`LICENSE`](./LICENSE). Configured as preset `kd8G`:
+dependencies), MIT — see [`LICENSE`](./LICENSE). Configured as preset `kd8G`:
 ⌘K shortcut, descriptions, shortcut caps, suggestions, tabs and footer on,
 filters off, rounded shape, default size.
 
 The public entry is `@groot/ui/command-menu` (`packages/ui/src/command-menu.tsx`).
-Everything in this folder is its private support code: dialog, tabs, scroll
-area, button, fluid-hover hook and the shape/size/icon/surface contexts: kept
+Everything in this folder is its private support code — dialog, tabs, scroll
+area, button, fluid-hover hook and the shape/size/icon/surface contexts — kept
 outside `src/` so it stays off the kit's public export map (see
 `scripts/check-kit-exports.ts`). Do not import it from other packages.
 

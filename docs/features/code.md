@@ -35,7 +35,7 @@ label and a filter, and **New thread** offers a harness picker.
 The layout follows Cursor's cloud agents and Claude Code on the web:
 
 - a slim top bar with a way back to the app (the workspace owns the full
-  column: no app sidebar here) and the ⌘K trigger;
+  column — no app sidebar here) and the ⌘K trigger;
 - one line per thread in the list;
 - a one-line header;
 - every setting a turn needs (model, reasoning, permissions, context) as a
@@ -99,7 +99,7 @@ has no background jobs, so its threads show no job chips.
 **Control.**
 
 - Stop, Resume, rename, change directory, fork from a message, delete,
-  Open in Shelley, each where the harness has it.
+  Open in Shelley — each where the harness has it.
 - **Archive** moves a thread **with its subagents**, with Undo.
 - **Select** (the checklist button beside New thread) turns the list into
   checkboxes: pick threads (a click on a row picks it; a picked thread's

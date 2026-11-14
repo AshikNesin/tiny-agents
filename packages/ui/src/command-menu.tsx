@@ -105,7 +105,7 @@ interface CommandMenuSection {
 const listShape = shapeMap.rounded;
 
 // ---------------------------------------------------------------------------
-// Shortcuts: one string syntax for both the trigger combo and the caps a row
+// Shortcuts — one string syntax for both the trigger combo and the caps a row
 // displays, owned by ./hotkeys and re-exported here for existing importers.
 // ---------------------------------------------------------------------------
 
@@ -555,7 +555,7 @@ const CommandMenu = forwardRef<HTMLDivElement, CommandMenuProps>(
 CommandMenu.displayName = "CommandMenu";
 
 // ---------------------------------------------------------------------------
-// CommandMenuInput: the search field. Keeps focus; arrows and Enter act on
+// CommandMenuInput — the search field. Keeps focus; arrows and Enter act on
 // the list through aria-activedescendant.
 // ---------------------------------------------------------------------------
 
@@ -591,7 +591,7 @@ const CommandMenuInput = forwardRef<HTMLInputElement, CommandMenuInputProps>(
         case "ArrowLeft":
         case "ArrowRight": {
           // With tabs under the field, ← and → switch tabs (wrapping) instead
-          // of moving the caret. Modified presses keep their editing meaning:
+          // of moving the caret. Modified presses keep their editing meaning —
           // Shift+Arrow in particular must still extend the selection.
           const tabs = tabsRef.current;
           if (!tabs || tabs.tabs.length === 0 || e.shiftKey || e.altKey || e.metaKey || e.ctrlKey)
@@ -696,7 +696,7 @@ const CommandMenuInput = forwardRef<HTMLInputElement, CommandMenuInputProps>(
 CommandMenuInput.displayName = "CommandMenuInput";
 
 // ---------------------------------------------------------------------------
-// CommandMenuTabs: tabs under the field. The tabs are state you own:
+// CommandMenuTabs — tabs under the field. The tabs are state you own:
 // derive `items` from the value so the list follows.
 // ---------------------------------------------------------------------------
 
@@ -792,7 +792,7 @@ const CommandMenuTabs = forwardRef<HTMLDivElement, CommandMenuTabsProps>(
 CommandMenuTabs.displayName = "CommandMenuTabs";
 
 // ---------------------------------------------------------------------------
-// CommandMenuFilters: a borderless bar under the field for compact controls
+// CommandMenuFilters — a borderless bar under the field for compact controls
 // (borderless Selects, ghost Buttons). Nothing frames it: the controls sit
 // on the panel's own surface and the list's divider closes the header.
 // ---------------------------------------------------------------------------
@@ -830,7 +830,7 @@ const CommandMenuFilters = forwardRef<HTMLDivElement, CommandMenuFiltersProps>(
 CommandMenuFilters.displayName = "CommandMenuFilters";
 
 // ---------------------------------------------------------------------------
-// CommandMenuList: the scrolling rows under a divider, grouped by heading,
+// CommandMenuList — the scrolling rows under a divider, grouped by heading,
 // with the fluid hover fill.
 // ---------------------------------------------------------------------------
 
@@ -955,7 +955,7 @@ const CommandMenuList = forwardRef<HTMLDivElement, CommandMenuListProps>(
 CommandMenuList.displayName = "CommandMenuList";
 
 // ---------------------------------------------------------------------------
-// CommandMenuEmpty: shown in place of the rows when nothing matches.
+// CommandMenuEmpty — shown in place of the rows when nothing matches.
 // ---------------------------------------------------------------------------
 
 export type CommandMenuEmptyProps = HTMLAttributes<HTMLDivElement>;
@@ -981,7 +981,7 @@ const CommandMenuEmpty = forwardRef<HTMLDivElement, CommandMenuEmptyProps>(
 CommandMenuEmpty.displayName = "CommandMenuEmpty";
 
 // ---------------------------------------------------------------------------
-// CommandMenuShortcut: the caps at a row's trailing edge.
+// CommandMenuShortcut — the caps at a row's trailing edge.
 // ---------------------------------------------------------------------------
 
 export interface CommandMenuShortcutProps extends HTMLAttributes<HTMLElement> {
@@ -1025,7 +1025,7 @@ const CommandMenuShortcut = forwardRef<HTMLElement, CommandMenuShortcutProps>(
 CommandMenuShortcut.displayName = "CommandMenuShortcut";
 
 // ---------------------------------------------------------------------------
-// CommandMenuItem: one row. Reads its data from the root by `value`; any
+// CommandMenuItem — one row. Reads its data from the root by `value`; any
 // prop set here overrides it.
 // ---------------------------------------------------------------------------
 
@@ -1152,7 +1152,7 @@ const CommandMenuItem = memo(
 CommandMenuItem.displayName = "CommandMenuItem";
 
 // ---------------------------------------------------------------------------
-// CommandMenuFooter, the hint strip under the list: what the keys do here.
+// CommandMenuFooter — the hint strip under the list: what the keys do here.
 // The default hints follow the menu (tabs add ← →, a dialog adds Esc).
 // ---------------------------------------------------------------------------
 
@@ -1225,7 +1225,7 @@ const CommandMenuFooter = forwardRef<HTMLDivElement, CommandMenuFooterProps>(
 CommandMenuFooter.displayName = "CommandMenuFooter";
 
 // ---------------------------------------------------------------------------
-// CommandMenuDialog: the modal shell, opened by a global shortcut.
+// CommandMenuDialog — the modal shell, opened by a global shortcut.
 // ---------------------------------------------------------------------------
 
 // The combo is a "dialog" hotkey (./hotkeys): while this dialog is open the

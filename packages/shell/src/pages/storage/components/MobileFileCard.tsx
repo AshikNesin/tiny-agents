@@ -59,7 +59,7 @@ export function MobileFileCard({ file, selected, onToggle, onNavigate, actions }
         <div>
           <span className="block">Modified</span>
           <span className="font-medium text-foreground">
-            {/* Folders: "-", the epoch sentinel isn't a date (see
+            {/* Folders: "-" — the epoch sentinel isn't a date (see
                 DesktopFileRow). */}
             {file.isDirectory ? "-" : formatDate(file.lastModified)}
           </span>

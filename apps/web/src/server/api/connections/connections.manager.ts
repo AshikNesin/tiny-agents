@@ -4,7 +4,7 @@
  *
  * - At boot each connection's capability is installed from its cached tool
  *   list right away (so interrupted calls can resume and bots keep their
- *   tools), then connected in the background: `/health` never waits on it.
+ *   tools), then connected in the background — `/health` never waits on it.
  * - A row change (created, url or secret edited) starts a fresh connect
  *   attempt that supersedes any in flight: every attempt carries the entry's
  *   generation and discards its own result once a newer one has started or

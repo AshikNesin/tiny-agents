@@ -14,7 +14,7 @@ const createMock = vi.fn();
 vi.mock("@/lib/bots-api", () => ({
   botsApi: {
     // Real wire shape: the route returns { capabilities } and the client
-    // unwraps it: mock the unwrapped result here.
+    // unwraps it — mock the unwrapped result here.
     capabilities: vi.fn().mockResolvedValue([]),
     create: (...args: unknown[]) => createMock(...args),
     remove: (...args: unknown[]) => removeMock(...args),

@@ -11,7 +11,7 @@ import { metaLabelClass } from "./typography";
  * `TableHead` applies this automatically. Grid-based tables (which can't use
  * `<th>` because their rows are links) should import this instead of
  * re-declaring a local header class, so both table styles stay in step.
- * Values here equal `metaLabelClass` from `@groot/ui/typography`: the one
+ * Values here equal `metaLabelClass` from `@groot/ui/typography` — the one
  * canonical meta-label treatment.
  */
 export const tableColumnHeaderClass = metaLabelClass;

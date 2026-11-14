@@ -45,7 +45,7 @@ interface TabsProps extends Omit<HTMLAttributes<HTMLDivElement>, "onSelect"> {
   /** When true, only the selected tab shows its text label. Requires icons on tabs. */
   activeLabel?: boolean;
   /** Pins the tabs to one step of the size ladder (default 36px, compact
-   *  28px, see /docs/sizes). Omitted, they follow the surrounding
+   *  28px — see /docs/sizes). Omitted, they follow the surrounding
    *  SizeProvider. */
   size?: SizeVariant;
 }
@@ -284,7 +284,7 @@ const TabsItem = forwardRef<HTMLButtonElement, TabsItemProps>(
     // framer resolves an "auto" target from the element's *visual*
     // (transformed) size, so under a scaled ancestor (e.g. /demo's card) the
     // spring overshoots to scale-x the real width and snaps when "auto"
-    // lands. offsetWidth and ResizeObserver are transform-immune: same
+    // lands. offsetWidth and ResizeObserver are transform-immune — same
     // setup as the accordions' height animation.
     const [labelWidth, setLabelWidth] = useState<number | null>(null);
     const labelRoRef = useRef<ResizeObserver | null>(null);
@@ -386,7 +386,7 @@ const TabsItem = forwardRef<HTMLButtonElement, TabsItemProps>(
                 // target from the element's *visual* size, so under a scaled
                 // ancestor (the /demo card, ~1.76x) it writes back a layout
                 // width that much too wide, then springs back down when the
-                // measured value arrives: the selected tab visibly pulses on
+                // measured value arrives — the selected tab visibly pulses on
                 // arrival. Plain CSS auto is the true layout width, and the
                 // measured number that follows matches it exactly.
                 style={labelWidth == null ? { width: "auto" } : undefined}

@@ -1,4 +1,4 @@
-# tiny-agents: Product Requirements Document
+# tiny-agents — Product Requirements Document
 
 > Status: Phase 1 scope agreed · Last updated: 2026-11-08
 
@@ -7,12 +7,12 @@
 **tiny-agents** is a minimal, personal take on xAI's _Grok Bot_ ("your team of always-on agents"): a
 messenger-style app where every contact in the bot list is an AI bot you chat with.
 
-- **Agent core:** [pi-durable](https://earendil.com/posts/pi-durable/) (`@earendil-works/pi-durable`), every
+- **Agent core:** [pi-durable](https://earendil.com/posts/pi-durable/) (`@earendil-works/pi-durable`) — every
   conversation is durable: it survives page refreshes, server crashes and redeploys.
 - **Foundation:** a child project of the [groot](https://github.com/AshikNesin/groot) boilerplate (Hono +
   React 19 + Drizzle/SQLite + JWT/passkey auth), kept in sync with it via groot's sync tooling.
 - **Inference:** all LLM calls go through **Cloudflare AI Gateway**; provider keys live only in the gateway
-  (since changed: models are owner data, provider accounts of several kinds, configured in
+  (since changed: models are owner data — provider accounts of several kinds, configured in
   Settings → Models; §7.3 and [ADR 0016](docs/adr/0016-models-are-owner-data.md)).
 - **UI:** React + shadcn/ui + shadcn [AI Elements](https://ui.shadcn.com/docs/ai-elements). Visual and layout
   reference: [Talorys](https://rociiu.github.io/talorys/#demo) (calm three-column workspace, light + dark);
@@ -26,7 +26,7 @@ Phase 1 delivers the core only: **create bots and chat with them**. Tools and ev
 
 1. Create, edit and delete bots (persona + model).
 2. Chat with a bot with streamed replies and persisted history.
-3. Durability as a first-class property: conversations never get lost or duplicated.
+3. Durability as a first-class property — conversations never get lost or duplicated.
 4. A clean foundation (groot + pi-durable) that later phases can extend with tools, channels, routines, etc.
 
 ### Definition of done
@@ -34,9 +34,9 @@ Phase 1 delivers the core only: **create bots and chat with them**. Tools and ev
 Phase 1 is done when, on the Coolify deployment:
 
 - [ ] I can log in (password or passkey), create a bot, open it and chat with streamed replies.
-- [ ] **Refreshing the page mid-reply** reconnects and shows the reply continuing (or completed): no loss.
+- [ ] **Refreshing the page mid-reply** reconnects and shows the reply continuing (or completed) — no loss.
 - [ ] **Restarting / redeploying the server mid-reply** resumes the reply after boot, or marks it cleanly as
-      interrupted: no lost user messages, no duplicated messages.
+      interrupted — no lost user messages, no duplicated messages.
 - [ ] A bot that is replying while I'm viewing another bot shows "typing…" and then an unread badge.
 - [ ] All tests in §13 pass in CI.
 
@@ -63,7 +63,7 @@ Explicitly out of scope (see §15 Roadmap):
   HttpOnly `token` cookie (expiry from `config.yml` `auth.jwtExpiresIn`, default 30d).
 - **No signup.** The owner creates their account manually via groot's admin endpoint
   (`POST /api/v1/auth/users` with `X-Admin-Auth-Key: $ADMIN_AUTH_KEY`). No seeding from env.
-- Additional users can be created the same way, but **bots and conversations are not user-scoped**, every
+- Additional users can be created the same way, but **bots and conversations are not user-scoped** — every
   logged-in user sees everything (same as groot's `Todo`). Since shipped: **guests** (issue #145), added in
   Settings → People, see only the bots shared with them (in the same chat as the owner) and Code; see
   `docs/features/shared-bots.md`.
@@ -136,7 +136,7 @@ chrome on mobile only (`pageChrome: "sidebar"` hides the back button and profile
 | `/chats`        | Desktop: opens the last-opened bot (else the sidebar's top bot). Mobile: the Bots section full-screen. No bots: create-first-bot. |
 | `/chats/:botId` | Desktop: sidebar + open chat. Mobile: chat full-screen; the hamburger opens the sidebar drawer.                                   |
 | Empty state     | No bots yet → centered card with a short explanation and a primary "Create your first bot" button.                                |
-| Bot dialog      | Single-page create/edit dialog (name, description, model, system prompt), not OpenMausBot's multi-section wizard.                 |
+| Bot dialog      | Single-page create/edit dialog (name, description, model, system prompt) — not OpenMausBot's multi-section wizard.                |
 | Settings        | groot's Settings page (passkeys via `PasskeyManager`) + theme choice.                                                             |
 | Gateway banner  | Thin warning bar above the chat pane when gateway env vars are missing.                                                           |
 
@@ -187,7 +187,7 @@ packages/agent  (only module that touches pi-durable)
     replace groot's demo `Todos` nav with `Chats`), app-level CSS (accent token overrides)
   - `apps/web/src/server/db/schema.ts` (the app tables, starting with `bots`) and the migrations
     `pnpm db:generate` writes to `apps/web/drizzle/`
-  - `packages/agent/**`: new workspace package, child-only
+  - `packages/agent/**` — new workspace package, child-only
   - `config.yml`, `README.md`, `tests/server/{app,routes}/**`, `tests/e2e/**`
 
 ### 7.2 Agent core: `packages/agent` (pi-durable)
@@ -199,7 +199,7 @@ packages/agent  (only module that touches pi-durable)
   changes without notice"). One pi-ai version across the workspace.
 - **Lifecycle:**
   1. On server boot: acquire an **exclusive lock** on `agent.db` (retry briefly; if still held by another
-     process, exit non-zero, never run two owners).
+     process, exit non-zero — never run two owners).
   2. `Harness.open(openNodeSqliteStorage(AGENT_DB_PATH), { models, … })` with one pi-ai provider per
      provider account (from the database).
   3. `harness.resume()` to continue interrupted work.
@@ -242,10 +242,10 @@ tables. The link between them is `Bot.conversationId`.
 
 - **SSE** for server → browser, plain REST POST for actions. groot's `compression()` must skip
   `text/event-stream` (§12).
-- `GET /api/v1/events`, app-wide stream for the bot list: per-bot typing state, last-message preview, unread
+- `GET /api/v1/events` — app-wide stream for the bot list: per-bot typing state, last-message preview, unread
   changes, bot created/updated/deleted.
-- `GET /api/v1/bots/:id/stream`, open-chat stream: **snapshot first, then deltas** (from pi-durable
-  `watchEvents()`). On reconnect the client simply receives a fresh snapshot: no replay logic. Slow clients
+- `GET /api/v1/bots/:id/stream` — open-chat stream: **snapshot first, then deltas** (from pi-durable
+  `watchEvents()`). On reconnect the client simply receives a fresh snapshot — no replay logic. Slow clients
   get re-snapshotted (pi-durable behaviour).
 - Frontend renders the stream with AI Elements patterns directly (no Vercel AI SDK required on the backend).
 
@@ -297,7 +297,7 @@ Env vars are validated with Zod at boot: groot's in `packages/core/src/env.ts`, 
   - Build pack: **Railpack**. Health check: **`/health`**.
   - One persistent volume at **`/data`**: production defaults already point both stores at
     it (`DATABASE_URL=file:/data/app.db`, `AGENT_DB_PATH=/data/agent.db`), so mounting the
-    volume is the only step: no env overrides needed for the default SQLite layout.
+    volume is the only step — no env overrides needed for the default SQLite layout.
   - **Container naming → "Consistent name (no rolling updates)"** so Coolify stops the old container before
     starting the new one. Rolling updates would briefly run two processes against the same SQLite files,
     which pi-durable does not support. Accept a few seconds of downtime per deploy; in-flight replies are
@@ -323,7 +323,7 @@ These are generic improvements made in the groot repo, then pulled in with `pnpm
 5. **Passkey sign-in button** on `packages/shell` `Login.tsx` (backend/store already support it).
 6. **Deploy docs:** note in `docs/guides/deploy.md` that SQLite deployments on Coolify must disable rolling
    updates.
-7. **Theme toggle in `packages/shell`:** wire the existing `.dark` tokens: light/dark/system toggle in the
+7. **Theme toggle in `packages/shell`:** wire the existing `.dark` tokens — light/dark/system toggle in the
    user menu, persisted in localStorage, applied before first paint (no flash); app-configurable default
    (tiny-agents uses dark). Make shell-owned editors (e.g. `CodeMirrorEditor`) follow the theme.
 
@@ -333,7 +333,7 @@ Uses groot's existing Vitest (server: supertest; client: jsdom) and Playwright s
 
 - **Unit/integration (Vitest):** bots API (CRUD, validation, auth required), `packages/agent` (create /
   configure / submit / abort / reset, `requestId` idempotency, lock behaviour) using an in-memory storage and a
-  fake/mock pi-ai model: **no real API keys in tests**.
+  fake/mock pi-ai model — **no real API keys in tests**.
 - **Durability test (automated):** start server → send a message → kill the server mid-reply → restart →
   assert the reply completes or is marked interrupted, and that there are no duplicate user/assistant
   messages.
@@ -365,7 +365,7 @@ Uses groot's existing Vitest (server: supertest; client: jsdom) and Playwright s
 - **Memory** page (Talorys "Memories"): what bots know about you, grouped by category (Preferences, Facts,
   Goals, Habits) with counts, searchable, add/edit/delete, source line ("Added manually" / "From chat").
   _(shipped: issue #22, [docs/features/memory.md](docs/features/memory.md))_
-- **Routines** page (Talorys "Automations"): reminders and AI routines on groot jobs, "Upcoming" cards,
+- **Routines** page (Talorys "Automations"): reminders and AI routines on groot jobs — "Upcoming" cards,
   "Active schedules" list with enable toggle + delete + next run, "Recent executions". _(shipped: issue #18)_
 - Skills; notifications (bell in the nav header, web push); mobile bottom tab bar once there are several
   sections. _(skills and Pushover notifications shipped; web push and the tab bar have not)_
@@ -382,7 +382,7 @@ Uses groot's existing Vitest (server: supertest; client: jsdom) and Playwright s
 - pi-durable on Cloudflare: https://earendil.com/posts/pi-durable-on-cloudflare/
 - pi monorepo (pi-durable, pi-ai): https://github.com/earendil-works/pi
 - groot boilerplate: https://github.com/AshikNesin/groot (local: `~/Code/groot`)
-- UI reference (visual/layout): Talorys, https://rociiu.github.io/talorys/#demo ·
+- UI reference (visual/layout): Talorys — https://rociiu.github.io/talorys/#demo ·
   https://github.com/rociiu/talorys
 - UI reference (product): https://github.com/milind-soni/OpenMausBot
 - Grok Bot (xAI): https://x.ai/news/introducing-grok-bot

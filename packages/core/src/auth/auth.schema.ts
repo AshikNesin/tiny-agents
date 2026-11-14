@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-// Shared field shapes: composed by the auth schemas below. These are pure
+// Shared field shapes — composed by the auth schemas below. These are pure
 // Zod (no server-only imports) so the client can reuse them for form
 // validation (single source of truth).
 const emailField = z.email("Invalid email address");
@@ -30,7 +30,7 @@ export type CreateUserDTO = z.infer<typeof createUserSchema>;
 /**
  * The signed-in user as every sign-in route (`POST /auth/login`,
  * `POST /auth/setup`, `POST /passkey/login/verify`) and `GET /auth/me` return
- * it: the shape the client session store keeps. This is the wire type the
+ * it — the shape the client session store keeps. This is the wire type the
  * client imports (type-only). (`/auth/me` also returns `createdAt`; clients
  * must not rely on it.)
  */

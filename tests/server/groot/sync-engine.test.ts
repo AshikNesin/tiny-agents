@@ -265,13 +265,13 @@ describe("groot sync engine (integration)", () => {
       const kitCommit = await commitAll(fx.bp, "kit: add kv suite");
 
       // The child adopts it through any channel the old classifier did not
-      // cover (manual merge, pre-ownership kit surface): it is tracked.
+      // cover (manual merge, pre-ownership kit surface) — it is tracked.
       await write(fx.child, TARGET, "import { test } from 'vitest';\ntest('kv', () => {});\n");
       await commitAll(fx.child, "adopt kit kv suite");
 
       // Last sync ran with the OLD classifier surface, which did not own
       // `tests/server/core/**` (trunk owned `tests/server/{ai,core,shared}`
-      //: reproduced here as a project exclusion). That sync writes the
+      // — reproduced here as a project exclusion). That sync writes the
       // baseline ref WITHOUT the path, exactly like the finance child's.
       await writeCfg(["tests/server/core/**"]);
       await runSync(fx.child, { mode: "apply", skipConflicts: false, force: false });

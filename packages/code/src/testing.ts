@@ -1,5 +1,5 @@
 /**
- * `@tiny-agents/code/testing`: what driver tests share, an in-memory
+ * `@tiny-agents/code/testing`: what driver tests share — an in-memory
  * thread index, a quiet host, and the contract checks every driver must
  * pass: a capability is on exactly when its method exists
  * (`capabilityProblems`), a watch keeps the event order

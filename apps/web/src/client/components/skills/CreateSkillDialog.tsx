@@ -41,7 +41,7 @@ export function CreateSkillDialog({
 }) {
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
-  /** Fields the user has interacted with: errors show only after that. */
+  /** Fields the user has interacted with — errors show only after that. */
   const [touched, setTouched] = useState({ name: false, description: false });
 
   useEffect(() => {

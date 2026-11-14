@@ -28,7 +28,6 @@ export const gates = [
   { name: "Rule table", run: "pnpm exec tsx scripts/check-rule-table.ts" },
   { name: "Dead code", run: "pnpm check:dead" },
   { name: "Design tokens", run: "pnpm check:tokens" },
-  { name: "No em dash", run: "pnpm check:em-dash" },
   { name: "pnpm policy", run: "pnpm check:pnpm-policy" },
   { name: "Migrations are up to date with the schema", run: migrationsMatchSchema },
   {

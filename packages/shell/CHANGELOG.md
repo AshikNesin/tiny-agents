@@ -308,9 +308,9 @@
 
 - [`0eff25d`](https://github.com/AshikNesin/groot/commit/0eff25daff7315a63e28af7e419e13beac5e7ac9) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Dead exports trimmed from the kit surface.
 
-  - **`titleClass` is no longer exported** from `@groot/ui/typography` (or the `@groot/ui` barrel). It was the `Text` `title` variant's class list with the export left over; use `<Text variant="title">`: identical classes.
+  - **`titleClass` is no longer exported** from `@groot/ui/typography` (or the `@groot/ui` barrel). It was the `Text` `title` variant's class list with the export left over; use `<Text variant="title">` — identical classes.
   - **The deprecated `CommandPalette` wrapper is removed** from `@groot/shell/components/CommandPalette`; render `CommandPaletteTrigger` and `CommandPaletteDialog` directly.
-  - **`CommandPaletteTrigger` drops the `iconOnly` prop** and always renders the icon button: the labeled, input-styled variant had no callers left.
+  - **`CommandPaletteTrigger` drops the `iconOnly` prop** and always renders the icon button — the labeled, input-styled variant had no callers left.
 
 - [`a17ed96`](https://github.com/AshikNesin/groot/commit/a17ed960618f9e4bc38a57d4e8dd3f14bd16e0d7) Thanks [@AshikNesin](https://github.com/AshikNesin)! - The server owns passkey policy; the client renders it.
 
@@ -329,7 +329,7 @@
 
 - [`507b6dd`](https://github.com/AshikNesin/groot/commit/507b6dd55f5a3a3a26468e49fae970e7d87406c1) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Page chrome and app settings lose their extra modules.
 
-  - **`PageHeader` is folded into `PageLayout`.** `@groot/shell/components/layout/PageHeader` and the `@groot/shell/components/layout/index` barrel are removed; import `PageLayout` and `PageContainer` from their own files (`@groot/shell/components/layout/PageLayout`). `PageLayout` keeps `title`, `description`, `actions`, `breadcrumb`, `titleAdornment`, `maxWidth` and `className`: everything `PageHeader` rendered.
+  - **`PageHeader` is folded into `PageLayout`.** `@groot/shell/components/layout/PageHeader` and the `@groot/shell/components/layout/index` barrel are removed; import `PageLayout` and `PageContainer` from their own files (`@groot/shell/components/layout/PageLayout`). `PageLayout` keeps `title`, `description`, `actions`, `breadcrumb`, `titleAdornment`, `maxWidth` and `className` — everything `PageHeader` rendered.
   - **`@groot/shell/services/settings` is removed** (`settingsService`, `AppSettingMetadata`, `UpsertSettingData`). Its three `apiClient` calls are inlined into `useAppSettings`; the `AppSetting` type moved to `@groot/shell/hooks/useAppSettings`.
 
 - [`8532dc0`](https://github.com/AshikNesin/groot/commit/8532dc003cce91cc872b4a2508e5f5f5c7fc4529) Thanks [@AshikNesin](https://github.com/AshikNesin)! - One client session module; `@groot/shell/lib/api` is pure transport. The transport and the session store no longer import each other, and the sign-in rules live in one place.
@@ -362,9 +362,9 @@ emptyOk })` covers the rest: extra headers such as a step-up token or an
 
 - [`b3a2a21`](https://github.com/AshikNesin/groot/commit/b3a2a210251e7557517804feda498a711591eeb8) Thanks [@AshikNesin](https://github.com/AshikNesin)! - One wire-type source per slice: the server publishes its JSON response types once, and clients import them type-only (erased at build) instead of hand-copying shapes that drift.
 
-  - **`@groot/jobs`**: new `@groot/jobs/server/wire-types`, `Job`, `JobSchedule`, `JobLog`, `JobStats`, `BulkRerunResult`, derived from the schema rows with every timestamp as an ISO string. `@groot/jobs/client/types` re-exports them under the same names, so existing imports keep working.
+  - **`@groot/jobs`**: new `@groot/jobs/server/wire-types` — `Job`, `JobSchedule`, `JobLog`, `JobStats`, `BulkRerunResult`, derived from the schema rows with every timestamp as an ISO string. `@groot/jobs/client/types` re-exports them under the same names, so existing imports keep working.
   - **`@groot/core`**: `SessionUser` (`auth.schema`), `PasskeySummary` with string dates (`passkey.schema`), `FileInfo` with a string `lastModified` plus `UploadFilesResult` (`storage.schema`) and `AppSetting` (`app-settings.schema`) are the single sources, each declared in a zod-only leaf so the client's type graph never pulls in server modules. The passkey service now serialises dates itself, matching what JSON always sent; the service modules re-export their wire types for server-side importers.
-  - **`@groot/shell`**: local copies removed, `useStorage`'s `StorageFile`/`UploadResult`, `store/auth`'s `SessionUser`, `services/passkey`'s `Passkey` and `useAppSettings`' `AppSetting` are now aliases of the core types. `@groot/shell` gains a (type-only) `@groot/core` dependency.
+  - **`@groot/shell`**: local copies removed — `useStorage`'s `StorageFile`/`UploadResult`, `store/auth`'s `SessionUser`, `services/passkey`'s `Passkey` and `useAppSettings`' `AppSetting` are now aliases of the core types. `@groot/shell` gains a (type-only) `@groot/core` dependency.
 
   `AGENTS.md` documents the rule: type-only imports across the client/server boundary are allowed for wire types; each slice publishes them once, in a web-neutral leaf module, with dates as ISO strings.
 
@@ -466,20 +466,20 @@ emptyOk })` covers the rest: extra headers such as a step-up token or an
   Ships the recurring higher-order patterns the DLS audit found hand-rolled across groot and the child projects (nesins-finance-api alone had 9 files of drifting dt/dd display fields; list-row hover treatments appeared in 86 child files).
 
   - `@groot/ui/display` (new): `DataField` (label/value pair, `dt`/`dd`, meta-label typography) + `DataFields` (responsive 2→4 col grid wrapper). The display counterpart to form-`Field` from `@groot/ui/form`.
-  - `@groot/ui/stat-tile` (new): `StatTile`, meta label + optional icon + `statClass` value, with a clickable/active variant for filter-stats (JobsStats' pattern).
-  - `@groot/ui/list-row` (new): `listRowClass` / `listRowGridClass`, the interactive list-row treatments as class constants (`tableColumnHeaderClass` precedent; rows stay semantic elements). Unblocks child projects against the new transition-colors gate rule on next sync.
+  - `@groot/ui/stat-tile` (new): `StatTile` — meta label + optional icon + `statClass` value, with a clickable/active variant for filter-stats (JobsStats' pattern).
+  - `@groot/ui/list-row` (new): `listRowClass` / `listRowGridClass` — the interactive list-row treatments as class constants (`tableColumnHeaderClass` precedent; rows stay semantic elements). Unblocks child projects against the new transition-colors gate rule on next sync.
   - Consumers reconciled: JobOverview (local `Field` deleted), JobDetail singleton section, JobsStats (inline tile → `StatTile`), JobsTable (both row variants), ScheduledJobsPanel, Todos, PasskeyManager.
   - Docs: `docs/features/dls.md` gains a composition-components section (with the pull-don't-push doctrine); `docs/features/client.md` rules table extended.
 
 - [`e95a091`](https://github.com/AshikNesin/groot/commit/e95a09100a8459eab096df4d414ba081d8454112) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Introduce the DLS: a closed type scale, Kumo-adapted rules, and enforcement
 
-  Establishes the repo's Design Language System as a written spec plus enforced rules: built on the existing stack (Tailwind v4 + Radix/shadcn + cva), with Cloudflare's Kumo as reference, not dependency.
+  Establishes the repo's Design Language System as a written spec plus enforced rules — built on the existing stack (Tailwind v4 + Radix/shadcn + cva), with Cloudflare's Kumo as reference, not dependency.
 
-  - `@groot/ui/typography` (new): `Text` component + exported classes, `titleClass`, `h1Class`, `statClass`, `displayClass`, `monoClass`, `metaLabelClass`. The type scale is now closed; pages never pick `text-*` sizes ad hoc. `tableColumnHeaderClass` now equals `metaLabelClass` (one definition of the meta-label idiom).
+  - `@groot/ui/typography` (new): `Text` component + exported classes — `titleClass`, `h1Class`, `statClass`, `displayClass`, `monoClass`, `metaLabelClass`. The type scale is now closed; pages never pick `text-*` sizes ad hoc. `tableColumnHeaderClass` now equals `metaLabelClass` (one definition of the meta-label idiom).
   - 4 new gate rules in `scripts/check-design-tokens.ts` (9 total): `tracking-modified` (no `tracking-*`, except `metaLabelClass`), `font-bold` (banned; `font-semibold` is max), `transition-colors-hover` (instant color hover in pages; primitives exempt as the motion layer), `inline-mono-full-step` (inline mono at `text-[0.9em]`). `allow` lists now support directory-prefix entries.
   - Drift reconciled: `tracking-tight` removed from 8 headings; local meta-label copies in jobs → `tableColumnHeaderClass`; inline `font-mono text-sm` → `text-[0.9em]`; `transition-colors/all` removed from 18 page/shell sites (primitives keep theirs). Login h1 uses `h1Class`; marketing h2 uses `displayClass`.
   - Docs: `docs/features/dls.md` (spec + rationale + rejected alternatives); rules table extended in `docs/features/client.md`; AGENTS.md index link.
-  - Agent skill: `.agents/skills/groot-dls/SKILL.md`, the distilled non-negotiables for AI sessions.
+  - Agent skill: `.agents/skills/groot-dls/SKILL.md` — the distilled non-negotiables for AI sessions.
 
 - Updated dependencies [[`960a9c1`](https://github.com/AshikNesin/groot/commit/960a9c15e059e49b2edcfb837875c9efc399190d), [`e95a091`](https://github.com/AshikNesin/groot/commit/e95a09100a8459eab096df4d414ba081d8454112)]:
   - @groot/ui@0.7.0
@@ -495,7 +495,7 @@ emptyOk })` covers the rest: extra headers such as a step-up token or an
 
 ### Minor Changes
 
-- [`18e3200`](https://github.com/AshikNesin/groot/commit/18e3200e3a34db550672c49aa2c5683a4f261b11) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Codebase simplification pass: dead code, duplication, API surface
+- [`18e3200`](https://github.com/AshikNesin/groot/commit/18e3200e3a34db550672c49aa2c5683a4f261b11) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Codebase simplification pass — dead code, duplication, API surface
 
   Audit-driven cleanup, no behavior changes. Verified green across every layer: typecheck, lint, 211 unit tests, full build, 6 e2e tests. All removals were verified to have zero real consumers via import-graph resolution.
 
@@ -583,8 +583,8 @@ emptyOk })` covers the rest: extra headers such as a step-up token or an
 - [#102](https://github.com/AshikNesin/groot/pull/102) [`011c6d5`](https://github.com/AshikNesin/groot/commit/011c6d5595ea9e4fff8911f56e497e497aecb380) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Fix pg-boss jobs list showing blank metadata; replace native confirm with a styled dialog
 
   The jobs dashboard table was missing data for pg-boss (Postgres) jobs: the
-  "Started" column showed a dash, "Created" showed "N/A", retry counts read 0, and
-  expire/keep-until/dead-letter were empty: for _every_ job in the list (active
+  "Started" column showed "—", "Created" showed "N/A", retry counts read 0, and
+  expire/keep-until/dead-letter were empty — for _every_ job in the list (active
   jobs most visibly, since they always have a `started_on`). The stats counts at
   the top of the page were correct; only the per-row metadata was broken.
 
@@ -597,9 +597,9 @@ emptyOk })` covers the rest: extra headers such as a step-up token or an
   camelCase (double-quoted so Postgres preserves case), matching the shape
   `normalizeBossJob` reads, so both paths agree.
 
-  Also replaces every native `window.confirm()`: jobs page (bulk re-run,
+  Also replaces every native `window.confirm()` — jobs page (bulk re-run,
   purge-by-state, delete job, cancel scheduled job) and storage page (delete
-  files, delete folder), with a new shared `ConfirmProvider`/`useConfirm`, a
+  files, delete folder) — with a new shared `ConfirmProvider`/`useConfirm`, a
   thin imperative convenience layer over a Radix `AlertDialog` primitive (a port
   of shadcn's `alert-dialog`). Both live under `@groot/ui/primitives` so callers
   know they are composed/Radix-backed, not direct shadcn re-exports. Using
@@ -671,7 +671,7 @@ emptyOk })` covers the rest: extra headers such as a step-up token or an
 - [#74](https://github.com/AshikNesin/groot/pull/74) [`1e85141`](https://github.com/AshikNesin/groot/commit/1e851410f1b5cdce9a6bcafd269da4f091c99245) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Add `loginWithPasskey` to the shell auth store
 
   `useAuthStore` now exposes `loginWithPasskey(email?)`, which runs the WebAuthn
-  ceremony via the existing `passkeyService.loginWithPasskey` and: on success,
+  ceremony via the existing `passkeyService.loginWithPasskey` and — on success —
   sets `isAuthenticated`/`user` and bumps `generation`, mirroring password login.
 
   Previously apps that wanted passkey login had to fork the store and track a
@@ -683,11 +683,11 @@ emptyOk })` covers the rest: extra headers such as a step-up token or an
 
   `<Layout/>` now accepts:
 
-  - `header?: ReactNode`, render a custom header/nav (e.g. an app `<Navbar/>`)
+  - `header?: ReactNode` — render a custom header/nav (e.g. an app `<Navbar/>`)
     instead of the default shell header (logo + command palette + user menu).
-  - `padded?: boolean` (default `true`), toggle `<main>`'s default padding. Set
+  - `padded?: boolean` (default `true`) — toggle `<main>`'s default padding. Set
     `false` when pages own their own padding via `PageContainer`.
-  - `mainClassName?` / `className?`: extra classes merged onto `<main>` / the
+  - `mainClassName?` / `className?` — extra classes merged onto `<main>` / the
     outer wrapper.
 
   Fully backward compatible: `<Layout/>` with no props behaves exactly as before.
@@ -701,8 +701,8 @@ emptyOk })` covers the rest: extra headers such as a step-up token or an
 
   Standardizes import style so cross-directory imports always use the
   package alias (`@groot/core/*`, `@groot/shell/*`, `@groot/jobs/*`) while
-  same-directory imports stay relative (`./`). Previously these were mixed:
-  even within a single file (e.g. `../kv` next to `@groot/core/logger`):
+  same-directory imports stay relative (`./`). Previously these were mixed —
+  even within a single file (e.g. `../kv` next to `@groot/core/logger`) —
   making import style inconsistent across the codebase.
 
   ## @groot/core
@@ -796,19 +796,19 @@ emptyOk })` covers the rest: extra headers such as a step-up token or an
 
 - [#60](https://github.com/AshikNesin/groot/pull/60) [`0473401`](https://github.com/AshikNesin/groot/commit/0473401aacc5ccd4e67e8def92e98b30ecd72a9a) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Extract all jobs code into a dedicated `@groot/jobs` package
 
-  The entire jobs vertical: pg-boss backend infrastructure, HTTP admin API,
-  job logger, the dashboard UI, client types, and API methods, now lives in a
+  The entire jobs vertical — pg-boss backend infrastructure, HTTP admin API,
+  job logger, the dashboard UI, client types, and API methods — now lives in a
   single `@groot/jobs` package with two flat entry points:
 
-  - `@groot/jobs/server/*`: pg-boss queue/worker/queries, routes, job logger
-  - `@groot/jobs/client/*`: dashboard UI, `jobsApi`, types
+  - `@groot/jobs/server/*` — pg-boss queue/worker/queries, routes, job logger
+  - `@groot/jobs/client/*` — dashboard UI, `jobsApi`, types
 
   Business-specific handlers (`todo.jobs.ts`) and bootstrap wiring stay in
   `apps/web/`. This consolidates jobs code that was previously spread across
   `@groot/core` (`core/job`, `shared/jobs`, `core/logger`), `@groot/shell`
   (`types/jobs`, apiClient methods), and `apps/web` (dashboard UI).
 
-  **Breaking: migration required for downstream repos:**
+  **Breaking — migration required for downstream repos:**
 
   - `createJobLogger` / `JobLogStream` / `createJobLogStream` moved from
     `@groot/core/core/logger` → `@groot/jobs/server/logger`. The

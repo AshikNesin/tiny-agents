@@ -12,14 +12,14 @@ metadata:
 **Primitives:** `@groot/ui` (Radix + cva + Tailwind v4), composition in
 `@groot/shell/components/layout/`
 
-Rules adapted from Cloudflare Kumo's design skill (MIT): re-derived for our
+Rules adapted from Cloudflare Kumo's design skill (MIT) — re-derived for our
 Radix/shadcn stack, not copied. Kumo is the reference, not a dependency.
 
 ## When to use this skill
 
 Building or reviewing any client UI: new pages, new components, styling
 changes, design review. **Load the full rules** from
-`docs/features/dls.md` before writing classNames: that document defines the
+`docs/features/dls.md` before writing classNames — that document defines the
 sanctioned type scale and the rationale for each rule.
 
 ## The non-negotiables
@@ -34,22 +34,22 @@ sanctioned type scale and the rationale for each rule.
    `metaLabelClass` (uppercase meta labels, `tracking-wider`, defined once in
    `@groot/ui/typography`).
 4. **Never `font-bold`.** `font-semibold` is the heaviest weight.
-5. **Instant color hover.** No `transition-colors`/`transition-all` in pages:
+5. **Instant color hover.** No `transition-colors`/`transition-all` in pages —
    color changes are immediate. Transform transitions are fine. Entrance/exit
    choreography lives in `@groot/ui` primitives only.
-6. **Inline mono at 0.9em.** `font-mono text-[0.9em]` (or `monoClass`): mono
+6. **Inline mono at 0.9em.** `font-mono text-[0.9em]` (or `monoClass`) — mono
    glyphs are optically larger, so they sit even with surrounding prose at
    90% size. `text-xs`/`text-[11px]` mono (smaller than prose) is also fine.
 7. **Icons: `size-4` / `size-3.5`.** Square `h-N w-N` is legacy. Inside
-   Button/DropdownMenuItem/Badge, drop `mr-2`: they already set `gap`.
+   Button/DropdownMenuItem/Badge, drop `mr-2` — they already set `gap`.
 8. **Composition over hand-rolling.** Page titles → `PageLayout`;
    sections → `Section`; surfaces → `Card`; empty/failed states →
    `EmptyState`/`ErrorState`; loading → `Skeleton*`; tables → `Table` +
    `tableColumnHeaderClass`; status → `StatusBadge`.
 9. **Sentence case headings.** "Recent requests", not "Recent Requests".
 10. **Dialogs via `open` prop.** Never conditionally render (`{open && <Dialog>}`)
-    : it kills exit animations. Use `<Dialog open={open} onOpenChange={setOpen}>`.
-11. **No stacked layer cards.** One card layer per surface: don't nest cards
+    — it kills exit animations. Use `<Dialog open={open} onOpenChange={setOpen}>`.
+11. **No stacked layer cards.** One card layer per surface — don't nest cards
     visually on top of each other; separate with `border` or spacing.
 12. **Sticky separation with `border`.** Not shadows.
 13. **Concentric radii.** When surfaces are ≤8px apart, outer radius = inner
@@ -78,7 +78,7 @@ import { Text, metaLabelClass, monoClass } from "@groot/ui";
 </PageLayout>;
 ```
 
-(`metaLabelClass` uppercases via CSS, always write the source text in
+(`metaLabelClass` uppercases via CSS — always write the source text in
 sentence case and let the class transform it.)
 
 ## Rule ↔ gate mapping
@@ -86,6 +86,6 @@ sentence case and let the class transform it.)
 | DLS rule               | Gate rule                 | Layer exempt               |
 | ---------------------- | ------------------------- | -------------------------- |
 | never modify tracking  | `tracking-modified`       | typography.tsx             |
-| never font-bold        | `font-bold`               | -                          |
+| never font-bold        | `font-bold`               | —                          |
 | instant color hover    | `transition-colors-hover` | `packages/ui/src/`         |
 | mono at `text-[0.9em]` | `inline-mono-full-step`   | typography/command/palette |

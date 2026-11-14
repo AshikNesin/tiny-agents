@@ -1,7 +1,7 @@
 /**
  * The interactive list-row idiom, as a class (not a component).
  *
- * Rows stay semantic (`<li>`, `<button>`, `<div role="row">`): this constant
+ * Rows stay semantic (`<li>`, `<button>`, `<div role="row">`) — this constant
  * supplies only the shared treatment: hover tint, focus ring, padding rhythm.
  * Same precedent as `tableColumnHeaderClass`: the DLS centralizes the *class*,
  * pages keep their own markup.

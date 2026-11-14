@@ -258,7 +258,7 @@ export function createRemoteCdpTransport(options: RemoteCdpTransportOptions): Br
         });
       });
 
-      // connectOverCDP uses webSocketDebuggerUrl from /json/version verbatim:
+      // connectOverCDP uses webSocketDebuggerUrl from /json/version verbatim —
       // it names the VM-side port, unreachable here. Fetch it through the
       // tunnel, rewrite to the local port, pass ws:// (used as-is).
       const version = await fetchJsonVersion(localPort);
@@ -295,7 +295,7 @@ export function createRemoteCdpTransport(options: RemoteCdpTransportOptions): Br
         },
       });
     } catch (error) {
-      // Setup failed after the stack launched and/or the tunnel bound:
+      // Setup failed after the stack launched and/or the tunnel bound —
       // tear both down instead of leaking them.
       await cleanup().catch(() => {});
       throw error;

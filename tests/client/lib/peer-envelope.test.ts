@@ -38,7 +38,7 @@ describe("parsePeerEnvelope", () => {
     });
   });
 
-  it("keeps inner lookalike lines intact: only the opening is the envelope", () => {
+  it("keeps inner lookalike lines intact — only the opening is the envelope", () => {
     const text = "**Reply from Radar:** they wrote **Message from X (bot):** inside";
     const parsed = parsePeerEnvelope(text);
     expect(parsed).not.toBeNull();
@@ -50,7 +50,7 @@ describe("parsePeerEnvelope", () => {
     expect(parsePeerEnvelope("see [From the owner, in X's chat] below")).toBeNull();
   });
 
-  it("rejects empty payloads: render raw instead of an empty card", () => {
+  it("rejects empty payloads — render raw instead of an empty card", () => {
     expect(parsePeerEnvelope("**Reply from Radar:**")).toBeNull();
     expect(parsePeerEnvelope("**Reply from Radar:**   ")).toBeNull();
   });

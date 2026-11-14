@@ -6,7 +6,7 @@ import { evaluatePolicy } from "../../../scripts/check-pnpm-policy";
  *
  * The guard pins the two halves of pnpm-workspace.yaml's hardening: the
  * trustPolicy/minimumReleaseAge values and exact name@version excludes. The
- * pure verdict runs here against synthetic workspace files: the intact
+ * pure verdict runs here against synthetic workspace files — the intact
  * policy, each weakening of it, and the edge shapes a bulk edit could
  * produce.
  */

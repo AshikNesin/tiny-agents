@@ -1,6 +1,6 @@
 /**
  * MemoryStore adapter: the agent's `memory` capability reads the bot's
- * injectable memories from app.db. Dependency direction stays one-way:
+ * injectable memories from app.db. Dependency direction stays one-way —
  * `@tiny-agents/agent` defines the port, apps/web implements it.
  *
  * Ordering matches memories.domain.ts exactly (fixed category order, then

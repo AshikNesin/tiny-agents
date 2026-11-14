@@ -40,7 +40,7 @@ async function diffStats(before: Buffer, after: Buffer | string): Promise<DiffSt
     const { stdout } = await exec("git", ["diff", "--no-index", "--numstat", "before", "after"], {
       cwd: dir,
     }).catch((err) => {
-      // git diff --no-index exits 1 when the files differ: that's expected
+      // git diff --no-index exits 1 when the files differ — that's expected
       if (typeof err.stdout === "string") return { stdout: err.stdout as string };
       throw err;
     });
@@ -316,7 +316,7 @@ async function main() {
   }
 
   // 3. Get child app name + resolve the boilerplate's default branch in parallel
-  //    (independent reads: don't assume "main" for the branch).
+  //    (independent reads — don't assume "main" for the branch).
   const [childAppName, defaultBranch] = await Promise.all([
     getChildAppName(projectRoot),
     resolveDefaultBranch(config.boilerplate.repo),
@@ -355,14 +355,17 @@ async function main() {
 
   // 5. Display candidates and the files that cannot be upstreamed as-is
   printSection(
-    "Conflicts: groot changed the same lines since your last sync; run `pnpm groot:sync` first",
+    "Conflicts — groot changed the same lines since your last sync; run `pnpm groot:sync` first",
     byKind("conflict"),
   );
   printSection(
-    "Binary Conflicts: changed on both sides, reconcile manually",
+    "Binary Conflicts — changed on both sides, reconcile manually",
     byKind("binary-conflict"),
   );
-  printSection("Deleted in groot since your last sync: not upstreamed", byKind("deleted-in-groot"));
+  printSection(
+    "Deleted in groot since your last sync — not upstreamed",
+    byKind("deleted-in-groot"),
+  );
 
   if (candidates.length === 0) {
     console.log("No local changes to synced files can be upstreamed.\n");

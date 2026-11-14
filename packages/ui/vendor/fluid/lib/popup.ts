@@ -5,7 +5,7 @@
 // ---------------------------------------------------------------------------
 
 /**
- * Enter/exit choreography follows the RESOLVED side: the one the positioner
+ * Enter/exit choreography follows the RESOLVED side — the one the positioner
  * lands on after collision flipping, not the requested one. The primitive
  * stamps `data-side` (on the positioner, or on the content itself); these
  * rules turn it into the transform origin and the 4px slide offset, so a
@@ -26,7 +26,7 @@ export const popupMotionClass =
  * Popup lists scroll inside ScrollArea: the hover-revealed thumb instead of
  * the platform scrollbar, and a scroll-aware fade on the viewport. The popup
  * is only max-height constrained, so the viewport's percentage height can't
- * resolve: it inherits the max-height instead (the ScrollArea root inherits
+ * resolve — it inherits the max-height instead (the ScrollArea root inherits
  * it from the popup) and sizes to its rows up to that. The scroll primitive's
  * inline-styled sizer is forced back to a plain block so rows can shrink and
  * truncate; the `[style]` qualifier keeps that off the rows' own wrapper on

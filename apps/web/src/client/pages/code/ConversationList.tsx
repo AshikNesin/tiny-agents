@@ -1,6 +1,6 @@
 /**
  * Left column of the Code page (issue #143, ADR 0011): every thread of every
- * harness (working now on top, then recent, archived on a toggle) with
+ * harness — working now on top, then recent, archived on a toggle — with
  * subagents nested under their parent, unread dots, a harness and a
  * repository filter, and search. Hovering a row offers Archive (Restore in
  * the archived view) when its harness archives, which moves the thread

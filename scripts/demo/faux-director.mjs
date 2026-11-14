@@ -107,7 +107,7 @@ async function flightAnswer() {
   if (!best) {
     return msg(
       text(
-        "Here are Friday's flights from Chennai to Bengaluru on Google Flights: they're in the panel on the right. Want me to keep an eye on the fares?",
+        "Here are Friday's flights from Chennai to Bengaluru on Google Flights — they're in the panel on the right. Want me to keep an eye on the fares?",
       ),
     );
   }
@@ -116,7 +116,7 @@ async function flightAnswer() {
   return msg(
     text(
       [
-        `Best Friday-evening pick: **${best.airline}, ${times}**: ${best.stops.toLowerCase()}${best.duration ? `, ${best.duration}` : ""}, **${rupees}**.`,
+        `Best Friday-evening pick: **${best.airline}, ${times}** — ${best.stops.toLowerCase()}${best.duration ? `, ${best.duration}` : ""}, **${rupees}**.`,
         "",
         `That's the cheapest of ${pool.length} evening flights on Google Flights right now. Want me to keep an eye on the fare?`,
       ].join("\n"),
@@ -183,7 +183,7 @@ const SCENES = [
           ),
           text(
             [
-              "Perfect: here's a **food-first weekend in Bangalore**, with one early start:",
+              "Perfect — here's a **food-first weekend in Bangalore**, with one early start:",
               "",
               "**Saturday · Basavanagudi & VV Puram**",
               "- Masala dosa and filter coffee at Vidyarthi Bhavan",
@@ -195,7 +195,7 @@ const SCENES = [
               "- Back for a classic breakfast at MTR",
               "- Craft beer and dinner in Indiranagar",
               "",
-              "**Stay:** Indiranagar: walkable, great food and right on the metro, with plenty of stays in your ₹4,000–8,000 range.",
+              "**Stay:** Indiranagar — walkable, great food and right on the metro, with plenty of stays in your ₹4,000–8,000 range.",
             ].join("\n"),
           ),
         ]),
@@ -241,7 +241,7 @@ const SCENES = [
               "- Summers are hot, dry and busy; winters are mild but wetter.",
               "- Spring and early autumn are warm, sunny and far less crowded.",
               "",
-              "Source: Wikipedia: Lisbon, *Climate*.",
+              "Source: Wikipedia — Lisbon, *Climate*.",
             ].join("\n"),
           ),
         ),
@@ -255,7 +255,7 @@ const SCENES = [
         msg(
           text(
             [
-              "All **6 tests pass** ✅: totals, the SAVE10 coupon and rounding are covered.",
+              "All **6 tests pass** ✅ — totals, the SAVE10 coupon and rounding are covered.",
               "",
               "The new euro formatter in `src/format.js` has no test yet. Want me to add one?",
             ].join("\n"),
@@ -340,7 +340,7 @@ const SCENES = [
           ),
           text(
             [
-              "Perfect: here's a **3-day Lisbon** plan built around food, with one easy day trip:",
+              "Perfect — here's a **3-day Lisbon** plan built around food, with one easy day trip:",
               "",
               "**Day 1 · Alfama & Baixa**",
               "- Pastéis de nata at Manteigaria, then wander Alfama's alleys",
@@ -355,7 +355,7 @@ const SCENES = [
               "- Jerónimos Monastery and the riverside walk",
               "- Time Out Market for a long, lazy lunch",
               "",
-              "**Stay:** Memmo Príncipe Real or The Lumiares: both in your €100–200 range.",
+              "**Stay:** Memmo Príncipe Real or The Lumiares — both in your €100–200 range.",
             ].join("\n"),
           ),
         ]),
@@ -407,9 +407,9 @@ const SCENES = [
               "",
               "**Why you'll love it**",
               "",
-              "- **Durable by design**: replies survive refreshes, crashes and redeploys, and pick up right where they left off.",
-              "- **You stay in control**: bots ask before they act, and ask you questions instead of guessing.",
-              "- **Remembers what matters**: preferences, routines and skills carry across every chat.",
+              "- **Durable by design** — replies survive refreshes, crashes and redeploys, and pick up right where they left off.",
+              "- **You stay in control** — bots ask before they act, and ask you questions instead of guessing.",
+              "- **Remembers what matters** — preferences, routines and skills carry across every chat.",
               "",
               "Spin up your first bot in under a minute. Your team is waiting.",
             ].join("\n"),
@@ -426,9 +426,9 @@ const SCENES = [
             [
               "Here's a 20-minute, no-equipment routine 💪",
               "",
-              "1. **Warm-up (3 min)**: jumping jacks, arm circles",
-              "2. **Circuit ×3 (14 min)**: 12 squats · 10 push-ups · 30 s plank · 12 lunges",
-              "3. **Cool-down (3 min)**: hamstring and hip stretches",
+              "1. **Warm-up (3 min)** — jumping jacks, arm circles",
+              "2. **Circuit ×3 (14 min)** — 12 squats · 10 push-ups · 30 s plank · 12 lunges",
+              "3. **Cool-down (3 min)** — hamstring and hip stretches",
               "",
               "Want me to schedule it for Monday, Wednesday and Friday mornings?",
             ].join("\n"),
@@ -452,7 +452,7 @@ const SCENES = [
               "}, []);",
               "```",
               "",
-              "It only happens in dev: production runs the effect once.",
+              "It only happens in dev — production runs the effect once.",
             ].join("\n"),
           ),
         ),
@@ -461,7 +461,7 @@ const SCENES = [
 ];
 
 function fallback(userText) {
-  return msg(text(`On it! Here's my take on “${userText.slice(0, 80)}”: I'll keep you posted.`));
+  return msg(text(`On it! Here's my take on “${userText.slice(0, 80)}” — I'll keep you posted.`));
 }
 
 function director(context) {

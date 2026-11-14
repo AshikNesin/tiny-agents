@@ -1,7 +1,7 @@
 /**
  * The notification port: what the notification service hands a channel
  * (Pushover today; ntfy, web push or Telegram later) and what it gets back.
- * Call sites never talk to a channel: they call `notificationService.notify`.
+ * Call sites never talk to a channel — they call `notificationService.notify`.
  */
 
 /**

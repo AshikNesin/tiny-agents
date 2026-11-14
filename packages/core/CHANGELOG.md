@@ -378,11 +378,11 @@
 ### Patch Changes
 
 - [`8af6c00`](https://github.com/AshikNesin/tiny-agents/commit/8af6c000505b5cc575993db964318ae25f439086) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Browser live view: serve frames over SSE instead of MJPEG. multipart/
-  x-mixed-replace in an <img> does not survive reverse proxies: Cloudflare
+  x-mixed-replace in an <img> does not survive reverse proxies — Cloudflare
   (in front of the production deploy) buffers or reshapes it and the panel
   stays black even though the browser session is healthy. The live route now
-  emits `event: frame` SSE messages (base64 JPEG), the same transport the
-  chat feed already streams through, and BrowserPanel paints each frame
+  emits `event: frame` SSE messages (base64 JPEG) — the same transport the
+  chat feed already streams through — and BrowserPanel paints each frame
   into the viewport <img> as a blob URL. Verified end-to-end against the
   sandbox VM chromium: first frame ~56ms after connect.
 
@@ -467,7 +467,7 @@
 - [`9afae1d`](https://github.com/AshikNesin/groot/commit/9afae1d6d901ed02f0b3c82ddcd6c781229ca636) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Remove Doppler from secrets management. Secrets resolve from real
   environment variables only (hosting platform env vars or a git-ignored
   .env file): drop the @varlock/doppler-plugin, the DOPPLER_TOKEN item and
-  all doppler() resolvers from .env.schema: production secrets that are
+  all doppler() resolvers from .env.schema — production secrets that are
   unset now fail validation with a clear message instead of a Doppler auth
   error. Setup script and docs updated to match.
 
@@ -485,19 +485,19 @@
 
 - [`81cfc6d`](https://github.com/AshikNesin/groot/commit/81cfc6d9797f3d51d6b79555ac933d1eebacb83a) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Upgrade Prisma ORM from 7.8.0 to 7.10.0 (prisma CLI, @prisma/client, @prisma/adapter-pg, @prisma/adapter-better-sqlite3)
 
-  7.9/7.10 are fix-and-feature releases within the 7.x line: no code changes were required (schema, prisma.config.ts, driver-adapter wiring, and generated-client imports all unchanged). Notable fixes that land with the bump: unique-constraint violations from nested writes now report the right `modelName` (P2002) including `@@map`/`@@schema` models, batched `findUniqueOrThrow()` misses correctly reject with P2025, parameter-chunked statements execute atomically with rollback, `@prisma/adapter-better-sqlite3` maps the full `SQLITE_BUSY` family to typed errors, and `@prisma/adapter-pg` preserves constraint names in P2002 errors. Also relevant to this repo: the `prisma generate` opt-in agent-skills prompt is skipped in npm lifecycle scripts (this repo generates via `postinstall`), and the transitive `fast-uri` audit advisory is patched.
+  7.9/7.10 are fix-and-feature releases within the 7.x line — no code changes were required (schema, prisma.config.ts, driver-adapter wiring, and generated-client imports all unchanged). Notable fixes that land with the bump: unique-constraint violations from nested writes now report the right `modelName` (P2002) including `@@map`/`@@schema` models, batched `findUniqueOrThrow()` misses correctly reject with P2025, parameter-chunked statements execute atomically with rollback, `@prisma/adapter-better-sqlite3` maps the full `SQLITE_BUSY` family to typed errors, and `@prisma/adapter-pg` preserves constraint names in P2002 errors. Also relevant to this repo: the `prisma generate` opt-in agent-skills prompt is skipped in npm lifecycle scripts (this repo generates via `postinstall`), and the transitive `fast-uri` audit advisory is patched.
 
-  `pnpm-workspace.yaml` adds a one-line `trustPolicyExclude` for `prisma@7.10.0`: that release was published without an npm provenance attestation after a broken publish-token incident on Prisma's side (see the `7.10.0-integration-fix-prisma-publish-token` dist-tag), which trips this repo's `trustPolicy: no-downgrade` guard. Verified benign (official `latest` tag, matching git tag and release notes, registry signatures intact) and scoped to that exact version so the exclusion dies with the next release.
+  `pnpm-workspace.yaml` adds a one-line `trustPolicyExclude` for `prisma@7.10.0`: that release was published without an npm provenance attestation after a broken publish-token incident on Prisma's side (see the `7.10.0-integration-fix-prisma-publish-token` dist-tag), which trips this repo's `trustPolicy: no-downgrade` guard. Verified benign — official `latest` tag, matching git tag and release notes, registry signatures intact — and scoped to that exact version so the exclusion dies with the next release.
 
-- [`bb4e94d`](https://github.com/AshikNesin/groot/commit/bb4e94d544ce23d4e8fe35411ff2fcc72bec4c3c) Thanks [@AshikNesin](https://github.com/AshikNesin)! - fix(settings): session-authorize app settings writes, the UI write path was dead code
+- [`bb4e94d`](https://github.com/AshikNesin/groot/commit/bb4e94d544ce23d4e8fe35411ff2fcc72bec4c3c) Thanks [@AshikNesin](https://github.com/AshikNesin)! - fix(settings): session-authorize app settings writes — the UI write path was dead code
 
-  `PUT`/`DELETE /api/v1/settings/:key` required an `x-admin-auth-key` header that the browser client never sends, so every signed-in user clicking "Add Setting", "Save changes", or "Delete" received a 401, and the axios 401 interceptor then cleared their session and bounced them to `/login`. Writes are now authorized by the session (the router already mounts behind `jwtAuthMiddleware`), matching the settings UI that has always shipped. The admin key remains reserved for machine endpoints (`POST`/`GET /auth/users`).
+  `PUT`/`DELETE /api/v1/settings/:key` required an `x-admin-auth-key` header that the browser client never sends, so every signed-in user clicking "Add Setting", "Save changes", or "Delete" received a 401 — and the axios 401 interceptor then cleared their session and bounced them to `/login`. Writes are now authorized by the session (the router already mounts behind `jwtAuthMiddleware`), matching the settings UI that has always shipped. The admin key remains reserved for machine endpoints (`POST`/`GET /auth/users`).
 
   Covered by an e2e round trip: create → edit description + JSON → save → full reload → persisted → delete via confirm dialog.
 
 - [`9477a61`](https://github.com/AshikNesin/groot/commit/9477a61b24c2f2d722ceb476cba652c34af96acb) Thanks [@AshikNesin](https://github.com/AshikNesin)! - fix(storage): prune emptied directories after folder delete on the local driver
 
-  `deleteFolder` removed every object under the prefix, but the fs adapter leaves the now-empty directories on disk: `local/uploads` accumulated empty husks forever. Invisible in the UI (listings are file-driven) but a real disk leak; S3 has no on-disk directories so it was unaffected. The service now walks the deleted prefix bottom-up after the batch delete and `rmdir`s emptied directories, with a containment guard so a crafted folder path can never escape the uploads root.
+  `deleteFolder` removed every object under the prefix, but the fs adapter leaves the now-empty directories on disk — `local/uploads` accumulated empty husks forever. Invisible in the UI (listings are file-driven) but a real disk leak; S3 has no on-disk directories so it was unaffected. The service now walks the deleted prefix bottom-up after the batch delete and `rmdir`s emptied directories, with a containment guard so a crafted folder path can never escape the uploads root.
 
   The uploads root moved to a shared `LOCAL_UPLOADS_ROOT` constant (`storage/files.ts`) so the adapter config and the prune can't drift apart. Regression-locked by unit tests (nested folder prune, trailing-slash validation) and an on-disk assertion in the storage e2e folder-lifecycle test.
 
@@ -508,7 +508,7 @@
 - [`9e5602a`](https://github.com/AshikNesin/groot/commit/9e5602a68d11df36357165df982f71cb8d6c2a79) Thanks [@AshikNesin](https://github.com/AshikNesin)! - feat: restore child-project primitives removed by the v2.6.0 dead-code audit
 
   The v2.6.0 simplification pass verified "zero importers" via the in-repo
-  import graph: the right bar for app code, the wrong bar for a boilerplate's
+  import graph — the right bar for app code, the wrong bar for a boilerplate's
   shipped surface. Child projects (nesins-finance being the reference fork)
   consumed these within months of forking, and their removal forces every
   consumer to vendor copies that then drift. Restored on proven child-project
@@ -517,11 +517,11 @@
   - `@groot/ui`: `alert`, `select`, `pagination`, `tooltip` primitives and
     barrel exports (select alone had 30 importers in the first child project).
     The barrel now documents that this package is the component kit shipped to
-    child projects: absence of in-repo importers is not dead code.
+    child projects — absence of in-repo importers is not dead code.
   - `@groot/core/logger`: `logPerformance` (duration-escalating performance
     record) and the breadcrumb subsystem (`addBreadcrumb` /
     `getBreadcrumbs` / `clearBreadcrumbs`, context wiring, `buildErrorContext`
-    attachment): used by child projects' job and ingestion instrumentation.
+    attachment) — used by child projects' job and ingestion instrumentation.
   - `@groot/core/storage`: `copyFile` (404-guarded object duplication for
     workflow/template-style derived files).
 
@@ -539,7 +539,7 @@
 
 ### Minor Changes
 
-- [`18e3200`](https://github.com/AshikNesin/groot/commit/18e3200e3a34db550672c49aa2c5683a4f261b11) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Codebase simplification pass: dead code, duplication, API surface
+- [`18e3200`](https://github.com/AshikNesin/groot/commit/18e3200e3a34db550672c49aa2c5683a4f261b11) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Codebase simplification pass — dead code, duplication, API surface
 
   Audit-driven cleanup, no behavior changes. Verified green across every layer: typecheck, lint, 211 unit tests, full build, 6 e2e tests. All removals were verified to have zero real consumers via import-graph resolution.
 
@@ -580,7 +580,7 @@
 
 - [`c097350`](https://github.com/AshikNesin/groot/commit/c0973502ae2e731094876e05dcfc9b3db6b3ccfc) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Database engine is now inferred from the `DATABASE_URL` scheme (`postgresql://` → Postgres, `file:` / bare path → SQLite) instead of a separate `DATABASE_ENGINE` env var. The old knob is removed from `.env.schema`; existing consumers that relied on `DATABASE_ENGINE` should delete it (the scheme now drives `dbEngine`, `isPostgres`, and `isSqlite` everywhere).
 
-- [`c097350`](https://github.com/AshikNesin/groot/commit/c0973502ae2e731094876e05dcfc9b3db6b3ccfc) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Storage adapter is now selected by `STORAGE_DRIVER` (`local` | `s3`, default `local`) instead of branching on `NODE_ENV`. The local filesystem adapter is now valid in every environment, including production single-node deployments; S3 is only loaded when explicitly selected. AWS credentials are no longer marked `@required` in `.env.schema`: they apply only when `STORAGE_DRIVER=s3`.
+- [`c097350`](https://github.com/AshikNesin/groot/commit/c0973502ae2e731094876e05dcfc9b3db6b3ccfc) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Storage adapter is now selected by `STORAGE_DRIVER` (`local` | `s3`, default `local`) instead of branching on `NODE_ENV`. The local filesystem adapter is now valid in every environment, including production single-node deployments; S3 is only loaded when explicitly selected. AWS credentials are no longer marked `@required` in `.env.schema` — they apply only when `STORAGE_DRIVER=s3`.
 
 ## 0.7.1
 
@@ -592,7 +592,7 @@
   naming was misleading. Renamed `auth`, `passkey`, `app-settings`,
   `storage`, and `todo` validation files to `*.schema.ts` and updated
   all imports across `@groot/core`, `@groot/web`, the docs, and
-  `AGENTS.md`. This is a pure rename: no behavior change.
+  `AGENTS.md`. This is a pure rename — no behavior change.
 
 ## 0.7.0
 
@@ -616,7 +616,7 @@
     `provider`). A unit test (`tests/server/prisma/schema-parity.test.ts`)
     guards that the two stay in sync.
   - **`Json` columns on both engines.** Array/JSON fields use Prisma's `Json`
-    type (native `JSONB` on Postgres, `TEXT` on SQLite) so the generated client
+    type — native `JSONB` on Postgres, `TEXT` on SQLite — so the generated client
     types are identical (`runtime.JsonValue`) and there is zero app-code
     branching.
   - **KV backend follows the engine.** Keyv now uses `@keyv/sqlite` on SQLite
@@ -646,7 +646,7 @@
   - **SQLite is the default engine.** `DATABASE_ENGINE` defaults to `sqlite`;
     set `DATABASE_ENGINE=postgres` to opt into PostgreSQL.
   - **Dual-engine CI.** `.github/workflows/test.yml` runs the full suite
-    (typecheck, lint, test, build) on both engines via a matrix: Postgres leg
+    (typecheck, lint, test, build) on both engines via a matrix — Postgres leg
     uses a `pgvector/pgvector:pg18` service container. Convenience scripts:
     `pnpm test:sqlite`, `pnpm test:postgres`, `pnpm test:all`.
   - **Build.** Native modules (`better-sqlite3`, `sqlite3`, `pg`,
@@ -665,13 +665,13 @@
 - [#73](https://github.com/AshikNesin/groot/pull/73) [`40eb1ec`](https://github.com/AshikNesin/groot/commit/40eb1ece15b0b3c299b32f12763f2c7be4ff25d0) Thanks [@exe-dev-github-integration](https://github.com/apps/exe-dev-github-integration)! - perf: reduce memory consumption across the stack
 
   - **Connection pools**: Prisma now uses an explicit `pg.Pool` (`max=5` dev / `max=10` prod, `idleTimeoutMillis=30s`) instead of letting PrismaPg silently create an uncapped pool. KeyvPostgres pool capped at `max=2`. Combined with the PgBoss fix this cuts idle PostgreSQL connections from ~30 to ~6.
-  - **Logger**: removed the custom `serializeObject()` + `dayjs()` call from pino's `log` formatter. Every log line was running a 5-level deep recursive object traversal: pino already serialises objects natively, making this pure overhead.
+  - **Logger**: removed the custom `serializeObject()` + `dayjs()` call from pino's `log` formatter. Every log line was running a 5-level deep recursive object traversal — pino already serialises objects natively, making this pure overhead.
   - **Prisma query events**: `{ level: "query", emit: "event" }` is now only registered in development where the DB-query logger subscribes to it. In production the event listener overhead was paid on every query for nothing.
   - **Body parser limits**: reduced `express.json` / `express.urlencoded` from `50mb` → `1mb`. The 50 MB limit caused `raw-body` to pre-allocate a 50 MB buffer for every incoming request regardless of payload size.
   - **Compression**: added `threshold: 1024` so responses under 1 KB are sent uncompressed, avoiding wasteful CPU on tiny JSON payloads.
   - **S3 adapter lazy-load**: `files-sdk/s3` (which eagerly imports all three `@aws-sdk/*` packages) is now dynamically imported only in production. In development the local-fs adapter is used and `@aws-sdk` never loads.
   - **lodash.mergewith removed**: replaced with a 25-line native `mergeWith()` in `object.utils.ts`. The package was loaded at every boot solely for a one-time config merge.
-  - **`@sentry/profiling-node` removed**: was listed as a dependency but never imported anywhere in the codebase, pure dead weight.
+  - **`@sentry/profiling-node` removed**: was listed as a dependency but never imported anywhere in the codebase — pure dead weight.
 
 ## 0.6.0
 
@@ -698,8 +698,8 @@
 
   Standardizes import style so cross-directory imports always use the
   package alias (`@groot/core/*`, `@groot/shell/*`, `@groot/jobs/*`) while
-  same-directory imports stay relative (`./`). Previously these were mixed:
-  even within a single file (e.g. `../kv` next to `@groot/core/logger`):
+  same-directory imports stay relative (`./`). Previously these were mixed —
+  even within a single file (e.g. `../kv` next to `@groot/core/logger`) —
   making import style inconsistent across the codebase.
 
   ## @groot/core
@@ -788,14 +788,14 @@
   the `@groot/jobs` → `@groot/core` reach-through for logger exports and gives
   foundational infrastructure its own package boundary.
 
-  **Breaking: migration required for downstream repos:**
+  **Breaking — migration required for downstream repos:**
 
   - All `@groot/core/core/logger` imports must move to `@groot/core/logger`. Affected
     surfaces: server middlewares, kv store, shared services, the jobs backend,
     the app bootstrap, and tests that `vi.mock` the logger.
   - The logger no longer reads `env`/`config` eagerly. The server bootstrap must
     call `configureLogger({ level, service, nodeEnv })` once before request
-    handling: `apps/web/src/server/index.ts` now does this as the first statement
+    handling — `apps/web/src/server/index.ts` now does this as the first statement
     in `main()`:
     ```ts
     import { configureLogger } from "@groot/core/logger";
@@ -828,19 +828,19 @@
 
 - [#60](https://github.com/AshikNesin/groot/pull/60) [`0473401`](https://github.com/AshikNesin/groot/commit/0473401aacc5ccd4e67e8def92e98b30ecd72a9a) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Extract all jobs code into a dedicated `@groot/jobs` package
 
-  The entire jobs vertical: pg-boss backend infrastructure, HTTP admin API,
-  job logger, the dashboard UI, client types, and API methods, now lives in a
+  The entire jobs vertical — pg-boss backend infrastructure, HTTP admin API,
+  job logger, the dashboard UI, client types, and API methods — now lives in a
   single `@groot/jobs` package with two flat entry points:
 
-  - `@groot/jobs/server/*`: pg-boss queue/worker/queries, routes, job logger
-  - `@groot/jobs/client/*`: dashboard UI, `jobsApi`, types
+  - `@groot/jobs/server/*` — pg-boss queue/worker/queries, routes, job logger
+  - `@groot/jobs/client/*` — dashboard UI, `jobsApi`, types
 
   Business-specific handlers (`todo.jobs.ts`) and bootstrap wiring stay in
   `apps/web/`. This consolidates jobs code that was previously spread across
   `@groot/core` (`core/job`, `shared/jobs`, `core/logger`), `@groot/shell`
   (`types/jobs`, apiClient methods), and `apps/web` (dashboard UI).
 
-  **Breaking: migration required for downstream repos:**
+  **Breaking — migration required for downstream repos:**
 
   - `createJobLogger` / `JobLogStream` / `createJobLogStream` moved from
     `@groot/core/core/logger` → `@groot/jobs/server/logger`. The

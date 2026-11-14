@@ -67,7 +67,7 @@ export function surfaceClasses(bgLevel: number, shadowLevel: number = bgLevel): 
 }
 
 /** The hover half of `surfaceClasses`: the level a surface rises to while the
- *  pointer is on it. Same literal-lookup reason as above: `hover:bg-surface-`
+ *  pointer is on it. Same literal-lookup reason as above — `hover:bg-surface-`
  *  plus a template expression generates nothing. */
 export function surfaceHoverClasses(bgLevel: number, shadowLevel: number = bgLevel): string {
   const bg = Math.round(Math.max(1, Math.min(8, bgLevel)));

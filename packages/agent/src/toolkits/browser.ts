@@ -198,9 +198,7 @@ export function createBrowserToolkit(options: BrowserToolkitOptions = {}): Capab
               assertRefShape(args.ref);
               const s = await actionTurn(Number(api.conversationId));
               const result = await s.session.click(args.ref);
-              return {
-                output: [{ type: "text", text: `clicked ${args.ref}, now on ${result.url}` }],
-              };
+              return { output: [{ type: "text", text: `clicked ${args.ref} — ${result.url}` }] };
             } catch (error) {
               return fail(describe(error));
             }
@@ -223,9 +221,7 @@ export function createBrowserToolkit(options: BrowserToolkitOptions = {}): Capab
               assertRefShape(args.ref);
               const s = await actionTurn(Number(api.conversationId));
               const result = await s.session.type(args.ref, args.text);
-              return {
-                output: [{ type: "text", text: `typed into ${args.ref}, now on ${result.url}` }],
-              };
+              return { output: [{ type: "text", text: `typed into ${args.ref} — ${result.url}` }] };
             } catch (error) {
               return fail(describe(error));
             }

@@ -13,7 +13,7 @@
  *     attacks.
  *  2. `trustPolicyExclude` entries must be exact `name@version` pins. A
  *     wildcard entry (bare `name`, `name@*`, range) exempts every present
- *     and future version of a package: that is the weakening this check
+ *     and future version of a package — that is the weakening this check
  *     exists to prevent.
  *
  * YAML is parsed with a line scanner rather than a YAML library because the

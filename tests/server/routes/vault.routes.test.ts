@@ -1,7 +1,7 @@
 /**
  * The Vault routes and service end to end (issue #56) on the local backend:
  * step-up before writes and reveals, CRUD, policy decisions, the audit trail,
- * credential request submits, and the canary invariant: no value in the
+ * credential request submits, and the canary invariant — no value in the
  * database, in list/detail responses, or in the audit.
  */
 import bcrypt from "bcryptjs";
@@ -310,7 +310,7 @@ describe("vault policy", () => {
       "page origin changed before the fill",
     ],
     [
-      new WindowMismatchError("firefox: Phish"),
+      new WindowMismatchError("firefox — Phish"),
       "refused_origin",
       "active window changed before typing",
     ],

@@ -60,7 +60,7 @@ Set these on the host; defaults and the full list are in the
   calls the API), `SENTRY_DSN` and `SENTRY_RELEASE` (see
   [Sentry source maps](./sentry-source-maps.md); in production `SENTRY_DSN`
   defaults to the tiny-agents project DSN, and the SDK costs ~50 MB of
-  RSS, see [Memory](#memory)).
+  RSS — see [Memory](#memory)).
 - **Behind a reverse proxy** (Coolify's Traefik, Railway's edge, the exe.dev
   HTTPS proxy): the server reads `X-Forwarded-For` only from a trusted proxy.
   By default that is loopback and the private networks, which covers a proxy
@@ -135,7 +135,7 @@ NODE_OPTIONS="--max-old-space-size=160 --max-semi-space-size=16"
 
 - `--max-old-space-size` caps the JS heap and forces earlier GC. Leave
   headroom for memory outside the heap (native addons, buffers, the job
-  poller): on a 256 MB instance, 160 is a reasonable starting point.
+  poller) — on a 256 MB instance, 160 is a reasonable starting point.
 - `--max-semi-space-size` shrinks the young generation for further savings,
   trading more frequent minor GCs.
 
@@ -144,7 +144,7 @@ NODE_OPTIONS="--max-old-space-size=160 --max-semi-space-size=16"
 [V8 pointer compression](https://v8.dev/blog/pointer-compression) would cut
 heap usage further, but it needs a custom Node build
 ([`platformatic/node-caged`](https://hub.docker.com/r/platformatic/node-caged))
-on which `better-sqlite3` segfaults: its native binding assumes stock
+on which `better-sqlite3` segfaults — its native binding assumes stock
 Node's heap layout. Supporting it would mean a different SQLite driver and
 Node 26; revisit if either changes.
 

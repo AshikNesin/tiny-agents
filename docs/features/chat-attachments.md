@@ -115,7 +115,7 @@ POST /uploads → sniffFile (415 on mismatch/executable) → row extractStatus=p
       extract(): text | pdf (unpdf) | docx/xlsx/pptx/odt/ods/odp (zip + XML) | zip/tar/tgz/gz listing
   → chat/<id>/extract.json + row extractStatus/extractMeta
 send → resolveAttachments: per file a reference line with its id
-     + the whole text, fenced, when ≤ 32k chars (≤ 96k per send): else the outline
+     + the whole text, fenced, when ≤ 32k chars (≤ 96k per send) — else the outline
 bot → attachments toolkit: list_attachments, read_attachment, search_attachment,
       copy_attachment_to_sandbox (AttachmentStore, scoped to the conversation)
 ```

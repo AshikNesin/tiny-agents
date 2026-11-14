@@ -1,7 +1,7 @@
 /**
  * Terminal REST routes (issue #28): tab lifecycle over the TerminalService.
  * All JWT-protected, mounted under /api/v1/terminal. Bytes never appear
- * here: attach traffic goes through the ticketed WebSocket bridge in
+ * here — attach traffic goes through the ticketed WebSocket bridge in
  * `terminal.ws.ts`.
  */
 import { Hono } from "hono";

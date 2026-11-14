@@ -6,9 +6,9 @@ import { typeClasses, typeClass, fieldTouchClass, type TypeScaleRole } from "./t
 type SizeVariant = "default" | "compact";
 
 interface SizeClasses {
-  /** The variant these classes belong to: handy for conditionals. */
+  /** The variant these classes belong to — handy for conditionals. */
   variant: SizeVariant;
-  /** Bounded control height: buttons, inputs, select triggers, tabs,
+  /** Bounded control height — buttons, inputs, select triggers, tabs —
    *  AND list/menu rows (select options, dropdown, checkbox and radio rows).
    *  One token by design: a popup row lines up with the trigger that opened
    *  it because they share this height. */
@@ -16,7 +16,7 @@ interface SizeClasses {
   /** `control` as a number, for consumers that need raw pixels. */
   controlHeight: number;
   /** Tab trigger height inside a padded segmented list. Sized so
-   *  `segmentPad` + `segmentItem` adds back up to the control height:
+   *  `segmentPad` + `segmentItem` adds back up to the control height —
    *  the segmented control's outer box stays on the same ladder. */
   segmentItem: string;
   /** Padding of the segmented list around its tabs. */
@@ -47,7 +47,7 @@ interface SizeClasses {
 }
 
 const sizeMap: Record<SizeVariant, SizeClasses> = {
-  // 36px: the default control height. Matches a 13px label with comfortable
+  // 36px — the default control height. Matches a 13px label with comfortable
   // breathing room and keeps controls a workable pointer target.
   default: {
     variant: "default",
@@ -63,7 +63,7 @@ const sizeMap: Record<SizeVariant, SizeClasses> = {
     gap: "gap-2",
     icon: 16,
   },
-  // 28px, the compact height for dense surfaces: filter bars, toolbars,
+  // 28px — the compact height for dense surfaces: filter bars, toolbars,
   // table headers, sidebars. One step down in text (12px) and icon (14px)
   // so the whole control shrinks together, not just its box.
   compact: {
@@ -107,7 +107,7 @@ function SizeProvider({
   defaultSize = "default",
 }: {
   children: ReactNode;
-  /** Controlled variant: pin a whole region to one size (e.g. a compact
+  /** Controlled variant — pin a whole region to one size (e.g. a compact
    *  filter bar). Overrides internal state. */
   size?: SizeVariant;
   defaultSize?: SizeVariant;
@@ -116,7 +116,7 @@ function SizeProvider({
   const isControlled = size !== undefined;
   const resolved = size ?? internalSize;
 
-  // Controlled providers ignore setSize entirely: a background write to the
+  // Controlled providers ignore setSize entirely — a background write to the
   // shadowed internal state would pop back out if the size prop were later
   // removed.
   const setSize = useCallback(

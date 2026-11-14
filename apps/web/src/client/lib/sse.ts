@@ -2,7 +2,7 @@
  * Minimal EventSource-style client for the app's SSE endpoints with
  * auto-reconnect and auth handling. `EventSource` cannot send the JWT cookie
  * cross-origin reliably or be aborted per-connection in older browsers, but
- * same-origin with `withCredentials` it is fine: we use fetch streaming for
+ * same-origin with `withCredentials` it is fine — we use fetch streaming for
  * one reason: EventSource reconnects on its own schedule; we want explicit
  * abort + resubscribe (fresh snapshot) control (PRD §7.5).
  */
@@ -53,7 +53,7 @@ export function subscribeSse(
           signal: attempt.signal,
         });
         if (!response.ok || !response.body) {
-          // Surface the failure, then keep retrying: a transient 502
+          // Surface the failure, then keep retrying — a transient 502
           // (deploy, proxy hiccup) must not freeze the transcript forever.
           // Auth failures are the exception: the page will be redirected to
           // /login on the next API call, so retrying here is pointless.

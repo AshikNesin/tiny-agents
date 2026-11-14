@@ -1,7 +1,7 @@
 /**
  * The sandbox toolkit (issue #19): unit tests against an in-memory sandbox
  * connection and integration tests through the in-process SSH server (real
- * ssh2 client, real wire protocol, none-auth: the shape Tailscale SSH
+ * ssh2 client, real wire protocol, none-auth — the shape Tailscale SSH
  * presents). Pooling, retry and host keys belong to the connection and are
  * tested once in `sandbox-connection.test.ts`.
  */
@@ -175,7 +175,7 @@ describe("sandbox toolkit (integration, in-process SSH server)", () => {
 
   it("writes then reads a file through real SFTP, round-trip intact", async () => {
     const sandbox = toolkit();
-    const payload = "line one\nline two · ünïcödé ✓\n";
+    const payload = "line one\nline two — ünïcödé ✓\n";
     const wrote = await run(sandbox, "write_file", { path: "/notes.txt", content: payload });
     expect(wrote.isError).toBeUndefined();
     const read = await run(sandbox, "read_file", { path: "/notes.txt" });

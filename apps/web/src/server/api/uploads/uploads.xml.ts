@@ -1,8 +1,8 @@
 /**
  * A minimal, non-validating XML tokenizer for reading OOXML and ODF parts
- * (issue #58). It never resolves DTDs or external entities: DOCTYPEs are
+ * (issue #58). It never resolves DTDs or external entities — DOCTYPEs are
  * skipped and only the five predefined entities and numeric references are
- * decoded, so a hostile document can't expand or reach out.
+ * decoded — so a hostile document can't expand or reach out.
  */
 
 export type XmlEvent =

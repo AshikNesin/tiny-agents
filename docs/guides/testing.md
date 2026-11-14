@@ -30,13 +30,13 @@ need in `beforeEach` (e.g. `await db.delete(tasks)`, `jobRunner.reset()`).
 
 ## Helpers (`tests/server/helpers.ts`)
 
-| Helper                                             | Does                                                                                                                                                                                                                           |
-| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `createTestApp(options?)`                          | `createWebApp()`: the real app with every router and rate-limit counters of its own. Pass `clientAddress` (a resolver such as `(c) => c.req.header("x-test-peer")`) to say who each request is from instead of faking a socket |
-| `setAppConfig(overrides?)`                         | The app's config with `overrides` on top; call it bare to restore. A bare `setConfig()` would drop the app's own overrides                                                                                                     |
-| `api(app, path, { method, json, token, headers })` | Sends the request, returns `{ status, headers, body }`; `body` is the envelope, a 204 yields `{ success: true }`                                                                                                               |
-| `signIn(app)`                                      | Creates a unique user and logs in; returns `{ token, user, email, password, cookie }`                                                                                                                                          |
-| `adminHeaders()`                                   | `{ "x-admin-auth-key": env.ADMIN_AUTH_KEY }`                                                                                                                                                                                   |
+| Helper                                             | Does                                                                                                                                                                                                                            |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `createTestApp(options?)`                          | `createWebApp()` — the real app with every router and rate-limit counters of its own. Pass `clientAddress` (a resolver such as `(c) => c.req.header("x-test-peer")`) to say who each request is from instead of faking a socket |
+| `setAppConfig(overrides?)`                         | The app's config with `overrides` on top; call it bare to restore. A bare `setConfig()` would drop the app's own overrides                                                                                                      |
+| `api(app, path, { method, json, token, headers })` | Sends the request, returns `{ status, headers, body }`; `body` is the envelope, a 204 yields `{ success: true }`                                                                                                                |
+| `signIn(app)`                                      | Creates a unique user and logs in; returns `{ token, user, email, password, cookie }`                                                                                                                                           |
+| `adminHeaders()`                                   | `{ "x-admin-auth-key": env.ADMIN_AUTH_KEY }`                                                                                                                                                                                    |
 
 ## Layout
 
