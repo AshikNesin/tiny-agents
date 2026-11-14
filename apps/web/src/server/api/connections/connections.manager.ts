@@ -45,7 +45,7 @@ import {
 } from "../bots/bot-toolkits";
 import { connectionForState, createOAuthProvider, readOAuthState } from "./oauth";
 import { SecretLockedError } from "../../crypto/secret-box";
-import { openHeaderSecret } from "./connection-secrets";
+import { ownHeaderHandle } from "./connection-secrets";
 import { resolveConnectionSecret } from "../vault/vault.service";
 import { app } from "../../app-root";
 import type { ConnectionStatus } from "../../../shared/api/connections";
@@ -214,13 +214,20 @@ export class ConnectionManager {
   }
 
   async #auth(row: ConnectionRow, live: Live) {
-    if (row.authType === "header" && row.headerName && row.secretRef) {
+    // The header value is a vault item (Q4): the one the owner picked, else the connection's own.
+    const handle =
+      row.secretRef ?? (row.secretItemId ? ownHeaderHandle(row.secretItemId) : undefined);
+    if (row.authType === "header" && row.headerName && handle) {
       return {
-        headers: { [row.headerName]: await resolveConnectionSecret(row.secretRef, row.slug) },
+        headers: { [row.headerName]: await resolveConnectionSecret(handle, row.slug) },
       };
     }
-    if (row.authType === "header" && row.headerName && row.secretEnc) {
-      return { headers: { [row.headerName]: openHeaderSecret(row.id, row.secretEnc) } };
+    if (row.authType === "header" && row.secretEnc) {
+      // A pre-Q4 value the startup import could not move yet (it says why in the log).
+      throw new SecretLockedError(
+        "unreadable",
+        "This connection's header value hasn't moved into the vault yet: check SECRETS_KEY and restart, or enter it again.",
+      );
     }
     if (row.authType === "oauth") {
       // No tokens yet: connect without the provider so a 401 surfaces as

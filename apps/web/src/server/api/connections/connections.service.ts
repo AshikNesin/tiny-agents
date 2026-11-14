@@ -34,7 +34,8 @@ import type {
 import { parseDisabledTools, parseTools } from "../bots/bot-toolkits";
 import { createId } from "@groot/core/utils/id.utils";
 import { hasSecretsKey } from "../../crypto/secret-box";
-import { sealHeaderSecret, sealOAuthState } from "./connection-secrets";
+import { deleteOwnHeaderSecret, sealOAuthState, writeOwnHeaderSecret } from "./connection-secrets";
+import { vaultItemsChanged } from "../vault/vault.admin.service";
 import type {
   CallToolDTO,
   CreateConnectionDTO,
@@ -71,7 +72,7 @@ function toDTO(row: Row): ConnectionData {
     transport: row.transport,
     authType: row.authType,
     headerName: row.headerName,
-    hasSecret: Boolean(row.secretEnc || row.secretRef),
+    hasSecret: Boolean(row.secretRef || row.secretItemId || row.secretEnc),
     secretRef: row.secretRef,
     tools: parseTools(row.toolsCache).map((tool) => toToolDTO(row, tool, disabled)),
     botIds: row.bots.map((link) => link.botId),
@@ -159,31 +160,35 @@ export async function create(data: CreateConnectionDTO): Promise<ConnectionData>
   if (data.authType === "header" || data.authType === "oauth") requireSecretsKey();
   // The id is chosen first: each sealed value is bound to its row.
   const connectionId = createId();
-  const [row] = await db
-    .insert(connections)
-    .values({
-      id: connectionId,
-      name: data.name,
-      slug: await uniqueSlug(data.name),
-      url: data.url,
-      transport: data.transport,
-      authType: data.authType,
-      headerName: data.authType === "header" ? (data.headerName ?? null) : null,
-      secretEnc:
-        data.authType === "header" && data.secret
-          ? sealHeaderSecret(connectionId, data.secret)
+  const slug = await uniqueSlug(data.name);
+  // The row and its own header-value vault item (Q4) are written together.
+  db.transaction((tx) => {
+    tx.insert(connections)
+      .values({
+        id: connectionId,
+        name: data.name,
+        slug,
+        url: data.url,
+        transport: data.transport,
+        authType: data.authType,
+        headerName: data.authType === "header" ? (data.headerName ?? null) : null,
+        oauthEnc: manualClient
+          ? sealOAuthState(connectionId, {
+              client: {
+                client_id: data.clientId,
+                ...(data.clientSecret ? { client_secret: data.clientSecret } : {}),
+              },
+            })
           : null,
-      oauthEnc: manualClient
-        ? sealOAuthState(connectionId, {
-            client: {
-              client_id: data.clientId,
-              ...(data.clientSecret ? { client_secret: data.clientSecret } : {}),
-            },
-          })
-        : null,
-    })
-    .returning();
-  const id = row!.id;
+      })
+      .run();
+    if (data.authType === "header" && data.secret) {
+      const target = { id: connectionId, name: data.name, slug, url: data.url, secretItemId: null };
+      writeOwnHeaderSecret(tx, target, data.secret, "connections");
+    }
+  });
+  if (data.authType === "header" && data.secret) vaultItemsChanged();
+  const id = connectionId;
   await getConnectionManager().rowChanged(id);
   if (data.botIds) await setBots(id, data.botIds);
   return get(id);
@@ -216,24 +221,35 @@ export async function update(id: string, data: UpdateConnectionDTO): Promise<Con
     current.authType === "header" &&
     data.secret === undefined &&
     data.secretRef === undefined;
+  const writesSecret = data.secret !== undefined && current.authType === "header";
   const changes = {
     ...(data.name !== undefined ? { name: data.name } : {}),
     ...(data.url !== undefined ? { url: data.url } : {}),
     ...(data.headerName !== undefined && current.authType === "header"
       ? { headerName: data.headerName }
       : {}),
-    ...(data.secret !== undefined && current.authType === "header"
-      ? { secretEnc: sealHeaderSecret(id, data.secret), secretRef: null }
-      : {}),
+    // A new value goes into the connection's own vault item (below).
+    ...(writesSecret ? { secretRef: null } : {}),
     ...(data.secretRef !== undefined && data.secret === undefined && current.authType === "header"
       ? { secretRef: data.secretRef }
       : {}),
-    ...(dropSecret ? { secretEnc: null, secretRef: null } : {}),
+    ...(dropSecret ? { secretEnc: null, secretRef: null, secretItemId: null } : {}),
   };
-  // Drizzle refuses an empty SET (e.g. a PATCH that only changes botIds).
-  if (Object.keys(changes).length > 0) {
-    await db.update(connections).set(changes).where(eq(connections.id, id));
-  }
+  db.transaction((tx) => {
+    const row = tx.select().from(connections).where(eq(connections.id, id)).get();
+    if (!row) throw Boom.notFound("Connection not found");
+    // The old host's value goes with it: its own item is deleted, not kept (S4).
+    if (dropSecret && row.secretItemId) deleteOwnHeaderSecret(tx, row.secretItemId, row.slug);
+    // Drizzle refuses an empty SET (e.g. a PATCH that only changes botIds).
+    if (Object.keys(changes).length > 0) {
+      tx.update(connections).set(changes).where(eq(connections.id, id)).run();
+    }
+    if (writesSecret) {
+      const target = { ...row, ...changes, secretItemId: dropSecret ? null : row.secretItemId };
+      writeOwnHeaderSecret(tx, target, data.secret!, "connections");
+    }
+  });
+  if (writesSecret || dropSecret) vaultItemsChanged();
   if (reconnect) await getConnectionManager().rowChanged(id);
   if (data.botIds) await setBots(id, data.botIds);
   return get(id);
@@ -243,7 +259,14 @@ export async function remove(id: string): Promise<void> {
   const connection = await get(id);
   // The row (and its bot links) go first, so a connect attempt racing the
   // delete finds nothing to connect and the Reconcile sees the links gone.
-  await db.delete(connections).where(eq(connections.id, id));
+  // Its own header-value vault item goes with it.
+  const ownItem = db.transaction((tx) => {
+    const row = tx.select().from(connections).where(eq(connections.id, id)).get();
+    tx.delete(connections).where(eq(connections.id, id)).run();
+    if (row?.secretItemId) deleteOwnHeaderSecret(tx, row.secretItemId, row.slug);
+    return row?.secretItemId;
+  });
+  if (ownItem) vaultItemsChanged();
   await getConnectionManager().remove(id, connection.slug, connection.botIds);
 }
 
