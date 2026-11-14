@@ -11,7 +11,7 @@ import { describe, beforeEach, expect, it, vi } from "vite-plus/test";
 import { MemoryRouter } from "react-router-dom";
 import { MemoryPage } from "@/pages/memory/Memory";
 import { GrootUIProvider } from "@groot/ui";
-import type { MemoryRecord } from "@/lib/bots-api";
+import type { MemoryRecord } from "../../../apps/web/src/shared/api/memories";
 
 const listMock = vi.fn();
 const getMock = vi.fn();

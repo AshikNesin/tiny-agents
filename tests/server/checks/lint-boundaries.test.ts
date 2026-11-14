@@ -657,6 +657,30 @@ const FIXTURES: Record<string, Fixture> = {
     source: "const derived = new Map<string, string>();\nexport const d = derived;\n",
     rules: ["R12"],
   },
+  "apps/web/src/client/lib/r13-declarations-api.ts": {
+    source:
+      "export interface Bot {\n  id: string;\n}\nexport type Bots = Bot[];\nexport const botsApi = { list: (): Bots => [] };\n",
+    rules: ["R13", "R13"],
+    mentions: "apps/web/src/shared/api/<area>.ts",
+  },
+  "apps/web/src/client/lib/r13-reexports-api.ts": {
+    source:
+      'import type { Task } from "../../shared/api/tasks";\nexport type { Task };\nexport { type Routine } from "../../shared/api/routines";\nexport type * from "../../shared/api/skills";\nexport const tasks = (): Task[] => [];\n',
+    rules: ["R13", "R13", "R13"],
+  },
+  "apps/web/src/client/lib/r13-pass-api.ts": {
+    source:
+      'import { apiClient } from "@groot/shell/lib/api";\nimport type { Task } from "../../shared/api/tasks";\ninterface Local {\n  n: number;\n}\nconst local: Local = { n: 1 };\nexport const tasksApi = { list: () => apiClient.get<Task[]>("/tasks"), local };\nexport class StepUpRequiredError extends Error {}\nexport { local as defaults };\n',
+    rules: [],
+  },
+  "apps/web/src/client/lib/r13-elsewhere-pass.ts": {
+    source: "export interface Draft {\n  name: string;\n}\nexport type Drafts = Draft[];\n",
+    rules: [],
+  },
+  "apps/web/src/shared/api/r13-shared-pass.ts": {
+    source: "export interface Task {\n  id: string;\n}\nexport type { Task as Todo };\n",
+    rules: [],
+  },
   "apps/web/src/client/r12-elsewhere-pass.ts": {
     source: "let open = false;\nexport const toggle = () => (open = !open);\n",
     rules: [],

@@ -1,9 +1,14 @@
 import { z } from "zod";
 import { taskMachine } from "../../../shared/machines/task";
+import type { TaskPriority } from "../../../shared/api/tasks";
 
 const TASK_STATUSES = taskMachine.states;
-const TASK_PRIORITIES = ["low", "medium", "high", "urgent"] as const;
-export type TaskPriority = (typeof TASK_PRIORITIES)[number];
+const TASK_PRIORITIES = [
+  "low",
+  "medium",
+  "high",
+  "urgent",
+] as const satisfies readonly TaskPriority[];
 
 export const createTaskSchema = z.object({
   title: z.string().trim().min(1, "Title is required").max(300),

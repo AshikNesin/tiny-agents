@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Button, Text } from "@groot/ui";
-import { claudeCodeApi, type ClaudeCodeAccount, type ClaudeCodeStatus } from "../lib/bots-api";
+import type { ClaudeCodeAccount, ClaudeCodeStatus } from "../../shared/api/bots";
+import { claudeCodeApi } from "../lib/bots-api";
 import { terminalApi } from "../lib/terminal-api";
 import { errorMessage } from "../lib/errors";
 

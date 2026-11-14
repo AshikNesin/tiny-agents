@@ -7,7 +7,7 @@ import { asc, eq } from "drizzle-orm";
 import { botSkills, db, skills } from "../../db";
 import type { SkillStore } from "@tiny-agents/agent";
 import { conversationOwner } from "../bots/bots.owner";
-import type { SkillFile } from "./skills.parse";
+import type { SkillFile } from "../../../shared/api/skills";
 
 function files(raw: string): SkillFile[] {
   try {

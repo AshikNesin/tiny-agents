@@ -4,7 +4,7 @@
  * tab title and the favicon.
  */
 import { matchPath } from "react-router-dom";
-import type { BotListEntry } from "./bots-api";
+import type { BotListEntry } from "../../shared/api/bots";
 import { APP_NAV } from "../components/shell/nav";
 
 const APP_NAME = "tiny-agents";

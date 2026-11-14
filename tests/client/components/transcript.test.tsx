@@ -14,7 +14,7 @@ import { ConfirmProvider } from "@groot/ui/primitives";
 import { Transcript, type TranscriptPages } from "@/components/Transcript";
 import { PastChatPane } from "@/components/PastChatPane";
 import { MessageScrollerProvider } from "@/components/ui/message-scroller";
-import type { Bot } from "@/lib/bots-api";
+import type { Bot } from "../../../apps/web/src/shared/api/bots";
 import { chatTimeline } from "@/lib/chat-timeline";
 import type { ChatMessage } from "@/lib/chat-types";
 
@@ -135,6 +135,9 @@ describe("Past chat transcript", () => {
     browserProfile: "shared",
     pinnedAt: null,
     guestIds: [],
+    chatStartedAt: "2026-10-30T00:00:00.000Z",
+    memoryCapturedThrough: null,
+    connectionCapabilities: [],
     createdAt: "2026-10-30T00:00:00.000Z",
     updatedAt: "2026-10-30T00:00:00.000Z",
   };

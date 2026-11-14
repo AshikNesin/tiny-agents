@@ -22,6 +22,7 @@ import { cn } from "@groot/ui/lib/utils";
 import { PageLayout } from "@groot/shell/components/layout/PageLayout";
 import { Section } from "@groot/shell/components/layout/Section";
 import { formatRelativeTime } from "@groot/shell/lib/date.utils";
+import type { ValueField, VaultItemDetail as Detail, VaultPolicy } from "../../../shared/api/vault";
 import {
   apiError,
   FIELD_LABEL,
@@ -29,9 +30,6 @@ import {
   KIND_LABEL,
   SECRET_FIELDS,
   vaultApi,
-  type ValueField,
-  type VaultItemDetail as Detail,
-  type VaultPolicy,
 } from "../../lib/vault-api";
 import { PolicyForm } from "../../components/vault/PolicyForm";
 import { useStepUp } from "../../components/vault/StepUp";

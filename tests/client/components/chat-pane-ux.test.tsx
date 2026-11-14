@@ -17,7 +17,8 @@ import { BrowserRouter } from "react-router-dom";
 import { ChatPane } from "@/components/ChatPane";
 import { useBotsStore } from "@/store/bots";
 import { chatSessions } from "@/store/chats";
-import type { Bot, CatalogModel } from "@/lib/bots-api";
+import type { Bot } from "../../../apps/web/src/shared/api/bots";
+import type { CatalogModel } from "../../../apps/web/src/shared/api/models";
 import type { ChatMessage } from "@/lib/chat-types";
 import { botStream, openedPaths } from "../fakes/sse";
 
@@ -79,6 +80,9 @@ const HOST: Bot = {
   browserProfile: "shared",
   pinnedAt: null,
   guestIds: [],
+  chatStartedAt: new Date().toISOString(),
+  memoryCapturedThrough: null,
+  connectionCapabilities: [],
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 };

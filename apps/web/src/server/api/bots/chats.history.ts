@@ -19,19 +19,14 @@ import { firstMessageTitle, titlePastChat } from "./chats.title";
 import { publishBotChatEvent } from "./bots.events";
 import type { ChatHistoryDTO } from "./bots.schema";
 import { conversationRef, type BotRow } from "./bots.conversation";
+import type { Deleted } from "../../../shared/api/common";
+import type { HistoryPage, PastChatData, PastChatViewData } from "../../../shared/api/bots";
 
 export type PastChatRuntime = Pick<AgentRuntime, "readChat">;
 export type LeaveChatRuntime = Pick<AgentRuntime, "readChat" | "abort">;
 
-/** A past chat as the API returns it. */
-export interface PastChat {
-  id: string;
-  title: string | null;
-  startedAt: Date;
-  endedAt: Date;
-  lastMessagePreview: string | null;
-  messageCount: number;
-}
+/** A past chat as the API returns it (`shared/api/bots.ts`). */
+export type PastChat = PastChatData;
 
 const pastChatColumns = {
   id: true,
@@ -194,7 +189,11 @@ function publicChat({ conversationId: _ref, ...chat }: PastChat & { conversation
  * finished while it was the bot's chat. One read, no stream: nothing runs
  * in a retired conversation.
  */
-export async function readPastChat(botId: string, chatId: string, rt: PastChatRuntime) {
+export async function readPastChat(
+  botId: string,
+  chatId: string,
+  rt: PastChatRuntime,
+): Promise<PastChatViewData> {
   const chat = await findPastChat(botId, chatId);
   const full = await rt.readChat(conversationRef(chat.conversationId));
   return {
@@ -210,7 +209,7 @@ export async function pastChatPage(
   chatId: string,
   query: ChatHistoryDTO,
   rt: PastChatRuntime,
-) {
+): Promise<HistoryPage> {
   const chat = await findPastChat(botId, chatId);
   const { messages } = await rt.readChat(conversationRef(chat.conversationId));
   const page = pageBefore(messages, query.before, query.limit);
@@ -223,7 +222,7 @@ export async function pastChatPage(
  * orphaned in agent.db, like a deleted bot's (PRD §5.1): pi-durable has no
  * conversation delete yet.
  */
-export async function deletePastChat(botId: string, chatId: string) {
+export async function deletePastChat(botId: string, chatId: string): Promise<Deleted> {
   const chat = await findPastChat(botId, chatId);
   await db.delete(botChats).where(eq(botChats.id, chat.id));
   return { deleted: true };

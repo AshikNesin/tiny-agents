@@ -13,22 +13,14 @@ import { hashPassword } from "@groot/core/utils/password.utils";
 import { db, botGuests, guests, users } from "../../db";
 import { isGuestAccount } from "./access";
 import { revokeLiveAccess } from "./live-access";
-
-export interface GuestEntry {
-  id: number;
-  email: string;
-  name: string | null;
-  createdAt: Date;
-  /** Bots shared with this guest. */
-  botIds: string[];
-}
+import type { GuestData, GuestRemoved } from "../../../shared/api/people";
 
 /** The name a person goes by in a shared chat: their name, else their email's local part. */
 function displayName(user: { name: string | null; email: string }): string {
   return user.name?.trim() || user.email.split("@")[0] || user.email;
 }
 
-export async function listGuests(): Promise<GuestEntry[]> {
+export async function listGuests(): Promise<GuestData[]> {
   const rows = await db
     .select({
       id: users.id,
@@ -62,7 +54,7 @@ export async function listGuests(): Promise<GuestEntry[]> {
  * transaction (S8): an account without the row would be the owner, so a
  * failure between the two must leave neither.
  */
-export async function addGuest(data: CreateUserDTO): Promise<GuestEntry> {
+export async function addGuest(data: CreateUserDTO): Promise<GuestData> {
   const taken = () => Boom.conflict("User with this email already exists");
   if (await authService.findUserByEmail(data.email)) throw taken();
   const password = await hashPassword(data.password);
@@ -91,7 +83,7 @@ export async function addGuest(data: CreateUserDTO): Promise<GuestEntry> {
  * Remove a guest's account (their shares and passkeys go with it), and end
  * what they hold open. Owners are never removed here.
  */
-export async function removeGuest(userId: number): Promise<{ removed: true }> {
+export async function removeGuest(userId: number): Promise<GuestRemoved> {
   if (!(await isGuestAccount(userId))) throw Boom.notFound("Guest not found");
   await db.delete(users).where(eq(users.id, userId));
   revokeLiveAccess({ userId });

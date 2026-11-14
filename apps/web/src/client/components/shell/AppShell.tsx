@@ -20,7 +20,7 @@ import { useBotsStore } from "../../store/bots";
 import { useUiStore } from "../../store/ui";
 import { useCodeStore } from "../../store/code";
 import { threadPath } from "../../lib/code/api";
-import type { Bot as BotRow } from "../../lib/bots-api";
+import type { Bot as BotRow } from "../../../shared/api/bots";
 import { BotDialog } from "../BotDialog";
 import { AppSidebar } from "./AppSidebar";
 import { APP_NAV, guestNav } from "./nav";

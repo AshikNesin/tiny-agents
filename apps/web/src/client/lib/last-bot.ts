@@ -4,7 +4,7 @@
  * mode, blocked site data), so every access is best-effort.
  */
 import { groupBots } from "./bot-groups";
-import type { BotListEntry } from "./bots-api";
+import type { BotListEntry } from "../../shared/api/bots";
 
 const LAST_BOT_KEY = "tiny-agents:last-bot";
 

@@ -3,7 +3,8 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import { Download, FileText, Loader2, X } from "lucide-react";
 import { Button } from "@groot/ui/button";
-import { botsApi, type AttachmentRef } from "../lib/bots-api";
+import type { AttachmentRef } from "../lib/chat-types";
+import { botsApi } from "../lib/bots-api";
 import { humanSize, type StagedUpload } from "../lib/staged-uploads";
 import { FilePreviewDialog, statusLabel, useUploadStatus } from "./FilePreview";
 

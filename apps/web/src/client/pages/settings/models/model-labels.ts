@@ -2,7 +2,7 @@
  * Labels Settings → Models shows for kinds, statuses and roles (issue #179).
  */
 import type { StatusVariant } from "@groot/ui/status-badge";
-import type { Account, ModelRole, ProviderKind } from "../../../lib/models-api";
+import type { Account, ModelRole, ProviderKind } from "../../../../shared/api/models";
 
 export const KIND_LABEL: Record<ProviderKind, string> = {
   anthropic: "Anthropic",

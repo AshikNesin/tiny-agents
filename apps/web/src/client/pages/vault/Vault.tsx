@@ -1,6 +1,6 @@
 import { useParams } from "react-router-dom";
 import { StepUpProvider } from "../../components/vault/StepUp";
-import type { VaultKind } from "../../lib/vault-api";
+import type { VaultKind } from "../../../shared/api/vault";
 import { CredentialRequestSheet } from "./CredentialRequestSheet";
 import { NewVaultItem } from "./NewVaultItem";
 import { VaultItemDetail } from "./VaultItemDetail";

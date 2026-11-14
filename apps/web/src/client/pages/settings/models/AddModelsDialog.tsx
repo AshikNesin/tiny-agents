@@ -25,13 +25,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@groot/ui/tabs";
 import { Text } from "@groot/ui/typography";
 import { useStepUp } from "../../../components/vault/StepUp";
 import { errorMessage } from "../../../lib/errors";
-import {
-  modelsApi,
-  type Account,
-  type Connection,
-  type DiscoveredModel,
-  type ProviderTemplate,
-} from "../../../lib/models-api";
+import type {
+  Account,
+  DiscoveredModel,
+  ModelEndpoint,
+  ProviderTemplate,
+} from "../../../../shared/api/models";
+import { modelsApi } from "../../../lib/models-api";
 import {
   cleanCustomProviders,
   CustomProvidersEditor,
@@ -39,7 +39,7 @@ import {
 } from "./CustomProvidersEditor";
 import { formatTokens, KIND_LABEL, KINDS } from "./model-labels";
 
-type Kind = Connection["kind"];
+type Kind = ModelEndpoint["kind"];
 type ImageInput = "auto" | "yes" | "no";
 
 interface Draft {
@@ -76,7 +76,7 @@ function fromTemplate(template: ProviderTemplate | undefined): Draft {
 }
 
 /** The connection a draft describes, as the API takes it. */
-function connectionOf(draft: Draft): Connection {
+function connectionOf(draft: Draft): ModelEndpoint {
   return {
     kind: draft.kind,
     ...(draft.kind === "claude-plan" || !draft.baseUrl.trim()

@@ -41,8 +41,9 @@ import {
 import { cn } from "@groot/ui/lib/utils";
 import { Link } from "react-router-dom";
 import { useIsGuest } from "../store/people";
-import { botsApi, type BrowserStatus } from "../lib/bots-api";
-import type { Bot } from "../lib/bots-api";
+import type { Bot } from "../../shared/api/bots";
+import type { BrowserStatus } from "../../shared/api/live";
+import { botsApi } from "../lib/bots-api";
 import {
   connectionOf,
   panelHandoffButton as handoffButton,

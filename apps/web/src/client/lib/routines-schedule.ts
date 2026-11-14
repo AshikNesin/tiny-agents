@@ -7,7 +7,7 @@
  */
 import { CronExpressionParser } from "cron-parser";
 import cronstrue from "cronstrue";
-import type { Schedule } from "./routines-api";
+import type { Schedule } from "../../shared/api/routines";
 
 /** The single timezone (PRD 5.2): everything renders in IST, no picker. */
 export const TZ_IST = "Asia/Kolkata";

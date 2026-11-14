@@ -4,7 +4,7 @@
  */
 import { Card } from "@groot/ui/card";
 import { Text } from "@groot/ui/typography";
-import type { SkillFile } from "../../lib/skills-api";
+import type { SkillFile } from "../../../shared/api/skills";
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;

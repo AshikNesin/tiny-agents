@@ -12,7 +12,9 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { BotDialog } from "@/components/BotDialog";
-import { botsApi, type Bot, type CatalogModel } from "@/lib/bots-api";
+import type { Bot } from "../../../apps/web/src/shared/api/bots";
+import type { CatalogModel } from "../../../apps/web/src/shared/api/models";
+import { botsApi } from "@/lib/bots-api";
 
 vi.mock("@/lib/bots-api", () => ({
   botsApi: {

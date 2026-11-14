@@ -48,8 +48,7 @@ import { SecretLockedError } from "../../crypto/secret-box";
 import { openHeaderSecret } from "./connection-secrets";
 import { resolveConnectionSecret } from "../vault/vault.service";
 import { app } from "../../app-root";
-
-export type ConnectionStatus = "connecting" | "connected" | "error" | "needs_auth";
+import type { ConnectionStatus } from "../../../shared/api/connections";
 
 export interface ConnectionLiveState {
   status: ConnectionStatus;

@@ -11,7 +11,7 @@ import {
   fallbackModelId,
   toggleId,
 } from "@/lib/bot-draft";
-import type { Bot } from "@/lib/bots-api";
+import type { Bot } from "../../../apps/web/src/shared/api/bots";
 
 const bot = {
   id: "b1",

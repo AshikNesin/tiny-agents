@@ -14,7 +14,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 import { MemoryRouter } from "react-router-dom";
 import { GrootUIProvider } from "@groot/ui";
 import { BrowserPage } from "@/pages/browser";
-import { browserPageApi, type PageBrowser, type PageBrowserList } from "@/lib/browser-page-api";
+import type { PageBrowser, PageBrowserList } from "../../../apps/web/src/shared/api/live";
+import { browserPageApi } from "@/lib/browser-page-api";
 import { createRfb } from "@/lib/novnc";
 
 interface FakeRfb extends EventTarget {

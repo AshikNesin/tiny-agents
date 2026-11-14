@@ -9,19 +9,11 @@ import { asc, desc, eq, sql } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { db, tasks } from "../../db";
 import type { TaskStatus } from "../../../shared/machines/task";
-import type { CreateTaskDTO, TaskPriority, UpdateTaskDTO } from "./task.schema";
+import type { TaskData, TaskPriority } from "../../../shared/api/tasks";
+import type { CreateTaskDTO, UpdateTaskDTO } from "./task.schema";
 
-export interface TaskRow {
-  id: string;
-  title: string;
-  description: string;
-  status: TaskStatus;
-  priority: TaskPriority;
-  dueAt: Date | null;
-  completedAt: Date | null;
-  createdAt: Date;
-  updatedAt: Date;
-}
+/** A task as both adapters see it: the Tasks API's wire type (`shared/api/tasks.ts`). */
+export type TaskRow = TaskData;
 
 /** What creates a task: the page's form or a bot's tool call. */
 export interface NewTask {

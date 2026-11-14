@@ -14,7 +14,8 @@ import { Button } from "@groot/ui/button";
 import { Input } from "@groot/ui/input";
 import { Textarea } from "@groot/ui/textarea";
 import { Label } from "@groot/ui/label";
-import { skillsApi, type Skill } from "../../lib/skills-api";
+import type { Skill } from "../../../shared/api/skills";
+import { skillsApi } from "../../lib/skills-api";
 import { errorMessage } from "../../lib/errors";
 
 const NAME_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;

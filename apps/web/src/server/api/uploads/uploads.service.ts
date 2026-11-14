@@ -26,6 +26,7 @@ import {
   startExtraction,
 } from "./uploads.extraction";
 import { sniffFile, SniffError, TEXT_EXTENSIONS } from "./uploads.sniff";
+import type { StoredUpload, UploadMeta, UploadStatus } from "../../../shared/api/uploads";
 
 /** Max original sizes (issue #17 limits table). */
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
@@ -74,10 +75,6 @@ const ALLOWED_EXTENSIONS = new Set([
   // Code and plain text (issue #58): stored and read as text, never run.
   ...TEXT_EXTENSIONS,
 ]);
-
-export interface StoredUpload {
-  ref: AttachmentRef;
-}
 
 function sanitizeName(name: string): string {
   const trimmed = name.replace(/[\r\n"\\/\x00-\x1f]/g, "_").trim();
@@ -208,7 +205,7 @@ function toRef(row: {
 }
 
 /** An upload's live extraction state, for chips and the preview drawer. */
-export async function uploadStatus(id: string) {
+export async function uploadStatus(id: string): Promise<UploadStatus> {
   const found = await findUpload(id);
   if (!found) throw Boom.notFound("Unknown upload");
   const row = await ensureExtracting(found);
@@ -216,7 +213,7 @@ export async function uploadStatus(id: string) {
     ref: toRef(row),
     status: row.extractStatus,
     ...(row.extractError ? { error: row.extractError } : {}),
-    ...(row.extractMeta ? { meta: JSON.parse(row.extractMeta) as Record<string, unknown> } : {}),
+    ...(row.extractMeta ? { meta: JSON.parse(row.extractMeta) as UploadMeta } : {}),
   };
 }
 

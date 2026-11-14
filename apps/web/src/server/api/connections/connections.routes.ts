@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { AppContext, AppEnv } from "@groot/core/types";
 import { ok } from "@groot/core/utils/api-response.utils";
+import type { Deleted } from "../../../shared/api/common";
 import { parseBody, parseStringParam } from "@groot/core/utils/controller.utils";
 import { logger } from "@groot/core/logger";
 import * as connectionsService from "./connections.service";
@@ -96,7 +97,7 @@ router.patch("/connections/:id", async (c) => {
 
 router.delete("/connections/:id", requireStepUp, async (c) => {
   await connectionsService.remove(parseStringParam(c.req.param("id"), "id"));
-  return ok(c, { deleted: true });
+  return ok<Deleted>(c, { deleted: true });
 });
 
 router.post("/connections/:id/reconnect", async (c) => {

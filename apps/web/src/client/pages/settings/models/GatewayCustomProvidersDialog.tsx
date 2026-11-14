@@ -18,7 +18,8 @@ import {
 import { Text } from "@groot/ui/typography";
 import { useStepUp } from "../../../components/vault/StepUp";
 import { errorMessage } from "../../../lib/errors";
-import { modelsApi, type Account, type DiscoveredModel } from "../../../lib/models-api";
+import type { Account, DiscoveredModel } from "../../../../shared/api/models";
+import { modelsApi } from "../../../lib/models-api";
 import { ModelChecklist } from "./AddModelsDialog";
 import {
   cleanCustomProviders,

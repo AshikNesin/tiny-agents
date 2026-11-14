@@ -8,6 +8,7 @@ import { Input } from "@groot/ui/input";
 import { Textarea } from "@groot/ui/textarea";
 import { PageLayout } from "@groot/shell/components/layout/PageLayout";
 import { Section } from "@groot/shell/components/layout/Section";
+import type { ValueField, VaultKind, VaultPolicy } from "../../../shared/api/vault";
 import {
   apiError,
   FIELD_LABEL,
@@ -15,9 +16,6 @@ import {
   KIND_LABEL,
   SECRET_FIELDS,
   vaultApi,
-  type ValueField,
-  type VaultKind,
-  type VaultPolicy,
 } from "../../lib/vault-api";
 import { defaultPolicy, PolicyForm, suggestHandle } from "../../components/vault/PolicyForm";
 import { SecretInput } from "../../components/vault/SecretInput";

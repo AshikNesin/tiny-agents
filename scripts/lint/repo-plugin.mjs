@@ -113,6 +113,11 @@ const MODULE_STATE_MESSAGE =
 
 const COLLECTIONS = new Set(["Map", "Set", "WeakMap", "WeakSet"]);
 
+const API_TYPE_EXPORT_MESSAGE =
+  "R13: an API's request and response types live once, in apps/web/src/shared/api/<area>.ts, where the server's handlers use them too (docs/rewrite/README.md §4.5). Declare the type there and import it here; its other readers import it from there as well.";
+
+const TYPE_DECLARATIONS = new Set(["TSInterfaceDeclaration", "TSTypeAliasDeclaration"]);
+
 const WRAPPERS = new Set([
   "ParenthesizedExpression",
   "TSAsExpression",
@@ -198,6 +203,26 @@ export default {
               if (boundNames(declarator.id).every((name) => allowed.has(name))) continue;
               context.report({ node: declarator, message: MODULE_STATE_MESSAGE });
             }
+          },
+        };
+      },
+    },
+    "no-api-type-exports": {
+      create(context) {
+        const report = (node) => context.report({ node, message: API_TYPE_EXPORT_MESSAGE });
+        return {
+          ExportNamedDeclaration(node) {
+            if (node.declaration) {
+              if (TYPE_DECLARATIONS.has(node.declaration.type)) report(node);
+              return;
+            }
+            if (node.exportKind === "type") return report(node);
+            for (const specifier of node.specifiers) {
+              if (specifier.exportKind === "type") report(specifier);
+            }
+          },
+          ExportAllDeclaration(node) {
+            if (node.exportKind === "type") report(node);
           },
         };
       },

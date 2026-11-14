@@ -9,7 +9,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { GrootUIProvider } from "@groot/ui";
 import { CreateSkillDialog } from "@/components/skills/CreateSkillDialog";
-import type { Skill } from "@/lib/skills-api";
+import type { Skill } from "../../../../apps/web/src/shared/api/skills";
 
 const createMock = vi.fn();
 

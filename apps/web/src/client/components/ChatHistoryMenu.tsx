@@ -10,7 +10,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@groot/ui/dropdown-menu";
-import { botsApi, type PastChat } from "../lib/bots-api";
+import type { PastChat } from "../../shared/api/bots";
+import { botsApi } from "../lib/bots-api";
 import { messageCountLabel, pastChatRange, pastChatTitle } from "../lib/past-chats";
 import { previewLine } from "../lib/bot-groups";
 

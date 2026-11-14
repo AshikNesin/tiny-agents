@@ -36,6 +36,7 @@ import * as botsService from "../bots/bots.service";
 import { browserTargetForBot } from "../bots/browser.targets";
 import { knownProfile } from "../bots/profiles";
 import { watchOnly } from "../people/access";
+import type { DesktopApp, DesktopApps, LiveStarting, VncTicket } from "../../../shared/api/live";
 
 /** The owner's tab in every browser the profile routes open; bot tabs are keyed by bot id. */
 export const OWNER_TAB = "owner";
@@ -101,7 +102,7 @@ export interface LiveSurface<L extends LiveEntry> {
   resize?: { cannot: string; failed: string };
   /** The apps routes (by profile only); without them, no route. */
   apps?: {
-    list(live: L): Promise<unknown>;
+    list(live: L): Promise<DesktopApp[]>;
     open(live: L, id: string): Promise<void>;
     notDriving: string;
     listFailed: string;
@@ -231,7 +232,7 @@ function register(router: Hono<AppEnv>, surface: LiveSurface<LiveEntry>, a: Addr
       .catch(() => {
         // The failure is reported by the status (`error`).
       });
-    return ok(c, { starting: true });
+    return ok<LiveStarting>(c, { starting: true });
   });
 
   router.post(`${a.base}/vnc-ticket`, async (c) => {
@@ -251,7 +252,7 @@ function register(router: Hono<AppEnv>, surface: LiveSurface<LiveEntry>, a: Addr
       viewOnly: watchOnly(c.get("viewer")),
     });
     live.lastActivity = Date.now();
-    return ok(c, { path: `${a.vncPath(scope)}?ticket=${ticket}`, scale: view.scale });
+    return ok<VncTicket>(c, { path: `${a.vncPath(scope)}?ticket=${ticket}`, scale: view.scale });
   });
 
   const { resize } = surface;
@@ -294,7 +295,7 @@ function registerApps(router: Hono<AppEnv>, surface: LiveSurface<LiveEntry>, a: 
     const live = surface.ops().get(at);
     if (!live) throw Boom.notFound(a.notRunning);
     try {
-      return ok(c, { apps: await apps.list(live) });
+      return ok<DesktopApps>(c, { apps: await apps.list(live) });
     } catch (error) {
       badGateway(error, apps.listFailed);
     }

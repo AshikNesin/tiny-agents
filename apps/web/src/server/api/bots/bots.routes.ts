@@ -18,6 +18,13 @@ import {
   seesConnections,
 } from "../people/access";
 import type { BotStreamEvent, EventsFeedEvent } from "../../../shared/bot-stream";
+import type {
+  CapabilityList,
+  ClaudeCodeAccount,
+  ClaudeCodeStatus,
+  PastChatListData,
+} from "../../../shared/api/bots";
+import type { ModelsResponse } from "../../../shared/api/models";
 import {
   answerQuestionsSchema,
   approvalSchema,
@@ -41,18 +48,18 @@ function parseTaskId(value: string | undefined): number {
 // ── Models ────────────────────────────────────────────────────────────
 
 router.get("/claude-code/status", (c) => {
-  return ok(c, getAgentRuntime().claudePlan.status());
+  return ok<ClaudeCodeStatus>(c, getAgentRuntime().claudePlan.status());
 });
 
 // Is Claude Code installed and signed in where the worker runs? The first
 // call on a sandbox starts installing it; the client polls while it does.
 router.get("/claude-code/account", async (c) => {
-  return ok(c, await getAgentRuntime().claudePlan.account());
+  return ok<ClaudeCodeAccount>(c, await getAgentRuntime().claudePlan.account());
 });
 
 router.get("/models", (c) => {
   const catalog = getAgentRuntime().catalog;
-  return ok(c, {
+  return ok<ModelsResponse>(c, {
     // Chat models the picker offers, and any disabled one a bot still uses.
     models: catalog.list({ type: "chat" }),
     defaultModelId: catalog.forRole("bot_default")?.id ?? null,
@@ -64,7 +71,7 @@ router.get("/models", (c) => {
 // ── Capabilities ──────────────────────────────────────────────────────
 
 router.get("/capabilities", (c) => {
-  return ok(c, { capabilities: getAgentRuntime().listCapabilities() });
+  return ok<CapabilityList>(c, { capabilities: getAgentRuntime().listCapabilities() });
 });
 
 // ── Chat + activity streams (SSE) ─────────────────────────────────────
@@ -182,7 +189,7 @@ router.post("/bots/:id/reset", async (c) => {
 router.get("/bots/:id/chats", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
   await botsService.getBot(id);
-  return ok(c, { chats: await pastChats.listPastChats(id) });
+  return ok<PastChatListData>(c, { chats: await pastChats.listPastChats(id) });
 });
 
 router.get("/bots/:id/chats/:chatId", async (c) => {

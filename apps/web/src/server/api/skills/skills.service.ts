@@ -5,12 +5,8 @@
  */
 import { asc, eq, inArray } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
-import {
-  fetchSkillFromGitHub,
-  parseSkillMarkdown,
-  type ParsedSkill,
-  type SkillFile,
-} from "./skills.parse";
+import { fetchSkillFromGitHub, parseSkillMarkdown } from "./skills.parse";
+import type { SkillData, SkillFile, SkillPreview } from "../../../shared/api/skills";
 import type { CreateSkillDTO, PreviewSkillDTO, UpdateSkillDTO } from "./skills.schema";
 import { botSkills, bots, db, skills, type Skill } from "../../db";
 
@@ -18,20 +14,7 @@ type SkillRow = Skill & {
   bots: { botId: string }[];
 };
 
-export interface SkillDTO {
-  id: string;
-  name: string;
-  description: string;
-  body: string;
-  files: SkillFile[];
-  source: string;
-  sourceUrl: string | null;
-  botIds: string[];
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-function toDTO(row: SkillRow): SkillDTO {
+function toDTO(row: SkillRow): SkillData {
   let files: SkillFile[] = [];
   try {
     files = JSON.parse(row.files) as SkillFile[];
@@ -71,18 +54,18 @@ async function setBots(skillId: string, botIds: string[]): Promise<void> {
   });
 }
 
-export async function list(): Promise<SkillDTO[]> {
+export async function list(): Promise<SkillData[]> {
   const rows = await db.query.skills.findMany({ with: withBots, orderBy: asc(skills.name) });
   return rows.map(toDTO);
 }
 
-export async function get(id: string): Promise<SkillDTO> {
+export async function get(id: string): Promise<SkillData> {
   const row = await db.query.skills.findFirst({ where: eq(skills.id, id), with: withBots });
   if (!row) throw Boom.notFound("Skill not found");
   return toDTO(row);
 }
 
-export async function create(data: CreateSkillDTO): Promise<SkillDTO> {
+export async function create(data: CreateSkillDTO): Promise<SkillData> {
   await nameTaken(data.name);
   const [row] = await db
     .insert(skills)
@@ -99,7 +82,7 @@ export async function create(data: CreateSkillDTO): Promise<SkillDTO> {
   return get(row!.id);
 }
 
-export async function update(id: string, data: UpdateSkillDTO): Promise<SkillDTO> {
+export async function update(id: string, data: UpdateSkillDTO): Promise<SkillData> {
   await get(id);
   if (data.name) await nameTaken(data.name, id);
   const changes = {
@@ -121,7 +104,7 @@ export async function remove(id: string): Promise<void> {
 }
 
 /** Parse a pasted SKILL.md or fetch a GitHub skill folder, without saving. */
-export async function preview(input: PreviewSkillDTO): Promise<ParsedSkill & { exists: boolean }> {
+export async function preview(input: PreviewSkillDTO): Promise<SkillPreview> {
   const parsed =
     input.source === "paste"
       ? parseSkillMarkdown(input.content)

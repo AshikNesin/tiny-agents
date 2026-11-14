@@ -16,7 +16,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { monoClass } from "@groot/ui/typography";
 import { cn } from "@groot/ui/lib/utils";
 import { PageLayout } from "@groot/shell/components/layout/PageLayout";
-import { apiError, vaultApi, type CredentialRequestView } from "../../lib/vault-api";
+import type { CredentialRequestView } from "../../../shared/api/vault";
+import { apiError, vaultApi } from "../../lib/vault-api";
 import { SecretInput } from "../../components/vault/SecretInput";
 import { Switch } from "../../components/ui/switch";
 

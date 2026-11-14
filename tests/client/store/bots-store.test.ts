@@ -27,7 +27,8 @@ vi.mock("../../../apps/web/src/client/lib/sse", () => ({
 
 import { onConnectionChange, useBotsStore } from "../../../apps/web/src/client/store/bots";
 import { chatSessions } from "../../../apps/web/src/client/store/chats";
-import { botsApi, type Bot, type BotListEntry } from "../../../apps/web/src/client/lib/bots-api";
+import type { Bot, BotListEntry } from "../../../apps/web/src/shared/api/bots";
+import { botsApi } from "../../../apps/web/src/client/lib/bots-api";
 import type { EventsFeedEvent } from "../../../apps/web/src/client/lib/chat-types";
 
 function listEntry(id: string, conversationId: string, overrides: Partial<BotListEntry> = {}) {

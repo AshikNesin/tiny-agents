@@ -20,7 +20,10 @@ import {
 } from "@groot/ui/dropdown-menu";
 import { cn } from "@groot/ui/lib/utils";
 import { toast } from "sonner";
-import { botsApi, type AttachmentRef, type Bot, type CatalogModel } from "../lib/bots-api";
+import type { Bot } from "../../shared/api/bots";
+import type { CatalogModel } from "../../shared/api/models";
+import type { AttachmentRef } from "../lib/chat-types";
+import { botsApi } from "../lib/bots-api";
 import {
   canSend as draftCanSend,
   editText,
@@ -507,7 +510,8 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
               {models.length > 0 && (
                 <ModelChip
                   models={models}
-                  value={model?.id ?? bot.modelId}
+                  // `bot.modelId` is null on the default model (README §4.5, W1).
+                  value={model?.id ?? (bot.modelId as string)}
                   onChange={onModelChange}
                 />
               )}

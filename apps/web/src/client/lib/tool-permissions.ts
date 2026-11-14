@@ -3,7 +3,7 @@
  * Off choices, read and set per tool, per toolkit, or for every tool at once.
  * A tool without a stored choice uses its default.
  */
-import type { CapabilityInfo, ToolPermission } from "./bots-api";
+import type { CapabilityInfo, ToolPermission } from "../../shared/api/bots";
 
 export type ToolInfo = CapabilityInfo["tools"][number];
 export type Permissions = Record<string, ToolPermission>;

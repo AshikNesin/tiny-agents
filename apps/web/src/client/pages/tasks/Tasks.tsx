@@ -27,7 +27,8 @@ import { Card } from "@groot/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@groot/ui/select";
 import { cn } from "@groot/ui/lib/utils";
 import { PageLayout } from "@groot/shell/components/layout/PageLayout";
-import { tasksApi, type Task, type TaskInput } from "../../lib/tasks-api";
+import type { Task, TaskUpdateBody } from "../../../shared/api/tasks";
+import { tasksApi } from "../../lib/tasks-api";
 import { formatRelativeTime } from "@groot/shell/lib/date.utils";
 import { errorMessage } from "../../lib/errors";
 import { parseQuickTask } from "../../lib/task-quick-add";
@@ -440,7 +441,7 @@ function TaskEditor({
   const save = async () => {
     if (!task || !form.title.trim()) return;
     setSaving(true);
-    const input: TaskInput = {
+    const input: TaskUpdateBody = {
       title: form.title.trim(),
       description: form.description.trim(),
       status: form.status,

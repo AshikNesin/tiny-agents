@@ -18,6 +18,7 @@ import {
   type Slide,
 } from "./uploads.office";
 import { decodeText, type ExtractKind } from "./uploads.text";
+import type { UploadMeta } from "../../../shared/api/uploads";
 
 const EXTRACT_LIMITS = {
   /** Extracted text per file; the rest is marked truncated. */
@@ -33,23 +34,8 @@ const EXTRACT_LIMITS = {
   pageChars: 16_000,
 };
 
-/** What the attachment row records about the extraction (no content). */
-interface ExtractMeta {
-  format: AttachmentContent["format"];
-  pages?: number;
-  sheets?: number;
-  lines?: number;
-  entries?: number;
-  chars: number;
-  truncated?: boolean;
-  title?: string;
-  author?: string;
-  /** JSON/YAML: whether it parses. */
-  valid?: boolean;
-  /** PDF pages with almost no text (scans, images). */
-  imagePages?: number;
-  suspicious?: string;
-}
+/** What the attachment row records about the extraction (no content): the wire `UploadMeta`. */
+type ExtractMeta = UploadMeta;
 
 export type ExtractResult =
   | { status: "ready"; content: AttachmentContent; meta: ExtractMeta }

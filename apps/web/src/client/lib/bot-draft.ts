@@ -3,7 +3,9 @@
  * nothing, with the default model), takes edits field by field, and turns
  * into the create/update payload once it is valid. The dialog is its view.
  */
-import type { Bot, BrowserProfile, CatalogModel, ToolPermission } from "./bots-api";
+import type { Bot, ToolPermission } from "../../shared/api/bots";
+import type { BrowserProfile } from "../../shared/api/live";
+import type { CatalogModel } from "../../shared/api/models";
 
 /** The server caps the persona at ~24 KB (bots.schema.ts). */
 export const SYSTEM_PROMPT_MAX = 24_576;

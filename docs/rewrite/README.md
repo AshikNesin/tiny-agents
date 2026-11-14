@@ -654,6 +654,47 @@ rows 22 to 28 decide by whether the conversation is shared, take no
 The wire types live once, in `apps/web/src/shared/api/<area>.ts`. Both the
 server's handlers and the client import them, and the hand copies go away.
 
+Step 5.1 did this (naming in `shared/api/common.ts`: a `…Data` type is what a
+handler hands to `ok()`, dates as `Date`; the plain name is its `Jsonified`
+form the client reads). A handler or service is annotated with its response
+type, so a server change that breaks the client fails the typecheck. Request
+bodies stay validated by the routes' zod schemas, and
+`tests/server/api/wire-types.test.ts` fails the typecheck when a body type is
+one its schema would not accept. R13 keeps types out of `client/lib/*-api.ts`.
+
+Where a client hand copy disagreed with what the server sends, the shared
+type follows the server and nothing at runtime changed (D9). The
+disagreements:
+
+| #   | Wire type (route)                                | The hand copy said                                                                      | The server sends                                                                                                      |
+| --- | ------------------------------------------------ | --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| W1  | `Bot.modelId` (every route returning a bot)      | `string`                                                                                | `string \| null`: null when the bot runs on the `bot_default` role                                                    |
+| W2  | `Bot`                                            | no `chatStartedAt`, `memoryCapturedThrough`, `connectionCapabilities`                   | all three                                                                                                             |
+| W3  | `DELETE /bots/:id`, `POST /bots/:id/read`        | untyped                                                                                 | the bot                                                                                                               |
+| W4  | `PastChatView.state` (`GET /bots/:id/chats/:id`) | `{ messages, hasMore? }`                                                                | the windowed `ChatState`: also `busy`, `queued`, `cursor`                                                             |
+| W5  | `CapabilityInfo.tools[]` (`GET /capabilities`)   | no `unattendedOnly`, `vault`                                                            | the agent package's `ToolInfo`, both optional                                                                         |
+| W6  | `BrowserStatus` (`GET /bots/:id/browser`)        | `profile`, `mode`, `scale`, `starting`, `phase`, `error` optional                       | all six, always                                                                                                       |
+| W7  | `UploadStatus.meta` (`GET /uploads/:id`)         | all fields optional; no `chars`, `title`, `author`, `valid`, `imagePages`, `suspicious` | the stored extraction meta: `format` and `chars` always (the server itself typed it `Record<string, unknown>`)        |
+| W8  | `UploadText` (`GET /uploads/:id/text`)           | `format: string`; entries without `compressedSize`                                      | `format` is the attachment format union; entries are the agent's `AttachmentEntry`                                    |
+| W9  | `Routine.done` (every routine route)             | optional                                                                                | always a boolean                                                                                                      |
+| W10 | `RoutineRun` (both runs lists)                   | no `requestId`                                                                          | the whole `routine_runs` row, `requestId` included                                                                    |
+| W11 | `Connection` (every connection route)            | no `secretRef`                                                                          | `secretRef: string \| null`                                                                                           |
+| W12 | `POST /connections/test`                         | tools without `name`; `transport: string`                                               | each tool's server `name`; `transport` is `streamable-http` or `sse`                                                  |
+| W13 | `DiscoveredModel` (discover, available, refresh) | no `compat`, `aliases`                                                                  | the models package's `DiscoveredModel`                                                                                |
+| W14 | `VaultItemDetail.events` (`GET /vault/items/:h`) | no `itemId`, `taskId`                                                                   | the whole audit row                                                                                                   |
+| W15 | `POST /vault/requests/:id/submit`                | `{ filled, savedHandle }`                                                               | also `saveFailed`                                                                                                     |
+| W16 | deletes, `cancel`, connection `DELETE`           | `{ deleted: boolean }`, `{ cancelled: boolean }`, `void`                                | `{ deleted: true }`, `{ cancelled: true }`                                                                            |
+| W17 | bodies: skills create/update, guest add          | `Partial<Skill>` (any skill field); `NewGuest.name` required                            | the schemas take name, description, body, files, source, sourceUrl, botIds (update: four); a guest's name is optional |
+| W18 | server-side only: text columns typed `string`    | the unions the client relied on                                                         | `bots.browserProfile`, `routine_runs.trigger` now `$type` their union; model and vault views cast theirs              |
+| W19 | server-side only: `GET /routines` `schedule`     | `Schedule`                                                                              | the stored JSON, unparsed (`unknown`); every write parses it, so the view casts                                       |
+
+W1 also reveals a client quirk, left as it is behind a typed cast: when a bot
+is on the default model and no default is set, `ChatComposer` passes null to
+the model chip and its "no longer in the model catalog" line names no model
+(`ChatComposer.tsx`, `BotDialog.tsx`). `FilePreview.statusLabel` reads W7's
+meta as `Partial<UploadMeta>`. Test fixtures gained the fields W2, W6, W9 and
+W10 add, with values that render the same.
+
 Data fetching settles on one rule:
 
 - **React Query** for request/response resources, which is what the docs
@@ -672,14 +713,14 @@ and e2e specs select on them.
 
 ### 4.6 Module boundaries and their enforcers
 
-| Rule                                                                                                | Enforcer                                                     |
-| --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| Only `packages/agent/src/runtime/**` imports `@earendil-works/pi-durable`                           | new lint rule (R11)                                          |
-| `@tiny-agents/sandbox` and `@tiny-agents/models` import neither pi-durable nor `@tiny-agents/agent` | package deps + R11                                           |
-| Toolkits import `ToolCall`, never pi-durable types                                                  | R11                                                          |
-| No module-level mutable state in `apps/web/src/server` outside `App`                                | new lint rule (R12), allowlist that shrinks to empty         |
-| The coding protocol in claude-worker matches `@tiny-agents/code/contracts`                          | type-level conformance test (Q6)                             |
-| Every client API response type comes from `shared/api`                                              | lint: no `interface`/`type` exports in `client/lib/*-api.ts` |
+| Rule                                                                                                | Enforcer                                                           |
+| --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| Only `packages/agent/src/runtime/**` imports `@earendil-works/pi-durable`                           | new lint rule (R11)                                                |
+| `@tiny-agents/sandbox` and `@tiny-agents/models` import neither pi-durable nor `@tiny-agents/agent` | package deps + R11                                                 |
+| Toolkits import `ToolCall`, never pi-durable types                                                  | R11                                                                |
+| No module-level mutable state in `apps/web/src/server` outside `App`                                | new lint rule (R12), allowlist that shrinks to empty               |
+| The coding protocol in claude-worker matches `@tiny-agents/code/contracts`                          | type-level conformance test (Q6)                                   |
+| Every client API response type comes from `shared/api`                                              | lint: no `interface`/`type` exports in `client/lib/*-api.ts` (R13) |
 
 ## 5. Prototypes run for this design
 

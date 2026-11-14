@@ -1,10 +1,12 @@
 import { Hono } from "hono";
 import type { AppEnv } from "@groot/core/types";
 import { ok } from "@groot/core/utils/api-response.utils";
+import type { Deleted } from "../../../shared/api/common";
 import { parseBody, parseQuery, parseStringParam } from "@groot/core/utils/controller.utils";
 import * as routinesService from "./routines.service";
 import { createRoutineSchema, listRunsSchema, updateRoutineSchema } from "./routines.schema";
 import { formatIst, safeParseSchedule } from "./routines.schedule";
+import type { RoutineWithPreviewData } from "../../../shared/api/routines";
 
 const router = new Hono<AppEnv>();
 
@@ -13,7 +15,11 @@ router.get("/routines", async (c) => ok(c, await routinesService.list()));
 router.post("/routines", async (c) => {
   const payload = await parseBody(c, createRoutineSchema);
   const routine = await routinesService.create(payload);
-  return ok(c, { ...routine, nextFireTimes: fireTimesOf(routine.schedule) }, 201);
+  return ok<RoutineWithPreviewData>(
+    c,
+    { ...routine, nextFireTimes: fireTimesOf(routine.schedule) },
+    201,
+  );
 });
 
 router.get("/routines/runs/recent", async (c) => {
@@ -29,12 +35,15 @@ router.patch("/routines/:id", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
   const payload = await parseBody(c, updateRoutineSchema);
   const routine = await routinesService.update(id, payload);
-  return ok(c, { ...routine, nextFireTimes: fireTimesOf(routine.schedule) });
+  return ok<RoutineWithPreviewData>(c, {
+    ...routine,
+    nextFireTimes: fireTimesOf(routine.schedule),
+  });
 });
 
 router.delete("/routines/:id", async (c) => {
   await routinesService.remove(parseStringParam(c.req.param("id"), "id"));
-  return ok(c, { deleted: true });
+  return ok<Deleted>(c, { deleted: true });
 });
 
 router.post("/routines/:id/pause", async (c) =>

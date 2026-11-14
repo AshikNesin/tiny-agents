@@ -1,25 +1,10 @@
 import { apiClient } from "@groot/shell/lib/api";
-import type { TaskStatus } from "../../shared/machines/task";
-
-export interface Task {
-  id: string;
-  title: string;
-  description: string;
-  status: TaskStatus;
-  priority: "low" | "medium" | "high" | "urgent";
-  dueAt: string | null;
-  completedAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export type TaskInput = Partial<Pick<Task, "title" | "description" | "status" | "priority">> & {
-  dueAt?: string | null;
-};
+import type { Deleted } from "../../shared/api/common";
+import type { Task, TaskCreateBody, TaskUpdateBody } from "../../shared/api/tasks";
 
 export const tasksApi = {
   list: () => apiClient.get<Task[]>("/tasks"),
-  create: (input: { title: string } & Partial<TaskInput>) => apiClient.post<Task>("/tasks", input),
-  update: (id: string, input: TaskInput) => apiClient.patch<Task>(`/tasks/${id}`, input),
-  remove: (id: string) => apiClient.delete<{ deleted: boolean }>(`/tasks/${id}`),
+  create: (input: TaskCreateBody) => apiClient.post<Task>("/tasks", input),
+  update: (id: string, input: TaskUpdateBody) => apiClient.patch<Task>(`/tasks/${id}`, input),
+  remove: (id: string) => apiClient.delete<Deleted>(`/tasks/${id}`),
 };

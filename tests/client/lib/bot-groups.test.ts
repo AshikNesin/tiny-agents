@@ -6,7 +6,7 @@ import {
   previewLine,
   relativeTime,
 } from "@/lib/bot-groups";
-import type { BotListEntry } from "@/lib/bots-api";
+import type { BotListEntry } from "../../../apps/web/src/shared/api/bots";
 
 function bot(id: string, overrides: Partial<BotListEntry> = {}): BotListEntry {
   return {

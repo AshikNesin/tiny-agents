@@ -29,6 +29,12 @@ import {
   type Schedule,
 } from "./routines.schedule";
 import type { CreateRoutineDTO, UpdateRoutineDTO } from "./routines.schema";
+import type {
+  RecentRoutineRunData,
+  RoutineData,
+  RoutineRunData,
+  Schedule as WireSchedule,
+} from "../../../shared/api/routines";
 
 const routineWithBot = {
   bot: { columns: { id: true, name: true, conversationId: true } },
@@ -51,7 +57,7 @@ type RoutineRow = {
   bot: { id: string; name: string; conversationId: string };
 };
 
-function toApi(row: RoutineRow) {
+function toApi(row: RoutineRow): RoutineData {
   const schedule = safeParseSchedule(row.schedule);
   return {
     id: row.id,
@@ -59,7 +65,8 @@ function toApi(row: RoutineRow) {
     botName: row.bot.name,
     name: row.name,
     prompt: row.prompt,
-    schedule: row.schedule,
+    // Sent as stored, unparsed: every write parses it with `scheduleSchema` first.
+    schedule: row.schedule as WireSchedule,
     scheduleDescription: schedule ? describeSchedule(schedule) : "Unknown schedule",
     enabled: row.enabled,
     nextRunAt: row.nextRunAt,
@@ -250,7 +257,7 @@ export async function runNow(id: string): Promise<{ runId: string }> {
   return { runId: runId ?? "" };
 }
 
-export async function listRuns(id: string, limit: number) {
+export async function listRuns(id: string, limit: number): Promise<RoutineRunData[]> {
   await findRoutine(id);
   const rows = await db
     .select()
@@ -261,7 +268,7 @@ export async function listRuns(id: string, limit: number) {
   return rows;
 }
 
-export async function recentRuns(limit: number) {
+export async function recentRuns(limit: number): Promise<RecentRoutineRunData[]> {
   const routineIds = await db.query.routines.findMany({
     columns: { id: true, name: true },
     with: { bot: { columns: { name: true } } },

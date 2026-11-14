@@ -13,7 +13,8 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { BrowserRouter } from "react-router-dom";
 import { ChatPane } from "@/components/ChatPane";
 import { useBotsStore } from "@/store/bots";
-import type { Bot, CatalogModel } from "@/lib/bots-api";
+import type { Bot } from "../../../apps/web/src/shared/api/bots";
+import type { CatalogModel } from "../../../apps/web/src/shared/api/models";
 
 const sendMock = vi.fn().mockResolvedValue(undefined);
 
@@ -68,6 +69,9 @@ const HOST: Bot = {
   browserProfile: "shared",
   pinnedAt: null,
   guestIds: [],
+  chatStartedAt: new Date().toISOString(),
+  memoryCapturedThrough: null,
+  connectionCapabilities: [],
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 };
