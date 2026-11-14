@@ -23,7 +23,7 @@ import { safeMessage, useFromSink, vaultGatePlan } from "./vault";
 export interface WebToolkitOptions {
   /** TinyFish API key. Search and Fetch stay hidden without it. */
   apiKey?: string;
-  /** Override for tests. */
+  /** TinyFish's fetch (tests). Never used by `http_request`, which connects through `sendPinned`. */
   fetch?: typeof fetch;
   /** Alternate Search API origin. */
   searchBase?: string;
@@ -36,7 +36,8 @@ export interface WebToolkitOptions {
   /**
    * Send one `http_request` hop (tests). It must connect only to
    * `addresses`, the ones `resolveHost` gave and the check passed. Default:
-   * `fetch`, when one is given, else a connection pinned to those addresses.
+   * `pinnedFetch`, a connection pinned to those addresses; nothing else
+   * sends an `http_request`.
    */
   sendPinned?: PinnedFetch;
 }
@@ -232,9 +233,7 @@ export function createWebToolkit(options: WebToolkitOptions): Capability {
   });
 
   const resolveHost = options.resolveHost ?? defaultResolve;
-  const sendPinned: PinnedFetch =
-    options.sendPinned ??
-    (options.fetch ? (url, _addresses, init) => options.fetch!(url.href, init) : pinnedFetch);
+  const sendPinned: PinnedFetch = options.sendPinned ?? pinnedFetch;
   /**
    * The URL, checked again after DNS: a public name must not resolve to a
    * private address. Resolved once: the request connects to these addresses
@@ -375,9 +374,9 @@ export function createWebToolkit(options: WebToolkitOptions): Capability {
       });
       const location = response.headers.get("location");
       if (response.status >= 300 && response.status < 400 && location) {
-        if (hop >= MAX_REDIRECTS) throw httpError("Too many redirects.");
-        // Not read: let the connection go before the next hop.
+        // Not read: let the connection go before the next hop (or the error).
         await response.body?.cancel().catch(() => undefined);
+        if (hop >= MAX_REDIRECTS) throw httpError("Too many redirects.");
         try {
           ({ url, addresses } = await publicTarget(new URL(location, url).href));
         } catch (error) {
@@ -461,7 +460,7 @@ export const pinnedFetch: PinnedFetch = async (url, addresses, init) => {
     return response;
   } finally {
     // Graceful: the body still streams, and the agent closes once it is read or cancelled.
-    void dispatcher.close();
+    dispatcher.close().catch(() => undefined);
   }
 };
 

@@ -41,14 +41,24 @@ function isLocalName(host: string): boolean {
 }
 
 /**
- * True for loopback, private, link-local, CGNAT (Tailscale), multicast and
- * unspecified addresses, and for an IPv4-mapped IPv6 address of any of them
- * (`::ffff:127.0.0.1`, or its hex form `::ffff:7f00:1`).
+ * True for an address a public URL must not reach: IPv4 unspecified (0/8),
+ * private (10/8, 172.16/12, 192.168/16), loopback, link-local, CGNAT
+ * (100.64/10, Tailscale), IETF protocol assignments (192.0.0/24),
+ * documentation (192.0.2/24), benchmarking (198.18/15), multicast and
+ * reserved (224/3 up); IPv6 unique local, link-local, site-local and
+ * multicast; and any IPv6 form that embeds or maps an IPv4 address whose
+ * IPv4 is one of those: mapped (`::ffff:127.0.0.1`, hex `::ffff:7f00:1`),
+ * SIIT (`::ffff:0:a.b.c.d`), compatible (`::a.b.c.d`, so `::` and `::1`
+ * too), NAT64 (`64:ff9b::/96`) and 6to4 (`2002::/16`). Local-use NAT64
+ * (`64:ff9b:1::/48`) is refused whole. A zone id (`%eth0`) is ignored.
  */
 export function isPrivateAddress(address: string): boolean {
-  const ip = address.replace(/^\[|\]$/g, "").toLowerCase();
+  const ip = address
+    .replace(/^\[|\]$/g, "")
+    .replace(/%.*$/, "")
+    .toLowerCase();
   if (isIP(ip) === 4) {
-    const [a, b] = ip.split(".").map(Number);
+    const [a, b, c] = ip.split(".").map(Number) as [number, number, number, number];
     return (
       a === 0 ||
       a === 10 ||
@@ -57,22 +67,30 @@ export function isPrivateAddress(address: string): boolean {
       (a === 169 && b === 254) ||
       (a === 172 && b >= 16 && b <= 31) ||
       (a === 192 && b === 168) ||
+      (a === 192 && b === 0 && (c === 0 || c === 2)) ||
+      (a === 198 && (b === 18 || b === 19)) ||
       a >= 224
     );
   }
   if (isIP(ip) === 6) {
-    const groups = ipv6Groups(ip);
-    const mapped = groups.slice(0, 5).every((group) => group === 0) && groups[5] === 0xffff;
-    if (mapped) {
-      const [high, low] = [groups[6]!, groups[7]!];
-      return isPrivateAddress(`${high >> 8}.${high & 0xff}.${low >> 8}.${low & 0xff}`);
-    }
-    const unspecifiedOrLoopback =
-      groups.slice(0, 7).every((group) => group === 0) && groups[7]! <= 1;
+    const g = ipv6Groups(ip);
+    const zero = (from: number, to: number) => g.slice(from, to).every((group) => group === 0);
+    const v4 = (high: number, low: number) =>
+      `${high >> 8}.${high & 0xff}.${low >> 8}.${low & 0xff}`;
+    const embedsLastV4 =
+      (zero(0, 5) && g[5] === 0xffff) || // mapped
+      (zero(0, 4) && g[4] === 0xffff && g[5] === 0) || // SIIT
+      zero(0, 6) || // compatible, `::` and `::1` included
+      (g[0] === 0x64 && g[1] === 0xff9b && zero(2, 6)); // NAT64
+    if (embedsLastV4) return isPrivateAddress(v4(g[6]!, g[7]!));
+    if (g[0] === 0x2002) return isPrivateAddress(v4(g[1]!, g[2]!)); // 6to4
+    const first = g[0]!;
     return (
-      unspecifiedOrLoopback ||
-      (groups[0]! & 0xfe00) === 0xfc00 || // unique local, fc00::/7
-      (groups[0]! & 0xffc0) === 0xfe80 // link-local, fe80::/10
+      (first === 0x64 && g[1] === 0xff9b && g[2] === 1) || // local-use NAT64
+      (first & 0xfe00) === 0xfc00 || // unique local, fc00::/7
+      (first & 0xffc0) === 0xfe80 || // link-local, fe80::/10
+      (first & 0xffc0) === 0xfec0 || // site-local, fec0::/10
+      (first & 0xff00) === 0xff00 // multicast, ff00::/8
     );
   }
   return false;

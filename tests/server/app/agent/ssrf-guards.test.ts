@@ -1,16 +1,17 @@
 /**
  * S7 (behavior register): the SSRF guards. `checkPublicUrl` classifies IP
- * literals as addresses (CGNAT and IPv4-mapped IPv6 included) and names as
- * names; the browser checks each hop of a navigation before its request is
- * sent; `http_request` resolves a host once and connects only to the
- * addresses it checked.
+ * literals as addresses (CGNAT and every IPv6 form that embeds an IPv4
+ * included) and names as names; the browser checks every main-frame request
+ * of an agent's tab and its popups before it is sent, for the tab's whole
+ * life, and resolves names; `http_request` resolves a host once and
+ * connects only to the addresses it checked.
  */
 import { existsSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { ToolExecutionApi, ToolExecutionResult } from "@earendil-works/pi-durable";
-import { chromium, type Page } from "playwright-core";
+import { chromium, type Browser, type Page } from "playwright-core";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import type { VaultBroker } from "../../../../packages/agent/src/vault";
 import {
@@ -19,6 +20,10 @@ import {
   type PinnedFetch,
 } from "../../../../packages/agent/src/toolkits/web";
 import { pageSession } from "../../../../packages/sandbox/src/browser-chromium";
+import {
+  navigationGuard,
+  refusesNavigation,
+} from "../../../../packages/sandbox/src/navigation-guard";
 import { checkPublicUrl, isPrivateAddress } from "../../../../packages/sandbox/src/public-url";
 
 const servers: Server[] = [];
@@ -93,6 +98,33 @@ describe("checkPublicUrl and isPrivateAddress (S7a)", () => {
     allowed("https://example.com/");
   });
 
+  it("refuses IPv6 forms that embed a private IPv4, and site-local and multicast IPv6", () => {
+    refused("http://[::127.0.0.1]/"); // IPv4-compatible, parsed to [::7f00:1]
+    refused("http://[::7f00:1]/");
+    refused("http://[64:ff9b::7f00:1]/"); // NAT64
+    refused("http://[64:ff9b::a9fe:a9fe]/");
+    refused("http://[64:ff9b:1::a00:1]/"); // local-use NAT64
+    refused("http://[2002:7f00:1::]/"); // 6to4
+    refused("http://[2002:a9fe:a9fe::1]/");
+    refused("http://[::ffff:0:7f00:1]/"); // SIIT
+    refused("http://[fec0::1]/"); // site-local
+    refused("http://[ff02::1]/"); // multicast
+    allowed("http://[64:ff9b::808:808]/"); // NAT64 of 8.8.8.8
+    allowed("http://[2002:808:808::1]/"); // 6to4 of 8.8.8.8
+    expect(isPrivateAddress("::ffff:0:10.0.0.1")).toBe(true);
+    expect(isPrivateAddress("fe80::1%eth0")).toBe(true);
+    expect(isPrivateAddress("2002:c0a8:101::")).toBe(true);
+  });
+
+  it("refuses the benchmarking, IETF and documentation IPv4 ranges", () => {
+    refused("http://198.18.0.1/");
+    refused("http://198.19.255.254/");
+    refused("http://192.0.0.8/");
+    refused("http://192.0.2.1/");
+    allowed("http://198.20.0.1/");
+    allowed("http://192.0.1.1/");
+  });
+
   it("classifies a name as a name, however it starts", () => {
     allowed("https://10.example.com/");
     allowed("https://127.example.com/");
@@ -108,87 +140,153 @@ describe("checkPublicUrl and isPrivateAddress (S7a)", () => {
 const open = { viewportWidth: 1280, viewportHeight: 800 };
 
 /**
- * A page whose `goto` follows `redirects` and asks the DevTools Fetch domain
- * about each hop, as Chromium does: a hop is only sent once it is continued.
+ * A browser as the guard sees it: one browser-level DevTools session whose
+ * `Fetch` pauses each tab's main-frame document requests (a request only
+ * goes out once it is continued) and whose `Target` events name popups.
  */
-function fakeChromePage(redirects: Record<string, string>) {
+function fakeChrome() {
   const sent: string[] = [];
+  const listeners = new Map<string, (event: unknown) => void>();
   const answers = new Map<string, (method: string) => void>();
-  let onPaused: ((event: unknown) => void) | undefined;
-  let intercepting = false;
-  let current = "about:blank";
   let id = 0;
   const cdp = {
-    send: async (method: string, params?: { requestId?: string }) => {
-      if (method === "Page.getFrameTree") return { frameTree: { frame: { id: "main" } } };
-      if (method === "Fetch.enable") intercepting = true;
-      if (method === "Fetch.disable") intercepting = false;
-      if (params?.requestId) answers.get(params.requestId)?.(method);
+    send: async (_method: string, params?: { requestId?: string }) => {
+      if (params?.requestId) answers.get(params.requestId)?.(_method);
       return {};
     },
-    on: (event: string, handler: (event: unknown) => void) => {
-      if (event === "Fetch.requestPaused") onPaused = handler;
-    },
-    detach: async () => undefined,
+    on: (event: string, handler: (event: unknown) => void) => void listeners.set(event, handler),
   };
-  const page = {
-    once: () => undefined,
-    context: () => ({ newCDPSession: async () => cdp }),
-    url: () => current,
-    goto: async (start: string) => {
-      const chain: string[] = [];
-      for (let url: string | undefined = start; url; url = redirects[url]) {
-        if (intercepting && onPaused) {
-          const requestId = `r${++id}`;
-          const answer = new Promise<string>((resolve) => answers.set(requestId, resolve));
-          onPaused({ requestId, frameId: "main", resourceType: "Document", request: { url } });
-          if ((await answer) === "Fetch.failRequest") {
+  const browser = { newBrowserCDPSession: async () => cdp } as unknown as Browser;
+
+  /** Tab `frameId` asks for `url`: whether the request went out. */
+  async function request(frameId: string, url: string): Promise<boolean> {
+    const requestId = `r${++id}`;
+    const answer = new Promise<string>((resolve) => answers.set(requestId, resolve));
+    listeners.get("Fetch.requestPaused")?.({
+      requestId,
+      frameId,
+      resourceType: "Document",
+      request: { url },
+    });
+    const went = (await answer) === "Fetch.continueRequest";
+    if (went) sent.push(url);
+    return went;
+  }
+
+  /** A tab whose `goto` follows `redirects`, each hop asked of the guard. */
+  function tab(frameId: string, redirects: Record<string, string> = {}): Page {
+    let current = "about:blank";
+    const page = {
+      once: () => undefined,
+      context: () => ({
+        newCDPSession: async () => ({
+          send: async () => ({ frameTree: { frame: { id: frameId } } }),
+          detach: async () => undefined,
+        }),
+      }),
+      url: () => current,
+      goto: async (start: string) => {
+        const chain: string[] = [];
+        for (let url: string | undefined = start; url; url = redirects[url]) {
+          if (url !== "about:blank" && !(await request(frameId, url))) {
             throw new Error(`page.goto: net::ERR_BLOCKED_BY_CLIENT at ${start}`);
           }
+          chain.push(url);
+          current = url;
         }
-        sent.push(url);
-        chain.push(url);
-        current = url;
-      }
-      const request = (i: number): unknown =>
-        i < 0 ? null : { url: () => chain[i], redirectedFrom: () => request(i - 1) };
-      return { status: () => 200, request: () => request(chain.length - 1) };
-    },
-  };
-  return { page: page as unknown as Page, sent };
+        const hop = (i: number): unknown =>
+          i < 0 ? null : { url: () => chain[i], redirectedFrom: () => hop(i - 1) };
+        return { status: () => 200, request: () => hop(chain.length - 1) };
+      },
+    };
+    return page as unknown as Page;
+  }
+
+  /** Tab `openerId` opened a popup, `targetId`. */
+  const popup = (openerId: string, targetId: string) =>
+    listeners.get("Target.targetCreated")?.({
+      targetInfo: { targetId, openerId, type: "page", url: "" },
+    });
+  return { browser, tab, request, popup, sent };
 }
+
+/** Names the fake DNS knows: nip.io-style names answer the address they spell. */
+const fakeDns = async (host: string) =>
+  host.endsWith(".nip.io") ? [host.slice(0, -".nip.io".length)] : ["93.184.216.34"];
 
 describe("browser navigation guard (S7b)", () => {
   it("refuses a redirect hop to a private address before its request is sent", async () => {
-    const { page, sent } = fakeChromePage({
+    const chrome = fakeChrome();
+    const guard = await navigationGuard(chrome.browser, { resolveHost: fakeDns });
+    const page = chrome.tab("tab-1", {
       "https://public.example/start": "https://public.example/next",
       "https://public.example/next": "http://127.0.0.1:8080/admin",
     });
-    const session = pageSession(page, open, { close: async () => {} });
+    const session = pageSession(page, open, { close: async () => {}, guard });
     await expect(session.navigate("https://public.example/start")).rejects.toThrow(
       "Blocked: the page redirected to a private address (127.0.0.1:8080).",
     );
-    expect(sent).toEqual([
-      "https://public.example/start",
-      "https://public.example/next",
-      "about:blank",
-    ]);
+    expect(chrome.sent).toEqual(["https://public.example/start", "https://public.example/next"]);
+    expect(page.url()).toBe("about:blank");
   });
 
   it("lets a redirect to an exempt private host through", async () => {
-    const { page, sent } = fakeChromePage({ "https://public.example/": "http://localhost:3000/" });
+    const chrome = fakeChrome();
+    const guard = await navigationGuard(chrome.browser, { resolveHost: fakeDns });
+    const page = chrome.tab("tab-1", { "https://public.example/": "http://localhost:3000/" });
     const session = pageSession(
       page,
       { ...open, allowedPrivateHosts: "localhost" },
-      {
-        close: async () => {},
-      },
+      { close: async () => {}, guard },
     );
     expect(await session.navigate("https://public.example/")).toEqual({
       url: "http://localhost:3000/",
       status: 200,
     });
-    expect(sent).toEqual(["https://public.example/", "http://localhost:3000/"]);
+    expect(chrome.sent).toEqual(["https://public.example/", "http://localhost:3000/"]);
+  });
+
+  it("refuses a name that resolves to a private address, as the URL or as a hop", async () => {
+    const chrome = fakeChrome();
+    const guard = await navigationGuard(chrome.browser, { resolveHost: fakeDns });
+    const page = chrome.tab("tab-1", {
+      "https://public.example/": "https://10.1.2.3.nip.io/",
+    });
+    const session = pageSession(page, open, { close: async () => {}, guard });
+    await expect(session.navigate("https://127.0.0.1.nip.io/")).rejects.toThrow(
+      "Private and local addresses can't be fetched.",
+    );
+    await expect(session.navigate("https://public.example/")).rejects.toThrow(
+      "Blocked: the page redirected to a private address (10.1.2.3.nip.io).",
+    );
+    expect(chrome.sent).toEqual(["https://public.example/"]);
+    expect(await refusesNavigation("https://8.8.8.8.nip.io/", new Set(), fakeDns)).toBe(false);
+  });
+
+  it("keeps guarding the tab after navigate: the page's own navigations and its popups", async () => {
+    const chrome = fakeChrome();
+    const guard = await navigationGuard(chrome.browser, { resolveHost: fakeDns });
+    const session = pageSession(chrome.tab("tab-1"), open, { close: async () => {}, guard });
+    await session.navigate("https://public.example/");
+    // A meta refresh, `location = …` or a click later: a main-frame request of the tab.
+    expect(await chrome.request("tab-1", "http://127.0.0.1:8080/admin")).toBe(false);
+    expect(await chrome.request("tab-1", "https://public.example/next")).toBe(true);
+    // `window.open` from the tab: the popup inherits the guard.
+    chrome.popup("tab-1", "popup-1");
+    expect(await chrome.request("popup-1", "http://169.254.169.254/latest/meta-data/")).toBe(false);
+    chrome.popup("popup-1", "popup-2");
+    expect(await chrome.request("popup-2", "http://10.0.0.1/")).toBe(false);
+    // A tab no agent holds (the owner's own) is not guarded.
+    expect(await chrome.request("owner-tab", "http://127.0.0.1:8080/router")).toBe(true);
+  });
+
+  it("refuses to navigate without a guard", async () => {
+    const chrome = fakeChrome();
+    const session = pageSession(chrome.tab("tab-1"), open, { close: async () => {} });
+    await expect(session.navigate("https://public.example/")).rejects.toThrow(
+      "This browser has no navigation guard.",
+    );
+    expect(chrome.sent).toEqual([]);
   });
 
   /** A Chromium this machine has, if any (CI may have none). */
@@ -198,48 +296,82 @@ describe("browser navigation guard (S7b)", () => {
     "/usr/bin/google-chrome",
   ].find((path) => path && existsSync(path));
 
+  /**
+   * A private target on 127.0.0.1 and a site on `localhost` (standing in
+   * for a public one: exempt, while 127.0.0.1 is not) whose pages try to
+   * reach it.
+   */
+  async function realChrome() {
+    const target = await serve(() => ({ body: "secret" }));
+    const T = `http://127.0.0.1:${target.port}`;
+    const html = (body: string) => ({ headers: { "content-type": "text/html" }, body });
+    const site = await serve((path) => {
+      if (path === "/go") return { status: 302, headers: { location: "/hop" } };
+      if (path === "/hop") return { status: 302, headers: { location: `${T}/redirect` } };
+      if (path === "/meta") return html(`<meta http-equiv="refresh" content="0;url=${T}/meta">hi`);
+      if (path === "/script") {
+        return html(
+          `<script>addEventListener("load", () => setTimeout(() => (location = "${T}/script"), 200))</script>hi`,
+        );
+      }
+      if (path === "/popup") return html(`<script>window.open("${T}/popup")</script>hi`);
+      if (path === "/popup-hop") return html(`<script>window.open("/hop")</script>hi`);
+      return html("ok");
+    });
+    const browser = await chromium.launch({ executablePath: chromiumPath, args: ["--no-sandbox"] });
+    const guard = await navigationGuard(browser);
+    const page = await browser.newPage();
+    const session = pageSession(
+      page,
+      { ...open, allowedPrivateHosts: "localhost" },
+      { close: async () => {}, guard },
+    );
+    const S = `http://localhost:${site.port}`;
+    return { browser, page, session, target, site, S };
+  }
+  const settle = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
   it.skipIf(!chromiumPath)(
     "in real Chromium, a public page's redirect to 127.0.0.1 never reaches it",
     async () => {
-      const target = await serve(() => ({ body: "secret" }));
-      const site = await serve((path) =>
-        path === "/go"
-          ? { status: 302, headers: { location: "/hop" } }
-          : path === "/hop"
-            ? { status: 302, headers: { location: `http://127.0.0.1:${target.port}/admin` } }
-            : { body: "ok" },
-      );
-      const browser = await chromium.launch({
-        executablePath: chromiumPath,
-        args: ["--no-sandbox"],
-      });
+      const { browser, page, session, target, site, S } = await realChrome();
       try {
-        const page = await browser.newPage();
-        // `localhost` stands in for a public site: exempt, while 127.0.0.1 is not.
-        const session = pageSession(
-          page,
-          { ...open, allowedPrivateHosts: "localhost" },
-          {
-            close: async () => {},
-          },
-        );
-        await expect(session.navigate(`http://localhost:${site.port}/go`)).rejects.toThrow(
+        await expect(session.navigate(`${S}/go`)).rejects.toThrow(
           `Blocked: the page redirected to a private address (127.0.0.1:${target.port}).`,
         );
         expect(site.hits).toEqual(["/go", "/hop"]);
         expect(target.hits).toEqual([]);
         expect(page.url()).toBe("about:blank");
-
-        // The guard is off once the navigation is over: an exempt page loads as before.
-        expect(await session.navigate(`http://localhost:${site.port}/`)).toEqual({
-          url: `http://localhost:${site.port}/`,
-          status: 200,
-        });
+        // An exempt page still loads.
+        expect(await session.navigate(`${S}/`)).toEqual({ url: `${S}/`, status: 200 });
       } finally {
         await browser.close();
       }
     },
     30_000,
+  );
+
+  it.skipIf(!chromiumPath)(
+    "in real Chromium, a meta refresh, a script and window.open after the load never reach 127.0.0.1",
+    async () => {
+      const { browser, page, session, target, S } = await realChrome();
+      try {
+        for (const path of ["/meta", "/script", "/popup", "/popup-hop"]) {
+          await session.navigate(`${S}${path}`).catch(() => undefined);
+          await settle(1_000);
+        }
+        expect(target.hits).toEqual([]);
+        // The agent's own tab is not on the private page either.
+        expect(page.url()).not.toContain(`127.0.0.1:${target.port}`);
+        // The owner's own tab, which no agent holds, is not guarded.
+        const owner = await browser.newPage();
+        await owner.goto(`http://127.0.0.1:${target.port}/owner`);
+        expect(target.hits).toEqual(["/owner"]);
+      } finally {
+        await browser.close();
+      }
+    },
+    40_000,
   );
 });
 
@@ -304,6 +436,39 @@ describe("http_request against DNS rebinding (S7c)", () => {
     expect(result.isError).toBe(true);
     expect(result.text).toBe("Blocked redirect: Private and local addresses can't be requested.");
     expect(sends).toEqual(["https://rebind.example/"]);
+  });
+
+  it("refuses a name whose answer holds a private address next to public ones", async () => {
+    const sends: string[] = [];
+    const web = createWebToolkit({
+      vault: {} as VaultBroker,
+      resolveHost: async () => ["93.184.216.34", "64:ff9b::7f00:1"],
+      sendPinned: async (url) => {
+        sends.push(url.href);
+        return new Response("no");
+      },
+    });
+    const result = await run(web, { url: "https://mixed.example/" });
+    expect(result.text).toBe("Private and local addresses can't be requested.");
+    expect(sends).toEqual([]);
+  });
+
+  it("lets go of each redirect's body, the last one included", async () => {
+    const cancelled: string[] = [];
+    const sendPinned: PinnedFetch = async (url) => {
+      const body = new ReadableStream<Uint8Array>({
+        cancel: () => void cancelled.push(url.pathname),
+      });
+      return new Response(body, { status: 302, headers: { location: `${url.pathname}x` } });
+    };
+    const web = createWebToolkit({
+      vault: {} as VaultBroker,
+      resolveHost: async () => ["93.184.216.34"],
+      sendPinned,
+    });
+    const result = await run(web, { url: "https://loop.example/a" });
+    expect(result.text).toBe("Too many redirects.");
+    expect(cancelled).toEqual(["/a", "/ax", "/axx", "/axxx", "/axxxx", "/axxxxx"]);
   });
 
   it("connects to the pinned address, never to what DNS says for the name", async () => {

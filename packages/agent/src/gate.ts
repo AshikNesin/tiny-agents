@@ -401,7 +401,13 @@ async function reviewOnce(
   const stored = await reviewMemo.read(api, context);
   if (stored) return stored;
   if (!(await mayAutoReview(call.name, api, context))) return undefined;
-  const messages = ownerMessages(await call.userMessages(), await ownerUserId());
+  let owner: number | undefined;
+  try {
+    owner = await ownerUserId();
+  } catch {
+    return undefined; // Whose turn it is can't be told: the owner gets the card.
+  }
+  const messages = ownerMessages(await call.userMessages(), owner);
   if (!messages) return undefined;
   const verdict = await reviewer({
     tool: call.name,

@@ -260,11 +260,21 @@ another bot) and `url` is the bot's own tab, `null` until it has one.
   The viewer is already trusted with the whole browser (it is you); the agent
   absorbs whatever changed at its next snapshot.
 - Navigation by the agent passes the same private-address rules as `web_fetch`
-  (`checkPublicUrl`); `BROWSER_ALLOWED_PRIVATE_HOSTS` exempts named hosts.
-  Each redirect hop is checked before its request is sent (the DevTools Fetch
-  domain pauses it), so a public page can't redirect the agent into the
-  private network. The owner can browse anywhere in the streamed Chrome, like
-  any browser.
+  (`checkPublicUrl`), and a name must not resolve to a private address;
+  `BROWSER_ALLOWED_PRIVATE_HOSTS` exempts named hosts. The guard
+  (`navigation-guard.ts`) checks every main-frame request of an agent's tab
+  before it is sent, for the tab's whole life: the URL, each redirect hop,
+  and what the page does later on its own (a meta refresh, a script setting
+  `location`, a click). Popups an agent's tab opens are guarded the same way.
+  A refused request never leaves the browser. The owner can browse anywhere
+  in the streamed Chrome in tabs no agent holds, like any browser; in the
+  agent's tab the owner's navigations pass the same guard.
+- Known limits of that guard: subframes (iframes) and subresources (images,
+  scripts, `fetch` from the page) are not checked; a name is resolved by the
+  server and then again by Chrome, so DNS rebinding between the two lookups
+  is not caught (only `http_request` pins its connection); and on the VM
+  transport Chrome resolves names on the VM, which may answer differently
+  from the server. A name the server can't resolve is left to Chrome.
 - Typing a secret while you drive goes to Chrome as keystrokes. Tool results
   never echo typed text, and the bridge never logs the bytes it relays.
 - Bots sign in, enter 2FA codes and pay through the [vault](./vault.md):
