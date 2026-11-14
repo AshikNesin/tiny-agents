@@ -260,8 +260,11 @@ another bot) and `url` is the bot's own tab, `null` until it has one.
   The viewer is already trusted with the whole browser (it is you); the agent
   absorbs whatever changed at its next snapshot.
 - Navigation by the agent passes the same private-address rules as `web_fetch`
-  (`checkPublicUrl`); `BROWSER_ALLOWED_PRIVATE_HOSTS` exempts named hosts. The
-  owner can browse anywhere in the streamed Chrome, like any browser.
+  (`checkPublicUrl`); `BROWSER_ALLOWED_PRIVATE_HOSTS` exempts named hosts.
+  Each redirect hop is checked before its request is sent (the DevTools Fetch
+  domain pauses it), so a public page can't redirect the agent into the
+  private network. The owner can browse anywhere in the streamed Chrome, like
+  any browser.
 - Typing a secret while you drive goes to Chrome as keystrokes. Tool results
   never echo typed text, and the bridge never logs the bytes it relays.
 - Bots sign in, enter 2FA codes and pay through the [vault](./vault.md):

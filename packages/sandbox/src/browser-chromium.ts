@@ -7,7 +7,7 @@
  */
 import { statSync } from "node:fs";
 import { chromium } from "playwright-core";
-import type { Locator, Page } from "playwright-core";
+import type { Locator, Page, Response } from "playwright-core";
 import { fillSecretFields, pageOrigin } from "./browser-fill";
 import { assertRefShape, isBlockedPrivateUrl, parseExemptHosts } from "./browser-guard";
 import type { BrowserSession, BrowserVnc, OpenBrowserOptions } from "./browser-sessions";
@@ -71,7 +71,8 @@ export function createChromiumTransport(options: ChromiumTransportOptions = {}) 
 
 /**
  * The page-level session every chromium transport shares: navigation with
- * the redirect guard and ref snapshot/click/type.
+ * the redirect guard (each hop checked before it is sent) and ref
+ * snapshot/click/type.
  * `teardown.close` disposes the transport-specific resources around the
  * page (local context vs a remote chromium + tunnel). `openTab` gives
  * another agent a tab of its own in the same browser; `claimed` is the set
@@ -144,14 +145,24 @@ export function pageSession(
     focus: () => page.bringToFront(),
     url: () => page.url(),
     navigate: async (url) => {
-      // Redirect guard: validate every hop of the redirect chain. Route
-      // interception never sees redirect hops here, but the response's
-      // request chain does (redirectedFrom). A private hop bails to
-      // about:blank before any private byte is rendered.
-      const response = await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 });
+      // Redirect guard (S7): every hop of the main frame's navigation is
+      // checked before its request is sent (`guardNavigation`), so a public
+      // page that redirects to a private address never reaches it. The
+      // response's request chain (redirectedFrom) is checked again after
+      // the load, as before. A private hop bails to about:blank.
+      const guard = await guardNavigation(page, exempt);
+      let response: Response | null = null;
+      try {
+        response = await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 });
+      } catch (error) {
+        // The refused hop fails the load; say why rather than the net error.
+        if (!guard.refused()) throw error;
+      } finally {
+        await guard.stop();
+      }
       const hops: string[] = [];
       for (let r = response?.request() ?? null; r; r = r.redirectedFrom()) hops.push(r.url());
-      const bad = hops.find((hop) => isBlockedPrivateUrl(hop, exempt));
+      const bad = guard.refused() ?? hops.find((hop) => isBlockedPrivateUrl(hop, exempt));
       if (bad) {
         await page.goto("about:blank").catch(() => {});
         throw new Error(
@@ -179,6 +190,50 @@ export function pageSession(
     },
   };
   return session;
+}
+
+/**
+ * Check each request of the page's main frame before it is sent, until
+ * `stop()`: the navigation's first URL and every redirect hop after it
+ * (Playwright's route interception never sees redirect hops; the DevTools
+ * Fetch domain pauses each one). A private, non-exempt hop is failed with
+ * `BlockedByClient`, so the request never leaves, and `refused()` names it.
+ */
+async function guardNavigation(
+  page: Page,
+  exempt: ReadonlySet<string>,
+): Promise<{ refused(): string | undefined; stop(): Promise<void> }> {
+  const cdp = await page.context().newCDPSession(page);
+  let refused: string | undefined;
+  try {
+    const { frameTree } = await cdp.send("Page.getFrameTree");
+    const mainFrame = frameTree.frame.id;
+    cdp.on("Fetch.requestPaused", (event) => {
+      const refuse = event.frameId === mainFrame && isBlockedPrivateUrl(event.request.url, exempt);
+      if (refuse) refused ??= event.request.url;
+      const answered = refuse
+        ? cdp.send("Fetch.failRequest", {
+            requestId: event.requestId,
+            errorReason: "BlockedByClient",
+          })
+        : cdp.send("Fetch.continueRequest", { requestId: event.requestId });
+      // A request the page already dropped (a newer navigation) has nothing to answer.
+      answered.catch(() => undefined);
+    });
+    await cdp.send("Fetch.enable", {
+      patterns: [{ urlPattern: "*", resourceType: "Document", requestStage: "Request" }],
+    });
+  } catch (error) {
+    await cdp.detach().catch(() => undefined);
+    throw error;
+  }
+  return {
+    refused: () => refused,
+    stop: async () => {
+      await cdp.send("Fetch.disable").catch(() => undefined);
+      await cdp.detach().catch(() => undefined);
+    },
+  };
 }
 
 /** The tab Chrome is showing: the one whose document reports itself visible. */
