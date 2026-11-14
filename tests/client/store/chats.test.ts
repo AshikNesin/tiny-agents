@@ -46,6 +46,8 @@ function harness(responses: Array<() => Promise<unknown>> = []) {
     abort: vi.fn().mockResolvedValue(undefined),
     setYolo: vi.fn(async (_botId: string, on: boolean) => ({ on })),
     history: vi.fn<(botId: string, before: string) => Promise<ChatPage>>(),
+    pastChat: vi.fn(),
+    pastChatHistory: vi.fn(),
     isOnline: () => online,
     whenOnline: (listener) => {
       onlineListeners.add(listener);

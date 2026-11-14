@@ -1,15 +1,5 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
-import {
-  Globe,
-  Menu,
-  MonitorPlay,
-  Paperclip,
-  SquarePen,
-  Users,
-  X,
-  WifiOff,
-  Zap,
-} from "lucide-react";
+import { Globe, Menu, MonitorPlay, Paperclip, SquarePen, Users, X, Zap } from "lucide-react";
 import { Button } from "@groot/ui/button";
 import {
   Dialog,
@@ -33,9 +23,8 @@ import { BotAvatar } from "./BotAvatar";
 import { BotMenu, type BotMenuView } from "./BotMenu";
 import { BrowserPanel } from "./BrowserPanel";
 import { ComputerPanel } from "./ComputerPanel";
-import { TypingIndicator } from "./ui/transcript-parts";
 import { ChatComposer, type ChatComposerHandle } from "./ChatComposer";
-import { Transcript, type TranscriptPages } from "./Transcript";
+import { ChatScrollerProvider, ChatSessionTranscript } from "./ChatSessionTranscript";
 import {
   browserInUse,
   computerInUse,
@@ -43,31 +32,10 @@ import {
   useComputerPanel,
 } from "../lib/browser-panel";
 import { SHOW_COMPUTER_EVENT } from "../lib/owner-actions";
-import { useHttpOwnerActions } from "../lib/owner-actions";
-import { Message } from "./ui/message";
-import { Spinner } from "./ui/spinner";
+import { LIVE_CHAT } from "../lib/chat-mode";
 import { isEcho, type OutboxEntry } from "../lib/chat-session";
-import {
-  MessageScrollerItem,
-  MessageScrollerProvider,
-  useMessageScroller,
-} from "./ui/message-scroller";
+import { useMessageScroller } from "./ui/message-scroller";
 import { errorMessage } from "../lib/errors";
-import { useOnline } from "../lib/online";
-
-/** True once `active` has held for `ms`: hides sub-second flickers. */
-function useSettled(active: boolean, ms: number): boolean {
-  const [settled, setSettled] = useState(false);
-  useEffect(() => {
-    if (!active) {
-      setSettled(false);
-      return;
-    }
-    const timer = window.setTimeout(() => setSettled(true), ms);
-    return () => window.clearTimeout(timer);
-  }, [active, ms]);
-  return active && settled;
-}
 
 /** ⌘⇧O on Apple keyboards, Ctrl+Shift+O elsewhere (ChatGPT's new-chat chord). */
 const NEW_CHAT_SHORTCUT =
@@ -85,17 +53,14 @@ interface ChatPaneProps {
 /**
  * Column 3 (PRD §6.2): header, transcript, composer. Thin shell — the
  * transcript needs `useMessageScroller` *inside* the scroller Provider, so
- * the pane body is a child component.
+ * the pane body is a child component. The transcript is the chat session in
+ * its live mode (lib/chat-mode.ts).
  */
 export function ChatPane(props: ChatPaneProps) {
   return (
-    // `last-anchor` opens the transcript on the newest read (anchored)
-    // message — WhatsApp-style first-unread positioning (issue #2b) —
-    // instead of jumping to the very top of the history. `autoScroll` then
-    // keeps the newest message pinned while the reader is at the bottom.
-    <MessageScrollerProvider autoScroll defaultScrollPosition="last-anchor">
+    <ChatScrollerProvider mode={LIVE_CHAT}>
       <ChatPaneBody {...props} />
-    </MessageScrollerProvider>
+    </ChatScrollerProvider>
   );
 }
 
@@ -107,7 +72,6 @@ function ChatPaneBody({ bot, models, canAnswer, onEditBot }: ChatPaneProps) {
   const chat = useChat(bot.id);
   const { messages, busy, yolo } = chat;
   const setMobileOpen = useUiStore((s) => s.setMobileOpen);
-  const ownerActions = useHttpOwnerActions(bot.id);
   const [confirmReset, setConfirmReset] = useState(false);
   const [confirmYolo, setConfirmYolo] = useState(false);
   // A guest (issue #145) chats; settings, New chat and Chat history stay the owner's.
@@ -127,12 +91,6 @@ function ChatPaneBody({ bot, models, canAnswer, onEditBot }: ChatPaneProps) {
   const composerRef = useRef<ChatComposerHandle>(null);
   const scroller = useMessageScroller();
 
-  // The transcript's pages: older ones load on scroll (issue #92).
-  const pages: TranscriptPages = {
-    hasMore: chat.hasMore,
-    loadingOlder: chat.loadingOlder,
-    loadOlder: chat.loadOlder,
-  };
   // Held by the server behind (or steering into) the reply; Echoes are in the timeline.
   const held = chat.outbox.filter((entry) => !isEcho(entry));
   // YOLO mode (issue #151): the owner's per-chat switch; the stream says its state.
@@ -140,12 +98,6 @@ function ChatPaneBody({ bot, models, canAnswer, onEditBot }: ChatPaneProps) {
     setConfirmYolo(false);
     await chat.setYolo(on);
   };
-  // Brief stream hiccups reconnect on their own; only a drop that lasts
-  // gets the notice. The first connection is "loading", not "reconnecting".
-  const reconnecting = useSettled(chat.health === "reconnecting", 1000);
-  const online = useOnline();
-  // A cached transcript shows while it reconnects; only an empty one waits on a spinner.
-  const showLoading = useSettled(chat.health === "loading" && messages.length === 0, 300);
   // A fresh conversation has nothing to start over from.
   const canReset = !guest && (messages.length > 0 || chat.outbox.length > 0);
 
@@ -226,31 +178,6 @@ function ChatPaneBody({ bot, models, canAnswer, onEditBot }: ChatPaneProps) {
     window.addEventListener(SHOW_COMPUTER_EVENT, onShow);
     return () => window.removeEventListener(SHOW_COMPUTER_EVENT, onShow);
   }, [showComputerPanel]);
-
-  // Read/unread split (issue #3): the chat's "New messages" divider sits
-  // above the first reply that arrived while the owner was away, and read
-  // messages are the scroller's anchors — `last-anchor` opens on the newest
-  // read message (WhatsApp-style), with the unread block peeking in below.
-  // Read anchors only place the chat as it opens. The scroller treats
-  // anchors as user turns and re-targets them whenever the transcript's
-  // children are swapped (an echo replaced by its confirmed row), which
-  // yanked the view back up to an old read message while a reply streamed
-  // instead of following it. Two frames after the first render with
-  // messages the initial position is applied; from then on autoScroll
-  // alone keeps the newest message pinned.
-  const [anchoring, setAnchoring] = useState(true);
-  const hasMessages = messages.length > 0;
-  useEffect(() => {
-    if (!anchoring || !hasMessages) return;
-    let inner = 0;
-    const outer = requestAnimationFrame(() => {
-      inner = requestAnimationFrame(() => setAnchoring(false));
-    });
-    return () => {
-      cancelAnimationFrame(outer);
-      cancelAnimationFrame(inner);
-    };
-  }, [anchoring, hasMessages]);
 
   // A bot without a model of its own runs on the default model.
   const defaultModel = useBotsStore((s) => s.defaultModel);
@@ -427,71 +354,10 @@ function ChatPaneBody({ bot, models, canAnswer, onEditBot }: ChatPaneProps) {
         )}
 
         {/* Transcript (AI Elements Chat: Message Scroller keeps the newest
-          message pinned unless the reader scrolled up). The provider mounts
-          at the pane root so the body can drive it (send → scroll to end). */}
-        <div className="relative min-h-0 flex-1">
-          {/* Stream health: the transcript is frozen while disconnected. A
-              floating pill, so the transcript does not shift under it. */}
-          {(!online || reconnecting) && (
-            <div
-              role="status"
-              className="bg-background/90 text-muted-foreground absolute top-2 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-full border px-3 py-1 text-xs shadow-sm"
-            >
-              {online ? (
-                <>
-                  <Spinner className="size-3" aria-hidden />
-                  Reconnecting…
-                </>
-              ) : (
-                <>
-                  <WifiOff className="size-3" aria-hidden />
-                  You're offline. Messages send when you're back.
-                </>
-              )}
-            </div>
-          )}
-          {/* First load: outside the scroller content, which must hold only
-              transcript rows for the initial positioning to apply. */}
-          {showLoading && (
-            <div className="text-muted-foreground absolute inset-0 flex items-center justify-center">
-              <Spinner className="size-5" />
-            </div>
-          )}
-          <Transcript
-            botName={bot.name}
-            pages={pages}
-            timeline={chat.timeline}
-            actions={ownerActions}
-            unreadDividerId={chat.unreadDividerId}
-            scrollAnchor={(i) => anchoring && chat.isRead(i)}
-            empty={
-              chat.health !== "loading" && (
-                <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-3 py-16 text-center">
-                  <BotAvatar name={bot.name} className="size-20" />
-                  <div className="max-w-sm">
-                    <p className="text-foreground text-lg font-semibold">{bot.name}</p>
-                    {bot.description ? (
-                      <p className="mt-1 text-sm">{bot.description}</p>
-                    ) : (
-                      <p className="mt-1 text-sm">Say hi to start the conversation.</p>
-                    )}
-                  </div>
-                </div>
-              )
-            }
-            tail={
-              <>
-                {chat.typing && (
-                  <MessageScrollerItem messageId="typing">
-                    <Message>
-                      <TypingIndicator label={`${bot.name} is typing`} />
-                    </Message>
-                  </MessageScrollerItem>
-                )}
-              </>
-            }
-          />
-        </div>
+          message pinned unless the reader scrolled up), with the stream's
+          health and the unread divider. The provider mounts at the pane root
+          so the body can drive it (send → scroll to end). */}
+        <ChatSessionTranscript bot={bot} chat={chat} mode={LIVE_CHAT} />
 
         {/* Messages the server holds behind (or steering into) the running
             reply (issue #9), as compact rows over the composer like the Code

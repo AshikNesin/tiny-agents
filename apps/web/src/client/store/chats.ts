@@ -12,7 +12,10 @@
  *   offline keeps its Echo and goes again once online; a refusal (an error
  *   answer, or no answer while online) withdraws the Echo, says why and
  *   resolves "restored", so the composer puts the draft back;
- * - stop, withdraw, YOLO mode and older pages.
+ * - stop, withdraw, YOLO mode and older pages;
+ * - past chats (issue #101): a read-only session per past chat on screen,
+ *   read once (no stream: nothing runs in a retired conversation) and paged
+ *   from the past chat's own history, under `pastChatKey`.
  *
  * Everything outside the tab (HTTP, the stream, the online signal, toasts)
  * comes in through `ChatPorts`, so tests drive it with fakes; `chatSessions`
@@ -34,6 +37,7 @@ import {
   type Echo,
 } from "../lib/chat-session";
 import type { AttachmentRef, BotStreamEvent, ChatPage } from "../lib/chat-types";
+import type { PastChatView } from "../../shared/api/bots";
 
 /** What the composer hands over for one owner message. */
 export interface OwnerSubmission {
@@ -71,6 +75,10 @@ export interface ChatPorts {
   setYolo(botId: string, on: boolean): Promise<{ on: boolean }>;
   /** The page of messages just before `before`. */
   history(botId: string, before: string): Promise<ChatPage>;
+  /** A past chat, read once: its newest messages and its routine cards. */
+  pastChat(botId: string, chatId: string): Promise<PastChatView>;
+  /** The page of a past chat's messages just before `before`. */
+  pastChatHistory(botId: string, chatId: string, before: string): Promise<ChatPage>;
   /** The browser's online signal, now. */
   isOnline(): boolean;
   /** Call `listener` once the browser comes back online; returns an unsubscribe. */
@@ -81,8 +89,17 @@ export interface ChatPorts {
 }
 
 export interface ChatSessionsState {
+  /** By bot id for its live chat, by `pastChatKey` for a past chat. */
   sessions: Record<string, ChatSession>;
 }
+
+/** The session key of a past chat on screen (a bot's live chat is keyed by the bot's id). */
+export function pastChatKey(botId: string, chatId: string): string {
+  return `${botId}/history/${chatId}`;
+}
+
+/** How a past chat's read ended: read, refused (toasted), or off screen first. */
+export type PastChatOutcome = "open" | "failed" | "closed";
 
 /** No answer at all (fetch rejected): the request may or may not have landed. */
 function unanswered(error: unknown): boolean {
@@ -92,6 +109,8 @@ function unanswered(error: unknown): boolean {
 export function createChatSessions(ports: ChatPorts) {
   const store = createStore<ChatSessionsState>(() => ({ sessions: {} }));
   const streams = new Map<string, { close(): void }>();
+  /** The past chats on screen, by session key: where their messages come from. */
+  const pastChats = new Map<string, { botId: string; chatId: string }>();
 
   /** Apply `action` to the bot's session; nothing when the chat was dropped meanwhile. */
   const dispatch = (botId: string, action: ChatAction) =>
@@ -171,17 +190,43 @@ export function createChatSessions(ports: ChatPorts) {
     },
 
     /**
-     * Forget the bot's chat (it moved to another conversation, or is gone):
-     * close its stream and drop the session, so nothing of the old
-     * transcript shows or keeps growing while the new one connects.
+     * A past chat is on screen: a fresh read-only session, read once.
+     * Resolves "failed" when it could not be read (the reason toasted),
+     * "closed" when it left the screen first (nothing toasted or kept).
      */
-    drop(botId: string): void {
-      streams.get(botId)?.close();
-      streams.delete(botId);
+    async openPast(botId: string, chatId: string): Promise<PastChatOutcome> {
+      const key = pastChatKey(botId, chatId);
+      const source = { botId, chatId };
+      pastChats.set(key, source);
+      store.setState((state) => ({
+        sessions: { ...state.sessions, [key]: newChatSession() },
+      }));
+      try {
+        const view = await ports.pastChat(botId, chatId);
+        if (pastChats.get(key) !== source) return "closed";
+        dispatch(key, { type: "past-chat", view });
+        return "open";
+      } catch (error) {
+        if (pastChats.get(key) !== source) return "closed";
+        ports.notifyError(errorMessage(error, "Failed to open the past chat"));
+        return "failed";
+      }
+    },
+
+    /**
+     * Forget a chat: the bot's (it moved to another conversation, or is
+     * gone), or a past chat that left the screen. Close its stream and drop
+     * the session, so nothing of the old transcript shows or keeps growing
+     * while the new one connects.
+     */
+    drop(key: string): void {
+      streams.get(key)?.close();
+      streams.delete(key);
+      pastChats.delete(key);
       store.setState((state) => {
-        if (!state.sessions[botId]) return state;
+        if (!state.sessions[key]) return state;
         const sessions = { ...state.sessions };
-        delete sessions[botId];
+        delete sessions[key];
         return { sessions };
       });
     },
@@ -238,18 +283,24 @@ export function createChatSessions(ports: ChatPorts) {
       }
     },
 
-    /** Fetch the page of messages above the oldest loaded one (issue #92). */
-    async loadOlder(botId: string): Promise<void> {
-      const session = store.getState().sessions[botId];
+    /**
+     * Fetch the page of messages above the oldest loaded one (issue #92):
+     * from the bot's chat, or from the past chat the key names.
+     */
+    async loadOlder(key: string): Promise<void> {
+      const session = store.getState().sessions[key];
       const before = session ? oldestEntryId(session.messages) : undefined;
       if (!session || !session.hasMore || session.loadingOlder || !before) return;
-      dispatch(botId, { type: "older-loading" });
+      const past = pastChats.get(key);
+      dispatch(key, { type: "older-loading" });
       try {
-        const page = await ports.history(botId, before);
-        dispatch(botId, { type: "older-page", before, page });
+        const page = past
+          ? await ports.pastChatHistory(past.botId, past.chatId, before)
+          : await ports.history(key, before);
+        dispatch(key, { type: "older-page", before, page });
       } catch {
         // Stay loadable: the next scroll to the top tries again.
-        dispatch(botId, { type: "older-failed" });
+        dispatch(key, { type: "older-failed" });
       }
     },
   };
@@ -275,6 +326,8 @@ export const chatSessions: ChatSessions = createChatSessions({
   abort: (botId) => botsApi.abort(botId),
   setYolo: (botId, on) => botsApi.setYolo(botId, on),
   history: (botId, before) => botsApi.history(botId, before),
+  pastChat: (botId, chatId) => botsApi.pastChat(botId, chatId),
+  pastChatHistory: (botId, chatId, before) => botsApi.pastChatHistory(botId, chatId, before),
   isOnline: () => navigator.onLine,
   whenOnline: whenBrowserOnline,
   notifyError: (message) => toast.error(message),

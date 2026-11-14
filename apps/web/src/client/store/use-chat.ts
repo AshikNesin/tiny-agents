@@ -3,12 +3,16 @@
  * owner can do in it. While mounted it keeps the bot's stream open
  * (reopening it when the bot moves to another conversation) and clears the
  * bot list's unread flag; the pane renders the view as it is.
+ *
+ * `usePastChat(botId, chatId)`: a past chat (issue #101), the same session
+ * and view, read-only: read once while mounted, and only older pages to load.
  */
 import { useEffect, useMemo } from "react";
 import { useStore } from "zustand";
+import type { PastChat } from "../../shared/api/bots";
 import { chatView, newChatSession, type ChatView } from "../lib/chat-session";
 import { useBotsStore } from "./bots";
-import { chatSessions, type OwnerSendOutcome, type OwnerSubmission } from "./chats";
+import { chatSessions, pastChatKey, type OwnerSendOutcome, type OwnerSubmission } from "./chats";
 
 export interface ChatHandle extends ChatView {
   /** Echo and send one owner message (see store/chats.ts for its outcomes). */
@@ -64,5 +68,38 @@ export function useChat(botId: string): ChatHandle {
       loadOlder: () => chatSessions.loadOlder(botId),
     }),
     [view, botId],
+  );
+}
+
+/** A past chat, ready to render: no send, stop, withdraw or YOLO switch. */
+export interface PastChatHandle extends ChatView {
+  /** Its record (title, dates, message count); null until read. */
+  chat: PastChat | null;
+  /** Fetch the page above the oldest loaded message. */
+  loadOlder(): Promise<void>;
+}
+
+/**
+ * The past chat `chatId` of the bot, read while mounted and dropped after.
+ * `onFailed` runs when it could not be read (the reason already toasted).
+ */
+export function usePastChat(botId: string, chatId: string, onFailed: () => void): PastChatHandle {
+  const key = pastChatKey(botId, chatId);
+  useEffect(() => {
+    void chatSessions.openPast(botId, chatId).then((outcome) => {
+      if (outcome === "failed") onFailed();
+    });
+    return () => chatSessions.drop(pastChatKey(botId, chatId));
+  }, [botId, chatId, onFailed]);
+
+  const session = useStore(chatSessions.store, (s) => s.sessions[key]) ?? NOT_OPEN;
+  const view = useMemo(() => chatView(session), [session]);
+  return useMemo(
+    () => ({
+      ...view,
+      chat: session.past,
+      loadOlder: () => chatSessions.loadOlder(key),
+    }),
+    [view, session.past, key],
   );
 }

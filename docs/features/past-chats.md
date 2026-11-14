@@ -54,10 +54,13 @@ A past chat is read once, with no stream: nothing runs in a retired
 conversation. `runs` holds the routine cards that finished while it was the
 bot's chat (`startedAt ≤ finishedAt < endedAt`). Another bot's `chatId` is a 404.
 
-The client shows it at `/chats/:botId/history/:chatId` (`PastChatPane`) with
-the same transcript rendering as the live chat. `ChatMessageView` runs in
-`readOnly` mode there: approval, sign-in and question cards still waiting in
-the retired conversation show "not answered" with no buttons.
+The client shows it at `/chats/:botId/history/:chatId` (`PastChatPane`) as
+a read-only mode of the live chat's session: the same store
+(`store/chats.ts`, read by `usePastChat`), paging and transcript
+(`ChatSessionTranscript`), with each difference a flag of `PAST_CHAT`
+(`lib/chat-mode.ts`). It has no owner actions, so approval, sign-in and
+question cards still waiting in the retired conversation show "not
+answered" with no buttons.
 
 ## Continuing
 

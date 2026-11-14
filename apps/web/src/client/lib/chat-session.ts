@@ -11,7 +11,12 @@
  * flight or waits for the browser to be back online, a queued item while
  * the server holds it behind (or steering into) the running reply, and a
  * transcript message once placed.
+ *
+ * A past chat (issue #101) is the same session, read-only: read once
+ * (`past-chat`) instead of streamed, paged like the live chat, and never
+ * sent to (lib/chat-mode.ts lists how it renders).
  */
+import type { PastChat, PastChatView } from "../../shared/api/bots";
 import { mergeSnapshot, oldestEntryId, prependOlder } from "./chat-history";
 import { chatTimeline, type TimelineItem } from "./chat-timeline";
 import { isActive } from "./tool-call-view";
@@ -74,12 +79,14 @@ export interface ChatSession {
    * are never flagged. `undefined` until that snapshot, `null` for none.
    */
   dividerId: string | null | undefined;
+  /** A past chat's record (title, dates, message count) once read; null for the live chat. */
+  past: PastChat | null;
 }
 
 /**
  * Everything that changes a chat: an event of the bot stream, or the
  * browser's own (the chat opening and closing, the stream's health, an
- * owner send's progress, a page of older messages).
+ * owner send's progress, a page of older messages, a past chat read).
  */
 export type ChatAction =
   | BotStreamEvent
@@ -96,7 +103,9 @@ export type ChatAction =
   | { type: "echo-refused"; requestId: string }
   | { type: "older-loading" }
   | { type: "older-page"; before: string; page: ChatPage }
-  | { type: "older-failed" };
+  | { type: "older-failed" }
+  /** A past chat, read once: its newest window, as a snapshot, and its routine cards. */
+  | { type: "past-chat"; view: PastChatView };
 
 /** A chat with nothing known yet: before its first snapshot. */
 export function newChatSession(unreadFrom: number | null = null): ChatSession {
@@ -113,6 +122,7 @@ export function newChatSession(unreadFrom: number | null = null): ChatSession {
     loaded: false,
     unreadFrom,
     dividerId: undefined,
+    past: null,
   };
 }
 
@@ -216,7 +226,10 @@ export function reduceChat(state: ChatSession, action: ChatAction): ChatSession 
       };
     }
     case "remove":
-      return { ...state, messages: state.messages.filter((m) => m.id !== action.id) };
+      return {
+        ...state,
+        messages: state.messages.filter((m) => m.id !== action.id),
+      };
     case "delta":
       return {
         ...state,
@@ -277,10 +290,20 @@ export function reduceChat(state: ChatSession, action: ChatAction): ChatSession 
     case "older-page":
       // A new chat or a fresh snapshot meanwhile: this page no longer fits.
       return oldestEntryId(state.messages) === action.before
-        ? { ...state, ...prependOlder(state.messages, action.page), loadingOlder: false }
+        ? {
+            ...state,
+            ...prependOlder(state.messages, action.page),
+            loadingOlder: false,
+          }
         : { ...state, loadingOlder: false };
     case "older-failed":
       return { ...state, loadingOlder: false };
+    case "past-chat":
+      return {
+        ...reduceChat(state, { type: "snapshot", state: action.view.state }),
+        routineRuns: action.view.runs,
+        past: action.view.chat,
+      };
   }
 }
 
@@ -361,7 +384,11 @@ export function chatView(session: ChatSession): ChatView {
   }));
   const timeline: TimelineItem[] = [
     ...chatTimeline(messages, session.routineRuns),
-    ...echoed.map((echo) => ({ kind: "echo" as const, echo, at: echo.createdAt ?? 0 })),
+    ...echoed.map((echo) => ({
+      kind: "echo" as const,
+      echo,
+      at: echo.createdAt ?? 0,
+    })),
   ];
   const firstUnread = messages.findIndex((m) => m.createdAt > (session.unreadFrom ?? 0));
   return {
