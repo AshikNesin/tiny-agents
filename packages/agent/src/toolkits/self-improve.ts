@@ -14,7 +14,7 @@ import { defineExtension, defineTool, section } from "@earendil-works/pi-durable
 import type { Capability } from "../capabilities";
 
 /** Why an instructions change was refused, as the model reads it. */
-type InstructionsRefusal = "disabled" | "unattended";
+type InstructionsRefusal = "disabled" | "unattended" | "shared";
 
 /** What the app provides: read, apply and review the bot's instructions. */
 export interface InstructionsStore {
@@ -31,6 +31,8 @@ const REFUSED = {
   disabled: "Self-editing is not available for this bot. Nothing was changed.",
   unattended:
     "Instructions can only change in the owner's own turns, not in a routine run or another bot's message. Nothing was changed.",
+  shared:
+    "Instructions can't change from a chat shared with guests. Ask the owner to edit the bot in its settings. Nothing was changed.",
 } as const;
 
 export function createSelfImproveCapability(store: InstructionsStore): Capability {

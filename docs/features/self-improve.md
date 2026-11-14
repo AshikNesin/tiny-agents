@@ -28,6 +28,8 @@ prompt section, so the model can read what it is about to change.
    (`apps/web/src/server/api/bots/self-improve.store.ts`) refuses the call in
    a routine run or when the latest message came from another bot (the same
    `isUnattended` rule as `remember`), so a peer can never plant a prompt.
+   It also refuses in a chat shared with guests, as bot-builder does: a
+   guest's turn counts as attended and a guest can answer the card.
 
 ## History
 

@@ -36,7 +36,8 @@ it is listed.
   answer only when someone talks to it, asks for something or @mentions it,
   and otherwise reply exactly `[skip]`. Those replies are hidden in the chat
   and don't touch the sidebar preview or unread badge.
-- It works with the tools you allowed, for either of you.
+- It works with the tools you allowed, for either of you, except that it
+  cannot create bots or change its own instructions there.
 - **Vault:** every use asks, even for items set to "allowed", and only the
   owner can approve it.
 - **Memory is off** while the bot is shared: nothing from the chat is captured,
