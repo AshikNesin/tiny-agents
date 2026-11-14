@@ -69,6 +69,7 @@ import {
   seedFauxModels,
   vaultCredentials,
 } from "../models/models.config";
+import { app, installAppForTests } from "../../app-root";
 
 type RuntimeOptions = Parameters<typeof AgentRuntime.open>[0];
 type RuntimeEnv = Readonly<Record<string, string | undefined>>;
@@ -198,11 +199,9 @@ function botMessagingStore(rt: AgentRuntime): BotMessagingStore {
   return store;
 }
 
-let runtime: AgentRuntime | undefined;
-let ready = false;
-
 /** The open runtime. Throws when called before boot finished (or in tests without a fake). */
 export function getAgentRuntime(): AgentRuntime {
+  const runtime = app().runtime;
   if (!runtime) {
     throw new Error("AgentRuntime is not open (server boot incomplete or test fake missing)");
   }
@@ -211,7 +210,7 @@ export function getAgentRuntime(): AgentRuntime {
 
 /** True once boot finished and `close()` has not run since. */
 export function agentRuntimeReady(): boolean {
-  return ready;
+  return app().runtimeReady;
 }
 
 /**
@@ -275,24 +274,24 @@ function finishOpen(instance: AgentRuntime): AgentRuntime {
   if (missing.length > 0) {
     logger.warn({ missing }, "Bots select toolkits the runtime has not installed");
   }
-  runtime = instance;
-  ready = true;
+  app().runtime = instance;
+  app().runtimeReady = true;
   return instance;
 }
 
 /** Shutdown: close the runtime and release the store lock. */
 export async function closeAgentRuntime(): Promise<void> {
-  ready = false;
+  const root = app();
+  root.runtimeReady = false;
   bindModelRuntime(undefined);
-  const instance = runtime;
-  runtime = undefined;
+  const instance = root.runtime;
+  root.runtime = undefined;
   await instance?.close();
 }
 
 /** Test seam: install a fake runtime without touching the real store. */
 export function setAgentRuntimeForTests(fake: AgentRuntime): void {
-  runtime = fake;
-  ready = true;
+  installAppForTests({ runtime: fake, runtimeReady: true });
 }
 
 /** A faux bot's ask_owner call on "/ask": a single-choice, a multiple-choice and an open question. */
