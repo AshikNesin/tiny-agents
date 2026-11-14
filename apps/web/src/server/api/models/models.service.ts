@@ -978,7 +978,7 @@ export async function testModel(input: TestDTO): Promise<TestResult> {
     if (!model) throw Boom.notFound("No such model");
     if (model.engine === "claude-code") {
       const started = Date.now();
-      const account = await rt.claudeCodeAccount();
+      const account = await rt.claudePlan.account();
       const ok = account.state === "ready" && account.loggedIn;
       return {
         ok,

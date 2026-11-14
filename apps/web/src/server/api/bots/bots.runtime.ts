@@ -246,7 +246,7 @@ export async function openAgentRuntime(
   opened = instance;
   // With the Claude plan on, install and start its worker on the sandbox
   // now, so the first turn doesn't wait on it.
-  instance.prepareClaudeCode();
+  instance.claudePlan.prepare();
   return finishOpen(instance);
 }
 

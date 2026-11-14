@@ -1,37 +1,31 @@
 /**
  * The pi-durable harness as an engine (ADR 0008, ADR 0014): turns run as
  * pi-durable tasks, the transcript is the conversation's entries, and the
- * chat is their projection. The runtime opens the harness (it is also the
- * durable store every conversation's documents live in) and hands it here.
+ * chat is their projection. The runtime's conversation store owns the
+ * durable conversation (its agent change, documents and reply tasks); this
+ * engine admits, stops and withdraws pi turns and reads their chat.
  */
 import type { Context } from "@earendil-works/chord";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import {
-  configure as configureAgent,
   InboxDoc,
   watchEvents,
   type Conversation,
   type ConversationId,
-  type Cursor,
   type EntryRecord,
   type Extension,
   type Harness,
-  type TaskGraphWatch,
   type ToolRegistration,
 } from "@earendil-works/pi-durable";
 import { gateHooksOf } from "../approvals";
-import {
-  ConversationNotFoundError,
-  type AgentEngine,
-  type CompiledConversation,
-  type EngineSubmission,
-} from "../engine";
+import { loadHistory, type ConversationStore } from "../conversation-store";
+import type { AgentEngine, EngineSubmission } from "../engine";
 import { toJson } from "../durable-json";
 import type { ToolGate } from "../gate";
-import { applyPermissions, PermissionsDoc, type GateUserMessage } from "../policy";
+import type { GateUserMessage } from "../policy";
 import { ChatProjection, unansweredOf, type ProjectionSnapshot } from "../projection";
 import { REVIEW_ENTRY_LOOKBACK } from "../reviewer";
-import { attachmentsOf, CHAT_USER_ENTRY, queuedOf, userMessagesOf } from "../transcript";
+import { CHAT_USER_ENTRY, queuedOf, userMessagesOf } from "../transcript";
 import type {
   ChatEvent,
   ChatState,
@@ -43,52 +37,23 @@ import type {
 
 const ctx: Context = BACKGROUND_CONTEXT;
 
-/** Entries read per storage page when loading a chat's history. */
-const HISTORY_PAGE = 500;
-
-/** Task kinds that mean "the bot is replying" (background compaction does not). */
-const REPLY_TASK_KINDS = new Set(["pi.generation", "pi.tool"]);
-
-export interface PiEngineOptions {
-  /** A conversation started or stopped replying. */
-  onBusy?: (ref: ConversationRef) => void;
-}
-
 export class PiEngine implements AgentEngine {
   readonly kind = "pi" as const;
+  readonly #store: ConversationStore;
   readonly #harness: Harness;
-  readonly #onBusy: (ref: ConversationRef) => void;
   readonly #chats = new Set<ChatSubscription>();
-  #busy = new Set<ConversationRef>();
-  #graph: TaskGraphWatch | undefined;
 
-  constructor(harness: Harness, options: PiEngineOptions = {}) {
-    this.#harness = harness;
-    this.#onBusy = options.onBusy ?? (() => undefined);
+  /** Busy changes reach the runtime from the store: a pi reply is a task in its graph. */
+  constructor(store: ConversationStore) {
+    this.#store = store;
+    this.#harness = store.harness;
   }
 
-  /** Start following the task graph (who is replying). Before `resume()`. */
-  async start(): Promise<void> {
-    const graph = await this.#harness.watchTaskGraph(ctx);
-    this.#graph = graph;
-    this.#busy = busyFromGraph(graph.value);
-    graph.start(async (value) => {
-      const next = busyFromGraph(value);
-      const changed: ConversationRef[] = [];
-      for (const ref of next) if (!this.#busy.has(ref)) changed.push(ref);
-      for (const ref of this.#busy) if (!next.has(ref)) changed.push(ref);
-      this.#busy = next;
-      for (const ref of changed) this.#onBusy(ref);
-    });
-  }
-
-  /** Conversations replying right now. */
-  busyConversations(): ConversationRef[] {
-    return [...this.#busy];
-  }
+  /** Nothing to load: what pi runs on is the store's. */
+  async start(): Promise<void> {}
 
   busy(ref: ConversationRef): boolean {
-    return this.#busy.has(ref);
+    return this.#store.replying(ref);
   }
 
   /** Every conversation has a pi transcript: pi runs whatever no other engine runs. */
@@ -96,35 +61,8 @@ export class PiEngine implements AgentEngine {
     return true;
   }
 
-  /** Create the durable conversation with its agent and permissions. */
-  async create(compiled: CompiledConversation): Promise<ConversationRef> {
-    const conversation = await this.#harness.createConversation(
-      { ownership: { kind: "ownerless" }, agent: compiled.change },
-      ctx,
-    );
-    const ref = Number(conversation.id);
-    const { permissions } = compiled;
-    if (permissions) {
-      await this.#harness.commit(async (tx) => {
-        applyPermissions(await tx.doc(PermissionsDoc, ref as ConversationId), permissions);
-      }, ctx);
-    }
-    return ref;
-  }
-
-  /**
-   * Store the agent change and the gate's permissions, in one commit.
-   * Applies from the next model request; history is kept.
-   */
-  async configure(ref: ConversationRef, compiled: CompiledConversation): Promise<void> {
-    await this.#conversation(ref);
-    await this.#harness.commit(async (tx) => {
-      await configureAgent(tx, ref as ConversationId, compiled.change);
-      if (compiled.permissions) {
-        applyPermissions(await tx.doc(PermissionsDoc, ref as ConversationId), compiled.permissions);
-      }
-    }, ctx);
-  }
+  /** Nothing to take: pi runs on the agent change and permissions the store keeps. */
+  async configure(): Promise<void> {}
 
   async submit(ref: ConversationRef, input: EngineSubmission): Promise<"accepted"> {
     const conversation = await this.#conversation(ref);
@@ -199,19 +137,6 @@ export class PiEngine implements AgentEngine {
     // An input already withdrawn (by cancel or Stop) stays withdrawn, not 409.
     if (record.status === "unanswered" && record.reason === "aborted") return "withdrawn";
     return "settled";
-  }
-
-  /** Upload ids attached to the newest 50 user entries (issue #17). */
-  async attachmentIds(ref: ConversationRef): Promise<string[]> {
-    const conversation = await this.#conversation(ref);
-    const page = await conversation.entries({ order: "descending" }, 50, undefined, ctx);
-    const ids: string[] = [];
-    for (const entry of page.items) {
-      for (const attachment of attachmentsOf(entry) ?? []) {
-        if (!ids.includes(attachment.uploadId)) ids.push(attachment.uploadId);
-      }
-    }
-    return ids;
   }
 
   /** The newest user messages (newest first) within the gate's lookback. */
@@ -297,10 +222,9 @@ export class PiEngine implements AgentEngine {
     return subscription;
   }
 
-  /** Stop the chat watches and the task graph. The runtime closes the harness. */
+  /** Stop the chat watches. The store stops the task graph and closes the harness. */
   async close(): Promise<void> {
     await Promise.allSettled([...this.#chats].map((chat) => chat.stop()));
-    await this.#graph?.stop().catch(() => undefined);
   }
 
   /**
@@ -362,10 +286,8 @@ export class PiEngine implements AgentEngine {
     return queuedOf(items, records);
   }
 
-  async #conversation(ref: ConversationRef): Promise<Conversation> {
-    const conversation = await this.#harness.conversation(ref as ConversationId, ctx);
-    if (!conversation) throw new ConversationNotFoundError(ref);
-    return conversation;
+  #conversation(ref: ConversationRef): Promise<Conversation> {
+    return this.#store.conversation(ref);
   }
 }
 
@@ -412,29 +334,4 @@ function gateTool(
         () => tool.execute(args, api, context),
       ),
   };
-}
-
-function busyFromGraph(value: TaskGraphWatch["value"]): Set<ConversationRef> {
-  const busy = new Set<ConversationRef>();
-  for (const node of Object.values(value.tasks)) {
-    if (REPLY_TASK_KINDS.has(node.kind)) busy.add(Number(node.conversationId));
-  }
-  return busy;
-}
-
-/**
- * Every stored entry of a conversation, ascending — the full transcript, not
- * just what the model still sees after resets/compactions. Paged so a long
- * conversation never loads in one storage read. The Claude plan reads its
- * `claude.*` entries through it too.
- */
-export async function loadHistory(conversation: Conversation): Promise<EntryRecord[]> {
-  const entries: EntryRecord[] = [];
-  let cursor: Cursor | undefined;
-  do {
-    const page = await conversation.entries({ order: "ascending" }, HISTORY_PAGE, cursor, ctx);
-    entries.push(...page.items);
-    cursor = page.next;
-  } while (cursor !== undefined);
-  return entries;
 }
