@@ -93,6 +93,42 @@ These land before the baseline, so the goldens record the fixed behavior.
 
 ## Phase 6: retire
 
-| PR  | Change                                                                              | Proof                              | Status |
-| --- | ----------------------------------------------------------------------------------- | ---------------------------------- | ------ |
-| 6.1 | `pnpm check:old-modules` with the retired-paths list; remaining old modules deleted | the definition of done (design §7) | todo   |
+| PR  | Change                                                                              | Proof                              | Status                                                                                                     |
+| --- | ----------------------------------------------------------------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| 6.1 | `pnpm check:old-modules` with the retired-paths list; remaining old modules deleted | the definition of done (design §7) | done: the list below, checked by `scripts/check-old-modules.ts` (a gate); nothing on it was left to delete |
+
+## Retired paths
+
+The list is [`scripts/old-modules.json`](../../scripts/old-modules.json), and
+`pnpm check:old-modules` holds it (design §7, item 4). Each entry names what
+replaced it, and that path must exist. Retired paths are written here without
+code spans, since they no longer exist.
+
+| Retired                                                                                                                                                                                           | Replaced by                                                                                             | Step     |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | -------- |
+| The Claude plan's old transcript in engines/claude-code/engine.ts: the in-memory `messages` field, the JSON file it wrote (`persistPath`), `.claude.json` read anywhere but the one-time importer | `claude.*` entries in `packages/agent/src/engines/claude-code/transcript.ts` (ADR 0018); the file stays | 2.4      |
+| bots.runtime.ts singletons (`runtime`, `ready`, `ownerWaits`, `messagingStores`) and 23 more module singletons in `apps/web/src/server`                                                           | `App` members in `apps/web/src/server/app-root.ts`; lint R12 for any new one                            | 1.1–1.4  |
+| `setAgentRuntimeForTests`                                                                                                                                                                         | `useTestRuntime` in `tests/server/fixtures/runtime.ts`                                                  | 1.4      |
+| The engines' second transcript helpers and pi's own history reader                                                                                                                                | `packages/agent/src/transcript.ts`, `packages/agent/src/conversation-store.ts`                          | 2.2      |
+| `claudeCodeStatus`, `claudeCodeAccount`, `prepareClaudeCode`, `PiEngineOptions`                                                                                                                   | `runtime.claudePlan` (`plan.ts`) and the conversation store                                             | 2.5      |
+| `withGatePlan` and the hand-kept `ToolInfo` lists (`browserVaultToolInfos`)                                                                                                                       | `tool()` and its `gate` field in `packages/agent/src/toolkit.ts`                                        | 3.1, 3.2 |
+| packages/agent/src/providers/ and packages/agent/src/model-catalog.ts                                                                                                                             | `packages/models/src`                                                                                   | 3.3      |
+| packages/agent/src/ssh/, terminal/, testing-ssh-server.ts, vault-target.ts and ten toolkits/ files (browser and computer sessions, transports, VM setup, public-url)                              | `packages/sandbox/src`                                                                                  | 3.4      |
+| The two session managers' own lifecycle code                                                                                                                                                      | `packages/sandbox/src/live-sessions.ts`                                                                 | 3.5      |
+| The four shell-quoting and script-wrapping helpers                                                                                                                                                | `packages/sandbox/src/shell.ts`                                                                         | 3.6      |
+| api/bots/browser.routes.ts, browser.page.routes.ts, computer.routes.ts, computer.page.routes.ts                                                                                                   | `apps/web/src/server/api/live/live.routes.ts`                                                           | 4.3      |
+| Hand-copied wire types in `client/lib/*-api.ts`                                                                                                                                                   | `apps/web/src/shared/api`; lint R13                                                                     | 5.1      |
+| A past chat's own fetching state                                                                                                                                                                  | the chat session's past mode in `apps/web/src/client/store/chats.ts`                                    | 5.4      |
+| tests/server/app/agent/claude-persist.test.ts                                                                                                                                                     | `tests/server/app/agent/engine-contract.test.ts`                                                        | 2.4      |
+
+Narrowed modules keep their names (D13), and the gate keeps them narrow:
+`bots.service.ts` declares no `chats.service.ts` action, calls no chat method
+on the runtime and imports no chat module; `browser-sessions.ts` and
+`computer-sessions.ts` are `createLiveSessions` instances with no timers,
+waits or session registry of their own; the Browser and Computer pages and
+panels render `LivePage` and `LivePanel` and hold no state.
+
+The deprecated re-exports of `@tiny-agents/models` and `@tiny-agents/sandbox`
+on the `@tiny-agents/agent` root and its `./sandbox`, `./terminal`,
+`./browser` and `./computer` subpaths stay for importers outside this repo;
+the gate fails any import of them here. Removing them waits for a major.

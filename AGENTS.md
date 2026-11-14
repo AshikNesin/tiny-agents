@@ -19,6 +19,7 @@ R1 to R13 are lint rules in `scripts/lint/boundaries.ts`, run by `pnpm check`.
 | Render breadcrumbs with `Breadcrumbs` from `@groot/ui/breadcrumb`.                       | R5a, R5b, R5c                                     |
 | Code and every test under `tests/` typecheck.                                            | `pnpm typecheck`, run by the pre-push hook        |
 | No unused file or export.                                                                | `pnpm check:dead`                                 |
+| A module the rewrite retired stays gone, and a narrowed one narrow.                      | `pnpm check:old-modules`                          |
 | Every path, link and `pnpm` script a doc names exists.                                   | `pnpm check:doc-refs`                             |
 | UI colors come from design tokens.                                                       | `pnpm check:tokens`                               |
 | UI copy has no em dash; a needed one is written `\u2014`.                                | R10                                               |
