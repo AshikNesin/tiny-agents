@@ -398,3 +398,14 @@ export async function rearmRoutines(now: Date = new Date()): Promise<number> {
   if (rearmed > 0) logger.info({ rearmed }, "Re-armed routines whose fire job was gone");
   return rearmed;
 }
+
+/**
+ * Boot ("routine re-arm" in entry.node.ts): re-arm in the background, logging
+ * a failure instead of failing the boot.
+ */
+export function rearmRoutinesOnBoot(): Promise<void> {
+  return rearmRoutines().then(
+    () => undefined,
+    (error: unknown) => logger.warn({ error }, "Failed to re-arm routines on boot"),
+  );
+}
