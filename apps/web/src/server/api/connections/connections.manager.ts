@@ -216,7 +216,9 @@ export class ConnectionManager {
   async #auth(row: ConnectionRow, live: Live) {
     // The header value is a vault item (Q4): the one the owner picked, else the connection's own.
     const handle =
-      row.secretRef ?? (row.secretItemId ? ownHeaderHandle(row.secretItemId) : undefined);
+      row.authType !== "header"
+        ? undefined
+        : (row.secretRef ?? (row.secretItemId ? ownHeaderHandle(row.secretItemId) : undefined));
     if (row.authType === "header" && row.headerName && handle) {
       return {
         headers: { [row.headerName]: await resolveConnectionSecret(handle, row.slug) },
