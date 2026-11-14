@@ -364,9 +364,13 @@ export const connections = sqliteTable("connections", {
   transport: text("transport").notNull().default("streamable-http"),
   /** none | header | oauth */
   authType: text("auth_type").notNull().default("none"),
-  /** Header carrying `secretEnc` for header auth (e.g. Authorization, x-api-key). */
+  /** Header carrying the header value for header auth (e.g. Authorization, x-api-key). */
   headerName: text("header_name"),
-  /** AES-GCM (SECRETS_KEY) encrypted header value. */
+  /**
+   * Before Q4, the header value itself (AES-GCM, SECRETS_KEY). Only the
+   * startup import (`vault/vault.import.ts`) reads it, moving it into a vault
+   * item (`secretItemId`) and clearing it.
+   */
   secretEnc: text("secret_enc"),
   /** AES-GCM (SECRETS_KEY) encrypted OAuth state: client registration, tokens, PKCE verifier. */
   oauthEnc: text("oauth_enc"),
@@ -374,8 +378,15 @@ export const connections = sqliteTable("connections", {
   toolsCache: text("tools_cache").notNull().default("[]"),
   /** JSON array of server tool names turned off for every bot; tools the server adds later start on. */
   disabledTools: text("disabled_tools").notNull().default("[]"),
-  /** Vault handle (`vaultItems.handle`) holding the header value; preferred over `secretEnc` when set. */
+  /** Vault handle (`vaultItems.handle`) the owner chose for the header value; preferred over `secretItemId`. */
   secretRef: text("secret_ref"),
+  /**
+   * The connection's own header value (Q4): the id of a vault item it
+   * created, used when `secretRef` is unset and deleted with the connection.
+   * No foreign key: drizzle-kit adds the column without its ON DELETE, and a
+   * deleted item reads like a `secretRef` to a deleted handle.
+   */
+  secretItemId: text("secret_item_id"),
   ...timestamps,
 });
 
@@ -437,6 +448,23 @@ export const vaultItems = sqliteTable("vault_items", {
   disabled: bool("disabled").notNull().default(false),
   lastUsedAt: ms("last_used_at"),
   lastUsedBy: text("last_used_by"),
+  ...timestamps,
+});
+
+/**
+ * The local vault backend's values (Q4): one row per backend item, the id
+ * being the `externalId` a `vault_items` row links. The item (title, urls,
+ * values) is sealed with SECRETS_KEY (`crypto/secret-box.ts`, purpose
+ * `vault-local`), its id and policy digest in the AAD. `policy` is the digest
+ * it is sealed under; it is the authority only while no row links the value
+ * (S11, `api/vault/backends/local.ts`).
+ */
+export const vaultValues = sqliteTable("vault_values", {
+  id: text("id").primaryKey(),
+  /** `v2:<kid>:<iv>:<tag>:<ciphertext>`. */
+  sealed: text("sealed").notNull(),
+  /** The policy digest in the AAD; "" for an item sealed under none. */
+  policy: text("policy").notNull().default(""),
   ...timestamps,
 });
 
@@ -825,6 +853,7 @@ export type Connection = typeof connections.$inferSelect;
 export type BotConnection = typeof botConnections.$inferSelect;
 export type VaultItem = typeof vaultItems.$inferSelect;
 export type VaultAuditEvent = typeof vaultAuditEvents.$inferSelect;
+export type VaultValue = typeof vaultValues.$inferSelect;
 export type Upload = typeof uploads.$inferSelect;
 export type Routine = typeof routines.$inferSelect;
 export type Memory = typeof memories.$inferSelect;
