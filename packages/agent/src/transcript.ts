@@ -8,6 +8,7 @@ import type {
   ChatPage,
   ChatState,
   ChatToolCall,
+  LastMessage,
   QueuedMessage,
 } from "./types";
 import type { GateUserMessage } from "./policy";
@@ -33,6 +34,9 @@ interface ToolResult {
   diagnostics: { code?: string; message?: string }[];
 }
 
+/** How a message that settled without an answer reads, when no reason was recorded. */
+export const NO_REPLY = "No reply was produced for this message.";
+
 const UNANSWERED_REASONS: Record<string, string> = {
   no_model: "This bot's model is not available. Pick another model.",
   aborted: "Stopped before a reply started.",
@@ -40,7 +44,7 @@ const UNANSWERED_REASONS: Record<string, string> = {
 };
 
 /** The text blocks of a message's content, joined. */
-export function textOf(content: unknown): string {
+function textOf(content: unknown): string {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return "";
   return content
@@ -54,19 +58,55 @@ export const CHAT_USER_ENTRY = "chat.user";
 
 /**
  * The user messages among a conversation's entries, in the entries' order,
- * as the Tool gate reads them (who sent each, and what it said).
+ * as the Tool gate reads them (who sent each, and what it said). The text
+ * is what the model read: a shared chat's sender prefix stays on.
  */
 export function userMessagesOf(entries: readonly EntryRecord[]): GateUserMessage[] {
   return entries
     .filter((entry) => entry.kind === "pi.user" || entry.kind === CHAT_USER_ENTRY)
-    .map((entry) => {
-      const author = authorOf(entry);
-      return {
+    .map((entry) =>
+      gateUserMessage({
         text: textOf(entry.model?.[0]?.content),
-        peer: peerOf(entry) !== undefined,
-        ...(author ? { author: author.id } : {}),
-      };
-    });
+        peer: peerOf(entry),
+        author: authorOf(entry),
+      }),
+    );
+}
+
+/**
+ * A chat's user messages, newest first, as the Tool gate reads them, for a
+ * transcript whose messages keep the text the model read (the Claude plan's).
+ */
+export function gateUserMessages(messages: readonly ChatMessage[]): GateUserMessage[] {
+  return messages
+    .filter((message) => message.role === "user")
+    .reverse()
+    .map(gateUserMessage);
+}
+
+/** One user message as the Tool gate reads it. */
+function gateUserMessage(message: Pick<ChatMessage, "text" | "peer" | "author">): GateUserMessage {
+  return {
+    text: message.text,
+    peer: message.peer !== undefined,
+    ...(message.author ? { author: message.author.id } : {}),
+  };
+}
+
+/**
+ * The newest user or assistant message with something to show (the Bot
+ * list preview): a reply that ended in an error reads as `⚠ <error>`.
+ */
+export function lastMessageOf(messages: readonly ChatMessage[]): LastMessage | undefined {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (!message || (message.role !== "user" && message.role !== "assistant")) continue;
+    const text =
+      message.role === "assistant" && message.error ? `⚠ ${message.error}` : message.text;
+    if (!text) continue;
+    return { role: message.role, text, createdAt: message.createdAt };
+  }
+  return undefined;
 }
 
 /** Trusted peer attribution stored in a `chat.user` entry's data. */
@@ -227,7 +267,7 @@ function toolCallView(
 }
 
 /** How an assistant message that ended in a model error reads to the owner. */
-export function modelErrorText(message: Pick<AssistantMessage, "errorMessage">): string {
+function modelErrorText(message: Pick<AssistantMessage, "errorMessage">): string {
   return message.errorMessage || "The model returned an error.";
 }
 
@@ -422,9 +462,7 @@ export function deriveChat(raw: RawChat): ChatMessage[] {
     out[i] = {
       ...message,
       status: "unanswered",
-      error:
-        (reasonCode && (UNANSWERED_REASONS[reasonCode] ?? reasonCode)) ||
-        "No reply was produced for this message.",
+      error: (reasonCode && (UNANSWERED_REASONS[reasonCode] ?? reasonCode)) || NO_REPLY,
     };
   }
 

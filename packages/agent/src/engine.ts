@@ -15,11 +15,9 @@ import type {
   AttachmentRef,
   ChatEvent,
   ChatMessage,
-  ChatPage,
   ChatState,
   ChatSubscription,
   ConversationRef,
-  LastMessage,
 } from "./types";
 
 export class ConversationNotFoundError extends Error {
@@ -81,21 +79,18 @@ export interface AgentEngine {
   submit(ref: ConversationRef, input: EngineSubmission): Promise<"accepted" | "unavailable">;
   /** Stop the in-flight reply (and withdraw queued inputs). */
   abort(ref: ConversationRef): Promise<void>;
-  /** The chat state right now, for one-shot readers. */
+  /**
+   * The chat state right now, for one-shot readers. The runtime derives
+   * pages, the Bot list preview and Finished replies from it (`transcript.ts`,
+   * `replies.ts`), the same way for both engines.
+   */
   read(ref: ConversationRef): Promise<ChatState>;
-  /** Up to `limit` messages just before message `before`, oldest first. */
-  page(
-    ref: ConversationRef,
-    query: { before: string; limit: number },
-  ): Promise<ChatPage | undefined>;
   /** A `snapshot` first, then changes; with `window`, only the newest messages. */
   watch(
     ref: ConversationRef,
     listener: (events: ChatEvent[]) => void | Promise<void>,
     options: { window?: number },
   ): Promise<ChatSubscription>;
-  /** The newest user or assistant message with something to show (the Bot list preview). */
-  lastMessage(ref: ConversationRef): Promise<LastMessage | undefined>;
   /** The conversation's user messages, newest first, as the Tool gate reads them. */
   userMessages(ref: ConversationRef): Promise<readonly GateUserMessage[]>;
   /** A reply is running. */

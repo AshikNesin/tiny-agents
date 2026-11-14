@@ -31,22 +31,12 @@ import type { ToolGate } from "../gate";
 import { applyPermissions, PermissionsDoc, type GateUserMessage } from "../policy";
 import { ChatProjection, unansweredOf, type ProjectionSnapshot } from "../projection";
 import { REVIEW_ENTRY_LOOKBACK } from "../reviewer";
-import {
-  attachmentsOf,
-  CHAT_USER_ENTRY,
-  modelErrorText,
-  pageBefore,
-  queuedOf,
-  textOf,
-  userMessagesOf,
-} from "../transcript";
+import { attachmentsOf, CHAT_USER_ENTRY, queuedOf, userMessagesOf } from "../transcript";
 import type {
   ChatEvent,
-  ChatPage,
   ChatState,
   ChatSubscription,
   ConversationRef,
-  LastMessage,
   QueuedMessage,
   WithdrawOutcome,
 } from "../types";
@@ -224,28 +214,6 @@ export class PiEngine implements AgentEngine {
     return ids;
   }
 
-  async lastMessage(ref: ConversationRef): Promise<LastMessage | undefined> {
-    const conversation = await this.#conversation(ref);
-    const page = await conversation.entries({ order: "descending" }, 20, undefined, ctx);
-    for (const entry of page.items) {
-      const message = entry.model?.[0];
-      if (!message) continue;
-      if ((entry.kind === "pi.user" || entry.kind === CHAT_USER_ENTRY) && message.role === "user") {
-        return {
-          role: "user",
-          text: textOf(message.content),
-          createdAt: message.timestamp ?? Date.now(),
-        };
-      }
-      if (entry.kind === "pi.assistant" && message.role === "assistant") {
-        const shown =
-          message.stopReason === "error" ? `⚠ ${modelErrorText(message)}` : textOf(message.content);
-        return { role: "assistant", text: shown, createdAt: message.timestamp ?? Date.now() };
-      }
-    }
-    return undefined;
-  }
-
   /** The newest user messages (newest first) within the gate's lookback. */
   async userMessages(ref: ConversationRef): Promise<GateUserMessage[]> {
     const conversation = await this.#harness.conversation(ref as ConversationId, ctx);
@@ -275,13 +243,6 @@ export class PiEngine implements AgentEngine {
       await this.#snapshot(conversation, ref, { entries: [], busy: false, tools: [] }),
     );
     return projection.state;
-  }
-
-  async page(
-    ref: ConversationRef,
-    { before, limit }: { before: string; limit: number },
-  ): Promise<ChatPage | undefined> {
-    return pageBefore((await this.read(ref)).messages, before, limit);
   }
 
   /**
@@ -464,9 +425,10 @@ function busyFromGraph(value: TaskGraphWatch["value"]): Set<ConversationRef> {
 /**
  * Every stored entry of a conversation, ascending — the full transcript, not
  * just what the model still sees after resets/compactions. Paged so a long
- * conversation never loads in one storage read.
+ * conversation never loads in one storage read. The Claude plan reads its
+ * `claude.*` entries through it too.
  */
-async function loadHistory(conversation: Conversation): Promise<EntryRecord[]> {
+export async function loadHistory(conversation: Conversation): Promise<EntryRecord[]> {
   const entries: EntryRecord[] = [];
   let cursor: Cursor | undefined;
   do {
