@@ -403,17 +403,31 @@ export async function decideApproval(
 ) {
   const chat = await openBotChat(id, rt);
   const { bot } = chat;
+  const waitingCall = async () =>
+    (await chat.read()).messages
+      .flatMap((message) => message.toolCalls ?? [])
+      .find((toolCall) => toolCall.taskId === input.taskId);
   if (viewer?.guest) {
     // A guest answers the bot's approvals, but the vault holds the owner's
     // secrets and "always allow" changes the bot: both stay the owner's.
     if (input.alwaysAllow || input.grant) throw Boom.forbidden("Only the owner can do that");
-    const call = (await chat.read()).messages
-      .flatMap((message) => message.toolCalls ?? [])
-      .find((toolCall) => toolCall.taskId === input.taskId);
+    const call = await waitingCall();
     if (call?.vault) throw Boom.forbidden("Only the owner can approve vault use");
   }
-  if (input.decision === "approved" && input.alwaysAllow) {
-    const toolPermissions = { ...bot.toolPermissions, [input.alwaysAllow]: "allow" as const };
+  // "Always allow" switches on the tool of the call being approved, never
+  // whatever name the request carries (S5), and never a vault use. A call
+  // that isn't there changes nothing; the decision below answers 409.
+  const call = input.decision === "approved" && input.alwaysAllow ? await waitingCall() : undefined;
+  if (call && call.name !== input.alwaysAllow) {
+    throw Boom.badRequest(
+      `"Always allow" must name the tool being approved (${call.name})`,
+      undefined,
+      "ALWAYS_ALLOW_MISMATCH",
+    );
+  }
+  if (call?.vault) throw Boom.badRequest("Vault uses can't be always allowed");
+  if (call) {
+    const toolPermissions = { ...bot.toolPermissions, [call.name]: "allow" as const };
     await updateRow(id, { toolPermissions: JSON.stringify(toolPermissions) });
     await reconcileBotConversation(id, rt);
   }

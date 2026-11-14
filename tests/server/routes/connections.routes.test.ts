@@ -207,7 +207,7 @@ describe("MCP connections (header auth, streamable http)", () => {
       json: body,
       stepUp: false,
     });
-    expect(refused.error.details).toEqual({ code: "step_up_required" });
+    expect(refused.error?.details).toEqual({ code: "step_up_required" });
     const { data } = await call(app, "/api/v1/connections", 201, { method: "POST", json: body });
     const path = `/api/v1/connections/${data.id}`;
 
@@ -278,7 +278,7 @@ describe("MCP connections (header auth, streamable http)", () => {
         method: "PATCH",
         json: { secretRef: "model-key" },
       });
-      expect(refused.error.message).toContain("used by the app");
+      expect(refused.error?.message).toContain("used by the app");
     } finally {
       await db.delete(vaultItems);
     }

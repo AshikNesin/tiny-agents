@@ -525,9 +525,27 @@ describe("Bots API routes", () => {
     );
   });
 
+  /** Stand in for one call waiting on a card in the bot's chat. */
+  const waitingCard = (name: string, extra: Record<string, unknown> = {}) =>
+    agentRuntime.readChat.mockResolvedValueOnce({
+      messages: [
+        {
+          id: "e1",
+          role: "assistant",
+          text: "",
+          status: "streaming",
+          createdAt: 0,
+          toolCalls: [{ id: "t1", name, status: "awaiting_approval", taskId: 7, ...extra }],
+        },
+      ],
+      busy: true,
+      queued: [],
+    } as never);
+
   it("answers approvals, with 'always allow' switching the tool to allow", async () => {
     const bot = await createBot();
     // Nothing is waiting in a fresh conversation: stand in for a pending card.
+    waitingCard("send_email");
     agentRuntime.decideApproval.mockResolvedValueOnce(undefined);
     const approved = await call(`/api/v1/bots/${bot.id}/approvals/7`, {
       method: "POST",
@@ -554,6 +572,33 @@ describe("Bots API routes", () => {
     });
     expect(stale.status).toBe(409);
     expect(agentRuntime.decideApproval).toHaveBeenLastCalledWith(conv(bot), 7, "denied");
+  });
+
+  it("'always allow' switches on only the tool being approved, never a vault use (S5)", async () => {
+    const bot = await createBot();
+    waitingCard("send_email");
+    const widened = await call(`/api/v1/bots/${bot.id}/approvals/7`, {
+      method: "POST",
+      json: { decision: "approved", alwaysAllow: "run_command" },
+    });
+    expect(widened.status).toBe(400);
+    expect(widened.body.error?.code).toBe("ALWAYS_ALLOW_MISMATCH");
+
+    waitingCard("browser_fill_secret", { vault: { handle: "bank", kind: "login" } });
+    const vault = await call(`/api/v1/bots/${bot.id}/approvals/7`, {
+      method: "POST",
+      json: { decision: "approved", alwaysAllow: "browser_fill_secret" },
+    });
+    expect(vault.status).toBe(400);
+
+    // Nothing waiting: the permissions stay as they were and the answer is 409.
+    const stale = await call(`/api/v1/bots/${bot.id}/approvals/7`, {
+      method: "POST",
+      json: { decision: "approved", alwaysAllow: "run_command" },
+    });
+    expect(stale.status).toBe(409);
+    expect(JSON.parse((await findBot(bot.id))!.toolPermissions)).toEqual({});
+    expect(agentRuntime.decideApproval).toHaveBeenCalledTimes(1);
   });
 
   it("answers or dismisses a bot's questions", async () => {
