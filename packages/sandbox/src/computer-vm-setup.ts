@@ -1,11 +1,11 @@
 /**
- * Shell builders for the computer (issue #108): an XFCE desktop on the
- * sandbox VM, one per profile, on a private X display that Xtigervnc serves
- * over RFB, beside (not inside) the browser's display. Everything here is a
- * pure string builder so the scripts can be unit-tested without a VM;
- * `computer-x11.ts` runs them over SSH.
+ * The computer's stack on the sandbox VM (issue #108), one `VmStack`
+ * (`vm-stack.ts`): an XFCE desktop, one per profile, on a private X display
+ * that Xtigervnc serves over RFB, beside (not inside) the browser's display.
+ * The builders are pure strings so the scripts can be unit-tested without a
+ * VM; `computer-x11.ts` runs them over SSH.
  *
- * The rules are the browser stack's (`browser-vm-setup.ts`):
+ * The rules are every stack's, the browser's (`browser-vm-setup.ts`) too:
  * - the VNC port binds to 127.0.0.1 on the VM and is reached only through an
  *   SSH channel the app opens, so nothing new is reachable from the network;
  * - launches share the browser's VM-wide launch lock, so a browser and a
@@ -18,15 +18,26 @@
  * session environment are recorded in the profile directory, and the next
  * launch for the profile reattaches to it instead of starting another.
  */
-import { LAUNCH_LOCK_FILE, shQuote } from "./browser-vm-setup";
+import { shQuote } from "./shell";
+import {
+  createVmStack,
+  installScript,
+  launchBudgetMs,
+  launchScript,
+  parseReport,
+  readyScript,
+  RELEASE_LOCK,
+  reportLine,
+  teardownScript,
+  type VmRun,
+  type VmStack,
+  type VmStackSpec,
+  wipeScript,
+  X_WAIT_SECONDS,
+} from "./vm-stack";
 
 /** Bump when the install steps change so existing VMs re-run them. */
 export const COMPUTER_STACK_VERSION = "v1";
-
-const MARKER = `$HOME/.tiny-agents/computer-stack-${COMPUTER_STACK_VERSION}`;
-
-/** Shared with the browser's installer: one apt at a time on the VM. */
-const INSTALL_LOCK_FILE = "browser-stack.lock";
 
 /** Where a profile's desktop lives on the VM, relative to the SSH user's home. */
 export const COMPUTER_PROFILES_DIR = ".tiny-agents/computer-profiles";
@@ -109,59 +120,6 @@ export function parseDesktopSize(raw: string | undefined): {
   return { width, height };
 }
 
-/** Wrap a multi-line script so it runs as one SSH exec command. */
-function bash(lines: string[]): string {
-  return `bash -c ${shQuote(lines.join("\n"))}`;
-}
-
-function installedTest(extra: readonly string[]): string {
-  const commands = REQUIRED_COMMANDS.map((c) => `command -v ${c} >/dev/null 2>&1`).join(" && ");
-  const packages = extra
-    .map(
-      (p) =>
-        `dpkg-query -W -f='\${Status}' ${shQuote(p)} 2>/dev/null | grep -q "install ok installed"`,
-    )
-    .join(" && ");
-  return `[ -f "$MARK" ] && ${commands}${packages ? ` && ${packages}` : ""}`;
-}
-
-/** Prints `ready` when the desktop stack (and every extra package) is installed, `missing` otherwise. */
-export function computerStackReadyCommand(extraPackages: readonly string[] = []): string {
-  return bash([
-    `MARK="${MARKER}"`,
-    `if ${installedTest(extraPackages)}; then echo ready; else echo missing; fi`,
-  ]);
-}
-
-/**
- * Idempotent first-run install of the desktop stack plus the owner's extra
- * packages. Serialized with the browser's installer; waits out a dpkg lock
- * held by unattended upgrades. Prints `ready` (already there) or `installed`.
- */
-export function installComputerStackCommand(extraPackages: readonly string[] = []): string {
-  for (const name of extraPackages) {
-    if (!PACKAGE_NAME.test(name)) throw new Error(`Not a package name: ${name}`);
-  }
-  const packages = [...COMPUTER_PACKAGES, ...extraPackages].join(" ");
-  const ready = installedTest(extraPackages);
-  return bash([
-    "set -e",
-    `MARK="${MARKER}"`,
-    `${ready} && { echo ready; exit 0; }`,
-    'mkdir -p "$HOME/.tiny-agents"',
-    `exec 9>"$HOME/.tiny-agents/${INSTALL_LOCK_FILE}"`,
-    "flock 9",
-    `${ready} && { echo ready; exit 0; }`,
-    "export DEBIAN_FRONTEND=noninteractive",
-    "sudo -n apt-get -o DPkg::Lock::Timeout=180 update -qq",
-    `sudo -n apt-get -o DPkg::Lock::Timeout=180 install -y -qq --no-install-recommends ${packages}`,
-    "sudo -n mkdir -p /tmp/.X11-unix",
-    "sudo -n chmod 1777 /tmp/.X11-unix",
-    'touch "$MARK"',
-    "echo installed",
-  ]);
-}
-
 export interface LaunchDesktopOptions {
   /** The profile's directory on the VM (settings, pids, the session env). */
   profileDir: string;
@@ -189,20 +147,7 @@ const DESKTOP_STATE_FILE = ".desktop";
 /** Shell exports every tool exec sources: DISPLAY, the XDG dirs, the session bus. */
 export const DESKTOP_ENV_FILE = ".desktop-env";
 
-const LOCK_WAIT_SECONDS = 25;
-const X_WAIT_SECONDS = 10;
 const WM_WAIT_SECONDS = 30;
-
-/**
- * Upper bound on how long a launch script runs: its waits plus the fixed
- * sleeps and process starts. A caller that waits this long never walks away
- * from a script still running on the VM.
- */
-export const DESKTOP_LAUNCH_BUDGET_MS =
-  (LOCK_WAIT_SECONDS + X_WAIT_SECONDS + WM_WAIT_SECONDS + 5) * 1000;
-
-/** Closes the launch lock's fd (8) in a child; see `launchStackCommand`. */
-const RELEASE_LOCK = "8>&-";
 
 /**
  * XFCE settings seeded into a fresh profile: one bottom panel (menu, window
@@ -385,6 +330,162 @@ const KILL_RECORDED = [
   `rm -f "$PROFILE/${DESKTOP_PID_FILE}" "$PROFILE/${DESKTOP_STATE_FILE}" "$PROFILE/${DESKTOP_ENV_FILE}"`,
 ];
 
+/** Desktop geometry of a launch. */
+const sizeOf = (options: LaunchDesktopOptions) =>
+  `${Math.round(options.width)}x${Math.round(options.height)}`;
+
+/**
+ * The desktop stack plus the owner's extra packages. The install waits out a
+ * dpkg lock held by unattended upgrades.
+ */
+function computerStack(extraPackages: readonly string[]): VmStackSpec<LaunchDesktopOptions> {
+  return {
+    marker: `computer-stack-${COMPUTER_STACK_VERSION}`,
+    commands: REQUIRED_COMMANDS,
+    packages: extraPackages,
+    readyLayout: "variable",
+    installSteps: () => {
+      for (const name of extraPackages) {
+        if (!PACKAGE_NAME.test(name)) throw new Error(`Not a package name: ${name}`);
+      }
+      const packages = [...COMPUTER_PACKAGES, ...extraPackages].join(" ");
+      return [
+        "export DEBIAN_FRONTEND=noninteractive",
+        "sudo -n apt-get -o DPkg::Lock::Timeout=180 update -qq",
+        `sudo -n apt-get -o DPkg::Lock::Timeout=180 install -y -qq --no-install-recommends ${packages}`,
+      ];
+    },
+    launch: {
+      // Before the reattach check, so a running desktop's menu follows too.
+      beforeLock: (options) => browserLinkLines(options.browserProfileDir),
+      lockHolders: "browser or desktop",
+      clearPrevious: (options) => [
+        // Reattach: the desktop this profile recorded is still up at this size.
+        `if [ -s "$PROFILE/${DESKTOP_STATE_FILE}" ] && [ -s "$PROFILE/${DESKTOP_ENV_FILE}" ]; then`,
+        `  OLD_DISP="$(sed -n 's/.*display=\\([0-9]*\\).*/\\1/p' "$PROFILE/${DESKTOP_STATE_FILE}")"`,
+        `  OLD_VNC="$(sed -n 's/.*vnc=\\([0-9]*\\).*/\\1/p' "$PROFILE/${DESKTOP_STATE_FILE}")"`,
+        `  OLD_SIZE="$(sed -n 's/.*size=\\([0-9x]*\\).*/\\1/p' "$PROFILE/${DESKTOP_STATE_FILE}")"`,
+        `  OLD_X="$(head -n 1 "$PROFILE/${DESKTOP_PID_FILE}" 2>/dev/null || true)"`,
+        `  if [ -n "$OLD_DISP" ] && [ -n "$OLD_VNC" ] && [ "$OLD_SIZE" = "${sizeOf(options)}" ] && [ -n "$OLD_X" ] && kill -0 "$OLD_X" 2>/dev/null && [ -S "/tmp/.X11-unix/X$OLD_DISP" ] && DISPLAY=":$OLD_DISP" wmctrl -m >/dev/null 2>&1; then`,
+        `    ${reportLine({ display: "OLD_DISP", vnc: "OLD_VNC" }, ["reused"])}`,
+        "    exit 0",
+        "  fi",
+        "fi",
+        // Whatever was recorded is stale (or at another size): stop it first.
+        ...KILL_RECORDED,
+      ],
+      ports: [
+        `VNC="$(python3 -c 'import socket
+s = socket.socket()
+s.bind(("127.0.0.1", 0))
+print(s.getsockname()[1])
+s.close()')"`,
+      ],
+      prepare: () => [
+        'CONF="$PROFILE/config"',
+        ...seedLines(),
+        'mkdir -p "$PROFILE/cache" "$PROFILE/data"',
+        'XLOG="$PROFILE/.xvnc.log"',
+        'SLOG="$PROFILE/.session.log"',
+        'stop_started() { for P in $(cat "$PROFILE/' +
+          DESKTOP_PID_FILE +
+          '" 2>/dev/null); do kill -- "-$P" 2>/dev/null || true; kill "$P" 2>/dev/null || true; done; rm -f "$PROFILE/' +
+          DESKTOP_PID_FILE +
+          '"; }',
+      ],
+      geometry: sizeOf,
+      desktopName: "tiny-agents-computer",
+      pidFile: DESKTOP_PID_FILE,
+      // Unlike the browser, give up here when the display server never came up.
+      afterX: [
+        'if [ ! -S "/tmp/.X11-unix/X$DISP" ]; then',
+        `  echo "The display server did not start on the VM within ${X_WAIT_SECONDS}s" >&2`,
+        '  tail -n 20 "$XLOG" >&2 || true',
+        "  stop_started",
+        "  exit 1",
+        "fi",
+      ],
+      start: () => [
+        // The session bus every app of this desktop shares; its address goes in
+        // the env file tool execs source.
+        `BUS="$(DISPLAY=":$DISP" dbus-launch --sh-syntax ${RELEASE_LOCK})"`,
+        'eval "$BUS"',
+        '[ -n "${DBUS_SESSION_BUS_PID:-}" ] && echo "$DBUS_SESSION_BUS_PID" >> "$PROFILE/' +
+          DESKTOP_PID_FILE +
+          '"',
+        `cat > "$PROFILE/${DESKTOP_ENV_FILE}" <<TA_ENV_EOF`,
+        'export DISPLAY=":$DISP"',
+        'export XDG_CONFIG_HOME="$CONF"',
+        'export XDG_CACHE_HOME="$PROFILE/cache"',
+        'export XDG_DATA_HOME="$PROFILE/data"',
+        'export PATH="$PROFILE/bin:\\$PATH"',
+        "export DBUS_SESSION_BUS_ADDRESS='${DBUS_SESSION_BUS_ADDRESS:-}'",
+        "TA_ENV_EOF",
+        `( . "$PROFILE/${DESKTOP_ENV_FILE}" && exec setsid nohup xfce4-session </dev/null >"$SLOG" 2>&1 ${RELEASE_LOCK} ) &`,
+        `echo "$!" >> "$PROFILE/${DESKTOP_PID_FILE}"`,
+      ],
+      up: {
+        probe: 'DISPLAY=":$DISP" wmctrl -m >/dev/null 2>&1',
+        seconds: WM_WAIT_SECONDS,
+        deadline: "WMWAIT",
+        failure: `The desktop did not start on the VM within ${WM_WAIT_SECONDS}s`,
+        logs: '"$XLOG" "$SLOG"',
+        cleanup: ["stop_started", `rm -f "$PROFILE/${DESKTOP_ENV_FILE}"`],
+      },
+      afterUp: (options) => [
+        `echo "display=$DISP vnc=$VNC size=${sizeOf(options)}" > "$PROFILE/${DESKTOP_STATE_FILE}"`,
+      ],
+      otherWaitSeconds: 0,
+    },
+    report: {
+      variables: { display: "DISP", vnc: "VNC" },
+      flags: ["reused"],
+      missing: "The VM did not report the desktop's display",
+    },
+    teardown: KILL_RECORDED,
+    wipe: KILL_RECORDED,
+    steps: {
+      check: { timeoutMs: 30_000, label: "check the desktop stack" },
+      // apt update + XFCE + the X11 tools.
+      install: { timeoutMs: 15 * 60_000, label: "install the desktop stack" },
+      launch: { label: "start the desktop" },
+      stop: { timeoutMs: 30_000, label: "stop the desktop" },
+      wipe: { timeoutMs: 30_000, label: "reset the computer" },
+    },
+  };
+}
+
+/** Launch, teardown and wipe do not depend on the extra packages. */
+const DESKTOP_STACK = computerStack([]);
+
+/** The desktop stack over `run`, with the owner's extra packages. */
+export function computerVmStack(
+  run: VmRun,
+  extraPackages: readonly string[] = [],
+): VmStack<LaunchDesktopOptions> {
+  return createVmStack(computerStack(extraPackages), run);
+}
+
+/** Prints `ready` when the desktop stack (and every extra package) is installed, `missing` otherwise. */
+export function computerStackReadyCommand(extraPackages: readonly string[] = []): string {
+  return readyScript(computerStack(extraPackages));
+}
+
+/**
+ * Idempotent first-run install of the desktop stack plus the owner's extra
+ * packages, serialized with the browser's installer. Prints `ready` (already
+ * there) or `installed`.
+ */
+export function installComputerStackCommand(extraPackages: readonly string[] = []): string {
+  return installScript(computerStack(extraPackages));
+}
+
+/**
+ * Upper bound on how long a launch script runs: its waits plus the fixed
+ * sleeps and process starts.
+ */
+export const DESKTOP_LAUNCH_BUDGET_MS = launchBudgetMs(DESKTOP_STACK);
+
 /**
  * Start (or reattach to) the profile's desktop: Xtigervnc at a fixed
  * geometry, vncconfig for the clipboard, a session bus, and an XFCE session
@@ -394,118 +495,31 @@ const KILL_RECORDED = [
  * tails, and exits non-zero.
  */
 export function launchDesktopCommand(options: LaunchDesktopOptions): string {
-  const width = Math.round(options.width);
-  const height = Math.round(options.height);
-  const size = `${width}x${height}`;
-  return bash([
-    "set -e",
-    `PROFILE=${shQuote(options.profileDir)}`,
-    'mkdir -p "$PROFILE" "$HOME/.tiny-agents"',
-    'PROFILE="$(cd "$PROFILE" && pwd)"',
-    // Before the reattach check, so a running desktop's menu follows too.
-    ...browserLinkLines(options.browserProfileDir),
-    `exec 8>"$HOME/.tiny-agents/${LAUNCH_LOCK_FILE}"`,
-    `flock -w ${LOCK_WAIT_SECONDS} 8 || { echo "Gave up after ${LOCK_WAIT_SECONDS}s waiting for another browser or desktop to finish starting on the VM" >&2; exit 1; }`,
-    // Reattach: the desktop this profile recorded is still up at this size.
-    `if [ -s "$PROFILE/${DESKTOP_STATE_FILE}" ] && [ -s "$PROFILE/${DESKTOP_ENV_FILE}" ]; then`,
-    `  OLD_DISP="$(sed -n 's/.*display=\\([0-9]*\\).*/\\1/p' "$PROFILE/${DESKTOP_STATE_FILE}")"`,
-    `  OLD_VNC="$(sed -n 's/.*vnc=\\([0-9]*\\).*/\\1/p' "$PROFILE/${DESKTOP_STATE_FILE}")"`,
-    `  OLD_SIZE="$(sed -n 's/.*size=\\([0-9x]*\\).*/\\1/p' "$PROFILE/${DESKTOP_STATE_FILE}")"`,
-    `  OLD_X="$(head -n 1 "$PROFILE/${DESKTOP_PID_FILE}" 2>/dev/null || true)"`,
-    `  if [ -n "$OLD_DISP" ] && [ -n "$OLD_VNC" ] && [ "$OLD_SIZE" = "${size}" ] && [ -n "$OLD_X" ] && kill -0 "$OLD_X" 2>/dev/null && [ -S "/tmp/.X11-unix/X$OLD_DISP" ] && DISPLAY=":$OLD_DISP" wmctrl -m >/dev/null 2>&1; then`,
-    '    echo "ok display=$OLD_DISP vnc=$OLD_VNC reused=1"',
-    "    exit 0",
-    "  fi",
-    "fi",
-    // Whatever was recorded is stale (or at another size): stop it first.
-    ...KILL_RECORDED,
-    "sleep 0.3",
-    `VNC="$(python3 -c 'import socket
-s = socket.socket()
-s.bind(("127.0.0.1", 0))
-print(s.getsockname()[1])
-s.close()')"`,
-    'DISP=""',
-    "for n in $(seq 90 189); do",
-    '  [ -e "/tmp/.X11-unix/X$n" ] && continue',
-    '  [ -e "/tmp/.X$n-lock" ] && continue',
-    '  DISP="$n"; break',
-    "done",
-    '[ -n "$DISP" ] || { echo "No free X display on the VM" >&2; exit 1; }',
-    'CONF="$PROFILE/config"',
-    ...seedLines(),
-    'mkdir -p "$PROFILE/cache" "$PROFILE/data"',
-    'XLOG="$PROFILE/.xvnc.log"',
-    'SLOG="$PROFILE/.session.log"',
-    'stop_started() { for P in $(cat "$PROFILE/' +
-      DESKTOP_PID_FILE +
-      '" 2>/dev/null); do kill -- "-$P" 2>/dev/null || true; kill "$P" 2>/dev/null || true; done; rm -f "$PROFILE/' +
-      DESKTOP_PID_FILE +
-      '"; }',
-    `setsid nohup Xtigervnc ":$DISP" -geometry ${size} -depth 24 -rfbport "$VNC" -localhost -nolisten tcp -SecurityTypes None -AlwaysShared -desktop tiny-agents-computer </dev/null >"$XLOG" 2>&1 ${RELEASE_LOCK} &`,
-    `echo "$!" > "$PROFILE/${DESKTOP_PID_FILE}"`,
-    `XWAIT=$((SECONDS + ${X_WAIT_SECONDS}))`,
-    'while [ ! -S "/tmp/.X11-unix/X$DISP" ] && [ "$SECONDS" -lt "$XWAIT" ]; do sleep 0.1; done',
-    'if [ ! -S "/tmp/.X11-unix/X$DISP" ]; then',
-    `  echo "The display server did not start on the VM within ${X_WAIT_SECONDS}s" >&2`,
-    '  tail -n 20 "$XLOG" >&2 || true',
-    "  stop_started",
-    "  exit 1",
-    "fi",
-    // vncconfig bridges X selections and VNC clipboard messages.
-    `DISPLAY=":$DISP" setsid nohup vncconfig -nowin </dev/null >"$PROFILE/.vncconfig.log" 2>&1 ${RELEASE_LOCK} &`,
-    `echo "$!" >> "$PROFILE/${DESKTOP_PID_FILE}"`,
-    // The session bus every app of this desktop shares; its address goes in
-    // the env file tool execs source.
-    `BUS="$(DISPLAY=":$DISP" dbus-launch --sh-syntax ${RELEASE_LOCK})"`,
-    'eval "$BUS"',
-    '[ -n "${DBUS_SESSION_BUS_PID:-}" ] && echo "$DBUS_SESSION_BUS_PID" >> "$PROFILE/' +
-      DESKTOP_PID_FILE +
-      '"',
-    `cat > "$PROFILE/${DESKTOP_ENV_FILE}" <<TA_ENV_EOF`,
-    'export DISPLAY=":$DISP"',
-    'export XDG_CONFIG_HOME="$CONF"',
-    'export XDG_CACHE_HOME="$PROFILE/cache"',
-    'export XDG_DATA_HOME="$PROFILE/data"',
-    'export PATH="$PROFILE/bin:\\$PATH"',
-    "export DBUS_SESSION_BUS_ADDRESS='${DBUS_SESSION_BUS_ADDRESS:-}'",
-    "TA_ENV_EOF",
-    `( . "$PROFILE/${DESKTOP_ENV_FILE}" && exec setsid nohup xfce4-session </dev/null >"$SLOG" 2>&1 ${RELEASE_LOCK} ) &`,
-    `echo "$!" >> "$PROFILE/${DESKTOP_PID_FILE}"`,
-    "UP=0",
-    `WMWAIT=$((SECONDS + ${WM_WAIT_SECONDS}))`,
-    'while [ "$SECONDS" -lt "$WMWAIT" ]; do',
-    '  DISPLAY=":$DISP" wmctrl -m >/dev/null 2>&1 && { UP=1; break; }',
-    "  sleep 0.2",
-    "done",
-    'if [ "$UP" != 1 ]; then',
-    `  echo "The desktop did not start on the VM within ${WM_WAIT_SECONDS}s" >&2`,
-    '  tail -n 20 "$XLOG" "$SLOG" >&2 || true',
-    "  stop_started",
-    `  rm -f "$PROFILE/${DESKTOP_ENV_FILE}"`,
-    "  exit 1",
-    "fi",
-    `echo "display=$DISP vnc=$VNC size=${size}" > "$PROFILE/${DESKTOP_STATE_FILE}"`,
-    'echo "ok display=$DISP vnc=$VNC"',
-  ]);
+  return launchScript(DESKTOP_STACK, options);
+}
+
+/** The display and port a launch report names. */
+export function launchedDesktop(report: Record<string, string>): LaunchedDesktop {
+  return {
+    display: Number(report.display),
+    vncPort: Number(report.vnc),
+    reused: report.reused === "1",
+  };
 }
 
 export function parseDesktopLaunch(output: string): LaunchedDesktop {
-  const match = /ok display=(\d+) vnc=(\d+)( reused=1)?/.exec(output);
-  if (!match) throw new Error("The VM did not report the desktop's display");
-  return { display: Number(match[1]), vncPort: Number(match[2]), reused: Boolean(match[3]) };
+  return launchedDesktop(parseReport(output, DESKTOP_STACK.report));
 }
 
 /** Stop the profile's desktop: every process group recorded at launch. */
 export function teardownDesktopCommand(profileDir: string): string {
-  return bash([`PROFILE=${shQuote(profileDir)}`, ...KILL_RECORDED]);
+  return teardownScript(DESKTOP_STACK, profileDir);
 }
 
 /**
  * Delete the profile (the panel's Reset): XFCE settings and app state. Files
- * the bot saved in the home directory are untouched. The pause lets the
- * just-stopped session finish exiting so it cannot rewrite its settings.
+ * the bot saved in the home directory are untouched.
  */
 export function wipeDesktopCommand(profileDir: string): string {
-  return bash([`PROFILE=${shQuote(profileDir)}`, ...KILL_RECORDED, "sleep 1", 'rm -rf "$PROFILE"']);
+  return wipeScript(DESKTOP_STACK, profileDir);
 }

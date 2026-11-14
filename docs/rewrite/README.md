@@ -347,6 +347,94 @@ always did, each close runs in its own async step, so the throw rejects only
 that entry, every other desktop is still released and closed, and `closeAll`
 resolves.
 
+As built in 3.6 (`packages/sandbox/src/vm-stack.ts`), a `VmStack` is one
+spec plus the caller's exec. `createVmStack(spec, run)` returns
+`ensureInstalled(onInstalling?)`, `launch(args)` (the parsed report, as a
+record; a launch that fails is stopped first), `stop(profileDir)` and
+`wipe(profileDir)`. `stop` and `wipe` take the profile because one stack
+serves every profile on the VM. The spec owns the install marker, the binaries
+and packages the readiness test checks, the install steps, the launch script's
+parts, the report's keys, the teardown and wipe lines, and each step's timeout
+and label. The pure builders (`readyScript`, `installScript`, `launchScript`,
+`teardownScript`, `wipeScript`, `parseReport`, `reportLine`, `launchBudgetMs`)
+generate every script from the spec, and the old exported builders
+(`launchStackCommand`, `launchDesktopCommand` and the rest) are now one-line
+calls of them. The browser (`browserVmStack`) and the computer
+(`computerVmStack`) are the two specs.
+
+Written once, with no option, because the two copies were already the same:
+the install script's frame (the marker set as `MARK`, the check before and
+after the VM-wide `browser-stack.lock` on fd 9, the X socket directory, the
+marker, `installed`), the launch script's frame (the profile made absolute,
+`browser-launch.lock` on fd 8 given up after 25 s, the display search from 90
+to 189, the X socket wait, vncconfig, `8>&-` on every background process, the
+`UP` wait loop and its failure block, the report line), the 20 s margin over
+the launch budget, the teardown after a failed launch (its error swallowed),
+and comparing the readiness check's trimmed output with `ready`.
+
+Each difference between the two old copies is one spec field. Every script
+is pinned byte for byte, and every row is pinned by `vm-stack-drift.test.ts`
+(recorded on the old code):
+
+| Drift                          | Browser                                                                            | Computer                                                                                            | Option                                  | Why kept                                                              |
+| ------------------------------ | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | --------------------------------------- | --------------------------------------------------------------------- |
+| Install marker                 | `~/.tiny-agents/browser-stack-v1`                                                  | `~/.tiny-agents/computer-stack-v1`                                                                  | `marker`                                | D9: existing VMs and `docker/sandbox/Dockerfile` carry them           |
+| What counts as installed       | `Xtigervnc`, `google-chrome-stable`                                                | eight binaries, and each extra package by `dpkg-query`                                              | `commands`, `packages`                  | the stacks differ                                                     |
+| Readiness script layout        | the marker path inline, a multi-line `if`                                          | `MARK` set first, a one-line `if`                                                                   | `readyLayout`                           | the scripts stay byte-identical; the answer is the same               |
+| Install steps                  | amd64 only, plain apt, the Chrome .deb                                             | apt waits 180 s for dpkg's lock, the extras; a bad extra name refused once the install starts       | `installSteps()`, built when it runs    | the stacks differ; the refusal comes after the `installing` phase     |
+| Check and install timeouts     | 15 s, 10 min                                                                       | 30 s, 15 min                                                                                        | `steps.check`, `steps.install`          | no behavior change in 3.6                                             |
+| Lock give-up message           | "…another browser to finish starting…"                                             | "…another browser or desktop to finish starting…"                                                   | `launch.lockHolders`                    | stderr reaches the error                                              |
+| Before the launch lock         | nothing                                                                            | points the desktop's Chrome at the browser profile                                                  | `launch.beforeLock`                     | a running desktop's menu follows too                                  |
+| The profile's last run         | kills its recorded pids, then every Chrome on the profile (waits up to 10 s)       | reattaches when the recorded desktop is up at this size (`reused=1`), else kills its process groups | `launch.clearPrevious`                  | a desktop outlives the app, a browser does not                        |
+| Ports                          | VNC and CDP                                                                        | VNC                                                                                                 | `launch.ports`                          | the stacks differ                                                     |
+| Before Xtigervnc               | log paths, the pid file emptied                                                    | the XFCE settings seed, log paths, `stop_started`                                                   | `launch.prepare`                        | the stacks differ                                                     |
+| Xtigervnc                      | CSS size times the scale, `-desktop tiny-agents`                                   | the size as given, `-desktop tiny-agents-computer`                                                  | `launch.geometry`, `launch.desktopName` | a VNC viewer shows the name                                           |
+| Pid file                       | `.stack-pids`, the X pid through `XPID`                                            | `.desktop-pids`, `$!` directly                                                                      | `launch.pidFile`, `launch.xPidVariable` | D9 (the desktop's Chrome reads `.stack-pids`); byte-identical scripts |
+| X server that never came up    | carries on, and the CDP wait fails                                                 | fails at once: "The display server did not start…"                                                  | `launch.afterX`                         | the error text differs                                                |
+| App and readiness probe        | Chrome; `curl /json/version`, 30 s, deadline `CDPWAIT`                             | a session bus and XFCE; `wmctrl -m`, 30 s, deadline `WMWAIT`                                        | `launch.start`, `launch.up`             | the stacks differ                                                     |
+| Cleanup when the app is not up | kills and removes the pid file                                                     | `stop_started`, removes the env file                                                                | `launch.up.cleanup`                     | the stacks differ                                                     |
+| Once up                        | nothing                                                                            | records `.desktop` (display, port, size)                                                            | `launch.afterUp`                        | the reattach reads it                                                 |
+| Report                         | `ok display= vnc= cdp=`                                                            | `ok display= vnc=` and an optional ` reused=1`                                                      | `report.variables`, `report.flags`      | parsing unchanged: first match anywhere, keys in order, digits only   |
+| Missing report                 | "The VM did not report the browser stack ports"                                    | "The VM did not report the desktop's display"                                                       | `report.missing`                        | tool results show it                                                  |
+| Launch budget                  | 80 s (adds the 10 s Chrome stop wait)                                              | 70 s                                                                                                | `launch.otherWaitSeconds`               | the exec timeout is the budget plus 20 s                              |
+| Teardown                       | kills the recorded pids                                                            | kills each recorded process group, then the pid; removes the state and env files                    | `teardown`                              | the stacks differ                                                     |
+| Teardown timeout               | 15 s                                                                               | 30 s                                                                                                | `steps.stop`                            | no behavior change in 3.6                                             |
+| Wipe                           | the profile made absolute, every Chrome on it stopped                              | the recorded process groups killed                                                                  | `wipe`                                  | the computer's Chrome may hold the browser profile                    |
+| Exec failure wording           | `VM exec failed (<code>): <step>`, then stderr's (or stdout's) last 600 characters | `Could not <step> on the VM (exit <code>): ` and the last 600 of stderr's first 4000 (or stdout's)  | each transport's `VmRun`                | the computer's runner also serves its tools                           |
+| Exec timeout wording and cap   | `VM exec timed out: <step>`, 16 MiB                                                | `The computer did not answer within <n>s`, 12 MiB                                                   | each transport's `VmRun`                | tool results show it                                                  |
+
+One label is new and never shown: the computer's teardown after a failed
+launch now runs as "stop the desktop", and its failure is swallowed as before.
+
+The Claude worker's setup (`sandbox-setup.ts`) is not a `VmStack`, because
+its shape is different, not drifted: its marker lives in a directory picked
+at run time (`/opt/tiny-agents/claude-worker` when the image baked it, else
+`~/.tiny-agents/claude-worker`) and an install deletes older markers; its
+install lock is its own (`install.lock` in that directory), so npm may run
+beside apt, and taking the VM-wide lock would change that; there is no
+separate readiness check, no display and no VNC; and its launch is a
+reuse-or-replace keyed on the bundle's sha, answering `missing`, `upload` or
+`ok <token>` on the last line, which drives up to four rounds with an upload
+on stdin between them. It uses the shell module like everything else.
+
+`packages/sandbox/src/shell.ts` is the one place that quotes, wraps and reads
+exit codes, re-exported from the package root for the agent's toolkits:
+
+| Export                   | Replaces                                                                                                                                                          |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `shQuote`                | the browser setup's (re-exported there for its suite) and three hand-rolled copies: tmux `typeLineCommand`, the sandbox toolkit's detach, the attachments `mkdir` |
+| `bashScript`             | five `bash -c` wrappers: the browser and computer setups, the desktop tools, the Claude worker, confined commands                                                 |
+| `exitWith`               | every sentinel exit: the desktop tools' 97, 96 and 95, confined commands' 97 and 96, and the stack scripts' generic failures                                      |
+| `exitSentinel`           | the reads of those codes: the desktop tools (`DESKTOP_EXITS`) and `run_command` (`CONFINED_EXITS`)                                                                |
+| `EXIT_COMMAND_NOT_FOUND` | tmux's literal 127 ("tmux is missing")                                                                                                                            |
+| `EXIT_NO_STATUS`         | the connection's literal 255 (a signal, or no exit status)                                                                                                        |
+| `failureDetail`          | the browser's, the computer's and the Claude worker's "stderr, else stdout, trimmed, the last N characters" (600, 600, 800)                                       |
+
+Kept as they were, and pinned: a desktop tool's error quotes stderr only (its
+last 400 characters); outside the tool that expects it, a window mismatch
+(96) or a missing app (95) reads as success; and `run_command` reads 97 as "the
+VM can't confine commands" even for a command it did not confine.
+
 ### 4.3 Models (`@tiny-agents/models`, new package, pi-ai only)
 
 `providers/*` moves here:

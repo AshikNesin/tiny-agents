@@ -5,7 +5,8 @@
  * builds it once from the endpoint and hands it to the toolkits, the
  * terminal, the browser and computer transports and the Claude worker. Plain
  * ssh2. Beside it: the forwarding server the Claude worker tunnels through,
- * shell quoting for the VM setup scripts, the public-URL guards the browser
+ * shell quoting, script wrapping and exit-code reading for every command sent
+ * to the VM (`shell.ts`), the public-URL guards the browser
  * and the web toolkit share, and the vault's pi-durable-free pieces the
  * browser and computer sinks need.
  *
@@ -32,6 +33,6 @@ export {
   type SshEndpoint,
 } from "./ssh/connection";
 export { createForwardingServer } from "./browser-remote-cdp";
-export { shQuote } from "./browser-vm-setup";
+export { bashScript, exitSentinel, exitWith, failureDetail, shQuote } from "./shell";
 export { checkPublicUrl, isPrivateAddress } from "./public-url";
 export { SecretValue, VaultTargetMovedError } from "./vault-target";
