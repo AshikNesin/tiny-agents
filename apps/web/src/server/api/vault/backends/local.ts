@@ -166,12 +166,7 @@ export function insertLocalItem(tx: DbTx, draft: ItemDraft, policy = ""): string
  * authority, and re-seal it under `policy` (default: the same). One
  * read-modify-write: call it inside a synchronous transaction.
  */
-export function writeLocalItem(
-  tx: DbTx,
-  id: string,
-  draft: Partial<ItemDraft>,
-  policy?: string,
-): void {
+function writeLocalItem(tx: DbTx, id: string, draft: Partial<ItemDraft>, policy?: string): void {
   const row = rowOf(tx, id);
   requireKey();
   const item = openRow(row, linksOf(tx, id));
