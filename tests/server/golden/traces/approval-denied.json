@@ -54,7 +54,7 @@
         "state": {
           "messages": [
             {
-              "id": "e27",
+              "id": "<e1>",
               "role": "user",
               "text": "/tool create_task {\"title\":\"Sell the car\"}",
               "requestId": "golden-deny-0001",
@@ -62,7 +62,7 @@
               "createdAt": 1793946600000
             },
             {
-              "id": "e31",
+              "id": "<e2>",
               "role": "assistant",
               "text": "",
               "toolCalls": [
@@ -84,7 +84,7 @@
           "busy": true,
           "queued": [],
           "hasMore": false,
-          "cursor": "e27"
+          "cursor": "<e1>"
         }
       },
       {
@@ -118,7 +118,7 @@
         "state": {
           "messages": [
             {
-              "id": "e27",
+              "id": "<e1>",
               "role": "user",
               "text": "/tool create_task {\"title\":\"Sell the car\"}",
               "requestId": "golden-deny-0001",
@@ -126,7 +126,7 @@
               "createdAt": 1793946600000
             },
             {
-              "id": "e31",
+              "id": "<e2>",
               "role": "assistant",
               "text": "",
               "toolCalls": [
@@ -147,7 +147,7 @@
               "createdAt": 1793946600000
             },
             {
-              "id": "e37",
+              "id": "<e3>",
               "role": "assistant",
               "text": "Tool said: The owner denied this create_task call. Do not retry it unless asked.",
               "status": "done",
@@ -158,7 +158,7 @@
           "busy": false,
           "queued": [],
           "hasMore": false,
-          "cursor": "e27"
+          "cursor": "<e1>"
         }
       },
       {

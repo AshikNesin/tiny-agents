@@ -90,7 +90,7 @@
   {
     "http": "history before e100",
     "method": "GET",
-    "path": "/api/v1/bots/<id1>/messages?before=e100&limit=10",
+    "path": "/api/v1/bots/<id1>/messages?before=<e1>&limit=10",
     "status": 400,
     "body": {
       "success": false,
@@ -109,7 +109,7 @@
         "state": {
           "messages": [
             {
-              "id": "e16",
+              "id": "<e2>",
               "role": "user",
               "text": "hello there",
               "requestId": "golden-turn-0001",
@@ -117,7 +117,7 @@
               "createdAt": 1793946600000
             },
             {
-              "id": "e20",
+              "id": "<e3>",
               "role": "assistant",
               "text": "Echo: hello there",
               "status": "done",
@@ -128,7 +128,7 @@
           "busy": false,
           "queued": [],
           "hasMore": false,
-          "cursor": "e16"
+          "cursor": "<e2>"
         }
       },
       {
@@ -144,14 +144,14 @@
   {
     "http": "history before the newest",
     "method": "GET",
-    "path": "/api/v1/bots/<id1>/messages?before=e20",
+    "path": "/api/v1/bots/<id1>/messages?before=<e3>",
     "status": 200,
     "body": {
       "success": true,
       "data": {
         "messages": [
           {
-            "id": "e16",
+            "id": "<e2>",
             "role": "user",
             "text": "hello there",
             "requestId": "golden-turn-0001",
@@ -285,7 +285,7 @@
         "state": {
           "messages": [
             {
-              "id": "e16",
+              "id": "<e2>",
               "role": "user",
               "text": "hello there",
               "requestId": "golden-turn-0001",
@@ -293,7 +293,7 @@
               "createdAt": 1793946600000
             },
             {
-              "id": "e20",
+              "id": "<e3>",
               "role": "assistant",
               "text": "Echo: hello there",
               "status": "done",
@@ -304,7 +304,7 @@
           "busy": false,
           "queued": [],
           "hasMore": false,
-          "cursor": "e16"
+          "cursor": "<e2>"
         }
       },
       {

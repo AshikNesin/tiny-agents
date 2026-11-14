@@ -90,7 +90,7 @@
         "state": {
           "messages": [
             {
-              "id": "e106",
+              "id": "<e1>",
               "role": "user",
               "text": "/tool create_task {\"title\":\"Water plants\"}",
               "requestId": "golden-busy-0001",
@@ -98,7 +98,7 @@
               "createdAt": 1793946600000
             },
             {
-              "id": "e110",
+              "id": "<e2>",
               "role": "assistant",
               "text": "",
               "toolCalls": [
@@ -136,7 +136,7 @@
             }
           ],
           "hasMore": false,
-          "cursor": "e106"
+          "cursor": "<e1>"
         }
       },
       {
@@ -182,7 +182,7 @@
         "state": {
           "messages": [
             {
-              "id": "e106",
+              "id": "<e1>",
               "role": "user",
               "text": "/tool create_task {\"title\":\"Water plants\"}",
               "requestId": "golden-busy-0001",
@@ -190,7 +190,7 @@
               "createdAt": 1793946600000
             },
             {
-              "id": "e110",
+              "id": "<e2>",
               "role": "assistant",
               "text": "",
               "toolCalls": [
@@ -211,7 +211,7 @@
               "createdAt": 1793946600000
             },
             {
-              "id": "e118",
+              "id": "<e3>",
               "role": "user",
               "text": "also make it weekly",
               "requestId": "golden-busy-0004",
@@ -219,7 +219,7 @@
               "createdAt": 1793946600000
             },
             {
-              "id": "e120",
+              "id": "<e4>",
               "role": "assistant",
               "text": "Echo: also make it weekly",
               "status": "done",
@@ -227,7 +227,7 @@
               "createdAt": 1793946600000
             },
             {
-              "id": "e121",
+              "id": "<e5>",
               "role": "user",
               "text": "after that, thanks",
               "requestId": "golden-busy-0002",
@@ -235,7 +235,7 @@
               "createdAt": 1793946600000
             },
             {
-              "id": "e123",
+              "id": "<e6>",
               "role": "assistant",
               "text": "Echo: after that, thanks",
               "status": "done",
@@ -246,7 +246,7 @@
           "busy": false,
           "queued": [],
           "hasMore": false,
-          "cursor": "e106"
+          "cursor": "<e1>"
         }
       },
       {
