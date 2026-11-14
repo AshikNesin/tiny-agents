@@ -116,9 +116,30 @@ await journey("connections", async ({ page, step, proof, cleanup, api, stamp }) 
   const capability = async () =>
     (await api.get("/capabilities")).capabilities.find((c) => c.id === `mcp:${slug}`);
   const toolNames = (cap) => (cap?.tools ?? []).map((t) => t.name ?? t);
+  // Adding, re-pointing and deleting a connection need the vault step-up (S4).
+  const freshStepUp = async () => {
+    const res = await page.request.post("/api/v1/vault/step-up", {
+      data: { password: DEMO.password },
+    });
+    if (!res.ok()) throw new Error(`step-up ${res.status()}`);
+    return { "X-Vault-Step-Up": (await res.json()).data.token };
+  };
   const removeIfThere = (n) => async () => {
     const row = await byName(n);
-    if (row) await api.delete(`/connections/${row.id}`);
+    if (!row) return;
+    const res = await page.request.delete(`/api/v1/connections/${row.id}`, {
+      headers: await freshStepUp(),
+    });
+    if (!res.ok() && res.status() !== 404) throw new Error(`connection cleanup ${res.status()}`);
+  };
+  /** The page asks "Confirm it's you" once per step-up token's life: answer it when it does. */
+  const confirmIfAsked = async (done) => {
+    const confirm = page.getByRole("dialog", { name: "Confirm it's you" });
+    await expect(confirm.or(done)).toBeVisible();
+    if (await confirm.isVisible()) {
+      await confirm.getByLabel("Password").fill(DEMO.password);
+      await confirm.getByRole("button", { name: "Confirm" }).click();
+    }
   };
 
   await step("setup: a local MCP server (header x-api-key) and a faux bot (API)", async () => {
@@ -169,6 +190,7 @@ await journey("connections", async ({ page, step, proof, cleanup, api, stamp }) 
       .getByRole("dialog", { name: "Add connection" })
       .getByRole("button", { name: "Save" })
       .click();
+    await confirmIfAsked(page.getByText("Connection added"));
     await expect(page.getByText("Connection added")).toBeVisible();
     await expect(page).toHaveURL(/\/connections\/[^/]+$/);
     id = page.url().split("/").pop();
@@ -322,7 +344,12 @@ await journey("connections", async ({ page, step, proof, cleanup, api, stamp }) 
       });
       keys.clear();
       keys.add(vaultSecret);
-      const patched = await api.patch(`/connections/${id}`, { secretRef: handle });
+      const patchRes = await page.request.patch(`/api/v1/connections/${id}`, {
+        headers,
+        data: { secretRef: handle },
+      });
+      expect(patchRes.ok(), await patchRes.text()).toBe(true);
+      const patched = (await patchRes.json()).data;
       expect(patched.secretRef).toBe(handle);
       expect(JSON.stringify(patched)).not.toContain(vaultSecret);
       await page.reload();
@@ -342,6 +369,7 @@ await journey("connections", async ({ page, step, proof, cleanup, api, stamp }) 
     await dialog.getByLabel("Name").fill(broken);
     await dialog.getByLabel("URL").fill(`http://127.0.0.1:${port}/mcp`);
     await dialog.getByRole("button", { name: "Save" }).click();
+    await confirmIfAsked(page.getByText("Connection added"));
     await expect(page.getByText("Connection added")).toBeVisible();
     cleanup(removeIfThere(broken));
     await expect
@@ -363,6 +391,7 @@ await journey("connections", async ({ page, step, proof, cleanup, api, stamp }) 
     const dialog = page.getByRole("dialog", { name: "Remove connection?" });
     await expect(dialog).toContainText("1 bot will lose these tools");
     await dialog.getByRole("button", { name: "Remove", exact: true }).click();
+    await confirmIfAsked(page.getByText("Connection removed"));
     await expect(page.getByText("Connection removed")).toBeVisible();
     await expect(page).toHaveURL(/\/connections$/);
     await expect(page.getByRole("link", { name: new RegExp(`^${name}`) })).toHaveCount(0);

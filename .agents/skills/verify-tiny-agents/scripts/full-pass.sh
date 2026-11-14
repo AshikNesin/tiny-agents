@@ -8,7 +8,7 @@
 # --no-infra runs only the groups that need no sandbox, Shelley or Cloudflare
 # keys (the rewrite's definition of done runs it; docs/rewrite/PLAN.md).
 # --aria save|check runs those on frozen-clock instances (`up --fixed-clock`),
-# without the two journeys that wait for a scheduled fire, then saves or
+# without the three journeys that wait for a scheduled fire or a retry, then saves or
 # checks every journey's ARIA snapshots against goldens/ (aria-goldens.mjs).
 set -u
 NO_INFRA=0
@@ -68,7 +68,10 @@ pass() { # run-id port up-flags journeys...
 pass "$TAG-a" 3300 "$FIXED" $GROUP_A &
 pass "$TAG-b" 3310 "$FIXED" $GROUP_B &
 pass "$TAG-c" 3320 "$FIXED" $GROUP_C &
-pass "$TAG-d" 3330 "$FIXED" $GROUP_D &
+# jobs-admin waits for a retried job to come due again: real time too.
+GROUP_D_RUN=$GROUP_D
+[ -n "$ARIA" ] && GROUP_D_RUN=${GROUP_D/ jobs-admin/}
+pass "$TAG-d" 3330 "$FIXED" $GROUP_D_RUN &
 # A frozen clock never reaches a scheduled slot: those two need real time.
 if [ -n "$ARIA" ]; then pass "$TAG-e" 3370 "$FIXED" vault-passkey &
 else pass "$TAG-e" 3370 "" $GROUP_E &
