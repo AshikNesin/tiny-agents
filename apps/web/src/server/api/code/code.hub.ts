@@ -3,7 +3,8 @@
  * harness. It starts each instance, keeps a cached thread list per instance
  * (re-read when the instance says it changed), decorates rows with what
  * tiny-agents tracks (followed, unread), counts who is watching a thread,
- * and relays instance events (turn ends, attention, reconnects) to the
+ * runs the bots' starts and sends one at a time per key, and relays
+ * instance events (turn ends, attention, reconnects) to the
  * watcher that delivers hand-offs and pushes.
  *
  * It never asks which kind of harness an instance is.
@@ -44,6 +45,12 @@ export interface CodeHub {
   /** Watch one thread; counts as a viewer while open. */
   watch(threadId: string, listener: (event: ThreadEvent) => void): () => void;
   viewers(threadId: string): number;
+  /**
+   * Run `work` once the earlier work under `key` has settled, one at a time
+   * in call order (in this process): a hand-off's start by its idempotency
+   * key, a thread's bot sends by its id.
+   */
+  serial<T>(key: string, work: () => Promise<T>): Promise<T>;
   onChange(listener: (change: HubChange) => void): () => void;
   onEvent(listener: (event: HubEvent) => void): () => void;
 }
@@ -63,6 +70,7 @@ export function createCodeHub(options: HubOptions): CodeHub {
   const lists = new Map<string, ThreadSummary[]>();
   const timers = new Map<string, ReturnType<typeof setTimeout>>();
   const viewerCounts = new Map<string, number>();
+  const queues = new Map<string, Promise<unknown>>();
   const changeListeners = new Set<(change: HubChange) => void>();
   const eventListeners = new Set<(event: HubEvent) => void>();
   const unsubscribers: Array<() => void> = [];
@@ -178,6 +186,18 @@ export function createCodeHub(options: HubOptions): CodeHub {
       };
     },
     viewers: (threadId) => viewerCounts.get(threadId) ?? 0,
+    serial(key, work) {
+      const next = (queues.get(key) ?? Promise.resolve()).then(work);
+      const settled = next.then(
+        () => undefined,
+        () => undefined,
+      );
+      queues.set(key, settled);
+      void settled.then(() => {
+        if (queues.get(key) === settled) queues.delete(key);
+      });
+      return next;
+    },
     onChange(listener) {
       changeListeners.add(listener);
       return () => changeListeners.delete(listener);

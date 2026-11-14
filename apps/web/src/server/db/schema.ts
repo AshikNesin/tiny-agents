@@ -276,8 +276,10 @@ export const codeThreads = sqliteTable(
 
 /**
  * Coding work a bot handed to a harness (`code_start`, or `shelley_start`).
- * When that thread's turn ends, the finish is delivered once into the bot's
- * chat (running → finished, compare-and-set).
+ * A start claims its row (`starting`) before the harness makes the thread,
+ * so a replayed start never makes a second one. When that thread's turn
+ * ends, the finish is owed to the bot's chat (running → finished,
+ * compare-and-set, with its `code_handoff_finishes` row).
  */
 export const codeHandoffs = sqliteTable(
   "code_handoffs",
@@ -286,8 +288,8 @@ export const codeHandoffs = sqliteTable(
     botId: text("bot_id")
       .notNull()
       .references(() => bots.id, { onDelete: "cascade" }),
-    /** `<instanceId>:<nativeId>`. */
-    threadId: text("thread_id").notNull(),
+    /** `<instanceId>:<nativeId>`; null while `starting` (the harness has not made it yet). */
+    threadId: text("thread_id"),
     title: text("title"),
     /** What the bot asked for (first message), for the card and list. */
     task: text("task").notNull(),
@@ -303,6 +305,32 @@ export const codeHandoffs = sqliteTable(
     index("code_handoffs_thread_idx").on(t.threadId),
     index("code_handoffs_bot_idx").on(t.botId, t.createdAt),
   ],
+);
+
+/**
+ * Hand-off finishes owed to a bot's chat (register row C7): written in the
+ * same transaction as the hand-off's running → finished move, delivered at
+ * least once (after a crash or a failed submit, again until it lands) and
+ * never twice, because the submit is idempotent by `requestId`.
+ * `deliveredAt` marks the submit done.
+ */
+export const codeHandoffFinishes = sqliteTable(
+  "code_handoff_finishes",
+  {
+    id: id(),
+    handoffId: text("handoff_id")
+      .notNull()
+      .references(() => codeHandoffs.id, { onDelete: "cascade" }),
+    /** Idempotency key of the submit into the bot's chat (one per turn end). */
+    requestId: text("request_id").notNull().unique(),
+    /** Who the reply is from: the harness's label. */
+    harness: text("harness").notNull(),
+    /** The chat text, framed and sanitized (`handoffFinishText`). */
+    text: text("text").notNull(),
+    createdAt: createdAt(),
+    deliveredAt: ms("delivered_at"),
+  },
+  (t) => [index("code_handoff_finishes_delivered_idx").on(t.deliveredAt)],
 );
 
 export const botSkills = sqliteTable(

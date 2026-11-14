@@ -4,6 +4,10 @@
  * - A **hand-off** (a bot started the thread with `code_start` or
  *   `shelley_start`) gets the finish delivered into the bot's chat, once, as
  *   a reply from the harness. The harness's words are untrusted peer text.
+ *   The finish is recorded as owed with the hand-off's running → finished
+ *   move, then submitted (idempotent by request id) and marked delivered; a
+ *   finish still owed after a crash or a failed submit is sent again at
+ *   boot, on every reconnect and on a timer until it lands (register C7).
  * - A **followed** thread (started, opened or handed off here) pushes a
  *   notification when it finishes, fails or asks for the owner while no tab
  *   shows it.
@@ -18,11 +22,21 @@ import { logger } from "@groot/core/logger";
 import type { Notification } from "@groot/core/notification/notifier";
 import { sanitizePeerText } from "@tiny-agents/agent";
 import { threadIdOf, type HarnessInstance, type TurnOutcome } from "@tiny-agents/code/server";
-import type { CodeHandoff } from "../../db";
 import { relayText } from "../bots/bots.delivery";
 import { codeUpdate } from "../notifications/notifications.events";
 import type { CodeHub } from "./code.hub";
-import { finishHandoffOnce, isFollowed, runningHandoffs } from "./code.store";
+import {
+  isFollowed,
+  markFinishDelivered,
+  oweFinish,
+  owedFinishes,
+  runningHandoffs,
+  type OwedFinish,
+  type ThreadHandoff,
+} from "./code.store";
+
+/** How often finishes still owed are sent again. */
+const RETRY_MS = 30_000;
 
 export interface WatcherDeps {
   hub: CodeHub;
@@ -32,12 +46,14 @@ export interface WatcherDeps {
     submission: { requestId: string; text: string; from: string },
   ): Promise<void>;
   notify(notification: Notification): void;
+  /** How often finishes still owed are sent again (default 30 s). */
+  retryMs?: number;
 }
 
 /** The chat text a bot receives when its hand-off's turn ends (`text` is already chat-sized). */
 export function handoffFinishText(
   harness: string,
-  handoff: Pick<CodeHandoff, "threadId" | "title">,
+  handoff: Pick<ThreadHandoff, "threadId" | "title">,
   outcome: { text: string; failed: boolean; title?: string | null },
 ): string {
   const name = outcome.title || handoff.title || handoff.threadId;
@@ -58,19 +74,49 @@ function logError(error: unknown, threadId: string, what: string) {
 export function startCodeWatcher(deps: WatcherDeps): () => void {
   const { hub } = deps;
 
+  /** Owed finishes being submitted now, so a sweep and a turn end never send one twice at once. */
+  const sending = new Set<string>();
+
+  /** Submit owed finishes; one that fails stays owed for the next sweep. */
+  async function send(finishes: OwedFinish[]) {
+    for (const finish of finishes) {
+      if (sending.has(finish.id)) continue;
+      sending.add(finish.id);
+      try {
+        await deps.deliver(finish.botId, {
+          requestId: finish.requestId,
+          text: finish.text,
+          from: finish.harness,
+        });
+        await markFinishDelivered(finish.id);
+      } catch (error) {
+        logError(error, finish.threadId ?? finish.id, "finish delivery (will retry)");
+      } finally {
+        sending.delete(finish.id);
+      }
+    }
+  }
+
+  /** Every finish still owed (boot, reconnects, the retry timer). */
+  async function sweep() {
+    await send(await owedFinishes());
+  }
+
   async function deliverFinished(
     instance: HarnessInstance,
-    handoffs: CodeHandoff[],
+    handoffs: ThreadHandoff[],
     outcome: TurnOutcome,
   ) {
+    const owed: OwedFinish[] = [];
     for (const handoff of handoffs) {
-      if (!(await finishHandoffOnce(handoff.id))) continue;
-      await deps.deliver(handoff.botId, {
+      const finish = oweFinish(handoff, {
         requestId: `code-${handoff.id}-${outcome.cursor}`,
+        harness: instance.label,
         text: handoffFinishText(instance.label, handoff, outcome),
-        from: instance.label,
       });
+      if (finish) owed.push(finish);
     }
+    await send(owed);
   }
 
   async function onTurnEnd(instance: HarnessInstance, nativeId: string, outcome: TurnOutcome) {
@@ -94,7 +140,7 @@ export function startCodeWatcher(deps: WatcherDeps): () => void {
 
   /** Hand-offs of this instance whose turn ended while it was unreachable. */
   async function reconcile(instance: HarnessInstance) {
-    const byThread = new Map<string, { nativeId: string; handoffs: CodeHandoff[] }>();
+    const byThread = new Map<string, { nativeId: string; handoffs: ThreadHandoff[] }>();
     for (const h of await runningHandoffs()) {
       const target = hub.resolve(h.threadId);
       if (target?.instance.id !== instance.id) continue;
@@ -129,14 +175,23 @@ export function startCodeWatcher(deps: WatcherDeps): () => void {
     deps.notify(codeUpdate({ id, title, harness: instance.label }, "message", text, key));
   }
 
-  return hub.onEvent(({ instance, event }) => {
+  const logSweep = (error: unknown) => logError(error, "*", "finish sweep");
+  // Finishes owed when the app stopped.
+  void sweep().catch(logSweep);
+  const timer = setInterval(() => void sweep().catch(logSweep), deps.retryMs ?? RETRY_MS);
+  timer.unref?.();
+
+  const off = hub.onEvent(({ instance, event }) => {
     if (event.type === "turn_ended") {
       const id = threadIdOf(instance.id, event.nativeId);
       void onTurnEnd(instance, event.nativeId, event.outcome).catch((error: unknown) =>
         logError(error, id, "turn end"),
       );
     } else if (event.type === "connected") {
-      void reconcile(instance).catch((error: unknown) => logError(error, instance.id, "reconcile"));
+      void reconcile(instance)
+        .catch((error: unknown) => logError(error, instance.id, "reconcile"))
+        .then(sweep)
+        .catch(logSweep);
     } else if (event.type === "attention") {
       const id = threadIdOf(instance.id, event.nativeId);
       void onAttention(instance, event.nativeId, event.text, event.key).catch((error: unknown) =>
@@ -144,4 +199,8 @@ export function startCodeWatcher(deps: WatcherDeps): () => void {
       );
     }
   });
+  return () => {
+    off();
+    clearInterval(timer);
+  };
 }
