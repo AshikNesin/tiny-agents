@@ -134,6 +134,11 @@ export interface AgentRuntimeOptions {
    * call shows its approval card.
    */
   reviewer?: Reviewer;
+  /**
+   * The owner's user id, for auto-review in a shared chat: it reads only the
+   * owner's messages (S6). Without one, no message with an author counts.
+   */
+  ownerUserId?: () => Promise<number | undefined>;
   /** Raw extensions installed as-is (tests). Selected by conversations that never chose capabilities. */
   extensions?: readonly Extension[];
   /** Non-fatal errors pi-durable reports (hooks, listeners, …). */
@@ -299,6 +304,7 @@ export class AgentRuntime {
       const gate = new ToolGate({
         approvals,
         ...(options.reviewer ? { reviewer: options.reviewer } : {}),
+        ...(options.ownerUserId ? { ownerUserId: options.ownerUserId } : {}),
         store: {
           decide: async (conversation, taskId, decision, grant) => {
             try {

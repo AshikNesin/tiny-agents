@@ -49,6 +49,7 @@ import { createBotMessagingStore } from "./bots.messaging";
 import { createAttachmentStore, createVisionStore } from "../uploads/uploads.store";
 import { createInstructionsStore } from "./self-improve.store";
 import { createBotCreationStore } from "./bot-builder.store";
+import { ownerUserId } from "../people/people.service";
 import { createRoutineStore } from "../routines/routines.toolkit-store";
 import { browserTargetForConversation } from "./browser.targets";
 import { createVaultBroker } from "../vault/vault.broker";
@@ -240,6 +241,8 @@ export async function openAgentRuntime(
     credentials: vaultCredentials,
     approvalTracker: app().ownerWaits,
     reviewer: rest.reviewer ?? autoReviewer(() => opened),
+    // Auto-review in a shared chat reads only the owner's messages (S6).
+    ownerUserId: rest.ownerUserId ?? ownerUserId,
     capabilities: [...builtinCapabilities(appVars, modelConfig), ...(rest.capabilities ?? [])],
     claudeWorker: rest.claudeWorker ?? sharedClaudeWorkerLocator(appVars),
   });

@@ -167,17 +167,25 @@ export interface GateUserMessage {
 }
 
 /**
+ * Whether the owner sent this message: it is not a peer delivery (another
+ * bot, a relayed reply or a mention) and, in a shared chat, its author is
+ * the owner (`by`). A guest's message is not the owner's.
+ */
+export function fromOwner(message: GateUserMessage, by: number | undefined): boolean {
+  if (message.peer) return false;
+  return message.author === undefined || message.author === by;
+}
+
+/**
  * Whether the turn is the owner's: the newest user message (newest first)
- * is not a peer delivery (another bot, a relayed reply or a mention) and,
- * in a shared chat, was sent by the owner (`by`). YOLO trusts only that.
+ * is `fromOwner`. YOLO and auto-review trust only that.
  */
 export function ownerTurn(
   newestFirst: readonly GateUserMessage[],
   by: number | undefined,
 ): boolean {
   const last = newestFirst[0];
-  if (!last || last.peer) return false;
-  return last.author === undefined || last.author === by;
+  return last !== undefined && fromOwner(last, by);
 }
 
 /** Whether auto-review may approve this tool's calls in the conversation. */

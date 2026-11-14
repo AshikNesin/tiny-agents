@@ -11,8 +11,9 @@
  * 3. A conversation nobody watches never asks: the call is refused.
  * 4. YOLO mode (`tiny.yolo`) runs an asking call without a card in the
  *    owner's own turns, never a vault use.
- * 5. Auto-review may run an asking call the owner clearly asked for, never
- *    a vault use.
+ * 5. Auto-review may run an asking call the owner clearly asked for, in
+ *    the owner's own turns (a guest's message is not the owner's), never a
+ *    vault use.
  * 6. Anything still asking waits for the owner: counted by the runtime's
  *    approvals `WaitTracker` (the Bot list badge, push notifications), with
  *    the answer kept in a task document (pi, survives a restart) or in
@@ -92,6 +93,12 @@ export interface ToolGateOptions {
   approvals: WaitTracker;
   /** Auto-review (issue #65); without one every asking call shows its card. */
   reviewer?: Reviewer;
+  /**
+   * The owner's user id. In a shared chat auto-review reads only their
+   * messages, as YOLO trusts only its `by` (S6); without one, no message
+   * with an author counts as the owner's.
+   */
+  ownerUserId?: () => Promise<number | undefined>;
   store?: GateStore;
 }
 
@@ -120,12 +127,14 @@ const heldKey = (conversation: number, taskId: number) => `${conversation}:${tas
 export class ToolGate {
   readonly #approvals: WaitTracker;
   readonly #reviewer: Reviewer | undefined;
+  readonly #ownerUserId: () => Promise<number | undefined>;
   readonly #store: GateStore;
   readonly #held = new Map<string, HeldAnswer>();
 
   constructor(options: ToolGateOptions) {
     this.#approvals = options.approvals;
     this.#reviewer = options.reviewer;
+    this.#ownerUserId = options.ownerUserId ?? (async () => undefined);
     this.#store = options.store ?? noStore;
   }
 
@@ -160,7 +169,7 @@ export class ToolGate {
     const yoloed = ask && !vault ? await yoloOnce(call) : false;
     const verdict =
       ask && !yoloed && this.#reviewer && !vault
-        ? await reviewOnce(call, this.#reviewer)
+        ? await reviewOnce(call, this.#reviewer, this.#ownerUserId)
         : undefined;
     const auto = yoloed || verdict?.approve === true;
     // How long the call sat on the owner, so its duration can leave that out.
@@ -379,15 +388,20 @@ const reviewMemo = durableMemo<ReviewVerdict>(
 
 /**
  * Auto-review a call that would ask, once: `undefined` when the conversation
- * does not let auto-review approve this tool or no owner message is in reach
- * (the card shows as before). A verdict is memoized before it is acted on.
+ * does not let auto-review approve this tool, or the turn is not the owner's
+ * (another bot's or a guest's) or no owner message is in reach (the card
+ * shows as before). A verdict is memoized before it is acted on.
  */
-async function reviewOnce(call: GateCall, reviewer: Reviewer): Promise<ReviewVerdict | undefined> {
+async function reviewOnce(
+  call: GateCall,
+  reviewer: Reviewer,
+  ownerUserId: () => Promise<number | undefined>,
+): Promise<ReviewVerdict | undefined> {
   const { api, context } = call;
   const stored = await reviewMemo.read(api, context);
   if (stored) return stored;
   if (!(await mayAutoReview(call.name, api, context))) return undefined;
-  const messages = ownerMessages(await call.userMessages());
+  const messages = ownerMessages(await call.userMessages(), await ownerUserId());
   if (!messages) return undefined;
   const verdict = await reviewer({
     tool: call.name,

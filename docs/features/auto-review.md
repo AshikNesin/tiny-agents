@@ -17,7 +17,9 @@ Turn it on per bot in **Edit bot → Tools → Auto-review**. It is off by defau
   - vault uses (logins, cards, API keys: their own policy decides),
   - **Ask (always)** tools (`askOnly`, e.g. saving a skill),
   - turns another bot started (a message from another bot is not your
-    request).
+    request),
+  - in a shared bot's chat, turns a guest started: as with YOLO, only your
+    own messages are your request.
 - Auto-approved calls show **auto-approved** on their row in the chat, and the
   server logs one `Auto-review` line per review (tool, scores, outcome,
   duration; never the call's arguments).
@@ -27,7 +29,7 @@ Turn it on per bot in **Edit bot → Tools → Auto-review**. It is off by defau
 The classifier gets three things:
 
 - the bot's instructions,
-- your latest five messages in the chat,
+- your latest five messages in the chat (never a guest's, in a shared chat),
 - the pending call: tool name and arguments.
 
 It never sees tool results, web pages or emails, which is where injected
