@@ -1,6 +1,6 @@
 /**
  * The Computer page's API: the desktops on the sandbox VM by profile
- * (`shared`, `bot-<id>`), not by bot. See `computer.page.routes.ts`.
+ * (`shared`, `bot-<id>`), not by bot. See `server/api/live/live.routes.ts`.
  */
 import { apiClient } from "@groot/shell/lib/api";
 import type { VncTicket } from "../components/browser/VncView";
