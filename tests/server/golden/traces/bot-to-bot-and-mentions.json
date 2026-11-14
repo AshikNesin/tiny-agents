@@ -90,7 +90,7 @@
         "state": {
           "messages": [
             {
-              "id": "e138",
+              "id": "<e1>",
               "role": "user",
               "text": "/tool message_bot {\"to\":\"Helper\",\"text\":\"what is 2+2?\"}",
               "requestId": "golden-b2b-00001",
@@ -98,7 +98,7 @@
               "createdAt": 1793946600000
             },
             {
-              "id": "e142",
+              "id": "<e2>",
               "role": "assistant",
               "text": "",
               "toolCalls": [
@@ -119,7 +119,7 @@
               "createdAt": 1793946600000
             },
             {
-              "id": "e153",
+              "id": "<e3>",
               "role": "assistant",
               "text": "Tool said: Message delivered for Helper. The reply arrives here as \"Reply from Helper\" - do not message them back just to acknowledge it.",
               "status": "done",
@@ -127,7 +127,7 @@
               "createdAt": 1793946600000
             },
             {
-              "id": "e154",
+              "id": "<e4>",
               "role": "user",
               "text": "**Reply from Helper:** Echo: **Message from Host (bot):** what is 2+2?",
               "requestId": "botmsg-reply-<id4>",
@@ -139,7 +139,7 @@
               "createdAt": 1793946600000
             },
             {
-              "id": "e157",
+              "id": "<e5>",
               "role": "assistant",
               "text": "Echo: **Reply from Helper:** Echo: **Message from Host (bot):** what is 2+2?",
               "status": "done",
@@ -150,7 +150,7 @@
           "busy": false,
           "queued": [],
           "hasMore": false,
-          "cursor": "e138"
+          "cursor": "<e1>"
         }
       },
       {
@@ -172,7 +172,7 @@
         "state": {
           "messages": [
             {
-              "id": "e144",
+              "id": "<e6>",
               "role": "user",
               "text": "**Message from Host (bot):** what is 2+2?",
               "requestId": "botmsg-pi:<id5>:143",
@@ -184,7 +184,7 @@
               "createdAt": 1793946600000
             },
             {
-              "id": "e151",
+              "id": "<e7>",
               "role": "assistant",
               "text": "Echo: **Message from Host (bot):** what is 2+2?",
               "status": "done",
@@ -195,7 +195,7 @@
           "busy": false,
           "queued": [],
           "hasMore": false,
-          "cursor": "e144"
+          "cursor": "<e6>"
         }
       },
       {
@@ -229,7 +229,7 @@
         "state": {
           "messages": [
             {
-              "id": "e138",
+              "id": "<e1>",
               "role": "user",
               "text": "/tool message_bot {\"to\":\"Helper\",\"text\":\"what is 2+2?\"}",
               "requestId": "golden-b2b-00001",
@@ -237,7 +237,7 @@
               "createdAt": 1793946600000
             },
             {
-              "id": "e142",
+              "id": "<e2>",
               "role": "assistant",
               "text": "",
               "toolCalls": [
@@ -258,7 +258,7 @@
               "createdAt": 1793946600000
             },
             {
-              "id": "e153",
+              "id": "<e3>",
               "role": "assistant",
               "text": "Tool said: Message delivered for Helper. The reply arrives here as \"Reply from Helper\" - do not message them back just to acknowledge it.",
               "status": "done",
@@ -266,7 +266,7 @@
               "createdAt": 1793946600000
             },
             {
-              "id": "e154",
+              "id": "<e4>",
               "role": "user",
               "text": "**Reply from Helper:** Echo: **Message from Host (bot):** what is 2+2?",
               "requestId": "botmsg-reply-<id4>",
@@ -278,7 +278,7 @@
               "createdAt": 1793946600000
             },
             {
-              "id": "e157",
+              "id": "<e5>",
               "role": "assistant",
               "text": "Echo: **Reply from Helper:** Echo: **Message from Host (bot):** what is 2+2?",
               "status": "done",
@@ -286,7 +286,7 @@
               "createdAt": 1793946600000
             },
             {
-              "id": "e160",
+              "id": "<e8>",
               "role": "user",
               "text": "@Helper say hi",
               "requestId": "golden-b2b-00002",
@@ -294,7 +294,7 @@
               "createdAt": 1793946600000
             },
             {
-              "id": "e166",
+              "id": "<e9>",
               "role": "assistant",
               "text": "Echo: @Helper say hi",
               "status": "done",
@@ -302,7 +302,7 @@
               "createdAt": 1793946600000
             },
             {
-              "id": "e168",
+              "id": "<e10>",
               "role": "user",
               "text": "**Reply from Helper:** Echo: [From the owner, in Host's chat] @Helper say hi",
               "requestId": "botmsg-reply-<id6>",
@@ -314,7 +314,7 @@
               "createdAt": 1793946600000
             },
             {
-              "id": "e171",
+              "id": "<e11>",
               "role": "assistant",
               "text": "Echo: **Reply from Helper:** Echo: [From the owner, in Host's chat] @Helper say hi",
               "status": "done",
@@ -325,7 +325,7 @@
           "busy": false,
           "queued": [],
           "hasMore": false,
-          "cursor": "e138"
+          "cursor": "<e1>"
         }
       },
       {

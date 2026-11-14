@@ -186,7 +186,7 @@
         "state": {
           "messages": [
             {
-              "id": "e89",
+              "id": "<e1>",
               "role": "user",
               "text": "/tool create_task {\"title\":\"Call mom\"}",
               "requestId": "golden-task-0001",
@@ -194,7 +194,7 @@
               "createdAt": 1793946600000
             },
             {
-              "id": "e93",
+              "id": "<e2>",
               "role": "assistant",
               "text": "",
               "toolCalls": [
@@ -214,7 +214,7 @@
               "createdAt": 1793946600000
             },
             {
-              "id": "e97",
+              "id": "<e3>",
               "role": "assistant",
               "text": "Tool said: Created task [<id8>] Call mom · medium · todo",
               "status": "done",
@@ -225,7 +225,7 @@
           "busy": false,
           "queued": [],
           "hasMore": false,
-          "cursor": "e89"
+          "cursor": "<e1>"
         }
       },
       {

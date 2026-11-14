@@ -67,7 +67,7 @@
         "state": {
           "messages": [
             {
-              "id": "e73",
+              "id": "<e1>",
               "role": "user",
               "text": "/tool create_task {\"title\":\"Buy milk\"}",
               "requestId": "golden-yolo-0001",
@@ -75,7 +75,7 @@
               "createdAt": 1793946600000
             },
             {
-              "id": "e77",
+              "id": "<e2>",
               "role": "assistant",
               "text": "",
               "toolCalls": [
@@ -96,7 +96,7 @@
               "createdAt": 1793946600000
             },
             {
-              "id": "e81",
+              "id": "<e3>",
               "role": "assistant",
               "text": "Tool said: Created task [<id3>] Buy milk · medium · todo",
               "status": "done",
@@ -107,7 +107,7 @@
           "busy": false,
           "queued": [],
           "hasMore": false,
-          "cursor": "e73"
+          "cursor": "<e1>"
         }
       },
       {

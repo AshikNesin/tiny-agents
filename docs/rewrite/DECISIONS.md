@@ -115,3 +115,32 @@ the database handle map, the entry's error reporter. Others are constant
 lookup sets. Moving these into `App` would add fields nobody resets or swaps,
 and no test needs to. Each entry carries its reason in
 `scripts/lint/boundaries.ts`, and any new entry is a reviewed change.
+
+## D11: The Claude plan's durable transcript (2.4) comes before the shared projection (2.2) (accepted under autopilot, 2026-11-14)
+
+2.2 asked for one chat projection, one `userMessages` and one `lastMessage`
+over both engines. Today pi reads durable entries while the Claude plan
+reads an in-memory `ChatMessage[]` (`engines/claude-code/engine.ts`), so
+the helpers are duplicated because the stores differ. Unifying them before
+2.4 would mean writing an adapter that 2.4 then deletes. So 2.4 goes first,
+and 2.2 becomes the deletion of the second copies.
+
+The approach for 2.4 (D4, owner sign-off Q2, #250):
+
+- Admit: one commit appends a `claude.user` entry with `{requestId, text,
+  author?, peer?, attachments?}`, after a `scanEntries` check that the
+  request id isn't already there (P2). A retry is deduplicated.
+- Run: one turn at a time per conversation. A send while a turn runs is
+  held and answered by the next turn (`whenBusy`), as on pi. `submit`
+  returns on admit.
+- Stream: the worker's `text` / `tool_use` / `turn_end` become `claude.assistant`
+  entries (the streaming text is kept in memory and committed when the turn
+  ends or a tool round finishes). A stopped turn commits its status once,
+  and a later worker event for it is ignored (fixes C2's flip-back).
+- Restart: `<agent.db>.claude.json` is imported once into entries, then
+  renamed `.imported`. Reads go to the durable entries, so the wrong-engine
+  read after a restart (C4) goes away.
+- Proof: the engine-contract suite gains retry, queue, restart and import
+  cases on both engines; characterization tests C5, C6 and C16 are updated
+  only where the register rows they pin are the ones this fixes (C1, C2, C4,
+  C23).

@@ -66,16 +66,31 @@ const ID_PATTERNS = [
  */
 const TIMING_KEYS = new Set(["durationMs", "waitedMs"]);
 
+/**
+ * pi-durable entry ids (`e152`) count every entry in the store, so two
+ * conversations writing at once (a bot and the bot it messages) interleave
+ * them by timing. Like generated ids, they are numbered by first appearance
+ * (`<e1>`), wherever an id, a cursor or a `before=` page cursor holds one.
+ */
+const ENTRY_ID = /^e\d+$/;
+const ENTRY_CURSOR = /\b(before=)(e\d+)\b/g;
+
 function normalize(value: unknown): unknown {
   const ids = new Map<string, string>();
   const name = (id: string) => {
     if (!ids.has(id)) ids.set(id, `<id${ids.size + 1}>`);
     return ids.get(id)!;
   };
+  const entries = new Map<string, string>();
+  const entry = (id: string) => {
+    if (!entries.has(id)) entries.set(id, `<e${entries.size + 1}>`);
+    return entries.get(id)!;
+  };
   const walk = (v: unknown): unknown => {
     if (v instanceof Date) return v.toISOString();
     if (typeof v === "string") {
-      let out = v;
+      if (ENTRY_ID.test(v)) return entry(v);
+      let out = v.replace(ENTRY_CURSOR, (_, prefix: string, id: string) => prefix + entry(id));
       for (const pattern of ID_PATTERNS) out = out.replace(pattern, name);
       return out;
     }
