@@ -599,9 +599,9 @@ five checks pass:
    `--sandbox --shelley` run, with the evidence attached to the last PR.
 4. `pnpm check:old-modules` exits 0: no file on the retired-paths list
    exists, and nothing imports one. The list is in the plan, starting with
-   `bots.service.ts`, `browser-sessions.ts`, `computer-sessions.ts`,
-   `engines/claude-code/engine.ts` (old transcript),
-   `bots.runtime.ts` singletons and the hand-copied `lib/*-api.ts` types.
+   `engines/claude-code/engine.ts` (old transcript), `bots.runtime.ts`
+   singletons and the hand-copied `lib/*-api.ts` types. `bots.service.ts`,
+   `browser-sessions.ts` and `computer-sessions.ts` stay, narrowed (D13).
 5. `pnpm check:dead` (knip) exits 0.
 
 ## 8. Rough shape of the plan

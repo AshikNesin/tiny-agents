@@ -155,3 +155,17 @@ change it; an edge event that also re-fires on those changes would rename
 today's behavior and gain nothing. So 2.3 is not done until C16 is decided:
 settling stays level-triggered, its pinned double run included. If C16 is
 set to Fix, 2.3 becomes that fix.
+
+## D13: Narrowed modules keep their names; the retired-paths list drops them (accepted under autopilot, 2026-11-14)
+
+§7 of the design put `bots.service.ts`, `browser-sessions.ts` and
+`computer-sessions.ts` on the retired-paths list, as stand-ins for the god
+module and the two drifted managers. The re-cut kept each file under a
+narrower role instead: `bots.service.ts` is CRUD and links only (4.1, the
+chat actions moved to `chats.service.ts`), and the two session files are
+thin `LiveSessions` instances (3.5). Their names follow the routines layout
+(`<feature>.service.ts`) and the package's subpath exports, so renaming them
+would churn imports for nothing. The list keeps the paths that really go
+away; `check:old-modules` (6.1) also checks that the three narrowed files
+stay narrow (no chat action in `bots.service.ts`, no manager logic outside
+`live-sessions.ts`).
