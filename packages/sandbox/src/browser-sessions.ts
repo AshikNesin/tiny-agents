@@ -4,21 +4,28 @@
  * the browser toolkit (tool calls) and the app's routes (status, "Open
  * browser", takeover, reset, the VNC bridge), so nobody reads module state.
  *
- * It owns the lifecycle rules:
- * - lazy open per profile; concurrent callers share one launch;
- * - close cancels an in-flight open, so a reset or wipe never comes back as
- *   a browser that finished opening after it;
- * - the driver flag: action tools wait on a promise the owner's hand-back
- *   resolves, bounded by `humanDriverWaitMs`;
- * - the idle sweep, on an injectable clock;
- * - `peek`, which never launches: planning a tool call must not start a
- *   browser (or a first-run VM install).
+ * The lifecycle rules (lazy shared open, cancel-on-close, the driver flag,
+ * the idle sweep, `peek` that never launches) are `LiveSessions`'
+ * (`live-sessions.ts`). This instance adds what only a browser has: one tab
+ * per agent in a shared profile, bringing the acting agent's tab to the
+ * front, and adopting the tab the owner left in front on a hand-back. Its
+ * options keep the browser's side of the drift (docs/rewrite/README.md
+ * §4.2): reads are allowed while the owner drives, and an open waits for a
+ * close in progress.
  */
 import type { SecretFill } from "./browser-fill";
 import { parseExemptHosts } from "./browser-guard";
+import {
+  createLiveSessions,
+  realClock,
+  type LiveClock,
+  type LiveEntry,
+  type LiveOpenState,
+  type LivePhase,
+} from "./live-sessions";
 
 /** Where a session is while it opens; `installing` is the one-time VM setup. */
-type BrowserPhase = "installing" | "starting";
+type BrowserPhase = LivePhase;
 
 export interface OpenBrowserOptions {
   viewportWidth: number;
@@ -114,16 +121,13 @@ export type BrowserDriver = "agent" | "human";
 export const DEFAULT_BROWSER_PROFILES_DIR = "./data/browser-profiles";
 
 /** One live browser (a profile): shared by every agent whose target names it. */
-interface LiveBrowserSession {
+interface LiveBrowserSession extends LiveEntry {
   /** The browser itself; closing it closes every tab. Also the first agent's tab. */
   session: BrowserSession;
   /** Each agent's tab, by `BrowserTarget.tab`. */
   tabs: Map<string, BrowserSession>;
   /** The owner drives the whole browser, so takeover pauses every agent in it. */
   driver: BrowserDriver;
-  lastActivity: number;
-  /** This session's idle close window (ms), from the manager options. */
-  idleMs: number;
   /** The tab last brought to the front, so agents only refocus on a change. */
   front?: string;
 }
@@ -135,29 +139,7 @@ export interface LiveBrowserTab {
 }
 
 /** Timers and the clock, injectable so the idle sweep and driver wait are testable. */
-export interface BrowserClock {
-  now(): number;
-  setTimeout(fn: () => void, ms: number): unknown;
-  clearTimeout(handle: unknown): void;
-  setInterval(fn: () => void, ms: number): unknown;
-  clearInterval(handle: unknown): void;
-}
-
-const realClock: BrowserClock = {
-  now: () => Date.now(),
-  setTimeout: (fn, ms) => {
-    const handle = setTimeout(fn, ms);
-    handle.unref?.();
-    return handle;
-  },
-  clearTimeout: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
-  setInterval: (fn, ms) => {
-    const handle = setInterval(fn, ms);
-    handle.unref?.();
-    return handle;
-  },
-  clearInterval: (handle) => clearInterval(handle as ReturnType<typeof setInterval>),
-};
+export type BrowserClock = LiveClock;
 
 export interface BrowserSessionsOptions {
   /** Profiles root; one directory per profile key. Default `./data/browser-profiles`. */
@@ -177,7 +159,7 @@ export interface BrowserSessionsOptions {
   clock?: BrowserClock;
 }
 
-type BrowserOpenState = { opening: true; phase: BrowserPhase } | { opening: false; error?: string };
+type BrowserOpenState = LiveOpenState;
 
 export interface BrowserSessions {
   /** Profiles root (the reset endpoint wipes under it). */
@@ -222,8 +204,6 @@ export interface BrowserSessions {
   tabOrigin(target: BrowserTarget): Promise<string | undefined>;
 }
 
-const IDLE_SWEEP_MS = 60_000;
-
 /** Every manager created, so a process-wide shutdown can close them all. */
 const managers = new Set<BrowserSessions>();
 
@@ -241,45 +221,17 @@ export function describeBrowserError(error: unknown): string {
   return message;
 }
 
-interface Opening {
-  promise: Promise<LiveBrowserSession>;
-  readonly phase: BrowserPhase;
-  /** A close arrived meanwhile: the opened browser closes at once. */
-  cancel(): void;
-}
+/** What an action says when its wait for the owner's hand-back ran out. */
+const OWNER_DRIVING =
+  "The owner is driving the browser; wait and retry, or continue without the browser.";
 
 export function createBrowserSessions(options: BrowserSessionsOptions = {}): BrowserSessions {
   const clock = options.clock ?? realClock;
   const profilesDir = (options.profilesDir ?? DEFAULT_BROWSER_PROFILES_DIR).replace(/\/$/, "");
   const exemptHosts = parseExemptHosts(options.allowedPrivateHosts);
-  const idleMs = (options.idleMinutes ?? 10) * 60_000;
-  const humanWaitMs = options.humanDriverWaitMs ?? 10 * 60_000;
 
-  const live = new Map<string, LiveBrowserSession>();
-  const opening = new Map<string, Opening>();
-  /** Closes in progress: an open waits for them, so a wipe never deletes a launching profile. */
-  const closing = new Map<string, Promise<void>>();
   /** In-flight tab opens per browser, by tab key, so one agent never gets two tabs. */
   const tabsOpening = new WeakMap<LiveBrowserSession, Map<string, Promise<BrowserSession>>>();
-  /** Last open failure per profile, surfaced by the status route until the next attempt. */
-  const openErrors = new Map<string, string>();
-  /** Action tools waiting for the owner to hand the browser back. */
-  const handBacks = new WeakMap<LiveBrowserSession, Set<() => void>>();
-  let sweeper: unknown;
-
-  function ensureSweeper() {
-    if (sweeper !== undefined) return;
-    sweeper = clock.setInterval(() => {
-      const now = clock.now();
-      for (const [key, entry] of live) {
-        if (entry.driver === "human") continue; // an open takeover is activity
-        if (entry.lastActivity < now - entry.idleMs) {
-          live.delete(key);
-          void entry.session.close().catch(() => {});
-        }
-      }
-    }, IDLE_SWEEP_MS);
-  }
 
   function profileDir(key: string): string {
     if (!/^[\w-]+$/.test(key)) throw new Error(`Invalid browser profile "${key}".`);
@@ -290,97 +242,52 @@ export function createBrowserSessions(options: BrowserSessionsOptions = {}): Bro
     return options.transport ?? (await import("./browser-chromium")).createChromiumTransport();
   }
 
-  async function openSession(
-    key: string,
-    onPhase: (phase: BrowserPhase) => void,
-  ): Promise<LiveBrowserSession> {
-    const dir = profileDir(key);
-    const { mkdirSync } = await import("node:fs");
-    mkdirSync(dir, { recursive: true });
-    const session = await (
-      await transport()
-    )(dir, {
-      viewportWidth: options.viewportWidth ?? 1280,
-      viewportHeight: options.viewportHeight ?? 800,
-      allowedPrivateHosts: options.allowedPrivateHosts,
-      scale: options.scale === 1 ? 1 : 2,
-      onPhase,
-    });
-    const entry: LiveBrowserSession = {
-      session,
-      tabs: new Map(),
-      driver: "agent",
-      lastActivity: clock.now(),
-      idleMs,
-    };
-    session.onDisconnect?.(() => dropDeadSession(key, entry));
-    return entry;
-  }
-
-  /**
-   * A browser that died under the app must stop answering as live: until
-   * the idle sweeper noticed (minutes), every tool call and viewer resize
-   * would fail or silently do nothing against it. The next call opens fresh.
-   */
-  function dropDeadSession(key: string, entry: LiveBrowserSession): void {
-    if (live.get(key) !== entry) return; // already closed, reset or replaced
-    live.delete(key);
-    entry.driver = "agent"; // nobody drives a dead browser: waiting actions move on
-    release(entry);
-    void entry.session.close().catch(() => {});
-  }
-
-  function acquireBrowser(profile: string): Promise<LiveBrowserSession> {
-    ensureSweeper();
-    const entry = live.get(profile);
-    if (entry) return Promise.resolve(entry);
-    let pending = opening.get(profile);
-    if (!pending) {
-      let phase: BrowserPhase = "starting";
-      let cancelled = false;
-      const promise = (closing.get(profile) ?? Promise.resolve())
-        .then(() =>
-          openSession(profile, (next) => {
-            phase = next;
-          }),
-        )
-        .then(async (opened) => {
-          if (cancelled) {
-            // Closed while opening: the browser never becomes live.
-            await opened.session.close().catch(() => {});
-            throw new Error("The browser was closed while it was opening.");
-          }
-          live.set(profile, opened);
-          openErrors.delete(profile);
-          return opened;
-        })
-        .catch((error: unknown) => {
-          if (!cancelled) openErrors.set(profile, describeBrowserError(error));
-          throw error;
-        })
-        .finally(() => {
-          if (opening.get(profile) === pending) opening.delete(profile);
-        });
-      pending = {
-        promise,
-        get phase() {
-          return phase;
-        },
-        cancel() {
-          cancelled = true;
-        },
-      };
-      opening.set(profile, pending);
-    }
-    return pending.promise;
-  }
+  const live = createLiveSessions<BrowserSession, LiveBrowserSession>({
+    clock,
+    idleMs: (options.idleMinutes ?? 10) * 60_000,
+    humanDriverWaitMs: options.humanDriverWaitMs ?? 10 * 60_000,
+    async launch(key, onPhase) {
+      // The profile is checked inside the open, so an invalid one becomes the last open error.
+      const dir = profileDir(key);
+      const { mkdirSync } = await import("node:fs");
+      mkdirSync(dir, { recursive: true });
+      return (await transport())(dir, {
+        viewportWidth: options.viewportWidth ?? 1280,
+        viewportHeight: options.viewportHeight ?? 800,
+        allowedPrivateHosts: options.allowedPrivateHosts,
+        scale: options.scale === 1 ? 1 : 2,
+        onPhase,
+      });
+    },
+    enter: (session, base) => ({ session, tabs: new Map(), ...base }),
+    surfaceOf: (entry) => entry.session,
+    async wipe(profile) {
+      const dir = profileDir(profile);
+      const { rmSync } = await import("node:fs");
+      rmSync(dir, { recursive: true, force: true });
+      await (await transport()).wipe?.(dir);
+    },
+    touchOnOpen: false,
+    touchOnHandBack: false,
+    openWaitsForClose: true,
+    wipeCancelledOpen: false,
+    closeErrors: "throw",
+    closedWhileOpening: "The browser was closed while it was opening.",
+    describeOpenError: describeBrowserError,
+    // Reads are allowed while the owner drives (U11), so only an action's wait runs out.
+    ownerDriving: () => new Error(OWNER_DRIVING),
+  });
 
   /**
    * The agent's tab: the browser's first tab goes to the first agent, later
    * agents get a new tab each (or share the first where the transport
    * cannot open tabs).
    */
-  async function tabIn(entry: LiveBrowserSession, key: string): Promise<BrowserSession> {
+  async function tabIn(
+    profile: string,
+    entry: LiveBrowserSession,
+    key: string,
+  ): Promise<BrowserSession> {
     const existing = entry.tabs.get(key);
     if (existing) return existing;
     if (entry.tabs.size === 0 || !entry.session.openTab) {
@@ -395,7 +302,7 @@ export function createBrowserSessions(options: BrowserSessionsOptions = {}): Bro
         .openTab()
         .then((tab) => {
           // A browser closed meanwhile took the tab with it; don't record it.
-          if ([...live.values()].includes(entry)) entry.tabs.set(key, tab);
+          if (live.peek(profile) === entry) entry.tabs.set(key, tab);
           return tab;
         })
         .finally(() => inFlight.delete(key));
@@ -404,11 +311,15 @@ export function createBrowserSessions(options: BrowserSessionsOptions = {}): Bro
     return pending;
   }
 
-  async function acquire(target: BrowserTarget): Promise<LiveBrowserTab> {
-    const entry = await acquireBrowser(target.profile);
-    const tab = await tabIn(entry, target.tab);
+  /** The agent's tab in an open browser; getting it is the activity the idle sweep counts. */
+  async function tabOf(entry: LiveBrowserSession, target: BrowserTarget): Promise<LiveBrowserTab> {
+    const tab = await tabIn(target.profile, entry, target.tab);
     entry.lastActivity = clock.now();
     return { browser: entry, session: tab };
+  }
+
+  async function acquire(target: BrowserTarget): Promise<LiveBrowserTab> {
+    return tabOf(await live.open(target.profile), target);
   }
 
   /**
@@ -422,134 +333,62 @@ export function createBrowserSessions(options: BrowserSessionsOptions = {}): Bro
     if (browser.tabs.size > 1) await session.focus?.().catch(() => {});
   }
 
-  /** Wake every action tool waiting for this browser's owner to hand it back. */
-  function release(entry: LiveBrowserSession) {
-    const waiters = handBacks.get(entry);
-    if (!waiters) return;
-    handBacks.delete(entry);
-    for (const wake of waiters) wake();
-  }
-
-  /** Resolves when the owner hands the browser back, or after `ms`. */
-  function handBack(entry: LiveBrowserSession, ms: number): Promise<void> {
-    return new Promise((resolve) => {
-      const waiters = handBacks.get(entry) ?? new Set<() => void>();
-      handBacks.set(entry, waiters);
-      const timer = clock.setTimeout(() => {
-        waiters.delete(wake);
-        resolve();
-      }, ms);
-      const wake = () => {
-        clock.clearTimeout(timer);
-        resolve();
-      };
-      waiters.add(wake);
-    });
-  }
-
-  async function closeEntry(profile: string, entry: LiveBrowserSession): Promise<void> {
-    entry.driver = "agent";
-    release(entry);
-    if (live.get(profile) === entry) live.delete(profile);
-    await entry.session.close();
-  }
-
-  async function wipe(profile: string): Promise<void> {
-    const dir = profileDir(profile);
-    const { rmSync } = await import("node:fs");
-    rmSync(dir, { recursive: true, force: true });
-    await (await transport()).wipe?.(dir);
-  }
-
   const manager: BrowserSessions = {
     profilesDir,
     exemptHosts,
     acquire,
     peek(target) {
-      const entry = live.get(target.profile);
+      const entry = live.peek(target.profile);
       const tab = entry?.tabs.get(target.tab);
       return entry && tab ? { browser: entry, session: tab } : undefined;
     },
     async start(target) {
-      openErrors.delete(target.profile);
+      live.forgetOpenError(target.profile);
       const tab = await acquire(target);
       await bringToFront(tab, target.tab);
       return tab;
     },
-    openState(target) {
-      const pending = opening.get(target.profile);
-      if (pending) return { opening: true, phase: pending.phase };
-      return { opening: false, error: openErrors.get(target.profile) };
-    },
-    get: (target) => live.get(target.profile),
-    profiles: () => [...live.keys()],
+    openState: (target) => live.openState(target.profile),
+    get: (target) => live.peek(target.profile),
+    profiles: () => live.profiles(),
     async readTurn(target) {
-      const tab = await acquire(target);
+      const tab = await live.read(target.profile, (entry) => tabOf(entry, target), {
+        allowWhileHuman: true,
+      });
       await bringToFront(tab, target.tab);
       return tab;
     },
     async actionTurn(target) {
-      const tab = await acquire(target);
-      const entry = tab.browser;
-      const deadline = clock.now() + humanWaitMs;
-      while (entry.driver === "human") {
-        const left = deadline - clock.now();
-        if (left <= 0) {
-          throw new Error(
-            "The owner is driving the browser; wait and retry, or continue without the browser.",
-          );
-        }
-        await handBack(entry, left);
-      }
+      const tab = await live.act(target.profile, (entry) => tabOf(entry, target));
       await bringToFront(tab, target.tab);
       return tab;
     },
     async setDriver(target, driver) {
-      const entry = live.get(target.profile);
-      if (!entry) return;
-      const released = entry.driver === "human" && driver === "agent";
-      entry.driver = driver;
-      if (driver === "human") entry.lastActivity = clock.now();
-      if (!released) return;
+      if (driver === "human") {
+        live.takeOver(target.profile);
+        return;
+      }
       // The owner may have opened or switched tabs while driving; the agent
       // they hand back to continues from whichever tab they left in front.
-      entry.front = undefined;
-      const tab = entry.tabs.get(target.tab);
-      if (tab) {
-        await tab.adoptActiveTab?.().catch(() => {});
-        entry.front = target.tab;
-      }
-      release(entry);
-    },
-    async close(target, { wipeProfile = false } = {}) {
-      const { profile } = target;
-      const done = (async () => {
-        const pending = opening.get(profile);
-        if (pending) {
-          pending.cancel();
-          await pending.promise.catch(() => undefined);
+      await live.handBack(target.profile, async (entry) => {
+        entry.front = undefined;
+        const tab = entry.tabs.get(target.tab);
+        if (tab) {
+          await tab.adoptActiveTab?.().catch(() => {});
+          entry.front = target.tab;
         }
-        const entry = live.get(profile);
-        if (entry) await closeEntry(profile, entry);
-        openErrors.delete(profile);
-        if (wipeProfile) await wipe(profile);
-      })();
-      const settled = done.catch(() => undefined);
-      closing.set(profile, settled);
-      try {
-        await done;
-      } finally {
-        if (closing.get(profile) === settled) closing.delete(profile);
-      }
+      });
     },
+    close: (target, { wipeProfile = false } = {}) =>
+      live.close(target.profile, { wipe: wipeProfile }),
     async closeTab(target) {
-      const entry = live.get(target.profile);
+      const entry = live.peek(target.profile);
       const tab = entry?.tabs.get(target.tab);
       if (!entry || !tab) return;
       entry.tabs.delete(target.tab);
       if (entry.front === target.tab) entry.front = undefined;
       if (entry.tabs.size === 0) {
-        await closeEntry(target.profile, entry);
+        await live.dispose(target.profile, entry);
         return;
       }
       // A transport without openTab shares one tab between agents: keep it.
@@ -562,25 +401,14 @@ export function createBrowserSessions(options: BrowserSessionsOptions = {}): Bro
       }
       await tab.close().catch(() => undefined);
     },
-    async closeAll() {
-      for (const pending of opening.values()) pending.cancel();
-      await Promise.allSettled([...opening.values()].map((pending) => pending.promise));
-      const entries = [...live.entries()];
-      live.clear();
-      await Promise.allSettled(entries.map(([, entry]) => closeEntry("", entry)));
-      openErrors.clear();
-      if (sweeper !== undefined) {
-        clock.clearInterval(sweeper);
-        sweeper = undefined;
-      }
-    },
+    closeAll: () => live.closeAll(),
     async fillSecret(target, fill) {
-      const tab = live.get(target.profile)?.tabs.get(target.tab);
+      const tab = live.peek(target.profile)?.tabs.get(target.tab);
       if (!tab?.fillSecret) throw new Error("The bot's browser is not open any more.");
       return tab.fillSecret(fill);
     },
     async tabOrigin(target) {
-      const tab = live.get(target.profile)?.tabs.get(target.tab);
+      const tab = live.peek(target.profile)?.tabs.get(target.tab);
       return tab?.origin?.().catch(() => undefined);
     },
   };
