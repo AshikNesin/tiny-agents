@@ -144,6 +144,16 @@ export const clientMessageSchema = z.discriminatedUnion("type", [
   z.strictObject({ type: z.literal("abort"), sessionId: z.string().min(1) }),
   /** Claude Code's own model list for this login; answers `{ models: ClaudeCodeModel[] }`. */
   z.strictObject({ type: z.literal("models"), requestId: z.string().min(1).max(100) }),
+  /**
+   * A proxied call still waits on the owner (an approval, a Question, a
+   * credential request): its result timer starts over. The app sends it
+   * while the call waits, so the timeout only ends calls the app forgot.
+   */
+  z.strictObject({
+    type: z.literal("tool_waiting"),
+    sessionId: z.string().min(1),
+    toolUseId: z.string().min(1),
+  }),
   z.strictObject({
     type: z.literal("tool_result"),
     sessionId: z.string().min(1),

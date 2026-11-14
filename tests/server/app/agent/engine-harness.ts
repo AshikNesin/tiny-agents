@@ -3,7 +3,8 @@
  * on the faux model, the Claude plan engine on a fake worker socket (no
  * sandbox, no Claude Code, no network). The script calls the tool a message
  * names ("send_email ana@x.dev") and reports its result as
- * `RESULT:<text>`; any other message is echoed as `Echo: <text>`.
+ * `RESULT:<text>`; `silent` gets a reply with nothing in it; any other
+ * message is echoed as `Echo: <text>`.
  */
 import { Type, type Context as PiContext, type JsonObject } from "@earendil-works/pi-ai";
 import { until } from "../../fixtures/until";
@@ -207,6 +208,9 @@ function contentText(content: unknown): string {
     .join("");
 }
 
+/** The message the script answers with an empty reply: no text, no tool call, no error. */
+export const SILENT = "silent";
+
 /** The script on pi's faux model. */
 function piScript(context: PiContext) {
   const last = context.messages.at(-1);
@@ -219,6 +223,7 @@ function piScript(context: PiContext) {
       .filter((message) => message.role === "user")
       .map((message) => contentText(message.content))
       .findLast(Boolean) ?? "";
+  if (said === SILENT) return fauxAssistantMessage([]);
   const request = toolRequest(said);
   if (!request) return fauxAssistantMessage([fauxText(`Echo: ${said}`)]);
   return {
@@ -235,9 +240,13 @@ interface FakeClaudeWorker {
   locator: ClaudeWorkerLocator;
   connect: (url: string, token: string) => WebSocketLike;
   /** Every turn the engine sent, as the worker received it. */
-  turns: { sessionId: string; text: string; tools: string[] }[];
+  turns: { sessionId: string; text: string; tools: string[]; resume?: string }[];
   /** Every tool result the engine sent back (what Claude would read). */
   results: { toolUseId: string; content: string; isError?: boolean }[];
+  /** Calls the engine said still wait on the owner (`tool_waiting`), by tool_use_id. */
+  waiting: string[];
+  /** Turns the worker ended (published `turn_end`), by turn id. */
+  ended: string[];
   /** Hold the next turns until `release()`: the conversation stays busy. */
   hold(): void;
   release(): void;
@@ -249,6 +258,8 @@ interface FakeClaudeWorker {
 function fakeClaudeWorker(): FakeClaudeWorker {
   const turns: FakeClaudeWorker["turns"] = [];
   const results: FakeClaudeWorker["results"] = [];
+  const waitingCalls: string[] = [];
+  const ended: string[] = [];
   const waiting = new Map<string, (content: string) => void>();
   const seq = new Map<string, number>();
   let held: (() => void)[] | undefined;
@@ -267,16 +278,24 @@ function fakeClaudeWorker(): FakeClaudeWorker {
     turnId: string;
     text: string;
     tools?: { name: string }[];
+    resume?: string;
   }) => {
     const { sessionId, turnId } = message;
     const started = boot;
-    turns.push({ sessionId, text: message.text, tools: (message.tools ?? []).map((t) => t.name) });
+    turns.push({
+      sessionId,
+      text: message.text,
+      tools: (message.tools ?? []).map((t) => t.name),
+      ...(message.resume ? { resume: message.resume } : {}),
+    });
     if (held) await new Promise<void>((resolve) => held?.push(resolve));
     // A restart while the turn was held: it is gone with the old worker.
     if (boot !== started) return;
     publish(sessionId, { type: "session", claudeSessionId: `claude-${sessionId}` });
     const request = toolRequest(message.text);
-    if (!request) {
+    if (message.text === SILENT) {
+      // Claude ends the turn without saying anything.
+    } else if (!request) {
       publish(sessionId, { type: "text", turnId, text: `Echo: ${message.text}` });
     } else {
       const toolUseId = `toolu_${++nextTool}`;
@@ -291,6 +310,7 @@ function fakeClaudeWorker(): FakeClaudeWorker {
       publish(sessionId, { type: "text", turnId, text: `RESULT:${await result}` });
     }
     publish(sessionId, { type: "turn_end", turnId, stopReason: "end_turn" });
+    ended.push(turnId);
   };
 
   const connect = (): WebSocketLike => {
@@ -317,6 +337,7 @@ function fakeClaudeWorker(): FakeClaudeWorker {
             JSON.stringify({ type: "reply", requestId: message.requestId, ok: true, result }),
           );
         }
+        if (message.type === "tool_waiting") waitingCalls.push(String(message.toolUseId));
         if (message.type === "tool_result") {
           results.push({
             toolUseId: String(message.toolUseId),
@@ -357,6 +378,8 @@ function fakeClaudeWorker(): FakeClaudeWorker {
     connect,
     turns,
     results,
+    waiting: waitingCalls,
+    ended,
     hold: () => {
       held ??= [];
     },
@@ -383,10 +406,7 @@ export interface EngineUnderTest {
   worker: FakeClaudeWorker;
   /** The model id that selects this engine. */
   modelId: string;
-  /**
-   * Send a message. pi admits it durably and returns; the Claude plan's
-   * submit runs the whole turn, so this does not wait for it.
-   */
+  /** Send a message: both engines admit it durably and return before the reply. */
   send(ref: ConversationRef, input: Parameters<AgentRuntime["submit"]>[1]): Promise<void>;
 }
 
@@ -409,13 +429,7 @@ export async function openEngine(
     runtime,
     worker,
     modelId: kind === "pi" ? TEST_MODEL : CLAUDE_MODEL,
-    send: async (ref, input) => {
-      const submitted = runtime.submit(ref, input);
-      if (kind === "pi") return submitted;
-      submitted.catch((error: unknown) => {
-        throw error;
-      });
-    },
+    send: (ref, input) => runtime.submit(ref, input),
   };
 }
 

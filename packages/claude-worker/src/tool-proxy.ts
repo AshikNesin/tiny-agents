@@ -57,14 +57,29 @@ export class ToolProxy {
       });
     }
     return new Promise((resolve) => {
-      const clear = this.arm(() => {
-        this.settle(toolUseId, {
-          content: `Tool timed out after ${this.timeoutMs}ms without a result.`,
-          isError: true,
-        });
-      }, this.timeoutMs);
-      this.waiters.set(toolUseId, { resolve, clear });
+      this.waiters.set(toolUseId, { resolve, clear: this.armTimeout(toolUseId) });
     });
+  }
+
+  /**
+   * Start a waiting call's timer over (the client says it is still waiting
+   * on its owner). False when the call is not waiting.
+   */
+  extend(toolUseId: string): boolean {
+    const waiter = this.waiters.get(toolUseId);
+    if (!waiter) return false;
+    waiter.clear();
+    waiter.clear = this.armTimeout(toolUseId);
+    return true;
+  }
+
+  private armTimeout(toolUseId: string): () => void {
+    return this.arm(() => {
+      this.settle(toolUseId, {
+        content: `Tool timed out after ${this.timeoutMs}ms without a result.`,
+        isError: true,
+      });
+    }, this.timeoutMs);
   }
 
   /**

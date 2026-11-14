@@ -11,9 +11,12 @@ import {
   ClaudeWorkerClient,
   type WebSocketLike,
 } from "../../../../packages/agent/src/engines/claude-code/client";
-import { WORKER_RESTARTED } from "../../../../packages/agent/src/engines/claude-code/engine";
+import {
+  OWNER_WAIT_KEEPALIVE_MS,
+  WORKER_RESTARTED,
+} from "../../../../packages/agent/src/engines/claude-code/engine";
 import type { ChatMessage } from "../../../../packages/agent/src/types";
-import { mailCapability, openEngine } from "./engine-harness";
+import { awaitingApproval, mailCapability, openEngine, watch } from "./engine-harness";
 import {
   DEFAULT_TIMINGS,
   OverrideRefusal,
@@ -33,6 +36,7 @@ import {
   type ClaudeSdkModule,
   type QueryFactory,
   type SdkQueryOptions,
+  type SessionEvent,
   type Timings,
   type WorkerMessage,
 } from "../../../../packages/claude-worker/src/index";
@@ -175,6 +179,132 @@ describe("tool proxy, caps, eviction", () => {
     expect(result.isError).toBe(true);
     expect(result.content).toMatch(/120000ms/);
     expect(proxy.settle("toolu_1", { content: "late" })).toBe(false);
+  });
+
+  // Register C3: a call waiting on the owner outlives the 120s timer while the app says so.
+  it("starts a waiting call's timer over when the app says it still waits", async () => {
+    const timers: { ms: number; cleared: boolean }[] = [];
+    const proxy = new ToolProxy(120_000, (_fn, ms) => {
+      const timer = { ms, cleared: false };
+      timers.push(timer);
+      return () => {
+        timer.cleared = true;
+      };
+    });
+    const pending = proxy.wait("toolu_1");
+    expect(proxy.extend("toolu_1")).toBe(true);
+    expect(proxy.extend("toolu_1")).toBe(true);
+    expect(timers).toEqual([
+      { ms: 120_000, cleared: true },
+      { ms: 120_000, cleared: true },
+      { ms: 120_000, cleared: false },
+    ]);
+    expect(proxy.settle("toolu_1", { content: "approved and sent" })).toBe(true);
+    expect(await pending).toEqual({ content: "approved and sent" });
+    expect(timers.at(-1)?.cleared).toBe(true);
+    expect(proxy.extend("toolu_1")).toBe(false);
+    expect(proxy.extend("toolu_unknown")).toBe(false);
+  });
+
+  // Register C23: Stop ends the turn and the Claude process with it.
+  it("stops the query when a turn is aborted, so nothing of it runs later", async () => {
+    const signals: AbortSignal[] = [];
+    const factory: QueryFactory = async (ctx) => {
+      signals.push(ctx.signal);
+      for await (const turn of ctx.turns) {
+        ctx.publish({ type: "text", turnId: turn.turnId, text: "working" });
+        await new Promise<void>((resolve) =>
+          ctx.signal.addEventListener("abort", () => resolve(), { once: true }),
+        );
+        // A query that kept going would say more and end the turn itself.
+        ctx.publish({ type: "text", turnId: turn.turnId, text: "still going" });
+        ctx.publish({ type: "turn_end", turnId: turn.turnId, stopReason: "end_turn" });
+      }
+    };
+    const book = new SessionBook(factory, DEFAULT_TIMINGS);
+    const open = { sessionId: "s", model: "claude-sonnet-4-6", tools: [] as const };
+    const running = book.runTurn(open, { turnId: "t1", text: "go" }, 0);
+    await until(() => book.get("s")?.log.replay(0).length === 1, "the turn's first text");
+    const session = book.get("s")!;
+    session.abortTurn();
+    await running;
+    expect(signals[0]?.aborted).toBe(true);
+    expect(session.alive).toBe(false);
+    expect(book.runningTurns).toBe(0);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    const events = session.log.replay(0).map((item) => item.event);
+    expect(events).toEqual<SessionEvent[]>([
+      { type: "text", turnId: "t1", text: "working" },
+      { type: "turn_end", turnId: "t1", stopReason: "aborted" },
+    ]);
+
+    // The next turn starts a new process that resumes the session.
+    const next = book.runTurn(open, { turnId: "t2", text: "again" }, 1);
+    await until(() => signals.length === 2, "a new process");
+    expect(signals[1]?.aborted).toBe(false);
+    book.get("s")!.abortTurn();
+    await next;
+  });
+
+  it("closes the Claude Code query when its turn is stopped", async () => {
+    let closed = 0;
+    const sdk: ClaudeSdkModule = {
+      query: (args) =>
+        Object.assign(
+          (async function* () {
+            for await (const _ of args.prompt) {
+              yield { type: "assistant", message: { content: [{ type: "text", text: "on it" }] } };
+              await new Promise(() => undefined);
+            }
+          })(),
+          {
+            close: () => {
+              closed += 1;
+            },
+          },
+        ),
+      tool: (name) => ({ name }),
+      createSdkMcpServer: (opts) => ({ name: opts.name, toolCount: opts.tools.length }),
+    };
+    const abort = new AbortController();
+    const events: SessionEvent[] = [];
+    void createSdkQueryFactory(sdk, { PATH: "/usr/bin" })({
+      model: "claude-sonnet-4-6",
+      tools: [],
+      signal: abort.signal,
+      turns: (async function* () {
+        yield { turnId: "t", text: "browse" };
+        await new Promise(() => undefined);
+      })(),
+      publish: (event) => events.push(event),
+      callTool: async () => ({ content: "" }),
+      setClaudeSessionId: () => undefined,
+    });
+    await until(() => events.length === 1, "the turn's text");
+    expect(closed).toBe(0);
+    abort.abort();
+    expect(closed).toBe(1);
+  });
+
+  // Register C23: a usage pause ends the turn for the worker too.
+  it("resolves the turn on a usage pause, so the next turn is not refused as busy", async () => {
+    const factory: QueryFactory = async (ctx) => {
+      for await (const turn of ctx.turns) {
+        ctx.publish({ type: "usage_pause", turnId: turn.turnId, reason: "rejected" });
+        // Claude Code goes quiet; the process does not end by itself.
+        await new Promise(() => undefined);
+      }
+    };
+    const book = new SessionBook(factory, DEFAULT_TIMINGS);
+    const open = { sessionId: "s", model: "claude-sonnet-4-6", tools: [] as const };
+    const session = await book.runTurn(open, { turnId: "t1", text: "hi" }, 0);
+    expect(book.runningTurns).toBe(0);
+    expect(session.log.replay(0).map((item) => item.event)).toEqual([
+      { type: "usage_pause", turnId: "t1", reason: "rejected" },
+      expect.objectContaining({ type: "turn_end", turnId: "t1", stopReason: "paused" }),
+    ]);
+    await book.runTurn(open, { turnId: "t2", text: "again" }, 1);
+    expect(book.runningTurns).toBe(0);
   });
 
   it("evicts idle processes and recycles sessions older than the max age", async () => {
@@ -461,6 +591,49 @@ describe("localhost worker", () => {
     expect(executions).toEqual(["toolu_once"]);
   });
 
+  it("starts the 120s timer over on the app's tool_waiting", async () => {
+    const armed: number[] = [];
+    let cleared = 0;
+    const query: QueryFactory = async (ctx) => {
+      for await (const turn of ctx.turns) {
+        await ctx.callTool({
+          turnId: turn.turnId,
+          toolUseId: "toolu_ask",
+          name: "send_email",
+          input: {},
+        });
+      }
+    };
+    const server = await createClaudeWorkerServer({
+      token: TOKEN,
+      query,
+      authStatus: subscribed,
+      env: {},
+      timings: { ...fastTimings, toolResultTimeoutMs: 120_000 },
+      arm: (_fn, ms) => {
+        armed.push(ms);
+        return () => {
+          cleared += 1;
+        };
+      },
+      port: 0,
+    });
+    servers.push(server);
+    const { client } = botClient(server.url, { onTool: () => new Promise(() => undefined) });
+    client.track("4");
+    client.send({
+      type: "turn",
+      sessionId: "4",
+      turnId: "ask",
+      text: "mail ana",
+      model: "claude-sonnet-4-6",
+    });
+    await vi.waitFor(() => expect(armed).toEqual([120_000]));
+    client.send({ type: "tool_waiting", sessionId: "4", toolUseId: "toolu_ask" });
+    await vi.waitFor(() => expect(armed).toEqual([120_000, 120_000]));
+    expect(cleared).toBe(1);
+  });
+
   it("returns an error tool result when the 120s timer fires", async () => {
     let fire: (() => void) | undefined;
     const query: QueryFactory = async (ctx) => {
@@ -567,6 +740,34 @@ describe("the worker's side of the envelope", () => {
     });
     expect(frames[1]).toMatchObject({ type: "event", sessionId: "5", seq: 2 });
   });
+});
+
+describe("bot engine while a call waits on the owner", () => {
+  const runtimes: { close: () => Promise<void> }[] = [];
+  afterEach(async () => {
+    await Promise.allSettled(runtimes.splice(0).map((runtime) => runtime.close()));
+  });
+
+  // Register C3: the app keeps the worker's tool timer from ending an Owner wait.
+  it("tells the worker the call still waits, well inside its tool timeout", async () => {
+    expect(OWNER_WAIT_KEEPALIVE_MS * 3).toBeLessThan(DEFAULT_TIMINGS.toolResultTimeoutMs);
+    const engine = await openEngine("claude-code", { capabilities: [mailCapability([])] });
+    runtimes.push(engine.runtime);
+    const ref = await engine.runtime.createConversation({
+      modelId: engine.modelId,
+      systemPrompt: "Be brief.",
+      capabilities: { enabled: ["mail"], permissions: {} },
+    });
+    const chat = await watch(engine.runtime, ref);
+    await engine.send(ref, { requestId: "r1", text: "send_email ana@x.dev" });
+    const waiting = await awaitingApproval(chat, "send_email");
+    await until(() => engine.worker.waiting.length > 0, "the first tool_waiting");
+    expect(engine.worker.waiting).toEqual(["toolu_1"]);
+    await engine.runtime.decideApproval(ref, waiting.taskId!, "approved");
+    await until(() => engine.worker.ended.includes("r1"), "the turn to end");
+    expect(engine.worker.waiting).toEqual(["toolu_1"]);
+    await chat.stop();
+  }, 15_000);
 });
 
 describe("bot engine on a worker restart", () => {

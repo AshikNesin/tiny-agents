@@ -54,7 +54,7 @@ export interface EngineSubmission {
   peer?: ChatMessage["peer"];
   /** Who sent it, in a shared chat (`text` already carries their name for the model). */
   author?: ChatMessage["author"];
-  /** Placement while a reply runs: "steer" joins it, "followUp" (default) waits. */
+  /** Placement while a reply runs: "steer" joins it (pi; the Claude plan queues it too), "followUp" (default) waits. */
   whenBusy?: "steer" | "followUp";
 }
 
