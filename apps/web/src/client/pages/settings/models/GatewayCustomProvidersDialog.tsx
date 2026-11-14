@@ -19,7 +19,7 @@ import { Text } from "@groot/ui/typography";
 import { useStepUp } from "../../../components/vault/StepUp";
 import { errorMessage } from "../../../lib/errors";
 import type { Account, DiscoveredModel } from "../../../../shared/api/models";
-import { modelsApi } from "../../../lib/models-api";
+import { useModelDiscovery, useModelMutations } from "../../../queries/models";
 import { ModelChecklist } from "./AddModelsDialog";
 import {
   cleanCustomProviders,
@@ -56,6 +56,8 @@ export function GatewayCustomProvidersDialog({
   onChanged: () => void;
 }) {
   const { run } = useStepUp();
+  const { updateConnection, addModel } = useModelMutations();
+  const { refresh } = useModelDiscovery();
   const [rows, setRows] = useState<CustomProvider[]>(() => savedProviders(account));
   const [found, setFound] = useState<DiscoveredModel[] | null>(null);
   const [chosen, setChosen] = useState<Set<string>>(new Set());
@@ -66,18 +68,21 @@ export function GatewayCustomProvidersDialog({
     try {
       const customProviders = cleanCustomProviders(rows);
       const saved = await run(() =>
-        modelsApi.updateConnection(account.id, {
-          settings: {
-            accountId: String(account.settings.accountId ?? ""),
-            gatewayId: String(account.settings.gatewayId ?? ""),
-            customProviders,
+        updateConnection.mutateAsync({
+          id: account.id,
+          input: {
+            settings: {
+              accountId: String(account.settings.accountId ?? ""),
+              gatewayId: String(account.settings.gatewayId ?? ""),
+              customProviders,
+            },
           },
         }),
       );
       if (!saved) return;
       onChanged();
       // What the custom providers list that the account doesn't have yet.
-      const { available } = await modelsApi.refresh(account.id);
+      const { available } = await refresh.mutateAsync(account.id);
       const slugs = customProviders.map((p) => `${p.slug}/`);
       const custom = available.filter((m) => slugs.some((slug) => m.upstreamId.startsWith(slug)));
       if (custom.length === 0) {
@@ -101,7 +106,9 @@ export function GatewayCustomProvidersDialog({
     setBusy(true);
     try {
       await Promise.all(
-        [...chosen].map((upstreamId) => modelsApi.addModel(account.id, { upstreamId })),
+        [...chosen].map((upstreamId) =>
+          addModel.mutateAsync({ accountId: account.id, input: { upstreamId } }),
+        ),
       );
       toast.success(`Added ${chosen.size} model${chosen.size === 1 ? "" : "s"}`);
       onChanged();

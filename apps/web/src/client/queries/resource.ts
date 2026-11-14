@@ -2,16 +2,18 @@
  * What every request/response resource on the client shares (rewrite §4.5:
  * React Query for those, Zustand only for the live stores). The Tasks,
  * Routines, Skills and Memory pages moved here from hand-rolled fetching in
- * rewrite step 5.2 and kept what a user saw (the table in
- * docs/rewrite/README.md §4.5), so the shell's query defaults are overridden
- * for them.
+ * rewrite step 5.2, and Connections, Vault and Models in 5.3; each kept what a
+ * user saw (the tables in docs/rewrite/README.md §4.5), so the shell's query
+ * defaults are overridden for them.
  */
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import {
   hashKey,
+  useMutation,
   useQuery,
   useQueryClient,
   type QueryKey,
+  type UseQueryOptions,
   type UseQueryResult,
 } from "@tanstack/react-query";
 import { errorMessage } from "../lib/errors";
@@ -45,13 +47,25 @@ export interface Resource<T> {
   refresh: () => Promise<void>;
 }
 
+/**
+ * What a page may change about how its resource lands: `structuralSharing:
+ * false` makes every answer a new object even when nothing changed, and
+ * `placeholderData: keepPreviousData` keeps the last key's answer on screen
+ * until the next key's lands.
+ */
+export type ResourceOptions<T> = Pick<
+  UseQueryOptions<T, Error, T, QueryKey>,
+  "structuralSharing" | "placeholderData"
+>;
+
 /** Read `queryKey` with `RESOURCE_QUERY`; a failure is worded with `fallback`. */
 export function useResource<T>(
   queryKey: QueryKey,
   queryFn: () => Promise<T>,
   fallback: string,
+  options: ResourceOptions<T> = {},
 ): Resource<T> {
-  const query = useQuery({ queryKey, queryFn, ...RESOURCE_QUERY });
+  const query = useQuery({ queryKey, queryFn, ...RESOURCE_QUERY, ...options });
   return {
     data: query.data ?? null,
     loadError: useLoadError(query, queryKey, fallback),
@@ -61,14 +75,21 @@ export function useResource<T>(
 
 /**
  * Refetch the resource under `queryKey` now. A fetch still in flight is
- * dropped first, so the answer to the newest request is the one shown.
+ * dropped first, so the answer to the newest request is the one shown. The
+ * same function while the key stays the same, so a page can subscribe it to
+ * an event.
  */
 function useRefresh(queryKey: QueryKey): () => Promise<void> {
   const client = useQueryClient();
-  return async () => {
-    await client.cancelQueries({ queryKey });
-    await client.invalidateQueries({ queryKey });
-  };
+  const hash = hashKey(queryKey);
+  return useCallback(
+    async () => {
+      await client.cancelQueries({ queryKey });
+      await client.invalidateQueries({ queryKey });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the key is compared by its hash
+    [client, hash],
+  );
 }
 
 /**
@@ -90,4 +111,28 @@ function useLoadError(
     setKept(error ? { hash, error } : null);
   }
   return error ? errorMessage(error, fallback) : null;
+}
+
+/**
+ * A write whose request or answer carries a secret (a key, a password, a
+ * vault value, a revealed value). It runs as a `RESOURCE_MUTATION`, and once
+ * it answers it is reset and, with `gcTime: 0`, dropped from the mutation
+ * cache, so what it sent and got lives only where the caller keeps it.
+ * Called like a mutation: `await write.mutateAsync(variables)`.
+ */
+export function useSecretMutation<TVariables, TData>(
+  mutationFn: (variables: TVariables) => Promise<TData>,
+): { mutateAsync: (variables: TVariables) => Promise<TData> } {
+  const { mutateAsync, reset } = useMutation({ mutationFn, ...RESOURCE_MUTATION, gcTime: 0 });
+  const run = useCallback(
+    async (variables: TVariables) => {
+      try {
+        return await mutateAsync(variables);
+      } finally {
+        reset();
+      }
+    },
+    [mutateAsync, reset],
+  );
+  return { mutateAsync: run };
 }

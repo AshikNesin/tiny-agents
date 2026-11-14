@@ -3,7 +3,7 @@
  * a code or pay on a page. What you type goes to the server, straight into
  * the bot's page on the origin shown here, and never to the bot.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Lock, MonitorPlay, ShieldAlert } from "lucide-react";
@@ -16,8 +16,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { monoClass } from "@groot/ui/typography";
 import { cn } from "@groot/ui/lib/utils";
 import { PageLayout } from "@groot/shell/components/layout/PageLayout";
-import type { CredentialRequestView } from "../../../shared/api/vault";
-import { apiError, vaultApi } from "../../lib/vault-api";
+import { apiError } from "../../lib/vault-api";
+import { useCredentialRequest, useVaultMutations } from "../../queries/vault";
 import { SecretInput } from "../../components/vault/SecretInput";
 import { Switch } from "../../components/ui/switch";
 
@@ -38,24 +38,11 @@ function minutesLeft(expiresAt: number): string {
 
 export function CredentialRequestSheet({ taskId }: { taskId: number }) {
   const navigate = useNavigate();
-  const [request, setRequest] = useState<CredentialRequestView | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const { data: request, loadError } = useCredentialRequest(taskId);
+  const mutations = useVaultMutations();
   const [values, setValues] = useState<Record<string, string>>({});
   const [save, setSave] = useState(true);
   const [busy, setBusy] = useState(false);
-
-  const load = useCallback(async () => {
-    try {
-      setRequest(await vaultApi.request(taskId));
-      setLoadError(null);
-    } catch (error) {
-      setLoadError(apiError(error, "This request is no longer open"));
-    }
-  }, [taskId]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
 
   const done = () => void navigate(request?.bot ? `/chats/${request.bot.id}` : "/chats");
 
@@ -63,7 +50,11 @@ export function CredentialRequestSheet({ taskId }: { taskId: number }) {
     if (!request) return;
     setBusy(true);
     try {
-      const result = await vaultApi.submitRequest(taskId, values, save && canSave);
+      const result = await mutations.submitRequest.mutateAsync({
+        taskId,
+        values,
+        save: save && canSave,
+      });
       setValues({});
       toast.success(
         result.savedHandle ? `Filled and saved as ${result.savedHandle}` : "Filled into the page",
@@ -79,7 +70,7 @@ export function CredentialRequestSheet({ taskId }: { taskId: number }) {
   const cancel = async () => {
     setBusy(true);
     try {
-      await vaultApi.cancelRequest(taskId);
+      await mutations.cancelRequest.mutateAsync(taskId);
       done();
     } catch (error) {
       toast.error(apiError(error, "Couldn't cancel"));

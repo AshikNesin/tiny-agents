@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Copy, Eye, EyeOff, Pencil, Plus, Trash2, TriangleAlert } from "lucide-react";
@@ -29,8 +29,8 @@ import {
   FIELDS_BY_KIND,
   KIND_LABEL,
   SECRET_FIELDS,
-  vaultApi,
 } from "../../lib/vault-api";
+import { useVaultItem, useVaultMutations, useVaultReveal } from "../../queries/vault";
 import { PolicyForm } from "../../components/vault/PolicyForm";
 import { useStepUp } from "../../components/vault/StepUp";
 import { Switch } from "../../components/ui/switch";
@@ -97,6 +97,8 @@ function FieldRow({
   onEdit: () => void;
 }) {
   const { run } = useStepUp();
+  const revealValue = useVaultReveal();
+  // The revealed value lives here only: never in a cache, gone with the row.
   const [value, setValue] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -108,7 +110,7 @@ function FieldRow({
       return;
     }
     try {
-      const result = await run(() => vaultApi.reveal(handle, field, "reveal"));
+      const result = await run(() => revealValue.mutateAsync({ handle, field, purpose: "reveal" }));
       if (!result) return;
       setValue(result.value);
       clearTimeout(timer.current);
@@ -120,7 +122,7 @@ function FieldRow({
 
   const copy = async () => {
     try {
-      const result = await run(() => vaultApi.reveal(handle, field, "copy"));
+      const result = await run(() => revealValue.mutateAsync({ handle, field, purpose: "copy" }));
       if (!result) return;
       await navigator.clipboard.writeText(result.value);
       toast.success(`${FIELD_LABEL[field]} copied; it's cleared from the clipboard in 30 seconds`);
@@ -165,33 +167,26 @@ function FieldRow({
 export function VaultItemDetail({ handle }: { handle: string }) {
   const navigate = useNavigate();
   const { run } = useStepUp();
-  const [detail, setDetail] = useState<Detail | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const { data: detail, loadError, refresh } = useVaultItem(handle);
+  const mutations = useVaultMutations();
   const [policy, setPolicy] = useState<VaultPolicy | null>(null);
+  // Each answer that lands resets the policy form to it.
+  const [policyFrom, setPolicyFrom] = useState<Detail | null>(null);
+  if (detail && detail !== policyFrom) {
+    setPolicyFrom(detail);
+    setPolicy(policyOf(detail));
+  }
   const [editing, setEditing] = useState<ValueField | null>(null);
   const [draft, setDraft] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const refresh = useCallback(async () => {
-    try {
-      const next = await vaultApi.detail(handle);
-      setDetail(next);
-      setPolicy(policyOf(next));
-      setLoadError(null);
-    } catch (error) {
-      setLoadError(apiError(error, "Failed to load the item"));
-    }
-  }, [handle]);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
-
   const savePolicy = async (next: VaultPolicy) => {
     setBusy(true);
     try {
-      const item = await run(() => vaultApi.update(handle, { policy: next }));
+      const item = await run(() =>
+        mutations.update.mutateAsync({ handle, input: { policy: next } }),
+      );
       if (!item) return;
       toast.success("Saved");
       if (item.handle !== handle) void navigate(`/vault/items/${item.handle}`, { replace: true });
@@ -207,7 +202,9 @@ export function VaultItemDetail({ handle }: { handle: string }) {
     if (!editing) return;
     setBusy(true);
     try {
-      const item = await run(() => vaultApi.update(handle, { values: { [editing]: draft } }));
+      const item = await run(() =>
+        mutations.update.mutateAsync({ handle, input: { values: { [editing]: draft } } }),
+      );
       if (!item) return;
       toast.success(`${FIELD_LABEL[editing]} saved`);
       setEditing(null);
@@ -223,7 +220,7 @@ export function VaultItemDetail({ handle }: { handle: string }) {
   const remove = async (purge: boolean) => {
     setBusy(true);
     try {
-      const done = await run(() => vaultApi.remove(handle, purge));
+      const done = await run(() => mutations.remove.mutateAsync({ handle, purge }));
       if (done) {
         toast.success(purge ? "Deleted" : "Unlinked");
         void navigate("/vault", { replace: true });

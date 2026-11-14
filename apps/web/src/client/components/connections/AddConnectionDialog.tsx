@@ -15,8 +15,8 @@ import { Input } from "@groot/ui/input";
 import { Label } from "@groot/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@groot/ui/select";
 import type { Connection, ConnectionTestResult } from "../../../shared/api/connections";
-import { connectionsApi } from "../../lib/connections-api";
 import { connectionAuth } from "../../lib/connection-auth";
+import { useConnectionMutations } from "../../queries/connections";
 import { useStepUp } from "../vault/StepUp";
 import { errorMessage } from "./connection-status";
 
@@ -68,6 +68,7 @@ export function AddConnectionDialog({
   const [testError, setTestError] = useState<string | null>(null);
   const [testing, setTesting] = useState(false);
   const [saving, setSaving] = useState(false);
+  const mutations = useConnectionMutations();
 
   useEffect(() => {
     if (open) {
@@ -103,7 +104,7 @@ export function AddConnectionDialog({
     setTestError(null);
     try {
       setTestResult(
-        await connectionsApi.test({
+        await mutations.test.mutateAsync({
           url: form.url.trim(),
           ...(form.authType === "header"
             ? {
@@ -130,7 +131,7 @@ export function AddConnectionDialog({
     if (!canSave) return;
     setSaving(true);
     const created = run(() =>
-      connectionsApi.create({
+      mutations.create.mutateAsync({
         name: form.name.trim(),
         url: form.url.trim(),
         authType: form.authType,
