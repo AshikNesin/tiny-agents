@@ -13,9 +13,9 @@
  * the bot row is updated, so history survives further edits (and deleting a
  * revision never corrupts the current prompt).
  */
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db, bots, promptRevisions } from "../../db";
-import { conversationOwner, isUnattended, type ChatReader } from "./bots.owner";
+import { chatOwner, conversationOwner, isUnattended, type ChatReader } from "./bots.owner";
 import { getAgentRuntime } from "./bots.runtime";
 import type { InstructionsStore } from "@tiny-agents/agent";
 
@@ -24,8 +24,11 @@ export function createInstructionsStore(
 ): InstructionsStore {
   return {
     async read(conversationId) {
+      // The chat's bot only: a routine's conversation reads "" (pinned as is).
+      const owner = await chatOwner(conversationId);
+      if (!owner) return "";
       const bot = await db.query.bots.findFirst({
-        where: eq(bots.conversationId, String(conversationId)),
+        where: and(eq(bots.id, owner.id), eq(bots.conversationId, String(conversationId))),
         columns: { systemPrompt: true },
       });
       return bot?.systemPrompt ?? "";
@@ -42,8 +45,9 @@ export function createInstructionsStore(
       // so a shared chat never changes the prompt (as bot-builder; S1).
       if (owner.bot.shared) return refuse("shared");
 
+      // The bot the owner lookup found, while this is still its chat.
       const bot = await db.query.bots.findFirst({
-        where: eq(bots.conversationId, String(conversationId)),
+        where: and(eq(bots.id, owner.bot.id), eq(bots.conversationId, String(conversationId))),
         columns: { id: true, systemPrompt: true },
       });
       if (!bot) return refuse("disabled");
