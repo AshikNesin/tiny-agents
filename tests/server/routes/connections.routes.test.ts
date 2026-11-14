@@ -5,7 +5,7 @@
  * authorization server.
  */
 import { createServer, type IncomingMessage, type RequestListener, type Server } from "node:http";
-import { fakeCatalog } from "../fixtures";
+import { fakeCatalog, useTestRuntime } from "../fixtures";
 import type { AddressInfo } from "node:net";
 import { getRequestListener } from "@hono/node-server";
 import { Hono } from "hono";
@@ -18,7 +18,6 @@ import {
   setConnectionManagerForTests,
 } from "../../../apps/web/src/server/api/connections/connections.manager";
 import { MCP_DEFER_THRESHOLD } from "../../../packages/agent/src/mcp";
-import { setAgentRuntimeForTests } from "../../../apps/web/src/server/api/bots/bots.runtime";
 import { api, createTestApp, type TestApp } from "../helpers";
 import { authToken, until } from "../fixtures";
 import { issueStepUp } from "../../../apps/web/src/server/api/vault/vault.stepup";
@@ -163,7 +162,7 @@ describe("MCP connections (header auth, streamable http)", () => {
     mcpServer = await startMcpServer();
     installed = new Map();
     configured = [];
-    setAgentRuntimeForTests({
+    useTestRuntime({
       configure: async () => undefined,
       catalog: fakeCatalog(),
       installCapability: (capability: { id: string }) => runtimeCalls.install.push(capability.id),
@@ -186,7 +185,7 @@ describe("MCP connections (header auth, streamable http)", () => {
   afterEach(async () => {
     await manager.close();
     setConnectionManagerForTests(undefined);
-    setAgentRuntimeForTests(undefined as never);
+    useTestRuntime(undefined);
     await new Promise<void>((resolve) => mcpServer.server.close(() => resolve()));
     await db.delete(botConnections);
     await db.delete(connections);
@@ -531,7 +530,7 @@ describe("MCP connection lifecycle (the manager owns it)", () => {
     runtimeCalls = { install: [], uninstall: [] };
     configured = [];
     changes = [];
-    setAgentRuntimeForTests({
+    useTestRuntime({
       configure: async () => undefined,
       catalog: fakeCatalog(),
       installCapability: () => undefined,
@@ -558,7 +557,7 @@ describe("MCP connection lifecycle (the manager owns it)", () => {
   afterEach(async () => {
     await manager.close();
     setConnectionManagerForTests(undefined);
-    setAgentRuntimeForTests(undefined as never);
+    useTestRuntime(undefined);
     await new Promise<void>((resolve) => mcpServer.server.close(() => resolve()));
     await db.delete(botConnections);
     await db.delete(connections);

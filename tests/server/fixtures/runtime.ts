@@ -31,9 +31,9 @@ import { openTestRuntime, type TestRuntimeOptions } from "../../../packages/agen
 import {
   appStoreCapabilities,
   botsCapability,
-  setAgentRuntimeForTests,
 } from "../../../apps/web/src/server/api/bots/bots.runtime";
 import { appEnv } from "../../../apps/web/src/server/env";
+import { installAppForTests } from "../../../apps/web/src/server/app-root";
 
 export { TEST_MODEL } from "../../../packages/agent/src/testing";
 
@@ -65,7 +65,7 @@ export async function openAppRuntime(
   ]) {
     runtime.installCapability(capability);
   }
-  setAgentRuntimeForTests(runtime);
+  useTestRuntime(runtime);
   current = { kind: "real", runtime };
   return runtime;
 }
@@ -392,7 +392,15 @@ export function spyOnRuntime(runtime: AgentRuntime): SpiedRuntime {
 
 /** Make a fake the app's runtime (`getAgentRuntime()`), typed as the runtime it stands in for. */
 export function installFakeRuntime(fake: FakeRuntime = createFakeRuntime()): FakeRuntime {
-  setAgentRuntimeForTests(fake as unknown as AgentRuntime);
+  useTestRuntime(fake as unknown as AgentRuntime);
   current = { kind: "fake", fake };
   return fake;
+}
+
+/**
+ * Make `runtime` the app's (the App root's), as boot would, and mark it
+ * ready. Pass undefined to leave none installed (still marked ready).
+ */
+export function useTestRuntime(runtime: AgentRuntime | undefined): void {
+  installAppForTests({ runtime, runtimeReady: true });
 }

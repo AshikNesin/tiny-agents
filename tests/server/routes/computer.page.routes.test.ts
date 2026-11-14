@@ -5,12 +5,11 @@
  * fake desktop manager.
  */
 import { eq } from "drizzle-orm";
-import { fakeCatalog, fakeModel } from "../fixtures";
+import { fakeCatalog, fakeModel, useTestRuntime } from "../fixtures";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { api, createTestApp } from "../helpers";
 import { authToken } from "../fixtures";
 import { db, bots } from "../../../apps/web/src/server/db";
-import { setAgentRuntimeForTests } from "../../../apps/web/src/server/api/bots/bots.runtime";
 import { setComputerSessionsForTests } from "../../../apps/web/src/server/api/bots/computer.sessions";
 import { resetComputerVncTicketsForTests } from "../../../apps/web/src/server/api/bots/computer.vnc";
 import {
@@ -58,7 +57,7 @@ describe("computer page routes", () => {
   };
 
   beforeEach(async () => {
-    setAgentRuntimeForTests(agentRuntime as never);
+    useTestRuntime(agentRuntime as never);
     fake = fakeComputer();
     sessions = createComputerSessions({ transport: fake.transport, width: 1280, height: 800 });
     setComputerSessionsForTests(sessions);

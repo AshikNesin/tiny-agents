@@ -4,7 +4,7 @@
  * `apps/web/src/server/entry.node.ts` opens the runtime at boot (before the HTTP
  * server accepts requests) and closes it in the graceful-shutdown hook. Route
  * modules read the instance through `getAgentRuntime()`; tests substitute a
- * fake via `setAgentRuntimeForTests()` instead of touching pi-durable.
+ * fake through the App root (`installAppForTests`) instead of touching pi-durable.
  */
 import {
   AgentRuntime,
@@ -68,7 +68,7 @@ import {
   seedFauxModels,
   vaultCredentials,
 } from "../models/models.config";
-import { app, installAppForTests } from "../../app-root";
+import { app } from "../../app-root";
 
 type RuntimeOptions = Parameters<typeof AgentRuntime.open>[0];
 type RuntimeEnv = Readonly<Record<string, string | undefined>>;
@@ -280,11 +280,6 @@ export async function closeAgentRuntime(): Promise<void> {
   const instance = root.runtime;
   root.runtime = undefined;
   await instance?.close();
-}
-
-/** Test seam: install a fake runtime without touching the real store. */
-export function setAgentRuntimeForTests(fake: AgentRuntime): void {
-  installAppForTests({ runtime: fake, runtimeReady: true });
 }
 
 /** A faux bot's ask_owner call on "/ask": a single-choice, a multiple-choice and an open question. */

@@ -6,12 +6,11 @@
  * browser transport.
  */
 import { eq } from "drizzle-orm";
-import { fakeCatalog, fakeModel } from "../fixtures";
+import { fakeCatalog, fakeModel, useTestRuntime } from "../fixtures";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { api, createTestApp } from "../helpers";
 import { authToken } from "../fixtures";
 import { db, bots } from "../../../apps/web/src/server/db";
-import { setAgentRuntimeForTests } from "../../../apps/web/src/server/api/bots/bots.runtime";
 import { setBrowserSessionsForTests } from "../../../apps/web/src/server/api/bots/browser.sessions";
 import {
   redeemBrowserPageVncTicket,
@@ -132,7 +131,7 @@ describe("browser page routes", () => {
   beforeEach(async () => {
     vi.stubEnv("SANDBOX_HOST", "sandbox.test");
     vi.stubEnv("BROWSER_EXECUTABLE_PATH", "");
-    setAgentRuntimeForTests(agentRuntime as never);
+    useTestRuntime(agentRuntime as never);
     useFake(fakeBrowser());
     resetVncTicketsForTests();
     await db.delete(bots);

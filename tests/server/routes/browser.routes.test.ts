@@ -5,10 +5,9 @@
  * toolkit uses).
  */
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
-import { fakeCatalog, fakeModel } from "../fixtures";
+import { fakeCatalog, fakeModel, useTestRuntime } from "../fixtures";
 import { api, createTestApp } from "../helpers";
 import { db, bots } from "../../../apps/web/src/server/db";
-import { setAgentRuntimeForTests } from "../../../apps/web/src/server/api/bots/bots.runtime";
 import { vi } from "vite-plus/test";
 import {
   createBrowserSessions,
@@ -136,7 +135,7 @@ const agentRuntime = {
 
 describe("browser routes", () => {
   beforeEach(() => {
-    setAgentRuntimeForTests(agentRuntime as never);
+    useTestRuntime(agentRuntime as never);
   });
   const app = createTestApp();
   const get = (path: string) => call(app, path);
