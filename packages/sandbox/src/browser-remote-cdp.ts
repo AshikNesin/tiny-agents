@@ -14,8 +14,8 @@ import { createServer, type Server } from "node:net";
 import type { Duplex } from "node:stream";
 import type { BrowserContext, CDPSession, Page } from "playwright-core";
 import { chromium } from "playwright-core";
-import { SandboxTimeoutError } from "../ssh/connection";
-import type { SandboxConnection } from "../ssh/sandbox-connection";
+import { SandboxTimeoutError } from "./ssh/connection";
+import type { SandboxConnection } from "./ssh/sandbox-connection";
 import { pageSession } from "./browser-chromium";
 import {
   installStackCommand,

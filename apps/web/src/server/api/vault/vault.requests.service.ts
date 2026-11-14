@@ -18,8 +18,8 @@ import {
   type AgentRuntime,
   type CredentialField,
   type CredentialRequest,
-  type SecretFillField,
 } from "@tiny-agents/agent";
+import type { SecretFillField } from "@tiny-agents/sandbox/browser";
 import { logger } from "@groot/core/logger";
 import { db, vaultItems } from "../../db";
 import { getBrowserSessions } from "../bots/browser.sessions";

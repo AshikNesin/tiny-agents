@@ -1,9 +1,9 @@
 import { WaitTracker, type AgentRuntime, type BotMessagingStore } from "@tiny-agents/agent";
-import type { BrowserSessions } from "@tiny-agents/agent/browser";
+import type { BrowserSessions } from "@tiny-agents/sandbox/browser";
 import type { ClaudeWorkerLocator } from "@tiny-agents/agent/claude-worker";
-import type { HostKeyStore, SandboxConnection } from "@tiny-agents/agent/sandbox";
-import type { TerminalService } from "@tiny-agents/agent/terminal";
-import type { ComputerSessions } from "@tiny-agents/agent/computer";
+import type { HostKeyStore, SandboxConnection } from "@tiny-agents/sandbox";
+import type { TerminalService } from "@tiny-agents/sandbox/terminal";
+import type { ComputerSessions } from "@tiny-agents/sandbox/computer";
 import type { UpdateStatus } from "../shared/local-updates";
 import type { TurnBudget } from "./api/bots/bots.messaging";
 import type { BotChatEvent } from "./api/bots/bots.events";

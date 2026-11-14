@@ -21,7 +21,7 @@ import {
   type SessionName,
   type TerminalSessionRow,
   type TerminalStatus,
-} from "@tiny-agents/agent/terminal";
+} from "@tiny-agents/sandbox/terminal";
 import { issueTerminalTicket } from "./terminal.ws";
 import { getTerminalService } from "./terminal.instance";
 

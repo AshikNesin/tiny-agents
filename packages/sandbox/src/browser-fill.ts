@@ -11,8 +11,8 @@
  * heuristics.
  */
 import type { Frame, Page } from "playwright-core";
-import type { SecretValue } from "../vault";
-import { VaultTargetMovedError } from "../vault-target";
+import type { SecretValue } from "./vault-target";
+import { VaultTargetMovedError } from "./vault-target";
 import { assertRefShape } from "./browser-guard";
 
 export interface SecretFillField {

@@ -138,9 +138,16 @@ export async function openTestRuntime(options: TestRuntimeOptions): Promise<Agen
     settings: { retry: { enabled: false }, ...rest.settings },
   });
 }
-/** In-process SSH server (issue #19 sandbox tests): none-auth, canned exec, real SFTP. */
+// Moved to @tiny-agents/sandbox/testing (rewrite step 3.4). Re-exported so
+// importers of this subpath keep compiling; nothing in this repo imports them
+// from here.
 export {
+  /** @deprecated Import from `@tiny-agents/sandbox/testing`. */
   startFakeSandboxServer,
-  type FakeSandboxServer,
-  type ExecHandler,
-} from "./testing-ssh-server";
+} from "@tiny-agents/sandbox/testing";
+export type {
+  /** @deprecated Import from `@tiny-agents/sandbox/testing`. */
+  ExecHandler,
+  /** @deprecated Import from `@tiny-agents/sandbox/testing`. */
+  FakeSandboxServer,
+} from "@tiny-agents/sandbox/testing";

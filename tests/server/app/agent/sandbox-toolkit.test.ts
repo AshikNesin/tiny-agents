@@ -9,12 +9,12 @@ import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { ToolExecutionApi, ToolExecutionResult } from "@earendil-works/pi-durable";
 import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
 import { createSandboxToolkit } from "../../../../packages/agent/src/toolkits/sandbox";
-import { SandboxTimeoutError } from "../../../../packages/agent/src/ssh/connection";
+import { SandboxTimeoutError } from "../../../../packages/sandbox/src/ssh/connection";
 import {
   createSandboxConnection,
   type SandboxConnection,
-} from "../../../../packages/agent/src/ssh/sandbox-connection";
-import { startFakeSandboxServer } from "../../../../packages/agent/src/testing-ssh-server";
+} from "../../../../packages/sandbox/src/ssh/sandbox-connection";
+import { startFakeSandboxServer } from "../../../../packages/sandbox/src/testing-ssh-server";
 import type { Capability } from "../../../../packages/agent/src/capabilities";
 import { fakeSandboxConnection } from "./sandbox-connection-fake";
 

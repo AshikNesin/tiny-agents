@@ -25,15 +25,17 @@ import { toJson } from "../durable-json";
 import { tool } from "../toolkit";
 import { SecretValue, VAULT_RULE, type VaultBroker } from "../vault";
 import { refuseUnattended, waitForOwner, type WaitTracker } from "../waiting";
-import type { SecretFill, SecretFillField } from "./browser-fill";
-import { assertRefShape, parseExemptHosts } from "./browser-guard";
 import {
+  assertRefShape,
   describeBrowserError,
+  parseExemptHosts,
   type BrowserSession,
   type BrowserSessions,
   type BrowserTarget,
   type LiveBrowserTab,
-} from "./browser-sessions";
+  type SecretFill,
+  type SecretFillField,
+} from "@tiny-agents/sandbox/browser";
 import { safeMessage, useFromSink, vaultGatePlan } from "./vault";
 
 export interface BrowserVaultOptions {

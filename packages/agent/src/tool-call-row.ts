@@ -9,7 +9,7 @@
 import { approvalOf } from "./approvals";
 import { credentialsOf } from "./credentials";
 import { secretRedactor } from "./redact";
-import { takeoverOf } from "./toolkits/computer-sessions";
+import { takeoverOf } from "@tiny-agents/sandbox/computer";
 import { questionsOf } from "./toolkits/questions";
 import type { ChatToolCall, ChatToolStatus } from "./types";
 

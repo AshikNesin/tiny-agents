@@ -21,19 +21,19 @@ import {
   hostKeyHash,
   SandboxTimeoutError,
   type SshEndpoint,
-} from "../../../../packages/agent/src/ssh/connection";
+} from "../../../../packages/sandbox/src/ssh/connection";
 import {
   createSandboxConnection,
   type SandboxConnection,
   type SandboxConnectionOptions,
-} from "../../../../packages/agent/src/ssh/sandbox-connection";
+} from "../../../../packages/sandbox/src/ssh/sandbox-connection";
 import {
   fakePty,
   startFakeSandboxServer,
   type ExecHandler,
   type FakePty,
   type FakeSandboxServer,
-} from "../../../../packages/agent/src/testing-ssh-server";
+} from "../../../../packages/sandbox/src/testing-ssh-server";
 
 const cleanups: (() => void)[] = [];
 afterEach(() => {

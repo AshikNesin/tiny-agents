@@ -14,7 +14,7 @@ import {
   type HostKeyStore,
   type SandboxConnection,
   type SshEndpoint,
-} from "@tiny-agents/agent/sandbox";
+} from "@tiny-agents/sandbox";
 import { appEnv, type AppEnv } from "../../env";
 import { app } from "../../app-root";
 

@@ -6,17 +6,17 @@
  * connection's, tested in `sandbox-connection.test.ts`.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from "vite-plus/test";
-import { createMemoryHostKeyStore } from "../../../../packages/agent/src/ssh/connection";
+import { createMemoryHostKeyStore } from "../../../../packages/sandbox/src/ssh/connection";
 import {
   createSandboxConnection,
   type SandboxConnection,
-} from "../../../../packages/agent/src/ssh/sandbox-connection";
+} from "../../../../packages/sandbox/src/ssh/sandbox-connection";
 import {
   fakePty,
   startFakeSandboxServer,
   type FakePty,
   type FakeSandboxServer,
-} from "../../../../packages/agent/src/testing-ssh-server";
+} from "../../../../packages/sandbox/src/testing-ssh-server";
 import {
   createTerminalService,
   SessionLimitError,
@@ -24,7 +24,7 @@ import {
   SessionBusyError,
   TerminalUnreachableError,
   TmuxMissingError,
-} from "../../../../packages/agent/src/terminal/terminal";
+} from "../../../../packages/sandbox/src/terminal/terminal";
 import { fakeSandboxConnection } from "./sandbox-connection-fake";
 import {
   attachCommand,
@@ -32,7 +32,7 @@ import {
   loginShellCommand,
   newSessionCommand,
   type SessionName,
-} from "../../../../packages/agent/src/terminal/tmux";
+} from "../../../../packages/sandbox/src/terminal/tmux";
 
 const name = (n: number) => `ta-term-${n}` as SessionName;
 

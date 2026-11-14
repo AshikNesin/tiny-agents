@@ -17,7 +17,7 @@ import {
   TerminalUnreachableError,
   type TerminalService,
   type TerminalSessionRow,
-} from "../../../packages/agent/src/terminal/terminal";
+} from "../../../packages/sandbox/src/terminal/terminal";
 import { api, createTestApp, type TestApp } from "../helpers";
 import { authToken } from "../fixtures";
 

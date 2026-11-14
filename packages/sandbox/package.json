@@ -1,0 +1,22 @@
+{
+  "name": "@tiny-agents/sandbox",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The sandbox VM layer without pi-durable: the SSH connection, terminal tabs, the browser and computer sessions and transports, their VM setup scripts and the forwarding server. Imports neither pi-durable nor @tiny-agents/agent.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./terminal": "./src/subpaths/terminal.ts",
+    "./browser": "./src/subpaths/browser.ts",
+    "./computer": "./src/subpaths/computer.ts",
+    "./testing": "./src/testing-ssh-server.ts"
+  },
+  "dependencies": {
+    "playwright-core": "1.64.1",
+    "ssh2": "1.17.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "@types/ssh2": "1.15.6"
+  }
+}

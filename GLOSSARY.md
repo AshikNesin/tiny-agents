@@ -150,7 +150,7 @@ A tool call paused until the owner answers: an approval (`approvals.ts`, asked b
 _Avoid_: pending approval (for the family), interrupt, prompt
 
 **Browser session**:
-One live browser per profile, owned by the session manager (`toolkits/browser-sessions.ts`): open, peek (never launches), the driver flag (owner or bot), the idle sweep, close (which cancels an open still in flight). The toolkit, the vault sinks and the app's browser routes all hold the same manager instance; nothing reads a module global.
+One live browser per profile, owned by the session manager (`packages/sandbox/src/browser-sessions.ts`): open, peek (never launches), the driver flag (owner or bot), the idle sweep, close (which cancels an open still in flight). The toolkit, the vault sinks and the app's browser routes all hold the same manager instance; nothing reads a module global.
 _Avoid_: tab (a session has tabs), browser instance
 
 **Computer**:
@@ -158,7 +158,7 @@ A bot's desktop (issue #108): XFCE on the sandbox VM, one per browser profile, w
 _Avoid_: VM (the VM hosts several desktops and the shell), workstation
 
 **Desktop**:
-One live computer: an X display served by Xtigervnc with an XFCE session on it, at a fixed size, owned by the computer session manager (`toolkits/computer-sessions.ts`) through the `ComputerDesktop` port. It survives an app crash and is reattached by the next launch for its profile.
+One live computer: an X display served by Xtigervnc with an XFCE session on it, at a fixed size, owned by the computer session manager (`packages/sandbox/src/computer-sessions.ts`) through the `ComputerDesktop` port. It survives an app crash and is reattached by the next launch for its profile.
 _Avoid_: screen (a screenshot is of a desktop), display (the X display number)
 
 **Live view**:
@@ -166,7 +166,7 @@ The owner's noVNC view of a bot's browser or desktop, in the chat (`BrowserPanel
 _Avoid_: screencast, preview
 
 **Sandbox connection**:
-The app's one SSH connection to the sandbox VM or the local sandbox container (`SandboxConnection`, `ssh/sandbox-connection.ts`), built once from the endpoint and handed to every user: the sandbox toolkit, attachments, the terminal, the computer, the browser and the Claude worker. It runs execs, ptys, file transfers and forwards as channels on one pooled connection, and owns the host-key pinning, the retry rule, the idle close and the "Cannot reach the sandbox" wording (ADR 0013).
+The app's one SSH connection to the sandbox VM or the local sandbox container (`SandboxConnection`, `packages/sandbox/src/ssh/sandbox-connection.ts`), built once from the endpoint and handed to every user: the sandbox toolkit, attachments, the terminal, the computer, the browser and the Claude worker. It runs execs, ptys, file transfers and forwards as channels on one pooled connection, and owns the host-key pinning, the retry rule, the idle close and the "Cannot reach the sandbox" wording (ADR 0013).
 _Avoid_: endpoint (that is only the address), SSH session, transport (a computer or browser transport sits on top of it)
 
 **Worker connection**:

@@ -9,8 +9,8 @@ import type {
   SandboxConnection,
   SandboxExecOptions,
   SandboxExecResult,
-} from "../../../../packages/agent/src/ssh/sandbox-connection";
-import type { PtySize, PtyStream } from "../../../../packages/agent/src/ssh/pty-stream";
+} from "../../../../packages/sandbox/src/ssh/sandbox-connection";
+import type { PtySize, PtyStream } from "../../../../packages/sandbox/src/ssh/pty-stream";
 
 export interface FakeExecReply {
   stdout?: string | Buffer;

@@ -23,7 +23,7 @@ import {
   versionCommand,
   type SessionName,
   TERMINAL_SETTINGS,
-} from "../../../../packages/agent/src/terminal/tmux";
+} from "../../../../packages/sandbox/src/terminal/tmux";
 
 const name = (n: number) => `ta-term-${n}` as SessionName;
 

@@ -588,6 +588,40 @@ const FIXTURES: Record<string, Fixture> = {
       'import { defineTool } from "@earendil-works/pi-durable";\nimport type { ModelCatalog } from "@tiny-agents/models";\nexport const t = defineTool;\nexport type C = ModelCatalog;\n',
     rules: [],
   },
+  "packages/sandbox/src/r11-durable-fail.ts": {
+    source:
+      'import { defineTool } from "@earendil-works/pi-durable";\nexport const t = defineTool;\n',
+    rules: ["R11"],
+    mentions: "Move the pi-durable-free code it needs into packages/sandbox",
+  },
+  "packages/sandbox/src/r11-durable-subpath-fail.ts": {
+    source: 'export { DEFAULT_IMAGE_LIMITS } from "@earendil-works/pi-durable/tools";\n',
+    rules: ["R11"],
+  },
+  "packages/sandbox/src/r11-agent-type-fail.ts": {
+    source:
+      'import type { AgentRuntime } from "@tiny-agents/agent";\nexport type R = AgentRuntime;\n',
+    rules: ["R11"],
+  },
+  "packages/sandbox/src/r11-agent-subpath-fail.ts": {
+    source: 'export { createBrowserToolkit } from "@tiny-agents/agent/browser";\n',
+    rules: ["R11"],
+  },
+  "packages/sandbox/src/subpaths/r11-agent-relative-fail.ts": {
+    source:
+      'import type { VaultBroker } from "../../../agent/src/vault";\nexport type V = VaultBroker;\n',
+    rules: ["R11"],
+  },
+  "packages/sandbox/src/r11-pass.ts": {
+    source:
+      'import type { Client } from "ssh2";\nimport type { Page } from "playwright-core";\nimport { checkPublicUrl } from "./public-url";\nexport type C = [Client, Page];\nexport const check = checkPublicUrl;\n',
+    rules: [],
+  },
+  "packages/agent/src/toolkits/r11-sandbox-elsewhere-pass.ts": {
+    source:
+      'import { defineTool } from "@earendil-works/pi-durable";\nimport type { SandboxConnection } from "@tiny-agents/sandbox";\nexport const t = defineTool;\nexport type C = SandboxConnection;\n',
+    rules: [],
+  },
   "apps/web/src/server/api/bots/r12-let-fail.ts": {
     source: "let count = 0;\nexport const bump = () => ++count;\n",
     rules: ["R12"],

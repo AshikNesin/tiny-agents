@@ -21,15 +21,16 @@ import type { Capability } from "../capabilities";
 import { defineToolkit, tool } from "../toolkit";
 import type { VaultBroker } from "../vault";
 import type { WaitTracker } from "../waiting";
-import { assertRefShape, checkNavigableUrl } from "./browser-guard";
 import {
+  assertRefShape,
+  checkNavigableUrl,
   conversationBrowserTarget,
   createBrowserSessions,
   describeBrowserError,
   type BrowserSessions,
   type BrowserSessionsOptions,
   type BrowserTarget,
-} from "./browser-sessions";
+} from "@tiny-agents/sandbox/browser";
 import { createBrowserVaultTools } from "./browser-vault";
 
 export {
@@ -43,8 +44,8 @@ export {
   type BrowserTarget,
   type BrowserTransport,
   type BrowserVnc,
-} from "./browser-sessions";
-export { isBlockedPrivateUrl } from "./browser-guard";
+  isBlockedPrivateUrl,
+} from "@tiny-agents/sandbox/browser";
 
 export interface BrowserToolkitOptions extends BrowserSessionsOptions {
   /**

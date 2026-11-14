@@ -12,7 +12,7 @@ import {
   fillSecretFields,
   OriginMismatchError,
   pageOrigin,
-} from "../../../../packages/agent/src/toolkits/browser-fill";
+} from "../../../../packages/sandbox/src/browser-fill";
 import { SecretValue, VaultTargetMovedError } from "../../../../packages/agent/src/vault";
 
 const executable = [

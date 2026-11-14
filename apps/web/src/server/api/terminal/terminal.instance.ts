@@ -4,7 +4,7 @@
  * SSH user, whose host-key pins persist through the app's KV.
  * Tests substitute a fake via `setTerminalServiceForTests()`.
  */
-import { createTerminalService, type TerminalService } from "@tiny-agents/agent/terminal";
+import { createTerminalService, type TerminalService } from "@tiny-agents/sandbox/terminal";
 import { sandboxConnection } from "../bots/sandbox-host";
 import { app } from "../../app-root";
 

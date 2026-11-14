@@ -22,7 +22,7 @@
  * never a file, never ssh `AcceptEnv`. Everything here is a pure string
  * builder so it can be tested without a VM.
  */
-import { shQuote } from "./browser-vm-setup";
+import { shQuote } from "@tiny-agents/sandbox";
 
 /** Exit code the wrapper uses for "the VM can't confine commands". */
 export const CONFINE_UNAVAILABLE = 97;

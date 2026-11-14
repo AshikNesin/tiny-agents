@@ -42,11 +42,8 @@ import {
   type BrowserSessions,
 } from "../../../packages/agent/src/toolkits/browser";
 import { setBrowserSessionsForTests } from "../../../apps/web/src/server/api/bots/browser.sessions";
-import {
-  OriginMismatchError,
-  type SecretFill,
-} from "../../../packages/agent/src/toolkits/browser-fill";
-import { WindowMismatchError } from "../../../packages/agent/src/toolkits/computer-sessions";
+import { OriginMismatchError, type SecretFill } from "../../../packages/sandbox/src/browser-fill";
+import { WindowMismatchError } from "../../../packages/sandbox/src/computer-sessions";
 import { secretRedactor } from "../../../packages/agent/src/redact";
 import type { CredentialRequest } from "../../../packages/agent/src/credentials";
 import { api, createTestApp, type TestApp } from "../helpers";

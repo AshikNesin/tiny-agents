@@ -11,11 +11,11 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   installStackCommand,
   STACK_VERSION,
-} from "../../../../packages/agent/src/toolkits/browser-vm-setup";
+} from "../../../../packages/sandbox/src/browser-vm-setup";
 import {
   COMPUTER_PACKAGES,
   COMPUTER_STACK_VERSION,
-} from "../../../../packages/agent/src/toolkits/computer-vm-setup";
+} from "../../../../packages/sandbox/src/computer-vm-setup";
 
 import {
   CLAUDE_WORKER_NODE_VERSION,

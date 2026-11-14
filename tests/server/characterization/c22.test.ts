@@ -8,8 +8,8 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import {
   createComputerSessions,
   type ComputerSessions,
-} from "../../../packages/agent/src/toolkits/computer-sessions";
-import type { BrowserClock } from "../../../packages/agent/src/toolkits/browser-sessions";
+} from "../../../packages/sandbox/src/computer-sessions";
+import type { BrowserClock } from "../../../packages/sandbox/src/browser-sessions";
 import { fakeComputer } from "../app/agent/computer-fakes";
 
 /** A clock the test moves by hand: timeouts fire when `advance` passes them. */

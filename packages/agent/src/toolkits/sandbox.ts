@@ -34,8 +34,11 @@ import {
   SECRETS_MISSING,
   type EgressEntry,
 } from "./sandbox-egress";
-import { SandboxTimeoutError } from "../ssh/connection";
-import type { SandboxConnection, SandboxExecResult } from "../ssh/sandbox-connection";
+import {
+  SandboxTimeoutError,
+  type SandboxConnection,
+  type SandboxExecResult,
+} from "@tiny-agents/sandbox";
 import {
   safeMessage,
   useAllFromSink,

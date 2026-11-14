@@ -26,7 +26,8 @@ the agent can browse, but there is nothing to stream (the panel says so)
   through VNC pixels and keystrokes. Both act on the same Chrome, so tabs,
   logins and downloads are shared. VNC is the only live view: there is no
   separate screencast or input route.
-- Toolkit: `packages/agent/src/toolkits/browser.ts` (port + tools),
+- Toolkit: `packages/agent/src/toolkits/browser.ts` (port + tools). In
+  `packages/sandbox/src/`: `browser-sessions.ts` (session manager),
   `browser-chromium.ts` (Playwright page session), `browser-remote-cdp.ts`
   (SSH transport), `browser-vm-setup.ts` (shell scripts that install and
   launch the VM stack). Wired in `bots.runtime.ts` beside the sandbox.

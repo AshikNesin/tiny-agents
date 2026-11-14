@@ -11,8 +11,11 @@
  */
 import type { Context } from "@earendil-works/chord";
 import { defineDoc, type ToolExecutionApi } from "@earendil-works/pi-durable";
+import type { SecretValue } from "@tiny-agents/sandbox";
 
-export { VaultTargetMovedError } from "./vault-target";
+// Kept beside the browser and computer sinks in @tiny-agents/sandbox, which
+// never loads pi-durable; part of the vault port all the same.
+export { SecretValue, VaultTargetMovedError } from "@tiny-agents/sandbox";
 
 export const VAULT_KINDS = ["login", "card", "identity", "api_key"] as const;
 export type VaultKind = (typeof VAULT_KINDS)[number];
@@ -178,29 +181,6 @@ export class VaultError extends Error {
   ) {
     super(message);
     this.name = "VaultError";
-  }
-}
-
-const HIDDEN = "[vault]";
-
-/** A value that can't be serialized or logged by accident. */
-export class SecretValue {
-  readonly #value: string;
-  constructor(value: string) {
-    this.#value = value;
-  }
-  /** Only sinks call this. */
-  reveal(): string {
-    return this.#value;
-  }
-  toJSON(): string {
-    return HIDDEN;
-  }
-  toString(): string {
-    return HIDDEN;
-  }
-  [Symbol.for("nodejs.util.inspect.custom")](): string {
-    return HIDDEN;
   }
 }
 

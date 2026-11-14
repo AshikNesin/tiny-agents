@@ -81,22 +81,21 @@ Lookup material.
 
 `packages/agent` is the only module that touches pi-durable. Its root is that
 boundary; the areas that do not use pi-durable have their own subpaths, so a
-change to the terminal or a transport does not churn the root. Each subpath
-is an entry file under `packages/agent/src/subpaths/`, listed in the
-package's `exports` and in the root `tsconfig.json` `paths` (which the server
-build also resolves through). No subpath loads pi-durable code: the URL
-guards the browser and the web toolkit share live in `toolkits/public-url.ts`.
+change to one does not churn the root. Each subpath is an entry file under
+`packages/agent/src/subpaths/`, listed in the package's `exports` and in the
+root `tsconfig.json` `paths` (which the server build also resolves through).
+No subpath loads pi-durable code.
 
-| Import                             | What it holds                                                                                          |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `@tiny-agents/agent`               | `AgentRuntime`, the conversation and chat types, the toolkits and capabilities, vault and MCP types    |
-| `@tiny-agents/agent/sandbox`       | `createSandboxConnection` and its types (ADR 0013), host keys, the SSH endpoint                        |
-| `@tiny-agents/agent/terminal`      | `createTerminalService`, its errors, tmux session names                                                |
-| `@tiny-agents/agent/browser`       | Browser sessions, the Chromium and remote CDP transports (the browser toolkit stays on the root)       |
-| `@tiny-agents/agent/computer`      | Desktop sessions, the X11 transport, desktop settings parsers (the computer toolkit stays on the root) |
-| `@tiny-agents/agent/claude-worker` | `createSandboxClaudeWorker` and its locator types (ADR 0010), the Claude sign-in shell line            |
-| `@tiny-agents/agent/peer-envelope` | Peer envelope parser; client-safe, imported by the client and the server                               |
-| `@tiny-agents/agent/testing`       | The faux-provider test runtime                                                                         |
+| Import                             | What it holds                                                                                       |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `@tiny-agents/agent`               | `AgentRuntime`, the conversation and chat types, the toolkits and capabilities, vault and MCP types |
+| `@tiny-agents/agent/claude-worker` | `createSandboxClaudeWorker` and its locator types (ADR 0010), the Claude sign-in shell line         |
+| `@tiny-agents/agent/peer-envelope` | Peer envelope parser; client-safe, imported by the client and the server                            |
+| `@tiny-agents/agent/testing`       | The faux-provider test runtime                                                                      |
+
+`@tiny-agents/agent/sandbox`, `/terminal`, `/browser` and `/computer` only
+re-export what they exported before the sandbox layer moved out, marked
+`@deprecated`; import from `@tiny-agents/sandbox` instead.
 
 The root exports only what something outside the package imports. Tests of
 the package's internals import the source module directly
@@ -109,6 +108,23 @@ takes. It uses pi-ai only and imports neither pi-durable nor
 `@tiny-agents/agent` (lint R11). The agent root still re-exports what it
 exported before the move, marked `@deprecated`; code in this repo imports
 from `@tiny-agents/models`.
+
+The sandbox VM layer is its own package too, `@tiny-agents/sandbox`
+(`packages/sandbox`): the SSH connection, terminal tabs, the browser and
+computer sessions and transports, their VM setup scripts and the forwarding
+server. It imports neither pi-durable nor `@tiny-agents/agent` (lint R11);
+the browser, computer and sandbox toolkits stay in `@tiny-agents/agent` and
+drive it (docs/rewrite/DECISIONS.md D7). Its subpaths are entry files under
+`packages/sandbox/src/subpaths/`, listed in its `exports` and the root
+`tsconfig.json` `paths`.
+
+| Import                          | What it holds                                                                                                                                           |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@tiny-agents/sandbox`          | `createSandboxConnection` and its types (ADR 0013), host keys, the SSH endpoint, the forwarding server, `shQuote`, the public-URL guards, `SecretValue` |
+| `@tiny-agents/sandbox/terminal` | `createTerminalService`, its errors, tmux session names                                                                                                 |
+| `@tiny-agents/sandbox/browser`  | Browser sessions, the Chromium and remote CDP transports, the URL and ref guards, the secret-fill types                                                 |
+| `@tiny-agents/sandbox/computer` | Desktop sessions, the X11 transport, desktop settings parsers                                                                                           |
+| `@tiny-agents/sandbox/testing`  | `startFakeSandboxServer`, an in-process SSH server for tests                                                                                            |
 
 ## API surface
 

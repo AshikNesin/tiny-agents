@@ -26,7 +26,7 @@ import {
   openTestRuntime,
   TEST_MODEL,
 } from "../../../../packages/agent/src/testing";
-import { OriginMismatchError } from "../../../../packages/agent/src/toolkits/browser-fill";
+import { OriginMismatchError } from "../../../../packages/sandbox/src/browser-fill";
 import {
   useAllFromSink,
   useFromSink,

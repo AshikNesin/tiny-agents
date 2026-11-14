@@ -1,22 +1,32 @@
 /**
- * `@tiny-agents/agent/browser`: live browser sessions and the transports that
- * open them (local Chromium, or Chrome on the sandbox over CDP). The browser
+ * `@tiny-agents/agent/browser`: moved to `@tiny-agents/sandbox/browser`
+ * (rewrite step 3.4). Re-exported so importers of this subpath keep
+ * compiling; nothing in this repo imports them from here. The browser
  * toolkit the bots call stays on the package root.
  */
 export {
+  /** @deprecated Import from `@tiny-agents/sandbox/browser`. */
   closeAllBrowserSessions,
+  /** @deprecated Import from `@tiny-agents/sandbox/browser`. */
   createBrowserSessions,
-  DEFAULT_BROWSER_PROFILES_DIR,
-  type BrowserSessions,
-  type BrowserSessionsOptions,
-  type BrowserTarget,
-  type BrowserTransport,
-} from "../toolkits/browser-sessions";
-export {
+  /** @deprecated Import from `@tiny-agents/sandbox/browser`. */
   createChromiumTransport,
-  type ChromiumTransportOptions,
-} from "../toolkits/browser-chromium";
-export {
+  /** @deprecated Import from `@tiny-agents/sandbox/browser`. */
   createRemoteCdpTransport,
-  type RemoteCdpTransportOptions,
-} from "../toolkits/browser-remote-cdp";
+  /** @deprecated Import from `@tiny-agents/sandbox/browser`. */
+  DEFAULT_BROWSER_PROFILES_DIR,
+} from "@tiny-agents/sandbox/browser";
+export type {
+  /** @deprecated Import from `@tiny-agents/sandbox/browser`. */
+  BrowserSessions,
+  /** @deprecated Import from `@tiny-agents/sandbox/browser`. */
+  BrowserSessionsOptions,
+  /** @deprecated Import from `@tiny-agents/sandbox/browser`. */
+  BrowserTarget,
+  /** @deprecated Import from `@tiny-agents/sandbox/browser`. */
+  BrowserTransport,
+  /** @deprecated Import from `@tiny-agents/sandbox/browser`. */
+  ChromiumTransportOptions,
+  /** @deprecated Import from `@tiny-agents/sandbox/browser`. */
+  RemoteCdpTransportOptions,
+} from "@tiny-agents/sandbox/browser";

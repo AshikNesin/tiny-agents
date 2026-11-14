@@ -18,7 +18,7 @@
  * here reads it.
  */
 import { FORBIDDEN_BACKEND_FLAGS, FORBIDDEN_OVERRIDE_KEYS } from "@tiny-agents/claude-worker";
-import { shQuote } from "../../toolkits/browser-vm-setup";
+import { shQuote } from "@tiny-agents/sandbox";
 
 /** Bump when the install steps or the pins change so existing sandboxes re-run them. */
 export const CLAUDE_WORKER_STACK_VERSION = "v1";

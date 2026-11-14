@@ -6,8 +6,8 @@ import { inspect } from "node:util";
 import { describe, expect, it } from "vite-plus/test";
 import { SecretRedactor } from "../../../../packages/agent/src/redact";
 import { SecretValue, VaultTargetMovedError } from "../../../../packages/agent/src/vault";
-import { OriginMismatchError } from "../../../../packages/agent/src/toolkits/browser-fill";
-import { WindowMismatchError } from "../../../../packages/agent/src/toolkits/computer-sessions";
+import { OriginMismatchError } from "../../../../packages/sandbox/src/browser-fill";
+import { WindowMismatchError } from "../../../../packages/sandbox/src/computer-sessions";
 import { parseTotp, totpCode } from "../../../../apps/web/src/server/api/vault/vault.totp";
 
 describe("TOTP", () => {

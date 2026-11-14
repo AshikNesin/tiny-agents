@@ -25,7 +25,12 @@
       "@tiny-agents/code/contracts": ["./packages/code/src/contracts/index.ts"],
       "@tiny-agents/code/server": ["./packages/code/src/server/index.ts"],
       "@tiny-agents/code/testing": ["./packages/code/src/testing.ts"],
-      "@tiny-agents/models": ["./packages/models/src/index.ts"]
+      "@tiny-agents/models": ["./packages/models/src/index.ts"],
+      "@tiny-agents/sandbox": ["./packages/sandbox/src/index.ts"],
+      "@tiny-agents/sandbox/terminal": ["./packages/sandbox/src/subpaths/terminal.ts"],
+      "@tiny-agents/sandbox/browser": ["./packages/sandbox/src/subpaths/browser.ts"],
+      "@tiny-agents/sandbox/computer": ["./packages/sandbox/src/subpaths/computer.ts"],
+      "@tiny-agents/sandbox/testing": ["./packages/sandbox/src/testing-ssh-server.ts"]
     }
   },
   "include": [
@@ -36,6 +41,7 @@
     "packages/claude-worker/src/**/*",
     "packages/code/src/**/*",
     "packages/models/src/**/*",
+    "packages/sandbox/src/**/*",
     "tests/server/**/*",
     "tests/test-clock.ts"
   ],
