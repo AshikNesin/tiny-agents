@@ -20,6 +20,8 @@ import connectionsRoutes, { publicConnectionsRouter } from "./api/connections/co
 import vaultRoutes, { vaultNoStore } from "./api/vault/vault.routes";
 import modelsRoutes from "./api/models/models.routes";
 import codeRoutes from "./api/code/code.routes";
+import codeProjectRoutes from "./api/code/code.projects.routes";
+import { registerCodeJobs } from "./api/code/code.pulls";
 import peopleRoutes from "./api/people/people.routes";
 import updatesRoutes from "./api/system/updates.routes";
 import appLinksRouter from "./api/system/app-links";
@@ -29,6 +31,7 @@ import { registerRoutineJobs } from "./api/routines/routines.jobs";
 /** Register every feature's job handlers. Call before `startWorkers()` / the first tick. */
 export function registerJobHandlers(): void {
   registerRoutineJobs();
+  registerCodeJobs();
 }
 
 /** The HTTP app. Feature routers declare full paths (`/bots/:id`) and mount at the API root. */
@@ -60,6 +63,7 @@ export function createWebApp(options: Omit<CreateAppOptions, "routes"> = {}) {
       api.route("/", skillsRoutes);
       api.route("/", connectionsRoutes);
       api.route("/", codeRoutes);
+      api.route("/", codeProjectRoutes);
       api.route("/", modelsRoutes);
       api.route("/", updatesRoutes);
       api.use("/vault/*", vaultNoStore);

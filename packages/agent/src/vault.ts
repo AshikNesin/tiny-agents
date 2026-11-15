@@ -67,6 +67,8 @@ export interface VaultItemMeta {
  *   title and checked right before typing; every use asks.
  * - `provider`: a model provider account's requests (issue #179). The item
  *   must be an `app` item and list the request's host; no bot is behind it.
+ * - `github`: Code's GitHub calls and pushes (issue #297, ADR 0022). The
+ *   item must be an `app` item and list `github.com` or `api.github.com`.
  */
 export const VAULT_TARGET_KINDS = [
   "origin",
@@ -75,6 +77,7 @@ export const VAULT_TARGET_KINDS = [
   "connection",
   "window",
   "provider",
+  "github",
 ] as const;
 export type VaultTargetKind = (typeof VAULT_TARGET_KINDS)[number];
 

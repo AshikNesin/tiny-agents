@@ -16,6 +16,7 @@ import {
 import {
   codeHandoffFinishes,
   codeHandoffs,
+  codePullRequests,
   codeThreads,
   db,
   shelleyHandoffs,
@@ -138,6 +139,37 @@ export async function seenMap(): Promise<Map<string, number>> {
     .from(codeThreads)
     .where(eq(codeThreads.followed, true));
   return new Map(rows.map((r) => [r.id, r.cursor]));
+}
+
+/** What the list adds to each thread (issue #297): its project and open pull request. */
+export interface ThreadDecoration {
+  projectId: string | null;
+  pr: { number: number; loop: string } | null;
+}
+
+export async function threadDecorations(): Promise<Map<string, ThreadDecoration>> {
+  const [threads, pulls] = await Promise.all([
+    db
+      .select({ id: codeThreads.id, projectId: codeThreads.projectId })
+      .from(codeThreads)
+      .where(isNotNull(codeThreads.projectId)),
+    db
+      .select({
+        threadId: codePullRequests.threadId,
+        number: codePullRequests.number,
+        loop: codePullRequests.loopStatus,
+      })
+      .from(codePullRequests)
+      .where(eq(codePullRequests.state, "open")),
+  ]);
+  const out = new Map<string, ThreadDecoration>();
+  for (const t of threads) out.set(t.id, { projectId: t.projectId, pr: null });
+  for (const p of pulls) {
+    const entry = out.get(p.threadId) ?? { projectId: null, pr: null };
+    entry.pr = { number: p.number, loop: p.loop };
+    out.set(p.threadId, entry);
+  }
+  return out;
 }
 
 export async function isFollowed(threadId: string): Promise<boolean> {

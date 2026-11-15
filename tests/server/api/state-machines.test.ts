@@ -10,6 +10,8 @@ import {
   extractionMachine,
   type ExtractStatus,
 } from "../../../apps/web/src/shared/machines/extraction";
+import { autofixMachine } from "../../../apps/web/src/shared/machines/autofix";
+import { autofixPassMachine } from "../../../apps/web/src/shared/machines/autofix-pass";
 import { handoffMachine } from "../../../apps/web/src/shared/machines/handoff";
 import { memoryMachine } from "../../../apps/web/src/shared/machines/memory";
 import { routineRunMachine } from "../../../apps/web/src/shared/machines/routine-run";
@@ -22,6 +24,8 @@ const MACHINES: StateMachine<string>[] = [
   extractionMachine,
   taskMachine,
   handoffMachine,
+  autofixMachine,
+  autofixPassMachine,
 ];
 
 describe.each(MACHINES.map((machine) => [machine.name, machine] as const))(

@@ -10,6 +10,7 @@
   },
   "additional_exclusions": [
     "packages/agent/**",
+    "packages/github/**",
     "packages/models/**",
     "packages/sandbox/**",
     "packages/core/src/notification/**",

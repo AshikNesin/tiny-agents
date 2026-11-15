@@ -75,6 +75,22 @@ export const NOTIFICATION_EVENTS: NotificationEventDef[] = [
     defaultEnabled: true,
   },
   {
+    event: "code.autofix",
+    label: "Auto-fix needs you",
+    description:
+      "A pull request's Auto-fix stopped for your input, switched itself off at a limit, or a check stalled.",
+    category: "needs_input",
+    defaultEnabled: true,
+  },
+  {
+    event: "code.pr",
+    label: "Pull request updates",
+    description:
+      "A Code pull request's checks went green or failed (with Auto-fix off), or it merged.",
+    category: "notify",
+    defaultEnabled: true,
+  },
+  {
     event: "vault.alert",
     label: "Vault alerts",
     description: "A vault value was revealed or an item deleted, or a bot was refused a fill.",
@@ -346,6 +362,40 @@ export function codeUpdate(
     urlTitle: "Open in Code",
     priority: kind === "message" ? 0 : -1,
     dedupeKey: `code:${thread.id}:${kind}:${at}`,
+  };
+}
+
+export type CodePullKind = "needs_input" | "off" | "stalled" | "green" | "merged" | "checks_failed";
+
+/**
+ * A linked pull request's news (issue #297 §9.7): "needs you" kinds go out
+ * as `code.autofix`, the rest as the quieter `code.pr`. `detail` is the
+ * app's own wording (a limit, a refused push), scrubbed all the same.
+ */
+export function codePullUpdate(
+  pull: { threadId: string; number: number; title: string },
+  kind: CodePullKind,
+  detail?: string,
+): Notification {
+  const needsYou = kind === "needs_input" || kind === "off" || kind === "stalled";
+  const name = `#${pull.number}${pull.title ? ` ${pull.title}` : ""}`;
+  const title = {
+    needs_input: `✋ Auto-fix needs you on ${name}`,
+    off: `⏹️ Auto-fix switched off on ${name}`,
+    stalled: `⏳ A check stalled on ${name}`,
+    green: `✅ Checks green on ${name}`,
+    merged: `🎉 Merged ${name}`,
+    checks_failed: `❌ Checks failed on ${name}`,
+  }[kind];
+  return {
+    event: needsYou ? "code.autofix" : "code.pr",
+    category: needsYou ? "needs_input" : "notify",
+    title,
+    message: scrubText(detail) ?? "Open the thread's PR tab.",
+    path: `/code/${encodeURIComponent(pull.threadId)}`,
+    urlTitle: "Open in Code",
+    priority: needsYou ? 0 : -1,
+    dedupeKey: `code-pr:${pull.threadId}:${pull.number}:${kind}:${detail ?? ""}`,
   };
 }
 

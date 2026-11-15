@@ -1,0 +1,320 @@
+/**
+ * Code projects, GitHub, pull requests and review (issue #297), under
+ * `/api/v1/code`. Owner-only: none of these paths is in `GUEST_ACCESS`, so
+ * the guest guard refuses them before they get here.
+ */
+import { Hono } from "hono";
+import { and, eq, isNull } from "drizzle-orm";
+import { z } from "zod";
+import type { AppEnv } from "@groot/core/types";
+import { Boom } from "@groot/core/errors";
+import { ok } from "@groot/core/utils/api-response.utils";
+import { parseBody } from "@groot/core/utils/controller.utils";
+import { codeReviewDrafts, codeReviewViewed, db } from "../../db";
+import type {
+  GitHubStatus,
+  ProjectView,
+  ReviewDraft,
+  ReviewFile,
+  ThreadPullsView,
+} from "../../../shared/api/code";
+import { githubStatus, setGitHubToken, codeGitHub } from "./code.github";
+import { codeHub } from "./code.hub";
+import {
+  createProject,
+  deleteProject,
+  listProjects,
+  projectThread,
+  projectView,
+  updateProject,
+} from "./code.projects";
+import {
+  linkPull,
+  manualPass,
+  mergePull,
+  publish,
+  setAutofix,
+  threadPulls,
+  unlinkPull,
+} from "./code.pulls";
+
+const router = new Hono<AppEnv>();
+
+const threadParam = (raw: string | undefined) => {
+  const id = decodeURIComponent(raw ?? "");
+  if (!id || id.length > 300) throw Boom.badRequest("Invalid thread");
+  return id;
+};
+
+// --- GitHub settings ---------------------------------------------------------------------
+
+router.get("/code/github", async (c) => ok<GitHubStatus>(c, await githubStatus()));
+
+router.put("/code/github", async (c) => {
+  const { token } = await parseBody(
+    c,
+    z.object({ token: z.string().trim().min(10).max(400).nullable() }),
+  );
+  await setGitHubToken(token);
+  return ok<GitHubStatus>(c, await githubStatus());
+});
+
+// --- projects ------------------------------------------------------------------------------
+
+router.get("/code/projects", async (c) =>
+  ok<ProjectView[]>(c, (await listProjects()).map(projectView)),
+);
+
+const createSchema = z.object({
+  repo: z.string().trim().min(3).max(300),
+  name: z.string().trim().max(100).optional(),
+  baseBranch: z.string().trim().max(200).optional(),
+  defaultInstanceId: z.string().trim().max(40).optional(),
+  defaultModel: z.string().trim().max(200).optional(),
+});
+
+router.post("/code/projects", async (c) => {
+  const body = await parseBody(c, createSchema);
+  return ok<ProjectView>(c, projectView(await createProject(body)), 201);
+});
+
+const scriptsSchema = z
+  .object({
+    setup: z.string().max(4000).optional(),
+    check: z.string().max(4000).optional(),
+    archive: z.string().max(4000).optional(),
+  })
+  .strict();
+
+const updateSchema = z.strictObject({
+  name: z.string().trim().min(1).max(100).optional(),
+  baseBranch: z.string().trim().min(1).max(200).optional(),
+  defaultInstanceId: z.string().trim().max(40).nullable().optional(),
+  defaultModel: z.string().trim().max(200).nullable().optional(),
+  settings: z
+    .strictObject({
+      scripts: scriptsSchema.optional(),
+      archiveOnMerge: z.boolean().optional(),
+      protectedPaths: z.array(z.string().trim().min(1).max(300)).max(50).optional(),
+      autofix: z
+        .strictObject({
+          triggers: z
+            .strictObject({
+              checks: z.boolean().optional(),
+              reviews: z.boolean().optional(),
+              conflicts: z.boolean().optional(),
+            })
+            .optional(),
+          trustedBots: z.array(z.string().trim().min(1).max(100)).max(30).optional(),
+          hourlyLimit: z.number().int().min(1).max(30).optional(),
+          noOwnerLimit: z.number().int().min(1).max(50).optional(),
+          passMinutes: z.number().int().min(5).max(120).optional(),
+          onByDefault: z.boolean().optional(),
+        })
+        .optional(),
+    })
+    .optional(),
+});
+
+router.patch("/code/projects/:project", async (c) => {
+  const change = await parseBody(c, updateSchema);
+  return ok<ProjectView>(c, projectView(await updateProject(c.req.param("project"), change)));
+});
+
+router.delete("/code/projects/:project", async (c) => {
+  await deleteProject(c.req.param("project"));
+  return ok(c, { deleted: true });
+});
+
+// --- one thread's pull requests ------------------------------------------------------------
+
+router.get("/code/threads/:id/pr", async (c) => {
+  const fresh = c.req.query("fresh") !== "false";
+  return ok<ThreadPullsView>(c, await threadPulls(threadParam(c.req.param("id")), fresh));
+});
+
+router.post("/code/threads/:id/publish", async (c) => {
+  const id = threadParam(c.req.param("id"));
+  const body = await parseBody(
+    c,
+    z.object({
+      title: z.string().trim().max(250).optional(),
+      body: z.string().max(60_000).optional(),
+    }),
+  );
+  await publish(id, body);
+  return ok<ThreadPullsView>(c, await threadPulls(id, false), 201);
+});
+
+router.post("/code/threads/:id/pr/link", async (c) => {
+  const id = threadParam(c.req.param("id"));
+  const { number } = await parseBody(c, z.object({ number: z.number().int().min(1) }));
+  await linkPull(id, number);
+  return ok<ThreadPullsView>(c, await threadPulls(id), 201);
+});
+
+router.post("/code/threads/:id/pr/unlink", async (c) => {
+  const id = threadParam(c.req.param("id"));
+  await unlinkPull(id);
+  return ok<ThreadPullsView>(c, await threadPulls(id, false));
+});
+
+router.post("/code/threads/:id/pr/autofix", async (c) => {
+  const id = threadParam(c.req.param("id"));
+  const { enabled } = await parseBody(c, z.object({ enabled: z.boolean() }));
+  await setAutofix(id, enabled);
+  return ok<ThreadPullsView>(c, await threadPulls(id, false));
+});
+
+router.post("/code/threads/:id/pr/fix", async (c) => {
+  const id = threadParam(c.req.param("id"));
+  const result = await manualPass(id);
+  return ok(c, { ...result, view: await threadPulls(id, false) });
+});
+
+router.post("/code/threads/:id/pr/merge", async (c) => {
+  const id = threadParam(c.req.param("id"));
+  const { method } = await parseBody(
+    c,
+    z.object({ method: z.enum(["merge", "squash", "rebase"]) }),
+  );
+  await mergePull(id, method);
+  return ok<ThreadPullsView>(c, await threadPulls(id, false));
+});
+
+// --- review: base-branch diff, viewed marks, batched comments -----------------------------
+
+async function reviewTarget(threadId: string) {
+  const found = await projectThread(threadId);
+  if (!found?.thread.worktree) {
+    throw Boom.notFound("Review against the base branch is for project threads with a worktree.");
+  }
+  return { ...found, worktree: found.thread.worktree, ws: await codeGitHub().workspace() };
+}
+
+router.get("/code/threads/:id/review/files", async (c) => {
+  const id = threadParam(c.req.param("id"));
+  const { project, worktree, ws } = await reviewTarget(id);
+  const [files, viewed] = await Promise.all([
+    ws.baseFiles(worktree, project.baseBranch),
+    db.select().from(codeReviewViewed).where(eq(codeReviewViewed.threadId, id)),
+  ]);
+  const marks = new Map(viewed.map((v) => [v.path, v.contentHash]));
+  return ok<ReviewFile[]>(
+    c,
+    files.map((f) => ({ ...f, viewed: marks.get(f.path) === f.hash })),
+  );
+});
+
+router.get("/code/threads/:id/review/file", async (c) => {
+  const id = threadParam(c.req.param("id"));
+  const path = c.req.query("path") ?? "";
+  if (
+    !path ||
+    path.length > 1024 ||
+    path.split("/").some((s) => s === "..") ||
+    path.startsWith("/")
+  ) {
+    throw Boom.badRequest("Invalid path");
+  }
+  const { project, worktree, ws } = await reviewTarget(id);
+  return ok(c, { path, ...(await ws.baseFile(worktree, project.baseBranch, path)) });
+});
+
+router.post("/code/threads/:id/review/viewed", async (c) => {
+  const id = threadParam(c.req.param("id"));
+  const body = await parseBody(
+    c,
+    z.object({
+      path: z.string().min(1).max(1024),
+      hash: z.string().min(1).max(64),
+      viewed: z.boolean(),
+    }),
+  );
+  if (body.viewed) {
+    await db
+      .insert(codeReviewViewed)
+      .values({ threadId: id, path: body.path, contentHash: body.hash })
+      .onConflictDoUpdate({
+        target: [codeReviewViewed.threadId, codeReviewViewed.path],
+        set: { contentHash: body.hash },
+      });
+  } else {
+    await db
+      .delete(codeReviewViewed)
+      .where(and(eq(codeReviewViewed.threadId, id), eq(codeReviewViewed.path, body.path)));
+  }
+  return ok(c, { viewed: body.viewed });
+});
+
+const draftView = (row: typeof codeReviewDrafts.$inferSelect): ReviewDraft => ({
+  id: row.id,
+  path: row.path,
+  side: row.side,
+  startLine: row.startLine,
+  endLine: row.endLine,
+  quote: row.quote,
+  body: row.body,
+  createdAt: row.createdAt.toISOString(),
+});
+
+const unsent = (threadId: string) =>
+  and(eq(codeReviewDrafts.threadId, threadId), isNull(codeReviewDrafts.sentAt));
+
+router.get("/code/threads/:id/review/drafts", async (c) => {
+  const id = threadParam(c.req.param("id"));
+  const rows = await db.select().from(codeReviewDrafts).where(unsent(id));
+  return ok<ReviewDraft[]>(c, rows.map(draftView));
+});
+
+const draftSchema = z.object({
+  path: z.string().min(1).max(1024),
+  side: z.enum(["old", "new"]).optional(),
+  startLine: z.number().int().min(1),
+  endLine: z.number().int().min(1),
+  quote: z.string().max(20_000).optional(),
+  body: z.string().trim().min(1).max(20_000),
+});
+
+router.post("/code/threads/:id/review/drafts", async (c) => {
+  const id = threadParam(c.req.param("id"));
+  const body = await parseBody(c, draftSchema);
+  if (body.endLine < body.startLine) throw Boom.badRequest("The range ends before it starts.");
+  const [row] = await db
+    .insert(codeReviewDrafts)
+    .values({ threadId: id, ...body, side: body.side ?? "new", quote: body.quote ?? "" })
+    .returning();
+  return ok<ReviewDraft>(c, draftView(row!), 201);
+});
+
+router.delete("/code/threads/:id/review/drafts/:draft", async (c) => {
+  const id = threadParam(c.req.param("id"));
+  await db
+    .delete(codeReviewDrafts)
+    .where(and(unsent(id), eq(codeReviewDrafts.id, c.req.param("draft"))));
+  return ok(c, { deleted: true });
+});
+
+/** The drafts as one message: file, lines and the quoted lines travel with each comment. */
+function reviewMessage(drafts: ReviewDraft[]): string {
+  const parts = drafts.map((d) => {
+    const lines = d.startLine === d.endLine ? `${d.startLine}` : `${d.startLine}-${d.endLine}`;
+    const quote = d.quote ? `\n\`\`\`\n${d.quote.replace(/```/g, "ʼʼʼ")}\n\`\`\`` : "";
+    return `**\`${d.path}:${lines}\`**${d.side === "old" ? " (old side)" : ""}${quote}\n${d.body}`;
+  });
+  return `Review comments (${drafts.length}):\n\n${parts.join("\n\n---\n\n")}`;
+}
+
+router.post("/code/threads/:id/review/send", async (c) => {
+  const id = threadParam(c.req.param("id"));
+  const rows = await db.select().from(codeReviewDrafts).where(unsent(id));
+  if (rows.length === 0) throw Boom.badRequest("No comments to send.");
+  const target = codeHub()?.resolve(id);
+  if (!target) throw Boom.notFound("No harness serves this thread");
+  const drafts = rows.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()).map(draftView);
+  const result = await target.instance.send(target.nativeId, { message: reviewMessage(drafts) });
+  await db.update(codeReviewDrafts).set({ sentAt: new Date() }).where(unsent(id));
+  return ok(c, { sent: rows.length, status: result.status });
+});
+
+export default router;

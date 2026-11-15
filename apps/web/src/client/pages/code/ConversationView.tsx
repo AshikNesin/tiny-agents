@@ -18,6 +18,7 @@ import {
   FileDiff,
   FolderOpen,
   GitCommitHorizontal,
+  GitPullRequest,
   Pencil,
   Play,
   Send,
@@ -156,6 +157,10 @@ export function ConversationView({
   onToggleChanges,
   insert,
   onCwd,
+  inProject = false,
+  pr = null,
+  prOpen = false,
+  onTogglePr,
 }: {
   id: string;
   harness: HarnessInfo;
@@ -166,6 +171,12 @@ export function ConversationView({
   onToggleChanges(): void;
   insert: { text: string; nonce: number } | null;
   onCwd?(cwd: string | null): void;
+  /** Started in a project (issue #297): Changes against its base branch, and the PR tab. */
+  inProject?: boolean;
+  /** Its open pull request, as the list knows it. */
+  pr?: { number: number; loop: string } | null;
+  prOpen?: boolean;
+  onTogglePr?(): void;
 }) {
   const navigate = useNavigate();
   const confirm = useConfirm();
@@ -407,12 +418,30 @@ export function ConversationView({
             {archived ? <ArchiveRestore /> : <Archive />}
           </Button>
         )}
-        {caps.workspace.diffs && (
+        {inProject && onTogglePr && (
+          <Button
+            variant={prOpen ? "secondary" : "ghost"}
+            size="sm"
+            onClick={onTogglePr}
+            aria-pressed={prOpen}
+            title={pr ? `Pull request #${pr.number}` : "Publish a pull request"}
+            className={cn(!prOpen && "text-muted-foreground")}
+            data-testid="code-pr-toggle"
+          >
+            <GitPullRequest />
+            <span className="hidden sm:inline">
+              {pr ? `#${pr.number}` : "PR"}
+              {pr && pr.loop === "needs_input" && " · needs you"}
+              {pr && pr.loop === "fixing" && " · fixing"}
+            </span>
+          </Button>
+        )}
+        {(caps.workspace.diffs || inProject) && (
           <Button
             variant={changesOpen ? "secondary" : "ghost"}
             size="sm"
             onClick={onToggleChanges}
-            disabled={!row?.cwd}
+            disabled={!row?.cwd && !inProject}
             title="Changes (⌘⇧D)"
             aria-pressed={changesOpen}
             className={cn(!changesOpen && "text-muted-foreground")}
