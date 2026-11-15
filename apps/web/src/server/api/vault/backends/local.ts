@@ -1,18 +1,24 @@
 /**
  * The `local` vault backend (issue #56): values sealed with SECRETS_KEY
- * (`crypto/secret-box.ts`, purpose `vault-local`) in the app's KV store.
- * Where every vault item lives, including connection header secrets that move
- * here when the owner turns them into vault items.
+ * (`crypto/secret-box.ts`, purpose `vault-local`), one `vault_values` row per
+ * item (Q4). Where every vault item lives, a connection's own header value
+ * included.
  *
- * Each item is bound to its KV key and to the digest of its row's policy
- * (issue #179): reads pass the digest computed from the row, so widening an
- * item's hosts or origins in the database without the service leaves the
- * value unreadable. The digest an item was last sealed under is kept beside
- * it, only so an item no row links yet can still be listed and rotated.
+ * Each item is bound to its id and to a policy digest (issue #179): both are
+ * in the AAD, and the row keeps the digest it is sealed under. Every read
+ * opens the item under its **authority** (S11): the digest of the
+ * `vault_items` row that links it, or, while no row links it, the digest it
+ * was sealed under. Widening an item's hosts or origins in the database
+ * without the service, or editing the stored digest, leaves the value
+ * unreadable on every path, listing included. Rows are written one statement
+ * or one synchronous transaction at a time, so concurrent writes never lose
+ * one another (C11).
  */
 import { randomUUID } from "node:crypto";
-import { createNamespaceKv } from "@groot/core/kv";
+import { and, eq, sql } from "drizzle-orm";
 import { SecretValue, type VaultKind } from "@tiny-agents/agent";
+import { logger } from "@groot/core/logger";
+import { db, vaultItems, vaultValues, type VaultValue } from "../../../db";
 import {
   hasSecretsKey,
   needsReseal,
@@ -22,9 +28,12 @@ import {
   type SecretBinding,
 } from "../../../crypto/secret-box";
 import { parseTotp, totpCode } from "../vault.totp";
+import { vaultPolicyDigest, type PolicyColumns } from "../vault.policy";
 import {
   BackendError,
   type BackendItemSummary,
+  type CandidateListing,
+  type DbTx,
   type ItemDraft,
   type ValueField,
   type VaultBackend,
@@ -42,6 +51,7 @@ function cardBrand(number: string): string {
   return "Card";
 }
 
+/** What a value row seals: the item as the owner typed it. */
 interface StoredItem {
   kind: VaultKind;
   title: string;
@@ -50,56 +60,139 @@ interface StoredItem {
   updatedAt: string;
 }
 
-/** What the KV store holds per item: the sealed item and the digest it is bound to. */
-interface StoredEntry {
-  policy: string;
-  sealed: string;
-}
-
-const binding = (externalId: string, policy: string): SecretBinding => ({
+const binding = (id: string, policy: string): SecretBinding => ({
   purpose: "vault-local",
-  record: externalId,
+  record: id,
   field: "item",
   policy,
 });
 
-function seal(externalId: string, item: StoredItem, policy: string): string {
-  const entry: StoredEntry = { policy, sealed: sealJson(item, binding(externalId, policy)) };
-  return JSON.stringify(entry);
+const UNREADABLE = "The stored secret doesn't match its record or policy. Re-enter it.";
+
+/** The policy rows linking `id` (normally none or one). */
+function linksOf(tx: DbTx, id: string): PolicyColumns[] {
+  return tx
+    .select({
+      audience: vaultItems.audience,
+      originsJson: vaultItems.originsJson,
+      hostsJson: vaultItems.hostsJson,
+      injectJson: vaultItems.injectJson,
+    })
+    .from(vaultItems)
+    .where(and(eq(vaultItems.backend, "local"), eq(vaultItems.externalId, id)))
+    .all();
 }
 
-function parseEntry(raw: string): StoredEntry {
+/**
+ * The digest an item must open under (S11): its linking row's, or the one
+ * it was sealed under while no row links it. The stored digest must agree,
+ * so editing it alone is as unreadable as editing the row.
+ */
+function authority(row: Pick<VaultValue, "policy">, links: PolicyColumns[]): string {
+  if (links.length === 0) return row.policy;
+  const digests = new Set(links.map(vaultPolicyDigest));
+  const [digest] = digests;
+  if (digests.size > 1 || digest !== row.policy) throw new BackendError("failed", UNREADABLE);
+  return digest!;
+}
+
+function openRow(row: VaultValue, links: PolicyColumns[]): StoredItem {
+  const policy = authority(row, links);
   try {
-    const entry = JSON.parse(raw) as Partial<StoredEntry>;
-    if (typeof entry.policy === "string" && typeof entry.sealed === "string") {
-      return { policy: entry.policy, sealed: entry.sealed };
-    }
-  } catch {
-    // fall through
+    return openJson<StoredItem>(row.sealed, binding(row.id, policy))!;
+  } catch (error) {
+    if (error instanceof SecretLockedError) throw new BackendError("failed", error.message);
+    throw error;
   }
-  throw new BackendError("failed", "The local item is in an unknown format. Re-enter it.");
 }
 
-/** Item ids, so listing doesn't need a KV scan. */
-const INDEX_KEY = "__index";
-
-export interface LocalStore {
-  get(key: string): Promise<string | undefined>;
-  set(key: string, value: string): Promise<void>;
-  delete(key: string): Promise<void>;
+function requireKey(): void {
+  if (!hasSecretsKey()) throw new BackendError("unconfigured", "SECRETS_KEY is not set.");
 }
 
-function kvStore(): LocalStore {
-  const kv = createNamespaceKv("VAULT_LOCAL");
+function rowOf(tx: DbTx, id: string): VaultValue {
+  const row = tx.select().from(vaultValues).where(eq(vaultValues.id, id)).get();
+  if (!row) throw new BackendError("not_found", "Item not found in the local vault.");
+  return row;
+}
+
+/** Open item `id` under its authority (synchronous, for a caller's transaction). */
+function readItem(tx: DbTx, id: string): StoredItem {
+  requireKey();
+  return openRow(rowOf(tx, id), linksOf(tx, id));
+}
+
+/** Item `id`'s values, opened under its authority: for a caller checking what it just wrote. */
+export function localItemValues(tx: DbTx, id: string): Partial<Record<ValueField, string>> {
+  return readItem(tx, id).values;
+}
+
+/**
+ * Seal `draft` as item `id`'s whole content under `policy`, whatever it held
+ * before (it need not open): a value the owner enters again replaces one a
+ * lost key made unreadable.
+ */
+export function replaceLocalItem(tx: DbTx, id: string, draft: ItemDraft, policy: string): void {
+  requireKey();
+  const sealed = sealJson(storedItem(draft), binding(id, policy));
+  tx.insert(vaultValues)
+    .values({ id, sealed, policy })
+    .onConflictDoUpdate({ target: vaultValues.id, set: { sealed, policy } })
+    .run();
+}
+
+function storedItem(draft: ItemDraft): StoredItem {
   return {
-    get: async (key) => (await kv.get<string>(key)) ?? undefined,
-    set: async (key, value) => {
-      await kv.set(key, value);
-    },
-    delete: async (key) => {
-      await kv.delete(key);
-    },
+    kind: draft.kind,
+    title: draft.title,
+    urls: draft.urls ?? [],
+    values: Object.fromEntries(Object.entries(draft.values).filter(([, v]) => v)),
+    updatedAt: new Date().toISOString(),
   };
+}
+
+/** A new item sealed under `policy` (the digest of the row about to link it). Returns its id. */
+export function insertLocalItem(tx: DbTx, draft: ItemDraft, policy = ""): string {
+  requireKey();
+  const id = randomUUID();
+  tx.insert(vaultValues)
+    .values({ id, sealed: sealJson(storedItem(draft), binding(id, policy)), policy })
+    .run();
+  return id;
+}
+
+/**
+ * Set the given values (and title/urls) of item `id`, opened under its
+ * authority, and seal it again under the same digest. One
+ * read-modify-write: call it inside a synchronous transaction.
+ */
+function writeLocalItem(tx: DbTx, id: string, draft: Partial<ItemDraft>): void {
+  const row = rowOf(tx, id);
+  requireKey();
+  const item = openRow(row, linksOf(tx, id));
+  const values = { ...item.values };
+  for (const [field, value] of Object.entries(draft.values ?? {}) as [ValueField, string][]) {
+    if (value === "") delete values[field];
+    else if (value !== undefined) values[field] = value;
+  }
+  const changed =
+    draft.values !== undefined || draft.title !== undefined || draft.urls !== undefined;
+  const next: StoredItem = {
+    ...item,
+    ...(draft.title !== undefined ? { title: draft.title } : {}),
+    ...(draft.urls !== undefined ? { urls: draft.urls } : {}),
+    values,
+    ...(changed ? { updatedAt: new Date().toISOString() } : {}),
+  };
+  tx.update(vaultValues)
+    .set({ sealed: sealJson(next, binding(id, row.policy)) })
+    .where(eq(vaultValues.id, id))
+    .run();
+}
+
+/** Delete item `id`'s value. */
+export function deleteLocalItem(tx: DbTx, id: string): void {
+  tx.delete(vaultValues).where(eq(vaultValues.id, id)).run();
 }
 
 function summarize(externalId: string, item: StoredItem): BackendItemSummary {
@@ -125,22 +218,39 @@ function summarize(externalId: string, item: StoredItem): BackendItemSummary {
   };
 }
 
-export function createLocalBackend(store: LocalStore = kvStore()): VaultBackend {
-  /** The item, opened under `policy` (the row's digest), or the stored one for an unlinked item. */
-  const read = async (externalId: string, policy?: string): Promise<StoredItem> => {
-    if (!hasSecretsKey()) throw new BackendError("unconfigured", "SECRETS_KEY is not set.");
-    const raw = await store.get(externalId);
-    if (!raw) throw new BackendError("not_found", "Item not found in the local vault.");
-    const entry = parseEntry(raw);
+/** Every local item, each opened under its authority; one that won't open is named, not fatal. */
+function listItems(): CandidateListing {
+  const rows = db
+    .select()
+    .from(vaultValues)
+    .orderBy(sql`rowid`)
+    .all();
+  const links = new Map<string, PolicyColumns[]>();
+  for (const link of db
+    .select({
+      externalId: vaultItems.externalId,
+      audience: vaultItems.audience,
+      originsJson: vaultItems.originsJson,
+      hostsJson: vaultItems.hostsJson,
+      injectJson: vaultItems.injectJson,
+    })
+    .from(vaultItems)
+    .where(eq(vaultItems.backend, "local"))
+    .all()) {
+    links.set(link.externalId, [...(links.get(link.externalId) ?? []), link]);
+  }
+  const listing: CandidateListing = { items: [], unreadable: [] };
+  for (const row of rows) {
     try {
-      return openJson<StoredItem>(entry.sealed, binding(externalId, policy ?? entry.policy))!;
+      listing.items.push(summarize(row.id, openRow(row, links.get(row.id) ?? [])));
     } catch (error) {
-      if (error instanceof SecretLockedError) throw new BackendError("failed", error.message);
-      throw error;
+      listing.unreadable.push({ externalId: row.id, reason: (error as Error).message });
     }
-  };
-  const index = async (): Promise<string[]> => JSON.parse((await store.get(INDEX_KEY)) ?? "[]");
+  }
+  return listing;
+}
 
+export function createLocalBackend(): VaultBackend {
   return {
     name: "local",
     capabilities: { create: true, update: true, delete: true, reveal: true },
@@ -150,15 +260,14 @@ export function createLocalBackend(store: LocalStore = kvStore()): VaultBackend 
         : { state: "unconfigured", detail: "Set SECRETS_KEY to use the local vault." };
     },
     async listCandidates() {
-      if (!hasSecretsKey()) return [];
-      const ids = await index();
-      return Promise.all(ids.map(async (id) => summarize(id, await read(id))));
+      if (!hasSecretsKey()) return { items: [], unreadable: [] };
+      return listItems();
     },
-    async describe(externalId, policy) {
-      return summarize(externalId, await read(externalId, policy));
+    async describe(externalId) {
+      return summarize(externalId, readItem(db, externalId));
     },
-    async resolve(externalId, field, policy) {
-      const item = await read(externalId, policy);
+    async resolve(externalId, field) {
+      const item = readItem(db, externalId);
       const value = item.values[field];
       if (!value) throw new BackendError("missing_field", `The item has no ${field}.`);
       if (field === "totp") {
@@ -172,67 +281,67 @@ export function createLocalBackend(store: LocalStore = kvStore()): VaultBackend 
       }
       return new SecretValue(value);
     },
-    async create(draft: ItemDraft, policy = "") {
-      if (!hasSecretsKey()) throw new BackendError("unconfigured", "SECRETS_KEY is not set.");
-      const id = randomUUID();
-      const item: StoredItem = {
-        kind: draft.kind,
-        title: draft.title,
-        urls: draft.urls ?? [],
-        values: Object.fromEntries(Object.entries(draft.values).filter(([, v]) => v)),
-        updatedAt: new Date().toISOString(),
-      };
-      await store.set(id, seal(id, item, policy));
-      await store.set(INDEX_KEY, JSON.stringify([...(await index()), id]));
-      return id;
+    async create(draft, policy = "") {
+      return insertLocalItem(db, draft, policy);
     },
-    async update(externalId, draft, policy) {
-      const item = await read(externalId, policy);
-      const values = { ...item.values };
-      for (const [field, value] of Object.entries(draft.values ?? {}) as [ValueField, string][]) {
-        if (value === "") delete values[field];
-        else if (value !== undefined) values[field] = value;
-      }
-      const next: StoredItem = {
-        ...item,
-        ...(draft.title !== undefined ? { title: draft.title } : {}),
-        ...(draft.urls !== undefined ? { urls: draft.urls } : {}),
-        values,
-        updatedAt: new Date().toISOString(),
-      };
-      await store.set(
-        externalId,
-        seal(externalId, next, policy ?? parseEntry((await store.get(externalId))!).policy),
-      );
+    async update(externalId, draft) {
+      db.transaction((tx) => writeLocalItem(tx, externalId, draft));
     },
-    async rebind(externalId, from, to) {
-      await store.set(externalId, seal(externalId, await read(externalId, from), to));
+    async rebind(externalId, writeRow) {
+      return db.transaction((tx) => {
+        // Opened under the row as this transaction finds it, sealed under the row as written.
+        const row = rowOf(tx, externalId);
+        // An edit that leaves the digest as it is (approval, on/off) needs no
+        // re-seal, so it still lands on an item that won't open.
+        let opened: { item: StoredItem } | { error: unknown };
+        try {
+          requireKey();
+          opened = { item: openRow(row, linksOf(tx, externalId)) };
+        } catch (error) {
+          opened = { error };
+        }
+        const written = writeRow(tx);
+        const policy = vaultPolicyDigest(written);
+        if (policy !== row.policy) {
+          if ("error" in opened) throw opened.error;
+          const { item } = opened;
+          tx.update(vaultValues)
+            .set({ sealed: sealJson(item, binding(externalId, policy)), policy })
+            .where(eq(vaultValues.id, externalId))
+            .run();
+        }
+        return written;
+      });
     },
     async remove(externalId) {
-      await store.delete(externalId);
-      await store.set(INDEX_KEY, JSON.stringify((await index()).filter((id) => id !== externalId)));
+      deleteLocalItem(db, externalId);
     },
   };
 }
 
 /**
  * Rewrite every local item still sealed under SECRETS_KEY_PREVIOUS under the
- * current key (`pnpm secrets:rotate`). Returns how many it rewrote.
+ * current key (`pnpm secrets:rotate`), each in its own transaction. An item
+ * that won't open is logged, left alone and named in `skipped`: it still
+ * needs SECRETS_KEY_PREVIOUS. Returns how many it rewrote.
  */
-export async function resealLocalItems(store: LocalStore = kvStore()): Promise<number> {
-  const ids: string[] = JSON.parse((await store.get(INDEX_KEY)) ?? "[]");
-  const resealed = await Promise.all(
-    ids.map(async (id) => {
-      const raw = await store.get(id);
-      if (!raw) return false;
-      const entry = parseEntry(raw);
-      if (!needsReseal(entry.sealed, "vault-local")) return false;
-      const item = openJson<StoredItem>(entry.sealed, binding(id, entry.policy))!;
-      // Skip an item the owner changed meanwhile: its new value is already current.
-      if ((await store.get(id)) !== raw) return false;
-      await store.set(id, seal(id, item, entry.policy));
-      return true;
-    }),
-  );
-  return resealed.filter(Boolean).length;
+export function resealLocalItems(): { resealed: number; skipped: string[] } {
+  const ids = db.select({ id: vaultValues.id }).from(vaultValues).all();
+  let resealed = 0;
+  const skipped: string[] = [];
+  for (const { id } of ids) {
+    try {
+      const done = db.transaction((tx) => {
+        const row = tx.select().from(vaultValues).where(eq(vaultValues.id, id)).get();
+        if (!row || !needsReseal(row.sealed, "vault-local")) return false;
+        writeLocalItem(tx, id, {});
+        return true;
+      });
+      if (done) resealed += 1;
+    } catch (error) {
+      skipped.push(id);
+      logger.warn({ item: id, error: (error as Error).message }, "Vault item not re-sealed");
+    }
+  }
+  return { resealed, skipped };
 }

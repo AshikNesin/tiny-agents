@@ -1,6 +1,8 @@
 # 0015 — One secrets subsystem: the vault holds the app's own credentials too
 
-- Status: accepted (amends [0005](0005-secrets-live-outside-the-app.md))
+- Status: accepted (amends [0005](0005-secrets-live-outside-the-app.md); amended by
+  [0019](0019-vault-values-table.md): values in a table, connection header values
+  as vault items)
 - Date: 2026-11-07
 - Issue: #179
 

@@ -152,7 +152,8 @@ Two smaller ones:
 - `packages/agent` holds about 1,100 lines of provider catalog and discovery
   and the whole sandbox/VM layer, none of which touches pi-durable.
 - Secrets live in KV plus a hand-kept `__index` and a sidecar digest, which
-  weakens policy binding (S11).
+  weakens policy binding (S11). Step 4.4 moved them into `vault_values`
+  ([ADR 0019](../adr/0019-vault-values-table.md)).
 
 ## 4. The new core types
 

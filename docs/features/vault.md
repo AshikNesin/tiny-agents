@@ -16,7 +16,8 @@ Code: `packages/agent/src/vault.ts` (the port), `packages/agent/src/redact.ts`,
 `packages/sandbox/src/vault-target.ts` (`SecretValue`), and
 `apps/web/src/server/api/vault/`. UI: `apps/web/src/client/pages/vault/`.
 Decision records: [ADR 0005](../adr/0005-secrets-live-outside-the-app.md),
-amended by [ADR 0017](../adr/0017-local-is-the-only-vault-backend.md).
+amended by [ADR 0017](../adr/0017-local-is-the-only-vault-backend.md) and
+[ADR 0019](../adr/0019-vault-values-table.md).
 
 ## How a use flows
 
@@ -65,9 +66,12 @@ A chat's [YOLO mode](./yolo-mode.md) never covers a vault use: a call that
 carries a vault item always shows its card, and the broker still requires the
 owner's approval before it resolves a value.
 
-MCP connections take a vault handle as their header value
-(`Connection.secretRef`, set with `PATCH /connections/:id { secretRef }`); it
-is resolved at connect time, audited, and needs the item to allow `mcp`.
+An MCP connection's header value is a vault item: its own (`mcp-<slug>`,
+written when the owner enters the value on the connection, no bots, tool
+`mcp`), or one the owner picks (`Connection.secretRef`, set with
+`PATCH /connections/:id { secretRef }`). It is resolved at connect time,
+audited, and needs the item to allow `mcp`. See
+[connections](./connections.md#stored-secrets).
 
 Tool text tells the model: _"Never type, ask for or repeat a password, card
 number, security code or one-time code yourself."_ `browser_type` points to
@@ -220,26 +224,67 @@ no code path hands a value to anything but a sink.
 
 ### Local
 
-Items go to the `local` backend: values sealed
-in the app's KV store by `apps/web/src/server/crypto/secret-box.ts`. It's
-fully writable from the Vault UI.
+Items go to the `local` backend (`apps/web/src/server/api/vault/backends/local.ts`):
+one `vault_values` row per item, sealed by
+`apps/web/src/server/crypto/secret-box.ts`. It's fully writable from the Vault
+UI.
 
+- **Rows.** `vault_values` holds `id` (the `externalId` a `vault_items` row
+  links), `sealed` (the item's title, urls and values as one ciphertext),
+  `policy` (the policy digest it is sealed under) and timestamps. Every write
+  is one statement or one synchronous transaction (create, a value edit, a
+  re-seal with its row write), so concurrent writes never lose one another,
+  and there is no index to keep (C11).
 - **Keys.** Each purpose (`vault-local`, `connection`) gets its own AES-256-GCM
   key, derived from `SECRETS_KEY` with HKDF-SHA256. Every write uses a fresh
   IV. Values are stored as `v2:<kid>:<iv>:<tag>:<ciphertext>`, where `kid`
   fingerprints the key.
-- **Binding.** The purpose, the record (the item's KV key, or the connection
-  row) and the field are the AAD. A value copied to another item, row or
-  column does not decrypt. A local item is also bound to a digest of its
-  row's policy (audience, origins, hosts, injection). Editing the policy in
-  the Vault UI re-seals the value; widening it in the database directly
-  leaves the value unreadable.
+- **Binding.** The purpose, the record (the item's id, or the connection row)
+  and the field are the AAD. A value copied to another item, row or column
+  does not decrypt. A local item's AAD also carries the digest of its policy
+  (audience, origins, hosts, injection; `vault.policy.ts`).
+- **Authority (S11).** Every read (the listing, describe, resolve, reveal and
+  the item page) opens an item under the digest of the `vault_items` row that
+  links it, and the stored `policy` must equal it. Only an item no row links
+  opens under its stored digest, and the AAD makes that one tamper-evident.
+  Editing the policy in the Vault UI re-seals the value in the transaction
+  that writes the row, opened under the row as that transaction finds it and
+  sealed under the row as written, so two edits at once both land; widening it in the database directly, or editing the
+  stored digest, leaves the value unreadable everywhere ("doesn't match its
+  record or policy"). A value another row already links can't be linked
+  again.
+- **Unreadable items.** An item that won't open doesn't hide the others: "Not
+  linked yet" lists it as "Unreadable item" (not usable, not linkable) and the
+  server logs why. A linked one shows the reason on its page.
 - **Wrong key.** Losing or changing `SECRETS_KEY` makes stored values
   unreadable: the item reports "stored under a different SECRETS_KEY" and has
   to be re-entered. Boot is unaffected.
 - **Rotation.** Move the old key to `SECRETS_KEY_PREVIOUS`, set a new
   `SECRETS_KEY` and run `pnpm secrets:rotate`. It re-seals local items and
-  connection secrets under the new key; then remove `SECRETS_KEY_PREVIOUS`.
+  connection OAuth state under the new key; then remove `SECRETS_KEY_PREVIOUS`.
+  An item it can't read is named and left as it was, and the script exits
+  non-zero: keep `SECRETS_KEY_PREVIOUS` until that item is re-entered or
+  deleted.
+
+### From the KV store (Q4)
+
+Before Q4 each item was a `VAULT_LOCAL:<id>` entry in the KV store
+(`{policy, sealed}`), listed by a hand-kept `VAULT_LOCAL:__index`, and a
+connection's header value was sealed on its row (`secret_enc`). Every start,
+and `pnpm secrets:rotate`, runs `importStoredSecrets()`
+(`apps/web/src/server/api/vault/vault.import.ts`) first:
+
+- Each `VAULT_LOCAL:` entry, whether the index names it or not, is copied
+  byte for byte into `vault_values`: same id, ciphertext and digest, so
+  nothing is re-encrypted. The copy is read back, then the KV entry is
+  deleted. An entry already in the table is stale and is deleted.
+- An entry not in that format stays in KV and is logged, and so is the index
+  while anything is left. An entry another key sealed moves anyway and is
+  logged as unreadable; it opens once that key is `SECRETS_KEY_PREVIOUS`.
+- Each `secret_enc` becomes the connection's own vault item, checked and
+  cleared in one transaction. One that can't be opened stays and is logged.
+
+A second run finds nothing to move. The start never fails because of it.
 
 ## Limits (v1)
 

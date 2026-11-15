@@ -29,7 +29,6 @@ import {
 } from "@tiny-agents/agent";
 import { KIND_DEFAULT_TOOLS } from "../../../shared/vault-kinds";
 import { db, vaultAuditEvents, vaultItems, type VaultItem } from "../../db";
-import { policyDigest } from "../../crypto/secret-box";
 import { readBackends } from "./backends";
 import {
   BackendError,
@@ -93,25 +92,6 @@ export function toMeta(row: VaultItemRow): VaultItemMeta {
     approval: effectiveApproval(row),
     tools: effectiveTools(row),
   };
-}
-
-/**
- * The digest of what an item's value may be used for: its audience, origins,
- * hosts and injection. The local backend binds each value to it, so a row
- * whose policy was widened in the database (not through the service, which
- * re-seals) no longer opens its value.
- */
-export function vaultPolicyDigest(
-  row: Pick<VaultItemRow, "audience" | "originsJson" | "hostsJson" | "injectJson">,
-): string {
-  return policyDigest({
-    audience: row.audience,
-    origins: [...parseList(row.originsJson)].sort(),
-    hosts: parseList(row.hostsJson)
-      .map((h) => h.toLowerCase())
-      .sort(),
-    inject: parseJson(row.injectJson) ?? null,
-  });
 }
 
 function botAllowed(row: VaultItemRow, botId: string | undefined): boolean {
@@ -491,11 +471,7 @@ async function resolveValues(
   try {
     for (const field of wanted) {
       try {
-        const value = await backend.resolve(
-          row.externalId,
-          backendField(row, field),
-          vaultPolicyDigest(row),
-        );
+        const value = await backend.resolve(row.externalId, backendField(row, field));
         secretRedactor.register(value);
         values[field] = value;
       } catch (error) {
@@ -533,13 +509,22 @@ async function markUsed(itemId: string, by: string | null): Promise<void> {
  * is registered with the redactor and audited. The owner linked the item to
  * the connection, so there is no bot scope, no per-use approval and nobody
  * "present" for the unattended rule; the item must still allow `mcp` and be
- * enabled. Throws a message the connection's status shows.
+ * enabled. With `host` (the connection's own item), the item must also list
+ * that host. Throws a message the connection's status shows.
  */
-export async function resolveConnectionSecret(handle: string, slug: string): Promise<string> {
+export async function resolveConnectionSecret(
+  handle: string,
+  slug: string,
+  host?: string,
+): Promise<string> {
   const target = `mcp:${slug}`;
   try {
     return await runUse(
-      { handle, tool: "mcp", targetKind: "connection", target, approved: false },
+      // The connection's own item goes only to the hosts it lists (S4): the
+      // use is checked as one to the connection's host.
+      host === undefined
+        ? { handle, tool: "mcp", targetKind: "connection", target, approved: false }
+        : { handle, tool: "mcp", targetKind: "host", target: host, approved: false },
       { unattended: false },
       { botScoped: false, usedBy: target },
       ["value"],

@@ -9,7 +9,7 @@ exports[`Settings → Models, pinned > deleting a model in use asks which takes 
     aria-hidden="true"
     data-aria-hidden="true"
     data-radix-focus-guard=""
-    style="outline: medium; opacity: 0; position: fixed; pointer-events: none;"
+    style="outline: medium; position: fixed; pointer-events: none;"
     tabindex="0"
   />
   <div
@@ -1285,7 +1285,7 @@ exports[`Settings → Models, pinned > deleting a model in use asks which takes 
     data-aria-hidden="true"
     data-slot="alert-dialog-overlay"
     data-state="open"
-    style="pointer-events: auto; opacity: 1;"
+    style="pointer-events: auto;"
   />
   <div
     aria-describedby="radix-<id1>"
@@ -1295,7 +1295,7 @@ exports[`Settings → Models, pinned > deleting a model in use asks which takes 
     data-state="open"
     id="radix-<id3>"
     role="alertdialog"
-    style="opacity: 1; transform: translateX(-50%) translateY(-50%); pointer-events: auto;"
+    style="pointer-events: auto;"
     tabindex="-1"
   >
     <div
@@ -1358,7 +1358,7 @@ exports[`Settings → Models, pinned > deleting a model in use asks which takes 
     aria-hidden="true"
     data-aria-hidden="true"
     data-radix-focus-guard=""
-    style="outline: medium; opacity: 0; position: fixed; pointer-events: none;"
+    style="outline: medium; position: fixed; pointer-events: none;"
     tabindex="0"
   />
 </body>"
@@ -1537,7 +1537,7 @@ exports[`Settings → Models, pinned > deleting a model in use asks which takes 
     aria-hidden="true"
     data-aria-hidden="true"
     data-radix-focus-guard=""
-    style="outline: medium; opacity: 0; position: fixed; pointer-events: none;"
+    style="outline: medium; position: fixed; pointer-events: none;"
     tabindex="0"
   />
   <div
@@ -2813,7 +2813,7 @@ exports[`Settings → Models, pinned > deleting a model in use asks which takes 
     data-aria-hidden="true"
     data-slot="dialog-overlay"
     data-state="open"
-    style="pointer-events: auto; opacity: 1;"
+    style="pointer-events: auto;"
   />
   <div
     aria-describedby="radix-<id1>"
@@ -2823,7 +2823,7 @@ exports[`Settings → Models, pinned > deleting a model in use asks which takes 
     data-state="open"
     id="radix-<id3>"
     role="dialog"
-    style="opacity: 1; transform: translateX(-50%) translateY(-50%); pointer-events: auto;"
+    style="pointer-events: auto;"
     tabindex="-1"
   >
     <div
@@ -2941,7 +2941,7 @@ exports[`Settings → Models, pinned > deleting a model in use asks which takes 
     aria-hidden="true"
     data-aria-hidden="true"
     data-radix-focus-guard=""
-    style="outline: medium; opacity: 0; position: fixed; pointer-events: none;"
+    style="outline: medium; position: fixed; pointer-events: none;"
     tabindex="0"
   />
 </body>"
@@ -13723,7 +13723,7 @@ exports[`Settings → Models, pinned > the edit dialog for Anthropic > markup 1`
     aria-hidden="true"
     data-aria-hidden="true"
     data-radix-focus-guard=""
-    style="outline: medium; opacity: 0; position: fixed; pointer-events: none;"
+    style="outline: medium; position: fixed; pointer-events: none;"
     tabindex="0"
   />
   <div
@@ -14734,7 +14734,7 @@ exports[`Settings → Models, pinned > the edit dialog for Anthropic > markup 1`
     data-aria-hidden="true"
     data-slot="dialog-overlay"
     data-state="open"
-    style="pointer-events: auto; opacity: 1;"
+    style="pointer-events: auto;"
   />
   <div
     aria-describedby="radix-<id1>"
@@ -14744,7 +14744,7 @@ exports[`Settings → Models, pinned > the edit dialog for Anthropic > markup 1`
     data-state="open"
     id="radix-<id3>"
     role="dialog"
-    style="opacity: 1; transform: translateX(-50%) translateY(-50%); pointer-events: auto;"
+    style="pointer-events: auto;"
     tabindex="-1"
   >
     <div
@@ -14885,7 +14885,7 @@ exports[`Settings → Models, pinned > the edit dialog for Anthropic > markup 1`
     aria-hidden="true"
     data-aria-hidden="true"
     data-radix-focus-guard=""
-    style="outline: medium; opacity: 0; position: fixed; pointer-events: none;"
+    style="outline: medium; position: fixed; pointer-events: none;"
     tabindex="0"
   />
 </body>"
@@ -15039,7 +15039,7 @@ exports[`Settings → Models, pinned > the edit dialog for Gateway > markup 1`] 
     aria-hidden="true"
     data-aria-hidden="true"
     data-radix-focus-guard=""
-    style="outline: medium; opacity: 0; position: fixed; pointer-events: none;"
+    style="outline: medium; position: fixed; pointer-events: none;"
     tabindex="0"
   />
   <div
@@ -16050,7 +16050,7 @@ exports[`Settings → Models, pinned > the edit dialog for Gateway > markup 1`] 
     data-aria-hidden="true"
     data-slot="dialog-overlay"
     data-state="open"
-    style="pointer-events: auto; opacity: 1;"
+    style="pointer-events: auto;"
   />
   <div
     aria-describedby="radix-<id1>"
@@ -16060,7 +16060,7 @@ exports[`Settings → Models, pinned > the edit dialog for Gateway > markup 1`] 
     data-state="open"
     id="radix-<id3>"
     role="dialog"
-    style="opacity: 1; transform: translateX(-50%) translateY(-50%); pointer-events: auto;"
+    style="pointer-events: auto;"
     tabindex="-1"
   >
     <div
@@ -16163,7 +16163,7 @@ exports[`Settings → Models, pinned > the edit dialog for Gateway > markup 1`] 
     aria-hidden="true"
     data-aria-hidden="true"
     data-radix-focus-guard=""
-    style="outline: medium; opacity: 0; position: fixed; pointer-events: none;"
+    style="outline: medium; position: fixed; pointer-events: none;"
     tabindex="0"
   />
 </body>"
@@ -16313,7 +16313,7 @@ exports[`Settings → Models, pinned > the edit dialog for Local > markup 1`] = 
     aria-hidden="true"
     data-aria-hidden="true"
     data-radix-focus-guard=""
-    style="outline: medium; opacity: 0; position: fixed; pointer-events: none;"
+    style="outline: medium; position: fixed; pointer-events: none;"
     tabindex="0"
   />
   <div
@@ -17324,7 +17324,7 @@ exports[`Settings → Models, pinned > the edit dialog for Local > markup 1`] = 
     data-aria-hidden="true"
     data-slot="dialog-overlay"
     data-state="open"
-    style="pointer-events: auto; opacity: 1;"
+    style="pointer-events: auto;"
   />
   <div
     aria-describedby="radix-<id1>"
@@ -17334,7 +17334,7 @@ exports[`Settings → Models, pinned > the edit dialog for Local > markup 1`] = 
     data-state="open"
     id="radix-<id3>"
     role="dialog"
-    style="opacity: 1; transform: translateX(-50%) translateY(-50%); pointer-events: auto;"
+    style="pointer-events: auto;"
     tabindex="-1"
   >
     <div
@@ -17496,7 +17496,7 @@ exports[`Settings → Models, pinned > the edit dialog for Local > markup 1`] = 
     aria-hidden="true"
     data-aria-hidden="true"
     data-radix-focus-guard=""
-    style="outline: medium; opacity: 0; position: fixed; pointer-events: none;"
+    style="outline: medium; position: fixed; pointer-events: none;"
     tabindex="0"
   />
 </body>"
@@ -17651,7 +17651,7 @@ exports[`Settings → Models, pinned > the edit dialog for Through gateway > mar
     aria-hidden="true"
     data-aria-hidden="true"
     data-radix-focus-guard=""
-    style="outline: medium; opacity: 0; position: fixed; pointer-events: none;"
+    style="outline: medium; position: fixed; pointer-events: none;"
     tabindex="0"
   />
   <div
@@ -18662,7 +18662,7 @@ exports[`Settings → Models, pinned > the edit dialog for Through gateway > mar
     data-aria-hidden="true"
     data-slot="dialog-overlay"
     data-state="open"
-    style="pointer-events: auto; opacity: 1;"
+    style="pointer-events: auto;"
   />
   <div
     aria-describedby="radix-<id1>"
@@ -18672,7 +18672,7 @@ exports[`Settings → Models, pinned > the edit dialog for Through gateway > mar
     data-state="open"
     id="radix-<id3>"
     role="dialog"
-    style="opacity: 1; transform: translateX(-50%) translateY(-50%); pointer-events: auto;"
+    style="pointer-events: auto;"
     tabindex="-1"
   >
     <div
@@ -18772,7 +18772,7 @@ exports[`Settings → Models, pinned > the edit dialog for Through gateway > mar
     aria-hidden="true"
     data-aria-hidden="true"
     data-radix-focus-guard=""
-    style="outline: medium; opacity: 0; position: fixed; pointer-events: none;"
+    style="outline: medium; position: fixed; pointer-events: none;"
     tabindex="0"
   />
 </body>"

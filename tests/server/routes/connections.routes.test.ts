@@ -11,7 +11,16 @@ import { getRequestListener } from "@hono/node-server";
 import { Hono } from "hono";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vite-plus/test";
 import { z } from "zod";
-import { botConnections, bots, connections, db, vaultItems } from "../../../apps/web/src/server/db";
+import {
+  botConnections,
+  bots,
+  connections,
+  db,
+  vaultAuditEvents,
+  vaultItems,
+  vaultValues,
+} from "../../../apps/web/src/server/db";
+import { eq } from "drizzle-orm";
 import { McpServer, StreamableHTTPServerTransport } from "../../../packages/agent/src/testing";
 import {
   ConnectionManager,
@@ -190,6 +199,10 @@ describe("MCP connections (header auth, streamable http)", () => {
     await db.delete(botConnections);
     await db.delete(connections);
     await db.delete(bots);
+    // Connections deleted above leave their own header-value items (Q4).
+    await db.delete(vaultAuditEvents);
+    await db.delete(vaultItems);
+    await db.delete(vaultValues);
   });
 
   it("needs a step-up to create, re-point or delete a connection, not to rename it (S4)", async () => {
@@ -243,13 +256,141 @@ describe("MCP connections (header auth, streamable http)", () => {
     const elsewhere = mcpServer.url.replace("127.0.0.1", "localhost");
     const moved = await call(app, path, 200, { method: "PATCH", json: { url: elsewhere } });
     expect(moved.data.hasSecret).toBe(false);
-    expect((await db.query.connections.findFirst())?.secretEnc).toBeNull();
+    // The old host's value is gone, its own vault item with it (Q4).
+    expect((await db.query.connections.findFirst())?.secretItemId).toBeNull();
+    expect(await db.select().from(vaultItems)).toEqual([]);
     // Moving with a new secret keeps that one.
     const back = await call(app, path, 200, {
       method: "PATCH",
       json: { url: mcpServer.url, secret: "fresh" },
     });
     expect(back.data.hasSecret).toBe(true);
+  });
+
+  it("a host move without a new value drops the own item even with secretRef: null (S4)", async () => {
+    const app = buildApp();
+    const { data } = await call(app, "/api/v1/connections", 201, {
+      method: "POST",
+      json: { ...DEMO, name: "Probe", url: mcpServer.url },
+    });
+    expect(data.status).toBe("connected");
+    const elsewhere = mcpServer.url.replace("127.0.0.1", "localhost");
+    const moved = await call(app, `/api/v1/connections/${data.id}`, 200, {
+      method: "PATCH",
+      json: { url: elsewhere, secretRef: null },
+    });
+    expect(moved.data).toMatchObject({ hasSecret: false, secretRef: null });
+    expect(moved.data.status).not.toBe("connected");
+    expect((await db.query.connections.findFirst())?.secretItemId).toBeNull();
+    expect(await db.select().from(vaultItems)).toEqual([]);
+  });
+
+  it("sends the own item only to the hosts it lists (S4)", async () => {
+    const app = buildApp();
+    const { data } = await call(app, "/api/v1/connections", 201, {
+      method: "POST",
+      json: { ...DEMO, name: "Scoped", url: mcpServer.url },
+    });
+    expect(data.status).toBe("connected");
+    await call(app, "/api/v1/vault/items/mcp-scoped", 200, {
+      method: "PUT",
+      json: { policy: { hosts: ["mcp.elsewhere.example"] } },
+    });
+    const again = await call(app, `/api/v1/connections/${data.id}/reconnect`, 200, {
+      method: "POST",
+    });
+    expect(again.data.status).toBe("error");
+    expect(again.data.error).toContain("may not be sent to 127.0.0.1");
+  });
+
+  it("a new value resets the own item's policy, so it still opens (inject set in the Vault)", async () => {
+    const app = buildApp();
+    const { data } = await call(app, "/api/v1/connections", 201, {
+      method: "POST",
+      json: { ...DEMO, name: "Inject", url: mcpServer.url },
+    });
+    await call(app, "/api/v1/vault/items/mcp-inject", 200, {
+      method: "PUT",
+      json: { policy: { inject: { as: "header", name: "x-api-key", format: "{value}" } } },
+    });
+    mcpServer.tokens.add("secret456");
+    const changed = await call(app, `/api/v1/connections/${data.id}`, 200, {
+      method: "PATCH",
+      json: { secret: "secret456" },
+    });
+    expect(changed.data.status).toBe("connected");
+    expect((await db.query.vaultItems.findFirst())?.injectJson).toBeNull();
+  });
+
+  it("refuses to delete a connection's own item from the Vault page (409)", async () => {
+    const app = buildApp();
+    const { data } = await call(app, "/api/v1/connections", 201, {
+      method: "POST",
+      json: { ...DEMO, name: "Kept", url: mcpServer.url },
+    });
+    for (const path of [
+      "/api/v1/vault/items/mcp-kept?purge=true",
+      "/api/v1/vault/items/mcp-kept",
+    ]) {
+      const refused = await call(app, path, 409, { method: "DELETE" });
+      expect(refused.error?.message).toContain("Kept");
+    }
+    expect(await db.select().from(vaultItems)).toHaveLength(1);
+    const kept = await call(app, `/api/v1/connections/${data.id}/reconnect`, 200, {
+      method: "POST",
+    });
+    expect(kept.data).toMatchObject({ hasSecret: true, status: "connected" });
+  });
+
+  it("keeps the header value as the connection's own vault item, deleted with it (Q4)", async () => {
+    const app = buildApp();
+    const { data } = await call(app, "/api/v1/connections", 201, {
+      method: "POST",
+      json: { ...DEMO, name: "Own", url: mcpServer.url },
+    });
+    expect(data).toMatchObject({ status: "connected", hasSecret: true, secretRef: null });
+    const row = await db.query.connections.findFirst({ where: eq(connections.id, data.id) });
+    expect(row?.secretEnc).toBeNull();
+    const [item] = await db.select().from(vaultItems);
+    expect(item).toMatchObject({
+      id: row!.secretItemId,
+      handle: "mcp-own",
+      kind: "api_key",
+      audience: "bots",
+      hostsJson: '["127.0.0.1"]',
+      toolsJson: '["mcp"]',
+      botsJson: "[]",
+    });
+    expect(JSON.stringify(await db.select().from(vaultValues))).not.toContain("secret123");
+
+    // A new value replaces the item's in place, and connects with it.
+    const path = `/api/v1/connections/${data.id}`;
+    mcpServer.tokens.add("secret456");
+    mcpServer.tokens.delete("secret123");
+    const changed = await call(app, path, 200, { method: "PATCH", json: { secret: "secret456" } });
+    expect(changed.data.status).toBe("connected");
+    expect((await db.select().from(vaultItems)).map((i) => i.id)).toEqual([item!.id]);
+
+    // Pointing at another item and back (null) returns to its own.
+    const shared = await call(app, path, 200, { method: "PATCH", json: { secretRef: "mcp-own" } });
+    expect(shared.data).toMatchObject({ secretRef: "mcp-own", status: "connected" });
+    const own = await call(app, path, 200, { method: "PATCH", json: { secretRef: null } });
+    expect(own.data).toMatchObject({ secretRef: null, hasSecret: true, status: "connected" });
+
+    // Removing the connection removes its item and value; the audit says so.
+    await call(app, path, 200, { method: "DELETE" });
+    expect(await db.select().from(vaultItems)).toEqual([]);
+    expect(await db.select().from(vaultValues)).toEqual([]);
+    const outcomes = (await db.select().from(vaultAuditEvents))
+      .filter((event) => event.handle === "mcp-own")
+      .map((event) => [event.tool, event.outcome]);
+    expect(outcomes).toEqual(
+      expect.arrayContaining([
+        ["connections", "created"],
+        ["connections", "updated"],
+        ["connections", "deleted"],
+      ]),
+    );
   });
 
   it("refuses an app credential as a connection's header secret (S4)", async () => {

@@ -155,7 +155,6 @@ exports[`ChatMessageView, pinned > a failed tool row opens to a destructive outp
               data-slot="trace-collapsible-content"
               data-state="open"
               id="radix-<id1>"
-              style=""
             >
               <div
                 class="mt-2 mb-1 ml-[calc(--spacing(2)-1px)] min-w-0 border-l pr-1 pl-4 leading-relaxed wrap-break-word text-muted-foreground space-y-2"
@@ -334,7 +333,6 @@ exports[`ChatMessageView, pinned > a group opens to its calls > markup 1`] = `
               data-slot="trace-collapsible-content"
               data-state="open"
               id="radix-<id1>"
-              style=""
             >
               <div
                 class="mt-2 mb-1 ml-[calc(--spacing(2)-1px)] min-w-0 border-l pr-1 pl-4 leading-relaxed wrap-break-word text-muted-foreground space-y-1"
@@ -438,7 +436,6 @@ exports[`ChatMessageView, pinned > a group opens to its calls > markup 1`] = `
                       data-state="closed"
                       hidden=""
                       id="radix-<id2>"
-                      style=""
                     />
                   </div>
                 </div>
@@ -562,7 +559,6 @@ exports[`ChatMessageView, pinned > a tool row opens to its input, output and sou
               data-slot="trace-collapsible-content"
               data-state="open"
               id="radix-<id1>"
-              style=""
             >
               <div
                 class="mt-2 mb-1 ml-[calc(--spacing(2)-1px)] min-w-0 border-l pr-1 pl-4 leading-relaxed wrap-break-word text-muted-foreground space-y-2"
@@ -1081,7 +1077,6 @@ exports[`ChatMessageView, pinned > assistant: done tool while streaming > markup
           </span>
           <span
             class="col-start-1 row-start-1 shimmer-text"
-            style="opacity: 1; transform: none;"
           >
             Thinking
           </span>
@@ -1114,7 +1109,7 @@ exports[`ChatMessageView, pinned > assistant: error with detail > markup 1`] = `
     >
       <div
         class="flex min-w-0 flex-col items-start gap-1"
-        style="transform-origin: left bottom; opacity: 1; transform: none;"
+        style="transform-origin: left bottom;"
       >
         <div
           class="chat-md min-w-0 max-w-full px-0.5 py-1 md:max-w-[88%]"
@@ -1192,7 +1187,7 @@ exports[`ChatMessageView, pinned > assistant: error, no text > markup 1`] = `
     >
       <div
         class="flex min-w-0 flex-col items-start gap-1"
-        style="transform-origin: left bottom; opacity: 1; transform: none;"
+        style="transform-origin: left bottom;"
       >
         <div
           class="chat-md min-w-0 max-w-full px-0.5 py-1 md:max-w-[88%]"
@@ -1228,7 +1223,7 @@ exports[`ChatMessageView, pinned > assistant: fresh text > markup 1`] = `
     >
       <div
         class="flex min-w-0 flex-col items-start gap-1"
-        style="transform-origin: left bottom; opacity: 0; transform: translateY(8px) scale(0.96);"
+        style="transform-origin: left bottom;"
       >
         <div
           class="chat-md min-w-0 max-w-full px-0.5 py-1 md:max-w-[88%]"
@@ -1385,12 +1380,11 @@ exports[`ChatMessageView, pinned > assistant: reasoning done > markup 1`] = `
           data-state="closed"
           hidden=""
           id="radix-<id1>"
-          style=""
         />
       </div>
       <div
         class="flex min-w-0 flex-col items-start gap-1"
-        style="transform-origin: left bottom; opacity: 1; transform: none;"
+        style="transform-origin: left bottom;"
       >
         <div
           class="chat-md min-w-0 max-w-full px-0.5 py-1 md:max-w-[88%]"
@@ -1514,7 +1508,7 @@ exports[`ChatMessageView, pinned > assistant: reasoning while streaming > markup
           data-slot="trace-collapsible-content"
           data-state="open"
           id="radix-<id1>"
-          style="transition-duration: 0s; animation-name: none;"
+          style="transition-duration: 0s;"
         >
           <div
             class="mt-2 mb-1 ml-[calc(--spacing(2)-1px)] min-w-0 border-l pr-1 pl-4 leading-relaxed wrap-break-word text-muted-foreground"
@@ -1591,7 +1585,7 @@ exports[`ChatMessageView, pinned > assistant: stopped > markup 1`] = `
     >
       <div
         class="flex min-w-0 flex-col items-start gap-1"
-        style="transform-origin: left bottom; opacity: 1; transform: none;"
+        style="transform-origin: left bottom;"
       >
         <div
           class="chat-md min-w-0 max-w-full px-0.5 py-1 md:max-w-[88%]"
@@ -1669,7 +1663,7 @@ exports[`ChatMessageView, pinned > assistant: streaming text > markup 1`] = `
     >
       <div
         class="flex min-w-0 flex-col items-start gap-1"
-        style="transform-origin: left bottom; opacity: 0; transform: translateY(8px) scale(0.96);"
+        style="transform-origin: left bottom;"
       >
         <div
           class="chat-md min-w-0 max-w-full px-0.5 py-1 md:max-w-[88%]"
@@ -1737,7 +1731,6 @@ exports[`ChatMessageView, pinned > assistant: streaming, nothing yet > markup 1`
           </span>
           <span
             class="col-start-1 row-start-1 shimmer-text"
-            style="opacity: 1; transform: none;"
           >
             Thinking
           </span>
@@ -1769,7 +1762,7 @@ exports[`ChatMessageView, pinned > assistant: text > markup 1`] = `
     >
       <div
         class="flex min-w-0 flex-col items-start gap-1"
-        style="transform-origin: left bottom; opacity: 1; transform: none;"
+        style="transform-origin: left bottom;"
       >
         <div
           class="chat-md min-w-0 max-w-full px-0.5 py-1 md:max-w-[88%]"
@@ -1878,7 +1871,7 @@ exports[`ChatMessageView, pinned > assistant: unanswered > markup 1`] = `
     >
       <div
         class="flex min-w-0 flex-col items-start gap-1"
-        style="transform-origin: left bottom; opacity: 1; transform: none;"
+        style="transform-origin: left bottom;"
       >
         <div
           class="chat-md min-w-0 max-w-full px-0.5 py-1 md:max-w-[88%]"
@@ -2326,7 +2319,6 @@ exports[`ChatMessageView, pinned > card: asked questions > markup 1`] = `
               data-state="closed"
               hidden=""
               id="radix-<id1>"
-              style=""
             />
           </div>
         </div>
@@ -3173,7 +3165,7 @@ exports[`ChatMessageView, pinned > copy swaps its icon > markup 1`] = `
     >
       <div
         class="flex min-w-0 flex-col items-start gap-1"
-        style="transform-origin: left bottom; opacity: 1; transform: none;"
+        style="transform-origin: left bottom;"
       >
         <div
           class="chat-md min-w-0 max-w-full px-0.5 py-1 md:max-w-[88%]"
@@ -3593,7 +3585,6 @@ exports[`ChatMessageView, pinned > peer: message, streaming > markup 1`] = `
         </span>
         <span
           class="col-start-1 row-start-1 shimmer-text"
-          style="opacity: 1; transform: none;"
         >
           Replying
         </span>
@@ -3808,7 +3799,6 @@ exports[`ChatMessageView, pinned > read-only (no owner actions) card: approval >
               data-state="closed"
               hidden=""
               id="radix-<id1>"
-              style=""
             />
           </div>
         </div>
@@ -3920,7 +3910,6 @@ exports[`ChatMessageView, pinned > read-only (no owner actions) card: approval, 
               data-state="closed"
               hidden=""
               id="radix-<id1>"
-              style=""
             />
           </div>
         </div>
@@ -4036,7 +4025,6 @@ Do t”
               data-state="closed"
               hidden=""
               id="radix-<id1>"
-              style=""
             />
           </div>
         </div>
@@ -4141,7 +4129,6 @@ exports[`ChatMessageView, pinned > read-only (no owner actions) card: asked ques
               data-state="closed"
               hidden=""
               id="radix-<id1>"
-              style=""
             />
           </div>
         </div>
@@ -4466,7 +4453,6 @@ exports[`ChatMessageView, pinned > read-only (no owner actions) card: question >
               data-state="closed"
               hidden=""
               id="radix-<id1>"
-              style=""
             />
           </div>
         </div>
@@ -4714,7 +4700,6 @@ exports[`ChatMessageView, pinned > read-only (no owner actions) card: vault appr
               data-state="closed"
               hidden=""
               id="radix-<id1>"
-              style=""
             />
           </div>
         </div>
@@ -4793,12 +4778,12 @@ exports[`ChatMessageView, pinned > reasoning folds when the turn finishes and op
           data-state="closed"
           hidden=""
           id="radix-<id1>"
-          style="transition-duration: 0s; animation-name: none;"
+          style="transition-duration: 0s;"
         />
       </div>
       <div
         class="flex min-w-0 flex-col items-start gap-1"
-        style="transform-origin: left bottom; opacity: 0; transform: translateY(8px) scale(0.96);"
+        style="transform-origin: left bottom;"
       >
         <div
           class="chat-md min-w-0 max-w-full px-0.5 py-1 md:max-w-[88%]"
@@ -4909,7 +4894,6 @@ exports[`ChatMessageView, pinned > reasoning folds when the turn finishes and op
           data-slot="trace-collapsible-content"
           data-state="open"
           id="radix-<id1>"
-          style=""
         >
           <div
             class="mt-2 mb-1 ml-[calc(--spacing(2)-1px)] min-w-0 border-l pr-1 pl-4 leading-relaxed wrap-break-word text-muted-foreground"
@@ -4925,7 +4909,7 @@ exports[`ChatMessageView, pinned > reasoning folds when the turn finishes and op
       </div>
       <div
         class="flex min-w-0 flex-col items-start gap-1"
-        style="transform-origin: left bottom; opacity: 1; transform: none;"
+        style="transform-origin: left bottom;"
       >
         <div
           class="chat-md min-w-0 max-w-full px-0.5 py-1 md:max-w-[88%]"
@@ -5273,7 +5257,6 @@ exports[`ChatMessageView, pinned > tool: error > markup 1`] = `
               data-state="closed"
               hidden=""
               id="radix-<id1>"
-              style=""
             />
           </div>
         </div>
@@ -5456,7 +5439,6 @@ exports[`ChatMessageView, pinned > tool: group of finished > markup 1`] = `
               data-state="closed"
               hidden=""
               id="radix-<id1>"
-              style=""
             />
           </div>
         </div>
@@ -5579,7 +5561,6 @@ exports[`ChatMessageView, pinned > tool: load_skill > markup 1`] = `
               data-state="closed"
               hidden=""
               id="radix-<id1>"
-              style=""
             />
           </div>
         </div>
@@ -5669,7 +5650,6 @@ exports[`ChatMessageView, pinned > tool: with output, sources, duration > markup
               data-state="closed"
               hidden=""
               id="radix-<id1>"
-              style=""
             />
           </div>
         </div>
@@ -5696,7 +5676,7 @@ exports[`ChatMessageView, pinned > user: attachments only > markup 1`] = `
   >
     <div
       class="flex max-w-[92%] md:max-w-[80%] min-w-0 flex-col gap-1 items-end"
-      style="transform-origin: right bottom; opacity: 1; transform: none;"
+      style="transform-origin: right bottom;"
     >
       <div
         class="mb-1 flex flex-col items-end gap-1.5"
@@ -5801,7 +5781,7 @@ exports[`ChatMessageView, pinned > user: mine, fresh > markup 1`] = `
   >
     <div
       class="flex max-w-[92%] md:max-w-[80%] min-w-0 flex-col gap-1 items-end"
-      style="transform-origin: right bottom; opacity: 0; transform: translateY(8px) scale(0.96);"
+      style="transform-origin: right bottom;"
     >
       <div
         class="bg-bubble-user text-bubble-user-foreground min-w-0 max-w-full rounded-2xl px-3.5 py-2 text-[15px] leading-[22.5px] wrap-break-word text-pretty"
@@ -5865,7 +5845,7 @@ exports[`ChatMessageView, pinned > user: mine, long ago > markup 1`] = `
   >
     <div
       class="flex max-w-[92%] md:max-w-[80%] min-w-0 flex-col gap-1 items-end"
-      style="transform-origin: right bottom; opacity: 1; transform: none;"
+      style="transform-origin: right bottom;"
     >
       <div
         class="bg-bubble-user text-bubble-user-foreground min-w-0 max-w-full rounded-2xl px-3.5 py-2 text-[15px] leading-[22.5px] wrap-break-word text-pretty"
@@ -5929,7 +5909,7 @@ exports[`ChatMessageView, pinned > user: mine, this week > markup 1`] = `
   >
     <div
       class="flex max-w-[92%] md:max-w-[80%] min-w-0 flex-col gap-1 items-end"
-      style="transform-origin: right bottom; opacity: 1; transform: none;"
+      style="transform-origin: right bottom;"
     >
       <div
         class="bg-bubble-user text-bubble-user-foreground min-w-0 max-w-full rounded-2xl px-3.5 py-2 text-[15px] leading-[22.5px] wrap-break-word text-pretty"
@@ -5993,7 +5973,7 @@ exports[`ChatMessageView, pinned > user: mine, today > markup 1`] = `
   >
     <div
       class="flex max-w-[92%] md:max-w-[80%] min-w-0 flex-col gap-1 items-end"
-      style="transform-origin: right bottom; opacity: 1; transform: none;"
+      style="transform-origin: right bottom;"
     >
       <div
         class="bg-bubble-user text-bubble-user-foreground min-w-0 max-w-full rounded-2xl px-3.5 py-2 text-[15px] leading-[22.5px] wrap-break-word text-pretty"
@@ -6058,7 +6038,7 @@ exports[`ChatMessageView, pinned > user: my own authored > markup 1`] = `
   >
     <div
       class="flex max-w-[92%] md:max-w-[80%] min-w-0 flex-col gap-1 items-end"
-      style="transform-origin: right bottom; opacity: 1; transform: none;"
+      style="transform-origin: right bottom;"
     >
       <div
         class="bg-bubble-user text-bubble-user-foreground min-w-0 max-w-full rounded-2xl px-3.5 py-2 text-[15px] leading-[22.5px] wrap-break-word text-pretty"
@@ -6122,7 +6102,7 @@ exports[`ChatMessageView, pinned > user: no time > markup 1`] = `
   >
     <div
       class="flex max-w-[92%] md:max-w-[80%] min-w-0 flex-col gap-1 items-end"
-      style="transform-origin: right bottom; opacity: 1; transform: none;"
+      style="transform-origin: right bottom;"
     >
       <div
         class="bg-bubble-user text-bubble-user-foreground min-w-0 max-w-full rounded-2xl px-3.5 py-2 text-[15px] leading-[22.5px] wrap-break-word text-pretty"
@@ -6178,7 +6158,7 @@ exports[`ChatMessageView, pinned > user: someone else's > markup 1`] = `
   >
     <div
       class="flex max-w-[92%] md:max-w-[80%] min-w-0 flex-col gap-1 items-start"
-      style="transform-origin: left bottom; opacity: 1; transform: none;"
+      style="transform-origin: left bottom;"
     >
       <p
         class="text-muted-foreground flex items-center gap-1.5 px-1 text-xs"
@@ -6259,7 +6239,7 @@ exports[`ChatMessageView, pinned > user: someone else's, unanswered > markup 1`]
   >
     <div
       class="flex max-w-[92%] md:max-w-[80%] min-w-0 flex-col gap-1 items-start"
-      style="transform-origin: left bottom; opacity: 1; transform: none;"
+      style="transform-origin: left bottom;"
     >
       <p
         class="text-muted-foreground flex items-center gap-1.5 px-1 text-xs"
@@ -6345,7 +6325,7 @@ exports[`ChatMessageView, pinned > user: text and attachment > markup 1`] = `
   >
     <div
       class="flex max-w-[92%] md:max-w-[80%] min-w-0 flex-col gap-1 items-end"
-      style="transform-origin: right bottom; opacity: 1; transform: none;"
+      style="transform-origin: right bottom;"
     >
       <div
         class="mb-1 flex flex-col items-end gap-1.5"
@@ -6477,7 +6457,7 @@ exports[`ChatMessageView, pinned > user: unanswered > markup 1`] = `
   >
     <div
       class="flex max-w-[92%] md:max-w-[80%] min-w-0 flex-col gap-1 items-end"
-      style="transform-origin: right bottom; opacity: 1; transform: none;"
+      style="transform-origin: right bottom;"
     >
       <div
         class="bg-bubble-user text-bubble-user-foreground min-w-0 max-w-full rounded-2xl px-3.5 py-2 text-[15px] leading-[22.5px] wrap-break-word text-pretty"

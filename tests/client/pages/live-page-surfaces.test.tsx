@@ -529,7 +529,7 @@ describe("the pages' poll", () => {
     mount("browser");
     await connect();
     expect(delays()[0]).toBe(3000);
-    expect(delays().at(-1)).toBe(1500);
+    await waitFor(() => expect(delays().at(-1)).toBe(1500));
   });
 
   it("polls the desktops every 1.5s while any of them starts, not just the one shown", async () => {
@@ -538,7 +538,7 @@ describe("the pages' poll", () => {
     mount("computer");
     await connect();
     expect(delays()[0]).toBe(3000);
-    expect(delays().at(-1)).toBe(1500);
+    await waitFor(() => expect(delays().at(-1)).toBe(1500));
   });
 
   it("polls every 3s when nothing starts", async () => {

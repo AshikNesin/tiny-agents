@@ -145,7 +145,7 @@ exports[`Routines page, pinned > a card while it runs > markup 1`] = `
                     data-disabled=""
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -279,7 +279,7 @@ exports[`Routines page, pinned > a card while it runs > markup 1`] = `
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -411,7 +411,7 @@ exports[`Routines page, pinned > a card while it runs > markup 1`] = `
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="unchecked"
-                    style="width: 16px; height: 16px; transform: translateX(2px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -546,7 +546,7 @@ exports[`Routines page, pinned > a card while it runs > markup 1`] = `
                     data-disabled=""
                     data-slot="switch-thumb"
                     data-state="unchecked"
-                    style="width: 16px; height: 16px; transform: translateX(2px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -693,7 +693,7 @@ exports[`Routines page, pinned > a card while it runs > markup 1`] = `
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -840,7 +840,7 @@ exports[`Routines page, pinned > a card while it runs > markup 1`] = `
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -982,7 +982,7 @@ exports[`Routines page, pinned > a card while it runs > markup 1`] = `
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="unchecked"
-                    style="width: 16px; height: 16px; transform: translateX(2px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -1923,7 +1923,7 @@ exports[`Routines page, pinned > the editor for a daily cron > markup 1`] = `
     aria-hidden="true"
     data-aria-hidden="true"
     data-radix-focus-guard=""
-    style="outline: medium; opacity: 0; position: fixed; pointer-events: none;"
+    style="outline: medium; position: fixed; pointer-events: none;"
     tabindex="0"
   />
   <div>
@@ -2068,7 +2068,7 @@ exports[`Routines page, pinned > the editor for a daily cron > markup 1`] = `
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -2200,7 +2200,7 @@ exports[`Routines page, pinned > the editor for a daily cron > markup 1`] = `
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -2332,7 +2332,7 @@ exports[`Routines page, pinned > the editor for a daily cron > markup 1`] = `
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="unchecked"
-                    style="width: 16px; height: 16px; transform: translateX(2px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -2467,7 +2467,7 @@ exports[`Routines page, pinned > the editor for a daily cron > markup 1`] = `
                     data-disabled=""
                     data-slot="switch-thumb"
                     data-state="unchecked"
-                    style="width: 16px; height: 16px; transform: translateX(2px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -2614,7 +2614,7 @@ exports[`Routines page, pinned > the editor for a daily cron > markup 1`] = `
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -2761,7 +2761,7 @@ exports[`Routines page, pinned > the editor for a daily cron > markup 1`] = `
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -2903,7 +2903,7 @@ exports[`Routines page, pinned > the editor for a daily cron > markup 1`] = `
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="unchecked"
-                    style="width: 16px; height: 16px; transform: translateX(2px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -3525,7 +3525,7 @@ exports[`Routines page, pinned > the editor for a daily cron > markup 1`] = `
     data-aria-hidden="true"
     data-slot="dialog-overlay"
     data-state="open"
-    style="pointer-events: auto; opacity: 1;"
+    style="pointer-events: auto;"
   />
   <div
     aria-describedby="radix-<id1>"
@@ -3535,7 +3535,7 @@ exports[`Routines page, pinned > the editor for a daily cron > markup 1`] = `
     data-state="open"
     id="radix-<id3>"
     role="dialog"
-    style="opacity: 1; transform: translateX(-50%) translateY(-50%); pointer-events: auto;"
+    style="pointer-events: auto;"
     tabindex="-1"
   >
     <div
@@ -3883,7 +3883,7 @@ exports[`Routines page, pinned > the editor for a daily cron > markup 1`] = `
     aria-hidden="true"
     data-aria-hidden="true"
     data-radix-focus-guard=""
-    style="outline: medium; opacity: 0; position: fixed; pointer-events: none;"
+    style="outline: medium; position: fixed; pointer-events: none;"
     tabindex="0"
   />
 </body>"
@@ -4133,7 +4133,7 @@ exports[`Routines page, pinned > the editor for a done once > markup 1`] = `
     aria-hidden="true"
     data-aria-hidden="true"
     data-radix-focus-guard=""
-    style="outline: medium; opacity: 0; position: fixed; pointer-events: none;"
+    style="outline: medium; position: fixed; pointer-events: none;"
     tabindex="0"
   />
   <div>
@@ -4278,7 +4278,7 @@ exports[`Routines page, pinned > the editor for a done once > markup 1`] = `
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -4410,7 +4410,7 @@ exports[`Routines page, pinned > the editor for a done once > markup 1`] = `
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -4542,7 +4542,7 @@ exports[`Routines page, pinned > the editor for a done once > markup 1`] = `
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="unchecked"
-                    style="width: 16px; height: 16px; transform: translateX(2px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -4677,7 +4677,7 @@ exports[`Routines page, pinned > the editor for a done once > markup 1`] = `
                     data-disabled=""
                     data-slot="switch-thumb"
                     data-state="unchecked"
-                    style="width: 16px; height: 16px; transform: translateX(2px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -4824,7 +4824,7 @@ exports[`Routines page, pinned > the editor for a done once > markup 1`] = `
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -4971,7 +4971,7 @@ exports[`Routines page, pinned > the editor for a done once > markup 1`] = `
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -5113,7 +5113,7 @@ exports[`Routines page, pinned > the editor for a done once > markup 1`] = `
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="unchecked"
-                    style="width: 16px; height: 16px; transform: translateX(2px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -5735,7 +5735,7 @@ exports[`Routines page, pinned > the editor for a done once > markup 1`] = `
     data-aria-hidden="true"
     data-slot="dialog-overlay"
     data-state="open"
-    style="pointer-events: auto; opacity: 1;"
+    style="pointer-events: auto;"
   />
   <div
     aria-describedby="radix-<id1>"
@@ -5745,7 +5745,7 @@ exports[`Routines page, pinned > the editor for a done once > markup 1`] = `
     data-state="open"
     id="radix-<id3>"
     role="dialog"
-    style="opacity: 1; transform: translateX(-50%) translateY(-50%); pointer-events: auto;"
+    style="pointer-events: auto;"
     tabindex="-1"
   >
     <div
@@ -6050,7 +6050,7 @@ exports[`Routines page, pinned > the editor for a done once > markup 1`] = `
     aria-hidden="true"
     data-aria-hidden="true"
     data-radix-focus-guard=""
-    style="outline: medium; opacity: 0; position: fixed; pointer-events: none;"
+    style="outline: medium; position: fixed; pointer-events: none;"
     tabindex="0"
   />
 </body>"
@@ -6290,7 +6290,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
     aria-hidden="true"
     data-aria-hidden="true"
     data-radix-focus-guard=""
-    style="outline: medium; opacity: 0; position: fixed; pointer-events: none;"
+    style="outline: medium; position: fixed; pointer-events: none;"
     tabindex="0"
   />
   <div>
@@ -6435,7 +6435,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -6567,7 +6567,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -6699,7 +6699,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="unchecked"
-                    style="width: 16px; height: 16px; transform: translateX(2px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -6834,7 +6834,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     data-disabled=""
                     data-slot="switch-thumb"
                     data-state="unchecked"
-                    style="width: 16px; height: 16px; transform: translateX(2px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -6981,7 +6981,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -7128,7 +7128,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -7270,7 +7270,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="unchecked"
-                    style="width: 16px; height: 16px; transform: translateX(2px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -7892,7 +7892,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
     data-aria-hidden="true"
     data-slot="dialog-overlay"
     data-state="open"
-    style="pointer-events: auto; opacity: 1;"
+    style="pointer-events: auto;"
   />
   <div
     aria-describedby="radix-<id1>"
@@ -7902,7 +7902,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
     data-state="open"
     id="radix-<id3>"
     role="dialog"
-    style="opacity: 1; transform: translateX(-50%) translateY(-50%); pointer-events: auto;"
+    style="pointer-events: auto;"
     tabindex="-1"
   >
     <div
@@ -8206,7 +8206,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
     aria-hidden="true"
     data-aria-hidden="true"
     data-radix-focus-guard=""
-    style="outline: medium; opacity: 0; position: fixed; pointer-events: none;"
+    style="outline: medium; position: fixed; pointer-events: none;"
     tabindex="0"
   />
 </body>"
@@ -8447,7 +8447,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
     aria-hidden="true"
     data-aria-hidden="true"
     data-radix-focus-guard=""
-    style="outline: medium; opacity: 0; position: fixed; pointer-events: none;"
+    style="outline: medium; position: fixed; pointer-events: none;"
     tabindex="0"
   />
   <div>
@@ -8592,7 +8592,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -8724,7 +8724,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -8856,7 +8856,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="unchecked"
-                    style="width: 16px; height: 16px; transform: translateX(2px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -8991,7 +8991,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     data-disabled=""
                     data-slot="switch-thumb"
                     data-state="unchecked"
-                    style="width: 16px; height: 16px; transform: translateX(2px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -9138,7 +9138,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -9285,7 +9285,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -9427,7 +9427,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="unchecked"
-                    style="width: 16px; height: 16px; transform: translateX(2px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -10049,7 +10049,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
     data-aria-hidden="true"
     data-slot="dialog-overlay"
     data-state="open"
-    style="pointer-events: auto; opacity: 1;"
+    style="pointer-events: auto;"
   />
   <div
     aria-describedby="radix-<id1>"
@@ -10059,7 +10059,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
     data-state="open"
     id="radix-<id3>"
     role="dialog"
-    style="opacity: 1; transform: translateX(-50%) translateY(-50%); pointer-events: auto;"
+    style="pointer-events: auto;"
     tabindex="-1"
   >
     <div
@@ -10203,7 +10203,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
               <span
                 aria-hidden="true"
                 class="pointer-events-none absolute -z-10 rounded-lg bg-foreground/5"
-                style="left: 0px; top: 0px; width: 0px; height: 0px; opacity: 1;"
+                style="left: 0px; top: 0px; width: 0px; height: 0px;"
               />
               <button
                 aria-controls="radix-<id4>-content-once"
@@ -10368,7 +10368,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
     aria-hidden="true"
     data-aria-hidden="true"
     data-radix-focus-guard=""
-    style="outline: medium; opacity: 0; position: fixed; pointer-events: none;"
+    style="outline: medium; position: fixed; pointer-events: none;"
     tabindex="0"
   />
 </body>"
@@ -10610,7 +10610,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
     aria-hidden="true"
     data-aria-hidden="true"
     data-radix-focus-guard=""
-    style="outline: medium; opacity: 0; position: fixed; pointer-events: none;"
+    style="outline: medium; position: fixed; pointer-events: none;"
     tabindex="0"
   />
   <div>
@@ -10755,7 +10755,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -10887,7 +10887,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -11019,7 +11019,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="unchecked"
-                    style="width: 16px; height: 16px; transform: translateX(2px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -11154,7 +11154,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     data-disabled=""
                     data-slot="switch-thumb"
                     data-state="unchecked"
-                    style="width: 16px; height: 16px; transform: translateX(2px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -11301,7 +11301,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -11448,7 +11448,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -11590,7 +11590,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="unchecked"
-                    style="width: 16px; height: 16px; transform: translateX(2px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -12212,7 +12212,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
     data-aria-hidden="true"
     data-slot="dialog-overlay"
     data-state="open"
-    style="pointer-events: auto; opacity: 1;"
+    style="pointer-events: auto;"
   />
   <div
     aria-describedby="radix-<id1>"
@@ -12222,7 +12222,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
     data-state="open"
     id="radix-<id3>"
     role="dialog"
-    style="opacity: 1; transform: translateX(-50%) translateY(-50%); pointer-events: auto;"
+    style="pointer-events: auto;"
     tabindex="-1"
   >
     <div
@@ -12569,7 +12569,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
     aria-hidden="true"
     data-aria-hidden="true"
     data-radix-focus-guard=""
-    style="outline: medium; opacity: 0; position: fixed; pointer-events: none;"
+    style="outline: medium; position: fixed; pointer-events: none;"
     tabindex="0"
   />
 </body>"
@@ -12818,7 +12818,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
     aria-hidden="true"
     data-aria-hidden="true"
     data-radix-focus-guard=""
-    style="outline: medium; opacity: 0; position: fixed; pointer-events: none;"
+    style="outline: medium; position: fixed; pointer-events: none;"
     tabindex="0"
   />
   <div>
@@ -12963,7 +12963,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -13095,7 +13095,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -13227,7 +13227,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="unchecked"
-                    style="width: 16px; height: 16px; transform: translateX(2px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -13362,7 +13362,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     data-disabled=""
                     data-slot="switch-thumb"
                     data-state="unchecked"
-                    style="width: 16px; height: 16px; transform: translateX(2px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -13509,7 +13509,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -13656,7 +13656,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -13798,7 +13798,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="unchecked"
-                    style="width: 16px; height: 16px; transform: translateX(2px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -14420,7 +14420,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
     data-aria-hidden="true"
     data-slot="dialog-overlay"
     data-state="open"
-    style="pointer-events: auto; opacity: 1;"
+    style="pointer-events: auto;"
   />
   <div
     aria-describedby="radix-<id1>"
@@ -14430,7 +14430,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
     data-state="open"
     id="radix-<id3>"
     role="dialog"
-    style="opacity: 1; transform: translateX(-50%) translateY(-50%); pointer-events: auto;"
+    style="pointer-events: auto;"
     tabindex="-1"
   >
     <div
@@ -14574,7 +14574,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
               <span
                 aria-hidden="true"
                 class="pointer-events-none absolute -z-10 rounded-lg bg-foreground/5"
-                style="left: 0px; top: 0px; width: 0px; height: 0px; opacity: 1;"
+                style="left: 0px; top: 0px; width: 0px; height: 0px;"
               />
               <button
                 aria-controls="radix-<id4>-content-once"
@@ -14743,7 +14743,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
     aria-hidden="true"
     data-aria-hidden="true"
     data-radix-focus-guard=""
-    style="outline: medium; opacity: 0; position: fixed; pointer-events: none;"
+    style="outline: medium; position: fixed; pointer-events: none;"
     tabindex="0"
   />
 </body>"
@@ -14985,7 +14985,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
     aria-hidden="true"
     data-aria-hidden="true"
     data-radix-focus-guard=""
-    style="outline: medium; opacity: 0; position: fixed; pointer-events: none;"
+    style="outline: medium; position: fixed; pointer-events: none;"
     tabindex="0"
   />
   <div>
@@ -15130,7 +15130,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -15262,7 +15262,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -15394,7 +15394,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="unchecked"
-                    style="width: 16px; height: 16px; transform: translateX(2px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -15529,7 +15529,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     data-disabled=""
                     data-slot="switch-thumb"
                     data-state="unchecked"
-                    style="width: 16px; height: 16px; transform: translateX(2px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -15676,7 +15676,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -15823,7 +15823,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -15965,7 +15965,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="unchecked"
-                    style="width: 16px; height: 16px; transform: translateX(2px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -16587,7 +16587,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
     data-aria-hidden="true"
     data-slot="dialog-overlay"
     data-state="open"
-    style="pointer-events: auto; opacity: 1;"
+    style="pointer-events: auto;"
   />
   <div
     aria-describedby="radix-<id1>"
@@ -16597,7 +16597,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
     data-state="open"
     id="radix-<id3>"
     role="dialog"
-    style="opacity: 1; transform: translateX(-50%) translateY(-50%); pointer-events: auto;"
+    style="pointer-events: auto;"
     tabindex="-1"
   >
     <div
@@ -16919,7 +16919,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
     aria-hidden="true"
     data-aria-hidden="true"
     data-radix-focus-guard=""
-    style="outline: medium; opacity: 0; position: fixed; pointer-events: none;"
+    style="outline: medium; position: fixed; pointer-events: none;"
     tabindex="0"
   />
 </body>"
@@ -17167,7 +17167,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
     aria-hidden="true"
     data-aria-hidden="true"
     data-radix-focus-guard=""
-    style="outline: medium; opacity: 0; position: fixed; pointer-events: none;"
+    style="outline: medium; position: fixed; pointer-events: none;"
     tabindex="0"
   />
   <div>
@@ -17312,7 +17312,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -17444,7 +17444,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -17576,7 +17576,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="unchecked"
-                    style="width: 16px; height: 16px; transform: translateX(2px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -17711,7 +17711,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     data-disabled=""
                     data-slot="switch-thumb"
                     data-state="unchecked"
-                    style="width: 16px; height: 16px; transform: translateX(2px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -17858,7 +17858,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -18005,7 +18005,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -18147,7 +18147,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="unchecked"
-                    style="width: 16px; height: 16px; transform: translateX(2px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -18769,7 +18769,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
     data-aria-hidden="true"
     data-slot="dialog-overlay"
     data-state="open"
-    style="pointer-events: auto; opacity: 1;"
+    style="pointer-events: auto;"
   />
   <div
     aria-describedby="radix-<id1>"
@@ -18779,7 +18779,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
     data-state="open"
     id="radix-<id3>"
     role="dialog"
-    style="opacity: 1; transform: translateX(-50%) translateY(-50%); pointer-events: auto;"
+    style="pointer-events: auto;"
     tabindex="-1"
   >
     <div
@@ -18923,7 +18923,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
               <span
                 aria-hidden="true"
                 class="pointer-events-none absolute -z-10 rounded-lg bg-foreground/5"
-                style="left: 0px; top: 0px; width: 0px; height: 0px; opacity: 1;"
+                style="left: 0px; top: 0px; width: 0px; height: 0px;"
               />
               <button
                 aria-controls="radix-<id4>-content-once"
@@ -19110,7 +19110,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
     aria-hidden="true"
     data-aria-hidden="true"
     data-radix-focus-guard=""
-    style="outline: medium; opacity: 0; position: fixed; pointer-events: none;"
+    style="outline: medium; position: fixed; pointer-events: none;"
     tabindex="0"
   />
 </body>"
@@ -19359,7 +19359,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
     aria-hidden="true"
     data-aria-hidden="true"
     data-radix-focus-guard=""
-    style="outline: medium; opacity: 0; position: fixed; pointer-events: none;"
+    style="outline: medium; position: fixed; pointer-events: none;"
     tabindex="0"
   />
   <div>
@@ -19504,7 +19504,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -19636,7 +19636,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -19768,7 +19768,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="unchecked"
-                    style="width: 16px; height: 16px; transform: translateX(2px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -19903,7 +19903,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     data-disabled=""
                     data-slot="switch-thumb"
                     data-state="unchecked"
-                    style="width: 16px; height: 16px; transform: translateX(2px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -20050,7 +20050,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -20197,7 +20197,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -20339,7 +20339,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="unchecked"
-                    style="width: 16px; height: 16px; transform: translateX(2px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -20961,7 +20961,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
     data-aria-hidden="true"
     data-slot="dialog-overlay"
     data-state="open"
-    style="pointer-events: auto; opacity: 1;"
+    style="pointer-events: auto;"
   />
   <div
     aria-describedby="radix-<id1>"
@@ -20971,7 +20971,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
     data-state="open"
     id="radix-<id3>"
     role="dialog"
-    style="opacity: 1; transform: translateX(-50%) translateY(-50%); pointer-events: auto;"
+    style="pointer-events: auto;"
     tabindex="-1"
   >
     <div
@@ -21115,7 +21115,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
               <span
                 aria-hidden="true"
                 class="pointer-events-none absolute -z-10 rounded-lg bg-foreground/5"
-                style="left: 0px; top: 0px; width: 0px; height: 0px; opacity: 1;"
+                style="left: 0px; top: 0px; width: 0px; height: 0px;"
               />
               <button
                 aria-controls="radix-<id4>-content-once"
@@ -21289,7 +21289,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
     aria-hidden="true"
     data-aria-hidden="true"
     data-radix-focus-guard=""
-    style="outline: medium; opacity: 0; position: fixed; pointer-events: none;"
+    style="outline: medium; position: fixed; pointer-events: none;"
     tabindex="0"
   />
 </body>"
@@ -21533,7 +21533,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
     aria-hidden="true"
     data-aria-hidden="true"
     data-radix-focus-guard=""
-    style="outline: medium; opacity: 0; position: fixed; pointer-events: none;"
+    style="outline: medium; position: fixed; pointer-events: none;"
     tabindex="0"
   />
   <div>
@@ -21678,7 +21678,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -21810,7 +21810,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -21942,7 +21942,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="unchecked"
-                    style="width: 16px; height: 16px; transform: translateX(2px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -22077,7 +22077,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     data-disabled=""
                     data-slot="switch-thumb"
                     data-state="unchecked"
-                    style="width: 16px; height: 16px; transform: translateX(2px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -22224,7 +22224,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -22371,7 +22371,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -22513,7 +22513,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="unchecked"
-                    style="width: 16px; height: 16px; transform: translateX(2px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -23135,7 +23135,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
     data-aria-hidden="true"
     data-slot="dialog-overlay"
     data-state="open"
-    style="pointer-events: auto; opacity: 1;"
+    style="pointer-events: auto;"
   />
   <div
     aria-describedby="radix-<id1>"
@@ -23145,7 +23145,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
     data-state="open"
     id="radix-<id3>"
     role="dialog"
-    style="opacity: 1; transform: translateX(-50%) translateY(-50%); pointer-events: auto;"
+    style="pointer-events: auto;"
     tabindex="-1"
   >
     <div
@@ -23453,7 +23453,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
     aria-hidden="true"
     data-aria-hidden="true"
     data-radix-focus-guard=""
-    style="outline: medium; opacity: 0; position: fixed; pointer-events: none;"
+    style="outline: medium; position: fixed; pointer-events: none;"
     tabindex="0"
   />
 </body>"
@@ -23694,7 +23694,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
     aria-hidden="true"
     data-aria-hidden="true"
     data-radix-focus-guard=""
-    style="outline: medium; opacity: 0; position: fixed; pointer-events: none;"
+    style="outline: medium; position: fixed; pointer-events: none;"
     tabindex="0"
   />
   <div>
@@ -23839,7 +23839,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -23971,7 +23971,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -24103,7 +24103,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="unchecked"
-                    style="width: 16px; height: 16px; transform: translateX(2px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -24238,7 +24238,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     data-disabled=""
                     data-slot="switch-thumb"
                     data-state="unchecked"
-                    style="width: 16px; height: 16px; transform: translateX(2px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -24385,7 +24385,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -24532,7 +24532,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -24674,7 +24674,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="unchecked"
-                    style="width: 16px; height: 16px; transform: translateX(2px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -25296,7 +25296,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
     data-aria-hidden="true"
     data-slot="dialog-overlay"
     data-state="open"
-    style="pointer-events: auto; opacity: 1;"
+    style="pointer-events: auto;"
   />
   <div
     aria-describedby="radix-<id1>"
@@ -25306,7 +25306,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
     data-state="open"
     id="radix-<id3>"
     role="dialog"
-    style="opacity: 1; transform: translateX(-50%) translateY(-50%); pointer-events: auto;"
+    style="pointer-events: auto;"
     tabindex="-1"
   >
     <div
@@ -25450,7 +25450,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
               <span
                 aria-hidden="true"
                 class="pointer-events-none absolute -z-10 rounded-lg bg-foreground/5"
-                style="left: 0px; top: 0px; width: 0px; height: 0px; opacity: 1;"
+                style="left: 0px; top: 0px; width: 0px; height: 0px;"
               />
               <button
                 aria-controls="radix-<id4>-content-once"
@@ -25705,7 +25705,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
     aria-hidden="true"
     data-aria-hidden="true"
     data-radix-focus-guard=""
-    style="outline: medium; opacity: 0; position: fixed; pointer-events: none;"
+    style="outline: medium; position: fixed; pointer-events: none;"
     tabindex="0"
   />
 </body>"
@@ -25960,7 +25960,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
     aria-hidden="true"
     data-aria-hidden="true"
     data-radix-focus-guard=""
-    style="outline: medium; opacity: 0; position: fixed; pointer-events: none;"
+    style="outline: medium; position: fixed; pointer-events: none;"
     tabindex="0"
   />
   <div>
@@ -26105,7 +26105,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -26237,7 +26237,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -26369,7 +26369,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="unchecked"
-                    style="width: 16px; height: 16px; transform: translateX(2px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -26504,7 +26504,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     data-disabled=""
                     data-slot="switch-thumb"
                     data-state="unchecked"
-                    style="width: 16px; height: 16px; transform: translateX(2px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -26651,7 +26651,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -26798,7 +26798,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -26940,7 +26940,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="unchecked"
-                    style="width: 16px; height: 16px; transform: translateX(2px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -27562,7 +27562,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
     data-aria-hidden="true"
     data-slot="dialog-overlay"
     data-state="open"
-    style="pointer-events: auto; opacity: 1;"
+    style="pointer-events: auto;"
   />
   <div
     aria-describedby="radix-<id1>"
@@ -27572,7 +27572,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
     data-state="open"
     id="radix-<id3>"
     role="dialog"
-    style="opacity: 1; transform: translateX(-50%) translateY(-50%); pointer-events: auto;"
+    style="pointer-events: auto;"
     tabindex="-1"
   >
     <div
@@ -27920,7 +27920,7 @@ exports[`Routines page, pinned > the editor for a new routine, on each schedule 
     aria-hidden="true"
     data-aria-hidden="true"
     data-radix-focus-guard=""
-    style="outline: medium; opacity: 0; position: fixed; pointer-events: none;"
+    style="outline: medium; position: fixed; pointer-events: none;"
     tabindex="0"
   />
 </body>"
@@ -28170,7 +28170,7 @@ exports[`Routines page, pinned > the editor for a weekday cron > markup 1`] = `
     aria-hidden="true"
     data-aria-hidden="true"
     data-radix-focus-guard=""
-    style="outline: medium; opacity: 0; position: fixed; pointer-events: none;"
+    style="outline: medium; position: fixed; pointer-events: none;"
     tabindex="0"
   />
   <div>
@@ -28315,7 +28315,7 @@ exports[`Routines page, pinned > the editor for a weekday cron > markup 1`] = `
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -28447,7 +28447,7 @@ exports[`Routines page, pinned > the editor for a weekday cron > markup 1`] = `
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -28579,7 +28579,7 @@ exports[`Routines page, pinned > the editor for a weekday cron > markup 1`] = `
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="unchecked"
-                    style="width: 16px; height: 16px; transform: translateX(2px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -28714,7 +28714,7 @@ exports[`Routines page, pinned > the editor for a weekday cron > markup 1`] = `
                     data-disabled=""
                     data-slot="switch-thumb"
                     data-state="unchecked"
-                    style="width: 16px; height: 16px; transform: translateX(2px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -28861,7 +28861,7 @@ exports[`Routines page, pinned > the editor for a weekday cron > markup 1`] = `
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -29008,7 +29008,7 @@ exports[`Routines page, pinned > the editor for a weekday cron > markup 1`] = `
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -29150,7 +29150,7 @@ exports[`Routines page, pinned > the editor for a weekday cron > markup 1`] = `
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="unchecked"
-                    style="width: 16px; height: 16px; transform: translateX(2px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -29772,7 +29772,7 @@ exports[`Routines page, pinned > the editor for a weekday cron > markup 1`] = `
     data-aria-hidden="true"
     data-slot="dialog-overlay"
     data-state="open"
-    style="pointer-events: auto; opacity: 1;"
+    style="pointer-events: auto;"
   />
   <div
     aria-describedby="radix-<id1>"
@@ -29782,7 +29782,7 @@ exports[`Routines page, pinned > the editor for a weekday cron > markup 1`] = `
     data-state="open"
     id="radix-<id3>"
     role="dialog"
-    style="opacity: 1; transform: translateX(-50%) translateY(-50%); pointer-events: auto;"
+    style="pointer-events: auto;"
     tabindex="-1"
   >
     <div
@@ -30104,7 +30104,7 @@ exports[`Routines page, pinned > the editor for a weekday cron > markup 1`] = `
     aria-hidden="true"
     data-aria-hidden="true"
     data-radix-focus-guard=""
-    style="outline: medium; opacity: 0; position: fixed; pointer-events: none;"
+    style="outline: medium; position: fixed; pointer-events: none;"
     tabindex="0"
   />
 </body>"
@@ -30352,7 +30352,7 @@ exports[`Routines page, pinned > the editor for a weekly cron > markup 1`] = `
     aria-hidden="true"
     data-aria-hidden="true"
     data-radix-focus-guard=""
-    style="outline: medium; opacity: 0; position: fixed; pointer-events: none;"
+    style="outline: medium; position: fixed; pointer-events: none;"
     tabindex="0"
   />
   <div>
@@ -30497,7 +30497,7 @@ exports[`Routines page, pinned > the editor for a weekly cron > markup 1`] = `
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -30629,7 +30629,7 @@ exports[`Routines page, pinned > the editor for a weekly cron > markup 1`] = `
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -30761,7 +30761,7 @@ exports[`Routines page, pinned > the editor for a weekly cron > markup 1`] = `
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="unchecked"
-                    style="width: 16px; height: 16px; transform: translateX(2px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -30896,7 +30896,7 @@ exports[`Routines page, pinned > the editor for a weekly cron > markup 1`] = `
                     data-disabled=""
                     data-slot="switch-thumb"
                     data-state="unchecked"
-                    style="width: 16px; height: 16px; transform: translateX(2px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -31043,7 +31043,7 @@ exports[`Routines page, pinned > the editor for a weekly cron > markup 1`] = `
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -31190,7 +31190,7 @@ exports[`Routines page, pinned > the editor for a weekly cron > markup 1`] = `
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -31332,7 +31332,7 @@ exports[`Routines page, pinned > the editor for a weekly cron > markup 1`] = `
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="unchecked"
-                    style="width: 16px; height: 16px; transform: translateX(2px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -31954,7 +31954,7 @@ exports[`Routines page, pinned > the editor for a weekly cron > markup 1`] = `
     data-aria-hidden="true"
     data-slot="dialog-overlay"
     data-state="open"
-    style="pointer-events: auto; opacity: 1;"
+    style="pointer-events: auto;"
   />
   <div
     aria-describedby="radix-<id1>"
@@ -31964,7 +31964,7 @@ exports[`Routines page, pinned > the editor for a weekly cron > markup 1`] = `
     data-state="open"
     id="radix-<id3>"
     role="dialog"
-    style="opacity: 1; transform: translateX(-50%) translateY(-50%); pointer-events: auto;"
+    style="pointer-events: auto;"
     tabindex="-1"
   >
     <div
@@ -32336,7 +32336,7 @@ exports[`Routines page, pinned > the editor for a weekly cron > markup 1`] = `
     aria-hidden="true"
     data-aria-hidden="true"
     data-radix-focus-guard=""
-    style="outline: medium; opacity: 0; position: fixed; pointer-events: none;"
+    style="outline: medium; position: fixed; pointer-events: none;"
     tabindex="0"
   />
 </body>"
@@ -32581,7 +32581,7 @@ exports[`Routines page, pinned > the editor for an interval > markup 1`] = `
     aria-hidden="true"
     data-aria-hidden="true"
     data-radix-focus-guard=""
-    style="outline: medium; opacity: 0; position: fixed; pointer-events: none;"
+    style="outline: medium; position: fixed; pointer-events: none;"
     tabindex="0"
   />
   <div>
@@ -32726,7 +32726,7 @@ exports[`Routines page, pinned > the editor for an interval > markup 1`] = `
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -32858,7 +32858,7 @@ exports[`Routines page, pinned > the editor for an interval > markup 1`] = `
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -32990,7 +32990,7 @@ exports[`Routines page, pinned > the editor for an interval > markup 1`] = `
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="unchecked"
-                    style="width: 16px; height: 16px; transform: translateX(2px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -33125,7 +33125,7 @@ exports[`Routines page, pinned > the editor for an interval > markup 1`] = `
                     data-disabled=""
                     data-slot="switch-thumb"
                     data-state="unchecked"
-                    style="width: 16px; height: 16px; transform: translateX(2px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -33272,7 +33272,7 @@ exports[`Routines page, pinned > the editor for an interval > markup 1`] = `
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -33419,7 +33419,7 @@ exports[`Routines page, pinned > the editor for an interval > markup 1`] = `
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -33561,7 +33561,7 @@ exports[`Routines page, pinned > the editor for an interval > markup 1`] = `
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="unchecked"
-                    style="width: 16px; height: 16px; transform: translateX(2px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -34183,7 +34183,7 @@ exports[`Routines page, pinned > the editor for an interval > markup 1`] = `
     data-aria-hidden="true"
     data-slot="dialog-overlay"
     data-state="open"
-    style="pointer-events: auto; opacity: 1;"
+    style="pointer-events: auto;"
   />
   <div
     aria-describedby="radix-<id1>"
@@ -34193,7 +34193,7 @@ exports[`Routines page, pinned > the editor for an interval > markup 1`] = `
     data-state="open"
     id="radix-<id3>"
     role="dialog"
-    style="opacity: 1; transform: translateX(-50%) translateY(-50%); pointer-events: auto;"
+    style="pointer-events: auto;"
     tabindex="-1"
   >
     <div
@@ -34519,7 +34519,7 @@ exports[`Routines page, pinned > the editor for an interval > markup 1`] = `
     aria-hidden="true"
     data-aria-hidden="true"
     data-radix-focus-guard=""
-    style="outline: medium; opacity: 0; position: fixed; pointer-events: none;"
+    style="outline: medium; position: fixed; pointer-events: none;"
     tabindex="0"
   />
 </body>"
@@ -35178,7 +35178,7 @@ exports[`Routines page, pinned > with one routine > markup 1`] = `
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -35435,7 +35435,7 @@ exports[`Routines page, pinned > with routines in each state and runs in each st
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -35567,7 +35567,7 @@ exports[`Routines page, pinned > with routines in each state and runs in each st
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -35699,7 +35699,7 @@ exports[`Routines page, pinned > with routines in each state and runs in each st
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="unchecked"
-                    style="width: 16px; height: 16px; transform: translateX(2px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -35834,7 +35834,7 @@ exports[`Routines page, pinned > with routines in each state and runs in each st
                     data-disabled=""
                     data-slot="switch-thumb"
                     data-state="unchecked"
-                    style="width: 16px; height: 16px; transform: translateX(2px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -35981,7 +35981,7 @@ exports[`Routines page, pinned > with routines in each state and runs in each st
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -36128,7 +36128,7 @@ exports[`Routines page, pinned > with routines in each state and runs in each st
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="checked"
-                    style="width: 16px; height: 16px; transform: translateX(16px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>
@@ -36270,7 +36270,7 @@ exports[`Routines page, pinned > with routines in each state and runs in each st
                     class="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
                     data-slot="switch-thumb"
                     data-state="unchecked"
-                    style="width: 16px; height: 16px; transform: translateX(2px) translateY(2px);"
+                    style="width: 16px; height: 16px;"
                   />
                 </button>
               </div>

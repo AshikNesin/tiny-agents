@@ -61,18 +61,32 @@ export async function readOAuthState(connectionId: string): Promise<OAuthState> 
   return openOAuthState<OAuthState>(connectionId, row?.oauthEnc) ?? {};
 }
 
+/**
+ * Change one part of the state. The read, the change and the write are one
+ * synchronous transaction (C11): two steps of concurrent flows (a token
+ * refresh and a new sign-in's verifier) can't read the same state and have
+ * the second write drop the first one's change.
+ */
 async function writeOAuthState(
   connectionId: string,
   change: (state: OAuthState) => OAuthState,
 ): Promise<void> {
-  const next = change(await readOAuthState(connectionId));
-  const updated = await db
-    .update(connections)
-    .set({ oauthEnc: sealOAuthState(connectionId, next) })
-    .where(eq(connections.id, connectionId))
-    .returning({ id: connections.id });
-  // The connection was removed (Prisma's update threw P2025 → 404).
-  if (updated.length === 0) throw Boom.notFound("Record not found");
+  const written = db.transaction((tx) => {
+    const row = tx
+      .select({ oauthEnc: connections.oauthEnc })
+      .from(connections)
+      .where(eq(connections.id, connectionId))
+      .get();
+    // The connection was removed (Prisma's update threw P2025 → 404).
+    if (!row) return false;
+    const next = change(openOAuthState<OAuthState>(connectionId, row.oauthEnc) ?? {});
+    tx.update(connections)
+      .set({ oauthEnc: sealOAuthState(connectionId, next) })
+      .where(eq(connections.id, connectionId))
+      .run();
+    return true;
+  });
+  if (!written) throw Boom.notFound("Record not found");
 }
 
 /** The connection whose pending authorization used `state`. */
