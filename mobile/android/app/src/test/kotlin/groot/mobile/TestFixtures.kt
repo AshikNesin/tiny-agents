@@ -4,6 +4,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.emptyPreferences
 import groot.kit.buildinfo.BuildInfo
+import groot.mobile.data.AvatarStore
 import groot.mobile.data.BotsState
 import groot.mobile.data.api.AttachmentRef
 import groot.mobile.data.api.Bot
@@ -24,6 +25,7 @@ import groot.mobile.data.api.OwnerTask
 import groot.mobile.data.api.QuestionOption
 import groot.mobile.data.api.QueuedMessage
 import groot.mobile.data.api.Routine
+import groot.mobile.data.api.RoutineRunCard
 import groot.mobile.data.api.Schedule
 import groot.mobile.data.api.Skill
 import groot.mobile.data.api.Source
@@ -41,6 +43,11 @@ import groot.mobile.feature.bots.BotEditorData
 import groot.mobile.feature.chat.ChatActions
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Protocol
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
 
 /** In-memory DataStore: unit tests never touch the disk. */
 class FakePreferencesDataStore : DataStore<Preferences> {
@@ -316,3 +323,45 @@ val sampleEditorData = BotEditorData(
 )
 
 val sampleEditorBotsState = sampleBotsState.copy(capabilities = sampleCapabilities)
+
+/**
+ * An [AvatarStore] whose "network" is the faces bundled under `src/test/resources/avatars`
+ * (DiceBear gaze PNGs for the sample bots), so screenshots show real avatars with no network.
+ * Any other name answers 404, which draws the initial.
+ */
+fun fakeAvatarStore(): AvatarStore = AvatarStore(
+    cacheDir = null,
+    client = OkHttpClient.Builder().addInterceptor { chain ->
+        val seed = chain.request().url.queryParameter("seed").orEmpty()
+        val bytes = AvatarStore::class.java.getResourceAsStream("/avatars/${seed.replace(' ', '_')}.png")?.use { it.readBytes() }
+        Response.Builder()
+            .request(chain.request())
+            .protocol(Protocol.HTTP_1_1)
+            .code(if (bytes != null) 200 else 404)
+            .message(if (bytes != null) "OK" else "Not Found")
+            .body((bytes ?: ByteArray(0)).toResponseBody("image/png".toMediaType()))
+            .build()
+    }.build(),
+)
+
+fun routineRun(id: String, name: String, minutesAgo: Long, status: String = "succeeded", output: String? = "Nothing new from your key senders.", error: String? = null) =
+    RoutineRunCard(id, "r-$name", name, status, "schedule", 0, FIXED_NOW - minutesAgo * 60_000, output, error)
+
+/** A chat an hourly-ish routine has run in all day: 24 runs back to back, one blocked, one failed. */
+fun sampleRoutineChatView(): ChatView {
+    val runs = (0 until 24).map { i ->
+        val minutesAgo = 380L - i * 15
+        when (i) {
+            7 -> routineRun("p$i", "Process emails from key senders", minutesAgo, status = "blocked", output = null, error = "Gmail asked to sign in again.")
+            15 -> routineRun("p$i", "Process emails from key senders", minutesAgo, status = "failed", output = null, error = "The model timed out.")
+            else -> routineRun("p$i", "Process emails from key senders", minutesAgo)
+        }
+    } + routineRun("m1", "Morning summary", 2, output = "Three meetings today; the first at 10:00.")
+    val messages = listOf(
+        message("r1", MessageRole.User, "Check my inbox for mails from my key senders every 15 minutes.", minutesAgo = 400),
+        message("r2", MessageRole.Assistant, "Done. I set up the routine **Process emails from key senders**.", minutesAgo = 399),
+        message("r3", MessageRole.User, "Anything from Priya today?", minutesAgo = 10),
+        message("r4", MessageRole.Assistant, "Not yet. I will tell you when something arrives.", minutesAgo = 9),
+    )
+    return chatView(sampleSession(messages, busy = false).copy(routineRuns = runs))
+}

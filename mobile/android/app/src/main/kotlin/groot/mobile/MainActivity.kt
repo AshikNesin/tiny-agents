@@ -11,6 +11,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import groot.kit.theme.GrootTheme
 import groot.kit.theme.ThemeMode
 import groot.mobile.ui.brand.BrandPalette
+import groot.mobile.ui.components.LocalAvatars
 import groot.mobile.ui.components.LocalContainer
 import kotlinx.coroutines.runBlocking
 
@@ -36,7 +37,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val themeMode by store.themeMode.collectAsStateWithLifecycle(initialValue = initialMode)
             GrootTheme(mode = themeMode, palette = BrandPalette) {
-                CompositionLocalProvider(LocalContainer provides container) {
+                CompositionLocalProvider(LocalContainer provides container, LocalAvatars provides container.avatars) {
                     TinyAgentsRoot(container)
                 }
             }

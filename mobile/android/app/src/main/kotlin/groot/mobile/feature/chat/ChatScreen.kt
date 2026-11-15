@@ -70,7 +70,7 @@ import groot.mobile.ui.brand.Accents
 import groot.mobile.ui.brand.AppIcons
 import groot.mobile.ui.brand.Dims
 import groot.mobile.ui.components.AppIcon
-import groot.mobile.ui.components.Avatar
+import groot.mobile.ui.components.BotAvatar
 import groot.mobile.ui.components.MenuRow
 import groot.mobile.ui.components.Sheet
 import groot.mobile.ui.components.StatusDot
@@ -309,7 +309,7 @@ private fun ChatEmpty(bot: BotListEntry, modifier: Modifier = Modifier) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(S.md),
     ) {
-        Avatar(bot.name, size = Dims.avatarLarge)
+        BotAvatar(bot.name, size = Dims.avatarLarge)
         Text(bot.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
         Text(
             bot.description.ifBlank { "Ask anything to get started." },

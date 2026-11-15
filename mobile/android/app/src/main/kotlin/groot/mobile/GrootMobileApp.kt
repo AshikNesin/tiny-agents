@@ -6,6 +6,7 @@ import groot.kit.buildinfo.BuildInfo
 import groot.kit.log.Log
 import groot.kit.theme.ThemeModeStore
 import groot.mobile.data.AppPreferences
+import groot.mobile.data.AvatarStore
 import groot.mobile.data.BotsStore
 import groot.mobile.data.FileActions
 import groot.mobile.data.ImageStore
@@ -58,6 +59,9 @@ class AppContainer(context: Context) {
     val chats = ChatStore(api, scope, notices)
 
     val images = ImageStore(api)
+
+    /** Bot faces; not tied to the session, so they stay across sign-outs. */
+    val avatars = AvatarStore(appContext.cacheDir)
 
     val files = FileActions(appContext, api)
 

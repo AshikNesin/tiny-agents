@@ -36,7 +36,8 @@ shared with them.
 The app's wire types mirror `apps/web/src/shared/api/` and
 `apps/web/src/shared/bot-stream.ts`. Its chat reducer is a port of the web
 client's `apps/web/src/client/lib/chat-session.ts`, and its tool call text and
-view tables port `lib/tool-call-text.ts` and `lib/tool-call-view.ts`. A
+view tables port `lib/tool-call-text.ts` and `lib/tool-call-view.ts`, and
+`AttachmentNotes.kt` ports `lib/attachment-notes.ts`. A
 change to a wire type or to these chat rules needs the matching change in
 `mobile/android/app/src/main/kotlin/groot/mobile/data/`.
 

@@ -30,6 +30,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
@@ -44,6 +45,9 @@ import groot.mobile.feature.chat.ChatViewModel
 import groot.mobile.navigation.Routes
 import groot.mobile.ui.brand.AppIcons
 import groot.mobile.ui.brand.Dims
+import groot.mobile.ui.components.ActionTile
+import groot.mobile.ui.components.AppIcon
+import groot.mobile.ui.components.BotAvatar
 import groot.mobile.ui.components.ConfirmDialog
 import groot.mobile.ui.components.EmptyState
 import groot.mobile.ui.components.IconBtn
@@ -67,6 +71,12 @@ fun HomeRoute(container: AppContainer, onNavigate: (String) -> Unit) {
     var menu by remember { mutableStateOf(false) }
     var confirmNewChat by remember { mutableStateOf(false) }
     BackHandler(enabled = drawer.isOpen) { scope.launch { drawer.close() } }
+    // The server sends no event when a bot is created, renamed or pinned elsewhere (the web app,
+    // another phone): coming back to the app picks those up.
+    LifecycleStartEffect(Unit) {
+        viewModel.retry()
+        onStopOrDispose {}
+    }
 
     ModalNavigationDrawer(
         drawerState = drawer,
@@ -129,7 +139,7 @@ fun HomeRoute(container: AppContainer, onNavigate: (String) -> Unit) {
     if (menu && bot != null) {
         BotMenuSheet(
             bot = bot,
-            guest = bots.guest,
+            bots = bots,
             session = sessions[bot.id],
             container = container,
             onDismiss = { menu = false },
@@ -158,7 +168,10 @@ fun HomeRoute(container: AppContainer, onNavigate: (String) -> Unit) {
     }
 }
 
-/** Menu, the open bot (tap for its menu), and a new chat. */
+/**
+ * Menu, the open bot (its face and name; tap for its menu), and a new chat. Kept to two
+ * icons: everything else about the bot lives in the sheet the name opens.
+ */
 @Composable
 internal fun HomeTopBar(bot: BotListEntry?, bots: BotsState, onMenu: () -> Unit, onTitle: () -> Unit, onNewChat: () -> Unit) {
     Row(
@@ -166,28 +179,63 @@ internal fun HomeTopBar(bot: BotListEntry?, bots: BotsState, onMenu: () -> Unit,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconBtn(AppIcons.Menu, "Open the menu", onMenu, iconSize = Dims.iconLarge)
-        Column(
+        Row(
             Modifier
                 .weight(1f)
                 .padding(horizontal = S.xs)
                 .clip(RoundedCornerShape(Dims.fieldRadius))
                 .clickable(enabled = bot != null, role = Role.Button, onClickLabel = "Bot menu", onClick = onTitle)
-                .padding(horizontal = S.sm, vertical = S.xs),
+                .padding(horizontal = S.xs, vertical = S.xs),
+            horizontalArrangement = Arrangement.spacedBy(S.sm),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                bot?.name ?: "Tiny Agents",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (bot != null) {
+            if (bot != null) BotAvatar(bot.name, size = Dims.avatarTopBar)
+            Column(Modifier.weight(1f, fill = false)) {
                 Text(
-                    when {
-                        bot.replying -> "Replying"
-                        bot.needsYou -> "Waiting for you"
-                        else -> bots.modelName(bot.modelId)
-                    },
+                    bot?.name ?: "Tiny Agents",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                val status = when {
+                    bot == null -> null
+                    bot.replying -> "Replying\u2026"
+                    bot.needsYou -> "Waiting for you"
+                    else -> null
+                }
+                if (status != null) {
+                    Text(status, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                }
+            }
+            if (bot != null) AppIcon(AppIcons.ChevronDown, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, size = Dims.iconSmall)
+        }
+        if (bot != null && !bots.guest) IconBtn(AppIcons.Compose, "New chat", onNewChat)
+    }
+}
+
+/**
+ * What the open bot offers besides chatting. Who it is on top, its places as a row of tiles
+ * (live views, past chats, memory), then the few switches and settings as rows.
+ */
+@Composable
+private fun BotMenuSheet(
+    bot: BotListEntry,
+    bots: BotsState,
+    session: ChatSession?,
+    container: AppContainer,
+    onDismiss: () -> Unit,
+    onNavigate: (String) -> Unit,
+    onTogglePin: () -> Unit,
+) {
+    val guest = bots.guest
+    Sheet(onDismiss = onDismiss) {
+        Row(horizontalArrangement = Arrangement.spacedBy(S.md), verticalAlignment = Alignment.CenterVertically) {
+            BotAvatar(bot.name, size = Dims.avatarSheet)
+            Column(Modifier.weight(1f)) {
+                Text(bot.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    bots.modelName(bot.modelId),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -195,34 +243,22 @@ internal fun HomeTopBar(bot: BotListEntry?, bots: BotsState, onMenu: () -> Unit,
                 )
             }
         }
-        if (bot != null && !bots.guest) IconBtn(AppIcons.Compose, "New chat", onNewChat)
-        if (bot != null) IconBtn(AppIcons.More, "Bot menu", onTitle)
-    }
-}
-
-/** What the open bot offers besides chatting: its live views, its past chats, its settings. */
-@Composable
-private fun BotMenuSheet(
-    bot: BotListEntry,
-    guest: Boolean,
-    session: ChatSession?,
-    container: AppContainer,
-    onDismiss: () -> Unit,
-    onNavigate: (String) -> Unit,
-    onTogglePin: () -> Unit,
-) {
-    Sheet(onDismiss = onDismiss, title = bot.name) {
-        Column(verticalArrangement = Arrangement.spacedBy(S.xxs)) {
-            MenuRow(AppIcons.Globe, "Browser", summary = "Watch or take over what ${bot.name} browses", onClick = { onNavigate(Routes.liveBot("browser", bot.id)) })
-            MenuRow(AppIcons.Monitor, "Computer", summary = "The desktop ${bot.name} works on", onClick = { onNavigate(Routes.liveBot("computer", bot.id)) })
+        Row(Modifier.fillMaxWidth()) {
+            val tile = Modifier.weight(1f)
+            ActionTile(AppIcons.Globe, "Browser", { onNavigate(Routes.liveBot("browser", bot.id)) }, tile)
+            ActionTile(AppIcons.Monitor, "Computer", { onNavigate(Routes.liveBot("computer", bot.id)) }, tile)
             if (!guest) {
-                MenuRow(AppIcons.History, "Past chats", onClick = { onNavigate(Routes.history(bot.id)) })
-                MenuRow(AppIcons.Layers, "Memory", onClick = { onNavigate(Routes.memory(bot.id)) })
+                ActionTile(AppIcons.History, "Past chats", { onNavigate(Routes.history(bot.id)) }, tile)
+                ActionTile(AppIcons.Layers, "Memory", { onNavigate(Routes.memory(bot.id)) }, tile)
+            }
+        }
+        if (!guest) {
+            Column(verticalArrangement = Arrangement.spacedBy(S.xxs)) {
                 val yolo = session?.yolo == true
                 MenuRow(
                     AppIcons.Zap,
                     "YOLO mode",
-                    summary = "Run tools in this chat without asking (vault uses still ask)",
+                    summary = "Run tools without asking (vault uses still ask)",
                     onClick = { container.chats.setYolo(bot.id, !yolo) },
                     trailing = { Switch(checked = yolo, onCheckedChange = { container.chats.setYolo(bot.id, it) }) },
                 )

@@ -1,5 +1,6 @@
 package groot.mobile.ui.components
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -39,6 +40,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,7 +49,9 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -58,6 +63,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import groot.kit.theme.S
 import groot.mobile.AppContainer
+import groot.mobile.data.AvatarStore
 import groot.mobile.ui.brand.AppIcons
 import groot.mobile.ui.brand.Dims
 
@@ -241,7 +247,39 @@ fun StatusDot(color: Color, modifier: Modifier = Modifier) {
     Box(modifier.size(Dims.dot).clip(CircleShape).background(color))
 }
 
-/** A bot's (or person's) avatar: its initial on a quiet disc. */
+/**
+ * Where bot faces come from. Null (screenshots, previews) draws the initial only; the
+ * activity provides the app's [AvatarStore].
+ */
+val LocalAvatars = staticCompositionLocalOf<AvatarStore?> { null }
+
+/** A bot's avatar: its face from the web app's avatar service, over its initial until (or unless) the face arrives. */
+@Composable
+fun BotAvatar(name: String, modifier: Modifier = Modifier, size: Dp = Dims.avatar) {
+    val avatars = LocalAvatars.current
+    // Keyed, not just restarted: the same slot showing another bot (the top bar after a switch)
+    // must start from that bot's face, never keep the previous one.
+    val face = key(avatars, name) {
+        produceState(initialValue = avatars?.cached(name)) {
+            if (value == null && avatars != null) value = avatars.load(name)
+        }.value
+    }
+    Box(modifier.size(size).clip(CircleShape), contentAlignment = Alignment.Center) {
+        val bitmap = face
+        if (bitmap != null) {
+            Image(
+                bitmap = bitmap.asImageBitmap(),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.matchParentSize().background(MaterialTheme.colorScheme.surfaceContainerHigh),
+            )
+        } else {
+            Avatar(name, size = size)
+        }
+    }
+}
+
+/** A person's avatar (and a bot's until its face loads): the initial on a quiet disc. */
 @Composable
 fun Avatar(name: String, modifier: Modifier = Modifier, size: Dp = Dims.avatar) {
     val initial = name.trim().firstOrNull()?.uppercase() ?: "?"
@@ -456,6 +494,27 @@ fun Sheet(
             }
             content()
         }
+    }
+}
+
+/** A launcher tile: an icon on a soft square over a short label. Grids of these replace long menus. */
+@Composable
+fun ActionTile(icon: ImageVector, label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Column(
+        modifier
+            .clip(RoundedCornerShape(Dims.fieldRadius))
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(vertical = S.sm, horizontal = S.xs),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(S.xs),
+    ) {
+        Box(
+            Modifier.size(Dims.tile).clip(RoundedCornerShape(Dims.fieldRadius)).background(MaterialTheme.colorScheme.surfaceContainer),
+            contentAlignment = Alignment.Center,
+        ) {
+            AppIcon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
+        }
+        Text(label, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
     }
 }
 

@@ -24,13 +24,18 @@ object Accents {
 /** The app's own sizes, beside the kit's spacing scale (`S`). */
 object Dims {
     val avatarSmall = 28.dp
+    val avatarTopBar = 32.dp
     val avatar = 40.dp
+    val avatarSheet = 48.dp
     val avatarLarge = 72.dp
 
     val iconSmall = 16.dp
     val icon = 20.dp
     val iconLarge = 24.dp
     val iconButton = 40.dp
+
+    /** The icon square of a launcher tile (drawer workspace, bot menu). */
+    val tile = 48.dp
 
     /** Chat bubbles and the composer pill. */
     val bubbleRadius = 22.dp

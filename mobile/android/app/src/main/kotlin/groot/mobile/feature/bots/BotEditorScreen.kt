@@ -58,6 +58,10 @@ import groot.mobile.ui.components.Sheet
 import groot.mobile.ui.components.rememberResource
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import groot.mobile.ui.components.BotAvatar
+import groot.mobile.ui.components.Avatar
+import kotlinx.coroutines.delay
+import androidx.compose.runtime.produceState
 
 /** What the editor needs besides the bot itself: what it can be given. */
 data class BotEditorData(val bot: Bot?, val skills: List<Skill>, val connections: List<Connection>, val guests: List<Guest>)
@@ -121,7 +125,16 @@ fun BotEditor(data: BotEditorData, bots: BotsState, onSave: (BotDraft) -> Unit, 
     val model = bots.models.models.firstOrNull { it.id == (modelId ?: bots.models.defaultModelId) }
     val canSave = name.isNotBlank() && (bot != null || model != null)
 
+    // The avatar is seeded by the name (as on the web), so it previews as the owner types; settled, not per keystroke.
+    val face by produceState(initialValue = name, name) {
+        delay(AVATAR_PREVIEW_DELAY_MS)
+        value = name
+    }
+
     ScreenColumn {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+            if (face.isBlank()) Avatar("?", size = Dims.avatarLarge) else BotAvatar(face, size = Dims.avatarLarge)
+        }
         Field(name, { name = it }, label = "Name", placeholder = "Travel Planner")
         Field(description, { description = it }, label = "Description", placeholder = "What it is for, in a line")
         Field(
@@ -328,3 +341,5 @@ private fun ModelSheet(models: List<CatalogModel>, selected: String?, onPick: (S
         }
     }
 }
+
+private const val AVATAR_PREVIEW_DELAY_MS = 400L

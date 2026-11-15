@@ -40,11 +40,12 @@ import groot.mobile.data.api.AttachmentRef
 import groot.mobile.data.api.ChatMessage
 import groot.mobile.data.api.MessageRole
 import groot.mobile.data.api.MessageStatus
-import groot.mobile.data.api.RoutineRunCard
 import groot.mobile.data.chat.OutboxEntry
+import groot.mobile.data.chat.ownerText
 import groot.mobile.ui.brand.AppIcons
 import groot.mobile.ui.brand.Dims
 import groot.mobile.ui.components.AppIcon
+import groot.mobile.ui.components.BotAvatar
 import groot.mobile.ui.components.IconBtn
 import groot.mobile.ui.components.Markdown
 import groot.mobile.ui.components.StatusDot
@@ -66,7 +67,7 @@ fun MessageView(
                 PeerMessage(message, modifier)
             } else {
                 UserBubble(
-                    text = message.text,
+                    text = ownerText(message.text, message.attachments.isNotEmpty()),
                     attachments = message.attachments,
                     author = message.author?.name,
                     onOpenImage = onOpenImage,
@@ -123,7 +124,7 @@ private fun PeerMessage(message: ChatMessage, modifier: Modifier) {
     val peer = message.peer ?: return
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(S.xs)) {
         Row(horizontalArrangement = Arrangement.spacedBy(S.xs), verticalAlignment = Alignment.CenterVertically) {
-            AppIcon(AppIcons.Bot, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, size = Dims.iconSmall)
+            BotAvatar(peer.name, size = Dims.icon)
             Text(
                 when (peer.kind) {
                     "reply" -> "${peer.name} replied"
@@ -236,50 +237,6 @@ fun EchoBubble(echo: OutboxEntry, onOpenImage: (AttachmentRef) -> Unit, onSaveFi
         footnote = if (echo.state == OutboxEntry.State.Offline) "Waiting for the connection" else "Sending",
         faded = true,
     )
-}
-
-/** Finished routine runs, as one quiet line each. */
-@Composable
-fun RoutineRunsLine(runs: List<RoutineRunCard>, modifier: Modifier = Modifier) {
-    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(S.xs)) {
-        for (run in runs) {
-            val failed = run.status != "succeeded"
-            var open by rememberSaveable(run.id) { mutableStateOf(false) }
-            val detail = run.error ?: run.output
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(Dims.fieldRadius))
-                    .clickable(enabled = detail != null, role = Role.Button) { open = !open }
-                    .padding(vertical = S.xs),
-            ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(S.sm), verticalAlignment = Alignment.CenterVertically) {
-                    AppIcon(AppIcons.Clock, null, tint = if (failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant, size = Dims.iconSmall)
-                    Text(
-                        "Routine ${run.routineName} ${
-                            when (run.status) {
-                                "succeeded" -> "ran"
-                                "blocked" -> "was blocked"
-                                "missed" -> "was missed"
-                                "cancelled" -> "was cancelled"
-                                else -> "failed"
-                            }
-                        }",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                AnimatedVisibility(open && detail != null) {
-                    Text(
-                        detail.orEmpty(),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(start = S.xl, top = S.xs),
-                    )
-                }
-            }
-        }
-    }
 }
 
 /** A centred, muted line between messages: a marker, the "New messages" divider. */

@@ -44,6 +44,7 @@ import groot.mobile.feature.terminal.TerminalTabs
 import groot.mobile.ui.brand.BrandPalette
 import groot.mobile.ui.components.KeyBar
 import groot.mobile.ui.components.Loadable
+import groot.mobile.ui.components.LocalAvatars
 import groot.mobile.ui.components.LocalContainer
 import groot.mobile.ui.components.ScreenScaffold
 import groot.mobile.data.api.LiveStatus
@@ -55,6 +56,10 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import kotlinx.coroutines.runBlocking
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasClickAction
 
 /**
  * Renders the app's screens with sample data to PNGs for review: `pnpm screenshots`
@@ -85,6 +90,16 @@ class ScreenshotTest {
     @Test fun chatEmptyDark() = capture("chat_empty_dark", ThemeMode.Dark) {
         Chat(sampleBots[4], sampleChatView(emptyList(), busy = false))
     }
+
+    @Test fun chatRoutineRunsDark() = capture("chat_routine_runs_dark", ThemeMode.Dark) { Chat(sampleBots[1], sampleRoutineChatView()) }
+
+    @Test fun chatRoutineRunsOpenDark() = capture(
+        "chat_routine_runs_open_dark",
+        ThemeMode.Dark,
+        act = { compose.onNode(hasClickAction() and hasContentDescription("ran 24", substring = true)).performClick() },
+    ) { Chat(sampleBots[1], sampleRoutineChatView()) }
+
+    @Test fun chatRoutineRunsLight() = capture("chat_routine_runs_light", ThemeMode.Light) { Chat(sampleBots[1], sampleRoutineChatView()) }
 
     @Test fun drawerDark() = capture("drawer_dark", ThemeMode.Dark) { Drawer() }
 
@@ -156,17 +171,22 @@ class ScreenshotTest {
         }
     }
 
-    private fun capture(name: String, mode: ThemeMode, content: @Composable () -> Unit) {
+    private fun capture(name: String, mode: ThemeMode, act: () -> Unit = {}, content: @Composable () -> Unit) {
         val container = ApplicationProvider.getApplicationContext<GrootMobileApp>().container
+        // Loaded up front: the avatar's first frame reads the cache, and the shot is taken on idle.
+        val avatars = fakeAvatarStore().also { store -> runBlocking { sampleBots.forEach { store.load(it.name) } } }
         compose.setContent {
             GrootTheme(mode = mode, palette = BrandPalette) {
                 CompositionLocalProvider(
                     LocalContainer provides container,
+                    LocalAvatars provides avatars,
                     LocalContentColor provides MaterialTheme.colorScheme.onBackground,
                     content = content,
                 )
             }
         }
+        compose.waitForIdle()
+        act()
         compose.waitForIdle()
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/$name.png")
     }
