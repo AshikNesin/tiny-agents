@@ -242,8 +242,9 @@ async function createUpstreamPR(
     await exec("git", ["-C", tempDir, "push", "origin", branchName]);
 
     // Build PR body
+    const writtenFiles = new Set(written);
     const fileList = selected
-      .filter((c) => written.includes(c.item.file))
+      .filter((c) => writtenFiles.has(c.item.file))
       .map((c) => `- \`${c.item.file}\` (+${c.stats.added} -${c.stats.removed})`)
       .join("\n");
 

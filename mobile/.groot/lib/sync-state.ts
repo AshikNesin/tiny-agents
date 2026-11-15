@@ -40,8 +40,10 @@ export async function openMergeBase(
   const reachable = await hasCommit(cloneDir, lastSyncCommit);
   const commit = reachable ? await resolveCommit(cloneDir, lastSyncCommit) : lastSyncCommit;
 
-  const ref = await baselineRef(projectRoot);
-  const baseline = await readBaselineInfo(projectRoot);
+  const [ref, baseline] = await Promise.all([
+    baselineRef(projectRoot),
+    readBaselineInfo(projectRoot),
+  ]);
   if (baseline !== null && shaMatches(baseline.boilerplateCommit, commit)) {
     return {
       commit,
