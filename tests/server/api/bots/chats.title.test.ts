@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from "vite-plus/test";
+import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { eq } from "drizzle-orm";
 import {
   CHAT_TITLE_MAX,
   cleanTitle,
@@ -7,6 +8,30 @@ import {
   titlePastChat,
 } from "../../../../apps/web/src/server/api/bots/chats.title";
 import type { SideCaller } from "../../../../apps/web/src/server/api/bots/side-call";
+import { botChats, db } from "../../../../apps/web/src/server/db";
+import { resetAppTables, seedBot } from "../../fixtures";
+
+beforeEach(resetAppTables);
+
+/** A parked chat whose provisional title the side-call may replace. */
+async function parkedChat(title: string) {
+  const bot = await seedBot();
+  const [chat] = await db
+    .insert(botChats)
+    .values({
+      botId: bot.id,
+      conversationId: `past-${bot.id}`,
+      startedAt: new Date(Date.now() - 60_000),
+      endedAt: new Date(),
+      title,
+    })
+    .returning();
+  return chat!;
+}
+
+async function storedTitle(id: string) {
+  return (await db.query.botChats.findFirst({ where: eq(botChats.id, id) }))?.title;
+}
 
 describe("past-chat titles (issue #101)", () => {
   it("takes the first owner message, on one line and capped", () => {
@@ -54,9 +79,11 @@ describe("past-chat titles (issue #101)", () => {
     ],
   };
 
-  it("asks the side-caller for the title model, falling back to the bot's own", async () => {
-    const complete = vi.fn<SideCaller["complete"]>().mockResolvedValue(undefined);
-    await titlePastChat("chat-1", input, { sideCaller: { complete } });
+  it("asks the side-caller for the title model and stores the title it returns", async () => {
+    const chat = await parkedChat("Find flights to Goa");
+    const complete = vi.fn<SideCaller["complete"]>().mockResolvedValue("Goa weekend flights");
+    await titlePastChat(chat.id, input, { sideCaller: { complete } });
+    expect(await storedTitle(chat.id)).toBe("Goa weekend flights");
     expect(complete).toHaveBeenLastCalledWith(
       expect.objectContaining({
         role: "chat_title",
@@ -67,12 +94,15 @@ describe("past-chat titles (issue #101)", () => {
     );
   });
 
-  it("makes no call for a chat with nothing said, and never throws", async () => {
+  it("makes no call for a chat with nothing said, and keeps the provisional title when the call fails", async () => {
+    const chat = await parkedChat("Find flights to Goa");
     const complete = vi.fn<SideCaller["complete"]>().mockRejectedValue(new Error("boom"));
-    await titlePastChat("chat-1", { ...input, messages: [] }, { sideCaller: { complete } });
+    await titlePastChat(chat.id, { ...input, messages: [] }, { sideCaller: { complete } });
     expect(complete).not.toHaveBeenCalled();
+    expect(await storedTitle(chat.id)).toBe("Find flights to Goa");
     await expect(
-      titlePastChat("chat-1", input, { sideCaller: { complete } }),
+      titlePastChat(chat.id, input, { sideCaller: { complete } }),
     ).resolves.toBeUndefined();
+    expect(await storedTitle(chat.id)).toBe("Find flights to Goa");
   });
 });

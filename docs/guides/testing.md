@@ -4,6 +4,14 @@ Vitest (through Vite+) for server and client tests, Playwright for end to end.
 Server tests never start an HTTP server: the Hono app is called in-process with
 `app.request()` against an in-memory SQLite database.
 
+## What a test proves
+
+The rules for agents are in [AGENTS.md](../../AGENTS.md#testing). A test calls
+the real code and asserts a result a caller can see: a return value, a saved
+row, an HTTP response, or text on the screen. It fails on the code before the
+change. Mock the network, the clock, or a third-party SDK. Do not mock the
+function the test covers and then assert that the mock ran.
+
 ## Commands
 
 ```bash
