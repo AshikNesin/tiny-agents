@@ -7,7 +7,7 @@
  * page holds the list and its actions; the card, the run lists and the
  * editor are beside it.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -25,6 +25,9 @@ import { RoutineCard } from "./RoutineCard";
 import { RoutineEditor } from "./RoutineEditor";
 import { RecentRuns, UpcomingRuns } from "./RoutineRunLists";
 
+/** How often the page checks back while a run is still awaiting its result. */
+const AWAITING_POLL_MS = 4_000;
+
 export function Routines() {
   const { data, loadError, refresh } = useRoutines();
   const routines = data?.routines ?? null;
@@ -35,6 +38,15 @@ export function Routines() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const confirm = useConfirm();
   const navigate = useNavigate();
+
+  // A run in flight settles in the bot's chat, not here: check back until it
+  // has, so Recent runs doesn't say "awaiting" until the next reload.
+  const awaiting = runs?.some((run) => run.status === "awaiting") ?? false;
+  useEffect(() => {
+    if (!awaiting) return;
+    const timer = setInterval(() => void refresh(), AWAITING_POLL_MS);
+    return () => clearInterval(timer);
+  }, [awaiting, refresh]);
 
   const upcoming = useMemo(
     () =>

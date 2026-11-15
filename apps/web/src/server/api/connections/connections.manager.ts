@@ -198,6 +198,16 @@ export class ConnectionManager {
     } catch (error) {
       if (stale()) return;
       if (error instanceof SecretLockedError) {
+        // A sign-in the app can no longer open (an old format, another
+        // SECRETS_KEY) is fixed by signing in again, which replaces it.
+        if (row.authType === "oauth" && error.reason !== "no_key") {
+          this.#withdraw(id, row.slug);
+          this.#set(id, {
+            status: "needs_auth",
+            error: "The saved sign-in can't be read anymore. Sign in again.",
+          });
+          return;
+        }
         this.#set(id, { status: "error", error: error.message });
         return;
       }

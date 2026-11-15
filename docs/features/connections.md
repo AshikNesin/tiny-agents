@@ -69,9 +69,10 @@ OAuth state (`oauth_enc`) stays on the row, sealed with `SECRETS_KEY` under the
 `connection` purpose and bound to its row and column; each change to it is one
 read-modify-write in a synchronous transaction, so concurrent sign-in steps
 can't overwrite each other (C11). See the vault's
-[local backend](./vault.md#local) for the format and `pnpm secrets:rotate`. A
-value that no longer opens (a changed key) puts the connection in `error` with
-the reason; re-enter the secret.
+[local backend](./vault.md#local) for the format and `pnpm secrets:rotate`. An
+OAuth state that no longer opens (the pre-v2 `v1` format, or another key) puts
+the connection in `needs_auth` ("Sign in again"), and signing in replaces it;
+with no `SECRETS_KEY` at all it stays in `error`.
 
 Before Q4 the header value itself was sealed in `secret_enc`. The first start
 on Q4 moves each one into the connection's own item, checks it and clears

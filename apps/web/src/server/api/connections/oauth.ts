@@ -15,6 +15,7 @@ import type {
   OAuthTokens,
 } from "@tiny-agents/agent";
 import { connections, db } from "../../db";
+import { SecretLockedError } from "../../crypto/secret-box";
 import { openOAuthState, sealOAuthState } from "./connection-secrets";
 
 /** What a connection stores about its OAuth sign-in (encrypted in `oauthEnc`). */
@@ -53,12 +54,36 @@ export function clientMetadata(): OAuthClientMetadata {
   };
 }
 
+/** The stored state. Throws `SecretLockedError` when it can't be opened; the manager reports that. */
 export async function readOAuthState(connectionId: string): Promise<OAuthState> {
   const row = await db.query.connections.findFirst({
     where: eq(connections.id, connectionId),
     columns: { oauthEnc: true },
   });
   return openOAuthState<OAuthState>(connectionId, row?.oauthEnc) ?? {};
+}
+
+/**
+ * The state as a sign-in reads and changes it. A stored state that can't be
+ * opened (the pre-v2 format, or another SECRETS_KEY) counts as none, so
+ * signing in again replaces it instead of failing on it; the connection has
+ * already asked the owner to sign in again.
+ */
+function openForSignIn(connectionId: string, stored: string | null | undefined): OAuthState {
+  try {
+    return openOAuthState<OAuthState>(connectionId, stored) ?? {};
+  } catch (error) {
+    if (error instanceof SecretLockedError && error.reason !== "no_key") return {};
+    throw error;
+  }
+}
+
+async function readForSignIn(connectionId: string): Promise<OAuthState> {
+  const row = await db.query.connections.findFirst({
+    where: eq(connections.id, connectionId),
+    columns: { oauthEnc: true },
+  });
+  return openForSignIn(connectionId, row?.oauthEnc);
 }
 
 /**
@@ -79,7 +104,7 @@ async function writeOAuthState(
       .get();
     // The connection was removed (Prisma's update threw P2025 → 404).
     if (!row) return false;
-    const next = change(openOAuthState<OAuthState>(connectionId, row.oauthEnc) ?? {});
+    const next = change(openForSignIn(connectionId, row.oauthEnc));
     tx.update(connections)
       .set({ oauthEnc: sealOAuthState(connectionId, next) })
       .where(eq(connections.id, connectionId))
@@ -124,13 +149,13 @@ export function createOAuthProvider(
       return state;
     },
     async clientInformation() {
-      return (await readOAuthState(connectionId)).client;
+      return (await readForSignIn(connectionId)).client;
     },
     async saveClientInformation(client) {
       await writeOAuthState(connectionId, (s) => ({ ...s, client }));
     },
     async tokens() {
-      return (await readOAuthState(connectionId)).tokens;
+      return (await readForSignIn(connectionId)).tokens;
     },
     async saveTokens(tokens) {
       await writeOAuthState(connectionId, (s) => ({ ...s, tokens }));
@@ -142,7 +167,7 @@ export function createOAuthProvider(
       await writeOAuthState(connectionId, (s) => ({ ...s, verifier }));
     },
     async codeVerifier() {
-      const verifier = (await readOAuthState(connectionId)).verifier;
+      const verifier = (await readForSignIn(connectionId)).verifier;
       if (!verifier) throw new Error("No pending OAuth sign-in for this connection");
       return verifier;
     },
