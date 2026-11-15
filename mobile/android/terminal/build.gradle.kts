@@ -8,6 +8,14 @@ plugins {
 
 android {
     namespace = "tinyagents.terminal"
+
+    lint {
+        // The Compose libraries pull in androidx.lifecycle:lifecycle-runtime 2.9.4 here (kit and app
+        // resolve newer). That third-party AAR bundles a lint.jar built against a Kotlin PSI API the
+        // current lint no longer has, so lint skips its two checks and warns about the jar. Fixing it
+        // would mean adding a dependency only to bump lifecycle; this module uses no lifecycle APIs.
+        disable += "ObsoleteLintCustomCheck"
+    }
 }
 
 dependencies {

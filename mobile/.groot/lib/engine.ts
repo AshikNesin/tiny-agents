@@ -567,12 +567,18 @@ export async function applyUpstream(
 ): Promise<{ written: string[]; unmerged: string[] }> {
   const writes: { file: string; content: Buffer | string }[] = [];
   const unmerged: string[] = [];
-  for (const item of items) {
-    const groot = await readFile(join(grootDir, item.file)).catch(() => null);
-    const outcome = await mergeIntoGroot(item.file, item.base, item.local, groot);
-    if (outcome.kind === "ready") writes.push({ file: item.file, content: outcome.content });
-    else if (outcome.kind !== "up-to-date") unmerged.push(item.file);
-  }
+  // Each item reads and merges its own file, so they run together; results keep item order.
+  const outcomes = await Promise.all(
+    items.map(async (item) => {
+      const groot = await readFile(join(grootDir, item.file)).catch(() => null);
+      return mergeIntoGroot(item.file, item.base, item.local, groot);
+    }),
+  );
+  outcomes.forEach((outcome, i) => {
+    const file = items[i].file;
+    if (outcome.kind === "ready") writes.push({ file, content: outcome.content });
+    else if (outcome.kind !== "up-to-date") unmerged.push(file);
+  });
   if (unmerged.length > 0) return { written: [], unmerged };
 
   for (const { file, content } of writes) {

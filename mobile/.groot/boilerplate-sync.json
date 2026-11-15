@@ -4,8 +4,8 @@
     "repo": "https://github.com/AshikNesin/groot-mobile-app"
   },
   "last_sync": {
-    "commit": "27c75c6ce09bb09735824f9fe5802a87f27a16c9",
-    "date": "2026-11-15T08:33:17.956Z"
+    "commit": "08e8dfcce307a391ee9275de03c898a89382a5d8",
+    "date": "2026-11-15T09:21:17.422Z"
   },
   "additional_exclusions": [
     "ios/**",

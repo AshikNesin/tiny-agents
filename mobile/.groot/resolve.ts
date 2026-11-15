@@ -340,9 +340,10 @@ async function main() {
   console.log("\n## Groot Resolve\n");
 
   // 1. Load config (validates this is a groot-synced project) + manifest
-  const config = await loadConfig(projectRoot);
-
-  const manifest = await readManifest(projectRoot);
+  const [config, manifest] = await Promise.all([
+    loadConfig(projectRoot),
+    readManifest(projectRoot),
+  ]);
   if (manifest === null) {
     console.log(`No conflicts to resolve — \`${MANIFEST_RELATIVE_PATH}\` not found.\n`);
     console.log("Run `pnpm groot:sync` first if you expect pending conflicts.\n");
@@ -351,7 +352,8 @@ async function main() {
 
   let conflicts = manifest.conflicts;
   if (fileFilters.length > 0) {
-    conflicts = conflicts.filter((c) => fileFilters.includes(c.file));
+    const wanted = new Set(fileFilters);
+    conflicts = conflicts.filter((c) => wanted.has(c.file));
   }
 
   if (conflicts.length === 0) {
@@ -444,9 +446,10 @@ async function main() {
   }
 
   // 3. Update the manifest: drop resolved entries, keep failures.
+  const resolvedFiles = new Set(resolved);
   await writeManifest(projectRoot, {
     ...manifest,
-    conflicts: manifest.conflicts.filter((c) => !resolved.includes(c.file)),
+    conflicts: manifest.conflicts.filter((c) => !resolvedFiles.has(c.file)),
   });
 
   // 4. Summary + verification
