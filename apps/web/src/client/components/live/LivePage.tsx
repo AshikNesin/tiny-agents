@@ -7,8 +7,9 @@
  *
  * The view is the chat panel's (`VncView`), fit to the page (the browser's
  * window) or scaled to it (the desktop's fixed size), view-only until the
- * owner takes control. Taking control is the same driver flag the panel
- * flips, so the bots on that browser or desktop wait (and take no
+ * owner clicks it to take control. One bar over it holds the tabs, a status
+ * chip and the tools, so full screen (the view and its bar) keeps them all.
+ * Taking control is the same driver flag the panel flips, so the bots on that browser or desktop wait (and take no
  * screenshots) until it is handed back, and a bot's takeover request is
  * answered by the hand-back here too. The browser's owner works in a tab of
  * their own (`owner` on the server), so opening the page never lands in a
@@ -17,7 +18,7 @@
  * Ctrl+W).
  */
 import { useCallback, useMemo } from "react";
-import { MonitorOff, MousePointerClick } from "lucide-react";
+import { MonitorOff } from "lucide-react";
 import { Button, EmptyState, ErrorState, LoadingState } from "@groot/ui";
 import { cn } from "@groot/ui/lib/utils";
 import { PageLayout } from "@groot/shell/components/layout/PageLayout";
@@ -25,10 +26,16 @@ import type { ResizeBody } from "../../../shared/api/live";
 import { errorMessage } from "../../lib/errors";
 import { connectionOf, useLiveView } from "../../lib/live-view";
 import { VncView } from "../browser/VncView";
-import { ConnectingOverlay, TakeoverBanner } from "./live-parts";
+import {
+  ConnectingOverlay,
+  DrivingFrame,
+  StatusChip,
+  TakeControlLayer,
+  TakeoverBanner,
+} from "./live-parts";
 import { LivePageActions } from "./LivePageActions";
 import { OffState } from "./LivePageOffState";
-import { LivePageStatusLine, LivePageTabs } from "./LivePageTabs";
+import { driverOf, LivePageTabs } from "./LivePageTabs";
 import type { LiveSurface, PageItem, PanelStatus } from "./surface";
 import { useSelectedProfile } from "./use-selected-profile";
 
@@ -82,6 +89,7 @@ export function LivePage<S extends PanelStatus, L, I extends PageItem>({
   const profile = item?.profile;
   const active = Boolean(item?.active);
   const connection = connectionOf({ mode: streaming ? "vnc" : "headless" }, vncState);
+  const live = streaming && vncState === "live";
 
   const sendShortcut = (index: number) => {
     const shortcut = page.keys?.[index];
@@ -134,11 +142,36 @@ export function LivePage<S extends PanelStatus, L, I extends PageItem>({
         )}
         data-testid={`${kind}-region`}
       >
-        <LivePageTabs kind={kind} page={page} items={items} profile={profile} onSelect={select} />
-
-        {page.statusLine && active && item && (
-          <LivePageStatusLine kind={kind} connection={connection} item={item} />
-        )}
+        {/* One bar: the tabs, the selected one's status, its tools. A container:
+            a narrow one (a phone) puts the tabs on a row of their own. */}
+        <div className="@container flex min-h-11 shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-b px-1.5 py-1">
+          <LivePageTabs kind={kind} page={page} items={items} profile={profile} onSelect={select} />
+          {active && item && (
+            <StatusChip
+              connection={connection}
+              live={live}
+              yours={driving}
+              driver={driverOf(item)}
+              testId={`${kind}-page-status`}
+              driverTestId={`${kind}-page-driver`}
+            />
+          )}
+          {item && (
+            <LivePageActions
+              kind={kind}
+              page={page}
+              profile={profile}
+              streaming={streaming}
+              driving={driving}
+              fullscreen={fullscreen}
+              onSendShortcut={sendShortcut}
+              onPaste={paste}
+              onToggleFullscreen={toggleFullscreen}
+              onReset={() => void reset()}
+              onDriver={(driver) => void setDriver(driver)}
+            />
+          )}
+        </div>
 
         {page.takeover && streaming && driving && item?.takeover && (
           <TakeoverBanner
@@ -171,19 +204,14 @@ export function LivePage<S extends PanelStatus, L, I extends PageItem>({
           {streaming && vncState !== "live" && (
             <ConnectingOverlay vncState={vncState} connecting={page.connecting} />
           )}
-          {streaming && vncState === "live" && !driving && (
-            <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
-              <Button
-                size="sm"
-                className="pointer-events-auto shadow-md"
-                onClick={() => void setDriver("human")}
-                data-testid={`${kind}-page-takeover-hint`}
-              >
-                <MousePointerClick />
-                View only · Take control to use it
-              </Button>
-            </div>
+          {live && !driving && (
+            <TakeControlLayer
+              testId={`${kind}-page-take`}
+              title={page.takeTitle}
+              onTake={() => void setDriver("human")}
+            />
           )}
+          {live && driving && <DrivingFrame testId={`${kind}-page-driving-frame`} />}
           {page.headless && active && !streaming && (
             <EmptyState
               icon={MonitorOff}
@@ -200,31 +228,8 @@ export function LivePage<S extends PanelStatus, L, I extends PageItem>({
     );
   })();
 
-  const configured = Boolean(list && page.available(list) && item);
-
   return (
-    <PageLayout
-      title={page.title}
-      description={page.description}
-      maxWidth="full"
-      actions={
-        configured ? (
-          <LivePageActions
-            kind={kind}
-            page={page}
-            profile={profile}
-            streaming={streaming}
-            driving={driving}
-            fullscreen={fullscreen}
-            onSendShortcut={sendShortcut}
-            onPaste={paste}
-            onToggleFullscreen={toggleFullscreen}
-            onReset={() => void reset()}
-            onDriver={(driver) => void setDriver(driver)}
-          />
-        ) : undefined
-      }
-    >
+    <PageLayout title={page.title} description={page.description} maxWidth="full">
       {body}
     </PageLayout>
   );

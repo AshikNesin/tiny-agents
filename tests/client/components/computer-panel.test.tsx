@@ -7,7 +7,14 @@
  * is faked; its canvas needs a real browser.
  */
 import React from "react";
-import { act, fireEvent, render as rtlRender, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render as rtlRender,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { MemoryRouter } from "react-router-dom";
 import { ConfirmProvider } from "@groot/ui/primitives";
@@ -80,7 +87,7 @@ const connected = async () => {
   act(() => {
     fakes.rfbs[fakes.rfbs.length - 1]!.dispatchEvent(new Event("connect"));
   });
-  await screen.findByText("Live");
+  await screen.findByTestId("computer-driver");
 };
 
 describe("ComputerPanel", () => {
@@ -106,20 +113,23 @@ describe("ComputerPanel", () => {
       { remoteResize: false },
     );
     await connected();
-    expect(screen.getByTestId("computer-driver").textContent).toBe("Clicker drives");
-    expect(screen.getByText("1280×800")).toBeInTheDocument();
+    expect(screen.getByTestId("computer-driver").textContent).toBe("Clicker is driving");
+    // The desktop's size is not something the owner acts on; the header leaves it out.
+    expect(screen.queryByText("1280×800")).not.toBeInTheDocument();
     expect(fakes.rfbs[0]!.viewOnly).toBe(true);
     expect(resize).not.toHaveBeenCalled();
   });
 
-  it("takes control and releases it", async () => {
+  it("takes control from a click on the desktop and hands it back", async () => {
     const api = mockApi(liveStatus());
     render(<ComputerPanel bot={bot} onClose={vi.fn()} />);
     await connected();
-    fireEvent.click(screen.getByTestId("computer-takeover"));
+    const viewport = screen.getByTestId("computer-viewport");
+    fireEvent.click(within(viewport).getByRole("button", { name: "Take control" }));
     await waitFor(() => expect(api.driver).toHaveBeenCalledWith("b1", "human"));
     await waitFor(() => expect(fakes.rfbs[0]!.viewOnly).toBe(false));
-    expect(screen.getByTestId("computer-driver").textContent).toBe("You drive");
+    expect(screen.getByTestId("computer-driver").textContent).toBe("You're driving");
+    expect(within(viewport).getByTestId("computer-driving-frame")).toBeInTheDocument();
     expect(screen.getByTestId("computer-paste")).toBeInTheDocument();
     fireEvent.click(screen.getByTestId("computer-release"));
     await waitFor(() => expect(api.driver).toHaveBeenCalledWith("b1", "agent"));

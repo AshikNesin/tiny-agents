@@ -279,7 +279,7 @@ describe("Browser page states", () => {
     mockBrowsers(browsers([browserItem(), scoutBrowser()]));
     mount("browser");
     await connect();
-    await screen.findByTestId("browser-page-takeover-hint");
+    await screen.findByTestId("browser-page-take");
     pin();
   });
 
@@ -287,7 +287,7 @@ describe("Browser page states", () => {
     mockBrowsers(browsers([browserItem({ bots: [ALPHA] })]));
     mount("browser");
     await connect();
-    await screen.findByTestId("browser-page-takeover-hint");
+    await screen.findByTestId("browser-page-take");
     pin();
   });
 
@@ -304,7 +304,7 @@ describe("Browser page states", () => {
     );
     mount("browser", "/browser?profile=bot-b3");
     await connect();
-    await screen.findByTestId("browser-page-takeover-hint");
+    await screen.findByTestId("browser-page-take");
     pin();
   });
 });
@@ -382,7 +382,7 @@ describe("Computer page states", () => {
     mockDesktops(desktops([desktopItem(), scoutDesktop()]));
     mount("computer");
     await connect();
-    await screen.findByTestId("computer-page-takeover-hint");
+    await screen.findByTestId("computer-page-take");
     pin();
   });
 

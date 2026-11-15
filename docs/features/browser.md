@@ -115,17 +115,16 @@ page is the shared `LivePage`; the Computer's panel and page are the same two
 components on the computer's surface (`components/live/surfaces.tsx`, every
 difference a field; docs/rewrite/README.md §4.5).
 
-The panel is one card (`Card` from `@groot/ui`): a header over the viewport.
-The header has the title, a status line, and the tools. The status line is a
-dot and label (Live, Connecting, Reconnecting, Starting, Headless, Closed),
-then who is driving ("Surfer drives", "You drive") and the agent's current
-URL (hidden while you drive, since the streamed Chrome has its own address
-bar). The tools are Take control or Release control, Paste (while you drive),
-Full screen, then Reset and Close as icons. The header is a container: Paste
-and Full screen show their label when it is at least 36rem wide, the hand-off
-button and the driver and URL parts of the status line from 28rem. Below that
-the buttons shrink to icons and the status line is just the connection, so the
-panel works from its 360 px minimum up. On a phone the panel is a full-screen
+The panel is one card (`Card` from `@groot/ui`): a one-row header over the
+viewport. The header has the title (or the Browser / Computer tabs), one status
+chip, and the tools as icons. The chip says who is driving once the stream is
+live ("Surfer is driving", or a pulsing "You're driving"), and the connection
+otherwise (Connecting, Reconnecting, Starting, Headless, Closed). The streamed
+Chrome shows its own address bar, so the header shows the agent's URL only for
+a headless browser. The tools are Hand back and Paste (while you drive), Full
+screen, the page link, Reset and Close. The header is a container: in a
+narrow panel the tabs keep only their icons and your chip is just its pulsing
+dot, so the panel works from its 360 px minimum up. On a phone the panel is a full-screen
 overlay; on desktop it is an inset card beside the chat.
 The closed, starting, headless and failed states use `EmptyState` and
 `ErrorState`, with a spinner overlay on the viewport while connecting.
@@ -149,8 +148,10 @@ The closed, starting, headless and failed states use `EmptyState` and
   its padding, radius and ring, so the viewport (and the Chrome window fitted
   to it) is the whole screen. Esc goes to the remote Chrome, so leave with the
   "Exit full screen" button.
-- **Take control.** The viewer starts view-only. "Take control" enables input
-  and focus; "Release control" hands the browser back to the bot. On a Mac, Cmd
+- **Take control.** The viewer starts view-only, and the stream itself is the
+  "Take control" button: hover shows "Click to take control" (a touch screen
+  always shows it), and a click enables input and focus. While you drive, a
+  green frame marks the stream as yours; "Hand back" returns it to the bot. On a Mac, Cmd
   shortcuts are sent as Ctrl shortcuts to the remote Linux Chrome.
 - **Clipboard.** Text copied in the remote Chrome lands on your clipboard.
   "Paste" (or Cmd+V on a Mac while driving) sends your clipboard to the remote
@@ -159,8 +160,8 @@ The closed, starting, headless and failed states use `EmptyState` and
   Reset closes the browser, wipes the profile and returns to "Open browser".
 
 Without a VNC display (local fallback, no `SANDBOX_HOST`) the panel shows
-"No live view for this browser" with the current URL, and Take control, Paste
-and Full screen are not offered.
+"No live view for this browser" with the current URL, and taking control,
+Paste and Full screen are not offered.
 
 ## Browser page
 
@@ -180,9 +181,10 @@ browsers directly, the way the Computer page gives them the desktops:
   panel gives that bot the front tab instead). The owner's tab closes with
   the browser.
 - **The live view** is the panel's `VncView`, fit to the page through the
-  page's own resize route, view-only until you take control. Taking control
-  is the same driver flag the panel flips: every bot on that browser waits
-  until you release it. **Paste**, **Full screen** (with keyboard lock) and
+  page's own resize route, view-only until you click it to take control.
+  Taking control is the same driver flag the panel flips: every bot on that
+  browser waits until you hand it back. One bar over the view holds the tabs,
+  a status chip and the tools, so full screen keeps them on screen. **Paste**, **Full screen** (with keyboard lock) and
   **Reset** (closes the browser and wipes the profile; on Shared it names the
   bots it signs out) work as in the panel.
 - **One window per browser.** The page and a chat panel both fit Chrome's

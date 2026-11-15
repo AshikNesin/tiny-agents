@@ -98,27 +98,32 @@ await journey(
       if (await open.isVisible({ timeout: 5_000 }).catch(() => false)) await open.click();
       // A failed drive must not leave Chrome running on the shared sandbox.
       cleanup(async () => (await shared()).active && api.delete("/browser/shared"));
-      await expect(page.getByTestId("browser-page-status")).toContainText("Live", {
-        timeout: 120_000,
-      });
+      // Once live, the status chip says who drives.
+      await expect(page.getByTestId("browser-page-driver")).toBeVisible({ timeout: 120_000 });
       await streamed(/\/browser\/shared\/vnc/);
-      await expect(page.getByRole("button", { name: /View only · Take control/ })).toBeVisible();
+      // View only: the stream itself is the Take control button.
+      await expect(
+        page.getByTestId("browser-page-viewport").getByRole("button", { name: "Take control" }),
+      ).toBeVisible();
       expect((await shared()).active).toBe(true);
       expect(Number(chromes())).toBeGreaterThan(0);
     });
     await proof("page-live");
-    await step("Take control: you drive, Paste is enabled; the flag reads human", async () => {
-      await page.getByRole("button", { name: "Take control", exact: true }).click();
-      await expect(page.getByRole("button", { name: "Release control" })).toBeVisible();
-      await expect(page.getByTestId("browser-page-status")).toContainText("You drive");
-      await expect(page.getByRole("button", { name: "Paste from your clipboard" })).toBeEnabled();
-      await expect.poll(async () => (await shared()).driver).toBe("human");
-    });
+    await step(
+      "A click on the stream takes control: Paste shows; the flag reads human",
+      async () => {
+        await page.getByRole("button", { name: "Take control", exact: true }).click();
+        await expect(page.getByRole("button", { name: "Hand back" })).toBeVisible();
+        await expect(page.getByTestId("browser-page-status")).toContainText("You're driving");
+        await expect(page.getByRole("button", { name: "Paste from your clipboard" })).toBeEnabled();
+        await expect.poll(async () => (await shared()).driver).toBe("human");
+      },
+    );
     await proof("page-you-drive");
-    await step("Release control hands it back to the bot", async () => {
-      await page.getByRole("button", { name: "Release control" }).click();
+    await step("Hand back returns it to the bot", async () => {
+      await page.getByRole("button", { name: "Hand back" }).click();
       await expect(page.getByRole("button", { name: "Take control", exact: true })).toBeVisible();
-      await expect(page.getByTestId("browser-page-status")).toContainText(`${name} drives`);
+      await expect(page.getByTestId("browser-page-status")).toContainText(`${name} is driving`);
       await expect.poll(async () => (await shared()).driver).not.toBe("human");
     });
     await step("Full screen puts the browser region in the Fullscreen API", async () => {
@@ -154,15 +159,15 @@ await journey(
       await expect(panel).toContainText("Live", { timeout: 60_000 });
       await streamed(new RegExp(`/bots/${botId}/browser/vnc`));
       await echoes(1);
-      await expect(panel.getByTestId("browser-driver")).toHaveText(`${name} drives`);
+      await expect(panel.getByTestId("browser-driver")).toHaveText(`${name} is driving`);
     });
     await proof("panel-desktop");
-    await step("panel: Take control and Release control flip the driver", async () => {
+    await step("panel: a click on the stream takes control; Hand back returns it", async () => {
       await panel.getByRole("button", { name: "Take control" }).click();
-      await expect(panel.getByTestId("browser-driver")).toHaveText("You drive");
+      await expect(panel.getByTestId("browser-driver")).toHaveText("You're driving");
       expect((await api.get(`/bots/${botId}/browser`)).driver).toBe("human");
-      await panel.getByRole("button", { name: "Release control" }).click();
-      await expect(panel.getByTestId("browser-driver")).toHaveText(`${name} drives`);
+      await panel.getByRole("button", { name: "Hand back" }).click();
+      await expect(panel.getByTestId("browser-driver")).toHaveText(`${name} is driving`);
     });
     await step("panel: closing sticks, later /browse only lights the toggle", async () => {
       await panel.getByRole("button", { name: "Close browser panel" }).click();

@@ -1,20 +1,18 @@
 /**
- * The page header's actions for the selected browser or desktop: while it
- * streams, the Apps and Keys menus (the computer's), paste and full screen;
- * then reset, and the hand-off control.
+ * The tools in the page view's bar, for the selected browser or desktop:
+ * while the owner drives, Hand back, then the Apps and Keys menus (the
+ * computer's) and paste; while it streams, full screen; then reset. They sit
+ * in the view's own bar, so full screen keeps them on screen. Taking control
+ * is a click on the stream (`TakeControlLayer`), so it has no button here.
  */
-import {
-  Bot as BotIcon,
-  ClipboardPaste,
-  Maximize2,
-  Minimize2,
-  MousePointerClick,
-  RotateCcw,
-} from "lucide-react";
+import { ClipboardPaste, Maximize2, Minimize2, RotateCcw, Undo2 } from "lucide-react";
 import { Button } from "@groot/ui";
 import type { Driver, LiveViewKind } from "../../lib/live-view";
 import { AppsMenu, KeysMenu } from "./LivePageMenus";
 import type { LivePageSurface, PageItem } from "./surface";
+
+/** The muted icon tools. */
+const tool = "text-muted-foreground hover:text-foreground";
 
 export function LivePageActions<L, I extends PageItem>({
   kind,
@@ -41,51 +39,53 @@ export function LivePageActions<L, I extends PageItem>({
   onReset: () => void;
   onDriver: (driver: Driver) => void;
 }) {
+  const yours = streaming && driving;
   return (
-    <>
-      {streaming && (
+    <div className="ml-auto flex shrink-0 items-center gap-0.5">
+      {yours && (
         <>
+          <Button
+            size="xs"
+            variant="secondary"
+            className="mr-1"
+            onClick={() => onDriver("agent")}
+            title="Hand it back to the bots"
+            data-testid={`${kind}-page-release`}
+          >
+            <Undo2 />
+            Hand back
+          </Button>
           {page.apps && (
-            <AppsMenu
-              key={profile}
-              apps={page.apps}
-              profile={profile!}
-              disabled={!driving}
-              testId={`${kind}-apps`}
-            />
+            <AppsMenu key={profile} apps={page.apps} profile={profile!} testId={`${kind}-apps`} />
           )}
           {page.keys && (
-            <KeysMenu
-              shortcuts={page.keys}
-              disabled={!driving}
-              onSend={onSendShortcut}
-              testId={`${kind}-keys`}
-            />
+            <KeysMenu shortcuts={page.keys} onSend={onSendShortcut} testId={`${kind}-keys`} />
           )}
           <Button
             variant="ghost"
             size="icon-sm"
             onClick={onPaste}
-            disabled={!driving}
             aria-label="Paste from your clipboard"
             title="Paste from your clipboard"
-            className="text-muted-foreground hover:text-foreground"
+            className={tool}
             data-testid={`${kind}-page-paste`}
           >
-            <ClipboardPaste className="size-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={onToggleFullscreen}
-            aria-label={fullscreen ? "Exit full screen" : "Full screen"}
-            title={fullscreen ? "Exit full screen" : "Full screen"}
-            className="text-muted-foreground hover:text-foreground"
-            data-testid={`${kind}-page-fullscreen`}
-          >
-            {fullscreen ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+            <ClipboardPaste className="size-3.5" />
           </Button>
         </>
+      )}
+      {streaming && (
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={onToggleFullscreen}
+          aria-label={fullscreen ? "Exit full screen" : "Full screen"}
+          title={fullscreen ? "Exit full screen" : "Full screen"}
+          className={tool}
+          data-testid={`${kind}-page-fullscreen`}
+        >
+          {fullscreen ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
+        </Button>
       )}
       <Button
         variant="ghost"
@@ -93,27 +93,11 @@ export function LivePageActions<L, I extends PageItem>({
         onClick={onReset}
         aria-label={page.reset.label}
         title={page.reset.title}
-        className="text-muted-foreground hover:text-foreground"
+        className={tool}
         data-testid={`${kind}-page-reset`}
       >
-        <RotateCcw className="size-4" />
+        <RotateCcw className="size-3.5" />
       </Button>
-      {streaming &&
-        (driving ? (
-          <Button
-            variant="secondary"
-            onClick={() => onDriver("agent")}
-            data-testid={`${kind}-page-release`}
-          >
-            <BotIcon />
-            Release control
-          </Button>
-        ) : (
-          <Button onClick={() => onDriver("human")} data-testid={`${kind}-page-take`}>
-            <MousePointerClick />
-            Take control
-          </Button>
-        ))}
-    </>
+    </div>
   );
 }
