@@ -124,6 +124,19 @@ afterEach(() => {
 });
 
 describe("Storage browser", () => {
+  it("shows the folder trail only inside a folder", async () => {
+    const user = userEvent.setup();
+    renderStorage();
+    await screen.findByText("root.txt", { selector: "td *" });
+    // At the root a trail would be a lone home button to where you already are.
+    expect(screen.queryByRole("button", { name: "Go to root folder" })).not.toBeInTheDocument();
+
+    await user.click(within(rowOf("a")).getByRole("button", { name: "a" }));
+    await screen.findByText("one.txt", { selector: "td *" });
+    await user.click(screen.getByRole("button", { name: "Go to root folder" }));
+    await screen.findByText("root.txt", { selector: "td *" });
+  });
+
   it("drops a selection made in another folder, so a path change can never delete it", async () => {
     const user = userEvent.setup();
     const { navigate } = renderStorage("?path=a/");

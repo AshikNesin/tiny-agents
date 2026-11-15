@@ -23,6 +23,12 @@ interface PageLayoutProps {
    * the menu button.
    */
   backTo?: string;
+  /**
+   * The phone menu button that opens the app's sidebar drawer. Off for a
+   * full-page screen that brings its own way back (Settings), where there is
+   * no drawer to open.
+   */
+  navButton?: boolean;
 }
 
 /**
@@ -60,15 +66,19 @@ export function PageLayout({
   className,
   maxWidth = "5xl",
   backTo,
+  navButton = true,
 }: PageLayoutProps) {
   const navigate = useNavigate();
   const { openNav } = useShellConfig();
   return (
     <PageContainer maxWidth={maxWidth} className={className}>
       {breadcrumb && <div className="mb-4">{breadcrumb}</div>}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2.5">
+      {/* A grid, so the actions share the title's row but never the
+          description's: on a phone the description keeps the full width
+          instead of wrapping into a narrow column beside the buttons. */}
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4">
+        <div className="col-start-1 row-start-1 min-w-0">
+          <div className="flex min-h-9 items-center gap-2.5">
             {backTo ? (
               <Button
                 variant="outline"
@@ -79,7 +89,7 @@ export function PageLayout({
               >
                 <ArrowLeft className="size-5" />
               </Button>
-            ) : openNav ? (
+            ) : openNav && navButton ? (
               <Button
                 variant="ghost"
                 size="icon"
@@ -93,9 +103,26 @@ export function PageLayout({
             <h1 className={cn("truncate", h1Class)}>{title}</h1>
             {titleAdornment}
           </div>
-          {description && <div className="mt-1 text-sm text-muted-foreground">{description}</div>}
         </div>
-        {actions && <div className="flex flex-shrink-0 items-center gap-2">{actions}</div>}
+        {description && (
+          <div className="col-span-2 row-start-2 mt-1 text-sm text-muted-foreground md:col-span-1">
+            {description}
+          </div>
+        )}
+        {/* After the description in reading order; placed beside the title. */}
+        {actions && (
+          <div
+            className={cn(
+              "col-start-2 row-start-1 flex flex-shrink-0 items-center gap-2 md:row-span-2",
+              // A detail page's title is a name (often long) and its actions
+              // several: on a phone they get a row of their own under the
+              // description, so the title is not cut to a few letters.
+              backTo && "max-sm:col-span-2 max-sm:col-start-1 max-sm:row-start-3 max-sm:mt-3",
+            )}
+          >
+            {actions}
+          </div>
+        )}
       </div>
       <div className="mt-8 space-y-6">{children}</div>
     </PageContainer>
