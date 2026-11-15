@@ -184,7 +184,8 @@ export function LivePage<S extends PanelStatus, L, I extends PageItem>({
 
         <div
           className={cn(
-            "relative w-full flex-1 overflow-hidden",
+            // The region's bottom corners, so the driving frame follows them.
+            "relative w-full flex-1 overflow-hidden rounded-b-[inherit]",
             fullscreen ? "min-h-0" : "h-[60vh] min-h-[320px] md:h-auto md:min-h-0",
           )}
           data-testid={`${kind}-page-viewport`}

@@ -173,7 +173,11 @@ export function LivePanel<S extends PanelStatus, L, I extends PageItem>({
           />
         )}
 
-        <div className="relative min-h-0 flex-1 overflow-hidden" data-testid={`${kind}-viewport`}>
+        {/* The card's bottom corners, so the driving frame follows them. */}
+        <div
+          className="relative min-h-0 flex-1 overflow-hidden rounded-b-[inherit]"
+          data-testid={`${kind}-viewport`}
+        >
           {streaming && (
             <VncView
               ref={vncRef}
