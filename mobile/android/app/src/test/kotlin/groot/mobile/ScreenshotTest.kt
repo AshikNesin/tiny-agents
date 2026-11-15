@@ -101,6 +101,14 @@ class ScreenshotTest {
 
     @Test fun chatRoutineRunsLight() = capture("chat_routine_runs_light", ThemeMode.Light) { Chat(sampleBots[1], sampleRoutineChatView()) }
 
+    @Test fun chatApprovalsDark() = capture("chat_approvals_dark", ThemeMode.Dark) {
+        Chat(sampleBots[2], sampleChatView(sampleApprovalMessages, busy = false))
+    }
+
+    @Test fun chatApprovalsLight() = capture("chat_approvals_light", ThemeMode.Light) {
+        Chat(sampleBots[2], sampleChatView(sampleApprovalMessages, busy = false))
+    }
+
     @Test fun drawerDark() = capture("drawer_dark", ThemeMode.Dark) { Drawer() }
 
     @Test fun drawerLight() = capture("drawer_light", ThemeMode.Light) { Drawer() }

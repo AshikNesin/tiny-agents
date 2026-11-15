@@ -30,6 +30,10 @@ import groot.mobile.data.api.Schedule
 import groot.mobile.data.api.Skill
 import groot.mobile.data.api.Source
 import groot.mobile.data.api.TerminalTab
+import groot.mobile.data.api.Takeover
+import groot.mobile.data.api.CredentialField
+import groot.mobile.data.api.CredentialRequest
+import groot.mobile.data.api.VaultUse
 import groot.mobile.data.api.ToolCall
 import groot.mobile.data.api.ToolInfo
 import groot.mobile.data.api.ToolStatus
@@ -365,3 +369,52 @@ fun sampleRoutineChatView(): ChatView {
     )
     return chatView(sampleSession(messages, busy = false).copy(routineRuns = runs))
 }
+
+/** One chat with every kind of card that waits on the owner: a command, a vault use, a sign-in, the computer. */
+val sampleApprovalMessages = listOf(
+    message("a1", MessageRole.User, "Update the server and renew the GitHub token.", minutesAgo = 6),
+    message(
+        "a2",
+        MessageRole.Assistant,
+        "",
+        toolCalls = listOf(
+            tool("run_command", mapOf("command" to "sudo apt-get update && sudo apt-get upgrade -y"), status = ToolStatus.AwaitingApproval, taskId = 61, durationMs = null),
+        ),
+        minutesAgo = 5,
+    ),
+    message(
+        "a3",
+        MessageRole.Assistant,
+        "",
+        toolCalls = listOf(
+            tool("browser_fill_secret", mapOf("handle" to "github"), status = ToolStatus.AwaitingApproval, taskId = 62, durationMs = null).copy(
+                vault = VaultUse("github", "GitHub", "login", "browser_fill_secret", "github.com", null, null, "ashik", grantable = true, env = emptyList(), hosts = emptyList()),
+                expiresAt = FIXED_NOW + 9 * 60_000,
+            ),
+        ),
+        minutesAgo = 4,
+    ),
+    message(
+        "a4",
+        MessageRole.Assistant,
+        "",
+        toolCalls = listOf(
+            tool("request_credentials", status = ToolStatus.AwaitingCredentials, taskId = 63, durationMs = null).copy(
+                credentials = CredentialRequest("pending", "https://kite.zerodha.com", "Zerodha Kite login", "To read your holdings", listOf(CredentialField("user", "User ID", "text", true), CredentialField("password", "Password", "password", true)), emptyList(), null),
+                expiresAt = FIXED_NOW + 14 * 60_000,
+            ),
+        ),
+        minutesAgo = 3,
+    ),
+    message(
+        "a5",
+        MessageRole.Assistant,
+        "",
+        toolCalls = listOf(
+            tool("computer_request_takeover", status = ToolStatus.AwaitingTakeover, taskId = 64, durationMs = null).copy(
+                takeover = Takeover("waiting", "The checkout page shows a CAPTCHA I cannot solve."),
+            ),
+        ),
+        minutesAgo = 2,
+    ),
+)
