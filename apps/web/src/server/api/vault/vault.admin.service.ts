@@ -462,11 +462,6 @@ export async function linkItem(input: {
     backendFailure(error);
   }
   if (summary.kind === "other") throw Boom.badRequest("This kind of item can't be used by bots");
-  // One row per value: a second would open it under a policy the first never agreed to.
-  const linked = await db.query.vaultItems.findFirst({
-    where: and(eq(vaultItems.backend, input.backend), eq(vaultItems.externalId, input.externalId)),
-  });
-  if (linked) throw Boom.conflict(`This item is already linked as "${linked.handle}"`);
   const origins =
     input.policy.origins.length > 0 ? input.policy.origins : originsFrom(summary.urls);
   const values = {
@@ -479,23 +474,24 @@ export async function linkItem(input: {
     ...metadataOf(summary),
   };
   // A backend that seals values itself binds the item to its row's policy,
-  // in the transaction that inserts the row.
-  const insertRow = (tx: DbTx) => tx.insert(vaultItems).values(values).returning().get();
+  // in the transaction that inserts the row. One row per value: a second
+  // would open it under a policy the first never agreed to, so the check is
+  // in that transaction too (C11).
+  const insertRow = (tx: DbTx) => {
+    const linked = tx
+      .select({ handle: vaultItems.handle })
+      .from(vaultItems)
+      .where(
+        and(eq(vaultItems.backend, input.backend), eq(vaultItems.externalId, input.externalId)),
+      )
+      .get();
+    if (linked) throw Boom.conflict(`This item is already linked as "${linked.handle}"`);
+    return tx.insert(vaultItems).values(values).returning().get();
+  };
   const write = writeBackends().get(input.backend);
   let row: VaultItemRow;
   try {
-    row = write?.rebind
-      ? await write.rebind(
-          input.externalId,
-          vaultPolicyDigest({
-            audience: "bots",
-            originsJson: values.originsJson ?? "[]",
-            hostsJson: values.hostsJson ?? "[]",
-            injectJson: values.injectJson ?? null,
-          }),
-          insertRow,
-        )
-      : insertRow(db);
+    row = write?.rebind ? await write.rebind(input.externalId, insertRow) : insertRow(db);
   } catch (error) {
     backendFailure(error);
   }
@@ -536,7 +532,7 @@ async function updateItemRow(
   actor: { via: "vault_ui" | "credential_request" | "models" } = { via: "vault_ui" },
 ) {
   const kind = row.kind as VaultKind;
-  const before = vaultPolicyDigest(row);
+  const touchesPolicy = input.policy !== undefined || input.audience !== undefined;
   const touchesBackend =
     input.values !== undefined || input.title !== undefined || input.urls !== undefined;
   let metadata = {};
@@ -565,26 +561,25 @@ async function updateItemRow(
     ...metadata,
   };
   const writeRow = (tx: DbTx): VaultItemRow => {
-    // Drizzle refuses an empty SET; with nothing to change the row stands as it is.
-    if (Object.keys(data).length === 0) return row;
-    const changed = tx
-      .update(vaultItems)
-      .set(data)
-      .where(eq(vaultItems.id, row.id))
-      .returning()
-      .get();
+    // Drizzle refuses an empty SET: with nothing to change, the row as it stands now.
+    const changed =
+      Object.keys(data).length === 0
+        ? tx.select().from(vaultItems).where(eq(vaultItems.id, row.id)).get()
+        : tx.update(vaultItems).set(data).where(eq(vaultItems.id, row.id)).returning().get();
     // Deleted meanwhile (Prisma's P2025 → 404); a re-seal with it rolls back.
     if (!changed) throw Boom.notFound("Record not found");
     return changed;
   };
-  // A new policy digest re-seals a self-sealed value (opened under the row as
-  // it stands) in the transaction that writes the row.
-  const after = vaultPolicyDigest({ ...row, ...data });
-  const rebind =
-    after !== before ? writeBackends().get(row.backend as BackendName)?.rebind : undefined;
+  // A policy edit re-seals a self-sealed value in the transaction that writes
+  // the row: opened under the row as that transaction finds it (a concurrent
+  // edit included) and sealed under the row as written, never under a digest
+  // worked out from the row read before (C11).
+  const rebind = touchesPolicy
+    ? writeBackends().get(row.backend as BackendName)?.rebind
+    : undefined;
   let updated: VaultItemRow;
   try {
-    updated = rebind ? await rebind(row.externalId, after, writeRow) : writeRow(db);
+    updated = rebind ? await rebind(row.externalId, writeRow) : writeRow(db);
   } catch (error) {
     backendFailure(error);
   }

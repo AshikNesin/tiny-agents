@@ -163,10 +163,10 @@ export function insertLocalItem(tx: DbTx, draft: ItemDraft, policy = ""): string
 
 /**
  * Set the given values (and title/urls) of item `id`, opened under its
- * authority, and re-seal it under `policy` (default: the same). One
+ * authority, and seal it again under the same digest. One
  * read-modify-write: call it inside a synchronous transaction.
  */
-function writeLocalItem(tx: DbTx, id: string, draft: Partial<ItemDraft>, policy?: string): void {
+function writeLocalItem(tx: DbTx, id: string, draft: Partial<ItemDraft>): void {
   const row = rowOf(tx, id);
   requireKey();
   const item = openRow(row, linksOf(tx, id));
@@ -184,9 +184,8 @@ function writeLocalItem(tx: DbTx, id: string, draft: Partial<ItemDraft>, policy?
     values,
     ...(changed ? { updatedAt: new Date().toISOString() } : {}),
   };
-  const sealedUnder = policy ?? row.policy;
   tx.update(vaultValues)
-    .set({ sealed: sealJson(next, binding(id, sealedUnder)), policy: sealedUnder })
+    .set({ sealed: sealJson(next, binding(id, row.policy)) })
     .where(eq(vaultValues.id, id))
     .run();
 }
@@ -288,10 +287,30 @@ export function createLocalBackend(): VaultBackend {
     async update(externalId, draft) {
       db.transaction((tx) => writeLocalItem(tx, externalId, draft));
     },
-    async rebind(externalId, policy, writeRow) {
+    async rebind(externalId, writeRow) {
       return db.transaction((tx) => {
-        writeLocalItem(tx, externalId, {}, policy);
-        return writeRow(tx);
+        // Opened under the row as this transaction finds it, sealed under the row as written.
+        const row = rowOf(tx, externalId);
+        // An edit that leaves the digest as it is (approval, on/off) needs no
+        // re-seal, so it still lands on an item that won't open.
+        let opened: { item: StoredItem } | { error: unknown };
+        try {
+          requireKey();
+          opened = { item: openRow(row, linksOf(tx, externalId)) };
+        } catch (error) {
+          opened = { error };
+        }
+        const written = writeRow(tx);
+        const policy = vaultPolicyDigest(written);
+        if (policy !== row.policy) {
+          if ("error" in opened) throw opened.error;
+          const { item } = opened;
+          tx.update(vaultValues)
+            .set({ sealed: sealJson(item, binding(externalId, policy)), policy })
+            .where(eq(vaultValues.id, externalId))
+            .run();
+        }
+        return written;
       });
     },
     async remove(externalId) {

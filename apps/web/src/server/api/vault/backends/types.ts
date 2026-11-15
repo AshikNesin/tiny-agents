@@ -6,6 +6,7 @@
  */
 import type { SecretValue, VaultKind } from "@tiny-agents/agent";
 import type { AppDatabase } from "../../../db";
+import type { PolicyColumns } from "../vault.policy";
 
 import type { BackendStatus, ValueField, VaultBackendName } from "../../../../shared/api/vault";
 
@@ -62,12 +63,14 @@ export interface VaultBackend {
   update?(externalId: string, draft: Partial<ItemDraft>): Promise<void>;
   remove?(externalId: string): Promise<void>;
   /**
-   * Re-seal an item under the digest its row is about to have (the owner
-   * changed its policy, or links it), and write that row with `writeRow` in
-   * the same transaction: the value and its row never disagree, and a row
-   * write that fails leaves the value as it was.
+   * Write the row that links an item (the owner changed its policy, or links
+   * it) with `writeRow`, and re-seal the item under the digest of the row it
+   * returns, all in one transaction: the item is opened under the row as the
+   * transaction finds it and sealed under the row as written, so the value
+   * and its row never disagree, a concurrent edit is never sealed over, and a
+   * row write that fails leaves the value as it was.
    */
-  rebind?<T>(externalId: string, policy: string, writeRow: (tx: DbTx) => T): Promise<T>;
+  rebind?<T extends PolicyColumns>(externalId: string, writeRow: (tx: DbTx) => T): Promise<T>;
 }
 
 /** `db`, or a synchronous transaction on it (R7). */

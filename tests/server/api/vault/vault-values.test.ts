@@ -240,6 +240,73 @@ describe("S11: every read checks the authoritative policy", () => {
     expect((await local.resolve(row.externalId, "password")).reveal()).toBe("bank-pw");
   });
 
+  it("two policy edits at once both land, and the item still opens (C11)", async () => {
+    await createItem(login("bank"));
+    // Both read the row before either writes it.
+    await Promise.all([
+      updateItem("bank", { policy: { hosts: ["api.bank.example.com"] } } as never),
+      updateItem("bank", {
+        policy: { origins: ["https://bank.example.com", "https://login.bank.example.com"] },
+      } as never),
+    ]);
+    const row = (await findItem("bank"))!;
+    expect(JSON.parse(row.hostsJson)).toEqual(["api.bank.example.com"]);
+    expect(JSON.parse(row.originsJson)).toEqual([
+      "https://bank.example.com",
+      "https://login.bank.example.com",
+    ]);
+    expect((await local.resolve(row.externalId, "password")).reveal()).toBe("bank-pw");
+  });
+
+  it("resending a policy that changes nothing keeps the item readable", async () => {
+    await createItem(login("bank"));
+    const before = (await findItem("bank"))!;
+    await Promise.all([
+      updateItem("bank", { policy: { hosts: ["api.bank.example.com"] } } as never),
+      updateItem("bank", { policy: { origins: JSON.parse(before.originsJson) } } as never),
+    ]);
+    const row = (await findItem("bank"))!;
+    expect(JSON.parse(row.hostsJson)).toEqual(["api.bank.example.com"]);
+    expect((await local.resolve(row.externalId, "password")).reveal()).toBe("bank-pw");
+  });
+
+  it("an edit outside the digest (on/off) still lands on an item that won't open", async () => {
+    await createItem(login("bank"));
+    const row = (await findItem("bank"))!;
+    await db
+      .update(vaultValues)
+      .set({ sealed: "v2:not:a:real:value" })
+      .where(eq(vaultValues.id, row.externalId));
+    await updateItem("bank", { policy: { disabled: true } } as never);
+    expect((await findItem("bank"))!.disabled).toBe(true);
+    await expect(
+      updateItem("bank", { policy: { hosts: ["api.bank.example.com"] } } as never),
+    ).rejects.toMatchObject({ statusCode: 502 });
+  });
+
+  it("two links of one value at once: one wins, the other is refused, it still opens", async () => {
+    const id = await local.create!(
+      {
+        kind: "login",
+        title: "Shop",
+        urls: ["https://shop.example.com"],
+        values: { password: "s" },
+      },
+      "",
+    );
+    const results = await Promise.allSettled([
+      linkItem({ backend: "local", externalId: id, policy: login("shop-a").policy }),
+      linkItem({
+        backend: "local",
+        externalId: id,
+        policy: { ...login("shop-b").policy, origins: ["https://evil.example"] },
+      }),
+    ]);
+    expect(results.map((r) => r.status).sort()).toEqual(["fulfilled", "rejected"]);
+    expect(await db.select().from(vaultItems)).toHaveLength(1);
+    expect((await local.resolve(id, "password")).reveal()).toBe("s");
+  });
+
   it("refuses to link a value another row already links", async () => {
     await createItem(login("bank"));
     const row = (await findItem("bank"))!;
