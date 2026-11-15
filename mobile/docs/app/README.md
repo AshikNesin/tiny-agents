@@ -52,8 +52,9 @@ or need attention. Tapping it lists the runs newest first: the latest five plus 
 An owner message is first an Echo (an optimistic copy with a `requestId` minted once), then a queued item if the
 server holds it behind a running reply, then a transcript message. `ChatStore.send` retries a send that got no
 answer with the same `requestId`, which the server dedupes; a refused send removes the Echo and puts the draft
-back. `ToolCallText.kt` and `ToolCallView.kt` port the web client's `lib/tool-call-text.ts` and
-`lib/tool-call-view.ts` the same way. A change to these rules in one client must be made in the other.
+back. `ToolCallText.kt`, `ToolCallView.kt` and `AttachmentNotes.kt` port the web client's `lib/tool-call-text.ts`,
+`lib/tool-call-view.ts` and `lib/attachment-notes.ts` the same way (the last hides the server's notes for the model
+from the owner's bubble). A change to these rules in one client must be made in the other.
 
 ### Streams and reconnects
 

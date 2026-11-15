@@ -1,5 +1,19 @@
 package groot.mobile
 
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
+import groot.mobile.ui.components.BotAvatar
+import groot.mobile.ui.components.LocalAvatars
+import org.junit.Assert.assertNotEquals
+import org.junit.Rule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import groot.mobile.data.AvatarStore
 import java.util.concurrent.atomic.AtomicInteger
@@ -21,6 +35,27 @@ import org.robolectric.annotation.GraphicsMode
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class AvatarStoreTest {
+    @get:Rule
+    val compose = createComposeRule()
+
+    @Test
+    fun `an avatar slot that switches bots shows the new bot's face, not the old one`() {
+        val store = fakeAvatarStore().also { runBlocking { it.load("Travel Planner"); it.load("Ops") } }
+        var name by mutableStateOf("Travel Planner")
+        compose.setContent {
+            CompositionLocalProvider(LocalAvatars provides store) { BotAvatar(name, Modifier.testTag("avatar")) }
+        }
+        fun facePixel(): Int = compose.onNodeWithTag("avatar").captureToImage().asAndroidBitmap().let { it.getPixel(it.width / 2, it.height * 3 / 4) }
+        val travelPlanner = facePixel()
+        name = "Ops"
+        compose.waitForIdle()
+        val switched = facePixel()
+        assertNotEquals("the top bar kept the previous bot's face", travelPlanner, switched)
+        name = "Travel Planner"
+        compose.waitForIdle()
+        assertEquals(travelPlanner, facePixel())
+    }
+
     @Test
     fun `the url is the web app's DiceBear gaze avatar, as PNG, seeded by the raw name`() {
         // Web: https://api.dicebear.com/10.x/gaze/svg?seed=${encodeURIComponent(name)}

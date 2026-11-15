@@ -41,6 +41,7 @@ import groot.mobile.data.api.ChatMessage
 import groot.mobile.data.api.MessageRole
 import groot.mobile.data.api.MessageStatus
 import groot.mobile.data.chat.OutboxEntry
+import groot.mobile.data.chat.ownerText
 import groot.mobile.ui.brand.AppIcons
 import groot.mobile.ui.brand.Dims
 import groot.mobile.ui.components.AppIcon
@@ -66,7 +67,7 @@ fun MessageView(
                 PeerMessage(message, modifier)
             } else {
                 UserBubble(
-                    text = message.text,
+                    text = ownerText(message.text, message.attachments.isNotEmpty()),
                     attachments = message.attachments,
                     author = message.author?.name,
                     onOpenImage = onOpenImage,

@@ -30,6 +30,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
@@ -70,6 +71,12 @@ fun HomeRoute(container: AppContainer, onNavigate: (String) -> Unit) {
     var menu by remember { mutableStateOf(false) }
     var confirmNewChat by remember { mutableStateOf(false) }
     BackHandler(enabled = drawer.isOpen) { scope.launch { drawer.close() } }
+    // The server sends no event when a bot is created, renamed or pinned elsewhere (the web app,
+    // another phone): coming back to the app picks those up.
+    LifecycleStartEffect(Unit) {
+        viewModel.retry()
+        onStopOrDispose {}
+    }
 
     ModalNavigationDrawer(
         drawerState = drawer,

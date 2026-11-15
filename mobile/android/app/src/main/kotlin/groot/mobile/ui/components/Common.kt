@@ -40,7 +40,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
@@ -257,8 +257,12 @@ val LocalAvatars = staticCompositionLocalOf<AvatarStore?> { null }
 @Composable
 fun BotAvatar(name: String, modifier: Modifier = Modifier, size: Dp = Dims.avatar) {
     val avatars = LocalAvatars.current
-    val face by produceState(initialValue = avatars?.cached(name), avatars, name) {
-        if (value == null && avatars != null) value = avatars.load(name)
+    // Keyed, not just restarted: the same slot showing another bot (the top bar after a switch)
+    // must start from that bot's face, never keep the previous one.
+    val face = key(avatars, name) {
+        produceState(initialValue = avatars?.cached(name)) {
+            if (value == null && avatars != null) value = avatars.load(name)
+        }.value
     }
     Box(modifier.size(size).clip(CircleShape), contentAlignment = Alignment.Center) {
         val bitmap = face

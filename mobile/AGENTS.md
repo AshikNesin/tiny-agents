@@ -70,7 +70,8 @@ only (`ios/` is excluded from sync). The app guide is `docs/app/README.md`.
   `apps/web/src/shared/api/` and `apps/web/src/shared/bot-stream.ts` field for field. When a server type changes,
   change the Kotlin type in the same change.
 - **Chat rules** in `android/app/src/main/kotlin/groot/mobile/data/chat/` are ports of the web client's
-  `lib/chat-session.ts`, `lib/tool-call-text.ts` and `lib/tool-call-view.ts`. Change both clients together.
+  `lib/chat-session.ts`, `lib/tool-call-text.ts`, `lib/tool-call-view.ts` and `lib/attachment-notes.ts`. Change
+  both clients together.
 - **Live-server tests.** In the tiny-agents repo run
   `.agents/skills/verify-tiny-agents/scripts/ta-verify.mjs up` (add `--sandbox` with a sandbox), then in
   `android/`:
