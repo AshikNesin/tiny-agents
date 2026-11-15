@@ -70,7 +70,9 @@
     );
     S.sfx(0.45, "buzz");
     S.cap(".c1", 0.12, 2.55);
-    const onNotif = phone.frame(NOTIF, { fit: 1, ay: 0.55 });
+    // The clock and the push together (CLOCK from lockscreen-positions.json).
+    const CLOCK = { x: 28, y: 84, w: 159, h: 84 };
+    const onNotif = phone.frame({ x: NOTIF.x, y: CLOCK.y, w: NOTIF.w, h: NOTIF.y + NOTIF.h - CLOCK.y }, { fit: 1, ay: 0.5 });
     phone.to(1.0, onNotif, 0.7);
 
     // A tap opens the app on the waiting card.
@@ -98,7 +100,7 @@
     S.cap(".c3", 5.3, 7.92);
     // What happened instead: the card was filled into the page, and the bot never saw it.
     const onSettled = phone.frame(SETTLED, { fit: 0.95, ay: 0.55 });
-    phone.to(5.45, phone.frame({ x: 8, y: REPLY.y, w: 396, h: SETTLED.y + SETTLED.h - REPLY.y }, { fit: 1, ay: 0.5 }), 0.55);
+    phone.to(5.2, phone.frame({ x: 8, y: REPLY.y, w: 396, h: SETTLED.y + SETTLED.h - REPLY.y }, { fit: 1, ay: 0.5 }), 0.55);
     phone.to(6.6, onSettled, 0.7);
   });
 </script>

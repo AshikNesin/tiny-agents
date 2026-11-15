@@ -74,7 +74,8 @@
     // Every provider account, each with its models.
     const anth = has(shots[2], '[data-slot="card"]', "Claude Opus 5.5");
     const models = [...anth.querySelectorAll("li")];
-    shot(2, (cam) => union(cam.local(anth.firstElementChild), ...models.map(cam.local)), { fit: 0.98, ay: 0.5 }, (el, t) =>
+    const anthTitle = anth.querySelector('[data-slot="card-title"]') || anth;
+    shot(2, (cam) => union(cam.local(anthTitle), ...models.map(cam.local)), { fit: 0.98, ay: 0.5 }, (el, t) =>
       S.show(t + 0.2, models, { y: 8, stagger: 0.16 }),
     );
 

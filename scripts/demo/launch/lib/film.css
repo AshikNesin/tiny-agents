@@ -202,3 +202,10 @@ html[data-fmt="v"] .cursor {
 .appwin [data-slot="message-scroller-item"] {
   content-visibility: visible;
 }
+
+/* A phone reserves no room for a scrollbar; the desktop Chrome that renders the
+   film does, which would rewrap every line of the phone layout. */
+.appwin.m,
+.appwin.m * {
+  scrollbar-width: none;
+}
