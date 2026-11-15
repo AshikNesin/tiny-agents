@@ -15,3 +15,4 @@
 .verify-*.html
 /assets/app.*.film.css
 /assets/vendor/
+/.work/

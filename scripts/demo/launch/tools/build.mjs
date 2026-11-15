@@ -13,7 +13,15 @@
 // In a scene, <div class="appwin" data-snap="desktop/side-researcher"> is
 // filled with that app state. data-fix="name:arg; name2" then runs the named
 // edits from src/fixes.mjs on it (swap in a sidebar, mark a row read).
-import { readFileSync, writeFileSync, readdirSync, mkdirSync, existsSync, rmSync } from "node:fs";
+import {
+  readFileSync,
+  writeFileSync,
+  readdirSync,
+  mkdirSync,
+  existsSync,
+  rmSync,
+  symlinkSync,
+} from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { JSDOM } from "jsdom";
@@ -23,6 +31,10 @@ import * as fixes from "../src/fixes.mjs";
 import { repairSelectors } from "./snaplib.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
+// FILM_OUT=<dir> builds into that folder instead of the project root, with
+// links back to the shared assets, so two people can work on different scenes
+// without overwriting each other's index.html.
+const OUT = process.env.FILM_OUT ? path.resolve(ROOT, process.env.FILM_OUT) : ROOT;
 const read = (p) => readFileSync(path.join(ROOT, p), "utf8");
 const FILM_SIZE = { h: { w: 1920, h: 1080 }, v: { w: 1080, h: 1920 } };
 
@@ -53,11 +65,34 @@ export function loadSnap(name) {
 function buildAppCss(mode) {
   const dir = path.join(ROOT, "assets/.css", mode);
   if (!existsSync(dir)) return;
-  const css = readdirSync(dir)
-    .sort()
-    .map((f) => repairSelectors(readFileSync(path.join(dir, f), "utf8")))
-    .join("\n");
-  const root = postcss.parse(css);
+  // Each staging run saved the app's whole stylesheet again, so the parts are
+  // near copies of each other. Keep each rule once: a render restyles on every
+  // frame, and seventeen copies of the same sheet make that slow.
+  const root = postcss.root();
+  const seen = new Set();
+  const layers = new Map();
+  for (const f of readdirSync(dir).sort()) {
+    for (const node of postcss.parse(repairSelectors(readFileSync(path.join(dir, f), "utf8")))
+      .nodes) {
+      if (node.type === "atrule" && node.name === "layer" && node.nodes) {
+        if (!layers.has(node.params)) {
+          layers.set(node.params, postcss.atRule({ name: "layer", params: node.params }));
+          root.append(layers.get(node.params));
+        }
+        for (const child of node.nodes) {
+          const key = `${node.params}|${child.toString()}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          layers.get(node.params).append(child.clone());
+        }
+      } else {
+        const key = node.toString();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        root.append(node.clone());
+      }
+    }
+  }
   root.walkDecls((d) => {
     if (/^(transition|animation)(-|$)/.test(d.prop)) {
       d.remove();
@@ -191,7 +226,7 @@ ${script.replaceAll("{{id}}", id).replaceAll("{{dur}}", String(dur))}
   </script>
 </template>
 `;
-  writeFileSync(path.join(ROOT, "compositions", `${id}.html`), out);
+  writeFileSync(path.join(OUT, "compositions", `${id}.html`), out);
   return dur;
 }
 
@@ -253,7 +288,7 @@ ${audio.join("\n")}
   </body>
 </html>
 `;
-  writeFileSync(path.join(ROOT, `${name}.html`), html);
+  writeFileSync(path.join(OUT, `${name}.html`), html);
   return total;
 }
 
@@ -267,8 +302,14 @@ if (!existsSync(gsapFile)) {
 
 buildAppCss("desktop");
 buildAppCss("mobile");
-rmSync(path.join(ROOT, "compositions"), { recursive: true, force: true });
-mkdirSync(path.join(ROOT, "compositions"), { recursive: true });
+rmSync(path.join(OUT, "compositions"), { recursive: true, force: true });
+mkdirSync(path.join(OUT, "compositions"), { recursive: true });
+if (OUT !== ROOT) {
+  for (const dir of ["assets", "lib", "android"])
+    if (!existsSync(path.join(OUT, dir))) symlinkSync(path.join(ROOT, dir), path.join(OUT, dir));
+  for (const f of ["hyperframes.json", "meta.json"])
+    if (!existsSync(path.join(OUT, f))) writeFileSync(path.join(OUT, f), read(f));
+}
 const durs = {};
 const want = new Set(Object.values(CUTS).flatMap((c) => c.scenes.map((s) => s[0])));
 for (const [dir, fmt] of [

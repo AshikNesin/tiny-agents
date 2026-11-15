@@ -58,6 +58,9 @@ const DRIVER_HOMES = [
   // Workers: the D1 binding only exists per request, so the entry opens it.
   "apps/web/src/server/entry.worker.ts",
   "tests/**",
+  // The launch film's staging scripts seed a throwaway instance's own database
+  // (data/verify/<area>/app.db), never the app's.
+  "scripts/demo/launch/tools/**",
   // A file lock for the agent store, not the app database.
   "packages/agent/src/lock.ts",
 ];

@@ -48,11 +48,13 @@ export const CUTS = {
   teaser: {
     title: "15-second teaser",
     fmt: "h",
+    // The hook as it is; the hand-off from the click to the passing tests; the
+    // phone from the push to the approval; the close from the click on the mark.
     scenes: [
-      ["s01-open", 3, 0, 4],
-      ["s02-code", 4.5, 9.5, 18.5],
+      ["s01-open", 3, 0, 3],
+      ["s02-code", 4.5, 3.3, 11.1],
       ["s04-phone", 3.5, 2.5, 9.5],
-      ["s08-close", 4, 3.5, 9],
+      ["s08-close", 4, 3.4, 9],
     ],
   },
 };
