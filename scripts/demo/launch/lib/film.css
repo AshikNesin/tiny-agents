@@ -1,0 +1,198 @@
+/* The film's own styles: ground, screen, captions, cursor.
+   The product UI inside .appwin is styled by app.desktop.css / app.mobile.css. */
+:root {
+  --ground: #f6f6f7;
+  --ink: #1f1f23;
+  --muted: #6f6f7a;
+  --line: #e6e6ea;
+  --ok: #2f8a5b;
+  --warn: #b45309;
+  --night: #0c0b0a;
+  --film-font: "Inter Variable", "Inter", sans-serif;
+  --film-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+html,
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: var(--ground);
+}
+html[data-fmt="h"],
+html[data-fmt="h"] body {
+  width: 1920px;
+  height: 1080px;
+}
+html[data-fmt="v"],
+html[data-fmt="v"] body {
+  width: 1080px;
+  height: 1920px;
+}
+
+/* ── Scene ─────────────────────────────────────────────────────────── */
+.f-scene {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--film-font);
+  font-feature-settings: "cv11", "ss01";
+  -webkit-font-smoothing: antialiased;
+}
+.f-abs {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+/* ── The screen: a fixed panel the camera moves inside ─────────────── */
+.vp {
+  position: absolute;
+  overflow: hidden;
+  background: #fff;
+  box-shadow:
+    0 0 0 1px rgba(24, 24, 32, 0.09),
+    0 36px 90px -24px rgba(24, 24, 32, 0.28),
+    0 10px 28px -10px rgba(24, 24, 32, 0.14);
+}
+html[data-fmt="h"] .vp {
+  left: 200px;
+  top: 171px;
+  width: 1520px;
+  height: 855px;
+  border-radius: 18px;
+}
+html[data-fmt="v"] .vp {
+  left: 60px;
+  top: 440px;
+  width: 960px;
+  height: 1480px;
+  border-radius: 34px 34px 0 0;
+}
+.cam {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+}
+.appwin {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1280px;
+  height: 720px;
+  --app-w: 1280px;
+  --app-h: 720px;
+  overflow: hidden;
+  contain: layout;
+  text-align: left;
+}
+.appwin.m {
+  width: 390px;
+  height: 844px;
+  --app-w: 390px;
+  --app-h: 844px;
+}
+.appwin > .appbody {
+  position: absolute;
+  inset: 0;
+}
+/* The app is a still here: nothing in it should animate by itself. */
+.appwin *,
+.appwin *::before,
+.appwin *::after {
+  animation: none !important;
+  transition: none !important;
+  caret-color: transparent;
+}
+
+/* ── Captions ──────────────────────────────────────────────────────── */
+.cap {
+  position: absolute;
+  left: 0;
+  right: 0;
+  margin: 0;
+  text-align: center;
+  font-family: var(--film-font);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1.04;
+  color: var(--ink);
+  z-index: 20;
+}
+.cap .w {
+  display: inline-block;
+  opacity: 0;
+  white-space: pre;
+}
+html[data-fmt="h"] .cap {
+  top: 56px;
+  font-size: 72px;
+  white-space: nowrap;
+}
+html[data-fmt="v"] .cap {
+  top: 218px;
+  padding: 0 70px;
+  font-size: 94px;
+}
+.eyebrow {
+  position: absolute;
+  left: 0;
+  right: 0;
+  margin: 0;
+  text-align: center;
+  font-family: var(--film-font);
+  font-weight: 650;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  z-index: 20;
+  opacity: 0;
+}
+html[data-fmt="h"] .eyebrow {
+  top: 22px;
+  font-size: 22px;
+}
+html[data-fmt="v"] .eyebrow {
+  top: 176px;
+  font-size: 30px;
+}
+
+/* ── Cursor ────────────────────────────────────────────────────────── */
+.cursor {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 58px;
+  height: 58px;
+  z-index: 60;
+  opacity: 0;
+  pointer-events: none;
+}
+.cursor > svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-origin: 20% 10%;
+  filter: drop-shadow(0 4px 7px rgba(0, 0, 0, 0.3));
+}
+html[data-fmt="v"] .cursor {
+  width: 76px;
+  height: 76px;
+}
+/* A finger tap for touch surfaces. */
+.tap {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 84px;
+  height: 84px;
+  margin: -42px 0 0 -42px;
+  border-radius: 50%;
+  background: rgba(31, 31, 35, 0.2);
+  box-shadow: inset 0 0 0 3px rgba(31, 31, 35, 0.28);
+  z-index: 60;
+  opacity: 0;
+  pointer-events: none;
+}

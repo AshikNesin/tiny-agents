@@ -1,0 +1,11 @@
+{
+  "name": "tiny-agents-launch-film",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node tools/build.mjs",
+    "dev": "node tools/build.mjs && npx --yes hyperframes@0.9.53 preview",
+    "check": "node tools/build.mjs && npx --yes hyperframes@0.9.53 check",
+    "render": "./render.sh"
+  }
+}

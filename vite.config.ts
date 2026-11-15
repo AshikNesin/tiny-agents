@@ -149,6 +149,9 @@ export default defineConfig({
       ".claude/skills/stageshow/**",
       "site/demos/kit/**",
       "site/assets/**",
+      // Generated from the running app for the launch film (tools/snaplib.mjs).
+      "scripts/demo/launch/assets/**",
+      "scripts/demo/launch/snap/**",
     ],
     rules: { "no-unused-vars": "error" },
     overrides: boundaryOverrides("./scripts/lint/repo-plugin.mjs"),
@@ -171,6 +174,8 @@ export default defineConfig({
       ".claude/skills/stageshow/**",
       "site/demos/kit/**",
       "site/assets/**",
+      "scripts/demo/launch/assets/**",
+      "scripts/demo/launch/snap/**",
     ],
     semi: true,
     singleQuote: false,

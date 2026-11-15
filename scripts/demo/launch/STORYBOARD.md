@@ -20,13 +20,13 @@ This one covers the whole product and has a spine.
 
 ## What changed from the first board
 
-| First board | This board |
-| --- | --- |
-| Six unrelated mini-demos, each with its own sample data | One evening, one bot list, four bots whose jobs connect |
-| Hook was one line of reply text | Hook is four finished jobs landing in two seconds |
-| Only features newer than the last film | The strongest use cases of the whole product: routines, the bot's browser and the Vault are back |
-| YOLO mode had its own 9 s scene | One shot in the montage; "it asks first" is the stronger trust story |
-| Dark ground, like the last film | The app's light theme on the site's white, which reads better at size; the end card is dark |
+| First board                                             | This board                                                                                       |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Six unrelated mini-demos, each with its own sample data | One evening, one bot list, four bots whose jobs connect                                          |
+| Hook was one line of reply text                         | Hook is four finished jobs landing in two seconds                                                |
+| Only features newer than the last film                  | The strongest use cases of the whole product: routines, the bot's browser and the Vault are back |
+| YOLO mode had its own 9 s scene                         | One shot in the montage; "it asks first" is the stronger trust story                             |
+| Dark ground, like the last film                         | The app's light theme on the site's white, which reads better at size; the end card is dark      |
 
 Kept from the earlier films, because it's the product's own: the logo, Inter and
 JetBrains Mono, monochrome with green for done and amber for waiting, the tagline,
@@ -48,14 +48,14 @@ the scripted fake-model recorder for real captures, and a code-generated score.
 
 ## The cast (sample data, used in every beat)
 
-| Bot | Its job in the film |
-| --- | --- |
-| Code Buddy | Fixed the flaky checkout test through Claude Code |
-| Travel Planner | Checks Chennai to Goa fares every morning; found a drop; wants to book |
-| Chief of Staff | Asked to make an Expense Tracker bot |
-| Expense Tracker | The new bot; appears in the list during the film |
+| Bot             | Its job in the film                                                    |
+| --------------- | ---------------------------------------------------------------------- |
+| Code Buddy      | Fixed the flaky checkout test through Claude Code                      |
+| Travel Planner  | Checks Chennai to Goa fares every morning; found a drop; wants to book |
+| Chief of Staff  | Asked to make an Expense Tracker bot                                   |
+| Expense Tracker | The new bot; appears in the list during the film                       |
 
-People: Maya (the owner) and Sam (her guest in the Goa chat).
+People: Ashik (the owner) and Sonaal (a guest in the Goa chat).
 
 ## Frame 1: The inbox
 
@@ -78,7 +78,7 @@ People: Maya (the owner) and Sam (her guest in the Goa chat).
 
 - duration: 14s (6.0 to 20.0)
 - transition_in: the cursor clicks the Code Buddy row; the row opens into its chat
-- scene: Maya's earlier message is already there: "The checkout test is flaky. Fix it and run the suite." Under it, a tool row for the hand-off to Claude Code. The cursor clicks it and the row grows into the full-page **Code** workspace. The transcript plays fast: `pnpm test checkout` fails red; an edit row opens its +/− diff (pushed in at 1.8x); the test re-runs green, "48 passed"; the turn ends "Worked for 2m 14s · $0.31". The thread shrinks back into the chat as "Reply from Claude Code: …".
+- scene: Ashik's earlier message is already there: "The checkout test is flaky. Fix it and run the suite." Under it, a tool row for the hand-off to Claude Code. The cursor clicks it and the row grows into the full-page **Code** workspace. The transcript plays fast: `pnpm test checkout` fails red; an edit row opens its +/− diff (pushed in at 1.8x); the test re-runs green, "48 passed"; the turn ends "Worked for 2m 14s · $0.31". The thread shrinks back into the chat as "Reply from Claude Code: …".
 - captions: "Hand off the bug" (6.0 to 9.5) → "It codes on your sandbox" (10.0 to 14.5) → "Tests pass. It reports back." (15.0 to 20.0)
 - reads: the message (6.5 to 9.0); red fail (10.0 to 11.5); the diff (11.5 to 14.5); green pass and cost (15.0 to 18.0); the reply (18.0 to 20.0)
 - sound: a click; a whoosh on the grow; a low thud on red; a bright tick on green
@@ -87,7 +87,7 @@ People: Maya (the owner) and Sam (her guest in the Goa chat).
 
 - duration: 12s (20.0 to 32.0)
 - transition_in: back to the list (Code Buddy now read); the cursor clicks Travel Planner
-- scene: The chat shows a routine run from 7:00 AM: "Check Chennai to Goa fares". The live view panel opens beside the chat with the bot's own browser on a fare results page; the bot's cursor sorts by price and picks one. Maya's cursor hovers the stream, which reads "Click to take control"; she clicks, the status flips to driving, and she scrolls to check the baggage line herself.
+- scene: The chat shows a routine run from 7:00 AM: "Check Chennai to Goa fares". The live view panel opens beside the chat with the bot's own browser on a fare results page; the bot's cursor sorts by price and picks one. Ashik's cursor hovers the stream, which reads "Click to take control"; a click flips the status to driving, and Ashik scrolls to check the baggage line.
 - captions: "Runs every morning at 7" (20.0 to 23.5) → "In its own browser" (24.0 to 27.5) → "Take the wheel anytime" (28.0 to 32.0)
 - sound: a soft tick on the routine line; a click on take control
 
@@ -103,7 +103,7 @@ People: Maya (the owner) and Sam (her guest in the Goa chat).
 
 - duration: 9s (42.0 to 51.0)
 - transition_in: the phone slides out; back to the list; the cursor clicks Chief of Staff
-- scene: Maya's message: "Make me an Expense Tracker bot. Log receipts I send it." An amber card: "Chief of Staff wants to create a new bot: “Expense Tracker”" with its description, model and instructions (pushed in at 1.8x). The cursor clicks Approve. The camera follows a new avatar as it drops into the bot list: Expense Tracker, online.
+- scene: Ashik's message: "Make me an Expense Tracker bot. Log receipts I send it." An amber card: "Chief of Staff wants to create a new bot: “Expense Tracker”" with its description, model and instructions (pushed in at 1.8x). The cursor clicks Approve. The camera follows a new avatar as it drops into the bot list: Expense Tracker, online.
 - captions: "Need a new teammate? Ask." (42.0 to 45.5) → "You approve. It joins the team." (46.5 to 51.0)
 - sound: a click and a chime; a soft pop as the row lands
 
@@ -111,7 +111,7 @@ People: Maya (the owner) and Sam (her guest in the Goa chat).
 
 - duration: 8s (51.0 to 59.0)
 - transition_in: the cursor reopens Travel Planner; a second app window slides in from the right
-- scene: Two windows, Maya's and Sam's, on the same chat. Maya sends "Sam, the 6:15 flight works?" and it appears in both at once under her name. Sam answers "Yes! Book it." The bot replies once, in both windows. Sam's window slides away.
+- scene: Two windows, Ashik's and Sonaal's, on the same chat. Ashik sends "Sonaal, the 6:15 flight works?" and it appears in both at once under the name Ashik. Sonaal answers "Yes! Book it." The bot replies once, in both windows. Sonaal's window slides away.
 - captions: "Bring a friend into the chat" (51.0 to 54.5) → "One chat, everyone live" (55.0 to 59.0)
 - sound: two message pops, panned left and right
 
@@ -157,13 +157,13 @@ Inbox hook (0 to 3) → Hand off the bug (3 to 7.5) → Approve from your phone
 
 # Sourcing: real, rebuilt, or sample
 
-| What | Source |
-| --- | --- |
-| Bot list, chats, approval cards, bot builder card, shared chat, Memory, Connections, Models, Updates, YOLO banner | The real app in a throwaway instance (`verify-tiny-agents`), driven by the scripted fake model, captured and rebuilt at 1.6 to 2x with the real labels |
-| Code page transcript | Rebuilt from the real `/code` components. A live Claude Code run needs a signed-in Claude account, which this container doesn't have |
-| Live view and Terminal contents | The real panel and its "Click to take control" control. What's inside the stream is a still of a sample page, because no sandbox VM or container can run here |
-| Android app and the push | Rebuilt from the `mobile/` Compose source and its design doc. There's no emulator here |
-| Bot names, messages, fares, test counts, the cost line, the card number | Sample data |
+| What                                                                                                              | Source                                                                                                                                                        |
+| ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Bot list, chats, approval cards, bot builder card, shared chat, Memory, Connections, Models, Updates, YOLO banner | The real app in a throwaway instance (`verify-tiny-agents`), driven by the scripted fake model, captured and rebuilt at 1.6 to 2x with the real labels        |
+| Code page transcript                                                                                              | Rebuilt from the real `/code` components. A live Claude Code run needs a signed-in Claude account, which this container doesn't have                          |
+| Live view and Terminal contents                                                                                   | The real panel and its "Click to take control" control. What's inside the stream is a still of a sample page, because no sandbox VM or container can run here |
+| Android app and the push                                                                                          | Rebuilt from the `mobile/` Compose source and its design doc. There's no emulator here                                                                        |
+| Bot names, messages, fares, test counts, the cost line, the card number                                           | Sample data                                                                                                                                                   |
 
 # Sound
 

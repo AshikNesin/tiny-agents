@@ -1,0 +1,15 @@
+# Built by tools/build.mjs from src/ and snap/ (npm run build)
+/compositions/
+/index.html
+/vertical.html
+/teaser.html
+# Built by tools/audio.sh from the cue sheets
+/assets/audio/
+# Comparison screenshots written beside each snapshot
+/snap/**/*.png
+# HyperFrames working files and renders
+/.hyperframes/
+/renders/
+/boards/
+/snapshots/
+.verify-*.html

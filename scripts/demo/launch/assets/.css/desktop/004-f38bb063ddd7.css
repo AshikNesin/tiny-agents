@@ -1,0 +1,17 @@
+:root { --bubble: #f0efed; --bubble-user: color-mix(in oklab, var(--accent), var(--foreground) 4%); --bubble-user-foreground: var(--foreground); --composer: #ffffff; --fg-tertiary: #6b6b6b; --link: oklch(0.5 0.2 267.7); --inline-code-bg: rgb(250 117 0 / 10%); --inline-code-fg: #9e3a00; }
+.dark { --bubble: #201f1d; --bubble-user: color-mix(in oklab, var(--accent), var(--foreground) 6%); --bubble-user-foreground: var(--foreground); --composer: #201f1d; --fg-tertiary: #858585; --link: oklch(0.72 0.146 271.2); --inline-code-bg: rgb(253 186 116 / 10%); --inline-code-fg: #fdba74; }
+.chat-md { font-size: 15px; line-height: 22.5px; overflow-wrap: anywhere; }
+.chat-md ul { list-style: inside disc; }
+.chat-md ol { list-style: inside decimal; }
+.chat-md a { color: var(--link); font-weight: 500; }
+.chat-md :not(pre) > code { background: var(--inline-code-bg); color: var(--inline-code-fg); border-radius: 4px; padding: 0px 4px; font-size: 14px; line-height: 21px; }
+body .fbx-panel, body .fbx-qa { inset: 0px; margin: auto; height: fit-content; transform-origin: center center; }
+body:has(.fbx-panel.fbx-open:not(.fbx-away))::after, body:has(.fbx-qa)::after { content: ""; position: fixed; inset: 0px; z-index: 2147482999; background: rgba(0, 0, 0, 0.5); }
+body:has(aside[aria-label="Sidebar"]) .fbx-launch { display: none; }
+:root { --hover: color-mix(in oklab, var(--foreground) 4%, transparent); --active: color-mix(in oklab, var(--foreground) 7%, transparent); --tint: color-mix(in oklab, var(--foreground) 8%, transparent); --tint-hover: color-mix(in oklab, var(--foreground) 6.5%, transparent); --focus-ring: color-mix(in oklab, var(--foreground) 45%, transparent); }
+.dark { --hover: color-mix(in oklab, var(--foreground) 6%, transparent); --active: color-mix(in oklab, var(--foreground) 10%, transparent); --tint: color-mix(in oklab, var(--foreground) 16%, transparent); --tint-hover: color-mix(in oklab, var(--foreground) 12%, transparent); --focus-ring: color-mix(in oklab, var(--foreground) 55%, transparent); }
+@keyframes fluid-shimmer { 
+  0% { background-position: 100% 0px; }
+  100% { background-position: 0% 0px; }
+}
+.shimmer-text { color: transparent; background-image: ; background-position-x: ; background-position-y: ; background-repeat: ; background-attachment: ; background-origin: ; background-color: ; background-size: 300% 100%; background-clip: text; animation: 1.5s ease-in-out 0s infinite normal none running fluid-shimmer; }
