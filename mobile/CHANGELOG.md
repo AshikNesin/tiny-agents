@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.1
+
+### Patch Changes
+
+- Republish 0.3.0, whose release build never started: the release now builds on the `instabox-medium` runner. The app is
+  unchanged from 0.3.0 (push notification links open the app on the waiting card).
+
 ## 0.3.0
 
 ### Minor Changes
