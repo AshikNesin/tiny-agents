@@ -44,6 +44,11 @@ images and the step-up token, and starts `BotsStore` again if someone is signed 
 deltas, tool calls, queue, YOLO), the stream opening or dropping, Echoes, and older pages. `chatView()` turns
 the session into what the chat screen draws, including the "New messages" divider and routine run lines.
 
+Routine runs that finish back to back on the same day fold into one quiet, centred line, as on the web
+(`components/RoutineRuns.tsx`): "Process emails · ran 24× · last 16:20", with a second line for any that failed
+or need attention. Tapping it lists the runs newest first: the latest five plus every run with a problem, then
+"Show N earlier". `feature/chat/RoutineRuns.kt` draws it; times are IST, like the server.
+
 An owner message is first an Echo (an optimistic copy with a `requestId` minted once), then a queued item if the
 server holds it behind a running reply, then a transcript message. `ChatStore.send` retries a send that got no
 answer with the same `requestId`, which the server dedupes; a refused send removes the Echo and puts the draft

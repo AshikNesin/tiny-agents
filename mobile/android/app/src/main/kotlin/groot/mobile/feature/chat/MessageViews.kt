@@ -40,7 +40,6 @@ import groot.mobile.data.api.AttachmentRef
 import groot.mobile.data.api.ChatMessage
 import groot.mobile.data.api.MessageRole
 import groot.mobile.data.api.MessageStatus
-import groot.mobile.data.api.RoutineRunCard
 import groot.mobile.data.chat.OutboxEntry
 import groot.mobile.ui.brand.AppIcons
 import groot.mobile.ui.brand.Dims
@@ -237,50 +236,6 @@ fun EchoBubble(echo: OutboxEntry, onOpenImage: (AttachmentRef) -> Unit, onSaveFi
         footnote = if (echo.state == OutboxEntry.State.Offline) "Waiting for the connection" else "Sending",
         faded = true,
     )
-}
-
-/** Finished routine runs, as one quiet line each. */
-@Composable
-fun RoutineRunsLine(runs: List<RoutineRunCard>, modifier: Modifier = Modifier) {
-    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(S.xs)) {
-        for (run in runs) {
-            val failed = run.status != "succeeded"
-            var open by rememberSaveable(run.id) { mutableStateOf(false) }
-            val detail = run.error ?: run.output
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(Dims.fieldRadius))
-                    .clickable(enabled = detail != null, role = Role.Button) { open = !open }
-                    .padding(vertical = S.xs),
-            ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(S.sm), verticalAlignment = Alignment.CenterVertically) {
-                    AppIcon(AppIcons.Clock, null, tint = if (failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant, size = Dims.iconSmall)
-                    Text(
-                        "Routine ${run.routineName} ${
-                            when (run.status) {
-                                "succeeded" -> "ran"
-                                "blocked" -> "was blocked"
-                                "missed" -> "was missed"
-                                "cancelled" -> "was cancelled"
-                                else -> "failed"
-                            }
-                        }",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                AnimatedVisibility(open && detail != null) {
-                    Text(
-                        detail.orEmpty(),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(start = S.xl, top = S.xs),
-                    )
-                }
-            }
-        }
-    }
 }
 
 /** A centred, muted line between messages: a marker, the "New messages" divider. */
