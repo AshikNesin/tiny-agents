@@ -30,6 +30,8 @@ import {
 } from "../people/access";
 import { codeHub, type CodeHub } from "./code.hub";
 import { follow, markSeen, seenMap } from "./code.store";
+import { getProject, onProjectThreadDeleted, startProjectThread } from "./code.projects";
+import { noteOwnerInput, onThreadArchived } from "./code.pulls";
 
 const UPLOAD_MAX_BYTES = 25 * 1024 * 1024;
 
@@ -198,7 +200,12 @@ const refs = z.array(z.string().max(2048)).max(20).optional();
 const permissionMode = z.enum(["default", "acceptEdits", "plan", "bypassPermissions"]);
 
 const createSchema = z.object({
-  instanceId: z.string().min(1).max(40),
+  /** Omitted with a project: its default harness. */
+  instanceId: z.string().min(1).max(40).optional(),
+  /** Start in a project (issue #297): its own worktree on a new branch. */
+  projectId: z.string().min(1).max(64).optional(),
+  /** With a project: check out this existing branch (a PR's head) instead. */
+  branch: z.string().trim().min(1).max(250).optional(),
   message,
   cwd: z.string().trim().max(1024).optional(),
   model: z.string().trim().max(200).optional(),
@@ -210,15 +217,22 @@ const createSchema = z.object({
 router.post("/code/threads", async (c) => {
   const body = await parseBody(c, createSchema);
   requireCodeChange(c.get("viewer"), body);
-  const instance = hub().instance(body.instanceId);
+  const project = body.projectId ? await getProject(body.projectId) : undefined;
+  const instanceId = body.instanceId ?? project?.defaultInstanceId ?? undefined;
+  if (!instanceId) throw Boom.badRequest("Pick a harness.");
+  const instance = hub().instance(instanceId);
   if (!instance) throw Boom.notFound("No such harness");
   const caps = instance.capabilities();
-  if (caps.workspace.requiresCwd && !body.cwd) throw Boom.badRequest("Pick a working directory.");
+  if (!project && caps.workspace.requiresCwd && !body.cwd) {
+    throw Boom.badRequest("Pick a working directory.");
+  }
   if (body.permissionMode && !caps.settings.permissionModes.includes(body.permissionMode)) {
     throw Boom.badRequest("This harness does not offer that permission mode.");
   }
-  const { instanceId: _instance, ...input } = body;
-  const { nativeId } = await run(() => instance.createThread(input));
+  const { instanceId: _instance, projectId: _project, branch, ...input } = body;
+  const { nativeId } = project
+    ? await run(() => startProjectThread(project, instance, { ...input, branch }))
+    : await run(() => instance.createThread(input));
   await follow(instance.id, nativeId);
   void hub().refresh(instance.id);
   return ok(c, { threadId: threadIdOf(instance.id, nativeId) }, 201);
@@ -260,6 +274,8 @@ router.post("/code/threads/:id/messages", async (c) => {
   const body = await parseBody(c, sendSchema);
   const result = await run(() => instance.send(nativeId, body));
   await follow(instance.id, nativeId);
+  // The owner's own words: a waiting Auto-fix loop may go on (issue #297 §9.4).
+  if (c.get("viewer").kind === "owner") await noteOwnerInput(threadIdOf(instance.id, nativeId));
   return ok(c, result);
 });
 
@@ -344,14 +360,19 @@ router.post("/code/threads/:id/archive", async (c) => {
   const { archived } = await parseBody(c, z.object({ archived: z.boolean() }));
   const result = await run(() => need(instance, "archive", "archive")(nativeId, archived));
   void hub().refresh(instance.id);
+  // Project threads: the worktree goes on archive and comes back on unarchive (§7.6).
+  for (const native of [nativeId, ...result.moved]) {
+    await onThreadArchived(threadIdOf(instance.id, native), archived).catch(() => undefined);
+  }
   return ok(c, {
     moved: result.moved.map((child) => threadIdOf(instance.id, child)),
   });
 });
 
 router.delete("/code/threads/:id", async (c) => {
-  const { instance, nativeId } = thread(c);
+  const { instance, nativeId, id } = thread(c);
   await run(() => need(instance, "remove", "delete threads")(nativeId));
+  await onProjectThreadDeleted(id).catch(() => undefined);
   void hub().refresh(instance.id);
   return ok(c, { deleted: true });
 });

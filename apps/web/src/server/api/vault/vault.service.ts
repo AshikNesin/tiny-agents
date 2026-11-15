@@ -230,6 +230,12 @@ function targetAllowed(row: VaultItemRow, kind: VaultTargetKind, target: string)
     // A model provider's requests: only an app item, and only to its hosts.
     case "provider":
       return row.audience === "app" && hostAllowed(row, target);
+    // Code's GitHub calls and pushes: only an app item that names GitHub.
+    case "github":
+      return (
+        row.audience === "app" &&
+        (hostAllowed(row, "github.com") || hostAllowed(row, "api.github.com"))
+      );
     // Commands run confined to the item's hosts, so it must name some.
     case "command":
       return parseList(row.hostsJson).length > 0;
@@ -576,6 +582,29 @@ export async function resolveProviderSecret(
     { handle, tool: "model", targetKind: "provider", target: input.host, approved: false },
     { unattended: false },
     { botScoped: false, usedBy: `provider:${input.providerId}`, auditUse: false },
+    ["value"],
+    async (values) => values.value!.reveal(),
+  );
+  appValues.set(key, { at: Date.now(), value });
+  return value;
+}
+
+/**
+ * Code's GitHub token from its `app` vault item (issue #297 §7.2, ADR 0022):
+ * the API calls the app server makes, and the one `git push` it hands the
+ * token to on stdin. The owner set it in Settings → GitHub, so there is no
+ * bot scope and no approval; the item must be an app item that lists
+ * `github.com` or `api.github.com`, and be enabled. Cached like a provider
+ * key; refusals are audited.
+ */
+export async function resolveGitHubToken(handle: string): Promise<string> {
+  const key = `${handle}\0github`;
+  const cached = appValues.get(key);
+  if (cached && Date.now() - cached.at < APP_VALUE_TTL_MS) return cached.value;
+  const value = await runUse(
+    { handle, tool: "github", targetKind: "github", target: "api.github.com", approved: false },
+    { unattended: false },
+    { botScoped: false, usedBy: "code:github", auditUse: false },
     ["value"],
     async (values) => values.value!.reveal(),
   );

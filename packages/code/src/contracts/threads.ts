@@ -39,6 +39,10 @@ export interface ThreadSummary {
   followed?: boolean;
   /** App-decorated: its turn ended after the owner last looked. */
   unread?: boolean;
+  /** App-decorated: the Code project it was started in (issue #297). */
+  projectId?: string | null;
+  /** App-decorated: its open pull request and Auto-fix loop state. */
+  pr?: { number: number; loop: string } | null;
 }
 
 export interface ThreadSettings {

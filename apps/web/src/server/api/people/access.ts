@@ -151,9 +151,10 @@ export function codeCapabilities(viewer: Viewer, caps: Capabilities): Capabiliti
  */
 export function requireCodeChange(
   viewer: Viewer,
-  change: { cwd?: string | null; permissionMode?: string | null },
+  change: { cwd?: string | null; permissionMode?: string | null; projectId?: string | null },
 ): void {
   if (viewer.kind === "owner") return;
+  if (change.projectId) throw Boom.forbidden("Only the owner can start a thread in a project.");
   if (change.permissionMode === "bypassPermissions") {
     throw Boom.forbidden("Only the owner can turn off permission prompts.");
   }
