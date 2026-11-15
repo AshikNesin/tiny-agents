@@ -199,6 +199,16 @@ beforeEach(() => {
   });
 });
 
+/** The confirm dialog and its overlay fade in; pin them once both are fully shown. */
+const dialogShown = () =>
+  waitFor(() => {
+    const dialog = screen.getByRole("alertdialog");
+    expect(dialog.style.opacity).toBe("1");
+    const overlays = document.querySelectorAll<HTMLElement>('[style*="pointer-events: auto"]');
+    expect(overlays.length).toBeGreaterThan(0);
+    for (const el of overlays) expect(el.style.opacity).toBe("1");
+  });
+
 describe("Settings → Models, pinned", () => {
   it("while loading", async () => {
     api.accounts.mockReturnValue(new Promise(() => {}));
@@ -298,6 +308,7 @@ describe("Settings → Models, pinned", () => {
     await screen.findByText("Default models");
     await user.click(screen.getByRole("button", { name: "Anthropic" }));
     await user.click(screen.getByRole("button", { name: "Delete CLAUDE-A" }));
+    await dialogShown();
     pin("confirm");
     await user.click(
       within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Delete" }),

@@ -9,7 +9,7 @@ exports[`ChatPane, pinned > ?history=1 opens the bot menu on Chat history > mark
     aria-hidden="true"
     data-aria-hidden="true"
     data-radix-focus-guard=""
-    style="outline: medium; opacity: 0; position: fixed; pointer-events: none;"
+    style="outline: medium; position: fixed; pointer-events: none;"
     tabindex="0"
   />
   <div
@@ -344,7 +344,6 @@ exports[`ChatPane, pinned > ?history=1 opens the bot menu on Chat history > mark
                   >
                     <span
                       class="flex items-center justify-center leading-none"
-                      style="opacity: 1; transform: none;"
                     >
                       <svg
                         aria-hidden="true"
@@ -379,7 +378,7 @@ exports[`ChatPane, pinned > ?history=1 opens the bot menu on Chat history > mark
   <div
     data-radix-popper-content-wrapper=""
     dir="ltr"
-    style="position: fixed; left: 0px; top: 0px; transform: translate(0px, 4px); min-width: max-content; --radix-popper-transform-origin: 0% 0px; z-index: auto; --radix-popper-available-width: 0px; --radix-popper-available-height: -4px; --radix-popper-anchor-width: 0px; --radix-popper-anchor-height: 0px;"
+    style="position: fixed; left: 0px; top: 0px; min-width: max-content; --radix-popper-transform-origin: 0% 0px; z-index: auto; --radix-popper-available-width: 0px; --radix-popper-available-height: -4px; --radix-popper-anchor-width: 0px; --radix-popper-anchor-height: 0px;"
   >
     <div
       aria-labelledby="radix-<id2>"
@@ -443,7 +442,7 @@ exports[`ChatPane, pinned > ?history=1 opens the bot menu on Chat history > mark
     aria-hidden="true"
     data-aria-hidden="true"
     data-radix-focus-guard=""
-    style="outline: medium; opacity: 0; position: fixed; pointer-events: none;"
+    style="outline: medium; position: fixed; pointer-events: none;"
     tabindex="0"
   />
 </body>"
@@ -661,7 +660,7 @@ exports[`ChatPane, pinned > YOLO on > markup 1`] = `
                   >
                     <div
                       class="flex max-w-[92%] md:max-w-[80%] min-w-0 flex-col gap-1 items-end"
-                      style="transform-origin: right bottom; opacity: 1; transform: none;"
+                      style="transform-origin: right bottom;"
                     >
                       <div
                         class="bg-bubble-user text-bubble-user-foreground min-w-0 max-w-full rounded-2xl px-3.5 py-2 text-[15px] leading-[22.5px] wrap-break-word text-pretty"
@@ -896,7 +895,6 @@ exports[`ChatPane, pinned > YOLO on > markup 1`] = `
                   >
                     <span
                       class="flex items-center justify-center leading-none"
-                      style="opacity: 1; transform: none;"
                     >
                       <svg
                         aria-hidden="true"
@@ -1305,7 +1303,6 @@ exports[`ChatPane, pinned > a computer: the toggle, then the tabs > browser in f
                   >
                     <span
                       class="flex items-center justify-center leading-none"
-                      style="opacity: 1; transform: none;"
                     >
                       <svg
                         aria-hidden="true"
@@ -1747,7 +1744,6 @@ exports[`ChatPane, pinned > a computer: the toggle, then the tabs > closed again
                   >
                     <span
                       class="flex items-center justify-center leading-none"
-                      style="opacity: 1; transform: none;"
                     >
                       <svg
                         aria-hidden="true"
@@ -2148,7 +2144,6 @@ exports[`ChatPane, pinned > a computer: the toggle, then the tabs > closed marku
                   >
                     <span
                       class="flex items-center justify-center leading-none"
-                      style="opacity: 1; transform: none;"
                     >
                       <svg
                         aria-hidden="true"
@@ -2549,7 +2544,6 @@ exports[`ChatPane, pinned > a computer: the toggle, then the tabs > computer in 
                   >
                     <span
                       class="flex items-center justify-center leading-none"
-                      style="opacity: 1; transform: none;"
                     >
                       <svg
                         aria-hidden="true"
@@ -2827,7 +2821,7 @@ exports[`ChatPane, pinned > a conversation > markup 1`] = `
                   >
                     <div
                       class="flex max-w-[92%] md:max-w-[80%] min-w-0 flex-col gap-1 items-end"
-                      style="transform-origin: right bottom; opacity: 1; transform: none;"
+                      style="transform-origin: right bottom;"
                     >
                       <div
                         class="bg-bubble-user text-bubble-user-foreground min-w-0 max-w-full rounded-2xl px-3.5 py-2 text-[15px] leading-[22.5px] wrap-break-word text-pretty"
@@ -2902,7 +2896,7 @@ exports[`ChatPane, pinned > a conversation > markup 1`] = `
                     >
                       <div
                         class="flex min-w-0 flex-col items-start gap-1"
-                        style="transform-origin: left bottom; opacity: 1; transform: none;"
+                        style="transform-origin: left bottom;"
                       >
                         <div
                           class="chat-md min-w-0 max-w-full px-0.5 py-1 md:max-w-[88%]"
@@ -3106,7 +3100,6 @@ exports[`ChatPane, pinned > a conversation > markup 1`] = `
                   >
                     <span
                       class="flex items-center justify-center leading-none"
-                      style="opacity: 1; transform: none;"
                     >
                       <svg
                         aria-hidden="true"
@@ -3313,7 +3306,7 @@ exports[`ChatPane, pinned > a guest's pane > markup 1`] = `
                   >
                     <div
                       class="flex max-w-[92%] md:max-w-[80%] min-w-0 flex-col gap-1 items-end"
-                      style="transform-origin: right bottom; opacity: 1; transform: none;"
+                      style="transform-origin: right bottom;"
                     >
                       <div
                         class="bg-bubble-user text-bubble-user-foreground min-w-0 max-w-full rounded-2xl px-3.5 py-2 text-[15px] leading-[22.5px] wrap-break-word text-pretty"
@@ -3521,7 +3514,6 @@ exports[`ChatPane, pinned > a guest's pane > markup 1`] = `
                   >
                     <span
                       class="flex items-center justify-center leading-none"
-                      style="opacity: 1; transform: none;"
                     >
                       <svg
                         aria-hidden="true"
@@ -3945,7 +3937,6 @@ exports[`ChatPane, pinned > a shared chat > markup 1`] = `
                   >
                     <span
                       class="flex items-center justify-center leading-none"
-                      style="opacity: 1; transform: none;"
                     >
                       <svg
                         aria-hidden="true"
@@ -4426,7 +4417,6 @@ exports[`ChatPane, pinned > a takeover request opens the computer > markup 1`] =
                   >
                     <span
                       class="flex items-center justify-center leading-none"
-                      style="opacity: 1; transform: none;"
                     >
                       <svg
                         aria-hidden="true"
@@ -4876,7 +4866,6 @@ exports[`ChatPane, pinned > an empty chat > markup 1`] = `
                   >
                     <span
                       class="flex items-center justify-center leading-none"
-                      style="opacity: 1; transform: none;"
                     >
                       <svg
                         aria-hidden="true"
@@ -5250,7 +5239,6 @@ exports[`ChatPane, pinned > before the first snapshot > markup 1`] = `
                   >
                     <span
                       class="flex items-center justify-center leading-none"
-                      style="opacity: 1; transform: none;"
                     >
                       <svg
                         aria-hidden="true"
@@ -5484,7 +5472,7 @@ exports[`ChatPane, pinned > messages held over the composer > markup 1`] = `
                   >
                     <div
                       class="flex max-w-[92%] md:max-w-[80%] min-w-0 flex-col gap-1 items-end"
-                      style="transform-origin: right bottom; opacity: 1; transform: none;"
+                      style="transform-origin: right bottom;"
                     >
                       <div
                         class="bg-bubble-user text-bubble-user-foreground min-w-0 max-w-full rounded-2xl px-3.5 py-2 text-[15px] leading-[22.5px] wrap-break-word text-pretty"
@@ -5575,7 +5563,6 @@ exports[`ChatPane, pinned > messages held over the composer > markup 1`] = `
                         </span>
                         <span
                           class="col-start-1 row-start-1 shimmer-text"
-                          style="opacity: 1; transform: none;"
                         >
                           Thinking
                         </span>
@@ -5838,7 +5825,6 @@ exports[`ChatPane, pinned > messages held over the composer > markup 1`] = `
                   >
                     <span
                       class="flex items-center justify-center leading-none"
-                      style="opacity: 1; transform: none;"
                     >
                       <svg
                         aria-hidden="true"
@@ -6276,7 +6262,6 @@ exports[`ChatPane, pinned > no model can run > markup 1`] = `
                   >
                     <span
                       class="flex items-center justify-center leading-none"
-                      style="opacity: 1; transform: none;"
                     >
                       <svg
                         aria-hidden="true"
@@ -6694,7 +6679,6 @@ exports[`ChatPane, pinned > no model is set up > markup 1`] = `
                   >
                     <span
                       class="flex items-center justify-center leading-none"
-                      style="opacity: 1; transform: none;"
                     >
                       <svg
                         aria-hidden="true"
@@ -6778,7 +6762,7 @@ exports[`ChatPane, pinned > the New chat confirmation > markup 1`] = `
     aria-hidden="true"
     data-aria-hidden="true"
     data-radix-focus-guard=""
-    style="outline: medium; opacity: 0; position: fixed; pointer-events: none;"
+    style="outline: medium; position: fixed; pointer-events: none;"
     tabindex="0"
   />
   <div
@@ -6948,7 +6932,7 @@ exports[`ChatPane, pinned > the New chat confirmation > markup 1`] = `
                   >
                     <div
                       class="flex max-w-[92%] md:max-w-[80%] min-w-0 flex-col gap-1 items-end"
-                      style="transform-origin: right bottom; opacity: 1; transform: none;"
+                      style="transform-origin: right bottom;"
                     >
                       <div
                         class="bg-bubble-user text-bubble-user-foreground min-w-0 max-w-full rounded-2xl px-3.5 py-2 text-[15px] leading-[22.5px] wrap-break-word text-pretty"
@@ -7147,7 +7131,6 @@ exports[`ChatPane, pinned > the New chat confirmation > markup 1`] = `
                   >
                     <span
                       class="flex items-center justify-center leading-none"
-                      style="opacity: 1; transform: none;"
                     >
                       <svg
                         aria-hidden="true"
@@ -7185,7 +7168,7 @@ exports[`ChatPane, pinned > the New chat confirmation > markup 1`] = `
     data-aria-hidden="true"
     data-slot="dialog-overlay"
     data-state="open"
-    style="pointer-events: auto; opacity: 1;"
+    style="pointer-events: auto;"
   />
   <div
     aria-describedby="radix-<id3>"
@@ -7195,7 +7178,7 @@ exports[`ChatPane, pinned > the New chat confirmation > markup 1`] = `
     data-state="open"
     id="radix-<id5>"
     role="dialog"
-    style="opacity: 1; transform: translateX(-50%) translateY(-50%); pointer-events: auto;"
+    style="pointer-events: auto;"
     tabindex="-1"
   >
     <div
@@ -7269,7 +7252,7 @@ exports[`ChatPane, pinned > the New chat confirmation > markup 1`] = `
     aria-hidden="true"
     data-aria-hidden="true"
     data-radix-focus-guard=""
-    style="outline: medium; opacity: 0; position: fixed; pointer-events: none;"
+    style="outline: medium; position: fixed; pointer-events: none;"
     tabindex="0"
   />
 </body>"
@@ -7338,7 +7321,7 @@ exports[`ChatPane, pinned > the New chat shortcut > markup 1`] = `
     aria-hidden="true"
     data-aria-hidden="true"
     data-radix-focus-guard=""
-    style="outline: medium; opacity: 0; position: fixed; pointer-events: none;"
+    style="outline: medium; position: fixed; pointer-events: none;"
     tabindex="0"
   />
   <div
@@ -7508,7 +7491,7 @@ exports[`ChatPane, pinned > the New chat shortcut > markup 1`] = `
                   >
                     <div
                       class="flex max-w-[92%] md:max-w-[80%] min-w-0 flex-col gap-1 items-end"
-                      style="transform-origin: right bottom; opacity: 1; transform: none;"
+                      style="transform-origin: right bottom;"
                     >
                       <div
                         class="bg-bubble-user text-bubble-user-foreground min-w-0 max-w-full rounded-2xl px-3.5 py-2 text-[15px] leading-[22.5px] wrap-break-word text-pretty"
@@ -7707,7 +7690,6 @@ exports[`ChatPane, pinned > the New chat shortcut > markup 1`] = `
                   >
                     <span
                       class="flex items-center justify-center leading-none"
-                      style="opacity: 1; transform: none;"
                     >
                       <svg
                         aria-hidden="true"
@@ -7745,7 +7727,7 @@ exports[`ChatPane, pinned > the New chat shortcut > markup 1`] = `
     data-aria-hidden="true"
     data-slot="dialog-overlay"
     data-state="open"
-    style="pointer-events: auto; opacity: 1;"
+    style="pointer-events: auto;"
   />
   <div
     aria-describedby="radix-<id3>"
@@ -7755,7 +7737,7 @@ exports[`ChatPane, pinned > the New chat shortcut > markup 1`] = `
     data-state="open"
     id="radix-<id5>"
     role="dialog"
-    style="opacity: 1; transform: translateX(-50%) translateY(-50%); pointer-events: auto;"
+    style="pointer-events: auto;"
     tabindex="-1"
   >
     <div
@@ -7829,7 +7811,7 @@ exports[`ChatPane, pinned > the New chat shortcut > markup 1`] = `
     aria-hidden="true"
     data-aria-hidden="true"
     data-radix-focus-guard=""
-    style="outline: medium; opacity: 0; position: fixed; pointer-events: none;"
+    style="outline: medium; position: fixed; pointer-events: none;"
     tabindex="0"
   />
 </body>"
@@ -7898,7 +7880,7 @@ exports[`ChatPane, pinned > the YOLO confirmation > markup 1`] = `
     aria-hidden="true"
     data-aria-hidden="true"
     data-radix-focus-guard=""
-    style="outline: medium; opacity: 0; position: fixed; pointer-events: none;"
+    style="outline: medium; position: fixed; pointer-events: none;"
     tabindex="0"
   />
   <div
@@ -8068,7 +8050,7 @@ exports[`ChatPane, pinned > the YOLO confirmation > markup 1`] = `
                   >
                     <div
                       class="flex max-w-[92%] md:max-w-[80%] min-w-0 flex-col gap-1 items-end"
-                      style="transform-origin: right bottom; opacity: 1; transform: none;"
+                      style="transform-origin: right bottom;"
                     >
                       <div
                         class="bg-bubble-user text-bubble-user-foreground min-w-0 max-w-full rounded-2xl px-3.5 py-2 text-[15px] leading-[22.5px] wrap-break-word text-pretty"
@@ -8267,7 +8249,6 @@ exports[`ChatPane, pinned > the YOLO confirmation > markup 1`] = `
                   >
                     <span
                       class="flex items-center justify-center leading-none"
-                      style="opacity: 1; transform: none;"
                     >
                       <svg
                         aria-hidden="true"
@@ -8305,7 +8286,7 @@ exports[`ChatPane, pinned > the YOLO confirmation > markup 1`] = `
     data-aria-hidden="true"
     data-slot="dialog-overlay"
     data-state="open"
-    style="pointer-events: auto; opacity: 1;"
+    style="pointer-events: auto;"
   />
   <div
     aria-describedby="radix-<id3>"
@@ -8315,7 +8296,7 @@ exports[`ChatPane, pinned > the YOLO confirmation > markup 1`] = `
     data-state="open"
     id="radix-<id5>"
     role="dialog"
-    style="pointer-events: auto; opacity: 1; transform: translateX(-50%) translateY(-50%);"
+    style="pointer-events: auto;"
     tabindex="-1"
   >
     <div
@@ -8389,7 +8370,7 @@ exports[`ChatPane, pinned > the YOLO confirmation > markup 1`] = `
     aria-hidden="true"
     data-aria-hidden="true"
     data-radix-focus-guard=""
-    style="outline: medium; opacity: 0; position: fixed; pointer-events: none;"
+    style="outline: medium; position: fixed; pointer-events: none;"
     tabindex="0"
   />
 </body>"
@@ -8815,7 +8796,6 @@ exports[`ChatPane, pinned > the bot using the browser opens its panel > closed w
                   >
                     <span
                       class="flex items-center justify-center leading-none"
-                      style="opacity: 1; transform: none;"
                     >
                       <svg
                         aria-hidden="true"
@@ -9251,7 +9231,6 @@ exports[`ChatPane, pinned > the bot using the browser opens its panel > open mar
                   >
                     <span
                       class="flex items-center justify-center leading-none"
-                      style="opacity: 1; transform: none;"
                     >
                       <svg
                         aria-hidden="true"
@@ -9703,7 +9682,6 @@ exports[`ChatPane, pinned > the bot using the computer, with a computer > closed
                   >
                     <span
                       class="flex items-center justify-center leading-none"
-                      style="opacity: 1; transform: none;"
                     >
                       <svg
                         aria-hidden="true"
@@ -10139,7 +10117,6 @@ exports[`ChatPane, pinned > the bot using the computer, with a computer > open m
                   >
                     <span
                       class="flex items-center justify-center leading-none"
-                      style="opacity: 1; transform: none;"
                     >
                       <svg
                         aria-hidden="true"
@@ -10601,7 +10578,6 @@ exports[`ChatPane, pinned > the bot's model is not in the catalog > markup 1`] =
                   >
                     <span
                       class="flex items-center justify-center leading-none"
-                      style="opacity: 1; transform: none;"
                     >
                       <svg
                         aria-hidden="true"
@@ -11022,7 +10998,6 @@ exports[`ChatPane, pinned > the file-drop overlay > dragging markup 1`] = `
                   >
                     <span
                       class="flex items-center justify-center leading-none"
-                      style="opacity: 1; transform: none;"
                     >
                       <svg
                         aria-hidden="true"
@@ -11424,7 +11399,6 @@ exports[`ChatPane, pinned > the file-drop overlay > left markup 1`] = `
                   >
                     <span
                       class="flex items-center justify-center leading-none"
-                      style="opacity: 1; transform: none;"
                     >
                       <svg
                         aria-hidden="true"
@@ -11663,7 +11637,7 @@ exports[`ChatPane, pinned > the transcript's Open computer brings the computer u
                   >
                     <div
                       class="flex max-w-[92%] md:max-w-[80%] min-w-0 flex-col gap-1 items-end"
-                      style="transform-origin: right bottom; opacity: 1; transform: none;"
+                      style="transform-origin: right bottom;"
                     >
                       <div
                         class="bg-bubble-user text-bubble-user-foreground min-w-0 max-w-full rounded-2xl px-3.5 py-2 text-[15px] leading-[22.5px] wrap-break-word text-pretty"
@@ -11862,7 +11836,6 @@ exports[`ChatPane, pinned > the transcript's Open computer brings the computer u
                   >
                     <span
                       class="flex items-center justify-center leading-none"
-                      style="opacity: 1; transform: none;"
                     >
                       <svg
                         aria-hidden="true"

@@ -11,7 +11,7 @@
  * split must render each the same.
  */
 import React from "react";
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { ApiError } from "@groot/shell/lib/api";
@@ -186,6 +186,15 @@ function pin(name?: string) {
   expect(markup(document.body)).toMatchSnapshot(name ? `${name} markup` : "markup");
 }
 
+/** A clicked tab leaves the pointer on the tab list: its hover highlight fades in first. */
+const hoverShown = () =>
+  waitFor(() => {
+    const highlights = document.querySelectorAll<HTMLElement>(
+      "[role=tablist] > .bg-foreground\\/5",
+    );
+    expect(highlights.length).toBeGreaterThan(0);
+    for (const el of highlights) expect(el.style.opacity).toBe("1");
+  });
 const user = userEvent.setup();
 
 beforeEach(() => {
@@ -225,6 +234,7 @@ describe("BotDialog, pinned", () => {
     );
     await mount();
     await user.click(screen.getByRole("tab", { name: "Skills" }));
+    await hoverShown();
     await user.click(screen.getByRole("button", { name: "Save changes" }));
     pin();
   });
@@ -232,6 +242,7 @@ describe("BotDialog, pinned", () => {
   it("edit: Tools", async () => {
     await mount();
     await user.click(screen.getByRole("tab", { name: "Tools" }));
+    await hoverShown();
     pin("closed big");
     await user.click(screen.getByRole("button", { name: /^Big/ }));
     pin("opened big");
@@ -242,6 +253,7 @@ describe("BotDialog, pinned", () => {
   it("edit: Tools, a group set to mixed and then all", async () => {
     await mount();
     await user.click(screen.getByRole("tab", { name: "Tools" }));
+    await hoverShown();
     await user.click(screen.getByRole("button", { name: "Allow read-only" }));
     pin("read-only");
     await user.click(screen.getByRole("button", { name: "Ask for everything" }));
@@ -251,6 +263,7 @@ describe("BotDialog, pinned", () => {
   it("edit: Tools, searching", async () => {
     await mount();
     await user.click(screen.getByRole("tab", { name: "Tools" }));
+    await hoverShown();
     await user.type(screen.getByRole("searchbox", { name: "Search tools" }), "task");
     pin("matches");
     await user.clear(screen.getByRole("searchbox", { name: "Search tools" }));
@@ -262,12 +275,14 @@ describe("BotDialog, pinned", () => {
     empty();
     await mount();
     await user.click(screen.getByRole("tab", { name: "Tools" }));
+    await hoverShown();
     pin();
   });
 
   it("edit: Skills", async () => {
     await mount();
     await user.click(screen.getByRole("tab", { name: "Skills" }));
+    await hoverShown();
     pin();
   });
 
@@ -275,12 +290,14 @@ describe("BotDialog, pinned", () => {
     empty();
     await mount();
     await user.click(screen.getByRole("tab", { name: "Skills" }));
+    await hoverShown();
     pin();
   });
 
   it("edit: Sharing", async () => {
     await mount();
     await user.click(screen.getByRole("tab", { name: "Sharing" }));
+    await hoverShown();
     pin();
   });
 
@@ -288,6 +305,7 @@ describe("BotDialog, pinned", () => {
     empty();
     await mount();
     await user.click(screen.getByRole("tab", { name: "Sharing" }));
+    await hoverShown();
     pin();
   });
 

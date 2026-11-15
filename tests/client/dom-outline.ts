@@ -28,6 +28,16 @@ function normalized(root: Element): Element {
   const clone = root.cloneNode(true) as Element;
   clone.normalize();
   for (const svg of clone.querySelectorAll("svg")) svg.replaceChildren();
+  // Motion sets `opacity` and `transform` inline frame by frame; which frame a
+  // pin catches depends on load, not on the code, so they are left out.
+  for (const el of clone.querySelectorAll<HTMLElement>("[style]")) {
+    el.style.removeProperty("opacity");
+    el.style.removeProperty("transform");
+    // Radix Presence sets these for a frame on mount, by timing too.
+    el.style.removeProperty("animation-duration");
+    el.style.removeProperty("animation-name");
+    if (!el.getAttribute("style")) el.removeAttribute("style");
+  }
   return clone;
 }
 

@@ -183,6 +183,20 @@ async function mountMemory() {
   await settle();
 }
 
+/** Each bot's switch and memories load on their own; pin once every read has answered. */
+async function memoryLoaded() {
+  await screen.findByText("Journals every night");
+  const bots = (await api.botsList.mock.results[0]?.value) as unknown[];
+  await waitFor(() => {
+    expect(api.botsGet).toHaveBeenCalledTimes(bots.length);
+    expect(api.listMemories).toHaveBeenCalledTimes(bots.length);
+  });
+  await Promise.all(api.botsGet.mock.results.map((r) => r.value));
+  await Promise.all(api.listMemories.mock.results.map((r) => r.value));
+  await settle();
+  await settle();
+}
+
 describe("Memory, pinned", () => {
   it("while loading", async () => {
     api.botsList.mockReturnValue(new Promise(() => {}));
@@ -207,14 +221,14 @@ describe("Memory, pinned", () => {
   it("with bots with and without memories", async () => {
     loadMemory();
     await mountMemory();
-    await screen.findByText("Journals every night");
+    await memoryLoaded();
     pin();
   });
 
   it("the archived rows open", async () => {
     loadMemory();
     await mountMemory();
-    await screen.findByText("Journals every night");
+    await memoryLoaded();
     await user.click(screen.getByRole("button", { name: /archived/i }));
     pin();
   });
@@ -222,7 +236,7 @@ describe("Memory, pinned", () => {
   it("searching", async () => {
     loadMemory();
     await mountMemory();
-    await screen.findByText("Journals every night");
+    await memoryLoaded();
     await user.type(screen.getByRole("searchbox", { name: "Search memories" }), "prefers");
     pin("matches");
     await user.clear(screen.getByRole("searchbox", { name: "Search memories" }));
@@ -233,7 +247,7 @@ describe("Memory, pinned", () => {
   it("the editor for a new memory", async () => {
     loadMemory();
     await mountMemory();
-    await screen.findByText("Journals every night");
+    await memoryLoaded();
     await user.click(screen.getByRole("button", { name: "Add memory for Quiet Bot" }));
     await screen.findByRole("dialog");
     pin();
