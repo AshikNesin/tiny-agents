@@ -127,6 +127,15 @@ export async function dumpCss(page, mode) {
     if (!have.some((f) => f.endsWith(`-${hash}.css`)))
       writeFileSync(path.join(parts, `${String(have.length).padStart(3, "0")}-${hash}.css`), css);
   }
+  return writeAppCss(mode);
+}
+
+/**
+ * Joins the saved stylesheets of one mode into assets/app.<mode>.css, the file
+ * verify() mounts. It is derived (and not committed): the parts are the record.
+ */
+export function writeAppCss(mode) {
+  const parts = path.join(ROOT, "assets/.css", mode);
   const all = readdirSync(parts)
     .sort()
     .map((f) => repairSelectors(readFileSync(path.join(parts, f), "utf8")));
@@ -255,6 +264,7 @@ export async function verify(mode, name) {
   const { width, height } = SIZES[mode];
   const dir = path.join(ROOT, "snap", mode);
   const fragment = readFileSync(path.join(dir, `${name}.html`), "utf8");
+  if (!existsSync(path.join(ROOT, `assets/app.${mode}.css`))) writeAppCss(mode);
   const test = path.join(ROOT, `.verify-${mode}-${name}.html`);
   writeFileSync(
     test,

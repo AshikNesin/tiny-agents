@@ -10,6 +10,7 @@
 /boards/
 /snapshots/
 .verify-*.html
-/assets/app.*.film.css
+# Joined from assets/.css/<mode>/ by tools/snaplib.mjs and tools/build.mjs
+/assets/app.*.css
 /assets/vendor/
 /.work/
