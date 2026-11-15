@@ -254,7 +254,8 @@
     /** A finger tap on a touch screen, centred on p. */
     function tap(sel, t, p) {
       const el = q(sel);
-      tl.set(el, { x: p.x, y: p.y }, t - 0.02);
+      // In place before it starts to show.
+      tl.set(el, { x: p.x, y: p.y }, t - 0.18);
       tl.fromTo(
         el,
         { opacity: 0, scale: 1.5 },
