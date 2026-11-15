@@ -1,0 +1,3 @@
+# This app is its own pnpm root inside the host repo: `pnpm install` here installs only its tooling.
+packages:
+  - "."

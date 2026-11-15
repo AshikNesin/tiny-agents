@@ -1,0 +1,306 @@
+package groot.mobile
+
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import groot.mobile.data.BotsStore
+import groot.mobile.data.Notices
+import groot.mobile.data.api.ApiClient
+import groot.mobile.data.api.ApiException
+import groot.mobile.data.api.ApiSession
+import groot.mobile.data.api.BotDraft
+import groot.mobile.data.api.ChatMessage
+import groot.mobile.data.api.MessageRole
+import groot.mobile.data.api.MessageStatus
+import groot.mobile.data.api.OwnerAnswer
+import groot.mobile.data.api.Schedule
+import groot.mobile.data.api.TinyAgentsApi
+import groot.mobile.data.api.ToolStatus
+import groot.mobile.data.chat.ChatSession
+import groot.mobile.data.chat.ChatStore
+import groot.mobile.data.chat.OwnerSubmission
+import groot.mobile.data.chat.chatView
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
+
+/**
+ * The app's data layer against a real tiny-agents server: sign-in, the bot list, a streamed
+ * chat, approvals, questions, uploads, past chats and the management routes.
+ *
+ * Skipped unless `TINY_AGENTS_URL` points at a disposable instance running the faux model
+ * (in the tiny-agents repo: `.agents/skills/verify-tiny-agents/scripts/ta-verify.mjs up`,
+ * then `TINY_AGENTS_URL=http://localhost:3100`). It creates and deletes its own rows.
+ */
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [36])
+class LiveServerTest {
+    private val url: String? = System.getenv("TINY_AGENTS_URL")
+    private val email = System.getenv("TINY_AGENTS_EMAIL") ?: "demo@example.com"
+    private val password = System.getenv("TINY_AGENTS_PASSWORD") ?: "demo@example.com"
+
+    private class Session(override val serverUrl: String?) : ApiSession {
+        override var token: String? = null
+        var invalidated = 0
+        override fun onSessionInvalid() {
+            invalidated++
+        }
+    }
+
+    private lateinit var session: Session
+    private lateinit var api: TinyAgentsApi
+    private lateinit var scope: CoroutineScope
+    private val notices = Notices()
+    private val stamp = System.nanoTime().toString(36)
+    private val created = mutableListOf<String>()
+
+    @Before
+    fun signIn() {
+        assumeTrue("TINY_AGENTS_URL is not set", url != null)
+        session = Session(url)
+        api = TinyAgentsApi(ApiClient(session))
+        scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        runBlocking { session.token = api.login(email, password).token }
+    }
+
+    @After
+    fun cleanUp() {
+        if (url == null) return
+        runBlocking { for (id in created) runCatching { api.deleteBot(id) } }
+        scope.cancel()
+    }
+
+    private suspend fun newBot(name: String = "Mobile $stamp"): String {
+        val models = api.models()
+        val bot = api.createBot(BotDraft(name = name, description = "Android integration test", modelId = models.defaultModelId ?: models.models.first().id))
+        created.add(bot.id)
+        return bot.id
+    }
+
+    private suspend fun ChatStore.await(botId: String, timeoutMs: Long = 60_000, until: (ChatSession) -> Boolean): ChatSession =
+        withTimeout(timeoutMs) { sessions.first { map -> map[botId]?.let(until) == true }.getValue(botId) }
+
+    private fun ChatSession.lastReply(): ChatMessage? = messages.lastOrNull { it.role == MessageRole.Assistant }
+
+    @Test
+    fun `signs in, reads the account and refuses a bad token`() = runBlocking {
+        assertFalse(api.needsSetup())
+        assertEquals(email, api.me().email)
+        assertFalse(api.isGuest())
+
+        val stranger = Session(url).apply { token = "bad" }
+        val error = runCatching { TinyAgentsApi(ApiClient(stranger)).bots() }.exceptionOrNull()
+        assertTrue(error is ApiException && error.status == 401 && error.code == ApiClient.SESSION_INVALID)
+        assertEquals(1, stranger.invalidated)
+
+        val wrong = runCatching { api.login(email, "wrong-password") }.exceptionOrNull()
+        assertTrue(wrong is ApiException && wrong.status == 401)
+        assertEquals("a wrong password is not a dead session", 0, session.invalidated)
+    }
+
+    @Test
+    fun `a streamed chat, steering, and the bot list following it`() = runBlocking {
+        val botId = newBot()
+        val bots = BotsStore(api, scope, notices)
+        bots.start()
+        withTimeout(20_000) { bots.state.first { it.bot(botId) != null && it.models.models.isNotEmpty() && it.capabilities.isNotEmpty() } }
+        assertTrue(bots.state.value.models.canAnswer)
+        assertTrue(bots.state.value.labels.done.isNotEmpty())
+
+        val chats = ChatStore(api, scope, notices)
+        chats.open(botId, unreadFrom = null)
+        chats.await(botId) { it.loaded && it.connected }
+
+        assertTrue(chats.send(botId, OwnerSubmission("hello from android")))
+        val done = chats.await(botId) { it.lastReply()?.status == MessageStatus.Done && !it.busy && it.echoes.isEmpty() }
+        assertEquals("Echo: hello from android", done.lastReply()?.text)
+        assertEquals(listOf(MessageRole.User, MessageRole.Assistant), done.messages.map { it.role })
+        assertEquals("the echo was replaced by the confirmed message, not doubled", 2, chatView(done).timeline.size)
+
+        // The drawer's row follows: a preview, and no longer replying.
+        withTimeout(20_000) { bots.state.first { it.bot(botId)?.lastMessagePreview?.contains("Echo") == true && it.bot(botId)?.replying == false } }
+
+        // A reconnect gets a fresh snapshot and does not duplicate the transcript.
+        chats.close(botId)
+        chats.open(botId, unreadFrom = null)
+        assertEquals(2, chats.await(botId) { it.loaded && it.connected }.messages.size)
+        chats.close(botId)
+        bots.stop()
+    }
+
+    @Test
+    fun `an approval card is decided from the phone`() = runBlocking {
+        val botId = newBot()
+        val chats = ChatStore(api, scope, notices)
+        chats.open(botId, null)
+        chats.await(botId) { it.loaded }
+        assertTrue(chats.send(botId, OwnerSubmission("/improve")))
+
+        val waiting = chats.await(botId) { s -> s.messages.any { m -> m.toolCalls.any { it.status == ToolStatus.AwaitingApproval && it.taskId != null } } }
+        val call = waiting.messages.flatMap { it.toolCalls }.first { it.status == ToolStatus.AwaitingApproval }
+        assertEquals("update_instructions", call.name)
+
+        chats.decideApproval(botId, call.taskId!!, approved = true).join()
+        val after = chats.await(botId) { s -> !s.busy && s.messages.flatMap { it.toolCalls }.none { it.status == ToolStatus.AwaitingApproval } }
+        val decided = after.messages.flatMap { it.toolCalls }.first { it.name == "update_instructions" }
+        assertEquals(ToolStatus.Done, decided.status)
+        assertEquals("approved", decided.approval)
+        assertTrue(api.bot(botId).systemPrompt.contains("Self-improvement e2e"))
+        chats.close(botId)
+    }
+
+    @Test
+    fun `a bot's questions are answered from the phone`() = runBlocking {
+        val botId = newBot()
+        val chats = ChatStore(api, scope, notices)
+        chats.open(botId, null)
+        chats.await(botId) { it.loaded }
+        assertTrue(chats.send(botId, OwnerSubmission("/ask")))
+
+        val waiting = chats.await(botId) { s -> s.messages.any { m -> m.toolCalls.any { it.status == ToolStatus.AwaitingAnswer } } }
+        val call = waiting.messages.flatMap { it.toolCalls }.first { it.status == ToolStatus.AwaitingAnswer }
+        val questions = call.questions!!
+        assertTrue(questions.isNotEmpty())
+        api.answerQuestions(
+            botId,
+            call.taskId!!,
+            questions.map { q -> if (q.options.isNotEmpty()) OwnerAnswer(listOf(q.options.first().label)) else OwnerAnswer(emptyList(), "typed on a phone") },
+        )
+        val after = chats.await(botId) { s -> !s.busy && s.messages.flatMap { it.toolCalls }.any { it.answers != null } }
+        assertEquals(questions.size, after.messages.flatMap { it.toolCalls }.first { it.answers != null }.answers!!.size)
+        chats.close(botId)
+    }
+
+    @Test
+    fun `a file goes up with a message and comes back byte for byte`() = runBlocking {
+        val botId = newBot()
+        // Short on purpose: the faux model echoes the file back at a few tokens a second.
+        val bytes = "tiny agents on android $stamp\n".repeat(2).toByteArray()
+        val ref = api.upload("notes-$stamp.txt", "text/plain", bytes.size.toLong()) { bytes.inputStream() }
+        assertEquals("file", ref.kind)
+        assertEquals(bytes.size.toLong(), ref.size)
+
+        val chats = ChatStore(api, scope, notices)
+        chats.open(botId, null)
+        chats.await(botId) { it.loaded }
+        assertTrue(chats.send(botId, OwnerSubmission("read this", attachments = listOf(ref))))
+        val done = chats.await(botId, timeoutMs = 180_000) { it.lastReply()?.status == MessageStatus.Done && !it.busy }
+        assertEquals(ref.uploadId, done.messages.first { it.role == MessageRole.User }.attachments.single().uploadId)
+
+        val downloaded = api.uploadContent(ref.uploadId).use { it.body.bytes() }
+        assertTrue(bytes.contentEquals(downloaded))
+        chats.close(botId)
+    }
+
+    @Test
+    fun `a new chat leaves a past chat that can be read and continued`() = runBlocking {
+        val botId = newBot()
+        val chats = ChatStore(api, scope, notices)
+        chats.open(botId, null)
+        chats.await(botId) { it.loaded }
+        assertTrue(chats.send(botId, OwnerSubmission("remember the past")))
+        chats.await(botId) { it.lastReply()?.status == MessageStatus.Done && !it.busy }
+
+        api.resetChat(botId)
+        // The stream ends on the old conversation and reconnects onto the new, empty one.
+        chats.await(botId) { it.loaded && it.connected && it.messages.isEmpty() }
+
+        val past = api.pastChats(botId).single()
+        assertEquals(2, past.messageCount)
+        val key = ChatStore.pastChatKey(botId, past.id)
+        chats.openPast(botId, past.id)
+        val read = withTimeout(20_000) { chats.sessions.first { it[key]?.loaded == true }.getValue(key) }
+        assertEquals("Echo: remember the past", read.lastReply()?.text)
+        assertNotNull(read.past)
+
+        api.continuePastChat(botId, past.id)
+        assertEquals(2, chats.await(botId) { it.loaded && it.connected && it.messages.size == 2 }.messages.size)
+        chats.close(botId)
+    }
+
+    @Test
+    fun `tasks, routines, skills and memory round-trip`() = runBlocking {
+        val botId = newBot()
+
+        val task = api.createTask("Ship the Android app $stamp")
+        assertEquals("done", api.updateTask(task.id, status = "done").status)
+        assertTrue(api.tasks().any { it.id == task.id && it.completedAt != null })
+        api.deleteTask(task.id)
+        assertFalse(api.tasks().any { it.id == task.id })
+
+        val routine = api.createRoutine(botId, "Morning $stamp", "Say good morning", Schedule.Cron("0 9 * * 1-5"))
+        assertEquals("scheduled", routine.state)
+        assertTrue(routine.scheduleDescription.isNotBlank())
+        api.pauseRoutine(routine.id)
+        assertEquals("paused", api.routines().first { it.id == routine.id }.state)
+        val edited = api.updateRoutine(routine.id, null, null, null, Schedule.Interval(120))
+        assertEquals(Schedule.Interval(120), edited.schedule)
+        api.deleteRoutine(routine.id)
+
+        val skill = api.createSkill("android-$stamp".lowercase().filter { it.isLetterOrDigit() || it == '-' }, "Used by the Android test", "Be brief.")
+        assertEquals(listOf(botId), api.updateSkill(skill.id, botIds = listOf(botId)).botIds)
+        assertTrue(api.bot(botId).skillIds.contains(skill.id))
+        api.deleteSkill(skill.id)
+
+        val memory = api.createMemory(botId, "Prefers window seats $stamp", "preference")
+        assertEquals("active", memory.status)
+        assertEquals("goal", api.updateMemory(memory.id, category = "goal").category)
+        api.deleteMemory(memory.id)
+        assertFalse(api.memories(botId, includeArchived = false).any { it.id == memory.id })
+    }
+
+    @Test
+    fun `bot settings, pins, people, step-up and the live surfaces answer`() = runBlocking {
+        val botId = newBot()
+        val capabilities = api.capabilities()
+        val tool = capabilities.flatMap { it.tools }.first { !it.askOnly && !it.unattendedOnly }
+        val updated = api.updateBot(botId, BotDraft(description = "edited on a phone", toolPermissions = mapOf(tool.name to "off"), yoloByDefault = true))
+        assertEquals("edited on a phone", updated.description)
+        assertEquals("off", updated.toolPermissions[tool.name])
+        assertTrue(updated.yoloByDefault)
+
+        api.pinBot(botId, true)
+        assertNotNull(api.bots().first { it.id == botId }.pinnedAt)
+
+        val guest = api.addGuest("guest-$stamp@example.com", "guest-pass-1", "Guest")
+        assertEquals(listOf(guest.id), api.updateBot(botId, BotDraft(guestIds = listOf(guest.id))).guestIds)
+        assertTrue(api.guests().any { it.id == guest.id && it.botIds.contains(botId) })
+
+        // The guest signs in on their own phone: they see only the shared bot and cannot manage anything.
+        val guestSession = Session(url)
+        val guestApi = TinyAgentsApi(ApiClient(guestSession))
+        guestSession.token = guestApi.login("guest-$stamp@example.com", "guest-pass-1").token
+        assertTrue(guestApi.isGuest())
+        assertEquals(listOf(botId), guestApi.bots().map { it.id })
+        assertTrue((runCatching { guestApi.tasks() }.exceptionOrNull() as? ApiException)?.status == 403)
+        api.removeGuest(guest.id)
+
+        val wrong = runCatching { api.stepUp("not my password") }.exceptionOrNull()
+        assertTrue(wrong is ApiException)
+        val stepUp = api.stepUp(password)
+        assertTrue(stepUp.token.isNotBlank() && stepUp.expiresAt > System.currentTimeMillis())
+        api.vaultItems()
+        api.connections()
+
+        // No sandbox on this instance: the surfaces say so instead of failing.
+        val browser = api.botLiveStatus(botId, "browser")
+        assertFalse(browser.active)
+        val computer = api.botLiveStatus(botId, "computer")
+        assertFalse(computer.configured && computer.active)
+        assertNotNull(api.liveProfiles("browser"))
+        assertNotNull(api.liveProfiles("computer"))
+        assertTrue(api.terminalTabs().status in setOf("ready", "unconfigured", "unreachable", "tmux-missing"))
+    }
+}

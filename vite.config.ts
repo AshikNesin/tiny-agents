@@ -138,10 +138,13 @@ export default defineConfig({
   lint: {
     // Vendored code is linted where it comes from: the Stageshow skill
     // (installed by `npx skills`), its kit copied into the site, and the
-    // site's built demo bundle.
+    // site's built demo bundle. `mobile/` is the Android app, a child of
+    // groot-mobile-app with its own tooling and checks (`pnpm check` there);
+    // its synced files must stay byte-for-byte what the boilerplate ships.
     ignorePatterns: [
       "dist/**",
       "node_modules/**",
+      "mobile/**",
       ".agents/skills/stageshow/**",
       ".claude/skills/stageshow/**",
       "site/demos/kit/**",
@@ -160,8 +163,10 @@ export default defineConfig({
     // every "chore: version packages" merge — the release workflow commits the
     // raw changeset output with VITE_GIT_HOOKS=0, so the pre-commit formatter
     // never gets a chance to normalize them.
+    // `mobile/` is formatted by its own boilerplate's rules (see `lint` above).
     ignorePatterns: [
       "**/CHANGELOG.md",
+      "mobile/**",
       ".agents/skills/stageshow/**",
       ".claude/skills/stageshow/**",
       "site/demos/kit/**",

@@ -64,6 +64,7 @@ What ships in the box and how to use or extend it.
 | [`bot-to-bot-contract.md`](./bot-to-bot-contract.md)                         | tiny-agents: cross-bot delivery over the `BotMessage` ledger                      |
 | [`features/vault.md`](./features/vault.md)                                   | tiny-agents: logins, cards, 2FA and API keys for bots                             |
 | [`features/shared-bots.md`](./features/shared-bots.md)                       | tiny-agents: chat with a guest and a bot together                                 |
+| [`features/mobile-app.md`](./features/mobile-app.md)                         | tiny-agents: the Android app in `mobile/`, a second client of the same server     |
 
 ## Reference
 
