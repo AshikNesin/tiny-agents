@@ -65,7 +65,8 @@ repo checks, Android lint and unit tests, and uploads the debug APK as the
 `tiny-agents-debug-apk` artifact.
 
 `.github/workflows/mobile-release-hub.yml` publishes a signed release APK to a
-release hub server, run by hand from the Actions tab. It is the boilerplate's
+release hub server whenever `mobile/android/version.properties` changes on
+main, and can be rerun from the Actions tab. It is the boilerplate's
 Release Hub Publish workflow with its paths pointed at `mobile/`. Setup (the
 app on the release hub, its keyless grant, the `RELEASE_HUB_URL` variable, and
 `RELEASE_HUB_SLUG` if the app's slug there is not `tiny-agents`) is in

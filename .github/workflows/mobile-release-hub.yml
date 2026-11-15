@@ -15,11 +15,17 @@
 #   3. Set repo variable vars.RELEASE_HUB_URL (e.g. https://release-hub.example.com).
 #      Optionally vars.RELEASE_HUB_SLUG if it differs from the repo name lowercased.
 #
-# Then bump mobile/android/version.properties (VERSION_CODE only goes up; the release hub refuses
-# a code it already has) and run this workflow from the Actions tab.
+# Then bump VERSION_CODE in mobile/android/version.properties (it only goes up; the release hub
+# refuses a code it already has). Merging that to main publishes; the Actions tab can rerun it.
 name: Mobile Release Hub Publish
 
 on:
+  # Every VERSION_CODE bump that lands on main publishes; the release hub refuses a code it
+  # already has, so a change that keeps the code fails the run instead of publishing twice.
+  push:
+    branches: [main]
+    paths:
+      - mobile/android/version.properties
   workflow_dispatch:
     inputs:
       notes:
