@@ -1,0 +1,104 @@
+<!-- scene: dur=8 -->
+<style>
+  .cap {
+    text-wrap: balance;
+  }
+  /* In this cut the screen is the phone: the Android stills fill it. */
+  .ph .appwin {
+    width: 412px;
+    height: 892px;
+    background: #fff;
+  }
+  .ph .appwin img {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 412px;
+    height: 892px;
+    display: block;
+  }
+  .ph .appwin img.notif {
+    left: -8px;
+    top: 208px;
+    width: 428px;
+    height: 186px;
+  }
+</style>
+<div class="f-scene">
+  <div class="vp ph">
+    <div class="cam">
+      <div class="appwin">
+        <img class="lock" src="android/lock-empty.png" alt="" />
+        <img class="notif" src="android/lock-notif.png" alt="" />
+        <img class="chat-wait" src="android/chat-waiting.png" alt="" />
+        <img class="chat-done" src="android/chat-approved.png" alt="" />
+      </div>
+    </div>
+  </div>
+  <p class="cap c1">It asks before it pays</p>
+  <p class="cap c2">Approve from your phone</p>
+  <p class="cap c3">Your card stays in the Vault</p>
+  <div class="tap"></div>
+</div>
+<script>
+  Film.scene("{{id}}", {{dur}}, (S) => {
+    const { tl } = S;
+    // Positions on the phone screen, in dp (android/lockscreen-positions.json, chat-positions.json).
+    const NOTIF = { x: 16, y: 232, w: 380, h: 138 };
+    const REPLY = { x: 16, y: 144, w: 380, h: 72 };
+    const CARD = { x: 16, y: 281, w: 380, h: 222 };
+    const APPROVE = { x: 32, y: 440, w: 101, h: 48 };
+    const SETTLED = { x: 16, y: 276, w: 314, h: 24 };
+    const tapEl = S.q(".tap");
+    /** S.tap moves the dot only 0.02 s before the tap but fades it in from 0.16 s before: put it there first. */
+    const tap = (t, p) => {
+      tl.set(tapEl, { x: p.x, y: p.y }, t - 0.17);
+      S.tap(tapEl, t, p);
+    };
+
+    const phone = S.camera(".cam");
+    const base = phone.full();
+    phone.set(base);
+    gsap.set(S.qa(".chat-wait, .chat-done"), { opacity: 0 });
+
+    // The push lands on the lock screen.
+    tl.fromTo(
+      S.q(".notif"),
+      { opacity: 0, y: -46, scale: 0.97 },
+      { opacity: 1, y: 0, scale: 1, duration: 0.4, ease: "power3.out" },
+      0.45,
+    );
+    S.sfx(0.45, "buzz");
+    S.cap(".c1", 0.12, 2.55);
+    const onNotif = phone.frame(NOTIF, { fit: 1, ay: 0.55 });
+    phone.to(1.0, onNotif, 0.7);
+
+    // A tap opens the app on the waiting card.
+    S.cap(".c2", 2.7, 5.15);
+    tap(2.75, phone.point(NOTIF, 1.7));
+    const cx = NOTIF.x + NOTIF.w / 2;
+    const cy = NOTIF.y + NOTIF.h / 2;
+    tl.set(S.q(".chat-wait"), { opacity: 1 }, 2.83);
+    tl.fromTo(
+      S.q(".chat-wait"),
+      { clipPath: `circle(0px at ${cx}px ${cy}px)` },
+      { clipPath: `circle(1000px at ${cx}px ${cy}px)`, duration: 0.5, ease: "power2.in" },
+      2.83,
+    );
+    S.sfx(2.83, "whoosh", { d: 0.5 });
+    const onAsk = phone.frame({ x: 8, y: REPLY.y, w: 396, h: CARD.y + CARD.h - REPLY.y }, { fit: 1, ay: 0.5 });
+    phone.to(3.25, onAsk, 0.6);
+    const onCard = phone.frame({ x: 8, y: CARD.y, w: 396, h: CARD.h }, { fit: 1, ay: 0.5 });
+    phone.to(4.1, onCard, 0.5);
+
+    // Approve.
+    tap(4.95, phone.point(APPROVE, 4.6));
+    tl.to(S.q(".chat-done"), { opacity: 1, duration: 0.16, ease: "none" }, 5.07);
+    S.sfx(5.1, "bell");
+    S.cap(".c3", 5.3, 7.92);
+    // What happened instead: the card was filled into the page, and the bot never saw it.
+    const onSettled = phone.frame(SETTLED, { fit: 0.95, ay: 0.55 });
+    phone.to(5.45, phone.frame({ x: 8, y: REPLY.y, w: 396, h: SETTLED.y + SETTLED.h - REPLY.y }, { fit: 1, ay: 0.5 }), 0.55);
+    phone.to(6.6, onSettled, 0.7);
+  });
+</script>

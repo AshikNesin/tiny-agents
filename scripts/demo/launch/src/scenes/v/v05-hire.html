@@ -1,0 +1,115 @@
+<!-- scene: dur=7 -->
+<style>
+  .cap {
+    text-wrap: balance;
+  }
+  .lyr {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    /* The app's own ground, so a swap inside a layer never shows the screen beneath it. */
+    background: oklch(0.98 0.0017 67.8);
+  }
+  .lyr.over {
+    box-shadow: -18px 0 44px rgba(24, 24, 32, 0.12);
+  }
+</style>
+<div class="f-scene">
+  <div class="vp">
+    <div class="lyr l-list">
+      <div class="cam list-cam">
+        <div class="appwin m st-start" data-snap="mobile/list-start"></div>
+        <div class="appwin m st-end" data-snap="mobile/list-end"></div>
+      </div>
+    </div>
+    <div class="lyr over l-chat">
+      <div class="cam chat-cam">
+        <div class="appwin m st-ask" data-snap="mobile/chief-pending"></div>
+        <div class="appwin m st-ok" data-snap="mobile/chief-approved"></div>
+      </div>
+    </div>
+  </div>
+  <p class="cap c1">Need a new teammate? Ask.</p>
+  <p class="cap c2">You approve.<br />It joins the team.</p>
+  <div class="tap"></div>
+</div>
+<script>
+  Film.scene("{{id}}", {{dur}}, (S) => {
+    const { tl } = S;
+    const W = 960;
+    const tapEl = S.q(".tap");
+    /** S.tap moves the dot only 0.02 s before the tap but fades it in from 0.16 s before: put it there first. */
+    const tap = (t, p) => {
+      tl.set(tapEl, { x: p.x, y: p.y }, t - 0.17);
+      S.tap(tapEl, t, p);
+    };
+    const union = (...r) => {
+      const x = Math.min(...r.map((a) => a.x));
+      const y = Math.min(...r.map((a) => a.y));
+      return { x, y, w: Math.max(...r.map((a) => a.x + a.w)) - x, h: Math.max(...r.map((a) => a.y + a.h)) - y };
+    };
+    const list = S.camera(".list-cam");
+    const chat = S.camera(".chat-cam");
+    const [lList, lChat] = [".l-list", ".l-chat"].map(S.q);
+    const [start, end, ask, ok] = [".st-start", ".st-end", ".st-ask", ".st-ok"].map(S.q);
+    const rowsOf = (w) => [...w.querySelectorAll('main section[aria-label="Bots"] li')];
+    const rowOf = (w, name) => rowsOf(w).find((li) => li.querySelector("a .truncate").textContent === name);
+    list.set(list.full());
+    chat.set(chat.full());
+    gsap.set([end, ok], { autoAlpha: 0 });
+    gsap.set(lChat, { x: W });
+
+    // ── Back on the list, Code Buddy and Travel Planner are read now. Chief of Staff is waiting.
+    for (const name of ["Code Buddy", "Travel Planner"]) {
+      const mark = rowOf(start, name).querySelector("a > span:last-child > *");
+      if (mark) gsap.set(mark, { opacity: 0 });
+    }
+    const chiefRow = rowOf(start, "Chief of Staff").querySelector("a");
+    tap(0.45, list.point(chiefRow, 0, 0.42, 0.5));
+    tl.to(lChat, { x: 0, duration: 0.4, ease: "power3.out" }, 0.5);
+    tl.to(lList, { x: -W * 0.25, duration: 0.4, ease: "power3.out" }, 0.5);
+    S.sfx(0.5, "whoosh", { d: 0.4 });
+    S.cap(".c1", 0.3, 2.85);
+
+    // The ask, and the card that answers it.
+    const card = ask.querySelector('[data-waiting^="approval"] [data-slot="item"]');
+    const approve = [...card.querySelectorAll("button")].find((b) => b.textContent.trim() === "Approve");
+    const bubble = ask.querySelector(".bg-bubble-user");
+    const onAsk = chat.frame(union(chat.local(bubble), chat.local(card)), { fit: 1, ay: 0.5 });
+    chat.to(0.95, onAsk, 0.55);
+    const onApprove = chat.frame(card, { scale: 3.2, px: 0.72, ay: 0.5 });
+    chat.to(1.95, onApprove, 0.55);
+    tap(2.95, chat.point(approve, 2.6));
+    S.press(2.95, approve);
+
+    // ── Approved: the bot exists.
+    S.swap(3.1, ask, ok);
+    S.sfx(3.12, "bell");
+    S.cap(".c2", 3.2, 6.9);
+    const okItems = [...ok.querySelectorAll('[data-slot="message-scroller-item"]')];
+    const made = ok.querySelector('[data-slot="trace"]');
+    const reply = okItems[okItems.length - 1];
+    const onDone = chat.frame(union(chat.local(made), chat.local(reply)), { fit: 1, ay: 0.5 });
+    tl.set(chat.el, onDone, 3.1);
+    gsap.set(reply, { opacity: 0 });
+    tl.to(reply, { opacity: 1, duration: 0.01 }, 3.45);
+    S.stream(3.45, reply, 0.7);
+
+    // ── And it is in the list: the newest member of the team.
+    S.swap(3.5, start, end, 0.01);
+    tl.to(lChat, { x: W, duration: 0.4, ease: "power3.inOut" }, 4.55);
+    tl.to(lList, { x: 0, duration: 0.4, ease: "power3.inOut" }, 4.55);
+    S.sfx(4.55, "whoosh", { d: 0.4 });
+    const rows = rowsOf(end);
+    const fresh = rowOf(end, "Expense Tracker");
+    const below = rows.slice(rows.indexOf(fresh) + 1);
+    const gap = list.local(below[0]).y - list.local(fresh).y;
+    gsap.set(below, { y: -gap });
+    gsap.set(fresh, { opacity: 0 });
+    tl.to(below, { y: 0, duration: 0.4, ease: "power3.out" }, 5.05);
+    tl.fromTo(fresh, { opacity: 0, scale: 0.94 }, { opacity: 1, scale: 1, duration: 0.34, ease: "power3.out" }, 5.15);
+    S.sfx(5.18, "pop");
+    const onFresh = list.frame(union(list.local(fresh), list.local(below[0])), { scale: 2.9, ax: 0, px: 0, dx: 20, ay: 0.5 });
+    list.to(5.6, onFresh, 0.7);
+  });
+</script>

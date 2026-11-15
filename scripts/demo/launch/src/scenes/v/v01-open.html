@@ -1,0 +1,65 @@
+<!-- scene: dur=5 -->
+<style>
+  .cap {
+    text-wrap: balance;
+  }
+</style>
+<div class="f-scene">
+  <div class="vp">
+    <div class="cam">
+      <div class="appwin m" data-snap="mobile/list-start"></div>
+    </div>
+  </div>
+  <p class="cap c1">While you were out</p>
+  <p class="eyebrow o-brand">Tiny Agents</p>
+  <p class="cap c2">A team of AI bots</p>
+  <div class="tap"></div>
+</div>
+<script>
+  Film.scene("{{id}}", {{dur}}, (S) => {
+    const { tl } = S;
+    const cam = S.camera(".cam");
+    const rows = S.qa('.appwin main section[aria-label="Bots"] li');
+    const row = (name) => rows.find((li) => li.querySelector("a .truncate").textContent === name);
+    const status = (li) => li.querySelector("a > span:last-child > *");
+    const [code, travel, chief, research] = ["Code Buddy", "Travel Planner", "Chief of Staff", "Researcher"].map(row);
+
+    // The hook: the four rows close up. Two jobs are already in; two more land.
+    const list = cam.local(S.q('.appwin main section[aria-label="Bots"]'));
+    // Close enough that the avatars fall off the left edge; the pull-back brings them in.
+    // The screen's left edge falls just right of the avatars, before the names.
+    const k = cam.vp.w / (cam.win.w - 44);
+    const close = { ...cam.frame(list, { scale: k, ay: 0.52 }), x: -44 * k };
+    const full = cam.full();
+    cam.set(close);
+
+    const step = cam.local(rows[1]).y - cam.local(rows[0]).y;
+    gsap.set([chief, research], { y: -2 * step });
+    gsap.set(travel, { y: -step });
+    tl.fromTo(travel, { opacity: 0, scale: 0.96 }, { opacity: 1, scale: 1, duration: 0.3, ease: "power3.out" }, 0.55);
+    tl.to([chief, research], { y: -step, duration: 0.36, ease: "power3.out" }, 0.48);
+    S.sfx(0.55, "pop", { pan: -0.2 });
+    tl.fromTo(code, { opacity: 0, scale: 0.96 }, { opacity: 1, scale: 1, duration: 0.3, ease: "power3.out" }, 1.15);
+    tl.to([travel, chief, research], { y: 0, duration: 0.36, ease: "power3.out" }, 1.08);
+    S.sfx(1.15, "pop", { pan: 0.2 });
+    for (const [li, at] of [[travel, 0.78], [code, 1.38]]) {
+      const mark = status(li);
+      if (mark) tl.fromTo(mark, { scale: 0 }, { scale: 1, duration: 0.3, ease: "back.out(2.4)" }, at);
+    }
+    S.cap(".c1", 0.08, 2.4);
+
+    // Pull back: the whole phone screen, the team's home.
+    cam.to(2.3, full, 0.8, "power3.inOut");
+    S.sfx(2.3, "whoosh", { d: 0.8 });
+    tl.fromTo(".o-brand", { opacity: 0 }, { opacity: 1, duration: 0.3 }, 2.55);
+    S.cap(".c2", 2.5, 4.62);
+    tl.to(".o-brand", { opacity: 0, duration: 0.18 }, 4.44);
+
+    // A tap opens the first unread chat.
+    const link = code.querySelector("a");
+    const pLink = cam.point(link, 3.2, 0.42, 0.5);
+    // S.tap places the dot 0.02 s before the tap but fades it in from 0.16 s before.
+    tl.set(S.q(".tap"), { x: pLink.x, y: pLink.y }, 4.53);
+    S.tap(".tap", 4.7, pLink);
+  });
+</script>

@@ -1,0 +1,3 @@
+.xterm .xterm-scrollable-element > .scrollbar > .slider { background: rgba(5, 5, 5, 0.12); }
+.xterm .xterm-scrollable-element > .scrollbar > .slider:hover { background: rgba(5, 5, 5, 0.22); }
+.xterm .xterm-scrollable-element > .scrollbar > .slider.active { background: rgba(5, 5, 5, 0.32); }
