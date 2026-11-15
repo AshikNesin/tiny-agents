@@ -31,6 +31,39 @@ shared with them.
 - **Step-up.** Vault changes and adding or removing a connection ask for the
   password and send the step-up token, as the web app does.
 
+## Links from notifications
+
+A push notification links to the web app (`/chats/<bot>?focus=approval:<task>`,
+see [notifications](./notifications.md)). The Android app claims those links
+for one server, so tapping one on the phone opens the app on that bot's chat,
+scrolled to the waiting card, instead of the browser.
+
+| Link                                                     | Opens                                      |
+| -------------------------------------------------------- | ------------------------------------------ |
+| `/chats/<bot>?focus=approval\|question\|takeover:<task>` | The bot's chat, scrolled to the card       |
+| `/chats/<bot>`                                           | The bot's chat                             |
+| `/vault/requests/<task>`                                 | The asking bot's chat, on the sign-in card |
+| `/vault`, `/routines`, `/tasks`                          | That screen                                |
+
+`/code/…` links stay in the browser. A link to another server than the one the
+app is signed in to just opens the app.
+
+**Setup.**
+
+1. The server's host is built into the app: `linkHost` in
+   `mobile/android/app/build.gradle.kts` (build with
+   `-PtinyAgents.linkHost=agents.example.com` for another).
+2. Android opens the links in the app without asking only once it has
+   verified them against the server. Set `ANDROID_APP_CERT_SHA256` on the
+   server to the app's signing certificate SHA-256 (comma-separated for
+   several); the server then serves `/.well-known/assetlinks.json`
+   (`apps/web/src/server/api/system/app-links.ts`). Read the fingerprint from
+   a release APK with `apksigner verify --print-certs app-release.apk`.
+   `ANDROID_APP_PACKAGE` overrides the app id `io.nesin.tinyagents`.
+3. Install (or reinstall) the app after the server serves the file: Android
+   verifies at install time. Until then, the links open in the app only if
+   App info → Open by default → Add links lists the server and it is ticked.
+
 ## Keeping it in step with the web app
 
 The app's wire types mirror `apps/web/src/shared/api/` and
@@ -87,7 +120,8 @@ the branch `chore/groot-mobile-sync`.
 
 ## Limits
 
-- Android only, and no push notifications.
+- Android only. Push notifications come through Pushover; tapping one opens
+  the app (see "Links from notifications").
 - The Code page, the Models section of Settings, passkey sign-in, creating
   vault items, importing skills from GitHub and the connection tool
   playground stay in the web app.

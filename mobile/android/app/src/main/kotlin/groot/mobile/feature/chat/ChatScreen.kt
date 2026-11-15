@@ -75,6 +75,7 @@ import groot.mobile.ui.components.MenuRow
 import groot.mobile.ui.components.Sheet
 import groot.mobile.ui.components.StatusDot
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 /** The bot is running a browser tool right now. */
 fun browserInUse(messages: List<ChatMessage>): Boolean = messages.any { message ->
@@ -115,6 +116,24 @@ fun ChatPane(
     var viewer by remember { mutableStateOf<AttachmentRef?>(null) }
     var credentials by remember { mutableStateOf<ToolCall?>(null) }
     var attachMenu by remember { mutableStateOf(false) }
+
+    // Opened from a push notification's link: scroll to the card it is about once the chat
+    // shows it, as the web client's `?focus=` does. Gives up after a while (the card may be gone).
+    val focus by container.links.focus.collectAsStateWithLifecycle()
+    val focusTask = focus?.takeIf { it.botId == bot.id }?.taskId
+    LaunchedEffect(focusTask, view.timeline, view.typing) {
+        val task = focusTask ?: return@LaunchedEffect
+        val index = transcriptIndexOfTask(view, task) ?: return@LaunchedEffect
+        // After the transcript's own first scroll to the newest message, not under it.
+        delay(FOCUS_SETTLE_MS)
+        listState.animateScrollToItem(index)
+        container.links.clearFocus()
+    }
+    LaunchedEffect(focusTask) {
+        if (focusTask == null) return@LaunchedEffect
+        delay(FOCUS_WAIT_MS)
+        container.links.clearFocus()
+    }
 
     val pickPhotos = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(MAX_PICK)) { viewModel.attach(it) }
     val pickFiles = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { viewModel.attach(it) }
@@ -414,4 +433,17 @@ private fun openFile(context: Context, uri: Uri, mimeType: String) {
     }
 }
 
+/**
+ * The transcript row holding the card waiting on [taskId], as the reversed list lays it out
+ * (the typing dots first, then newest to oldest); null while the chat does not show it.
+ */
+fun transcriptIndexOfTask(view: ChatView, taskId: Int): Int? {
+    val reversed = view.timeline.asReversed()
+    val at = reversed.indexOfFirst { item -> item is TimelineItem.Message && item.message.toolCalls.any { it.taskId == taskId } }
+    if (at < 0) return null
+    return at + if (view.typing) 1 else 0
+}
+
 private const val MAX_PICK = 10
+private const val FOCUS_SETTLE_MS = 300L
+private const val FOCUS_WAIT_MS = 10_000L

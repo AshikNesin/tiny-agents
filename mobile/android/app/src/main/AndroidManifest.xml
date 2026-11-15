@@ -17,10 +17,25 @@
             android:name=".MainActivity"
             android:configChanges="uiMode"
             android:windowSoftInputMode="adjustResize"
+            android:launchMode="singleTask"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- The server's links (a push notification's) open here. Verified when the server
+                 serves /.well-known/assetlinks.json (ANDROID_APP_CERT_SHA256); the host is
+                 `linkHost` in app/build.gradle.kts. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:host="${linkHost}" />
+                <data android:pathPrefix="/chats/" />
+                <data android:pathPrefix="/vault" />
+                <data android:path="/routines" />
+                <data android:path="/tasks" />
             </intent-filter>
         </activity>
     </application>

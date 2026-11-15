@@ -143,6 +143,15 @@ screen for `TERM=xterm-256color`.
   the process and asks before it sends `?force=1`.
 - The screen detaches when it leaves the screen, so the server's idle timer can free the attach.
 
+## Links from notifications
+
+`data/AppLinks.kt` maps the server's notification links (`/chats/<bot>?focus=approval:<task>`,
+`/vault/requests/<task>`, `/vault`, `/routines`, `/tasks`) onto screens; `MainActivity` (`singleTask`) hands them
+over on a cold start or in `onNewIntent`, and `AppNavHost` acts on them once signed in. A chat scrolls to the
+focused card when it shows it. The manifest claims `https://<linkHost>` (`app/build.gradle.kts`); the server
+verifies the claim with `/.well-known/assetlinks.json`. Setup (the server's `ANDROID_APP_CERT_SHA256`) is in the
+tiny-agents mobile app guide, "Links from notifications".
+
 ## Security
 
 - **Token.** `POST /auth/login` (or `/auth/setup`) returns a session token. The app sends it as

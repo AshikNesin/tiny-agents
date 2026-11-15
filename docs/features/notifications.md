@@ -44,7 +44,9 @@ stream for that bot (`bots.viewers.ts`); approvals and questions always send,
 since the owner may be on another tab. A routine's run happens in the
 routine's own conversation and reports through the routine events only; it
 never waits on the owner (see [routines](./routines.md)). The `?focus=` link scrolls the chat to the waiting
-card (`focus-param.ts`).
+card (`focus-param.ts`). On an Android phone with the app, the same link opens
+the app on that card ([mobile app](./mobile-app.md), "Links from
+notifications").
 
 ## Content rules
 
