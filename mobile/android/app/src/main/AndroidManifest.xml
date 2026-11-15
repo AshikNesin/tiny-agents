@@ -37,6 +37,27 @@
                 <data android:path="/routines" />
                 <data android:path="/tasks" />
             </intent-filter>
+            <!-- The bots data/ShareTargets.kt publishes as Direct Share targets. -->
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
+        </activity>
+        <!-- Share from another app: a sheet over it to pick a bot, add a note and send. It runs in
+             the sharing app's task, so closing it goes straight back there. -->
+        <activity
+            android:name=".ShareActivity"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.GrootMobile.Share"
+            android:windowSoftInputMode="adjustResize"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
         </activity>
     </application>
 

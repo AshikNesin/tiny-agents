@@ -31,6 +31,15 @@ shared with them.
 - **Step-up.** Vault changes and adding or removing a connection ask for the
   password and send the step-up token, as the web app does.
 
+## Sharing from other apps
+
+The Android app is a share target. Share a file, photos, a link or selected
+text from any app, pick Tiny Agents (or one of your top bots, which Android
+lists by face as Direct Share targets), choose the bot, add a note and send.
+The bot gets one message: your note, then the shared text, with the files
+attached through `POST /api/v1/uploads` like the composer's. Details are in the
+app guide, "Share sheet".
+
 ## Links from notifications
 
 A push notification links to the web app (`/chats/<bot>?focus=approval:<task>`,

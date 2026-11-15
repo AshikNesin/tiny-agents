@@ -45,6 +45,8 @@ dependencies {
     implementation(project(":kit"))
     implementation(project(":vnc"))
     implementation(project(":terminal"))
+    // Already in the graph through the kit and activity: the share sheet uses its shortcut and intent helpers.
+    implementation(libs.androidx.core)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)

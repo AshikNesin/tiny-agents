@@ -53,6 +53,11 @@ object Dims {
     val hairline = 1.dp
     val stroke = 2.dp
 
+    /** The share sheet: its top corners, a shared file's card, the chosen bot's chip. */
+    val sheetRadius = 28.dp
+    val shareCard = 104.dp
+    val shareChipMaxWidth = 180.dp
+
     val drawerWidth = 320.dp
     val contentMaxWidth = 720.dp
     val sheetHandleWidth = 36.dp

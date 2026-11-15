@@ -38,6 +38,12 @@ import groot.mobile.feature.live.linkLabel
 import groot.mobile.feature.manage.RoutinesScreen
 import groot.mobile.feature.manage.TasksScreen
 import groot.mobile.feature.settings.SettingsScreen
+import groot.mobile.feature.share.ShareDraft
+import groot.mobile.feature.chat.StagedUpload
+import groot.mobile.data.PickedFile
+import groot.mobile.data.api.AttachmentRef
+import android.net.Uri
+import groot.mobile.feature.share.ShareSheet
 import groot.mobile.feature.terminal.TERMINAL_KEYS
 import groot.mobile.feature.terminal.TerminalLink
 import groot.mobile.feature.terminal.TerminalTabs
@@ -179,6 +185,44 @@ class ScreenshotTest {
         }
     }
 
+    @Test fun shareDark() = capture("share_dark", ThemeMode.Dark) { Share(sampleShareDraft) }
+
+    @Test fun shareLight() = capture("share_light", ThemeMode.Light) { Share(sampleShareDraft) }
+
+    @Test fun shareLinkUploadingDark() = capture("share_link_uploading_dark", ThemeMode.Dark) {
+        Share(
+            sampleShareDraft.copy(
+                botId = null,
+                query = "r",
+                note = "Which of these fits a long weekend?",
+                sharedText = "Cheap flights to Goa\nhttps://example.com/flights/goa",
+                staged = listOf(sampleShareDraft.staged[0].copy(ref = null), sampleShareDraft.staged[1].copy(ref = null, error = "Files can be up to 25 MB.")),
+            ),
+        )
+    }
+
+    @Test fun shareSignedOutDark() = capture("share_signed_out_dark", ThemeMode.Dark) { Share(sampleShareDraft, signedIn = false) }
+
+    @Composable
+    private fun Share(draft: ShareDraft, signedIn: Boolean = true) {
+        ShareSheet(
+            signedIn = signedIn,
+            bots = sampleBotsState,
+            draft = draft,
+            onQueryChange = {},
+            onSelect = {},
+            onClearBot = {},
+            onNoteChange = {},
+            onRemoveStaged = {},
+            onRemoveSharedText = {},
+            onAttach = {},
+            onSend = {},
+            onRetry = {},
+            onCancel = {},
+            onOpenApp = {},
+        )
+    }
+
     private fun capture(name: String, mode: ThemeMode, act: () -> Unit = {}, content: @Composable () -> Unit) {
         val container = ApplicationProvider.getApplicationContext<GrootMobileApp>().container
         // Loaded up front: the avatar's first frame reads the cache, and the shot is taken on idle.
@@ -294,3 +338,20 @@ class ScreenshotTest {
         }
     }
 }
+
+/** Android types (Uri) need Robolectric: kept out of TestFixtures, which plain JVM tests load. The share sheet with a CSV and a PDF shared to Researcher. */
+private val sampleShareDraft = ShareDraft(
+    botId = "b2",
+    staged = listOf(
+        StagedUpload(
+            "s1",
+            PickedFile(Uri.parse("content://files/artha-net-worth.csv"), "artha-net-worth.csv", "text/csv", 797),
+            ref = AttachmentRef("up1", "file", "artha-net-worth.csv", "text/csv", 797),
+        ),
+        StagedUpload(
+            "s2",
+            PickedFile(Uri.parse("content://files/statement.pdf"), "Bank statement October.pdf", "application/pdf", 120_000),
+            ref = AttachmentRef("up2", "file", "Bank statement October.pdf", "application/pdf", 120_000),
+        ),
+    ),
+)

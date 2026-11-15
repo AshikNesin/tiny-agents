@@ -8,6 +8,8 @@ groot-mobile-app boilerplate.
 
 - **Chat with bots.** Replies stream in. Attach photos and files, steer a running reply or queue a message for
   after it, take back a queued message, stop a reply, start a new chat and scroll back through older messages.
+- **Share to a bot.** Share files, photos, links or text from any app: pick the bot (your top bots show in
+  Android's share sheet), add a note and send.
 - **Answer bots.** Approve or deny a tool call, answer a bot's questions, fill a credential request, and turn on
   YOLO mode for a chat.
 - **Manage bots.** Create, edit, pin and delete bots: model, behaviour, tools, skills, connections and the guests
