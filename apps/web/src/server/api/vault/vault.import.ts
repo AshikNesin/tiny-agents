@@ -23,7 +23,7 @@
  */
 import { eq, isNotNull, sql } from "drizzle-orm";
 import { logger } from "@groot/core/logger";
-import { connections, db, kv, vaultItems, vaultValues } from "../../db";
+import { connections, db, kv, vaultItems, vaultValues, type Connection } from "../../db";
 import { hasSecretsKey } from "../../crypto/secret-box";
 import { openHeaderSecret, writeOwnHeaderSecret } from "../connections/connection-secrets";
 import { localItemValues } from "./backends/local";
@@ -169,25 +169,38 @@ export function importConnectionSecrets(): VaultImportReport["connections"] {
       continue;
     }
     try {
-      const value = openHeaderSecret(row.id, row.secretEnc!);
-      db.transaction((tx) => {
-        const itemId = writeOwnHeaderSecret(tx, row, value, "vault_import");
-        // Read it back through its row before `secret_enc` is gone for good.
-        const item = tx
-          .select({ externalId: vaultItems.externalId })
-          .from(vaultItems)
-          .where(eq(vaultItems.id, itemId))
-          .get();
-        if (!item || localItemValues(tx, item.externalId).value !== value) {
-          throw new Error("the vault item doesn't hold the value");
-        }
-      });
-      report.moved.push(row.id);
+      if (moveConnectionSecret(row)) report.moved.push(row.id);
     } catch (error) {
       report.failed.push({ id: row.id, reason: (error as Error).message });
     }
   }
   return report;
+}
+
+/**
+ * Move one connection's `secret_enc` into its own vault item, read back and
+ * checked, in one transaction. The row is read again inside it: when another
+ * run (a boot and `secrets:rotate` at once) moved or changed it since `seen`
+ * was read, this does nothing and returns false.
+ */
+export function moveConnectionSecret(seen: Connection): boolean {
+  if (!seen.secretEnc) return false;
+  const value = openHeaderSecret(seen.id, seen.secretEnc);
+  return db.transaction((tx) => {
+    const row = tx.select().from(connections).where(eq(connections.id, seen.id)).get();
+    if (!row || row.secretEnc !== seen.secretEnc) return false;
+    const itemId = writeOwnHeaderSecret(tx, row, value, "vault_import");
+    // Read it back through its row before `secret_enc` is gone for good.
+    const item = tx
+      .select({ externalId: vaultItems.externalId })
+      .from(vaultItems)
+      .where(eq(vaultItems.id, itemId))
+      .get();
+    if (!item || localItemValues(tx, item.externalId).value !== value) {
+      throw new Error("the vault item doesn't hold the value");
+    }
+    return true;
+  });
 }
 
 /** Both moves, logged. For the boot and `pnpm secrets:rotate`. */

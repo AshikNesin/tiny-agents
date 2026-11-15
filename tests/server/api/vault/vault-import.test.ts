@@ -29,6 +29,7 @@ import {
   importConnectionSecrets,
   importStoredSecrets,
   importVaultValues,
+  moveConnectionSecret,
 } from "../../../../apps/web/src/server/api/vault/vault.import";
 
 const KEY = process.env.SECRETS_KEY!;
@@ -311,6 +312,15 @@ describe("Q4 import: connection header values become vault items", () => {
     process.env.SECRETS_KEY = KEY;
     expect(importConnectionSecrets().moved).toEqual(["conn-a"]);
     expect(await resolveConnectionSecret("mcp-alpha", "alpha")).toBe("alpha-secret");
+  });
+
+  it("a second import working from a row read before the first moved it does nothing", async () => {
+    await oldConnection("conn-a", "alpha", "alpha-secret");
+    // What a concurrent run (a boot and `secrets:rotate`) read before this one moved it.
+    const [stale] = await db.select().from(connections);
+    expect(importConnectionSecrets().moved).toEqual(["conn-a"]);
+    expect(moveConnectionSecret(stale!)).toBe(false);
+    expect((await db.select().from(vaultItems)).map((item) => item.handle)).toEqual(["mcp-alpha"]);
   });
 
   it("runs both moves at start", async () => {
