@@ -1337,26 +1337,60 @@ exports[`ChatPane, pinned > a computer: the toggle, then the tabs > browser in f
       >
         <div
           aria-label="Live view"
-          class="bg-muted inline-flex rounded-lg p-0.5"
+          class="inline-flex shrink-0 items-center rounded-lg bg-muted p-0.5"
           role="tablist"
         >
           <button
             aria-selected="true"
-            class="text-muted-foreground aria-selected:bg-background aria-selected:text-foreground focus-visible:ring-ring/50 relative rounded-md px-2.5 py-0.5 text-sm font-medium outline-none focus-visible:ring-3 aria-selected:shadow-sm"
+            class="relative inline-flex h-6 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 aria-selected:bg-background aria-selected:text-foreground aria-selected:shadow-sm"
             data-testid="live-view-tab-browser"
             role="tab"
             type="button"
           >
-            Browser
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-globe size-3.5"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            />
+            <span
+              class="@max-lg:sr-only"
+            >
+              Browser
+            </span>
           </button>
           <button
             aria-selected="false"
-            class="text-muted-foreground aria-selected:bg-background aria-selected:text-foreground focus-visible:ring-ring/50 relative rounded-md px-2.5 py-0.5 text-sm font-medium outline-none focus-visible:ring-3 aria-selected:shadow-sm"
+            class="relative inline-flex h-6 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 aria-selected:bg-background aria-selected:text-foreground aria-selected:shadow-sm"
             data-testid="live-view-tab-computer"
             role="tab"
             type="button"
           >
-            Computer
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-monitor size-3.5"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            />
+            <span
+              class="@max-lg:sr-only"
+            >
+              Computer
+            </span>
           </button>
         </div>
         <button
@@ -1407,8 +1441,10 @@ p [testid=composer-hint, aria-hidden=true]
 complementary
   tablist "Live view"
     tab "Browser" [testid=live-view-tab-browser, aria-selected=true]
+      icon lucide-globe
       "Browser"
     tab "Computer" [testid=live-view-tab-computer, aria-selected=false]
+      icon lucide-monitor
       "Computer"
   button "Close browser stand-in"
     "Close browser stand-in""
@@ -2578,26 +2614,60 @@ exports[`ChatPane, pinned > a computer: the toggle, then the tabs > computer in 
       >
         <div
           aria-label="Live view"
-          class="bg-muted inline-flex rounded-lg p-0.5"
+          class="inline-flex shrink-0 items-center rounded-lg bg-muted p-0.5"
           role="tablist"
         >
           <button
             aria-selected="false"
-            class="text-muted-foreground aria-selected:bg-background aria-selected:text-foreground focus-visible:ring-ring/50 relative rounded-md px-2.5 py-0.5 text-sm font-medium outline-none focus-visible:ring-3 aria-selected:shadow-sm"
+            class="relative inline-flex h-6 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 aria-selected:bg-background aria-selected:text-foreground aria-selected:shadow-sm"
             data-testid="live-view-tab-browser"
             role="tab"
             type="button"
           >
-            Browser
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-globe size-3.5"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            />
+            <span
+              class="@max-lg:sr-only"
+            >
+              Browser
+            </span>
           </button>
           <button
             aria-selected="true"
-            class="text-muted-foreground aria-selected:bg-background aria-selected:text-foreground focus-visible:ring-ring/50 relative rounded-md px-2.5 py-0.5 text-sm font-medium outline-none focus-visible:ring-3 aria-selected:shadow-sm"
+            class="relative inline-flex h-6 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 aria-selected:bg-background aria-selected:text-foreground aria-selected:shadow-sm"
             data-testid="live-view-tab-computer"
             role="tab"
             type="button"
           >
-            Computer
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-monitor size-3.5"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            />
+            <span
+              class="@max-lg:sr-only"
+            >
+              Computer
+            </span>
           </button>
         </div>
         <button
@@ -2648,8 +2718,10 @@ p [testid=composer-hint, aria-hidden=true]
 complementary
   tablist "Live view"
     tab "Browser" [testid=live-view-tab-browser, aria-selected=false]
+      icon lucide-globe
       "Browser"
     tab "Computer" [testid=live-view-tab-computer, aria-selected=true]
+      icon lucide-monitor
       "Computer"
   button "Close computer stand-in"
     "Close computer stand-in""
@@ -4451,26 +4523,60 @@ exports[`ChatPane, pinned > a takeover request opens the computer > markup 1`] =
       >
         <div
           aria-label="Live view"
-          class="bg-muted inline-flex rounded-lg p-0.5"
+          class="inline-flex shrink-0 items-center rounded-lg bg-muted p-0.5"
           role="tablist"
         >
           <button
             aria-selected="false"
-            class="text-muted-foreground aria-selected:bg-background aria-selected:text-foreground focus-visible:ring-ring/50 relative rounded-md px-2.5 py-0.5 text-sm font-medium outline-none focus-visible:ring-3 aria-selected:shadow-sm"
+            class="relative inline-flex h-6 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 aria-selected:bg-background aria-selected:text-foreground aria-selected:shadow-sm"
             data-testid="live-view-tab-browser"
             role="tab"
             type="button"
           >
-            Browser
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-globe size-3.5"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            />
+            <span
+              class="@max-lg:sr-only"
+            >
+              Browser
+            </span>
           </button>
           <button
             aria-selected="true"
-            class="text-muted-foreground aria-selected:bg-background aria-selected:text-foreground focus-visible:ring-ring/50 relative rounded-md px-2.5 py-0.5 text-sm font-medium outline-none focus-visible:ring-3 aria-selected:shadow-sm"
+            class="relative inline-flex h-6 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 aria-selected:bg-background aria-selected:text-foreground aria-selected:shadow-sm"
             data-testid="live-view-tab-computer"
             role="tab"
             type="button"
           >
-            Computer
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-monitor size-3.5"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            />
+            <span
+              class="@max-lg:sr-only"
+            >
+              Computer
+            </span>
           </button>
         </div>
         <button
@@ -4531,8 +4637,10 @@ p [testid=composer-hint, aria-hidden=true]
 complementary
   tablist "Live view"
     tab "Browser" [testid=live-view-tab-browser, aria-selected=false]
+      icon lucide-globe
       "Browser"
     tab "Computer" [testid=live-view-tab-computer, aria-selected=true]
+      icon lucide-monitor
       "Computer"
   button "Close computer stand-in"
     "Close computer stand-in""
@@ -10151,26 +10259,60 @@ exports[`ChatPane, pinned > the bot using the computer, with a computer > open m
       >
         <div
           aria-label="Live view"
-          class="bg-muted inline-flex rounded-lg p-0.5"
+          class="inline-flex shrink-0 items-center rounded-lg bg-muted p-0.5"
           role="tablist"
         >
           <button
             aria-selected="false"
-            class="text-muted-foreground aria-selected:bg-background aria-selected:text-foreground focus-visible:ring-ring/50 relative rounded-md px-2.5 py-0.5 text-sm font-medium outline-none focus-visible:ring-3 aria-selected:shadow-sm"
+            class="relative inline-flex h-6 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 aria-selected:bg-background aria-selected:text-foreground aria-selected:shadow-sm"
             data-testid="live-view-tab-browser"
             role="tab"
             type="button"
           >
-            Browser
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-globe size-3.5"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            />
+            <span
+              class="@max-lg:sr-only"
+            >
+              Browser
+            </span>
           </button>
           <button
             aria-selected="true"
-            class="text-muted-foreground aria-selected:bg-background aria-selected:text-foreground focus-visible:ring-ring/50 relative rounded-md px-2.5 py-0.5 text-sm font-medium outline-none focus-visible:ring-3 aria-selected:shadow-sm"
+            class="relative inline-flex h-6 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 aria-selected:bg-background aria-selected:text-foreground aria-selected:shadow-sm"
             data-testid="live-view-tab-computer"
             role="tab"
             type="button"
           >
-            Computer
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-monitor size-3.5"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            />
+            <span
+              class="@max-lg:sr-only"
+            >
+              Computer
+            </span>
           </button>
         </div>
         <button
@@ -10224,8 +10366,10 @@ p [testid=composer-hint, aria-hidden=true]
 complementary
   tablist "Live view"
     tab "Browser" [testid=live-view-tab-browser, aria-selected=false]
+      icon lucide-globe
       "Browser"
     tab "Computer" [testid=live-view-tab-computer, aria-selected=true]
+      icon lucide-monitor
       "Computer"
   button "Close computer stand-in"
     "Close computer stand-in""
@@ -11870,26 +12014,60 @@ exports[`ChatPane, pinned > the transcript's Open computer brings the computer u
       >
         <div
           aria-label="Live view"
-          class="bg-muted inline-flex rounded-lg p-0.5"
+          class="inline-flex shrink-0 items-center rounded-lg bg-muted p-0.5"
           role="tablist"
         >
           <button
             aria-selected="false"
-            class="text-muted-foreground aria-selected:bg-background aria-selected:text-foreground focus-visible:ring-ring/50 relative rounded-md px-2.5 py-0.5 text-sm font-medium outline-none focus-visible:ring-3 aria-selected:shadow-sm"
+            class="relative inline-flex h-6 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 aria-selected:bg-background aria-selected:text-foreground aria-selected:shadow-sm"
             data-testid="live-view-tab-browser"
             role="tab"
             type="button"
           >
-            Browser
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-globe size-3.5"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            />
+            <span
+              class="@max-lg:sr-only"
+            >
+              Browser
+            </span>
           </button>
           <button
             aria-selected="true"
-            class="text-muted-foreground aria-selected:bg-background aria-selected:text-foreground focus-visible:ring-ring/50 relative rounded-md px-2.5 py-0.5 text-sm font-medium outline-none focus-visible:ring-3 aria-selected:shadow-sm"
+            class="relative inline-flex h-6 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 aria-selected:bg-background aria-selected:text-foreground aria-selected:shadow-sm"
             data-testid="live-view-tab-computer"
             role="tab"
             type="button"
           >
-            Computer
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-monitor size-3.5"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            />
+            <span
+              class="@max-lg:sr-only"
+            >
+              Computer
+            </span>
           </button>
         </div>
         <button
@@ -11943,8 +12121,10 @@ p [testid=composer-hint, aria-hidden=true]
 complementary
   tablist "Live view"
     tab "Browser" [testid=live-view-tab-browser, aria-selected=false]
+      icon lucide-globe
       "Browser"
     tab "Computer" [testid=live-view-tab-computer, aria-selected=true]
+      icon lucide-monitor
       "Computer"
   button "Close computer stand-in"
     "Close computer stand-in""

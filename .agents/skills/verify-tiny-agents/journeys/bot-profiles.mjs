@@ -153,7 +153,7 @@ await journey(
       expect((await started).status()).toBe(200);
       await expect(browserPanel).toContainText("Live", { timeout: 120_000 });
       await streamed(new RegExp(`/bots/${botId}/browser/vnc`));
-      await expect(browserPanel.getByTestId("browser-driver")).toHaveText(`${name} drives`);
+      await expect(browserPanel.getByTestId("browser-driver")).toHaveText(`${name} is driving`);
     });
     await proof("browser-own-live");
     await step("it is the bot's profile, not Shared (API, page list, VM)", async () => {
@@ -175,9 +175,7 @@ await journey(
       const tab = page.getByTestId(`browser-tab-${profile}`);
       await expect(tab).toHaveAttribute("aria-selected", "true", { timeout: 20_000 });
       await expect(tab).toContainText("own browser");
-      await expect(page.getByTestId("browser-page-status")).toContainText("Live", {
-        timeout: 60_000,
-      });
+      await expect(page.getByTestId("browser-page-driver")).toBeVisible({ timeout: 60_000 });
       await streamed(new RegExp(`/browser/${profile}/vnc`));
     });
     await proof("browser-page-own-tab");
@@ -236,7 +234,7 @@ await journey(
       expect((await started).status()).toBe(200);
       await streamed(new RegExp(`/bots/${botId}/computer/vnc`));
       await expect(computerPanel).toContainText("Live", { timeout: 60_000 });
-      await expect(computerPanel.getByTestId("computer-driver")).toHaveText(`${name} drives`);
+      await expect(computerPanel.getByTestId("computer-driver")).toHaveText(`${name} is driving`);
     });
     await proof("computer-own-live");
     await step("it is the bot's desktop, not Shared (API, page list, VM)", async () => {
@@ -255,12 +253,12 @@ await journey(
       expect(sharedXBefore).toBe("off");
       expect(exists("~/.tiny-agents/computer-profiles/shared/.desktop-env")).toBe(false);
     });
-    await step("panel Take control / Release control drive the bot's desktop", async () => {
+    await step("panel: a click takes the bot's desktop; Hand back returns it", async () => {
       await computerPanel.getByRole("button", { name: "Take control" }).click();
-      await expect(computerPanel.getByTestId("computer-driver")).toHaveText("You drive");
+      await expect(computerPanel.getByTestId("computer-driver")).toHaveText("You're driving");
       await expect.poll(async () => (await pageDesktop(profile))?.driver).toBe("human");
-      await computerPanel.getByRole("button", { name: "Release control" }).click();
-      await expect(computerPanel.getByTestId("computer-driver")).toHaveText(`${name} drives`);
+      await computerPanel.getByRole("button", { name: "Hand back" }).click();
+      await expect(computerPanel.getByTestId("computer-driver")).toHaveText(`${name} is driving`);
     });
     await step("the Computer page lists it as the bot's own desktop, live", async () => {
       await page.goto("/computer", LOADED);
@@ -269,9 +267,9 @@ await journey(
       await tab.click();
       await expect(tab).toHaveAttribute("aria-selected", "true");
       await streamed(new RegExp(`/computer/${profile}/vnc`));
-      await expect(page.getByRole("button", { name: /View only · Take control/ })).toBeVisible({
-        timeout: 30_000,
-      });
+      await expect(
+        page.getByTestId("computer-page-viewport").getByRole("button", { name: "Take control" }),
+      ).toBeVisible({ timeout: 30_000 });
     });
     await proof("computer-page-own-tab");
     await step(

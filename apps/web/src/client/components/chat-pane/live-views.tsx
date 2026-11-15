@@ -3,6 +3,7 @@
  * front, the header toggle's state and label, and the tabs between them.
  */
 import { useEffect, useState } from "react";
+import { Globe, Monitor, type LucideIcon } from "lucide-react";
 import type { Bot } from "../../../shared/api/bots";
 import type { ChatMessage } from "../../lib/chat-types";
 import { botsApi } from "../../lib/bots-api";
@@ -100,7 +101,9 @@ export type LiveViews = ReturnType<typeof useLiveViews>;
 
 /**
  * The live view's switch between the bot's browser and its computer, in the
- * open panel's title. A dot marks the one the bot is using out of sight.
+ * open panel's title: a compact segmented control, an icon and a label each
+ * (the icon alone in a narrow panel).
+ * A dot marks the one the bot is using out of sight.
  */
 function LiveViewTabs({
   front,
@@ -115,31 +118,40 @@ function LiveViewTabs({
   onBrowser: () => void;
   onComputer: () => void;
 }) {
-  const tab = (key: "browser" | "computer", label: string, busy: boolean, onClick: () => void) => (
+  const tab = (
+    key: "browser" | "computer",
+    label: string,
+    Icon: LucideIcon,
+    busy: boolean,
+    onClick: () => void,
+  ) => (
     <button
       type="button"
       role="tab"
       aria-selected={front === key}
       onClick={onClick}
-      className="text-muted-foreground aria-selected:bg-background aria-selected:text-foreground focus-visible:ring-ring/50 relative rounded-md px-2.5 py-0.5 text-sm font-medium outline-none focus-visible:ring-3 aria-selected:shadow-sm"
+      className="relative inline-flex h-6 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 aria-selected:bg-background aria-selected:text-foreground aria-selected:shadow-sm"
       data-testid={`live-view-tab-${key}`}
     >
-      {label}
+      <Icon className="size-3.5" aria-hidden />
+      {/* A narrow panel (a phone) keeps the icons; the label stays for screen readers. */}
+      <span className="@max-lg:sr-only">{label}</span>
       {busy && (
         <>
-          <span
-            className="bg-success absolute top-0.5 right-0.5 size-1.5 animate-pulse rounded-full"
-            aria-hidden
-          />
+          <span className="size-1.5 animate-pulse rounded-full bg-success" aria-hidden />
           <span className="sr-only">, in use</span>
         </>
       )}
     </button>
   );
   return (
-    <div role="tablist" aria-label="Live view" className="bg-muted inline-flex rounded-lg p-0.5">
-      {tab("browser", "Browser", browserBusy, onBrowser)}
-      {tab("computer", "Computer", computerBusy, onComputer)}
+    <div
+      role="tablist"
+      aria-label="Live view"
+      className="inline-flex shrink-0 items-center rounded-lg bg-muted p-0.5"
+    >
+      {tab("browser", "Browser", Globe, browserBusy, onBrowser)}
+      {tab("computer", "Computer", Monitor, computerBusy, onComputer)}
     </div>
   );
 }

@@ -65,12 +65,7 @@ export const browserSurface: LiveSurface<BrowserStatus, PageBrowserList, PageBro
             done: "Browser profile wiped; the next session starts fresh.",
           },
     mode: (status) => (status.active ? (status.mode ?? "headless") : null),
-    // The streamed Chrome has its own address bar, so the bot's last URL goes
-    // while the owner drives.
-    detail: (status, { mode, humanDrives }) =>
-      !(mode === "vnc" && humanDrives) && status.url
-        ? { text: status.url, testId: "browser-url", grow: true }
-        : null,
+    headlessDetail: (status) => (status.url ? { text: status.url, testId: "browser-url" } : null),
     takeTitle: (bot) => `Click and type in the browser yourself. ${bot} waits.`,
     releaseTitle: (bot) => `Hand the browser back to ${bot}`,
     // The Browser page (issue #160) is the owner's; it opens on this browser.
@@ -116,7 +111,7 @@ export const browserSurface: LiveSurface<BrowserStatus, PageBrowserList, PageBro
   page: {
     title: "Browser",
     description:
-      "The bots' browsers on the sandbox VM. Take control to use one yourself; bots on it wait.",
+      "The bots' browsers on the sandbox VM. Click one to use it yourself; bots on it wait.",
     selectedKey: "tiny-agents:browser-page-profile",
     deepLink: true,
     api: browserPageApi,
@@ -148,7 +143,7 @@ export const browserSurface: LiveSurface<BrowserStatus, PageBrowserList, PageBro
       };
     },
     tabs: { label: "Browsers", own: "own browser", errorDot: true },
-    statusLine: true,
+    takeTitle: "Click and type in this browser yourself. Bots on it wait.",
     connecting: "Connecting to the browser…",
     headless: {
       title: "This browser is headless",
@@ -214,8 +209,6 @@ export const computerSurface: LiveSurface<ComputerStatus, DesktopList, Desktop> 
       title: "No computer on this server.",
       hint: (status) => status.setupHint ?? "The computer is not configured.",
     },
-    detail: (status) =>
-      status.width && status.height ? { text: `${status.width}×${status.height}` } : null,
     takeTitle: (bot) => `Click and type on the computer yourself. ${bot} waits and sees nothing.`,
     releaseTitle: (bot) => `Hand the computer back to ${bot}`,
     takeover: { done: "I'm done", note: "It sees nothing until you press I'm done." },
@@ -247,7 +240,7 @@ export const computerSurface: LiveSurface<ComputerStatus, DesktopList, Desktop> 
   page: {
     title: "Computer",
     description:
-      "The bots' desktops on the sandbox VM. Take control to use one yourself; bots on it wait.",
+      "The bots' desktops on the sandbox VM. Click one to use it yourself; bots on it wait.",
     selectedKey: "tiny-agents:computer-desktop",
     deepLink: false,
     api: computerApi,
@@ -272,8 +265,8 @@ export const computerSurface: LiveSurface<ComputerStatus, DesktopList, Desktop> 
       done: "Desktop reset; it starts fresh next time.",
     }),
     tabs: { label: "Desktops", own: "own desktop", errorDot: false },
-    statusLine: false,
-    takeover: { asked: "A bot asked you:", note: "It sees nothing until you release control." },
+    takeTitle: "Click and type on this desktop yourself. Bots on it wait and see nothing.",
+    takeover: { asked: "A bot asked you:", note: "It sees nothing until you hand it back." },
     connecting: "Connecting to the desktop…",
     off: {
       icon: Monitor,

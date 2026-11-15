@@ -1,4 +1,4 @@
-/** The desktop page's header menus, while it streams: Apps and Keys (the computer's). */
+/** The desktop page's menus, in its view's bar while the owner drives: Apps and Keys (the computer's). */
 import { useState } from "react";
 import { toast } from "sonner";
 import { AppWindow, Keyboard } from "lucide-react";
@@ -16,16 +16,17 @@ import type { DesktopShortcut } from "../../lib/desktop-keys";
 import { errorMessage } from "../../lib/errors";
 import type { AppsApi } from "./surface";
 
+/** The bar's muted icon tools. */
+const menuTool = "text-muted-foreground hover:text-foreground";
+
 /** The Apps menu: the desktop's applications, loaded when it opens. */
 export function AppsMenu({
   apps: api,
   profile,
-  disabled,
   testId,
 }: {
   apps: AppsApi;
   profile: string;
-  disabled: boolean;
   testId: string;
 }) {
   const [apps, setApps] = useState<DesktopApp[] | null>(null);
@@ -60,13 +61,13 @@ export function AppsMenu({
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
-          size="sm"
-          disabled={disabled}
-          title={disabled ? "Take control to open apps" : "Open an app on this desktop"}
+          size="icon-sm"
+          className={menuTool}
+          aria-label="Apps"
+          title="Open an app on this desktop"
           data-testid={testId}
         >
-          <AppWindow />
-          Apps
+          <AppWindow className="size-3.5" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="max-h-80 w-64 overflow-y-auto">
@@ -93,12 +94,10 @@ export function AppsMenu({
 /** The Keys menu: desktop shortcuts the local browser would otherwise keep. */
 export function KeysMenu({
   shortcuts,
-  disabled,
   onSend,
   testId,
 }: {
   shortcuts: readonly DesktopShortcut[];
-  disabled: boolean;
   onSend: (index: number) => void;
   testId: string;
 }) {
@@ -107,13 +106,13 @@ export function KeysMenu({
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
-          size="sm"
-          disabled={disabled}
-          title={disabled ? "Take control to send keys" : "Send a shortcut to the desktop"}
+          size="icon-sm"
+          className={menuTool}
+          aria-label="Keys"
+          title="Send a shortcut to the desktop"
           data-testid={testId}
         >
-          <Keyboard />
-          Keys
+          <Keyboard className="size-3.5" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-60">

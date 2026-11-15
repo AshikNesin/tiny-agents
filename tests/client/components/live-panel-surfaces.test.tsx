@@ -135,7 +135,8 @@ const connect = async () => {
   act(() => {
     fakes.rfbs[fakes.rfbs.length - 1]!.dispatchEvent(new Event("connect"));
   });
-  await screen.findByText("Live");
+  // Once live, the status chip says who drives.
+  await screen.findByTestId(/-driver$/);
 };
 
 const pin = () => {
@@ -432,9 +433,9 @@ describe("the panels' actions", () => {
     const api = mockComputer(computer({ driver: "human", takeover: "Sign in" }));
     mount("computer");
     await connect();
-    await user().click(screen.getByRole("button", { name: "Release control" }));
+    await user().click(screen.getByRole("button", { name: "I'm done" }));
     await waitFor(() => expect(api.driver).toHaveBeenCalledWith("b1", "agent"));
-    expect(screen.getByRole("button", { name: "Release control" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "I'm done" })).toHaveAttribute(
       "title",
       "Hand the computer back to Surfer",
     );

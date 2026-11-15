@@ -81,25 +81,29 @@ await journey(
       if (await start.isVisible({ timeout: 5_000 }).catch(() => false)) await start.click();
       cleanup(async () => (await shared()).active && api.delete("/computer/shared"));
       await streamed(/\/computer\/shared\/vnc/);
-      await expect(page.getByRole("button", { name: /View only · Take control/ })).toBeVisible({
-        timeout: 30_000,
-      });
-      // View only: the driving tools wait for Take control.
-      await expect(page.getByTestId("computer-apps")).toBeDisabled();
-      await expect(page.getByTestId("computer-keys")).toBeDisabled();
+      // View only: the desktop itself is the Take control button.
+      await expect(
+        page.getByTestId("computer-page-viewport").getByRole("button", { name: "Take control" }),
+      ).toBeVisible({ timeout: 30_000 });
+      // The driving tools appear once the owner takes control.
+      await expect(page.getByTestId("computer-apps")).toHaveCount(0);
+      await expect(page.getByTestId("computer-keys")).toHaveCount(0);
       expect((await shared()).active).toBe(true);
       await expect.poll(() => windows().length, { timeout: 30_000 }).toBeGreaterThan(0);
     });
     await proof("live-view-only");
 
-    await step("Take control: you drive, Apps/Keys/Paste unlock, flag reads human", async () => {
-      await page.getByRole("button", { name: "Take control", exact: true }).click();
-      await expect(page.getByRole("button", { name: "Release control" })).toBeVisible();
-      await expect(page.getByTestId("computer-apps")).toBeEnabled();
-      await expect(page.getByTestId("computer-keys")).toBeEnabled();
-      await expect(page.getByRole("button", { name: "Paste from your clipboard" })).toBeEnabled();
-      await expect.poll(async () => (await shared()).driver).toBe("human");
-    });
+    await step(
+      "A click on the desktop takes control: Apps/Keys/Paste show, flag reads human",
+      async () => {
+        await page.getByRole("button", { name: "Take control", exact: true }).click();
+        await expect(page.getByRole("button", { name: "Hand back" })).toBeVisible();
+        await expect(page.getByTestId("computer-apps")).toBeEnabled();
+        await expect(page.getByTestId("computer-keys")).toBeEnabled();
+        await expect(page.getByRole("button", { name: "Paste from your clipboard" })).toBeEnabled();
+        await expect.poll(async () => (await shared()).driver).toBe("human");
+      },
+    );
 
     let appWindowsBefore;
     await step("Apps menu lists the desktop's apps and opens one as a window", async () => {
@@ -134,10 +138,10 @@ await journey(
     });
     await proof("keys-terminal");
 
-    await step("Release control hands the desktop back to the bots", async () => {
-      await page.getByRole("button", { name: "Release control" }).click();
+    await step("Hand back returns the desktop to the bots", async () => {
+      await page.getByRole("button", { name: "Hand back" }).click();
       await expect(page.getByRole("button", { name: "Take control", exact: true })).toBeVisible();
-      await expect(page.getByTestId("computer-apps")).toBeDisabled();
+      await expect(page.getByTestId("computer-apps")).toHaveCount(0);
       await expect.poll(async () => (await shared()).driver).not.toBe("human");
     });
 
@@ -163,16 +167,19 @@ await journey(
       await expect(panel.getByRole("link", { name: "Open the Computer page" })).toBeVisible();
     });
     await proof("chat-panel");
-    await step("chat panel: Take control and Release control flip the driver", async () => {
-      const panel = page.getByTestId("computer-panel");
-      await panel.getByRole("button", { name: "Take control" }).click();
-      await expect(panel.getByTestId("computer-driver")).toHaveText("You drive");
-      await expect.poll(async () => (await shared()).driver).toBe("human");
-      await panel.getByRole("button", { name: "Release control" }).click();
-      await expect(panel.getByTestId("computer-driver")).not.toHaveText("You drive");
-      await panel.getByRole("button", { name: "Close computer panel" }).click();
-      await expect(panel).toHaveCount(0);
-    });
+    await step(
+      "chat panel: a click on the stream takes control; Hand back returns it",
+      async () => {
+        const panel = page.getByTestId("computer-panel");
+        await panel.getByRole("button", { name: "Take control" }).click();
+        await expect(panel.getByTestId("computer-driver")).toHaveText("You're driving");
+        await expect.poll(async () => (await shared()).driver).toBe("human");
+        await panel.getByRole("button", { name: "Hand back" }).click();
+        await expect(panel.getByTestId("computer-driver")).not.toHaveText("You're driving");
+        await panel.getByRole("button", { name: "Close computer panel" }).click();
+        await expect(panel).toHaveCount(0);
+      },
+    );
 
     await step("Reset asks first, closes the desktop and wipes its settings", async () => {
       await page.goto("/computer", LOADED);

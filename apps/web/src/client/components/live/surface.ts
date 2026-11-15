@@ -104,11 +104,13 @@ export interface LivePanelSurface<S extends PanelStatus> {
    * without it the panel is always set up, even before the first status.
    */
   setup?: { configured(status: S): boolean; title: string; hint(status: S): string };
-  /** The status line's last part, after who drives: the browser's URL, the desktop's size. */
-  detail(
-    status: S,
-    view: { mode: "vnc" | "headless"; humanDrives: boolean },
-  ): { text: string; testId?: string; grow?: boolean } | null;
+  /**
+   * What the header adds beside the status while it is open without a
+   * stream (the headless browser's URL). A stream shows its own address bar,
+   * so the header stays quiet then.
+   */
+  headlessDetail?(status: S): { text: string; testId: string } | null;
+  /** The tooltip of the click-to-take-over layer over the stream. */
   takeTitle(bot: string): string;
   releaseTitle(bot: string): string;
   /** A bot asks the owner to take over (the computer's): the banner, and the hand-back's label. */
@@ -156,8 +158,8 @@ export interface LivePageSurface<L, I extends PageItem> {
     /** Whether a failed open turns the tab's dot red. */
     errorDot: boolean;
   };
-  /** The connection and who drives, over the view (the browser's). */
-  statusLine: boolean;
+  /** The tooltip of the click-to-take-over layer over the stream. */
+  takeTitle: string;
   /** A bot asks the owner to take over (the computer's): a hand on its tab, the banner while driving. */
   takeover?: { asked: string; note: string };
   connecting: string;

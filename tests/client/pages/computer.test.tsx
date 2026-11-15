@@ -143,9 +143,14 @@ describe("ComputerPage", () => {
       { remoteResize: false },
     );
     expect(fakes.rfbs[0]!.viewOnly).toBe(true);
-    expect(screen.getByTestId("computer-apps")).toBeDisabled();
-    expect(screen.getByTestId("computer-keys")).toBeDisabled();
-    expect(await screen.findByTestId("computer-page-takeover-hint")).toBeInTheDocument();
+    // View only: the driving tools appear once the owner takes control.
+    expect(screen.queryByTestId("computer-apps")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("computer-keys")).not.toBeInTheDocument();
+    expect(
+      await within(screen.getByTestId("computer-page-viewport")).findByRole("button", {
+        name: "Take control",
+      }),
+    ).toBeInTheDocument();
   });
 
   it("takes control, then opens apps and sends shortcuts the browser would keep", async () => {
@@ -153,10 +158,12 @@ describe("ComputerPage", () => {
     const api = mockApi(listOf([desktop()]));
     mount();
     await connected();
-    await user.click(await screen.findByTestId("computer-page-take"));
+    const viewport = screen.getByTestId("computer-page-viewport");
+    await user.click(await within(viewport).findByRole("button", { name: "Take control" }));
     await waitFor(() => expect(api.driver).toHaveBeenCalledWith("shared", "human"));
     await waitFor(() => expect(fakes.rfbs[0]!.viewOnly).toBe(false));
-    expect(screen.queryByTestId("computer-page-takeover-hint")).not.toBeInTheDocument();
+    expect(within(viewport).queryByRole("button", { name: "Take control" })).toBeNull();
+    expect(screen.getByTestId("computer-page-status")).toHaveTextContent("You're driving");
 
     await user.click(screen.getByTestId("computer-apps"));
     await user.click(await screen.findByRole("menuitem", { name: "Mousepad" }));
@@ -173,7 +180,7 @@ describe("ComputerPage", () => {
       [0xffe9, "AltLeft", false],
     ]);
 
-    await user.click(screen.getByTestId("computer-page-release"));
+    await user.click(screen.getByRole("button", { name: "Hand back" }));
     await waitFor(() => expect(api.driver).toHaveBeenCalledWith("shared", "agent"));
   });
 

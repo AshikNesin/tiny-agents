@@ -8,7 +8,7 @@
  * needs a real browser.
  */
 import React from "react";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { MemoryRouter } from "react-router-dom";
@@ -136,20 +136,30 @@ describe("BrowserPage", () => {
       2,
     );
     expect(fakes.rfbs[0]!.viewOnly).toBe(true);
-    expect(await screen.findByTestId("browser-page-takeover-hint")).toBeInTheDocument();
-    expect(screen.getByTestId("browser-page-status")).toHaveTextContent("Bots drive");
+    // The stream itself is the Take control button.
+    const viewport = screen.getByTestId("browser-page-viewport");
+    expect(
+      await within(viewport).findByRole("button", { name: "Take control" }),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("browser-page-status")).toHaveTextContent("Bots are driving");
   });
 
-  it("takes control and hands back", async () => {
+  it("takes control from a click on the stream and hands back from the view's own bar", async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     const api = mockApi(listOf([shared()]));
     mount();
     await connected();
-    await user.click(await screen.findByTestId("browser-page-take"));
+    const viewport = screen.getByTestId("browser-page-viewport");
+    await user.click(await within(viewport).findByRole("button", { name: "Take control" }));
     await waitFor(() => expect(api.driver).toHaveBeenCalledWith("shared", "human"));
     await waitFor(() => expect(fakes.rfbs[0]!.viewOnly).toBe(false));
-    expect(screen.getByTestId("browser-page-status")).toHaveTextContent("You drive");
-    await user.click(screen.getByTestId("browser-page-release"));
+    expect(screen.getByTestId("browser-page-status")).toHaveTextContent("You're driving");
+    expect(within(viewport).getByTestId("browser-page-driving-frame")).toBeInTheDocument();
+    expect(within(viewport).queryByRole("button", { name: "Take control" })).toBeNull();
+    // The tools sit in the view's bar, so they stay on screen in full screen.
+    const region = screen.getByTestId("browser-region");
+    expect(within(region).getByTestId("browser-page-fullscreen")).toBeInTheDocument();
+    await user.click(within(region).getByRole("button", { name: "Hand back" }));
     await waitFor(() => expect(api.driver).toHaveBeenCalledWith("shared", "agent"));
   });
 

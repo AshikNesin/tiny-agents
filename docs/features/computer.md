@@ -130,8 +130,8 @@ owner's (`computer_request_takeover`).
   desktop from idling out) and backpressure are shared; bytes are never
   logged.
 - `ComputerPanel` streams the desktop with `VncView` (kind `computer`: no
-  remote resize, `scaleViewport`), with Take control / Release control,
-  Paste, Full screen, Reset and Close. It opens on its own the first time a
+  remote resize, `scaleViewport`). A click on the desktop takes control; the
+  header has Hand back, Paste, Full screen, Reset and Close. It opens on its own the first time a
   `computer_*` call runs or the bot asks for a takeover, and a close by the
   owner is final for the conversation (the browser panel's rule). The Browser
   and Computer panels share the place beside the chat; the one opened last is
@@ -157,10 +157,12 @@ the way the Terminal page gives them the VM's shells:
   and one per bot with a profile of its own. Each tab shows whether the
   desktop is live, starting, or waiting for you (a bot's takeover request).
 - **The live view** is the panel's `VncView`, scaled to the page and full
-  screen capable, view-only until you take control. Taking control is the
-  same driver flag the chat panel flips: the bots on that desktop pause and
-  take no screenshots until you release it, and releasing answers a bot's
-  takeover request.
+  screen capable, view-only until you click it to take control (a green frame
+  then marks it as yours). Taking control is the same driver flag the chat
+  panel flips: the bots on that desktop pause and take no screenshots until
+  you hand it back, and handing back answers a bot's takeover request. One
+  bar over the view holds the tabs, a status chip and the tools, so full
+  screen keeps them on screen.
 - **While you drive:** an **Apps** menu opens any installed application
   (`gtk-launch`, the same path as `computer_open_app`), a **Keys** menu sends
   the XFCE shortcuts the local browser would keep for itself (Alt+F1 menu,

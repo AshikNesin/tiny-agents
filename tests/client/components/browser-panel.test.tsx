@@ -7,7 +7,14 @@
  * canvas needs a real browser (covered by the live check against the VM).
  */
 import React from "react";
-import { act, fireEvent, render as rtlRender, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render as rtlRender,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vite-plus/test";
 import { MemoryRouter } from "react-router-dom";
 import { ConfirmProvider } from "@groot/ui/primitives";
@@ -124,7 +131,7 @@ const connected = async () => {
   act(() => {
     latestRfb().dispatchEvent(new Event("connect"));
   });
-  await screen.findByText("Live");
+  await screen.findByTestId("browser-driver");
 };
 
 describe("BrowserPanel", () => {
@@ -154,8 +161,9 @@ describe("BrowserPanel", () => {
 
     await connected();
     expect(screen.queryByText("Connecting to the browser…")).not.toBeInTheDocument();
-    expect(screen.getByTestId("browser-url").textContent).toBe("https://example.com/");
-    expect(screen.getByTestId("browser-driver").textContent).toBe("Surfer drives");
+    expect(screen.getByTestId("browser-driver").textContent).toBe("Surfer is driving");
+    // The streamed Chrome shows its own address bar, so the header does not repeat the URL.
+    expect(screen.queryByTestId("browser-url")).not.toBeInTheDocument();
     expect(screen.getByTestId("browser-takeover")).toBeEnabled();
     expect(screen.queryByTestId("browser-paste")).not.toBeInTheDocument();
   });
@@ -191,27 +199,30 @@ describe("BrowserPanel", () => {
 
     expect(screen.getByRole("heading", { name: "Browser" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Take control" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Full screen" })).toHaveTextContent("Full screen");
+    // Full screen is an icon: its name, no label beside it.
+    expect(screen.getByRole("button", { name: "Full screen" })).toHaveTextContent("");
     expect(screen.getByRole("button", { name: "Reset browser profile" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Close browser panel" })).toBeInTheDocument();
   });
 
-  it("take control makes the viewer interactive; release hands it back", async () => {
+  it("clicking the stream takes control; Hand back returns it", async () => {
     const api = mockApi(vncStatus());
     render(<BrowserPanel bot={bot} onClose={vi.fn()} />);
     await connected();
 
-    fireEvent.click(screen.getByTestId("browser-takeover"));
+    // The header has no Take control button: the stream itself is the control.
+    const viewport = screen.getByTestId("browser-viewport");
+    fireEvent.click(within(viewport).getByRole("button", { name: "Take control" }));
     await waitFor(() => expect(api.driver).toHaveBeenCalledWith("b1", "human"));
     await waitFor(() => expect(latestRfb().viewOnly).toBe(false));
     expect(latestRfb().focus).toHaveBeenCalled();
-    expect(screen.getByTestId("browser-driver").textContent).toBe("You drive");
-    // The streamed Chrome has its own address bar; the stale agent URL goes.
+    expect(screen.getByTestId("browser-driver").textContent).toBe("You're driving");
+    // Nothing covers the stream while the owner drives; a frame marks it as theirs.
+    expect(screen.queryByTestId("browser-takeover")).not.toBeInTheDocument();
+    expect(within(viewport).getByTestId("browser-driving-frame")).toBeInTheDocument();
     expect(screen.queryByTestId("browser-url")).not.toBeInTheDocument();
     expect(screen.getByTestId("browser-paste")).toBeInTheDocument();
-    expect(screen.getByTestId("browser-release")).toHaveTextContent("Release control");
-    // The label is hidden in a narrow header; the button keeps its name.
-    expect(screen.getByRole("button", { name: "Release control" })).toBe(
+    expect(screen.getByRole("button", { name: "Hand back" })).toBe(
       screen.getByTestId("browser-release"),
     );
 
@@ -220,11 +231,18 @@ describe("BrowserPanel", () => {
     fireEvent.click(screen.getByTestId("browser-release"));
     await waitFor(() => expect(api.driver).toHaveBeenCalledWith("b1", "agent"));
     await waitFor(() => expect(latestRfb().viewOnly).toBe(true));
-    // Releasing re-reads the status so the adopted tab's URL shows at once.
+    // Releasing re-reads the status at once.
     await waitFor(() => expect(api.status.mock.calls.length).toBeGreaterThan(polls));
-    await waitFor(() =>
-      expect(screen.getByTestId("browser-url").textContent).toBe("https://example.org/"),
-    );
+    expect(screen.getByTestId("browser-driver").textContent).toBe("Surfer is driving");
+    expect(screen.queryByTestId("browser-driving-frame")).not.toBeInTheDocument();
+  });
+
+  it("offers no take-over click until the stream is live", async () => {
+    mockApi(vncStatus());
+    render(<BrowserPanel bot={bot} onClose={vi.fn()} />);
+    await waitFor(() => expect(fakes.rfbs.length).toBeGreaterThan(0), { timeout: 4000 });
+    expect(screen.getByText("Connecting")).toBeInTheDocument();
+    expect(screen.queryByTestId("browser-takeover")).not.toBeInTheDocument();
   });
 
   it("pastes the local clipboard into the remote browser", async () => {
@@ -439,7 +457,7 @@ describe("BrowserPanel", () => {
     act(() => {
       latestRfb().dispatchEvent(new Event("connect"));
     });
-    await screen.findByText("Live");
+    await screen.findByTestId("browser-driver");
   });
 
   it("disconnects the viewer when the panel closes", async () => {

@@ -9,12 +9,13 @@
  * a VM the browser is headless (the bot can use it, there is nothing to
  * stream) and the computer is not set up, and the panel says so.
  *
- * The panel is one card: a header (title, connection status, view tools and
- * the hand-off control) over the viewport. Takeover is explicit: the viewer
- * is view-only while the bot drives, and "Take control" flips the server's
- * driver flag, which pauses the bot's tools (and the computer's
- * screenshots). "Release control" hands it back. When a bot asked for the
- * takeover itself, the panel says what it asked for.
+ * The panel is one card: a one-row header (title or tabs, one status chip,
+ * icon tools) over the viewport. Takeover is explicit but direct: the viewer
+ * is view-only while the bot drives, and a click on the stream takes control,
+ * flipping the server's driver flag, which pauses the bot's tools (and the
+ * computer's screenshots). While the owner drives, a frame marks the stream
+ * as theirs and "Hand back" returns it. When a bot asked for the takeover
+ * itself, the panel says what it asked for.
  */
 import type { CSSProperties, ReactNode } from "react";
 import { Card } from "@groot/ui";
@@ -23,7 +24,7 @@ import type { Bot } from "../../../shared/api/bots";
 import { connectionOf, useLiveView, usePanelWidth } from "../../lib/live-view";
 import { useIsGuest } from "../../store/people";
 import { VncView, type VncState } from "../browser/VncView";
-import { ConnectingOverlay, TakeoverBanner } from "./live-parts";
+import { ConnectingOverlay, DrivingFrame, TakeControlLayer, TakeoverBanner } from "./live-parts";
 import { LivePanelHeader } from "./LivePanelHeader";
 import { LivePanelOffStates } from "./LivePanelOffStates";
 import type { LivePanelSurface, LiveSurface, PageItem, PanelStatus } from "./surface";
@@ -31,11 +32,10 @@ import type { LivePanelSurface, LiveSurface, PageItem, PanelStatus } from "./sur
 /** A guest's viewer never resizes the remote window. */
 const keepSize = async () => undefined;
 
-/** What the panel shows for `status`: its mode, whether it is set up, the status line's parts. */
+/** What the panel shows for `status`: its mode, whether it is set up, the status chip's parts. */
 function panelState<S extends PanelStatus>(
   panel: LivePanelSurface<S>,
   status: S | null,
-  humanDrives: boolean,
   vncState: VncState,
 ) {
   const starting = Boolean(status?.starting);
@@ -47,9 +47,20 @@ function panelState<S extends PanelStatus>(
   const shared = status?.profile !== "own";
 
   const connection = connectionOf(status && { configured, starting, mode }, vncState);
-  const detail = status && mode ? panel.detail(status, { mode, humanDrives }) : null;
+  const live = streaming && vncState === "live";
+  const detail = status && mode === "headless" ? (panel.headlessDetail?.(status) ?? null) : null;
   const takeover = panel.takeover && status?.takeover ? status.takeover : null;
-  return { starting, mode, streaming, configured, shared, connection, detail, takeover };
+  return {
+    starting,
+    mode,
+    streaming,
+    live,
+    configured,
+    shared,
+    connection,
+    detail,
+    takeover,
+  };
 }
 
 export interface LivePanelProps {
@@ -99,8 +110,8 @@ export function LivePanel<S extends PanelStatus, L, I extends PageItem>({
     paste,
   } = view;
 
-  const { starting, mode, streaming, configured, shared, connection, detail, takeover } =
-    panelState(panel, status, humanDrives, vncState);
+  const { starting, mode, streaming, live, configured, shared, connection, detail, takeover } =
+    panelState(panel, status, vncState);
 
   // The panel itself is the full-screen element: its box has to be the whole
   // screen, with nothing around the card, so the viewport (and the remote
@@ -138,7 +149,7 @@ export function LivePanel<S extends PanelStatus, L, I extends PageItem>({
           status={status}
           guest={guest}
           connection={connection}
-          mode={mode}
+          live={live}
           detail={detail}
           takeover={takeover}
           streaming={streaming}
@@ -177,6 +188,14 @@ export function LivePanel<S extends PanelStatus, L, I extends PageItem>({
           {streaming && vncState !== "live" && (
             <ConnectingOverlay vncState={vncState} connecting={panel.connecting} />
           )}
+          {live && !humanDrives && !guest && (
+            <TakeControlLayer
+              testId={`${kind}-takeover`}
+              title={panel.takeTitle(bot.name)}
+              onTake={() => void setDriver("human")}
+            />
+          )}
+          {live && humanDrives && <DrivingFrame testId={`${kind}-driving-frame`} />}
 
           <LivePanelOffStates
             kind={kind}
