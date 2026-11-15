@@ -1,138 +1,173 @@
 ---
 format: 1920x1080
-duration: 78s
-message: "Your bots now code, hire, and ask from your pocket"
-arc: Hook → Reveal → 6 use-case beats → And more → End card
-audience: developers and tinkerers who self-host their own AI assistant
+duration: 76s
+message: "Your bots do real work while you're away, and ask before anything that matters"
+arc: Inbox hook → Name → 5 use-case beats → And more → Inbox, all read → End card
+audience: developers and tinkerers who would self-host a personal AI team
 fps: 30
 bpm: 120 (one bar = 2.0 s; every cut lands on a downbeat)
-device: The result first, then how it got there
-form: Object-to-object chain (each beat ends on the thing that opens the next)
+storyline: A. The inbox (see STORYLINES.md)
 ---
 
-# tiny-agents launch film (November 2026)
+# tiny-agents product demo
 
-The one thing a viewer remembers: **"My bots do real work, and I stay in control from anywhere."**
+One evening, one person catching up. The bot list is the home screen: the film
+opens on it full of finished work, opens each bot in turn to show how the job got
+done, and returns to it between beats. Each return shows one more row read.
 
-One carrier runs through the film: a chat message or card becomes the next scene.
-The chain goes reply, Code thread, approval card, phone push, live view, shared chat,
-YOLO banner, then the logo.
+Second revision. The first board was a tour of what shipped since the last film.
+This one covers the whole product and has a spine.
+
+## What changed from the first board
+
+| First board | This board |
+| --- | --- |
+| Six unrelated mini-demos, each with its own sample data | One evening, one bot list, four bots whose jobs connect |
+| Hook was one line of reply text | Hook is four finished jobs landing in two seconds |
+| Only features newer than the last film | The strongest use cases of the whole product: routines, the bot's browser and the Vault are back |
+| YOLO mode had its own 9 s scene | One shot in the montage; "it asks first" is the stronger trust story |
+| Dark ground, like the last film | The app's light theme on the site's white, which reads better at size; the end card is dark |
+
+Kept from the earlier films, because it's the product's own: the logo, Inter and
+JetBrains Mono, monochrome with green for done and amber for waiting, the tagline,
+the scripted fake-model recorder for real captures, and a code-generated score.
 
 ## Look
 
-- **Desktop world:** the real web app in its light theme, filling 85% or more of the
-  frame on the brand ground `#0c0b0a`. Punch-ins run at 1.6 to 2.0x on the control
-  the cursor needs. Window radius 22 px; shadow 0 50 px 120 px at 0.75.
-- **Phone world (beat 3 only):** a warm paper ground `#ece9e4`, with the Android
-  phone at 70% of frame height.
-- **Type:** Inter Display 700 for captions (72 px, -0.04em). Eyebrows are Inter
-  650, 22 px, +0.16em, upper case, `#a39f98`. JetBrains Mono for commands.
-- **Colour:** monochrome. Green only for live or passing, amber only for an
-  approval waiting.
-- **Banned (beyond HyperFrames defaults):** a title over a dimmed screenshot,
-  three cards in a row, a docked logo, a small window floating in a void, and
-  product UI tilted in 3D.
+- **Home screen:** the app window at 88% of frame width on white `#ffffff` with a
+  `#f6f6f7` ground; ink `#1f1f23`, muted `#6f6f7a`, line `#e6e6ea`.
+- **Punch-ins:** 1.6 to 2.0x onto the one control the cursor needs; moves take
+  0.5 s, then hold while the UI acts. No UI text under 26 px after a push.
+- **Captions:** Inter Display 700, 72 px, -0.04em, ink on white, top of frame, one
+  line at a time, at most 6 words.
+- **Colour:** green `#2f8a5b` only for done or passing; amber `#b45309` only for
+  something waiting on you.
+- **End card:** flips to the brand near-black `#0c0b0a` with the white mark.
+- **Banned:** a title over a dimmed screenshot, three cards in a row, a docked
+  logo, a small window floating in an empty frame, UI tilted in 3D, glow.
 
-## Sourcing (real or recreated)
+## The cast (sample data, used in every beat)
 
-| Beat | Source |
+| Bot | Its job in the film |
 | --- | --- |
-| Chat, bot builder card, YOLO, shared chat, Settings screens | The real app (`verify-tiny-agents`: isolated instance, faux model driven by a scripted director), captured and rebuilt at 1.6 to 2x with the real labels |
-| Code page transcript | Rebuilt from the real `/code` components and labels. A live Claude Code run needs a signed-in Claude account, which this container doesn't have |
-| Android app | Rebuilt from `mobile/` Compose source and `mobile/docs/design/DESIGN.md`. There's no emulator here |
-| Live view stream | The real live-view frame ("Click to take control") around a page the bot browses. The stream content is a capture, not a VNC recording |
+| Code Buddy | Fixed the flaky checkout test through Claude Code |
+| Travel Planner | Checks Chennai to Goa fares every morning; found a drop; wants to book |
+| Chief of Staff | Asked to make an Expense Tracker bot |
+| Expense Tracker | The new bot; appears in the list during the film |
 
-## Frame 1: Hook
+People: Maya (the owner) and Sam (her guest in the Goa chat).
 
-- duration: 3s (0.0 to 3.0)
-- transition_in: cut (frame 0 is the thumbnail and is already busy)
-- scene: Pushed in at 1.8x on a chat reply arriving: "Reply from Claude Code: Fixed the flaky checkout test. All 48 tests pass." The green pass check ticks on.
-- caption: "Fixed while you were at lunch"
-- reads: the reply text streams in (0.0 to 1.4 s); the caption lands (1.2 to 3.0 s)
-- sound: the bed enters on a hit; a soft tick on the green check
+## Frame 1: The inbox
 
-## Frame 2: Reveal
+- duration: 4s (0.0 to 4.0)
+- transition_in: cut. Frame 0 is the thumbnail: the bot list with two previews already unread
+- scene: The bot list at 1.7x. Two more previews land with a pop each, so four rows are unread: Code Buddy "Fixed the flaky checkout test. 48 passing." · Travel Planner "Goa fares dropped ₹4,200." with the amber waiting mark · Chief of Staff "Expense Tracker is ready for your OK." · Researcher "Your report is ready."
+- caption: "While you were out"
+- reads: the previews (0.0 to 2.0 s); the caption (1.4 to 4.0 s)
+- sound: the bed starts on a hit; a pop per preview
 
-- duration: 3s (3.0 to 6.0)
-- transition_in: camera pull-back from the reply to the whole app window
-- scene: The pull-back reveals the real sidebar of bots (Code Buddy, Chief of Staff, Researcher, Writer…), each online dot lighting in a stagger.
-- caption: eyebrow "TINY AGENTS" with headline "Your always-on AI team"
-- sound: rising swell into the first beat
+## Frame 2: The name
 
-## Frame 3: Hand off the coding
+- duration: 2s (4.0 to 6.0)
+- transition_in: the camera pulls back from the list to the whole app window
+- scene: The full app: bot list on the left, an open chat on the right.
+- caption: eyebrow "TINY AGENTS", headline "A team of AI bots"
+- sound: a short rise into the first beat
 
-- duration: 12s (6.0 to 18.0)
-- transition_in: the camera pushes into Code Buddy's composer
-- scene: The prompt types: "The checkout test is flaky. Fix it and run the suite." A code tool row appears, and the row morphs into the full-page **Code** workspace. The transcript plays: a bash row `pnpm test checkout` fails red, an edit row shows a +/− diff (punched in), the bash row re-runs green ("48 passed"), and the turn ends "Worked for 2m 14s · $0.31". The thread morphs back into the chat as "Reply from …".
-- captions: "Hand off the coding" (6.0 to 9.0) → "It codes in your sandbox" (9.5 to 13.5) → "Reports back when it's done" (14.0 to 18.0)
-- sound: typing ticks; a whoosh on the morph; a low thud on the red fail; a bright tick on green
+## Frame 3: Hand off the bug
 
-## Frame 4: Bots that build bots
+- duration: 14s (6.0 to 20.0)
+- transition_in: the cursor clicks the Code Buddy row; the row opens into its chat
+- scene: Maya's earlier message is already there: "The checkout test is flaky. Fix it and run the suite." Under it, a tool row for the hand-off to Claude Code. The cursor clicks it and the row grows into the full-page **Code** workspace. The transcript plays fast: `pnpm test checkout` fails red; an edit row opens its +/− diff (pushed in at 1.8x); the test re-runs green, "48 passed"; the turn ends "Worked for 2m 14s · $0.31". The thread shrinks back into the chat as "Reply from Claude Code: …".
+- captions: "Hand off the bug" (6.0 to 9.5) → "It codes on your sandbox" (10.0 to 14.5) → "Tests pass. It reports back." (15.0 to 20.0)
+- reads: the message (6.5 to 9.0); red fail (10.0 to 11.5); the diff (11.5 to 14.5); green pass and cost (15.0 to 18.0); the reply (18.0 to 20.0)
+- sound: a click; a whoosh on the grow; a low thud on red; a bright tick on green
 
-- duration: 10s (18.0 to 28.0)
-- transition_in: cut on the bar to Chief of Staff's chat
-- scene: The prompt types: "Make me a Travel Planner bot. Window seats, mid-range hotels." An amber approval card arrives, "Chief of Staff wants to create a new bot: “Travel Planner”", listing Description, Model and Instructions (Read more). Punch in at 1.8x. The cursor clicks **Approve**, then the camera follows the new bot's avatar dropping into the sidebar.
-- captions: "Need a new teammate? Ask." → "You approve every new bot" → "Ready in your sidebar"
-- sound: a click and a chime on Approve; a soft pop when the avatar lands
+## Frame 4: It browses for you
 
-## Frame 5: Approve from your pocket
+- duration: 12s (20.0 to 32.0)
+- transition_in: back to the list (Code Buddy now read); the cursor clicks Travel Planner
+- scene: The chat shows a routine run from 7:00 AM: "Check Chennai to Goa fares". The live view panel opens beside the chat with the bot's own browser on a fare results page; the bot's cursor sorts by price and picks one. Maya's cursor hovers the stream, which reads "Click to take control"; she clicks, the status flips to driving, and she scrolls to check the baggage line herself.
+- captions: "Runs every morning at 7" (20.0 to 23.5) → "In its own browser" (24.0 to 27.5) → "Take the wheel anytime" (28.0 to 32.0)
+- sound: a soft tick on the routine line; a click on take control
 
-- duration: 10s (28.0 to 38.0)
-- transition_in: the next amber card lifts out of the desktop and shrinks into a push notification (world change: paper ground)
-- scene: An Android phone at 70% height shows the lock screen push "Travel Planner needs your approval". A thumb taps it, and the Tiny Agents Android app opens on that bot's chat, scrolled to the waiting card. The thumb taps Approve and the card settles to approved.
-- captions: "Away from your desk?" → "Approve from your phone"
-- sound: phone buzz; a tap; a chime
+## Frame 5: It asks before it pays
 
-## Frame 6: Watch, then take the wheel
+- duration: 10s (32.0 to 42.0)
+- transition_in: an amber card rises in the chat and shrinks into a phone push as the phone slides in
+- scene: An Android phone at 72% of frame height on the light ground. Lock screen push: "Travel Planner needs your approval". A tap opens the Tiny Agents Android app on that chat, scrolled to the card: "Travel Planner wants to fill Visa ••4242 on …" with the line "The value goes straight into the page; Travel Planner never sees it." A tap on Approve; the card settles to approved.
+- captions: "It asks before it pays" (32.0 to 35.0) → "Approve from your phone" (35.5 to 38.5) → "Your card stays in the Vault" (39.0 to 42.0)
+- sound: a phone buzz; a tap; a chime on Approve
 
-- duration: 10s (38.0 to 48.0)
-- transition_in: the phone screen zooms through to the desktop's live view panel (Browser | Computer tabs)
-- scene: The bot's browser streams live and its cursor works on a page. Our cursor hovers, the whole stream reads "Click to take control", the click switches the status to driving, and the cursor scrolls and clicks. A tab switch to Computer shows the same page in the desktop's Chrome (one shared profile).
-- captions: "Watch it work, live" → "Click to take the wheel"
-- sound: a soft room tone under the stream; a click
+## Frame 6: Hire a new bot
 
-## Frame 7: Bring a friend
+- duration: 9s (42.0 to 51.0)
+- transition_in: the phone slides out; back to the list; the cursor clicks Chief of Staff
+- scene: Maya's message: "Make me an Expense Tracker bot. Log receipts I send it." An amber card: "Chief of Staff wants to create a new bot: “Expense Tracker”" with its description, model and instructions (pushed in at 1.8x). The cursor clicks Approve. The camera follows a new avatar as it drops into the bot list: Expense Tracker, online.
+- captions: "Need a new teammate? Ask." (42.0 to 45.5) → "You approve. It joins the team." (46.5 to 51.0)
+- sound: a click and a chime; a soft pop as the row lands
 
-- duration: 9s (48.0 to 57.0)
-- transition_in: split screen. The live view slides left and a second window slides in from the right
-- scene: Two browser windows, Maya's and Sam's, show the same Travel Planner chat. Maya types "@Travel Planner Goa for the two of us, under ₹40k?" and it appears in both windows at once, with her name. Sam adds "Beach hostel is fine!". The bot answers once, visible in both. The split collapses to one window.
-- captions: "Bring a friend into the chat" → "One chat, everyone live"
+## Frame 7: Bring a friend in
+
+- duration: 8s (51.0 to 59.0)
+- transition_in: the cursor reopens Travel Planner; a second app window slides in from the right
+- scene: Two windows, Maya's and Sam's, on the same chat. Maya sends "Sam, the 6:15 flight works?" and it appears in both at once under her name. Sam answers "Yes! Book it." The bot replies once, in both windows. Sam's window slides away.
+- captions: "Bring a friend into the chat" (51.0 to 54.5) → "One chat, everyone live" (55.0 to 59.0)
 - sound: two message pops, panned left and right
 
-## Frame 8: YOLO, safely
+## Frame 8: And more
 
-- duration: 9s (57.0 to 66.0)
-- transition_in: the cursor clicks the bot's name in the chat header and the menu opens
-- scene: The cursor clicks the **YOLO mode** row and confirms. A banner punches in: "YOLO on: tools run without asking (vault items still ask)". Tool rows tick by with "auto-approved (YOLO)". Then an amber vault card still appears and waits.
-- captions: "Trust this chat? Go YOLO" → "Your secrets still ask first"
-- sound: the rows tick fast; the music drops to a held note on the vault card
-
-## Frame 9: And more
-
-- duration: 7s (66.0 to 73.0)
+- duration: 8s (59.0 to 67.0)
 - transition_in: cut on the bar
-- scene: Six real screens at about 1.1 s each, cut on half bars, each a punch-in on one control: Settings → Models (provider kinds incl. Claude plan); Settings → Updates "Update & restart"; Code → Changes diff cards; the context-ring usage popup; the "wants to update its instructions" card; the first-run `/setup` page.
-- captions: eyebrow "AND MORE", plus one label per shot: "Any model" · "One-click updates" · "Review every change" · "Usage and cost" · "Bots refine themselves" · "Guided first run"
+- scene: Six real screens, 1.3 s each, cut on the beat, each a push-in on one control: a remembered fact in Memory; the sandbox Terminal running a command; Connections (MCP servers); Settings → Models with its provider kinds; the YOLO banner "YOLO on: tools run without asking (vault items still ask)"; Settings → Updates with "Update & restart".
+- captions: eyebrow "AND MORE", one label per shot: "Remembers you" · "A real terminal" · "Your tools, connected" · "Any model" · "Or let it run" · "Updates itself"
 - sound: a hat on each cut
+
+## Frame 9: All read
+
+- duration: 4s (67.0 to 71.0)
+- transition_in: cut back to the bot list
+- scene: The same list as frame 1, now with five bots and nothing unread. The last unread dot clears as the shot starts.
+- caption: "They work. You stay in charge."
+- sound: the bed drops to a held chord
 
 ## Frame 10: End card
 
-- duration: 5s (73.0 to 78.0)
-- transition_in: the cursor clicks the logo mark at the top of the app's rail; the mark lifts to centre as the app falls away
-- scene: The mark sits centred at 18% of frame width while a fill rises through it. "Tiny Agents" wipes in beside it, the tagline follows, then a real button "Star on GitHub" and `github.com/AshikNesin/tiny-agents`. Hold 2.5 s.
-- captions: "Tiny Agents" / "Your team of always-on AI agents." / CTA
+- duration: 5s (71.0 to 76.0)
+- transition_in: the cursor clicks the logo mark at the top of the sidebar; the mark lifts to centre as the ground turns near-black
+- scene: The mark centred at 18% of frame width, a fill rising through it. "Tiny Agents" wipes in beside it; the tagline lands; then a "Star on GitHub" button and `github.com/AshikNesin/tiny-agents`. Hold 2.5 s.
+- captions: "Tiny Agents" / "Your team of always-on AI agents." / the link
 - sound: the final chord resolves on the mark
 
 # Cut-downs
 
-## Vertical (1080x1920, about 60 s)
+## Vertical (1080x1920, about 56 s)
 
-The same story, recomposed rather than cropped. The web app is shown in its **real phone layout** (390 px wide, scaled 2.6x), which fills the vertical frame. Every word and the product sit between 168 px and 1330 px. Captions are 1.35x larger, at most 5 words. Beats shorten to 8 s each with 1 to 2 s shots, and the montage drops to 4 shots.
+Rebuilt, not cropped. The home screen is the web app's real phone layout, where
+the bot list already fills a phone screen (390 px wide, scaled 2.6x). Every word
+and the product sit between 168 px and 1330 px. Captions are 1.35x larger, at
+most 5 words. Frames run 3 / 2 / 10 / 9 / 8 / 7 / 6 / 5 / 3 / 3 s; the Code
+transcript and the live view stack under the chat instead of beside it; the
+montage keeps four shots.
 
 ## X teaser (1920x1080, 15 s)
 
-Hook (0 to 2.5) → Hand off the coding (2.5 to 6.0) → Bots build bots (6.0 to 9.0) → Approve from your phone (9.0 to 12.0) → End card (12.0 to 15.0). These are the same compositions re-timed, not new scenes.
+Inbox hook (0 to 3) → Hand off the bug (3 to 7.5) → Approve from your phone
+(7.5 to 11) → All read and end card (11 to 15). The same scene files, re-timed.
+
+# Sourcing: real, rebuilt, or sample
+
+| What | Source |
+| --- | --- |
+| Bot list, chats, approval cards, bot builder card, shared chat, Memory, Connections, Models, Updates, YOLO banner | The real app in a throwaway instance (`verify-tiny-agents`), driven by the scripted fake model, captured and rebuilt at 1.6 to 2x with the real labels |
+| Code page transcript | Rebuilt from the real `/code` components. A live Claude Code run needs a signed-in Claude account, which this container doesn't have |
+| Live view and Terminal contents | The real panel and its "Click to take control" control. What's inside the stream is a still of a sample page, because no sandbox VM or container can run here |
+| Android app and the push | Rebuilt from the `mobile/` Compose source and its design doc. There's no emulator here |
+| Bot names, messages, fares, test counts, the cost line, the card number | Sample data |
 
 # Sound
 
-An original, royalty-free score synthesised in numpy (the same approach as the previous films' `music.py`) at 120 BPM, mastered to -16 LUFS. It's one `<audio id="music">` slot pointing at `assets/music.wav`, so a licensed track can replace it without touching any scene. UI effects (clicks, ticks, buzz, whoosh) are synthesised too.
+An original, royalty-free score generated in numpy at 120 BPM, mastered to
+-16 LUFS, on one `<audio id="music">` slot (`assets/music.wav`) so another track
+can replace it without touching a scene. Pops, clicks, the buzz and chimes are
+generated the same way and sit on the visible actions.
