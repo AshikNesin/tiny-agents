@@ -28,7 +28,14 @@ bootstrap({
 importStoredSecrets();
 const vault = resealLocalItems();
 const connections = await resealConnectionSecrets();
-console.log(
-  `✓ Re-sealed ${vault} local vault item(s) and ${connections} connection secret(s). ` +
-    "You can now remove SECRETS_KEY_PREVIOUS.",
-);
+const done = `Re-sealed ${vault.resealed} local vault item(s) and ${connections} connection secret(s).`;
+if (vault.skipped.length > 0) {
+  // Those still open only under the old key: removing it would lose them.
+  console.error(
+    `✗ ${done} ${vault.skipped.length} vault item(s) couldn't be read and were left as they ` +
+      `were (${vault.skipped.join(", ")}); keep SECRETS_KEY_PREVIOUS until they are ` +
+      "re-entered or deleted in the Vault, then run this again.",
+  );
+  process.exit(1);
+}
+console.log(`✓ ${done} You can now remove SECRETS_KEY_PREVIOUS.`);

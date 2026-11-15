@@ -322,11 +322,13 @@ export function createLocalBackend(): VaultBackend {
 /**
  * Rewrite every local item still sealed under SECRETS_KEY_PREVIOUS under the
  * current key (`pnpm secrets:rotate`), each in its own transaction. An item
- * that won't open is logged and left alone. Returns how many it rewrote.
+ * that won't open is logged, left alone and named in `skipped`: it still
+ * needs SECRETS_KEY_PREVIOUS. Returns how many it rewrote.
  */
-export function resealLocalItems(): number {
+export function resealLocalItems(): { resealed: number; skipped: string[] } {
   const ids = db.select({ id: vaultValues.id }).from(vaultValues).all();
   let resealed = 0;
+  const skipped: string[] = [];
   for (const { id } of ids) {
     try {
       const done = db.transaction((tx) => {
@@ -337,8 +339,9 @@ export function resealLocalItems(): number {
       });
       if (done) resealed += 1;
     } catch (error) {
+      skipped.push(id);
       logger.warn({ item: id, error: (error as Error).message }, "Vault item not re-sealed");
     }
   }
-  return resealed;
+  return { resealed, skipped };
 }

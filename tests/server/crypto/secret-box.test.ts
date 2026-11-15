@@ -102,14 +102,28 @@ describe("secrets:rotate", () => {
 
     process.env.SECRETS_KEY = "the-new-key";
     process.env.SECRETS_KEY_PREVIOUS = KEY;
-    expect(resealLocalItems()).toBe(1);
+    expect(resealLocalItems()).toEqual({ resealed: 1, skipped: [] });
     expect(await resealConnectionSecrets()).toBe(1);
-    expect(resealLocalItems()).toBe(0);
+    expect(resealLocalItems()).toEqual({ resealed: 0, skipped: [] });
 
     delete process.env.SECRETS_KEY_PREVIOUS;
     expect((await backend.resolve(itemId, "value")).reveal()).toBe("v-1");
     const after = await db.query.connections.findFirst({ where: eq(connections.id, row!.id) });
     expect(openOAuthState(row!.id, after!.oauthEnc!)).toEqual({ verifier: "h-1" });
+  });
+
+  it("names the items it couldn't re-seal, so SECRETS_KEY_PREVIOUS stays", async () => {
+    const backend = createLocalBackend();
+    const good = await backend.create!({ kind: "api_key", title: "G", values: { value: "g" } });
+    const bad = await backend.create!({ kind: "api_key", title: "B", values: { value: "b" } });
+    await db.update(vaultValues).set({ policy: "edited" }).where(eq(vaultValues.id, bad));
+    process.env.SECRETS_KEY = "the-new-key";
+    process.env.SECRETS_KEY_PREVIOUS = KEY;
+    const report = resealLocalItems();
+    expect(report.resealed).toBe(1);
+    expect(report.skipped).toEqual([bad]);
+    delete process.env.SECRETS_KEY_PREVIOUS;
+    expect((await backend.resolve(good, "value")).reveal()).toBe("g");
   });
 
   it("a local item copied under another id doesn't open", async () => {
