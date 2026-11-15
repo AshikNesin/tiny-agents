@@ -26,15 +26,17 @@ lost.
 
 ## The machines
 
-| Machine     | File                                                                                      | Column                        | Written by                    |
-| ----------- | ----------------------------------------------------------------------------------------- | ----------------------------- | ----------------------------- |
-| Routine run | [`routine-run.ts`](../../apps/web/src/shared/machines/routine-run.ts)                     | `routine_runs.status`         | `routines.runs.ts`            |
-| Memory      | [`memory.ts`](../../apps/web/src/shared/machines/memory.ts)                               | `memories.status`             | `memories.ledger.ts`          |
-| Extraction  | [`extraction.ts`](../../apps/web/src/shared/machines/extraction.ts)                       | `uploads.extract_status`      | `uploads.extraction.ts`       |
-| Task        | [`task.ts`](../../apps/web/src/shared/machines/task.ts)                                   | `tasks.status`                | `task.service.ts`             |
-| Hand-off    | [`handoff.ts`](../../apps/web/src/shared/machines/handoff.ts)                             | `code_handoffs.status`        | `code.store.ts`               |
-| Job         | [`packages/jobs/src/lifecycle.ts`](../../packages/jobs/src/lifecycle.ts)                  | `jobs.state`                  | `packages/jobs` (groot-owned) |
-| Routine     | [`routine.ts`](../../apps/web/src/shared/machines/routine.ts) (derived, `routineState()`) | `enabled`, `paused_reason`, … | `routines.arming.ts`          |
+| Machine       | File                                                                                      | Column                           | Written by                    |
+| ------------- | ----------------------------------------------------------------------------------------- | -------------------------------- | ----------------------------- |
+| Routine run   | [`routine-run.ts`](../../apps/web/src/shared/machines/routine-run.ts)                     | `routine_runs.status`            | `routines.runs.ts`            |
+| Memory        | [`memory.ts`](../../apps/web/src/shared/machines/memory.ts)                               | `memories.status`                | `memories.ledger.ts`          |
+| Extraction    | [`extraction.ts`](../../apps/web/src/shared/machines/extraction.ts)                       | `uploads.extract_status`         | `uploads.extraction.ts`       |
+| Task          | [`task.ts`](../../apps/web/src/shared/machines/task.ts)                                   | `tasks.status`                   | `task.service.ts`             |
+| Hand-off      | [`handoff.ts`](../../apps/web/src/shared/machines/handoff.ts)                             | `code_handoffs.status`           | `code.store.ts`               |
+| Auto-fix      | [`autofix.ts`](../../apps/web/src/shared/machines/autofix.ts)                             | `code_pull_requests.loop_status` | `code.pulls.store.ts`         |
+| Auto-fix pass | [`autofix-pass.ts`](../../apps/web/src/shared/machines/autofix-pass.ts)                   | `code_autofix_passes.status`     | `code.pulls.store.ts`         |
+| Job           | [`packages/jobs/src/lifecycle.ts`](../../packages/jobs/src/lifecycle.ts)                  | `jobs.state`                     | `packages/jobs` (groot-owned) |
+| Routine       | [`routine.ts`](../../apps/web/src/shared/machines/routine.ts) (derived, `routineState()`) | `enabled`, `paused_reason`, …    | `routines.arming.ts`          |
 
 Each machine file draws its graph in its header comment. The rules that ride
 on the edges:
@@ -56,6 +58,14 @@ on the edges:
   finish it owes the bot in the same transaction (`code_handoff_finishes`),
   sent until it lands and taken once. A follow-up reopens a finished
   hand-off before its message is sent.
+- **Auto-fix.** A linked PR's loop (issue #297). Only `decide()` picks a
+  move; `code.pulls.ts` applies it. `merged` is final; `off` comes back only
+  when the owner switches Auto-fix on, and an owner's message moves
+  `needs_input` and `paused` back to `watching`.
+- **Auto-fix pass.** Claimed as `starting`, keyed by the PR's state, before
+  the harness hears anything, so a second claim for the same state loses.
+  `running → finished` happens once, whichever of the turn end and the next
+  reconcile gets there first.
 - **Routine.** Not stored as one column: `routineState()` reads `scheduled`,
   `struggling`, `auto_paused`, `done` or `paused` off the routine's fields,
   so the Routines page asks one question instead of combining four.
