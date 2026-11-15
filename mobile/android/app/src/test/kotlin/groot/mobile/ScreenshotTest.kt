@@ -39,6 +39,10 @@ import groot.mobile.feature.manage.RoutinesScreen
 import groot.mobile.feature.manage.TasksScreen
 import groot.mobile.feature.settings.SettingsScreen
 import groot.mobile.feature.share.ShareDraft
+import groot.mobile.feature.chat.StagedUpload
+import groot.mobile.data.PickedFile
+import groot.mobile.data.api.AttachmentRef
+import android.net.Uri
 import groot.mobile.feature.share.ShareSheet
 import groot.mobile.feature.terminal.TERMINAL_KEYS
 import groot.mobile.feature.terminal.TerminalLink
@@ -334,3 +338,20 @@ class ScreenshotTest {
         }
     }
 }
+
+/** Android types (Uri) need Robolectric: kept out of TestFixtures, which plain JVM tests load. The share sheet with a CSV and a PDF shared to Researcher. */
+private val sampleShareDraft = ShareDraft(
+    botId = "b2",
+    staged = listOf(
+        StagedUpload(
+            "s1",
+            PickedFile(Uri.parse("content://files/artha-net-worth.csv"), "artha-net-worth.csv", "text/csv", 797),
+            ref = AttachmentRef("up1", "file", "artha-net-worth.csv", "text/csv", 797),
+        ),
+        StagedUpload(
+            "s2",
+            PickedFile(Uri.parse("content://files/statement.pdf"), "Bank statement October.pdf", "application/pdf", 120_000),
+            ref = AttachmentRef("up2", "file", "Bank statement October.pdf", "application/pdf", 120_000),
+        ),
+    ),
+)
