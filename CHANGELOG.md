@@ -1,5 +1,84 @@
 # tiny-agents
 
+## 1.3.0
+
+### Minor Changes
+
+- [#239](https://github.com/AshikNesin/tiny-agents/pull/239) [`3642389`](https://github.com/AshikNesin/tiny-agents/commit/3642389479a078802e8ba5ad398b3f1a7fc52d79) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Bots: a **YOLO mode by default** switch in a bot's settings (Tools tab). Every new chat with that bot starts with YOLO mode on; you can still turn it off per chat. Vault use, turns you did not start and routines still ask.
+
+- [`4919164`](https://github.com/AshikNesin/tiny-agents/commit/4919164bb2f3061d45b0635eabba20b5e380e28d) Thanks [@claude](https://github.com/claude)! - The computer's Chrome and the Browser feature now use the same Chrome profile.
+  
+  - **One profile, two views:** Chrome opened on a desktop (the menu, the Web Browser launcher, `computer_open_app`) opens the browser profile of the same key (`shared`, or a bot's own). A site you sign into in either one is signed in in the other, along with history, bookmarks and extensions.
+  - **Handoff:** Chrome lets only one running browser use a profile. Opening Chrome on the desktop closes the bot's browser on that profile, and the bot's next browser call closes the desktop's Chrome and reopens it in the Browser panel. Cookies are saved on each handoff.
+  - **Reset:** resetting a browser profile also closes the desktop's Chrome on it.
+
+- [#237](https://github.com/AshikNesin/tiny-agents/pull/237) [`419331c`](https://github.com/AshikNesin/tiny-agents/commit/419331ce4878b8c372f9307c6fb964b179fd6151) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Run locally and update from the app: `pnpm local`.
+  
+  - **`pnpm local`** runs the production server from a built release and checks git for new commits. It follows `origin/main` by default, or the newest release with `--track release`.
+  - **Settings → Updates** shows the running version, the new commits, and an **Update & restart** button. The new version builds while the old one keeps serving, then the server restarts and the page reloads.
+  - **Safe swaps:** a failed build leaves the running version alone, a version that does not start is rolled back, and a crashed server is restarted. `--auto` updates without the click.
+
+- [#286](https://github.com/AshikNesin/tiny-agents/pull/286) [`afa0941`](https://github.com/AshikNesin/tiny-agents/commit/afa09416dc85eb759180d86dffcc503dea4b3cd0) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Vault values now live in their own `vault_values` table instead of the key-value store, and an MCP connection's header secret is a vault item. The first start after the update moves every existing value and connection secret over and checks each one before removing the old copy; an entry it can't read stays where it was and is named in the log. The Vault list no longer goes empty when one item can't be read: that item shows as unreadable and the rest list. Every read of an item checks it against its current policy, listing included, and concurrent OAuth sign-in steps no longer overwrite each other.
+
+- [#246](https://github.com/AshikNesin/tiny-agents/pull/246) [`378198e`](https://github.com/AshikNesin/tiny-agents/commit/378198ea0a216e8845147cc66c5a14d0152c6362) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Remove the 1Password Connect vault backend. Vault items live in the local backend (sealed with `SECRETS_KEY`), and the `OP_CONNECT_HOST`, `OP_CONNECT_VAULT_ID`, `OP_CONNECT_TOKEN` and `OP_CONNECT_ADMIN_TOKEN` settings are gone.
+
+### Patch Changes
+
+- [#245](https://github.com/AshikNesin/tiny-agents/pull/245) [`c37311f`](https://github.com/AshikNesin/tiny-agents/commit/c37311f435bd8b6c8cd7c87f84107c9a1e8f57b2) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Tidier chat header: the bot's name opens a menu with Bot settings, Chat history and the YOLO switch, Browser and Computer share one live view button (tabs in the panel switch between them), and the model and description no longer repeat in the header. On phones the bot's name now has room instead of being cut off.
+
+- [#265](https://github.com/AshikNesin/tiny-agents/pull/265) [`393dd71`](https://github.com/AshikNesin/tiny-agents/commit/393dd71934f643d83303f57467f54e90318a9b76) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Claude plan: the transcript lives in the agent store, and sends behave as they do on pi (ADR 0018).
+  
+  - **Durable transcript:** each message and reply is an entry of the bot's own conversation in `agent.db`, not a JSON file beside it. On the first start after the upgrade, `<agent.db>.claude.json` is imported once and renamed `.claude.json.imported`; a file that cannot be read is left as it is and logged.
+  - **Sends:** a send returns as soon as it is stored instead of when the reply ends, a retried send is not added twice, and a message sent while Claude replies waits above the composer (withdraw it there) and is answered next.
+  - **Stop and pauses:** a stopped reply stays stopped, Stop also ends the Claude Code process on the sandbox, a usage pause keeps your message and frees the worker for the next turn, and a reply with nothing in it still counts as finished.
+  - **Restarts:** after an app restart a Claude plan chat shows its own transcript right away.
+  - **Long waits:** a tool call waiting for your approval, answer or sign-in no longer times out after two minutes on the worker.
+
+- [#236](https://github.com/AshikNesin/tiny-agents/pull/236) [`b5dcf5d`](https://github.com/AshikNesin/tiny-agents/commit/b5dcf5df004bd1294a853ee120c5e0032dc55f78) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Claude plan: raise the per-reply turn limit and make it a setting.
+  
+  - **Default:** Claude Code's `maxTurns` goes from 30 to 100, so browser tasks no longer stop with "Reached maximum number of turns (30)".
+  - **Settings → Models → Claude plan → Max turns:** set 1 to 1,000, or tick **No limit** (opt-in) to run Claude Code without `maxTurns`. It applies from the next message, with no release: the worker restarts an idle Claude process with the new limit and resumes the conversation.
+  - **Error:** running out of turns now says where to raise the limit.
+
+- [#277](https://github.com/AshikNesin/tiny-agents/pull/277) [`3342118`](https://github.com/AshikNesin/tiny-agents/commit/3342118da1af6ce513455ff5adafc858367a49da) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Code hand-offs: a bot hears every finish, once, and a start makes one thread (register row C7).
+  
+  - **Finishes:** when a handed-off turn ends, its "Reply from …" is recorded as owed before it is sent. One cut off by a restart or a failed send is sent again at boot, on reconnect and every 30 seconds until it lands, and the bot's chat never shows it twice.
+  - **Starts:** a `code_start` that pi-durable runs again (after a restart, or while the first run is still starting) makes no second thread. A start interrupted after the harness may have made its thread is not repeated; the bot is told to check with you.
+  - **Follow-ups:** `code_send` arms the hand-off before the harness hears the message, so a turn that ends at once still reports back, and a thread's sends go one at a time.
+  - **Migration:** `0013_code_handoff_finishes` adds the `code_handoff_finishes` table and lets `code_handoffs.thread_id` be empty while a start is claimed; existing rows are copied as they are.
+
+- [`879de1d`](https://github.com/AshikNesin/tiny-agents/commit/879de1db33c332dfbf9ab98bb83fca2f53ed108a) Thanks [@claude](https://github.com/claude)! - Fixes from an end-to-end pass (friction issues [#240](https://github.com/AshikNesin/tiny-agents/issues/240)–[#244](https://github.com/AshikNesin/tiny-agents/issues/244)).
+  
+  - **Test servers can sign in for every test ([#240](https://github.com/AshikNesin/tiny-agents/issues/240)):** `AUTH_RATE_LIMIT_MAX` overrides the 20 sign-ins per 15 minutes. `pnpm test:e2e` and `ta-verify up` set it to 1000, and both login helpers now say when a login was rate-limited instead of failing as "still on /login".
+  - **Old settings links work ([#241](https://github.com/AshikNesin/tiny-agents/issues/241)):** `/settings?tab=<id>` opens `/settings/<id>` (`general` → Account, `claude` → Models). The verify journeys follow the full-page Settings, and a client test fails when a journey or recipe names a page that no longer exists.
+  - **No dead end on /code ([#242](https://github.com/AshikNesin/tiny-agents/issues/242)):** with no coding agent, the page keeps its "Back to tiny-agents" bar and links Settings → Models.
+  - **E2E in containers ([#243](https://github.com/AshikNesin/tiny-agents/issues/243)):** `pnpm test:e2e` launches `PLAYWRIGHT_CHROMIUM_PATH`, or a Chromium pre-installed at `/opt/pw-browsers/chromium` when Playwright's own build is missing.
+  - **Quieter logs ([#244](https://github.com/AshikNesin/tiny-agents/issues/244)):** 4xx errors are logged without a stack trace, and the session guard's 401 (every signed-out page load) at debug. `@groot/core/session` exports `isSessionInvalid()`.
+
+- [#234](https://github.com/AshikNesin/tiny-agents/pull/234) [`4a6e906`](https://github.com/AshikNesin/tiny-agents/commit/4a6e9064f4e32e12711b4a2b25869b49328d9430) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Mobile sidebar matches desktop: Routines, Skills, Memory, Connections and Vault live only in the account menu instead of also being listed in the drawer all the time, so the bot list stays in view.
+
+- [#277](https://github.com/AshikNesin/tiny-agents/pull/277) [`3342118`](https://github.com/AshikNesin/tiny-agents/commit/3342118da1af6ce513455ff5adafc858367a49da) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Settings → Models: deleting a model or account in use moves its users only where they could have been set (register row C12).
+  
+  - **Classifier role:** it moves only to another classifier model, never onto a chat model. An account whose classifier and chat models are both in use asks you to move the classifier role first.
+  - **Claude plan fallback:** it moves only to a chat model that runs on pi, never to a Claude plan model, the same rule as picking the fallback on the Claude plan's card.
+  - A refused move answers 400 with the reason and changes nothing.
+
+- [#245](https://github.com/AshikNesin/tiny-agents/pull/245) [`c37311f`](https://github.com/AshikNesin/tiny-agents/commit/c37311f435bd8b6c8cd7c87f84107c9a1e8f57b2) Thanks [@AshikNesin](https://github.com/AshikNesin)! - UI copy no longer uses em dashes: messages read with a period, colon or comma, and empty values show "-". Lint rule R10 keeps them out of the app's screens.
+
+- [#259](https://github.com/AshikNesin/tiny-agents/pull/259) [`a31a0f8`](https://github.com/AshikNesin/tiny-agents/commit/a31a0f8f19aa609c185601068b9d041a6c2c5825) Thanks [@AshikNesin](https://github.com/AshikNesin)! - A bot in a chat shared with guests can no longer change its own instructions: `update_instructions` is refused there, as `create_bot` already was, so a guest can't rewrite a shared bot's system prompt by approving the card.
+
+- [#259](https://github.com/AshikNesin/tiny-agents/pull/259) [`a31a0f8`](https://github.com/AshikNesin/tiny-agents/commit/a31a0f8f19aa609c185601068b9d041a6c2c5825) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Guests can only watch a shared bot's browser and computer: taking control, starting, resizing and resetting are the owner's, and the VNC bridge drops a guest viewer's keys, clicks and clipboard. A guest with the chat open no longer holds back the owner's Pushover pushes.
+
+- [#259](https://github.com/AshikNesin/tiny-agents/pull/259) [`a31a0f8`](https://github.com/AshikNesin/tiny-agents/commit/a31a0f8f19aa609c185601068b9d041a6c2c5825) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Guests on the Code page keep threads but not the harness host: no directory browsing or choosing, file finding, uploads, worktrees, moving a thread, file assets or bypass permission mode. The page hides those controls for a guest and the routes refuse them.
+
+- [#259](https://github.com/AshikNesin/tiny-agents/pull/259) [`a31a0f8`](https://github.com/AshikNesin/tiny-agents/commit/a31a0f8f19aa609c185601068b9d041a6c2c5825) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Adding, deleting or re-pointing an MCP connection (URL, header, secret) now asks you to confirm it's you, as model accounts already did. Moving a connection to another host drops its stored header secret unless you enter a new one, and an app credential can't be used as a connection's header secret.
+
+- [#259](https://github.com/AshikNesin/tiny-agents/pull/259) [`a31a0f8`](https://github.com/AshikNesin/tiny-agents/commit/a31a0f8f19aa609c185601068b9d041a6c2c5825) Thanks [@AshikNesin](https://github.com/AshikNesin)! - "Always allow" on an approval card now switches on only the tool of the call being approved: a request naming another tool is refused (400 `ALWAYS_ALLOW_MISMATCH`), a vault use can't be always allowed, and nothing changes when no such call is waiting.
+
+- [#278](https://github.com/AshikNesin/tiny-agents/pull/278) [`2677cc6`](https://github.com/AshikNesin/tiny-agents/commit/2677cc6fddbc652e02bc17cd89ac64c9df690a78) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Auto-review no longer counts a guest's messages as the owner's (security fix, S6). In a shared bot's chat a turn a guest started always shows its approval card, and the classifier reads only the owner's own messages, the same rule YOLO mode applies (`fromOwner` in `policy.ts`). `ToolGate` and `AgentRuntime.open` take an `ownerUserId` option for this; without one, no message with an author counts as the owner's. `ownerMessages()` now takes the owner's user id as its second argument.
+
+- [#278](https://github.com/AshikNesin/tiny-agents/pull/278) [`2677cc6`](https://github.com/AshikNesin/tiny-agents/commit/2677cc6fddbc652e02bc17cd89ac64c9df690a78) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Adding a guest now creates their account and marks it a guest in one database transaction (security fix, S8). Before, a failure between the two left an account with no guest mark, which the app treats as an owner. A taken email still answers 409.
+
 ## 1.2.1
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
-import { connections, db } from "../../../apps/web/src/server/db";
+import { connections, db, vaultValues } from "../../../apps/web/src/server/db";
 import {
   needsReseal,
   open,
@@ -9,14 +9,13 @@ import {
   type SecretBinding,
 } from "../../../apps/web/src/server/crypto/secret-box";
 import {
-  openHeaderSecret,
+  openOAuthState,
   resealConnectionSecrets,
-  sealHeaderSecret,
+  sealOAuthState,
 } from "../../../apps/web/src/server/api/connections/connection-secrets";
 import {
   createLocalBackend,
   resealLocalItems,
-  type LocalStore,
 } from "../../../apps/web/src/server/api/vault/backends/local";
 
 const KEY = process.env.SECRETS_KEY!;
@@ -26,16 +25,6 @@ afterEach(() => {
   process.env.SECRETS_KEY = KEY;
   delete process.env.SECRETS_KEY_PREVIOUS;
 });
-
-function memoryStore(): LocalStore & { data: Map<string, string> } {
-  const data = new Map<string, string>();
-  return {
-    data,
-    get: async (key) => data.get(key),
-    set: async (key, value) => void data.set(key, value),
-    delete: async (key) => void data.delete(key),
-  };
-}
 
 function lockReason(fn: () => unknown): string | undefined {
   try {
@@ -96,8 +85,7 @@ describe("SecretBox", () => {
 
 describe("secrets:rotate", () => {
   it("re-seals local vault items and connection secrets under the new key", async () => {
-    const store = memoryStore();
-    const backend = createLocalBackend(store);
+    const backend = createLocalBackend();
     const itemId = await backend.create!({
       kind: "api_key",
       title: "Key",
@@ -109,27 +97,41 @@ describe("secrets:rotate", () => {
       .returning();
     await db
       .update(connections)
-      .set({ secretEnc: sealHeaderSecret(row!.id, "h-1") })
+      .set({ oauthEnc: sealOAuthState(row!.id, { verifier: "h-1" }) })
       .where(eq(connections.id, row!.id));
 
     process.env.SECRETS_KEY = "the-new-key";
     process.env.SECRETS_KEY_PREVIOUS = KEY;
-    expect(await resealLocalItems(store)).toBe(1);
+    expect(resealLocalItems()).toEqual({ resealed: 1, skipped: [] });
     expect(await resealConnectionSecrets()).toBe(1);
-    expect(await resealLocalItems(store)).toBe(0);
+    expect(resealLocalItems()).toEqual({ resealed: 0, skipped: [] });
 
     delete process.env.SECRETS_KEY_PREVIOUS;
     expect((await backend.resolve(itemId, "value")).reveal()).toBe("v-1");
     const after = await db.query.connections.findFirst({ where: eq(connections.id, row!.id) });
-    expect(openHeaderSecret(row!.id, after!.secretEnc!)).toBe("h-1");
+    expect(openOAuthState(row!.id, after!.oauthEnc!)).toEqual({ verifier: "h-1" });
+  });
+
+  it("names the items it couldn't re-seal, so SECRETS_KEY_PREVIOUS stays", async () => {
+    const backend = createLocalBackend();
+    const good = await backend.create!({ kind: "api_key", title: "G", values: { value: "g" } });
+    const bad = await backend.create!({ kind: "api_key", title: "B", values: { value: "b" } });
+    await db.update(vaultValues).set({ policy: "edited" }).where(eq(vaultValues.id, bad));
+    process.env.SECRETS_KEY = "the-new-key";
+    process.env.SECRETS_KEY_PREVIOUS = KEY;
+    const report = resealLocalItems();
+    expect(report.resealed).toBe(1);
+    expect(report.skipped).toEqual([bad]);
+    delete process.env.SECRETS_KEY_PREVIOUS;
+    expect((await backend.resolve(good, "value")).reveal()).toBe("g");
   });
 
   it("a local item copied under another id doesn't open", async () => {
-    const store = memoryStore();
-    const backend = createLocalBackend(store);
+    const backend = createLocalBackend();
     const a = await backend.create!({ kind: "api_key", title: "A", values: { value: "a" } });
     const b = await backend.create!({ kind: "api_key", title: "B", values: { value: "b" } });
-    store.data.set(b, store.data.get(a)!);
+    const copied = await db.query.vaultValues.findFirst({ where: eq(vaultValues.id, a) });
+    await db.update(vaultValues).set({ sealed: copied!.sealed }).where(eq(vaultValues.id, b));
     await expect(backend.resolve(b, "value")).rejects.toThrow(/doesn't match/);
   });
 });

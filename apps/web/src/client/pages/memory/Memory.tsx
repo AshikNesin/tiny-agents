@@ -68,6 +68,94 @@ function groupMemories(rows: MemoryRecord[]): MemoryGroup[] {
   ];
 }
 
+/** Each bot's rows matching `query` (all of them, and every bot, when not searching). */
+function filterMemories(
+  memories: Record<string, MemoryRecord[]>,
+  query: string,
+): Map<string, MemoryRecord[]> {
+  const q = query.trim().toLowerCase();
+  const byBot = new Map<string, MemoryRecord[]>();
+  for (const [botId, rows] of Object.entries(memories)) {
+    const hits = q ? rows.filter((row) => row.text.toLowerCase().includes(q)) : rows;
+    // Not searching: every bot keeps its section, even with zero rows, so
+    // an empty bot still offers its switch and Add button.
+    if (hits.length > 0 || !q) byBot.set(botId, hits);
+  }
+  return byBot;
+}
+
+/**
+ * Bots with memories come first, most first; bots without any fold into one
+ * compact list at the end instead of a "Nothing yet" section each (#95).
+ */
+function splitBots(
+  bots: BotListEntry[],
+  filtered: Map<string, MemoryRecord[]>,
+  searching: boolean,
+): { withMemories: BotListEntry[]; withoutMemories: BotListEntry[] } {
+  const countOf = (botId: string) =>
+    (filtered.get(botId) ?? []).filter((row) => row.status === "active").length;
+  const listed = bots.filter((bot) => filtered.has(bot.id));
+  const withMemories = listed
+    .filter((bot) => (filtered.get(bot.id) ?? []).length > 0)
+    .map((bot, index) => ({ bot, index }))
+    .sort((a, b) => countOf(b.bot.id) - countOf(a.bot.id) || a.index - b.index)
+    .map(({ bot }) => bot);
+  const withoutMemories = searching
+    ? []
+    : listed.filter((bot) => (filtered.get(bot.id) ?? []).length === 0);
+  return { withMemories, withoutMemories };
+}
+
+/** The bots with no memories yet, one compact row each: Add, and the switch. */
+function BotsWithoutMemories({
+  bots,
+  memoryEnabled,
+  busyId,
+  onAdd,
+  onToggle,
+}: {
+  bots: BotListEntry[];
+  memoryEnabled: Record<string, boolean | undefined>;
+  busyId: string | null;
+  onAdd: (bot: BotListEntry) => void;
+  onToggle: (botId: string, on: boolean) => void;
+}) {
+  return (
+    <section aria-label="Bots without memories">
+      <h2 className="text-sm font-medium">No memories yet</h2>
+      <p className="text-muted-foreground mt-1 text-xs">
+        These bots pick things up as you chat with them, or you can add a memory yourself. Each bot
+        keeps its own memories.
+      </p>
+      <ul className="mt-2 divide-y rounded-xl border">
+        {bots.map((bot) => (
+          <li key={bot.id} className="flex items-center justify-between gap-3 px-3 py-2">
+            <span className="min-w-0 truncate text-sm">{bot.name}</span>
+            <div className="flex shrink-0 items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onAdd(bot)}
+                aria-label={`Add memory for ${bot.name}`}
+              >
+                <Plus className="size-3.5" />
+                Add
+              </Button>
+              <MemorySwitch
+                botName={bot.name}
+                memoryEnabled={memoryEnabled[bot.id]}
+                busy={busyId !== null && busyId.startsWith(bot.id)}
+                onToggle={(on) => onToggle(bot.id, on)}
+              />
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 export function MemoryPage() {
   const { data, loadError, refresh } = useMemories();
   const bots = data?.bots ?? null;
@@ -120,31 +208,8 @@ export function MemoryPage() {
   };
 
   const searching = query.trim() !== "";
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const byBot = new Map<string, MemoryRecord[]>();
-    for (const [botId, rows] of Object.entries(memories)) {
-      const hits = q ? rows.filter((row) => row.text.toLowerCase().includes(q)) : rows;
-      // Not searching: every bot keeps its section, even with zero rows, so
-      // an empty bot still offers its switch and Add button.
-      if (hits.length > 0 || !q) byBot.set(botId, hits);
-    }
-    return byBot;
-  }, [memories, query]);
-
-  // Bots with memories come first, most first; bots without any fold into one
-  // compact list at the end instead of a "Nothing yet" section each (#95).
-  const countOf = (botId: string) =>
-    (filtered.get(botId) ?? []).filter((row) => row.status === "active").length;
-  const listed = (bots ?? []).filter((bot) => filtered.has(bot.id));
-  const withMemories = listed
-    .filter((bot) => (filtered.get(bot.id) ?? []).length > 0)
-    .map((bot, index) => ({ bot, index }))
-    .sort((a, b) => countOf(b.bot.id) - countOf(a.bot.id) || a.index - b.index)
-    .map(({ bot }) => bot);
-  const withoutMemories = searching
-    ? []
-    : listed.filter((bot) => (filtered.get(bot.id) ?? []).length === 0);
+  const filtered = useMemo(() => filterMemories(memories, query), [memories, query]);
+  const { withMemories, withoutMemories } = splitBots(bots ?? [], filtered, searching);
 
   return (
     <PageLayout
@@ -203,39 +268,13 @@ export function MemoryPage() {
             />
           ))}
           {withoutMemories.length > 0 && (
-            <section aria-label="Bots without memories">
-              <h2 className="text-sm font-medium">No memories yet</h2>
-              <p className="text-muted-foreground mt-1 text-xs">
-                These bots pick things up as you chat with them, or you can add a memory yourself.
-                Each bot keeps its own memories.
-              </p>
-              <ul className="mt-2 divide-y rounded-xl border">
-                {withoutMemories.map((bot) => (
-                  <li key={bot.id} className="flex items-center justify-between gap-3 px-3 py-2">
-                    <span className="min-w-0 truncate text-sm">{bot.name}</span>
-                    <div className="flex shrink-0 items-center gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() =>
-                          setEditor({ botId: bot.id, botName: bot.name, memory: null })
-                        }
-                        aria-label={`Add memory for ${bot.name}`}
-                      >
-                        <Plus className="size-3.5" />
-                        Add
-                      </Button>
-                      <MemorySwitch
-                        botName={bot.name}
-                        memoryEnabled={memoryEnabled[bot.id]}
-                        busy={busyId !== null && busyId.startsWith(bot.id)}
-                        onToggle={(on) => toggleMemory(bot.id, on)}
-                      />
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </section>
+            <BotsWithoutMemories
+              bots={withoutMemories}
+              memoryEnabled={memoryEnabled}
+              busyId={busyId}
+              onAdd={(bot) => setEditor({ botId: bot.id, botName: bot.name, memory: null })}
+              onToggle={(botId, on) => toggleMemory(botId, on)}
+            />
           )}
         </>
       )}

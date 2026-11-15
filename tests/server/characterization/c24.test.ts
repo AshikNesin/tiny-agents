@@ -12,14 +12,11 @@ import { createHash } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { storageService } from "@groot/core/storage";
-import { db, providers, uploads, vaultItems } from "../../../apps/web/src/server/db";
+import { db, providers, uploads, vaultItems, vaultValues } from "../../../apps/web/src/server/db";
 import { createAccount } from "../../../apps/web/src/server/api/models/models.service";
 import { createAccountSchema } from "../../../apps/web/src/server/api/models/models.schema";
 import { setReadBackendsForTests } from "../../../apps/web/src/server/api/vault/backends";
-import {
-  createLocalBackend,
-  type LocalStore,
-} from "../../../apps/web/src/server/api/vault/backends/local";
+import { createLocalBackend } from "../../../apps/web/src/server/api/vault/backends/local";
 import {
   createItem,
   setWriteBackendsForTests,
@@ -40,13 +37,8 @@ function refuseInserts(table: string): void {
 
 let local: ReturnType<typeof createLocalBackend>;
 beforeEach(async () => {
-  const map = new Map<string, string>();
-  const store: LocalStore = {
-    get: async (key) => map.get(key),
-    set: async (key, value) => void map.set(key, value),
-    delete: async (key) => void map.delete(key),
-  };
-  local = createLocalBackend(store);
+  await db.delete(vaultValues);
+  local = createLocalBackend();
   setReadBackendsForTests(new Map([["local", local]]));
   setWriteBackendsForTests(new Map([["local", local]]));
   await db.delete(vaultItems);
@@ -63,7 +55,7 @@ afterEach(async () => {
 /** Vault values the backend holds that no `vault_items` row links. */
 async function unlinkedValues(): Promise<string[]> {
   const linked = new Set((await db.select().from(vaultItems)).map((row) => row.externalId));
-  return (await local.listCandidates())
+  return (await local.listCandidates()).items
     .map((item) => item.externalId)
     .filter((id) => !linked.has(id));
 }
@@ -88,7 +80,7 @@ describe("C24: a failed second step", () => {
     expect(items).toHaveLength(1);
     expect(items[0]).toMatchObject({ label: "Model provider: Orphan", audience: "app" });
     expect(items[0]!.handle).toMatch(/^provider-orphan-[0-9a-f]{6}$/);
-    expect(await local.listCandidates()).toHaveLength(1);
+    expect((await local.listCandidates()).items).toHaveLength(1);
   });
 
   it("vault item: the stored value stays when its row is refused", async () => {
@@ -105,7 +97,7 @@ describe("C24: a failed second step", () => {
     expect(await db.select().from(vaultItems)).toEqual([]);
     const orphans = await unlinkedValues();
     expect(orphans).toHaveLength(1);
-    expect((await local.listCandidates())[0]).toMatchObject({ title: "GitHub" });
+    expect((await local.listCandidates()).items[0]).toMatchObject({ title: "GitHub" });
   });
 
   it("upload: the stored original stays when its row is refused", async () => {

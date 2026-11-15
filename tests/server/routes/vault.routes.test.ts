@@ -9,12 +9,15 @@ import { asc, eq, ne, sql } from "drizzle-orm";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { generateToken } from "@groot/core/utils/jwt.utils";
 import { hashPassword } from "@groot/core/utils/password.utils";
-import { db, users, vaultAuditEvents, vaultItems } from "../../../apps/web/src/server/db";
-import { setReadBackendsForTests } from "../../../apps/web/src/server/api/vault/backends";
 import {
-  createLocalBackend,
-  type LocalStore,
-} from "../../../apps/web/src/server/api/vault/backends/local";
+  db,
+  users,
+  vaultAuditEvents,
+  vaultItems,
+  vaultValues,
+} from "../../../apps/web/src/server/db";
+import { setReadBackendsForTests } from "../../../apps/web/src/server/api/vault/backends";
+import { createLocalBackend } from "../../../apps/web/src/server/api/vault/backends/local";
 import {
   createAppCredential,
   createItem,
@@ -51,19 +54,13 @@ import { api, createTestApp, type TestApp } from "../helpers";
 const CANARY = "canary-pw-7Hq2Zx";
 const PASSWORD = "owner-password-123";
 
-function memoryStore(): LocalStore & { dump(): string } {
-  const map = new Map<string, string>();
-  return {
-    get: async (key) => map.get(key),
-    set: async (key, value) => void map.set(key, value),
-    delete: async (key) => void map.delete(key),
-    dump: () => [...map.values()].join("\n"),
-  };
+/** The local backend's sealed rows, as stored. */
+async function dumpValues(): Promise<string> {
+  return JSON.stringify(await db.select().from(vaultValues));
 }
 
 const app: TestApp = createTestApp();
 let token: string;
-let store: ReturnType<typeof memoryStore>;
 
 beforeAll(async () => {
   const [user] = await db
@@ -80,8 +77,8 @@ beforeAll(async () => {
 beforeEach(async () => {
   await db.delete(vaultAuditEvents);
   await db.delete(vaultItems);
-  store = memoryStore();
-  const local = createLocalBackend(store);
+  await db.delete(vaultValues);
+  const local = createLocalBackend();
   setReadBackendsForTests(new Map([["local", local]]));
   setWriteBackendsForTests(new Map([["local", local]]));
   clearStatusCache();
@@ -134,7 +131,7 @@ async function assertNoCanary(): Promise<void> {
   expect(events).not.toContain(CANARY);
   expect(overview).not.toContain(CANARY);
   // The local backend keeps it encrypted, never in the clear.
-  expect(store.dump()).not.toContain(CANARY);
+  expect(await dumpValues()).not.toContain(CANARY);
 }
 
 describe("vault routes", () => {
@@ -248,7 +245,7 @@ describe("vault routes", () => {
         .orderBy(asc(vaultAuditEvents.at), sql`rowid`)
     ).map((e) => e.outcome);
     expect(outcomes).toEqual(["created", "revealed", "updated", "deleted"]);
-    expect(store.dump()).not.toContain("rotated-canary");
+    expect(await dumpValues()).not.toContain("rotated-canary");
   });
 
   it("keeps cards at every_use and never unattended", async () => {

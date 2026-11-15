@@ -139,7 +139,8 @@ log).
    - Server: `bots.service.ts` (CRUD, links, guests, revisions, send,
      approvals, YOLO).
    - Client: `ChatPane` 675 lines, `ChatMessageView` 960,
-     `ModelsSettings` 961, `Routines` 903, `BotDialog` 754.
+     `ModelsSettings` 961, `Routines` 903, `BotDialog` 754 (split in
+     step 5.6, §4.5).
 8. **Two data layers on the client, and hand-copied wire types.**
    - About 40% of response types are re-declared in `lib/*-api.ts`.
    - React Query is mounted and documented, but unused.
@@ -151,7 +152,8 @@ Two smaller ones:
 - `packages/agent` holds about 1,100 lines of provider catalog and discovery
   and the whole sandbox/VM layer, none of which touches pi-durable.
 - Secrets live in KV plus a hand-kept `__index` and a sidecar digest, which
-  weakens policy binding (S11).
+  weakens policy binding (S11). Step 4.4 moved them into `vault_values`
+  ([ADR 0019](../adr/0019-vault-values-table.md)).
 
 ## 4. The new core types
 
@@ -700,7 +702,7 @@ disagreements:
 W1 also reveals a client quirk, left as it is behind a typed cast: when a bot
 is on the default model and no default is set, `ChatComposer` passes null to
 the model chip and its "no longer in the model catalog" line names no model
-(`ChatComposer.tsx`, `BotDialog.tsx`). `FilePreview.statusLabel` reads W7's
+(`ChatComposer.tsx`, `bot-dialog/ProfileSection.tsx`). `FilePreview.statusLabel` reads W7's
 meta as `Partial<UploadMeta>`. Test fixtures gained the fields W2, W6, W9 and
 W10 add, with values that render the same.
 
@@ -886,6 +888,31 @@ leaves and a release answering a takeover (`settle`); and in `VncView` the
 viewer (view-only until the owner drives, a guest's always; the ticket's
 scale; the desktop's `remoteResize: false`; the browser's window fit; Cmd as
 Ctrl on a Mac).
+
+Step 5.6 split the god components along their existing internal sections,
+moving code without rewriting it: the same DOM, roles, labels, classes and
+order, and effects declared in the same order. Each was pinned first, on the
+one-file component, by an element-tree and markup snapshot of every state its
+tests and the app reach (`chat-pane-pinned`, `chat-message-view-pinned`,
+`bot-dialog-pinned`, `routines-pinned`, `models-settings-pinned`; the live
+view's 5.5 pins; `doctor-pages-pinned` for the three React Doctor named).
+
+| Component                                   | Keeps                                                     | Moved to                                                                                                                                                                                                       |
+| ------------------------------------------- | --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ChatPane` (543 → 193 lines)                | the chat, sending, the model chip, reset, the frame       | `components/chat-pane/`: the header, the model and YOLO notices, held messages, the file drop, the live views (`useLiveViews` and their tabs), the `?history=1` menu page, the two confirmations               |
+| `ChatMessageView` (960 → 65)                | the dispatch by message kind                              | `components/chat-message/`: a person's bubble, the peer cards, an assistant turn, its tool rows and groups, the owner's cards (approval, vault use, credentials, takeover), the shared time, copy and entrance |
+| `BotDialog` (755 → 239)                     | the draft, its reset on open, save, delete, the tab frame | `components/bot-dialog/`: the Profile, Tools (a group per toolkit), Skills and Sharing sections, the footer with its delete confirmation, the lists read on open                                               |
+| `Routines` (888 → 186)                      | the list, its actions, the editor's open state            | `pages/routines/`: the card, Upcoming and Recent runs, the editor, its schedule fields, the form and its compile step (`routine-form.ts`)                                                                      |
+| `ModelsSettings` (967 → 117)                | the page, the account list, the dialogs' open state       | `pages/settings/models/`: an account's card, its actions, model rows, Add a model and Claude plan settings, the Default models card, the edit and move dialogs, `modelOptions`                                 |
+| `LivePanel` (375 → 196)                     | the poll, the sizing, the viewer                          | `components/live/`: the header (title and status line, hand-off, tools), the off states; the takeover banner and connecting overlay (`live-parts.tsx`) shared with the page                                    |
+| `LivePage` (586 → 231)                      | the poll, the body, the viewer                            | `components/live/`: the tabs and status line, the header actions, the Apps and Keys menus, the off state, the remembered tab (`useSelectedProfile`)                                                            |
+| `ConnectionDetail`, `SkillDetail`, `Memory` | the data and its actions                                  | `pages/connections/detail/` and `pages/skills/detail/` (each card, section and prompt); Memory's filter and bot order as pure functions and the bots without memories as a component                           |
+
+Three effects that reset a form when its subject changes stay as they were
+(the bot editor's, the routine editor's, the memory editor's): a reset by
+`key` would remount the dialog, dropping its close animation, and the
+routine editor keeps a reopened edit's unsaved changes, which a remount
+would not.
 
 ### 4.6 Module boundaries and their enforcers
 

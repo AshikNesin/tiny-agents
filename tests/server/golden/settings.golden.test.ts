@@ -5,8 +5,20 @@
  */
 import { afterAll, afterEach, beforeAll, describe } from "vite-plus/test";
 import { createTestApp } from "../helpers";
-import { uploads, vaultAuditEvents, vaultItems } from "../../../apps/web/src/server/db";
+import { createNamespaceKv } from "@groot/core/kv";
+import {
+  connections,
+  db,
+  uploads,
+  vaultAuditEvents,
+  vaultItems,
+  vaultValues,
+} from "../../../apps/web/src/server/db";
 import { issueStepUp } from "../../../apps/web/src/server/api/vault/vault.stepup";
+import { sealJson } from "../../../apps/web/src/server/crypto/secret-box";
+import { sealHeaderSecret } from "../../../apps/web/src/server/api/connections/connection-secrets";
+import { importStoredSecrets } from "../../../apps/web/src/server/api/vault/vault.import";
+import { vaultPolicyDigest } from "../../../apps/web/src/server/api/vault/vault.policy";
 import { createCodeHub, setCodeHub } from "../../../apps/web/src/server/api/code/code.hub";
 import { authToken, closeAppRuntime, openAppRuntime, resetAppTables } from "../fixtures";
 import { fakeHarness } from "../code/fake-harness";
@@ -96,6 +108,66 @@ describe("golden: settings and owner tools", () => {
       headers: steppedUp(),
     });
     await r.http("overview at the end", "/api/v1/vault");
+  });
+
+  // Q4: an install the pre-Q4 code wrote (vault values in KV, a connection's
+  // header value on its row) after the startup import. The rows it migrated.
+  goldenFlow("vault-import", setup, async (r) => {
+    const clear = async () => {
+      await db.delete(connections);
+      await db.delete(vaultAuditEvents);
+      await db.delete(vaultItems);
+      await db.delete(vaultValues);
+    };
+    await clear();
+    const oldKv = createNamespaceKv("VAULT_LOCAL");
+    const seal = async (id: string, item: object, policy: string) => {
+      const sealed = sealJson(item, { purpose: "vault-local", record: id, field: "item", policy });
+      await oldKv.set(id, JSON.stringify({ policy, sealed }));
+    };
+    const linked = "00000000-0000-4000-8000-00000000000a";
+    const loose = "00000000-0000-4000-8000-00000000000b";
+    const [row] = await db
+      .insert(vaultItems)
+      .values({
+        handle: "shop",
+        kind: "login",
+        backend: "local",
+        externalId: linked,
+        label: "Shop",
+        originsJson: '["https://shop.example.com"]',
+      })
+      .returning();
+    const login = { kind: "login", title: "Shop", urls: ["https://shop.example.com"] };
+    const at = "2026-11-01T00:00:00.000Z";
+    await seal(
+      linked,
+      { ...login, values: { password: "pw" }, updatedAt: at },
+      vaultPolicyDigest(row!),
+    );
+    await seal(loose, { ...login, title: "Old", values: { password: "x" }, updatedAt: at }, "");
+    await oldKv.set("__index", JSON.stringify([linked, loose]));
+    await db.insert(connections).values({
+      id: "golden-conn",
+      name: "Alpha",
+      slug: "alpha",
+      url: "https://alpha.example.com/mcp",
+      authType: "header",
+      headerName: "x-api-key",
+      secretEnc: sealHeaderSecret("golden-conn", "alpha-secret"),
+    });
+
+    r.note("import", importStoredSecrets());
+    await r.db(
+      "migrated rows",
+      [vaultValues, vaultItems, connections, vaultAuditEvents],
+      ["sealed"],
+    );
+    r.note("left in KV", await oldKv.list());
+    await r.http("overview", "/api/v1/vault");
+    await r.http("the connection's item", "/api/v1/vault/items/mcp-alpha");
+    r.note("again", importStoredSecrets());
+    await clear();
   });
 
   goldenFlow("uploads", setup, async (r) => {

@@ -5,6 +5,8 @@
  * the owner's edits from the Vault UI.
  */
 import type { SecretValue, VaultKind } from "@tiny-agents/agent";
+import type { AppDatabase } from "../../../db";
+import type { PolicyColumns } from "../vault.policy";
 
 import type { BackendStatus, ValueField, VaultBackendName } from "../../../../shared/api/vault";
 
@@ -44,22 +46,40 @@ export interface VaultBackend {
     reveal: boolean;
   };
   status(): Promise<BackendStatus>;
-  listCandidates(): Promise<BackendItemSummary[]>;
+  /** Every item, linked or not; one that can't be read is named, never fatal (C11). */
+  listCandidates(): Promise<CandidateListing>;
   /**
-   * `policy` is the digest of the linked row's policy (`vaultPolicyDigest`).
-   * A backend that seals values itself (local) binds them to it, so a value
-   * whose row's policy changed behind the service's back doesn't open;
-   * others ignore it. Omitted for an item no row links yet.
+   * A backend that seals values itself (local) opens every item under the
+   * policy of the row that links it (S11, `vaultPolicyDigest`), on every
+   * read: listing, describe and resolve alike. A value whose row's policy
+   * changed behind the service's back doesn't open.
    */
-  describe(externalId: string, policy?: string): Promise<BackendItemSummary>;
+  describe(externalId: string): Promise<BackendItemSummary>;
   /** One value; called only after policy passed (or by the owner's reveal). */
-  resolve(externalId: string, field: ValueField, policy?: string): Promise<SecretValue>;
+  resolve(externalId: string, field: ValueField): Promise<SecretValue>;
+  /** `policy`: the digest of the row about to link the new item. */
   create?(draft: ItemDraft, policy?: string): Promise<string>;
   /** Set the given values (and title/urls); fields not named are left as they are. */
-  update?(externalId: string, draft: Partial<ItemDraft>, policy?: string): Promise<void>;
+  update?(externalId: string, draft: Partial<ItemDraft>): Promise<void>;
   remove?(externalId: string): Promise<void>;
-  /** Re-seal an item from one policy digest to another (the owner changed its policy). */
-  rebind?(externalId: string, from: string | undefined, to: string): Promise<void>;
+  /**
+   * Write the row that links an item (the owner changed its policy, or links
+   * it) with `writeRow`, and re-seal the item under the digest of the row it
+   * returns, all in one transaction: the item is opened under the row as the
+   * transaction finds it and sealed under the row as written, so the value
+   * and its row never disagree, a concurrent edit is never sealed over, and a
+   * row write that fails leaves the value as it was.
+   */
+  rebind?<T extends PolicyColumns>(externalId: string, writeRow: (tx: DbTx) => T): Promise<T>;
+}
+
+/** `db`, or a synchronous transaction on it (R7). */
+export type DbTx = Pick<AppDatabase, "select" | "insert" | "update" | "delete">;
+
+/** `listCandidates`: the items, and those that can't be read with why. */
+export interface CandidateListing {
+  items: BackendItemSummary[];
+  unreadable: { externalId: string; reason: string }[];
 }
 
 /** A backend failure with a code the owner sees and a fixed message bots see. */

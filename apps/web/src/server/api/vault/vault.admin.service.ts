@@ -3,12 +3,13 @@
  * delete items, round-tripping to the backend. Never wired into a toolkit. Values pass through in the request scope only: nothing here stores
  * one, and every reveal is registered with the redactor and audited.
  */
-import { asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
+import { logger } from "@groot/core/logger";
 import { vaultAlert } from "./vault.alerts";
 import { secretRedactor, type VaultApproval, type VaultKind } from "@tiny-agents/agent";
 import { KIND_DEFAULT_TOOLS } from "../../../shared/vault-kinds";
-import { db, vaultAuditEvents, vaultItems } from "../../db";
+import { connections, db, vaultAuditEvents, vaultItems } from "../../db";
 import { readBackends } from "./backends";
 import { createLocalBackend } from "./backends/local";
 import {
@@ -16,6 +17,7 @@ import {
   type BackendItemSummary,
   type BackendName,
   type BackendStatus,
+  type DbTx,
   type ItemDraft,
   type ValueField,
   type VaultBackend,
@@ -38,9 +40,9 @@ import {
   forgetAppCredential,
   normalizeOrigin,
   toMeta,
-  vaultPolicyDigest,
   type VaultItemRow,
 } from "./vault.service";
+import { vaultPolicyDigest } from "./vault.policy";
 
 let adminBackends: Map<BackendName, VaultBackend> | undefined;
 
@@ -56,6 +58,11 @@ const PRIMARY_BACKEND: BackendName = "local";
 /** Test seam. */
 export function setWriteBackendsForTests(map: Map<BackendName, VaultBackend> | undefined): void {
   adminBackends = map;
+  candidatesCache = undefined;
+}
+
+/** Items were added or removed outside this module (a connection's own item): list afresh. */
+export function vaultItemsChanged(): void {
   candidatesCache = undefined;
 }
 
@@ -82,6 +89,12 @@ function backendFailure(error: unknown): never {
 // ── Listing ─────────────────────────────────────────────────────────────
 
 const CANDIDATES_TTL_MS = 5 * 60_000;
+/**
+ * How a backend item that won't open (wrong key, policy edited in the
+ * database) is listed, linked or not. The overview shows it under "Not
+ * linked yet" only while no row links it; a linked one shows why on its page.
+ */
+const UNREADABLE_TITLE = "Unreadable item";
 let candidatesCache:
   | { at: number; items: (BackendItemSummary & { backend: BackendName })[] }
   | undefined;
@@ -92,8 +105,29 @@ async function candidates(force = false) {
   }
   const items: (BackendItemSummary & { backend: BackendName })[] = [];
   for (const [name, backend] of readBackends()) {
-    const listed = await backend.listCandidates().catch(() => [] as BackendItemSummary[]);
-    items.push(...listed.map((item) => ({ ...item, backend: name })));
+    const listed = await backend.listCandidates().catch((error: unknown) => {
+      logger.warn({ backend: name, error: (error as Error).message }, "Vault listing failed");
+      return { items: [], unreadable: [] };
+    });
+    items.push(...listed.items.map((item) => ({ ...item, backend: name })));
+    // One item that won't open is shown as unreadable; the rest still list (C11).
+    if (listed.unreadable.length > 0) {
+      logger.warn(
+        { backend: name, unreadable: listed.unreadable },
+        "Vault items can't be read; listed as unreadable",
+      );
+    }
+    items.push(
+      ...listed.unreadable.map(({ externalId }) => ({
+        externalId,
+        title: UNREADABLE_TITLE,
+        kind: "other" as const,
+        urls: [],
+        hasTotp: false,
+        fields: [],
+        backend: name,
+      })),
+    );
   }
   candidatesCache = { at: Date.now(), items };
   return items;
@@ -199,7 +233,7 @@ async function syncMetadata(): Promise<void> {
     const backend = readBackends().get(row.backend as BackendName);
     if (!backend) continue;
     try {
-      const summary = await backend.describe(row.externalId, vaultPolicyDigest(row));
+      const summary = await backend.describe(row.externalId);
       await db.update(vaultItems).set(metadataOf(summary)).where(eq(vaultItems.id, row.id));
     } catch (error) {
       if (error instanceof BackendError && error.code === "not_found") {
@@ -234,7 +268,7 @@ export async function detail(handle: string): Promise<VaultItemDetailData> {
   let backendError: string | undefined;
   if (backend) {
     try {
-      const summary = await backend.describe(row.externalId, vaultPolicyDigest(row));
+      const summary = await backend.describe(row.externalId);
       fields = summary.fields;
       urls = summary.urls;
       title = summary.title;
@@ -336,7 +370,7 @@ export async function createItem(
   let summary: BackendItemSummary;
   try {
     externalId = await backend.create(draft, digest);
-    summary = await backend.describe(externalId, digest);
+    summary = await backend.describe(externalId);
   } catch (error) {
     backendFailure(error);
   }
@@ -434,28 +468,36 @@ export async function linkItem(input: {
   if (summary.kind === "other") throw Boom.badRequest("This kind of item can't be used by bots");
   const origins =
     input.policy.origins.length > 0 ? input.policy.origins : originsFrom(summary.urls);
-  const [inserted] = await db
-    .insert(vaultItems)
-    .values({
-      handle: input.policy.handle,
-      kind: summary.kind,
-      backend: input.backend,
-      externalId: input.externalId,
-      label: input.policy.label ?? summary.title,
-      ...policyData({ ...input.policy, origins }, summary.kind),
-      ...metadataOf(summary),
-    })
-    .returning();
-  const row = inserted!;
-  // A backend that seals values itself binds the item to its new row's policy.
+  const values = {
+    handle: input.policy.handle,
+    kind: summary.kind,
+    backend: input.backend,
+    externalId: input.externalId,
+    label: input.policy.label ?? summary.title,
+    ...policyData({ ...input.policy, origins }, summary.kind),
+    ...metadataOf(summary),
+  };
+  // A backend that seals values itself binds the item to its row's policy,
+  // in the transaction that inserts the row. One row per value: a second
+  // would open it under a policy the first never agreed to, so the check is
+  // in that transaction too (C11).
+  const insertRow = (tx: DbTx) => {
+    const linked = tx
+      .select({ handle: vaultItems.handle })
+      .from(vaultItems)
+      .where(
+        and(eq(vaultItems.backend, input.backend), eq(vaultItems.externalId, input.externalId)),
+      )
+      .get();
+    if (linked) throw Boom.conflict(`This item is already linked as "${linked.handle}"`);
+    return tx.insert(vaultItems).values(values).returning().get();
+  };
   const write = writeBackends().get(input.backend);
-  if (write?.rebind) {
-    try {
-      await write.rebind(row.externalId, undefined, vaultPolicyDigest(row));
-    } catch (error) {
-      await db.delete(vaultItems).where(eq(vaultItems.id, row.id));
-      backendFailure(error);
-    }
+  let row: VaultItemRow;
+  try {
+    row = write?.rebind ? await write.rebind(input.externalId, insertRow) : insertRow(db);
+  } catch (error) {
+    backendFailure(error);
   }
   candidatesCache = undefined;
   await audit({
@@ -494,7 +536,7 @@ async function updateItemRow(
   actor: { via: "vault_ui" | "credential_request" | "models" } = { via: "vault_ui" },
 ) {
   const kind = row.kind as VaultKind;
-  const before = vaultPolicyDigest(row);
+  const touchesPolicy = input.policy !== undefined || input.audience !== undefined;
   const touchesBackend =
     input.values !== undefined || input.title !== undefined || input.urls !== undefined;
   let metadata = {};
@@ -503,16 +545,12 @@ async function updateItemRow(
     if (!backend.update)
       throw Boom.badRequest("This item's backend is read-only; edit it in the source app");
     try {
-      await backend.update(
-        row.externalId,
-        {
-          ...(input.title !== undefined ? { title: input.title } : {}),
-          ...(input.urls !== undefined ? { urls: input.urls } : {}),
-          values: input.values ?? {},
-        },
-        before,
-      );
-      metadata = metadataOf(await backend.describe(row.externalId, before));
+      await backend.update(row.externalId, {
+        ...(input.title !== undefined ? { title: input.title } : {}),
+        ...(input.urls !== undefined ? { urls: input.urls } : {}),
+        values: input.values ?? {},
+      });
+      metadata = metadataOf(await backend.describe(row.externalId));
     } catch (error) {
       backendFailure(error);
     }
@@ -526,32 +564,28 @@ async function updateItemRow(
     ...policyData(input.policy ?? {}, kind),
     ...metadata,
   };
-  // A new policy digest re-seals a self-sealed value first, so the value
-  // always opens under the row as stored.
-  const after = vaultPolicyDigest({ ...row, ...data });
-  const rebind =
-    after !== before ? writeBackends().get(row.backend as BackendName)?.rebind : undefined;
-  if (rebind) {
-    try {
-      await rebind(row.externalId, before, after);
-    } catch (error) {
-      backendFailure(error);
-    }
-  }
-  // Drizzle refuses an empty SET; with nothing to change the row stands as it is.
-  let updated = row;
-  if (Object.keys(data).length > 0) {
-    const [changed] = await db
-      .update(vaultItems)
-      .set(data)
-      .where(eq(vaultItems.id, row.id))
-      .returning();
-    // Deleted meanwhile (Prisma's P2025 → 404).
-    if (!changed) {
-      await rebind?.(row.externalId, after, before).catch(() => undefined);
-      throw Boom.notFound("Record not found");
-    }
-    updated = changed;
+  const writeRow = (tx: DbTx): VaultItemRow => {
+    // Drizzle refuses an empty SET: with nothing to change, the row as it stands now.
+    const changed =
+      Object.keys(data).length === 0
+        ? tx.select().from(vaultItems).where(eq(vaultItems.id, row.id)).get()
+        : tx.update(vaultItems).set(data).where(eq(vaultItems.id, row.id)).returning().get();
+    // Deleted meanwhile (Prisma's P2025 → 404); a re-seal with it rolls back.
+    if (!changed) throw Boom.notFound("Record not found");
+    return changed;
+  };
+  // A policy edit re-seals a self-sealed value in the transaction that writes
+  // the row: opened under the row as that transaction finds it (a concurrent
+  // edit included) and sealed under the row as written, never under a digest
+  // worked out from the row read before (C11).
+  const rebind = touchesPolicy
+    ? writeBackends().get(row.backend as BackendName)?.rebind
+    : undefined;
+  let updated: VaultItemRow;
+  try {
+    updated = rebind ? await rebind(row.externalId, writeRow) : writeRow(db);
+  } catch (error) {
+    backendFailure(error);
   }
   forgetAppCredential(row.handle);
   candidatesCache = undefined;
@@ -576,6 +610,16 @@ export async function deleteItem(handle: string, options: { purge: boolean }): P
   if (row.audience === "app") {
     throw Boom.conflict(
       "This item is used by the app; remove it where it is used (Settings → Models).",
+    );
+  }
+  // A connection's own header value goes with the connection, or with a new value there.
+  const owner = await db.query.connections.findFirst({
+    where: eq(connections.secretItemId, row.id),
+    columns: { name: true },
+  });
+  if (owner) {
+    throw Boom.conflict(
+      `This item is the header value of the connection "${owner.name}"; change or remove it on the Connections page.`,
     );
   }
   return deleteItemRow(row, options);
@@ -640,7 +684,7 @@ export async function reveal(
   if (!backend.capabilities.reveal) throw Boom.badRequest("This backend can't reveal values");
   let value: string;
   try {
-    const secret = await backend.resolve(row.externalId, field, vaultPolicyDigest(row));
+    const secret = await backend.resolve(row.externalId, field);
     secretRedactor.register(secret);
     value = secret.reveal();
   } catch (error) {

@@ -453,7 +453,7 @@ describe("the panels' poll", () => {
     const api = mockBrowser(browserClosed({ starting: true, phase: "starting" }));
     mount("browser");
     await screen.findByText("Starting the browser");
-    expect(delays().at(-1)).toBe(1500);
+    await waitFor(() => expect(delays().at(-1)).toBe(1500));
     expect(delays()[0]).toBe(3000);
     expect(api.status).toHaveBeenCalledWith("b1");
   });
@@ -463,7 +463,7 @@ describe("the panels' poll", () => {
     const api = mockComputer(computerOff({ starting: true, phase: "starting" }));
     mount("computer");
     await screen.findByText("Starting the computer");
-    expect(delays().at(-1)).toBe(1500);
+    await waitFor(() => expect(delays().at(-1)).toBe(1500));
     expect(delays()[0]).toBe(3000);
     expect(api.status).toHaveBeenCalledWith("b1");
   });
