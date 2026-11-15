@@ -245,7 +245,7 @@ describe("captureConversation", () => {
   });
 
   it("skips peer-only windows", async () => {
-    const { conversationId } = await seedBot();
+    const { botId, conversationId } = await seedBot();
     const caller = sideCaller();
     await captureConversation(conversationId, {
       sideCaller: caller,
@@ -255,6 +255,8 @@ describe("captureConversation", () => {
       ],
     });
     expect(caller.complete).not.toHaveBeenCalled();
+    expect(await db.$count(memories, eq(memories.botId, botId))).toBe(0);
+    expect((await findBot(botId))?.memoryCapturedThrough).toBeNull();
   });
 
   it("never captures a routine's conversation (issue #63): only the chat is a source", async () => {
@@ -272,6 +274,8 @@ describe("captureConversation", () => {
     await captureConversation(routineConversation, { sideCaller: caller, readTranscript });
     expect(readTranscript).not.toHaveBeenCalled();
     expect(caller.complete).not.toHaveBeenCalled();
+    expect(await db.$count(memories, eq(memories.botId, botId))).toBe(0);
+    expect((await findBot(botId))?.memoryCapturedThrough).toBeNull();
   });
 
   it("shows the newest 30 deleted memories to the extractor, which then leaves them out", async () => {

@@ -57,13 +57,15 @@ describe("see_image", () => {
     expect(transcriber.transcribe).toHaveBeenCalledWith(IMAGE, {});
   });
 
-  it("passes a focused question through", async () => {
+  it("passes a focused question through and returns the transcription", async () => {
     const transcriber: Transcriber = {
       transcribe: vi.fn().mockResolvedValue("An error dialog."),
       modelId: () => undefined,
     };
     const { capability } = toolkit(transcriber);
-    await run(capability, { uploadId: "u1", question: "what error is shown?" });
+    const result = await run(capability, { uploadId: "u1", question: "what error is shown?" });
+    expect(result.isError).toBe(false);
+    expect(result.text).toContain("An error dialog.");
     expect(transcriber.transcribe).toHaveBeenCalledWith(IMAGE, {
       question: "what error is shown?",
     });

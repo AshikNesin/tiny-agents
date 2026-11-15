@@ -100,21 +100,31 @@ const request = (overrides: Partial<SideCallRequest> = {}): SideCallRequest => (
 describe("createSideCaller: the model", () => {
   it("runs on the role's model when set, else the bot's own pi model", async () => {
     const set = fakeRuntime(undefined, { chat_title: "light" });
-    await createSideCaller(set.runtime).complete(request());
-    expect(set.getModel).toHaveBeenLastCalledWith("p", "light-upstream");
+    await expect(createSideCaller(set.runtime).complete(request())).resolves.toBe("answer");
+    expect(set.completeSimple.mock.calls.at(-1)?.[0]).toEqual({
+      id: "light-upstream",
+      provider: "p",
+    });
 
     const unset = fakeRuntime();
-    await createSideCaller(unset.runtime).complete(request());
-    expect(unset.getModel).toHaveBeenLastCalledWith("p", "bot-model-upstream");
+    await expect(createSideCaller(unset.runtime).complete(request())).resolves.toBe("answer");
+    expect(unset.completeSimple.mock.calls.at(-1)?.[0]).toEqual({
+      id: "bot-model-upstream",
+      provider: "p",
+    });
   });
 
   it("runs a Claude plan bot's call on the default model", async () => {
-    const { runtime, getModel, completeSimple } = fakeRuntime(undefined, {
+    const { runtime, completeSimple } = fakeRuntime(undefined, {
       bot_default: "light",
     });
-    await createSideCaller(runtime).complete(request({ botModelId: "plan-model" }));
-    expect(getModel).toHaveBeenLastCalledWith("p", "light-upstream");
-    expect(completeSimple).toHaveBeenCalledOnce();
+    await expect(
+      createSideCaller(runtime).complete(request({ botModelId: "plan-model" })),
+    ).resolves.toBe("answer");
+    expect(completeSimple.mock.calls.at(-1)?.[0]).toEqual({
+      id: "light-upstream",
+      provider: "p",
+    });
   });
 
   it("makes no call, and says so, when no model can run", async () => {

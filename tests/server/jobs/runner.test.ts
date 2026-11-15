@@ -280,35 +280,58 @@ describe("tick scheduling", () => {
   });
 
   it("forgets a pending re-run on reset", async () => {
+    let started!: () => void;
     let release!: () => void;
+    const running = new Promise<void>((resolve) => (started = resolve));
     const gate = new Promise<void>((resolve) => (release = resolve));
-    registerJobHandler("held", () => gate);
-    await addJob("held", null);
+    const ran: string[] = [];
+    const handler = async (job: { data: string }) => {
+      if (job.data === "first") {
+        started();
+        await gate;
+      }
+      ran.push(job.data);
+    };
+    registerJobHandler<string>("held", handler);
+    await addJob("held", "first");
     const first = runTick({ housekeeping: false });
-    const ticks = vi.spyOn(jobRunner, "runTick");
+    await running;
+    const second = await addJob("held", "second");
     void runTick();
     jobRunner.reset();
+    // reset drops handlers too. Put one back so a forgotten re-run would run the second job.
+    registerJobHandler<string>("held", handler);
     release();
     await first;
     await tickInFlight();
-    expect(ticks).toHaveBeenCalledTimes(1);
-    vi.restoreAllMocks();
+    expect(ran).toEqual(["first"]);
+    expect((await load(second)).state).toBe("created");
   });
 
   it("forgets a pending re-run on stop", async () => {
+    let started!: () => void;
     let release!: () => void;
+    const running = new Promise<void>((resolve) => (started = resolve));
     const gate = new Promise<void>((resolve) => (release = resolve));
-    registerJobHandler("held", () => gate);
-    await addJob("held", null);
+    const ran: string[] = [];
+    registerJobHandler<string>("held", async (job) => {
+      if (job.data === "first") {
+        started();
+        await gate;
+      }
+      ran.push(job.data);
+    });
+    await addJob("held", "first");
     const first = runTick({ housekeeping: false });
-    const ticks = vi.spyOn(jobRunner, "runTick");
+    await running;
+    const second = await addJob("held", "second");
     void runTick();
     const stopped = jobRunner.stop();
     release();
     await first;
     await stopped;
-    expect(ticks).toHaveBeenCalledTimes(1);
-    vi.restoreAllMocks();
+    expect(ran).toEqual(["first"]);
+    expect((await load(second)).state).toBe("created");
   });
 });
 
