@@ -141,6 +141,22 @@ await journey("workflow-e2e", async ({ page, step, proof, cleanup, api, stamp })
     }
     if (!res.ok() && res.status() !== 404) throw new Error(`vault purge -> ${res.status()}`);
   };
+  /** Changing where a connection points or what it sends, or deleting it, needs a fresh step-up (S4). */
+  const freshStepUp = async () => {
+    const up = await page.request.post("/api/v1/vault/step-up", {
+      data: { password: DEMO.password },
+    });
+    if (!up.ok()) throw new Error(`vault step-up -> ${up.status()}`);
+    return (await up.json()).data.token;
+  };
+  const withStepUp = async (method, url, data) => {
+    const res = await page.request.fetch(`/api/v1${url}`, {
+      method,
+      data,
+      headers: { "X-Vault-Step-Up": await freshStepUp() },
+    });
+    return res;
+  };
 
   // The scheduled fire pushes `routine.succeeded` when Pushover is configured.
   await step("guard: Pushover is not configured on this instance", async () => {
@@ -245,7 +261,7 @@ await journey("workflow-e2e", async ({ page, step, proof, cleanup, api, stamp })
       await expect(page).toHaveURL(/\/connections\/[^/]+$/);
       connId = page.url().split("/").pop();
       cleanup(async () => {
-        const res = await page.request.delete(`/api/v1/connections/${connId}`);
+        const res = await withStepUp("DELETE", `/connections/${connId}`);
         if (!res.ok() && res.status() !== 404) throw new Error(`delete connection ${res.status()}`);
       });
       await expect.poll(async () => (await conn()).status, { timeout: 30_000 }).toBe("error");
@@ -259,8 +275,9 @@ await journey("workflow-e2e", async ({ page, step, proof, cleanup, api, stamp })
   await step(
     "api-only: point the header at the vault item (secretRef); Reconnect connects",
     async () => {
-      const patched = await api.patch(`/connections/${connId}`, { secretRef: handle });
-      expect(patched.secretRef).toBe(handle);
+      const res = await withStepUp("PATCH", `/connections/${connId}`, { secretRef: handle });
+      expect(res.ok()).toBe(true);
+      expect((await res.json()).data.secretRef).toBe(handle);
       await page.reload();
       await page.getByRole("button", { name: "Reconnect" }).click();
       await expect(page.getByText("Reconnect started")).toBeVisible();
