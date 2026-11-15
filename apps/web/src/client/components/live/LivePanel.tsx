@@ -17,46 +17,40 @@
  * takeover itself, the panel says what it asked for.
  */
 import type { CSSProperties, ReactNode } from "react";
-import {
-  Bot as BotIcon,
-  ClipboardPaste,
-  Hand,
-  LoaderCircle,
-  Maximize2,
-  Minimize2,
-  MonitorOff,
-  MousePointerClick,
-  RotateCcw,
-  SquareArrowOutUpRight,
-  X,
-} from "lucide-react";
-import { Link } from "react-router-dom";
-import { Button, Card, CardTitle, EmptyState, ErrorState, LoadingSpinner, Text } from "@groot/ui";
+import { Card } from "@groot/ui";
 import { cn } from "@groot/ui/lib/utils";
 import type { Bot } from "../../../shared/api/bots";
 import { connectionOf, useLiveView, usePanelWidth } from "../../lib/live-view";
 import { useIsGuest } from "../../store/people";
-import { VncView } from "../browser/VncView";
-import type { LiveSurface, PageItem, PanelStatus } from "./surface";
-
-/** The header is the container: tool labels show once it is wide enough for them. */
-const toolLabel = "hidden @xl:inline";
-/** Below that width a labelled tool shrinks to a square icon button. */
-const toolButton = "@max-xl:w-7 @max-xl:px-0";
-/** The hand-off control is the panel's main action, so it keeps its label longer. */
-const handoffLabel = "hidden @md:inline";
-const handoffButton = "@max-md:w-7 @max-md:px-0";
-/**
- * An optional part of the status line. Its separator belongs to it, so a part
- * squeezed out by a narrow header takes the separator along; narrower than
- * that the line is just the connection.
- */
-const statusPart = "min-w-0 truncate before:pr-1.5 before:content-['·'] @max-md:hidden";
-/** Keeps a state's explanation to a readable line length, even in full screen. */
-const noteClass = "mx-auto block max-w-sm";
+import { VncView, type VncState } from "../browser/VncView";
+import { ConnectingOverlay, TakeoverBanner } from "./live-parts";
+import { LivePanelHeader } from "./LivePanelHeader";
+import { LivePanelOffStates } from "./LivePanelOffStates";
+import type { LivePanelSurface, LiveSurface, PageItem, PanelStatus } from "./surface";
 
 /** A guest's viewer never resizes the remote window. */
 const keepSize = async () => undefined;
+
+/** What the panel shows for `status`: its mode, whether it is set up, the status line's parts. */
+function panelState<S extends PanelStatus>(
+  panel: LivePanelSurface<S>,
+  status: S | null,
+  humanDrives: boolean,
+  vncState: VncState,
+) {
+  const starting = Boolean(status?.starting);
+  const mode = status ? panel.mode(status) : null;
+  const streaming = mode === "vnc";
+  const configured = !panel.setup || (status !== null && panel.setup.configured(status));
+  // Bots share one profile unless set to their own, so a reset can reach
+  // every one of them.
+  const shared = status?.profile !== "own";
+
+  const connection = connectionOf(status && { configured, starting, mode }, vncState);
+  const detail = status && mode ? panel.detail(status, { mode, humanDrives }) : null;
+  const takeover = panel.takeover && status?.takeover ? status.takeover : null;
+  return { starting, mode, streaming, configured, shared, connection, detail, takeover };
+}
 
 export interface LivePanelProps {
   bot: Bot;
@@ -105,17 +99,8 @@ export function LivePanel<S extends PanelStatus, L, I extends PageItem>({
     paste,
   } = view;
 
-  const starting = Boolean(status?.starting);
-  const mode = status ? panel.mode(status) : null;
-  const streaming = mode === "vnc";
-  const configured = !panel.setup || (status !== null && panel.setup.configured(status));
-  // Bots share one profile unless set to their own, so a reset can reach
-  // every one of them.
-  const shared = status?.profile !== "own";
-
-  const connection = connectionOf(status && { configured, starting, mode }, vncState);
-  const detail = status && mode ? panel.detail(status, { mode, humanDrives }) : null;
-  const takeover = panel.takeover && status?.takeover ? status.takeover : null;
+  const { starting, mode, streaming, configured, shared, connection, detail, takeover } =
+    panelState(panel, status, humanDrives, vncState);
 
   // The panel itself is the full-screen element: its box has to be the whole
   // screen, with nothing around the card, so the viewport (and the remote
@@ -145,135 +130,36 @@ export function LivePanel<S extends PanelStatus, L, I extends PageItem>({
       )}
 
       <Card size="sm" className={cn("min-h-0 flex-1 gap-0 py-0", surfaceClass)}>
-        <header className="@container flex shrink-0 items-center gap-3 border-b px-4 py-2.5">
-          <div className="min-w-0 flex-1">
-            {tabs ?? <CardTitle>{panel.title}</CardTitle>}
-            <Text variant="meta" className="flex min-w-0 items-center gap-1.5" aria-live="polite">
-              <span className={cn("size-1.5 shrink-0 rounded-full", connection.dot)} aria-hidden />
-              <span className="shrink-0 font-medium text-foreground">{connection.label}</span>
-              {mode && (
-                <span className={statusPart} data-testid={`${kind}-driver`}>
-                  {humanDrives ? "You drive" : `${bot.name} drives`}
-                </span>
-              )}
-              {detail && (
-                <span
-                  className={detail.grow ? cn(statusPart, "flex-1") : statusPart}
-                  data-testid={detail.testId}
-                >
-                  {detail.text}
-                </span>
-              )}
-            </Text>
-          </div>
-
-          <div className="flex shrink-0 items-center gap-1">
-            {streaming &&
-              !guest &&
-              (humanDrives ? (
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  className={handoffButton}
-                  onClick={() => void setDriver("agent")}
-                  aria-label="Release control"
-                  title={panel.releaseTitle(bot.name)}
-                  data-testid={`${kind}-release`}
-                >
-                  <BotIcon />
-                  <span className={handoffLabel}>
-                    {takeover && panel.takeover ? panel.takeover.done : "Release control"}
-                  </span>
-                </Button>
-              ) : (
-                <Button
-                  size="sm"
-                  className={handoffButton}
-                  onClick={() => void setDriver("human")}
-                  aria-label="Take control"
-                  title={panel.takeTitle(bot.name)}
-                  data-testid={`${kind}-takeover`}
-                >
-                  <MousePointerClick />
-                  <span className={handoffLabel}>Take control</span>
-                </Button>
-              ))}
-            {streaming && humanDrives && !guest && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className={toolButton}
-                onClick={paste}
-                aria-label="Paste from your clipboard"
-                title="Paste from your clipboard"
-                data-testid={`${kind}-paste`}
-              >
-                <ClipboardPaste />
-                <span className={toolLabel}>Paste</span>
-              </Button>
-            )}
-            {streaming && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className={toolButton}
-                onClick={toggleFullscreen}
-                aria-label={fullscreen ? "Exit full screen" : "Full screen"}
-                title={fullscreen ? "Exit full screen" : "Full screen"}
-                data-testid={`${kind}-fullscreen`}
-              >
-                {fullscreen ? <Minimize2 /> : <Maximize2 />}
-                <span className={toolLabel}>{fullscreen ? "Exit full screen" : "Full screen"}</span>
-              </Button>
-            )}
-            <span className="mx-1 h-4 w-px shrink-0 bg-border" aria-hidden />
-            {configured && (panel.openPage.forGuests || !guest) && (
-              <Button variant="ghost" size="icon-sm" asChild>
-                <Link
-                  to={panel.openPage.to(status, bot)}
-                  aria-label={panel.openPage.label}
-                  title={panel.openPage.label}
-                  data-testid={`${kind}-open-page`}
-                >
-                  <SquareArrowOutUpRight className="size-3.5" />
-                </Link>
-              </Button>
-            )}
-            {configured && !guest && (
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => void reset()}
-                aria-label={panel.reset.label}
-                title={panel.reset.title(shared)}
-                data-testid={`${kind}-reset`}
-              >
-                <RotateCcw className="size-3.5" />
-              </Button>
-            )}
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={onClose}
-              aria-label={panel.closeLabel}
-              title="Close panel"
-            >
-              <X className="size-3.5" />
-            </Button>
-          </div>
-        </header>
+        <LivePanelHeader
+          kind={kind}
+          panel={panel}
+          bot={bot}
+          tabs={tabs}
+          status={status}
+          guest={guest}
+          connection={connection}
+          mode={mode}
+          detail={detail}
+          takeover={takeover}
+          streaming={streaming}
+          humanDrives={humanDrives}
+          configured={configured}
+          shared={shared}
+          fullscreen={fullscreen}
+          onDriver={(driver) => void setDriver(driver)}
+          onPaste={paste}
+          onToggleFullscreen={toggleFullscreen}
+          onReset={() => void reset()}
+          onClose={onClose}
+        />
 
         {streaming && humanDrives && takeover && panel.takeover && (
-          <div
-            className="flex shrink-0 items-start gap-2 border-b bg-primary/5 px-4 py-2 text-sm"
-            data-testid={`${kind}-takeover-reason`}
-          >
-            <Hand className="mt-0.5 size-4 shrink-0 text-primary" />
-            <span className="min-w-0">
-              <span className="font-medium">{bot.name} asked you:</span> {takeover}{" "}
-              <span className="text-muted-foreground">{panel.takeover.note}</span>
-            </span>
-          </div>
+          <TakeoverBanner
+            testId={`${kind}-takeover-reason`}
+            asked={<>{bot.name} asked you:</>}
+            reason={takeover}
+            note={panel.takeover.note}
+          />
         )}
 
         <div className="relative min-h-0 flex-1 overflow-hidden" data-testid={`${kind}-viewport`}>
@@ -289,85 +175,20 @@ export function LivePanel<S extends PanelStatus, L, I extends PageItem>({
             />
           )}
           {streaming && vncState !== "live" && (
-            <div className="absolute inset-0 flex items-center justify-center gap-2 bg-background/70 text-xs text-muted-foreground">
-              <LoaderCircle className="size-3.5 animate-spin" />
-              {vncState === "connecting" ? panel.connecting : "Reconnecting…"}
-            </div>
+            <ConnectingOverlay vncState={vncState} connecting={panel.connecting} />
           )}
 
-          {mode === "headless" && panel.headless && (
-            <div className="h-full" data-testid={`${kind}-headless`}>
-              <EmptyState
-                icon={MonitorOff}
-                title={panel.headless.title}
-                description={<span className={noteClass}>{panel.headless.note(bot.name)}</span>}
-                className="h-full py-6"
-              />
-            </div>
-          )}
-          {status && panel.setup && !configured && (
-            <EmptyState
-              icon={MonitorOff}
-              title={panel.setup.title}
-              description={
-                <span className={noteClass} data-testid={`${kind}-setup-hint`}>
-                  {panel.setup.hint(status)}
-                </span>
-              }
-              className="h-full py-6"
-            />
-          )}
-
-          {configured && !mode && starting && (
-            <EmptyState
-              icon={panel.off.icon}
-              title={
-                status?.phase === "installing" ? panel.off.installing.title : panel.off.starting
-              }
-              description={
-                <span className={noteClass}>
-                  {status?.phase === "installing"
-                    ? panel.off.installing.description
-                    : "This takes a few seconds."}
-                </span>
-              }
-              action={<LoadingSpinner size="sm" />}
-              className="h-full py-6"
-            />
-          )}
-          {configured && !mode && !starting && status?.error && (
-            <ErrorState
-              title={panel.off.failed}
-              description={
-                <span className={cn(noteClass, "break-words")} data-testid={`${kind}-error`}>
-                  {status.error}
-                </span>
-              }
-              action={
-                guest ? undefined : (
-                  <Button size="sm" onClick={() => void open()} data-testid={`${kind}-open`}>
-                    Try again
-                  </Button>
-                )
-              }
-              className="h-full py-6"
-            />
-          )}
-          {configured && !mode && !starting && !status?.error && (
-            <EmptyState
-              icon={panel.off.icon}
-              title={panel.off.closed.title}
-              description={panel.off.closed.description(bot.name)}
-              action={
-                guest ? undefined : (
-                  <Button size="sm" onClick={() => void open()} data-testid={`${kind}-open`}>
-                    {panel.off.closed.open}
-                  </Button>
-                )
-              }
-              className="h-full py-6"
-            />
-          )}
+          <LivePanelOffStates
+            kind={kind}
+            panel={panel}
+            bot={bot}
+            status={status}
+            mode={mode}
+            configured={configured}
+            starting={starting}
+            guest={guest}
+            onOpen={() => void open()}
+          />
         </div>
       </Card>
     </div>
