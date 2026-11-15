@@ -116,6 +116,98 @@ composer.
 for you while no tab shows it. That covers Shelley's `message_user` and
 Claude Code's approval requests.
 
+## Projects, pull requests and Auto-fix
+
+Issue #297 (ADR 0021, ADR 0022, ADR 0023). Everything here sits above the
+harness contract, so it works for every harness whose `cwd` is on the
+sandbox. Owner-only: guests see none of it.
+
+**Set up.** **Projects** in the Code header opens the dialog:
+
+- **GitHub.** Either save a fine-grained token for the project's
+  repositories (recommended: it is kept as an `app` vault item for the
+  `github` sink; API calls go from this server, and only `git push` runs on
+  the sandbox, with the token on that command's stdin), or sign `gh` in
+  with `gh auth login` from the Terminal page (every process on the sandbox
+  can then use that login). The dialog says which is active and whom it
+  acts as.
+- **New project:** `owner/name` or a GitHub URL. The app checks the sandbox
+  has `git` (and `gh` without a token) and that the credential reaches the
+  repository, then clones it to `~/tiny-agents-code/<owner>--<name>/checkout`.
+- **Per project:** the default harness, a `check` script override, trusted
+  review bots, archive the thread when its PR merges (on by default), and
+  Auto-fix new PRs (off by default).
+
+**Scripts** are read from a checked-in `.tiny-agents/code.json`:
+
+```json
+{ "setup": "pnpm install", "check": "pnpm test", "archive": "rm -rf node_modules" }
+```
+
+`setup` runs in a new worktree before the first turn and after unarchive (a
+failure is reported to the agent; the turn still starts). The agent is told
+to run `check` before it reports done. `archive` runs before a worktree is
+removed.
+
+**Start.** Pick the project on the New thread screen. The thread gets its
+own worktree on a new branch `ta/<slug>-<hex>` from the freshly fetched base
+branch, and its first message starts with one line naming the branch and
+telling the agent to commit but not push.
+
+**Review.** In a project thread, Changes (⌘⇧D) shows everything since the
+merge base with the base branch, committed or not: a file list with a
+filter (generated files and lockfiles muted and last), **Viewed** marks that
+come back unmarked when the agent changes the file again, `[` / `]` between
+files, and line comments kept as drafts until **Send to agent** posts them
+as one message, each with its file, lines and quoted lines. **Uncommitted or
+a commit** switches to the harness's own Changes.
+
+**Publish.** The **PR** button in the thread header opens the PR tab.
+**Publish draft PR** pushes the branch (never forced, hooks off) and opens a
+draft PR with the commits as its body; with a PR open, Publish pushes new
+commits. **Link pull request** links an existing one, and a PR the agent
+opened for the branch is linked on its own. After a PR merges, the next
+Publish opens a new one; earlier PRs are listed.
+
+**The PR tab.** Checks at a glance (failures link to their log; a check
+pending for 6 hours is **Stalled** and no longer blocks green), reviews,
+unresolved comments (from authors Auto-fix does not trust, labelled
+**Ignored**), **Attach all comments** into the composer, the description,
+**Fix CI** (one pass now), **Merge** with the repository's methods, the
+**Auto-fix** switch with its state, the pass history, and **Unlink**.
+Opening the tab reconciles with GitHub.
+
+**Auto-fix.** While on, the app watches the PR (every minute while checks
+move, every 5 minutes idle) and starts a pass for a failed check, a trusted
+review or comment, or a merge conflict, after a 60-second quiet period:
+
+- The pass is sent to the thread (queued behind a running turn) with the
+  log tails and comments inside a block marked untrusted, and fixed
+  instructions: fix root causes, never weaken a test, do not edit CI
+  workflow files, run `check`, commit, end with an `autofix-report` block.
+- When the turn ends, the app pushes. It does not push a pass with no new
+  commit, one that touches a protected path (`.github/workflows/**` by
+  default), or one GitHub rejects; the loop then waits for you. It replies
+  to each fixed thread with the commit and resolves it; without a report it
+  posts one summary comment and resolves nothing.
+- Trusted: you, the repository's owners, members and collaborators, and the
+  review bots you list. The app's own comments never start a pass. PRs from
+  forks are never fixed. Approvals never start a pass.
+- Limits: 6 passes in an hour pauses until someone pushes, reviews or
+  writes; 10 passes in a row without you switches Auto-fix off; a pass past
+  20 minutes is stopped. Writing in the thread moves a waiting loop on.
+- A pass runs in the thread's own permission mode, never with YOLO's trust:
+  anything the harness asks waits for you.
+- Pushes (Settings → Notifications): **Auto-fix needs you** (it stopped for
+  you, switched itself off, or a check stalled) and **Pull request updates**
+  (checks green, merged, or failed with Auto-fix off). None while the
+  thread is on screen.
+
+Not built yet: the native pi-durable harness (phases 0 and 1), the GitHub
+App transport and webhooks, auto-merge, a final check when green, merge
+queues, per-turn checkpoints, a per-thread spend limit, and the
+`Thread-Id` commit trailer.
+
 ## Bots hand off coding
 
 Every bot has the `code` toolkit. Shelley is the default harness; a bot names
@@ -198,12 +290,23 @@ Known limits (register row C7):
   - `code.routes.ts`: `/api/v1/code/*`.
   - `code.bots.ts`: the bots' `CodeStore`.
   - `code.store.ts`: the tables.
+  - `code.projects.ts`, `code.workspace.ts`: projects, and git on the
+    sandbox (worktrees, base-branch diffs, the push rules).
+  - `code.github.ts`: the GitHub client and git credential, from Settings.
+  - `code.pulls.ts`, `code.pulls.store.ts`: PR links, Publish, the
+    reconcile chain (`code-pr-reconcile`) and the PR tab.
+  - `code.autofix.ts` (the pure `decide`), `code.passes.ts` (a pass).
+  - `code.projects.routes.ts`: `/api/v1/code/{projects,github}` and a
+    thread's `pr`, `publish` and `review` routes.
 - **Tables:**
   - `code_threads`: the index. Followed threads and how far you have read
     them, plus the rows of harnesses without their own list.
   - `code_handoffs`: the hand-offs, `starting → running → finished`
     compare-and-set.
   - `code_handoff_finishes`: finishes owed to bots' chats, until delivered.
+  - `code_projects`; `code_pull_requests` (a cache of GitHub plus the
+    Auto-fix loop); `code_autofix_passes`; `code_pr_comments` (the app's own
+    comments); `code_review_viewed` and `code_review_drafts`.
   - The old `shelley_seen` and `shelley_handoffs` rows are copied in at
     boot.
 - **Client:**
