@@ -33,8 +33,8 @@
 
     // The hook: the bot list alone, as a tall panel. Two jobs are already in;
     // two more land while the caption arrives.
-    const panel = S.listPanel(cam, S.q('.appwin aside[aria-label="Sidebar"]'));
-    const list = { ...panel.cam, y: -(cam.local(bots).y - 12) * panel.cam.scale };
+    const panel = S.listPanel(cam, S.q('.appwin aside[aria-label="Sidebar"]'), bots);
+    const list = panel.cam;
     gsap.set(vp, panel.vp);
     cam.set(list);
 

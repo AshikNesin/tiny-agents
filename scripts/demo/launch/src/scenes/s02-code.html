@@ -178,7 +178,6 @@
     S.show(10.9, footer, { y: 4 });
 
     // ── Back in the chat, the same answer has been reported to the bot.
-    for (const el of later) gsap.set(el, { opacity: 0 });
     const tail = later.length ? chat.local(later[later.length - 1]) : c;
     const report = { x: c.x, y: c.y, w: Math.max(ask.w, c.w), h: tail.y + tail.h - c.y };
     const onReport = chat.frame(report, { fit: 0.86, maxScale: 2.1, ay: 0.5 });
@@ -188,12 +187,14 @@
     tl.to(clip, { cut: shrink.cut, round: shrink.round, duration: 0.55, ease: "power3.inOut", onUpdate: applyClip }, 11.4);
     tl.to(layer, { autoAlpha: 0, duration: 0.12 }, 11.9);
     S.sfx(11.4, "whoosh", { d: 0.55 });
-    later.forEach((el, i) => {
-      const at = 12.0 + i * 0.75;
-      tl.to(el, { opacity: 1, duration: 0.01 }, at);
-      S.stream(at, el, 0.6);
-      S.sfx(at, "pop");
-    });
+    // Close in on what came back: the agent's own summary, relayed into the chat.
+    if (later.length) {
+      const bubble = chat.local(later[0].querySelector(".rounded-2xl") || later[0]);
+      const first = chat.local(later[0]);
+      const said = { x: bubble.x - 12, y: first.y, w: bubble.w + 24, h: tail.y + tail.h - first.y };
+      chat.to(12.15, chat.frame(said, { fit: 0.78, maxScale: 2.3, ay: 0.5 }), 0.6);
+      S.sfx(12.2, "pop");
+    }
     chat.to(13.45, full, 0.55);
   });
 </script>

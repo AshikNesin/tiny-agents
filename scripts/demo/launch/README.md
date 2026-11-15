@@ -42,13 +42,15 @@ them, generates and masters the score and effects, and renders with
 To look at a scene while working on it:
 
 ```sh
-SCENE=s02-code node tools/build.mjs
-npx hyperframes@0.9.53 snapshot --at 1,4,9 -o .hyperframes/shots
+SCENE=s02-code node tools/build.mjs          # builds .film/index/ from just that scene
+cd .film/index
+npx hyperframes@0.9.53 snapshot --at 1,4,9 -o shots
 npx hyperframes@0.9.53 preview
 ```
 
-`index.html`, `vertical.html`, `teaser.html` and `compositions/` are build
-output: edit `src/`, then run `node tools/build.mjs`.
+`node tools/build.mjs` writes one HyperFrames project per cut under `.film/`
+(`index`, `vertical`, `teaser`). They are build output: edit `src/`, then
+build again.
 
 ## Files
 

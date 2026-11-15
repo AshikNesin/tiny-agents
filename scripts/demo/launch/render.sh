@@ -24,8 +24,9 @@ CUTS=("${@:-index vertical teaser}")
 node tools/build.mjs
 node tools/cues.mjs
 mkdir -p assets/audio "$OUT"
+OUT_ABS="$(cd "$OUT" && pwd)"
 for cut in "${CUTS[@]}"; do
-  [[ -f "$cut.html" ]] || { echo "no $cut.html (its scenes are not all written yet)"; continue; }
+  [[ -f ".film/$cut/index.html" ]] || { echo "no .film/$cut (its scenes are not all written yet)"; continue; }
   python3 tools/music.py --cues "assets/audio/cues.$cut.json" \
     --music "assets/audio/music.$cut.raw.wav" --sfx "assets/audio/sfx.$cut.raw.wav"
   # The bed sits under the picture: glue, limit, then a linear loudness pass so
@@ -42,6 +43,6 @@ done
 
 node tools/build.mjs
 for cut in "${CUTS[@]}"; do
-  [[ -f "$cut.html" ]] || continue
-  $HF render --composition "$cut.html" --quality "$QUALITY" --fps 30 -o "$OUT/${NAME[$cut]}.mp4"
+  [[ -f ".film/$cut/index.html" ]] || continue
+  (cd ".film/$cut" && $HF render --quality "$QUALITY" --fps 30 -o "$OUT_ABS/${NAME[$cut]}.mp4")
 done

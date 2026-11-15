@@ -6,22 +6,22 @@
   }
   .who {
     position: absolute;
-    left: 216px;
+    right: 1736px;
     z-index: 25;
     padding: 7px 16px 8px;
     border-radius: 999px;
     background: var(--f-ink);
     color: #fff;
-    font-size: 26px;
+    font-size: 28px;
     font-weight: 650;
     letter-spacing: -0.01em;
     opacity: 0;
   }
   .who.w1 {
-    top: 187px;
+    top: 356px;
   }
   .who.w2 {
-    top: 627px;
+    top: 796px;
   }
 </style>
 <div class="f-scene">
@@ -117,8 +117,17 @@
 
     // ── Sonaal has the same chat open. Split the screen: one conversation, two people.
     const split = 3.05;
-    const thread = union(...mine.map((el) => cam.local(el)));
-    const k = (cam.vp.w * 0.86) / thread.w;
+    // Measured on the words, not on the rows: a row carries room for its hover controls.
+    const words = (c, list) => union(...list.flatMap((el) => [...el.querySelectorAll("p, span")]).map((el) => c.local(el)));
+    const thread = words(cam, mine);
+    const guestThread = words(cam2, theirs);
+    // One scale for both halves: wide enough to read, short enough that neither thread is cut.
+    const k = Math.min(
+      (cam.vp.w * 0.88) / thread.w,
+      (SPLIT_H - 60) / thread.h,
+      (SPLIT_H - 60) / guestThread.h,
+      1.9,
+    );
     const onThread = {
       scale: k,
       x: cam.vp.w / 2 - (thread.x + thread.w / 2) * k,
@@ -126,7 +135,6 @@
     };
     tl.to(vp1, { height: SPLIT_H, duration: 0.6, ease: "power3.inOut" }, split);
     cam.to(split, onThread, 0.6, "power3.inOut");
-    const guestThread = union(...theirs.map((el) => cam2.local(el)));
     cam2.set(cam2.frame(guestThread, { scale: k, ay: 0.5 }));
     tl.fromTo(vp2, { y: 520 }, { y: 0, duration: 0.6, ease: "expo.out" }, split + 0.1);
     S.sfx(split, "whoosh", { d: 0.6 });

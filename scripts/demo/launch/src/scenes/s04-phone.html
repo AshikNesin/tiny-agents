@@ -91,6 +91,7 @@
     const NOTIF = { x: 16, y: 232, w: 380, h: 138 };
     const CARD = { x: 16, y: 281, w: 380, h: 222 };
     const APPROVE = { x: 32, y: 440, w: 101, h: 48 };
+    const SETTLED = { x: 8, y: 150, w: 396, h: 150 };
 
     // The desk: the Travel Planner chat, on the waiting vault card.
     const desk = S.camera(".desk-cam");
@@ -105,13 +106,13 @@
     const base = phone.full();
     phone.set(base);
 
-    S.cap(".c1", 0.2, 2.8);
+    S.cap(".c1", 0.2, 2.1);
 
     // The desk leaves; the phone comes up from the bottom edge.
-    tl.fromTo(".ph-warm", { opacity: 0 }, { opacity: 1, duration: 0.5, ease: "power2.inOut" }, 2.5);
-    tl.to(S.q(".ph-desk"), { x: -1950, duration: 0.55, ease: "power3.in" }, 2.5);
-    S.sfx(2.55, "whoosh", { d: 0.5 });
-    tl.fromTo(S.q(".phone"), { y: 1000 }, { y: 0, duration: 0.75, ease: "expo.out" }, 2.75);
+    tl.fromTo(".ph-warm", { opacity: 0 }, { opacity: 1, duration: 0.5, ease: "power2.inOut" }, 1.8);
+    tl.to(S.q(".ph-desk"), { x: -1950, duration: 0.55, ease: "power3.in" }, 1.8);
+    S.sfx(1.85, "whoosh", { d: 0.5 });
+    tl.fromTo(S.q(".phone"), { y: 1000 }, { y: 0, duration: 0.75, ease: "expo.out" }, 2.05);
     gsap.set(S.qa(".chat-wait, .chat-done"), { opacity: 0 });
 
     // The push lands on the lock screen.
@@ -119,33 +120,35 @@
       S.q(".notif"),
       { opacity: 0, y: -46, scale: 0.97 },
       { opacity: 1, y: 0, scale: 1, duration: 0.4, ease: "power3.out" },
-      3.5,
+      2.75,
     );
-    S.sfx(3.5, "buzz");
-    S.cap(".c2", 3.4, 6.3);
+    S.sfx(2.75, "buzz");
+    S.cap(".c2", 2.6, 5.3);
 
     // A tap opens the app on the waiting card.
-    const pNotif = phone.point(NOTIF, 4.7);
-    S.tap(".tap", 4.7, pNotif);
+    const pNotif = phone.point(NOTIF, 3.9);
+    S.tap(".tap", 3.9, pNotif);
     const cx = NOTIF.x + NOTIF.w / 2;
     const cy = NOTIF.y + NOTIF.h / 2;
-    tl.set(S.q(".chat-wait"), { opacity: 1 }, 4.78);
+    tl.set(S.q(".chat-wait"), { opacity: 1 }, 3.98);
     tl.fromTo(
       S.q(".chat-wait"),
       { clipPath: `circle(0px at ${cx}px ${cy}px)` },
       { clipPath: `circle(1000px at ${cx}px ${cy}px)`, duration: 0.5, ease: "power2.in" },
-      4.78,
+      3.98,
     );
     const onPhoneCard = phone.frame({ x: 8, y: CARD.y, w: 396, h: CARD.h }, { fit: 1, ay: 0.5 });
-    phone.to(5.45, onPhoneCard, 0.6);
-    S.cap(".c3", 6.5, 9.45);
+    phone.to(4.6, onPhoneCard, 0.6);
+    S.cap(".c3", 5.6, 9.45);
 
     // Approve.
-    const pApprove = phone.point(APPROVE, 7.3);
-    S.tap(".tap", 7.3, pApprove);
-    tl.to(S.q(".chat-done"), { opacity: 1, duration: 0.16, ease: "none" }, 7.42);
-    S.sfx(7.45, "bell");
-    phone.to(7.55, base, 0.6);
+    const pApprove = phone.point(APPROVE, 6.5);
+    S.tap(".tap", 6.5, pApprove);
+    tl.to(S.q(".chat-done"), { opacity: 1, duration: 0.16, ease: "none" }, 6.62);
+    S.sfx(6.65, "bell");
+    phone.to(6.75, base, 0.55);
+    // The card is gone; one line says what happened, and that it waited for you.
+    phone.to(7.75, phone.frame(SETTLED, { fit: 1, ay: 0.4 }), 0.65);
 
     // Back to the desk, where the card is settled too.
     tl.set(S.q(".lay-wait"), { autoAlpha: 0 }, 9.0);

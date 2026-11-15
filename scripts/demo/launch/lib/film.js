@@ -175,14 +175,18 @@
      * just the sidebar. Returns the screen's box and the camera's framing for
      * that panel, and the screen's full box to return to.
      */
-    function listPanel(cam, sidebar) {
+    function listPanel(cam, sidebar, bots) {
       const W = 760;
       const b = cam.local(sidebar);
       const k = W / b.w;
+      const list = bots ? cam.local(bots) : null;
+      // With the list given, the panel starts just above it and is only as tall as it.
+      const y = list ? -(list.y - 12) * k : 0;
+      const height = list ? Math.min(cam.vp.h, Math.round((list.h + 30) * k)) : cam.vp.h;
       return {
-        vp: { left: (FRAME.w - W) / 2, width: W },
-        cam: { x: -b.x * k, y: 0, scale: k },
-        wide: { left: cam.vp.x, width: cam.vp.w },
+        vp: { left: (FRAME.w - W) / 2, width: W, height },
+        cam: { x: -b.x * k, y, scale: k },
+        wide: { left: cam.vp.x, width: cam.vp.w, height: cam.vp.h },
       };
     }
 

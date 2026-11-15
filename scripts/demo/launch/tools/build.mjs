@@ -2,11 +2,11 @@
 //   src/scenes/<id>.html      a scene: <style>, markup, <script>
 //   snap/<mode>/<name>.html   real app states (tools/snaplib.mjs)
 //   src/cuts.mjs              which scenes each cut plays, and for how long
-// and writes what HyperFrames renders:
-//   compositions/<id>.html    one sub-composition per scene
-//   index.html                the 16:9 film
-//   vertical.html             the 9:16 cut
-//   teaser.html               the 15-second cut
+// and writes what HyperFrames renders, one project folder per cut:
+//   .film/index/     the 16:9 film
+//   .film/vertical/  the 9:16 cut
+//   .film/teaser/    the 15-second cut
+// each with an index.html and one sub-composition per scene.
 //
 //   node tools/build.mjs
 //
@@ -31,10 +31,16 @@ import * as fixes from "../src/fixes.mjs";
 import { repairSelectors } from "./snaplib.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
-// FILM_OUT=<dir> builds into that folder instead of the project root, with
-// links back to the shared assets, so two people can work on different scenes
-// without overwriting each other's index.html.
-const OUT = process.env.FILM_OUT ? path.resolve(ROOT, process.env.FILM_OUT) : ROOT;
+// Each cut is its own HyperFrames project folder, .film/<cut>/, holding an
+// index.html, its compositions and links to the shared assets: HyperFrames
+// expects one root composition per folder. With SCENE set there is one cut,
+// and FILM_OUT=<dir> names its folder, so two people can work on different
+// scenes without overwriting each other.
+const cutDir = (name) =>
+  process.env.SCENE
+    ? path.resolve(ROOT, process.env.FILM_OUT ?? ".film/index")
+    : path.resolve(ROOT, process.env.FILM_OUT ?? ".film", name);
+const built = {};
 const read = (p) => readFileSync(path.join(ROOT, p), "utf8");
 const FILM_SIZE = { h: { w: 1920, h: 1080 }, v: { w: 1080, h: 1920 } };
 
@@ -226,12 +232,20 @@ ${script.replaceAll("{{id}}", id).replaceAll("{{dur}}", String(dur))}
   </script>
 </template>
 `;
-  writeFileSync(path.join(OUT, "compositions", `${id}.html`), out);
+  built[id] = out;
   return dur;
 }
 
 function buildCut(name, cut, durs) {
   const { w, h } = FILM_SIZE[cut.fmt];
+  const dir = cutDir(name);
+  rmSync(path.join(dir, "compositions"), { recursive: true, force: true });
+  mkdirSync(path.join(dir, "compositions"), { recursive: true });
+  for (const link of ["assets", "lib", "android"])
+    if (!existsSync(path.join(dir, link))) symlinkSync(path.join(ROOT, link), path.join(dir, link));
+  for (const f of ["hyperframes.json", "meta.json"]) writeFileSync(path.join(dir, f), read(f));
+  for (const [id] of cut.scenes)
+    writeFileSync(path.join(dir, "compositions", `${id}.html`), built[id]);
   let t = 0;
   const hosts = cut.scenes.map(([id, slot, a, b], i) => {
     const d = slot ?? durs[id];
@@ -288,7 +302,7 @@ ${audio.join("\n")}
   </body>
 </html>
 `;
-  writeFileSync(path.join(OUT, `${name}.html`), html);
+  writeFileSync(path.join(dir, "index.html"), html);
   return total;
 }
 
@@ -302,14 +316,6 @@ if (!existsSync(gsapFile)) {
 
 buildAppCss("desktop");
 buildAppCss("mobile");
-rmSync(path.join(OUT, "compositions"), { recursive: true, force: true });
-mkdirSync(path.join(OUT, "compositions"), { recursive: true });
-if (OUT !== ROOT) {
-  for (const dir of ["assets", "lib", "android"])
-    if (!existsSync(path.join(OUT, dir))) symlinkSync(path.join(ROOT, dir), path.join(OUT, dir));
-  for (const f of ["hyperframes.json", "meta.json"])
-    if (!existsSync(path.join(OUT, f))) writeFileSync(path.join(OUT, f), read(f));
-}
 const durs = {};
 const want = new Set(Object.values(CUTS).flatMap((c) => c.scenes.map((s) => s[0])));
 for (const [dir, fmt] of [
@@ -328,8 +334,10 @@ for (const [dir, fmt] of [
 for (const [name, cut] of Object.entries(CUTS)) {
   const missing = cut.scenes.filter(([id]) => !(id in durs)).map(([id]) => id);
   if (missing.length) {
-    console.log(`${name}.html: skipped, no source yet for ${missing.join(", ")}`);
+    console.log(`${name}: skipped, no source yet for ${missing.join(", ")}`);
     continue;
   }
-  console.log(`${name}.html: ${buildCut(name, cut, durs)} s, ${cut.scenes.length} scenes`);
+  console.log(
+    `${name}: ${buildCut(name, cut, durs)} s, ${cut.scenes.length} scenes -> ${path.relative(ROOT, cutDir(name))}/`,
+  );
 }

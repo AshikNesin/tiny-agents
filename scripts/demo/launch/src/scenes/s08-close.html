@@ -187,8 +187,8 @@
 
     // The bot list, as the film opened on it. Nothing is waiting now.
     const vp = S.q(".vp");
-    const panel = S.listPanel(cam, S.q('.appwin aside[aria-label="Sidebar"]'));
-    const inbox = { ...panel.cam, y: -(cam.local(bots).y - 12) * panel.cam.scale };
+    const panel = S.listPanel(cam, S.q('.appwin aside[aria-label="Sidebar"]'), bots);
+    const inbox = panel.cam;
     gsap.set(vp, panel.vp);
     cam.set(inbox);
     const dot = row("Expense Tracker")?.querySelector('[aria-label="Unread"]');

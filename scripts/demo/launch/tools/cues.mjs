@@ -19,7 +19,10 @@ mkdirSync(path.join(ROOT, "assets/audio"), { recursive: true });
 
 const browser = await chromium.launch();
 for (const [name, cut] of Object.entries(CUTS)) {
-  const file = path.join(ROOT, `${name}.html`);
+  const dir = process.env.SCENE
+    ? path.resolve(ROOT, process.env.FILM_OUT ?? ".film/index")
+    : path.resolve(ROOT, process.env.FILM_OUT ?? ".film", name);
+  const file = path.join(dir, "index.html");
   if (!existsSync(file)) continue;
   const size = cut.fmt === "h" ? { width: 1920, height: 1080 } : { width: 1080, height: 1920 };
   const page = await browser.newPage({ viewport: size });
@@ -29,7 +32,7 @@ for (const [name, cut] of Object.entries(CUTS)) {
   const scenes = Object.fromEntries(
     cut.scenes.map(([id]) => [
       id,
-      readFileSync(path.join(ROOT, "compositions", `${id}.html`), "utf8"),
+      readFileSync(path.join(dir, "compositions", `${id}.html`), "utf8"),
     ]),
   );
   await page.evaluate((scenes) => {

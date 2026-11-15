@@ -92,9 +92,9 @@
     S.cap(".c2", 4.4, 8.55);
 
     // ── And it is in the list: the newest member of the team.
-    const panel = S.listPanel(cam, ok.querySelector('aside[aria-label="Sidebar"]'));
     const bots = ok.querySelector('section[aria-label="Bots"]');
-    const onList = { ...panel.cam, y: -(cam.local(bots).y - 12) * panel.cam.scale };
+    const panel = S.listPanel(cam, ok.querySelector('aside[aria-label="Sidebar"]'), bots);
+    const onList = panel.cam;
     tl.to(vp, { ...panel.vp, duration: 0.7, ease: "power3.inOut" }, 5.5);
     cam.to(5.5, onList, 0.7, "power3.inOut");
     S.sfx(5.5, "whoosh", { d: 0.7 });
