@@ -44,7 +44,7 @@ jobs:
     # A version bump in a repo with no release hub set up skips quietly; a manual run still
     # fails fast on the missing variable.
     if: github.event_name == 'workflow_dispatch' || vars.RELEASE_HUB_URL != ''
-    runs-on: ubuntu-latest
+    runs-on: instabox-medium
     timeout-minutes: 30
     env:
       RELEASE_HUB_URL: ${{ vars.RELEASE_HUB_URL }}
