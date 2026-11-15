@@ -1,5 +1,17 @@
 # @tiny-agents/code
 
+## 0.2.4
+
+### Patch Changes
+
+- [#277](https://github.com/AshikNesin/tiny-agents/pull/277) [`3342118`](https://github.com/AshikNesin/tiny-agents/commit/3342118da1af6ce513455ff5adafc858367a49da) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Claude Code on the Code page: a bad request is answered as one (register row C13).
+  
+  - **400:** a missing or unusable working directory, an unknown effort or permission mode, an empty title and the like answer 400 with the reason ("Unknown effort "extreme". Use one of: low, medium, high, xhigh, max.") instead of 500 "unexpected error".
+  - **404:** a Claude Code thread that does not exist answers 404 ("No Claude Code thread …"), so a bot's `code_send` or `code_status` on it says there is no such thread.
+  - **Unchanged:** anything the harness did not expect, such as the sandbox worker being unreachable, is still a 500.
+- Updated dependencies [[`393dd71`](https://github.com/AshikNesin/tiny-agents/commit/393dd71934f643d83303f57467f54e90318a9b76), [`b5dcf5d`](https://github.com/AshikNesin/tiny-agents/commit/b5dcf5df004bd1294a853ee120c5e0032dc55f78)]:
+  - @tiny-agents/claude-worker@0.4.3
+
 ## 0.2.3
 
 ### Patch Changes

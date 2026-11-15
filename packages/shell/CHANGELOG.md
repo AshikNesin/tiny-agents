@@ -1,5 +1,12 @@
 # @groot/shell
 
+## 3.1.1
+
+### Patch Changes
+
+- Updated dependencies [[`879de1d`](https://github.com/AshikNesin/tiny-agents/commit/879de1db33c332dfbf9ab98bb83fca2f53ed108a)]:
+  - @groot/core@2.3.1
+
 ## 3.1.0
 
 ### Minor Changes

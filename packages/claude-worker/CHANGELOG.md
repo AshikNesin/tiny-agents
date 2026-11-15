@@ -1,5 +1,23 @@
 # @tiny-agents/claude-worker
 
+## 0.4.3
+
+### Patch Changes
+
+- [#265](https://github.com/AshikNesin/tiny-agents/pull/265) [`393dd71`](https://github.com/AshikNesin/tiny-agents/commit/393dd71934f643d83303f57467f54e90318a9b76) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Claude plan: the transcript lives in the agent store, and sends behave as they do on pi (ADR 0018).
+  
+  - **Durable transcript:** each message and reply is an entry of the bot's own conversation in `agent.db`, not a JSON file beside it. On the first start after the upgrade, `<agent.db>.claude.json` is imported once and renamed `.claude.json.imported`; a file that cannot be read is left as it is and logged.
+  - **Sends:** a send returns as soon as it is stored instead of when the reply ends, a retried send is not added twice, and a message sent while Claude replies waits above the composer (withdraw it there) and is answered next.
+  - **Stop and pauses:** a stopped reply stays stopped, Stop also ends the Claude Code process on the sandbox, a usage pause keeps your message and frees the worker for the next turn, and a reply with nothing in it still counts as finished.
+  - **Restarts:** after an app restart a Claude plan chat shows its own transcript right away.
+  - **Long waits:** a tool call waiting for your approval, answer or sign-in no longer times out after two minutes on the worker.
+
+- [#236](https://github.com/AshikNesin/tiny-agents/pull/236) [`b5dcf5d`](https://github.com/AshikNesin/tiny-agents/commit/b5dcf5df004bd1294a853ee120c5e0032dc55f78) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Claude plan: raise the per-reply turn limit and make it a setting.
+  
+  - **Default:** Claude Code's `maxTurns` goes from 30 to 100, so browser tasks no longer stop with "Reached maximum number of turns (30)".
+  - **Settings → Models → Claude plan → Max turns:** set 1 to 1,000, or tick **No limit** (opt-in) to run Claude Code without `maxTurns`. It applies from the next message, with no release: the worker restarts an idle Claude process with the new limit and resumes the conversation.
+  - **Error:** running out of turns now says where to raise the limit.
+
 ## 0.4.2
 
 ### Patch Changes
