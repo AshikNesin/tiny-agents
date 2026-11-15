@@ -593,9 +593,10 @@ export async function threadPulls(threadId: string, fresh = true): Promise<Threa
   const active = rows.find((r) => r.state === "open") ?? null;
   let ahead: number | null = null;
   if (thread.worktree) {
-    const ws = await codeGitHub().workspace();
-    ahead = await ws
-      .commitsAhead(thread.worktree, project.baseBranch)
+    // The tab still opens when the sandbox is unreachable; it just cannot count.
+    ahead = await codeGitHub()
+      .workspace()
+      .then((ws) => ws.commitsAhead(thread.worktree!, project.baseBranch))
       .then((c) => c.length)
       .catch(() => null);
   }
