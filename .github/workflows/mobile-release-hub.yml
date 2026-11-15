@@ -41,6 +41,9 @@ concurrency: ${{ github.workflow }}-${{ github.ref }}
 jobs:
   release:
     name: Build and publish
+    # A version bump in a repo with no release hub set up skips quietly; a manual run still
+    # fails fast on the missing variable.
+    if: github.event_name == 'workflow_dispatch' || vars.RELEASE_HUB_URL != ''
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:

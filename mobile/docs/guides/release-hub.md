@@ -28,18 +28,23 @@ match.
 
 ## Releasing
 
-Bump `android/version.properties` (`VERSION_CODE` only goes up — the release hub refuses a code it already
-has), then run **Release Hub Publish** from the Actions tab, optionally with release notes. That's all.
+Bump `VERSION_CODE` in `android/version.properties` (it only goes up — the release hub refuses a code it
+already has) and merge that to `main`. The push runs **Release Hub Publish**, which builds, signs and
+uploads. That's all.
+
+A change to `version.properties` that keeps the same `VERSION_CODE` fails the run rather than
+publishing twice. In a repo with no `RELEASE_HUB_URL` set, a version bump skips the job quietly. To
+publish with release notes, or to retry a failed run, run **Release Hub Publish** from the Actions
+tab.
 
 ## Monorepo children
 
 GitHub only reads workflows at the repo root, and monorepo children exclude `.github/workflows/**`
-from sync. Copy `release-hub.yml` to the repo root and change two things:
+from sync. Copy `release-hub.yml` to the repo root and change three things:
 
 - `uses: ./.github/actions/setup-android` → `uses: ./mobile/.github/actions/setup-android`
 - both `working-directory: android` → `working-directory: mobile/android`
-
-The release-hub repo itself does this — its root workflow is the same file with those two edits.
+- the push trigger's path `android/version.properties` → `mobile/android/version.properties`
 
 ## What the minted token can do
 
