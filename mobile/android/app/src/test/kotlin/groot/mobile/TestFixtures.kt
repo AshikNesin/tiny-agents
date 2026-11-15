@@ -4,6 +4,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.emptyPreferences
 import groot.kit.buildinfo.BuildInfo
+import groot.mobile.data.AvatarStore
 import groot.mobile.data.BotsState
 import groot.mobile.data.api.AttachmentRef
 import groot.mobile.data.api.Bot
@@ -41,6 +42,11 @@ import groot.mobile.feature.bots.BotEditorData
 import groot.mobile.feature.chat.ChatActions
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Protocol
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
 
 /** In-memory DataStore: unit tests never touch the disk. */
 class FakePreferencesDataStore : DataStore<Preferences> {
@@ -316,3 +322,23 @@ val sampleEditorData = BotEditorData(
 )
 
 val sampleEditorBotsState = sampleBotsState.copy(capabilities = sampleCapabilities)
+
+/**
+ * An [AvatarStore] whose "network" is the faces bundled under `src/test/resources/avatars`
+ * (DiceBear gaze PNGs for the sample bots), so screenshots show real avatars with no network.
+ * Any other name answers 404, which draws the initial.
+ */
+fun fakeAvatarStore(): AvatarStore = AvatarStore(
+    cacheDir = null,
+    client = OkHttpClient.Builder().addInterceptor { chain ->
+        val seed = chain.request().url.queryParameter("seed").orEmpty()
+        val bytes = AvatarStore::class.java.getResourceAsStream("/avatars/${seed.replace(' ', '_')}.png")?.use { it.readBytes() }
+        Response.Builder()
+            .request(chain.request())
+            .protocol(Protocol.HTTP_1_1)
+            .code(if (bytes != null) 200 else 404)
+            .message(if (bytes != null) "OK" else "Not Found")
+            .body((bytes ?: ByteArray(0)).toResponseBody("image/png".toMediaType()))
+            .build()
+    }.build(),
+)

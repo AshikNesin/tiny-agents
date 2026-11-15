@@ -44,8 +44,10 @@ import groot.mobile.feature.chat.TypingDots
 import groot.mobile.navigation.Routes
 import groot.mobile.ui.brand.AppIcons
 import groot.mobile.ui.brand.Dims
+import groot.mobile.ui.components.ActionTile
 import groot.mobile.ui.components.AppIcon
 import groot.mobile.ui.components.Avatar
+import groot.mobile.ui.components.BotAvatar
 import groot.mobile.ui.components.IconBtn
 import groot.mobile.ui.components.SectionLabel
 import groot.mobile.ui.components.StatusDot
@@ -129,19 +131,14 @@ fun AppDrawer(
                 }
             }
             if (!bots.guest && query.isBlank()) {
-                item { SectionLabel("Workspace", Modifier.padding(start = S.md, top = S.lg)) }
-                items(OWNER_DESTINATIONS, key = { it.route }) { destination ->
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(Dims.fieldRadius))
-                            .clickable(role = Role.Button) { onNavigate(destination.route) }
-                            .padding(horizontal = S.md, vertical = S.md),
-                        horizontalArrangement = Arrangement.spacedBy(S.lg),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        AppIcon(destination.icon, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(destination.label, style = MaterialTheme.typography.bodyLarge)
+                item(key = "workspace-label") { SectionLabel("Workspace", Modifier.padding(start = S.md, top = S.lg)) }
+                // A 3-wide grid of tiles: the nine places in a third of the height a list takes.
+                items(OWNER_DESTINATIONS.chunked(WORKSPACE_COLUMNS), key = { row -> row.first().route }) { row ->
+                    Row(Modifier.fillMaxWidth()) {
+                        for (destination in row) {
+                            ActionTile(destination.icon, destination.label, { onNavigate(destination.route) }, Modifier.weight(1f))
+                        }
+                        repeat(WORKSPACE_COLUMNS - row.size) { Spacer(Modifier.weight(1f)) }
                     }
                 }
             }
@@ -207,7 +204,7 @@ private fun BotRow(bot: BotListEntry, selected: Boolean, now: () -> Long, onClic
         horizontalArrangement = Arrangement.spacedBy(S.md),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Avatar(bot.name)
+        BotAvatar(bot.name)
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(S.xs)) {
                 Text(
@@ -240,3 +237,5 @@ private fun BotRow(bot: BotListEntry, selected: Boolean, now: () -> Long, onClic
         }
     }
 }
+
+private const val WORKSPACE_COLUMNS = 3

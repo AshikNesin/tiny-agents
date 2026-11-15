@@ -44,6 +44,7 @@ import groot.mobile.feature.terminal.TerminalTabs
 import groot.mobile.ui.brand.BrandPalette
 import groot.mobile.ui.components.KeyBar
 import groot.mobile.ui.components.Loadable
+import groot.mobile.ui.components.LocalAvatars
 import groot.mobile.ui.components.LocalContainer
 import groot.mobile.ui.components.ScreenScaffold
 import groot.mobile.data.api.LiveStatus
@@ -55,6 +56,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import kotlinx.coroutines.runBlocking
 
 /**
  * Renders the app's screens with sample data to PNGs for review: `pnpm screenshots`
@@ -158,10 +160,13 @@ class ScreenshotTest {
 
     private fun capture(name: String, mode: ThemeMode, content: @Composable () -> Unit) {
         val container = ApplicationProvider.getApplicationContext<GrootMobileApp>().container
+        // Loaded up front: the avatar's first frame reads the cache, and the shot is taken on idle.
+        val avatars = fakeAvatarStore().also { store -> runBlocking { sampleBots.forEach { store.load(it.name) } } }
         compose.setContent {
             GrootTheme(mode = mode, palette = BrandPalette) {
                 CompositionLocalProvider(
                     LocalContainer provides container,
+                    LocalAvatars provides avatars,
                     LocalContentColor provides MaterialTheme.colorScheme.onBackground,
                     content = content,
                 )

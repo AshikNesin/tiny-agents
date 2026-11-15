@@ -90,9 +90,10 @@ paths are under `/api/v1`. `{surface}` is `browser` or `computer`.
 | Settings | `settings` | `POST /auth/logout` |
 | About | `about` | none |
 
-The drawer lists the bots and opens Tasks, Terminal, Computer, Browser, Routines, Skills, Memory, Connections,
-Vault and Settings. The bot menu on Home opens that bot's Browser, Computer, Past chats, Memory and Edit bot, and
-holds the YOLO switch and Pin. People opens from Settings. A guest sees the bots shared with them and their live
+The drawer lists the bots, then a three-wide grid of tiles for Tasks, Terminal, Computer, Browser, Routines,
+Skills, Memory, Connections and Vault, and the account row that opens Settings. The Home top bar holds only the
+menu, the open bot (its avatar and name) and New chat. Tapping the bot opens its menu: tiles for that bot's
+Browser, Computer, Past chats and Memory, then the YOLO switch, Pin and Edit bot. People opens from Settings. A guest sees the bots shared with them and their live
 views, not the management screens.
 
 ## Live views (Browser and Computer)
@@ -148,6 +149,10 @@ screen for `TERM=xterm-256color`.
 - **Step-up.** Revealing, disabling or deleting a vault item, and adding or removing a connection, need a step-up
   token. The app asks for the password, calls `POST /vault/step-up`, keeps the token in memory only, and sends it
   as `X-Vault-Step-Up`. It is used until 10 s before it expires and is cleared on any session change.
+- **Bot avatars.** A bot's avatar is the web app's DiceBear "gaze" face for its name
+  (`https://api.dicebear.com/10.x/gaze/png?seed=<name>`, PNG because Android draws no SVG without a library),
+  loaded by `data/AvatarStore.kt` and cached in memory and on disk. The request carries only the bot's name, as
+  the web client's does. When it cannot be fetched, the bot's initial is drawn instead.
 - **Credential requests.** Values typed into a bot's credential request go to the server's vault route, never into
   the chat.
 

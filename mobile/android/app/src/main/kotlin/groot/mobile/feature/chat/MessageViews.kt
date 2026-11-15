@@ -45,6 +45,7 @@ import groot.mobile.data.chat.OutboxEntry
 import groot.mobile.ui.brand.AppIcons
 import groot.mobile.ui.brand.Dims
 import groot.mobile.ui.components.AppIcon
+import groot.mobile.ui.components.BotAvatar
 import groot.mobile.ui.components.IconBtn
 import groot.mobile.ui.components.Markdown
 import groot.mobile.ui.components.StatusDot
@@ -123,7 +124,7 @@ private fun PeerMessage(message: ChatMessage, modifier: Modifier) {
     val peer = message.peer ?: return
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(S.xs)) {
         Row(horizontalArrangement = Arrangement.spacedBy(S.xs), verticalAlignment = Alignment.CenterVertically) {
-            AppIcon(AppIcons.Bot, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, size = Dims.iconSmall)
+            BotAvatar(peer.name, size = Dims.icon)
             Text(
                 when (peer.kind) {
                     "reply" -> "${peer.name} replied"
