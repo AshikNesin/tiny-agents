@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Window and launcher colors only. Compose screens use kit tokens (GrootColors). -->
+    <color name="window_background">#FFFFFFFF</color>
+    <color name="launcher_background">#FF050505</color>
+    <color name="launcher_foreground">#FFFCFCFC</color>
+</resources>

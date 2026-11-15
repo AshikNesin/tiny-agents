@@ -1,0 +1,82 @@
+# The Android app in mobile/ (a child of groot-mobile-app, see mobile/docs/guides/sync.md,
+# "Apps inside a monorepo"). Its checks run from its own folder with its own tooling; the
+# web app's `Tests` workflow does not cover it.
+name: Mobile
+
+on:
+  pull_request:
+    paths:
+      - "mobile/**"
+      - ".github/workflows/mobile.yml"
+  push:
+    branches: ["main", "next"]
+    paths:
+      - "mobile/**"
+      - ".github/workflows/mobile.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  checks:
+    name: Repo checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: mobile/package.json
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: mobile/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check:boundaries
+      - run: pnpm check:tokens
+      - run: pnpm check:doc-refs
+      - run: pnpm check:kit-edits
+      - run: pnpm test:groot
+
+  android:
+    name: Android
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: ./mobile/.github/actions/setup-android
+      - name: Lint and unit tests (JUnit, Robolectric, Compose UI)
+        working-directory: mobile/android
+        run: ./gradlew lintDebug testDebugUnitTest --console=plain
+      - name: Debug APK
+        working-directory: mobile/android
+        run: ./gradlew :app:assembleDebug --console=plain
+      - name: Upload the debug APK
+        uses: actions/upload-artifact@v5
+        with:
+          name: tiny-agents-debug-apk
+          path: mobile/android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: mobile-android-reports
+          path: |
+            mobile/android/*/build/reports/
+            mobile/android/app/build/outputs/roborazzi/
+          if-no-files-found: ignore

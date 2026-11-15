@@ -98,6 +98,10 @@ it. Short version:
 - `apps/web` — app code (bots API + SSE under `src/server/api/bots`, chat UI
   under `src/client`); everything else is the groot boilerplate, synced via
   `pnpm groot:sync` and never edited here
+- `mobile`: the Android app (Kotlin and Jetpack Compose), a client of the
+  same server. A child of groot-mobile-app with its own tooling, checks and
+  sync, run from inside `mobile/`; see
+  [docs/features/mobile-app.md](docs/features/mobile-app.md)
 - `app.db` (Drizzle, schema in `apps/web/src/server/db/schema.ts`) and
   `agent.db` (pi-durable) are separate SQLite files; the link is
   `bots.conversationId`

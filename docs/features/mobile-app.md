@@ -1,0 +1,87 @@
+# Android app
+
+`mobile/` holds Tiny Agents for Android, a native client (Kotlin and Jetpack
+Compose) for a tiny-agents server. It is a second client of the same server,
+not a separate product: it signs in to the server you run and calls the same
+`/api/v1` routes as the web app. The app guide, with every screen and the
+routes it calls, is
+[`mobile/docs/app/README.md`](../../mobile/docs/app/README.md).
+
+## What it does
+
+The app covers the messenger and most of the workspace: chats with streamed
+replies, attachments, steering and queued messages, approvals, questions,
+credential requests and YOLO mode; creating and editing bots; past chats; the
+Browser and Computer live views with take control; Terminal tabs; and Tasks,
+Routines, Skills, Memory, Connections, Vault and People. Guests see the bots
+shared with them.
+
+## How it talks to the server
+
+- **Sign-in.** `POST /api/v1/auth/login` returns a session token. The app
+  sends it as `Authorization: Bearer` and stores it sealed with an Android
+  Keystore key. The web app's cookie session is not used.
+- **Streams.** Chats and the activity feed use the same server-sent event
+  routes as the web client (`GET /api/v1/bots/:id/stream`,
+  `GET /api/v1/events`) and reconnect with a backoff.
+- **Live views and terminal.** The app asks a ticket route for a WebSocket
+  path, then speaks raw RFB (VNC) or pty bytes over it. The protocol clients
+  are their own Gradle modules, `mobile/android/vnc` and
+  `mobile/android/terminal`.
+- **Step-up.** Vault changes and adding or removing a connection ask for the
+  password and send the step-up token, as the web app does.
+
+## Keeping it in step with the web app
+
+The app's wire types mirror `apps/web/src/shared/api/` and
+`apps/web/src/shared/bot-stream.ts`. Its chat reducer is a port of the web
+client's `apps/web/src/client/lib/chat-session.ts`, and its tool call text and
+view tables port `lib/tool-call-text.ts` and `lib/tool-call-view.ts`. A
+change to a wire type or to these chat rules needs the matching change in
+`mobile/android/app/src/main/kotlin/groot/mobile/data/`.
+
+## Where it lives
+
+`mobile/` was created from the groot-mobile-app boilerplate with
+`scripts/new-app.sh ... --platforms android`. It has its own `package.json`,
+lockfile and checks, and the web repo's lint and format skip it (`mobile/**`
+in the root `vite.config.ts`). App code is under
+`mobile/android/app/src/main/kotlin/groot/mobile/`. The web app's own groot
+sync and `pnpm check` do not cover it.
+
+## Build, test, sync
+
+Run these from `mobile/`:
+
+```sh
+pnpm install
+pnpm android:build    # debug APK under android/app/build/outputs/apk/debug/
+pnpm check            # repo checks, Android lint and unit tests
+pnpm screenshots      # renders screens to android/app/build/outputs/roborazzi/
+```
+
+CI is `.github/workflows/mobile.yml`. On a change under `mobile/` it runs the
+repo checks, Android lint and unit tests, and uploads the debug APK as the
+`tiny-agents-debug-apk` artifact.
+
+The live-server tests run the app's data layer against a disposable server
+started with `.agents/skills/verify-tiny-agents/scripts/ta-verify.mjs up`;
+the app guide has the commands.
+
+Sync with the boilerplate runs inside `mobile/` with `pnpm groot:check` and
+`pnpm groot:sync` (see `mobile/docs/guides/sync.md`, "Apps inside a
+monorepo"). Its baseline is the git ref `refs/groot/apps/mobile/baseline`,
+separate from `refs/groot/baseline`, which the web repo's own groot sync
+uses. `.github/workflows/mobile-sync.yml` opens the scheduled sync PR on
+the branch `chore/groot-mobile-sync`.
+
+## Limits
+
+- Android only, and no push notifications.
+- The Code page, the Models section of Settings, passkey sign-in, creating
+  vault items, importing skills from GitHub and the connection tool
+  playground stay in the web app.
+- Routine schedules are in IST, like the server.
+- Plain-HTTP servers are allowed, with a warning.
+- It has not been run on a device or emulator in the build environment; JVM
+  tests against a real server and rendered screenshots verify it.
