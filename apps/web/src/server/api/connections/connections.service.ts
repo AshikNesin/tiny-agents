@@ -213,14 +213,13 @@ export async function update(id: string, data: UpdateConnectionDTO): Promise<Con
       throw Boom.badRequest(`Vault item "${data.secretRef}" is used by the app, not by bots`);
     }
   }
-  // A new host does not inherit the old one's header secret (S4): it is
-  // dropped unless this change sends one.
+  // A new host does not inherit the old one's header secret (S4): unless this
+  // change sends a new value, the connection's own item is deleted, whatever
+  // `secretRef` says (null would fall back to it), and a reference goes too
+  // unless this change names one for the new host.
   const movesHost = data.url !== undefined && new URL(data.url).host !== new URL(current.url).host;
-  const dropSecret =
-    movesHost &&
-    current.authType === "header" &&
-    data.secret === undefined &&
-    data.secretRef === undefined;
+  const dropSecret = movesHost && current.authType === "header" && data.secret === undefined;
+  const dropRef = dropSecret && typeof data.secretRef !== "string";
   const writesSecret = data.secret !== undefined && current.authType === "header";
   const changes = {
     ...(data.name !== undefined ? { name: data.name } : {}),
@@ -233,7 +232,8 @@ export async function update(id: string, data: UpdateConnectionDTO): Promise<Con
     ...(data.secretRef !== undefined && data.secret === undefined && current.authType === "header"
       ? { secretRef: data.secretRef }
       : {}),
-    ...(dropSecret ? { secretEnc: null, secretRef: null, secretItemId: null } : {}),
+    ...(dropSecret ? { secretEnc: null, secretItemId: null } : {}),
+    ...(dropRef ? { secretRef: null } : {}),
   };
   db.transaction((tx) => {
     const row = tx.select().from(connections).where(eq(connections.id, id)).get();

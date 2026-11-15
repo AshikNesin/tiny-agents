@@ -509,13 +509,22 @@ async function markUsed(itemId: string, by: string | null): Promise<void> {
  * is registered with the redactor and audited. The owner linked the item to
  * the connection, so there is no bot scope, no per-use approval and nobody
  * "present" for the unattended rule; the item must still allow `mcp` and be
- * enabled. Throws a message the connection's status shows.
+ * enabled. With `host` (the connection's own item), the item must also list
+ * that host. Throws a message the connection's status shows.
  */
-export async function resolveConnectionSecret(handle: string, slug: string): Promise<string> {
+export async function resolveConnectionSecret(
+  handle: string,
+  slug: string,
+  host?: string,
+): Promise<string> {
   const target = `mcp:${slug}`;
   try {
     return await runUse(
-      { handle, tool: "mcp", targetKind: "connection", target, approved: false },
+      // The connection's own item goes only to the hosts it lists (S4): the
+      // use is checked as one to the connection's host.
+      host === undefined
+        ? { handle, tool: "mcp", targetKind: "connection", target, approved: false }
+        : { handle, tool: "mcp", targetKind: "host", target: host, approved: false },
       { unattended: false },
       { botScoped: false, usedBy: target },
       ["value"],

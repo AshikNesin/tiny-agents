@@ -9,7 +9,7 @@ import { logger } from "@groot/core/logger";
 import { vaultAlert } from "./vault.alerts";
 import { secretRedactor, type VaultApproval, type VaultKind } from "@tiny-agents/agent";
 import { KIND_DEFAULT_TOOLS } from "../../../shared/vault-kinds";
-import { db, vaultAuditEvents, vaultItems } from "../../db";
+import { connections, db, vaultAuditEvents, vaultItems } from "../../db";
 import { readBackends } from "./backends";
 import { createLocalBackend } from "./backends/local";
 import {
@@ -606,6 +606,16 @@ export async function deleteItem(handle: string, options: { purge: boolean }): P
   if (row.audience === "app") {
     throw Boom.conflict(
       "This item is used by the app; remove it where it is used (Settings → Models).",
+    );
+  }
+  // A connection's own header value goes with the connection, or with a new value there.
+  const owner = await db.query.connections.findFirst({
+    where: eq(connections.secretItemId, row.id),
+    columns: { name: true },
+  });
+  if (owner) {
+    throw Boom.conflict(
+      `This item is the header value of the connection "${owner.name}"; change or remove it on the Connections page.`,
     );
   }
   return deleteItemRow(row, options);

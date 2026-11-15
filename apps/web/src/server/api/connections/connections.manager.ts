@@ -215,13 +215,15 @@ export class ConnectionManager {
 
   async #auth(row: ConnectionRow, live: Live) {
     // The header value is a vault item (Q4): the one the owner picked, else the connection's own.
+    // The connection's own item is checked against the host it goes to (S4).
     const handle =
       row.authType !== "header"
         ? undefined
         : (row.secretRef ?? (row.secretItemId ? ownHeaderHandle(row.secretItemId) : undefined));
     if (row.authType === "header" && row.headerName && handle) {
+      const host = row.secretRef ? undefined : new URL(row.url).hostname;
       return {
-        headers: { [row.headerName]: await resolveConnectionSecret(handle, row.slug) },
+        headers: { [row.headerName]: await resolveConnectionSecret(handle, row.slug, host) },
       };
     }
     if (row.authType === "header" && row.secretEnc) {

@@ -111,7 +111,13 @@ export function writeOwnHeaderSecret(
   if (existing) {
     replaceLocalItem(tx, existing.externalId, { ...draft, title: existing.label }, digest);
     tx.update(vaultItems)
-      .set({ hostsJson: policy.hostsJson, audience: policy.audience, originsJson: "[]" })
+      // The digest covers exactly these, so the re-seal above opens under the row.
+      .set({
+        audience: policy.audience,
+        originsJson: policy.originsJson,
+        hostsJson: policy.hostsJson,
+        injectJson: policy.injectJson,
+      })
       .where(eq(vaultItems.id, existing.id))
       .run();
     item = existing;
