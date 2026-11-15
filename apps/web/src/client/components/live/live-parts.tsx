@@ -78,12 +78,16 @@ export function TakeControlLayer({
   );
 }
 
-/** Around the stream while the owner drives it: theirs until they hand it back. */
+/**
+ * Around the stream while the owner drives it: theirs until they hand it back.
+ * It takes the viewport's corners (which take the card's), so a rounded card
+ * does not clip the ring at its corners.
+ */
 export function DrivingFrame({ testId }: { testId: string }) {
   return (
     <div
       aria-hidden
-      className="pointer-events-none absolute inset-0 ring-2 ring-success ring-inset"
+      className="pointer-events-none absolute inset-0 rounded-[inherit] ring-2 ring-success ring-inset"
       data-testid={testId}
     />
   );
