@@ -64,11 +64,12 @@ CI is `.github/workflows/mobile.yml`. On a change under `mobile/` it runs the
 repo checks, Android lint and unit tests, and uploads the debug APK as the
 `tiny-agents-debug-apk` artifact.
 
-`.github/workflows/mobile-hub-release.yml` publishes a signed release APK to a
-release-hub server, run by hand from the Actions tab. It is the boilerplate's
-Hub Release workflow with its paths pointed at `mobile/`. Setup (hub app,
-keyless grant, the `RELEASE_HUB_URL` variable, and `HUB_SLUG` if the hub slug
-is not `tiny-agents`) is in `mobile/docs/guides/hub.md`. Bump
+`.github/workflows/mobile-release-hub.yml` publishes a signed release APK to a
+release hub server, run by hand from the Actions tab. It is the boilerplate's
+Release Hub Publish workflow with its paths pointed at `mobile/`. Setup (the
+app on the release hub, its keyless grant, the `RELEASE_HUB_URL` variable, and
+`RELEASE_HUB_SLUG` if the app's slug there is not `tiny-agents`) is in
+`mobile/docs/guides/release-hub.md`. Bump
 `mobile/android/version.properties` before each release.
 
 The live-server tests run the app's data layer against a disposable server

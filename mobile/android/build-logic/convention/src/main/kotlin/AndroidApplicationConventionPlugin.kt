@@ -6,7 +6,7 @@ import org.gradle.kotlin.dsl.configure
 /**
  * groot.android.application — SDK levels, R8 full mode + resource shrinking, lint, and
  * release signing from RELEASE_STORE_FILE, RELEASE_STORE_PASSWORD, RELEASE_KEY_ALIAS and
- * RELEASE_KEY_PASSWORD when they are set (Hub Release sets them); otherwise unsigned.
+ * RELEASE_KEY_PASSWORD when they are set (Release Hub Publish sets them); otherwise unsigned.
  */
 class AndroidApplicationConventionPlugin : Plugin<Project> {
     override fun apply(target: Project) = with(target) {
