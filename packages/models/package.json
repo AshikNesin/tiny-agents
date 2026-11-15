@@ -1,6 +1,6 @@
 {
   "name": "@tiny-agents/models",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "description": "Provider accounts and their models on pi-ai alone: provider kinds and templates, discovery, test calls, buildProviders and the Model catalog the runtime takes. Imports neither pi-durable nor @tiny-agents/agent.",
   "type": "module",

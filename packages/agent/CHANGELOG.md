@@ -1,5 +1,67 @@
 # @tiny-agents/agent
 
+## 1.1.0
+
+### Minor Changes
+
+- [#265](https://github.com/AshikNesin/tiny-agents/pull/265) [`393dd71`](https://github.com/AshikNesin/tiny-agents/commit/393dd71934f643d83303f57467f54e90318a9b76) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Claude plan: the transcript lives in the agent store, and sends behave as they do on pi (ADR 0018).
+  
+  - **Durable transcript:** each message and reply is an entry of the bot's own conversation in `agent.db`, not a JSON file beside it. On the first start after the upgrade, `<agent.db>.claude.json` is imported once and renamed `.claude.json.imported`; a file that cannot be read is left as it is and logged.
+  - **Sends:** a send returns as soon as it is stored instead of when the reply ends, a retried send is not added twice, and a message sent while Claude replies waits above the composer (withdraw it there) and is answered next.
+  - **Stop and pauses:** a stopped reply stays stopped, Stop also ends the Claude Code process on the sandbox, a usage pause keeps your message and frees the worker for the next turn, and a reply with nothing in it still counts as finished.
+  - **Restarts:** after an app restart a Claude plan chat shows its own transcript right away.
+  - **Long waits:** a tool call waiting for your approval, answer or sign-in no longer times out after two minutes on the worker.
+
+- [`4919164`](https://github.com/AshikNesin/tiny-agents/commit/4919164bb2f3061d45b0635eabba20b5e380e28d) Thanks [@claude](https://github.com/claude)! - The computer's Chrome and the Browser feature now use the same Chrome profile.
+  
+  - **One profile, two views:** Chrome opened on a desktop (the menu, the Web Browser launcher, `computer_open_app`) opens the browser profile of the same key (`shared`, or a bot's own). A site you sign into in either one is signed in in the other, along with history, bookmarks and extensions.
+  - **Handoff:** Chrome lets only one running browser use a profile. Opening Chrome on the desktop closes the bot's browser on that profile, and the bot's next browser call closes the desktop's Chrome and reopens it in the Browser panel. Cookies are saved on each handoff.
+  - **Reset:** resetting a browser profile also closes the desktop's Chrome on it.
+
+### Patch Changes
+
+- [#267](https://github.com/AshikNesin/tiny-agents/pull/267) [`3835981`](https://github.com/AshikNesin/tiny-agents/commit/383598107f6c3b6d799f8897a950b58cad16360d) Thanks [@AshikNesin](https://github.com/AshikNesin)! - `AgentRuntime`: the Claude plan's account calls move to `runtime.claudePlan` (rewrite step 2.5, no behavior change).
+  
+  - **Moved:** `claudeCodeStatus()` is now `claudePlan.status()`, `claudeCodeAccount()` is `claudePlan.account()`, and `prepareClaudeCode()` is `claudePlan.prepare()`. They return what they returned before.
+  - **Inside the package:** the runtime calls engines only through `AgentEngine`. What every conversation has whichever engine runs it (create, configure's agent and permissions, YOLO, attachment ids, the reply-task graph) is the runtime's conversation store.
+
+- [#236](https://github.com/AshikNesin/tiny-agents/pull/236) [`b5dcf5d`](https://github.com/AshikNesin/tiny-agents/commit/b5dcf5df004bd1294a853ee120c5e0032dc55f78) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Claude plan: raise the per-reply turn limit and make it a setting.
+  
+  - **Default:** Claude Code's `maxTurns` goes from 30 to 100, so browser tasks no longer stop with "Reached maximum number of turns (30)".
+  - **Settings → Models → Claude plan → Max turns:** set 1 to 1,000, or tick **No limit** (opt-in) to run Claude Code without `maxTurns`. It applies from the next message, with no release: the worker restarts an idle Claude process with the new limit and resumes the conversation.
+  - **Error:** running out of turns now says where to raise the limit.
+
+- [#270](https://github.com/AshikNesin/tiny-agents/pull/270) [`02f4b87`](https://github.com/AshikNesin/tiny-agents/commit/02f4b87e62bb73aad5c82b27aabcb699c8579b01) Thanks [@AshikNesin](https://github.com/AshikNesin)! - New package `@tiny-agents/models`: provider accounts and their models, on pi-ai only (rewrite step 3.3, no behavior change).
+  
+  - **Moved:** provider kinds and templates, discovery, test calls, `buildProviders` and the Model catalog (`ModelCatalog`, `createModelCatalog`) leave `@tiny-agents/agent` for `@tiny-agents/models`, with the model types they use (`CatalogModel`, `ProviderKind`, `ProviderStatus`, `ProviderSummary`, `ModelRole`, `ModelRoute`, `ModelUnavailableReason`, `AgentEngineKind`).
+  - **Boundary:** the package imports neither pi-durable nor `@tiny-agents/agent`; lint R11 fails the build if it does.
+  - **`@tiny-agents/agent`:** depends on `@tiny-agents/models`, and its root still exports every name it exported before, re-exported from `@tiny-agents/models` and marked `@deprecated`. Import them from `@tiny-agents/models` instead.
+
+- [#278](https://github.com/AshikNesin/tiny-agents/pull/278) [`2677cc6`](https://github.com/AshikNesin/tiny-agents/commit/2677cc6fddbc652e02bc17cd89ac64c9df690a78) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Auto-review no longer counts a guest's messages as the owner's (security fix, S6). In a shared bot's chat a turn a guest started always shows its approval card, and the classifier reads only the owner's own messages, the same rule YOLO mode applies (`fromOwner` in `policy.ts`). `ToolGate` and `AgentRuntime.open` take an `ownerUserId` option for this; without one, no message with an author counts as the owner's. `ownerMessages()` now takes the owner's user id as its second argument.
+
+- [#278](https://github.com/AshikNesin/tiny-agents/pull/278) [`2677cc6`](https://github.com/AshikNesin/tiny-agents/commit/2677cc6fddbc652e02bc17cd89ac64c9df690a78) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Close the rest of the SSRF gaps (security fix, S7 follow-up).
+  
+  - **Browser:** a new navigation guard (`navigationGuard`, one browser-level DevTools session per browser) checks every main-frame request of an agent's tab before it is sent, for the tab's whole life, and of every popup such a tab opens. A meta refresh, a script setting `location`, a click and `window.open` to a private address are now refused, as redirect hops already were, and a name that resolves to a private address (`127.0.0.1.nip.io`) is refused too. Both transports pass the guard to `pageSession` (new `guard` option); `navigate` refuses to run without one. Tabs no agent holds are not guarded, nor are subframes and subresources.
+  - **Addresses:** `isPrivateAddress` (and so `checkPublicUrl` and `http_request`'s DNS check) also refuses 192.0.0.0/24, 192.0.2.0/24 and 198.18.0.0/15, IPv6 site-local and multicast, local-use NAT64, and IPv6 forms that embed a private IPv4: compatible (`::127.0.0.1`), SIIT, NAT64 and 6to4. Zone ids are ignored.
+  - **`http_request`:** a redirect's body is released before the too-many-redirects error, closing a pinned agent never leaves an unhandled rejection, and `createWebToolkit`'s `fetch` option is now TinyFish's only: every `http_request` goes through `sendPinned` (default `pinnedFetch`).
+  - **Auto-review:** when the owner's id can't be looked up, the call shows its approval card instead of failing.
+
+- [#278](https://github.com/AshikNesin/tiny-agents/pull/278) [`2677cc6`](https://github.com/AshikNesin/tiny-agents/commit/2677cc6fddbc652e02bc17cd89ac64c9df690a78) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Close three SSRF gaps (security fix, S7).
+  
+  - **`checkPublicUrl`** (`@tiny-agents/sandbox`) classifies a host by what it is: an IP literal goes through `isPrivateAddress`, so CGNAT (`100.64.0.0/10`), IPv4-mapped IPv6 (`[::ffff:127.0.0.1]`, also in its hex form `[::ffff:7f00:1]`), multicast and `[::]` are now refused, and a name is only refused when it is local (`localhost`, `localhost.`, `.localhost`, `.local`, `.internal`), so `10.example.com` is allowed again. `isPrivateAddress` also recognizes the hex form of a mapped address.
+  - **Browser navigation** checks each redirect hop of the main frame before its request is sent (DevTools `Fetch` interception during `navigate`), instead of after the page loaded, so a refused hop never reaches the private address. The error is the same: `Blocked: the page redirected to a private address (host).`
+  - **`http_request`** (`@tiny-agents/agent`) resolves each hop's host once, checks every address, and connects only to those addresses (a pinned lookup on an `undici` agent), so a second DNS answer can't swap in a private one. `createWebToolkit` takes a `sendPinned` option for tests, and `pinnedFetch` is exported.
+
+- [#271](https://github.com/AshikNesin/tiny-agents/pull/271) [`9c8c673`](https://github.com/AshikNesin/tiny-agents/commit/9c8c6732f5b5434e1d8b7e7c471f09b9503f7bf1) Thanks [@AshikNesin](https://github.com/AshikNesin)! - New package `@tiny-agents/sandbox`: the sandbox VM layer without pi-durable (rewrite step 3.4, no behavior change).
+  
+  - **Moved:** the SSH connection (`ssh/`), terminal tabs (`terminal/`), the browser and computer session managers and their transports (local Chromium, remote CDP, X11), the browser and computer VM setup scripts, `createForwardingServer`, the in-process test SSH server, the public-URL guards and the vault's pi-durable-free pieces (`SecretValue`, `VaultTargetMovedError`) leave `@tiny-agents/agent` for `@tiny-agents/sandbox`. Subpaths: `./terminal`, `./browser`, `./computer`, `./testing`.
+  - **Boundary:** the package imports neither pi-durable nor `@tiny-agents/agent`; lint R11 now covers it as well as `@tiny-agents/models`.
+  - **`@tiny-agents/agent`:** depends on `@tiny-agents/sandbox`; the browser, computer and sandbox toolkits stay here and drive it. `./sandbox`, `./terminal`, `./browser` and `./computer` still export every name they exported before, and the root still exports `SecretFillField`, `checkPublicUrl` and `isPrivateAddress` and `./testing` `startFakeSandboxServer`, all re-exported from `@tiny-agents/sandbox` and marked `@deprecated`. Import them from `@tiny-agents/sandbox` instead. `SecretValue` and `VaultTargetMovedError` stay on the root as part of the vault port.
+- Updated dependencies [[`393dd71`](https://github.com/AshikNesin/tiny-agents/commit/393dd71934f643d83303f57467f54e90318a9b76), [`b5dcf5d`](https://github.com/AshikNesin/tiny-agents/commit/b5dcf5df004bd1294a853ee120c5e0032dc55f78), [`02f4b87`](https://github.com/AshikNesin/tiny-agents/commit/02f4b87e62bb73aad5c82b27aabcb699c8579b01), [`2677cc6`](https://github.com/AshikNesin/tiny-agents/commit/2677cc6fddbc652e02bc17cd89ac64c9df690a78), [`2677cc6`](https://github.com/AshikNesin/tiny-agents/commit/2677cc6fddbc652e02bc17cd89ac64c9df690a78), [`2677cc6`](https://github.com/AshikNesin/tiny-agents/commit/2677cc6fddbc652e02bc17cd89ac64c9df690a78), [`9c8c673`](https://github.com/AshikNesin/tiny-agents/commit/9c8c6732f5b5434e1d8b7e7c471f09b9503f7bf1), [`d93a971`](https://github.com/AshikNesin/tiny-agents/commit/d93a971495499fd3d927895f13eacdbb89a1deaf)]:
+  - @tiny-agents/claude-worker@0.4.3
+  - @tiny-agents/models@0.1.0
+  - @tiny-agents/sandbox@0.1.0
+
 ## 1.0.1
 
 ### Patch Changes
