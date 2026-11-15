@@ -22,6 +22,7 @@ import modelsRoutes from "./api/models/models.routes";
 import codeRoutes from "./api/code/code.routes";
 import peopleRoutes from "./api/people/people.routes";
 import updatesRoutes from "./api/system/updates.routes";
+import appLinksRouter from "./api/system/app-links";
 import { guestGuard } from "./api/people/guest.guard";
 import { registerRoutineJobs } from "./api/routines/routines.jobs";
 
@@ -40,6 +41,8 @@ export function createWebApp(options: Omit<CreateAppOptions, "routes"> = {}) {
       app.route("/api/v1/passkey", passkeyRoutes);
       // OAuth client metadata document: fetched by authorization servers.
       app.route("/api/v1", publicConnectionsRouter);
+      // Android App Links: lets the Android app open this server's notification links.
+      app.route("/", appLinksRouter);
 
       // Protected (JWT cookie or bearer token)
       const api = new Hono<AppEnv>();

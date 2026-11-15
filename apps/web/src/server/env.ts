@@ -52,6 +52,13 @@ const appEnvSchema = z.object({
    * Throwaway test servers raise it: e2e and verify runs sign in once per test.
    */
   AUTH_RATE_LIMIT_MAX: z.coerce.number().int().positive().optional(),
+  /**
+   * The Android app's signing certificate SHA-256 (comma-separated for several, e.g. release and
+   * debug). Set, `/.well-known/assetlinks.json` lets the app open this server's links.
+   */
+  ANDROID_APP_CERT_SHA256: z.string().optional(),
+  /** The Android app's id, if it is not `io.nesin.tinyagents`. */
+  ANDROID_APP_PACKAGE: z.string().optional(),
 });
 
 export type AppEnv = z.infer<typeof appEnvSchema>;

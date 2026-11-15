@@ -5,6 +5,7 @@ import android.content.Context
 import groot.kit.buildinfo.BuildInfo
 import groot.kit.log.Log
 import groot.kit.theme.ThemeModeStore
+import groot.mobile.data.AppLinks
 import groot.mobile.data.AppPreferences
 import groot.mobile.data.AvatarStore
 import groot.mobile.data.BotsStore
@@ -66,6 +67,9 @@ class AppContainer(context: Context) {
     val files = FileActions(appContext, api)
 
     val stepUp = StepUp(api)
+
+    /** Links the app was opened with (a push notification's), waiting for the signed-in screens. */
+    val links = AppLinks()
 
     init {
         // A session starting loads the bots and follows the feed; one ending forgets everything.

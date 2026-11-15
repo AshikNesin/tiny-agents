@@ -1,5 +1,6 @@
 package groot.mobile
 
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -10,6 +11,7 @@ import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import groot.kit.theme.GrootTheme
 import groot.kit.theme.ThemeMode
+import groot.mobile.data.parseAppLink
 import groot.mobile.ui.brand.BrandPalette
 import groot.mobile.ui.components.LocalAvatars
 import groot.mobile.ui.components.LocalContainer
@@ -33,6 +35,8 @@ class MainActivity : ComponentActivity() {
         // The stored session decides the first screen (sign-in or chats): read it before the
         // first frame so a signed-in owner never sees the sign-in screen flash by.
         runBlocking { container.session.load() }
+        // A cold start from a link; a running app gets it in onNewIntent (singleTask).
+        if (savedInstanceState == null) openLink(intent)
 
         setContent {
             val themeMode by store.themeMode.collectAsStateWithLifecycle(initialValue = initialMode)
@@ -42,5 +46,17 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        openLink(intent)
+    }
+
+    private fun openLink(intent: Intent?) {
+        if (intent?.action != Intent.ACTION_VIEW) return
+        val url = intent.dataString ?: return
+        val container = (application as GrootMobileApp).container
+        parseAppLink(url, container.session.serverUrl)?.let(container.links::open)
     }
 }

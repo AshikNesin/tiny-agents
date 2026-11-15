@@ -458,7 +458,12 @@ async function createDevServer(): Promise<http.Server> {
   const template = () => readFileSync(path.join(clientRoot, "index.html"), "utf8");
   server.on("request", (req, res) => {
     const url = req.url ?? "/";
-    if (url.startsWith("/api/") || url === "/health" || url === "/ready") {
+    if (
+      url.startsWith("/api/") ||
+      url.startsWith("/.well-known/") ||
+      url === "/health" ||
+      url === "/ready"
+    ) {
       void api(req, res);
       return;
     }

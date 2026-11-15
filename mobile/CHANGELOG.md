@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0
+
+### Minor Changes
+
+- Tapping a push notification opens the app instead of the browser: the app claims the server's links
+  (`/chats/<bot>?focus=approval:<task>`, sign-in requests, Vault, Routines, Tasks), opens that bot's chat and scrolls
+  to the waiting card. Android opens them without asking once the server serves `/.well-known/assetlinks.json`
+  (`ANDROID_APP_CERT_SHA256`).
+
 ## 0.2.0
 
 ### Minor Changes

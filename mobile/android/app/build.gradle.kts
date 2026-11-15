@@ -27,6 +27,9 @@ android {
         versionName = versionProps.getProperty("VERSION_NAME")
         versionCode = versionProps.getProperty("VERSION_CODE").toInt()
         buildConfigField("String", "GIT_COMMIT", "\"$gitCommit\"")
+        // The server whose links (push notifications') open the app (AndroidManifest.xml).
+        // Another server: build with -PtinyAgents.linkHost=agents.example.com.
+        manifestPlaceholders["linkHost"] = providers.gradleProperty("tinyAgents.linkHost").getOrElse("tiny-agents.ashiknesin.com")
     }
 
     buildFeatures {

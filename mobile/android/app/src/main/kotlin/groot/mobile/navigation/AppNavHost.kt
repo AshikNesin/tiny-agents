@@ -26,6 +26,12 @@ import groot.mobile.feature.about.AboutScreen
 import groot.mobile.feature.home.HomeRoute
 import groot.mobile.feature.settings.SettingsRoute
 import groot.mobile.feature.settings.SettingsViewModel
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.flow.first
+import groot.mobile.data.AppLink
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 
 /*
  * One minimal transition for every screen: only the screen being opened or closed moves.
@@ -54,6 +60,11 @@ fun AppNavHost(
 ) {
     val navigate: (String) -> Unit = { route -> navController.navigate(route) { launchSingleTop = true } }
     val back: () -> Unit = { navController.navigateUp() }
+    val pendingLink by container.links.pending.collectAsStateWithLifecycle()
+    LaunchedEffect(pendingLink) {
+        val link = container.links.take() ?: return@LaunchedEffect
+        openLink(container, link, home = { navController.popBackStack(Routes.HOME, inclusive = false) }, navigate = navigate)
+    }
     NavHost(
         navController = navController,
         startDestination = Routes.HOME,
@@ -100,3 +111,28 @@ internal fun ScreenContainer(content: @Composable () -> Unit) {
         content()
     }
 }
+
+/**
+ * Act on a link the app was opened with: a chat (scrolled to its waiting card), a sign-in
+ * request's chat, or a screen. A chat opens on Home, over whatever was on screen.
+ */
+private suspend fun openLink(container: AppContainer, link: AppLink, home: () -> Unit, navigate: (String) -> Unit) {
+    fun openChat(botId: String, taskId: Int?) {
+        container.session.selectBot(botId)
+        if (taskId != null) container.links.focus(botId, taskId) else container.links.clearFocus()
+        home()
+    }
+    when (link) {
+        is AppLink.Chat -> openChat(link.botId, link.focusTaskId)
+        is AppLink.CredentialRequest -> {
+            // The request names its bot, not the bot's id: find it in the list once that is loaded.
+            val request = runCatching { container.api.credentialRequest(link.taskId) }.getOrNull()
+            val bots = withTimeoutOrNull(LINK_WAIT_MS) { container.bots.state.first { !it.loading } }
+            val bot = bots?.bots?.firstOrNull { it.name == request?.botName }
+            if (bot != null) openChat(bot.id, link.taskId) else home()
+        }
+        is AppLink.Screen -> if (link.route == Routes.HOME) home() else navigate(link.route)
+    }
+}
+
+private const val LINK_WAIT_MS = 10_000L
