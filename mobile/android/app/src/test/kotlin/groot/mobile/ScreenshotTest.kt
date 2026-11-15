@@ -38,6 +38,8 @@ import groot.mobile.feature.live.linkLabel
 import groot.mobile.feature.manage.RoutinesScreen
 import groot.mobile.feature.manage.TasksScreen
 import groot.mobile.feature.settings.SettingsScreen
+import groot.mobile.feature.share.ShareDraft
+import groot.mobile.feature.share.ShareSheet
 import groot.mobile.feature.terminal.TERMINAL_KEYS
 import groot.mobile.feature.terminal.TerminalLink
 import groot.mobile.feature.terminal.TerminalTabs
@@ -177,6 +179,44 @@ class ScreenshotTest {
             KeyBar(keys = TERMINAL_KEYS, held = setOf(TERMINAL_KEYS[2].id), onKey = {})
             KeyBar(keys = LIVE_KEYS, held = setOf(Keysyms.Control_L), onKey = {})
         }
+    }
+
+    @Test fun shareDark() = capture("share_dark", ThemeMode.Dark) { Share(sampleShareDraft) }
+
+    @Test fun shareLight() = capture("share_light", ThemeMode.Light) { Share(sampleShareDraft) }
+
+    @Test fun shareLinkUploadingDark() = capture("share_link_uploading_dark", ThemeMode.Dark) {
+        Share(
+            sampleShareDraft.copy(
+                botId = null,
+                query = "r",
+                note = "Which of these fits a long weekend?",
+                sharedText = "Cheap flights to Goa\nhttps://example.com/flights/goa",
+                staged = listOf(sampleShareDraft.staged[0].copy(ref = null), sampleShareDraft.staged[1].copy(ref = null, error = "Files can be up to 25 MB.")),
+            ),
+        )
+    }
+
+    @Test fun shareSignedOutDark() = capture("share_signed_out_dark", ThemeMode.Dark) { Share(sampleShareDraft, signedIn = false) }
+
+    @Composable
+    private fun Share(draft: ShareDraft, signedIn: Boolean = true) {
+        ShareSheet(
+            signedIn = signedIn,
+            bots = sampleBotsState,
+            draft = draft,
+            onQueryChange = {},
+            onSelect = {},
+            onClearBot = {},
+            onNoteChange = {},
+            onRemoveStaged = {},
+            onRemoveSharedText = {},
+            onAttach = {},
+            onSend = {},
+            onRetry = {},
+            onCancel = {},
+            onOpenApp = {},
+        )
     }
 
     private fun capture(name: String, mode: ThemeMode, act: () -> Unit = {}, content: @Composable () -> Unit) {

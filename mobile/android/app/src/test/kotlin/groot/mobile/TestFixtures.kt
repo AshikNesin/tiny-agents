@@ -45,6 +45,10 @@ import groot.mobile.data.chat.chatView
 import groot.mobile.data.chat.reduceChat
 import groot.mobile.feature.bots.BotEditorData
 import groot.mobile.feature.chat.ChatActions
+import groot.mobile.feature.chat.StagedUpload
+import groot.mobile.feature.share.ShareDraft
+import groot.mobile.data.PickedFile
+import android.net.Uri
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import okhttp3.MediaType.Companion.toMediaType
@@ -416,5 +420,22 @@ val sampleApprovalMessages = listOf(
             ),
         ),
         minutesAgo = 2,
+    ),
+)
+
+/** The share sheet with a CSV and a PDF shared to Researcher. */
+val sampleShareDraft = ShareDraft(
+    botId = "b2",
+    staged = listOf(
+        StagedUpload(
+            "s1",
+            PickedFile(Uri.parse("content://files/artha-net-worth.csv"), "artha-net-worth.csv", "text/csv", 797),
+            ref = AttachmentRef("up1", "file", "artha-net-worth.csv", "text/csv", 797),
+        ),
+        StagedUpload(
+            "s2",
+            PickedFile(Uri.parse("content://files/statement.pdf"), "Bank statement October.pdf", "application/pdf", 120_000),
+            ref = AttachmentRef("up2", "file", "Bank statement October.pdf", "application/pdf", 120_000),
+        ),
     ),
 )

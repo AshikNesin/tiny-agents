@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.0
+
+### Minor Changes
+
+- Share to a bot from any app. Tiny Agents shows in Android's share sheet for files, photos, links and text, and
+  opens a sheet over the app you shared from: search and pick the bot, see what goes, add a note, attach more and
+  send. Your top four bots also show by face in the share sheet as Direct Share targets, and on a long press of the
+  app icon, where they open that bot's chat.
+
 ## 0.3.1
 
 ### Patch Changes
