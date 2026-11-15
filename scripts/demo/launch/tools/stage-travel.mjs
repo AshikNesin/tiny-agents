@@ -457,18 +457,8 @@ async function openAt(mode, offset, login) {
 }
 
 async function gotoChat({ page }, botId) {
-  await page.goto(`/bots/${botId}`, { waitUntil: "domcontentloaded" });
-  const line = page.getByText(D.FARE_LINE).first();
-  // A phone may land on the chat list first: open the chat from its row.
-  if (
-    !(await line.waitFor({ timeout: 8_000 }).then(
-      () => true,
-      () => false,
-    ))
-  ) {
-    await page.getByText("Travel Planner", { exact: true }).first().click();
-  }
-  await line.waitFor();
+  await page.goto(`/chats/${botId}`, { waitUntil: "domcontentloaded" });
+  await page.getByText(D.FARE_LINE).first().waitFor();
 }
 
 /** The one DOM edit: hide the owner's message that started the booking turn (CAST has none). */

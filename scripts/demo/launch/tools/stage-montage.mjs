@@ -11,11 +11,13 @@
 //   real flow      account name (first-run setup), bots, memories (the bot's
 //                  `remember` tool), the Researcher chat, YOLO (the real menu
 //                  and confirm dialog), its web tool calls (scripted model,
-//                  web answered offline: montage-faux.mjs, montage-director.mjs)
+//                  web answered offline: montage-faux.mjs, montage-director.mjs),
+//                  the stand-in model's display name (PATCH /models/:id)
 //   real server    Settings → Updates: the server gets its status over the
 //                  supervisor IPC channel `pnpm local` uses, from this script
 //   from Playwright  Connections, Settings → Models, Terminal (REST + WebSocket)
-// No DOM is edited.
+// One DOM edit, mobile chat only: `noGutter` below. Pages opened here get a
+// quiet Vite HMR socket and no third-party requests (see the main loop).
 import { spawn, execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -684,6 +686,7 @@ const STATES = {
   "yolo-menu": async ({ page, mode }) => {
     const r = researcher(page);
     if (!(await r.banner.isVisible())) await STATES.yolo({ page, mode });
+    await openToolGroup(page);
     if (mode === "mobile") await noGutter(page);
     await r.menuButton.click();
     await r.toggle.waitFor();
@@ -735,7 +738,7 @@ for (const mode of MODES) {
     await page.unrouteAll({ behavior: "ignoreErrors" });
     await stage(session);
     await page.waitForLoadState("networkidle", { timeout: 3000 }).catch(() => {});
-    if (mode === "desktop") await page.mouse.move(0, 0);
+    await page.mouse.move(0, 0); // no hover left on what was just clicked
     await dumpCss(page, mode);
     await snap(session, name);
     results.push([mode, name]);

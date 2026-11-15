@@ -249,7 +249,8 @@ function buildCut(name, cut, durs) {
   let t = 0;
   const hosts = cut.scenes.map(([id, slot, a, b], i) => {
     const d = slot ?? durs[id];
-    const trim = a != null ? ` data-film-in="${a}" data-film-out="${b}"` : "";
+    // The scene reads these, not data-start and data-duration, which HyperFrames owns.
+    const trim = ` data-film-start="${+t.toFixed(3)}" data-film-slot="${d}" data-film-in="${a ?? 0}" data-film-out="${b ?? durs[id]}"`;
     const host = `      <div
         id="${id}"
         data-composition-id="${id}"

@@ -29,6 +29,23 @@
     () => document.fonts.ready,
   );
 
+  /**
+   * A number GSAP can tween that calls `fn` whenever it is set. Unlike an
+   * onUpdate callback it also runs on a seek that suppresses events.
+   */
+  function driven(fn, start = 0) {
+    let v = start;
+    return {
+      get v() {
+        return v;
+      },
+      set v(next) {
+        v = next;
+        fn(next);
+      },
+    };
+  }
+
   function scene(id, dur, build) {
     const host = document.getElementById(id);
     const root = host.querySelector("[data-hf-inner-root]") || host;
@@ -63,10 +80,18 @@
         tl.to({}, { duration: 0.001 }, Math.max(0, dur - 0.001));
         const a = +(host.dataset.filmIn ?? 0);
         const b = +(host.dataset.filmOut ?? dur);
-        const slot = +(host.dataset.duration ?? dur);
+        const slot = +(host.dataset.filmSlot ?? b - a);
+        // The registered timeline scrubs the scene's own: slot seconds play
+        // the stretch [a, b]. It is scrubbed through a plain number, not by
+        // tweening the timeline's `time`: GSAP undoes a fromTo's start value
+        // when it rewinds, which sent the scene back to 0 and un-hid everything
+        // that had not appeared yet. The scene is never set to exactly 0 for
+        // the same reason.
+        const at = (p) => tl.time(Math.max(0.0001, a + (b - a) * p));
         const outer = gsap.timeline({ paused: true });
-        outer.fromTo(tl, { time: a }, { time: b, duration: slot, ease: "none" }, 0);
-        cues[id] = { start: +(host.dataset.start ?? 0), slot, in: a, out: b, list: S.cues };
+        outer.to(driven(at), { v: 1, duration: slot, ease: "none" }, 0);
+        at(0);
+        cues[id] = { start: +(host.dataset.filmStart ?? 0), slot, in: a, out: b, list: S.cues };
         window.__timelines[id] = outer;
       })
       .catch((e) => console.error(`[film] ${id}: ${e.stack || e}`));
@@ -354,18 +379,9 @@
     function type(t, target, text, o = {}) {
       const el = q(target);
       const d = text.length / (o.cps ?? 26);
-      const st = { n: 0 };
       const put = (s) => ("value" in el ? (el.value = s) : (el.textContent = s));
-      tl.to(
-        st,
-        {
-          n: text.length,
-          duration: d,
-          ease: "none",
-          onUpdate: () => put(text.slice(0, Math.round(st.n))),
-        },
-        t,
-      );
+      const st = driven((n) => put(text.slice(0, Math.round(n))));
+      tl.to(st, { v: text.length, duration: d, ease: "none" }, t);
       sfx(t, "type", { d: +d.toFixed(3) });
       return t + d;
     }
@@ -410,5 +426,5 @@
     };
   }
 
-  window.Film = { scene, FMT, H, FRAME };
+  window.Film = { scene, driven, FMT, H, FRAME };
 })();

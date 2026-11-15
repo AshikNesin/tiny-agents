@@ -1,0 +1,104 @@
+<!-- scene: dur=6 -->
+<style>
+  .cap {
+    text-wrap: balance;
+  }
+  .lyr {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    /* The app's own ground, so a layer never shows the screen beneath it. */
+    background: oklch(0.98 0.0017 67.8);
+  }
+  .lyr.over {
+    box-shadow: -18px 0 44px rgba(24, 24, 32, 0.12);
+  }
+</style>
+<div class="f-scene">
+  <div class="vp">
+    <div class="lyr l-list">
+      <div class="cam list-cam"><div class="appwin m" data-snap="mobile/list-end"></div></div>
+    </div>
+    <div class="lyr over l-ashik">
+      <div class="cam ashik-cam">
+        <div class="appwin m" data-snap="mobile/travel-shared-ashik"></div>
+      </div>
+    </div>
+    <div class="lyr over l-sonaal">
+      <div class="cam sonaal-cam">
+        <div class="appwin m" data-snap="mobile/travel-shared-sonaal"></div>
+      </div>
+    </div>
+  </div>
+  <p class="cap c1">Bring a friend into the chat</p>
+  <p class="cap c2">One chat, everyone live</p>
+  <div class="tap"></div>
+</div>
+<script>
+  Film.scene("{{id}}", {{dur}}, (S) => {
+    const { tl } = S;
+    const W = 960;
+    const tapEl = S.q(".tap");
+    /** S.tap moves the dot only 0.02 s before the tap but fades it in from 0.16 s before: put it there first. */
+    const tap = (t, p) => {
+      tl.set(tapEl, { x: p.x, y: p.y }, t - 0.17);
+      S.tap(tapEl, t, p);
+    };
+    const union = (...r) => {
+      const x = Math.min(...r.map((a) => a.x));
+      const y = Math.min(...r.map((a) => a.y));
+      return { x, y, w: Math.max(...r.map((a) => a.x + a.w)) - x, h: Math.max(...r.map((a) => a.y + a.h)) - y };
+    };
+    const list = S.camera(".list-cam");
+    const ashik = S.camera(".ashik-cam");
+    const sonaal = S.camera(".sonaal-cam");
+    const [lList, lAshik, lSonaal] = [".l-list", ".l-ashik", ".l-sonaal"].map(S.q);
+    gsap.set([lAshik, lSonaal], { x: W });
+
+    // ── The list as the last scene left it, close on the newest bot.
+    const rows = S.qa('.l-list main section[aria-label="Bots"] li');
+    const rowOf = (name) => rows.find((li) => li.querySelector("a .truncate").textContent === name);
+    const fresh = rowOf("Expense Tracker");
+    list.set(list.frame(union(list.local(fresh), list.local(rows[rows.indexOf(fresh) + 1])), { scale: 2.9, ax: 0, px: 0, dx: 20, ay: 0.5 }));
+    tap(0.35, list.point(rowOf("Travel Planner").querySelector("a"), 0, 0.35, 0.5));
+    tl.to(lAshik, { x: 0, duration: 0.4, ease: "power3.out" }, 0.4);
+    tl.to(lList, { x: -W * 0.25, duration: 0.4, ease: "power3.out" }, 0.4);
+    S.sfx(0.4, "whoosh", { d: 0.4 });
+    S.cap(".c1", 0.2, 2.75);
+
+    /** The three messages of the shared conversation, in the order they were sent. */
+    const shared = (root) => {
+      const items = [...root.querySelectorAll('[data-slot="message-scroller-item"]')];
+      const first = items.findIndex((el) => el.textContent.includes("we're booked for Friday"));
+      return items.slice(first, first + 3);
+    };
+    const onShared = (cam, msgs) => cam.frame(union(...msgs.map(cam.local)), { fit: 1, ay: 0.5 });
+    const [a1, a2, a3] = shared(lAshik);
+    const [s1, s2, s3] = shared(lSonaal);
+    ashik.set(onShared(ashik, [a1, a2, a3]));
+    sonaal.set(onShared(sonaal, [s1, s2, s3]));
+    gsap.set([a1, a2, a3, s3], { opacity: 0 });
+
+    // ── Ashik's phone: his message goes out, and Sonaal's answer comes in.
+    tl.fromTo(a1, { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.35, ease: "power3.out" }, 1.0);
+    S.sfx(1.0, "pop", { pan: -0.2 });
+    tl.fromTo(a2, { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.35, ease: "power3.out" }, 1.7);
+    S.sfx(1.7, "pop", { pan: 0.2 });
+
+    // ── Sonaal's phone, the same chat: Ashik's words on the other side, and the bot answers both.
+    tl.to(lAshik, { x: -W, duration: 0.45, ease: "power3.inOut" }, 2.6);
+    tl.fromTo(lSonaal, { x: W }, { x: 0, duration: 0.45, ease: "power3.inOut", immediateRender: false }, 2.6);
+    S.sfx(2.6, "whoosh", { d: 0.45 });
+    S.cap(".c2", 2.95, 5.92);
+    tl.to(s3, { opacity: 1, duration: 0.01 }, 3.3);
+    S.stream(3.3, s3, 0.6);
+    S.sfx(3.3, "pop", { pan: 0.2 });
+
+    // ── And back on Ashik's phone, the same reply is already there.
+    tl.set(a3, { opacity: 1 }, 4.0);
+    tl.to(lSonaal, { x: W, duration: 0.45, ease: "power3.inOut" }, 4.55);
+    tl.to(lAshik, { x: 0, duration: 0.45, ease: "power3.inOut" }, 4.55);
+    S.sfx(4.55, "whoosh", { d: 0.45 });
+    ashik.to(5.05, ashik.frame(a3, { scale: 3.3, ax: 0, px: 0, dx: 30, ay: 0.55 }), 0.6);
+  });
+</script>
