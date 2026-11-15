@@ -373,6 +373,8 @@ def build(sheet):
         elif name == "tick":
             mx.add(stem, hat(), at, gain=0.5)
             mx.add(stem, bell(midi(86), 0.9, 1.0), at, gain=0.09)
+        elif name == "cut":
+            mx.add(stem, hat(open_=True), at, gain=0.34)
         elif name == "bell":
             mx.add(stem, bell(midi(86), 1.8, 1.2), at, gain=0.2)
             mx.add(stem, bell(midi(93), 1.8, 1.2), at + 0.13, gain=0.18)

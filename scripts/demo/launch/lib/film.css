@@ -1,13 +1,13 @@
 /* The film's own styles: ground, screen, captions, cursor.
    The product UI inside .appwin is styled by app.desktop.css / app.mobile.css. */
 :root {
-  --ground: #f6f6f7;
-  --ink: #1f1f23;
-  --muted: #6f6f7a;
-  --line: #e6e6ea;
-  --ok: #2f8a5b;
-  --warn: #b45309;
-  --night: #0c0b0a;
+  --f-ground: #f6f6f7;
+  --f-ink: #1f1f23;
+  --f-muted: #6f6f7a;
+  --f-line: #e6e6ea;
+  --f-ok: #2f8a5b;
+  --f-warn: #b45309;
+  --f-night: #0c0b0a;
   --film-font: "Inter Variable", "Inter", sans-serif;
   --film-mono: "JetBrains Mono", ui-monospace, monospace;
 }
@@ -16,7 +16,7 @@ body {
   margin: 0;
   padding: 0;
   overflow: hidden;
-  background: var(--ground);
+  background: var(--f-ground);
 }
 html[data-fmt="h"],
 html[data-fmt="h"] body {
@@ -34,8 +34,8 @@ html[data-fmt="v"] body {
   position: absolute;
   inset: 0;
   overflow: hidden;
-  background: var(--ground);
-  color: var(--ink);
+  background: var(--f-ground);
+  color: var(--f-ink);
   font-family: var(--film-font);
   font-feature-settings: "cv11", "ss01";
   -webkit-font-smoothing: antialiased;
@@ -118,7 +118,7 @@ html[data-fmt="v"] .vp {
   font-weight: 700;
   letter-spacing: -0.04em;
   line-height: 1.04;
-  color: var(--ink);
+  color: var(--f-ink);
   z-index: 20;
 }
 .cap .w {
@@ -127,7 +127,7 @@ html[data-fmt="v"] .vp {
   white-space: pre;
 }
 html[data-fmt="h"] .cap {
-  top: 56px;
+  top: 62px;
   font-size: 72px;
   white-space: nowrap;
 }
@@ -146,13 +146,13 @@ html[data-fmt="v"] .cap {
   font-weight: 650;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--f-muted);
   z-index: 20;
   opacity: 0;
 }
 html[data-fmt="h"] .eyebrow {
-  top: 22px;
-  font-size: 22px;
+  top: 16px;
+  font-size: 28px;
 }
 html[data-fmt="v"] .eyebrow {
   top: 176px;
@@ -195,4 +195,10 @@ html[data-fmt="v"] .cursor {
   z-index: 60;
   opacity: 0;
   pointer-events: none;
+}
+
+/* The app defers painting rows that are off screen; the film scrolls them into
+   view itself, so they must always be laid out. */
+.appwin [data-slot="message-scroller-item"] {
+  content-visibility: visible;
 }

@@ -1,0 +1,115 @@
+<!-- scene: dur=9 -->
+<style></style>
+<div class="f-scene">
+  <div class="vp shot s1">
+    <div class="cam"><div class="appwin" data-snap="desktop/memory"></div></div>
+  </div>
+  <div class="vp shot s2">
+    <div class="cam"><div class="appwin" data-snap="desktop/terminal"></div></div>
+  </div>
+  <div class="vp shot s3">
+    <div class="cam"><div class="appwin" data-snap="desktop/connections"></div></div>
+  </div>
+  <div class="vp shot s4">
+    <div class="cam"><div class="appwin" data-snap="desktop/models"></div></div>
+  </div>
+  <div class="vp shot s5">
+    <div class="cam">
+      <div class="appwin" data-snap="desktop/yolo" data-fix="sidebar:end; active:Researcher"></div>
+    </div>
+  </div>
+  <div class="vp shot s6">
+    <div class="cam"><div class="appwin" data-snap="desktop/updates"></div></div>
+  </div>
+  <p class="eyebrow m-eyebrow">And more</p>
+  <p class="cap l1">Remembers you</p>
+  <p class="cap l2">A real terminal</p>
+  <p class="cap l3">Your tools, connected</p>
+  <p class="cap l4">Any model</p>
+  <p class="cap l5">Or let it run</p>
+  <p class="cap l6">Updates itself</p>
+</div>
+<script>
+  Film.scene("{{id}}", {{dur}}, (S) => {
+    const { tl } = S;
+    const CUT = [0, 1.5, 3.0, 4.5, 6.0, 7.5, 9.0];
+    const shots = S.qa(".shot");
+    /** The innermost element matching `sel` that holds `text`. */
+    const has = (root, sel, text) =>
+      [...root.querySelectorAll(sel)].filter((el) => el.textContent.includes(text)).pop();
+    const union = (a, b) => {
+      const x = Math.min(a.x, b.x);
+      const y = Math.min(a.y, b.y);
+      return { x, y, w: Math.max(a.x + a.w, b.x + b.w) - x, h: Math.max(a.y + a.h, b.y + b.h) - y };
+    };
+    tl.fromTo(".m-eyebrow", { opacity: 0 }, { opacity: 1, duration: 0.2 }, 0.02);
+
+    /** One shot: cut in a little wide of the control, settle on it, and let the control do something. */
+    const shot = (i, target, opts, act) => {
+      const el = shots[i];
+      const cam = S.camera(el.querySelector(".cam"));
+      // `left` keeps only that share of the target's width: the side its words are on.
+      const box = cam.local(typeof target === "function" ? target(cam) : target);
+      const aim = { ...box, w: box.w * (opts.left ?? 1) };
+      const to = cam.frame(aim, opts);
+      const from = cam.frame(aim, { ...opts, scale: to.scale * 0.93, fit: undefined });
+      cam.set(from);
+      const t = CUT[i];
+      if (i > 0) {
+        gsap.set(el, { autoAlpha: 0 });
+        tl.set(el, { autoAlpha: 1 }, t);
+        tl.set(shots[i - 1], { autoAlpha: 0 }, t);
+        S.sfx(t, "cut");
+      }
+      cam.to(t, to, 0.7, "expo.out");
+      S.cap(`.l${i + 1}`, t + 0.04, CUT[i + 1] - 0.02);
+      if (act) act(el, t);
+    };
+
+    shot(0, has(shots[0], '[data-slot="card"]', "Prefers window seats"), { left: 0.56, fit: 0.86, maxScale: 2.8, ay: 0.5 }, (el, t) =>
+      S.show(t + 0.2, [...has(el, '[data-slot="card"]', "Prefers window seats").querySelectorAll("li")], { y: 8, stagger: 0.14 }),
+    );
+
+    shot(
+      1,
+      (cam) => {
+        const rows = [...shots[1].querySelectorAll(".xterm-rows > div")].filter((r) => r.textContent.trim());
+        const tail = rows.slice(-5);
+        return union(cam.local(tail[0]), cam.local(tail[tail.length - 2]));
+      },
+      { fit: 0.94, maxScale: 2.6, ay: 0.5 },
+      (el, t) => {
+        const rows = [...el.querySelectorAll(".xterm-rows > div")].filter((r) => r.textContent.trim());
+        S.show(t + 0.15, rows.slice(-3, -1), { y: 0, d: 0.1, stagger: 0.22 });
+        S.sfx(t + 0.4, "tick");
+      },
+    );
+
+    shot(2, has(shots[2], '[data-slot="card"]', "Linear"), { left: 0.6, fit: 0.86, maxScale: 2.8, ay: 0.5 }, (el, t) =>
+      S.show(t + 0.12, [...has(el, '[data-slot="card"]', "Linear").querySelectorAll("li")], { y: 8, stagger: 0.1 }),
+    );
+
+    shot(3, has(shots[3], '[data-slot="card"]', "Claude Opus 5.5"), { left: 0.66, fit: 0.9, maxScale: 2.6, py: 0, ay: 0.07 }, (el, t) =>
+      S.show(t + 0.2, [...has(el, '[data-slot="card"]', "Claude Opus 5.5").querySelectorAll("li")], { y: 8, stagger: 0.16 }),
+    );
+
+    shot(
+      4,
+      (cam) => {
+        const banner = shots[4].querySelector('[data-testid="yolo-banner"]');
+        const rows = shots[4].querySelector('[data-slot="trace"]');
+        return union(cam.local(rows), cam.local(banner));
+      },
+      { fit: 0.9, maxScale: 2.0, ay: 0.52 },
+      (el, t) => {
+        const rows = [...el.querySelectorAll('[data-slot="trace-collapsible-content-inner"] [data-slot="trace"]')];
+        S.show(t + 0.1, rows, { y: 6, d: 0.18, stagger: 0.16 });
+      },
+    );
+
+    shot(5, has(shots[5], '[data-slot="card"]', "Update & restart"), { fit: 0.86, maxScale: 2.4, ay: 0.5 }, (el, t) => {
+      const btn = has(el, "button", "Update & restart");
+      tl.to(btn, { scale: 1.06, duration: 0.18, ease: "power2.out", yoyo: true, repeat: 1, transformOrigin: "50% 50%" }, t + 0.7);
+    });
+  });
+</script>

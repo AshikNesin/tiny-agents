@@ -1,0 +1,189 @@
+<!-- scene: dur=14 -->
+<style>
+  .code-layer {
+    position: absolute;
+    inset: 0;
+    background: #fff;
+  }
+</style>
+<div class="f-scene">
+  <div class="vp">
+    <div class="cam chat-cam">
+      <div class="appwin lay-inbox" data-snap="desktop/side-researcher"></div>
+      <div
+        class="appwin lay-chat"
+        data-snap="desktop/codebuddy-chat"
+        data-fix="sidebar:codebuddy"
+      ></div>
+    </div>
+    <div class="code-layer">
+      <div class="cam code-cam">
+        <div class="appwin" data-snap="desktop/code-done-open"></div>
+      </div>
+    </div>
+  </div>
+  <p class="cap c1">Hand off the bug</p>
+  <p class="cap c2">It codes on your sandbox</p>
+  <p class="cap c3">Tests pass. It reports back.</p>
+  <div class="cursor">
+    <svg viewBox="0 0 26 26">
+      <path
+        d="M5 2.5 L5 20.5 L9.6 16.4 L12.7 23.2 L15.9 21.8 L12.9 15.1 L19.2 15.1 Z"
+        fill="#111"
+        stroke="#fff"
+        stroke-width="1.5"
+        stroke-linejoin="round"
+      />
+    </svg>
+  </div>
+</div>
+<script>
+  Film.scene("{{id}}", {{dur}}, (S) => {
+    const { tl } = S;
+    const chat = S.camera(".chat-cam");
+    const code = S.camera(".code-cam");
+    const inbox = S.q(".lay-inbox");
+    const win = S.q(".lay-chat");
+    const layer = S.q(".code-layer");
+    const full = chat.full();
+    chat.set(full);
+    gsap.set(layer, { autoAlpha: 0 });
+
+    // ── The pointer is on Code Buddy's row; a click opens its chat.
+    const rowOf = (w, name) =>
+      [...w.querySelectorAll('section[aria-label="Bots"] li')].find(
+        (li) => li.querySelector("a .truncate").textContent === name,
+      );
+    const cur = S.cursor().place(chat.point(rowOf(inbox, "Code Buddy"), 0));
+    cur.click(0.15);
+    S.swap(0.2, inbox, win);
+
+    const items = [...win.querySelectorAll('[data-slot="message-scroller-item"]')];
+    const card = win.querySelector('[data-testid="code-handoff"]');
+    const open = card.querySelector('a[data-slot="button"]') || card;
+    const cardItem = card.closest('[data-slot="message-scroller-item"]');
+    const later = items.slice(items.indexOf(cardItem) + 1);
+    // What the owner asked for and the hand-off, close up.
+    const a = chat.local(items[0]);
+    const c = chat.local(card);
+    const ask = { x: c.x, y: a.y, w: a.x + a.w - c.x, h: c.y + c.h - a.y };
+    const onAsk = chat.frame(ask, { fit: 0.86, maxScale: 2.1, ay: 0.46 });
+    chat.to(0.45, onAsk, 0.65);
+    S.cap(".c1", 0.5, 3.3);
+    cur.to(1.7, chat.point(open, 2.4, 0.5, 0.55), 0.7);
+    cur.click(3.3);
+    S.press(3.3, open);
+
+    // ── The hand-off card opens into the Code workspace, on the thread it started.
+    const scroller = S.q('.code-layer [data-slot="message-scroller-viewport"]');
+    const log = S.q('.code-layer [data-testid="code-transcript"]');
+    // Wide enough to keep the thread's title in view, tall enough for most of the transcript.
+    const lg = code.local(log);
+    const column = { x: lg.x - 112, y: lg.y, w: lg.w + 124, h: lg.h };
+    const onLog = code.frame(column, { fit: 1, ay: 0, py: 0 });
+    const sc = code.local(scroller);
+    const onLogEnd = code.frame({ ...column, y: sc.y, h: sc.h }, { fit: 1, ay: 1, py: 1, dy: -10 });
+    code.set(onLog);
+    const pane = S.scroller(scroller);
+    const st0 = pane.value;
+    const top = code.local(scroller).y;
+    /** The scroll offset that puts `el` a little below the top of the transcript, measured now. */
+    const scrollFor = (el, gap = 14) => Math.max(0, Math.min(st0, pane.value + code.local(el).y - top - gap));
+
+    const vpw = chat.vp.w;
+    const vph = chat.vp.h;
+    const box = {
+      l: c.x * onAsk.scale + onAsk.x,
+      t: c.y * onAsk.scale + onAsk.y,
+      r: vpw - ((c.x + c.w) * onAsk.scale + onAsk.x),
+      b: vph - ((c.y + c.h) * onAsk.scale + onAsk.y),
+    };
+    const closed = `inset(${box.t}px ${box.r}px ${box.b}px ${box.l}px round 22px)`;
+    const opened = "inset(0px 0px 0px 0px round 0px)";
+    tl.set(layer, { autoAlpha: 1 }, 3.4);
+    tl.fromTo(layer, { clipPath: closed }, { clipPath: opened, duration: 0.6, ease: "power3.inOut" }, 3.4);
+    S.sfx(3.4, "whoosh", { d: 0.6 });
+    cur.hide(3.45);
+
+    const titems = [...log.querySelectorAll(':scope > [data-slot="message-scroller-item"]')];
+    const group = log.querySelector('[data-testid="code-tool-group"]');
+    const groupHead = group.querySelector('[data-slot="trace-collapsible-trigger"]');
+    const steps = [...group.querySelector('[data-slot="trace-collapsible-content-inner"]').children];
+    const [fail, edit, pass] = steps;
+    const answer = titems[titems.indexOf(group.closest('[data-slot="message-scroller-item"]')) + 1];
+    const footer = log.querySelector('[data-testid="turn-divider"]');
+    const head = (step) => step.querySelector('[data-slot="trace-collapsible-trigger"]');
+    const blocks = (step) => [...step.querySelectorAll('[data-slot="code-block"]')];
+    const lines = (el) => [...el.querySelectorAll('[data-slot="code-block-line"], [data-kind]')];
+    const body = (step) => step.querySelector('[data-slot="trace-collapsible-content"]');
+
+    // Every stop is measured before the pane moves.
+    const stops = { fail: scrollFor(head(fail), 30), edit: scrollFor(edit, 34), pass: scrollFor(pass) };
+    pane.set(0);
+    S.cap(".c2", 4.2, 8.2);
+
+    // 1. The test fails.
+    const inner = group.querySelector('[data-slot="trace-collapsible-content-inner"]');
+    S.show(4.05, [groupHead, inner], { y: 6, d: 0.25 });
+    for (const step of steps) gsap.set(step, { opacity: 0 });
+    tl.to(fail, { opacity: 1, duration: 0.2 }, 4.15);
+    const [failCmd, failOut] = blocks(fail);
+    S.show(4.4, failCmd, { y: 6 });
+    S.show(4.75, failOut, { y: 6, d: 0.2 });
+    S.show(4.85, lines(failOut), { y: 0, d: 0.12, stagger: 0.1 });
+    S.sfx(5.0, "thud");
+    pane.to(5.05, stops.fail, 0.5);
+
+    // 2. The fix.
+    pane.to(6.0, stops.edit, 0.6);
+    tl.to(edit, { opacity: 1, duration: 0.2 }, 6.15);
+    S.show(6.4, body(edit), { y: 6, d: 0.25 });
+    const diff = lines(body(edit));
+    if (diff.length) S.show(6.5, diff, { y: 0, d: 0.12, stagger: 0.11 });
+    S.sfx(6.45, "type", { d: 0.7 });
+
+    // 3. The suite passes.
+    pane.to(8.0, stops.pass, 0.6);
+    code.to(8.0, onLogEnd, 0.6);
+    tl.to(pass, { opacity: 1, duration: 0.2 }, 8.15);
+    const [passCmd, passOut] = blocks(pass);
+    S.show(8.4, passCmd, { y: 6 });
+    S.show(8.75, passOut, { y: 6, d: 0.2 });
+    S.show(8.85, lines(passOut), { y: 0, d: 0.12, stagger: 0.14 });
+    S.sfx(9.0, "tick");
+    S.cap(".c3", 8.6, 13.5);
+
+    // 4. What it did, how long it took and what it cost.
+    pane.to(9.6, st0, 0.6);
+    tl.fromTo(answer, { opacity: 0 }, { opacity: 1, duration: 0.01 }, 9.85);
+    S.stream(9.85, answer, 0.9);
+    S.show(10.9, footer, { y: 4 });
+
+    // ── Back in the chat, the same answer has been reported to the bot.
+    for (const el of later) gsap.set(el, { opacity: 0 });
+    const tail = later.length ? chat.local(later[later.length - 1]) : c;
+    const report = { x: c.x, y: c.y, w: Math.max(ask.w, c.w), h: tail.y + tail.h - c.y };
+    const onReport = chat.frame(report, { fit: 0.86, maxScale: 2.1, ay: 0.5 });
+    tl.set(chat.el, onReport, 11.3);
+    const c2 = {
+      l: c.x * onReport.scale + onReport.x,
+      t: c.y * onReport.scale + onReport.y,
+      r: vpw - ((c.x + c.w) * onReport.scale + onReport.x),
+      b: vph - ((c.y + c.h) * onReport.scale + onReport.y),
+    };
+    tl.to(
+      layer,
+      { clipPath: `inset(${c2.t}px ${c2.r}px ${c2.b}px ${c2.l}px round 22px)`, duration: 0.55, ease: "power3.inOut" },
+      11.4,
+    );
+    tl.to(layer, { autoAlpha: 0, duration: 0.12 }, 11.9);
+    S.sfx(11.4, "whoosh", { d: 0.55 });
+    later.forEach((el, i) => {
+      const at = 12.0 + i * 0.75;
+      tl.to(el, { opacity: 1, duration: 0.01 }, at);
+      S.stream(at, el, 0.6);
+      S.sfx(at, "pop");
+    });
+    chat.to(13.45, full, 0.55);
+  });
+</script>

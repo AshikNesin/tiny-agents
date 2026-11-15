@@ -56,3 +56,15 @@ export const CUTS = {
     ],
   },
 };
+
+// SCENE=s04-phone node tools/build.mjs builds index.html from just those
+// scenes (comma-separated), for working on one at a time.
+if (process.env.SCENE) {
+  const ids = process.env.SCENE.split(",");
+  for (const k of Object.keys(CUTS)) delete CUTS[k];
+  CUTS.index = {
+    title: "work in progress",
+    fmt: ids[0].startsWith("v") ? "v" : "h",
+    scenes: ids.map((id) => [id]),
+  };
+}

@@ -32,20 +32,44 @@
   function scene(id, dur, build) {
     const host = document.getElementById(id);
     const root = host.querySelector("[data-hf-inner-root]") || host;
-    fontsReady.then(() => {
-      const tl = gsap.timeline({ paused: true });
-      const S = api(root, tl, dur);
-      for (const el of root.querySelectorAll("[data-st]")) el.scrollTop = +el.dataset.st;
-      build(S);
-      tl.to({}, { duration: 0.001 }, Math.max(0, dur - 0.001));
-      const a = +(host.dataset.filmIn ?? 0);
-      const b = +(host.dataset.filmOut ?? dur);
-      const slot = +(host.dataset.duration ?? dur);
-      const outer = gsap.timeline({ paused: true });
-      outer.fromTo(tl, { time: a }, { time: b, duration: slot, ease: "none" }, 0);
-      cues[id] = { start: +(host.dataset.start ?? 0), slot, in: a, out: b, list: S.cues };
-      window.__timelines[id] = outer;
-    });
+    fontsReady
+      .then(() => {
+        const tl = gsap.timeline({ paused: true });
+        const S = api(root, tl, dur);
+        // HyperFrames keeps a scene undisplayed until its slot comes up, and an
+        // undisplayed element measures as nothing. Lay the scene out while it is
+        // built, then hand its display back.
+        const undisplayed = [];
+        for (let el = root; el && el !== document.documentElement; el = el.parentElement) {
+          if (getComputedStyle(el).display !== "none") continue;
+          undisplayed.push([
+            el,
+            el.style.getPropertyValue("display"),
+            el.style.getPropertyPriority("display"),
+          ]);
+          el.style.setProperty("display", "block", "important");
+        }
+        try {
+          // A scroll offset is lost whenever its element is undisplayed, so the
+          // app's scrolled panes are held by a transform instead.
+          for (const el of root.querySelectorAll("[data-st]")) S.scroller(el).set(+el.dataset.st);
+          build(S);
+        } finally {
+          for (const [el, value, priority] of undisplayed) {
+            if (value) el.style.setProperty("display", value, priority);
+            else el.style.removeProperty("display");
+          }
+        }
+        tl.to({}, { duration: 0.001 }, Math.max(0, dur - 0.001));
+        const a = +(host.dataset.filmIn ?? 0);
+        const b = +(host.dataset.filmOut ?? dur);
+        const slot = +(host.dataset.duration ?? dur);
+        const outer = gsap.timeline({ paused: true });
+        outer.fromTo(tl, { time: a }, { time: b, duration: slot, ease: "none" }, 0);
+        cues[id] = { start: +(host.dataset.start ?? 0), slot, in: a, out: b, list: S.cues };
+        window.__timelines[id] = outer;
+      })
+      .catch((e) => console.error(`[film] ${id}: ${e.stack || e}`));
   }
 
   function api(root, tl, dur) {
@@ -146,6 +170,22 @@
       return cam;
     }
 
+    /**
+     * The bot list on its own: the screen narrows to a tall panel that holds
+     * just the sidebar. Returns the screen's box and the camera's framing for
+     * that panel, and the screen's full box to return to.
+     */
+    function listPanel(cam, sidebar) {
+      const W = 760;
+      const b = cam.local(sidebar);
+      const k = W / b.w;
+      return {
+        vp: { left: (FRAME.w - W) / 2, width: W },
+        cam: { x: -b.x * k, y: 0, scale: k },
+        wide: { left: cam.vp.x, width: cam.vp.w },
+      };
+    }
+
     /** The pointer. Points are frame pixels; the arrow's tip lands on them. */
     function cursor(sel = ".cursor") {
       const el = q(sel);
@@ -154,6 +194,11 @@
       gsap.set(el, { opacity: 0 });
       const cur = {
         el,
+        /** Already on screen at p when the scene starts (it was left there by the scene before). */
+        place(p) {
+          gsap.set(el, { x: p.x - tip.x, y: p.y - tip.y, opacity: 1 });
+          return cur;
+        },
         /** Appears at `from` and travels to `to`, arriving at t + d. */
         enter(t, from, to, d = 0.7) {
           tl.set(el, { x: from.x - tip.x, y: from.y - tip.y }, t);
@@ -234,6 +279,37 @@
         );
     }
 
+    /**
+     * A scrolling pane of the app, moved by a transform on its content. `max`
+     * is how far it can scroll; set() and to() take an offset like scrollTop.
+     */
+    const scrollers = new Map();
+    function scroller(target) {
+      const el = q(target);
+      if (scrollers.has(el)) return scrollers.get(el);
+      const content = el.firstElementChild;
+      const max = Math.max(0, el.scrollHeight - el.clientHeight);
+      el.scrollTop = 0;
+      el.style.overflow = "hidden";
+      const sc = {
+        el,
+        max,
+        value: 0,
+        set(v) {
+          sc.value = Math.max(0, Math.min(max, v));
+          gsap.set(content, { y: -sc.value });
+          return sc;
+        },
+        to(t, v, d = 0.6, ease = "power2.inOut") {
+          sc.value = Math.max(0, Math.min(max, v));
+          tl.to(content, { y: -sc.value, duration: d, ease }, t);
+          return t + d;
+        },
+      };
+      scrollers.set(el, sc);
+      return sc;
+    }
+
     /** A first appearance. */
     const show = (t, target, o = {}) =>
       tl.fromTo(
@@ -311,6 +387,8 @@
       qa,
       rect,
       camera,
+      scroller,
+      listPanel,
       cursor,
       tap,
       cap,
