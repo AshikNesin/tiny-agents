@@ -101,7 +101,13 @@ export function SettingsLayout({ sections, active, basePath }: SettingsLayoutPro
         <main className="min-w-0 flex-1 px-4 pb-16 pt-6 sm:px-6 lg:px-10 lg:pt-10">
           {/* Left-aligned, so the title stays put when switching between narrow and wide sections. */}
           <div className={active.wide ? "max-w-5xl" : "max-w-3xl"}>
-            <PageLayout title={active.label} description={active.description} maxWidth="full">
+            {/* Settings has its own way back and no app drawer: no menu button. */}
+            <PageLayout
+              title={active.label}
+              description={active.description}
+              maxWidth="full"
+              navButton={false}
+            >
               {active.element}
             </PageLayout>
           </div>

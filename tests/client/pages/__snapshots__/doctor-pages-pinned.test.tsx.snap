@@ -9,13 +9,13 @@ exports[`ConnectionDetail, pinned > after a failed load > markup 1`] = `
       class="max-w-4xl mx-auto "
     >
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <button
               aria-label="Back"
@@ -214,13 +214,13 @@ exports[`ConnectionDetail, pinned > connected, with tools and bots > markup 1`] 
         </nav>
       </div>
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <button
               aria-label="Back"
@@ -259,15 +259,15 @@ exports[`ConnectionDetail, pinned > connected, with tools and bots > markup 1`] 
               Connected
             </span>
           </div>
-          <div
-            class="mt-1 text-sm text-muted-foreground"
+        </div>
+        <div
+          class="col-span-2 row-start-2 mt-1 text-sm text-muted-foreground md:col-span-1"
+        >
+          <span
+            class="font-mono text-[0.9em] break-all text-muted-foreground"
           >
-            <span
-              class="font-mono text-[0.9em] break-all text-muted-foreground"
-            >
-              https://mcp.notion.test/mcp
-            </span>
-          </div>
+            https://mcp.notion.test/mcp
+          </span>
         </div>
       </div>
       <div
@@ -837,13 +837,13 @@ exports[`ConnectionDetail, pinned > connected, without tools, bots loading > mar
         </nav>
       </div>
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <button
               aria-label="Back"
@@ -882,15 +882,15 @@ exports[`ConnectionDetail, pinned > connected, without tools, bots loading > mar
               Connected
             </span>
           </div>
-          <div
-            class="mt-1 text-sm text-muted-foreground"
+        </div>
+        <div
+          class="col-span-2 row-start-2 mt-1 text-sm text-muted-foreground md:col-span-1"
+        >
+          <span
+            class="font-mono text-[0.9em] break-all text-muted-foreground"
           >
-            <span
-              class="font-mono text-[0.9em] break-all text-muted-foreground"
-            >
-              https://mcp.notion.test/mcp
-            </span>
-          </div>
+            https://mcp.notion.test/mcp
+          </span>
         </div>
       </div>
       <div
@@ -1244,13 +1244,13 @@ exports[`ConnectionDetail, pinned > connecting, without tools, bots loading > ma
         </nav>
       </div>
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <button
               aria-label="Back"
@@ -1289,15 +1289,15 @@ exports[`ConnectionDetail, pinned > connecting, without tools, bots loading > ma
               Connecting
             </span>
           </div>
-          <div
-            class="mt-1 text-sm text-muted-foreground"
+        </div>
+        <div
+          class="col-span-2 row-start-2 mt-1 text-sm text-muted-foreground md:col-span-1"
+        >
+          <span
+            class="font-mono text-[0.9em] break-all text-muted-foreground"
           >
-            <span
-              class="font-mono text-[0.9em] break-all text-muted-foreground"
-            >
-              https://mcp.notion.test/mcp
-            </span>
-          </div>
+            https://mcp.notion.test/mcp
+          </span>
         </div>
       </div>
       <div
@@ -1651,13 +1651,13 @@ exports[`ConnectionDetail, pinned > error, without tools, bots loading > markup 
         </nav>
       </div>
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <button
               aria-label="Back"
@@ -1696,15 +1696,15 @@ exports[`ConnectionDetail, pinned > error, without tools, bots loading > markup 
               Error
             </span>
           </div>
-          <div
-            class="mt-1 text-sm text-muted-foreground"
+        </div>
+        <div
+          class="col-span-2 row-start-2 mt-1 text-sm text-muted-foreground md:col-span-1"
+        >
+          <span
+            class="font-mono text-[0.9em] break-all text-muted-foreground"
           >
-            <span
-              class="font-mono text-[0.9em] break-all text-muted-foreground"
-            >
-              https://mcp.notion.test/mcp
-            </span>
-          </div>
+            https://mcp.notion.test/mcp
+          </span>
         </div>
       </div>
       <div
@@ -2064,13 +2064,13 @@ exports[`ConnectionDetail, pinned > needs_auth, without tools, bots loading > ma
         </nav>
       </div>
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <button
               aria-label="Back"
@@ -2109,15 +2109,15 @@ exports[`ConnectionDetail, pinned > needs_auth, without tools, bots loading > ma
               Needs sign-in
             </span>
           </div>
-          <div
-            class="mt-1 text-sm text-muted-foreground"
+        </div>
+        <div
+          class="col-span-2 row-start-2 mt-1 text-sm text-muted-foreground md:col-span-1"
+        >
+          <span
+            class="font-mono text-[0.9em] break-all text-muted-foreground"
           >
-            <span
-              class="font-mono text-[0.9em] break-all text-muted-foreground"
-            >
-              https://mcp.notion.test/mcp
-            </span>
-          </div>
+            https://mcp.notion.test/mcp
+          </span>
         </div>
       </div>
       <div
@@ -2495,13 +2495,13 @@ exports[`ConnectionDetail, pinned > no bots > markup 1`] = `
         </nav>
       </div>
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <button
               aria-label="Back"
@@ -2540,15 +2540,15 @@ exports[`ConnectionDetail, pinned > no bots > markup 1`] = `
               Connected
             </span>
           </div>
-          <div
-            class="mt-1 text-sm text-muted-foreground"
+        </div>
+        <div
+          class="col-span-2 row-start-2 mt-1 text-sm text-muted-foreground md:col-span-1"
+        >
+          <span
+            class="font-mono text-[0.9em] break-all text-muted-foreground"
           >
-            <span
-              class="font-mono text-[0.9em] break-all text-muted-foreground"
-            >
-              https://mcp.notion.test/mcp
-            </span>
-          </div>
+            https://mcp.notion.test/mcp
+          </span>
         </div>
       </div>
       <div
@@ -3043,13 +3043,13 @@ exports[`ConnectionDetail, pinned > the remove prompt for none > markup 1`] = `
         </nav>
       </div>
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <button
               aria-label="Back"
@@ -3088,15 +3088,15 @@ exports[`ConnectionDetail, pinned > the remove prompt for none > markup 1`] = `
               Connected
             </span>
           </div>
-          <div
-            class="mt-1 text-sm text-muted-foreground"
+        </div>
+        <div
+          class="col-span-2 row-start-2 mt-1 text-sm text-muted-foreground md:col-span-1"
+        >
+          <span
+            class="font-mono text-[0.9em] break-all text-muted-foreground"
           >
-            <span
-              class="font-mono text-[0.9em] break-all text-muted-foreground"
-            >
-              https://mcp.notion.test/mcp
-            </span>
-          </div>
+            https://mcp.notion.test/mcp
+          </span>
         </div>
       </div>
       <div
@@ -3762,13 +3762,13 @@ exports[`ConnectionDetail, pinned > the remove prompt for one > markup 1`] = `
         </nav>
       </div>
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <button
               aria-label="Back"
@@ -3807,15 +3807,15 @@ exports[`ConnectionDetail, pinned > the remove prompt for one > markup 1`] = `
               Connected
             </span>
           </div>
-          <div
-            class="mt-1 text-sm text-muted-foreground"
+        </div>
+        <div
+          class="col-span-2 row-start-2 mt-1 text-sm text-muted-foreground md:col-span-1"
+        >
+          <span
+            class="font-mono text-[0.9em] break-all text-muted-foreground"
           >
-            <span
-              class="font-mono text-[0.9em] break-all text-muted-foreground"
-            >
-              https://mcp.notion.test/mcp
-            </span>
-          </div>
+            https://mcp.notion.test/mcp
+          </span>
         </div>
       </div>
       <div
@@ -4503,13 +4503,13 @@ exports[`ConnectionDetail, pinned > the remove prompt for several > markup 1`] =
         </nav>
       </div>
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <button
               aria-label="Back"
@@ -4548,15 +4548,15 @@ exports[`ConnectionDetail, pinned > the remove prompt for several > markup 1`] =
               Connected
             </span>
           </div>
-          <div
-            class="mt-1 text-sm text-muted-foreground"
+        </div>
+        <div
+          class="col-span-2 row-start-2 mt-1 text-sm text-muted-foreground md:col-span-1"
+        >
+          <span
+            class="font-mono text-[0.9em] break-all text-muted-foreground"
           >
-            <span
-              class="font-mono text-[0.9em] break-all text-muted-foreground"
-            >
-              https://mcp.notion.test/mcp
-            </span>
-          </div>
+            https://mcp.notion.test/mcp
+          </span>
         </div>
       </div>
       <div
@@ -5196,13 +5196,13 @@ exports[`ConnectionDetail, pinned > while loading > markup 1`] = `
       class="max-w-4xl mx-auto "
     >
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <button
               aria-label="Back"
@@ -5271,13 +5271,13 @@ exports[`Memory, pinned > after a failed load > markup 1`] = `
       class="max-w-4xl mx-auto "
     >
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <h1
               class="truncate text-xl font-semibold text-foreground sm:text-2xl"
@@ -5285,11 +5285,11 @@ exports[`Memory, pinned > after a failed load > markup 1`] = `
               Memory
             </h1>
           </div>
-          <div
-            class="mt-1 text-sm text-muted-foreground"
-          >
-            What each bot remembers about you. Bots learn from chats; you can add, edit, or remove anything.
-          </div>
+        </div>
+        <div
+          class="col-span-2 row-start-2 mt-1 text-sm text-muted-foreground md:col-span-1"
+        >
+          What each bot remembers about you. Bots learn from chats; you can add, edit, or remove anything.
         </div>
       </div>
       <div
@@ -5381,13 +5381,13 @@ exports[`Memory, pinned > searching > matches markup 1`] = `
       class="max-w-4xl mx-auto "
     >
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <h1
               class="truncate text-xl font-semibold text-foreground sm:text-2xl"
@@ -5395,11 +5395,11 @@ exports[`Memory, pinned > searching > matches markup 1`] = `
               Memory
             </h1>
           </div>
-          <div
-            class="mt-1 text-sm text-muted-foreground"
-          >
-            What each bot remembers about you. Bots learn from chats; you can add, edit, or remove anything.
-          </div>
+        </div>
+        <div
+          class="col-span-2 row-start-2 mt-1 text-sm text-muted-foreground md:col-span-1"
+        >
+          What each bot remembers about you. Bots learn from chats; you can add, edit, or remove anything.
         </div>
       </div>
       <div
@@ -5700,13 +5700,13 @@ exports[`Memory, pinned > searching > no match markup 1`] = `
       class="max-w-4xl mx-auto "
     >
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <h1
               class="truncate text-xl font-semibold text-foreground sm:text-2xl"
@@ -5714,11 +5714,11 @@ exports[`Memory, pinned > searching > no match markup 1`] = `
               Memory
             </h1>
           </div>
-          <div
-            class="mt-1 text-sm text-muted-foreground"
-          >
-            What each bot remembers about you. Bots learn from chats; you can add, edit, or remove anything.
-          </div>
+        </div>
+        <div
+          class="col-span-2 row-start-2 mt-1 text-sm text-muted-foreground md:col-span-1"
+        >
+          What each bot remembers about you. Bots learn from chats; you can add, edit, or remove anything.
         </div>
       </div>
       <div
@@ -5796,13 +5796,13 @@ exports[`Memory, pinned > the archived rows open > markup 1`] = `
       class="max-w-4xl mx-auto "
     >
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <h1
               class="truncate text-xl font-semibold text-foreground sm:text-2xl"
@@ -5810,11 +5810,11 @@ exports[`Memory, pinned > the archived rows open > markup 1`] = `
               Memory
             </h1>
           </div>
-          <div
-            class="mt-1 text-sm text-muted-foreground"
-          >
-            What each bot remembers about you. Bots learn from chats; you can add, edit, or remove anything.
-          </div>
+        </div>
+        <div
+          class="col-span-2 row-start-2 mt-1 text-sm text-muted-foreground md:col-span-1"
+        >
+          What each bot remembers about you. Bots learn from chats; you can add, edit, or remove anything.
         </div>
       </div>
       <div
@@ -6868,13 +6868,13 @@ exports[`Memory, pinned > the editor for a new memory > markup 1`] = `
       data-aria-hidden="true"
     >
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <h1
               class="truncate text-xl font-semibold text-foreground sm:text-2xl"
@@ -6882,11 +6882,11 @@ exports[`Memory, pinned > the editor for a new memory > markup 1`] = `
               Memory
             </h1>
           </div>
-          <div
-            class="mt-1 text-sm text-muted-foreground"
-          >
-            What each bot remembers about you. Bots learn from chats; you can add, edit, or remove anything.
-          </div>
+        </div>
+        <div
+          class="col-span-2 row-start-2 mt-1 text-sm text-muted-foreground md:col-span-1"
+        >
+          What each bot remembers about you. Bots learn from chats; you can add, edit, or remove anything.
         </div>
       </div>
       <div
@@ -8028,13 +8028,13 @@ exports[`Memory, pinned > while loading > markup 1`] = `
       class="max-w-4xl mx-auto "
     >
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <h1
               class="truncate text-xl font-semibold text-foreground sm:text-2xl"
@@ -8042,11 +8042,11 @@ exports[`Memory, pinned > while loading > markup 1`] = `
               Memory
             </h1>
           </div>
-          <div
-            class="mt-1 text-sm text-muted-foreground"
-          >
-            What each bot remembers about you. Bots learn from chats; you can add, edit, or remove anything.
-          </div>
+        </div>
+        <div
+          class="col-span-2 row-start-2 mt-1 text-sm text-muted-foreground md:col-span-1"
+        >
+          What each bot remembers about you. Bots learn from chats; you can add, edit, or remove anything.
         </div>
       </div>
       <div
@@ -8154,13 +8154,13 @@ exports[`Memory, pinned > with bots with and without memories > markup 1`] = `
       class="max-w-4xl mx-auto "
     >
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <h1
               class="truncate text-xl font-semibold text-foreground sm:text-2xl"
@@ -8168,11 +8168,11 @@ exports[`Memory, pinned > with bots with and without memories > markup 1`] = `
               Memory
             </h1>
           </div>
-          <div
-            class="mt-1 text-sm text-muted-foreground"
-          >
-            What each bot remembers about you. Bots learn from chats; you can add, edit, or remove anything.
-          </div>
+        </div>
+        <div
+          class="col-span-2 row-start-2 mt-1 text-sm text-muted-foreground md:col-span-1"
+        >
+          What each bot remembers about you. Bots learn from chats; you can add, edit, or remove anything.
         </div>
       </div>
       <div
@@ -9134,13 +9134,13 @@ exports[`Memory, pinned > with no bots > markup 1`] = `
       class="max-w-4xl mx-auto "
     >
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <h1
               class="truncate text-xl font-semibold text-foreground sm:text-2xl"
@@ -9148,11 +9148,11 @@ exports[`Memory, pinned > with no bots > markup 1`] = `
               Memory
             </h1>
           </div>
-          <div
-            class="mt-1 text-sm text-muted-foreground"
-          >
-            What each bot remembers about you. Bots learn from chats; you can add, edit, or remove anything.
-          </div>
+        </div>
+        <div
+          class="col-span-2 row-start-2 mt-1 text-sm text-muted-foreground md:col-span-1"
+        >
+          What each bot remembers about you. Bots learn from chats; you can add, edit, or remove anything.
         </div>
       </div>
       <div
@@ -9232,13 +9232,13 @@ exports[`SkillDetail, pinned > after a failed load > markup 1`] = `
       class="max-w-4xl mx-auto "
     >
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <button
               aria-label="Back"
@@ -9431,13 +9431,13 @@ exports[`SkillDetail, pinned > edited, previewed, then asked to delete > delete 
         </nav>
       </div>
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <button
               aria-label="Back"
@@ -9468,7 +9468,7 @@ exports[`SkillDetail, pinned > edited, previewed, then asked to delete > delete 
           </div>
         </div>
         <div
-          class="flex flex-shrink-0 items-center gap-2"
+          class="col-start-2 row-start-1 flex flex-shrink-0 items-center gap-2 md:row-span-2 max-sm:col-span-2 max-sm:col-start-1 max-sm:row-start-3 max-sm:mt-3"
         >
           <button
             class="group/button inline-flex shrink-0 items-center justify-center rounded-xl border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:scale-[0.97] motion-reduce:transition-none disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 h-9 gap-1.5 px-3.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 text-destructive"
@@ -10107,13 +10107,13 @@ exports[`SkillDetail, pinned > edited, previewed, then asked to delete > dirty m
         </nav>
       </div>
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <button
               aria-label="Back"
@@ -10144,7 +10144,7 @@ exports[`SkillDetail, pinned > edited, previewed, then asked to delete > dirty m
           </div>
         </div>
         <div
-          class="flex flex-shrink-0 items-center gap-2"
+          class="col-start-2 row-start-1 flex flex-shrink-0 items-center gap-2 md:row-span-2 max-sm:col-span-2 max-sm:col-start-1 max-sm:row-start-3 max-sm:mt-3"
         >
           <button
             class="group/button inline-flex shrink-0 items-center justify-center rounded-xl border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:scale-[0.97] motion-reduce:transition-none disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 h-9 gap-1.5 px-3.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 text-destructive"
@@ -10669,13 +10669,13 @@ exports[`SkillDetail, pinned > edited, previewed, then asked to delete > preview
         </nav>
       </div>
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <button
               aria-label="Back"
@@ -10706,7 +10706,7 @@ exports[`SkillDetail, pinned > edited, previewed, then asked to delete > preview
           </div>
         </div>
         <div
-          class="flex flex-shrink-0 items-center gap-2"
+          class="col-start-2 row-start-1 flex flex-shrink-0 items-center gap-2 md:row-span-2 max-sm:col-span-2 max-sm:col-start-1 max-sm:row-start-3 max-sm:mt-3"
         >
           <button
             class="group/button inline-flex shrink-0 items-center justify-center rounded-xl border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:scale-[0.97] motion-reduce:transition-none disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 h-9 gap-1.5 px-3.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 text-destructive"
@@ -11243,13 +11243,13 @@ exports[`SkillDetail, pinned > no bots > markup 1`] = `
         </nav>
       </div>
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <button
               aria-label="Back"
@@ -11280,7 +11280,7 @@ exports[`SkillDetail, pinned > no bots > markup 1`] = `
           </div>
         </div>
         <div
-          class="flex flex-shrink-0 items-center gap-2"
+          class="col-start-2 row-start-1 flex flex-shrink-0 items-center gap-2 md:row-span-2 max-sm:col-span-2 max-sm:col-start-1 max-sm:row-start-3 max-sm:mt-3"
         >
           <button
             class="group/button inline-flex shrink-0 items-center justify-center rounded-xl border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:scale-[0.97] motion-reduce:transition-none disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 h-9 gap-1.5 px-3.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 text-destructive"
@@ -11701,13 +11701,13 @@ exports[`SkillDetail, pinned > used by none > edit markup 1`] = `
         </nav>
       </div>
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <button
               aria-label="Back"
@@ -11738,7 +11738,7 @@ exports[`SkillDetail, pinned > used by none > edit markup 1`] = `
           </div>
         </div>
         <div
-          class="flex flex-shrink-0 items-center gap-2"
+          class="col-start-2 row-start-1 flex flex-shrink-0 items-center gap-2 md:row-span-2 max-sm:col-span-2 max-sm:col-start-1 max-sm:row-start-3 max-sm:mt-3"
         >
           <button
             class="group/button inline-flex shrink-0 items-center justify-center rounded-xl border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:scale-[0.97] motion-reduce:transition-none disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 h-9 gap-1.5 px-3.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 text-destructive"
@@ -12199,13 +12199,13 @@ exports[`SkillDetail, pinned > used by none > empty preview markup 1`] = `
         </nav>
       </div>
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <button
               aria-label="Back"
@@ -12236,7 +12236,7 @@ exports[`SkillDetail, pinned > used by none > empty preview markup 1`] = `
           </div>
         </div>
         <div
-          class="flex flex-shrink-0 items-center gap-2"
+          class="col-start-2 row-start-1 flex flex-shrink-0 items-center gap-2 md:row-span-2 max-sm:col-span-2 max-sm:col-start-1 max-sm:row-start-3 max-sm:mt-3"
         >
           <button
             class="group/button inline-flex shrink-0 items-center justify-center rounded-xl border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:scale-[0.97] motion-reduce:transition-none disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 h-9 gap-1.5 px-3.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 text-destructive"
@@ -12704,13 +12704,13 @@ exports[`SkillDetail, pinned > used by one bot > markup 1`] = `
         </nav>
       </div>
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <button
               aria-label="Back"
@@ -12741,7 +12741,7 @@ exports[`SkillDetail, pinned > used by one bot > markup 1`] = `
           </div>
         </div>
         <div
-          class="flex flex-shrink-0 items-center gap-2"
+          class="col-start-2 row-start-1 flex flex-shrink-0 items-center gap-2 md:row-span-2 max-sm:col-span-2 max-sm:col-start-1 max-sm:row-start-3 max-sm:mt-3"
         >
           <button
             class="group/button inline-flex shrink-0 items-center justify-center rounded-xl border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:scale-[0.97] motion-reduce:transition-none disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 h-9 gap-1.5 px-3.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 text-destructive"
@@ -13245,13 +13245,13 @@ exports[`SkillDetail, pinned > used by one bot, bots still loading > markup 1`] 
         </nav>
       </div>
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <button
               aria-label="Back"
@@ -13282,7 +13282,7 @@ exports[`SkillDetail, pinned > used by one bot, bots still loading > markup 1`] 
           </div>
         </div>
         <div
-          class="flex flex-shrink-0 items-center gap-2"
+          class="col-start-2 row-start-1 flex flex-shrink-0 items-center gap-2 md:row-span-2 max-sm:col-span-2 max-sm:col-start-1 max-sm:row-start-3 max-sm:mt-3"
         >
           <button
             class="group/button inline-flex shrink-0 items-center justify-center rounded-xl border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:scale-[0.97] motion-reduce:transition-none disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 h-9 gap-1.5 px-3.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 text-destructive"
@@ -13637,13 +13637,13 @@ exports[`SkillDetail, pinned > while loading > markup 1`] = `
       class="max-w-4xl mx-auto "
     >
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <button
               aria-label="Back"

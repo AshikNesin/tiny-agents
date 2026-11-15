@@ -7,13 +7,13 @@ exports[`Browser page states > a bot's own browser, by deep link > markup 1`] = 
       class="max-w-full mx-auto "
     >
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <h1
               class="truncate text-xl font-semibold text-foreground sm:text-2xl"
@@ -21,11 +21,11 @@ exports[`Browser page states > a bot's own browser, by deep link > markup 1`] = 
               Browser
             </h1>
           </div>
-          <div
-            class="mt-1 text-sm text-muted-foreground"
-          >
-            The bots' browsers on the sandbox VM. Click one to use it yourself; bots on it wait.
-          </div>
+        </div>
+        <div
+          class="col-span-2 row-start-2 mt-1 text-sm text-muted-foreground md:col-span-1"
+        >
+          The bots' browsers on the sandbox VM. Click one to use it yourself; bots on it wait.
         </div>
       </div>
       <div
@@ -237,13 +237,13 @@ exports[`Browser page states > closed, nobody on it yet, beside a starting and a
       class="max-w-full mx-auto "
     >
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <h1
               class="truncate text-xl font-semibold text-foreground sm:text-2xl"
@@ -251,11 +251,11 @@ exports[`Browser page states > closed, nobody on it yet, beside a starting and a
               Browser
             </h1>
           </div>
-          <div
-            class="mt-1 text-sm text-muted-foreground"
-          >
-            The bots' browsers on the sandbox VM. Click one to use it yourself; bots on it wait.
-          </div>
+        </div>
+        <div
+          class="col-span-2 row-start-2 mt-1 text-sm text-muted-foreground md:col-span-1"
+        >
+          The bots' browsers on the sandbox VM. Click one to use it yourself; bots on it wait.
         </div>
       </div>
       <div
@@ -459,13 +459,13 @@ exports[`Browser page states > connecting > markup 1`] = `
       class="max-w-full mx-auto "
     >
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <h1
               class="truncate text-xl font-semibold text-foreground sm:text-2xl"
@@ -473,11 +473,11 @@ exports[`Browser page states > connecting > markup 1`] = `
               Browser
             </h1>
           </div>
-          <div
-            class="mt-1 text-sm text-muted-foreground"
-          >
-            The bots' browsers on the sandbox VM. Click one to use it yourself; bots on it wait.
-          </div>
+        </div>
+        <div
+          class="col-span-2 row-start-2 mt-1 text-sm text-muted-foreground md:col-span-1"
+        >
+          The bots' browsers on the sandbox VM. Click one to use it yourself; bots on it wait.
         </div>
       </div>
       <div
@@ -678,13 +678,13 @@ exports[`Browser page states > failed to load > markup 1`] = `
       class="max-w-full mx-auto "
     >
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <h1
               class="truncate text-xl font-semibold text-foreground sm:text-2xl"
@@ -692,11 +692,11 @@ exports[`Browser page states > failed to load > markup 1`] = `
               Browser
             </h1>
           </div>
-          <div
-            class="mt-1 text-sm text-muted-foreground"
-          >
-            The bots' browsers on the sandbox VM. Click one to use it yourself; bots on it wait.
-          </div>
+        </div>
+        <div
+          class="col-span-2 row-start-2 mt-1 text-sm text-muted-foreground md:col-span-1"
+        >
+          The bots' browsers on the sandbox VM. Click one to use it yourself; bots on it wait.
         </div>
       </div>
       <div
@@ -769,13 +769,13 @@ exports[`Browser page states > failed to start > markup 1`] = `
       class="max-w-full mx-auto "
     >
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <h1
               class="truncate text-xl font-semibold text-foreground sm:text-2xl"
@@ -783,11 +783,11 @@ exports[`Browser page states > failed to start > markup 1`] = `
               Browser
             </h1>
           </div>
-          <div
-            class="mt-1 text-sm text-muted-foreground"
-          >
-            The bots' browsers on the sandbox VM. Click one to use it yourself; bots on it wait.
-          </div>
+        </div>
+        <div
+          class="col-span-2 row-start-2 mt-1 text-sm text-muted-foreground md:col-span-1"
+        >
+          The bots' browsers on the sandbox VM. Click one to use it yourself; bots on it wait.
         </div>
       </div>
       <div
@@ -944,13 +944,13 @@ exports[`Browser page states > first-run setup > markup 1`] = `
       class="max-w-full mx-auto "
     >
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <h1
               class="truncate text-xl font-semibold text-foreground sm:text-2xl"
@@ -958,11 +958,11 @@ exports[`Browser page states > first-run setup > markup 1`] = `
               Browser
             </h1>
           </div>
-          <div
-            class="mt-1 text-sm text-muted-foreground"
-          >
-            The bots' browsers on the sandbox VM. Click one to use it yourself; bots on it wait.
-          </div>
+        </div>
+        <div
+          class="col-span-2 row-start-2 mt-1 text-sm text-muted-foreground md:col-span-1"
+        >
+          The bots' browsers on the sandbox VM. Click one to use it yourself; bots on it wait.
         </div>
       </div>
       <div
@@ -1115,13 +1115,13 @@ exports[`Browser page states > headless > markup 1`] = `
       class="max-w-full mx-auto "
     >
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <h1
               class="truncate text-xl font-semibold text-foreground sm:text-2xl"
@@ -1129,11 +1129,11 @@ exports[`Browser page states > headless > markup 1`] = `
               Browser
             </h1>
           </div>
-          <div
-            class="mt-1 text-sm text-muted-foreground"
-          >
-            The bots' browsers on the sandbox VM. Click one to use it yourself; bots on it wait.
-          </div>
+        </div>
+        <div
+          class="col-span-2 row-start-2 mt-1 text-sm text-muted-foreground md:col-span-1"
+        >
+          The bots' browsers on the sandbox VM. Click one to use it yourself; bots on it wait.
         </div>
       </div>
       <div
@@ -1292,13 +1292,13 @@ exports[`Browser page states > live, bots driving > markup 1`] = `
       class="max-w-full mx-auto "
     >
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <h1
               class="truncate text-xl font-semibold text-foreground sm:text-2xl"
@@ -1306,11 +1306,11 @@ exports[`Browser page states > live, bots driving > markup 1`] = `
               Browser
             </h1>
           </div>
-          <div
-            class="mt-1 text-sm text-muted-foreground"
-          >
-            The bots' browsers on the sandbox VM. Click one to use it yourself; bots on it wait.
-          </div>
+        </div>
+        <div
+          class="col-span-2 row-start-2 mt-1 text-sm text-muted-foreground md:col-span-1"
+        >
+          The bots' browsers on the sandbox VM. Click one to use it yourself; bots on it wait.
         </div>
       </div>
       <div
@@ -1522,13 +1522,13 @@ exports[`Browser page states > live, one bot on it driving > markup 1`] = `
       class="max-w-full mx-auto "
     >
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <h1
               class="truncate text-xl font-semibold text-foreground sm:text-2xl"
@@ -1536,11 +1536,11 @@ exports[`Browser page states > live, one bot on it driving > markup 1`] = `
               Browser
             </h1>
           </div>
-          <div
-            class="mt-1 text-sm text-muted-foreground"
-          >
-            The bots' browsers on the sandbox VM. Click one to use it yourself; bots on it wait.
-          </div>
+        </div>
+        <div
+          class="col-span-2 row-start-2 mt-1 text-sm text-muted-foreground md:col-span-1"
+        >
+          The bots' browsers on the sandbox VM. Click one to use it yourself; bots on it wait.
         </div>
       </div>
       <div
@@ -1726,13 +1726,13 @@ exports[`Browser page states > live, the owner driving > markup 1`] = `
       class="max-w-full mx-auto "
     >
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <h1
               class="truncate text-xl font-semibold text-foreground sm:text-2xl"
@@ -1740,11 +1740,11 @@ exports[`Browser page states > live, the owner driving > markup 1`] = `
               Browser
             </h1>
           </div>
-          <div
-            class="mt-1 text-sm text-muted-foreground"
-          >
-            The bots' browsers on the sandbox VM. Click one to use it yourself; bots on it wait.
-          </div>
+        </div>
+        <div
+          class="col-span-2 row-start-2 mt-1 text-sm text-muted-foreground md:col-span-1"
+        >
+          The bots' browsers on the sandbox VM. Click one to use it yourself; bots on it wait.
         </div>
       </div>
       <div
@@ -1987,13 +1987,13 @@ exports[`Browser page states > loading > markup 1`] = `
       class="max-w-full mx-auto "
     >
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <h1
               class="truncate text-xl font-semibold text-foreground sm:text-2xl"
@@ -2001,11 +2001,11 @@ exports[`Browser page states > loading > markup 1`] = `
               Browser
             </h1>
           </div>
-          <div
-            class="mt-1 text-sm text-muted-foreground"
-          >
-            The bots' browsers on the sandbox VM. Click one to use it yourself; bots on it wait.
-          </div>
+        </div>
+        <div
+          class="col-span-2 row-start-2 mt-1 text-sm text-muted-foreground md:col-span-1"
+        >
+          The bots' browsers on the sandbox VM. Click one to use it yourself; bots on it wait.
         </div>
       </div>
       <div
@@ -2052,13 +2052,13 @@ exports[`Browser page states > no live browser on this server, with a hint > mar
       class="max-w-full mx-auto "
     >
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <h1
               class="truncate text-xl font-semibold text-foreground sm:text-2xl"
@@ -2066,11 +2066,11 @@ exports[`Browser page states > no live browser on this server, with a hint > mar
               Browser
             </h1>
           </div>
-          <div
-            class="mt-1 text-sm text-muted-foreground"
-          >
-            The bots' browsers on the sandbox VM. Click one to use it yourself; bots on it wait.
-          </div>
+        </div>
+        <div
+          class="col-span-2 row-start-2 mt-1 text-sm text-muted-foreground md:col-span-1"
+        >
+          The bots' browsers on the sandbox VM. Click one to use it yourself; bots on it wait.
         </div>
       </div>
       <div
@@ -2135,13 +2135,13 @@ exports[`Browser page states > no live browser on this server, without a hint > 
       class="max-w-full mx-auto "
     >
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <h1
               class="truncate text-xl font-semibold text-foreground sm:text-2xl"
@@ -2149,11 +2149,11 @@ exports[`Browser page states > no live browser on this server, without a hint > 
               Browser
             </h1>
           </div>
-          <div
-            class="mt-1 text-sm text-muted-foreground"
-          >
-            The bots' browsers on the sandbox VM. Click one to use it yourself; bots on it wait.
-          </div>
+        </div>
+        <div
+          class="col-span-2 row-start-2 mt-1 text-sm text-muted-foreground md:col-span-1"
+        >
+          The bots' browsers on the sandbox VM. Click one to use it yourself; bots on it wait.
         </div>
       </div>
       <div
@@ -2218,13 +2218,13 @@ exports[`Browser page states > starting > markup 1`] = `
       class="max-w-full mx-auto "
     >
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <h1
               class="truncate text-xl font-semibold text-foreground sm:text-2xl"
@@ -2232,11 +2232,11 @@ exports[`Browser page states > starting > markup 1`] = `
               Browser
             </h1>
           </div>
-          <div
-            class="mt-1 text-sm text-muted-foreground"
-          >
-            The bots' browsers on the sandbox VM. Click one to use it yourself; bots on it wait.
-          </div>
+        </div>
+        <div
+          class="col-span-2 row-start-2 mt-1 text-sm text-muted-foreground md:col-span-1"
+        >
+          The bots' browsers on the sandbox VM. Click one to use it yourself; bots on it wait.
         </div>
       </div>
       <div
@@ -2389,13 +2389,13 @@ exports[`Computer page states > connecting > markup 1`] = `
       class="max-w-full mx-auto "
     >
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <h1
               class="truncate text-xl font-semibold text-foreground sm:text-2xl"
@@ -2403,11 +2403,11 @@ exports[`Computer page states > connecting > markup 1`] = `
               Computer
             </h1>
           </div>
-          <div
-            class="mt-1 text-sm text-muted-foreground"
-          >
-            The bots' desktops on the sandbox VM. Click one to use it yourself; bots on it wait.
-          </div>
+        </div>
+        <div
+          class="col-span-2 row-start-2 mt-1 text-sm text-muted-foreground md:col-span-1"
+        >
+          The bots' desktops on the sandbox VM. Click one to use it yourself; bots on it wait.
         </div>
       </div>
       <div
@@ -2608,13 +2608,13 @@ exports[`Computer page states > failed to load > markup 1`] = `
       class="max-w-full mx-auto "
     >
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <h1
               class="truncate text-xl font-semibold text-foreground sm:text-2xl"
@@ -2622,11 +2622,11 @@ exports[`Computer page states > failed to load > markup 1`] = `
               Computer
             </h1>
           </div>
-          <div
-            class="mt-1 text-sm text-muted-foreground"
-          >
-            The bots' desktops on the sandbox VM. Click one to use it yourself; bots on it wait.
-          </div>
+        </div>
+        <div
+          class="col-span-2 row-start-2 mt-1 text-sm text-muted-foreground md:col-span-1"
+        >
+          The bots' desktops on the sandbox VM. Click one to use it yourself; bots on it wait.
         </div>
       </div>
       <div
@@ -2699,13 +2699,13 @@ exports[`Computer page states > failed to start > markup 1`] = `
       class="max-w-full mx-auto "
     >
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <h1
               class="truncate text-xl font-semibold text-foreground sm:text-2xl"
@@ -2713,11 +2713,11 @@ exports[`Computer page states > failed to start > markup 1`] = `
               Computer
             </h1>
           </div>
-          <div
-            class="mt-1 text-sm text-muted-foreground"
-          >
-            The bots' desktops on the sandbox VM. Click one to use it yourself; bots on it wait.
-          </div>
+        </div>
+        <div
+          class="col-span-2 row-start-2 mt-1 text-sm text-muted-foreground md:col-span-1"
+        >
+          The bots' desktops on the sandbox VM. Click one to use it yourself; bots on it wait.
         </div>
       </div>
       <div
@@ -2874,13 +2874,13 @@ exports[`Computer page states > first-run setup > markup 1`] = `
       class="max-w-full mx-auto "
     >
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <h1
               class="truncate text-xl font-semibold text-foreground sm:text-2xl"
@@ -2888,11 +2888,11 @@ exports[`Computer page states > first-run setup > markup 1`] = `
               Computer
             </h1>
           </div>
-          <div
-            class="mt-1 text-sm text-muted-foreground"
-          >
-            The bots' desktops on the sandbox VM. Click one to use it yourself; bots on it wait.
-          </div>
+        </div>
+        <div
+          class="col-span-2 row-start-2 mt-1 text-sm text-muted-foreground md:col-span-1"
+        >
+          The bots' desktops on the sandbox VM. Click one to use it yourself; bots on it wait.
         </div>
       </div>
       <div
@@ -3045,13 +3045,13 @@ exports[`Computer page states > live, bots driving > markup 1`] = `
       class="max-w-full mx-auto "
     >
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <h1
               class="truncate text-xl font-semibold text-foreground sm:text-2xl"
@@ -3059,11 +3059,11 @@ exports[`Computer page states > live, bots driving > markup 1`] = `
               Computer
             </h1>
           </div>
-          <div
-            class="mt-1 text-sm text-muted-foreground"
-          >
-            The bots' desktops on the sandbox VM. Click one to use it yourself; bots on it wait.
-          </div>
+        </div>
+        <div
+          class="col-span-2 row-start-2 mt-1 text-sm text-muted-foreground md:col-span-1"
+        >
+          The bots' desktops on the sandbox VM. Click one to use it yourself; bots on it wait.
         </div>
       </div>
       <div
@@ -3275,13 +3275,13 @@ exports[`Computer page states > live, the owner driving at a bot's request > mar
       class="max-w-full mx-auto "
     >
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <h1
               class="truncate text-xl font-semibold text-foreground sm:text-2xl"
@@ -3289,11 +3289,11 @@ exports[`Computer page states > live, the owner driving at a bot's request > mar
               Computer
             </h1>
           </div>
-          <div
-            class="mt-1 text-sm text-muted-foreground"
-          >
-            The bots' desktops on the sandbox VM. Click one to use it yourself; bots on it wait.
-          </div>
+        </div>
+        <div
+          class="col-span-2 row-start-2 mt-1 text-sm text-muted-foreground md:col-span-1"
+        >
+          The bots' desktops on the sandbox VM. Click one to use it yourself; bots on it wait.
         </div>
       </div>
       <div
@@ -3662,13 +3662,13 @@ exports[`Computer page states > loading > markup 1`] = `
       class="max-w-full mx-auto "
     >
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <h1
               class="truncate text-xl font-semibold text-foreground sm:text-2xl"
@@ -3676,11 +3676,11 @@ exports[`Computer page states > loading > markup 1`] = `
               Computer
             </h1>
           </div>
-          <div
-            class="mt-1 text-sm text-muted-foreground"
-          >
-            The bots' desktops on the sandbox VM. Click one to use it yourself; bots on it wait.
-          </div>
+        </div>
+        <div
+          class="col-span-2 row-start-2 mt-1 text-sm text-muted-foreground md:col-span-1"
+        >
+          The bots' desktops on the sandbox VM. Click one to use it yourself; bots on it wait.
         </div>
       </div>
       <div
@@ -3727,13 +3727,13 @@ exports[`Computer page states > no computer on this server, with a hint > markup
       class="max-w-full mx-auto "
     >
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <h1
               class="truncate text-xl font-semibold text-foreground sm:text-2xl"
@@ -3741,11 +3741,11 @@ exports[`Computer page states > no computer on this server, with a hint > markup
               Computer
             </h1>
           </div>
-          <div
-            class="mt-1 text-sm text-muted-foreground"
-          >
-            The bots' desktops on the sandbox VM. Click one to use it yourself; bots on it wait.
-          </div>
+        </div>
+        <div
+          class="col-span-2 row-start-2 mt-1 text-sm text-muted-foreground md:col-span-1"
+        >
+          The bots' desktops on the sandbox VM. Click one to use it yourself; bots on it wait.
         </div>
       </div>
       <div
@@ -3810,13 +3810,13 @@ exports[`Computer page states > no computer on this server, without a hint > mar
       class="max-w-full mx-auto "
     >
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <h1
               class="truncate text-xl font-semibold text-foreground sm:text-2xl"
@@ -3824,11 +3824,11 @@ exports[`Computer page states > no computer on this server, without a hint > mar
               Computer
             </h1>
           </div>
-          <div
-            class="mt-1 text-sm text-muted-foreground"
-          >
-            The bots' desktops on the sandbox VM. Click one to use it yourself; bots on it wait.
-          </div>
+        </div>
+        <div
+          class="col-span-2 row-start-2 mt-1 text-sm text-muted-foreground md:col-span-1"
+        >
+          The bots' desktops on the sandbox VM. Click one to use it yourself; bots on it wait.
         </div>
       </div>
       <div
@@ -3893,13 +3893,13 @@ exports[`Computer page states > off, nobody on it yet, beside a starting and a f
       class="max-w-full mx-auto "
     >
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <h1
               class="truncate text-xl font-semibold text-foreground sm:text-2xl"
@@ -3907,11 +3907,11 @@ exports[`Computer page states > off, nobody on it yet, beside a starting and a f
               Computer
             </h1>
           </div>
-          <div
-            class="mt-1 text-sm text-muted-foreground"
-          >
-            The bots' desktops on the sandbox VM. Click one to use it yourself; bots on it wait.
-          </div>
+        </div>
+        <div
+          class="col-span-2 row-start-2 mt-1 text-sm text-muted-foreground md:col-span-1"
+        >
+          The bots' desktops on the sandbox VM. Click one to use it yourself; bots on it wait.
         </div>
       </div>
       <div
@@ -4115,13 +4115,13 @@ exports[`Computer page states > starting > markup 1`] = `
       class="max-w-full mx-auto "
     >
       <div
-        class="flex flex-wrap items-start justify-between gap-4"
+        class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4"
       >
         <div
-          class="min-w-0 flex-1"
+          class="col-start-1 row-start-1 min-w-0"
         >
           <div
-            class="flex items-center gap-2.5"
+            class="flex min-h-9 items-center gap-2.5"
           >
             <h1
               class="truncate text-xl font-semibold text-foreground sm:text-2xl"
@@ -4129,11 +4129,11 @@ exports[`Computer page states > starting > markup 1`] = `
               Computer
             </h1>
           </div>
-          <div
-            class="mt-1 text-sm text-muted-foreground"
-          >
-            The bots' desktops on the sandbox VM. Click one to use it yourself; bots on it wait.
-          </div>
+        </div>
+        <div
+          class="col-span-2 row-start-2 mt-1 text-sm text-muted-foreground md:col-span-1"
+        >
+          The bots' desktops on the sandbox VM. Click one to use it yourself; bots on it wait.
         </div>
       </div>
       <div

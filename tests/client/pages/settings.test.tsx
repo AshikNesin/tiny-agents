@@ -26,14 +26,14 @@ function Pathname() {
   return <output data-testid="pathname">{useLocation().pathname}</output>;
 }
 
-function renderAt(path: string) {
+function renderAt(path: string, config: ShellConfig = CONFIG) {
   // Security and Configuration query the API; with no server they settle into their error states.
   const queryClient = createShellQueryClient({ queries: { retry: false } });
   return render(
     <ShellQueryProvider client={queryClient}>
       <GrootUIProvider>
         <MemoryRouter initialEntries={[path]}>
-          <ShellProvider config={CONFIG}>
+          <ShellProvider config={config}>
             <Routes>
               <Route path="/" element={<Layout />}>
                 <Route path="todos" element={<p>todos page</p>} />
@@ -80,6 +80,13 @@ describe("Settings page", () => {
     expect(screen.queryByRole("link", { name: "Todos" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Toggle sidebar" })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /back to acme/i })).toHaveAttribute("href", "/");
+  });
+
+  it("offers no menu button on a phone: settings has no app drawer to open", () => {
+    // An app whose phone pages open a sidebar drawer (tiny-agents' `openNav`).
+    renderAt("/settings/account", { ...CONFIG, openNav: () => undefined });
+    expect(heading()).toHaveTextContent("Account");
+    expect(screen.queryByRole("button", { name: "Open menu" })).not.toBeInTheDocument();
   });
 
   it("keeps the app sidebar on other pages", () => {

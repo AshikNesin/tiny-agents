@@ -60,7 +60,8 @@ export function Storage({ onView }: StorageProps = {}) {
       title="Storage"
       description="Browse and manage your files and folders"
       actions={headerActions}
-      breadcrumb={breadcrumb}
+      // At the root the trail would be a lone home button to this very folder.
+      breadcrumb={crumbs.length > 0 ? breadcrumb : undefined}
       maxWidth="7xl"
     >
       {/* Action buttons */}

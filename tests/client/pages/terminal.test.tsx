@@ -154,6 +154,8 @@ describe("Terminal page", () => {
     mount();
     expect(await screen.findByText("Sandbox not configured")).toBeTruthy();
     expect(screen.getByText(/SANDBOX_HOST/)).toBeTruthy();
+    // There is no sandbox to open a tab on.
+    expect(screen.queryByTestId("terminal-create")).toBeNull();
   });
 
   it("renders tmux-missing with the install command", async () => {

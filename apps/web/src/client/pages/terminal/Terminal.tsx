@@ -443,7 +443,11 @@ export function TerminalPage() {
     );
   })();
 
-  const sandboxDown = status?.kind === "unreachable" || status?.kind === "tmux-missing";
+  // No sandbox to open a tab on: not set up, down, or without tmux.
+  const sandboxDown =
+    status?.kind === "unconfigured" ||
+    status?.kind === "unreachable" ||
+    status?.kind === "tmux-missing";
 
   return (
     <PageLayout
@@ -451,7 +455,7 @@ export function TerminalPage() {
       description="Shells on the sandbox VM. Tabs keep running when you leave."
       maxWidth="full"
       actions={
-        // Nothing to act on while the sandbox is down or tmux is missing.
+        // Nothing to act on without a usable sandbox.
         sandboxDown ? undefined : (
           <>
             {active && (

@@ -137,8 +137,9 @@ export function PasskeyManager() {
             Use biometrics (Face ID / Touch ID) or a security key for passwordless sign-in.
           </CardDescription>
         </CardHeader>
-        <CardContent className="flex items-end gap-3 px-5">
-          <div className="flex-1 space-y-1.5">
+        {/* Side by side from sm; on a phone the name gets the full width. */}
+        <CardContent className="flex flex-col gap-3 px-5 sm:flex-row sm:items-end">
+          <div className="space-y-1.5 sm:flex-1">
             <Label htmlFor="passkey-name" className="text-xs">
               Name (optional)
             </Label>
@@ -151,6 +152,7 @@ export function PasskeyManager() {
             />
           </div>
           <Button
+            className="self-start sm:self-auto"
             onClick={() => void add.run(newPasskeyName || undefined)}
             disabled={add.isPending}
           >
