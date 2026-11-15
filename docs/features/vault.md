@@ -248,7 +248,8 @@ UI.
   links it, and the stored `policy` must equal it. Only an item no row links
   opens under its stored digest, and the AAD makes that one tamper-evident.
   Editing the policy in the Vault UI re-seals the value in the transaction
-  that writes the row; widening it in the database directly, or editing the
+  that writes the row, opened under the row as that transaction finds it and
+  sealed under the row as written, so two edits at once both land; widening it in the database directly, or editing the
   stored digest, leaves the value unreadable everywhere ("doesn't match its
   record or policy"). A value another row already links can't be linked
   again.
@@ -261,6 +262,9 @@ UI.
 - **Rotation.** Move the old key to `SECRETS_KEY_PREVIOUS`, set a new
   `SECRETS_KEY` and run `pnpm secrets:rotate`. It re-seals local items and
   connection OAuth state under the new key; then remove `SECRETS_KEY_PREVIOUS`.
+  An item it can't read is named and left as it was, and the script exits
+  non-zero: keep `SECRETS_KEY_PREVIOUS` until that item is re-entered or
+  deleted.
 
 ### From the KV store (Q4)
 

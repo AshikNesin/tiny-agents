@@ -41,11 +41,20 @@ reveal paths.
   AAD makes tamper-evident. The backend port no longer takes a digest from its
   caller on reads: the backend works it out, so no path can pass the stored
   one. A re-seal runs in the transaction that writes the row
-  (`rebind(id, policy, writeRow)`), and a value already linked can't be linked
-  by a second row.
+  (`rebind(id, writeRow)`): the item is opened under the row as that
+  transaction finds it and sealed under the row `writeRow` returns, so a
+  concurrent edit is never sealed over. A value already linked can't be linked
+  by a second row, checked in the same transaction.
+- **What the digest covers.** Audience, origins, hosts and injection: where a
+  value may go. It does not cover the bots, tools, approval, unattended or
+  on/off columns (as before Q4), so someone who can write the database can
+  widen those without breaking the seal. The digest is unchanged here; that
+  gap is recorded for the owner.
 - **A connection's header value is a vault item** (Q4): its own `mcp-<slug>`
-  API key (host-only, tool `mcp`, no bots), linked from
-  `connections.secret_item_id` and written and deleted with the connection.
+  API key (tool `mcp`, no bots), linked from `connections.secret_item_id` and
+  written and deleted with the connection. It goes only to the hosts it lists:
+  a connect checks the URL's host as a `host` use. A host move without a new
+  value deletes it (S4), and a new value resets its policy columns.
   `secretRef` still names another item and wins over it. The HTTP API and its
   wire shapes are unchanged. OAuth state stays on the row, changed in one
   transaction.
@@ -63,8 +72,8 @@ reveal paths.
   Database write access can no longer widen an item's reach or reveal its
   metadata without `SECRETS_KEY`; with the key, as before, it can do anything.
 - The Vault page lists connection header values as API keys, with the same
-  reveal, rotate and audit as any item. Deleting one there leaves its
-  connection without a header value.
+  reveal, rotate and audit as any item. Deleting one there is refused (409);
+  it goes with its connection.
 - `connections.secret_enc` is read only by the import. A later release can drop
   it, and the `VAULT_LOCAL:` namespace, once every install has started on Q4.
 - A KV entry the import can't parse stays in KV until the owner removes it; it

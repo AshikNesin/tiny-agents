@@ -89,7 +89,11 @@ function backendFailure(error: unknown): never {
 // ── Listing ─────────────────────────────────────────────────────────────
 
 const CANDIDATES_TTL_MS = 5 * 60_000;
-/** How an unlinked item that won't open (wrong key, policy edited in the database) is listed. */
+/**
+ * How a backend item that won't open (wrong key, policy edited in the
+ * database) is listed, linked or not. The overview shows it under "Not
+ * linked yet" only while no row links it; a linked one shows why on its page.
+ */
 const UNREADABLE_TITLE = "Unreadable item";
 let candidatesCache:
   | { at: number; items: (BackendItemSummary & { backend: BackendName })[] }

@@ -54,13 +54,16 @@ A connection's header value is a [vault](./vault.md) item (Q4,
 [ADR 0019](../adr/0019-vault-values-table.md)). Entering a `secret` on a
 header-auth connection writes it as the connection's **own item**: an API key
 with the handle `mcp-<slug>` (`mcp-<slug>-2`… when taken), labelled
-"MCP connection: <name>", sent only to the connection's host, usable only by
-the `mcp` tool and by no bot. `connections.secret_item_id` links it; the row
-and the item are written in one transaction. A new `secret` replaces the
-item's value in place; removing the connection deletes the item. The Vault page
+"MCP connection: <name>", usable only by the `mcp` tool and by no bot.
+`connections.secret_item_id` links it; the row and the item are written in one
+transaction. It goes only to the hosts it lists (the connection's host): each
+connect checks the URL's host against them, as `http_request` does. A new
+`secret` replaces the item's value in place and resets its policy (audience,
+origins, hosts, injection) to that, so an edit made on the Vault page can't
+leave it unreadable; removing the connection deletes the item. The Vault page
 lists it under API keys, where it can be revealed, rotated or given to bots
-like any other item. Deleting it there leaves the connection without a header
-value ("deleted from the vault. Enter it again").
+like any other item, but not deleted: that answers 409 and points to the
+connection.
 
 OAuth state (`oauth_enc`) stays on the row, sealed with `SECRETS_KEY` under the
 `connection` purpose and bound to its row and column; each change to it is one
@@ -81,9 +84,10 @@ Where a connection points and what it sends are guarded like a model
 account's: adding a connection, deleting it, and changing its URL, header
 name, secret or `secretRef` need a fresh vault step-up (`X-Vault-Step-Up`,
 403 `step_up_required` without one). Renaming and choosing bots don't. A URL
-that moves to another host deletes the connection's own item and drops the
-reference unless the same change sends a new value, so a stored secret never
-follows the URL somewhere else.
+that moves to another host deletes the connection's own item unless the same
+change sends a new value (`secretRef: null` doesn't keep it), and drops the
+reference unless the same change names one, so a stored secret never follows
+the URL somewhere else.
 
 ## Header secrets from the vault
 
