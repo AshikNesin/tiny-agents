@@ -24,8 +24,18 @@ const thread = (id: string) => `${base}/threads/${encodeURIComponent(id)}`;
 export const projectsApi = {
   github: () => apiClient.get<GitHubStatus>(`${base}/github`),
   setToken: (token: string | null) => apiClient.put<GitHubStatus>(`${base}/github`, { token }),
-  setApp: (app: { appId: string; privateKey: string; webhookSecret: string } | null) =>
-    apiClient.put<GitHubStatus>(`${base}/github/app`, app),
+  /** Start the one-click App setup: the page posts `manifest` to `url` (GitHub). */
+  createApp: (organization?: string) =>
+    apiClient.post<{ url: string; manifest: object; webhooks: boolean }>(
+      `${base}/github/app/manifest`,
+      organization ? { organization } : {},
+    ),
+  installApp: () => apiClient.post<{ url: string }>(`${base}/github/app/install`),
+  appRepositories: () =>
+    apiClient.get<Array<{ fullName: string; installationId: number; private: boolean }>>(
+      `${base}/github/app/repositories`,
+    ),
+  disconnectApp: () => apiClient.delete<GitHubStatus>(`${base}/github/app`),
 
   list: () => apiClient.get<ProjectView[]>(`${base}/projects`),
   create: (body: ProjectCreateBody) => apiClient.post<ProjectView>(`${base}/projects`, body),

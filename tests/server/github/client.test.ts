@@ -357,3 +357,33 @@ describe("the GitHub App", () => {
     );
   });
 });
+
+describe("convertManifest", () => {
+  it("trades the one-time code for the App GitHub created", async () => {
+    const { convertManifest } = await import("../../../packages/github/src/index");
+    const fake = fakeFetch((method, path) =>
+      method === "POST" && path === "/app-manifests/abc/conversions"
+        ? json(
+            {
+              id: 5,
+              slug: "tiny-agents-1",
+              name: "tiny-agents-1",
+              pem: "PEM",
+              webhook_secret: "s3",
+            },
+            201,
+          )
+        : json({ message: "Not Found" }, 404),
+    );
+    expect(await convertManifest("abc", { fetch: fake.impl })).toEqual({
+      id: 5,
+      slug: "tiny-agents-1",
+      name: "tiny-agents-1",
+      pem: "PEM",
+      webhookSecret: "s3",
+    });
+    // The code is the only credential: no token is sent.
+    expect(fake.calls[0]?.auth).toBeNull();
+    await expect(convertManifest("used", { fetch: fake.impl })).rejects.toThrow("Not Found");
+  });
+});

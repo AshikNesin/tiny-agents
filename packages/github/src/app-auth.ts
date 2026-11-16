@@ -23,6 +23,8 @@ export interface AppAuth {
   installationToken(installationId: number): Promise<string>;
   /** The installation that reaches `repo`, or a `GitHubError` 404 when the App is not installed there. */
   installationFor(repo: RepoRef): Promise<number>;
+  /** Every repository the App's (unsuspended) installations reach, by full name. */
+  repositories(): Promise<Array<{ fullName: string; installationId: number; private: boolean }>>;
 }
 
 const base64url = (text: string) =>
@@ -47,11 +49,11 @@ export function createAppAuth(options: AppAuthOptions): AppAuth {
     return `${head}.${body}.${await options.sign(`${head}.${body}`)}`;
   }
 
-  async function call<T>(method: string, path: string): Promise<T> {
+  async function call<T>(method: string, path: string, token?: string): Promise<T> {
     const response = await doFetch(`${base}${path}`, {
       method,
       headers: {
-        authorization: `Bearer ${await jwt()}`,
+        authorization: `Bearer ${token ?? (await jwt())}`,
         accept: "application/vnd.github+json",
         "x-github-api-version": "2022-11-28",
       },
@@ -73,6 +75,34 @@ export function createAppAuth(options: AppAuthOptions): AppAuth {
       );
       tokens.set(installationId, { token: minted.token, expiresAt: Date.parse(minted.expires_at) });
       return minted.token;
+    },
+    async repositories() {
+      const out: Array<{ fullName: string; installationId: number; private: boolean }> = [];
+      for (let page = 1; ; page += 1) {
+        const installations = await call<Array<{ id: number; suspended_at: string | null }>>(
+          "GET",
+          `/app/installations?per_page=100&page=${page}`,
+        );
+        for (const installation of installations) {
+          if (installation.suspended_at) continue;
+          const token = await this.installationToken(installation.id);
+          for (let repoPage = 1; ; repoPage += 1) {
+            const { repositories } = await call<{
+              repositories: Array<{ full_name: string; private: boolean }>;
+            }>("GET", `/installation/repositories?per_page=100&page=${repoPage}`, token);
+            for (const repo of repositories) {
+              out.push({
+                fullName: repo.full_name,
+                installationId: installation.id,
+                private: repo.private,
+              });
+            }
+            if (repositories.length < 100) break;
+          }
+        }
+        if (installations.length < 100) break;
+      }
+      return out.sort((a, b) => a.fullName.localeCompare(b.fullName));
     },
     async installationFor(repo) {
       const found = await call<{ id: number }>(
@@ -106,4 +136,52 @@ export async function verifyWebhook(
   for (let i = 0; i < expected.length; i += 1)
     diff |= expected.charCodeAt(i) ^ signature.charCodeAt(i);
   return diff === 0;
+}
+
+/** What GitHub hands back for a manifest code: the new App and its credentials. */
+export interface ManifestApp {
+  id: number;
+  slug: string;
+  name: string;
+  /** The App's private key (PEM). */
+  pem: string;
+  /** Present when the manifest asked for a webhook. */
+  webhookSecret: string | null;
+}
+
+/**
+ * Finish GitHub's App Manifest flow: trade the one-time `code` GitHub
+ * redirected back with for the App it just created. The code is the only
+ * credential, and it works once, within an hour.
+ */
+export async function convertManifest(
+  code: string,
+  options: { baseUrl?: string; fetch?: typeof fetch } = {},
+): Promise<ManifestApp> {
+  const base = (options.baseUrl ?? "https://api.github.com").replace(/\/$/, "");
+  const response = await (options.fetch ?? fetch)(
+    `${base}/app-manifests/${encodeURIComponent(code)}/conversions`,
+    {
+      method: "POST",
+      headers: { accept: "application/vnd.github+json", "x-github-api-version": "2022-11-28" },
+    },
+  );
+  const body = (await response.json().catch(() => ({}))) as {
+    id?: number;
+    slug?: string;
+    name?: string;
+    pem?: string;
+    webhook_secret?: string | null;
+    message?: string;
+  };
+  if (!response.ok || !body.id || !body.slug || !body.pem) {
+    throw new GitHubError(body.message ?? `GitHub answered ${response.status}`, response.status);
+  }
+  return {
+    id: body.id,
+    slug: body.slug,
+    name: body.name ?? body.slug,
+    pem: body.pem,
+    webhookSecret: body.webhook_secret ?? null,
+  };
 }

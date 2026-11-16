@@ -8,7 +8,7 @@
 import { useEffect, useState } from "react";
 import { FolderGit2, GitBranch, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { Button, Input, Label, Textarea, metaLabelClass, monoClass } from "@groot/ui";
+import { Button, Input, Label, metaLabelClass, monoClass } from "@groot/ui";
 import {
   Dialog,
   DialogContent,
@@ -97,10 +97,25 @@ function GitHubSection() {
   );
 }
 
+/** Post the manifest to GitHub as a form: GitHub shows the owner the App to create. */
+function submitManifest(url: string, manifest: object) {
+  const form = document.createElement("form");
+  form.method = "post";
+  form.action = url;
+  const input = document.createElement("input");
+  input.type = "hidden";
+  input.name = "manifest";
+  input.value = JSON.stringify(manifest);
+  form.append(input);
+  document.body.append(form);
+  form.submit();
+}
+
 /**
- * The optional GitHub App (phase 6): API calls with short-lived
- * installation tokens and webhooks for events, for projects that choose it.
- * Its key and webhook secret are kept as `app` vault items.
+ * The optional GitHub App, created in one click (GitHub's App Manifest flow,
+ * as FeedbackBee does): GitHub creates it with the right permissions and
+ * events and hands back its key and webhook secret, which go to the vault.
+ * Then one more click installs it on repositories.
  */
 function GitHubAppForm({
   status,
@@ -109,105 +124,98 @@ function GitHubAppForm({
   status: GitHubStatus;
   onSaved(status: GitHubStatus): void;
 }) {
-  const [open, setOpen] = useState(false);
-  const [appId, setAppId] = useState("");
-  const [privateKey, setPrivateKey] = useState("");
-  const [webhookSecret, setWebhookSecret] = useState("");
+  const confirm = useConfirm();
+  const [organization, setOrganization] = useState("");
   const [busy, setBusy] = useState(false);
-  const save = async (
-    value: { appId: string; privateKey: string; webhookSecret: string } | null,
-  ) => {
+  const go = async (what: string, work: () => Promise<void>) => {
     setBusy(true);
     try {
-      onSaved(await projectsApi.setApp(value));
-      setOpen(false);
-      setPrivateKey("");
-      setWebhookSecret("");
+      await work();
     } catch (e) {
-      toast.error(errorMessage(e, "Could not save the GitHub App."));
-    } finally {
+      toast.error(errorMessage(e, `Could not ${what}.`));
       setBusy(false);
     }
   };
-  if (!open) {
+  if (!status.app) {
     return (
-      <div className="flex flex-wrap items-center gap-2">
+      <form
+        className="border-border space-y-2 rounded-xl border p-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void go("start the GitHub App setup", async () => {
+            const { url, manifest } = await projectsApi.createApp(organization.trim() || undefined);
+            submitManifest(url, manifest);
+          });
+        }}
+      >
+        <p className="text-sm">GitHub App (optional)</p>
         <p className="text-muted-foreground text-xs">
-          {status.appId
-            ? `GitHub App ${status.appId} is set up. Its webhook URL is ${window.location.origin}/api/v1/code/github/webhook.`
-            : "Optional: a GitHub App gives projects short-lived tokens and webhooks instead of polling."}
+          Short-lived tokens instead of a stored token, pull requests opened by the App, and
+          webhooks instead of polling. GitHub creates the App with the access Code needs; you only
+          confirm it there.
         </p>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setOpen(true)}
-          data-testid="code-github-app"
-        >
-          {status.appId ? "Replace the App" : "Set up a GitHub App"}
-        </Button>
-        {status.appId && (
-          <Button variant="ghost" size="sm" disabled={busy} onClick={() => void save(null)}>
-            Remove the App
+        <div className="flex flex-wrap gap-2">
+          <Input
+            value={organization}
+            onChange={(e) => setOrganization(e.target.value)}
+            placeholder="Organization (leave empty for your account)"
+            aria-label="Organization"
+            className="min-w-56 flex-1"
+          />
+          <Button type="submit" size="sm" disabled={busy} data-testid="code-github-app">
+            {busy ? <Spinner /> : <GitBranch />}
+            Create GitHub App
           </Button>
-        )}
-      </div>
+        </div>
+      </form>
     );
   }
+  const app = status.app;
   return (
-    <form
-      className="border-border space-y-2 rounded-xl border p-3"
-      onSubmit={(e) => {
-        e.preventDefault();
-        void save({ appId: appId.trim(), privateKey: privateKey.trim(), webhookSecret });
-      }}
-    >
-      <p className="text-muted-foreground text-xs">
-        Create the App on GitHub with read and write access to contents, pull requests and checks,
-        subscribe it to pull request, review, review comment, check run, check suite, status and
-        issue comment events, and point its webhook at{" "}
-        <span className={monoClass}>{window.location.origin}/api/v1/code/github/webhook</span>.
+    <div className="border-border space-y-2 rounded-xl border p-3">
+      <p className="text-sm">
+        GitHub App <span className={monoClass}>{app.name}</span>
       </p>
-      <Input
-        value={appId}
-        onChange={(e) => setAppId(e.target.value)}
-        placeholder="App ID"
-        aria-label="App ID"
-        inputMode="numeric"
-      />
-      <Textarea
-        value={privateKey}
-        onChange={(e) => setPrivateKey(e.target.value)}
-        placeholder="-----BEGIN RSA PRIVATE KEY-----"
-        aria-label="Private key"
-        rows={4}
-        className={monoClass}
-      />
-      <Input
-        type="password"
-        value={webhookSecret}
-        onChange={(e) => setWebhookSecret(e.target.value)}
-        placeholder="Webhook secret (16 characters or more)"
-        aria-label="Webhook secret"
-        autoComplete="off"
-      />
-      <div className="flex gap-2">
+      <p className="text-muted-foreground text-xs">
+        {app.webhooks
+          ? "GitHub sends its events here, so Code looks at a pull request within seconds."
+          : "This server's address is not public https, so GitHub sends no webhooks; Code polls."}
+      </p>
+      <div className="flex flex-wrap gap-2">
         <Button
-          type="submit"
           size="sm"
-          disabled={
-            busy ||
-            !/^\d+$/.test(appId.trim()) ||
-            !privateKey.includes("PRIVATE KEY") ||
-            webhookSecret.length < 16
+          disabled={busy}
+          onClick={() =>
+            void go("open the installation", async () => {
+              window.location.assign((await projectsApi.installApp()).url);
+            })
+          }
+          data-testid="code-github-install"
+        >
+          Install on repositories
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={busy}
+          onClick={() =>
+            void go("disconnect the GitHub App", async () => {
+              const ok = await confirm({
+                title: `Disconnect ${app.name}?`,
+                description:
+                  "Projects on the App stop reaching GitHub until it is set up again. Delete the App itself on GitHub.",
+                destructive: true,
+                confirmLabel: "Disconnect",
+              });
+              if (ok) onSaved(await projectsApi.disconnectApp());
+              setBusy(false);
+            })
           }
         >
-          Save the App
-        </Button>
-        <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>
-          Cancel
+          Disconnect
         </Button>
       </div>
-    </form>
+    </div>
   );
 }
 
@@ -375,6 +383,18 @@ export function ProjectsDialog({
   const [repo, setRepo] = useState("");
   const [instanceId, setInstanceId] = useState(harnesses[0]?.id ?? "");
   const [viaApp, setViaApp] = useState(false);
+  const [appRepos, setAppRepos] = useState<Array<{ fullName: string }> | null>(null);
+  useEffect(() => {
+    if (!viaApp) return;
+    setRepo("");
+    projectsApi
+      .appRepositories()
+      .then(setAppRepos)
+      .catch((e: unknown) => {
+        toast.error(errorMessage(e, "Could not list the App's repositories."));
+        setAppRepos(null);
+      });
+  }, [viaApp]);
   const [busy, setBusy] = useState(false);
   const create = async () => {
     setBusy(true);
@@ -413,13 +433,33 @@ export function ProjectsDialog({
               if (repo.trim()) void create();
             }}
           >
-            <Input
-              value={repo}
-              onChange={(e) => setRepo(e.target.value)}
-              placeholder="owner/repository or its GitHub URL"
-              aria-label="Repository"
-              className="min-w-56 flex-1"
-            />
+            {viaApp && appRepos ? (
+              <select
+                aria-label="Repository"
+                className="border-input bg-background h-9 min-w-56 flex-1 rounded-lg border px-2 text-sm"
+                value={repo}
+                onChange={(e) => setRepo(e.target.value)}
+              >
+                <option value="">
+                  {appRepos.length
+                    ? "Pick a repository the App is installed on"
+                    : "Install the App on a repository first"}
+                </option>
+                {appRepos.map((r) => (
+                  <option key={r.fullName} value={r.fullName}>
+                    {r.fullName}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <Input
+                value={repo}
+                onChange={(e) => setRepo(e.target.value)}
+                placeholder="owner/repository or its GitHub URL"
+                aria-label="Repository"
+                className="min-w-56 flex-1"
+              />
+            )}
             <label className="flex items-center gap-2 text-sm">
               <Switch
                 checked={viaApp}

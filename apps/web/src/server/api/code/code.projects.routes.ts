@@ -7,6 +7,7 @@ import { Hono } from "hono";
 import { and, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import type { AppEnv } from "@groot/core/types";
+import { env } from "@groot/core/env";
 import { Boom } from "@groot/core/errors";
 import { ok } from "@groot/core/utils/api-response.utils";
 import { parseBody } from "@groot/core/utils/controller.utils";
@@ -19,7 +20,15 @@ import type {
   ReviewFile,
   ThreadPullsView,
 } from "../../../shared/api/code";
-import { codeGitHub, githubStatus, setGitHubApp, setGitHubToken } from "./code.github";
+import {
+  codeGitHub,
+  disconnectGitHubApp,
+  githubStatus,
+  setGitHubToken,
+  startInstall,
+  startManifest,
+} from "./code.github";
+import { setFlowCookie } from "./code.webhook";
 import { checkpointRange, checkpointsOf, revertTo } from "./code.checkpoints";
 import { codeHub } from "./code.hub";
 import {
@@ -77,21 +86,40 @@ router.put("/code/github", async (c) => {
   return ok<GitHubStatus>(c, await githubStatus());
 });
 
-router.put("/code/github/app", async (c) => {
-  const body = await parseBody(
+/**
+ * Create the GitHub App in one click (GitHub's App Manifest flow, as
+ * FeedbackBee does): answers the manifest the page posts to GitHub, and
+ * binds the flow to this browser with a short-lived httpOnly cookie.
+ */
+router.post("/code/github/app/manifest", async (c) => {
+  const { organization } = await parseBody(
     c,
-    z
-      .object({
-        appId: z
-          .string()
-          .trim()
-          .regex(/^\d{1,12}$/),
-        privateKey: z.string().trim().min(100).max(10_000).includes("PRIVATE KEY"),
-        webhookSecret: z.string().min(16).max(400),
-      })
-      .nullable(),
+    z.object({
+      organization: z
+        .string()
+        .trim()
+        .regex(/^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,37}[a-zA-Z0-9])?$/)
+        .optional(),
+    }),
   );
-  await setGitHubApp(body);
+  const flow = await startManifest(env.ORIGIN, organization);
+  setFlowCookie(c, flow.binding);
+  return ok(c, { url: flow.url, manifest: flow.manifest, webhooks: flow.webhooks });
+});
+
+/** Install the App on repositories, or change which: GitHub's page, then back to `installed`. */
+router.post("/code/github/app/install", async (c) => {
+  const flow = await startInstall();
+  setFlowCookie(c, flow.binding);
+  return ok(c, { url: flow.url });
+});
+
+router.get("/code/github/app/repositories", async (c) =>
+  ok(c, await codeGitHub().appRepositories()),
+);
+
+router.delete("/code/github/app", async (c) => {
+  await disconnectGitHubApp();
   return ok<GitHubStatus>(c, await githubStatus());
 });
 

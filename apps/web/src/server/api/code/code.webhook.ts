@@ -1,5 +1,8 @@
 /**
- * The GitHub App's webhook (issue #297 §7.4, phase 6): public, so GitHub can
+ * The GitHub App's public routes (issue #297 phase 6): the two redirects of
+ * its one-click setup (`callback`, `installed`), and its webhook.
+ *
+ * The webhook (§7.4): public, so GitHub can
  * reach it, and refused unless signed with the App's webhook secret. A
  * delivery is only a hint to look now: its id is stored (unique, so a
  * redelivery is dropped), the linked PRs it names have their reconcile
@@ -8,6 +11,10 @@
  * backup for deliveries that never arrive.
  */
 import { Hono } from "hono";
+import { deleteCookie, getCookie, setCookie } from "hono/cookie";
+import { z } from "zod";
+import { env } from "@groot/core/env";
+import { logger } from "@groot/core/logger";
 import { and, eq } from "drizzle-orm";
 import type { AppEnv } from "@groot/core/types";
 import { Boom } from "@groot/core/errors";
@@ -15,7 +22,8 @@ import { ok } from "@groot/core/utils/api-response.utils";
 import { routeBodyLimit } from "@groot/core/middlewares/body-limit.middleware";
 import { verifyWebhook } from "@tiny-agents/github";
 import { codePrEvents, codeProjects, codePullRequests, db, type CodePullRow } from "../../db";
-import { webhookSecret } from "./code.github";
+import type { AppContext } from "@groot/core/types";
+import { completeInstall, completeManifest, FLOW_COOKIE, webhookSecret } from "./code.github";
 import { armReconcile } from "./code.pulls";
 
 /** How soon a hinted PR is looked at (a burst of deliveries becomes one look). */
@@ -59,6 +67,49 @@ async function pullsOf(payload: Payload): Promise<CodePullRow[]> {
 }
 
 const router = new Hono<AppEnv>();
+
+const COOKIE_PATH = "/api/v1/code/github";
+
+/** The browser that started a setup flow carries its binding, for 10 minutes. */
+export function setFlowCookie(c: AppContext, binding: string): void {
+  setCookie(c, FLOW_COOKIE, binding, {
+    path: COOKIE_PATH,
+    secure: env.ORIGIN.startsWith("https://"),
+    httpOnly: true,
+    sameSite: "Lax",
+    maxAge: 600,
+  });
+}
+
+const stateSchema = z.string().min(20).max(100);
+
+/** GitHub's two setup redirects: back to the Code page, which says how it went. */
+for (const kind of ["callback", "installed"] as const) {
+  router.get(`/code/github/${kind}`, async (c) => {
+    c.header("Cache-Control", "no-store");
+    c.header("Referrer-Policy", "no-referrer");
+    const binding = getCookie(c, FLOW_COOKIE);
+    deleteCookie(c, FLOW_COOKIE, { path: COOKIE_PATH });
+    try {
+      if (!binding) throw Boom.badRequest("This browser did not start the GitHub setup.");
+      const state = stateSchema.parse(c.req.query("state"));
+      if (kind === "callback") {
+        await completeManifest(
+          state,
+          binding,
+          z.string().min(1).max(200).parse(c.req.query("code")),
+        );
+      } else {
+        const id = z.coerce.number().int().positive().parse(c.req.query("installation_id"));
+        await completeInstall(state, binding, id);
+      }
+      return c.redirect(`/code?github=${kind === "callback" ? "created" : "installed"}`);
+    } catch (error) {
+      logger.warn({ error }, `Code: GitHub App ${kind} failed`);
+      return c.redirect("/code?github=error");
+    }
+  });
+}
 
 router.post(
   "/code/github/webhook",

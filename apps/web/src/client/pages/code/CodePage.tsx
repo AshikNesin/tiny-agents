@@ -10,7 +10,14 @@
  * `/code/new` or `/code/:id` → `/code/:id/changes`).
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
+import {
+  Link,
+  Navigate,
+  useLocation,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
 import { ArrowLeft, Code2, FolderGit2, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import { Button, EmptyState, monoClass } from "@groot/ui";
@@ -65,6 +72,28 @@ export function CodePage() {
   const prOpen = Boolean(threadId) && pathname.endsWith("/pr");
   const { projects, reload: reloadProjects } = useProjects();
   const [managing, setManaging] = useState(false);
+  // Back from GitHub's App setup: say how it went and reopen Projects for the next step.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const githubResult = searchParams.get("github");
+  useEffect(() => {
+    if (!githubResult) return;
+    if (githubResult === "created") {
+      toast.success("GitHub App created. Install it on the repositories Code should reach.");
+    } else if (githubResult === "installed") {
+      toast.success("GitHub App installed. Its repositories are ready for projects.");
+    } else {
+      toast.error("GitHub could not finish the App setup. Start it again from Projects.");
+    }
+    setManaging(true);
+    reloadProjects();
+    setSearchParams(
+      (params) => {
+        params.delete("github");
+        return params;
+      },
+      { replace: true },
+    );
+  }, [githubResult, reloadProjects, setSearchParams]);
   // A project thread's Changes default to everything since its base branch.
   const [reviewScope, setReviewScope] = useState<"base" | "harness">("base");
   // `/code/new` is the new-thread screen on phones (`/code` is the list there).

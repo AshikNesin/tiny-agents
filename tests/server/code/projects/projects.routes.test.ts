@@ -9,6 +9,7 @@ import { createHmac } from "node:crypto";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { eq } from "drizzle-orm";
+import { createNamespaceKv } from "@groot/core/kv";
 import { FIXED_NOW } from "../../../test-clock";
 import { api, createTestApp } from "../../helpers";
 import { authToken, resetAppTables } from "../../fixtures";
@@ -19,6 +20,7 @@ import { createWorkspace } from "../../../../apps/web/src/server/api/code/code.w
 import { onTurnEnded } from "../../../../apps/web/src/server/api/code/code.pulls";
 import type {
   CheckpointView,
+  GitHubStatus,
   ProjectView,
   ReviewFile,
   ThreadPullsView,
@@ -36,9 +38,17 @@ let local: LocalExec;
 let bare: string;
 let github: FakeGitHub;
 let harness: FakeHarness;
+/** Manifest codes the fake GitHub was asked to convert. */
+let manifestCodes: string[] = [];
+const PEM = `-----BEGIN RSA PRIVATE KEY-----\n${"A".repeat(120)}\n-----END RSA PRIVATE KEY-----`;
+const SECRET = "webhook-secret-for-tests";
 
 beforeEach(async () => {
   await resetAppTables();
+  // GitHub settings and setup flows live in KV, outside the app tables.
+  await createNamespaceKv("CODE_GITHUB").clear();
+  await createNamespaceKv("CODE_GITHUB_FLOW").clear();
+  manifestCodes = [];
   local = localExec();
   bare = await bareRepo(local);
   github = fakeGitHub(local, bare);
@@ -53,6 +63,17 @@ beforeEach(async () => {
       workspace: async () => ws,
       credential: async () => "token",
       installationFor: async () => 4242,
+      appRepositories: async () => [{ fullName: "acme/web", installationId: 4242, private: true }],
+      convertManifest: async (code) => {
+        manifestCodes.push(code);
+        return {
+          id: 99,
+          slug: "tiny-agents-test",
+          name: "tiny-agents-test",
+          pem: PEM,
+          webhookSecret: SECRET,
+        };
+      },
     },
   });
   harness = fakeHarness("fake", {
@@ -135,6 +156,10 @@ describe("projects", () => {
         workspace: async () => ({ ...ws, tools: async () => ({ git: true, gh: false }) }),
         credential: async () => "gh",
         installationFor: async () => 4242,
+        appRepositories: async () => [],
+        convertManifest: async () => {
+          throw new Error("unused");
+        },
       },
     });
     const res = await call<unknown>("POST", "/projects", { repo: "acme/web" });
@@ -610,8 +635,6 @@ describe("phase 6 on a published PR", () => {
 });
 
 describe("the GitHub App", () => {
-  const PRIVATE_KEY = `-----BEGIN RSA PRIVATE KEY-----\n${"A".repeat(120)}\n-----END RSA PRIVATE KEY-----`;
-  const SECRET = "webhook-secret-for-tests";
   const sign = (body: string) =>
     `sha256=${createHmac("sha256", SECRET).update(body).digest("hex")}`;
   const deliver = (body: string, headers: Record<string, string>) =>
@@ -620,6 +643,99 @@ describe("the GitHub App", () => {
       body,
       headers: { "content-type": "application/json", ...headers },
     });
+  /** A request as the browser makes it: the owner's session, and the setup cookie when it has one. */
+  const browser = (path: string, init: { method?: string; json?: unknown; cookie?: string } = {}) =>
+    app.request(path, {
+      method: init.method ?? "GET",
+      headers: {
+        authorization: `Bearer ${token}`,
+        "content-type": "application/json",
+        ...(init.cookie ? { cookie: init.cookie } : {}),
+      },
+      ...(init.json !== undefined ? { body: JSON.stringify(init.json) } : {}),
+    });
+  const flowCookie = (res: Response) =>
+    /tiny_agents_github_flow=[^;]+/.exec(res.headers.get("set-cookie") ?? "")?.[0];
+
+  /** Start the one-click setup, and come back from GitHub with `code`. */
+  async function createApp(code = "manifest-code") {
+    const started = await browser("/api/v1/code/github/app/manifest", { method: "POST", json: {} });
+    const body = (await started.json()) as {
+      data: { url: string; manifest: Record<string, unknown>; webhooks: boolean };
+    };
+    const state = new URL(body.data.url).searchParams.get("state")!;
+    const cookie = flowCookie(started)!;
+    const back = await app.request(`/api/v1/code/github/callback?code=${code}&state=${state}`, {
+      headers: { cookie },
+    });
+    return { started: body.data, state, cookie, back };
+  }
+
+  it("creates the App in one click: a manifest for GitHub, then the code traded on the way back", async () => {
+    const { started, state, cookie, back } = await createApp();
+    expect(started.url).toBe(`https://github.com/settings/apps/new?state=${state}`);
+    expect(started.manifest).toMatchObject({
+      redirect_url: "http://localhost:3000/api/v1/code/github/callback",
+      setup_url: "http://localhost:3000/api/v1/code/github/installed",
+      public: false,
+      default_permissions: { contents: "write", pull_requests: "write", checks: "read" },
+    });
+    // GitHub cannot deliver webhooks to a plain-http origin: Code polls instead.
+    expect(started.webhooks).toBe(false);
+    expect(started.manifest).not.toHaveProperty("hook_attributes");
+
+    expect(back.status).toBe(302);
+    expect(back.headers.get("location")).toBe("/code?github=created");
+    expect(manifestCodes).toEqual(["manifest-code"]);
+    const status = (await call<GitHubStatus>("GET", "/github")).body.data!;
+    expect(status.app).toEqual({
+      slug: "tiny-agents-test",
+      name: "tiny-agents-test",
+      webhooks: true,
+    });
+
+    // The state works once.
+    const replay = await app.request(`/api/v1/code/github/callback?code=again&state=${state}`, {
+      headers: { cookie },
+    });
+    expect(replay.headers.get("location")).toBe("/code?github=error");
+    expect(manifestCodes).toEqual(["manifest-code"]);
+  });
+
+  it("refuses a callback in a browser that did not start the setup", async () => {
+    const started = await browser("/api/v1/code/github/app/manifest", { method: "POST", json: {} });
+    const { data } = (await started.json()) as { data: { url: string } };
+    const state = new URL(data.url).searchParams.get("state")!;
+    const res = await app.request(`/api/v1/code/github/callback?code=x&state=${state}`, {
+      headers: { cookie: "tiny_agents_github_flow=someone-elses" },
+    });
+    expect(res.headers.get("location")).toBe("/code?github=error");
+    expect(manifestCodes).toEqual([]);
+    expect((await call<GitHubStatus>("GET", "/github")).body.data?.app).toBeNull();
+  });
+
+  it("installs the App, accepting only an installation of this App", async () => {
+    await createApp();
+    const install = async (id: number) => {
+      const started = await browser("/api/v1/code/github/app/install", { method: "POST" });
+      const { data } = (await started.json()) as { data: { url: string } };
+      expect(
+        data.url.startsWith("https://github.com/apps/tiny-agents-test/installations/new?state="),
+      ).toBe(true);
+      const state = new URL(data.url).searchParams.get("state")!;
+      const back = await app.request(
+        `/api/v1/code/github/installed?installation_id=${id}&state=${state}`,
+        {
+          headers: { cookie: flowCookie(started)! },
+        },
+      );
+      return back.headers.get("location");
+    };
+    expect(await install(4242)).toBe("/code?github=installed");
+    expect(await install(7)).toBe("/code?github=error");
+    const repos = await call<Array<{ fullName: string }>>("GET", "/github/app/repositories");
+    expect(repos.body.data?.map((r) => r.fullName)).toEqual(["acme/web"]);
+  });
 
   it("creates a project on the App's installation", async () => {
     const res = await call<ProjectView>("POST", "/projects", {
@@ -633,15 +749,7 @@ describe("the GitHub App", () => {
   });
 
   it("takes a signed delivery as a hint to look now, once, and refuses a bad signature", async () => {
-    expect(
-      (
-        await call("PUT", "/github/app", {
-          appId: "123",
-          privateKey: PRIVATE_KEY,
-          webhookSecret: SECRET,
-        })
-      ).status,
-    ).toBe(200);
+    await createApp();
     const project = await newProject();
     const thread = await newThread(project.id);
     await commit(thread.worktree, "a.txt");

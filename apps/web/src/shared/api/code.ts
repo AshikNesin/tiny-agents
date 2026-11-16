@@ -79,7 +79,8 @@ export interface ProjectUpdateBody {
 export interface GitHubStatus {
   credential: "token" | "gh";
   tokenHandle: string | null;
-  appId: string | null;
+  /** The GitHub App, when one is set up; `webhooks` false means Code polls it. */
+  app: { slug: string; name: string; webhooks: boolean } | null;
   sandbox: boolean;
   tools: { git: boolean; gh: boolean } | null;
   login: string | null;

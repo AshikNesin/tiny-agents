@@ -229,16 +229,21 @@ it replaces is checkpointed first). Not while the agent works.
 - **Merge queue:** a PR the merge queue removed gets a pass (per project,
   on by default); a queued PR shows **queued**.
 
-**GitHub App (optional).** Projects → GitHub → **Set up a GitHub App**: the
-App's id, private key and webhook secret (the two secrets are kept as `app`
-vault items). Give the App read and write access to contents, pull requests
-and checks, subscribe it to pull request, review, review comment, check run,
-check suite, status and issue comment events, and set its webhook URL to
-`<your server>/api/v1/code/github/webhook`. A project created with
-**GitHub App** on uses short-lived installation tokens for API calls and
-pushes, and webhooks bring each reconcile forward to within seconds (polling
-stays as the backup). Deliveries must be signed with the secret; a
-redelivery is ignored.
+**GitHub App (optional).** Projects → GitHub → **Create GitHub App**
+(optionally under an organization). GitHub's App Manifest flow does the
+rest, as FeedbackBee's setup does: GitHub opens with the App already
+described (contents and pull requests read and write, checks, statuses and
+Actions read, and the pull request, review, check, status and issue comment
+events), you confirm, and GitHub returns to Code with the App's id, private
+key and webhook secret, which are kept as `app` vault items. **Install on
+repositories** then picks the repositories; a new project with **GitHub
+App** on lists them. Projects on the App use short-lived installation tokens
+for API calls and pushes. When `ORIGIN` is a public https address, GitHub's
+webhooks bring each reconcile forward to within seconds (deliveries must be
+signed, and a redelivery is ignored); otherwise the App is made without a
+webhook and Code polls. The setup's two redirects are bound to the browser
+that started it (a 10-minute, single-use state plus an httpOnly cookie).
+**Disconnect** forgets the App; delete it on GitHub yourself.
 
 Not built yet: the native pi-durable harness (phases 0 and 1), re-running a
 flaky check before spending a pass, mention commands from PR comments,

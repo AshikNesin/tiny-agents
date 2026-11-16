@@ -14,9 +14,15 @@ spend limit and the `Thread-Id` trailer.
 
 ## Decision
 
-- **The App transport** is a project's choice (`transport: app`). The App's
-  id is a setting; its private key and webhook secret are `app` vault items
-  for the `github` sink. `packages/github` mints the app JWT and trades it for
+- **The App transport** is a project's choice (`transport: app`). The App
+  is created in one click with GitHub's App Manifest flow, as FeedbackBee
+  does: GitHub creates it from a manifest Code posts (permissions, events,
+  callback and webhook URLs) and hands back its id, private key and webhook
+  secret for a one-time code. The two public redirects are bound to the
+  browser that started the setup (a hashed, single-use, 10-minute state and
+  an httpOnly cookie). The App's id is a setting; its private key and
+  webhook secret are `app` vault items for the `github` sink. Without a
+  public https origin the App is made without a webhook and Code polls. `packages/github` mints the app JWT and trades it for
   installation tokens (cached until a minute before expiry, in the App root);
   the RS256 signature is the app server's, so the key never enters the
   package. Installation tokens serve API calls and the sandbox's `git push`
