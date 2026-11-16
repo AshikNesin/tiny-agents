@@ -1,5 +1,11 @@
 # tiny-agents
 
+## 1.4.1
+
+### Patch Changes
+
+- [#313](https://github.com/AshikNesin/tiny-agents/pull/313) [`c84f9ca`](https://github.com/AshikNesin/tiny-agents/commit/c84f9caba1f548c8d3d818a3af9e2e4a7691ab03) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Internal cleanup with no visible change: the vault's sink helpers no longer carry hook-style `use…` names, the chat transcript reads its page source without writing a ref during render, and the multiple-choice selection's merge and split timers now live in an effect that clears them.
+
 ## 1.4.0
 
 ### Minor Changes
