@@ -16,6 +16,9 @@ groot-mobile-app boilerplate.
   a bot is shared with. Read, continue or delete past chats.
 - **Watch and drive.** The live Browser and Computer views stream a bot's Chrome or desktop. Take control, hand it
   back, reset it, or open an app on the desktop.
+- **Code.** Your coding agents (Shelley, Claude Code): watch threads live, steer or queue, stop, approve, change
+  the model and permissions, start new threads, review changes and run a project's pull request (publish,
+  Auto-fix, merge). A bot's hand-off card opens the thread in the app.
 - **Terminal.** Tabs on the sandbox VM, with a full xterm screen.
 - **The rest of the workspace.** Tasks, Routines, Skills, Memory, Connections (MCP servers), Vault and People.
 - **Guests.** A guest account sees only the bots shared with it, without the management screens.

@@ -17,6 +17,7 @@ import groot.mobile.data.ShareTarget
 import groot.mobile.data.ShareTargets
 import groot.mobile.data.StepUp
 import groot.mobile.data.api.ApiClient
+import groot.mobile.data.api.CodeApi
 import groot.mobile.data.api.TinyAgentsApi
 import groot.mobile.data.chat.ChatStore
 import groot.mobile.data.shareTargetBots
@@ -59,7 +60,12 @@ class AppContainer(context: Context) {
 
     val session: SessionStore = SessionStore.create(appContext, scope)
 
-    val api = TinyAgentsApi(ApiClient(session))
+    private val client = ApiClient(session)
+
+    val api = TinyAgentsApi(client)
+
+    /** The Code page's routes: coding agents, their threads, changes and pull requests. */
+    val code = CodeApi(client)
 
     val bots = BotsStore(api, scope, notices)
 

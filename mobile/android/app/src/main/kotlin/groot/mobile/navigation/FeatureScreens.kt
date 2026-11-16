@@ -8,6 +8,11 @@ import groot.mobile.AppContainer
 import groot.mobile.feature.bots.BotEditorRoute
 import groot.mobile.feature.bots.PastChatRoute
 import groot.mobile.feature.bots.PastChatsRoute
+import groot.mobile.feature.code.CodeChangesRoute
+import groot.mobile.feature.code.CodeListRoute
+import groot.mobile.feature.code.CodePullRoute
+import groot.mobile.feature.code.CodeThreadRoute
+import groot.mobile.feature.code.NewCodeThreadRoute
 import groot.mobile.feature.live.LivePageRoute
 import groot.mobile.feature.live.LiveRoute
 import groot.mobile.feature.live.LiveTarget
@@ -63,4 +68,40 @@ internal fun NavGraphBuilder.featureScreens(container: AppContainer, navigate: (
     composable(Routes.CONNECTIONS) { ScreenContainer { ConnectionsRoute(container, back) } }
     composable(Routes.VAULT) { ScreenContainer { VaultRoute(container, back) } }
     composable(Routes.PEOPLE) { ScreenContainer { PeopleRoute(container, back) } }
+    codeScreens(container, navigate, back)
+}
+
+/** Code: the thread list, a new thread, one thread, its changes and its pull request. */
+private fun NavGraphBuilder.codeScreens(container: AppContainer, navigate: (String) -> Unit, back: () -> Unit) {
+    composable(Routes.CODE) {
+        ScreenContainer { CodeListRoute(container, onOpen = { navigate(Routes.codeThread(it)) }, onNew = { navigate(Routes.CODE_NEW) }, onBack = back) }
+    }
+    composable(Routes.CODE_NEW) {
+        ScreenContainer {
+            NewCodeThreadRoute(container, onStarted = { id ->
+                // The new thread takes the place of the form: back from it returns to the list.
+                back()
+                navigate(Routes.codeThread(id))
+            }, onBack = back)
+        }
+    }
+    composable(Routes.CODE_THREAD) { entry ->
+        val threadId = entry.arguments?.getString("threadId").orEmpty()
+        ScreenContainer {
+            CodeThreadRoute(
+                container,
+                threadId,
+                onOpenThread = { navigate(Routes.codeThread(it)) },
+                onChanges = { navigate(Routes.codeChanges(threadId)) },
+                onPullRequest = { navigate(Routes.codePr(threadId)) },
+                onBack = back,
+            )
+        }
+    }
+    composable(Routes.CODE_CHANGES) { entry ->
+        ScreenContainer { CodeChangesRoute(container, entry.arguments?.getString("threadId").orEmpty(), onBack = back) }
+    }
+    composable(Routes.CODE_PR) { entry ->
+        ScreenContainer { CodePullRoute(container, entry.arguments?.getString("threadId").orEmpty(), onBack = back) }
+    }
 }

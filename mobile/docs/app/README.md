@@ -92,15 +92,46 @@ paths are under `/api/v1`. `{surface}` is `browser` or `computer`.
 | Memory | `memory?botId={botId}` | `GET /bots/:id/memories`, `POST /bots/:id/memories`, `PATCH /memories/:id`, `DELETE /memories/:id` |
 | Connections | `connections` | `GET /connections`, `POST /connections` (step-up), `PATCH /connections/:id`, `DELETE /connections/:id` (step-up), `POST /connections/:id/reconnect`, `POST /connections/:id/authorize`, `PATCH /connections/:id/tools/:server` |
 | Vault | `vault` | `GET /vault`, `GET /vault/items/:handle`, `POST /vault/step-up`, `POST /vault/items/:handle/reveal`, `PUT /vault/items/:handle`, `DELETE /vault/items/:handle` (the last three with step-up) |
+| Code | `code` | `GET /code/status`, `GET /code/events`, `GET /code/threads?view=archived` |
+| New Code thread | `code/new` | `GET /code/status`, `GET /code/projects`, `GET /code/threads`, `GET /code/harnesses/:instance/models`, `GET /code/harnesses/:instance/validate-cwd`, `POST /code/threads` |
+| Code thread | `code/thread/{threadId}` | `GET /code/status`, `GET /code/threads/:id/events`, `POST /code/threads/:id/seen`, `POST /code/threads/:id/messages`, `POST /code/threads/:id/interrupt`, `POST /code/threads/:id/requests/:rid`, `POST /code/threads/:id/recover`, `POST /code/threads/:id/queued/:qid/:action`, `POST /code/threads/:id/settings`, `POST /code/threads/:id/rename`, `POST /code/threads/:id/archive`, `DELETE /code/threads/:id` |
+| Code changes | `code/thread/{threadId}/changes` | `GET /code/threads/:id`, `GET /code/harnesses/:instance/diffs`, `GET /code/harnesses/:instance/diffs/:diff/files`, `GET /code/harnesses/:instance/diffs/:diff/file`, `GET /code/threads/:id/review/files`, `GET /code/threads/:id/review/file`, `POST /code/threads/:id/review/viewed`, `GET` and `POST /code/threads/:id/review/drafts`, `POST /code/threads/:id/review/send` |
+| Code pull request | `code/thread/{threadId}/pr` | `GET /code/threads/:id/pr`, `POST /code/threads/:id/publish`, `POST /code/threads/:id/pr/link`, `POST /code/threads/:id/pr/unlink`, `POST /code/threads/:id/pr/autofix`, `POST /code/threads/:id/pr/automerge`, `POST /code/threads/:id/pr/fix`, `POST /code/threads/:id/pr/merge` |
 | People | `people` | `GET /people`, `POST /people`, `DELETE /people/:id` |
 | Settings | `settings` | `POST /auth/logout` |
 | About | `about` | none |
 
-The drawer lists the bots, then a three-wide grid of tiles for Tasks, Terminal, Computer, Browser, Routines,
+The drawer lists the bots, then a three-wide grid of tiles for Tasks, Code, Terminal, Computer, Browser, Routines,
 Skills, Memory, Connections and Vault, and the account row that opens Settings. The Home top bar holds only the
 menu, the open bot (its avatar and name) and New chat. Tapping the bot opens its menu: tiles for that bot's
 Browser, Computer, Past chats and Memory, then the YOLO switch, Pin and Edit bot. People opens from Settings. A guest sees the bots shared with them and their live
 views, not the management screens.
+
+## Code
+
+`feature/code/` is the web Code page on a phone; `data/api/WireCode.kt` mirrors the harness contracts
+(`packages/code/src/contracts`) and `apps/web/src/shared/api/code.ts`, and `data/code/` ports the web client's
+`lib/code/use-thread.ts` (the thread reducer), `transcript.ts` (folding finished tool calls) and `list.ts` (working
+now, recent, subagents nested). Change both clients together.
+
+- **List.** Live from `/code/events` while on screen: working threads first, subagents under their parent, unread
+  dots, the PR and its Auto-fix state, a harness filter and Archived. A harness that is not connected says why.
+- **Thread.** Live from the thread's stream (a snapshot, then rows upserted by id). Streaming text and thinking,
+  tool calls (bash output, edit diffs, plans, subagents with Open), runs of finished calls folded into one line,
+  "Worked for 12s · $0.04". Allow or Deny an approval and answer questions; Retry or Resume after an error.
+- **Steering.** While the agent works, Send steers the running turn and the queue button holds the message for
+  when it ends; with nothing typed the button is Stop. Queued messages can be sent now or cancelled.
+- **Settings.** Model, reasoning and permission mode as chips over the composer, with context use and cost. The
+  menu renames, archives (with subagents), deletes, and opens the thread in the harness or the web app.
+- **Changes.** The thread's uncommitted changes or a recent commit, each file with its diff (`data/code/LineDiff.kt`
+  diffs the two versions the server sends). A project thread also reviews its whole branch against the base, with
+  Viewed marks and line comments kept as drafts until Send to the agent.
+- **Pull request.** For a project thread: Publish draft PR (or push new commits), link or unlink one, checks,
+  reviews and unresolved comments, Fix now, the Auto-fix and Auto-merge switches with the loop's state, and Merge.
+
+Every control shows only when the thread's harness has the capability, as on the web. Not on the phone yet:
+attachments, `@` file and `/` command completion, skills, fork, changing the directory, the usage report, per-turn
+checkpoints and revert, and setting up projects and GitHub (Projects in the web app).
 
 ## Live views (Browser and Computer)
 
@@ -146,7 +177,8 @@ screen for `TERM=xterm-256color`.
 ## Links from notifications
 
 `data/AppLinks.kt` maps the server's notification links (`/chats/<bot>?focus=approval:<task>`,
-`/vault/requests/<task>`, `/vault`, `/routines`, `/tasks`) onto screens; `MainActivity` (`singleTask`) hands them
+`/vault/requests/<task>`, `/vault`, `/routines`, `/tasks`, `/code` and a Code thread's `/code/<thread>`) onto
+screens; `MainActivity` (`singleTask`) hands them
 over on a cold start or in `onNewIntent`, and `AppNavHost` acts on them once signed in. A chat scrolls to the
 focused card when it shows it. The manifest claims `https://<linkHost>` (`app/build.gradle.kts`); the server
 verifies the claim with `/.well-known/assetlinks.json`. Setup (the server's `ANDROID_APP_CERT_SHA256`) is in the
@@ -234,7 +266,7 @@ not count environment variables as test inputs and would otherwise reuse an earl
 
 - Android only. There is no iOS app.
 - No push notifications. The app shows activity only while it is open.
-- These stay in the web app: the Code page (coding agents), the Models section of Settings (providers), passkey sign-in,
+- These stay in the web app: setting up Code projects and GitHub, the Models section of Settings (providers), passkey sign-in,
   creating vault items, importing skills from GitHub, and the connection tool playground.
 - Routine schedules are entered and shown in IST, like the server.
 - Plain-HTTP servers are allowed, with a warning on the sign-in screen.

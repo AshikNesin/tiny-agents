@@ -26,11 +26,20 @@ object Routes {
     const val CONNECTIONS = "connections"
     const val VAULT = "vault"
 
+    const val CODE = "code"
+    const val CODE_NEW = "code/new"
+    const val CODE_THREAD = "code/thread/{threadId}"
+    const val CODE_CHANGES = "code/thread/{threadId}/changes"
+    const val CODE_PR = "code/thread/{threadId}/pr"
+
     fun botEdit(botId: String) = "bot/${Uri.encode(botId)}/edit"
     fun history(botId: String) = "bot/${Uri.encode(botId)}/history"
     fun pastChat(botId: String, chatId: String) = "bot/${Uri.encode(botId)}/history/${Uri.encode(chatId)}"
     fun liveBot(surface: String, botId: String) = "live/$surface/bot/${Uri.encode(botId)}"
     fun livePage(surface: String) = "live/$surface"
     fun liveProfile(surface: String, profile: String) = "live/$surface/profile/${Uri.encode(profile)}"
+    fun codeThread(threadId: String) = "code/thread/${Uri.encode(threadId)}"
+    fun codeChanges(threadId: String) = "code/thread/${Uri.encode(threadId)}/changes"
+    fun codePr(threadId: String) = "code/thread/${Uri.encode(threadId)}/pr"
     fun memory(botId: String?) = if (botId == null) "memory" else "memory?botId=${Uri.encode(botId)}"
 }

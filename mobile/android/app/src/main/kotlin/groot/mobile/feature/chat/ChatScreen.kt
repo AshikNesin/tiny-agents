@@ -150,7 +150,7 @@ fun ChatPane(
             onOpenCredentials = { credentials = it },
             onCancelCredentials = { viewModel.cancelCredentials(it) },
             onOpenComputer = { onOpenLive("computer") },
-            onOpenLink = { openLink(context, container.session.serverUrl, it) },
+            onOpenLink = { openCardLink(container, context, it) },
         )
     }
 
@@ -412,6 +412,17 @@ private fun copyText(context: Context, text: String) {
 }
 
 /** Open a link; a path from the server (a Code thread) is opened on the server's origin. */
+/**
+ * Open a link a card carries: one of this server's pages the app has a screen for (a Code
+ * thread, a chat) opens in the app, anything else in the browser.
+ */
+internal fun openCardLink(container: groot.mobile.AppContainer, context: Context, link: String) {
+    val serverUrl = container.session.serverUrl
+    val url = if (link.startsWith("/") && serverUrl != null) serverUrl + link else link
+    val inApp = groot.mobile.data.parseAppLink(url, serverUrl)
+    if (inApp != null) container.links.open(inApp) else openLink(context, serverUrl, link)
+}
+
 internal fun openLink(context: Context, serverUrl: String?, link: String) {
     val url = if (link.startsWith("/") && serverUrl != null) serverUrl + link else link
     try {
