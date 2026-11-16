@@ -1,12 +1,12 @@
 # Code extras
 
-Beyond a basic thread (`code.md`), the `/code` workspace lets the owner browse the coding agent's folders for a working directory, start a thread in a fresh git worktree, filter the thread list by repository, change a thread's model and reasoning, get `/` command hints and `@` file completion in the composer, pick skills and attach images and files to a message (shown inline or as links), open the usage popover from the context ring, fork a thread from any message, change a thread's working directory, send a queued message right away or cancel it, and recover from a refused turn.
+Beyond a basic thread (`code.md`), the `/code` workspace lets the owner browse the coding agent's folders for a working directory, start a thread in a fresh git worktree, find each repository's (and worktree's) threads in their own fold-away group of the thread list, change a thread's model and reasoning, get `/` command hints and `@` file completion in the composer, pick skills and attach images and files to a message (shown inline or as links), open the usage popover from the context ring, fork a thread from any message, change a thread's working directory, send a queued message right away or cancel it, and recover from a refused turn.
 
 ## Sub-features
 
 - `code-folder-browser` `Working directory` → option `Browse folders…` → dialog `Choose a working directory`: the path (`· git` inside a repo), `..`, folder buttons (no hidden folders), `No folders here.`, `Use this folder`.
 - `code-worktree` `New worktree` (`aria-pressed`) on a git directory → `Start` makes a sibling worktree `<dir>-<date>` and starts the thread there.
-- `code-repo-filter` thread-list `Repository` picker, shown once threads span two repositories: `All repositories` plus one option per repository root; picking one narrows `Code threads`.
+- `code-repo-groups` `Code threads` groups threads outside a project by repository root (else working directory): one region per folder, named by its basename, so a worktree gets a group of its own beside its repo; the heading button folds it (`aria-expanded`); `New thread in <label>` links to `/code/new?cwd=<path>`. (The old `Repository` and harness filters are gone.)
 - `code-chips` composer `Model` (the harness's models) and `Reasoning` (`Auto`, `Low` … `High` …) on a thread: toast `Takes effect on the next turn`, saved on the thread. No `Permissions` chip on Shelley.
 - `code-slash` typing `/` lists listbox `Commands` (`/model`, `/compact`, `/btw`, `/fork`, `/cwd`, `/new`, `/help` with hints); Enter or Tab inserts.
 - `code-at-files` typing `@` lists listbox `Files` from the thread's directory; Enter inserts `@<path> `.
@@ -24,7 +24,7 @@ Beyond a basic thread (`code.md`), the `/code` workspace lets the owner browse t
 
 - Sidebar `Primary` → `Code` → `New thread` (`/code/new`): working directory, `New worktree`, composer.
 - A thread page: the composer's chips, `+` menu, `/` and `@`; the title's `<title>: thread actions` menu; hover a message for `Fork from here`.
-- The thread list's header for `Repository`.
+- The thread list's groups (`Code threads`), one per repository or folder.
 
 ## Driving it with ta-verify
 
@@ -36,8 +36,8 @@ Preconditions:
 - **Setup.** `setup:` git repo `data/verify/<run>/work-<stamp>` with `a.txt`, `alpha-<stamp>.txt`, `sub/keep.txt` (committed). Cleanups: delete every thread (active and archived) whose cwd is the repo, under it, or the worktree; `git worktree remove --force` the worktree; remove the stamped uploads from the host's `/tmp/shelley-uploads`; remove the repo.
 - **Folder browser.** `/code/new` → `Working directory` → type the repo path → Enter. Again → `Browse folders…`: `GET …/directories` 200; `<dir> · git`; no `.git`; `sub` → `<dir>/sub · git`, `No folders here.`; `..` → back; `Use this folder` → the button reads `…/<run>/work-<stamp>`.
 - **Worktree.** `New worktree` (pressed) → `echo: wt-<stamp>` → `Start`: `POST …/worktrees` 201 with `path` `<dir>-<date>`; the reply shows; `git worktree list` has it, `a.txt` is in it, the thread's API `cwd` is it.
-- **Main thread.** `New thread`: directory remembered, `New worktree` not pressed; `echo: main-<stamp>` → `Start`; API `cwd` = the repo. `setup:` rename both threads `main-<stamp>` / `wt-<stamp>` via the API.
-- **Repository filter.** `Repository` → `All repositories` and two options under the repo path → pick the worktree: only `wt-<stamp>` listed → `All repositories` restores.
+- **Main thread.** `New thread` (exact name; each group also has `New thread in <label>`): directory remembered, `New worktree` not pressed; `echo: main-<stamp>` → `Start`; API `cwd` = the repo. `setup:` rename both threads `main-<stamp>` / `wt-<stamp>` via the API.
+- **Repository groups.** Region `work-<stamp>` lists `main-<stamp>` only; region `<basename of the worktree>` lists `wt-<stamp>`, and its `New thread in <basename>` has href `/code/new?cwd=<encoded worktree>`. Its heading button folds it: `wt-<stamp>` gone, `main-<stamp>` stays; again unfolds.
 - **Chips.** `Reasoning` → `High`: `POST …/settings {effort: "high"}` 200, toast, API `settings.effort: "high"`, still `High` after a reload. `Model` → `predictable`: `{model: "predictable"}` 200, API agrees. `code-permission` absent.
 - **`/` and `@`.** `/fo` → `Commands` has `/fork … copy of this conversation` → Enter → `/fork `. `echo: see @alph` → `Files` has `alpha-<stamp>.txt` (`find-files` with `dir` = the repo) → Enter → `echo: see @alpha-<stamp>.txt ` → Enter: reply `see @alpha-<stamp>.txt`.
 - **Skills.** `Add files or skills` → `Skills for this message` (`GET …/skills` 200) → first checkbox item checked → chip `Remove skill <name>`; `echo: skill-<stamp>` → `POST …/messages` body `skills: [<name>]`; chip gone.
@@ -47,12 +47,12 @@ Preconditions:
 - **Change directory.** Back on main → `Change directory`: field holds the repo path; `/nonexistent-<stamp>` → `Change`: toast `… does not exist`, dialog stays, API cwd unchanged. `<dir>/sub` → `Change`: API cwd `<dir>/sub`; `bash: pwd > pwd-<stamp>.txt` → `Done.` and `sub/pwd-<stamp>.txt` holds `<dir>/sub`.
 - **Queued actions.** `delay: 45`; Alt+Enter `echo: later-<stamp>` and `echo: dropped-<stamp>`: two rows, API `queued` length 2. `Cancel queued message` on dropped: `…/queued/<qid>/cancel` 200, row gone, API queue = later only. `Send now` on later: `…/queued/<qid>/send` 200; reply `later-<stamp>` within 30 s (well before the delay ends), queue empty, `Send` back, `dropped-<stamp>` never answered.
 - **Recover.** `refusal` → `The model declined to continue` notice with `Try another model` → click: `POST …/recover {action: "continue"}` answers 400 and the toast says `Unknown or unavailable model` (predictable-only Shelley has no model to switch to).
-- **Proof.** `ta-verify drive $S/journeys/code-extras.mjs` → `code-extras/folder-browser`, `worktree-thread`, `repo-filter`, `slash-commands`, `at-files`, `skills-menu`, `attachments-chips`, `attachments-rendered`, `usage-popover`, `forked`, `cwd-changed`, `queued-two`, `queued-sent-now`, `refusal`, `recover-continue`.
+- **Proof.** `ta-verify drive $S/journeys/code-extras.mjs` → `code-extras/folder-browser`, `worktree-thread`, `repo-groups`, `slash-commands`, `at-files`, `skills-menu`, `attachments-chips`, `attachments-rendered`, `usage-popover`, `forked`, `cwd-changed`, `queued-two`, `queued-sent-now`, `refusal`, `recover-continue`.
 
 ## Gotchas
 
 - Shelley runs on the HOST: worktrees land beside the repo (`<dir>-<date>`, with `-N` on a clash) and uploads in the host's `/tmp/shelley-uploads/<name>`; use stamped names and remove them in cleanups.
-- The `Repository` picker is built from the listed threads' repository roots and shows only with two or more; `GET /code/harnesses/:instance/repos` has no caller in the UI (and predictable Shelley answers `repos: null`, scanning only its own `HOME`).
+- Folder groups come from the listed threads' repository roots (`repoRoot`, else `cwd`) and are named by basename only, so match regions with `exact: true` (`work-<stamp>` is a prefix of `work-<stamp>-<date>`). A folded group is remembered in `localStorage`: unfold it again. `GET /code/harnesses/:instance/repos` has no caller in the UI (and predictable Shelley answers `repos: null`, scanning only its own `HOME`).
 - A folder inside a repo also reads `· git` in the browser; match `<path> · git`.
 - The predictable `echo:` reply repeats the `[/tmp/shelley-uploads/…]` tokens the composer appends; check the user bubble, not the reply, for hidden tokens.
 - Shelley refuses a directory change while a turn runs (`Finish or stop the current turn to change the directory`): change it on an idle thread.

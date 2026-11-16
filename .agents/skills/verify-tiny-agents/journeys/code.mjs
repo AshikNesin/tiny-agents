@@ -1,8 +1,9 @@
 // Feature: code (features/code.md). /code with the Shelley harness on its keyless
 // predictable model (`ta-verify up --shelley`): working-directory validation, a new
 // thread, streamed reply, steer, queue, stop, rename + /code/s/<title>, Changes, the
-// thread list (Working now / Recent / unread / search / Archived + restore) and a
-// bot hand-off (`/code cwd=<dir> <task>` on the faux model).
+// thread list (grouped by repository or folder, a working thread's spinner, unread,
+// folding a group, its New thread, search, the Archived footer view + restore), the
+// Code settings page and a bot hand-off (`/code cwd=<dir> <task>` on the faux model).
 //
 // That Shelley runs on the HOST, so every thread works in a throwaway git repo under
 // data/verify/<run>/work-<stamp>, never the checkout or $HOME. Predictable prompts:
@@ -30,6 +31,8 @@ await journey(
     const composer = page.getByRole("textbox", { name: "Message Shelley" });
     const transcript = page.getByRole("region", { name: "Messages" });
     const list = page.getByRole("navigation", { name: "Code threads" });
+    // The list groups threads by repository or folder; this repo's group is named by its basename.
+    const group = list.getByRole("region", { name: `work-${stamp}`, exact: true });
     const stop = page.getByRole("button", { name: "Stop Shelley" });
     const threads = async (view) =>
       (await api.get(`/code/threads${view ? `?view=${view}` : ""}`)).filter((t) => t.cwd === dir);
@@ -97,16 +100,19 @@ await journey(
       await expect(page.getByRole("button", { name: "New worktree" })).toBeEnabled(); // a git repo
     });
 
-    await step("start a thread: it is Working now, the composer steers, Stop shows", async () => {
-      await composer.fill("delay: 20");
-      await page.getByRole("button", { name: "Start" }).click();
-      await expect(page).toHaveURL(/\/code\/shelley%3A/, { timeout: 20_000 });
-      mainId = idOf();
-      await expect(stop).toBeVisible({ timeout: 15_000 });
-      await expect(composer).toHaveAttribute("placeholder", /Steer Shelley/);
-      await expect(list.getByRole("heading", { name: "Working now" })).toBeVisible();
-      await expect(list.getByRole("status", { name: "Working" }).first()).toBeVisible();
-    });
+    await step(
+      "start a thread: its group shows it Working, the composer steers, Stop shows",
+      async () => {
+        await composer.fill("delay: 20");
+        await page.getByRole("button", { name: "Start" }).click();
+        await expect(page).toHaveURL(/\/code\/shelley%3A/, { timeout: 20_000 });
+        mainId = idOf();
+        await expect(stop).toBeVisible({ timeout: 15_000 });
+        await expect(composer).toHaveAttribute("placeholder", /Steer Shelley/);
+        await expect(group).toBeVisible({ timeout: 20_000 });
+        await expect(group.getByRole("status", { name: "Working" })).toBeVisible();
+      },
+    );
     await step("steer: Enter puts the message into the running turn", async () => {
       await composer.fill(`echo: steer-${stamp}`);
       await composer.press("Enter");
@@ -140,7 +146,7 @@ await journey(
         });
         await expect(page.getByTestId("code-queued")).toHaveCount(0);
         await expect(transcript.getByText(/Worked for \d/).first()).toBeVisible();
-        await expect(list.getByRole("heading", { name: "Recent" })).toBeVisible();
+        await expect(group.getByRole("status", { name: "Working" })).toHaveCount(0);
       },
     );
     await proof("turn-done");
@@ -214,7 +220,8 @@ await journey(
 
     let otherTitle;
     await step("a second thread starts in the same directory (remembered)", async () => {
-      await page.getByRole("link", { name: "New thread" }).click();
+      // `exact`: each group also has a "New thread in <label>" link.
+      await page.getByRole("link", { name: "New thread", exact: true }).click();
       // The directory is remembered per harness.
       await expect(page.getByRole("button", { name: "Working directory" })).toHaveText(short);
       await composer.fill("delay: 15");
@@ -237,6 +244,25 @@ await journey(
     });
     await proof("unread");
 
+    await step("the group folds away and offers a New thread in its folder", async () => {
+      const heading = group.getByRole("button", { name: `work-${stamp}`, exact: true });
+      await expect(heading).toHaveAttribute("aria-expanded", "true");
+      await heading.click();
+      await expect(heading).toHaveAttribute("aria-expanded", "false");
+      await expect(group.getByRole("link", { name: new RegExp(`^${title}`) })).toHaveCount(0);
+      await proof("group-folded");
+      await heading.click();
+      await expect(group.getByRole("link", { name: new RegExp(`^${title}`) })).toBeVisible();
+      const start = group.getByRole("link", { name: `New thread in work-${stamp}`, exact: true });
+      await expect(start).toHaveAttribute("href", `/code/new?cwd=${encodeURIComponent(dir)}`);
+      await start.click();
+      await expect(composer).toBeVisible({ timeout: 20_000 });
+      await expect(page.getByRole("heading", { name: "What should we build?" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Working directory" })).toHaveText(short);
+      await list.getByRole("link", { name: new RegExp(`^${title}`) }).click();
+      await expect(page.getByTestId("code-title")).toHaveText(title);
+    });
+
     await step("search threads filters the list by title", async () => {
       await page.getByRole("textbox", { name: "Search threads" }).fill(title);
       await expect(list.getByRole("link", { name: new RegExp(`^${title}`) })).toBeVisible({
@@ -254,17 +280,38 @@ await journey(
       await expect
         .poll(async () => (await threads("archived")).some((t) => t.id === mainId))
         .toBe(true);
-      await page.getByRole("radio", { name: "Archived" }).click();
+      const archivedToggle = page.getByTestId("code-archived-toggle");
+      await archivedToggle.click();
+      await expect(archivedToggle).toHaveAttribute("aria-pressed", "true");
       await expect(list.getByRole("link", { name: new RegExp(`^${title}`) })).toBeVisible({
         timeout: 15_000,
       });
+      // No New thread in the archived view.
+      await expect(list.getByRole("link", { name: /^New thread in / })).toHaveCount(0);
       await proof("archived");
       await list.getByRole("button", { name: `Restore ${title}` }).click();
       await expect.poll(async () => (await threads()).some((t) => t.id === mainId)).toBe(true);
-      await page.getByRole("radio", { name: "Active" }).click();
+      await page.getByRole("button", { name: "Archived threads" }).click();
+      await expect(archivedToggle).toHaveAttribute("aria-pressed", "false");
       await expect(list.getByRole("link", { name: new RegExp(`^${title}`) })).toBeVisible({
         timeout: 15_000,
       });
+    });
+
+    await step("the list's footer opens Code settings: Projects and GitHub sections", async () => {
+      await page.getByTestId("code-settings").click();
+      await expect(page).toHaveURL(/\/code\/settings\/projects$/);
+      await expect(page.getByRole("heading", { name: "Projects", exact: true })).toBeVisible();
+      const sections = page.getByRole("navigation", { name: "Settings sections" });
+      await expect(sections.getByRole("link", { name: "Projects" })).toHaveAttribute(
+        "aria-current",
+        "page",
+      );
+      await expect(sections.getByRole("link", { name: "GitHub" })).toBeVisible();
+      await expect(page.getByRole("region", { name: "Add a project" })).toBeVisible();
+      await proof("settings");
+      // The way back to the app sits at the top of the thread list.
+      await expect(page.getByRole("link", { name: /^Back to / })).toBeVisible();
     });
 
     // ---- bot hand-off --------------------------------------------------------

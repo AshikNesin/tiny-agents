@@ -82,9 +82,9 @@ Sandbox and code
 - [Terminal](./terminal.md) [`--sandbox`]: tabs, typing, re-attach, keys panel, full screen, close.
 - [Computer](./computer.md) [`--sandbox`]: desktop, VNC live view, control, Apps menu, reset.
 - [Browser](./browser.md) [`--sandbox`]: `/browser` page and the chat panel from `/browse N`, desktop and phone.
-- [Code](./code.md) [`--shelley`]: Shelley threads: start, steer, queue, stop, changes, archive, bot hand-off.
+- [Code](./code.md) [`--shelley`]: Shelley threads: start, steer, queue, stop, changes, the grouped thread list (fold, New thread per group, Archived footer view), Code settings, bot hand-off.
 - [Code multi-select archive](./code-select.md) [`--shelley`]: Select threads, archive or restore many at once, one Undo.
-- [Code extras](./code-extras.md) [`--shelley`]: fork, change directory, worktree, chips, completions, uploads, usage, queued actions, recover.
+- [Code extras](./code-extras.md) [`--shelley`]: fork, change directory, worktree, repository groups, chips, completions, uploads, usage, queued actions, recover.
 - [A bot's own browser and computer](./bot-profiles.md) [`--sandbox`]: own profile, start, stream, reset, release on delete.
 - [Claude plan](./claude-plan.md): the engine-off state.
 
