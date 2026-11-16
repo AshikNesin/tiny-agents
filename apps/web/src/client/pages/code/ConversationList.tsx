@@ -354,10 +354,10 @@ export function ConversationList({
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
-      saveCollapsed(next);
       return next;
     });
   }, []);
+  useEffect(() => saveCollapsed(collapsed), [collapsed]);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<ThreadSummary[] | null>(null);
   const caps = useMemo(() => new Map(harnesses.map((h) => [h.id, h.capabilities])), [harnesses]);

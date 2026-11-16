@@ -113,8 +113,29 @@ function SwitchRow({
   );
 }
 
-/** A text field that saves when it loses focus (or on Enter), if it changed. */
-function TextField({
+interface TextFieldProps {
+  id: string;
+  value: string;
+  /** `false`: refused, the field goes back to the saved value. */
+  onSave(next: string): false | void;
+  placeholder?: string;
+  mono?: boolean;
+  /** An empty value is not saved: the field goes back to what it was. */
+  required?: boolean;
+  inputMode?: "numeric";
+  className?: string;
+}
+
+/**
+ * A text field that saves when it loses focus (or on Enter), if it changed.
+ * A new saved value starts a fresh draft (the key), instead of copying the
+ * prop into state.
+ */
+function TextField(props: TextFieldProps) {
+  return <DraftField key={props.value} {...props} />;
+}
+
+function DraftField({
   id,
   value,
   onSave,
@@ -123,27 +144,12 @@ function TextField({
   required,
   inputMode,
   className,
-}: {
-  id: string;
-  value: string;
-  onSave(next: string): void;
-  placeholder?: string;
-  mono?: boolean;
-  /** An empty value is not saved: the field goes back to what it was. */
-  required?: boolean;
-  inputMode?: "numeric";
-  className?: string;
-}) {
+}: TextFieldProps) {
   const [draft, setDraft] = useState(value);
-  useEffect(() => setDraft(value), [value]);
   const commit = () => {
     const next = draft.trim();
     if (next === value) return;
-    if (required && !next) {
-      setDraft(value);
-      return;
-    }
-    onSave(next);
+    if ((required && !next) || onSave(next) === false) setDraft(value);
   };
   return (
     <Input
@@ -184,10 +190,8 @@ export function CodeSettings({
   projects: ProjectView[] | null;
   onChange(): void;
 }) {
-  const guest = useIsGuest();
   if (!section) return <Navigate to="/code/settings/projects" replace />;
   if (!SECTIONS.some((s) => s.id === section)) return <Navigate to="/code/settings" replace />;
-  const project = projectId ? projects?.find((p) => p.id === projectId) : undefined;
   return (
     <div className="flex h-full min-h-0 flex-col" data-testid="code-settings-page">
       <header className="border-border flex h-13 shrink-0 items-center gap-1 border-b px-2 sm:px-3">
@@ -223,43 +227,69 @@ export function CodeSettings({
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-2xl space-y-8 px-4 py-6 sm:px-6">
-          {guest ? (
-            <EmptyState
-              icon={FolderGit2}
-              title="Projects are the owner's"
-              description="Projects and GitHub are set up by the owner of this app."
-            />
-          ) : section === "github" ? (
-            <GitHubSettings />
-          ) : projects === null ? (
-            <div className="flex justify-center p-6">
-              <Spinner />
-            </div>
-          ) : projectId ? (
-            project ? (
-              <ProjectSettings
-                key={project.id}
-                project={project}
-                harnesses={harnesses}
-                onChange={onChange}
-              />
-            ) : (
-              <EmptyState
-                icon={FolderGit2}
-                title="No such project"
-                description={
-                  <Link to="/code/settings/projects" className="underline underline-offset-2">
-                    All projects
-                  </Link>
-                }
-              />
-            )
-          ) : (
-            <ProjectsSettings harnesses={harnesses} projects={projects} onChange={onChange} />
-          )}
+          <SettingsBody
+            section={section}
+            projectId={projectId}
+            harnesses={harnesses}
+            projects={projects}
+            onChange={onChange}
+          />
         </div>
       </div>
     </div>
+  );
+}
+
+function SettingsBody({
+  section,
+  projectId,
+  harnesses,
+  projects,
+  onChange,
+}: {
+  section: string;
+  projectId?: string;
+  harnesses: HarnessInfo[];
+  projects: ProjectView[] | null;
+  onChange(): void;
+}) {
+  const guest = useIsGuest();
+  if (guest) {
+    return (
+      <EmptyState
+        icon={FolderGit2}
+        title="Projects are the owner's"
+        description="Projects and GitHub are set up by the owner of this app."
+      />
+    );
+  }
+  if (section === "github") return <GitHubSettings />;
+  if (projects === null) {
+    return (
+      <div className="flex justify-center p-6">
+        <Spinner />
+      </div>
+    );
+  }
+  if (!projectId) {
+    return <ProjectsSettings harnesses={harnesses} projects={projects} onChange={onChange} />;
+  }
+  const project = projects.find((p) => p.id === projectId);
+  if (!project) {
+    return (
+      <EmptyState
+        icon={FolderGit2}
+        title="No such project"
+        description={
+          <Link to="/code/settings/projects" className="underline underline-offset-2">
+            All projects
+          </Link>
+        }
+      />
+    );
+  }
+  return (
+    <ProjectSettings key={project.id} project={project} harnesses={harnesses} onChange={onChange} />
   );
 }
 
@@ -439,6 +469,7 @@ function AddProject({ harnesses, onChange }: { harnesses: HarnessInfo[]; onChang
   );
 }
 
+/** One project's settings, a group per concern; each change saves at once. */
 function ProjectSettings({
   project,
   harnesses,
@@ -448,198 +479,212 @@ function ProjectSettings({
   harnesses: HarnessInfo[];
   onChange(): void;
 }) {
-  const confirm = useConfirm();
-  const navigate = useNavigate();
-  const { settings } = project;
-  const { autofix } = settings;
-  const [models, setModels] = useState<ModelOption[]>([]);
-  const defaultHarness = harnesses.find((h) => h.id === project.defaultInstanceId);
-  useEffect(() => {
-    setModels([]);
-    if (!defaultHarness) return;
-    void loadModels(defaultHarness.id)
-      .then(setModels)
-      .catch(() => setModels([]));
-  }, [defaultHarness]);
-  const update = (body: ProjectUpdateBody) =>
+  const update: Update = (body) =>
     void projectsApi
       .update(project.id, body)
       .then(onChange)
       .catch((e: unknown) => toast.error(errorMessage(e, "Could not save that.")));
-  const field = (name: string) => `project-${project.id}-${name}`;
-  const remove = async () => {
-    const ok = await confirm({
-      title: `Remove ${project.name}?`,
-      description: "Its threads keep working without a project. The checkout stays on the sandbox.",
-      destructive: true,
-      confirmLabel: "Remove",
-    });
-    if (!ok) return;
-    try {
-      await projectsApi.remove(project.id);
-      onChange();
-      navigate("/code/settings/projects");
-    } catch (e) {
-      toast.error(errorMessage(e, "Could not remove it."));
-    }
-  };
-  const number = (key: "hourlyLimit" | "noOwnerLimit" | "passMinutes", min: number, max: number) =>
-    function save(next: string) {
-      const n = Number(next);
-      if (!Number.isInteger(n) || n < min || n > max) {
-        toast.error(`Use a whole number from ${min} to ${max}.`);
-        onChange();
-        return;
-      }
-      update({ settings: { autofix: { [key]: n } } });
-    };
-  const model = models.find((m) => m.id === project.defaultModel);
-
   return (
     <>
-      <div className="space-y-2 px-1">
-        <Link
-          to="/code/settings/projects"
-          className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-xs"
-        >
-          <ArrowLeft className="size-3.5" />
-          Projects
-        </Link>
-        <div className="flex items-center gap-2">
-          <FolderGit2 className="text-muted-foreground size-5 shrink-0" />
-          <h2 className="truncate text-lg font-semibold">{project.name}</h2>
-        </div>
-        <p className={cn("text-muted-foreground flex flex-wrap items-center gap-x-2 text-xs")}>
-          <a
-            href={`https://github.com/${project.repo.owner}/${project.repo.name}`}
-            target="_blank"
-            rel="noreferrer"
-            className={cn("hover:text-foreground inline-flex items-center gap-1", monoClass)}
-          >
-            {project.repo.owner}/{project.repo.name}
-            <ExternalLink className="size-3" />
-          </a>
-          <span>·</span>
-          <span>{project.transport === "app" ? "GitHub App" : "gh or the token"}</span>
-          <span>·</span>
-          <span className={cn("truncate", monoClass)} title={project.checkoutPath}>
-            {project.checkoutPath}
-          </span>
-        </p>
-      </div>
+      <ProjectHeader project={project} />
+      <GeneralGroup project={project} harnesses={harnesses} update={update} />
+      <ScriptsGroup project={project} update={update} />
+      <PullRequestGroups project={project} update={update} />
+      <LimitsGroup project={project} update={update} />
+      <DangerZone project={project} onChange={onChange} />
+    </>
+  );
+}
 
-      <SettingsGroup title="General">
-        <SettingsRow label="Name" htmlFor={field("name")}>
-          <TextField
-            id={field("name")}
-            value={project.name}
-            required
-            onSave={(name) => update({ name })}
-          />
-        </SettingsRow>
-        <SettingsRow
-          label="Base branch"
-          description="New threads branch from it, and Changes compare against it."
-          htmlFor={field("base")}
+type Update = (body: ProjectUpdateBody) => void;
+
+/** The id of one of a project's fields, for its label. */
+const fieldId = (project: ProjectView, name: string) => `project-${project.id}-${name}`;
+
+function ProjectHeader({ project }: { project: ProjectView }) {
+  return (
+    <div className="space-y-2 px-1">
+      <Link
+        to="/code/settings/projects"
+        className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-xs"
+      >
+        <ArrowLeft className="size-3.5" />
+        Projects
+      </Link>
+      <div className="flex items-center gap-2">
+        <FolderGit2 className="text-muted-foreground size-5 shrink-0" />
+        <h2 className="truncate text-lg font-semibold">{project.name}</h2>
+      </div>
+      <p className={cn("text-muted-foreground flex flex-wrap items-center gap-x-2 text-xs")}>
+        <a
+          href={`https://github.com/${project.repo.owner}/${project.repo.name}`}
+          target="_blank"
+          rel="noreferrer"
+          className={cn("hover:text-foreground inline-flex items-center gap-1", monoClass)}
         >
-          <TextField
-            id={field("base")}
-            value={project.baseBranch}
-            required
-            mono
-            onSave={(baseBranch) => update({ baseBranch })}
-          />
-        </SettingsRow>
-        <SettingsRow label="Default agent" description="Picked for a new thread in this project.">
+          {project.repo.owner}/{project.repo.name}
+          <ExternalLink className="size-3" />
+        </a>
+        <span>·</span>
+        <span>{project.transport === "app" ? "GitHub App" : "gh or the token"}</span>
+        <span>·</span>
+        <span className={cn("truncate", monoClass)} title={project.checkoutPath}>
+          {project.checkoutPath}
+        </span>
+      </p>
+    </div>
+  );
+}
+
+function GeneralGroup({
+  project,
+  harnesses,
+  update,
+}: {
+  project: ProjectView;
+  harnesses: HarnessInfo[];
+  update: Update;
+}) {
+  const [models, setModels] = useState<ModelOption[]>([]);
+  const defaultHarness = harnesses.find((h) => h.id === project.defaultInstanceId);
+  useEffect(() => {
+    let cancelled = false;
+    if (!defaultHarness) return;
+    void loadModels(defaultHarness.id)
+      .then((list) => !cancelled && setModels(list))
+      .catch(() => !cancelled && setModels([]));
+    return () => {
+      cancelled = true;
+    };
+  }, [defaultHarness]);
+  const model = models.find((m) => m.id === project.defaultModel);
+  const field = (name: string) => fieldId(project, name);
+  return (
+    <SettingsGroup title="General">
+      <SettingsRow label="Name" htmlFor={field("name")}>
+        <TextField
+          id={field("name")}
+          value={project.name}
+          required
+          onSave={(name) => update({ name })}
+        />
+      </SettingsRow>
+      <SettingsRow
+        label="Base branch"
+        description="New threads branch from it, and Changes compare against it."
+        htmlFor={field("base")}
+      >
+        <TextField
+          id={field("base")}
+          value={project.baseBranch}
+          required
+          mono
+          onSave={(baseBranch) => update({ baseBranch })}
+        />
+      </SettingsRow>
+      <SettingsRow label="Default agent" description="Picked for a new thread in this project.">
+        <SearchSelect
+          label="Default agent"
+          value={project.defaultInstanceId ?? ""}
+          onValueChange={(v) => update({ defaultInstanceId: v || null, defaultModel: null })}
+          searchable={false}
+          align="end"
+          options={[
+            { value: "", label: "Pick at start" },
+            ...harnesses.map((h) => ({ value: h.id, label: h.label })),
+          ]}
+        >
+          {defaultHarness?.label ?? "Pick at start"}
+          <ChevronDown className="opacity-50" />
+        </SearchSelect>
+      </SettingsRow>
+      {defaultHarness && models.length > 0 && (
+        <SettingsRow label="Default model">
           <SearchSelect
-            label="Default agent"
-            value={project.defaultInstanceId ?? ""}
-            onValueChange={(v) => update({ defaultInstanceId: v || null, defaultModel: null })}
-            searchable={false}
+            label="Default model"
+            value={project.defaultModel ?? ""}
+            onValueChange={(v) => update({ defaultModel: v || null })}
             align="end"
+            searchPlaceholder="Search models…"
             options={[
-              { value: "", label: "Pick at start" },
-              ...harnesses.map((h) => ({ value: h.id, label: h.label })),
+              { value: "", label: `${defaultHarness.label}'s default` },
+              ...models
+                .filter((m) => m.ready !== false)
+                .map((m) => ({ value: m.id, label: m.label || m.id })),
             ]}
           >
-            {defaultHarness?.label ?? "Pick at start"}
+            <span className="max-w-48 truncate">
+              {model ? model.label || model.id : `${defaultHarness.label}'s default`}
+            </span>
             <ChevronDown className="opacity-50" />
           </SearchSelect>
         </SettingsRow>
-        {defaultHarness && models.length > 0 && (
-          <SettingsRow label="Default model">
-            <SearchSelect
-              label="Default model"
-              value={project.defaultModel ?? ""}
-              onValueChange={(v) => update({ defaultModel: v || null })}
-              align="end"
-              searchPlaceholder="Search models…"
-              options={[
-                { value: "", label: `${defaultHarness.label}'s default` },
-                ...models
-                  .filter((m) => m.ready !== false)
-                  .map((m) => ({ value: m.id, label: m.label || m.id })),
-              ]}
-            >
-              <span className="max-w-48 truncate">
-                {model ? model.label || model.id : `${defaultHarness.label}'s default`}
-              </span>
-              <ChevronDown className="opacity-50" />
-            </SearchSelect>
-          </SettingsRow>
-        )}
-      </SettingsGroup>
+      )}
+    </SettingsGroup>
+  );
+}
 
-      <SettingsGroup
-        title="Scripts"
-        description={
-          <>
-            Empty fields use the checked-in{" "}
-            <code className={monoClass}>.tiny-agents/code.json</code>.
-          </>
-        }
+function ScriptsGroup({ project, update }: { project: ProjectView; update: Update }) {
+  const { settings } = project;
+  const field = (name: string) => fieldId(project, name);
+  return (
+    <SettingsGroup
+      title="Scripts"
+      description={
+        <>
+          Empty fields use the checked-in <code className={monoClass}>.tiny-agents/code.json</code>.
+        </>
+      }
+    >
+      <SettingsRow
+        label="Setup script"
+        description="Runs in a new worktree before the first turn."
+        htmlFor={field("setup")}
       >
-        <SettingsRow
-          label="Setup script"
-          description="Runs in a new worktree before the first turn."
-          htmlFor={field("setup")}
-        >
-          <TextField
-            id={field("setup")}
-            value={settings.scripts.setup ?? ""}
-            mono
-            placeholder="pnpm install"
-            onSave={(setup) => update({ settings: { scripts: { setup } } })}
-          />
-        </SettingsRow>
-        <SettingsRow
-          label="Check script"
-          description="The agent runs it before it reports done."
-          htmlFor={field("check")}
-        >
-          <TextField
-            id={field("check")}
-            value={settings.scripts.check ?? ""}
-            mono
-            placeholder="pnpm test"
-            onSave={(check) => update({ settings: { scripts: { check } } })}
-          />
-        </SettingsRow>
-        <SettingsRow
-          label="Archive script"
-          description="Runs before a worktree is removed."
-          htmlFor={field("archive")}
-        >
-          <TextField
-            id={field("archive")}
-            value={settings.scripts.archive ?? ""}
-            mono
-            placeholder="rm -rf node_modules"
-            onSave={(archive) => update({ settings: { scripts: { archive } } })}
-          />
-        </SettingsRow>
-      </SettingsGroup>
+        <TextField
+          id={field("setup")}
+          value={settings.scripts.setup ?? ""}
+          mono
+          placeholder="pnpm install"
+          onSave={(setup) => update({ settings: { scripts: { setup } } })}
+        />
+      </SettingsRow>
+      <SettingsRow
+        label="Check script"
+        description="The agent runs it before it reports done."
+        htmlFor={field("check")}
+      >
+        <TextField
+          id={field("check")}
+          value={settings.scripts.check ?? ""}
+          mono
+          placeholder="pnpm test"
+          onSave={(check) => update({ settings: { scripts: { check } } })}
+        />
+      </SettingsRow>
+      <SettingsRow
+        label="Archive script"
+        description="Runs before a worktree is removed."
+        htmlFor={field("archive")}
+      >
+        <TextField
+          id={field("archive")}
+          value={settings.scripts.archive ?? ""}
+          mono
+          placeholder="rm -rf node_modules"
+          onSave={(archive) => update({ settings: { scripts: { archive } } })}
+        />
+      </SettingsRow>
+    </SettingsGroup>
+  );
+}
 
+function PullRequestGroups({ project, update }: { project: ProjectView; update: Update }) {
+  const { settings } = project;
+  const { autofix } = settings;
+  const field = (name: string) => fieldId(project, name);
+  return (
+    <>
       <SettingsGroup title="Pull requests">
         <SwitchRow
           label="Archive the thread when its PR merges"
@@ -720,61 +765,98 @@ function ProjectSettings({
           />
         </SettingsRow>
       </SettingsGroup>
-
-      <SettingsGroup title="Limits">
-        <SettingsRow
-          label="Passes an hour"
-          description="More pauses Auto-fix until someone pushes, reviews or writes."
-          htmlFor={field("hourly")}
-        >
-          <TextField
-            id={field("hourly")}
-            value={String(autofix.hourlyLimit)}
-            inputMode="numeric"
-            className="sm:w-24"
-            onSave={number("hourlyLimit", 1, 30)}
-          />
-        </SettingsRow>
-        <SettingsRow
-          label="Passes in a row without you"
-          description="More switches Auto-fix off."
-          htmlFor={field("owner")}
-        >
-          <TextField
-            id={field("owner")}
-            value={String(autofix.noOwnerLimit)}
-            inputMode="numeric"
-            className="sm:w-24"
-            onSave={number("noOwnerLimit", 1, 50)}
-          />
-        </SettingsRow>
-        <SettingsRow
-          label="Minutes a pass may run"
-          description="A longer pass is stopped."
-          htmlFor={field("minutes")}
-        >
-          <TextField
-            id={field("minutes")}
-            value={String(autofix.passMinutes)}
-            inputMode="numeric"
-            className="sm:w-24"
-            onSave={number("passMinutes", 5, 120)}
-          />
-        </SettingsRow>
-      </SettingsGroup>
-
-      <SettingsGroup title="Danger zone">
-        <SettingsRow
-          label="Remove project"
-          description="Its threads keep working without a project. The checkout stays on the sandbox."
-        >
-          <Button variant="destructive" size="sm" onClick={() => void remove()}>
-            <Trash2 />
-            Remove
-          </Button>
-        </SettingsRow>
-      </SettingsGroup>
     </>
+  );
+}
+
+function LimitsGroup({ project, update }: { project: ProjectView; update: Update }) {
+  const { autofix } = project.settings;
+  const field = (name: string) => fieldId(project, name);
+  const number = (key: "hourlyLimit" | "noOwnerLimit" | "passMinutes", min: number, max: number) =>
+    function save(next: string): false | void {
+      const n = Number(next);
+      if (!Number.isInteger(n) || n < min || n > max) {
+        toast.error(`Use a whole number from ${min} to ${max}.`);
+        return false;
+      }
+      update({ settings: { autofix: { [key]: n } } });
+    };
+  return (
+    <SettingsGroup title="Limits">
+      <SettingsRow
+        label="Passes an hour"
+        description="More pauses Auto-fix until someone pushes, reviews or writes."
+        htmlFor={field("hourly")}
+      >
+        <TextField
+          id={field("hourly")}
+          value={String(autofix.hourlyLimit)}
+          inputMode="numeric"
+          className="sm:w-24"
+          onSave={number("hourlyLimit", 1, 30)}
+        />
+      </SettingsRow>
+      <SettingsRow
+        label="Passes in a row without you"
+        description="More switches Auto-fix off."
+        htmlFor={field("owner")}
+      >
+        <TextField
+          id={field("owner")}
+          value={String(autofix.noOwnerLimit)}
+          inputMode="numeric"
+          className="sm:w-24"
+          onSave={number("noOwnerLimit", 1, 50)}
+        />
+      </SettingsRow>
+      <SettingsRow
+        label="Minutes a pass may run"
+        description="A longer pass is stopped."
+        htmlFor={field("minutes")}
+      >
+        <TextField
+          id={field("minutes")}
+          value={String(autofix.passMinutes)}
+          inputMode="numeric"
+          className="sm:w-24"
+          onSave={number("passMinutes", 5, 120)}
+        />
+      </SettingsRow>
+    </SettingsGroup>
+  );
+}
+
+function DangerZone({ project, onChange }: { project: ProjectView; onChange(): void }) {
+  const confirm = useConfirm();
+  const navigate = useNavigate();
+  const remove = async () => {
+    const ok = await confirm({
+      title: `Remove ${project.name}?`,
+      description: "Its threads keep working without a project. The checkout stays on the sandbox.",
+      destructive: true,
+      confirmLabel: "Remove",
+    });
+    if (!ok) return;
+    try {
+      await projectsApi.remove(project.id);
+      onChange();
+      navigate("/code/settings/projects");
+    } catch (e) {
+      toast.error(errorMessage(e, "Could not remove it."));
+    }
+  };
+  return (
+    <SettingsGroup title="Danger zone">
+      <SettingsRow
+        label="Remove project"
+        description="Its threads keep working without a project. The checkout stays on the sandbox."
+      >
+        <Button variant="destructive" size="sm" onClick={() => void remove()}>
+          <Trash2 />
+          Remove
+        </Button>
+      </SettingsRow>
+    </SettingsGroup>
   );
 }
 

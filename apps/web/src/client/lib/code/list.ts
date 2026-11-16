@@ -109,7 +109,9 @@ export function buildGroups(
       group.nodes.map(lastActive).reduce((a, b) => (b > a ? b : a), ""),
     );
   }
-  return [...groups.values()].sort((a, b) => active.get(b.key)!.localeCompare(active.get(a.key)!));
+  return [...groups.values()].sort((a, b) =>
+    (active.get(b.key) ?? "").localeCompare(active.get(a.key) ?? ""),
+  );
 }
 
 /** The ancestry of a thread (root first), for the header breadcrumb. */

@@ -59,7 +59,7 @@ function SlugRedirect({ slug }: { slug: string }) {
 
 export function CodePage() {
   const { conversationId: rawId, slug, section, projectId: settingsProjectId } = useParams();
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   const navigate = useNavigate();
   const { brand } = useShellConfig();
   const harnessList = useCodeStore((s) => s.harnesses);
@@ -274,7 +274,7 @@ export function CodePage() {
               description="The thread belongs to a harness this server no longer runs."
             />
           ) : (
-            <NewConversation rows={rows} harnesses={harnesses} projects={projects} />
+            <NewConversation key={search} rows={rows} harnesses={harnesses} projects={projects} />
           )}
         </main>
 

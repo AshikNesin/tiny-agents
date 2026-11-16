@@ -7,7 +7,7 @@
  * harness when there are several. A sidebar group's New thread opens it
  * with its project (`?project=`) or folder (`?cwd=`) picked.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -213,9 +213,20 @@ export function NewConversation({
   projects?: ProjectView[] | null;
 }) {
   const navigate = useNavigate();
-  const [params, setParams] = useSearchParams();
-  const [harnessId, setHarnessId] = useState(() => initialHarness(harnesses));
-  const [projectId, setProjectId] = useState(() => read(PROJECT_KEY));
+  // A sidebar group's New thread links here with its project or folder; the
+  // page remounts per link (CodePage keys it by the query), so this is read once.
+  const [params] = useSearchParams();
+  const linkProject = params.get("project");
+  const [linkCwd] = useState(() => params.get("cwd"));
+  // The first harness effect starts in the link's folder; later ones in the remembered one.
+  const linkCwdUsed = useRef(false);
+  const [harnessId, setHarnessId] = useState(() => {
+    const preferred = projects?.find((p) => p.id === linkProject)?.defaultInstanceId;
+    return harnesses.find((h) => h.id === preferred)?.id ?? initialHarness(harnesses);
+  });
+  const [projectId, setProjectId] = useState(
+    () => linkProject ?? (linkCwd ? "" : read(PROJECT_KEY)),
+  );
   const project = projects?.find((p) => p.id === projectId) ?? null;
   const pickProject = (id: string) => {
     setProjectId(id);
@@ -238,7 +249,9 @@ export function NewConversation({
 
   // Each harness remembers its own directory, model and effort.
   useEffect(() => {
-    setCwd(read(key(harness.id, "cwd"), readLegacy(harness.id, "cwd") ?? ""));
+    const remembered = read(key(harness.id, "cwd"), readLegacy(harness.id, "cwd") ?? "");
+    setCwd(!linkCwdUsed.current && linkCwd ? linkCwd : remembered);
+    linkCwdUsed.current = true;
     setModel(read(key(harness.id, "model"), readLegacy(harness.id, "model") ?? DEFAULT));
     setEffort(read(key(harness.id, "effort"), readLegacy(harness.id, "effort") ?? DEFAULT));
     setPermission(harness.capabilities.settings.defaultPermissionMode ?? null);
@@ -254,31 +267,7 @@ export function NewConversation({
         );
       })
       .catch(() => setModels([]));
-  }, [harness]);
-
-  // A sidebar group's New thread: its project (once the list is in) or its folder.
-  const wantProject = params.get("project");
-  const wantCwd = params.get("cwd");
-  useEffect(() => {
-    if (wantProject) {
-      if (!projects) return;
-      if (projects.some((p) => p.id === wantProject)) pickProject(wantProject);
-    } else if (wantCwd) {
-      if (projects) pickProject("");
-      pickDir(wantCwd);
-    } else {
-      return;
-    }
-    setParams(
-      (next) => {
-        next.delete("project");
-        next.delete("cwd");
-        return next;
-      },
-      { replace: true },
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- apply a link's pick once
-  }, [wantProject, wantCwd, projects]);
+  }, [harness, linkCwd]);
 
   // Recent directories of this harness, most recent first: one click to reuse.
   const recent = useMemo(() => {

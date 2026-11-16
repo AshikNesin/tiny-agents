@@ -137,8 +137,9 @@ await journey(
         .toEqual([...picked, kept].map((t) => t.id).sort());
       expect(await ids("archived")).toEqual([]);
       await page.getByRole("button", { name: "Archived threads" }).click();
-      for (const t of [...picked, kept])
-        await expect(rowLink(t.title)).toBeVisible({ timeout: 15_000 });
+      await Promise.all(
+        [...picked, kept].map((t) => expect(rowLink(t.title)).toBeVisible({ timeout: 15_000 })),
+      );
     });
     await proof("restored");
   },
