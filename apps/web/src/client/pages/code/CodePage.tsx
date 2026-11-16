@@ -10,18 +10,29 @@
  * `/code/new` or `/code/:id` → `/code/:id/changes`).
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Code2, TriangleAlert } from "lucide-react";
+import {
+  Link,
+  Navigate,
+  useLocation,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
+import { ArrowLeft, Code2, FolderGit2, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
-import { EmptyState, monoClass } from "@groot/ui";
+import { Button, EmptyState, monoClass } from "@groot/ui";
 import { cn } from "@groot/ui/lib/utils";
 import { CommandPaletteTrigger } from "@groot/shell/components/CommandPalette";
 import { useShellConfig } from "@groot/shell/lib/shell-config";
 import { Spinner } from "../../components/ui/spinner";
 import { errorMessage } from "../../lib/errors";
 import { codeApi, instanceOf, normalizeThreadId, threadPath } from "../../lib/code/api";
+import { useProjects } from "../../lib/code/projects";
 import { harnessOf, useCodeStore } from "../../store/code";
 import { ChangesPanel } from "./ChangesPanel";
+import { ProjectsDialog } from "./ProjectsDialog";
+import { PullPanel } from "./PullPanel";
+import { ReviewPanel } from "./ReviewPanel";
 import { ConversationList } from "./ConversationList";
 import { ConversationView } from "./ConversationView";
 import { NewConversation } from "./NewConversation";
@@ -58,6 +69,33 @@ export function CodePage() {
   const [viewCwd, setViewCwd] = useState<string | null>(null);
   const threadId = rawId ? normalizeThreadId(decodeURIComponent(rawId)) : undefined;
   const changesOpen = Boolean(threadId) && pathname.endsWith("/changes");
+  const prOpen = Boolean(threadId) && pathname.endsWith("/pr");
+  const { projects, reload: reloadProjects } = useProjects();
+  const [managing, setManaging] = useState(false);
+  // Back from GitHub's App setup: say how it went and reopen Projects for the next step.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const githubResult = searchParams.get("github");
+  useEffect(() => {
+    if (!githubResult) return;
+    if (githubResult === "created") {
+      toast.success("GitHub App created. Install it on the repositories Code should reach.");
+    } else if (githubResult === "installed") {
+      toast.success("GitHub App installed. Its repositories are ready for projects.");
+    } else {
+      toast.error("GitHub could not finish the App setup. Start it again from Projects.");
+    }
+    setManaging(true);
+    reloadProjects();
+    setSearchParams(
+      (params) => {
+        params.delete("github");
+        return params;
+      },
+      { replace: true },
+    );
+  }, [githubResult, reloadProjects, setSearchParams]);
+  // A project thread's Changes default to everything since its base branch.
+  const [reviewScope, setReviewScope] = useState<"base" | "harness">("base");
   // `/code/new` is the new-thread screen on phones (`/code` is the list there).
   const composing = pathname === "/code/new";
   const rows = useMemo(() => threads ?? [], [threads]);
@@ -83,6 +121,12 @@ export function CodePage() {
     if (!threadId) return;
     navigate(changesOpen ? threadPath(threadId) : threadPath(threadId, "/changes"));
   }, [threadId, changesOpen, navigate]);
+  const togglePr = useCallback(() => {
+    if (!threadId) return;
+    navigate(prOpen ? threadPath(threadId) : threadPath(threadId, "/pr"));
+  }, [threadId, prOpen, navigate]);
+  const project = row?.projectId ? projects?.find((p) => p.id === row.projectId) : undefined;
+  const sideOpen = changesOpen || prOpen;
 
   // ⌘. stops the agent, ⌘⇧D toggles Changes.
   useEffect(() => {
@@ -137,13 +181,24 @@ export function CodePage() {
       </div>
     );
   }
-  if (pathname.endsWith("/changes") && !threadId) return <Navigate to="/code" replace />;
+  if ((pathname.endsWith("/changes") || pathname.endsWith("/pr")) && !threadId) {
+    return <Navigate to="/code" replace />;
+  }
 
   const offline = harnesses.filter((h) => h.status.state !== "connected");
 
   return (
     <div className="flex h-dvh min-h-0 flex-col">
-      <CodeHeader brand={brand} />
+      <CodeHeader brand={brand} onProjects={projects ? () => setManaging(true) : undefined} />
+      {projects && (
+        <ProjectsDialog
+          open={managing}
+          onOpenChange={setManaging}
+          harnesses={harnesses}
+          projects={projects}
+          onChange={reloadProjects}
+        />
+      )}
       {offline.map((h) => (
         <div
           key={h.id}
@@ -174,7 +229,7 @@ export function CodePage() {
             "border-border w-full shrink-0 flex-col border-r md:w-72 xl:w-80",
             threadId || composing ? "hidden" : "flex",
             // With Changes open the list steps aside until there is room for all three.
-            changesOpen ? "2xl:flex" : "md:flex",
+            sideOpen ? "2xl:flex" : "md:flex",
           )}
         >
           <div className="flex items-center gap-1 px-2 pt-2 md:hidden">
@@ -187,7 +242,7 @@ export function CodePage() {
           className={cn(
             "min-w-0 flex-1 flex-col",
             threadId
-              ? changesOpen
+              ? sideOpen
                 ? "hidden lg:flex"
                 : "flex"
               : composing
@@ -204,6 +259,10 @@ export function CodePage() {
               externalUrl={row?.externalUrl}
               changesOpen={changesOpen}
               onToggleChanges={toggleChanges}
+              inProject={Boolean(row?.projectId)}
+              pr={row?.pr ?? null}
+              prOpen={prOpen}
+              onTogglePr={togglePr}
               insert={insert}
               onCwd={setViewCwd}
             />
@@ -214,29 +273,75 @@ export function CodePage() {
               description="The thread belongs to a harness this server no longer runs."
             />
           ) : (
-            <NewConversation rows={rows} harnesses={harnesses} />
+            <NewConversation
+              rows={rows}
+              harnesses={harnesses}
+              projects={projects}
+              onManageProjects={() => setManaging(true)}
+            />
           )}
         </main>
 
-        {threadId && harness && changesOpen && cwd && harness.capabilities.workspace.diffs && (
+        {threadId && prOpen && (
           <section
             className="border-border flex w-full min-w-0 flex-col lg:w-[48%] lg:max-w-3xl lg:border-l"
-            aria-label="Changes"
+            aria-label="Pull request"
           >
-            <ChangesPanel
-              instanceId={harness.id}
-              cwd={cwd}
-              refreshKey={`${row?.working}:${row?.cursor}`}
-              onClose={toggleChanges}
-              onComment={(text) => {
+            <PullPanel
+              threadId={threadId}
+              refreshKey={`${row?.working}:${row?.cursor}:${row?.pr?.loop}`}
+              onClose={togglePr}
+              onAttach={(text) => {
                 setInsert({ text, nonce: Date.now() });
-                // On phones the composer is on the thread screen.
                 if (window.matchMedia("(max-width: 1023px)").matches)
                   navigate(threadPath(threadId));
               }}
             />
           </section>
         )}
+        {threadId && changesOpen && project && reviewScope === "base" && (
+          <section
+            className="border-border flex w-full min-w-0 flex-col lg:w-[48%] lg:max-w-3xl lg:border-l"
+            aria-label="Changes"
+          >
+            <ReviewPanel
+              threadId={threadId}
+              baseBranch={project.baseBranch}
+              refreshKey={`${row?.working}:${row?.cursor}`}
+              onClose={toggleChanges}
+              onOtherScopes={
+                harness?.capabilities.workspace.diffs ? () => setReviewScope("harness") : undefined
+              }
+            />
+          </section>
+        )}
+        {threadId &&
+          harness &&
+          changesOpen &&
+          (!project || reviewScope === "harness") &&
+          cwd &&
+          harness.capabilities.workspace.diffs && (
+            <section
+              className="border-border flex w-full min-w-0 flex-col lg:w-[48%] lg:max-w-3xl lg:border-l"
+              aria-label="Changes"
+            >
+              <ChangesPanel
+                instanceId={harness.id}
+                cwd={cwd}
+                refreshKey={`${row?.working}:${row?.cursor}`}
+                onClose={() => {
+                  setReviewScope("base");
+                  toggleChanges();
+                }}
+                onComment={(text) => {
+                  setInsert({ text, nonce: Date.now() });
+                  // On phones the composer is on the thread screen.
+                  if (window.matchMedia("(max-width: 1023px)").matches)
+                    navigate(threadPath(threadId));
+                }}
+              />
+            </section>
+          )}
       </div>
     </div>
   );
@@ -247,7 +352,14 @@ export function CodePage() {
  * carries its own way back to the app — like the settings screen. The
  * not-configured state shows it too, or a direct link to `/code` is a dead end.
  */
-function CodeHeader({ brand }: { brand: { to: string; label: string } }) {
+function CodeHeader({
+  brand,
+  onProjects,
+}: {
+  brand: { to: string; label: string };
+  /** Projects and GitHub (the owner's). */
+  onProjects?: () => void;
+}) {
   return (
     <header className="border-border bg-background sticky top-0 z-30 flex h-12 shrink-0 items-center gap-2 border-b px-4">
       <Link
@@ -257,7 +369,13 @@ function CodeHeader({ brand }: { brand: { to: string; label: string } }) {
         <ArrowLeft className="size-4" />
         Back to {brand.label}
       </Link>
-      <div className="ml-auto">
+      <div className="ml-auto flex items-center gap-1">
+        {onProjects && (
+          <Button variant="ghost" size="sm" onClick={onProjects} data-testid="code-projects">
+            <FolderGit2 />
+            Projects
+          </Button>
+        )}
         <CommandPaletteTrigger />
       </div>
     </header>

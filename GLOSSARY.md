@@ -81,6 +81,22 @@ _Avoid_: Claude engine (that is the bot engine)
 A bot giving coding work to a harness with `code_start` (or `shelley_start`): a `code_handoffs` row whose finish is delivered once into the bot's chat as a reply from that harness.
 _Avoid_: job, delegation
 
+**Project**:
+A GitHub repository bound to a checkout on the sandbox, with a base branch, defaults, scripts and Auto-fix rules (`code_projects`, ADR 0021). A thread started in a project gets its own worktree on a new branch; a thread without one works in any directory, as before.
+_Avoid_: repo (the GitHub side only), workspace
+
+**PR link**:
+A pull request recorded against a Code thread (`code_pull_requests`): made on Publish, by Link pull request, or by matching the thread's branch. A thread may have several over time, at most one open; a PR belongs to one thread. GitHub is the source of truth and the row its cache.
+_Avoid_: PR binding, subscription
+
+**Pass**:
+One Auto-fix run on a linked PR (ADR 0023): claimed for one state of the PR (its head sha and items), sent to the thread as a fix request, and finished when the turn ends, when the app checks, pushes and answers the reviewers.
+_Avoid_: fix run, attempt (a conflict's "attempts" are passes)
+
+**Checkpoint**:
+A project thread's worktree at its start or at the end of a turn, uncommitted files included, kept as a commit under a hidden ref (`code_checkpoints`, ADR 0024). Revert to a checkpoint restores its files as uncommitted changes; it never rewrites the branch.
+_Avoid_: snapshot (a PR snapshot is GitHub's state), save point
+
 **Steer**:
 A message sent to a harness while its turn runs: it goes into that turn. Queue holds a message for when the turn ends instead.
 _Avoid_: interrupt (Stop interrupts)
@@ -94,7 +110,7 @@ The tool that receives a vault value: a browser field, a request header, a confi
 _Avoid_: consumer, client
 
 **App credential**:
-A vault item with audience `app`: a secret the server uses itself, such as a model provider account's key. Bots never list or use it; only the `provider` sink resolves it, for a host the item lists. Shown on the Vault page under "Used by the app" and changed where it is used.
+A vault item with audience `app`: a secret the server uses itself, such as a model provider account's key or Code's GitHub token. Bots never list or use it; only its sink (`provider`, `github`) resolves it, for a host the item lists. Shown on the Vault page under "Used by the app" and changed where it is used.
 _Avoid_: system secret, server key
 
 **Settled**:

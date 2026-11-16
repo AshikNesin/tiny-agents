@@ -20,6 +20,9 @@ import connectionsRoutes, { publicConnectionsRouter } from "./api/connections/co
 import vaultRoutes, { vaultNoStore } from "./api/vault/vault.routes";
 import modelsRoutes from "./api/models/models.routes";
 import codeRoutes from "./api/code/code.routes";
+import codeProjectRoutes from "./api/code/code.projects.routes";
+import codeWebhookRoutes from "./api/code/code.webhook";
+import { registerCodeJobs } from "./api/code/code.pulls";
 import peopleRoutes from "./api/people/people.routes";
 import updatesRoutes from "./api/system/updates.routes";
 import appLinksRouter from "./api/system/app-links";
@@ -29,6 +32,7 @@ import { registerRoutineJobs } from "./api/routines/routines.jobs";
 /** Register every feature's job handlers. Call before `startWorkers()` / the first tick. */
 export function registerJobHandlers(): void {
   registerRoutineJobs();
+  registerCodeJobs();
 }
 
 /** The HTTP app. Feature routers declare full paths (`/bots/:id`) and mount at the API root. */
@@ -41,6 +45,8 @@ export function createWebApp(options: Omit<CreateAppOptions, "routes"> = {}) {
       app.route("/api/v1/passkey", passkeyRoutes);
       // OAuth client metadata document: fetched by authorization servers.
       app.route("/api/v1", publicConnectionsRouter);
+      // The GitHub App's webhook: signed by GitHub, not by a session.
+      app.route("/api/v1", codeWebhookRoutes);
       // Android App Links: lets the Android app open this server's notification links.
       app.route("/", appLinksRouter);
 
@@ -60,6 +66,7 @@ export function createWebApp(options: Omit<CreateAppOptions, "routes"> = {}) {
       api.route("/", skillsRoutes);
       api.route("/", connectionsRoutes);
       api.route("/", codeRoutes);
+      api.route("/", codeProjectRoutes);
       api.route("/", modelsRoutes);
       api.route("/", updatesRoutes);
       api.use("/vault/*", vaultNoStore);

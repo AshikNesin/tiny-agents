@@ -17,7 +17,15 @@ import {
   routineRuns,
   routines,
   codeHandoffFinishes,
+  codeAutofixPasses,
+  codeCheckpoints,
   codeHandoffs,
+  codePrEvents,
+  codePrComments,
+  codeProjects,
+  codePullRequests,
+  codeReviewDrafts,
+  codeReviewViewed,
   codeThreads,
   shelleyHandoffs,
   shelleySeen,
@@ -67,7 +75,15 @@ export async function seedBot(
 export async function resetAppTables(): Promise<void> {
   await db.delete(codeHandoffFinishes);
   await db.delete(codeHandoffs);
+  await db.delete(codeReviewDrafts);
+  await db.delete(codeCheckpoints);
+  await db.delete(codePrEvents);
+  await db.delete(codeReviewViewed);
+  await db.delete(codePrComments);
+  await db.delete(codeAutofixPasses);
+  await db.delete(codePullRequests);
   await db.delete(codeThreads);
+  await db.delete(codeProjects);
   await db.delete(shelleyHandoffs);
   await db.delete(shelleySeen);
   await db.delete(routineRuns);

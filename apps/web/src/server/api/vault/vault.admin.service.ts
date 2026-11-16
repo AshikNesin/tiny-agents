@@ -394,8 +394,8 @@ export async function createItem(
 
 /**
  * A secret the server itself uses (audience `app`, issue #179): a model
- * provider's key. Never listed to bots; usable only by the `provider` sink
- * for the given hosts. Goes to the local backend unless `backend` says
+ * provider's key, or Code's GitHub token (`tools: ["github"]`, issue #297).
+ * Never listed to bots; usable only by its sink for the given hosts. Goes to the local backend unless `backend` says
  * otherwise, so chatting never depends on an external manager being up.
  */
 export async function createAppCredential(input: {
@@ -405,6 +405,8 @@ export async function createAppCredential(input: {
   hosts: string[];
   inject: { as: "header"; name: string; format: string };
   backend?: BackendName;
+  /** The sinks that may use it (default `model`). */
+  tools?: string[];
 }): Promise<VaultItemRow> {
   await assertHandleFree(input.handle);
   const name = input.backend ?? "local";
@@ -435,7 +437,7 @@ export async function createAppCredential(input: {
       field: "value",
       label: input.label,
       ...policy,
-      toolsJson: JSON.stringify(["model"]),
+      toolsJson: JSON.stringify(input.tools ?? ["model"]),
       botsJson: "[]",
       approval: "allowed",
     })

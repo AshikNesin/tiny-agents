@@ -21,6 +21,7 @@ import {
   FolderOpen,
   GitBranchPlus,
   Layers,
+  Settings2,
 } from "lucide-react";
 import { Button, metaLabelClass, monoClass } from "@groot/ui";
 import {
@@ -48,10 +49,12 @@ import {
   type PermissionMode,
   type ThreadSummary,
 } from "../../lib/code/api";
+import type { ProjectView } from "../../../shared/api/code";
 import { Composer } from "./Composer";
 import { DEFAULT, ModelPicker, PermissionPicker, ReasoningPicker, loadModels } from "./controls";
 
 const HARNESS_KEY = "tiny-agents:code-harness";
+const PROJECT_KEY = "tiny-agents:code-project";
 const key = (harness: string, what: "cwd" | "model" | "effort") =>
   `tiny-agents:code-${what}:${harness}`;
 
@@ -283,12 +286,27 @@ function initialHarness(harnesses: HarnessInfo[]): string {
 export function NewConversation({
   rows,
   harnesses,
+  projects,
+  onManageProjects,
 }: {
   rows: ThreadSummary[];
   harnesses: HarnessInfo[];
+  /** The owner's projects (null: none to offer, as for a guest). */
+  projects?: ProjectView[] | null;
+  onManageProjects?: () => void;
 }) {
   const navigate = useNavigate();
   const [harnessId, setHarnessId] = useState(() => initialHarness(harnesses));
+  const [projectId, setProjectId] = useState(() => read(PROJECT_KEY));
+  const project = projects?.find((p) => p.id === projectId) ?? null;
+  const pickProject = (id: string) => {
+    setProjectId(id);
+    save(PROJECT_KEY, id);
+    const chosen = projects?.find((p) => p.id === id);
+    if (chosen?.defaultInstanceId && harnesses.some((h) => h.id === chosen.defaultInstanceId)) {
+      setHarnessId(chosen.defaultInstanceId);
+    }
+  };
   const harness = harnesses.find((h) => h.id === harnessId) ?? harnesses[0]!;
   const caps = harness.capabilities;
   const [cwd, setCwd] = useState("");
@@ -369,6 +387,20 @@ export function NewConversation({
   };
 
   const start = async (message: string, attachments: string[]) => {
+    if (project) {
+      save(HARNESS_KEY, harness.id);
+      const { threadId } = await codeApi.create({
+        instanceId: harness.id,
+        projectId: project.id,
+        message,
+        ...(model !== DEFAULT ? { model } : {}),
+        ...(effort !== DEFAULT ? { effort } : {}),
+        ...(permission ? { permissionMode: permission } : {}),
+        ...(attachments.length ? { attachments } : {}),
+      });
+      navigate(threadPath(threadId));
+      return;
+    }
     let dir = cwd.trim();
     if (caps.workspace.requiresCwd && !dir) {
       throw new Error(`Pick a working directory for ${harness.label}.`);
@@ -430,6 +462,43 @@ export function NewConversation({
       <div className="mx-auto flex min-h-0 w-full max-w-2xl flex-1 flex-col gap-8 overflow-y-auto px-4 pt-6 pb-8 md:pt-[12vh]">
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-1 px-1.5" data-testid="code-new-options">
+            {projects && (
+              <SearchSelect
+                label="Project"
+                value={project?.id ?? ""}
+                onValueChange={pickProject}
+                options={[
+                  {
+                    value: "",
+                    label: "No project",
+                    description: "Work in a directory you pick",
+                  },
+                  ...projects.map((p) => ({
+                    value: p.id,
+                    label: p.name,
+                    description: `${p.repo.owner}/${p.repo.name} · new branch from ${p.baseBranch}`,
+                    keywords: [p.repo.owner, p.repo.name],
+                  })),
+                ]}
+                actions={
+                  onManageProjects
+                    ? [
+                        {
+                          key: "manage",
+                          label: "Manage projects…",
+                          icon: <Settings2 className="text-muted-foreground" />,
+                          onSelect: onManageProjects,
+                        },
+                      ]
+                    : []
+                }
+                data-testid="code-project"
+              >
+                <FolderGit2 className="opacity-70" />
+                <span className="max-w-48 truncate">{project ? project.name : "No project"}</span>
+                <ChevronDown className="opacity-50" />
+              </SearchSelect>
+            )}
             {harnesses.length > 1 && (
               <SearchSelect
                 label="Coding agent"
@@ -450,50 +519,52 @@ export function NewConversation({
                 <ChevronDown className="opacity-50" />
               </SearchSelect>
             )}
-            <SearchSelect
-              label="Working directory"
-              value={cwd}
-              onValueChange={pickDir}
-              options={dirOptions}
-              searchPlaceholder="Search or type a path…"
-              emptyText="Type a full path to use it."
-              contentClassName="w-80"
-              createOption={(query) =>
-                query.startsWith("/") || query.startsWith("~")
-                  ? {
-                      key: "use-path",
-                      label: `Use “${query}”`,
-                      icon: <CornerDownLeft className="text-muted-foreground" />,
-                      onSelect: pickDir,
-                    }
-                  : null
-              }
-              actions={
-                caps.workspace.browse
-                  ? [
-                      {
-                        key: "browse",
-                        label: "Browse folders…",
-                        icon: <FolderOpen className="text-muted-foreground" />,
-                        onSelect: () => setBrowsing(true),
-                      },
-                    ]
-                  : []
-              }
-              triggerClassName={cn(cwdError && "text-destructive")}
-              data-testid="code-cwd"
-            >
-              <FolderGit2 className="opacity-70" />
-              <span className={cn("max-w-56 truncate", cwd && monoClass)}>
-                {cwd
-                  ? shortPath(cwd)
-                  : caps.workspace.requiresCwd
-                    ? "Pick a working directory"
-                    : `${harness.label}'s default directory`}
-              </span>
-              <ChevronDown className="opacity-50" />
-            </SearchSelect>
-            {caps.workspace.worktrees && (
+            {!project && (
+              <SearchSelect
+                label="Working directory"
+                value={cwd}
+                onValueChange={pickDir}
+                options={dirOptions}
+                searchPlaceholder="Search or type a path…"
+                emptyText="Type a full path to use it."
+                contentClassName="w-80"
+                createOption={(query) =>
+                  query.startsWith("/") || query.startsWith("~")
+                    ? {
+                        key: "use-path",
+                        label: `Use “${query}”`,
+                        icon: <CornerDownLeft className="text-muted-foreground" />,
+                        onSelect: pickDir,
+                      }
+                    : null
+                }
+                actions={
+                  caps.workspace.browse
+                    ? [
+                        {
+                          key: "browse",
+                          label: "Browse folders…",
+                          icon: <FolderOpen className="text-muted-foreground" />,
+                          onSelect: () => setBrowsing(true),
+                        },
+                      ]
+                    : []
+                }
+                triggerClassName={cn(cwdError && "text-destructive")}
+                data-testid="code-cwd"
+              >
+                <FolderGit2 className="opacity-70" />
+                <span className={cn("max-w-56 truncate", cwd && monoClass)}>
+                  {cwd
+                    ? shortPath(cwd)
+                    : caps.workspace.requiresCwd
+                      ? "Pick a working directory"
+                      : `${harness.label}'s default directory`}
+                </span>
+                <ChevronDown className="opacity-50" />
+              </SearchSelect>
+            )}
+            {caps.workspace.worktrees && !project && (
               <button
                 type="button"
                 onClick={() => setWorktree((w) => !w)}
@@ -517,7 +588,7 @@ export function NewConversation({
             key={harness.id}
             draftKey={`new:${harness.id}`}
             harness={harness}
-            cwd={cwd.trim() || null}
+            cwd={project ? null : cwd.trim() || null}
             autoFocus
             placeholder={`Ask ${harness.label} to build, fix bugs, explore…${caps.workspace.findFiles ? " (@ for files)" : ""}`}
             submitLabel="Start"

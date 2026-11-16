@@ -20,7 +20,7 @@ import {
   type ThreadEvent,
   type ThreadSummary,
 } from "@tiny-agents/code/server";
-import { seenMap } from "./code.store";
+import { seenMap, threadDecorations } from "./code.store";
 import { app } from "../../app-root";
 
 type HubChange = "list" | "status";
@@ -155,15 +155,17 @@ export function createCodeHub(options: HubOptions): CodeHub {
       return out;
     },
     async list() {
-      const seen = await seenMap();
+      const [seen, decorations] = await Promise.all([seenMap(), threadDecorations()]);
       const out: ThreadSummary[] = [];
       for (const instance of byId.values()) {
         for (const thread of lists.get(instance.id) ?? []) {
           const last = seen.get(thread.id);
+          const extra = decorations.get(thread.id);
           out.push({
             ...thread,
             followed: last !== undefined,
             unread: last !== undefined && !thread.working && thread.cursor > last,
+            ...(extra ? { projectId: extra.projectId, pr: extra.pr } : {}),
           });
         }
       }

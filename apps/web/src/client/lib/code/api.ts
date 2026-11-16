@@ -66,6 +66,8 @@ export const codeApi = {
   create: (input: {
     instanceId: string;
     message: string;
+    /** Start in a project: its own worktree on a new branch (issue #297). */
+    projectId?: string;
     cwd?: string;
     model?: string;
     effort?: string;

@@ -6,12 +6,13 @@
  */
 import { logger } from "@groot/core/logger";
 import { notificationService } from "@groot/core/notification/notification.service";
-import type { HarnessInstance } from "@tiny-agents/code/server";
+import { threadIdOf, type HarnessInstance } from "@tiny-agents/code/server";
 import type { BotConversationRuntime } from "../bots/bots.conversation";
 import { submitToBot } from "../bots/bots.conversation";
 import { createCodeHub, setCodeHub } from "./code.hub";
 import { buildHarnesses } from "./code.registry";
 import { copyShelleyTables } from "./code.store";
+import { onTurnEnded, rearmReconcilers } from "./code.pulls";
 import { startCodeWatcher } from "./code.watcher";
 
 export function startCode(
@@ -31,11 +32,23 @@ export function startCode(
     },
     notify: (notification) => notificationService.notify(notification),
   });
+  // Pull requests (issue #297): a pass's turn ends here; boot re-arms every chain.
+  const offPulls = hub.onEvent(({ instance, event }) => {
+    if (event.type !== "turn_ended") return;
+    const id = threadIdOf(instance.id, event.nativeId);
+    void onTurnEnded(id, event.outcome).catch((error: unknown) =>
+      logger.warn({ error, threadId: id }, "Code: a pass's turn end failed"),
+    );
+  });
+  void rearmReconcilers()
+    .then((armed) => armed && logger.info(`Code: re-armed ${armed} pull request reconciler(s)`))
+    .catch((error: unknown) => logger.warn({ error }, "Code: could not re-arm PR reconcilers"));
   hub.start();
   if (instances.length) {
     logger.info(`Code: ${instances.map((i) => i.label).join(", ")}`);
   }
   return () => {
+    offPulls();
     stopWatcher();
     setCodeHub(undefined);
   };

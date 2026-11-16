@@ -1,4 +1,4 @@
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import {
   index,
   integer,
@@ -13,6 +13,8 @@ import {
 import { timestamps, users } from "@groot/core/database/schema";
 import { createId } from "@groot/core/utils/id.utils";
 import type { ExtractStatus } from "../../shared/machines/extraction";
+import type { AutofixStatus } from "../../shared/machines/autofix";
+import type { AutofixPassStatus } from "../../shared/machines/autofix-pass";
 import type { HandoffStatus } from "../../shared/machines/handoff";
 import type { MemoryStatus } from "../../shared/machines/memory";
 import type { RoutineRunStatus } from "../../shared/machines/routine-run";
@@ -266,12 +268,225 @@ export const codeThreads = sqliteTable(
     seenCursor: integer("seen_cursor").notNull().default(0),
     /** Driver-private JSON (e.g. Claude Code's session id). */
     data: text("data").notNull().default("{}"),
+    /** The project the thread was started in (issue #297); null for a thread without one. */
+    projectId: text("project_id").references((): AnySQLiteColumn => codeProjects.id, {
+      onDelete: "set null",
+    }),
+    /** A project thread's branch, and the base commit its worktree was cut from. */
+    branch: text("branch"),
+    baseSha: text("base_sha"),
+    /** A project thread's worktree on the sandbox, while it has one (removed on archive). */
+    worktree: text("worktree"),
+    /** Stop Auto-fix passes once the thread has cost this much (USD; where the harness reports cost). */
+    spendLimitUsd: real("spend_limit_usd"),
     createdAt: createdAt(),
     updatedAt: ms("updated_at")
       .notNull()
       .$defaultFn(() => new Date()),
   },
-  (t) => [index("code_threads_instance_idx").on(t.instanceId, t.updatedAt)],
+  (t) => [
+    index("code_threads_instance_idx").on(t.instanceId, t.updatedAt),
+    index("code_threads_project_idx").on(t.projectId),
+  ],
+);
+
+/**
+ * A Code project (issue #297 §6): one GitHub repository, its checkout on the
+ * sandbox, and the defaults and rules for threads started in it. Settings
+ * that only a few code paths read are JSON (`settings`, parsed with
+ * `projectSettings` in `code.projects.ts`).
+ */
+export const codeProjects = sqliteTable(
+  "code_projects",
+  {
+    id: id(),
+    name: text("name").notNull(),
+    repoOwner: text("repo_owner").notNull(),
+    repoName: text("repo_name").notNull(),
+    /** How the app reaches GitHub: `gh` (the CLI on the sandbox, or a vault token) or `app` (phase 6). */
+    transport: text("transport").$type<"gh" | "app">().notNull().default("gh"),
+    baseBranch: text("base_branch").notNull(),
+    /** The clone on the sandbox; worktrees live beside it. */
+    checkoutPath: text("checkout_path").notNull(),
+    /** The GitHub App installation that reaches the repository (transport `app`). */
+    installationId: integer("installation_id"),
+    /** The harness instance and model a new thread starts on. */
+    defaultInstanceId: text("default_instance_id"),
+    defaultModel: text("default_model"),
+    /** JSON: scripts override, archive on merge, protected paths, Auto-fix triggers, trusted bots. */
+    settings: text("settings").notNull().default("{}"),
+    createdAt: createdAt(),
+    updatedAt: ms("updated_at")
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (t) => [uniqueIndex("code_projects_repo_idx").on(t.repoOwner, t.repoName)],
+);
+
+/**
+ * Pull requests linked to Code threads (issue #297 §7.5): a cache of GitHub,
+ * refreshed by the reconciler, plus the thread's Auto-fix loop for it. A
+ * thread may have several over time but at most one open; a PR belongs to
+ * one thread.
+ */
+export const codePullRequests = sqliteTable(
+  "code_pull_requests",
+  {
+    id: id(),
+    /** `<instanceId>:<nativeId>`. */
+    threadId: text("thread_id").notNull(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => codeProjects.id, { onDelete: "cascade" }),
+    number: integer("number").notNull(),
+    url: text("url").notNull(),
+    title: text("title").notNull().default(""),
+    headRef: text("head_ref").notNull(),
+    headSha: text("head_sha"),
+    baseRef: text("base_ref").notNull(),
+    state: text("state").$type<"open" | "closed" | "merged">().notNull().default("open"),
+    draft: bool("draft").notNull().default(true),
+    /** Enable GitHub's native auto-merge once no pass runs (phase 6); an owner's off is sticky. */
+    autoMerge: bool("auto_merge").notNull().default(false),
+    /** The last snapshot (`PullSnapshot` JSON), what the PR tab shows. */
+    snapshot: text("snapshot"),
+    syncedAt: ms("synced_at"),
+    autofix: bool("autofix").notNull().default(false),
+    /** The Auto-fix loop (shared/machines/autofix.ts). */
+    loopStatus: text("loop_status").$type<AutofixStatus>().notNull().default("off"),
+    /** Why the loop waits on the owner, paused or switched itself off. */
+    loopReason: text("loop_reason"),
+    loopChangedAt: ms("loop_changed_at"),
+    /** The head sha when the loop last changed state. */
+    loopHeadSha: text("loop_head_sha"),
+    /** Passes in a row with no owner input (switches Auto-fix off at the limit). */
+    passesWithoutOwner: integer("passes_without_owner").notNull().default(0),
+    /** When the owner last wrote in the thread or switched Auto-fix on. */
+    ownerInputAt: ms("owner_input_at"),
+    /** The reconcile job queued for it (the chain), so a run re-arms only its own. */
+    pendingJobId: text("pending_job_id"),
+    /** When a stalled check was last reported, so it is reported once. */
+    stalledNotifiedSha: text("stalled_notified_sha"),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex("code_pull_requests_number_idx").on(t.projectId, t.number),
+    uniqueIndex("code_pull_requests_open_idx")
+      .on(t.threadId)
+      .where(sql`state = 'open'`),
+    index("code_pull_requests_thread_idx").on(t.threadId, t.createdAt),
+  ],
+);
+
+/** Comments the app posted on a linked PR (they never start a pass, whoever GitHub says wrote them). */
+export const codePrComments = sqliteTable("code_pr_comments", {
+  /** GitHub's database id of the comment. */
+  id: integer("id").primaryKey(),
+  pullId: text("pull_id")
+    .notNull()
+    .references(() => codePullRequests.id, { onDelete: "cascade" }),
+  passId: text("pass_id"),
+  createdAt: createdAt(),
+});
+
+/**
+ * Auto-fix passes (issue #297 §9.3): claimed before the harness hears
+ * anything, keyed by the state of the PR they act on, finished when the
+ * thread's turn ends.
+ */
+export const codeAutofixPasses = sqliteTable(
+  "code_autofix_passes",
+  {
+    id: id(),
+    pullId: text("pull_id")
+      .notNull()
+      .references(() => codePullRequests.id, { onDelete: "cascade" }),
+    /** checks, review, conflict, manual. */
+    trigger: text("trigger").notNull(),
+    /** Hash of the head sha and the item ids: one pass per state of the PR. */
+    stateHash: text("state_hash").notNull(),
+    /** JSON: the items the pass was asked to handle (ids, kinds, text sent). */
+    items: text("items").notNull().default("[]"),
+    /** The pass machine (shared/machines/autofix-pass.ts). */
+    status: text("status").$type<AutofixPassStatus>().notNull(),
+    /** The worktree's head when the pass was sent. */
+    startSha: text("start_sha"),
+    pushedSha: text("pushed_sha"),
+    /** The thread's cost when the pass started, and what the pass cost (where the harness reports cost). */
+    startCostUsd: real("start_cost_usd"),
+    costUsd: real("cost_usd"),
+    /** pushed, no_progress, rejected, protected_path, timed_out, diverged, send_failed. */
+    outcome: text("outcome"),
+    detail: text("detail"),
+    createdAt: createdAt(),
+    startedAt: ms("started_at"),
+    finishedAt: ms("finished_at"),
+  },
+  (t) => [
+    uniqueIndex("code_autofix_passes_hash_idx").on(t.pullId, t.stateHash),
+    index("code_autofix_passes_pull_idx").on(t.pullId, t.createdAt),
+  ],
+);
+
+/**
+ * Per-turn checkpoints of a project thread (phase 6): the worktree at each
+ * turn end, uncommitted files included, as a commit kept under a hidden ref
+ * (`refs/tiny-agents/checkpoints/…`). `seq` 0 is the thread's start.
+ */
+export const codeCheckpoints = sqliteTable(
+  "code_checkpoints",
+  {
+    id: id(),
+    threadId: text("thread_id").notNull(),
+    seq: integer("seq").notNull(),
+    sha: text("sha").notNull(),
+    /** The branch head when it was taken. */
+    headSha: text("head_sha").notNull(),
+    /** start, turn, before_revert. */
+    reason: text("reason").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("code_checkpoints_seq_idx").on(t.threadId, t.seq)],
+);
+
+/** GitHub App webhook deliveries (phase 6): the id is unique, so a redelivery is dropped. */
+export const codePrEvents = sqliteTable("code_pr_events", {
+  deliveryId: text("delivery_id").primaryKey(),
+  event: text("event").notNull(),
+  /** The linked PR the delivery was about, when one matched. */
+  pullId: text("pull_id"),
+  receivedAt: createdAt(),
+});
+
+/** Files the owner marked viewed in Changes, by content: a changed file comes back unmarked. */
+export const codeReviewViewed = sqliteTable(
+  "code_review_viewed",
+  {
+    threadId: text("thread_id").notNull(),
+    path: text("path").notNull(),
+    contentHash: text("content_hash").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.threadId, t.path] })],
+);
+
+/** Line comments drafted in Changes, sent to the agent together (`sentAt` once sent). */
+export const codeReviewDrafts = sqliteTable(
+  "code_review_drafts",
+  {
+    id: id(),
+    threadId: text("thread_id").notNull(),
+    path: text("path").notNull(),
+    side: text("side").$type<"old" | "new">().notNull().default("new"),
+    startLine: integer("start_line").notNull(),
+    endLine: integer("end_line").notNull(),
+    /** The lines commented on, quoted, so the comment still reads after they move. */
+    quote: text("quote").notNull().default(""),
+    body: text("body").notNull(),
+    createdAt: createdAt(),
+    sentAt: ms("sent_at"),
+  },
+  (t) => [index("code_review_drafts_thread_idx").on(t.threadId, t.sentAt)],
 );
 
 /**
@@ -861,6 +1076,11 @@ export type RoutineRun = typeof routineRuns.$inferSelect;
 export type ShelleyHandoff = typeof shelleyHandoffs.$inferSelect;
 export type CodeThreadRow = typeof codeThreads.$inferSelect;
 export type CodeHandoff = typeof codeHandoffs.$inferSelect;
+export type CodeProjectRow = typeof codeProjects.$inferSelect;
+export type CodePullRow = typeof codePullRequests.$inferSelect;
+export type CodeAutofixPass = typeof codeAutofixPasses.$inferSelect;
+export type CodeReviewDraft = typeof codeReviewDrafts.$inferSelect;
+export type CodeCheckpoint = typeof codeCheckpoints.$inferSelect;
 export type BotGuest = typeof botGuests.$inferSelect;
 export type ProviderRow = typeof providers.$inferSelect;
 export type ModelRowRecord = typeof models.$inferSelect;

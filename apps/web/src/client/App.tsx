@@ -155,6 +155,7 @@ export const appRoutes: RouteObject[] = [
               { path: "/code/s/:slug", element: <CodePage /> },
               { path: "/code/:conversationId", element: <CodePage /> },
               { path: "/code/:conversationId/changes", element: <CodePage /> },
+              { path: "/code/:conversationId/pr", element: <CodePage /> },
               { path: "/routines", element: <Routines /> },
               { path: "/skills", element: <SkillsPage /> },
               { path: "/skills/:id", element: <SkillsPage /> },

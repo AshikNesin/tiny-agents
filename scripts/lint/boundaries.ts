@@ -281,6 +281,22 @@ const BOUNDARY_RULES: BoundaryRule[] = [
   {
     id: "R11",
     kind: "import",
+    scope: "packages/github/**",
+    enabled: true,
+    restrict: {
+      patterns: [
+        {
+          regex:
+            "^@earendil-works/pi-durable(/|$)|^@tiny-agents/(agent|sandbox)(/|$)|(^|/)(agent|sandbox)/src(/|$)",
+          message:
+            "R11: @tiny-agents/github imports neither pi-durable, @tiny-agents/agent nor @tiny-agents/sandbox (issue #297, ADR 0022). Take an exec port from the caller instead.",
+        },
+      ],
+    },
+  },
+  {
+    id: "R11",
+    kind: "import",
     scope: "packages/sandbox/**",
     enabled: true,
     restrict: {

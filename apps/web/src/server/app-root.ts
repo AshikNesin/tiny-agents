@@ -9,6 +9,8 @@ import type { TurnBudget } from "./api/bots/bots.messaging";
 import type { BotChatEvent } from "./api/bots/bots.events";
 import type { SseStream } from "./api/bots/bots.sse";
 import type { ChatTitler } from "./api/bots/chats.title";
+import type { AppAuth } from "@tiny-agents/github";
+import type { CodeGitHub } from "./api/code/code.github";
 import type { CodeHub } from "./api/code/code.hub";
 import type { ConnectionManager } from "./api/connections/connections.manager";
 import type { HeldLiveAccess } from "./api/people/live-access";
@@ -35,6 +37,10 @@ export interface App {
   connectionManager?: ConnectionManager;
   /** The Code page's harnesses (`codeHub`); unset until boot, or with none configured. */
   codeHub?: CodeHub;
+  /** Code projects' GitHub client and sandbox git (`codeGitHub`); unset builds them from Settings → GitHub. */
+  codeGitHub?: CodeGitHub;
+  /** The GitHub App's token source for the configured app id and key (`gitHubApp`), so installation tokens are reused. */
+  codeGitHubApp?: { key: string; auth: AppAuth };
   /** Past-chat titles' side-caller (`setChatTitler`); unset in tests and faux mode. */
   chatTitler?: ChatTitler;
   /** The sandbox's SSH connections, one per endpoint (`sandboxConnection`, ADR 0013). */
