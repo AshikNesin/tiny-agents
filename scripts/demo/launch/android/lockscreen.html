@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=412, initial-scale=1" />
+    <title>Lock screen push</title>
+    <!--
+  The launch film's lock screen: a standard Android (12+) notification from the Pushover app,
+  carrying the title and message the tiny-agents server sends for a waiting vault approval on
+  Travel Planner. Rebuilt by hand: no Android source renders a lock screen. See NOTES.md.
+  One CSS px is one dp. No external requests. Fonts by name only.
+-->
+    <style>
+      :root {
+        --wall-top: #eef0f4;
+        --wall-bottom: #e1e5ec;
+        --ink: #1b1b1f;
+        --ink-soft: #44474e;
+        --card: #fbfbfe;
+        --icon: #5f6368;
+        --chip: #e6e8ee;
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      html,
+      body {
+        width: 412px;
+        height: 892px;
+        overflow: hidden;
+      }
+      body {
+        position: relative;
+        font-family: Roboto, Inter, sans-serif;
+        color: var(--ink);
+        background: linear-gradient(180deg, var(--wall-top), var(--wall-bottom));
+        -webkit-font-smoothing: antialiased;
+      }
+      svg {
+        display: block;
+      }
+
+      /* Status bar: the same plain glyphs the chat stills use, no clock (the lock screen has its own). */
+      .status {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 412px;
+        height: 36px;
+        padding: 0 24px;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 6px;
+      }
+      .padlock {
+        position: absolute;
+        left: 197px;
+        top: 44px;
+      }
+
+      .clock {
+        position: absolute;
+        left: 28px;
+        top: 84px;
+        font-size: 76px;
+        line-height: 84px;
+        font-weight: 400;
+        letter-spacing: -1.5px;
+      }
+
+      /* An Android 12+ notification, expanded (BigText): 28dp corners, 16dp padding, 24dp icon circle. */
+      .notification {
+        position: absolute;
+        left: 16px;
+        top: 232px;
+        width: 380px;
+        padding: 16px;
+        border-radius: 28px;
+        background: var(--card);
+      }
+      .head {
+        display: flex;
+        align-items: center;
+        height: 24px;
+      }
+      .app-icon {
+        flex: none;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background: var(--icon);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .app-icon i {
+        display: block;
+        width: 10px;
+        height: 10px;
+        border-radius: 3px;
+        background: var(--card);
+      }
+      .head-text {
+        margin-left: 16px;
+        flex: 1;
+        font-size: 12px;
+        line-height: 16px;
+        color: var(--ink-soft);
+        white-space: nowrap;
+      }
+      .head-text .sep {
+        margin: 0 4px;
+      }
+      .expand {
+        flex: none;
+        width: 32px;
+        height: 24px;
+        border-radius: 12px;
+        background: var(--chip);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .content {
+        margin-left: 40px;
+        margin-top: 2px;
+        padding-right: 8px;
+      }
+      .title {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 14px;
+        line-height: 20px;
+        font-weight: 500;
+        color: var(--ink);
+      }
+      .title .emoji {
+        flex: none;
+        width: 16px;
+        height: 16px;
+      }
+      .message {
+        font-size: 14px;
+        line-height: 20px;
+        color: var(--ink-soft);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="status" aria-hidden="true">
+      <svg width="16" height="16" viewBox="0 0 16 16">
+        <path d="M8 13.8 0.9 6.6a10.1 10.1 0 0 1 14.2 0Z" fill="#1b1b1f" />
+      </svg>
+      <svg width="16" height="16" viewBox="0 0 16 16"><path d="M14 2v12H2Z" fill="#1b1b1f" /></svg>
+      <svg width="10" height="16" viewBox="0 0 10 16">
+        <rect x="3" y="0" width="4" height="2.4" rx="0.8" fill="#1b1b1f" />
+        <rect x="0" y="1.6" width="10" height="14.4" rx="2" fill="#1b1b1f" />
+      </svg>
+    </div>
+
+    <svg class="padlock" width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+      <path d="M5.5 8V5.5a3.5 3.5 0 0 1 7 0V8" fill="none" stroke="#1b1b1f" stroke-width="1.6" />
+      <rect x="3.5" y="8" width="11" height="8" rx="2" fill="#1b1b1f" />
+    </svg>
+
+    <div class="clock" data-testid="lock-clock">6:42</div>
+
+    <div
+      class="notification"
+      data-testid="push-notification"
+      role="group"
+      aria-label="Pushover notification"
+    >
+      <div class="head">
+        <!-- A plain neutral app icon: not Pushover's logo. -->
+        <span class="app-icon" aria-hidden="true"><i></i></span>
+        <span class="head-text"
+          ><span data-testid="push-app">Pushover</span><span class="sep">&middot;</span
+          ><span data-testid="push-time">now</span></span
+        >
+        <span class="expand" aria-hidden="true">
+          <svg width="12" height="12" viewBox="0 0 12 12">
+            <path
+              d="M2.5 7.5 6 4l3.5 3.5"
+              fill="none"
+              stroke="#44474e"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </span>
+      </div>
+      <div class="content">
+        <!-- Title: `✋ ${bot.name} needs approval` (notifications.events.ts:134). The raised hand is
+           drawn inline so it shows without an emoji font; its text stays in aria-label. -->
+        <div class="title" data-testid="push-title" aria-label="✋ Travel Planner needs approval">
+          <svg class="emoji" viewBox="0 0 16 16" role="img" aria-label="✋">
+            <g fill="#f7c948">
+              <rect x="3.1" y="2.6" width="2.2" height="7" rx="1.1" />
+              <rect x="5.5" y="1.2" width="2.2" height="8" rx="1.1" />
+              <rect x="7.9" y="1.6" width="2.2" height="8" rx="1.1" />
+              <rect x="10.3" y="3" width="2.2" height="7" rx="1.1" />
+              <path d="M3.1 7.6h9.4v2.9a4.6 4.6 0 0 1-4.6 4.6h-.2a4.6 4.6 0 0 1-4.6-4.6Z" />
+              <rect
+                x="0.9"
+                y="7.9"
+                width="2.4"
+                height="4.8"
+                rx="1.2"
+                transform="rotate(-28 2.1 10.3)"
+              />
+            </g>
+          </svg>
+          <span>Travel Planner needs approval</span>
+        </div>
+        <!-- Message: `Wants to use ${subject} (${tool}). Open the chat to approve or deny.`
+           (notifications.events.ts:136); subject is `${vault.label} on ${host}` (approvals.ts:303). -->
+        <div class="message" data-testid="push-message">
+          Wants to use Visa ••4242 on flights.example.com (browser_fill_secret). Open the chat to
+          approve or deny.
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

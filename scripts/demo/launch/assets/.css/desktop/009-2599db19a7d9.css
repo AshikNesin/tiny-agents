@@ -1,0 +1,45 @@
+.xterm { cursor: text; position: relative; user-select: none; }
+.xterm.focus, .xterm:focus { outline: none; }
+.xterm .xterm-helpers { position: absolute; top: 0px; z-index: 5; }
+.xterm .xterm-helper-textarea { padding: 0px; border: 0px; margin: 0px; position: absolute; opacity: 0; left: -9999em; top: 0px; width: 0px; height: 0px; z-index: -5; white-space: nowrap; overflow: hidden; resize: none; }
+.xterm .composition-view { background: rgb(0, 0, 0); color: rgb(255, 255, 255); display: none; position: absolute; white-space: nowrap; z-index: 1; }
+.xterm .composition-view.active { display: block; }
+.xterm .xterm-viewport { background-color: rgb(0, 0, 0); overflow-y: scroll; cursor: default; position: absolute; inset: 0px; }
+.xterm .xterm-screen { position: relative; }
+.xterm .xterm-screen canvas { position: absolute; left: 0px; top: 0px; }
+.xterm-char-measure-element { display: inline-block; visibility: hidden; position: absolute; top: 0px; left: -9999em; line-height: normal; }
+.xterm.enable-mouse-events { cursor: default; }
+.xterm.xterm-cursor-pointer, .xterm .xterm-cursor-pointer { cursor: pointer; }
+.xterm.column-select.focus { cursor: crosshair; }
+.xterm .xterm-accessibility:not(.debug), .xterm .xterm-message { position: absolute; inset: 0px; z-index: 10; color: transparent; pointer-events: none; }
+.xterm .xterm-accessibility-tree:not(.debug) ::selection { color: transparent; }
+.xterm .xterm-accessibility-tree { font-family: monospace; user-select: text; white-space: pre; }
+.xterm .xterm-accessibility-tree > div { transform-origin: left center; width: fit-content; }
+.xterm .live-region { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+.xterm-dim { opacity: 1 !important; }
+.xterm-underline-1 { text-decoration: underline; }
+.xterm-underline-2 { text-decoration: underline double; }
+.xterm-underline-3 { text-decoration: underline wavy; }
+.xterm-underline-4 { text-decoration: underline dotted; }
+.xterm-underline-5 { text-decoration: underline dashed; }
+.xterm-overline { text-decoration: overline; }
+.xterm-overline.xterm-underline-1 { text-decoration: underline overline; }
+.xterm-overline.xterm-underline-2 { }
+.xterm-overline.xterm-underline-3 { }
+.xterm-overline.xterm-underline-4 { }
+.xterm-overline.xterm-underline-5 { }
+.xterm-strikethrough { text-decoration: line-through; }
+.xterm-screen .xterm-decoration-container .xterm-decoration { z-index: 6; position: absolute; }
+.xterm-screen .xterm-decoration-container .xterm-decoration.xterm-decoration-top-layer { z-index: 7; }
+.xterm-decoration-overview-ruler { z-index: 8; position: absolute; top: 0px; right: 0px; pointer-events: none; }
+.xterm-decoration-top { z-index: 2; position: relative; }
+.xterm .xterm-scrollable-element > .scrollbar { cursor: default; }
+.xterm .xterm-scrollable-element > .scrollbar > .scra { cursor: pointer; font-size: 11px !important; }
+.xterm .xterm-scrollable-element > .visible { opacity: 1; background: rgba(0, 0, 0, 0); transition: opacity 100ms linear; z-index: 11; }
+.xterm .xterm-scrollable-element > .invisible { opacity: 0; pointer-events: none; }
+.xterm .xterm-scrollable-element > .invisible.fade { transition: opacity 800ms linear; }
+.xterm .xterm-scrollable-element > .shadow { position: absolute; display: none; }
+.xterm .xterm-scrollable-element > .shadow.top { display: block; top: 0px; left: 3px; height: 3px; width: 100%; box-shadow: var(--vscode-scrollbar-shadow, #000) 0 6px 6px -6px inset; }
+.xterm .xterm-scrollable-element > .shadow.left { display: block; top: 3px; left: 0px; height: 100%; width: 3px; box-shadow: var(--vscode-scrollbar-shadow, #000) 6px 0 6px -6px inset; }
+.xterm .xterm-scrollable-element > .shadow.top-left-corner { display: block; top: 0px; left: 0px; height: 3px; width: 3px; }
+.xterm .xterm-scrollable-element > .shadow.top.left { box-shadow: var(--vscode-scrollbar-shadow, #000) 6px 0 6px -6px inset; }

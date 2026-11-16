@@ -62,7 +62,7 @@ await journey("yolo", async ({ page, step, proof, cleanup, api, stamp }) => {
   await step("Turn on: menu row checked, banner shown", async () => {
     await clickToggle();
     await confirm.getByRole("button", { name: "Turn on", exact: true }).click();
-    await expect(banner).toContainText("YOLO on: tools run without asking");
+    await expect(banner).toContainText("no approval needed, except vault items");
     await expectYolo(true);
   });
   await step("YOLO survives a reload (server-side, per chat)", async () => {

@@ -1,0 +1,144 @@
+<!-- scene: dur=10 -->
+<style>
+  .lyr {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    /* The app's own ground, so a swap inside a layer never shows the screen beneath it. */
+    background: oklch(0.98 0.0017 67.8);
+  }
+  .cap {
+    text-wrap: balance;
+  }
+  .lyr.over {
+    box-shadow: -18px 0 44px rgba(24, 24, 32, 0.12);
+  }
+</style>
+<div class="f-scene">
+  <div class="vp">
+    <div class="lyr l-list">
+      <div class="cam list-cam"><div class="appwin m" data-snap="mobile/list-start"></div></div>
+    </div>
+    <div class="lyr over l-chat">
+      <div class="cam chat-cam"><div class="appwin m" data-snap="mobile/codebuddy-chat"></div></div>
+    </div>
+    <div class="lyr over l-code">
+      <div class="cam code-cam">
+        <div class="appwin m st-fail" data-snap="mobile/code-running-fail"></div>
+        <div class="appwin m st-diff" data-snap="mobile/code-running-diff"></div>
+        <div class="appwin m st-pass" data-snap="mobile/code-running-pass"></div>
+        <div class="appwin m st-done" data-snap="mobile/code-done"></div>
+      </div>
+    </div>
+  </div>
+  <p class="cap c1">Hand off the bug</p>
+  <p class="cap c2">It codes on your sandbox</p>
+  <p class="cap c3">Tests pass.<br />It reports back.</p>
+  <div class="tap"></div>
+</div>
+<script>
+  Film.scene("{{id}}", {{dur}}, (S) => {
+    const { tl } = S;
+    const W = 960;
+    /** S.tap moves the dot only 0.02 s before the tap but fades it in from 0.16 s before: put it there first. */
+    const tap = (t, p) => {
+      tl.set(S.q(".tap"), { x: p.x, y: p.y }, t - 0.17);
+      S.tap(".tap", t, p);
+    };
+    const list = S.camera(".list-cam");
+    const chat = S.camera(".chat-cam");
+    const code = S.camera(".code-cam");
+    const [lList, lChat, lCode] = [".l-list", ".l-chat", ".l-code"].map(S.q);
+    const [fail, diff, pass, done] = [".st-fail", ".st-diff", ".st-pass", ".st-done"].map(S.q);
+    const union = (...r) => {
+      const x = Math.min(...r.map((a) => a.x));
+      const y = Math.min(...r.map((a) => a.y));
+      return { x, y, w: Math.max(...r.map((a) => a.x + a.w)) - x, h: Math.max(...r.map((a) => a.y + a.h)) - y };
+    };
+    list.set(list.full());
+    const full = chat.full();
+    chat.set(full);
+
+    // ── The tap on Code Buddy's row (end of the last scene) opens its chat.
+    tl.fromTo(lChat, { x: W }, { x: 0, duration: 0.4, ease: "power3.out" }, 0);
+    tl.to(lList, { x: -W * 0.25, duration: 0.4, ease: "power3.out" }, 0);
+    S.sfx(0, "whoosh", { d: 0.4 });
+
+    const items = S.qa('.l-chat [data-slot="message-scroller-item"]');
+    const card = S.q('.l-chat [data-testid="code-handoff"]');
+    const open = card.querySelector('a[data-slot="button"]') || card;
+    const cardItem = card.closest('[data-slot="message-scroller-item"]');
+    const later = items.slice(items.indexOf(cardItem) + 1);
+    const onAsk = chat.frame(union(chat.local(items[0]), chat.local(card)), { fit: 1, ay: 0.5 });
+    chat.to(0.45, onAsk, 0.55);
+    S.cap(".c1", 0.3, 2.4);
+    const onOpen = chat.frame(card, { scale: 3.0, px: 0.62, ay: 0.55 });
+    chat.to(1.3, onOpen, 0.55);
+    const pOpen = chat.point(open, 2.0);
+    tap(2.2, pOpen);
+    S.press(2.2, open);
+
+    // ── The hand-off opens the Code thread: it slides in over the chat.
+    gsap.set([diff, pass, done], { autoAlpha: 0 });
+    const blocks = (w) => [...w.querySelectorAll('[data-slot="code-block"]')];
+    const [, failOut] = blocks(fail);
+    const onFail = code.frame(failOut, { fit: 0.96, ay: 0.56 });
+    code.set(code.full());
+    tl.fromTo(lCode, { x: W }, { x: 0, duration: 0.4, ease: "power3.out" }, 2.3);
+    tl.to(lChat, { x: -W * 0.25, duration: 0.4, ease: "power3.out" }, 2.3);
+    S.sfx(2.3, "whoosh", { d: 0.4 });
+    S.cap(".c2", 2.65, 5.55);
+
+    // 1. The test fails.
+    const failLines = [...failOut.querySelectorAll('[data-slot="code-block-line"]')];
+    gsap.set(failLines, { opacity: 0 });
+    code.to(2.75, onFail, 0.5);
+    S.show(3.05, failLines, { y: 0, d: 0.12, stagger: 0.1 });
+    S.sfx(3.25, "thud");
+
+    // 2. The fix, close up.
+    const diffBlock = blocks(diff)[0];
+    const onDiff = code.frame(diffBlock, { scale: 3.0, ax: 0, px: 0, dx: 24, ay: 0.55 });
+    S.swap(3.95, fail, diff, 0.08);
+    code.to(3.9, onDiff, 0.55);
+    S.show(4.2, [...diffBlock.querySelectorAll("[data-kind]")], { y: 0, d: 0.12, stagger: 0.11 });
+    S.sfx(4.2, "type", { d: 0.7 });
+
+    // 3. The suite passes.
+    const [passCmd, passOut] = blocks(pass);
+    const onPass = code.frame(union(code.local(passCmd), code.local(passOut)), { fit: 0.96, ay: 0.55 });
+    S.swap(5.55, diff, pass, 0.08);
+    code.to(5.5, onPass, 0.55);
+    S.show(5.85, [...passOut.querySelectorAll('[data-slot="code-block-line"]')], { y: 0, d: 0.12, stagger: 0.14 });
+    S.sfx(6.0, "tick");
+    S.cap(".c3", 5.8, 9.85);
+
+    // 4. The answer, the time it took and what it cost.
+    const dItems = [...done.querySelectorAll('[data-testid="code-transcript"] > [data-slot="message-scroller-item"]')];
+    const answer = dItems[2];
+    const footer = done.querySelector('[data-testid="turn-divider"]');
+    const onDone = code.frame(union(code.local(dItems[1]), code.local(footer)), { fit: 1, ay: 0.52 });
+    gsap.set([answer, footer], { opacity: 0 });
+    S.swap(6.85, pass, done, 0.08);
+    code.to(6.8, onDone, 0.55);
+    tl.to(answer, { opacity: 1, duration: 0.01 }, 7.0);
+    S.stream(7.0, answer, 0.75);
+    S.show(7.75, footer, { y: 4 });
+    code.to(7.8, code.frame(union(code.local(answer), code.local(footer)), { scale: 3.15, ax: 0, px: 0, dx: 30, ay: 0.55 }), 0.5);
+
+    // ── Back in the chat, the reply has arrived.
+    for (const el of later) gsap.set(el, { opacity: 0 });
+    const onReport = chat.frame(union(...later.map(chat.local)), { fit: 1, ay: 0.5 });
+    tl.set(chat.el, onReport, 8.4);
+    tl.to(lCode, { x: W, duration: 0.4, ease: "power3.inOut" }, 8.4);
+    tl.to(lChat, { x: 0, duration: 0.4, ease: "power3.inOut" }, 8.4);
+    S.sfx(8.4, "whoosh", { d: 0.4 });
+    // The relayed report arrives whole; Code Buddy's own line streams after it.
+    const [relay, own] = later;
+    tl.fromTo(relay, { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.35, ease: "power3.out" }, 8.8);
+    S.sfx(8.8, "pop");
+    tl.to(own, { opacity: 1, duration: 0.01 }, 9.15);
+    S.stream(9.15, own, 0.5);
+    S.sfx(9.15, "pop");
+  });
+</script>

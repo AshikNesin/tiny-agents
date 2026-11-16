@@ -1,0 +1,71 @@
+<!-- scene: dur=6 -->
+<style></style>
+<div class="f-scene">
+  <div class="vp o-vp">
+    <div class="cam">
+      <div class="appwin" data-snap="desktop/side-researcher"></div>
+    </div>
+  </div>
+  <p class="cap c1">While you were out</p>
+  <p class="eyebrow o-brand">Tiny Agents</p>
+  <p class="cap c2">A team of AI bots</p>
+  <div class="cursor">
+    <svg viewBox="0 0 26 26">
+      <path
+        d="M5 2.5 L5 20.5 L9.6 16.4 L12.7 23.2 L15.9 21.8 L12.9 15.1 L19.2 15.1 Z"
+        fill="#111"
+        stroke="#fff"
+        stroke-width="1.5"
+        stroke-linejoin="round"
+      />
+    </svg>
+  </div>
+</div>
+<script>
+  Film.scene("{{id}}", {{dur}}, (S) => {
+    const { tl } = S;
+    const cam = S.camera(".cam");
+    const vp = S.q(".o-vp");
+    const rows = S.qa('.appwin section[aria-label="Bots"] li');
+    const row = (name) => rows.find((li) => li.querySelector("a .truncate").textContent === name);
+    const status = (name) => row(name).querySelector("a > span:last-child > *");
+    const bots = S.q('.appwin section[aria-label="Bots"]');
+
+    // The hook: the bot list alone, as a tall panel. Two jobs are already in;
+    // two more land while the caption arrives.
+    const panel = S.listPanel(cam, S.q('.appwin aside[aria-label="Sidebar"]'), bots);
+    const list = panel.cam;
+    gsap.set(vp, panel.vp);
+    cam.set(list);
+
+    const step = cam.local(rows[1]).y - cam.local(rows[0]).y;
+    const [code, travel, chief, research] = ["Code Buddy", "Travel Planner", "Chief of Staff", "Researcher"].map(row);
+    gsap.set([chief, research], { y: -2 * step });
+    gsap.set(travel, { y: -step });
+    tl.fromTo(travel, { opacity: 0, scale: 0.96 }, { opacity: 1, scale: 1, duration: 0.3, ease: "power3.out" }, 0.62);
+    tl.to([chief, research], { y: -step, duration: 0.36, ease: "power3.out" }, 0.55);
+    S.sfx(0.62, "pop", { pan: -0.2 });
+    tl.fromTo(code, { opacity: 0, scale: 0.96 }, { opacity: 1, scale: 1, duration: 0.3, ease: "power3.out" }, 1.27);
+    tl.to([travel, chief, research], { y: 0, duration: 0.36, ease: "power3.out" }, 1.2);
+    S.sfx(1.27, "pop", { pan: 0.2 });
+    for (const [name, at] of [["Travel Planner", 0.86], ["Code Buddy", 1.5]]) {
+      const mark = status(name);
+      if (mark) tl.fromTo(mark, { scale: 0 }, { scale: 1, duration: 0.3, ease: "back.out(2.4)" }, at);
+    }
+    S.cap(".c1", 0.1, 2.95);
+
+    // Pull back: the list is one side of the whole app.
+    const full = cam.full();
+    tl.to(vp, { ...panel.wide, duration: 0.95, ease: "power3.inOut" }, 3.0);
+    cam.to(3.0, full, 0.95, "power3.inOut");
+    S.sfx(3.0, "whoosh", { d: 0.9 });
+    tl.fromTo(".o-brand", { opacity: 0 }, { opacity: 1, duration: 0.3 }, 3.45);
+    S.cap(".c2", 3.4, 5.75);
+    tl.to(".o-brand", { opacity: 0, duration: 0.18 }, 5.57);
+
+    // The pointer heads for the first unread chat.
+    const cur = S.cursor();
+    const p = cam.point(code, 5.9, 0.5, 0.5);
+    cur.enter(5.1, { x: p.x + 620, y: p.y + 460 }, p, 0.8);
+  });
+</script>

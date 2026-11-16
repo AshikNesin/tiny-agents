@@ -1,0 +1,126 @@
+<!-- scene: dur=9 -->
+<style>
+  .cap {
+    text-wrap: balance;
+  }
+  .lyr {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    /* The app's own ground, so a swap inside a layer never shows the screen beneath it. */
+    background: oklch(0.98 0.0017 67.8);
+  }
+  .lyr.over {
+    box-shadow: -18px 0 44px rgba(24, 24, 32, 0.12);
+  }
+</style>
+<div class="f-scene">
+  <div class="vp">
+    <div class="lyr l-list">
+      <div class="cam list-cam"><div class="appwin m" data-snap="mobile/list-start"></div></div>
+    </div>
+    <div class="lyr over l-prev">
+      <div class="cam prev-cam"><div class="appwin m" data-snap="mobile/codebuddy-chat"></div></div>
+    </div>
+    <div class="lyr over l-chat">
+      <div class="cam chat-cam"><div class="appwin m" data-snap="mobile/travel-waiting"></div></div>
+    </div>
+    <div class="lyr over l-live">
+      <div class="cam live-cam">
+        <div class="appwin m st-live" data-snap="mobile/travel-live"></div>
+        <div class="appwin m st-drive" data-snap="mobile/travel-driving"></div>
+      </div>
+    </div>
+  </div>
+  <p class="cap c1">Runs every morning at 7</p>
+  <p class="cap c2">In its own browser</p>
+  <p class="cap c3">Take the wheel anytime</p>
+  <div class="tap"></div>
+</div>
+<script>
+  Film.scene("{{id}}", {{dur}}, (S) => {
+    const { tl } = S;
+    const W = 960;
+    const tapEl = S.q(".tap");
+    /** S.tap moves the dot only 0.02 s before the tap but fades it in from 0.16 s before: put it there first. */
+    const tap = (t, p) => {
+      tl.set(tapEl, { x: p.x, y: p.y }, t - 0.17);
+      S.tap(tapEl, t, p);
+    };
+    const union = (...r) => {
+      const x = Math.min(...r.map((a) => a.x));
+      const y = Math.min(...r.map((a) => a.y));
+      return { x, y, w: Math.max(...r.map((a) => a.x + a.w)) - x, h: Math.max(...r.map((a) => a.y + a.h)) - y };
+    };
+    const list = S.camera(".list-cam");
+    const prev = S.camera(".prev-cam");
+    const chat = S.camera(".chat-cam");
+    const live = S.camera(".live-cam");
+    const [lList, lPrev, lChat, lLive] = [".l-list", ".l-prev", ".l-chat", ".l-live"].map(S.q);
+    const [stLive, stDrive] = [".st-live", ".st-drive"].map(S.q);
+    list.set(list.full());
+    chat.set(chat.full());
+    live.set(live.full());
+    gsap.set(lList, { x: -W * 0.25 });
+    gsap.set([lChat, lLive], { x: W });
+    gsap.set(stDrive, { autoAlpha: 0 });
+
+    // ── Code Buddy's chat as the last scene left it; back to the list, where it is read now.
+    const pItems = S.qa('.l-prev [data-slot="message-scroller-item"]');
+    const pCard = S.q('.l-prev [data-testid="code-handoff"]');
+    const later = pItems.slice(pItems.indexOf(pCard.closest('[data-slot="message-scroller-item"]')) + 1);
+    prev.set(prev.frame(union(...later.map(prev.local)), { fit: 1, ay: 0.5 }));
+    const rowOf = (name) =>
+      S.qa('.l-list main section[aria-label="Bots"] li').find((li) => li.querySelector("a .truncate").textContent === name);
+    const codeMark = rowOf("Code Buddy").querySelector("a > span:last-child > *");
+    if (codeMark) gsap.set(codeMark, { opacity: 0 });
+    tl.to(lPrev, { x: W, duration: 0.4, ease: "power3.inOut" }, 0.25);
+    tl.to(lList, { x: 0, duration: 0.4, ease: "power3.inOut" }, 0.25);
+    S.sfx(0.25, "whoosh", { d: 0.4 });
+
+    // ── Travel Planner has been busy since this morning.
+    tap(0.9, list.point(rowOf("Travel Planner").querySelector("a"), 0, 0.42, 0.5));
+    tl.to(lChat, { x: 0, duration: 0.4, ease: "power3.out" }, 0.95);
+    tl.to(lList, { x: -W * 0.25, duration: 0.4, ease: "power3.out" }, 0.95);
+    S.sfx(0.95, "whoosh", { d: 0.4 });
+    S.cap(".c1", 0.2, 3.2);
+
+    const routine = S.q('.l-chat [data-testid="routine-runs"]');
+    const said = S.q('.l-chat [data-slot="reply-card"]');
+    // The run's line close up (the routine's name, done, at 07:00), then what it found.
+    const onLine = chat.frame(routine, { scale: 3.4, ay: 0.3 });
+    chat.to(1.4, onLine, 0.55);
+    S.sfx(1.9, "tick");
+    void said;
+
+    // ── What is it doing right now? The header's live view button.
+    const openLive = S.q('.l-chat button[aria-label="Open live view"]');
+    chat.to(2.35, chat.full(), 0.55);
+    tap(3.35, chat.point(openLive, 3.2));
+    S.press(3.35, openLive);
+    tl.to(lLive, { x: 0, duration: 0.4, ease: "power3.out" }, 3.4);
+    tl.to(lChat, { x: -W * 0.25, duration: 0.4, ease: "power3.out" }, 3.4);
+    S.sfx(3.4, "whoosh", { d: 0.4 });
+    S.cap(".c2", 3.55, 5.95);
+
+    // Its own browser, on the fares page it opened (app pixels of the phone screen).
+    const view = S.q('.st-live [data-testid="browser-viewport"]');
+    const v = live.local(view);
+    const fares = { x: 0, y: 200, w: 390, h: 235 };
+    const form = { x: 0, y: 440, w: 390, h: 175 };
+    live.to(4.15, live.frame(fares, { fit: 1, ay: 0.5 }), 0.7);
+    live.to(5.25, live.frame(union(fares, form), { fit: 1, ay: 0.62 }), 0.7);
+
+    // ── The stream is itself the button: a tap, and you are driving.
+    S.cap(".c3", 6.1, 8.95);
+    const field = { x: 26, y: 498, w: 337, h: 28 };
+    tap(6.2, live.point(field, 6.0));
+    S.swap(6.3, stLive, stDrive, 0.08);
+    S.sfx(6.32, "tick");
+    // Up to the header: the green frame, and Hand back beside the status.
+    const handBack = [...stDrive.querySelectorAll("button")].find((b) => b.textContent.trim() === "Hand back");
+    live.to(6.55, live.full(), 0.6);
+    live.to(7.6, live.frame(handBack, { scale: 3.3, ay: 0.06, py: 0, dy: 24 }), 0.6);
+    void v;
+  });
+</script>

@@ -1,0 +1,139 @@
+<!-- scene: dur=12 -->
+<style></style>
+<div class="f-scene">
+  <div class="vp">
+    <div class="cam">
+      <div
+        class="appwin lay-prev"
+        data-snap="desktop/codebuddy-chat"
+        data-fix="sidebar:codebuddy"
+      ></div>
+      <div
+        class="appwin lay-chat"
+        data-snap="desktop/travel-waiting"
+        data-fix="sidebar:travel; read:Code Buddy"
+      ></div>
+      <div
+        class="appwin lay-live"
+        data-snap="desktop/travel-live"
+        data-fix="sidebar:travel; read:Code Buddy"
+      ></div>
+      <div
+        class="appwin lay-drive"
+        data-snap="desktop/travel-driving"
+        data-fix="sidebar:travel; read:Code Buddy"
+      ></div>
+    </div>
+  </div>
+  <p class="cap c1">Runs every morning at 7</p>
+  <p class="cap c2">In its own browser</p>
+  <p class="cap c3">Take the wheel anytime</p>
+  <div class="cursor">
+    <svg viewBox="0 0 26 26">
+      <path
+        d="M5 2.5 L5 20.5 L9.6 16.4 L12.7 23.2 L15.9 21.8 L12.9 15.1 L19.2 15.1 Z"
+        fill="#111"
+        stroke="#fff"
+        stroke-width="1.5"
+        stroke-linejoin="round"
+      />
+    </svg>
+  </div>
+</div>
+<script>
+  Film.scene("{{id}}", {{dur}}, (S) => {
+    const { tl } = S;
+    const cam = S.camera(".cam");
+    const [prev, chat, live, drive] = [".lay-prev", ".lay-chat", ".lay-live", ".lay-drive"].map(S.q);
+    const full = cam.full();
+    cam.set(full);
+    gsap.set([chat, live, drive], { autoAlpha: 0 });
+    const rowOf = (w, name) =>
+      [...w.querySelectorAll('section[aria-label="Bots"] li')].find(
+        (li) => li.querySelector("a .truncate").textContent === name,
+      );
+    const union = (...r) => {
+      const x = Math.min(...r.map((a) => a.x));
+      const y = Math.min(...r.map((a) => a.y));
+      return {
+        x,
+        y,
+        w: Math.max(...r.map((a) => a.x + a.w)) - x,
+        h: Math.max(...r.map((a) => a.y + a.h)) - y,
+      };
+    };
+    const cardOf = (w) =>
+      [...w.querySelectorAll('[data-slot="item"]')].find((el) => el.textContent.includes("wants to fill"));
+
+    // ── Travel Planner has been busy since this morning.
+    const cur = S.cursor();
+    const pRow = cam.point(rowOf(prev, "Travel Planner"), 0);
+    cur.enter(0, { x: pRow.x + 520, y: pRow.y + 400 }, pRow, 0.5);
+    cur.click(0.5);
+    S.swap(0.55, prev, chat);
+
+    const routine = chat.querySelector('[data-testid="routine-runs"] button') || chat.querySelector('[data-testid="routine-runs"]');
+    const card = cardOf(chat);
+    const said = chat.querySelector('[data-slot="reply-card"]');
+    const onRun = cam.frame(union(cam.local(routine), cam.local(card), cam.local(said)), {
+      fit: 0.84,
+      maxScale: 2.1,
+      ay: 0.46,
+    });
+    cam.to(0.75, onRun, 0.6);
+    S.cap(".c1", 0.9, 3.45);
+
+    // ── What is it doing right now? Open the live view.
+    const openLive = chat.querySelector('button[aria-label="Open live view"]');
+    cam.to(2.35, full, 0.55);
+    cur.to(2.5, cam.point(openLive, 3.0), 0.6);
+    cur.click(3.3);
+    S.press(3.3, openLive);
+    S.swap(3.4, chat, live);
+    S.sfx(3.42, "pop");
+
+    const panel = live.querySelector('[data-testid="browser-panel"]');
+    const view = live.querySelector('[data-testid="browser-viewport"]');
+    const p = cam.local(panel);
+    const v = cam.local(view);
+    // The top of the panel: its tabs, who is driving, and the page the bot is on.
+    const k = cam.vp.w / (p.w + 16);
+    const h = cam.vp.h / k;
+    const upper = { x: p.x - 8, y: p.y, w: p.w + 16, h };
+    const lower = { x: p.x - 8, y: v.y + v.h - h, w: p.w + 16, h };
+    const onTop = cam.frame(upper, { scale: k, ax: 1, px: 1, ay: 0, py: 0 });
+    const onForm = cam.frame(lower, { scale: k, ax: 1, px: 1, ay: 1, py: 1 });
+    cam.to(3.55, onTop, 0.65);
+    S.cap(".c2", 4.2, 7.3);
+    cur.hide(3.6);
+    cam.to(5.5, onForm, 0.9);
+
+    // ── The stream itself is the button: hover it, click, and you are driving.
+    const take = live.querySelector('[data-testid="browser-takeover"]');
+    const pill = take.querySelector("span");
+    gsap.set(pill, { opacity: 0 });
+    const pTake = cam.point(pill, 7.0, 0.5, 0.5);
+    tl.set(cur.el, { x: pTake.x + 420, y: pTake.y - 330 }, 6.45);
+    tl.to(cur.el, { opacity: 1, duration: 0.12 }, 6.5);
+    cur.to(6.5, { x: pTake.x + 6, y: pTake.y + 4 }, 0.7, "power3.out");
+    tl.to(pill, { opacity: 1, duration: 0.18 }, 6.85);
+    S.cap(".c3", 7.5, 11.5);
+    cur.click(8.1);
+    S.swap(8.2, live, drive, 0.12);
+    S.sfx(8.22, "tick");
+
+    // Up to the header: "You're driving", with Hand back beside it.
+    cam.to(8.45, onTop, 0.7);
+    const row = { x: v.x + v.w * 0.35, y: v.y + v.h * 0.42 };
+    cur.to(8.5, { x: cam.vp.x + onTop.x + row.x * onTop.scale, y: cam.vp.y + onTop.y + row.y * onTop.scale }, 0.8);
+
+    // ── Close the view. The chat has one more thing: a card that is waiting.
+    const close = drive.querySelector('button[aria-label="Close live view"]');
+    cur.to(9.7, cam.point(close, 10.3), 0.6);
+    cur.click(10.4);
+    S.swap(10.5, drive, chat);
+    cur.hide(10.6);
+    const onCard = cam.frame(card, { fit: 0.62, maxScale: 2.3, ay: 0.5 });
+    cam.to(10.6, onCard, 0.75);
+  });
+</script>

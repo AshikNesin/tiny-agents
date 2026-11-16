@@ -13,6 +13,21 @@ replies, durability as a first-class property.
 
 ## Demo
 
+[![Watch the Tiny Agents film (1:16)](docs/demo/launch-poster.jpg)](docs/demo/tiny-agents-launch.mp4)
+
+**In 76 seconds:** an evening of catching up. Code Buddy handed a flaky test to
+Claude Code and reports back with the fix and its cost; Travel Planner's 7 AM
+routine found a fare in its own browser (click the stream to take control) and
+asks before paying, approved from the Android app with the card filled from the
+Vault; Chief of Staff makes a new bot on request; a friend joins a shared chat;
+then memory, a real terminal, MCP connections, any model, YOLO mode and
+one-click updates. Also cut as a [vertical video](docs/demo/tiny-agents-launch-vertical.mp4)
+and a [15-second teaser](docs/demo/tiny-agents-launch-teaser.mp4). Every screen
+is the app's own UI; see [`scripts/demo/launch/`](scripts/demo/launch/README.md)
+for how it was made and what is staged.
+
+### Earlier films
+
 [![Watch the 50-second Tiny Agents teaser](docs/demo/teaser-poster.jpg)](docs/demo/tiny-agents-teaser.mp4)
 
 **In 50 seconds:** a trip to Japan from Chennai, planned by a bot that

@@ -1,0 +1,133 @@
+<!-- scene: dur=9 -->
+<style></style>
+<div class="f-scene">
+  <div class="vp shot s1">
+    <div class="cam"><div class="appwin" data-snap="desktop/memory"></div></div>
+  </div>
+  <div class="vp shot s2">
+    <div class="cam"><div class="appwin" data-snap="desktop/terminal"></div></div>
+  </div>
+  <div class="vp shot s3">
+    <div class="cam"><div class="appwin" data-snap="desktop/connections"></div></div>
+  </div>
+  <div class="vp shot s4">
+    <div class="cam"><div class="appwin" data-snap="desktop/models"></div></div>
+  </div>
+  <div class="vp shot s5">
+    <div class="cam">
+      <div class="appwin" data-snap="desktop/yolo" data-fix="sidebar:end; active:Researcher"></div>
+    </div>
+  </div>
+  <div class="vp shot s6">
+    <div class="cam"><div class="appwin" data-snap="desktop/updates"></div></div>
+  </div>
+  <p class="eyebrow m-eyebrow">And more</p>
+  <p class="cap l1">Remembers you</p>
+  <p class="cap l2">A real terminal</p>
+  <p class="cap l3">Your tools, connected</p>
+  <p class="cap l4">Any model</p>
+  <p class="cap l5">Or let it run</p>
+  <p class="cap l6">Updates itself</p>
+</div>
+<script>
+  Film.scene("{{id}}", {{dur}}, (S) => {
+    const { tl } = S;
+    const CUT = [0, 1.5, 3.0, 4.5, 6.0, 7.5, 9.0];
+    const shots = S.qa(".shot");
+    /** The innermost element matching `sel` that holds `text`. */
+    const has = (root, sel, text) =>
+      [...root.querySelectorAll(sel)].filter((el) => el.textContent.includes(text)).pop();
+    const union = (a, b) => {
+      const x = Math.min(a.x, b.x);
+      const y = Math.min(a.y, b.y);
+      return { x, y, w: Math.max(a.x + a.w, b.x + b.w) - x, h: Math.max(a.y + a.h, b.y + b.h) - y };
+    };
+    tl.fromTo(".m-eyebrow", { opacity: 0 }, { opacity: 1, duration: 0.2 }, 0.02);
+
+    /**
+     * One shot: the whole of `target` (an element, a list of them, or a
+     * function returning a box) fitted inside the screen with even margins,
+     * cutting in 7% wide and settling. A page saved scrolled is scrolled so the
+     * target is in view first. `max` caps the zoom.
+     */
+    const shot = (i, target, max, act) => {
+      const el = shots[i];
+      const cam = S.camera(el.querySelector(".cam"));
+      const els = typeof target === "function" ? null : [].concat(target);
+      const measure = () =>
+        els ? els.map((e) => cam.local(e)).reduce(union) : cam.local(target(cam));
+      const anchor = els ? els[0] : null;
+      // The pane that scrolls this page: one saved scrolled, or the nearest that can.
+      let pane = anchor && anchor.closest("[data-st]");
+      for (let e = anchor && anchor.parentElement; !pane && e && e !== el; e = e.parentElement)
+        if (e.scrollHeight > e.clientHeight + 4 && /auto|scroll/.test(getComputedStyle(e).overflowY)) pane = e;
+      if (pane) {
+        const sc = S.scroller(pane);
+        const top = cam.local(pane).y;
+        sc.set(sc.value + measure().y - top - 24);
+      }
+      // A fixed margin of page around the target, so no edge reaches into the
+      // UI beside it. The target fills the screen's width; if it is then too
+      // tall, its top is kept and the bottom runs off, like a scrolled page.
+      const M = 20;
+      const b = measure();
+      const box = { x: b.x - M, y: b.y - M, w: b.w + 2 * M, h: b.h + 2 * M };
+      const scale = Math.min(cam.vp.w / box.w, max);
+      const fits = box.h * scale <= cam.vp.h;
+      const place = fits ? { ax: 0.5, ay: 0.5 } : { ax: 0.5, ay: 0, py: 0 };
+      const to = cam.frame(box, { scale, ...place });
+      const from = cam.frame(box, { scale: scale * 0.93, ...place });
+      cam.set(from);
+      const t = CUT[i];
+      if (i > 0) {
+        gsap.set(el, { autoAlpha: 0 });
+        tl.set(el, { autoAlpha: 1 }, t);
+        tl.set(shots[i - 1], { autoAlpha: 0 }, t);
+        S.sfx(t, "cut");
+      }
+      cam.to(t, to, 0.7, "expo.out");
+      S.cap(`.l${i + 1}`, t + 0.04, CUT[i + 1] - 0.02);
+      if (act) act(el, t);
+    };
+    const MAX = 2.2;
+
+    // Memory: Travel Planner's saved facts, header to last card.
+    const mem = shots[0].querySelector('section[aria-label="Travel Planner memories"]');
+    shot(0, mem, MAX, (el, t) => S.show(t + 0.2, [...mem.querySelectorAll("li")], { y: 8, stagger: 0.14 }));
+
+    // Terminal: the whole run, from the command to the prompt.
+    const termRows = [...shots[1].querySelectorAll(".xterm-rows > div")].filter((r) => r.textContent.trim());
+    const termBox = (cam) => {
+      const screen = cam.local(shots[1].querySelector(".xterm-screen"));
+      const rows = termRows.map((r) => cam.local(r)).reduce(union);
+      return { x: screen.x, w: screen.w, y: rows.y, h: rows.h };
+    };
+    shot(1, termBox, MAX, (el, t) => {
+      S.show(t + 0.15, termRows.slice(-3, -1), { y: 0, d: 0.1, stagger: 0.22 });
+      S.sfx(t + 0.4, "tick");
+    });
+
+    // Connections: the card of connected servers.
+    const conn = has(shots[2], '[data-slot="card"]', "Linear");
+    shot(2, [shots[2].querySelector("main h1") || conn, conn], MAX, (el, t) => S.show(t + 0.12, [...conn.querySelectorAll("li")], { y: 8, stagger: 0.1 }));
+
+    // Models: the Anthropic account with its two models.
+    const acct = shots[3].querySelector('button[aria-label="Check Anthropic · Work again"]').closest('[data-slot="card"]');
+    shot(3, acct, MAX, (el, t) => S.show(t + 0.2, [...acct.querySelectorAll("li")], { y: 8, stagger: 0.16 }));
+
+    // YOLO: the auto-approved rows, the answer, and the banner.
+    const trace = shots[4].querySelector('[data-slot="trace"]');
+    const banner = shots[4].querySelector('[data-testid="yolo-banner"]');
+    shot(4, [trace, banner], MAX, (el, t) => {
+      const rows = [...el.querySelectorAll('[data-slot="trace-collapsible-content-inner"] [data-slot="trace"]')];
+      S.show(t + 0.1, rows, { y: 6, d: 0.18, stagger: 0.16 });
+    });
+
+    // Updates: the card with the versions and Update & restart.
+    const upd = has(shots[5], '[data-slot="card"]', "Update & restart");
+    shot(5, upd, MAX, (el, t) => {
+      const btn = has(el, "button", "Update & restart");
+      tl.to(btn, { scale: 1.06, duration: 0.18, ease: "power2.out", yoyo: true, repeat: 1, transformOrigin: "50% 50%" }, t + 0.7);
+    });
+  });
+</script>

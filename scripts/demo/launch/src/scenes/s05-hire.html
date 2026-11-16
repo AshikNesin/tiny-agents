@@ -1,0 +1,115 @@
+<!-- scene: dur=9 -->
+<style></style>
+<div class="f-scene">
+  <div class="vp h-vp">
+    <div class="cam">
+      <div
+        class="appwin lay-prev"
+        data-snap="desktop/travel-approved"
+        data-fix="sidebar:travel; read:Travel Planner; read:Code Buddy"
+      ></div>
+      <div
+        class="appwin lay-ask"
+        data-snap="desktop/chief-pending"
+        data-fix="read:Travel Planner; read:Code Buddy"
+      ></div>
+      <div
+        class="appwin lay-ok"
+        data-snap="desktop/chief-approved"
+        data-fix="read:Travel Planner; read:Code Buddy"
+      ></div>
+    </div>
+  </div>
+  <p class="cap c1">Need a new teammate? Ask.</p>
+  <p class="cap c2">You approve. It joins the team.</p>
+  <div class="cursor">
+    <svg viewBox="0 0 26 26">
+      <path
+        d="M5 2.5 L5 20.5 L9.6 16.4 L12.7 23.2 L15.9 21.8 L12.9 15.1 L19.2 15.1 Z"
+        fill="#111"
+        stroke="#fff"
+        stroke-width="1.5"
+        stroke-linejoin="round"
+      />
+    </svg>
+  </div>
+</div>
+<script>
+  Film.scene("{{id}}", {{dur}}, (S) => {
+    const { tl } = S;
+    const cam = S.camera(".cam");
+    const vp = S.q(".h-vp");
+    const [prev, ask, ok] = [".lay-prev", ".lay-ask", ".lay-ok"].map(S.q);
+    const full = cam.full();
+    cam.set(full);
+    gsap.set([ask, ok], { autoAlpha: 0 });
+    const rowsOf = (w) => [...w.querySelectorAll('section[aria-label="Bots"] li')];
+    const rowOf = (w, name) => rowsOf(w).find((li) => li.querySelector("a .truncate").textContent === name);
+    const itemsOf = (w) => [...w.querySelectorAll('[data-slot="message-scroller-item"]')];
+    const union = (a, b) => {
+      const x = Math.min(a.x, b.x);
+      const y = Math.min(a.y, b.y);
+      return { x, y, w: Math.max(a.x + a.w, b.x + b.w) - x, h: Math.max(a.y + a.h, b.y + b.h) - y };
+    };
+
+    // ── Chief of Staff has something waiting.
+    const cur = S.cursor();
+    const pRow = cam.point(rowOf(prev, "Chief of Staff"), 0);
+    cur.enter(0, { x: pRow.x + 560, y: pRow.y + 380 }, pRow, 0.5);
+    cur.click(0.5);
+    S.swap(0.55, prev, ask);
+
+    // The ask and the card that answers it.
+    const card = ask.querySelector('[data-waiting^="approval"] [data-slot="item"]');
+    const approve = [...card.querySelectorAll("button")].find((b) => b.textContent.trim() === "Approve");
+    const bubble = itemsOf(ask)[0].querySelector(".bg-bubble-user");
+    const said = ask.querySelector('[data-slot="reply-card"]');
+    const onAsk = cam.frame(union(union(cam.local(bubble), cam.local(card)), cam.local(said)), {
+      fit: 0.86,
+      maxScale: 2.05,
+      ay: 0.48,
+    });
+    cam.to(0.75, onAsk, 0.6);
+    S.cap(".c1", 0.8, 3.55);
+    const onCard = cam.frame(card, { fit: 0.72, maxScale: 2.3, ay: 0.5 });
+    cam.to(2.15, onCard, 0.55);
+    cur.to(2.6, cam.point(approve, 3.2, 0.5, 0.55), 0.65);
+    cur.click(3.7);
+    S.press(3.7, approve);
+
+    // ── Approved: the bot exists.
+    S.swap(3.85, ask, ok);
+    S.sfx(3.88, "bell");
+    cur.hide(3.95);
+    const okItems = itemsOf(ok);
+    const made = ok.querySelector('[data-slot="trace"]');
+    const reply = okItems[okItems.length - 1];
+    const onDone = cam.frame(union(cam.local(made), cam.local(reply)), { fit: 0.8, maxScale: 2.05, ay: 0.46 });
+    cam.to(3.95, onDone, 0.55);
+    gsap.set(reply, { opacity: 0 });
+    tl.to(reply, { opacity: 1, duration: 0.01 }, 4.5);
+    S.stream(4.5, reply, 0.8);
+    S.cap(".c2", 4.4, 8.55);
+
+    // ── And it is in the list: the newest member of the team.
+    const bots = ok.querySelector('section[aria-label="Bots"]');
+    const panel = S.listPanel(cam, ok.querySelector('aside[aria-label="Sidebar"]'), bots);
+    const onList = panel.cam;
+    tl.to(vp, { ...panel.vp, duration: 0.7, ease: "power3.inOut" }, 5.5);
+    cam.to(5.5, onList, 0.7, "power3.inOut");
+    S.sfx(5.5, "whoosh", { d: 0.7 });
+    const rows = rowsOf(ok);
+    const fresh = rowOf(ok, "Expense Tracker");
+    const below = rows.slice(rows.indexOf(fresh) + 1);
+    const step = cam.local(rows[2]).y - cam.local(rows[1]).y;
+    const gap = cam.local(below[0]).y - cam.local(fresh).y;
+    gsap.set(below, { y: -gap });
+    tl.to(below, { y: 0, duration: 0.4, ease: "power3.out" }, 6.25);
+    tl.fromTo(fresh, { opacity: 0, scale: 0.94 }, { opacity: 1, scale: 1, duration: 0.34, ease: "power3.out" }, 6.35);
+    S.sfx(6.38, "pop");
+    void step;
+
+    tl.to(vp, { ...panel.wide, duration: 0.75, ease: "power3.inOut" }, 8.2);
+    cam.to(8.2, full, 0.75, "power3.inOut");
+  });
+</script>

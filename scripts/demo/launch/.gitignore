@@ -1,0 +1,16 @@
+# Built by tools/build.mjs from src/ and snap/: one HyperFrames project per cut
+/.film/
+# Built by tools/audio.sh from the cue sheets
+/assets/audio/
+# Comparison screenshots written beside each snapshot
+/snap/**/*.png
+# HyperFrames working files and renders
+/.hyperframes/
+/renders/
+/boards/
+/snapshots/
+.verify-*.html
+# Joined from assets/.css/<mode>/ by tools/snaplib.mjs and tools/build.mjs
+/assets/app.*.css
+/assets/vendor/
+/.work/

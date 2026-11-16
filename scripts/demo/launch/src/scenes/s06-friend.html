@@ -1,0 +1,153 @@
+<!-- scene: dur=7 -->
+<style>
+  .f-vp2 {
+    top: 611px !important;
+    height: 415px !important;
+  }
+  .who {
+    position: absolute;
+    right: 1736px;
+    z-index: 25;
+    padding: 7px 16px 8px;
+    border-radius: 999px;
+    background: var(--f-ink);
+    color: #fff;
+    font-size: 28px;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+    opacity: 0;
+  }
+  .who.w1 {
+    top: 356px;
+  }
+  .who.w2 {
+    top: 796px;
+  }
+</style>
+<div class="f-scene">
+  <div class="vp f-vp1">
+    <div class="cam cam1">
+      <div
+        class="appwin lay-prev"
+        data-snap="desktop/chief-approved"
+        data-fix="read:Travel Planner; read:Code Buddy"
+      ></div>
+      <div
+        class="appwin lay-chat"
+        data-snap="desktop/travel-shared-ashik"
+        data-fix="sidebar:end; active:Travel Planner"
+      ></div>
+    </div>
+  </div>
+  <div class="vp f-vp2">
+    <div class="cam cam2">
+      <div class="appwin lay-guest" data-snap="desktop/travel-shared-sonaal"></div>
+    </div>
+  </div>
+  <div class="who w1">Ashik</div>
+  <div class="who w2">Sonaal</div>
+  <p class="cap c1">Bring a friend into the chat</p>
+  <p class="cap c2">One chat, everyone live</p>
+  <div class="cursor">
+    <svg viewBox="0 0 26 26">
+      <path
+        d="M5 2.5 L5 20.5 L9.6 16.4 L12.7 23.2 L15.9 21.8 L12.9 15.1 L19.2 15.1 Z"
+        fill="#111"
+        stroke="#fff"
+        stroke-width="1.5"
+        stroke-linejoin="round"
+      />
+    </svg>
+  </div>
+</div>
+<script>
+  Film.scene("{{id}}", {{dur}}, (S) => {
+    const { tl } = S;
+    const SPLIT_H = 415;
+    const [prev, chat, guest] = [".lay-prev", ".lay-chat", ".lay-guest"].map(S.q);
+    const vp1 = S.q(".f-vp1");
+    const vp2 = S.q(".f-vp2");
+    const cam = S.camera(".cam1");
+    const cam2 = S.camera(".cam2");
+    const full = cam.full();
+    cam.set(full);
+    gsap.set(chat, { autoAlpha: 0 });
+    const rowOf = (w, name) =>
+      [...w.querySelectorAll('section[aria-label="Bots"] li')].find(
+        (li) => li.querySelector("a .truncate").textContent === name,
+      );
+    const itemsOf = (w) => [...w.querySelectorAll('[data-slot="message-scroller-item"]')];
+    const union = (...r) => {
+      const x = Math.min(...r.map((a) => a.x));
+      const y = Math.min(...r.map((a) => a.y));
+      return { x, y, w: Math.max(...r.map((a) => a.x + a.w)) - x, h: Math.max(...r.map((a) => a.y + a.h)) - y };
+    };
+
+    // ── Back to Travel Planner. The trip is booked; time to tell Sonaal.
+    const cur = S.cursor();
+    const pRow = cam.point(rowOf(prev, "Travel Planner"), 0);
+    cur.enter(0, { x: pRow.x + 540, y: pRow.y + 360 }, pRow, 0.42);
+    cur.click(0.42);
+    S.swap(0.47, prev, chat);
+
+    // The three messages of the shared exchange: Ashik's, Sonaal's, the bot's.
+    const mine = itemsOf(chat).slice(-3);
+    const theirs = itemsOf(guest).slice(-3);
+    for (const el of [...mine, ...theirs]) gsap.set(el, { opacity: 0 });
+    const box = chat.querySelector("textarea");
+    const composer = box.closest("form") || box.parentElement.parentElement;
+    const send = [...composer.querySelectorAll("button")].pop();
+    const text = mine[0].querySelector("p")?.textContent ?? "Sonaal, we're booked for Friday 6:15!";
+
+    // Close on the end of the chat and the message box, and type.
+    const lane = union(cam.local(mine[0]), cam.local(composer));
+    const onType = cam.frame(lane, { fit: 0.92, maxScale: 2.0, ay: 1, py: 1, dy: -26 });
+    cam.to(0.62, onType, 0.55);
+    S.cap(".c1", 0.7, 3.25);
+    const typed = S.type(1.2, box, text, { cps: 34 });
+    cur.to(typed - 0.35, cam.point(send, typed + 0.2), 0.5);
+    cur.click(typed + 0.25);
+    const sent = typed + 0.32;
+    tl.set(box, { value: "" }, sent);
+    tl.to(mine[0], { opacity: 1, duration: 0.14 }, sent);
+    tl.fromTo(mine[0], { y: 16 }, { y: 0, duration: 0.3, ease: "power3.out" }, sent);
+    S.sfx(sent, "pop", { pan: -0.3 });
+    tl.set(theirs[0], { opacity: 1 }, sent);
+    cur.hide(sent + 0.2);
+
+    // ── Sonaal has the same chat open. Split the screen: one conversation, two people.
+    const split = 3.05;
+    // Measured on the words, not on the rows: a row carries room for its hover controls.
+    const words = (c, list) => union(...list.flatMap((el) => [...el.querySelectorAll("p, span")]).map((el) => c.local(el)));
+    const thread = words(cam, mine);
+    const guestThread = words(cam2, theirs);
+    // One scale for both halves: wide enough to read, short enough that neither thread is cut.
+    const k = Math.min(
+      (cam.vp.w * 0.88) / thread.w,
+      (SPLIT_H - 60) / thread.h,
+      (SPLIT_H - 60) / guestThread.h,
+      1.9,
+    );
+    const onThread = {
+      scale: k,
+      x: cam.vp.w / 2 - (thread.x + thread.w / 2) * k,
+      y: SPLIT_H / 2 - (thread.y + thread.h / 2) * k,
+    };
+    tl.to(vp1, { height: SPLIT_H, duration: 0.6, ease: "power3.inOut" }, split);
+    cam.to(split, onThread, 0.6, "power3.inOut");
+    cam2.set(cam2.frame(guestThread, { scale: k, ay: 0.5 }));
+    tl.fromTo(vp2, { y: 520 }, { y: 0, duration: 0.6, ease: "expo.out" }, split + 0.1);
+    S.sfx(split, "whoosh", { d: 0.6 });
+    S.show(split + 0.45, ".who", { y: -6, d: 0.3, stagger: 0.1 });
+    S.cap(".c2", 3.5, 6.85);
+
+    // Sonaal answers; both screens get it at once. Then the bot, once, for both.
+    for (const [list, pan] of [[mine, -0.3], [theirs, 0.3]]) {
+      tl.to(list[1], { opacity: 1, duration: 0.14 }, 4.15);
+      tl.fromTo(list[1], { y: 16 }, { y: 0, duration: 0.3, ease: "power3.out" }, 4.15);
+      S.sfx(4.15, "pop", { pan });
+      tl.to(list[2], { opacity: 1, duration: 0.01 }, 5.05);
+      S.stream(5.05, list[2], 0.7);
+    }
+  });
+</script>
