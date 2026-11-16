@@ -25,6 +25,7 @@ import type {
   ReviewFile,
   ThreadPullsView,
 } from "../../../../apps/web/src/shared/api/code";
+import type { SideCallRequest } from "../../../../apps/web/src/server/api/bots/side-call";
 import { fakeHarness, type FakeHarness } from "../fake-harness";
 import { bareRepo, localExec, sh, type LocalExec } from "./local-exec";
 import { fakeGitHub, type FakeGitHub } from "./fake-github";
@@ -92,7 +93,7 @@ beforeEach(async () => {
 
 afterEach(() => {
   setCodeHub(undefined);
-  installAppForTests({ codeGitHub: undefined });
+  installAppForTests({ codeGitHub: undefined, codeBranchNamer: undefined });
   local.cleanup();
 });
 
@@ -170,7 +171,7 @@ describe("projects", () => {
   it("starts a thread in its own worktree on a new branch, telling the agent not to push", async () => {
     const project = await newProject();
     const thread = await newThread(project.id);
-    expect(thread.branch).toMatch(/^ta\/fix-the-login-flow-[0-9a-f]{6}$/);
+    expect(thread.branch).toBe("ta/fix-login-flow");
     expect(existsSync(join(thread.worktree, "README.md"))).toBe(true);
     const created = harness.created[0]!;
     expect(created.cwd).toBe(thread.worktree);
@@ -179,6 +180,43 @@ describe("projects", () => {
     expect(String(created.message).endsWith("Fix the login flow")).toBe(true);
     const list = await call<Array<{ id: string; projectId?: string }>>("GET", "/threads");
     expect(list.body.data?.find((t) => t.id === thread.id)?.projectId).toBe(project.id);
+  });
+});
+
+describe("branch names", () => {
+  const task =
+    "Can you please fix the login flow when users sign in with Google? It 500s on the callback.";
+
+  it("names the branch for the task, short, and numbers a repeat", async () => {
+    const project = await newProject();
+    expect((await newThread(project.id, task)).branch).toBe("ta/fix-login-flow-users");
+    expect((await newThread(project.id, task)).branch).toBe("ta/fix-login-flow-users-2");
+  });
+
+  it("asks the naming model what the task is about, and keeps its answer clean", async () => {
+    const asked: SideCallRequest[] = [];
+    installAppForTests({
+      codeBranchNamer: {
+        sideCaller: {
+          complete: async (request) => {
+            asked.push(request);
+            return "Branch: `fix/google-callback`";
+          },
+        },
+      },
+    });
+    const project = await newProject();
+    expect((await newThread(project.id, task)).branch).toBe("ta/fix-google-callback");
+    expect(asked[0]?.role).toBe("chat_title");
+    expect(asked[0]?.user).toContain("It 500s on the callback.");
+  });
+
+  it("falls back to the task's own words when the model gives no usable name", async () => {
+    installAppForTests({
+      codeBranchNamer: { sideCaller: { complete: async () => undefined } },
+    });
+    const project = await newProject();
+    expect((await newThread(project.id, task)).branch).toBe("ta/fix-login-flow-users");
   });
 });
 

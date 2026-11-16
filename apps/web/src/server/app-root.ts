@@ -11,6 +11,7 @@ import type { SseStream } from "./api/bots/bots.sse";
 import type { ChatTitler } from "./api/bots/chats.title";
 import type { AppAuth } from "@tiny-agents/github";
 import type { CodeGitHub } from "./api/code/code.github";
+import type { CodeBranchNamer } from "./api/code/code.projects";
 import type { CodeHub } from "./api/code/code.hub";
 import type { ConnectionManager } from "./api/connections/connections.manager";
 import type { HeldLiveAccess } from "./api/people/live-access";
@@ -43,6 +44,8 @@ export interface App {
   codeGitHubApp?: { key: string; auth: AppAuth };
   /** Past-chat titles' side-caller (`setChatTitler`); unset in tests and faux mode. */
   chatTitler?: ChatTitler;
+  /** Names a project thread's branch from its task (`setCodeBranchNamer`); unset in tests and faux mode. */
+  codeBranchNamer?: CodeBranchNamer;
   /** The sandbox's SSH connections, one per endpoint (`sandboxConnection`, ADR 0013). */
   sandboxConnections: Map<string, SandboxConnection>;
   /** The sandbox's pinned host keys, kept in KV (`sandbox-host.ts`). */

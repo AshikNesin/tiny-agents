@@ -19,8 +19,12 @@ a thread to a repository and a branch of its own.
   a default harness and model, scripts and the Auto-fix rules. Creating one
   checks that the sandbox has `git` (and `gh` unless a token is set, ADR 0022) and that the credential reaches the repository, then clones it.
 - **A thread started in a project gets its own worktree** on a new branch
-  `ta/<slug>-<6 hex>`, cut from the freshly fetched base branch (or on an
-  existing branch, such as a PR's head). The app passes the worktree as the
+  `ta/<slug>`, cut from the freshly fetched base branch (or on an
+  existing branch, such as a PR's head). The slug says what the task does,
+  named by a side-call on the `chat_title` role, or from the task's words
+  without filler when there is no model; a taken name gets `-2`, `-3`.
+  (Amended: it was the prompt's first 40 characters plus 6 random hex,
+  which read as noise in GitHub's branch list and PR heads.) The app passes the worktree as the
   thread's `cwd`, so this works for every harness whose `cwd` is on the
   sandbox without a driver change. `code_threads` gains `project_id`,
   `branch`, `base_sha` and `worktree`.
