@@ -10,13 +10,14 @@ npx serve site        # or any static file server; open the printed URL
 Deploy the folder as-is to any static host (Cloudflare Pages, Netlify, GitHub
 Pages). Nothing in it depends on the app.
 
-| Path                         | What it is                                                |
-| ---------------------------- | --------------------------------------------------------- |
-| `index.html`                 | The page; works down to 360px wide                        |
-| `media/tiny-agents-demo.mp4` | Web encode of `docs/demo/tiny-agents-launch.mp4` (7.7 MB) |
-| `media/demo-poster.jpg`      | Poster frame from the film (2.4 s, the bot list)          |
-| `assets/demos.{js,css}`      | Built "How it works" demos (from `demos/`, committed)     |
-| `demos/`                     | Source of those demos: React + the Stageshow kit          |
+| Path                         | What it is                                                        |
+| ---------------------------- | ----------------------------------------------------------------- |
+| `index.html`                 | The page; works down to 360px wide                                |
+| `media/tiny-agents-demo.mp4` | Web encode of `docs/demo/tiny-agents-launch.mp4` (7.7 MB)         |
+| `media/demo-poster.jpg`      | Poster frame from the film (2.4 s, the bot list)                  |
+| `media/og.png`               | Link preview image, 1200x630 (`scripts/demo/launch/tools/og.mjs`) |
+| `assets/demos.{js,css}`      | Built "How it works" demos (from `demos/`, committed)             |
+| `demos/`                     | Source of those demos: React + the Stageshow kit                  |
 
 The media is refreshed by `scripts/demo/launch/render.sh` whenever it renders the
 film into `docs/demo/` (see [the film's README](../scripts/demo/launch/README.md)).
