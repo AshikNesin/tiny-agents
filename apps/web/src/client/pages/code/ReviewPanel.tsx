@@ -13,6 +13,7 @@ import {
   ChevronLeft,
   ChevronRight,
   FileDiff as FileDiffIcon,
+  Maximize2,
   PanelLeft,
   RefreshCw,
   RotateCcw,
@@ -59,6 +60,7 @@ export function ReviewPanel({
   baseBranch,
   refreshKey,
   onClose,
+  onExpand,
   onOtherScopes,
   commenting,
 }: {
@@ -66,6 +68,8 @@ export function ReviewPanel({
   baseBranch: string;
   refreshKey: unknown;
   onClose(): void;
+  /** Show this at full width on the thread's Review page. */
+  onExpand?: () => void;
   /** The thread's line comments: absent, the diff takes none. */
   commenting?: ThreadCommenting;
   /** Uncommitted changes or one commit, from the harness (when it serves diffs). */
@@ -303,6 +307,18 @@ export function ReviewPanel({
         >
           <RefreshCw />
         </Button>
+        {onExpand && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={onExpand}
+            aria-label="Open as a page"
+            title="Open as a page"
+            className="text-muted-foreground"
+          >
+            <Maximize2 />
+          </Button>
+        )}
         <Button
           variant="ghost"
           size="icon-sm"

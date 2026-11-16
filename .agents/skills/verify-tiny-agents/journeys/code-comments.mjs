@@ -62,7 +62,9 @@ await journey(
             .poll(
               async () => {
                 const left = [...(await threads()), ...(await threads("archived"))];
-                for (const t of left) await api.delete(`/code/threads/${encodeURIComponent(t.id)}`);
+                await Promise.all(
+                  left.map((t) => api.delete(`/code/threads/${encodeURIComponent(t.id)}`)),
+                );
                 return left.length;
               },
               { timeout: 30_000, intervals: [2_000] },
@@ -137,6 +139,32 @@ await journey(
       expect(await api.get(`/code/threads/${encodeURIComponent(id)}/review/drafts`)).toEqual([]);
     });
     await proof("comment-sent");
+
+    await step("Open as a page: the Review page shows the changes full width", async () => {
+      await changes.getByRole("button", { name: "Open as a page" }).click();
+      await expect(page).toHaveURL(/\/code\/shelley%3A[^/]+\/review$/);
+      const review = page.getByTestId("code-review-page");
+      await expect(review.getByRole("tab", { name: "Changes" })).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
+      await expect(review.getByTestId("code-file")).toHaveCount(1);
+      await expect(transcript).toHaveCount(0);
+      // Comments work here too, and wait in the tray at the bottom.
+      await review.getByText(`"${stamp}"`, { exact: false }).hover();
+      await review.getByRole("button", { name: "Comment on line 30" }).click();
+      await review
+        .getByRole("textbox", { name: "Comment on src/app.ts line 30" })
+        .fill(`From the review page (${stamp})`);
+      await review.getByRole("button", { name: "Comment", exact: true }).click();
+      await expect(review.getByRole("region", { name: "Comments for the agent" })).toContainText(
+        "1 comment goes with your next message",
+      );
+      await proof("review-page");
+      await review.getByRole("link", { name: "Back to the thread" }).click();
+      await expect(transcript).toBeVisible();
+      await expect(tray).toContainText("1 comment goes with your next message");
+    });
 
     await step("Hide sidebar folds the thread list away; Show sidebar brings it back", async () => {
       const sidebar = page.getByRole("complementary", { name: "Threads", includeHidden: true });

@@ -10,6 +10,8 @@
  * screens (the list steps aside for Changes until 2xl, and Hide sidebar or ⌘B
  * folds it away, remembered in this browser); one column at a time
  * on phones (`/code` → `/code/new` or `/code/:id` → `/code/:id/changes`).
+ * `/code/:id/review` shows the same Changes and Pull request at full width
+ * (each side pane's Open as a page goes there).
  * Projects and GitHub are settings pages of their own (`/code/settings`).
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -29,7 +31,13 @@ import { CommandPaletteTrigger } from "@groot/shell/components/CommandPalette";
 import { useShellConfig } from "@groot/shell/lib/shell-config";
 import { Spinner } from "../../components/ui/spinner";
 import { errorMessage } from "../../lib/errors";
-import { codeApi, instanceOf, normalizeThreadId, threadPath } from "../../lib/code/api";
+import {
+  codeApi,
+  instanceOf,
+  normalizeThreadId,
+  threadPath,
+  type HarnessInfo,
+} from "../../lib/code/api";
 import { useProjects } from "../../lib/code/projects";
 import { harnessOf, useCodeStore } from "../../store/code";
 import { ChangesPanel } from "./ChangesPanel";
@@ -38,6 +46,7 @@ import { useLiveChanges } from "../../lib/code/use-live-changes";
 import { useThreadCommenting } from "../../lib/code/comments";
 import { PullPanel } from "./PullPanel";
 import { ReviewPanel } from "./ReviewPanel";
+import { ReviewPage, type ReviewTab } from "./ReviewPage";
 import { ConversationList } from "./ConversationList";
 import { ConversationView } from "./ConversationView";
 import { NewConversation } from "./NewConversation";
@@ -50,6 +59,67 @@ function readSidebar(): boolean {
   } catch {
     return true;
   }
+}
+
+/** The thread list on wide screens (phones show it as its own screen), remembered here. */
+function useSidebar(): [boolean, () => void] {
+  const [open, setOpen] = useState(readSidebar);
+  const toggle = useCallback(() => setOpen((shown) => !shown), []);
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(SIDEBAR_KEY, open ? "open" : "closed");
+    } catch {
+      // not remembered in private mode
+    }
+  }, [open]);
+  return [open, toggle];
+}
+
+/** Back from GitHub's App setup: say how it went and open GitHub settings for the next step. */
+function useGitHubSetupResult(result: string | null, reloadProjects: () => void) {
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (!result) return;
+    if (result === "created") {
+      toast.success("GitHub App created. Install it on the repositories Code should reach.");
+    } else if (result === "installed") {
+      toast.success("GitHub App installed. Its repositories are ready for projects.");
+    } else {
+      toast.error("GitHub could not finish the App setup. Start it again from Projects.");
+    }
+    reloadProjects();
+    navigate("/code/settings/github", { replace: true });
+  }, [result, reloadProjects, navigate]);
+}
+
+/** ⌘B folds the sidebar, ⌘. stops the agent, ⌘⇧D toggles Changes. */
+function useCodeShortcuts(
+  threadId: string | undefined,
+  toggleChanges: () => void,
+  toggleSidebar: () => void,
+) {
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey)) return;
+      if (!event.shiftKey && !event.altKey && event.key.toLowerCase() === "b") {
+        event.preventDefault();
+        toggleSidebar();
+        return;
+      }
+      if (!threadId) return;
+      if (event.key === ".") {
+        event.preventDefault();
+        codeApi
+          .interrupt(threadId)
+          .catch((error: unknown) => toast.error(errorMessage(error, "Could not stop it.")));
+      } else if (event.shiftKey && event.key.toLowerCase() === "d") {
+        event.preventDefault();
+        toggleChanges();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [threadId, toggleChanges, toggleSidebar]);
 }
 
 function SlugRedirect({ slug }: { slug: string }) {
@@ -79,41 +149,19 @@ export function CodePage() {
   const statuses = useCodeStore((s) => s.statuses);
   const threads = useCodeStore((s) => s.threads);
   const [insert, setInsert] = useState<{ text: string; nonce: number } | null>(null);
-  // The thread list on wide screens (phones show it as its own screen).
-  const [sidebarOpen, setSidebarOpen] = useState(readSidebar);
-  const toggleSidebar = useCallback(() => {
-    setSidebarOpen((open) => !open);
-  }, []);
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(SIDEBAR_KEY, sidebarOpen ? "open" : "closed");
-    } catch {
-      // not remembered in private mode
-    }
-  }, [sidebarOpen]);
+  const [sidebarOpen, toggleSidebar] = useSidebar();
   // The open thread's directory, for Changes even when it is not in the
   // active list (archived, or not in the list yet).
   const [viewCwd, setViewCwd] = useState<string | null>(null);
   const threadId = rawId ? normalizeThreadId(decodeURIComponent(rawId)) : undefined;
   const changesOpen = Boolean(threadId) && pathname.endsWith("/changes");
   const prOpen = Boolean(threadId) && pathname.endsWith("/pr");
+  const reviewOpen = Boolean(threadId) && pathname.endsWith("/review");
   const { projects, reload: reloadProjects } = useProjects();
   const inSettings = pathname === "/code/settings" || pathname.startsWith("/code/settings/");
-  // Back from GitHub's App setup: say how it went and open GitHub settings for the next step.
   const [searchParams] = useSearchParams();
-  const githubResult = searchParams.get("github");
-  useEffect(() => {
-    if (!githubResult) return;
-    if (githubResult === "created") {
-      toast.success("GitHub App created. Install it on the repositories Code should reach.");
-    } else if (githubResult === "installed") {
-      toast.success("GitHub App installed. Its repositories are ready for projects.");
-    } else {
-      toast.error("GitHub could not finish the App setup. Start it again from Projects.");
-    }
-    reloadProjects();
-    navigate("/code/settings/github", { replace: true });
-  }, [githubResult, reloadProjects, navigate]);
+  useGitHubSetupResult(searchParams.get("github"), reloadProjects);
+  const reviewTab: ReviewTab = searchParams.get("tab") === "pr" ? "pr" : "changes";
   // A project thread's Changes default to everything since its base branch.
   const [reviewScope, setReviewScope] = useState<"base" | "harness">("base");
   // `/code/new` is the new-thread screen on phones (`/code` is the list there).
@@ -123,7 +171,11 @@ export function CodePage() {
   const cwd = row?.cwd ?? viewCwd;
   // While Changes is open the server pushes a version each time the files move;
   // where it cannot watch them, the panels re-read on transcript activity.
-  const changeVersion = useLiveChanges(threadId ?? null, cwd ?? null, changesOpen);
+  const changeVersion = useLiveChanges(
+    threadId ?? null,
+    cwd ?? null,
+    changesOpen || (reviewOpen && reviewTab === "changes"),
+  );
   const changesKey =
     changeVersion === null
       ? `${row?.working}:${row?.cursor}`
@@ -163,58 +215,10 @@ export function CodePage() {
   const project = row?.projectId ? projects?.find((p) => p.id === row.projectId) : undefined;
   const sideOpen = changesOpen || prOpen;
 
-  // ⌘B folds the sidebar, ⌘. stops the agent, ⌘⇧D toggles Changes.
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (!(event.metaKey || event.ctrlKey)) return;
-      if (!event.shiftKey && !event.altKey && event.key.toLowerCase() === "b") {
-        event.preventDefault();
-        toggleSidebar();
-        return;
-      }
-      if (!threadId) return;
-      if (event.key === ".") {
-        event.preventDefault();
-        codeApi
-          .interrupt(threadId)
-          .catch((error: unknown) => toast.error(errorMessage(error, "Could not stop it.")));
-      } else if (event.shiftKey && event.key.toLowerCase() === "d") {
-        event.preventDefault();
-        toggleChanges();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [threadId, toggleChanges, toggleSidebar]);
+  useCodeShortcuts(threadId, toggleChanges, toggleSidebar);
 
   if (slug) return <SlugRedirect slug={slug} />;
-  if (harnessList !== null && harnessList.length === 0) {
-    return (
-      <div className="flex h-dvh min-h-0 flex-col">
-        <CodeHeader brand={brand} />
-        <div className="mx-auto max-w-xl p-6">
-          <EmptyState
-            icon={Code2}
-            title="No coding agent is connected"
-            description={
-              <>
-                Set <code className={monoClass}>SHELLEY_URL</code> to your Shelley server (for
-                example <code className={monoClass}>http://my-vm:9000</code> over Tailscale) and
-                restart, or add the Claude plan in{" "}
-                <Link
-                  to="/settings/models"
-                  className="text-foreground underline underline-offset-2"
-                >
-                  Settings → Models
-                </Link>
-                . See docs/features/code.md.
-              </>
-            }
-          />
-        </div>
-      </div>
-    );
-  }
+  if (harnessList !== null && harnessList.length === 0) return <NotConfigured brand={brand} />;
   if (harnessList === null) {
     return (
       <div className="flex h-dvh items-center justify-center">
@@ -222,11 +226,69 @@ export function CodePage() {
       </div>
     );
   }
-  if ((pathname.endsWith("/changes") || pathname.endsWith("/pr")) && !threadId) {
+  if (
+    (pathname.endsWith("/changes") || pathname.endsWith("/pr") || pathname.endsWith("/review")) &&
+    !threadId
+  ) {
     return <Navigate to="/code" replace />;
   }
 
   const offline = harnesses.filter((h) => h.status.state !== "connected");
+
+  // The Changes and Pull request panels, for a side pane or the Review page.
+  const openPage = (tab: ReviewTab) =>
+    threadId && navigate(threadPath(threadId, `/review${tab === "pr" ? "?tab=pr" : ""}`));
+  const pullPanel = (onClose: () => void, page: boolean) =>
+    threadId ? (
+      <PullPanel
+        threadId={threadId}
+        refreshKey={`${row?.working}:${row?.cursor}:${row?.pr?.loop}`}
+        onClose={onClose}
+        onExpand={page ? undefined : () => openPage("pr")}
+        onAttach={(text) => {
+          setInsert({ text, nonce: Date.now() });
+          // The composer is on the thread screen (on phones, and from the Review page).
+          if (page || window.matchMedia("(max-width: 1023px)").matches)
+            navigate(threadPath(threadId));
+        }}
+      />
+    ) : null;
+  const changesPanel = (onClose: () => void, page: boolean) => {
+    if (!threadId) return null;
+    if (project && reviewScope === "base") {
+      return (
+        <ReviewPanel
+          threadId={threadId}
+          baseBranch={project.baseBranch}
+          refreshKey={changesKey}
+          onClose={onClose}
+          onExpand={page ? undefined : () => openPage("changes")}
+          commenting={commenting}
+          onOtherScopes={
+            harness?.capabilities.workspace.diffs ? () => setReviewScope("harness") : undefined
+          }
+        />
+      );
+    }
+    if (!harness || !cwd || !harness.capabilities.workspace.diffs) return null;
+    return (
+      <ChangesPanel
+        instanceId={harness.id}
+        cwd={cwd}
+        refreshKey={changesKey}
+        onClose={() => {
+          setReviewScope("base");
+          onClose();
+        }}
+        onExpand={page ? undefined : () => openPage("changes")}
+        commenting={commenting}
+      />
+    );
+  };
+  const sidePane = "border-border flex w-full min-w-0 flex-col lg:w-[48%] lg:max-w-3xl lg:border-l";
+  const backToThread = () => threadId && navigate(threadPath(threadId));
+  const sidePull = prOpen ? pullPanel(togglePr, false) : null;
+  const sideChanges = changesOpen ? changesPanel(toggleChanges, false) : null;
 
   return (
     <div className="flex h-dvh min-h-0 flex-col">
@@ -265,30 +327,7 @@ export function CodePage() {
             activeId={threadId}
             projects={projects}
           />
-          {offline.map((h) => (
-            <div
-              key={h.id}
-              className={cn(
-                "border-border flex items-center gap-2 border-t px-4 py-1.5 text-xs",
-                h.status.state === "reconnecting" ? "text-warning" : "text-muted-foreground",
-              )}
-              role="status"
-              data-testid="code-connection"
-            >
-              {h.status.state === "connecting" ? (
-                <Spinner className="size-3.5 shrink-0" />
-              ) : (
-                <TriangleAlert className="size-3.5 shrink-0" />
-              )}
-              <span className="min-w-0 truncate" title={h.status.detail}>
-                {h.status.state === "reconnecting"
-                  ? `${h.label} unreachable${h.status.detail ? `: ${h.status.detail}` : ""}, retrying…`
-                  : h.status.state === "connecting"
-                    ? `Connecting to ${h.label}…`
-                    : `${h.label}: ${h.status.detail ?? "not ready"}`}
-              </span>
-            </div>
-          ))}
+          <ConnectionNotices offline={offline} />
         </aside>
 
         <main
@@ -326,6 +365,17 @@ export function CodePage() {
               projects={projects}
               onChange={reloadProjects}
             />
+          ) : threadId && harness && reviewOpen ? (
+            <ReviewPage
+              threadId={threadId}
+              title={row?.title ?? threadId}
+              pr={row?.pr ?? null}
+              tab={reviewTab}
+              onTab={(tab) => openPage(tab)}
+              changes={changesPanel(backToThread, true)}
+              pull={row?.projectId ? pullPanel(backToThread, true) : null}
+              sidebarHidden={!sidebarOpen}
+            />
           ) : threadId && harness ? (
             <ConversationView
               key={threadId}
@@ -355,62 +405,16 @@ export function CodePage() {
           )}
         </main>
 
-        {threadId && prOpen && (
-          <section
-            className="border-border flex w-full min-w-0 flex-col lg:w-[48%] lg:max-w-3xl lg:border-l"
-            aria-label="Pull request"
-          >
-            <PullPanel
-              threadId={threadId}
-              refreshKey={`${row?.working}:${row?.cursor}:${row?.pr?.loop}`}
-              onClose={togglePr}
-              onAttach={(text) => {
-                setInsert({ text, nonce: Date.now() });
-                if (window.matchMedia("(max-width: 1023px)").matches)
-                  navigate(threadPath(threadId));
-              }}
-            />
+        {sidePull && (
+          <section className={sidePane} aria-label="Pull request">
+            {sidePull}
           </section>
         )}
-        {threadId && changesOpen && project && reviewScope === "base" && (
-          <section
-            className="border-border flex w-full min-w-0 flex-col lg:w-[48%] lg:max-w-3xl lg:border-l"
-            aria-label="Changes"
-          >
-            <ReviewPanel
-              threadId={threadId}
-              baseBranch={project.baseBranch}
-              refreshKey={changesKey}
-              onClose={toggleChanges}
-              commenting={commenting}
-              onOtherScopes={
-                harness?.capabilities.workspace.diffs ? () => setReviewScope("harness") : undefined
-              }
-            />
+        {sideChanges && (
+          <section className={sidePane} aria-label="Changes">
+            {sideChanges}
           </section>
         )}
-        {threadId &&
-          harness &&
-          changesOpen &&
-          (!project || reviewScope === "harness") &&
-          cwd &&
-          harness.capabilities.workspace.diffs && (
-            <section
-              className="border-border flex w-full min-w-0 flex-col lg:w-[48%] lg:max-w-3xl lg:border-l"
-              aria-label="Changes"
-            >
-              <ChangesPanel
-                instanceId={harness.id}
-                cwd={cwd}
-                refreshKey={changesKey}
-                onClose={() => {
-                  setReviewScope("base");
-                  toggleChanges();
-                }}
-                commenting={commenting}
-              />
-            </section>
-          )}
       </div>
     </div>
   );
@@ -441,5 +445,63 @@ function CodeHeader({ brand }: { brand: { to: string; label: string } }) {
         <CommandPaletteTrigger />
       </div>
     </header>
+  );
+}
+
+/** No harness is configured: how to add one, with the way back to the app. */
+function NotConfigured({ brand }: { brand: { to: string; label: string } }) {
+  return (
+    <div className="flex h-dvh min-h-0 flex-col">
+      <CodeHeader brand={brand} />
+      <div className="mx-auto max-w-xl p-6">
+        <EmptyState
+          icon={Code2}
+          title="No coding agent is connected"
+          description={
+            <>
+              Set <code className={monoClass}>SHELLEY_URL</code> to your Shelley server (for example{" "}
+              <code className={monoClass}>http://my-vm:9000</code> over Tailscale) and restart, or
+              add the Claude plan in{" "}
+              <Link to="/settings/models" className="text-foreground underline underline-offset-2">
+                Settings → Models
+              </Link>
+              . See docs/features/code.md.
+            </>
+          }
+        />
+      </div>
+    </div>
+  );
+}
+
+/** A line per harness that is not connected, at the foot of the thread list. */
+function ConnectionNotices({ offline }: { offline: HarnessInfo[] }) {
+  return (
+    <>
+      {offline.map((h) => (
+        <div
+          key={h.id}
+          className={cn(
+            "border-border flex items-center gap-2 border-t px-4 py-1.5 text-xs",
+            h.status.state === "reconnecting" ? "text-warning" : "text-muted-foreground",
+          )}
+          role="status"
+          data-testid="code-connection"
+        >
+          {h.status.state === "connecting" ? (
+            <Spinner className="size-3.5 shrink-0" />
+          ) : (
+            <TriangleAlert className="size-3.5 shrink-0" />
+          )}
+          <span className="min-w-0 truncate" title={h.status.detail}>
+            {h.status.state === "reconnecting"
+              ? `${h.label} unreachable${h.status.detail ? `: ${h.status.detail}` : ""}, retrying…`
+              : h.status.state === "connecting"
+                ? `Connecting to ${h.label}…`
+                : `${h.label}: ${h.status.detail ?? "not ready"}`}
+          </span>
+        </div>
+      ))}
+    </>
   );
 }

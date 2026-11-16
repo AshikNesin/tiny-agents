@@ -132,6 +132,11 @@ gutter numbers the lines, and long lines wrap.
   Comments are kept per thread on the server, so they survive a reload, and
   work for every harness. A guest's comment, which cannot be saved, goes into
   the composer as `` `path:lines` `` and its text.
+- **Review page.** Each side pane's **Open as a page** opens the thread's
+  Review page (`/code/<id>/review`): **Changes** and, for a project thread,
+  **Pull request** (`?tab=pr`), each a tab at full width. Comments work there
+  as in the pane and wait in a tray at the bottom (**Send now**); **Back to
+  the thread** returns to the composer, where they go with the next message.
 - **Hide sidebar** (top of the thread list) or ⌘B folds the list away on
   wide screens so the thread and Changes get the room; **Show sidebar** at
   the top left brings it back. The choice is remembered in this browser.

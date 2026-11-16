@@ -8,7 +8,14 @@
  * (capability `workspace.diffs`).
  */
 import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, FileDiff as FileDiffIcon, RefreshCw, X } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  FileDiff as FileDiffIcon,
+  Maximize2,
+  RefreshCw,
+  X,
+} from "lucide-react";
 import { Button, EmptyState, monoClass } from "@groot/ui";
 import { cn } from "@groot/ui/lib/utils";
 import { formatRelativeTime } from "@groot/shell/lib/date.utils";
@@ -37,6 +44,7 @@ export function ChangesPanel({
   refreshKey,
   commenting,
   onClose,
+  onExpand,
 }: {
   instanceId: string;
   cwd: string;
@@ -45,6 +53,8 @@ export function ChangesPanel({
   /** The thread's line comments: absent, the diff takes none. */
   commenting?: ThreadCommenting;
   onClose(): void;
+  /** Show this at full width on the thread's Review page. */
+  onExpand?: () => void;
 }) {
   const [diffs, setDiffs] = useState<GitDiff[] | null>(null);
   const [diffId, setDiffId] = useState<string>("working");
@@ -177,6 +187,18 @@ export function ChangesPanel({
         >
           <RefreshCw />
         </Button>
+        {onExpand && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={onExpand}
+            aria-label="Open as a page"
+            title="Open as a page"
+            className="text-muted-foreground"
+          >
+            <Maximize2 />
+          </Button>
+        )}
         <Button
           variant="ghost"
           size="icon-sm"
