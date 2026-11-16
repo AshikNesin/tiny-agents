@@ -27,7 +27,7 @@
 export const EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 
 /** Past this size a side is not sent: the panel says the file is too large to diff. */
-export const MAX_DIFF_SIDE_BYTES = 2 * 1024 * 1024;
+const MAX_DIFF_SIDE_BYTES = 2 * 1024 * 1024;
 
 /** Untracked files listed at most (each one's lines are counted). */
 const MAX_UNTRACKED = 500;
@@ -69,9 +69,9 @@ export interface ChangedFile {
 }
 
 /** Why a file's diff is not shown as text. */
-export type Unshowable = "binary" | "tooLarge";
+type Unshowable = "binary" | "tooLarge";
 
-export interface FileSides {
+interface FileSides {
   oldContent: string;
   newContent: string;
   /** Set when either side is binary or too large: both contents are then empty. */
@@ -136,7 +136,7 @@ export async function headCommit(port: GitReadPort): Promise<string | null> {
 }
 
 /** Untracked files that are not ignored, as git lists them. */
-export async function untrackedFiles(port: GitReadPort): Promise<string[]> {
+async function untrackedFiles(port: GitReadPort): Promise<string[]> {
   const out = await read(
     port,
     ["ls-files", "--others", "--exclude-standard", "-z"],
@@ -225,7 +225,7 @@ async function isBinaryFile(port: GitReadPort, path: string): Promise<boolean> {
 }
 
 /** A NUL near the start, as git decides binary. */
-export function isBinaryText(content: string): boolean {
+function isBinaryText(content: string): boolean {
   return content.slice(0, BINARY_SNIFF).includes("\0");
 }
 
