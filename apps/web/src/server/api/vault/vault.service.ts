@@ -573,7 +573,7 @@ export function forgetAppCredential(handle?: string): void {
  */
 export async function resolveProviderSecret(
   handle: string,
-  input: { providerId: string; host: string },
+  input: { providerName: string; host: string },
 ): Promise<string> {
   const key = `${handle}\0${input.host.toLowerCase()}`;
   const cached = appValues.get(key);
@@ -581,7 +581,8 @@ export async function resolveProviderSecret(
   const value = await runUse(
     { handle, tool: "model", targetKind: "provider", target: input.host, approved: false },
     { unattended: false },
-    { botScoped: false, usedBy: `provider:${input.providerId}`, auditUse: false },
+    // The account's name, as the Vault page shows it ("used … by Anthropic").
+    { botScoped: false, usedBy: input.providerName, auditUse: false },
     ["value"],
     async (values) => values.value!.reveal(),
   );

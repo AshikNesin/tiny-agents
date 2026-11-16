@@ -246,6 +246,22 @@ describe("Routines page", { timeout: 15_000 }, () => {
     await waitFor(() => expect(runNowMock).toHaveBeenCalledWith("r1"));
   });
 
+  it("shows a started run's result without a reload", async () => {
+    const awaiting: RoutineRun = {
+      ...run,
+      status: "awaiting",
+      finishedAt: null,
+      output: null,
+    };
+    listMock.mockResolvedValue([routine]);
+    recentRunsMock.mockResolvedValueOnce({ runs: [awaiting] }).mockResolvedValue({ runs: [run] });
+    mount();
+
+    expect(await screen.findByText("awaiting")).toBeTruthy();
+    expect(await screen.findByText("succeeded", undefined, { timeout: 6_000 })).toBeTruthy();
+    expect(screen.queryByText("awaiting")).toBeNull();
+  });
+
   it("skips the Upcoming list when one routine's card already shows its next run", async () => {
     loadPage();
     mount();
