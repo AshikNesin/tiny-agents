@@ -13,6 +13,7 @@ import type { AppAuth } from "@tiny-agents/github";
 import type { CodeGitHub } from "./api/code/code.github";
 import type { CodeBranchNamer } from "./api/code/code.projects";
 import type { CodeHub } from "./api/code/code.hub";
+import type { CodeChanges } from "./api/code/code.changes";
 import type { ConnectionManager } from "./api/connections/connections.manager";
 import type { HeldLiveAccess } from "./api/people/live-access";
 import type { VaultAlertSink } from "./api/vault/vault.alerts";
@@ -38,6 +39,8 @@ export interface App {
   connectionManager?: ConnectionManager;
   /** The Code page's harnesses (`codeHub`); unset until boot, or with none configured. */
   codeHub?: CodeHub;
+  /** Polls for the open Changes and Review panels, one per directory (`codeChanges`); made on first use. */
+  codeChanges?: CodeChanges;
   /** Code projects' GitHub client and sandbox git (`codeGitHub`); unset builds them from Settings → GitHub. */
   codeGitHub?: CodeGitHub;
   /** The GitHub App's token source for the configured app id and key (`gitHubApp`), so installation tokens are reused. */

@@ -22,6 +22,7 @@ import {
   type CodingForkResult,
   type CodingGitFile,
   type CodingGitFileDiff,
+  type CodingGitStamp,
   type CodingGitLogResult,
   type CodingHistoryResult,
   type CodingResumeResult,
@@ -1071,6 +1072,10 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
 
     fileDiff(cwd, diffId, path) {
       return op<CodingGitFileDiff>({ op: "git_file", cwd, diffId, path });
+    },
+
+    async changeStamp(cwd) {
+      return (await op<CodingGitStamp>({ op: "git_stamp", cwd })).stamp;
     },
   };
   return instance;

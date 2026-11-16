@@ -293,6 +293,59 @@ describe("Code API", () => {
   });
 });
 
+describe("live changes for the Changes panel", () => {
+  /** Read a thread's change stream until `done` holds for what arrived. */
+  async function changes(path: string, done: (text: string) => boolean, step?: () => void) {
+    const response = await app.request(`/api/v1/code/threads/${path}`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    const reader = response.body!.getReader();
+    const decoder = new TextDecoder();
+    let text = "";
+    let stepped = false;
+    while (!done(text)) {
+      const { value, done: ended } = await reader.read();
+      if (ended) break;
+      text += decoder.decode(value);
+      if (step && !stepped && text.includes('"version":0')) {
+        stepped = true;
+        step();
+      }
+    }
+    await reader.cancel();
+    return text;
+  }
+
+  it("sends a new version when the thread's directory changes", async () => {
+    fake.stamps.set("/repo", "a");
+    const text = await changes(
+      "fake:t1/changes?cwd=%2Frepo",
+      (s) => s.includes('"version":1'),
+      () => fake.stamps.set("/repo", "b"),
+    );
+    expect(text).toContain('{"type":"changes","version":0}');
+    expect(text).toContain('{"type":"changes","version":1}');
+  });
+
+  it("never watches a directory a guest names", async () => {
+    const guestToken = await authToken("code-changes-guest@example.com", 4343);
+    await db.insert(guests).values({ userId: 4343 }).onConflictDoNothing();
+    fake.stamps.set("/etc", "a");
+    const response = await app.request("/api/v1/code/threads/fake:t9/changes?cwd=%2Fetc", {
+      headers: { authorization: `Bearer ${guestToken}` },
+    });
+    const reader = response.body!.getReader();
+    const { value } = await reader.read();
+    await reader.cancel();
+    expect(new TextDecoder().decode(value)).toContain('"type":"unavailable"');
+  });
+
+  it("says unavailable for a harness that cannot stamp its directory", async () => {
+    const text = await changes("shelley:s1/changes?cwd=%2Frepo", (s) => s.includes("unavailable"));
+    expect(text).toContain('"type":"unavailable"');
+  });
+});
+
 describe("Code API for a guest (S3)", () => {
   let guestToken = "";
   beforeAll(async () => {

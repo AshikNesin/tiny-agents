@@ -63,7 +63,7 @@ export const GUEST_ACCESS: Record<string, GuestFeature> = {
     api: [
       {
         methods: READ,
-        path: /^\/code\/(status|events|threads(\/search|\/by-title\/[^/]+)?|threads\/[^/]+(\/(events|usage))?)$/,
+        path: /^\/code\/(status|events|threads(\/search|\/by-title\/[^/]+)?|threads\/[^/]+(\/(events|usage|changes))?)$/,
       },
       { methods: ["POST"], path: /^\/code\/threads$/ },
       {

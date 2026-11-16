@@ -30,7 +30,14 @@ import {
 } from "../people/access";
 import { codeHub, type CodeHub } from "./code.hub";
 import { follow, markSeen, seenMap } from "./code.store";
-import { getProject, onProjectThreadDeleted, startProjectThread } from "./code.projects";
+import {
+  getProject,
+  onProjectThreadDeleted,
+  projectThread,
+  startProjectThread,
+} from "./code.projects";
+import { codeChanges } from "./code.changes";
+import { codeGitHub } from "./code.github";
 import { noteOwnerInput, onThreadArchived } from "./code.pulls";
 
 const UPLOAD_MAX_BYTES = 25 * 1024 * 1024;
@@ -251,6 +258,43 @@ router.get("/code/threads/:id/events", (c) => {
   const h = hub();
   return openSse(c, (sse) => {
     sse.onClose(h.watch(id, (event) => sse.write(event)));
+  });
+});
+
+/**
+ * Live refresh for the Changes and Review panels (ADR 0025): a new version
+ * each time the thread's directory changes. A project thread watches its
+ * worktree; any other thread its directory, through the harness.
+ * Where neither can be stamped the stream says `unavailable` and the panel
+ * re-reads on transcript activity instead.
+ */
+router.get("/code/threads/:id/changes", async (c) => {
+  const { instance, id } = thread(c);
+  const project = await projectThread(id);
+  // The thread's own directory; only the owner may name another (a guest never chooses one).
+  const cwd =
+    (await hub().list()).find((row) => row.id === id)?.cwd ??
+    (c.get("viewer").kind === "owner" ? query(c, "cwd", false) : undefined);
+  let source: { key: string; stamp: () => Promise<string> } | undefined;
+  if (project?.thread.worktree) {
+    const worktree = project.thread.worktree;
+    // No sandbox or no GitHub set up: unavailable, not an error the client retries.
+    const ws = await codeGitHub()
+      .workspace(project.project)
+      .catch(() => undefined);
+    if (ws) source = { key: `sandbox:${worktree}`, stamp: () => ws.changeStamp(worktree) };
+  } else if (cwd && typeof instance.changeStamp === "function") {
+    source = {
+      key: `${instance.id}:${cwd}`,
+      stamp: () => instance.changeStamp!(cwd),
+    };
+  }
+  return openSse(c, (sse) => {
+    if (!source) {
+      sse.write({ type: "unavailable", message: "This thread's changes cannot be watched." });
+      return;
+    }
+    sse.onClose(codeChanges().watch(source.key, source.stamp, (event) => sse.write(event)));
   });
 });
 

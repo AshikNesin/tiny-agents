@@ -75,3 +75,14 @@ it("lists changes without rewriting the index, so an agent's commit never meets 
   expect(files).toEqual([]);
   expect(statSync(index).mtimeMs).toBe(before);
 });
+
+it("stamps the repository so a second write to a changed file is seen", async () => {
+  const stamp = async () =>
+    ((await runCodingOp({ op: "git_stamp", cwd: repo }, ctx)) as { stamp: string }).stamp;
+  writeFileSync(path.join(repo, "README.md"), "hello\nonce\n");
+  const first = await stamp();
+  expect(await stamp()).toBe(first);
+
+  writeFileSync(path.join(repo, "README.md"), "hello\nonce\ntwice\n");
+  expect(await stamp()).not.toBe(first);
+});
