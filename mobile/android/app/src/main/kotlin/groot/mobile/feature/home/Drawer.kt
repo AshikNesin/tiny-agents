@@ -59,6 +59,7 @@ data class DrawerDestination(val label: String, val icon: ImageVector, val route
 /** Everyday places first, then the set-up-and-forget ones (the web app's sidebar order). */
 val OWNER_DESTINATIONS: List<DrawerDestination> = listOf(
     DrawerDestination("Tasks", AppIcons.Tasks, Routes.TASKS),
+    DrawerDestination("Code", AppIcons.Code, Routes.CODE),
     DrawerDestination("Terminal", AppIcons.Terminal, Routes.TERMINAL),
     DrawerDestination("Computer", AppIcons.Monitor, Routes.livePage("computer")),
     DrawerDestination("Browser", AppIcons.Globe, Routes.livePage("browser")),
@@ -132,7 +133,7 @@ fun AppDrawer(
             }
             if (!bots.guest && query.isBlank()) {
                 item(key = "workspace-label") { SectionLabel("Workspace", Modifier.padding(start = S.md, top = S.lg)) }
-                // A 3-wide grid of tiles: the nine places in a third of the height a list takes.
+                // A 3-wide grid of tiles: the ten places in a third of the height a list takes.
                 items(OWNER_DESTINATIONS.chunked(WORKSPACE_COLUMNS), key = { row -> row.first().route }) { row ->
                     Row(Modifier.fillMaxWidth()) {
                         for (destination in row) {

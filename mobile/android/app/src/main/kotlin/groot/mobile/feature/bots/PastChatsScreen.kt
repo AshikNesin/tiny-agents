@@ -29,7 +29,7 @@ import groot.mobile.data.chat.ChatStore
 import groot.mobile.data.chat.chatView
 import groot.mobile.feature.chat.ChatActions
 import groot.mobile.feature.chat.Transcript
-import groot.mobile.feature.chat.openLink
+import groot.mobile.feature.chat.openCardLink
 import groot.mobile.ui.brand.AppIcons
 import groot.mobile.ui.components.AppCard
 import groot.mobile.ui.components.ConfirmDialog
@@ -115,7 +115,7 @@ fun PastChatRoute(container: AppContainer, botId: String, chatId: String, onCont
             onOpenCredentials = {},
             onCancelCredentials = {},
             onOpenComputer = {},
-            onOpenLink = { openLink(context, container.session.serverUrl, it) },
+            onOpenLink = { openCardLink(container, context, it) },
         )
     }
     val resource = rememberResource("past-chat-actions:$key") { }

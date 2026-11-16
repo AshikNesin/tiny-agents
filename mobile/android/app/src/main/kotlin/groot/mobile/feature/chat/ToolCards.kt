@@ -327,7 +327,7 @@ private fun CodeHandoffCard(call: ToolCall, actions: ChatActions) {
         }
         CardTitle(code.title ?: argSummary(call).ifEmpty { "Coding task" })
         if (code.cwd != null) CardBody(code.cwd)
-        SecondaryButton("Open in the web app", onClick = { actions.onOpenLink(code.url) }, icon = AppIcons.External)
+        SecondaryButton("Open in Code", onClick = { actions.onOpenLink(code.url) }, icon = AppIcons.Code)
     }
 }
 

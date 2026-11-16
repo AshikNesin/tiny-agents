@@ -72,6 +72,8 @@ only (`ios/` is excluded from sync). The app guide is `docs/app/README.md`.
 - **Chat rules** in `android/app/src/main/kotlin/groot/mobile/data/chat/` are ports of the web client's
   `lib/chat-session.ts`, `lib/tool-call-text.ts`, `lib/tool-call-view.ts` and `lib/attachment-notes.ts`. Change
   both clients together.
+- **Code rules** in `android/app/src/main/kotlin/groot/mobile/data/code/` are ports of the web client's
+  `lib/code/use-thread.ts`, `lib/code/transcript.ts` and `lib/code/list.ts`. Change both clients together.
 - **Live-server tests.** In the tiny-agents repo run
   `.agents/skills/verify-tiny-agents/scripts/ta-verify.mjs up` (add `--sandbox` with a sandbox), then in
   `android/`:

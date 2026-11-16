@@ -16,7 +16,7 @@ sealed interface AppLink {
     /** A bot's request for a sign-in (`/vault/requests/<task>`): its chat, on that card. */
     data class CredentialRequest(val taskId: Int) : AppLink
 
-    /** A screen with no argument: Home, Tasks, Routines, Vault. */
+    /** A screen: Home, Tasks, Routines, Vault, Code or one Code thread. */
     data class Screen(val route: String) : AppLink
 }
 
@@ -53,6 +53,10 @@ fun parseAppLink(url: String, serverUrl: String?): AppLink? {
         segments == listOf("vault") -> AppLink.Screen(Routes.VAULT)
         segments == listOf("routines") -> AppLink.Screen(Routes.ROUTINES)
         segments == listOf("tasks") -> AppLink.Screen(Routes.TASKS)
+        segments == listOf("code") -> AppLink.Screen(Routes.CODE)
+        segments == listOf("code", "new") -> AppLink.Screen(Routes.CODE_NEW)
+        // A Code push (`/code/<thread id>`): the thread, finished or asking for the owner.
+        segments.size == 2 && segments[0] == "code" -> AppLink.Screen(Routes.codeThread(segments[1]))
         else -> null
     }
 }
