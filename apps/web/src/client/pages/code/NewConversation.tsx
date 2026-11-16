@@ -1,19 +1,18 @@
 /**
- * Start a thread (issue #143, ADR 0011): pick the harness (Shelley,
- * Claude Code, …), then one composer for the task, with the harness's
- * model, reasoning and permission chips inside it and, under it, the
- * working directory (searchable: recent ones, a typed path, a folder
- * browser, validated by the harness) and an optional fresh git worktree
- * when the harness makes them.
+ * Start a thread (issue #143, ADR 0011): one composer for the task, with
+ * the harness's model, reasoning and permission chips inside it and, above
+ * it, where it runs: a project (its own worktree and branch), or a working
+ * directory (searchable: recent ones, a typed path, a folder browser,
+ * validated by the harness) with an optional fresh git worktree, and the
+ * harness when there are several. A sidebar group's New thread opens it
+ * with its project (`?project=`) or folder (`?cwd=`) picked.
  */
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
-  Bot,
   Check,
   ChevronDown,
-  CircleCheck,
   ChevronUp,
   CornerDownLeft,
   Folder,
@@ -23,7 +22,7 @@ import {
   Layers,
   Settings2,
 } from "lucide-react";
-import { Button, metaLabelClass, monoClass } from "@groot/ui";
+import { Button, monoClass } from "@groot/ui";
 import {
   Dialog,
   DialogContent,
@@ -197,86 +196,6 @@ export function shortAgo(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-/** The latest top-level threads under the composer, Cursor-agents style. */
-function RecentTasks({ rows, harnesses }: { rows: ThreadSummary[]; harnesses: HarnessInfo[] }) {
-  const recent = rows
-    .filter((r) => !r.parentId)
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-    .slice(0, 6);
-  if (recent.length === 0) return null;
-  const subagentCount = new Map<string, number>();
-  for (const r of rows) {
-    if (r.parentId) subagentCount.set(r.parentId, (subagentCount.get(r.parentId) ?? 0) + 1);
-  }
-  const several = harnesses.length > 1;
-  return (
-    <section aria-label="Recent threads" className="space-y-1">
-      <h2 className={cn(metaLabelClass, "px-2 pb-1")}>Recent</h2>
-      <ul className="space-y-px">
-        {recent.map((row) => {
-          const children = subagentCount.get(row.id) ?? 0;
-          const repo = row.repoRoot || row.cwd;
-          return (
-            <li key={row.id}>
-              <Link
-                to={threadPath(row.id)}
-                className="hover:bg-muted flex items-center gap-3 rounded-xl px-2 py-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-                data-testid="code-recent-task"
-              >
-                <span
-                  className="bg-muted/60 text-muted-foreground flex size-9 shrink-0 items-center justify-center rounded-xl ring-1 ring-foreground/5"
-                  aria-hidden
-                >
-                  {row.working ? (
-                    <Spinner className="size-4" />
-                  ) : (
-                    <CircleCheck className="size-4" />
-                  )}
-                </span>
-                <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="flex min-w-0 items-center gap-1.5">
-                    <span className={cn("truncate text-sm", row.unread && "font-medium")}>
-                      {row.title}
-                    </span>
-                    {row.unread && (
-                      <span
-                        className="bg-primary size-1.5 shrink-0 rounded-full"
-                        aria-label="Unread"
-                      />
-                    )}
-                  </span>
-                  <span className="text-muted-foreground flex min-w-0 items-center gap-2 text-xs">
-                    {several && (
-                      <span className="shrink-0">
-                        {harnesses.find((h) => h.id === row.instanceId)?.label ?? row.instanceId}
-                      </span>
-                    )}
-                    {row.working ? (
-                      <span>Working</span>
-                    ) : (
-                      row.model && <span className="truncate">{row.model}</span>
-                    )}
-                    {repo && (
-                      <span className="truncate">{repo.split("/").filter(Boolean).pop()}</span>
-                    )}
-                    {children > 0 && (
-                      <span className="flex shrink-0 items-center gap-0.5">
-                        <Bot className="size-3" />
-                        {children}
-                      </span>
-                    )}
-                    <span className="shrink-0 tabular-nums">{shortAgo(row.updatedAt)}</span>
-                  </span>
-                </span>
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
-    </section>
-  );
-}
-
 /** Which harness gets the new thread: the last one used, else the first. */
 function initialHarness(harnesses: HarnessInfo[]): string {
   const last = read(HARNESS_KEY);
@@ -287,15 +206,14 @@ export function NewConversation({
   rows,
   harnesses,
   projects,
-  onManageProjects,
 }: {
   rows: ThreadSummary[];
   harnesses: HarnessInfo[];
   /** The owner's projects (null: none to offer, as for a guest). */
   projects?: ProjectView[] | null;
-  onManageProjects?: () => void;
 }) {
   const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
   const [harnessId, setHarnessId] = useState(() => initialHarness(harnesses));
   const [projectId, setProjectId] = useState(() => read(PROJECT_KEY));
   const project = projects?.find((p) => p.id === projectId) ?? null;
@@ -337,6 +255,30 @@ export function NewConversation({
       })
       .catch(() => setModels([]));
   }, [harness]);
+
+  // A sidebar group's New thread: its project (once the list is in) or its folder.
+  const wantProject = params.get("project");
+  const wantCwd = params.get("cwd");
+  useEffect(() => {
+    if (wantProject) {
+      if (!projects) return;
+      if (projects.some((p) => p.id === wantProject)) pickProject(wantProject);
+    } else if (wantCwd) {
+      if (projects) pickProject("");
+      pickDir(wantCwd);
+    } else {
+      return;
+    }
+    setParams(
+      (next) => {
+        next.delete("project");
+        next.delete("cwd");
+        return next;
+      },
+      { replace: true },
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- apply a link's pick once
+  }, [wantProject, wantCwd, projects]);
 
   // Recent directories of this harness, most recent first: one click to reuse.
   const recent = useMemo(() => {
@@ -459,8 +401,18 @@ export function NewConversation({
         </Button>
         <span className="text-sm font-medium">New thread</span>
       </div>
-      <div className="mx-auto flex min-h-0 w-full max-w-2xl flex-1 flex-col gap-8 overflow-y-auto px-4 pt-6 pb-8 md:pt-[12vh]">
-        <div className="space-y-2">
+      <div className="mx-auto flex min-h-0 w-full max-w-2xl flex-1 flex-col justify-center overflow-y-auto px-4 pt-6 pb-[12vh]">
+        <div className="space-y-3">
+          <h1 className="text-muted-foreground px-1.5 text-center text-lg">
+            {project ? (
+              <>
+                What should we build in{" "}
+                <span className="text-foreground font-medium">{project.name}</span>?
+              </>
+            ) : (
+              "What should we build?"
+            )}
+          </h1>
           <div className="flex flex-wrap items-center gap-1 px-1.5" data-testid="code-new-options">
             {projects && (
               <SearchSelect
@@ -480,18 +432,14 @@ export function NewConversation({
                     keywords: [p.repo.owner, p.repo.name],
                   })),
                 ]}
-                actions={
-                  onManageProjects
-                    ? [
-                        {
-                          key: "manage",
-                          label: "Manage projects…",
-                          icon: <Settings2 className="text-muted-foreground" />,
-                          onSelect: onManageProjects,
-                        },
-                      ]
-                    : []
-                }
+                actions={[
+                  {
+                    key: "manage",
+                    label: "Manage projects…",
+                    icon: <Settings2 className="text-muted-foreground" />,
+                    onSelect: () => navigate("/code/settings/projects"),
+                  },
+                ]}
                 data-testid="code-project"
               >
                 <FolderGit2 className="opacity-70" />
@@ -630,7 +578,6 @@ export function NewConversation({
             </p>
           )}
         </div>
-        <RecentTasks rows={rows} harnesses={harnesses} />
       </div>
 
       {caps.workspace.browse && (

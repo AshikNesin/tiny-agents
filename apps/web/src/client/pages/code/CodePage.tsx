@@ -5,9 +5,11 @@
  * subagent, live transcripts, steering, approvals and the diff of what
  * changed — and the page shows only what a thread's harness can do.
  *
- * Layout: list | thread | changes on wide screens (the list steps aside for
- * Changes until 2xl); one column at a time on phones (`/code` →
- * `/code/new` or `/code/:id` → `/code/:id/changes`).
+ * Layout, after t3code: a sidebar of threads grouped by project (with the
+ * way back to the app, ⌘K, Archived and Settings) | thread | changes on wide
+ * screens (the list steps aside for Changes until 2xl); one column at a time
+ * on phones (`/code` → `/code/new` or `/code/:id` → `/code/:id/changes`).
+ * Projects and GitHub are settings pages of their own (`/code/settings`).
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -18,9 +20,9 @@ import {
   useParams,
   useSearchParams,
 } from "react-router-dom";
-import { ArrowLeft, Code2, FolderGit2, TriangleAlert } from "lucide-react";
+import { ArrowLeft, Code2, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
-import { Button, EmptyState, monoClass } from "@groot/ui";
+import { EmptyState, monoClass } from "@groot/ui";
 import { cn } from "@groot/ui/lib/utils";
 import { CommandPaletteTrigger } from "@groot/shell/components/CommandPalette";
 import { useShellConfig } from "@groot/shell/lib/shell-config";
@@ -30,7 +32,7 @@ import { codeApi, instanceOf, normalizeThreadId, threadPath } from "../../lib/co
 import { useProjects } from "../../lib/code/projects";
 import { harnessOf, useCodeStore } from "../../store/code";
 import { ChangesPanel } from "./ChangesPanel";
-import { ProjectsDialog } from "./ProjectsDialog";
+import { CodeSettings } from "./CodeSettings";
 import { PullPanel } from "./PullPanel";
 import { ReviewPanel } from "./ReviewPanel";
 import { ConversationList } from "./ConversationList";
@@ -56,7 +58,7 @@ function SlugRedirect({ slug }: { slug: string }) {
 }
 
 export function CodePage() {
-  const { conversationId: rawId, slug } = useParams();
+  const { conversationId: rawId, slug, section, projectId: settingsProjectId } = useParams();
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { brand } = useShellConfig();
@@ -71,9 +73,9 @@ export function CodePage() {
   const changesOpen = Boolean(threadId) && pathname.endsWith("/changes");
   const prOpen = Boolean(threadId) && pathname.endsWith("/pr");
   const { projects, reload: reloadProjects } = useProjects();
-  const [managing, setManaging] = useState(false);
-  // Back from GitHub's App setup: say how it went and reopen Projects for the next step.
-  const [searchParams, setSearchParams] = useSearchParams();
+  const inSettings = pathname === "/code/settings" || pathname.startsWith("/code/settings/");
+  // Back from GitHub's App setup: say how it went and open GitHub settings for the next step.
+  const [searchParams] = useSearchParams();
   const githubResult = searchParams.get("github");
   useEffect(() => {
     if (!githubResult) return;
@@ -84,16 +86,9 @@ export function CodePage() {
     } else {
       toast.error("GitHub could not finish the App setup. Start it again from Projects.");
     }
-    setManaging(true);
     reloadProjects();
-    setSearchParams(
-      (params) => {
-        params.delete("github");
-        return params;
-      },
-      { replace: true },
-    );
-  }, [githubResult, reloadProjects, setSearchParams]);
+    navigate("/code/settings/github", { replace: true });
+  }, [githubResult, reloadProjects, navigate]);
   // A project thread's Changes default to everything since its base branch.
   const [reviewScope, setReviewScope] = useState<"base" | "harness">("base");
   // `/code/new` is the new-thread screen on phones (`/code` is the list there).
@@ -189,53 +184,50 @@ export function CodePage() {
 
   return (
     <div className="flex h-dvh min-h-0 flex-col">
-      <CodeHeader brand={brand} onProjects={projects ? () => setManaging(true) : undefined} />
-      {projects && (
-        <ProjectsDialog
-          open={managing}
-          onOpenChange={setManaging}
-          harnesses={harnesses}
-          projects={projects}
-          onChange={reloadProjects}
-        />
-      )}
-      {offline.map((h) => (
-        <div
-          key={h.id}
-          className={cn(
-            "border-border flex items-center gap-2 border-b px-4 py-1.5 text-xs",
-            h.status.state === "reconnecting" ? "text-warning" : "text-muted-foreground",
-          )}
-          role="status"
-          data-testid="code-connection"
-        >
-          {h.status.state === "reconnecting" ? (
-            <TriangleAlert className="size-3.5" />
-          ) : h.status.state === "connecting" ? (
-            <Spinner className="size-3.5" />
-          ) : (
-            <TriangleAlert className="size-3.5" />
-          )}
-          {h.status.state === "reconnecting"
-            ? `${h.label} unreachable${h.status.detail ? `: ${h.status.detail}` : ""}}, retrying…`
-            : h.status.state === "connecting"
-              ? `Connecting to ${h.label}…`
-              : `${h.label}: ${h.status.detail ?? "not ready"}`}
-        </div>
-      ))}
       <div className="flex min-h-0 flex-1">
         <aside
           className={cn(
             "border-border w-full shrink-0 flex-col border-r md:w-72 xl:w-80",
-            threadId || composing ? "hidden" : "flex",
+            threadId || composing || inSettings ? "hidden" : "flex",
             // With Changes open the list steps aside until there is room for all three.
             sideOpen ? "2xl:flex" : "md:flex",
           )}
         >
-          <div className="flex items-center gap-1 px-2 pt-2 md:hidden">
-            <span className="font-medium">Code</span>
+          <div className="flex h-12 shrink-0 items-center gap-1 px-2">
+            <BackToApp brand={brand} />
+            <span className="flex-1" />
+            <CommandPaletteTrigger />
           </div>
-          <ConversationList threads={threads} harnesses={harnesses} activeId={threadId} />
+          <ConversationList
+            threads={threads}
+            harnesses={harnesses}
+            activeId={threadId}
+            projects={projects}
+          />
+          {offline.map((h) => (
+            <div
+              key={h.id}
+              className={cn(
+                "border-border flex items-center gap-2 border-t px-4 py-1.5 text-xs",
+                h.status.state === "reconnecting" ? "text-warning" : "text-muted-foreground",
+              )}
+              role="status"
+              data-testid="code-connection"
+            >
+              {h.status.state === "connecting" ? (
+                <Spinner className="size-3.5 shrink-0" />
+              ) : (
+                <TriangleAlert className="size-3.5 shrink-0" />
+              )}
+              <span className="min-w-0 truncate" title={h.status.detail}>
+                {h.status.state === "reconnecting"
+                  ? `${h.label} unreachable${h.status.detail ? `: ${h.status.detail}` : ""}, retrying…`
+                  : h.status.state === "connecting"
+                    ? `Connecting to ${h.label}…`
+                    : `${h.label}: ${h.status.detail ?? "not ready"}`}
+              </span>
+            </div>
+          ))}
         </aside>
 
         <main
@@ -245,12 +237,20 @@ export function CodePage() {
               ? sideOpen
                 ? "hidden lg:flex"
                 : "flex"
-              : composing
+              : composing || inSettings
                 ? "flex"
                 : "hidden md:flex",
           )}
         >
-          {threadId && harness ? (
+          {inSettings ? (
+            <CodeSettings
+              section={settingsProjectId ? "projects" : section}
+              projectId={settingsProjectId}
+              harnesses={harnesses}
+              projects={projects}
+              onChange={reloadProjects}
+            />
+          ) : threadId && harness ? (
             <ConversationView
               key={threadId}
               id={threadId}
@@ -260,6 +260,7 @@ export function CodePage() {
               changesOpen={changesOpen}
               onToggleChanges={toggleChanges}
               inProject={Boolean(row?.projectId)}
+              projectName={project?.name}
               pr={row?.pr ?? null}
               prOpen={prOpen}
               onTogglePr={togglePr}
@@ -273,12 +274,7 @@ export function CodePage() {
               description="The thread belongs to a harness this server no longer runs."
             />
           ) : (
-            <NewConversation
-              rows={rows}
-              harnesses={harnesses}
-              projects={projects}
-              onManageProjects={() => setManaging(true)}
-            />
+            <NewConversation rows={rows} harnesses={harnesses} projects={projects} />
           )}
         </main>
 
@@ -349,33 +345,26 @@ export function CodePage() {
 
 /**
  * The workspace owns the full column (the app sidebar stays away), so it
- * carries its own way back to the app — like the settings screen. The
+ * carries its own way back to the app, like the settings screen. The
  * not-configured state shows it too, or a direct link to `/code` is a dead end.
  */
-function CodeHeader({
-  brand,
-  onProjects,
-}: {
-  brand: { to: string; label: string };
-  /** Projects and GitHub (the owner's). */
-  onProjects?: () => void;
-}) {
+function BackToApp({ brand }: { brand: { to: string; label: string } }) {
+  return (
+    <Link
+      to={brand.to}
+      className="text-muted-foreground hover:bg-muted hover:text-foreground inline-flex h-8 min-w-0 items-center gap-1.5 rounded-xl px-2 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+    >
+      <ArrowLeft className="size-4 shrink-0" />
+      <span className="truncate">Back to {brand.label}</span>
+    </Link>
+  );
+}
+
+function CodeHeader({ brand }: { brand: { to: string; label: string } }) {
   return (
     <header className="border-border bg-background sticky top-0 z-30 flex h-12 shrink-0 items-center gap-2 border-b px-4">
-      <Link
-        to={brand.to}
-        className="text-muted-foreground hover:bg-muted hover:text-foreground inline-flex h-8 items-center gap-1.5 rounded-xl px-2 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
-      >
-        <ArrowLeft className="size-4" />
-        Back to {brand.label}
-      </Link>
+      <BackToApp brand={brand} />
       <div className="ml-auto flex items-center gap-1">
-        {onProjects && (
-          <Button variant="ghost" size="sm" onClick={onProjects} data-testid="code-projects">
-            <FolderGit2 />
-            Projects
-          </Button>
-        )}
         <CommandPaletteTrigger />
       </div>
     </header>

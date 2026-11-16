@@ -1,24 +1,28 @@
 /**
- * Left column of the Code page (issue #143, ADR 0011): every thread of every
- * harness — working now on top, then recent, archived on a toggle — with
- * subagents nested under their parent, unread dots, a harness and a
- * repository filter, and search. Hovering a row offers Archive (Restore in
- * the archived view) when its harness archives, which moves the thread
- * together with its subagents, with Undo. **Select** (issue #148) turns the
- * rows into checkboxes to archive or restore many threads at once.
+ * Left column of the Code page (issue #143, ADR 0011), laid out like
+ * t3code's sidebar: every thread of every harness grouped by project, then
+ * by repository or folder, each group folding away and offering its own New
+ * thread (and, for a project, its settings). Subagents nest under their
+ * parent, with unread dots and search. Hovering a row offers Archive
+ * (Restore in the archived view) when its harness archives, which moves the
+ * thread together with its subagents, with Undo. **Select** (issue #148)
+ * turns the rows into checkboxes to archive or restore many threads at once.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Archive,
   ArchiveRestore,
+  ArrowLeft,
   Bot,
-  ChevronDown,
   ChevronRight,
+  Folder,
   FolderGit2,
-  Layers,
+  FolderPlus,
   ListChecks,
+  Plus,
   Search,
+  Settings2,
   SquarePen,
   X,
 } from "lucide-react";
@@ -26,28 +30,46 @@ import { Button, metaLabelClass } from "@groot/ui";
 import { Checkbox } from "@groot/ui/checkbox";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@groot/ui/input-group";
 import { cn } from "@groot/ui/lib/utils";
-import { SearchSelect } from "../../components/ui/search-select";
 import { Spinner } from "../../components/ui/spinner";
-import { ToggleGroup, ToggleGroupItem } from "../../components/ui/toggle-group";
+import { codeApi, threadPath, type HarnessInfo, type ThreadSummary } from "../../lib/code/api";
 import {
-  codeApi,
-  shortPath,
-  threadPath,
-  type HarnessInfo,
-  type ThreadSummary,
-} from "../../lib/code/api";
-import {
-  buildSections,
+  buildGroups,
   buildTree,
-  repositories,
   selectionRoots,
+  type ListGroup,
   type ListNode,
 } from "../../lib/code/list";
+import type { ProjectView } from "../../../shared/api/code";
 import { useArchive, useArchiveMany } from "./controls";
 import { shortAgo } from "./NewConversation";
 
-const ALL_REPOS = "__all__";
-const ALL_HARNESSES = "__all__";
+const COLLAPSED_KEY = "tiny-agents:code-collapsed";
+/** Threads a group shows before "Show more". */
+const GROUP_LIMIT = 8;
+
+function readCollapsed(): Set<string> {
+  try {
+    const raw = window.localStorage.getItem(COLLAPSED_KEY);
+    return new Set(raw ? (JSON.parse(raw) as string[]) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveCollapsed(keys: Set<string>) {
+  try {
+    window.localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...keys]));
+  } catch {
+    // not remembered in private mode
+  }
+}
+
+/** Where a group's New thread goes: its project, its folder, or a blank start. */
+function newThreadPath(group: ListGroup): string {
+  if (group.projectId) return `/code/new?project=${encodeURIComponent(group.projectId)}`;
+  if (group.path) return `/code/new?cwd=${encodeURIComponent(group.path)}`;
+  return "/code/new";
+}
 
 function contains(node: ListNode, id: string): boolean {
   return node.row.id === id || node.children.some((child) => contains(child, id));
@@ -216,19 +238,126 @@ function Section({
   );
 }
 
+function Group({
+  group,
+  collapsed,
+  onToggle,
+  offerNew,
+  ...rest
+}: RowProps & {
+  group: ListGroup;
+  collapsed: boolean;
+  onToggle(): void;
+  /** New thread and settings links (not in the archived view). */
+  offerNew: boolean;
+}) {
+  const [all, setAll] = useState(false);
+  const headingId = `code-group-${group.key}`;
+  // The open thread stays visible even past the limit.
+  const shown = all
+    ? group.nodes
+    : group.nodes.filter(
+        (node, index) =>
+          index < GROUP_LIMIT || (rest.activeId ? contains(node, rest.activeId) : false),
+      );
+  const hidden = group.nodes.length - shown.length;
+  const Icon = group.projectId ? FolderGit2 : Folder;
+  return (
+    <section aria-labelledby={headingId} className="pb-1.5" data-testid="code-group">
+      <div className="group/head flex h-8 items-center gap-0.5 rounded-lg pr-1 hover:bg-muted/60">
+        <h2 id={headingId} className="min-w-0 flex-1">
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-expanded={!collapsed}
+            title={group.path ?? group.label}
+            className="text-muted-foreground hover:text-foreground flex h-8 w-full min-w-0 items-center gap-1.5 rounded-lg px-1 text-left text-xs font-medium outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            <ChevronRight
+              aria-hidden
+              className={cn("size-3.5 shrink-0 transition-transform", !collapsed && "rotate-90")}
+            />
+            <Icon aria-hidden className="size-3.5 shrink-0" />
+            <span className="truncate">{group.label}</span>
+          </button>
+        </h2>
+        {offerNew && group.projectId && (
+          <Button
+            asChild
+            variant="ghost"
+            size="icon-xs"
+            className="text-muted-foreground opacity-0 group-focus-within/head:opacity-100 group-hover/head:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
+          >
+            <Link
+              to={`/code/settings/projects/${encodeURIComponent(group.projectId)}`}
+              aria-label={`${group.label} settings`}
+              title="Project settings"
+            >
+              <Settings2 />
+            </Link>
+          </Button>
+        )}
+        {offerNew && (
+          <Button
+            asChild
+            variant="ghost"
+            size="icon-xs"
+            className="text-muted-foreground opacity-0 group-focus-within/head:opacity-100 group-hover/head:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
+          >
+            <Link
+              to={newThreadPath(group)}
+              aria-label={`New thread in ${group.label}`}
+              title="New thread"
+            >
+              <Plus />
+            </Link>
+          </Button>
+        )}
+      </div>
+      {!collapsed && shown.length > 0 && (
+        <ul className="space-y-px">
+          {shown.map((node) => (
+            <Row key={node.row.id} node={node} depth={0} {...rest} />
+          ))}
+        </ul>
+      )}
+      {!collapsed && hidden > 0 && (
+        <button
+          type="button"
+          onClick={() => setAll(true)}
+          className="text-muted-foreground hover:text-foreground h-7 w-full rounded-lg pl-6 text-left text-xs"
+        >
+          Show {hidden} more
+        </button>
+      )}
+    </section>
+  );
+}
+
 export function ConversationList({
   threads,
   harnesses,
   activeId,
+  projects = null,
 }: {
   threads: ThreadSummary[] | null;
   harnesses: HarnessInfo[];
   activeId?: string;
+  /** The owner's projects, each a group even before its first thread (null: none, as for a guest). */
+  projects?: ProjectView[] | null;
 }) {
   const [view, setView] = useState<"active" | "archived">("active");
   const [archived, setArchived] = useState<ThreadSummary[] | null>(null);
-  const [repo, setRepo] = useState<string>(ALL_REPOS);
-  const [harnessFilter, setHarnessFilter] = useState<string>(ALL_HARNESSES);
+  const [collapsed, setCollapsed] = useState(readCollapsed);
+  const toggleGroup = useCallback((key: string) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      saveCollapsed(next);
+      return next;
+    });
+  }, []);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<ThreadSummary[] | null>(null);
   const caps = useMemo(() => new Map(harnesses.map((h) => [h.id, h.capabilities])), [harnesses]);
@@ -238,10 +367,8 @@ export function ConversationList({
   );
   const labelOf = useCallback(
     (row: ThreadSummary) =>
-      harnesses.length > 1 && harnessFilter === ALL_HARNESSES
-        ? harnesses.find((h) => h.id === row.instanceId)?.label
-        : undefined,
-    [harnesses, harnessFilter],
+      harnesses.length > 1 ? harnesses.find((h) => h.id === row.instanceId)?.label : undefined,
+    [harnesses],
   );
   const canSearch = harnesses.some((h) => h.capabilities.threads.search);
   const anyArchives = harnesses.some((h) => h.capabilities.threads.archive);
@@ -311,21 +438,17 @@ export function ConversationList({
   );
 
   const rows = view === "archived" ? archived : threads;
-  const repos = useMemo(() => repositories(rows ?? []), [rows]);
-  const sections = useMemo(
-    () =>
-      buildSections(rows ?? [], {
-        repo: repo === ALL_REPOS ? null : repo,
-        instanceId: harnessFilter === ALL_HARNESSES ? null : harnessFilter,
-      }),
-    [rows, repo, harnessFilter],
-  );
+  const groups = useMemo(() => {
+    const all = buildGroups(rows ?? [], projects ?? []);
+    // An empty project is there to start a thread in, which the archived view does not offer.
+    return view === "archived" ? all.filter((g) => g.nodes.length > 0) : all;
+  }, [rows, projects, view]);
   const searchTree = useMemo(() => (results ? buildTree(results) : null), [results]);
 
-  // Select mode works on what is on screen: the search results, or the sections.
+  // Select mode works on what is on screen: the search results, or the open groups.
   const visible = useMemo(
-    () => searchTree ?? [...sections.working, ...sections.recent],
-    [searchTree, sections],
+    () => searchTree ?? groups.filter((g) => !collapsed.has(g.key)).flatMap((g) => g.nodes),
+    [searchTree, groups, collapsed],
   );
   const picked = useMemo(
     () => (selected ? selectionRoots(visible, selected) : null),
@@ -430,65 +553,20 @@ export function ConversationList({
           </Link>
         </Button>
       </div>
-      <div className="flex items-center gap-1 px-2 pb-1">
-        <ToggleGroup
-          type="single"
-          value={view}
-          onValueChange={(v) => v && setView(v as "active" | "archived")}
-          size="sm"
-          aria-label="Show"
-        >
-          <ToggleGroupItem value="active">Active</ToggleGroupItem>
-          <ToggleGroupItem value="archived">Archived</ToggleGroupItem>
-        </ToggleGroup>
-        <span className="flex-1" />
-        {harnesses.length > 1 && (
-          <SearchSelect
-            label="Coding agent"
-            value={harnessFilter}
-            onValueChange={setHarnessFilter}
-            align="end"
-            triggerClassName="max-w-32"
-            options={[
-              { value: ALL_HARNESSES, label: "All agents" },
-              ...harnesses.map((h) => ({ value: h.id, label: h.label })),
-            ]}
-            data-testid="code-harness-filter"
+      {view === "archived" && (
+        <div className="flex items-center gap-1 px-2 pb-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setView("active")}
+            className="text-muted-foreground"
+            data-testid="code-archived-back"
           >
-            <Layers className="opacity-70" />
-            <span className="truncate">
-              {harnessFilter === ALL_HARNESSES
-                ? "All"
-                : (harnesses.find((h) => h.id === harnessFilter)?.label ?? harnessFilter)}
-            </span>
-            <ChevronDown className="opacity-50" />
-          </SearchSelect>
-        )}
-        {repos.length > 1 && (
-          <SearchSelect
-            label="Repository"
-            value={repo}
-            onValueChange={setRepo}
-            align="end"
-            searchPlaceholder="Search repositories…"
-            emptyText="No repository matches."
-            triggerClassName="max-w-40"
-            options={[
-              { value: ALL_REPOS, label: "All repositories" },
-              ...repos.map((r) => ({
-                value: r,
-                label: shortPath(r),
-                description: r,
-                keywords: [r],
-              })),
-            ]}
-          >
-            <FolderGit2 className="opacity-70" />
-            <span className="truncate">{repo === ALL_REPOS ? "All repos" : shortPath(repo)}</span>
-            <ChevronDown className="opacity-50" />
-          </SearchSelect>
-        )}
-      </div>
+            <ArrowLeft />
+            Archived threads
+          </Button>
+        </div>
+      )}
       <nav aria-label="Code threads" className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
         {searchTree ? (
           searchTree.length ? (
@@ -500,19 +578,21 @@ export function ConversationList({
           <div className="flex justify-center p-4">
             <Spinner />
           </div>
-        ) : rows.length === 0 ? (
+        ) : groups.length === 0 ? (
           <p className="text-muted-foreground p-3 text-sm">
             {view === "archived" ? "No archived threads." : "No threads yet. Start one."}
           </p>
         ) : (
-          <>
-            <Section title="Working now" nodes={sections.working} {...listProps} />
-            <Section
-              title={view === "archived" ? "Archived" : "Recent"}
-              nodes={sections.recent}
+          groups.map((group) => (
+            <Group
+              key={group.key}
+              group={group}
+              collapsed={collapsed.has(group.key)}
+              onToggle={() => toggleGroup(group.key)}
+              offerNew={view === "active"}
               {...listProps}
             />
-          </>
+          ))
         )}
       </nav>
       {selected && picked && (
@@ -550,6 +630,45 @@ export function ConversationList({
             {view === "archived" ? <ArchiveRestore /> : <Archive />}
             {view === "archived" ? "Restore" : "Archive"}
           </Button>
+        </div>
+      )}
+      {!selected && (
+        <div className="border-border flex shrink-0 items-center gap-0.5 border-t px-2 py-1.5">
+          {anyArchives && (
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-pressed={view === "archived"}
+              onClick={() => setView((v) => (v === "archived" ? "active" : "archived"))}
+              className={cn(view !== "archived" && "text-muted-foreground")}
+              data-testid="code-archived-toggle"
+            >
+              <Archive />
+              Archived
+            </Button>
+          )}
+          <span className="flex-1" />
+          {projects && (
+            <>
+              <Button
+                asChild
+                variant="ghost"
+                size="icon-sm"
+                className="text-muted-foreground"
+                title="Add project"
+              >
+                <Link to="/code/settings/projects" aria-label="Add project">
+                  <FolderPlus />
+                </Link>
+              </Button>
+              <Button asChild variant="ghost" size="sm" className="text-muted-foreground">
+                <Link to="/code/settings" data-testid="code-settings">
+                  <Settings2 />
+                  Settings
+                </Link>
+              </Button>
+            </>
+          )}
         </div>
       )}
     </div>

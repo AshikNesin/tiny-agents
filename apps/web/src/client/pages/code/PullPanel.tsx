@@ -4,12 +4,14 @@
  * branch, open a draft PR) and Link. With one: checks at a glance (failures
  * link to their log; stalled ones are marked), reviews and unresolved
  * comments (from authors Auto-fix does not trust, labelled Ignored), the
- * description, Fix CI, Merge, the Auto-fix switch with its state, the pass
- * history, and earlier PRs. Opening the tab reconciles with GitHub, so what
+ * actions (Merge, Fix CI, Attach all comments) in one row, the Auto-fix and
+ * Auto-merge switches (and a spend limit where the harness reports cost),
+ * the pass history, the folded description, and earlier PRs. Opening the tab reconciles with GitHub, so what
  * it shows is current.
  */
 import { useCallback, useEffect, useState } from "react";
 import {
+  ChevronRight,
   CircleCheck,
   CircleDashed,
   CircleX,
@@ -269,10 +271,18 @@ export function PullPanel({
           />
         )}
         {snap && snap.body.trim() && (
-          <section className="space-y-1">
-            <h3 className={metaLabelClass}>Description</h3>
-            <p className="text-muted-foreground whitespace-pre-wrap">{snap.body}</p>
-          </section>
+          <details className="group">
+            <summary
+              className={cn(
+                metaLabelClass,
+                "hover:text-foreground flex cursor-pointer list-none items-center gap-1",
+              )}
+            >
+              <ChevronRight className="size-3.5 transition-transform group-open:rotate-90" />
+              Description
+            </summary>
+            <p className="text-muted-foreground mt-1 whitespace-pre-wrap">{snap.body}</p>
+          </details>
         )}
         {view && view.earlier.length > 0 && (
           <section className="space-y-1">
@@ -387,43 +397,90 @@ function ActivePull({
         </ul>
       )}
 
-      <section className="border-border space-y-3 rounded-xl border p-3" aria-label="Auto-fix">
-        <div className="flex items-center gap-3">
-          <Switch
-            checked={pr.autofix}
-            onCheckedChange={onAutofix}
-            disabled={busy !== null || pr.state !== "open"}
-            aria-label="Auto-fix"
-            data-testid="code-autofix"
-          />
-          <div className="min-w-0 flex-1">
-            <p className="font-medium">Auto-fix</p>
-            <p className="text-muted-foreground text-xs">
-              Fixes failing checks, trusted review comments and conflicts while you are away, in
-              this thread's permission mode.
-            </p>
-          </div>
-          <Badge variant={pr.loop.status === "needs_input" ? "destructive" : "secondary"}>
-            {LOOP_LABEL[pr.loop.status]}
-          </Badge>
-        </div>
-        {pr.loop.reason && pr.loop.status !== "watching" && (
-          <p className="text-muted-foreground text-xs">{pr.loop.reason}</p>
+      <div className="flex flex-wrap gap-2">
+        {pr.state === "open" && methods.length > 0 && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" disabled={busy !== null || pr.draft}>
+                {busy === "merge" ? <Spinner /> : <GitMerge />}
+                Merge
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              {methods.map((m) => (
+                <DropdownMenuItem key={m} onSelect={() => onMerge(m)}>
+                  {m === "squash"
+                    ? "Squash and merge"
+                    : m === "rebase"
+                      ? "Rebase and merge"
+                      : "Create a merge commit"}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs">
-          <label className="flex items-center gap-2">
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={onFix}
+          disabled={busy !== null || pr.state !== "open"}
+        >
+          {busy === "start a pass" ? <Spinner /> : <Wrench />}
+          Fix CI
+        </Button>
+        {open.length > 0 && (
+          <Button size="sm" variant="outline" onClick={onAttach}>
+            <MessageSquare />
+            Attach all comments
+          </Button>
+        )}
+      </div>
+
+      <section
+        className="border-border divide-border divide-y rounded-xl border"
+        aria-label="Auto-fix"
+      >
+        <div className="space-y-1 px-3 py-2.5">
+          <label
+            className="flex items-center gap-3"
+            title="Fixes failing checks, trusted review comments and conflicts while you are away, in this thread's permission mode."
+          >
+            <span className="min-w-0 flex-1 font-medium">Auto-fix</span>
+            <span
+              className={cn(
+                "text-xs",
+                pr.loop.status === "needs_input" ? "text-destructive" : "text-muted-foreground",
+              )}
+            >
+              {LOOP_LABEL[pr.loop.status]}
+            </span>
             <Switch
-              checked={pr.autoMerge}
-              onCheckedChange={onAutoMerge}
+              checked={pr.autofix}
+              onCheckedChange={onAutofix}
               disabled={busy !== null || pr.state !== "open"}
-              aria-label="Auto-merge"
-              data-testid="code-automerge"
+              aria-label="Auto-fix"
+              data-testid="code-autofix"
             />
-            Auto-merge when GitHub allows it
-            {snap?.autoMerge && <Badge variant="secondary">On at GitHub</Badge>}
           </label>
+          {pr.loop.reason && pr.loop.status !== "watching" && (
+            <p className="text-muted-foreground text-xs">{pr.loop.reason}</p>
+          )}
+        </div>
+        <label className="flex items-center gap-3 px-3 py-2.5">
+          <span className="min-w-0 flex-1">Auto-merge when GitHub allows it</span>
+          {snap?.autoMerge && <span className="text-muted-foreground text-xs">On at GitHub</span>}
+          <Switch
+            checked={pr.autoMerge}
+            onCheckedChange={onAutoMerge}
+            disabled={busy !== null || pr.state !== "open"}
+            aria-label="Auto-merge"
+            data-testid="code-automerge"
+          />
+        </label>
+        {/* A limit only means something where the harness reports what a turn cost. */}
+        {spend.usd !== null && (
           <form
-            className="flex items-center gap-2"
+            className="flex items-center gap-2 px-3 py-2"
             onSubmit={(e) => {
               e.preventDefault();
               const value = limit.trim() === "" ? null : Number(limit);
@@ -431,63 +488,25 @@ function ActivePull({
               onSpendLimit(value);
             }}
           >
-            <label htmlFor="code-spend-limit" className="text-muted-foreground">
-              Spend limit $
+            <label htmlFor="code-spend-limit" className="min-w-0 flex-1">
+              Spend limit
+              <span className="text-muted-foreground ml-2 text-xs tabular-nums">
+                ${spend.usd.toFixed(2)} spent
+              </span>
             </label>
             <Input
               id="code-spend-limit"
               value={limit}
               onChange={(e) => setLimit(e.target.value)}
               inputMode="decimal"
-              placeholder="none"
-              className="h-7 w-20"
+              placeholder="No limit"
+              className="h-7 w-24"
             />
             <Button type="submit" size="xs" variant="ghost" disabled={busy !== null}>
               Set
             </Button>
-            {spend.usd !== null && (
-              <span className="text-muted-foreground tabular-nums">
-                spent ${spend.usd.toFixed(2)}
-              </span>
-            )}
           </form>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={onFix}
-            disabled={busy !== null || pr.state !== "open"}
-          >
-            {busy === "start a pass" ? <Spinner /> : <Wrench />}
-            Fix CI
-          </Button>
-          <Button size="sm" variant="outline" onClick={onAttach} disabled={open.length === 0}>
-            <MessageSquare />
-            Attach all comments
-          </Button>
-          {pr.state === "open" && methods.length > 0 && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button size="sm" disabled={busy !== null || pr.draft}>
-                  {busy === "merge" ? <Spinner /> : <GitMerge />}
-                  Merge
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent>
-                {methods.map((m) => (
-                  <DropdownMenuItem key={m} onSelect={() => onMerge(m)}>
-                    {m === "squash"
-                      ? "Squash and merge"
-                      : m === "rebase"
-                        ? "Rebase and merge"
-                        : "Create a merge commit"}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-        </div>
+        )}
       </section>
 
       {open.length > 0 && (

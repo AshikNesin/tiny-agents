@@ -3,7 +3,8 @@
  * subagents nested, Archive on a row moves the thread together with its
  * subagents (the server cascades; the toast says how many, with Undo), and
  * a harness that cannot archive offers no Archive. Select mode (issue #148)
- * archives many threads at once.
+ * archives many threads at once. Threads are grouped by project, then by
+ * folder, each group with its own New thread.
  */
 import React from "react";
 import { render, screen, waitFor, within } from "@testing-library/react";
@@ -13,6 +14,7 @@ import { MemoryRouter } from "react-router-dom";
 import { NO_CAPABILITIES } from "@tiny-agents/code/contracts";
 import { ConversationList } from "@/pages/code/ConversationList";
 import type { HarnessInfo, ThreadSummary } from "@/lib/code/api";
+import type { ProjectView } from "../../../apps/web/src/shared/api/code";
 
 const archiveMock = vi.fn();
 const toastSuccess = vi.fn();
@@ -68,6 +70,33 @@ const row = (id: string, extra: Partial<ThreadSummary> = {}): ThreadSummary => (
   archived: false,
   cursor: 0,
   ...extra,
+});
+
+const project = (id: string, name: string): ProjectView => ({
+  id,
+  name,
+  repo: { owner: "AshikNesin", name },
+  transport: "gh",
+  baseBranch: "main",
+  checkoutPath: `/home/exedev/tiny-agents-code/AshikNesin--${name}/checkout`,
+  defaultInstanceId: null,
+  defaultModel: null,
+  settings: {
+    scripts: {},
+    archiveOnMerge: true,
+    protectedPaths: [],
+    autofix: {
+      triggers: { checks: true, reviews: true, conflicts: true, mergeQueue: true },
+      finalCheck: false,
+      autoMergeByDefault: false,
+      trustedBots: [],
+      hourlyLimit: 6,
+      noOwnerLimit: 10,
+      passMinutes: 20,
+      onByDefault: false,
+    },
+  },
+  createdAt: "2026-11-01T10:00:00Z",
 });
 
 beforeEach(() => {
@@ -215,5 +244,49 @@ describe("Code thread list", () => {
     expect(within(bar).getByText("3 selected")).toBeInTheDocument();
     await userEvent.click(within(bar).getByRole("button", { name: "Clear" }));
     expect(within(bar).getByText("Select threads")).toBeInTheDocument();
+  });
+
+  it("groups threads by project, then by folder, each group with its own New thread", async () => {
+    render(
+      <MemoryRouter>
+        <ConversationList
+          harnesses={[shelley]}
+          projects={[project("p1", "tiny-agents"), project("p2", "quiet")]}
+          threads={[
+            row("fix-login", { projectId: "p1" }),
+            row("scratch", { cwd: "/home/exedev/notes" }),
+            row("add-tests", { projectId: "p1" }),
+          ]}
+        />
+      </MemoryRouter>,
+    );
+    const titles = (name: string) =>
+      within(screen.getByRole("region", { name }))
+        .queryAllByTestId("code-conversation-row")
+        .map((r) => r.textContent)
+        .sort();
+    expect(titles("tiny-agents")).toEqual(["add-testsnow", "fix-loginnow"]);
+    expect(titles("notes")).toEqual(["scratchnow"]);
+    // A project with no threads yet is still there to start one in.
+    expect(titles("quiet")).toEqual([]);
+    expect(screen.getByRole("link", { name: "New thread in tiny-agents" })).toHaveAttribute(
+      "href",
+      "/code/new?project=p1",
+    );
+    expect(screen.getByRole("link", { name: "New thread in notes" })).toHaveAttribute(
+      "href",
+      "/code/new?cwd=%2Fhome%2Fexedev%2Fnotes",
+    );
+    expect(screen.getByRole("link", { name: "tiny-agents settings" })).toHaveAttribute(
+      "href",
+      "/code/settings/projects/p1",
+    );
+
+    // A group folds away.
+    await userEvent.click(screen.getByRole("button", { name: "tiny-agents", expanded: true }));
+    expect(titles("tiny-agents")).toEqual([]);
+    expect(
+      screen.getByRole("button", { name: "tiny-agents", expanded: false }),
+    ).toBeInTheDocument();
   });
 });

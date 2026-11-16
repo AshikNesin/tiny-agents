@@ -1,6 +1,6 @@
 /**
- * One Code thread (issue #143, ADR 0011): a one-line header (path, title
- * menu, cost, Changes), the live transcript with finished tool runs folded
+ * One Code thread (issue #143, ADR 0011): a one-line header (the title with
+ * its menu, the project or folder, PR and Changes), the live transcript with finished tool runs folded
  * into one line each, what is running (background jobs, subagents), queued
  * messages, and the composer with the model, reasoning, permission and
  * context chips and Stop. Every control comes from the thread's harness's
@@ -16,8 +16,8 @@ import {
   ChevronDown,
   ExternalLink,
   FileDiff,
+  FolderGit2,
   FolderOpen,
-  GitCommitHorizontal,
   GitPullRequest,
   Pencil,
   Play,
@@ -158,6 +158,7 @@ export function ConversationView({
   insert,
   onCwd,
   inProject = false,
+  projectName,
   pr = null,
   prOpen = false,
   onTogglePr,
@@ -173,6 +174,7 @@ export function ConversationView({
   onCwd?(cwd: string | null): void;
   /** Started in a project (issue #297): Changes against its base branch, and the PR tab. */
   inProject?: boolean;
+  projectName?: string;
   /** Its open pull request, as the list knows it. */
   pr?: { number: number; loop: string } | null;
   prOpen?: boolean;
@@ -334,7 +336,18 @@ export function ConversationView({
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-60">
-              <p className="text-muted-foreground px-2 py-1 text-xs">{harness.label}</p>
+              <p className="text-muted-foreground flex items-center gap-2 px-2 py-1 text-xs">
+                <span className="flex-1">{harness.label}</span>
+                {state.costUsd > 0 && (
+                  <span
+                    className="tabular-nums"
+                    title="Cost of this thread, subagents included"
+                    data-testid="code-cost"
+                  >
+                    {formatCost(state.costUsd)}
+                  </span>
+                )}
+              </p>
               {caps.threads.rename && (
                 <DropdownMenuItem onSelect={() => setDialog("rename")}>
                   <Pencil />
@@ -374,48 +387,22 @@ export function ConversationView({
             </DropdownMenuContent>
           </DropdownMenu>
         </nav>
-        {(row?.cwd || row?.gitCommit) && (
-          <span className="text-muted-foreground hidden min-w-0 shrink-[4] items-center gap-2 overflow-hidden text-xs lg:flex">
-            {row?.cwd && (
-              <span className={cn("truncate", monoClass)} title={row.cwd}>
-                {shortPath(row.cwd)}
-              </span>
-            )}
-            {row?.gitCommit && (
-              <span className="flex shrink-0 items-center gap-1" title={row.gitSubject ?? ""}>
-                <GitCommitHorizontal className="size-3.5 shrink-0" />
-                <span className={monoClass}>{row.gitCommit.slice(0, 7)}</span>
-              </span>
-            )}
+        {(projectName || row?.cwd) && (
+          <span
+            className="text-muted-foreground hidden min-w-0 shrink-[4] items-center gap-1 truncate text-xs lg:flex"
+            title={row?.cwd ?? undefined}
+          >
+            <FolderGit2 className="size-3.5 shrink-0" />
+            <span className={cn("truncate", !projectName && monoClass)}>
+              {projectName ?? shortPath(row!.cwd!)}
+            </span>
           </span>
         )}
         <span className="min-w-2 flex-1" />
-        {state.costUsd > 0 && (
-          <span
-            className="text-muted-foreground hidden px-1 text-xs tabular-nums sm:inline"
-            title="Cost of this thread, subagents included"
-            data-testid="code-cost"
-          >
-            {formatCost(state.costUsd)}
-          </span>
-        )}
         {!working && row?.turnInterrupted && caps.turns.recovery.includes("resume") && (
           <Button variant="outline" size="sm" onClick={() => actions.recover("resume")}>
             <Play />
             Resume
-          </Button>
-        )}
-        {caps.threads.archive && (
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={toggleArchive}
-            aria-label={archived ? "Restore thread" : "Archive thread"}
-            title={archived ? "Restore" : "Archive"}
-            className="text-muted-foreground"
-            data-testid="code-archive"
-          >
-            {archived ? <ArchiveRestore /> : <Archive />}
           </Button>
         )}
         {inProject && onTogglePr && (
