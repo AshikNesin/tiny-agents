@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.1
+
+### Patch Changes
+
+- Code: a binary file, or one over 2 MB, in a thread's changes now says so ("Binary file. Its contents are not
+  shown." or "This file is too large to show here") instead of an empty diff, and a binary file's row is marked
+  binary before you open it. The server already holds every harness's diffs to these rules.
+
 ## 0.5.0
 
 ### Minor Changes

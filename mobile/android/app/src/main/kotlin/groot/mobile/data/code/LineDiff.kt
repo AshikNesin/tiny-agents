@@ -1,5 +1,7 @@
 package groot.mobile.data.code
 
+import groot.mobile.data.api.FileContents
+
 /** One line of a diff: unchanged, added or removed, with its line numbers on each side. */
 data class DiffLine(val kind: Kind, val text: String, val oldLine: Int?, val newLine: Int?) {
     enum class Kind { Same, Added, Removed, Gap }
@@ -114,3 +116,16 @@ fun parseUnifiedDiff(diff: String): List<DiffLine> = splitLines(diff).mapNotNull
 }
 
 private const val MAX_CELLS = 4_000_000L
+
+/** What the Changes screen shows for one open file: its diff lines, or a [notice] saying why not. */
+data class FileDiffView(val lines: List<DiffLine>, val notice: String?)
+
+/**
+ * The open file as the server sent it: a file it cannot show as text (binary, or over 2 MB)
+ * says so, as the web client's `FileDiff` does; anything else is its [lineDiff].
+ */
+fun fileDiffView(contents: FileContents): FileDiffView = when (contents.unshowable) {
+    "binary" -> FileDiffView(emptyList(), "Binary file. Its contents are not shown.")
+    "tooLarge" -> FileDiffView(emptyList(), "This file is too large to show here (over 2 MB).")
+    else -> FileDiffView(lineDiff(contents.oldContent, contents.newContent), null)
+}

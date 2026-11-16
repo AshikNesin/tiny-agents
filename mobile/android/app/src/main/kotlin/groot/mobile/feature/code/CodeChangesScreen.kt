@@ -37,7 +37,8 @@ import groot.mobile.AppContainer
 import groot.mobile.data.api.ChangedFile
 import groot.mobile.data.api.GitDiff
 import groot.mobile.data.code.DiffLine
-import groot.mobile.data.code.lineDiff
+import groot.mobile.data.code.FileDiffView
+import groot.mobile.data.code.fileDiffView
 import groot.mobile.ui.brand.Accents
 import groot.mobile.ui.brand.AppIcons
 import groot.mobile.ui.brand.Dims
@@ -79,8 +80,8 @@ data class ChangesState(
     val scopes: List<ChangesScope> = emptyList(),
     val scope: ChangesScope? = null,
     val files: List<ChangedFile>? = null,
-    /** Path to its diff lines, for the files open now (null while it loads). */
-    val open: Map<String, List<DiffLine>?> = emptyMap(),
+    /** Path to what it shows, for the files open now (null while it loads). */
+    val open: Map<String, FileDiffView?> = emptyMap(),
     val drafts: Int = 0,
 )
 
@@ -152,8 +153,8 @@ class CodeChangesViewModel(private val container: AppContainer, private val thre
                     ChangesScope.Branch -> api.reviewFile(threadId, file.path)
                     is ChangesScope.Harness -> api.diffFile(instanceId, scope.diff.id, cwd.orEmpty(), file.path)
                 }
-                val lines = lineDiff(contents.oldContent, contents.newContent)
-                _state.update { if (it.open.containsKey(file.path)) it.copy(open = it.open + (file.path to lines)) else it }
+                val view = fileDiffView(contents)
+                _state.update { if (it.open.containsKey(file.path)) it.copy(open = it.open + (file.path to view)) else it }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -244,7 +245,7 @@ fun CodeChangesRoute(container: AppContainer, threadId: String, onBack: () -> Un
                             items(files, key = { it.path }) { file ->
                                 FileCard(
                                     file = file,
-                                    lines = state.open[file.path],
+                                    view = state.open[file.path],
                                     open = state.open.containsKey(file.path),
                                     review = state.scope == ChangesScope.Branch,
                                     onToggle = { viewModel.toggle(file) },
@@ -290,7 +291,7 @@ private fun scopeLabel(scope: ChangesScope): String = when (scope) {
 @Composable
 private fun FileCard(
     file: ChangedFile,
-    lines: List<DiffLine>?,
+    view: FileDiffView?,
     open: Boolean,
     review: Boolean,
     onToggle: () -> Unit,
@@ -314,17 +315,19 @@ private fun FileCard(
                 modifier = Modifier.weight(1f),
             )
             if (file.status != "modified") Text(file.status, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (file.binary) Text("binary", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text("+${file.additions}", style = MaterialTheme.typography.labelSmall, color = Accents.success)
             Text("−${file.deletions}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
             if (review && file.hash != null) Chip("Viewed", selected = file.viewed, icon = if (file.viewed) AppIcons.Check else null, onClick = { onViewed(!file.viewed) })
         }
         if (open) {
             when {
-                lines == null -> Text("Loading the diff…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                lines.isEmpty() -> Text("No line changes (binary, or only mode changed).", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                view == null -> Text("Loading the diff…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                view.notice != null -> Text(view.notice, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                view.lines.isEmpty() -> Text("No line changes.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 else -> {
                     if (review) Text("Tap a line to comment on it.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    DiffView(lines, maxLines = MAX_DIFF_LINES, onLongPress = if (review) onComment else null)
+                    DiffView(view.lines, maxLines = MAX_DIFF_LINES, onLongPress = if (review) onComment else null)
                 }
             }
         }
