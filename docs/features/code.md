@@ -194,7 +194,11 @@ unresolved comments (from authors Auto-fix does not trust, labelled
 **Ignored**), **Attach all comments** into the composer, the description,
 **Fix CI** (one pass now), **Merge** with the repository's methods, the
 **Auto-fix** switch with its state, the pass history, and **Unlink**.
-Opening the tab reconciles with GitHub.
+Opening the tab reconciles with GitHub, and while it is on screen it
+re-reads (and so reconciles) every 15 seconds, so a project on `gh` or a
+token, with no webhooks, shows a finished check within seconds. A hidden
+page stops reading and catches up when shown again; in the background the
+server's own poll (below) carries on.
 The actions sit in one row; the switches are plain rows, and the spend
 limit shows only where the harness reports cost.
 

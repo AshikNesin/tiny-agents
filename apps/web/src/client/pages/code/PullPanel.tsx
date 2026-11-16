@@ -6,8 +6,10 @@
  * comments (from authors Auto-fix does not trust, labelled Ignored), the
  * actions (Merge, Fix CI, Attach all comments) in one row, the Auto-fix and
  * Auto-merge switches (and a spend limit where the harness reports cost),
- * the pass history, the folded description, and earlier PRs. Opening the tab reconciles with GitHub, so what
- * it shows is current.
+ * the pass history, the folded description, and earlier PRs. Opening the
+ * tab reconciles with GitHub, and so does each re-read while it is on screen
+ * (every 15 seconds), so a project without the App's webhooks (`gh` or a
+ * token) keeps up as fast as one with them.
  */
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -41,6 +43,9 @@ import { Switch } from "../../components/ui/switch";
 import { errorMessage } from "../../lib/errors";
 import { projectsApi } from "../../lib/code/projects";
 import type { MergeMethod, PullView, ThreadPullsView } from "../../../shared/api/code";
+
+/** How often the tab re-reads (and so reconciles) its PR while it is on screen. */
+const LIVE_MS = 15_000;
 
 const LOOP_LABEL: Record<PullView["loop"]["status"], string> = {
   watching: "Watching",
@@ -107,6 +112,39 @@ export function PullPanel({
       cancelled = true;
     };
   }, [threadId, refreshKey, reload]);
+
+  // While on screen, re-read: each read is a fresh reconcile with GitHub. A
+  // hidden page stops, and catches up as soon as it is shown again. A missed
+  // background read keeps what is shown; the next one tries again.
+  useEffect(() => {
+    let cancelled = false;
+    let reading = false;
+    const read = () => {
+      if (reading || document.visibilityState !== "visible") return;
+      reading = true;
+      projectsApi
+        .pulls(threadId)
+        .then((v) => {
+          if (cancelled) return;
+          setView(v);
+          setError(null);
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          reading = false;
+        });
+    };
+    const timer = setInterval(read, LIVE_MS);
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") read();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [threadId]);
 
   const act = useCallback(async (what: string, work: () => Promise<ThreadPullsView | void>) => {
     setBusy(what);
