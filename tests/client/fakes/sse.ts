@@ -58,3 +58,22 @@ export function botStream(botId: string) {
     },
   };
 }
+
+/** The server's side of any stream, by the path the app opened. */
+export function streamAt(path: string) {
+  return {
+    get isOpen() {
+      return open.has(path);
+    },
+    send(...events: unknown[]) {
+      act(() => {
+        const stream = open.get(path);
+        if (!stream) throw new Error(`No open stream at ${path}`);
+        for (const event of events) stream.onEvent(event);
+      });
+    },
+    drop() {
+      act(() => open.get(path)?.onDrop?.());
+    },
+  };
+}

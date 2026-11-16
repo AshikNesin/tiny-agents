@@ -15,6 +15,7 @@ import type {
   ReviewDraft,
   ReviewDraftBody,
   ReviewFile,
+  ReviewFileDiff,
   ThreadPullsView,
 } from "../../../shared/api/code";
 
@@ -64,10 +65,9 @@ export const projectsApi = {
   checkpointFiles: (id: string, cp: string) =>
     apiClient.get<ReviewFile[]>(`${thread(id)}/checkpoints/${encodeURIComponent(cp)}/files`),
   checkpointFile: (id: string, cp: string, path: string) =>
-    apiClient.get<{ path: string; oldContent: string; newContent: string }>(
-      `${thread(id)}/checkpoints/${encodeURIComponent(cp)}/file`,
-      { path },
-    ),
+    apiClient.get<ReviewFileDiff>(`${thread(id)}/checkpoints/${encodeURIComponent(cp)}/file`, {
+      path,
+    }),
   revert: (id: string, cp: string) =>
     apiClient.post<{ reverted: boolean }>(
       `${thread(id)}/checkpoints/${encodeURIComponent(cp)}/revert`,
@@ -77,10 +77,7 @@ export const projectsApi = {
 
   reviewFiles: (id: string) => apiClient.get<ReviewFile[]>(`${thread(id)}/review/files`),
   reviewFile: (id: string, path: string) =>
-    apiClient.get<{ path: string; oldContent: string; newContent: string }>(
-      `${thread(id)}/review/file`,
-      { path },
-    ),
+    apiClient.get<ReviewFileDiff>(`${thread(id)}/review/file`, { path }),
   setViewed: (id: string, path: string, hash: string, viewed: boolean) =>
     apiClient.post(`${thread(id)}/review/viewed`, { path, hash, viewed }),
   drafts: (id: string) => apiClient.get<ReviewDraft[]>(`${thread(id)}/review/drafts`),

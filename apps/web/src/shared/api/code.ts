@@ -142,8 +142,18 @@ export interface ReviewFile {
   additions: number;
   deletions: number;
   isGenerated: boolean;
+  /** Git sees binary content: no line counts and no text diff. */
+  binary?: boolean;
   hash: string;
   viewed: boolean;
+}
+
+/** One file's two sides in Review, or why they are not sent (binary, over 2 MB). */
+export interface ReviewFileDiff {
+  path: string;
+  oldContent: string;
+  newContent: string;
+  unshowable?: "binary" | "tooLarge";
 }
 
 export interface ReviewDraft {

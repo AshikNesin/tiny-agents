@@ -86,6 +86,13 @@ export interface HarnessInstance {
   diffs?(cwd: string): Promise<{ diffs: GitDiff[]; gitRoot: string }>;
   diffFiles?(cwd: string, diffId: string): Promise<GitFile[]>;
   fileDiff?(cwd: string, diffId: string, path: string): Promise<GitFileDiff>;
+  /**
+   * A cheap fingerprint of `cwd`'s changes (HEAD, status, changed files'
+   * times) that moves whenever its diffs would: the app polls it while a
+   * Changes panel is open and pushes a new version when it moves. Without
+   * it, the panel re-reads on transcript activity.
+   */
+  changeStamp?(cwd: string): Promise<string>;
   /** Serve an asset ref (an image, an uploaded file). */
   asset?(ref: string): Promise<Response>;
 }

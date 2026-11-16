@@ -92,4 +92,5 @@ export {
   type CodingSdkUserMessage,
 } from "./coding-sdk";
 export { CodingBook, CodingError, CodingSession, questionAnswers } from "./coding";
-export { isGenerated, repoRelative, runCodingOp, safeFilename } from "./coding-ops";
+export { repoRelative, runCodingOp, safeFilename } from "./coding-ops";
+export { isGenerated } from "@tiny-agents/git";

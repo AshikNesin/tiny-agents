@@ -33,6 +33,7 @@ import { useProjects } from "../../lib/code/projects";
 import { harnessOf, useCodeStore } from "../../store/code";
 import { ChangesPanel } from "./ChangesPanel";
 import { CodeSettings } from "./CodeSettings";
+import { useLiveChanges } from "../../lib/code/use-live-changes";
 import { PullPanel } from "./PullPanel";
 import { ReviewPanel } from "./ReviewPanel";
 import { ConversationList } from "./ConversationList";
@@ -96,6 +97,13 @@ export function CodePage() {
   const rows = useMemo(() => threads ?? [], [threads]);
   const row = rows.find((r) => r.id === threadId);
   const cwd = row?.cwd ?? viewCwd;
+  // While Changes is open the server pushes a version each time the files move;
+  // where it cannot watch them, the panels re-read on transcript activity.
+  const changeVersion = useLiveChanges(threadId ?? null, cwd ?? null, changesOpen);
+  const changesKey =
+    changeVersion === null
+      ? `${row?.working}:${row?.cursor}`
+      : `live:${changeVersion}:${row?.working}`;
   // Live connection state over the static description.
   const harnesses = useMemo(
     () => (harnessList ?? []).map((h) => ({ ...h, status: statuses[h.id] ?? h.status })),
@@ -303,7 +311,7 @@ export function CodePage() {
             <ReviewPanel
               threadId={threadId}
               baseBranch={project.baseBranch}
-              refreshKey={`${row?.working}:${row?.cursor}`}
+              refreshKey={changesKey}
               onClose={toggleChanges}
               onOtherScopes={
                 harness?.capabilities.workspace.diffs ? () => setReviewScope("harness") : undefined
@@ -324,7 +332,7 @@ export function CodePage() {
               <ChangesPanel
                 instanceId={harness.id}
                 cwd={cwd}
-                refreshKey={`${row?.working}:${row?.cursor}`}
+                refreshKey={changesKey}
                 onClose={() => {
                   setReviewScope("base");
                   toggleChanges();

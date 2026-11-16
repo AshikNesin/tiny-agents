@@ -7,7 +7,7 @@ and `pnpm verify:static` runs the gates CI runs. Guides start at
 
 ## Rules and their enforcers
 
-R1 to R13 are lint rules in `scripts/lint/boundaries.ts`, run by `pnpm check`.
+R1 to R14 are lint rules in `scripts/lint/boundaries.ts`, run by `pnpm check`.
 
 | Rule                                                                                                                                                                           | Enforcer                                                                      |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
@@ -28,6 +28,7 @@ R1 to R13 are lint rules in `scripts/lint/boundaries.ts`, run by `pnpm check`.
 | Never edit an applied migration.                                                                                                                                               | `pnpm check:migrations-immutable`                                             |
 | A managed-path change adds a changeset or `.no-release/` reason.                                                                                                               | `pnpm check:changesets`                                                       |
 | Remove a kit export only in a major, after a deprecation.                                                                                                                      | `scripts/check-kit-exports.ts`                                                |
+| Code features work for every harness: shared git and diff logic lives in `packages/git`; only `code.registry.ts` names a harness's package.                                    | R14                                                                           |
 | `packages/agent` parses stored JSON with `durable-json.ts`.                                                                                                                    | R6, R6b                                                                       |
 | No transactions in `packages/`; sync ones are fine in `apps/`.                                                                                                                 | R7                                                                            |
 | Only `bootstrap()` sets `db`; never open a driver.                                                                                                                             | R8a, R8b                                                                      |

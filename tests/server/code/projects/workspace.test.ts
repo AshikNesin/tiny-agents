@@ -85,6 +85,118 @@ describe("diffs against the base branch", () => {
     });
     expect((await ws.commitsAhead(a, "main")).map((c) => c.subject)).toEqual(["b"]);
   });
+
+  it("lists a new file the agent has not committed, with its lines", async () => {
+    const a = join(local.home, "a");
+    await ws.addWorktree(checkout, a, "ta/a-1", "main");
+    await sh(local, `cd ${a} && mkdir -p src/new && printf 'one\\ntwo\\n' > src/new/c.ts`);
+
+    const files = await ws.baseFiles(a, "main");
+    expect(files.map((f) => [f.path, f.status, f.additions, f.deletions])).toEqual([
+      ["src/new/c.ts", "added", 2, 0],
+    ]);
+    expect(files[0]?.hash).toMatch(/^[0-9a-f]{40}$/);
+    expect(await ws.baseFile(a, "main", "src/new/c.ts")).toEqual({
+      oldContent: "",
+      newContent: "one\ntwo\n",
+    });
+  });
+
+  it("counts a renamed file's lines on both sides", async () => {
+    const a = join(local.home, "a");
+    await ws.addWorktree(checkout, a, "ta/a-1", "main");
+    await sh(local, `cd ${a} && git mv README.md DOCS.md && git commit --quiet -m mv`);
+
+    const files = await ws.baseFiles(a, "main");
+    expect(files.map((f) => [f.path, f.status, f.additions, f.deletions])).toEqual([
+      ["DOCS.md", "added", 1, 0],
+      ["README.md", "deleted", 0, 1],
+    ]);
+  });
+
+  it("reads paths with spaces and non-ASCII characters as they are", async () => {
+    const a = join(local.home, "a");
+    await ws.addWorktree(checkout, a, "ta/a-1", "main");
+    await sh(
+      local,
+      `cd ${a} && printf 'x\\n' > "café notes.md" && git add -A && git commit --quiet -m cafe && printf 'y\\n' >> "café notes.md"`,
+    );
+
+    const files = await ws.baseFiles(a, "main");
+    expect(files.map((f) => [f.path, f.status, f.additions])).toEqual([
+      ["café notes.md", "added", 2],
+    ]);
+    expect(files[0]?.hash).toMatch(/^[0-9a-f]{40}$/);
+    expect(await ws.baseFile(a, "main", "café notes.md")).toEqual({
+      oldContent: "",
+      newContent: "x\ny\n",
+    });
+  });
+
+  it("says a binary or oversized file cannot be shown instead of sending its bytes", async () => {
+    const a = join(local.home, "a");
+    await ws.addWorktree(checkout, a, "ta/a-1", "main");
+    await sh(
+      local,
+      `cd ${a} && printf 'PNG\\000\\001\\002' > logo.png && head -c 3000000 /dev/zero | tr '\\0' 'a' > big.txt`,
+    );
+
+    expect(await ws.baseFile(a, "main", "logo.png")).toEqual({
+      oldContent: "",
+      newContent: "",
+      unshowable: "binary",
+    });
+    expect(await ws.baseFile(a, "main", "big.txt")).toEqual({
+      oldContent: "",
+      newContent: "",
+      unshowable: "tooLarge",
+    });
+  });
+
+  it("moves its change stamp on every write the Review panel shows, and only then", async () => {
+    const a = join(local.home, "a");
+    await ws.addWorktree(checkout, a, "ta/a-1", "main");
+    await sh(
+      local,
+      `cd ${a} && printf 'node_modules/\\n' > .gitignore && git add -A && git commit -qm ignore`,
+    );
+    await sh(local, `cd ${a} && printf 'one\\n' >> README.md`);
+    const first = await ws.changeStamp(a);
+    expect(await ws.changeStamp(a)).toBe(first);
+
+    // A second write to a file that is already changed.
+    await sh(local, `cd ${a} && printf 'two\\n' >> README.md`);
+    const second = await ws.changeStamp(a);
+    expect(second).not.toBe(first);
+
+    // Ignored files and an unchanged file's timestamp are not changes.
+    await sh(
+      local,
+      `cd ${a} && mkdir -p node_modules && printf 'x' > node_modules/x.js && touch src/a.ts`,
+    );
+    expect(await ws.changeStamp(a)).toBe(second);
+
+    // A new file, and a commit, are.
+    await sh(local, `cd ${a} && printf 'n\\n' > new.ts`);
+    const third = await ws.changeStamp(a);
+    expect(third).not.toBe(second);
+    await sh(local, `cd ${a} && git add -A && git commit -qm work`);
+    expect(await ws.changeStamp(a)).not.toBe(third);
+  });
+
+  it("never rewrites the index while reading, so an agent's commit never meets our lock", async () => {
+    const a = join(local.home, "a");
+    await ws.addWorktree(checkout, a, "ta/a-1", "main");
+    // Same content, newer timestamp: a refreshing read would rewrite the index.
+    await sh(local, `cd ${a} && sleep 1 && touch README.md src/a.ts`);
+    const index = await sh(local, `git -C ${a} rev-parse --git-path index`);
+    const before = await sh(local, `cd ${a} && stat -c %Y.%Z ${index} && sha1sum ${index}`);
+
+    await ws.baseFiles(a, "main");
+    await ws.uncommitted(a);
+
+    expect(await sh(local, `cd ${a} && stat -c %Y.%Z ${index} && sha1sum ${index}`)).toBe(before);
+  });
 });
 
 describe("push", () => {

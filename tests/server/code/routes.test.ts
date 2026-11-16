@@ -216,6 +216,29 @@ describe("Code API", () => {
     expect(archived.body.data?.moved).toEqual(["shelley:cB", "shelley:cD"]);
   });
 
+  it("holds every harness's file diffs to the same rules: binary and oversized say so", async () => {
+    const harness = fake as Partial<FakeHarness>;
+    harness.fileDiff = async (_cwd, _diff, path) => ({
+      path,
+      oldContent: "",
+      newContent: path === "logo.png" ? "PNG\0\u0001" : "a".repeat(3_000_000),
+    });
+    const read = (path: string) =>
+      get<{ oldContent: string; newContent: string; unshowable?: string }>(
+        `/harnesses/fake/diffs/working/file?cwd=/repo&path=${path}`,
+      );
+    expect((await read("logo.png")).body.data).toEqual({
+      path: "logo.png",
+      oldContent: "",
+      newContent: "",
+      unshowable: "binary",
+    });
+    expect((await read("big.txt")).body.data).toMatchObject({
+      newContent: "",
+      unshowable: "tooLarge",
+    });
+  });
+
   it("forwards diffs, takes raw uploads, and serves assets sandboxed", async () => {
     const diff = await get<{ path: string }>(
       "/harnesses/shelley/diffs/working/file?cwd=/repo&path=src/a%20b.ts",
@@ -290,6 +313,84 @@ describe("Code API", () => {
     await read((s) => s.includes("Working"));
     await reader.cancel();
     expect(text).toContain('"type":"partial"');
+  });
+});
+
+describe("live changes for the Changes panel", () => {
+  /** Read a thread's change stream until `done` holds for what arrived. */
+  async function changes(path: string, done: (text: string) => boolean, step?: () => void) {
+    const response = await app.request(`/api/v1/code/threads/${path}`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    const reader = response.body!.getReader();
+    const decoder = new TextDecoder();
+    let text = "";
+    let stepped = false;
+    while (!done(text)) {
+      const { value, done: ended } = await reader.read();
+      if (ended) break;
+      text += decoder.decode(value);
+      if (step && !stepped && text.includes('"version":0')) {
+        stepped = true;
+        step();
+      }
+    }
+    await reader.cancel();
+    return text;
+  }
+
+  it("sends a new version when the thread's directory changes", async () => {
+    fake.stamps.set("/repo", "a");
+    const text = await changes(
+      "fake:t1/changes?cwd=%2Frepo",
+      (s) => s.includes('"version":1'),
+      () => fake.stamps.set("/repo", "b"),
+    );
+    expect(text).toContain('{"type":"changes","version":0}');
+    expect(text).toContain('{"type":"changes","version":1}');
+  });
+
+  it("never watches a directory a guest names", async () => {
+    const guestToken = await authToken("code-changes-guest@example.com", 4343);
+    await db.insert(guests).values({ userId: 4343 }).onConflictDoNothing();
+    fake.stamps.set("/etc", "a");
+    const response = await app.request("/api/v1/code/threads/fake:t9/changes?cwd=%2Fetc", {
+      headers: { authorization: `Bearer ${guestToken}` },
+    });
+    const reader = response.body!.getReader();
+    const { value } = await reader.read();
+    await reader.cancel();
+    expect(new TextDecoder().decode(value)).toContain('"type":"unavailable"');
+  });
+
+  it("follows any harness that serves diffs, by its own file list, when it has no stamp", async () => {
+    const harness = fake as Partial<FakeHarness>;
+    delete harness.changeStamp;
+    let additions = 1;
+    harness.diffFiles = async () => [
+      { path: "a.ts", status: "modified", additions, deletions: 0, isGenerated: false },
+    ];
+    const text = await changes(
+      "fake:t1/changes?cwd=%2Frepo",
+      (s) => s.includes('"version":1'),
+      () => (additions = 2),
+    );
+    expect(text).toContain('{"type":"changes","version":1}');
+  });
+
+  it("watches a Shelley thread too, through Shelley's own diffs", async () => {
+    const text = await changes("shelley:s1/changes?cwd=%2Frepo", (s) =>
+      /"type":"(changes|unavailable)"/.test(s),
+    );
+    expect(text).toContain('{"type":"changes","version":0}');
+  });
+
+  it("says unavailable only for a harness that serves no diffs at all", async () => {
+    const harness = fake as Partial<FakeHarness>;
+    delete harness.changeStamp;
+    delete harness.diffFiles;
+    const text = await changes("fake:t1/changes?cwd=%2Frepo", (s) => s.includes("unavailable"));
+    expect(text).toContain('"type":"unavailable"');
   });
 });
 

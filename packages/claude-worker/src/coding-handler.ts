@@ -6,6 +6,7 @@
  */
 import { CodingError, type CodingBook, type CodingSession } from "./coding";
 import { runCodingOp } from "./coding-ops";
+import { claudeConfigDir, withSessionPatches } from "./session-patches";
 import {
   isCodingMessage,
   parseCodingClientMessage,
@@ -87,10 +88,14 @@ export function createCodingHandler(deps: {
         return undefined;
       case "coding.history":
         return {
-          messages: await sessions.deps.sdk.getSessionMessages(message.claudeSessionId, {
-            dir: message.cwd,
-            includeSystemMessages: true,
-          }),
+          messages: await withSessionPatches(
+            await sessions.deps.sdk.getSessionMessages(message.claudeSessionId, {
+              dir: message.cwd,
+              includeSystemMessages: true,
+            }),
+            claudeConfigDir(sessions.deps.env),
+            message.claudeSessionId,
+          ),
         };
       case "coding.fork":
         return sessions.deps.sdk.forkSession(message.claudeSessionId, {

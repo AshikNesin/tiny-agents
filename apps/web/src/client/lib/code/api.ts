@@ -50,6 +50,9 @@ export const codeApi = {
   eventsPath: () => `/api/v1${base}/events`,
   /** One thread, live: a snapshot, then changes. */
   threadEventsPath: (id: string) => `/api/v1${thread(id)}/events`,
+  /** The thread's change versions (live Changes and Review panels). */
+  threadChangesPath: (id: string, cwd: string | null) =>
+    `/api/v1${thread(id)}/changes${cwd ? `?cwd=${encodeURIComponent(cwd)}` : ""}`,
 
   list: (view: "active" | "archived" = "active") =>
     apiClient.get<ThreadSummary[]>(`${base}/threads`, { view }),

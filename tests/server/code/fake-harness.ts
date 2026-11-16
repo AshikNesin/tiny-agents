@@ -24,6 +24,8 @@ export interface FakeHarness extends HarnessInstance {
   /** Report a turn end with the thread's outcome now (`outcomes`, else a finished "Done."). */
   endTurn(nativeId: string): void;
   push(nativeId: string, event: ThreadEvent): void;
+  /** Each directory's change stamp (`changeStamp`); a directory without one fails the read. */
+  stamps: Map<string, string>;
 }
 
 export function fakeHarness(id = "fake", capabilities: Partial<Capabilities> = {}): FakeHarness {
@@ -80,6 +82,12 @@ export function fakeHarness(id = "fake", capabilities: Partial<Capabilities> = {
     },
     push(nativeId, event) {
       for (const listener of watchers.get(nativeId) ?? []) listener(event);
+    },
+    stamps: new Map(),
+    async changeStamp(cwd) {
+      const stamp = harness.stamps.get(cwd);
+      if (stamp === undefined) throw new Error(`Not a git repository: ${cwd}`);
+      return stamp;
     },
     async listThreads() {
       return harness.threads;

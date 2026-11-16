@@ -5,7 +5,7 @@
  * injected SDK; nothing here calls Anthropic.
  */
 import { randomUUID } from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
@@ -28,6 +28,7 @@ import {
 } from "../../../../packages/claude-worker/src/index";
 import { mimeTypeOf } from "../../../../packages/claude-worker/src/coding-ops";
 import { FakeSdk, echo, manual, type Brain } from "../../code/claude-code/fake-sdk";
+import { normalizeEntries } from "../../../../packages/code/src/drivers/claude-code/normalize";
 
 const TOKEN = Buffer.alloc(32, 5).toString("base64");
 const cleanups: Array<() => Promise<void> | void> = [];
@@ -86,6 +87,7 @@ async function server(
     }>;
     coding?: boolean;
     query?: QueryFactory;
+    env?: Record<string, string>;
   } = {},
 ) {
   const sdk = new FakeSdk(options.brain ?? echo);
@@ -94,7 +96,7 @@ async function server(
     token: TOKEN,
     query: options.query ?? (async () => undefined),
     authStatus: options.authStatus ?? subscribed,
-    env: {},
+    env: options.env ?? {},
     timings,
     port: 0,
     ...(options.coding === false
@@ -244,6 +246,73 @@ describe("coding protocol", () => {
 });
 
 describe("coding mode on the worker socket", () => {
+  it("gives history the Edit patches Claude Code kept, so a reload draws the diff it drew live", async () => {
+    const configDir = await mkdtemp(path.join(tmpdir(), "worker-claude-config-"));
+    cleanups.push(() => rm(configDir, { recursive: true, force: true }));
+    const { worker, sdk, dir } = await server({ env: { CLAUDE_CONFIG_DIR: configDir } });
+    const claudeSessionId = randomUUID();
+    const edit = {
+      type: "assistant",
+      uuid: randomUUID(),
+      session_id: claudeSessionId,
+      parent_tool_use_id: null,
+      message: {
+        role: "assistant",
+        content: [
+          {
+            type: "tool_use",
+            id: "toolu_1",
+            name: "Edit",
+            input: { file_path: `${dir}/a.ts`, old_string: "foo", new_string: "bar" },
+          },
+        ],
+      },
+    };
+    const result = {
+      type: "user",
+      uuid: randomUUID(),
+      session_id: claudeSessionId,
+      parent_tool_use_id: null,
+      message: {
+        role: "user",
+        content: [{ type: "tool_result", tool_use_id: "toolu_1", content: "Updated." }],
+      },
+    };
+    // getSessionMessages leaves the tool's structured result out; Claude
+    // Code's own session file keeps it as `toolUseResult`.
+    sdk.transcripts.set(claudeSessionId, [edit, result]);
+    const project = path.join(configDir, "projects", dir.replaceAll(/[^A-Za-z0-9]/g, "-"));
+    await mkdir(project, { recursive: true });
+    const kept = {
+      ...result,
+      toolUseResult: {
+        filePath: `${dir}/a.ts`,
+        originalFile: "line\n".repeat(11) + "foo\n",
+        structuredPatch: [
+          {
+            oldStart: 9,
+            oldLines: 4,
+            newStart: 9,
+            newLines: 4,
+            lines: [" line", " line", " line", "-foo", "+bar"],
+          },
+        ],
+      },
+    };
+    await writeFile(
+      path.join(project, `${claudeSessionId}.jsonl`),
+      `${JSON.stringify(edit)}\n${JSON.stringify(kept)}\n`,
+    );
+
+    const socket = await connect(worker.url);
+    const reply = await socket.request({ type: "coding.history", claudeSessionId, cwd: dir });
+    const messages = (reply.result as { messages: Parameters<typeof normalizeEntries>[0] })
+      .messages;
+    const tool = normalizeEntries(messages).find((item) => item.kind === "tool");
+    if (tool?.kind !== "tool") throw new Error("no tool row");
+    expect(tool.diff?.diff).toContain("@@ -9,4 +9,4 @@\n line\n line\n line\n-foo\n+bar");
+  });
+
   it("answers unavailable when the worker runs without coding mode", async () => {
     const { worker } = await server({ coding: false });
     const socket = await connect(worker.url);

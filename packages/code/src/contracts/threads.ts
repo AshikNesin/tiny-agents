@@ -167,12 +167,19 @@ export interface GitFile {
   additions: number;
   deletions: number;
   isGenerated: boolean;
+  /** Git sees binary content: no line counts and no text diff. */
+  binary?: boolean;
 }
 
 export interface GitFileDiff {
   path: string;
   oldContent: string;
   newContent: string;
+  /**
+   * Set when a side is binary or too large to diff: both contents are then
+   * empty, and the panel says why instead of drawing a whole-file change.
+   */
+  unshowable?: "binary" | "tooLarge";
 }
 
 /** One token band of one model's usage (the context popup). */

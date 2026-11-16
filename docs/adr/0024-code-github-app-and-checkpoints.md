@@ -1,7 +1,8 @@
 # 0024 — The GitHub App transport, auto-merge, checkpoints and the rest of phase 6
 
 - Status: accepted (amends [0021](0021-code-projects-and-worktrees.md),
-  [0022](0022-github-through-gh-or-a-token.md) and [0023](0023-auto-fix.md))
+  [0022](0022-github-through-gh-or-a-token.md) and [0023](0023-auto-fix.md); amended by
+  [0025](0025-steady-code-diffs.md))
 - Date: 2026-11-16
 - Design: issue #297 (revision 3), §6, §7.4, §8, §9.4, §9.6 and phase 6
 
