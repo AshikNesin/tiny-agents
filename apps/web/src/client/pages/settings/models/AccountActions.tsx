@@ -25,7 +25,9 @@ export function AccountActions({
   const editable = account.kind !== "claude-plan" && account.kind !== "faux";
   const checkable = account.kind !== "faux";
   return (
-    <CardAction className="flex flex-wrap gap-1">
+    // On a phone the actions go under the summary, which otherwise wraps
+    // into a narrow column beside them.
+    <CardAction className="flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start">
       <Button variant="ghost" size="sm" onClick={onToggle}>
         {account.enabled ? "Disable" : "Enable"}
       </Button>

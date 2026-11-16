@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@groo
 import { useConfirm } from "@groot/ui/primitives";
 import { StatusBadge } from "@groot/ui/status-badge";
 import { Text } from "@groot/ui/typography";
+import { formatRelativeTime } from "@groot/shell/lib/date.utils";
 import { useStepUp } from "../../../components/vault/StepUp";
 import { errorMessage } from "../../../lib/errors";
 import type { Account, AccountModel } from "../../../../shared/api/models";
@@ -50,7 +51,7 @@ function accountSummary(account: Account, accounts: Account[]): string {
     : undefined;
   const count = `${account.models.length} model${account.models.length === 1 ? "" : "s"}`;
   const checked = account.checkedAt
-    ? `checked ${new Date(account.checkedAt).toLocaleString()}`
+    ? `checked ${formatRelativeTime(account.checkedAt)}`
     : undefined;
   return [KIND_LABEL[account.kind], via, key, count, checked].filter(Boolean).join(" · ");
 }

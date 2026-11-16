@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Direct Share: the bots data/ShareTargets.kt publishes (category below) show in Android's
+     share sheet and open ShareActivity with that bot chosen. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <share-target android:targetClass="groot.mobile.ShareActivity">
+        <data android:mimeType="*/*" />
+        <category android:name="groot.mobile.category.SHARE_TO_BOT" />
+    </share-target>
+</shortcuts>

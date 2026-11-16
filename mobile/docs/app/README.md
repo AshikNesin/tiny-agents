@@ -152,6 +152,26 @@ focused card when it shows it. The manifest claims `https://<linkHost>` (`app/bu
 verifies the claim with `/.well-known/assetlinks.json`. Setup (the server's `ANDROID_APP_CERT_SHA256`) is in the
 tiny-agents mobile app guide, "Links from notifications".
 
+## Share sheet
+
+Sharing from another app (a file, photos, a link, selected text) lists Tiny Agents in Android's share sheet.
+`ShareActivity` opens a sheet over the sharing app, in that app's task: a To field that searches the bots and shows
+the chosen one as a chip, the bot list, and a composer with what was shared (each file or the text as a removable
+card), a note, a paperclip to add more files, and Send.
+
+- **What is read.** `data/Share.kt` reads `ACTION_SEND` and `ACTION_SEND_MULTIPLE`: files from `EXTRA_STREAM` (or the
+  clip data), text from `EXTRA_TEXT`, and a link's page title from `EXTRA_SUBJECT`, set above the link.
+- **Sending.** Files upload as soon as the sheet opens (`POST /uploads`), while the read grant lasts. Send waits for
+  them, then posts one message: the note, a blank line, then the shared text, with the files attached. The send runs
+  through `ChatStore`, so a message the server does not answer keeps retrying with the same request id. The sheet
+  closes when the server takes it, or after 8 s with "Sending when you are back online". Closing the sheet without
+  sending deletes what it uploaded. The app then opens on the chat the share went to.
+- **Direct Share.** `data/ShareTargets.kt` publishes the top four bots in the drawer's order (pinned, then recent) as
+  sharing shortcuts with their faces (`res/xml/shortcuts.xml`). Android's share sheet lists them, and picking one
+  opens the sheet with that bot chosen (`EXTRA_SHORTCUT_ID` is `bot:<id>`). The same shortcuts appear on a long press
+  of the launcher icon and open that bot's chat. Signing out removes them.
+- **Signed out.** The sheet asks the owner to open the app and sign in.
+
 ## Security
 
 - **Token.** `POST /auth/login` (or `/auth/setup`) returns a session token. The app sends it as

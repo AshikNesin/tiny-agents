@@ -13,14 +13,20 @@ import groot.mobile.data.FileActions
 import groot.mobile.data.ImageStore
 import groot.mobile.data.Notices
 import groot.mobile.data.SessionStore
+import groot.mobile.data.ShareTarget
+import groot.mobile.data.ShareTargets
 import groot.mobile.data.StepUp
 import groot.mobile.data.api.ApiClient
 import groot.mobile.data.api.TinyAgentsApi
 import groot.mobile.data.chat.ChatStore
+import groot.mobile.data.shareTargetBots
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
@@ -71,6 +77,9 @@ class AppContainer(context: Context) {
     /** Links the app was opened with (a push notification's), waiting for the signed-in screens. */
     val links = AppLinks()
 
+    /** The top bots, offered by name and face in Android's share sheet. */
+    val shareTargets = ShareTargets(appContext, avatars)
+
     init {
         // A session starting loads the bots and follows the feed; one ending forgets everything.
         scope.launch {
@@ -81,6 +90,16 @@ class AppContainer(context: Context) {
                 stepUp.clear()
                 if (signedIn) bots.start()
             }
+        }
+        // Signed in, the share sheet offers the top bots once their list is in; signed out, none.
+        scope.launch {
+            combine(session.state, bots.state) { session, bots ->
+                when {
+                    !session.signedIn -> emptyList<ShareTarget>() to null
+                    bots.loading -> null
+                    else -> shareTargetBots(bots, shareTargets.max).map { ShareTarget(it.id, it.name) } to session.serverUrl
+                }
+            }.filterNotNull().distinctUntilChanged().collectLatest { (targets, serverUrl) -> shareTargets.publish(targets, serverUrl) }
         }
     }
 }
