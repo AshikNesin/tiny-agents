@@ -441,17 +441,21 @@ describe("app credentials (audience app)", () => {
 
   it("resolves for its provider's host only, without a per-use audit row", async () => {
     await createKey();
-    const input = { providerId: "p1", host: "api.anthropic.com" };
+    const input = { providerName: "Anthropic", host: "api.anthropic.com" };
     expect(await resolveProviderSecret("provider-anthropic", input)).toBe(CANARY);
     await expect(
-      resolveProviderSecret("provider-anthropic", { providerId: "p1", host: "evil.example" }),
+      resolveProviderSecret("provider-anthropic", {
+        providerName: "Anthropic",
+        host: "evil.example",
+      }),
     ).rejects.toMatchObject({ code: "refused_origin" });
     const outcomes = (
       await db.select().from(vaultAuditEvents).where(eq(vaultAuditEvents.tool, "model"))
     ).map((e) => e.outcome);
     expect(outcomes).toEqual(["refused_origin"]);
     const [row] = await db.select().from(vaultItems);
-    expect(row?.lastUsedBy).toBe("provider:p1");
+    // The Vault page says "used … by Anthropic", not the account's id.
+    expect(row?.lastUsedBy).toBe("Anthropic");
     await assertNoCanary();
   });
 
@@ -482,7 +486,7 @@ describe("app credentials (audience app)", () => {
       policy: policyOf({ handle: "bot-key", hosts: ["api.anthropic.com"], tools: ["model"] }),
     });
     await expect(
-      resolveProviderSecret("bot-key", { providerId: "p1", host: "api.anthropic.com" }),
+      resolveProviderSecret("bot-key", { providerName: "Anthropic", host: "api.anthropic.com" }),
     ).rejects.toMatchObject({ code: "refused_origin" });
   });
 
@@ -493,7 +497,10 @@ describe("app credentials (audience app)", () => {
       .set({ hostsJson: JSON.stringify(["api.anthropic.com", "evil.example"]) })
       .where(eq(vaultItems.handle, "provider-anthropic"));
     await expect(
-      resolveProviderSecret("provider-anthropic", { providerId: "p1", host: "evil.example" }),
+      resolveProviderSecret("provider-anthropic", {
+        providerName: "Anthropic",
+        host: "evil.example",
+      }),
     ).rejects.toMatchObject({ code: "backend_error" });
   });
 

@@ -139,17 +139,27 @@ export function Tasks() {
     // "Call mom tomorrow 5pm !high": a day, time or priority typed in the
     // box wins over the tab's default due date (#97).
     const parsed = parseQuickTask(text);
+    // Otherwise quick-add files the task where it was typed: today's tab
+    // due end of today, Upcoming due end of tomorrow (friction #36). An
+    // undated to-do counts as upcoming, so Today must not leave it undated.
+    const due = parsed.due ?? new Date(dueToday ? todayEnd : todayEnd + 86_400_000);
     try {
       await mutations.create.mutateAsync({
         title: parsed.title,
         ...(parsed.priority ? { priority: parsed.priority } : {}),
-        // Otherwise quick-add files the task where it was typed: today's tab
-        // due end of today, Upcoming due end of tomorrow (friction #36). An
-        // undated to-do counts as upcoming, so Today must not leave it undated.
-        dueAt: (parsed.due ?? new Date(dueToday ? todayEnd : todayEnd + 86_400_000)).toISOString(),
+        dueAt: due.toISOString(),
       });
       setQuick("");
       await refresh();
+      // A day typed in the box can file it under the other tab, where it
+      // would vanish from view: say where it went.
+      const landed: Tab = due.getTime() <= todayEnd ? "today" : "upcoming";
+      if (landed !== tab) {
+        toast.success(`Added to ${TAB_LABELS[landed]}`, {
+          description: `"${parsed.title}" · ${formatDue(due.toISOString())}`,
+          action: { label: "Show", onClick: () => setTab(landed) },
+        });
+      }
     } catch (error) {
       toast.error(errorMessage(error, "Failed to add task"));
     }

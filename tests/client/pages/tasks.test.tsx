@@ -89,6 +89,28 @@ describe("Tasks page", () => {
     expect(new Date(dueAt).getTime()).toBe(endOfDay(0).getTime());
   });
 
+  it("says where a task went when quick-add files it under another tab, and shows it there", async () => {
+    const tomorrow = task({ id: "t2", title: "Call mom", dueAt: endOfDay(1).toISOString() });
+    listMock.mockResolvedValueOnce([]).mockResolvedValue([tomorrow]);
+    const user = userEvent.setup();
+    mount();
+
+    await user.type(await screen.findByLabelText("New task title"), "Call mom tomorrow{Enter}");
+
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledTimes(1));
+    const [message, options] = toastSuccess.mock.calls[0] as [
+      string,
+      { action: { label: string; onClick: () => void } },
+    ];
+    expect(message).toBe("Added to Upcoming");
+    expect(options.action.label).toBe("Show");
+    expect(screen.queryByText("Call mom")).toBeNull();
+
+    options.action.onClick();
+    expect(await screen.findByText("Call mom")).toBeTruthy();
+    expect(screen.getByRole("tab", { name: /Upcoming/ })).toHaveAttribute("aria-selected", "true");
+  });
+
   it("reads a day and priority typed in quick-add (#97)", async () => {
     listMock.mockResolvedValue([]);
     const user = userEvent.setup();

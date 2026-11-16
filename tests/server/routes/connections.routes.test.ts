@@ -779,95 +779,117 @@ describe("MCP connection lifecycle (the manager owns it)", () => {
   }, 30_000);
 });
 
+/**
+ * A fake OAuth authorization server (discovery, registration, token) and an
+ * MCP URL that always answers 401 pointing at it.
+ */
+async function startFakeOAuth() {
+  // Minimal OAuth pieces: discovery, registration, token.
+  const authApp = new Hono();
+  authApp.get("/.well-known/oauth-authorization-server", (c) =>
+    c.json({
+      issuer: `http://127.0.0.1:${authPort}`,
+      authorization_endpoint: `http://127.0.0.1:${authPort}/authorize`,
+      token_endpoint: `http://127.0.0.1:${authPort}/token`,
+      registration_endpoint: `http://127.0.0.1:${authPort}/register`,
+      response_types_supported: ["code"],
+      grant_types_supported: ["authorization_code", "refresh_token"],
+      code_challenge_methods_supported: ["S256"],
+    }),
+  );
+  authApp.post("/register", (c) =>
+    c.json({
+      client_id: "client-1",
+      client_name: "tiny-agents",
+      redirect_uris: [
+        `${process.env.ORIGIN ?? "http://localhost:3000"}/api/v1/connections/oauth/callback`,
+      ],
+      grant_types: ["authorization_code", "refresh_token"],
+      response_types: ["code"],
+      token_endpoint_auth_method: "none",
+    }),
+  );
+  const tokensIssued: Record<string, string> = {};
+  authApp.post("/token", async (c) => {
+    const body = await c.req.parseBody();
+    if (body.grant_type === "authorization_code") {
+      tokensIssued.client = String(body.code);
+      return c.json({
+        access_token: `at-${String(body.code)}`,
+        token_type: "Bearer",
+        expires_in: 3600,
+        refresh_token: "rt-1",
+      });
+    }
+    if (body.grant_type === "refresh_token") {
+      return c.json({
+        access_token: "at-refreshed",
+        token_type: "Bearer",
+        expires_in: 3600,
+        refresh_token: "rt-2",
+      });
+    }
+    return c.json({ error: "unsupported_grant_type" }, 400);
+  });
+  const { server: authServer, port: authPort } = await listen(getRequestListener(authApp.fetch));
+  expect(authPort).toBeGreaterThan(0);
+
+  // A server URL whose discovery points at the fake AS and always 401s
+  // without a token; accept-token requests hit the AS's token endpoint only.
+  const resourceApp = new Hono();
+  resourceApp.get("/.well-known/oauth-protected-resource", (c) =>
+    c.json({
+      resource: `http://127.0.0.1:${resourcePort}/mcp`,
+      authorization_servers: [`http://127.0.0.1:${authPort}`],
+    }),
+  );
+  resourceApp.post("/mcp", (c) => {
+    c.header(
+      "WWW-Authenticate",
+      `Bearer resource_metadata="http://127.0.0.1:${resourcePort}/.well-known/oauth-protected-resource"`,
+    );
+    return c.json(
+      { jsonrpc: "2.0", error: { code: -32001, message: "Unauthorized" }, id: null },
+      401,
+    );
+  });
+  const { server: resourceServer, port: resourcePort } = await listen(
+    getRequestListener(resourceApp.fetch),
+  );
+  const url = `http://127.0.0.1:${resourcePort}/mcp`;
+  return {
+    url,
+    close: async () => {
+      await new Promise<void>((resolve) => resourceServer.close(() => resolve()));
+      await new Promise<void>((resolve) => authServer.close(() => resolve()));
+    },
+  };
+}
+
+/** A started manager whose runtime records the capabilities it uninstalls. */
+async function startOAuthManager() {
+  const manager = new ConnectionManager();
+  setConnectionManagerForTests(manager);
+  const uninstalled: string[] = [];
+  const runtime = {
+    installCapability: () => undefined,
+    uninstallCapability: (id: string) => uninstalled.push(id),
+    configure: async () => undefined,
+    catalog: fakeCatalog(),
+  } as never;
+  await manager.start(runtime);
+  return { manager, uninstalled };
+}
+
 describe("MCP OAuth (fake authorization server)", () => {
   it("marks a 401 as needs_auth, and finishAuthorization exchanges the code", async () => {
     await db.delete(botConnections);
     await db.delete(connections);
 
-    // Minimal OAuth pieces: discovery, registration, token.
-    const authApp = new Hono();
-    authApp.get("/.well-known/oauth-authorization-server", (c) =>
-      c.json({
-        issuer: `http://127.0.0.1:${authPort}`,
-        authorization_endpoint: `http://127.0.0.1:${authPort}/authorize`,
-        token_endpoint: `http://127.0.0.1:${authPort}/token`,
-        registration_endpoint: `http://127.0.0.1:${authPort}/register`,
-        response_types_supported: ["code"],
-        grant_types_supported: ["authorization_code", "refresh_token"],
-        code_challenge_methods_supported: ["S256"],
-      }),
-    );
-    authApp.post("/register", (c) =>
-      c.json({
-        client_id: "client-1",
-        client_name: "tiny-agents",
-        redirect_uris: [
-          `${process.env.ORIGIN ?? "http://localhost:3000"}/api/v1/connections/oauth/callback`,
-        ],
-        grant_types: ["authorization_code", "refresh_token"],
-        response_types: ["code"],
-        token_endpoint_auth_method: "none",
-      }),
-    );
-    const tokensIssued: Record<string, string> = {};
-    authApp.post("/token", async (c) => {
-      const body = await c.req.parseBody();
-      if (body.grant_type === "authorization_code") {
-        tokensIssued.client = String(body.code);
-        return c.json({
-          access_token: `at-${String(body.code)}`,
-          token_type: "Bearer",
-          expires_in: 3600,
-          refresh_token: "rt-1",
-        });
-      }
-      if (body.grant_type === "refresh_token") {
-        return c.json({
-          access_token: "at-refreshed",
-          token_type: "Bearer",
-          expires_in: 3600,
-          refresh_token: "rt-2",
-        });
-      }
-      return c.json({ error: "unsupported_grant_type" }, 400);
-    });
-    const { server: authServer, port: authPort } = await listen(getRequestListener(authApp.fetch));
-    expect(authPort).toBeGreaterThan(0);
+    const fake = await startFakeOAuth();
+    const url = fake.url;
 
-    // A server URL whose discovery points at the fake AS and always 401s
-    // without a token; accept-token requests hit the AS's token endpoint only.
-    const resourceApp = new Hono();
-    resourceApp.get("/.well-known/oauth-protected-resource", (c) =>
-      c.json({
-        resource: `http://127.0.0.1:${resourcePort}/mcp`,
-        authorization_servers: [`http://127.0.0.1:${authPort}`],
-      }),
-    );
-    resourceApp.post("/mcp", (c) => {
-      c.header(
-        "WWW-Authenticate",
-        `Bearer resource_metadata="http://127.0.0.1:${resourcePort}/.well-known/oauth-protected-resource"`,
-      );
-      return c.json(
-        { jsonrpc: "2.0", error: { code: -32001, message: "Unauthorized" }, id: null },
-        401,
-      );
-    });
-    const { server: resourceServer, port: resourcePort } = await listen(
-      getRequestListener(resourceApp.fetch),
-    );
-    const url = `http://127.0.0.1:${resourcePort}/mcp`;
-
-    const manager = new ConnectionManager();
-    setConnectionManagerForTests(manager);
-    const uninstalled: string[] = [];
-    const runtime = {
-      installCapability: () => undefined,
-      uninstallCapability: (id: string) => uninstalled.push(id),
-      configure: async () => undefined,
-      catalog: fakeCatalog(),
-    } as never;
-    await manager.start(runtime);
+    const { manager, uninstalled } = await startOAuthManager();
 
     try {
       const row = (
@@ -919,8 +941,47 @@ describe("MCP OAuth (fake authorization server)", () => {
     } finally {
       await manager.close();
       setConnectionManagerForTests(undefined);
-      await new Promise<void>((resolve) => resourceServer.close(() => resolve()));
-      await new Promise<void>((resolve) => authServer.close(() => resolve()));
+      await fake.close();
+      await db.delete(connections);
+    }
+  }, 30_000);
+
+  it("a sign-in stored in the old v1 format asks to sign in again, and signing in replaces it", async () => {
+    await db.delete(botConnections);
+    await db.delete(connections);
+    const fake = await startFakeOAuth();
+    const { manager, uninstalled } = await startOAuthManager();
+    try {
+      // What every OAuth connection held after the v2 secret format (#213) shipped.
+      const row = (
+        await db
+          .insert(connections)
+          .values({
+            name: "Old",
+            slug: "old",
+            url: fake.url,
+            authType: "oauth",
+            oauthEnc: "v1:aXZpdml2aXZpdg==:dGFndGFndGFn:Y2lwaGVy",
+          })
+          .returning()
+      )[0]!;
+
+      await manager.connect(row.id);
+      expect(manager.status(row.id)).toEqual({
+        status: "needs_auth",
+        error: "The saved sign-in can't be read anymore. Sign in again.",
+      });
+      expect(uninstalled).toContain("mcp:old");
+
+      const consent = await manager.authorize(row.id);
+      expect(consent).toContain("/authorize");
+      const state = decodeURIComponent(new URL(consent!).searchParams.get("state")!);
+      expect(await manager.finishAuthorization(state, "fresh-code")).toBe(row.id);
+      expect(await manager.hasTokens(row.id)).toBe(true);
+    } finally {
+      await manager.close();
+      setConnectionManagerForTests(undefined);
+      await fake.close();
       await db.delete(connections);
     }
   }, 30_000);

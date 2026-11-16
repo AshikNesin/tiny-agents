@@ -116,10 +116,10 @@ exports[`Settings → Models, pinned > deleting a model in use asks which takes 
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 11/5/2026, 10:00:00 AM
+            Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -504,7 +504,7 @@ exports[`Settings → Models, pinned > deleting a model in use asks which takes 
             </span>
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -624,10 +624,10 @@ exports[`Settings → Models, pinned > deleting a model in use asks which takes 
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            OpenAI Chat · through Gateway · 0 models · checked 11/5/2026, 10:00:00 AM
+            OpenAI Chat · through Gateway · 0 models · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -739,10 +739,10 @@ exports[`Settings → Models, pinned > deleting a model in use asks which takes 
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            Claude plan · 1 model · checked 11/5/2026, 10:00:00 AM
+            Claude plan · 1 model · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -846,10 +846,10 @@ exports[`Settings → Models, pinned > deleting a model in use asks which takes 
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 11/5/2026, 10:00:00 AM
+            OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -961,10 +961,10 @@ exports[`Settings → Models, pinned > deleting a model in use asks which takes 
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            Faux · 0 models · checked 11/5/2026, 10:00:00 AM
+            Faux · 0 models · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -1378,7 +1378,7 @@ div [aria-hidden=true]
       icon lucide-chevron-down
       "Anthropic"
     "Connected"
-  "Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 11/5/2026, 10:00:00 AM"
+  "Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 21 hours ago"
   button "Disable"
     "Disable"
   button "Check Anthropic again"
@@ -1442,7 +1442,7 @@ div [aria-hidden=true]
       icon lucide-chevron-right
       "Through gateway"
     "Disabled"
-  "OpenAI Chat · through Gateway · 0 models · checked 11/5/2026, 10:00:00 AM"
+  "OpenAI Chat · through Gateway · 0 models · checked 21 hours ago"
   button "Enable"
     "Enable"
   button "Check Through gateway again"
@@ -1456,7 +1456,7 @@ div [aria-hidden=true]
       icon lucide-chevron-right
       "Claude plan"
     "Connected"
-  "Claude plan · 1 model · checked 11/5/2026, 10:00:00 AM"
+  "Claude plan · 1 model · checked 21 hours ago"
   button "Disable"
     "Disable"
   button "Check Claude plan again"
@@ -1468,7 +1468,7 @@ div [aria-hidden=true]
       icon lucide-chevron-right
       "Local"
     "Unreachable"
-  "OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 11/5/2026, 10:00:00 AM"
+  "OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 21 hours ago"
   button "Disable"
     "Disable"
   button "Check Local again"
@@ -1482,7 +1482,7 @@ div [aria-hidden=true]
       icon lucide-chevron-right
       "Faux"
     "Connected"
-  "Faux · 0 models · checked 11/5/2026, 10:00:00 AM"
+  "Faux · 0 models · checked 21 hours ago"
   button "Disable"
     "Disable"
   button "Delete Faux"
@@ -1644,10 +1644,10 @@ exports[`Settings → Models, pinned > deleting a model in use asks which takes 
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 11/5/2026, 10:00:00 AM
+            Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -2032,7 +2032,7 @@ exports[`Settings → Models, pinned > deleting a model in use asks which takes 
             </span>
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -2152,10 +2152,10 @@ exports[`Settings → Models, pinned > deleting a model in use asks which takes 
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            OpenAI Chat · through Gateway · 0 models · checked 11/5/2026, 10:00:00 AM
+            OpenAI Chat · through Gateway · 0 models · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -2267,10 +2267,10 @@ exports[`Settings → Models, pinned > deleting a model in use asks which takes 
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            Claude plan · 1 model · checked 11/5/2026, 10:00:00 AM
+            Claude plan · 1 model · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -2374,10 +2374,10 @@ exports[`Settings → Models, pinned > deleting a model in use asks which takes 
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 11/5/2026, 10:00:00 AM
+            OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -2489,10 +2489,10 @@ exports[`Settings → Models, pinned > deleting a model in use asks which takes 
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            Faux · 0 models · checked 11/5/2026, 10:00:00 AM
+            Faux · 0 models · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -2961,7 +2961,7 @@ div [aria-hidden=true]
       icon lucide-chevron-down
       "Anthropic"
     "Connected"
-  "Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 11/5/2026, 10:00:00 AM"
+  "Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 21 hours ago"
   button "Disable"
     "Disable"
   button "Check Anthropic again"
@@ -3025,7 +3025,7 @@ div [aria-hidden=true]
       icon lucide-chevron-right
       "Through gateway"
     "Disabled"
-  "OpenAI Chat · through Gateway · 0 models · checked 11/5/2026, 10:00:00 AM"
+  "OpenAI Chat · through Gateway · 0 models · checked 21 hours ago"
   button "Enable"
     "Enable"
   button "Check Through gateway again"
@@ -3039,7 +3039,7 @@ div [aria-hidden=true]
       icon lucide-chevron-right
       "Claude plan"
     "Connected"
-  "Claude plan · 1 model · checked 11/5/2026, 10:00:00 AM"
+  "Claude plan · 1 model · checked 21 hours ago"
   button "Disable"
     "Disable"
   button "Check Claude plan again"
@@ -3051,7 +3051,7 @@ div [aria-hidden=true]
       icon lucide-chevron-right
       "Local"
     "Unreachable"
-  "OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 11/5/2026, 10:00:00 AM"
+  "OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 21 hours ago"
   button "Disable"
     "Disable"
   button "Check Local again"
@@ -3065,7 +3065,7 @@ div [aria-hidden=true]
       icon lucide-chevron-right
       "Faux"
     "Connected"
-  "Faux · 0 models · checked 11/5/2026, 10:00:00 AM"
+  "Faux · 0 models · checked 21 hours ago"
   button "Disable"
     "Disable"
   button "Delete Faux"
@@ -3220,10 +3220,10 @@ exports[`Settings → Models, pinned > max turns: invalid, then no limit > inval
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 11/5/2026, 10:00:00 AM
+            Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -3343,7 +3343,7 @@ exports[`Settings → Models, pinned > max turns: invalid, then no limit > inval
             </span>
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -3463,10 +3463,10 @@ exports[`Settings → Models, pinned > max turns: invalid, then no limit > inval
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            OpenAI Chat · through Gateway · 0 models · checked 11/5/2026, 10:00:00 AM
+            OpenAI Chat · through Gateway · 0 models · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -3578,10 +3578,10 @@ exports[`Settings → Models, pinned > max turns: invalid, then no limit > inval
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            Claude plan · 1 model · checked 11/5/2026, 10:00:00 AM
+            Claude plan · 1 model · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -3907,10 +3907,10 @@ exports[`Settings → Models, pinned > max turns: invalid, then no limit > inval
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 11/5/2026, 10:00:00 AM
+            OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -4022,10 +4022,10 @@ exports[`Settings → Models, pinned > max turns: invalid, then no limit > inval
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            Faux · 0 models · checked 11/5/2026, 10:00:00 AM
+            Faux · 0 models · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -4355,7 +4355,7 @@ heading "AnthropicConnected"
     icon lucide-chevron-right
     "Anthropic"
   "Connected"
-"Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 11/5/2026, 10:00:00 AM"
+"Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 21 hours ago"
 button "Disable"
   "Disable"
 button "Check Anthropic again"
@@ -4386,7 +4386,7 @@ heading "Through gatewayDisabled"
     icon lucide-chevron-right
     "Through gateway"
   "Disabled"
-"OpenAI Chat · through Gateway · 0 models · checked 11/5/2026, 10:00:00 AM"
+"OpenAI Chat · through Gateway · 0 models · checked 21 hours ago"
 button "Enable"
   "Enable"
 button "Check Through gateway again"
@@ -4400,7 +4400,7 @@ heading "Claude planConnected"
     icon lucide-chevron-down
     "Claude plan"
   "Connected"
-"Claude plan · 1 model · checked 11/5/2026, 10:00:00 AM"
+"Claude plan · 1 model · checked 21 hours ago"
 button "Disable"
   "Disable"
 button "Check Claude plan again"
@@ -4436,7 +4436,7 @@ heading "LocalUnreachable"
     icon lucide-chevron-right
     "Local"
   "Unreachable"
-"OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 11/5/2026, 10:00:00 AM"
+"OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 21 hours ago"
 button "Disable"
   "Disable"
 button "Check Local again"
@@ -4450,7 +4450,7 @@ heading "FauxConnected"
     icon lucide-chevron-right
     "Faux"
   "Connected"
-"Faux · 0 models · checked 11/5/2026, 10:00:00 AM"
+"Faux · 0 models · checked 21 hours ago"
 button "Disable"
   "Disable"
 button "Delete Faux"
@@ -4588,10 +4588,10 @@ exports[`Settings → Models, pinned > max turns: invalid, then no limit > unlim
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 11/5/2026, 10:00:00 AM
+            Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -4711,7 +4711,7 @@ exports[`Settings → Models, pinned > max turns: invalid, then no limit > unlim
             </span>
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -4831,10 +4831,10 @@ exports[`Settings → Models, pinned > max turns: invalid, then no limit > unlim
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            OpenAI Chat · through Gateway · 0 models · checked 11/5/2026, 10:00:00 AM
+            OpenAI Chat · through Gateway · 0 models · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -4946,10 +4946,10 @@ exports[`Settings → Models, pinned > max turns: invalid, then no limit > unlim
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            Claude plan · 1 model · checked 11/5/2026, 10:00:00 AM
+            Claude plan · 1 model · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -5293,10 +5293,10 @@ exports[`Settings → Models, pinned > max turns: invalid, then no limit > unlim
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 11/5/2026, 10:00:00 AM
+            OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -5408,10 +5408,10 @@ exports[`Settings → Models, pinned > max turns: invalid, then no limit > unlim
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            Faux · 0 models · checked 11/5/2026, 10:00:00 AM
+            Faux · 0 models · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -5741,7 +5741,7 @@ heading "AnthropicConnected"
     icon lucide-chevron-right
     "Anthropic"
   "Connected"
-"Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 11/5/2026, 10:00:00 AM"
+"Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 21 hours ago"
 button "Disable"
   "Disable"
 button "Check Anthropic again"
@@ -5772,7 +5772,7 @@ heading "Through gatewayDisabled"
     icon lucide-chevron-right
     "Through gateway"
   "Disabled"
-"OpenAI Chat · through Gateway · 0 models · checked 11/5/2026, 10:00:00 AM"
+"OpenAI Chat · through Gateway · 0 models · checked 21 hours ago"
 button "Enable"
   "Enable"
 button "Check Through gateway again"
@@ -5786,7 +5786,7 @@ heading "Claude planConnected"
     icon lucide-chevron-down
     "Claude plan"
   "Connected"
-"Claude plan · 1 model · checked 11/5/2026, 10:00:00 AM"
+"Claude plan · 1 model · checked 21 hours ago"
 button "Disable"
   "Disable"
 button "Check Claude plan again"
@@ -5823,7 +5823,7 @@ heading "LocalUnreachable"
     icon lucide-chevron-right
     "Local"
   "Unreachable"
-"OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 11/5/2026, 10:00:00 AM"
+"OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 21 hours ago"
 button "Disable"
   "Disable"
 button "Check Local again"
@@ -5837,7 +5837,7 @@ heading "FauxConnected"
     icon lucide-chevron-right
     "Faux"
   "Connected"
-"Faux · 0 models · checked 11/5/2026, 10:00:00 AM"
+"Faux · 0 models · checked 21 hours ago"
 button "Disable"
   "Disable"
 button "Delete Faux"
@@ -5975,10 +5975,10 @@ exports[`Settings → Models, pinned > the Anthropic card open > markup 1`] = `
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 11/5/2026, 10:00:00 AM
+            Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -6363,7 +6363,7 @@ exports[`Settings → Models, pinned > the Anthropic card open > markup 1`] = `
             </span>
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -6483,10 +6483,10 @@ exports[`Settings → Models, pinned > the Anthropic card open > markup 1`] = `
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            OpenAI Chat · through Gateway · 0 models · checked 11/5/2026, 10:00:00 AM
+            OpenAI Chat · through Gateway · 0 models · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -6598,10 +6598,10 @@ exports[`Settings → Models, pinned > the Anthropic card open > markup 1`] = `
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            Claude plan · 1 model · checked 11/5/2026, 10:00:00 AM
+            Claude plan · 1 model · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -6705,10 +6705,10 @@ exports[`Settings → Models, pinned > the Anthropic card open > markup 1`] = `
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 11/5/2026, 10:00:00 AM
+            OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -6820,10 +6820,10 @@ exports[`Settings → Models, pinned > the Anthropic card open > markup 1`] = `
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            Faux · 0 models · checked 11/5/2026, 10:00:00 AM
+            Faux · 0 models · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -7153,7 +7153,7 @@ heading "AnthropicConnected"
     icon lucide-chevron-down
     "Anthropic"
   "Connected"
-"Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 11/5/2026, 10:00:00 AM"
+"Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 21 hours ago"
 button "Disable"
   "Disable"
 button "Check Anthropic again"
@@ -7217,7 +7217,7 @@ heading "Through gatewayDisabled"
     icon lucide-chevron-right
     "Through gateway"
   "Disabled"
-"OpenAI Chat · through Gateway · 0 models · checked 11/5/2026, 10:00:00 AM"
+"OpenAI Chat · through Gateway · 0 models · checked 21 hours ago"
 button "Enable"
   "Enable"
 button "Check Through gateway again"
@@ -7231,7 +7231,7 @@ heading "Claude planConnected"
     icon lucide-chevron-right
     "Claude plan"
   "Connected"
-"Claude plan · 1 model · checked 11/5/2026, 10:00:00 AM"
+"Claude plan · 1 model · checked 21 hours ago"
 button "Disable"
   "Disable"
 button "Check Claude plan again"
@@ -7243,7 +7243,7 @@ heading "LocalUnreachable"
     icon lucide-chevron-right
     "Local"
   "Unreachable"
-"OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 11/5/2026, 10:00:00 AM"
+"OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 21 hours ago"
 button "Disable"
   "Disable"
 button "Check Local again"
@@ -7257,7 +7257,7 @@ heading "FauxConnected"
     icon lucide-chevron-right
     "Faux"
   "Connected"
-"Faux · 0 models · checked 11/5/2026, 10:00:00 AM"
+"Faux · 0 models · checked 21 hours ago"
 button "Disable"
   "Disable"
 button "Delete Faux"
@@ -7395,10 +7395,10 @@ exports[`Settings → Models, pinned > the Claude plan card open > markup 1`] = 
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 11/5/2026, 10:00:00 AM
+            Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -7518,7 +7518,7 @@ exports[`Settings → Models, pinned > the Claude plan card open > markup 1`] = 
             </span>
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -7638,10 +7638,10 @@ exports[`Settings → Models, pinned > the Claude plan card open > markup 1`] = 
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            OpenAI Chat · through Gateway · 0 models · checked 11/5/2026, 10:00:00 AM
+            OpenAI Chat · through Gateway · 0 models · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -7753,10 +7753,10 @@ exports[`Settings → Models, pinned > the Claude plan card open > markup 1`] = 
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            Claude plan · 1 model · checked 11/5/2026, 10:00:00 AM
+            Claude plan · 1 model · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -8078,10 +8078,10 @@ exports[`Settings → Models, pinned > the Claude plan card open > markup 1`] = 
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 11/5/2026, 10:00:00 AM
+            OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -8193,10 +8193,10 @@ exports[`Settings → Models, pinned > the Claude plan card open > markup 1`] = 
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            Faux · 0 models · checked 11/5/2026, 10:00:00 AM
+            Faux · 0 models · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -8526,7 +8526,7 @@ heading "AnthropicConnected"
     icon lucide-chevron-right
     "Anthropic"
   "Connected"
-"Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 11/5/2026, 10:00:00 AM"
+"Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 21 hours ago"
 button "Disable"
   "Disable"
 button "Check Anthropic again"
@@ -8557,7 +8557,7 @@ heading "Through gatewayDisabled"
     icon lucide-chevron-right
     "Through gateway"
   "Disabled"
-"OpenAI Chat · through Gateway · 0 models · checked 11/5/2026, 10:00:00 AM"
+"OpenAI Chat · through Gateway · 0 models · checked 21 hours ago"
 button "Enable"
   "Enable"
 button "Check Through gateway again"
@@ -8571,7 +8571,7 @@ heading "Claude planConnected"
     icon lucide-chevron-down
     "Claude plan"
   "Connected"
-"Claude plan · 1 model · checked 11/5/2026, 10:00:00 AM"
+"Claude plan · 1 model · checked 21 hours ago"
 button "Disable"
   "Disable"
 button "Check Claude plan again"
@@ -8607,7 +8607,7 @@ heading "LocalUnreachable"
     icon lucide-chevron-right
     "Local"
   "Unreachable"
-"OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 11/5/2026, 10:00:00 AM"
+"OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 21 hours ago"
 button "Disable"
   "Disable"
 button "Check Local again"
@@ -8621,7 +8621,7 @@ heading "FauxConnected"
     icon lucide-chevron-right
     "Faux"
   "Connected"
-"Faux · 0 models · checked 11/5/2026, 10:00:00 AM"
+"Faux · 0 models · checked 21 hours ago"
 button "Disable"
   "Disable"
 button "Delete Faux"
@@ -8759,10 +8759,10 @@ exports[`Settings → Models, pinned > the Faux card open > markup 1`] = `
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 11/5/2026, 10:00:00 AM
+            Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -8882,7 +8882,7 @@ exports[`Settings → Models, pinned > the Faux card open > markup 1`] = `
             </span>
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -9002,10 +9002,10 @@ exports[`Settings → Models, pinned > the Faux card open > markup 1`] = `
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            OpenAI Chat · through Gateway · 0 models · checked 11/5/2026, 10:00:00 AM
+            OpenAI Chat · through Gateway · 0 models · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -9117,10 +9117,10 @@ exports[`Settings → Models, pinned > the Faux card open > markup 1`] = `
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            Claude plan · 1 model · checked 11/5/2026, 10:00:00 AM
+            Claude plan · 1 model · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -9224,10 +9224,10 @@ exports[`Settings → Models, pinned > the Faux card open > markup 1`] = `
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 11/5/2026, 10:00:00 AM
+            OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -9339,10 +9339,10 @@ exports[`Settings → Models, pinned > the Faux card open > markup 1`] = `
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            Faux · 0 models · checked 11/5/2026, 10:00:00 AM
+            Faux · 0 models · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -9718,7 +9718,7 @@ heading "AnthropicConnected"
     icon lucide-chevron-right
     "Anthropic"
   "Connected"
-"Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 11/5/2026, 10:00:00 AM"
+"Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 21 hours ago"
 button "Disable"
   "Disable"
 button "Check Anthropic again"
@@ -9749,7 +9749,7 @@ heading "Through gatewayDisabled"
     icon lucide-chevron-right
     "Through gateway"
   "Disabled"
-"OpenAI Chat · through Gateway · 0 models · checked 11/5/2026, 10:00:00 AM"
+"OpenAI Chat · through Gateway · 0 models · checked 21 hours ago"
 button "Enable"
   "Enable"
 button "Check Through gateway again"
@@ -9763,7 +9763,7 @@ heading "Claude planConnected"
     icon lucide-chevron-right
     "Claude plan"
   "Connected"
-"Claude plan · 1 model · checked 11/5/2026, 10:00:00 AM"
+"Claude plan · 1 model · checked 21 hours ago"
 button "Disable"
   "Disable"
 button "Check Claude plan again"
@@ -9775,7 +9775,7 @@ heading "LocalUnreachable"
     icon lucide-chevron-right
     "Local"
   "Unreachable"
-"OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 11/5/2026, 10:00:00 AM"
+"OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 21 hours ago"
 button "Disable"
   "Disable"
 button "Check Local again"
@@ -9789,7 +9789,7 @@ heading "FauxConnected"
     icon lucide-chevron-down
     "Faux"
   "Connected"
-"Faux · 0 models · checked 11/5/2026, 10:00:00 AM"
+"Faux · 0 models · checked 21 hours ago"
 button "Disable"
   "Disable"
 button "Delete Faux"
@@ -9933,10 +9933,10 @@ exports[`Settings → Models, pinned > the Gateway card open > markup 1`] = `
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 11/5/2026, 10:00:00 AM
+            Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -10056,7 +10056,7 @@ exports[`Settings → Models, pinned > the Gateway card open > markup 1`] = `
             </span>
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -10472,10 +10472,10 @@ exports[`Settings → Models, pinned > the Gateway card open > markup 1`] = `
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            OpenAI Chat · through Gateway · 0 models · checked 11/5/2026, 10:00:00 AM
+            OpenAI Chat · through Gateway · 0 models · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -10587,10 +10587,10 @@ exports[`Settings → Models, pinned > the Gateway card open > markup 1`] = `
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            Claude plan · 1 model · checked 11/5/2026, 10:00:00 AM
+            Claude plan · 1 model · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -10694,10 +10694,10 @@ exports[`Settings → Models, pinned > the Gateway card open > markup 1`] = `
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 11/5/2026, 10:00:00 AM
+            OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -10809,10 +10809,10 @@ exports[`Settings → Models, pinned > the Gateway card open > markup 1`] = `
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            Faux · 0 models · checked 11/5/2026, 10:00:00 AM
+            Faux · 0 models · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -11142,7 +11142,7 @@ heading "AnthropicConnected"
     icon lucide-chevron-right
     "Anthropic"
   "Connected"
-"Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 11/5/2026, 10:00:00 AM"
+"Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 21 hours ago"
 button "Disable"
   "Disable"
 button "Check Anthropic again"
@@ -11209,7 +11209,7 @@ heading "Through gatewayDisabled"
     icon lucide-chevron-right
     "Through gateway"
   "Disabled"
-"OpenAI Chat · through Gateway · 0 models · checked 11/5/2026, 10:00:00 AM"
+"OpenAI Chat · through Gateway · 0 models · checked 21 hours ago"
 button "Enable"
   "Enable"
 button "Check Through gateway again"
@@ -11223,7 +11223,7 @@ heading "Claude planConnected"
     icon lucide-chevron-right
     "Claude plan"
   "Connected"
-"Claude plan · 1 model · checked 11/5/2026, 10:00:00 AM"
+"Claude plan · 1 model · checked 21 hours ago"
 button "Disable"
   "Disable"
 button "Check Claude plan again"
@@ -11235,7 +11235,7 @@ heading "LocalUnreachable"
     icon lucide-chevron-right
     "Local"
   "Unreachable"
-"OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 11/5/2026, 10:00:00 AM"
+"OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 21 hours ago"
 button "Disable"
   "Disable"
 button "Check Local again"
@@ -11249,7 +11249,7 @@ heading "FauxConnected"
     icon lucide-chevron-right
     "Faux"
   "Connected"
-"Faux · 0 models · checked 11/5/2026, 10:00:00 AM"
+"Faux · 0 models · checked 21 hours ago"
 button "Disable"
   "Disable"
 button "Delete Faux"
@@ -11387,10 +11387,10 @@ exports[`Settings → Models, pinned > the Local card open > markup 1`] = `
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 11/5/2026, 10:00:00 AM
+            Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -11510,7 +11510,7 @@ exports[`Settings → Models, pinned > the Local card open > markup 1`] = `
             </span>
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -11630,10 +11630,10 @@ exports[`Settings → Models, pinned > the Local card open > markup 1`] = `
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            OpenAI Chat · through Gateway · 0 models · checked 11/5/2026, 10:00:00 AM
+            OpenAI Chat · through Gateway · 0 models · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -11745,10 +11745,10 @@ exports[`Settings → Models, pinned > the Local card open > markup 1`] = `
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            Claude plan · 1 model · checked 11/5/2026, 10:00:00 AM
+            Claude plan · 1 model · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -11852,10 +11852,10 @@ exports[`Settings → Models, pinned > the Local card open > markup 1`] = `
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 11/5/2026, 10:00:00 AM
+            OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -12087,10 +12087,10 @@ exports[`Settings → Models, pinned > the Local card open > markup 1`] = `
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            Faux · 0 models · checked 11/5/2026, 10:00:00 AM
+            Faux · 0 models · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -12420,7 +12420,7 @@ heading "AnthropicConnected"
     icon lucide-chevron-right
     "Anthropic"
   "Connected"
-"Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 11/5/2026, 10:00:00 AM"
+"Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 21 hours ago"
 button "Disable"
   "Disable"
 button "Check Anthropic again"
@@ -12451,7 +12451,7 @@ heading "Through gatewayDisabled"
     icon lucide-chevron-right
     "Through gateway"
   "Disabled"
-"OpenAI Chat · through Gateway · 0 models · checked 11/5/2026, 10:00:00 AM"
+"OpenAI Chat · through Gateway · 0 models · checked 21 hours ago"
 button "Enable"
   "Enable"
 button "Check Through gateway again"
@@ -12465,7 +12465,7 @@ heading "Claude planConnected"
     icon lucide-chevron-right
     "Claude plan"
   "Connected"
-"Claude plan · 1 model · checked 11/5/2026, 10:00:00 AM"
+"Claude plan · 1 model · checked 21 hours ago"
 button "Disable"
   "Disable"
 button "Check Claude plan again"
@@ -12477,7 +12477,7 @@ heading "LocalUnreachable"
     icon lucide-chevron-down
     "Local"
   "Unreachable"
-"OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 11/5/2026, 10:00:00 AM"
+"OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 21 hours ago"
 button "Disable"
   "Disable"
 button "Check Local again"
@@ -12505,7 +12505,7 @@ heading "FauxConnected"
     icon lucide-chevron-right
     "Faux"
   "Connected"
-"Faux · 0 models · checked 11/5/2026, 10:00:00 AM"
+"Faux · 0 models · checked 21 hours ago"
 button "Disable"
   "Disable"
 button "Delete Faux"
@@ -12643,10 +12643,10 @@ exports[`Settings → Models, pinned > the Through gateway card open > markup 1`
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 11/5/2026, 10:00:00 AM
+            Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -12766,7 +12766,7 @@ exports[`Settings → Models, pinned > the Through gateway card open > markup 1`
             </span>
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -12886,10 +12886,10 @@ exports[`Settings → Models, pinned > the Through gateway card open > markup 1`
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            OpenAI Chat · through Gateway · 0 models · checked 11/5/2026, 10:00:00 AM
+            OpenAI Chat · through Gateway · 0 models · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -13047,10 +13047,10 @@ exports[`Settings → Models, pinned > the Through gateway card open > markup 1`
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            Claude plan · 1 model · checked 11/5/2026, 10:00:00 AM
+            Claude plan · 1 model · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -13154,10 +13154,10 @@ exports[`Settings → Models, pinned > the Through gateway card open > markup 1`
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 11/5/2026, 10:00:00 AM
+            OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -13269,10 +13269,10 @@ exports[`Settings → Models, pinned > the Through gateway card open > markup 1`
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            Faux · 0 models · checked 11/5/2026, 10:00:00 AM
+            Faux · 0 models · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -13602,7 +13602,7 @@ heading "AnthropicConnected"
     icon lucide-chevron-right
     "Anthropic"
   "Connected"
-"Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 11/5/2026, 10:00:00 AM"
+"Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 21 hours ago"
 button "Disable"
   "Disable"
 button "Check Anthropic again"
@@ -13633,7 +13633,7 @@ heading "Through gatewayDisabled"
     icon lucide-chevron-down
     "Through gateway"
   "Disabled"
-"OpenAI Chat · through Gateway · 0 models · checked 11/5/2026, 10:00:00 AM"
+"OpenAI Chat · through Gateway · 0 models · checked 21 hours ago"
 button "Enable"
   "Enable"
 button "Check Through gateway again"
@@ -13653,7 +13653,7 @@ heading "Claude planConnected"
     icon lucide-chevron-right
     "Claude plan"
   "Connected"
-"Claude plan · 1 model · checked 11/5/2026, 10:00:00 AM"
+"Claude plan · 1 model · checked 21 hours ago"
 button "Disable"
   "Disable"
 button "Check Claude plan again"
@@ -13665,7 +13665,7 @@ heading "LocalUnreachable"
     icon lucide-chevron-right
     "Local"
   "Unreachable"
-"OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 11/5/2026, 10:00:00 AM"
+"OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 21 hours ago"
 button "Disable"
   "Disable"
 button "Check Local again"
@@ -13679,7 +13679,7 @@ heading "FauxConnected"
     icon lucide-chevron-right
     "Faux"
   "Connected"
-"Faux · 0 models · checked 11/5/2026, 10:00:00 AM"
+"Faux · 0 models · checked 21 hours ago"
 button "Disable"
   "Disable"
 button "Delete Faux"
@@ -13830,10 +13830,10 @@ exports[`Settings → Models, pinned > the edit dialog for Anthropic > markup 1`
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 11/5/2026, 10:00:00 AM
+            Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -13953,7 +13953,7 @@ exports[`Settings → Models, pinned > the edit dialog for Anthropic > markup 1`
             </span>
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -14073,10 +14073,10 @@ exports[`Settings → Models, pinned > the edit dialog for Anthropic > markup 1`
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            OpenAI Chat · through Gateway · 0 models · checked 11/5/2026, 10:00:00 AM
+            OpenAI Chat · through Gateway · 0 models · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -14188,10 +14188,10 @@ exports[`Settings → Models, pinned > the edit dialog for Anthropic > markup 1`
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            Claude plan · 1 model · checked 11/5/2026, 10:00:00 AM
+            Claude plan · 1 model · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -14295,10 +14295,10 @@ exports[`Settings → Models, pinned > the edit dialog for Anthropic > markup 1`
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 11/5/2026, 10:00:00 AM
+            OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -14410,10 +14410,10 @@ exports[`Settings → Models, pinned > the edit dialog for Anthropic > markup 1`
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            Faux · 0 models · checked 11/5/2026, 10:00:00 AM
+            Faux · 0 models · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -14905,7 +14905,7 @@ div [aria-hidden=true]
       icon lucide-chevron-right
       "Anthropic"
     "Connected"
-  "Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 11/5/2026, 10:00:00 AM"
+  "Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 21 hours ago"
   button "Disable"
     "Disable"
   button "Check Anthropic again"
@@ -14936,7 +14936,7 @@ div [aria-hidden=true]
       icon lucide-chevron-right
       "Through gateway"
     "Disabled"
-  "OpenAI Chat · through Gateway · 0 models · checked 11/5/2026, 10:00:00 AM"
+  "OpenAI Chat · through Gateway · 0 models · checked 21 hours ago"
   button "Enable"
     "Enable"
   button "Check Through gateway again"
@@ -14950,7 +14950,7 @@ div [aria-hidden=true]
       icon lucide-chevron-right
       "Claude plan"
     "Connected"
-  "Claude plan · 1 model · checked 11/5/2026, 10:00:00 AM"
+  "Claude plan · 1 model · checked 21 hours ago"
   button "Disable"
     "Disable"
   button "Check Claude plan again"
@@ -14962,7 +14962,7 @@ div [aria-hidden=true]
       icon lucide-chevron-right
       "Local"
     "Unreachable"
-  "OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 11/5/2026, 10:00:00 AM"
+  "OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 21 hours ago"
   button "Disable"
     "Disable"
   button "Check Local again"
@@ -14976,7 +14976,7 @@ div [aria-hidden=true]
       icon lucide-chevron-right
       "Faux"
     "Connected"
-  "Faux · 0 models · checked 11/5/2026, 10:00:00 AM"
+  "Faux · 0 models · checked 21 hours ago"
   button "Disable"
     "Disable"
   button "Delete Faux"
@@ -15146,10 +15146,10 @@ exports[`Settings → Models, pinned > the edit dialog for Gateway > markup 1`] 
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 11/5/2026, 10:00:00 AM
+            Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -15269,7 +15269,7 @@ exports[`Settings → Models, pinned > the edit dialog for Gateway > markup 1`] 
             </span>
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -15389,10 +15389,10 @@ exports[`Settings → Models, pinned > the edit dialog for Gateway > markup 1`] 
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            OpenAI Chat · through Gateway · 0 models · checked 11/5/2026, 10:00:00 AM
+            OpenAI Chat · through Gateway · 0 models · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -15504,10 +15504,10 @@ exports[`Settings → Models, pinned > the edit dialog for Gateway > markup 1`] 
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            Claude plan · 1 model · checked 11/5/2026, 10:00:00 AM
+            Claude plan · 1 model · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -15611,10 +15611,10 @@ exports[`Settings → Models, pinned > the edit dialog for Gateway > markup 1`] 
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 11/5/2026, 10:00:00 AM
+            OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -15726,10 +15726,10 @@ exports[`Settings → Models, pinned > the edit dialog for Gateway > markup 1`] 
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            Faux · 0 models · checked 11/5/2026, 10:00:00 AM
+            Faux · 0 models · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -16183,7 +16183,7 @@ div [aria-hidden=true]
       icon lucide-chevron-right
       "Anthropic"
     "Connected"
-  "Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 11/5/2026, 10:00:00 AM"
+  "Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 21 hours ago"
   button "Disable"
     "Disable"
   button "Check Anthropic again"
@@ -16214,7 +16214,7 @@ div [aria-hidden=true]
       icon lucide-chevron-right
       "Through gateway"
     "Disabled"
-  "OpenAI Chat · through Gateway · 0 models · checked 11/5/2026, 10:00:00 AM"
+  "OpenAI Chat · through Gateway · 0 models · checked 21 hours ago"
   button "Enable"
     "Enable"
   button "Check Through gateway again"
@@ -16228,7 +16228,7 @@ div [aria-hidden=true]
       icon lucide-chevron-right
       "Claude plan"
     "Connected"
-  "Claude plan · 1 model · checked 11/5/2026, 10:00:00 AM"
+  "Claude plan · 1 model · checked 21 hours ago"
   button "Disable"
     "Disable"
   button "Check Claude plan again"
@@ -16240,7 +16240,7 @@ div [aria-hidden=true]
       icon lucide-chevron-right
       "Local"
     "Unreachable"
-  "OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 11/5/2026, 10:00:00 AM"
+  "OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 21 hours ago"
   button "Disable"
     "Disable"
   button "Check Local again"
@@ -16254,7 +16254,7 @@ div [aria-hidden=true]
       icon lucide-chevron-right
       "Faux"
     "Connected"
-  "Faux · 0 models · checked 11/5/2026, 10:00:00 AM"
+  "Faux · 0 models · checked 21 hours ago"
   button "Disable"
     "Disable"
   button "Delete Faux"
@@ -16420,10 +16420,10 @@ exports[`Settings → Models, pinned > the edit dialog for Local > markup 1`] = 
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 11/5/2026, 10:00:00 AM
+            Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -16543,7 +16543,7 @@ exports[`Settings → Models, pinned > the edit dialog for Local > markup 1`] = 
             </span>
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -16663,10 +16663,10 @@ exports[`Settings → Models, pinned > the edit dialog for Local > markup 1`] = 
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            OpenAI Chat · through Gateway · 0 models · checked 11/5/2026, 10:00:00 AM
+            OpenAI Chat · through Gateway · 0 models · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -16778,10 +16778,10 @@ exports[`Settings → Models, pinned > the edit dialog for Local > markup 1`] = 
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            Claude plan · 1 model · checked 11/5/2026, 10:00:00 AM
+            Claude plan · 1 model · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -16885,10 +16885,10 @@ exports[`Settings → Models, pinned > the edit dialog for Local > markup 1`] = 
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 11/5/2026, 10:00:00 AM
+            OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -17000,10 +17000,10 @@ exports[`Settings → Models, pinned > the edit dialog for Local > markup 1`] = 
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            Faux · 0 models · checked 11/5/2026, 10:00:00 AM
+            Faux · 0 models · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -17516,7 +17516,7 @@ div [aria-hidden=true]
       icon lucide-chevron-right
       "Anthropic"
     "Connected"
-  "Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 11/5/2026, 10:00:00 AM"
+  "Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 21 hours ago"
   button "Disable"
     "Disable"
   button "Check Anthropic again"
@@ -17547,7 +17547,7 @@ div [aria-hidden=true]
       icon lucide-chevron-right
       "Through gateway"
     "Disabled"
-  "OpenAI Chat · through Gateway · 0 models · checked 11/5/2026, 10:00:00 AM"
+  "OpenAI Chat · through Gateway · 0 models · checked 21 hours ago"
   button "Enable"
     "Enable"
   button "Check Through gateway again"
@@ -17561,7 +17561,7 @@ div [aria-hidden=true]
       icon lucide-chevron-right
       "Claude plan"
     "Connected"
-  "Claude plan · 1 model · checked 11/5/2026, 10:00:00 AM"
+  "Claude plan · 1 model · checked 21 hours ago"
   button "Disable"
     "Disable"
   button "Check Claude plan again"
@@ -17573,7 +17573,7 @@ div [aria-hidden=true]
       icon lucide-chevron-right
       "Local"
     "Unreachable"
-  "OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 11/5/2026, 10:00:00 AM"
+  "OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 21 hours ago"
   button "Disable"
     "Disable"
   button "Check Local again"
@@ -17587,7 +17587,7 @@ div [aria-hidden=true]
       icon lucide-chevron-right
       "Faux"
     "Connected"
-  "Faux · 0 models · checked 11/5/2026, 10:00:00 AM"
+  "Faux · 0 models · checked 21 hours ago"
   button "Disable"
     "Disable"
   button "Delete Faux"
@@ -17758,10 +17758,10 @@ exports[`Settings → Models, pinned > the edit dialog for Through gateway > mar
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 11/5/2026, 10:00:00 AM
+            Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -17881,7 +17881,7 @@ exports[`Settings → Models, pinned > the edit dialog for Through gateway > mar
             </span>
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -18001,10 +18001,10 @@ exports[`Settings → Models, pinned > the edit dialog for Through gateway > mar
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            OpenAI Chat · through Gateway · 0 models · checked 11/5/2026, 10:00:00 AM
+            OpenAI Chat · through Gateway · 0 models · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -18116,10 +18116,10 @@ exports[`Settings → Models, pinned > the edit dialog for Through gateway > mar
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            Claude plan · 1 model · checked 11/5/2026, 10:00:00 AM
+            Claude plan · 1 model · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -18223,10 +18223,10 @@ exports[`Settings → Models, pinned > the edit dialog for Through gateway > mar
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 11/5/2026, 10:00:00 AM
+            OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -18338,10 +18338,10 @@ exports[`Settings → Models, pinned > the edit dialog for Through gateway > mar
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            Faux · 0 models · checked 11/5/2026, 10:00:00 AM
+            Faux · 0 models · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -18792,7 +18792,7 @@ div [aria-hidden=true]
       icon lucide-chevron-right
       "Anthropic"
     "Connected"
-  "Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 11/5/2026, 10:00:00 AM"
+  "Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 21 hours ago"
   button "Disable"
     "Disable"
   button "Check Anthropic again"
@@ -18823,7 +18823,7 @@ div [aria-hidden=true]
       icon lucide-chevron-right
       "Through gateway"
     "Disabled"
-  "OpenAI Chat · through Gateway · 0 models · checked 11/5/2026, 10:00:00 AM"
+  "OpenAI Chat · through Gateway · 0 models · checked 21 hours ago"
   button "Enable"
     "Enable"
   button "Check Through gateway again"
@@ -18837,7 +18837,7 @@ div [aria-hidden=true]
       icon lucide-chevron-right
       "Claude plan"
     "Connected"
-  "Claude plan · 1 model · checked 11/5/2026, 10:00:00 AM"
+  "Claude plan · 1 model · checked 21 hours ago"
   button "Disable"
     "Disable"
   button "Check Claude plan again"
@@ -18849,7 +18849,7 @@ div [aria-hidden=true]
       icon lucide-chevron-right
       "Local"
     "Unreachable"
-  "OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 11/5/2026, 10:00:00 AM"
+  "OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 21 hours ago"
   button "Disable"
     "Disable"
   button "Check Local again"
@@ -18863,7 +18863,7 @@ div [aria-hidden=true]
       icon lucide-chevron-right
       "Faux"
     "Connected"
-  "Faux · 0 models · checked 11/5/2026, 10:00:00 AM"
+  "Faux · 0 models · checked 21 hours ago"
   button "Disable"
     "Disable"
   button "Delete Faux"
@@ -19085,10 +19085,10 @@ exports[`Settings → Models, pinned > with accounts of each kind, folded, and d
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 11/5/2026, 10:00:00 AM
+            Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -19208,7 +19208,7 @@ exports[`Settings → Models, pinned > with accounts of each kind, folded, and d
             </span>
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -19328,10 +19328,10 @@ exports[`Settings → Models, pinned > with accounts of each kind, folded, and d
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            OpenAI Chat · through Gateway · 0 models · checked 11/5/2026, 10:00:00 AM
+            OpenAI Chat · through Gateway · 0 models · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -19443,10 +19443,10 @@ exports[`Settings → Models, pinned > with accounts of each kind, folded, and d
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            Claude plan · 1 model · checked 11/5/2026, 10:00:00 AM
+            Claude plan · 1 model · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -19550,10 +19550,10 @@ exports[`Settings → Models, pinned > with accounts of each kind, folded, and d
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 11/5/2026, 10:00:00 AM
+            OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -19665,10 +19665,10 @@ exports[`Settings → Models, pinned > with accounts of each kind, folded, and d
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            Faux · 0 models · checked 11/5/2026, 10:00:00 AM
+            Faux · 0 models · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -20014,7 +20014,7 @@ heading "AnthropicConnected"
     icon lucide-chevron-right
     "Anthropic"
   "Connected"
-"Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 11/5/2026, 10:00:00 AM"
+"Anthropic · api.anthropic.com · sk-…a1B2 · local · 3 models · checked 21 hours ago"
 button "Disable"
   "Disable"
 button "Check Anthropic again"
@@ -20045,7 +20045,7 @@ heading "Through gatewayDisabled"
     icon lucide-chevron-right
     "Through gateway"
   "Disabled"
-"OpenAI Chat · through Gateway · 0 models · checked 11/5/2026, 10:00:00 AM"
+"OpenAI Chat · through Gateway · 0 models · checked 21 hours ago"
 button "Enable"
   "Enable"
 button "Check Through gateway again"
@@ -20059,7 +20059,7 @@ heading "Claude planConnected"
     icon lucide-chevron-right
     "Claude plan"
   "Connected"
-"Claude plan · 1 model · checked 11/5/2026, 10:00:00 AM"
+"Claude plan · 1 model · checked 21 hours ago"
 button "Disable"
   "Disable"
 button "Check Claude plan again"
@@ -20071,7 +20071,7 @@ heading "LocalUnreachable"
     icon lucide-chevron-right
     "Local"
   "Unreachable"
-"OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 11/5/2026, 10:00:00 AM"
+"OpenAI Chat · localhost:11434 · sk-…a1B2 · local · 1 model · checked 21 hours ago"
 button "Disable"
   "Disable"
 button "Check Local again"
@@ -20085,7 +20085,7 @@ heading "FauxConnected"
     icon lucide-chevron-right
     "Faux"
   "Connected"
-"Faux · 0 models · checked 11/5/2026, 10:00:00 AM"
+"Faux · 0 models · checked 21 hours ago"
 button "Disable"
   "Disable"
 button "Delete Faux"
@@ -20415,10 +20415,10 @@ exports[`Settings → Models, pinned > with only the faux account > markup 1`] =
             class="text-sm text-muted-foreground"
             data-slot="card-description"
           >
-            Faux · 0 models · checked 11/5/2026, 10:00:00 AM
+            Faux · 0 models · checked 21 hours ago
           </div>
           <div
-            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1"
+            class="col-start-2 row-span-2 row-start-1 self-start justify-self-end flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start"
             data-slot="card-action"
           >
             <button
@@ -20755,7 +20755,7 @@ heading "FauxConnected"
     icon lucide-chevron-right
     "Faux"
   "Connected"
-"Faux · 0 models · checked 11/5/2026, 10:00:00 AM"
+"Faux · 0 models · checked 21 hours ago"
 button "Disable"
   "Disable"
 button "Delete Faux"

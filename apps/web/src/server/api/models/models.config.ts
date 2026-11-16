@@ -115,7 +115,7 @@ export const vaultCredentials: CredentialResolver = {
     const host = providerHost(row);
     if (!item || !host) return undefined;
     try {
-      const key = await resolveProviderSecret(item.handle, { providerId, host });
+      const key = await resolveProviderSecret(item.handle, { providerName: row.name, host });
       if (row.status === "locked") {
         await setStatus(providerId, "unchecked", null);
         await reloadModels();

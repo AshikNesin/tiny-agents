@@ -242,3 +242,26 @@ describe("Settings → Models · delete", () => {
     expect(api.removeModel).not.toHaveBeenCalled();
   });
 });
+
+describe("Settings → Models · account summary", () => {
+  it("says when the account was last checked as a relative time", async () => {
+    // FIXED_NOW is 2026-11-06T06:30Z: an hour after this check.
+    api.accounts.mockResolvedValue({
+      accounts: [{ ...account([{}]), checkedAt: "2026-11-06T05:30:00.000Z" }],
+      templates: TEMPLATES,
+    });
+    render(
+      <AppQueryProvider>
+        <ConfirmProvider>
+          <ModelsSettings />
+        </ConfirmProvider>
+      </AppQueryProvider>,
+    );
+
+    expect(
+      await screen.findByText(
+        "Anthropic · api.anthropic.com · sk-…a1B2 · local · 1 model · checked an hour ago",
+      ),
+    ).toBeTruthy();
+  });
+});
