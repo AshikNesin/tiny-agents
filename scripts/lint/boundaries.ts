@@ -344,6 +344,37 @@ const BOUNDARY_RULES: BoundaryRule[] = [
     enabled: true,
   },
   {
+    id: "R14",
+    kind: "import",
+    scope: "packages/git/**",
+    enabled: true,
+    restrict: {
+      patterns: [
+        {
+          regex: "^[^.]",
+          message:
+            "R14: @tiny-agents/git imports nothing outside itself (ADR 0025). It serves every harness and is bundled into the Claude worker on the sandbox; take what it needs through its port.",
+        },
+      ],
+    },
+  },
+  {
+    id: "R14",
+    kind: "import",
+    scope: "apps/web/src/server/api/code/**",
+    except: ["apps/web/src/server/api/code/code.registry.ts"],
+    enabled: true,
+    restrict: {
+      patterns: [
+        {
+          regex: "^@tiny-agents/claude-worker(/|$)|(^|/)bots/claude-worker$",
+          message:
+            "R14: the app's Code layer serves every harness (ADR 0011, ADR 0025). Only code.registry.ts names the Claude worker; shared git and diff logic goes in @tiny-agents/git, harness-specific behaviour behind the HarnessInstance contract.",
+        },
+      ],
+    },
+  },
+  {
     id: "R13",
     kind: "plugin",
     scope: "apps/web/src/client/lib/*-api.ts",

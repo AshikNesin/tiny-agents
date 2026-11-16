@@ -34,11 +34,17 @@ stale replies by generation.
 
 ## Decision
 
-- **One reader.** `packages/claude-worker/src/git-reads.ts` lists changes,
-  reads both sides and makes a change stamp over a small port (`git` with an
-  argument list, file size, file read, file stats). The worker runs it with
-  `execFile` and `fs`; the app's project workspace runs the same module over
-  the sandbox exec port.
+- **One reader, for every harness.** `@tiny-agents/git` (`packages/git`,
+  no dependencies) lists changes, reads both sides and makes a change stamp
+  over a small port (`git` with an argument list, file size, file read, file
+  stats). The app's project workspace runs it over the sandbox exec port for
+  every project thread, whatever its harness; the Claude worker bundles it
+  and runs it with `execFile` and `fs`. R14 keeps it dependency-free and
+  keeps the app's Code layer from importing one harness's package (only
+  `code.registry.ts` does).
+- **The same rules for every harness's diffs.** The app passes each
+  harness's file diff through `guardSides`, so a Shelley diff that is binary
+  or over the cap is `unshowable` too, not only the ones this module read.
 - **Plumbing reads.** Listings use `diff-index` / `diff-tree -r` (never
   porcelain `diff`), `--no-optional-locks`, `-z`, `core.quotePath=false`
   and `--no-renames`. `--numstat` (which compares content) decides which
@@ -56,9 +62,12 @@ stale replies by generation.
   `git status --porcelain=v2 -z`, and each changed path's size and
   nanosecond mtime, every 1.5 s, 5 s after a quiet minute, never two at
   once, stopped with the last panel. A project thread stamps its worktree
-  over SSH; any other thread asks its harness (`changeStamp`, the worker's
-  `git_stamp` op). It says `unavailable` once when it cannot read, and the
-  panels then re-read on transcript activity as before.
+  over SSH; any other thread asks its harness for a stamp (`changeStamp`, the
+  worker's `git_stamp` op) or, for a harness without one (Shelley), uses its
+  own uncommitted file list (`diffFiles`) as the stamp, so every harness that
+  serves diffs is live. It says `unavailable` once when it cannot read (or a
+  harness serves no diffs), and the panels then re-read on transcript
+  activity as before.
 - **Steady panels.** Panels follow their key on a fixed 750 ms beat (not a
   debounce), keep the previous list and diff on screen while re-reading,
   and key the open diff by file and content hash.
@@ -75,6 +84,11 @@ stale replies by generation.
   per visible tab while a panel is open (hidden tabs give theirs back).
 - A worker that predates `git_stamp` answers an error; the stream says
   `unavailable` and the panel falls back until the worker updates.
+- A harness watched through its file list is coarser: an edit that keeps a
+  file's +/− counts shows on the next change, and each poll is one call to
+  that harness's diff API.
+- The history patches are Claude Code's alone: Shelley owns its transcript
+  and its patch tool already reports real hunks.
 - The stamp uses file times, so a write that keeps size and lands in the
   same nanosecond is missed until the next change; a `touch` of a changed
   file is a spurious (harmless) re-read.

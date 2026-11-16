@@ -22,7 +22,7 @@ import {
   type GitReadPort,
   type GitRunResult,
   type Side,
-} from "./git-reads";
+} from "@tiny-agents/git";
 import type {
   CodingAsset,
   CodingDirectoryListing,
@@ -137,7 +137,7 @@ async function repoRoot(dir: string): Promise<string> {
   }
 }
 
-/** The shared git reads (`git-reads.ts`) on a local repository: `execFile`, never a shell. */
+/** The shared git reads (`@tiny-agents/git`) on a local repository: `execFile`, never a shell. */
 function localPort(root: string): GitReadPort {
   const inside = (rel: string) => path.join(root, repoRelative(rel));
   return {

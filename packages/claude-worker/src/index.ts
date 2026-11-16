@@ -93,4 +93,4 @@ export {
 } from "./coding-sdk";
 export { CodingBook, CodingError, CodingSession, questionAnswers } from "./coding";
 export { repoRelative, runCodingOp, safeFilename } from "./coding-ops";
-export { isGenerated } from "./git-reads";
+export { isGenerated } from "@tiny-agents/git";

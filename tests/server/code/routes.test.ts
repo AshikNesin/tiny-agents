@@ -216,6 +216,29 @@ describe("Code API", () => {
     expect(archived.body.data?.moved).toEqual(["shelley:cB", "shelley:cD"]);
   });
 
+  it("holds every harness's file diffs to the same rules: binary and oversized say so", async () => {
+    const harness = fake as Partial<FakeHarness>;
+    harness.fileDiff = async (_cwd, _diff, path) => ({
+      path,
+      oldContent: "",
+      newContent: path === "logo.png" ? "PNG\0\u0001" : "a".repeat(3_000_000),
+    });
+    const read = (path: string) =>
+      get<{ oldContent: string; newContent: string; unshowable?: string }>(
+        `/harnesses/fake/diffs/working/file?cwd=/repo&path=${path}`,
+      );
+    expect((await read("logo.png")).body.data).toEqual({
+      path: "logo.png",
+      oldContent: "",
+      newContent: "",
+      unshowable: "binary",
+    });
+    expect((await read("big.txt")).body.data).toMatchObject({
+      newContent: "",
+      unshowable: "tooLarge",
+    });
+  });
+
   it("forwards diffs, takes raw uploads, and serves assets sandboxed", async () => {
     const diff = await get<{ path: string }>(
       "/harnesses/shelley/diffs/working/file?cwd=/repo&path=src/a%20b.ts",
@@ -340,8 +363,33 @@ describe("live changes for the Changes panel", () => {
     expect(new TextDecoder().decode(value)).toContain('"type":"unavailable"');
   });
 
-  it("says unavailable for a harness that cannot stamp its directory", async () => {
-    const text = await changes("shelley:s1/changes?cwd=%2Frepo", (s) => s.includes("unavailable"));
+  it("follows any harness that serves diffs, by its own file list, when it has no stamp", async () => {
+    const harness = fake as Partial<FakeHarness>;
+    delete harness.changeStamp;
+    let additions = 1;
+    harness.diffFiles = async () => [
+      { path: "a.ts", status: "modified", additions, deletions: 0, isGenerated: false },
+    ];
+    const text = await changes(
+      "fake:t1/changes?cwd=%2Frepo",
+      (s) => s.includes('"version":1'),
+      () => (additions = 2),
+    );
+    expect(text).toContain('{"type":"changes","version":1}');
+  });
+
+  it("watches a Shelley thread too, through Shelley's own diffs", async () => {
+    const text = await changes("shelley:s1/changes?cwd=%2Frepo", (s) =>
+      /"type":"(changes|unavailable)"/.test(s),
+    );
+    expect(text).toContain('{"type":"changes","version":0}');
+  });
+
+  it("says unavailable only for a harness that serves no diffs at all", async () => {
+    const harness = fake as Partial<FakeHarness>;
+    delete harness.changeStamp;
+    delete harness.diffFiles;
+    const text = await changes("fake:t1/changes?cwd=%2Frepo", (s) => s.includes("unavailable"));
     expect(text).toContain('"type":"unavailable"');
   });
 });

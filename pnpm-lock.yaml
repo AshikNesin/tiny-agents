@@ -317,12 +317,12 @@ importers:
       '@tiny-agents/agent':
         specifier: workspace:*
         version: link:../../packages/agent
-      '@tiny-agents/claude-worker':
-        specifier: workspace:*
-        version: link:../../packages/claude-worker
       '@tiny-agents/code':
         specifier: workspace:*
         version: link:../../packages/code
+      '@tiny-agents/git':
+        specifier: workspace:*
+        version: link:../../packages/git
       '@tiny-agents/github':
         specifier: workspace:*
         version: link:../../packages/github
@@ -451,6 +451,9 @@ importers:
 
   packages/claude-worker:
     dependencies:
+      '@tiny-agents/git':
+        specifier: workspace:*
+        version: link:../git
       ws:
         specifier: 8.22.0
         version: 8.22.0
@@ -523,6 +526,8 @@ importers:
       '@types/node':
         specifier: ^26.6.5
         version: 26.6.5
+
+  packages/git: {}
 
   packages/github: {}
 

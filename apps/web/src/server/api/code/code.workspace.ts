@@ -24,7 +24,7 @@ import {
   isGenerated,
   type ChangedFile,
   type GitReadPort,
-} from "@tiny-agents/claude-worker/git-reads";
+} from "@tiny-agents/git";
 
 const q = shQuote;
 
@@ -268,7 +268,7 @@ export function createWorkspace(options: WorkspaceOptions): Workspace {
 
   const git = (path: string) => `git -C ${q(path)}`;
 
-  /** The shared git reads (`git-reads.ts`) on this worktree, over the exec port. */
+  /** The shared git reads (`@tiny-agents/git`) on this worktree, over the exec port. */
   function reads(root: string): GitReadPort {
     const at = (rel: string) => q(`${root}/${rel}`);
     return {

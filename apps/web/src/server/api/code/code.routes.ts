@@ -37,6 +37,7 @@ import {
   startProjectThread,
 } from "./code.projects";
 import { codeChanges } from "./code.changes";
+import { guardSides } from "@tiny-agents/git";
 import { codeGitHub } from "./code.github";
 import { noteOwnerInput, onThreadArchived } from "./code.pulls";
 
@@ -264,7 +265,9 @@ router.get("/code/threads/:id/events", (c) => {
 /**
  * Live refresh for the Changes and Review panels (ADR 0025): a new version
  * each time the thread's directory changes. A project thread watches its
- * worktree; any other thread its directory, through the harness.
+ * worktree, whatever its harness; any other thread its directory, through
+ * the harness's own stamp or, failing that, its own uncommitted file list,
+ * so every harness that serves diffs is live.
  * Where neither can be stamped the stream says `unavailable` and the panel
  * re-reads on transcript activity instead.
  */
@@ -284,9 +287,13 @@ router.get("/code/threads/:id/changes", async (c) => {
       .catch(() => undefined);
     if (ws) source = { key: `sandbox:${worktree}`, stamp: () => ws.changeStamp(worktree) };
   } else if (cwd && typeof instance.changeStamp === "function") {
+    source = { key: `${instance.id}:${cwd}`, stamp: () => instance.changeStamp!(cwd) };
+  } else if (cwd && typeof instance.diffFiles === "function") {
+    // Any harness that serves diffs: its own uncommitted file list is the
+    // stamp (coarser: an edit that keeps a file's counts waits for the next).
     source = {
       key: `${instance.id}:${cwd}`,
-      stamp: () => instance.changeStamp!(cwd),
+      stamp: async () => JSON.stringify(await instance.diffFiles!(cwd, "working")),
     };
   }
   return openSse(c, (sse) => {
@@ -555,9 +562,12 @@ router.get("/code/harnesses/:instance/diffs/:diff/file", async (c) => {
   if (!diff.success) throw Boom.badRequest("Invalid diff");
   const path = query(c, "path")!;
   if (path.split("/").some((s) => s === "..")) throw Boom.badRequest("Invalid path");
+  // Every harness's diff, held to the same rules as the app's own git reads.
   return ok(
     c,
-    await run(() => need(instance, "fileDiff", "show diffs")(query(c, "cwd")!, diff.data, path)),
+    guardSides(
+      await run(() => need(instance, "fileDiff", "show diffs")(query(c, "cwd")!, diff.data, path)),
+    ),
   );
 });
 

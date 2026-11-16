@@ -1,8 +1,10 @@
 /**
  * Reading a repository's changes for the Code page's Changes and Review
- * panels, in one place: the worker runs it next to the files (`coding-ops`),
- * and the app runs the same reads over SSH for project worktrees
- * (`code.workspace.ts`). One module so the two never drift again.
+ * panels, for every harness, in one place: the app runs it over SSH for
+ * project worktrees whatever agent works in them (`code.workspace.ts`), the
+ * Claude worker runs it next to the files (`coding-ops`), and the app's
+ * guard (`guardSides`) holds every harness's diffs to the same rules. One
+ * module so they never drift again. It has no dependencies (ADR 0025, R14).
  *
  * Every read is safe to run while an agent works in the same repository:
  *
@@ -71,7 +73,7 @@ export interface ChangedFile {
 /** Why a file's diff is not shown as text. */
 type Unshowable = "binary" | "tooLarge";
 
-interface FileSides {
+export interface FileSides {
   oldContent: string;
   newContent: string;
   /** Set when either side is binary or too large: both contents are then empty. */
@@ -315,4 +317,30 @@ const GENERATED = [
 /** Lockfiles, build output and snapshots: listed muted and last, folded by default. */
 export function isGenerated(file: string): boolean {
   return GENERATED.some((pattern) => pattern.test(file));
+}
+
+/** UTF-8 bytes in a string, without encoding it when it is plainly small or plainly large. */
+function utf8Bytes(text: string): number {
+  if (text.length * 3 <= MAX_DIFF_SIDE_BYTES) return 0;
+  if (text.length > MAX_DIFF_SIDE_BYTES) return text.length;
+  return new TextEncoder().encode(text).length;
+}
+
+/**
+ * Any harness's file diff held to the rules this module's own reads follow:
+ * a side that is binary or over the size cap makes the file `unshowable`
+ * (both sides emptied), so the panel says why instead of drawing bytes or a
+ * whole-file change. A diff that already says so passes through.
+ */
+export function guardSides<T extends FileSides>(diff: T): T {
+  if (diff.unshowable) return diff;
+  const sides = [diff.oldContent, diff.newContent];
+  const unshowable: Unshowable | undefined = sides.some(
+    (side) => utf8Bytes(side) > MAX_DIFF_SIDE_BYTES,
+  )
+    ? "tooLarge"
+    : sides.some(isBinaryText)
+      ? "binary"
+      : undefined;
+  return unshowable ? { ...diff, oldContent: "", newContent: "", unshowable } : diff;
 }

@@ -124,10 +124,11 @@ as a card with its diff. Select lines and press **Comment** to put
 
 - While it is open it stays live: the server watches the directory and the
   panel re-reads when the files move, in place (the list, what you folded
-  and the scroll stay). Where a directory cannot be watched (Shelley), it
-  re-reads on transcript activity.
-- A binary file, or one over 2 MB, says so instead of showing its bytes. A
-  very long diff draws its first 4,000 lines.
+  and the scroll stay). This works for every harness that serves diffs: the
+  app reads a cheap change stamp where it can (project worktrees, Claude
+  Code) and otherwise the harness's own file list (Shelley).
+- A binary file, or one over 2 MB, says so instead of showing its bytes,
+  whichever harness served it. A very long diff draws its first 4,000 lines.
 
 **Away.** A followed thread (started, opened or handed off here) sends a push
 (Settings → Notifications → _Code updates_) when it finishes, fails or asks
@@ -403,9 +404,10 @@ Known limits (register row C7):
   - `store/code.ts`: the app-wide list stream.
   - `pages/code/`: the page; `CodeSettings.tsx` is `/code/settings`.
 
-- **Git reads:** `packages/claude-worker/src/git-reads.ts`, one module for
-  both panels (ADR 0025): the worker runs it next to the files and the
-  project workspace runs it over SSH. Plumbing commands only, so a read never
+- **Git reads:** `@tiny-agents/git` (`packages/git`), one module for both
+  panels and every harness (ADR 0025): the project workspace runs it over
+  SSH whatever agent works there, the Claude worker runs it next to the
+  files, and `guardSides` holds every harness's diffs to its rules. Plumbing commands only, so a read never
   rewrites the index an agent commits through; `-z` paths; untracked files
   count as added; a binary or oversized side is `unshowable`.
 
