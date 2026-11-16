@@ -52,7 +52,7 @@ await journey("account-shell", async ({ page, step, proof, cleanup, api, stamp }
   await step("Send feedback opens the FeedbackBee panel (closed without sending)", async () => {
     await account.click();
     await page.getByRole("menuitem", { name: "Send feedback" }).click();
-    // Third-party embed loaded from feedbackbee.nesin.workers.dev; without it the app toasts.
+    // Third-party embed loaded from feedbackbee.nesin.io; without it the app toasts.
     const panel = page.getByRole("dialog", { name: "Tell us more" });
     const unavailable = page.getByText("Feedback isn't available right now");
     await expect(panel.or(unavailable)).toBeVisible();

@@ -385,9 +385,7 @@ async function stageMode(mode) {
   // third-party feedback embed, whose launcher shows on pages without the app
   // sidebar (the Code page). Its host is refused from here on, so the Code
   // states have no launcher. (snaplib's sign-in page loaded it once already.)
-  await session.ctx.route(/^https:\/\/feedbackbee\.nesin\.workers\.dev\//, (route) =>
-    route.abort(),
-  );
+  await session.ctx.route(/^https:\/\/feedbackbee\.nesin\.io\//, (route) => route.abort());
   // The dev server's Vite watches the whole repo and reloads every open tab
   // when any .html file changes, including the snapshots this and the other
   // staging scripts write. Its HMR socket (port + 1) passes everything but
