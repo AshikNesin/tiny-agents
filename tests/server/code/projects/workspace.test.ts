@@ -7,7 +7,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
-  branchName,
+  branchSlug,
+  cleanBranchSlug,
   createWorkspace,
   matchesGlob,
   WorkspaceError,
@@ -173,6 +174,15 @@ describe("sync to the remote head", () => {
     expect((error as WorkspaceError).code).toBe("diverged");
   });
 
+  it("knows a branch name is taken, here or on the remote", async () => {
+    await ws.addWorktree(checkout, join(local.home, "a"), "ta/fix-login", "main");
+    await sh(local, `git -C ${bare} branch ta/on-remote main`);
+    await sh(local, `git -C ${checkout} fetch --quiet origin`);
+    expect(await ws.branchTaken(checkout, "ta/fix-login")).toBe(true);
+    expect(await ws.branchTaken(checkout, "ta/on-remote")).toBe(true);
+    expect(await ws.branchTaken(checkout, "ta/fix-login-2")).toBe(false);
+  });
+
   it("does nothing for a branch not on the remote yet", async () => {
     const a = join(local.home, "a");
     await ws.addWorktree(checkout, a, "ta/new-1", "main");
@@ -181,9 +191,30 @@ describe("sync to the remote head", () => {
 });
 
 describe("names and paths", () => {
-  it("makes branch names from a title", () => {
-    expect(branchName("Fix the login flow!", "a1b2c3")).toBe("ta/fix-the-login-flow-a1b2c3");
-    expect(branchName("   ", "a1b2c3")).toBe("ta/thread-a1b2c3");
+  it("makes a short branch slug from a task, without the filler", () => {
+    expect(branchSlug("Fix the login flow!")).toBe("fix-login-flow");
+    expect(
+      branchSlug("Can you please fix the login flow when users sign in with Google? It 500s."),
+    ).toBe("fix-login-flow-users");
+    expect(branchSlug("Let's add a dark mode toggle to the settings page")).toBe(
+      "add-dark-mode-toggle",
+    );
+    // Long words stop at a word boundary, under 28 characters.
+    expect(branchSlug("Refactor authentication middleware configuration loading")).toBe(
+      "refactor-authentication",
+    );
+    expect(branchSlug("   ")).toBe("thread");
+    expect(branchSlug("Please, could you?")).toBe("please-could-you");
+  });
+
+  it("cleans a model's branch name into a slug, or refuses it", () => {
+    expect(cleanBranchSlug("fix-google-sign-in")).toBe("fix-google-sign-in");
+    expect(cleanBranchSlug("Branch name: `feat/Dark_Mode Toggle`.")).toBe("feat-dark-mode-toggle");
+    expect(cleanBranchSlug("<think>hmm</think>\n\nta/add-retry-to-uploads\nBecause…")).toBe(
+      "add-retry-to-uploads",
+    );
+    expect(cleanBranchSlug("")).toBeNull();
+    expect(cleanBranchSlug("??")).toBeNull();
   });
 
   it("matches protected paths by glob", () => {

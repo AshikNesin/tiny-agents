@@ -169,9 +169,17 @@ to run `check` before it reports done. `archive` runs before a worktree is
 removed.
 
 **Start.** Pick the project on the New thread screen. The thread gets its
-own worktree on a new branch `ta/<slug>-<hex>` from the freshly fetched base
-branch, and its first message starts with one line naming the branch and
-telling the agent to commit but not push.
+own worktree on a new branch from the freshly fetched base branch, and its
+first message starts with one line naming the branch and telling the agent
+to commit but not push.
+
+The branch is named for what the task does, short: `ta/fix-google-callback`,
+not the prompt's opening words. One side-call on the `chat_title` model role
+(Settings → Models) reads the task and names it (2 to 4 words, starting with
+a verb), with an 8-second limit. With no model, a failed call or an unusable
+answer, the name is the task's first words without the filler ("Can you
+please fix the login flow when…" is `ta/fix-login-flow-users`). A name an
+earlier thread took, here or on the remote, gets `-2`, `-3`, ….
 
 **Review.** In a project thread, Changes (⌘⇧D) shows everything since the
 merge base with the base branch, committed or not: a file list with a

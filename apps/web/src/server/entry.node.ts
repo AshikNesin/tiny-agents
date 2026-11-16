@@ -40,6 +40,7 @@ import { sweepBotReleases } from "./api/bots/bot-resources";
 import { setVaultAlertSink } from "./api/vault/vault.alerts";
 import { importStoredSecrets } from "./api/vault/vault.import";
 import { setChatTitler } from "./api/bots/chats.title";
+import { setCodeBranchNamer } from "./api/code/code.projects";
 import { createSideCaller, type SideCaller } from "./api/bots/side-call";
 import { attachBrowserVnc } from "./api/bots/browser.vnc";
 import { attachComputerVnc } from "./api/bots/computer.vnc";
@@ -308,6 +309,7 @@ async function main(): Promise<void> {
     needs: ["agent runtime"],
     start: () => {
       setChatTitler(sideCaller && { sideCaller });
+      setCodeBranchNamer(sideCaller && { sideCaller });
     },
   });
 
