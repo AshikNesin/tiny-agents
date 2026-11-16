@@ -11,6 +11,18 @@ import { mkdir, readdir, readFile, realpath, stat, writeFile } from "node:fs/pro
 import { homedir } from "node:os";
 import path from "node:path";
 import { CodingError } from "./coding";
+import {
+  EMPTY_TREE,
+  GitReadError,
+  changeStamp,
+  changedFiles,
+  fileSides,
+  headCommit,
+  isGenerated,
+  type GitReadPort,
+  type GitRunResult,
+  type Side,
+} from "./git-reads";
 import type {
   CodingAsset,
   CodingDirectoryListing,
@@ -31,8 +43,6 @@ export interface CodingOpsContext {
   home?: string;
 }
 
-const EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
-const MAX_FILE_BYTES = 2 * 1024 * 1024;
 const MAX_LIST_ENTRIES = 1_000;
 
 function defaultUploadsDir(home = homedir()): string {
@@ -47,6 +57,10 @@ export async function runCodingOp(op: CodingOp, ctx: CodingOpsContext): Promise<
       return gitFiles(await repoRoot(await directory(op.cwd)), op.diffId);
     case "git_file":
       return gitFile(await repoRoot(await directory(op.cwd)), op.diffId, op.path);
+    case "git_stamp": {
+      const port = localPort(await repoRoot(await directory(op.cwd)));
+      return { stamp: await reading(() => changeStamp(port)) };
+    }
     case "find_files":
       return findFiles(await directory(op.dir), op.query, op.content, op.limit ?? 50);
     case "list_dir":
@@ -123,119 +137,83 @@ async function repoRoot(dir: string): Promise<string> {
   }
 }
 
-async function hasHead(root: string): Promise<boolean> {
-  return git(root, ["rev-parse", "--verify", "-q", "HEAD"]).then(
-    () => true,
-    () => false,
-  );
+/** The shared git reads (`git-reads.ts`) on a local repository: `execFile`, never a shell. */
+function localPort(root: string): GitReadPort {
+  const inside = (rel: string) => path.join(root, repoRelative(rel));
+  return {
+    git: (args) => runGit(root, args),
+    async fileSize(rel) {
+      const info = await stat(inside(rel)).catch(() => undefined);
+      return info?.isFile() ? info.size : null;
+    },
+    readFile: (rel) => readFile(inside(rel), "utf8").catch(() => null),
+    async stats(rels) {
+      const lines = await Promise.all(
+        rels.map(async (rel) => {
+          const info = await stat(inside(rel), { bigint: true }).catch(() => undefined);
+          return info ? `${info.size} ${info.mtimeNs}` : "-";
+        }),
+      );
+      return lines.join("\n");
+    },
+  };
 }
 
-interface NumstatRow {
-  path: string;
-  additions: number;
-  deletions: number;
+/** `git` with its exit code, for the shared reads (they decide what a failure means). */
+function runGit(cwd: string, args: string[]): Promise<GitRunResult> {
+  return new Promise((resolve) => {
+    execFile(
+      "git",
+      ["-C", cwd, ...args],
+      {
+        encoding: "utf8",
+        maxBuffer: 32 * 1024 * 1024,
+        timeout: 20_000,
+        env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GIT_OPTIONAL_LOCKS: "0", LC_ALL: "C" },
+      },
+      (error, stdout, stderr) => {
+        const code = (error as { code?: unknown } | null)?.code;
+        resolve({
+          stdout: String(stdout),
+          stderr: String(stderr || (error && typeof code !== "number" ? error.message : "")),
+          exitCode: error ? (typeof code === "number" ? code : 1) : 0,
+        });
+      },
+    );
+  });
 }
 
-/** `--numstat -z` rows (renames are off, so one path per row). */
-function parseNumstat(output: string): NumstatRow[] {
-  const rows: NumstatRow[] = [];
-  for (const record of output.split("\0")) {
-    const match = /^(-|\d+)\t(-|\d+)\t(.+)$/s.exec(record.replace(/^\n+/, ""));
-    if (!match) continue;
-    rows.push({
-      path: match[3]!,
-      additions: match[1] === "-" ? 0 : Number(match[1]),
-      deletions: match[2] === "-" ? 0 : Number(match[2]),
-    });
+/** A shared read's failure as the protocol's `git` error. */
+async function reading<T>(work: () => Promise<T>): Promise<T> {
+  try {
+    return await work();
+  } catch (error) {
+    if (error instanceof GitReadError) throw new CodingError("git", error.message);
+    throw error;
   }
-  return rows;
 }
 
-/** `--name-status -z`: status, path, status, path … */
-function parseNameStatus(output: string): Map<string, string> {
-  const parts = output.split("\0").filter((part) => part.length > 0);
-  const map = new Map<string, string>();
-  for (let i = 0; i + 1 < parts.length; i += 2) {
-    map.set(parts[i + 1]!, parts[i]!.trim().charAt(0));
-  }
-  return map;
-}
-
-async function untrackedFiles(root: string): Promise<string[]> {
-  const output = await git(root, ["ls-files", "--others", "--exclude-standard", "-z"]);
-  return output.split("\0").filter(Boolean);
-}
-
-async function lineCount(file: string): Promise<number> {
-  const info = await stat(file).catch(() => undefined);
-  if (!info?.isFile() || info.size > MAX_FILE_BYTES) return 0;
-  const content = await readFile(file, "utf8").catch(() => "");
-  if (!content) return 0;
-  return content.split("\n").length - (content.endsWith("\n") ? 1 : 0);
-}
+const withGenerated = (files: Array<Omit<CodingGitFile, "isGenerated">>): CodingGitFile[] =>
+  files.map((file) => ({ ...file, isGenerated: isGenerated(file.path) }));
 
 async function workingFiles(root: string): Promise<CodingGitFile[]> {
-  const base = (await hasHead(root)) ? "HEAD" : EMPTY_TREE;
-  const [numstat, names, untracked] = await Promise.all([
-    git(root, ["diff", base, "--no-renames", "--numstat", "-z"]),
-    git(root, ["diff", base, "--no-renames", "--name-status", "-z"]),
-    untrackedFiles(root),
-  ]);
-  const status = parseNameStatus(names);
-  const files: CodingGitFile[] = parseNumstat(numstat).map((row) => ({
-    path: row.path,
-    status: statusOf(status.get(row.path)),
-    additions: row.additions,
-    deletions: row.deletions,
-    isGenerated: isGenerated(row.path),
-  }));
-  const counts = await Promise.all(
-    untracked.slice(0, 500).map((file) => lineCount(path.join(root, file))),
+  const port = localPort(root);
+  return reading(async () =>
+    withGenerated(await changedFiles(port, (await headCommit(port)) ?? EMPTY_TREE)),
   );
-  untracked.slice(0, 500).forEach((file, index) => {
-    files.push({
-      path: file,
-      status: "added",
-      additions: counts[index] ?? 0,
-      deletions: 0,
-      isGenerated: isGenerated(file),
-    });
-  });
-  return files;
+}
+
+/** A commit's first parent, or the empty tree for a root commit. */
+async function parentOf(root: string, sha: string): Promise<string | null> {
+  return git(root, ["rev-parse", "--verify", "-q", `${sha}^`]).then(
+    (out) => out.trim(),
+    () => null,
+  );
 }
 
 async function commitFiles(root: string, sha: string): Promise<CodingGitFile[]> {
-  const [numstat, names] = await Promise.all([
-    git(root, ["show", "--format=", "--no-renames", "--numstat", "-z", sha]),
-    git(root, ["show", "--format=", "--no-renames", "--name-status", "-z", sha]),
-  ]);
-  const status = parseNameStatus(names);
-  return parseNumstat(numstat).map((row) => ({
-    path: row.path,
-    status: statusOf(status.get(row.path)),
-    additions: row.additions,
-    deletions: row.deletions,
-    isGenerated: isGenerated(row.path),
-  }));
-}
-
-function statusOf(letter: string | undefined): CodingGitFile["status"] {
-  if (letter === "A") return "added";
-  if (letter === "D") return "deleted";
-  return "modified";
-}
-
-const GENERATED = [
-  /(^|\/)(pnpm-lock\.yaml|package-lock\.json|yarn\.lock|bun\.lockb?|Cargo\.lock|go\.sum|poetry\.lock|uv\.lock|Gemfile\.lock|composer\.lock)$/,
-  /(^|\/)(dist|build|out|vendor|node_modules|\.next|coverage)\//,
-  /\.min\.(js|css)$/,
-  /\.map$/,
-  /(^|\/)__snapshots__\//,
-  /\.(generated|gen)\.[a-z]+$/,
-];
-
-export function isGenerated(file: string): boolean {
-  return GENERATED.some((pattern) => pattern.test(file));
+  const parent = (await parentOf(root, sha)) ?? EMPTY_TREE;
+  return reading(async () => withGenerated(await changedFiles(localPort(root), parent, sha)));
 }
 
 async function gitLog(dir: string, limit: number): Promise<CodingGitLogResult> {
@@ -252,7 +230,7 @@ async function gitLog(dir: string, limit: number): Promise<CodingGitLogResult> {
       deletions: working.reduce((sum, file) => sum + file.deletions, 0),
     },
   ];
-  if (!(await hasHead(root))) return { gitRoot: root, diffs };
+  if (!(await headCommit(localPort(root)))) return { gitRoot: root, diffs };
   const output = await git(root, [
     "log",
     `-n${limit}`,
@@ -297,35 +275,21 @@ async function gitFiles(root: string, diffId: string): Promise<CodingGitFile[]> 
   return diffId === "working" ? workingFiles(root) : commitFiles(root, diffId);
 }
 
-async function blob(root: string, spec: string): Promise<string> {
-  return git(root, ["show", spec], MAX_FILE_BYTES * 2).catch(() => "");
-}
-
 async function gitFile(root: string, diffId: string, file: string): Promise<CodingGitFileDiff> {
   const rel = repoRelative(file);
+  const port = localPort(root);
+  let before: Side;
+  let after: Side;
   if (diffId === "working") {
-    const head = await hasHead(root);
-    const absolute = path.join(root, rel);
-    const info = await stat(absolute).catch(() => undefined);
-    const newContent =
-      info?.isFile() && info.size <= MAX_FILE_BYTES
-        ? await readFile(absolute, "utf8").catch(() => "")
-        : "";
-    return {
-      path: rel,
-      oldContent: head ? await blob(root, `HEAD:${rel}`) : "",
-      newContent,
-    };
+    const head = await headCommit(port);
+    before = head ? { rev: head } : null;
+    after = { worktree: true };
+  } else {
+    const parent = await parentOf(root, diffId);
+    before = parent ? { rev: parent } : null;
+    after = { rev: diffId };
   }
-  const parent = await git(root, ["rev-parse", "--verify", "-q", `${diffId}^`]).then(
-    (out) => out.trim(),
-    () => "",
-  );
-  return {
-    path: rel,
-    oldContent: parent ? await blob(root, `${parent}:${rel}`) : "",
-    newContent: await blob(root, `${diffId}:${rel}`),
-  };
+  return { path: rel, ...(await reading(() => fileSides(port, rel, before, after))) };
 }
 
 // --- files -------------------------------------------------------------------

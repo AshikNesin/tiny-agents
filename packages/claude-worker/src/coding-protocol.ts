@@ -134,6 +134,8 @@ export const codingOpSchema = z.discriminatedUnion("op", [
     diffId,
     path: z.string().min(1).max(4096),
   }),
+  /** A fingerprint of the repository's changes (`changeStamp`), to poll cheaply. */
+  z.strictObject({ op: z.literal("git_stamp"), cwd: absolutePath }),
   z.strictObject({
     op: z.literal("find_files"),
     dir: absolutePath,
@@ -409,12 +411,18 @@ export interface CodingGitFile {
   additions: number;
   deletions: number;
   isGenerated: boolean;
+  binary?: boolean;
 }
 
 export interface CodingGitFileDiff {
   path: string;
   oldContent: string;
   newContent: string;
+  unshowable?: "binary" | "tooLarge";
+}
+
+export interface CodingGitStamp {
+  stamp: string;
 }
 
 export interface CodingFileMatch {

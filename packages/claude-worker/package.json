@@ -9,7 +9,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./client": "./src/client.ts"
+    "./client": "./src/client.ts",
+    "./git-reads": "./src/git-reads.ts"
   },
   "dependencies": {
     "ws": "8.22.0",

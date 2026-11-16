@@ -16,7 +16,15 @@
  */
 import { shQuote } from "@tiny-agents/sandbox";
 import type { ExecPort, ExecResult, RepoRef } from "@tiny-agents/github";
-import type { GitFile } from "@tiny-agents/code/contracts";
+import type { GitFile, GitFileDiff } from "@tiny-agents/code/contracts";
+import {
+  changeStamp,
+  changedFiles,
+  fileSides,
+  isGenerated,
+  type ChangedFile,
+  type GitReadPort,
+} from "@tiny-agents/claude-worker/git-reads";
 
 const q = shQuote;
 
@@ -76,14 +84,15 @@ export interface Workspace {
   headSha(path: string): Promise<string>;
   /** Uncommitted changes, as `git status --porcelain` lines. */
   uncommitted(path: string): Promise<string[]>;
-  /** Files changed since the merge base with `origin/<base>` (working tree included), with content hashes. */
+  /**
+   * Files changed since the merge base with `origin/<base>` (working tree and
+   * new files included), with content hashes.
+   */
   baseFiles(path: string, base: string): Promise<Array<GitFile & { hash: string }>>;
-  /** One file's merge-base and working-tree content. */
-  baseFile(
-    path: string,
-    base: string,
-    file: string,
-  ): Promise<{ oldContent: string; newContent: string }>;
+  /** One file's merge-base and working-tree content (or why it cannot be shown). */
+  baseFile(path: string, base: string, file: string): Promise<FileContents>;
+  /** A fingerprint of the worktree's changes: it moves when the Review panel would change. */
+  changeStamp(path: string): Promise<string>;
   /** Commits on HEAD that are not on `origin/<base>`, newest first. */
   commitsAhead(path: string, base: string): Promise<Array<{ sha: string; subject: string }>>;
   /** Paths changed between two commits. */
@@ -112,12 +121,7 @@ export interface Workspace {
   checkpoint(path: string, ref: string): Promise<string>;
   /** Files that differ between two commits (checkpoints), with blob ids. */
   rangeFiles(path: string, from: string, to: string): Promise<Array<GitFile & { hash: string }>>;
-  rangeFile(
-    path: string,
-    from: string,
-    to: string,
-    file: string,
-  ): Promise<{ oldContent: string; newContent: string }>;
+  rangeFile(path: string, from: string, to: string, file: string): Promise<FileContents>;
   /**
    * Put the worktree's files back as they were at a checkpoint, as
    * uncommitted changes: HEAD and the branch's history are untouched, so
@@ -125,6 +129,9 @@ export interface Workspace {
    */
   restore(path: string, sha: string): Promise<void>;
 }
+
+/** A file's two sides, or why they are not sent (`unshowable`). */
+type FileContents = Omit<GitFileDiff, "path">;
 
 /** Every hook git runs, so a per-worktree hooks directory can hand each to the repository's own. */
 const HOOK_NAMES = [
@@ -261,6 +268,52 @@ export function createWorkspace(options: WorkspaceOptions): Workspace {
 
   const git = (path: string) => `git -C ${q(path)}`;
 
+  /** The shared git reads (`git-reads.ts`) on this worktree, over the exec port. */
+  function reads(root: string): GitReadPort {
+    const at = (rel: string) => q(`${root}/${rel}`);
+    return {
+      git: (args) => run(`${git(root)} ${args.map(q).join(" ")}`),
+      async fileSize(rel) {
+        const result = await run(`test -f ${at(rel)} && stat -c %s -- ${at(rel)}`, 30_000);
+        return result.exitCode === 0 ? Number(result.stdout.trim()) : null;
+      },
+      async readFile(rel) {
+        const result = await run(`cat -- ${at(rel)}`);
+        return result.exitCode === 0 ? result.stdout : null;
+      },
+      async stats(rels) {
+        // `%y` carries nanoseconds on every GNU stat; a missing path prints `-`.
+        const result = await exec(
+          `cd ${q(root)} && while IFS= read -r -d '' f; do stat -c '%s %y' -- "$f" 2>/dev/null || echo -; done`,
+          { stdin: `${rels.join("\0")}\0`, timeoutMs: 30_000 },
+        );
+        return result.stdout;
+      },
+    };
+  }
+
+  /** Listed files with each live one's blob id; a file gone mid-read lists again once. */
+  async function hashed(
+    root: string,
+    list: () => Promise<ChangedFile[]>,
+  ): Promise<Array<GitFile & { hash: string }>> {
+    for (let attempt = 0; ; attempt++) {
+      const files = await list();
+      const live = files.filter((f) => f.status !== "deleted").map((f) => f.path);
+      const result = live.length
+        ? await run(`${git(root)} hash-object -- ${live.map(q).join(" ")}`)
+        : { stdout: "", stderr: "", exitCode: 0 };
+      if (result.exitCode !== 0 && attempt === 0) continue;
+      const hashes = result.exitCode === 0 ? result.stdout.split("\n").filter(Boolean) : [];
+      const hashOf = new Map(live.map((file, i) => [file, hashes[i] ?? ""]));
+      return files.map((f) => ({
+        ...f,
+        isGenerated: isGenerated(f.path),
+        hash: f.status === "deleted" ? "deleted" : (hashOf.get(f.path) ?? ""),
+      }));
+    }
+  }
+
   return {
     async tools() {
       const result = await run(
@@ -324,31 +377,22 @@ export function createWorkspace(options: WorkspaceOptions): Workspace {
       return (await must(`${git(path)} rev-parse HEAD`, "Could not read HEAD")).trim();
     },
     async uncommitted(path) {
-      const out = await must(`${git(path)} status --porcelain`, "Could not read the status");
+      const out = await must(
+        `git --no-optional-locks -C ${q(path)} status --porcelain`,
+        "Could not read the status",
+      );
       return out.split("\n").filter(Boolean);
     },
     async baseFiles(path, base) {
       const mb = await mergeBase(path, base);
-      const files = await changed(path, q(mb));
-      const live = files.filter((f) => f.status !== "deleted").map((f) => f.path);
-      const hashes = live.length
-        ? (await must(`${git(path)} hash-object -- ${live.map(q).join(" ")}`, "Could not hash"))
-            .split("\n")
-            .filter(Boolean)
-        : [];
-      const hashOf = new Map(live.map((file, i) => [file, hashes[i] ?? ""]));
-      return files.map((f) => ({ ...f, hash: hashOf.get(f.path) ?? "deleted" }));
+      return hashed(path, () => changedFiles(reads(path), mb));
     },
     async baseFile(path, base, file) {
       const mb = await mergeBase(path, base);
-      const [old, next] = await Promise.all([
-        run(`${git(path)} show ${q(`${mb}:${file}`)}`),
-        run(`cat -- ${q(`${path}/${file}`)}`),
-      ]);
-      return {
-        oldContent: old.exitCode === 0 ? old.stdout : "",
-        newContent: next.exitCode === 0 ? next.stdout : "",
-      };
+      return fileSides(reads(path), file, { rev: mb }, { worktree: true });
+    },
+    async changeStamp(path) {
+      return changeStamp(reads(path));
     },
     async commitsAhead(path, base) {
       const out = await must(
@@ -471,34 +515,32 @@ export function createWorkspace(options: WorkspaceOptions): Workspace {
       return (await must(`bash -c ${q(script)}`, "Could not make a checkpoint")).trim();
     },
     async rangeFiles(path, from, to) {
-      const files = await changed(path, `${q(from)} ${q(to)}`);
+      const files = await changedFiles(reads(path), from, to);
       const live = files.filter((f) => f.status !== "deleted");
       const ids = live.length
         ? await must(
-            `${git(path)} ls-tree ${q(to)} -- ${live.map((f) => q(f.path)).join(" ")}`,
+            `${git(path)} ls-tree -z ${q(to)} -- ${live.map((f) => q(f.path)).join(" ")}`,
             "Could not read the tree",
           )
         : "";
+      // `<mode> blob <id>\t<path>` records.
       const hashOf = new Map(
         ids
-          .split("\n")
+          .split("\0")
           .filter(Boolean)
-          .map((line) => {
-            const [meta, file] = line.split("\t");
-            return [file!, meta!.split(" ")[2] ?? ""] as const;
+          .map((record) => {
+            const tab = record.indexOf("\t");
+            return [record.slice(tab + 1), record.slice(0, tab).split(" ")[2] ?? ""] as const;
           }),
       );
-      return files.map((f) => ({ ...f, hash: hashOf.get(f.path) ?? "deleted" }));
+      return files.map((f) => ({
+        ...f,
+        isGenerated: isGenerated(f.path),
+        hash: f.status === "deleted" ? "deleted" : (hashOf.get(f.path) ?? ""),
+      }));
     },
     async rangeFile(path, from, to, file) {
-      const [old, next] = await Promise.all([
-        run(`${git(path)} show ${q(`${from}:${file}`)}`),
-        run(`${git(path)} show ${q(`${to}:${file}`)}`),
-      ]);
-      return {
-        oldContent: old.exitCode === 0 ? old.stdout : "",
-        newContent: next.exitCode === 0 ? next.stdout : "",
-      };
+      return fileSides(reads(path), file, { rev: from }, { rev: to });
     },
     async restore(path, sha) {
       await must(
@@ -521,37 +563,6 @@ export function createWorkspace(options: WorkspaceOptions): Workspace {
       };
     },
   };
-
-  /** Files changed by `git diff <range>` (a commit for the working tree, or `a b`). */
-  async function changed(path: string, range: string): Promise<Array<GitFile>> {
-    const [numstat, names] = await Promise.all([
-      must(`${git(path)} diff --numstat ${range}`, "Could not diff"),
-      must(`${git(path)} diff --name-status --no-renames ${range}`, "Could not diff"),
-    ]);
-    const counts = new Map<string, { add: number; del: number }>();
-    for (const line of numstat.split("\n").filter(Boolean)) {
-      const [add, del, file] = line.split("\t");
-      counts.set(file!, {
-        add: add === "-" ? 0 : Number(add),
-        del: del === "-" ? 0 : Number(del),
-      });
-    }
-    return names
-      .split("\n")
-      .filter(Boolean)
-      .map((line) => {
-        const [code, file] = line.split("\t") as [string, string];
-        const status: GitFile["status"] =
-          code === "A" ? "added" : code === "D" ? "deleted" : "modified";
-        return {
-          path: file,
-          status,
-          additions: counts.get(file)?.add ?? 0,
-          deletions: counts.get(file)?.del ?? 0,
-          isGenerated: isGenerated(file),
-        };
-      });
-  }
 
   async function mergeBase(path: string, base: string): Promise<string> {
     return (
@@ -576,15 +587,4 @@ function parseScripts(raw: string): ProjectScripts {
   } catch {
     return {};
   }
-}
-
-const GENERATED = [
-  /(^|\/)(package-lock\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb?|Cargo\.lock|go\.sum|poetry\.lock|composer\.lock|Gemfile\.lock)$/,
-  /(^|\/)(dist|build|vendor|node_modules)\//,
-  /\.min\.(js|css)$/,
-  /\.snap$/,
-];
-
-function isGenerated(path: string): boolean {
-  return GENERATED.some((re) => re.test(path));
 }

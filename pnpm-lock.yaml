@@ -317,6 +317,9 @@ importers:
       '@tiny-agents/agent':
         specifier: workspace:*
         version: link:../../packages/agent
+      '@tiny-agents/claude-worker':
+        specifier: workspace:*
+        version: link:../../packages/claude-worker
       '@tiny-agents/code':
         specifier: workspace:*
         version: link:../../packages/code
