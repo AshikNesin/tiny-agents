@@ -1,5 +1,0 @@
----
-"tiny-agents": minor
----
-
-Code has a quieter, t3code-inspired layout. The sidebar groups threads by project (then by repository or folder), each group folding away and offering its own New thread and, for a project, its settings; the top bar, the Active/Archived toggle and the harness and repository filters are gone, with Archived and Settings at the foot of the sidebar. The thread header is one line: the title (its menu now holds Archive and the cost), the project, PR and Changes. Projects are no longer one dialog: Code → Settings has a Projects page, a page per project with every rule (name, base branch, default agent and model, the setup, check and archive scripts, each Auto-fix trigger, protected paths and limits), and a GitHub page. The PR panel puts its actions in one row and shows the spend limit only where the harness reports cost. While the PR tab is on screen it re-checks GitHub every 15 seconds, so projects without the GitHub App's webhooks show a finished check within seconds instead of minutes.
