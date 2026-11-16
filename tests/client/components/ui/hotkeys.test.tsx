@@ -141,6 +141,21 @@ describe("useHotkey", () => {
     expect(nav.handler).toHaveBeenCalledTimes(1);
   });
 
+  it("ignores a closed modal left in the page as inert, like FeedbackBee's headless panel", () => {
+    const palette = bindHotkey("mod+k", { scope: "dialog", open: false });
+    const closed = document.createElement("div");
+    closed.setAttribute("aria-modal", "true");
+    closed.setAttribute("role", "dialog");
+    closed.setAttribute("inert", "");
+    document.body.append(closed);
+    try {
+      press("k", { ctrlKey: true });
+      expect(palette.handler).toHaveBeenCalledTimes(1);
+    } finally {
+      closed.remove();
+    }
+  });
+
   it("answers only while focus is inside `within`", () => {
     const handler = vi.fn();
     function Pane() {

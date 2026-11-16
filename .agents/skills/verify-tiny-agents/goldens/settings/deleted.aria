@@ -46,5 +46,3 @@
 - region "Notifications alt+T":
   - list:
     - listitem: Setting deleted successfully
-- button "Feedback":
-  - img

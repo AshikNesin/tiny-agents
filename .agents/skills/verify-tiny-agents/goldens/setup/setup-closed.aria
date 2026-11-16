@@ -26,5 +26,3 @@
     - paragraph: Yours alone
     - paragraph: Single-owner app with passkey or password login.
 - region "Notifications alt+T"
-- button "Feedback":
-  - img

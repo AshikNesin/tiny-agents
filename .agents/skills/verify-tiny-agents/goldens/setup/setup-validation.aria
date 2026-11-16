@@ -22,5 +22,3 @@
 - paragraph: Passwords do not match
 - button "Create account"
 - region "Notifications alt+T"
-- button "Feedback":
-  - img

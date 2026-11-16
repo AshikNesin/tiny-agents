@@ -45,5 +45,3 @@
     - term: User ID
     - definition: "1"
 - region "Notifications alt+T"
-- button "Feedback":
-  - img

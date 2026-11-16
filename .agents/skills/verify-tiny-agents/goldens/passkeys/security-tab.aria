@@ -47,5 +47,3 @@
     - paragraph: No passkeys configured
     - paragraph: Add a passkey above to enable passwordless authentication.
 - region "Notifications alt+T"
-- button "Feedback":
-  - img

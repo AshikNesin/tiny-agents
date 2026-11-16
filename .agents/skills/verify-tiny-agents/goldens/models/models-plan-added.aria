@@ -68,5 +68,3 @@
   - list:
     - listitem: Connected Claude plan
     - listitem: Claude Code lists its models once it is signed in. Connect, sign in from the account's card, then check again.
-- button "Feedback":
-  - img

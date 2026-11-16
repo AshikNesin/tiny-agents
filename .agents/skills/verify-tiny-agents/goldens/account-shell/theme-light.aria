@@ -44,5 +44,3 @@
       - button "Dark"
       - button "System"
 - region "Notifications alt+T"
-- button "Feedback":
-  - img
