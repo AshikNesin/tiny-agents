@@ -3,52 +3,50 @@
  * base with the project's base branch, committed or not. A file list with
  * +/− and a filter (generated files and lockfiles muted and last), Viewed
  * marks that come back unmarked when the agent changes the file again,
- * `[` / `]` between files, and line comments kept as drafts until Send to
- * agent posts them as one message, each with its file, lines and the
- * quoted lines. The scope picker also shows what one turn changed (its
+ * `[` / `]` between files, and line comments written under their lines that
+ * wait above the thread's composer and go to the agent with the next message. The scope picker also shows what one turn changed (its
  * checkpoint against the one before), with Revert to here.
  */
 import { useEffect, useMemo, useState } from "react";
 import {
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   FileDiff as FileDiffIcon,
-  MessageSquare,
+  Maximize2,
+  PanelLeft,
   RefreshCw,
   RotateCcw,
-  Send,
-  Trash2,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
-import {
-  Button,
-  Checkbox,
-  EmptyState,
-  Input,
-  Textarea,
-  metaLabelClass,
-  monoClass,
-} from "@groot/ui";
+import { Button, Checkbox, EmptyState, Input, monoClass } from "@groot/ui";
 import { useConfirm } from "@groot/ui/primitives";
 import { cn } from "@groot/ui/lib/utils";
 import { SearchSelect } from "../../components/ui/search-select";
 import { Spinner } from "../../components/ui/spinner";
 import { errorMessage } from "../../lib/errors";
 import { projectsApi } from "../../lib/code/projects";
-import type {
-  CheckpointView,
-  ReviewDraft,
-  ReviewFile,
-  ReviewFileDiff,
-} from "../../../shared/api/code";
+import type { CheckpointView, ReviewFile, ReviewFileDiff } from "../../../shared/api/code";
+import { fileCommenting, type ThreadCommenting } from "../../lib/code/comments";
 import { useSteadyKey } from "../../lib/code/use-live-changes";
-import { FileDiff, type LineSelection } from "./UnifiedDiff";
+import { FileDiff } from "./UnifiedDiff";
 
 const STATUS_TONE: Record<ReviewFile["status"], string> = {
   added: "text-success",
   modified: "text-warning",
   deleted: "text-destructive",
 };
+
+const TREE_KEY = "tiny-agents:code-review-files";
+
+function readTree(): boolean {
+  try {
+    return window.localStorage.getItem(TREE_KEY) !== "hidden";
+  } catch {
+    return true;
+  }
+}
 
 /** Real files first, generated ones last; each group by path. */
 function reviewOrder(files: ReviewFile[]): ReviewFile[] {
@@ -62,12 +60,18 @@ export function ReviewPanel({
   baseBranch,
   refreshKey,
   onClose,
+  onExpand,
   onOtherScopes,
+  commenting,
 }: {
   threadId: string;
   baseBranch: string;
   refreshKey: unknown;
   onClose(): void;
+  /** Show this at full width on the thread's Review page. */
+  onExpand?: () => void;
+  /** The thread's line comments: absent, the diff takes none. */
+  commenting?: ThreadCommenting;
   /** Uncommitted changes or one commit, from the harness (when it serves diffs). */
   onOtherScopes?: () => void;
 }) {
@@ -79,11 +83,17 @@ export function ReviewPanel({
   // The open file's diff, with the file and content (hash) it was read for: a
   // re-read after the agent changed the file swaps it in place.
   const [shown, setShown] = useState<{ key: string; diff: ReviewFileDiff } | null>(null);
-  const [drafts, setDrafts] = useState<ReviewDraft[]>([]);
-  const [composing, setComposing] = useState<LineSelection | null>(null);
-  const [body, setBody] = useState("");
   const [reload, setReload] = useState(0);
-  const [sending, setSending] = useState(false);
+  // The file list beside the diff; hidden, the file bar still steps through files.
+  const [tree, setTree] = useState(readTree);
+  const toggleTree = () => {
+    setTree(!tree);
+    try {
+      window.localStorage.setItem(TREE_KEY, tree ? "hidden" : "shown");
+    } catch {
+      // not remembered in private mode
+    }
+  };
   const confirm = useConfirm();
   /** `base`, or a checkpoint id (what that turn changed). */
   const [scope, setScope] = useState("base");
@@ -108,12 +118,11 @@ export function ReviewPanel({
       scope === "base"
         ? projectsApi.reviewFiles(threadId)
         : projectsApi.checkpointFiles(threadId, scope);
-    Promise.all([list, projectsApi.drafts(threadId)])
-      .then(([list, saved]) => {
+    list
+      .then((list) => {
         if (cancelled) return;
         const ordered = reviewOrder(list);
         setFiles(ordered);
-        setDrafts(saved);
         setCurrent((c) =>
           c && ordered.some((f) => f.path === c) ? c : (ordered[0]?.path ?? null),
         );
@@ -126,12 +135,10 @@ export function ReviewPanel({
     };
   }, [threadId, settledKey, reload, scope]);
 
-  const currentHash = files?.find((f) => f.path === current)?.hash;
+  const currentFile = files?.find((f) => f.path === current);
+  const currentHash = currentFile?.hash;
   const diffKey = `${scope}:${current ?? ""}`;
   const diff = shown?.key === diffKey ? shown.diff : null;
-
-  // Leave the line picker when another file opens, not when this one is re-read.
-  useEffect(() => setComposing(null), [diffKey]);
 
   useEffect(() => {
     if (!current) return;
@@ -177,41 +184,6 @@ export function ReviewPanel({
       toast.error(errorMessage(e, "Could not save that."));
       setReload((n) => n + 1);
     });
-  };
-
-  const saveDraft = async () => {
-    if (!composing || !current || !diff || !body.trim()) return;
-    const quote = diff.newContent
-      .split("\n")
-      .slice(composing.from - 1, composing.to)
-      .join("\n");
-    try {
-      const draft = await projectsApi.addDraft(threadId, {
-        path: current,
-        startLine: composing.from,
-        endLine: composing.to,
-        quote,
-        body: body.trim(),
-      });
-      setDrafts((d) => [...d, draft]);
-      setComposing(null);
-      setBody("");
-    } catch (e) {
-      toast.error(errorMessage(e, "Could not save the comment."));
-    }
-  };
-
-  const send = async () => {
-    setSending(true);
-    try {
-      const { sent } = await projectsApi.sendDrafts(threadId);
-      setDrafts([]);
-      toast.success(`Sent ${sent} ${sent === 1 ? "comment" : "comments"} to the agent.`);
-    } catch (e) {
-      toast.error(errorMessage(e, "Could not send the comments."));
-    } finally {
-      setSending(false);
-    }
   };
 
   const revert = async () => {
@@ -303,6 +275,19 @@ export function ReviewPanel({
           </span>
         )}
         <span className="flex-1" />
+        {files && files.length > 0 && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={toggleTree}
+            aria-pressed={tree}
+            aria-label={tree ? "Hide file list" : "Show file list"}
+            title={tree ? "Hide file list" : "Show file list"}
+            className="text-muted-foreground"
+          >
+            <PanelLeft />
+          </Button>
+        )}
         {onOtherScopes && (
           <Button
             variant="ghost"
@@ -322,6 +307,18 @@ export function ReviewPanel({
         >
           <RefreshCw />
         </Button>
+        {onExpand && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={onExpand}
+            aria-label="Open as a page"
+            title="Open as a page"
+            className="text-muted-foreground"
+          >
+            <Maximize2 />
+          </Button>
+        )}
         <Button
           variant="ghost"
           size="icon-sm"
@@ -347,153 +344,145 @@ export function ReviewPanel({
         />
       ) : (
         <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-          <nav
-            className="border-border flex max-h-56 shrink-0 flex-col border-b md:max-h-none md:w-64 md:border-r md:border-b-0"
-            aria-label="Changed files"
-          >
-            <div className="p-2">
-              <Input
-                value={filter}
-                onChange={(e) => setFilter(e.target.value)}
-                placeholder="Filter files"
-                aria-label="Filter files"
-                className="h-8"
-              />
-            </div>
-            <ul className="min-h-0 flex-1 overflow-y-auto px-1 pb-2">
-              {listedFiles.map((f) => (
-                <li key={f.path} className="flex items-center gap-1">
-                  {scope === "base" && (
-                    <Checkbox
-                      checked={f.viewed}
-                      onCheckedChange={() => toggleViewed(f)}
-                      aria-label={`Viewed ${f.path}`}
-                      className="ml-1 shrink-0"
-                    />
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setCurrent(f.path)}
-                    aria-current={f.path === current}
-                    className={cn(
-                      "hover:bg-muted flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-xs",
-                      f.path === current && "bg-muted",
-                      (f.isGenerated || f.viewed) && "text-muted-foreground",
+          {tree && (
+            <nav
+              className="border-border flex max-h-56 shrink-0 flex-col border-b md:max-h-none md:w-64 md:border-r md:border-b-0"
+              aria-label="Changed files"
+            >
+              <div className="p-2">
+                <Input
+                  value={filter}
+                  onChange={(e) => setFilter(e.target.value)}
+                  placeholder="Filter files"
+                  aria-label="Filter files"
+                  className="h-8"
+                />
+              </div>
+              <ul className="min-h-0 flex-1 overflow-y-auto px-1 pb-2">
+                {listedFiles.map((f) => (
+                  <li key={f.path} className="flex items-center gap-1">
+                    {scope === "base" && (
+                      <Checkbox
+                        checked={f.viewed}
+                        onCheckedChange={() => toggleViewed(f)}
+                        aria-label={`Viewed ${f.path}`}
+                        className="ml-1 shrink-0"
+                      />
                     )}
-                    title={f.path}
-                  >
-                    <span className={cn("min-w-0 flex-1 truncate", monoClass)}>{f.path}</span>
-                    <span className={cn("shrink-0 tabular-nums", STATUS_TONE[f.status])}>
-                      +{f.additions} −{f.deletions}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </nav>
+                    <button
+                      type="button"
+                      onClick={() => setCurrent(f.path)}
+                      aria-current={f.path === current}
+                      className={cn(
+                        "hover:bg-muted flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-xs",
+                        f.path === current && "bg-muted",
+                        (f.isGenerated || f.viewed) && "text-muted-foreground",
+                      )}
+                      title={f.path}
+                    >
+                      <span className={cn("min-w-0 flex-1 truncate", monoClass)}>{f.path}</span>
+                      <span className={cn("shrink-0 tabular-nums", STATUS_TONE[f.status])}>
+                        +{f.additions} −{f.deletions}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+          )}
           <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
+            {currentFile && (
+              <FileBar
+                file={currentFile}
+                index={listedFiles.findIndex((f) => f.path === currentFile.path)}
+                count={listedFiles.length}
+                onStep={(step) => {
+                  const index = listedFiles.findIndex((f) => f.path === currentFile.path);
+                  const next = listedFiles[index + step];
+                  if (next) setCurrent(next.path);
+                }}
+                onViewed={scope === "base" ? () => toggleViewed(currentFile) : undefined}
+              />
+            )}
             {!diff ? (
               <div className="flex justify-center p-6">
                 <Spinner />
               </div>
             ) : (
               <FileDiff
+                key={diffKey}
                 path={current ?? ""}
                 oldContent={diff.oldContent}
                 newContent={diff.newContent}
                 unshowable={diff.unshowable}
-                onComment={(selection) => setComposing(selection)}
+                {...fileCommenting(commenting, diff)}
               />
-            )}
-            {composing && (
-              <form
-                className="border-border space-y-2 border-t p-3"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  void saveDraft();
-                }}
-              >
-                <p className={cn("text-muted-foreground text-xs", monoClass)}>
-                  {current}:
-                  {composing.from === composing.to
-                    ? composing.from
-                    : `${composing.from}-${composing.to}`}
-                </p>
-                <Textarea
-                  value={body}
-                  onChange={(e) => setBody(e.target.value)}
-                  autoFocus
-                  rows={3}
-                  aria-label="Comment"
-                />
-                <div className="flex gap-2">
-                  <Button type="submit" size="sm" disabled={!body.trim()}>
-                    <MessageSquare />
-                    Add comment
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => setComposing(null)}
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </form>
             )}
           </div>
         </div>
       )}
+    </div>
+  );
+}
 
-      {drafts.length > 0 && (
-        <section
-          className="border-border max-h-60 shrink-0 space-y-2 overflow-y-auto border-t p-3"
-          aria-label="Draft comments"
-        >
-          <div className="flex items-center gap-2">
-            <h3 className={metaLabelClass}>
-              {drafts.length} {drafts.length === 1 ? "comment" : "comments"}
-            </h3>
-            <span className="flex-1" />
-            <Button
-              size="sm"
-              onClick={() => void send()}
-              disabled={sending}
-              data-testid="code-review-send"
-            >
-              {sending ? <Spinner /> : <Send />}
-              Send to agent
-            </Button>
-          </div>
-          <ul className="space-y-1">
-            {drafts.map((d) => (
-              <li key={d.id} className="flex items-start gap-2 text-xs">
-                <button
-                  type="button"
-                  className={cn("text-muted-foreground shrink-0 hover:underline", monoClass)}
-                  onClick={() => setCurrent(d.path)}
-                >
-                  {d.path}:{d.startLine === d.endLine ? d.startLine : `${d.startLine}-${d.endLine}`}
-                </button>
-                <span className="min-w-0 flex-1 whitespace-pre-wrap">{d.body}</span>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label="Remove comment"
-                  onClick={() =>
-                    void projectsApi
-                      .removeDraft(threadId, d.id)
-                      .then(() => setDrafts((list) => list.filter((x) => x.id !== d.id)))
-                      .catch((e: unknown) => toast.error(errorMessage(e, "Could not remove it.")))
-                  }
-                >
-                  <Trash2 />
-                </Button>
-              </li>
-            ))}
-          </ul>
-        </section>
+/** The open file over its diff: where it is in the list, a step either way, and Viewed. */
+function FileBar({
+  file,
+  index,
+  count,
+  onStep,
+  onViewed,
+}: {
+  file: ReviewFile;
+  index: number;
+  count: number;
+  onStep(step: -1 | 1): void;
+  onViewed?: () => void;
+}) {
+  const slash = file.path.lastIndexOf("/");
+  return (
+    <div className="bg-background/95 border-border sticky top-0 z-10 flex h-9 items-center gap-1 border-b px-2 text-xs backdrop-blur">
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        aria-label="Previous file"
+        title="Previous file ([)"
+        disabled={index <= 0}
+        onClick={() => onStep(-1)}
+      >
+        <ChevronLeft />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        aria-label="Next file"
+        title="Next file (])"
+        disabled={index < 0 || index >= count - 1}
+        onClick={() => onStep(1)}
+      >
+        <ChevronRight />
+      </Button>
+      <span className={cn("flex min-w-0 flex-1", monoClass)} title={file.path}>
+        <span className="text-muted-foreground truncate">{file.path.slice(0, slash + 1)}</span>
+        <span className="shrink-0">{file.path.slice(slash + 1)}</span>
+      </span>
+      {index >= 0 && (
+        <span className="text-muted-foreground shrink-0 tabular-nums">
+          {index + 1} of {count}
+        </span>
+      )}
+      <span className={cn("shrink-0 tabular-nums", STATUS_TONE[file.status])}>
+        +{file.additions} −{file.deletions}
+      </span>
+      {onViewed && (
+        <label className="text-muted-foreground flex shrink-0 items-center gap-1.5 pl-1">
+          <Checkbox
+            checked={file.viewed}
+            onCheckedChange={onViewed}
+            aria-label={`Viewed ${file.path}`}
+          />
+          Viewed
+        </label>
       )}
     </div>
   );

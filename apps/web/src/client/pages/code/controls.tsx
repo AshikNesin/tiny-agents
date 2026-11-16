@@ -6,7 +6,7 @@
  */
 import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { Brain, ChevronDown, Cpu, ShieldCheck } from "lucide-react";
+import { Brain, ChevronDown, Cpu, GitMerge, GitPullRequest, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@groot/ui/lib/utils";
 import {
@@ -376,5 +376,52 @@ export function useArchive() {
       }
     },
     [navigate],
+  );
+}
+
+/** What a thread's pull request is waiting on, in a word or two (null: nothing to say). */
+export function pullState(loop: string): string | null {
+  switch (loop) {
+    case "needs_input":
+      return "needs you";
+    case "fixing":
+      return "fixing";
+    case "merged":
+      return "merged";
+    case "green":
+      return "checks pass";
+    default:
+      return null;
+  }
+}
+
+const PULL_TONE: Record<string, string> = {
+  needs_input: "text-warning",
+  fixing: "text-foreground",
+  green: "text-success",
+};
+
+/** A thread's pull request as a small chip: its number, toned by what it waits on. */
+export function PullChip({
+  pr,
+  className,
+}: {
+  pr: { number: number; loop: string };
+  className?: string;
+}) {
+  const state = pullState(pr.loop);
+  const Icon = pr.loop === "merged" ? GitMerge : GitPullRequest;
+  return (
+    <span
+      aria-label={`Pull request #${pr.number}${state ? `, ${state}` : ""}`}
+      title={`Pull request #${pr.number}${state ? ` (${state})` : ""}`}
+      className={cn(
+        "bg-muted inline-flex h-5 shrink-0 items-center gap-0.5 rounded-md px-1 text-[11px] font-medium tabular-nums",
+        PULL_TONE[pr.loop] ?? "text-muted-foreground",
+        className,
+      )}
+    >
+      <Icon className="size-3" aria-hidden />#{pr.number}
+    </span>
   );
 }

@@ -2,13 +2,20 @@
  * The Changes panel (issue #143, ADR 0011): what the agent changed in the thread's
  * working directory — uncommitted changes or a recent commit (searchable),
  * every changed file as a card with its +/− and its diff, stacked in one
- * scroll (generated files folded). Selecting lines and pressing Comment puts
- * "`path:lines` " in the composer, so review feedback goes straight back to
- * the agent as a steer. Diffs come from the thread's harness (capability
- * `workspace.diffs`).
+ * scroll (generated files folded). A line's gutter offers Comment: the
+ * comment waits under its line and above the thread's composer, and goes to
+ * the agent with the next message. Diffs come from the thread's harness
+ * (capability `workspace.diffs`).
  */
 import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, FileDiff as FileDiffIcon, RefreshCw, X } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  FileDiff as FileDiffIcon,
+  Maximize2,
+  RefreshCw,
+  X,
+} from "lucide-react";
 import { Button, EmptyState, monoClass } from "@groot/ui";
 import { cn } from "@groot/ui/lib/utils";
 import { formatRelativeTime } from "@groot/shell/lib/date.utils";
@@ -16,8 +23,9 @@ import { SearchSelect, type SearchSelectOption } from "../../components/ui/searc
 import { Spinner } from "../../components/ui/spinner";
 import { errorMessage } from "../../lib/errors";
 import { codeApi, type GitDiff, type GitFile, type GitFileDiff } from "../../lib/code/api";
+import { fileCommenting, type ThreadCommenting } from "../../lib/code/comments";
 import { useSteadyKey } from "../../lib/code/use-live-changes";
-import { FileDiff, type LineSelection } from "./UnifiedDiff";
+import { FileDiff } from "./UnifiedDiff";
 
 const STATUS_LETTER: Record<GitFile["status"], string> = {
   added: "A",
@@ -34,15 +42,19 @@ export function ChangesPanel({
   instanceId,
   cwd,
   refreshKey,
-  onComment,
+  commenting,
   onClose,
+  onExpand,
 }: {
   instanceId: string;
   cwd: string;
   /** Changes when the files may have changed (a pushed version, or transcript activity). */
   refreshKey: unknown;
-  onComment(text: string): void;
+  /** The thread's line comments: absent, the diff takes none. */
+  commenting?: ThreadCommenting;
   onClose(): void;
+  /** Show this at full width on the thread's Review page. */
+  onExpand?: () => void;
 }) {
   const [diffs, setDiffs] = useState<GitDiff[] | null>(null);
   const [diffId, setDiffId] = useState<string>("working");
@@ -175,6 +187,18 @@ export function ChangesPanel({
         >
           <RefreshCw />
         </Button>
+        {onExpand && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={onExpand}
+            aria-label="Open as a page"
+            title="Open as a page"
+            className="text-muted-foreground"
+          >
+            <Maximize2 />
+          </Button>
+        )}
         <Button
           variant="ghost"
           size="icon-sm"
@@ -220,13 +244,7 @@ export function ChangesPanel({
                 cwd={cwd}
                 defaultOpen={openByDefault.has(file.path)}
                 reload={`${settledKey}:${reload}`}
-                onComment={(selection) => {
-                  const lines =
-                    selection.from === selection.to
-                      ? `${selection.from}`
-                      : `${selection.from}-${selection.to}`;
-                  onComment(`\`${file.path}:${lines}\` `);
-                }}
+                commenting={commenting}
               />
             ))}
           </ul>
@@ -244,7 +262,7 @@ function FileCard({
   cwd,
   defaultOpen,
   reload,
-  onComment,
+  commenting,
 }: {
   file: GitFile;
   diffId: string;
@@ -252,7 +270,7 @@ function FileCard({
   cwd: string;
   defaultOpen: boolean;
   reload: string;
-  onComment(selection: LineSelection): void;
+  commenting?: ThreadCommenting;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const [diff, setDiff] = useState<GitFileDiff | null>(null);
@@ -320,7 +338,7 @@ function FileCard({
             oldContent={diff.oldContent}
             newContent={diff.newContent}
             unshowable={diff.unshowable}
-            onComment={onComment}
+            {...fileCommenting(commenting, diff)}
           />
         ))}
     </li>

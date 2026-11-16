@@ -183,18 +183,26 @@ export function CodeSettings({
   harnesses,
   projects,
   onChange,
+  sidebarHidden = false,
 }: {
   section?: string;
   projectId?: string;
   harnesses: HarnessInfo[];
   projects: ProjectView[] | null;
   onChange(): void;
+  /** The thread list is folded away: leave room for Show sidebar. */
+  sidebarHidden?: boolean;
 }) {
   if (!section) return <Navigate to="/code/settings/projects" replace />;
   if (!SECTIONS.some((s) => s.id === section)) return <Navigate to="/code/settings" replace />;
   return (
     <div className="flex h-full min-h-0 flex-col" data-testid="code-settings-page">
-      <header className="border-border flex h-13 shrink-0 items-center gap-1 border-b px-2 sm:px-3">
+      <header
+        className={cn(
+          "border-border flex h-13 shrink-0 items-center gap-1 border-b px-2 sm:px-3",
+          sidebarHidden && "md:pl-12",
+        )}
+      >
         <Button
           asChild
           variant="ghost"

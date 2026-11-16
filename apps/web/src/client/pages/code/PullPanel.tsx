@@ -22,6 +22,7 @@ import {
   GitPullRequest,
   GitPullRequestDraft,
   Link2,
+  Maximize2,
   MessageSquare,
   MoreHorizontal,
   RefreshCw,
@@ -87,6 +88,7 @@ export function PullPanel({
   refreshKey,
   onAttach,
   onClose,
+  onExpand,
 }: {
   threadId: string;
   /** Changes when the thread's turn ends, to re-read. */
@@ -94,6 +96,8 @@ export function PullPanel({
   /** Put text in the composer. */
   onAttach(text: string): void;
   onClose(): void;
+  /** Show this at full width on the thread's Review page. */
+  onExpand?: () => void;
 }) {
   const [view, setView] = useState<ThreadPullsView | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -218,6 +222,18 @@ export function PullPanel({
         >
           <RefreshCw />
         </Button>
+        {onExpand && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={onExpand}
+            aria-label="Open as a page"
+            title="Open as a page"
+            className="text-muted-foreground"
+          >
+            <Maximize2 />
+          </Button>
+        )}
         <Button
           variant="ghost"
           size="icon-sm"

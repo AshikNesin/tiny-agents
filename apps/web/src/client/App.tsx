@@ -159,6 +159,7 @@ export const appRoutes: RouteObject[] = [
               { path: "/code/:conversationId", element: <CodePage /> },
               { path: "/code/:conversationId/changes", element: <CodePage /> },
               { path: "/code/:conversationId/pr", element: <CodePage /> },
+              { path: "/code/:conversationId/review", element: <CodePage /> },
               { path: "/routines", element: <Routines /> },
               { path: "/skills", element: <SkillsPage /> },
               { path: "/skills/:id", element: <SkillsPage /> },

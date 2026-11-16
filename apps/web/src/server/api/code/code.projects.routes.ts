@@ -4,7 +4,7 @@
  * the guest guard refuses them before they get here.
  */
 import { Hono } from "hono";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import type { AppEnv } from "@groot/core/types";
 import { env } from "@groot/core/env";
@@ -29,6 +29,7 @@ import {
   startManifest,
 } from "./code.github";
 import { setFlowCookie } from "./code.webhook";
+import { draftView, pendingReview, reviewMessage, unsentDrafts } from "./code.review";
 import { checkpointRange, checkpointsOf, revertTo } from "./code.checkpoints";
 import { codeHub } from "./code.hub";
 import {
@@ -365,23 +366,9 @@ router.post("/code/threads/:id/review/viewed", async (c) => {
   return ok(c, { viewed: body.viewed });
 });
 
-const draftView = (row: typeof codeReviewDrafts.$inferSelect): ReviewDraft => ({
-  id: row.id,
-  path: row.path,
-  side: row.side,
-  startLine: row.startLine,
-  endLine: row.endLine,
-  quote: row.quote,
-  body: row.body,
-  createdAt: row.createdAt.toISOString(),
-});
-
-const unsent = (threadId: string) =>
-  and(eq(codeReviewDrafts.threadId, threadId), isNull(codeReviewDrafts.sentAt));
-
 router.get("/code/threads/:id/review/drafts", async (c) => {
   const id = threadParam(c.req.param("id"));
-  const rows = await db.select().from(codeReviewDrafts).where(unsent(id));
+  const rows = await db.select().from(codeReviewDrafts).where(unsentDrafts(id));
   return ok<ReviewDraft[]>(c, rows.map(draftView));
 });
 
@@ -409,30 +396,21 @@ router.delete("/code/threads/:id/review/drafts/:draft", async (c) => {
   const id = threadParam(c.req.param("id"));
   await db
     .delete(codeReviewDrafts)
-    .where(and(unsent(id), eq(codeReviewDrafts.id, c.req.param("draft"))));
+    .where(and(unsentDrafts(id), eq(codeReviewDrafts.id, c.req.param("draft"))));
   return ok(c, { deleted: true });
 });
 
-/** The drafts as one message: file, lines and the quoted lines travel with each comment. */
-function reviewMessage(drafts: ReviewDraft[]): string {
-  const parts = drafts.map((d) => {
-    const lines = d.startLine === d.endLine ? `${d.startLine}` : `${d.startLine}-${d.endLine}`;
-    const quote = d.quote ? `\n\`\`\`\n${d.quote.replace(/```/g, "ʼʼʼ")}\n\`\`\`` : "";
-    return `**\`${d.path}:${lines}\`**${d.side === "old" ? " (old side)" : ""}${quote}\n${d.body}`;
-  });
-  return `Review comments (${drafts.length}):\n\n${parts.join("\n\n---\n\n")}`;
-}
-
 router.post("/code/threads/:id/review/send", async (c) => {
   const id = threadParam(c.req.param("id"));
-  const rows = await db.select().from(codeReviewDrafts).where(unsent(id));
-  if (rows.length === 0) throw Boom.badRequest("No comments to send.");
+  const review = await pendingReview(id);
+  if (review.drafts.length === 0) throw Boom.badRequest("No comments to send.");
   const target = codeHub()?.resolve(id);
   if (!target) throw Boom.notFound("No harness serves this thread");
-  const drafts = rows.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()).map(draftView);
-  const result = await target.instance.send(target.nativeId, { message: reviewMessage(drafts) });
-  await db.update(codeReviewDrafts).set({ sentAt: new Date() }).where(unsent(id));
-  return ok(c, { sent: rows.length, status: result.status });
+  const result = await target.instance.send(target.nativeId, {
+    message: reviewMessage(review.drafts),
+  });
+  await review.sent();
+  return ok(c, { sent: review.drafts.length, status: result.status });
 });
 
 export default router;

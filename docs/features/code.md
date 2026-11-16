@@ -119,8 +119,30 @@ folder):
 
 **Review.** **Changes** (⌘⇧D) shows the uncommitted changes (new files
 included), or a recent commit, of the thread's directory, each changed file
-as a card with its diff. Select lines and press **Comment** to put
-`` `path:lines` `` in the composer.
+as a card with its diff. Unchanged runs fold into **Show N more lines**, one
+gutter numbers the lines, and long lines wrap.
+
+- **Comments.** Hover a line and press its **+** to open a composer right
+  under it (shift-click another line's **+** to widen the range); ⌘↵ saves.
+  The comment stays under its line and waits above the thread's composer
+  ("N comments go with your next message"), where each can be removed. The
+  next message you send takes them along in the same turn, ahead of your
+  words; **Send now** sends them on their own. The agent gets each with its
+  file, lines and the quoted lines; the thread shows them as comment cards.
+  Comments are kept per thread on the server, so they survive a reload, and
+  work for every harness. A guest's comment, which cannot be saved, goes into
+  the composer as `` `path:lines` `` and its text.
+- **Review page.** Each side pane's **Open as a page** opens the thread's
+  Review page (`/code/<id>/review`): **Changes** and, for a project thread,
+  **Pull request** (`?tab=pr`), each a tab at full width. Comments work there
+  as in the pane and wait in a tray at the bottom (**Send now**); **Back to
+  the thread** returns to the composer, where they go with the next message.
+- **Hide sidebar** (top of the thread list) or ⌘B folds the list away on
+  wide screens so the thread and Changes get the room; **Show sidebar** at
+  the top left brings it back. The choice is remembered in this browser.
+- The thread's header reads `folder / title` (the project's name for a
+  project thread), and each row in the list shows its pull request (`#12`,
+  toned when it needs you, is fixing, passes or merged).
 
 - While it is open it stays live: the server watches the directory and the
   panel re-reads when the files move, in place (the list, what you folded
@@ -194,9 +216,9 @@ merge base with the base branch, committed or not (new files included), live
 as above: a file list with a
 filter (generated files and lockfiles muted and last), **Viewed** marks that
 come back unmarked when the agent changes the file again, `[` / `]` between
-files, and line comments kept as drafts until **Send to agent** posts them
-as one message, each with its file, lines and quoted lines. **Uncommitted or
-a commit** switches to the harness's own Changes.
+files (or the file bar over the diff: previous, next, `n of N`, **Viewed**;
+**Hide file list** gives the diff the panel's full width), and line comments
+as above. **Uncommitted or a commit** switches to the harness's own Changes.
 
 **Publish.** The **PR** button in the thread header opens the PR tab.
 **Publish draft PR** pushes the branch (never forced, hooks off) and opens a
