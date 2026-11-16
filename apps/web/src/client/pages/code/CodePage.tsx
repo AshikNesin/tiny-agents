@@ -34,6 +34,7 @@ import { harnessOf, useCodeStore } from "../../store/code";
 import { ChangesPanel } from "./ChangesPanel";
 import { CodeSettings } from "./CodeSettings";
 import { useLiveChanges } from "../../lib/code/use-live-changes";
+import { useThreadCommenting } from "../../lib/code/comments";
 import { PullPanel } from "./PullPanel";
 import { ReviewPanel } from "./ReviewPanel";
 import { ConversationList } from "./ConversationList";
@@ -110,6 +111,14 @@ export function CodePage() {
     [harnessList, statuses],
   );
   const harness = threadId ? harnessOf(harnesses, instanceOf(threadId)) : undefined;
+
+  // Line comments from the diff panels; a guest's go into the composer.
+  const commenting = useThreadCommenting(threadId, (text) => {
+    setInsert({ text, nonce: Date.now() });
+    // On phones the composer is on the thread screen.
+    if (threadId && window.matchMedia("(max-width: 1023px)").matches)
+      navigate(threadPath(threadId));
+  });
 
   // Links from before the harness layer (`/code/<shelley id>`) move to the new id.
   useEffect(() => {
@@ -313,6 +322,7 @@ export function CodePage() {
               baseBranch={project.baseBranch}
               refreshKey={changesKey}
               onClose={toggleChanges}
+              commenting={commenting}
               onOtherScopes={
                 harness?.capabilities.workspace.diffs ? () => setReviewScope("harness") : undefined
               }
@@ -337,12 +347,7 @@ export function CodePage() {
                   setReviewScope("base");
                   toggleChanges();
                 }}
-                onComment={(text) => {
-                  setInsert({ text, nonce: Date.now() });
-                  // On phones the composer is on the thread screen.
-                  if (window.matchMedia("(max-width: 1023px)").matches)
-                    navigate(threadPath(threadId));
-                }}
+                commenting={commenting}
               />
             </section>
           )}

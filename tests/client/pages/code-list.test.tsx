@@ -105,6 +105,30 @@ beforeEach(() => {
 });
 
 describe("Code thread list", () => {
+  it("shows each thread's pull request, and when it needs you", () => {
+    render(
+      <MemoryRouter>
+        <ConversationList
+          harnesses={[shelley]}
+          threads={[
+            row("fixing-ci", { pr: { number: 12, loop: "needs_input" } }),
+            row("merged-one", { pr: { number: 9, loop: "merged" } }),
+            row("no-pr"),
+          ]}
+        />
+      </MemoryRouter>,
+    );
+    const rowOf = (title: string) =>
+      screen.getAllByTestId("code-conversation-row").find((r) => r.textContent?.includes(title))!;
+    expect(
+      within(rowOf("fixing-ci")).getByLabelText("Pull request #12, needs you"),
+    ).toHaveTextContent("#12");
+    expect(
+      within(rowOf("merged-one")).getByLabelText("Pull request #9, merged"),
+    ).toBeInTheDocument();
+    expect(within(rowOf("no-pr")).queryByText(/#\d/)).toBeNull();
+  });
+
   it("archives a thread with its subagents, offering Undo", async () => {
     archiveMock.mockResolvedValue({ moved: ["shelley:child", "shelley:grandchild"] });
     render(

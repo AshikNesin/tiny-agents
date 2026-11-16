@@ -2,7 +2,8 @@
  * One Code thread (issue #143, ADR 0011): a one-line header (the title with
  * its menu, the project or folder, PR and Changes), the live transcript with finished tool runs folded
  * into one line each, what is running (background jobs, subagents), queued
- * messages, and the composer with the model, reasoning, permission and
+ * messages, the diff's line comments waiting to go with the next message,
+ * and the composer with the model, reasoning, permission and
  * context chips and Stop. Every control comes from the thread's harness's
  * capabilities: what the harness cannot do is not offered.
  */
@@ -58,7 +59,6 @@ import { Spinner } from "../../components/ui/spinner";
 import { errorMessage } from "../../lib/errors";
 import {
   codeApi,
-  shortPath,
   threadPath,
   type HarnessInfo,
   type ModelOption,
@@ -70,13 +70,17 @@ import { ancestry } from "../../lib/code/list";
 import { groupTools, lastErrorId } from "../../lib/code/transcript";
 import { useCodeThread } from "../../lib/code/use-thread";
 import { useCodeStore } from "../../store/code";
+import { useIsGuest } from "../../store/people";
+import { useCommentStore, useThreadComments } from "../../lib/code/comments";
 import { Composer } from "./Composer";
+import { PendingComments } from "./PendingComments";
 import {
   ContextRing,
   DEFAULT,
   ModelPicker,
   PermissionPicker,
   ReasoningPicker,
+  pullState,
   loadModels,
   useArchive,
 } from "./controls";
@@ -191,6 +195,9 @@ export function ConversationView({
   const [dialog, setDialog] = useState<"rename" | "cwd" | null>(null);
   const patchList = useCodeStore((s) => s.patch);
   const archive = useArchive();
+  const guest = useIsGuest();
+  const comments = useThreadComments(id, !guest);
+  const commentsSent = useCommentStore((s) => s.sent);
 
   useEffect(() => {
     void loadModels(harness.id)
@@ -307,6 +314,20 @@ export function ConversationView({
             <ArrowLeft />
           </Link>
         </Button>
+        {(projectName || row?.cwd) && (
+          <span
+            className="text-muted-foreground hidden max-w-40 min-w-16 shrink items-center gap-1 pl-1 text-sm sm:flex"
+            title={row?.cwd ?? undefined}
+          >
+            <FolderGit2 className="size-3.5 shrink-0" />
+            <span className="truncate">
+              {projectName ?? row!.cwd!.split("/").filter(Boolean).pop() ?? row!.cwd}
+            </span>
+            <span className="text-muted-foreground/60 pl-0.5" aria-hidden>
+              /
+            </span>
+          </span>
+        )}
         <nav aria-label="Thread path" className="flex min-w-0 items-center gap-0.5 text-sm">
           {chain.slice(0, -1).map((c) => (
             <span key={c.id} className="hidden min-w-0 shrink items-center gap-0.5 sm:flex">
@@ -387,17 +408,6 @@ export function ConversationView({
             </DropdownMenuContent>
           </DropdownMenu>
         </nav>
-        {(projectName || row?.cwd) && (
-          <span
-            className="text-muted-foreground hidden min-w-0 shrink-[4] items-center gap-1 truncate text-xs lg:flex"
-            title={row?.cwd ?? undefined}
-          >
-            <FolderGit2 className="size-3.5 shrink-0" />
-            <span className={cn("truncate", !projectName && monoClass)}>
-              {projectName ?? shortPath(row!.cwd!)}
-            </span>
-          </span>
-        )}
         <span className="min-w-2 flex-1" />
         {!working && row?.turnInterrupted && caps.turns.recovery.includes("resume") && (
           <Button variant="outline" size="sm" onClick={() => actions.recover("resume")}>
@@ -418,8 +428,7 @@ export function ConversationView({
             <GitPullRequest />
             <span className="hidden sm:inline">
               {pr ? `#${pr.number}` : "PR"}
-              {pr && pr.loop === "needs_input" && " · needs you"}
-              {pr && pr.loop === "fixing" && " · fixing"}
+              {pr && pullState(pr.loop) && ` · ${pullState(pr.loop)}`}
             </span>
           </Button>
         )}
@@ -584,6 +593,11 @@ export function ConversationView({
               ))}
             </ul>
           )}
+          <PendingComments
+            threadId={id}
+            enabled={!guest}
+            onShow={changesOpen ? undefined : onToggleChanges}
+          />
           <Composer
             draftKey={id}
             harness={harness}
@@ -636,7 +650,10 @@ export function ConversationView({
               </>
             }
             onSend={async (message, options) => {
-              await codeApi.send(id, message, options);
+              // Waiting line comments go ahead of the message, in the same turn.
+              const withReview = comments.length > 0;
+              await codeApi.send(id, message, { ...options, withReview });
+              if (withReview) commentsSent(id);
             }}
           />
         </div>

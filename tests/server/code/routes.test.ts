@@ -167,6 +167,30 @@ describe("Code API", () => {
     expect((await post("/threads/shelley:cGone/messages", { message: "hi" })).status).toBe(404);
   });
 
+  it("sends the thread's pending line comments with the next message, once", async () => {
+    const draft = (body: unknown) => post("/threads/fake:t1/review/drafts", body);
+    expect(
+      (await draft({ path: "src/a.ts", startLine: 2, endLine: 3, quote: "b\nc", body: "Rename" }))
+        .status,
+    ).toBe(201);
+    expect(
+      (await draft({ path: "old.ts", side: "old", startLine: 7, endLine: 7, body: "Why?" })).status,
+    ).toBe(201);
+
+    await post("/threads/fake:t1/messages", { message: "Then run the tests", withReview: true });
+    expect(fake.sent.at(-1)).toEqual({
+      nativeId: "t1",
+      message:
+        "Review comments (2):\n\n**`src/a.ts:2-3`**\n```\nb\nc\n```\nRename\n\n---\n\n**`old.ts:7`** (old side)\nWhy?\n\n---\n\nThen run the tests",
+      queue: undefined,
+    });
+    expect((await get<unknown[]>("/threads/fake:t1/review/drafts")).body.data).toEqual([]);
+
+    // Sent once: the next message goes alone.
+    await post("/threads/fake:t1/messages", { message: "Thanks", withReview: true });
+    expect(fake.sent.at(-1)?.message).toBe("Thanks");
+  });
+
   it("serves links written before the harness layer (bare Shelley ids)", async () => {
     shelley.conversations.set("cLegacy", {
       messages: [],

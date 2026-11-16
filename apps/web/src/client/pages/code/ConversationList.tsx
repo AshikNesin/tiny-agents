@@ -40,7 +40,7 @@ import {
   type ListNode,
 } from "../../lib/code/list";
 import type { ProjectView } from "../../../shared/api/code";
-import { useArchive, useArchiveMany } from "./controls";
+import { PullChip, useArchive, useArchiveMany } from "./controls";
 import { shortAgo } from "./NewConversation";
 
 const COLLAPSED_KEY = "tiny-agents:code-collapsed";
@@ -178,6 +178,7 @@ function Row({
             {label && <span className={cn(metaLabelClass, "shrink-0")}>{label}</span>}
             {/* The status / time slot makes room for the archive button on hover. */}
             <span className="flex shrink-0 items-center gap-1.5 pointer-fine:group-focus-within/row:invisible pointer-fine:group-hover/row:invisible">
+              {row.pr && <PullChip pr={row.pr} />}
               {row.working ? (
                 <Spinner className="size-3.5" aria-label="Working" />
               ) : node.unread ? (

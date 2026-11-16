@@ -80,7 +80,13 @@ export const codeApi = {
   send: (
     id: string,
     message: string,
-    options: { queue?: boolean; skills?: string[]; attachments?: string[] } = {},
+    options: {
+      queue?: boolean;
+      skills?: string[];
+      attachments?: string[];
+      /** Send the thread's unsent line comments ahead of the message. */
+      withReview?: boolean;
+    } = {},
   ) =>
     apiClient.post<{ status: "accepted" | "queued" }>(`${thread(id)}/messages`, {
       message,

@@ -79,13 +79,7 @@ describe("Changes panel", () => {
       newContent: "b\n",
     });
     const panel = (refreshKey: string) => (
-      <ChangesPanel
-        instanceId="claude-code"
-        cwd="/r"
-        refreshKey={refreshKey}
-        onComment={() => {}}
-        onClose={() => {}}
-      />
+      <ChangesPanel instanceId="claude-code" cwd="/r" refreshKey={refreshKey} onClose={() => {}} />
     );
     const { rerender } = render(panel("1"));
     await wait(0);
@@ -110,6 +104,43 @@ describe("Changes panel", () => {
   });
 });
 
+describe("commenting on a change", () => {
+  it("saves a line comment for the thread, with the lines it is about", async () => {
+    routes[`${harness}/diffs`] = () => ({ diffs: [working], gitRoot: "/r" });
+    routes[`${harness}/diffs/working/files`] = () => [file("src/a.ts", 1)];
+    routes[`${harness}/diffs/working/file?src/a.ts`] = () => ({
+      path: "src/a.ts",
+      oldContent: "one\ntwo\n",
+      newContent: "one\nTWO\n",
+    });
+    const add = vi.fn(async () => {});
+    render(
+      <ChangesPanel
+        instanceId="claude-code"
+        cwd="/r"
+        refreshKey="1"
+        commenting={{ comments: [], add, remove: () => {} }}
+        onClose={() => {}}
+      />,
+    );
+    await wait(0);
+    fireEvent.click(screen.getByRole("button", { name: "Comment on line 2" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Comment on src/a.ts line 2" }), {
+      target: { value: "Keep it lowercase" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Comment" }));
+    await wait(0);
+    expect(add).toHaveBeenCalledWith({
+      path: "src/a.ts",
+      side: "new",
+      startLine: 2,
+      endLine: 2,
+      quote: "TWO",
+      body: "Keep it lowercase",
+    });
+  });
+});
+
 describe("re-reading while the agent writes non-stop", () => {
   it("keeps re-reading at a steady pace instead of waiting for a pause", async () => {
     let reads = 0;
@@ -124,13 +155,7 @@ describe("re-reading while the agent writes non-stop", () => {
       newContent: "a\n",
     });
     const panel = (refreshKey: string) => (
-      <ChangesPanel
-        instanceId="claude-code"
-        cwd="/r"
-        refreshKey={refreshKey}
-        onComment={() => {}}
-        onClose={() => {}}
-      />
+      <ChangesPanel instanceId="claude-code" cwd="/r" refreshKey={refreshKey} onClose={() => {}} />
     );
     const { rerender } = render(panel("0"));
     await wait(0);

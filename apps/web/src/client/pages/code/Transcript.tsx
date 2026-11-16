@@ -20,6 +20,7 @@ import {
   Info,
   ListChecks,
   MessageCircle,
+  MessageSquare,
   RotateCcw,
   ShieldQuestion,
   SquareTerminal,
@@ -60,6 +61,7 @@ import {
   type TranscriptItem,
 } from "../../lib/code/api";
 import { describeTools, type DisplayItem, type ToolGroup } from "../../lib/code/transcript";
+import { parseReviewMessage, type SentComment } from "../../lib/code/comments";
 import { PatchView, diffStats } from "./UnifiedDiff";
 
 export interface TranscriptActions {
@@ -549,6 +551,57 @@ function RequestRow({
   );
 }
 
+/** The owner's message; line comments sent with it read as comment cards above it. */
+function UserText({ text }: { text: string }) {
+  if (!text) return null;
+  const review = parseReviewMessage(text);
+  if (!review) {
+    return <div className={cn(USER_PILL, "max-w-[85%] whitespace-pre-wrap")}>{text}</div>;
+  }
+  return (
+    <>
+      <div className="flex w-full max-w-[85%] flex-col gap-1.5">
+        {review.comments.map((comment) => (
+          <SentCommentCard
+            key={`${comment.path}:${comment.lines}:${comment.body}`}
+            comment={comment}
+          />
+        ))}
+      </div>
+      {review.message && (
+        <div className={cn(USER_PILL, "max-w-[85%] whitespace-pre-wrap")}>{review.message}</div>
+      )}
+    </>
+  );
+}
+
+function SentCommentCard({ comment }: { comment: SentComment }) {
+  return (
+    <article className="ring-foreground/10 bg-card overflow-hidden rounded-xl text-sm ring-1">
+      <header className="text-muted-foreground flex items-center gap-1.5 px-3 pt-2 text-xs">
+        <MessageSquare className="size-3.5 shrink-0" aria-hidden />
+        <span className={cn("min-w-0 truncate", monoClass)}>
+          {comment.path}:{comment.lines}
+          {comment.old && " (removed)"}
+        </span>
+      </header>
+      {comment.quote && (
+        <pre
+          className={cn(
+            "text-muted-foreground border-border mx-3 mt-1.5 line-clamp-4 border-l-2 pl-2 text-xs whitespace-pre-wrap [overflow-wrap:anywhere]",
+            monoClass,
+          )}
+        >
+          {comment.quote}
+        </pre>
+      )}
+      <p className="px-3 pt-1.5 pb-2 whitespace-pre-wrap [overflow-wrap:anywhere]">
+        {comment.body}
+      </p>
+    </article>
+  );
+}
+
 export function TranscriptRow({
   item,
   ctx,
@@ -569,9 +622,7 @@ export function TranscriptRow({
           onMouseEnter={() => setHover(true)}
           onMouseLeave={() => setHover(false)}
         >
-          {item.text && (
-            <div className={cn(USER_PILL, "max-w-[85%] whitespace-pre-wrap")}>{item.text}</div>
-          )}
+          <UserText text={item.text} />
           <Attachments assets={item.attachments} instanceId={ctx.instanceId} />
           <div className={cn("flex gap-1", !hover && "md:invisible")}>
             <Button
