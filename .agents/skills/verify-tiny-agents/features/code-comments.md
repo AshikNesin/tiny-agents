@@ -9,6 +9,7 @@ Reviewing a Code thread's changes as a reviewer does: the Changes panel folds un
 - `code-comment-saved` a saved comment is a `note` named `Comment on line N` under its line, with `Remove comment`.
 - `code-comment-tray` region `Comments for the agent` above the composer: `N comment(s) go(es) with your next message`, `Show comments` / `Hide comments`, `Send now`, `Remove comment` per comment.
 - `code-comment-sent` the next message takes them along: the tray goes, the transcript shows an `article` per comment (`<path>:<lines>`, the quoted lines, the comment) and then the message.
+- `code-sidebar` `Hide sidebar` (top of the thread list, ⌘B) folds the `complementary` `Threads` away (`data-state="closed"`); `Show sidebar` (top left, `aria-expanded` false) brings it back.
 - Not driven: the Review panel of a project thread (needs GitHub), a guest's comment going into the composer, `Send now` (covered by `tests/client/pages/code-pending-comments.test.tsx`), the PR chip on rows (needs a project's PR).
 
 ## How to get to it (user POV)
@@ -24,7 +25,8 @@ Preconditions: `ta-verify up --shelley` (the journey requires `shelley`).
 - **Fold.** `Changes`: one `code-file`; `Show 26 more lines` and `Show 27 more lines`; `const line10 = 10;` not shown.
 - **Comment.** Hover line 30 → `Comment on line 30` → textbox focused → type → `Comment`: POST `/review/drafts` 201, a `note` `Comment on line 30`, the tray reads `1 comment goes with your next message`, `Show comments` lists `src/app.ts:30`; the API lists the draft.
 - **Send.** `echo: thanks-<stamp>` + Enter: the tray goes, an `article` with `src/app.ts:30` and the comment, then `echo: thanks-<stamp>`; no `note` left; the API lists no drafts.
-- **Proof.** `ta-verify drive $S/journeys/code-comments.mjs` → `code-comments/changes-folded`, `composer-inline`, `comment-waiting`, `comment-sent`.
+- **Sidebar.** `Hide sidebar`: `Threads` closed, `Show sidebar` visible; `Show sidebar`: open again.
+- **Proof.** `ta-verify drive $S/journeys/code-comments.mjs` → `code-comments/changes-folded`, `composer-inline`, `comment-waiting`, `comment-sent`, `sidebar-hidden`.
 
 ## Gotchas
 

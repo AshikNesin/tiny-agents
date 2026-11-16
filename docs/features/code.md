@@ -132,6 +132,9 @@ gutter numbers the lines, and long lines wrap.
   Comments are kept per thread on the server, so they survive a reload, and
   work for every harness. A guest's comment, which cannot be saved, goes into
   the composer as `` `path:lines` `` and its text.
+- **Hide sidebar** (top of the thread list) or ⌘B folds the list away on
+  wide screens so the thread and Changes get the room; **Show sidebar** at
+  the top left brings it back. The choice is remembered in this browser.
 - The thread's header reads `folder / title` (the project's name for a
   project thread), and each row in the list shows its pull request (`#12`,
   toned when it needs you, is fixing, passes or merged).

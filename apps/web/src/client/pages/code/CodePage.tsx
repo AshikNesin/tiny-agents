@@ -7,7 +7,8 @@
  *
  * Layout, after t3code: a sidebar of threads grouped by project (with the
  * way back to the app, ⌘K, Archived and Settings) | thread | changes on wide
- * screens (the list steps aside for Changes until 2xl); one column at a time
+ * screens (the list steps aside for Changes until 2xl, and Hide sidebar or ⌘B
+ * folds it away, remembered in this browser); one column at a time
  * on phones (`/code` → `/code/new` or `/code/:id` → `/code/:id/changes`).
  * Projects and GitHub are settings pages of their own (`/code/settings`).
  */
@@ -20,9 +21,9 @@ import {
   useParams,
   useSearchParams,
 } from "react-router-dom";
-import { ArrowLeft, Code2, TriangleAlert } from "lucide-react";
+import { ArrowLeft, Code2, PanelLeftClose, PanelLeftOpen, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
-import { EmptyState, monoClass } from "@groot/ui";
+import { Button, EmptyState, monoClass } from "@groot/ui";
 import { cn } from "@groot/ui/lib/utils";
 import { CommandPaletteTrigger } from "@groot/shell/components/CommandPalette";
 import { useShellConfig } from "@groot/shell/lib/shell-config";
@@ -40,6 +41,16 @@ import { ReviewPanel } from "./ReviewPanel";
 import { ConversationList } from "./ConversationList";
 import { ConversationView } from "./ConversationView";
 import { NewConversation } from "./NewConversation";
+
+const SIDEBAR_KEY = "tiny-agents:code-sidebar";
+
+function readSidebar(): boolean {
+  try {
+    return window.localStorage.getItem(SIDEBAR_KEY) !== "closed";
+  } catch {
+    return true;
+  }
+}
 
 function SlugRedirect({ slug }: { slug: string }) {
   const navigate = useNavigate();
@@ -68,6 +79,18 @@ export function CodePage() {
   const statuses = useCodeStore((s) => s.statuses);
   const threads = useCodeStore((s) => s.threads);
   const [insert, setInsert] = useState<{ text: string; nonce: number } | null>(null);
+  // The thread list on wide screens (phones show it as its own screen).
+  const [sidebarOpen, setSidebarOpen] = useState(readSidebar);
+  const toggleSidebar = useCallback(() => {
+    setSidebarOpen((open) => !open);
+  }, []);
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(SIDEBAR_KEY, sidebarOpen ? "open" : "closed");
+    } catch {
+      // not remembered in private mode
+    }
+  }, [sidebarOpen]);
   // The open thread's directory, for Changes even when it is not in the
   // active list (archived, or not in the list yet).
   const [viewCwd, setViewCwd] = useState<string | null>(null);
@@ -140,10 +163,16 @@ export function CodePage() {
   const project = row?.projectId ? projects?.find((p) => p.id === row.projectId) : undefined;
   const sideOpen = changesOpen || prOpen;
 
-  // ⌘. stops the agent, ⌘⇧D toggles Changes.
+  // ⌘B folds the sidebar, ⌘. stops the agent, ⌘⇧D toggles Changes.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (!(event.metaKey || event.ctrlKey) || !threadId) return;
+      if (!(event.metaKey || event.ctrlKey)) return;
+      if (!event.shiftKey && !event.altKey && event.key.toLowerCase() === "b") {
+        event.preventDefault();
+        toggleSidebar();
+        return;
+      }
+      if (!threadId) return;
       if (event.key === ".") {
         event.preventDefault();
         codeApi
@@ -156,7 +185,7 @@ export function CodePage() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [threadId, toggleChanges]);
+  }, [threadId, toggleChanges, toggleSidebar]);
 
   if (slug) return <SlugRedirect slug={slug} />;
   if (harnessList !== null && harnessList.length === 0) {
@@ -203,17 +232,32 @@ export function CodePage() {
     <div className="flex h-dvh min-h-0 flex-col">
       <div className="flex min-h-0 flex-1">
         <aside
+          id="code-sidebar"
+          aria-label="Threads"
+          data-state={sidebarOpen ? "open" : "closed"}
           className={cn(
             "border-border w-full shrink-0 flex-col border-r md:w-72 xl:w-80",
             threadId || composing || inSettings ? "hidden" : "flex",
             // With Changes open the list steps aside until there is room for all three.
-            sideOpen ? "2xl:flex" : "md:flex",
+            !sidebarOpen ? "md:hidden" : sideOpen ? "2xl:flex" : "md:flex",
           )}
         >
           <div className="flex h-12 shrink-0 items-center gap-1 px-2">
             <BackToApp brand={brand} />
             <span className="flex-1" />
             <CommandPaletteTrigger />
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={toggleSidebar}
+              aria-label="Hide sidebar"
+              aria-controls="code-sidebar"
+              aria-expanded
+              title="Hide sidebar (⌘B)"
+              className="text-muted-foreground hidden md:inline-flex"
+            >
+              <PanelLeftClose />
+            </Button>
           </div>
           <ConversationList
             threads={threads}
@@ -249,7 +293,7 @@ export function CodePage() {
 
         <main
           className={cn(
-            "min-w-0 flex-1 flex-col",
+            "relative min-w-0 flex-1 flex-col",
             threadId
               ? sideOpen
                 ? "hidden lg:flex"
@@ -259,8 +303,23 @@ export function CodePage() {
                 : "hidden md:flex",
           )}
         >
+          {!sidebarOpen && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={toggleSidebar}
+              aria-label="Show sidebar"
+              aria-controls="code-sidebar"
+              aria-expanded={false}
+              title="Show sidebar (⌘B)"
+              className="text-muted-foreground absolute top-2.5 left-2 z-10 hidden md:inline-flex"
+            >
+              <PanelLeftOpen />
+            </Button>
+          )}
           {inSettings ? (
             <CodeSettings
+              sidebarHidden={!sidebarOpen}
               section={settingsProjectId ? "projects" : section}
               projectId={settingsProjectId}
               harnesses={harnesses}
@@ -270,6 +329,7 @@ export function CodePage() {
           ) : threadId && harness ? (
             <ConversationView
               key={threadId}
+              sidebarHidden={!sidebarOpen}
               id={threadId}
               harness={harness}
               rows={rows}

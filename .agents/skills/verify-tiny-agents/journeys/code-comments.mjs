@@ -137,6 +137,17 @@ await journey(
       expect(await api.get(`/code/threads/${encodeURIComponent(id)}/review/drafts`)).toEqual([]);
     });
     await proof("comment-sent");
+
+    await step("Hide sidebar folds the thread list away; Show sidebar brings it back", async () => {
+      const sidebar = page.getByRole("complementary", { name: "Threads", includeHidden: true });
+      await page.getByRole("button", { name: "Hide sidebar" }).click();
+      await expect(sidebar).toHaveAttribute("data-state", "closed");
+      await expect(sidebar).toBeHidden();
+      await expect(page.getByRole("button", { name: "Show sidebar" })).toBeVisible();
+      await proof("sidebar-hidden");
+      await page.getByRole("button", { name: "Show sidebar" }).click();
+      await expect(sidebar).toBeVisible();
+    });
   },
   { requires: ["shelley"] },
 );

@@ -166,6 +166,7 @@ export function ConversationView({
   pr = null,
   prOpen = false,
   onTogglePr,
+  sidebarHidden = false,
 }: {
   id: string;
   harness: HarnessInfo;
@@ -183,6 +184,8 @@ export function ConversationView({
   pr?: { number: number; loop: string } | null;
   prOpen?: boolean;
   onTogglePr?(): void;
+  /** The thread list is folded away: leave room for Show sidebar. */
+  sidebarHidden?: boolean;
 }) {
   const navigate = useNavigate();
   const confirm = useConfirm();
@@ -302,7 +305,12 @@ export function ConversationView({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header className="border-border flex h-13 shrink-0 items-center gap-1 border-b px-2 sm:px-3">
+      <header
+        className={cn(
+          "border-border flex h-13 shrink-0 items-center gap-1 border-b px-2 sm:px-3",
+          sidebarHidden && "md:pl-12",
+        )}
+      >
         <Button
           asChild
           variant="ghost"
