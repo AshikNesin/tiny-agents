@@ -655,16 +655,26 @@ async function pullView(
       status: p.status,
       outcome: p.outcome,
       detail: p.detail,
-      items: (JSON.parse(p.items) as Array<{ id: string; title: string }>).map(({ id, title }) => ({
-        id,
-        title,
-      })),
+      items: passItems(p.items),
       pushedSha: p.pushedSha,
       costUsd: p.costUsd,
       createdAt: p.createdAt.toISOString(),
       finishedAt: p.finishedAt?.toISOString() ?? null,
     })),
   };
+}
+
+/** A pass's stored items, for the tab (a malformed row shows none rather than failing the view). */
+function passItems(raw: string): Array<{ id: string; title: string }> {
+  try {
+    const value = JSON.parse(raw) as unknown;
+    if (!Array.isArray(value)) return [];
+    return value
+      .filter((i): i is { id: string; title?: unknown } => typeof i?.id === "string")
+      .map((i) => ({ id: i.id, title: typeof i.title === "string" ? i.title : i.id }));
+  } catch {
+    return [];
+  }
 }
 
 /** The PR tab: reconciles first (unless `fresh` is false), so what it shows is current. */

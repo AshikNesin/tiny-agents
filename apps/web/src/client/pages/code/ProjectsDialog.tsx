@@ -133,6 +133,7 @@ function GitHubAppForm({
       await work();
     } catch (e) {
       toast.error(errorMessage(e, `Could not ${what}.`));
+    } finally {
       setBusy(false);
     }
   };
@@ -208,7 +209,6 @@ function GitHubAppForm({
                 confirmLabel: "Disconnect",
               });
               if (ok) onSaved(await projectsApi.disconnectApp());
-              setBusy(false);
             })
           }
         >
@@ -229,7 +229,7 @@ function ProjectRow({
   onChange(): void;
 }) {
   const confirm = useConfirm();
-  const [bots, setBots] = useState(project.settings.autofix.trustedBots.join(", "));
+  const [bots, setBots] = useState(() => project.settings.autofix.trustedBots.join(", "));
   const [check, setCheck] = useState(project.settings.scripts.check ?? "");
   const update = (body: ProjectUpdateBody) =>
     void projectsApi

@@ -143,13 +143,11 @@ router.post("/code/projects", async (c) => {
   return ok<ProjectView>(c, projectView(await createProject(body)), 201);
 });
 
-const scriptsSchema = z
-  .object({
-    setup: z.string().max(4000).optional(),
-    check: z.string().max(4000).optional(),
-    archive: z.string().max(4000).optional(),
-  })
-  .strict();
+const scriptsSchema = z.strictObject({
+  setup: z.string().max(4000).optional(),
+  check: z.string().max(4000).optional(),
+  archive: z.string().max(4000).optional(),
+});
 
 const updateSchema = z.strictObject({
   name: z.string().trim().min(1).max(100).optional(),

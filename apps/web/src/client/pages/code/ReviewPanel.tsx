@@ -82,10 +82,14 @@ export function ReviewPanel({
   const checkpoint = checkpoints.find((c) => c.id === scope);
 
   useEffect(() => {
+    let cancelled = false;
     projectsApi
       .checkpoints(threadId)
-      .then(setCheckpoints)
-      .catch(() => setCheckpoints([]));
+      .then((list) => !cancelled && setCheckpoints(list))
+      .catch(() => !cancelled && setCheckpoints([]));
+    return () => {
+      cancelled = true;
+    };
   }, [threadId, refreshKey, reload]);
 
   useEffect(() => {
