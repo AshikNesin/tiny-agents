@@ -97,7 +97,7 @@ Times are film seconds. Each frame names the scene file that holds it
 - duration: 9s (58.0 to 67.0)
 - status: animated
 - transition_in: cut on the beat
-- scene: Six shots of 1.5 s, hard cuts, each cutting in a little wide and settling on one control: Memory's saved facts; the sandbox terminal after `pnpm test`; Connections with three MCP servers; Settings → Models with its provider accounts; a chat with "YOLO on: tools run without asking (vault items still ask)" and rows marked auto-approved; Settings → Updates with "Update & restart".
+- scene: Six shots of 1.5 s, hard cuts, each cutting in a little wide and settling on one control: Memory's saved facts; the sandbox terminal after `pnpm test`; Connections with three MCP servers; Settings → Models with its provider accounts; a chat with "YOLO · no approval needed, except vault items" and rows marked auto-approved; Settings → Updates with "Update & restart".
 - captions: eyebrow "AND MORE"; "Remembers you" · "A real terminal" · "Your tools, connected" · "Any model" · "Or let it run" · "Updates itself"
 - sound: a hat on each cut
 

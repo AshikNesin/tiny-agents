@@ -1,7 +1,5 @@
 /** The pane's standing notices: no model can answer, and YOLO is on. */
-import { Zap } from "lucide-react";
 import { Link } from "react-router-dom";
-import { Button } from "@groot/ui/button";
 
 /** Sending is off: no model is set up, or none can run. */
 export function ModelWarning({ anyEnabled }: { anyEnabled: boolean | undefined }) {
@@ -20,22 +18,30 @@ export function ModelWarning({ anyEnabled }: { anyEnabled: boolean | undefined }
   );
 }
 
-/** YOLO mode (issue #151) is on in this chat; the owner can turn it off here. */
+/**
+ * YOLO mode (issue #151) is on in this chat; the owner can turn it off here.
+ * One quiet line above the composer: an amber dot, what it means, and the way out.
+ */
 export function YoloBanner({ guest, onTurnOff }: { guest: boolean; onTurnOff: () => void }) {
   return (
     <div
       role="status"
       data-testid="yolo-banner"
-      className="mx-auto flex w-full max-w-[784px] items-center gap-2 px-4 pt-2 text-xs md:px-5"
+      className="text-muted-foreground mx-auto flex w-full max-w-[784px] items-center gap-2 px-5 pt-2 text-xs md:px-6"
     >
-      <span className="bg-warning/10 text-warning flex min-w-0 flex-1 items-center gap-1.5 rounded-lg px-3 py-1.5">
-        <Zap className="size-3.5 shrink-0" aria-hidden />
-        <span className="truncate">YOLO on: tools run without asking (vault items still ask)</span>
+      <span aria-hidden className="bg-warning size-1.5 shrink-0 rounded-full" />
+      <span className="min-w-0 flex-1 truncate">
+        <span className="text-foreground font-medium">YOLO</span> · no approval needed, except vault
+        items
       </span>
       {!guest && (
-        <Button size="xs" variant="ghost" onClick={onTurnOff}>
+        <button
+          type="button"
+          onClick={onTurnOff}
+          className="hover:text-foreground shrink-0 font-medium underline-offset-2 hover:underline"
+        >
           Turn off
-        </Button>
+        </button>
       )}
     </div>
   );

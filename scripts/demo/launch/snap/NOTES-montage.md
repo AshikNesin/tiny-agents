@@ -40,5 +40,5 @@ Each state was saved in `desktop` and `mobile`. Every verify result was under
 
 ## Known limits
 
-- On mobile, the app itself truncates the YOLO banner to "YOLO on: tools run without asking (vault …", the tool row titles, the bot names on the Memory page and the Terminal page title. The snapshots show the app as it rendered.
+- On mobile, the app itself truncates the tool row titles, the bot names on the Memory page and the Terminal page title. The snapshots show the app as it rendered.
 - The desktop sidebar also lists Chief of Staff, Travel Planner and Code Buddy. The last two show unread dots from saving their memories.
