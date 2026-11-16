@@ -422,6 +422,9 @@ export function useFluidHover<T extends HTMLElement>(
     (index: number, element: HTMLElement | null) => {
       if (element) {
         itemsRef.current.set(index, element);
+        // Released below when the row unregisters (its effect's cleanup), and
+        // the observer is disconnected on unmount.
+        // react-doctor-disable-next-line react-doctor/effect-needs-cleanup -- unobserved on unregister
         getItemRo()?.observe(element);
         if (index === activeIndexRef.current) element.setAttribute(ACTIVE_ATTR, "");
       } else {

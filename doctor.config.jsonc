@@ -1,0 +1,37 @@
+// React Doctor (`pnpm dlx react-doctor@latest --verbose`). Each override is one
+// rule on named paths, with the reason beside it. File globs are relative to
+// the workspace project the file belongs to (`apps/web`, `packages/ui`, the
+// repo root for `site/`).
+{
+  "$schema": "https://react.doctor/schema/config.json",
+  "ignore": {
+    "overrides": [
+      // packages/ui/vendor/fluid is vendored upstream code (see its README):
+      // it is re-fetched, not edited, so its findings are upstream's.
+      {
+        "files": ["vendor/fluid/**"],
+        "rules": ["react-doctor/no-layout-property-animation", "react-doctor/effect-needs-cleanup"],
+      },
+      // site/demos/kit is the Stageshow kit, copied in (MIT, see its LICENSE);
+      // its render-time ref reads are the kit's own timing, and the built
+      // demos in site/assets are committed from it.
+      {
+        "files": ["site/demos/kit/**"],
+        "rules": ["react-doctor/no-ref-current-in-render"],
+      },
+      // The size morph is the point here: the hover, focus and selection
+      // indicators reshape between rows of different sizes with rounded
+      // corners and a ring, the question card opens to its content's real
+      // height, and the switch thumb stretches into a pill. A scale transform
+      // would distort the corners, ring and pill instead.
+      {
+        "files": [
+          "src/client/components/fluid/ask-user-questions.tsx",
+          "src/client/components/fluid/hooks/use-merge-split.tsx",
+          "src/client/components/ui/switch.tsx",
+        ],
+        "rules": ["react-doctor/no-layout-property-animation"],
+      },
+    ],
+  },
+}

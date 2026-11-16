@@ -388,7 +388,7 @@ function backendField(row: VaultItemRow, field: SecretField): ValueField {
  * hand them to `sink`. Audited either way; values never leave this call
  * except into the sink.
  */
-export async function useItem<T>(
+export async function runItemUse<T>(
   use: VaultUse & { approved: boolean },
   who: UseContext & { taskId?: number },
   fields: readonly SecretField[] | ((item: VaultItemMeta) => readonly SecretField[]),

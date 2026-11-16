@@ -14,7 +14,14 @@
  * It must render inside a `MessageScrollerProvider` (the pane drives the
  * scroller too: send → scroll to the end).
  */
-import { Fragment, useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
+import {
+  Fragment,
+  useEffect,
+  useEffectEvent,
+  useLayoutEffect,
+  useRef,
+  type ReactNode,
+} from "react";
 import type { TimelineItem } from "../lib/chat-timeline";
 import { formatDayDivider } from "../lib/day-divider";
 import { OwnerActionsProvider, type OwnerActions } from "../lib/owner-actions";
@@ -68,8 +75,10 @@ function useOlderPages(pages: TranscriptPages, timeline: TimelineItem[]) {
   const keepFromBottom = useRef<{ el: HTMLElement; distance: number } | null>(null);
   // Set at the call, before the source's own flag re-renders: one fetch at a time.
   const requested = useRef(false);
-  const latest = useRef(pages);
-  latest.current = pages;
+  // The scroll listener reads the pages as they are now, not as they were
+  // when it was attached.
+  const isLoadingOlder = useEffectEvent(() => pages.loadingOlder);
+  const loadOlder = useEffectEvent(() => pages.loadOlder());
   const { hasMore, loadingOlder } = pages;
 
   useEffect(() => {
@@ -80,13 +89,13 @@ function useOlderPages(pages: TranscriptPages, timeline: TimelineItem[]) {
     let armed = false;
     const check = () => {
       if (!armed || viewport.scrollTop > 400) return;
-      if (requested.current || latest.current.loadingOlder) return;
+      if (requested.current || isLoadingOlder()) return;
       requested.current = true;
       keepFromBottom.current = {
         el: viewport,
         distance: viewport.scrollHeight - viewport.scrollTop,
       };
-      void Promise.resolve(latest.current.loadOlder())
+      void Promise.resolve(loadOlder())
         .catch(() => undefined)
         .finally(() => {
           requested.current = false;

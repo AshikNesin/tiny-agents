@@ -15,7 +15,7 @@ import {
   listFor,
   normalizeOrigin,
   planUse,
-  useItem,
+  runItemUse,
   type UseContext,
 } from "./vault.service";
 
@@ -62,7 +62,7 @@ export function createVaultBroker(runtime: () => ChatReader = getAgentRuntime): 
       return plan;
     },
     async use(use, fields, sink) {
-      return useItem(use, await who(use.conversation, runtime), fields, sink);
+      return runItemUse(use, await who(use.conversation, runtime), fields, sink);
     },
     async record(use: VaultUse, outcome, reason) {
       const context = await who(use.conversation, runtime);
