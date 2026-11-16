@@ -44,16 +44,16 @@ const STEADY_MS = 750;
 export function useSteadyKey<T>(key: T, ms = STEADY_MS): T {
   const [steady, setSteady] = useState(key);
   const latest = useRef(key);
-  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => {
     latest.current = key;
-    // One already due takes the newest key when it fires: a steady beat, not a reset.
-    if (timer.current !== undefined) return;
-    timer.current = setTimeout(() => {
-      timer.current = undefined;
-      setSteady(latest.current);
-    }, ms);
-  }, [key, ms]);
-  useEffect(() => () => clearTimeout(timer.current), []);
+  }, [key]);
+  // Keyed on whether a catch-up is due, not on the key: a newer key while one
+  // is due rides along when it fires (a steady beat), instead of resetting it.
+  const due = !Object.is(key, steady);
+  useEffect(() => {
+    if (!due) return;
+    const timer = setTimeout(() => setSteady(latest.current), ms);
+    return () => clearTimeout(timer);
+  }, [due, ms]);
   return steady;
 }
