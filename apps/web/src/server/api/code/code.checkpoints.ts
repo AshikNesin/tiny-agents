@@ -16,7 +16,7 @@ import { codeHub } from "./code.hub";
 import { projectThread } from "./code.projects";
 import { checkpointRef, type Workspace } from "./code.workspace";
 
-export type CheckpointReason = "start" | "turn" | "before_revert";
+type CheckpointReason = "start" | "turn" | "before_revert";
 
 export async function checkpointsOf(threadId: string): Promise<CodeCheckpoint[]> {
   return db
@@ -30,7 +30,7 @@ export async function checkpointsOf(threadId: string): Promise<CodeCheckpoint[]>
  * Take a checkpoint of a worktree, unless nothing changed since the last
  * one. Answers the row, or undefined when it was skipped.
  */
-export async function takeCheckpoint(
+async function takeCheckpoint(
   ws: Workspace,
   thread: { id: string; branch: string; worktree: string },
   reason: CheckpointReason,

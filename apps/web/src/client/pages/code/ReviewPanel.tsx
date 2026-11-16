@@ -247,7 +247,10 @@ export function ReviewPanel({
             ...checkpoints.map((c) => ({
               value: c.id,
               label: scopeLabel(c),
-              description: `What it changed · on ${c.headSha.slice(0, 7)}`,
+              description:
+                c.reason === "start"
+                  ? "The files as the agent first saw them"
+                  : `What it changed · on ${c.headSha.slice(0, 7)}`,
               group: "Turns",
             })),
           ]}

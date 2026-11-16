@@ -536,7 +536,8 @@ async function threadSpend(
   if (limitUsd === null) return { usd: null, limitUsd: null };
   const target = codeHub()?.resolve(threadId);
   const snapshot = await target?.instance.getThread(target.nativeId).catch(() => undefined);
-  return { usd: snapshot ? snapshot.costUsd : null, limitUsd };
+  // A harness that reports no cost reports 0: unknown, never "spent nothing".
+  return { usd: snapshot && snapshot.costUsd > 0 ? snapshot.costUsd : null, limitUsd };
 }
 
 /** The merge method auto-merge asks for: the repository's first of squash, merge, rebase. */

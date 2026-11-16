@@ -35,7 +35,7 @@ import { resolveGitHubToken } from "../vault/vault.service";
 import { createWorkspace, type Workspace } from "./code.workspace";
 
 /** What decides how a project reaches GitHub: its transport and, for the App, its installation. */
-export interface ProjectTransport {
+interface ProjectTransport {
   transport: "gh" | "app";
   installationId: number | null;
 }
@@ -64,7 +64,7 @@ interface GitHubSettings {
 
 const settingsKv = () => createNamespaceKv("CODE_GITHUB");
 
-export async function githubSettings(): Promise<GitHubSettings> {
+async function githubSettings(): Promise<GitHubSettings> {
   return (await settingsKv().get<GitHubSettings>("settings")) ?? {};
 }
 
@@ -97,7 +97,7 @@ function rsaSign(pem: string, data: string): string {
 }
 
 /** The App's token source, kept in the App root so installation tokens are reused. */
-export async function gitHubApp(): Promise<AppAuth> {
+async function gitHubApp(): Promise<AppAuth> {
   const { app: config } = await githubSettings();
   if (!config) throw Boom.badRequest("Set up the GitHub App in Projects → GitHub first.");
   const key = `${config.appId}\0${config.keyHandle}`;

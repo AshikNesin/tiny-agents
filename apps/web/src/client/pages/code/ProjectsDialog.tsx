@@ -163,7 +163,8 @@ function GitHubAppForm({
     >
       <p className="text-muted-foreground text-xs">
         Create the App on GitHub with read and write access to contents, pull requests and checks,
-        subscribe it to pull request, review, check and status events, and point its webhook at{" "}
+        subscribe it to pull request, review, review comment, check run, check suite, status and
+        issue comment events, and point its webhook at{" "}
         <span className={monoClass}>{window.location.origin}/api/v1/code/github/webhook</span>.
       </p>
       <Input
