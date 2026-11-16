@@ -203,10 +203,47 @@ review or comment, or a merge conflict, after a 60-second quiet period:
   (checks green, merged, or failed with Auto-fix off). None while the
   thread is on screen.
 
-Not built yet: the native pi-durable harness (phases 0 and 1), the GitHub
-App transport and webhooks, auto-merge, a final check when green, merge
-queues, per-turn checkpoints, a per-thread spend limit, and the
-`Thread-Id` commit trailer.
+**Each thread's commits** carry `Thread-Id: <thread id>`, so `git log`
+leads back to the conversation. The worktree's own hooks directory adds it,
+then runs the repository's hooks as usual.
+
+**Turns and revert.** Every turn that changed something is checkpointed:
+the worktree, uncommitted files included, under a hidden ref in the
+project's clone. In Changes, the scope picker shows what any one turn
+changed, and **Revert to here** puts the files back as they were after that
+turn, as uncommitted changes (commits, and anything pushed, stay; the state
+it replaces is checkpointed first). Not while the agent works.
+
+**More in the PR tab:**
+
+- **Auto-merge** (off by default, or on for new PRs per project): with no
+  pass running, the app turns on GitHub's auto-merge, marking a draft ready
+  first; GitHub's branch protection decides when it merges. Switching it off
+  turns GitHub's off too.
+- **Spend limit:** where the harness reports cost, the thread's spend and a
+  limit; at the limit Auto-fix pauses instead of starting a pass. Each pass
+  shows what it cost.
+- **Final check when green** (per project, off by default): one more pass
+  that reviews the whole change when checks go green. If it changes nothing
+  the PR settles green.
+- **Merge queue:** a PR the merge queue removed gets a pass (per project,
+  on by default); a queued PR shows **queued**.
+
+**GitHub App (optional).** Projects → GitHub → **Set up a GitHub App**: the
+App's id, private key and webhook secret (the two secrets are kept as `app`
+vault items). Give the App read and write access to contents, pull requests
+and checks, subscribe it to pull request, review, review comment, check run,
+check suite, status and issue comment events, and set its webhook URL to
+`<your server>/api/v1/code/github/webhook`. A project created with
+**GitHub App** on uses short-lived installation tokens for API calls and
+pushes, and webhooks bring each reconcile forward to within seconds (polling
+stays as the backup). Deliveries must be signed with the secret; a
+redelivery is ignored.
+
+Not built yet: the native pi-durable harness (phases 0 and 1), re-running a
+flaky check before spending a pass, mention commands from PR comments,
+threads started from issues, a preview script, and matching Shelley threads
+to projects by remote.
 
 ## Bots hand off coding
 
@@ -296,6 +333,8 @@ Known limits (register row C7):
   - `code.pulls.ts`, `code.pulls.store.ts`: PR links, Publish, the
     reconcile chain (`code-pr-reconcile`) and the PR tab.
   - `code.autofix.ts` (the pure `decide`), `code.passes.ts` (a pass).
+  - `code.checkpoints.ts`: per-turn checkpoints and revert.
+  - `code.webhook.ts`: the GitHub App's signed webhook (public).
   - `code.projects.routes.ts`: `/api/v1/code/{projects,github}` and a
     thread's `pr`, `publish` and `review` routes.
 - **Tables:**
@@ -306,7 +345,8 @@ Known limits (register row C7):
   - `code_handoff_finishes`: finishes owed to bots' chats, until delivered.
   - `code_projects`; `code_pull_requests` (a cache of GitHub plus the
     Auto-fix loop); `code_autofix_passes`; `code_pr_comments` (the app's own
-    comments); `code_review_viewed` and `code_review_drafts`.
+    comments); `code_review_viewed` and `code_review_drafts`;
+    `code_checkpoints`; `code_pr_events` (webhook deliveries, by id).
   - The old `shelley_seen` and `shelley_handoffs` rows are copied in at
     boot.
 - **Client:**

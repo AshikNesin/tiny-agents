@@ -52,6 +52,7 @@ const LOOP_LABEL: Record<PullView["loop"]["status"], string> = {
 
 const OUTCOME_LABEL: Record<string, string> = {
   pushed: "Pushed",
+  clean: "Nothing to change",
   no_progress: "No commit",
   rejected: "Push rejected",
   protected_path: "Not pushed: protected path",
@@ -258,6 +259,13 @@ export function PullPanel({
               if (text) onAttach(text);
               else toast.message("No open review comments.");
             }}
+            onAutoMerge={(enabled) =>
+              void act("switch auto-merge", () => projectsApi.autoMerge(threadId, enabled))
+            }
+            spend={view.spend}
+            onSpendLimit={(limit) =>
+              void act("set the spend limit", () => projectsApi.spendLimit(threadId, limit))
+            }
           />
         )}
         {snap && snap.body.trim() && (
@@ -293,6 +301,9 @@ function ActivePull({
   onFix,
   onMerge,
   onAttach,
+  onAutoMerge,
+  spend,
+  onSpendLimit,
 }: {
   pr: PullView;
   busy: string | null;
@@ -300,7 +311,11 @@ function ActivePull({
   onFix(): void;
   onMerge(method: MergeMethod): void;
   onAttach(): void;
+  onAutoMerge(enabled: boolean): void;
+  spend: { usd: number | null; limitUsd: number | null };
+  onSpendLimit(limitUsd: number | null): void;
 }) {
+  const [limit, setLimit] = useState(spend.limitUsd === null ? "" : String(spend.limitUsd));
   const snap = pr.snapshot;
   const checks = snap?.checks ?? [];
   const passed = checks.filter((c) => c.state === "success" || c.state === "neutral").length;
@@ -335,7 +350,13 @@ function ActivePull({
           <MessageSquare className="size-3.5" />
           {open.length} open
         </span>
-        <Badge variant="outline">{pr.state === "open" && pr.draft ? "draft" : pr.state}</Badge>
+        <Badge variant="outline">
+          {pr.state === "open" && snap?.inMergeQueue
+            ? "queued"
+            : pr.state === "open" && pr.draft
+              ? "draft"
+              : pr.state}
+        </Badge>
       </section>
 
       {checksOpen && checks.length > 0 && (
@@ -389,6 +410,48 @@ function ActivePull({
         {pr.loop.reason && pr.loop.status !== "watching" && (
           <p className="text-muted-foreground text-xs">{pr.loop.reason}</p>
         )}
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs">
+          <label className="flex items-center gap-2">
+            <Switch
+              checked={pr.autoMerge}
+              onCheckedChange={onAutoMerge}
+              disabled={busy !== null || pr.state !== "open"}
+              aria-label="Auto-merge"
+              data-testid="code-automerge"
+            />
+            Auto-merge when GitHub allows it
+            {snap?.autoMerge && <Badge variant="secondary">On at GitHub</Badge>}
+          </label>
+          <form
+            className="flex items-center gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const value = limit.trim() === "" ? null : Number(limit);
+              if (value !== null && !(value > 0)) return;
+              onSpendLimit(value);
+            }}
+          >
+            <label htmlFor="code-spend-limit" className="text-muted-foreground">
+              Spend limit $
+            </label>
+            <Input
+              id="code-spend-limit"
+              value={limit}
+              onChange={(e) => setLimit(e.target.value)}
+              inputMode="decimal"
+              placeholder="none"
+              className="h-7 w-20"
+            />
+            <Button type="submit" size="xs" variant="ghost" disabled={busy !== null}>
+              Set
+            </Button>
+            {spend.usd !== null && (
+              <span className="text-muted-foreground tabular-nums">
+                spent ${spend.usd.toFixed(2)}
+              </span>
+            )}
+          </form>
+        </div>
         <div className="flex flex-wrap gap-2">
           <Button
             size="sm"
@@ -476,6 +539,7 @@ function ActivePull({
                     ? (OUTCOME_LABEL[p.outcome ?? ""] ?? p.outcome)
                     : "Running"}
                   {p.pushedSha ? ` ${p.pushedSha.slice(0, 7)}` : ""}
+                  {p.costUsd !== null ? ` · $${p.costUsd.toFixed(2)}` : ""}
                 </span>
               </li>
             ))}

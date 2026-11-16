@@ -5,10 +5,20 @@
  * marks that come back unmarked when the agent changes the file again,
  * `[` / `]` between files, and line comments kept as drafts until Send to
  * agent posts them as one message, each with its file, lines and the
- * quoted lines.
+ * quoted lines. The scope picker also shows what one turn changed (its
+ * checkpoint against the one before), with Revert to here.
  */
 import { useEffect, useMemo, useState } from "react";
-import { FileDiff as FileDiffIcon, MessageSquare, RefreshCw, Send, Trash2, X } from "lucide-react";
+import {
+  ChevronDown,
+  FileDiff as FileDiffIcon,
+  MessageSquare,
+  RefreshCw,
+  RotateCcw,
+  Send,
+  Trash2,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 import {
   Button,
@@ -19,11 +29,13 @@ import {
   metaLabelClass,
   monoClass,
 } from "@groot/ui";
+import { useConfirm } from "@groot/ui/primitives";
 import { cn } from "@groot/ui/lib/utils";
+import { SearchSelect } from "../../components/ui/search-select";
 import { Spinner } from "../../components/ui/spinner";
 import { errorMessage } from "../../lib/errors";
 import { projectsApi } from "../../lib/code/projects";
-import type { ReviewDraft, ReviewFile } from "../../../shared/api/code";
+import type { CheckpointView, ReviewDraft, ReviewFile } from "../../../shared/api/code";
 import { FileDiff, type LineSelection } from "./UnifiedDiff";
 
 const STATUS_TONE: Record<ReviewFile["status"], string> = {
@@ -63,11 +75,27 @@ export function ReviewPanel({
   const [body, setBody] = useState("");
   const [reload, setReload] = useState(0);
   const [sending, setSending] = useState(false);
+  const confirm = useConfirm();
+  /** `base`, or a checkpoint id (what that turn changed). */
+  const [scope, setScope] = useState("base");
+  const [checkpoints, setCheckpoints] = useState<CheckpointView[]>([]);
+  const checkpoint = checkpoints.find((c) => c.id === scope);
+
+  useEffect(() => {
+    projectsApi
+      .checkpoints(threadId)
+      .then(setCheckpoints)
+      .catch(() => setCheckpoints([]));
+  }, [threadId, refreshKey, reload]);
 
   useEffect(() => {
     let cancelled = false;
     setError(null);
-    Promise.all([projectsApi.reviewFiles(threadId), projectsApi.drafts(threadId)])
+    const list =
+      scope === "base"
+        ? projectsApi.reviewFiles(threadId)
+        : projectsApi.checkpointFiles(threadId, scope);
+    Promise.all([list, projectsApi.drafts(threadId)])
       .then(([list, saved]) => {
         if (cancelled) return;
         const ordered = reviewOrder(list);
@@ -83,21 +111,23 @@ export function ReviewPanel({
     return () => {
       cancelled = true;
     };
-  }, [threadId, refreshKey, reload]);
+  }, [threadId, refreshKey, reload, scope]);
 
   useEffect(() => {
     if (!current) return;
     let cancelled = false;
     setDiff(null);
     setComposing(null);
-    projectsApi
-      .reviewFile(threadId, current)
+    (scope === "base"
+      ? projectsApi.reviewFile(threadId, current)
+      : projectsApi.checkpointFile(threadId, scope, current)
+    )
       .then((d) => !cancelled && setDiff(d))
       .catch((e: unknown) => !cancelled && setError(errorMessage(e, "Could not read the diff.")));
     return () => {
       cancelled = true;
     };
-  }, [threadId, current, reload]);
+  }, [threadId, current, reload, scope]);
 
   const shown = useMemo(
     () =>
@@ -166,6 +196,32 @@ export function ReviewPanel({
     }
   };
 
+  const revert = async () => {
+    if (!checkpoint) return;
+    const ok = await confirm({
+      title: `Revert the files to turn ${checkpoint.seq}?`,
+      description:
+        "The worktree's files go back to how they were after that turn, as uncommitted changes. Commits stay; the current state is kept as a checkpoint you can return to.",
+      confirmLabel: "Revert",
+    });
+    if (!ok) return;
+    try {
+      await projectsApi.revert(threadId, checkpoint.id);
+      toast.success(`Files are back to turn ${checkpoint.seq}.`);
+      setScope("base");
+      setReload((n) => n + 1);
+    } catch (e) {
+      toast.error(errorMessage(e, "Could not revert."));
+    }
+  };
+
+  const scopeLabel = (c: CheckpointView) =>
+    c.reason === "start"
+      ? "Start of the thread"
+      : c.reason === "before_revert"
+        ? `Before a revert (${c.seq})`
+        : `Turn ${c.seq}`;
+
   const totals = (files ?? []).reduce(
     (sum, f) => ({
       add: sum.add + f.additions,
@@ -178,13 +234,49 @@ export function ReviewPanel({
   return (
     <div className="flex h-full min-h-0 flex-col" data-testid="code-review">
       <div className="border-border flex h-13 shrink-0 items-center gap-1 border-b px-2">
-        <span className="flex items-center gap-2 px-2 text-sm font-medium">
+        <SearchSelect
+          label="Changes to show"
+          value={scope}
+          onValueChange={setScope}
+          options={[
+            {
+              value: "base",
+              label: `Since ${baseBranch}`,
+              description: "Everything, committed or not",
+            },
+            ...checkpoints.map((c) => ({
+              value: c.id,
+              label: scopeLabel(c),
+              description: `What it changed · on ${c.headSha.slice(0, 7)}`,
+              group: "Turns",
+            })),
+          ]}
+          triggerClassName="text-foreground h-8 text-sm"
+          data-testid="code-review-scope"
+        >
           <FileDiffIcon className="text-muted-foreground size-4" />
-          Since {baseBranch}
-        </span>
+          <span className="max-w-48 truncate">
+            {checkpoint ? scopeLabel(checkpoint) : `Since ${baseBranch}`}
+          </span>
+          <ChevronDown className="opacity-50" />
+        </SearchSelect>
+        {checkpoint && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => void revert()}
+            className="text-muted-foreground"
+            data-testid="code-revert"
+          >
+            <RotateCcw />
+            Revert to here
+          </Button>
+        )}
         {files && files.length > 0 && (
           <span className="text-muted-foreground shrink-0 px-1 text-xs tabular-nums">
-            {totals.viewed}/{files.length} viewed{" "}
+            {scope === "base"
+              ? `${totals.viewed}/${files.length} viewed `
+              : `${files.length} files `}
             <span className="text-success">+{totals.add}</span>{" "}
             <span className="text-destructive">−{totals.del}</span>
           </span>
@@ -250,12 +342,14 @@ export function ReviewPanel({
             <ul className="min-h-0 flex-1 overflow-y-auto px-1 pb-2">
               {shown.map((f) => (
                 <li key={f.path} className="flex items-center gap-1">
-                  <Checkbox
-                    checked={f.viewed}
-                    onCheckedChange={() => toggleViewed(f)}
-                    aria-label={`Viewed ${f.path}`}
-                    className="ml-1 shrink-0"
-                  />
+                  {scope === "base" && (
+                    <Checkbox
+                      checked={f.viewed}
+                      onCheckedChange={() => toggleViewed(f)}
+                      aria-label={`Viewed ${f.path}`}
+                      className="ml-1 shrink-0"
+                    />
+                  )}
                   <button
                     type="button"
                     onClick={() => setCurrent(f.path)}

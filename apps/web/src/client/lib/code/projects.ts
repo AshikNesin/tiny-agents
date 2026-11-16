@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { apiClient } from "@groot/shell/lib/api";
 import type {
+  CheckpointView,
   GitHubStatus,
   MergeMethod,
   ProjectCreateBody,
@@ -23,6 +24,8 @@ const thread = (id: string) => `${base}/threads/${encodeURIComponent(id)}`;
 export const projectsApi = {
   github: () => apiClient.get<GitHubStatus>(`${base}/github`),
   setToken: (token: string | null) => apiClient.put<GitHubStatus>(`${base}/github`, { token }),
+  setApp: (app: { appId: string; privateKey: string; webhookSecret: string } | null) =>
+    apiClient.put<GitHubStatus>(`${base}/github/app`, app),
 
   list: () => apiClient.get<ProjectView[]>(`${base}/projects`),
   create: (body: ProjectCreateBody) => apiClient.post<ProjectView>(`${base}/projects`, body),
@@ -42,6 +45,22 @@ export const projectsApi = {
   fix: (id: string) =>
     apiClient.post<{ started: boolean; reason?: string; view: ThreadPullsView }>(
       `${thread(id)}/pr/fix`,
+    ),
+  autoMerge: (id: string, enabled: boolean) =>
+    apiClient.post<ThreadPullsView>(`${thread(id)}/pr/automerge`, { enabled }),
+  spendLimit: (id: string, limitUsd: number | null) =>
+    apiClient.post<ThreadPullsView>(`${thread(id)}/spend-limit`, { limitUsd }),
+  checkpoints: (id: string) => apiClient.get<CheckpointView[]>(`${thread(id)}/checkpoints`),
+  checkpointFiles: (id: string, cp: string) =>
+    apiClient.get<ReviewFile[]>(`${thread(id)}/checkpoints/${encodeURIComponent(cp)}/files`),
+  checkpointFile: (id: string, cp: string, path: string) =>
+    apiClient.get<{ path: string; oldContent: string; newContent: string }>(
+      `${thread(id)}/checkpoints/${encodeURIComponent(cp)}/file`,
+      { path },
+    ),
+  revert: (id: string, cp: string) =>
+    apiClient.post<{ reverted: boolean }>(
+      `${thread(id)}/checkpoints/${encodeURIComponent(cp)}/revert`,
     ),
   merge: (id: string, method: MergeMethod) =>
     apiClient.post<ThreadPullsView>(`${thread(id)}/pr/merge`, { method }),

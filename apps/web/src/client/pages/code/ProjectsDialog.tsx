@@ -8,7 +8,7 @@
 import { useEffect, useState } from "react";
 import { FolderGit2, GitBranch, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { Button, Input, Label, metaLabelClass, monoClass } from "@groot/ui";
+import { Button, Input, Label, Textarea, metaLabelClass, monoClass } from "@groot/ui";
 import {
   Dialog,
   DialogContent,
@@ -90,9 +90,123 @@ function GitHubSection() {
               Remove the token and use gh on the sandbox
             </Button>
           )}
+          <GitHubAppForm status={status} onSaved={setStatus} />
         </div>
       )}
     </section>
+  );
+}
+
+/**
+ * The optional GitHub App (phase 6): API calls with short-lived
+ * installation tokens and webhooks for events, for projects that choose it.
+ * Its key and webhook secret are kept as `app` vault items.
+ */
+function GitHubAppForm({
+  status,
+  onSaved,
+}: {
+  status: GitHubStatus;
+  onSaved(status: GitHubStatus): void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [appId, setAppId] = useState("");
+  const [privateKey, setPrivateKey] = useState("");
+  const [webhookSecret, setWebhookSecret] = useState("");
+  const [busy, setBusy] = useState(false);
+  const save = async (
+    value: { appId: string; privateKey: string; webhookSecret: string } | null,
+  ) => {
+    setBusy(true);
+    try {
+      onSaved(await projectsApi.setApp(value));
+      setOpen(false);
+      setPrivateKey("");
+      setWebhookSecret("");
+    } catch (e) {
+      toast.error(errorMessage(e, "Could not save the GitHub App."));
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (!open) {
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="text-muted-foreground text-xs">
+          {status.appId
+            ? `GitHub App ${status.appId} is set up. Its webhook URL is ${window.location.origin}/api/v1/code/github/webhook.`
+            : "Optional: a GitHub App gives projects short-lived tokens and webhooks instead of polling."}
+        </p>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setOpen(true)}
+          data-testid="code-github-app"
+        >
+          {status.appId ? "Replace the App" : "Set up a GitHub App"}
+        </Button>
+        {status.appId && (
+          <Button variant="ghost" size="sm" disabled={busy} onClick={() => void save(null)}>
+            Remove the App
+          </Button>
+        )}
+      </div>
+    );
+  }
+  return (
+    <form
+      className="border-border space-y-2 rounded-xl border p-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void save({ appId: appId.trim(), privateKey: privateKey.trim(), webhookSecret });
+      }}
+    >
+      <p className="text-muted-foreground text-xs">
+        Create the App on GitHub with read and write access to contents, pull requests and checks,
+        subscribe it to pull request, review, check and status events, and point its webhook at{" "}
+        <span className={monoClass}>{window.location.origin}/api/v1/code/github/webhook</span>.
+      </p>
+      <Input
+        value={appId}
+        onChange={(e) => setAppId(e.target.value)}
+        placeholder="App ID"
+        aria-label="App ID"
+        inputMode="numeric"
+      />
+      <Textarea
+        value={privateKey}
+        onChange={(e) => setPrivateKey(e.target.value)}
+        placeholder="-----BEGIN RSA PRIVATE KEY-----"
+        aria-label="Private key"
+        rows={4}
+        className={monoClass}
+      />
+      <Input
+        type="password"
+        value={webhookSecret}
+        onChange={(e) => setWebhookSecret(e.target.value)}
+        placeholder="Webhook secret (16 characters or more)"
+        aria-label="Webhook secret"
+        autoComplete="off"
+      />
+      <div className="flex gap-2">
+        <Button
+          type="submit"
+          size="sm"
+          disabled={
+            busy ||
+            !/^\d+$/.test(appId.trim()) ||
+            !privateKey.includes("PRIVATE KEY") ||
+            webhookSecret.length < 16
+          }
+        >
+          Save the App
+        </Button>
+        <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>
+          Cancel
+        </Button>
+      </div>
+    </form>
   );
 }
 
@@ -134,6 +248,7 @@ function ProjectRow({
         <span className="font-medium">{project.name}</span>
         <span className={cn("text-muted-foreground truncate text-xs", monoClass)}>
           {project.repo.owner}/{project.repo.name} · {project.baseBranch}
+          {project.transport === "app" ? " · GitHub App" : ""}
         </span>
         <span className="flex-1" />
         <Button
@@ -159,6 +274,29 @@ function ProjectRow({
             onCheckedChange={(v) => update({ settings: { autofix: { onByDefault: v } } })}
           />
           Auto-fix new PRs
+        </label>
+        <label className="flex items-center gap-2">
+          <Switch
+            checked={project.settings.autofix.finalCheck}
+            onCheckedChange={(v) => update({ settings: { autofix: { finalCheck: v } } })}
+          />
+          A final check when checks go green
+        </label>
+        <label className="flex items-center gap-2">
+          <Switch
+            checked={project.settings.autofix.triggers.mergeQueue}
+            onCheckedChange={(v) =>
+              update({ settings: { autofix: { triggers: { mergeQueue: v } } } })
+            }
+          />
+          Fix when removed from the merge queue
+        </label>
+        <label className="flex items-center gap-2">
+          <Switch
+            checked={project.settings.autofix.autoMergeByDefault}
+            onCheckedChange={(v) => update({ settings: { autofix: { autoMergeByDefault: v } } })}
+          />
+          Auto-merge new PRs
         </label>
         <div className="space-y-1">
           <Label htmlFor={`harness-${project.id}`}>Default harness</Label>
@@ -235,11 +373,16 @@ export function ProjectsDialog({
 }) {
   const [repo, setRepo] = useState("");
   const [instanceId, setInstanceId] = useState(harnesses[0]?.id ?? "");
+  const [viaApp, setViaApp] = useState(false);
   const [busy, setBusy] = useState(false);
   const create = async () => {
     setBusy(true);
     try {
-      await projectsApi.create({ repo: repo.trim(), defaultInstanceId: instanceId || undefined });
+      await projectsApi.create({
+        repo: repo.trim(),
+        defaultInstanceId: instanceId || undefined,
+        ...(viaApp ? { transport: "app" as const } : {}),
+      });
       setRepo("");
       onChange();
       toast.success("Project ready: the repository is cloned on the sandbox.");
@@ -276,6 +419,14 @@ export function ProjectsDialog({
               aria-label="Repository"
               className="min-w-56 flex-1"
             />
+            <label className="flex items-center gap-2 text-sm">
+              <Switch
+                checked={viaApp}
+                onCheckedChange={setViaApp}
+                aria-label="Use the GitHub App"
+              />
+              GitHub App
+            </label>
             {harnesses.length > 1 && (
               <select
                 aria-label="Default harness"

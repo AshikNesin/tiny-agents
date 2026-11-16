@@ -93,6 +93,10 @@ _Avoid_: PR binding, subscription
 One Auto-fix run on a linked PR (ADR 0023): claimed for one state of the PR (its head sha and items), sent to the thread as a fix request, and finished when the turn ends, when the app checks, pushes and answers the reviewers.
 _Avoid_: fix run, attempt (a conflict's "attempts" are passes)
 
+**Checkpoint**:
+A project thread's worktree at its start or at the end of a turn, uncommitted files included, kept as a commit under a hidden ref (`code_checkpoints`, ADR 0024). Revert to a checkpoint restores its files as uncommitted changes; it never rewrites the branch.
+_Avoid_: snapshot (a PR snapshot is GitHub's state), save point
+
 **Steer**:
 A message sent to a harness while its turn runs: it goes into that turn. Queue holds a message for when the turn ends instead.
 _Avoid_: interrupt (Stop interrupts)
