@@ -39,6 +39,7 @@ R1 to R13 are lint rules in `scripts/lint/boundaries.ts`, run by `pnpm check`.
 | API wire types live in `apps/web/src/shared/api/`; a client `*-api.ts` declares none.                                                                                     | R13                                               |
 | A status column is a typed machine; its writes guard on it.                                                                                                               | `tests/server/api/state-machines.test.ts`         |
 | Verify journeys and recipes name real pages and settings sections.                                                                                                        | `tests/client/verify-journey-routes.test.ts`      |
+| A change under `mobile/android/` bumps `VERSION_CODE` (and `VERSION_NAME`) in `mobile/android/version.properties`, with a `mobile/CHANGELOG.md` entry, so CI releases the app. | `.github/workflows/mobile-release-hub.yml` publishes only on a bump; judgment |
 | A new test fails before the change and asserts behavior, not a mock of the code it covers.                                                                                | Judgment, see Testing                             |
 | Turn each operator correction into a row here.                                                                                                                            | Judgment, see below                               |
 

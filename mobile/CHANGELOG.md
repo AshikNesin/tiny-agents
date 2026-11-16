@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.0
+
+### Minor Changes
+
+- Code: your coding agents' threads, live. Watch a turn stream, steer it or queue a message for when it ends, stop
+  it, allow or deny tool calls and answer questions, and change the model, reasoning and permissions. Start a thread
+  in a directory or a project, review its changes (and comment on a project branch's lines), and run its pull
+  request: publish, Auto-fix, auto-merge and merge. Code pushes and a bot's hand-off card open the thread in the app.
+
 ## 0.4.0
 
 ### Minor Changes
