@@ -45,7 +45,10 @@ export function ChangesPanel({
 }) {
   const [diffs, setDiffs] = useState<GitDiff[] | null>(null);
   const [diffId, setDiffId] = useState<string>("working");
-  const [files, setFiles] = useState<GitFile[] | null>(null);
+  // The files of the scope they were read for: a re-read of the same scope
+  // swaps them in place, so the list (and what was folded) never blinks out.
+  const [listed, setListed] = useState<{ diffId: string; files: GitFile[] } | null>(null);
+  const files = listed?.diffId === diffId ? listed.files : null;
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
   // Re-read at most every 1.5 s while the agent works (each message bumps the key).
@@ -82,13 +85,12 @@ export function ChangesPanel({
   useEffect(() => {
     if (!diffs) return;
     let cancelled = false;
-    setFiles(null);
     codeApi
       .diffFiles(instanceId, diffId, cwd)
       .then((list) => {
         if (cancelled) return;
-        const rows = Array.isArray(list) ? list : [];
-        setFiles(rows);
+        setError(null);
+        setListed({ diffId, files: Array.isArray(list) ? list : [] });
       })
       .catch(
         (err: unknown) => !cancelled && setError(errorMessage(err, "Could not list the files.")),
@@ -189,7 +191,10 @@ export function ChangesPanel({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
-        {error ? (
+        {error && files ? (
+          <p className="text-destructive px-1 pb-2 text-xs">{error} Showing the last read.</p>
+        ) : null}
+        {error && !files ? (
           <p className="text-destructive p-1 text-sm">{error}</p>
         ) : !diffs || (files === null && diffs.length > 0) ? (
           <div className="flex justify-center p-6">
@@ -301,6 +306,7 @@ function FileCard({
           <span className="shrink-0">{name}</span>
         </span>
         {file.isGenerated && <span className="text-muted-foreground shrink-0">generated</span>}
+        {file.binary && <span className="text-muted-foreground shrink-0">binary</span>}
         <span className="text-success shrink-0 tabular-nums">+{file.additions}</span>
         <span className="text-destructive shrink-0 tabular-nums">−{file.deletions}</span>
       </button>
@@ -316,6 +322,7 @@ function FileCard({
             path={diff.path}
             oldContent={diff.oldContent}
             newContent={diff.newContent}
+            unshowable={diff.unshowable}
             onComment={onComment}
           />
         ))}

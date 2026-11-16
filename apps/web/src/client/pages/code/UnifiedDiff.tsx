@@ -189,25 +189,63 @@ export function PatchView({ patch, className }: { patch: string; className?: str
   return <DiffLines lines={lines} className={className} />;
 }
 
-/** One file's old → new contents (the Changes panel). */
+/** Diff lines drawn at most; a longer diff says how many it left out. */
+const MAX_DRAWN_LINES = 4_000;
+
+/** Give up diffing after this long rather than freeze the tab. */
+const DIFF_TIMEOUT_MS = 1_500;
+
+const UNSHOWABLE_TEXT = {
+  binary: "Binary file. Its contents are not shown.",
+  tooLarge: "This file is too large to show here (over 2 MB).",
+} as const;
+
+/** One file's old → new contents (the Changes and Review panels). */
 export function FileDiff({
   path,
   oldContent,
   newContent,
+  unshowable,
   onComment,
 }: {
   path: string;
   oldContent: string;
   newContent: string;
+  /** The server could not send this file as text: say why. */
+  unshowable?: keyof typeof UNSHOWABLE_TEXT;
   onComment?: (selection: LineSelection) => void;
 }) {
-  const lines = useMemo(
-    () =>
-      parseUnified(createTwoFilesPatch(path, path, oldContent, newContent, "", "", { context: 3 })),
-    [path, oldContent, newContent],
-  );
+  const lines = useMemo(() => {
+    if (unshowable) return null;
+    const patch = createTwoFilesPatch(path, path, oldContent, newContent, "", "", {
+      context: 3,
+      timeout: DIFF_TIMEOUT_MS,
+    });
+    return patch === undefined ? null : parseUnified(patch);
+  }, [path, oldContent, newContent, unshowable]);
+  if (unshowable) {
+    return <p className="text-muted-foreground p-4 text-sm">{UNSHOWABLE_TEXT[unshowable]}</p>;
+  }
+  if (lines === null) {
+    return (
+      <p className="text-muted-foreground p-4 text-sm">This diff is too large to work out here.</p>
+    );
+  }
   if (lines.length === 0) {
     return <p className="text-muted-foreground p-4 text-sm">No textual changes.</p>;
   }
-  return <DiffLines lines={lines} onComment={onComment} />;
+  const hidden = lines.length - MAX_DRAWN_LINES;
+  return (
+    <>
+      <DiffLines
+        lines={hidden > 0 ? lines.slice(0, MAX_DRAWN_LINES) : lines}
+        onComment={onComment}
+      />
+      {hidden > 0 && (
+        <p className="text-muted-foreground border-border border-t px-3 py-2 text-xs">
+          {hidden.toLocaleString()} more lines not shown.
+        </p>
+      )}
+    </>
+  );
 }

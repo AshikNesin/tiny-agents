@@ -35,7 +35,12 @@ import { SearchSelect } from "../../components/ui/search-select";
 import { Spinner } from "../../components/ui/spinner";
 import { errorMessage } from "../../lib/errors";
 import { projectsApi } from "../../lib/code/projects";
-import type { CheckpointView, ReviewDraft, ReviewFile } from "../../../shared/api/code";
+import type {
+  CheckpointView,
+  ReviewDraft,
+  ReviewFile,
+  ReviewFileDiff,
+} from "../../../shared/api/code";
 import { FileDiff, type LineSelection } from "./UnifiedDiff";
 
 const STATUS_TONE: Record<ReviewFile["status"], string> = {
@@ -69,7 +74,9 @@ export function ReviewPanel({
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
   const [current, setCurrent] = useState<string | null>(null);
-  const [diff, setDiff] = useState<{ oldContent: string; newContent: string } | null>(null);
+  // The open file's diff, with the file and content (hash) it was read for: a
+  // re-read after the agent changed the file swaps it in place.
+  const [shown, setShown] = useState<{ key: string; diff: ReviewFileDiff } | null>(null);
   const [drafts, setDrafts] = useState<ReviewDraft[]>([]);
   const [composing, setComposing] = useState<LineSelection | null>(null);
   const [body, setBody] = useState("");
@@ -117,23 +124,28 @@ export function ReviewPanel({
     };
   }, [threadId, refreshKey, reload, scope]);
 
+  const currentHash = files?.find((f) => f.path === current)?.hash;
+  const diffKey = `${scope}:${current ?? ""}`;
+  const diff = shown?.key === diffKey ? shown.diff : null;
+
+  // Leave the line picker when another file opens, not when this one is re-read.
+  useEffect(() => setComposing(null), [diffKey]);
+
   useEffect(() => {
     if (!current) return;
     let cancelled = false;
-    setDiff(null);
-    setComposing(null);
     (scope === "base"
       ? projectsApi.reviewFile(threadId, current)
       : projectsApi.checkpointFile(threadId, scope, current)
     )
-      .then((d) => !cancelled && setDiff(d))
+      .then((d) => !cancelled && setShown({ key: `${scope}:${current}`, diff: d }))
       .catch((e: unknown) => !cancelled && setError(errorMessage(e, "Could not read the diff.")));
     return () => {
       cancelled = true;
     };
-  }, [threadId, current, reload, scope]);
+  }, [threadId, current, currentHash, reload, scope]);
 
-  const shown = useMemo(
+  const listedFiles = useMemo(
     () =>
       (files ?? []).filter((f) => !filter || f.path.toLowerCase().includes(filter.toLowerCase())),
     [files, filter],
@@ -145,8 +157,8 @@ export function ReviewPanel({
       if (event.key !== "[" && event.key !== "]") return;
       const target = event.target as HTMLElement | null;
       if (target?.closest("input, textarea, [contenteditable=true]")) return;
-      const index = shown.findIndex((f) => f.path === current);
-      const next = shown[index + (event.key === "]" ? 1 : -1)];
+      const index = listedFiles.findIndex((f) => f.path === current);
+      const next = listedFiles[index + (event.key === "]" ? 1 : -1)];
       if (next) {
         event.preventDefault();
         setCurrent(next.path);
@@ -154,7 +166,7 @@ export function ReviewPanel({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [shown, current]);
+  }, [listedFiles, current]);
 
   const toggleViewed = (file: ReviewFile) => {
     const viewed = !file.viewed;
@@ -347,7 +359,7 @@ export function ReviewPanel({
               />
             </div>
             <ul className="min-h-0 flex-1 overflow-y-auto px-1 pb-2">
-              {shown.map((f) => (
+              {listedFiles.map((f) => (
                 <li key={f.path} className="flex items-center gap-1">
                   {scope === "base" && (
                     <Checkbox
@@ -387,6 +399,7 @@ export function ReviewPanel({
                 path={current ?? ""}
                 oldContent={diff.oldContent}
                 newContent={diff.newContent}
+                unshowable={diff.unshowable}
                 onComment={(selection) => setComposing(selection)}
               />
             )}
