@@ -275,6 +275,21 @@ export async function mergePull(threadId: string, method: MergeMethod): Promise<
   await reconcileNow(open.id);
 }
 
+/** The owner edits the open pull request's title or description, on GitHub. */
+export async function editPull(
+  threadId: string,
+  change: { title?: string; body?: string },
+): Promise<void> {
+  const { project } = await requireProjectThread(threadId);
+  const open = await openPullOf(threadId);
+  if (!open) throw Boom.notFound("The thread has no open pull request.");
+  const github = await codeGitHub().client(project);
+  await github.updatePull(repoOf(project), open.number, change).catch((error: unknown) => {
+    throw Boom.conflict(`GitHub did not update #${open.number}: ${githubMessage(error)}`);
+  });
+  await reconcileNow(open.id);
+}
+
 /** Fix CI (§7.5): one pass the owner asked for, on whatever is open now. */
 export async function manualPass(threadId: string): Promise<{ started: boolean; reason?: string }> {
   const { project } = await requireProjectThread(threadId);

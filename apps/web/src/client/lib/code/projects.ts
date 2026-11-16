@@ -72,6 +72,8 @@ export const projectsApi = {
     apiClient.post<{ reverted: boolean }>(
       `${thread(id)}/checkpoints/${encodeURIComponent(cp)}/revert`,
     ),
+  editPull: (id: string, change: { title?: string; body?: string }) =>
+    apiClient.patch<ThreadPullsView>(`${thread(id)}/pr`, change),
   merge: (id: string, method: MergeMethod) =>
     apiClient.post<ThreadPullsView>(`${thread(id)}/pr/merge`, { method }),
 

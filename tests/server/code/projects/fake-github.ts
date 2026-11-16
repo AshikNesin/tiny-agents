@@ -146,6 +146,11 @@ export function fakeGitHub(local: LocalExec, bare: string, login = "ashik"): Fak
       gh.autoMergeCalls.push({ pullId, action: "ready" });
       gh.pull(Number(pullId.replace("PR_", ""))).draft = false;
     },
+    async updatePull(_repo, number, change) {
+      const pr = gh.pull(number);
+      if (change.title !== undefined) pr.title = change.title;
+      if (change.body !== undefined) pr.body = change.body;
+    },
     async merge(_repo, number, method) {
       gh.merged.push({ number, method });
       gh.pull(number).state = "merged";

@@ -6,14 +6,14 @@
  * comments (from authors Auto-fix does not trust, labelled Ignored), the
  * actions (Merge, Fix CI, Attach all comments) in one row, the Auto-fix and
  * Auto-merge switches (and a spend limit where the harness reports cost),
- * the pass history, the folded description, and earlier PRs. Opening the
+ * the pass history, the description (markdown, with Edit while it is open),
+ * and earlier PRs. Opening the
  * tab reconciles with GitHub, and so does each re-read while it is on screen
  * (every 15 seconds), so a project without the App's webhooks (`gh` or a
  * token) keeps up as fast as one with them.
  */
 import { useCallback, useEffect, useState } from "react";
 import {
-  ChevronRight,
   CircleCheck,
   CircleDashed,
   CircleX,
@@ -25,13 +25,15 @@ import {
   Maximize2,
   MessageSquare,
   MoreHorizontal,
+  Pencil,
   RefreshCw,
   Upload,
   Wrench,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
-import { Badge, Button, EmptyState, Input, metaLabelClass, monoClass } from "@groot/ui";
+import { Streamdown } from "streamdown";
+import { Badge, Button, EmptyState, Input, Textarea, metaLabelClass, monoClass } from "@groot/ui";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -42,6 +44,7 @@ import { cn } from "@groot/ui/lib/utils";
 import { Spinner } from "../../components/ui/spinner";
 import { Switch } from "../../components/ui/switch";
 import { errorMessage } from "../../lib/errors";
+import { markdownComponents } from "../../lib/markdown";
 import { projectsApi } from "../../lib/code/projects";
 import type { MergeMethod, PullView, ThreadPullsView } from "../../../shared/api/code";
 
@@ -324,19 +327,13 @@ export function PullPanel({
             }
           />
         )}
-        {snap && snap.body.trim() && (
-          <details className="group">
-            <summary
-              className={cn(
-                metaLabelClass,
-                "hover:text-foreground flex cursor-pointer list-none items-center gap-1",
-              )}
-            >
-              <ChevronRight className="size-3.5 transition-transform group-open:rotate-90" />
-              Description
-            </summary>
-            <p className="text-muted-foreground mt-1 whitespace-pre-wrap">{snap.body}</p>
-          </details>
+        {snap && pr && (
+          <Description
+            threadId={threadId}
+            body={snap.body}
+            editable={pr.state === "open"}
+            onSaved={setView}
+          />
         )}
         {view && view.earlier.length > 0 && (
           <section className="space-y-1">
@@ -620,5 +617,101 @@ function ActivePull({
         </section>
       )}
     </>
+  );
+}
+
+/** HTML comments (a PR template's hints) are hidden on GitHub too. */
+const HTML_COMMENT = /<!--[\s\S]*?-->/g;
+
+/**
+ * The pull request's description as GitHub shows it (markdown), and for an
+ * open PR an Edit that saves it back to GitHub.
+ */
+function Description({
+  threadId,
+  body,
+  editable,
+  onSaved,
+}: {
+  threadId: string;
+  body: string;
+  editable: boolean;
+  onSaved(view: ThreadPullsView): void;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const shown = body.replace(HTML_COMMENT, "").trim();
+  const save = async () => {
+    if (draft === null) return;
+    setSaving(true);
+    try {
+      onSaved(await projectsApi.editPull(threadId, { body: draft }));
+      setDraft(null);
+    } catch (e) {
+      toast.error(errorMessage(e, "Could not save the description."));
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <section aria-label="Pull request description" className="space-y-1.5">
+      <div className="flex min-h-6 items-center gap-1">
+        <h3 className={cn(metaLabelClass, "flex-1")}>Description</h3>
+        {editable && draft === null && (
+          <Button
+            size="xs"
+            variant="ghost"
+            onClick={() => setDraft(body)}
+            aria-label="Edit description"
+            className="text-muted-foreground"
+          >
+            <Pencil />
+            Edit
+          </Button>
+        )}
+      </div>
+      {draft !== null ? (
+        <div className="space-y-2">
+          <Textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                void save();
+              } else if (e.key === "Escape") {
+                setDraft(null);
+              }
+            }}
+            autoFocus
+            rows={12}
+            aria-label="Description"
+            placeholder="Describe the change (markdown)"
+            className={cn("min-h-40 text-xs", monoClass)}
+          />
+          <div className="flex items-center justify-end gap-1.5">
+            <Button size="sm" variant="ghost" onClick={() => setDraft(null)} disabled={saving}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => void save()}
+              disabled={saving || draft === body}
+              aria-label="Save description"
+              title="Save to GitHub (⌘↵)"
+            >
+              {saving && <Spinner />}
+              Save
+            </Button>
+          </div>
+        </div>
+      ) : shown ? (
+        <div className="chat-md min-w-0 text-sm [overflow-wrap:anywhere]">
+          <Streamdown components={markdownComponents}>{shown}</Streamdown>
+        </div>
+      ) : (
+        <p className="text-muted-foreground text-sm">No description.</p>
+      )}
+    </section>
   );
 }
