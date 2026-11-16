@@ -34,14 +34,35 @@ export function subscribeSse(
   const onOnline = () => wake?.();
   window.addEventListener("offline", onOffline);
   window.addEventListener("online", onOnline);
+  // A browser opens at most 6 connections per origin over plain HTTP/1.1
+  // (`http://localhost`), and a stream holds one for as long as it is open:
+  // two or three tabs' streams leave every new request on every tab queued
+  // for good. So a hidden tab gives its stream back, and takes a fresh one
+  // (with a fresh snapshot) the moment it is shown again.
+  const hidden = () => typeof document !== "undefined" && document.visibilityState === "hidden";
+  const onVisibility = () => (hidden() ? attempt?.abort() : wake?.());
+  document.addEventListener("visibilitychange", onVisibility);
   controller.signal.addEventListener("abort", () => {
     window.removeEventListener("offline", onOffline);
     window.removeEventListener("online", onOnline);
+    document.removeEventListener("visibilitychange", onVisibility);
   });
+  /** Resolves when the tab is shown (or the subscription closes). */
+  const untilShown = () =>
+    new Promise<void>((resolve) => {
+      wake = resolve;
+      controller.signal.addEventListener("abort", () => resolve(), { once: true });
+    });
 
   void (async () => {
     let delayMs = 1500;
     while (!controller.signal.aborted) {
+      if (hidden()) {
+        await untilShown();
+        wake = undefined;
+        delayMs = 1500;
+        continue;
+      }
       let response: Response | undefined;
       attempt = new AbortController();
       const stop = () => attempt?.abort();

@@ -117,6 +117,15 @@ request sent during the current session clears it, so `ProtectedRoute`
 redirects to `/login`. One for a request sent before the last sign-in or
 sign-out is ignored.
 
+Live updates arrive over server-sent events through `subscribeSse`
+(`apps/web/src/client/lib/sse.ts`): it reconnects with backoff, and the server
+starts each connection with a fresh snapshot. A stream holds one of the 6
+connections a browser opens per origin over plain HTTP/1.1
+(`http://localhost`), so a few tabs' streams would leave every new request
+on every tab queued with no answer. A hidden tab therefore closes its
+streams and reconnects the moment it is shown, as it does when the browser
+goes offline and comes back.
+
 Response types come from the server, imported type-only (for example
 `SessionUser` from `@groot/core/auth/auth.schema`), never hand-copied; see the
 wire-type rule in [`AGENTS.md`](../../AGENTS.md).
