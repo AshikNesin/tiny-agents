@@ -8,7 +8,7 @@ import {
   authDescription,
 } from "../../../components/connections/connection-status";
 
-/** The connection's status, how it signs in and when it was added; Sign in and Reconnect. */
+/** The connection's status, how it signs in and when it was added; Sign in when it needs one, else Reconnect. */
 export function ConnectionStatusCard({
   connection,
   busy,
@@ -25,16 +25,18 @@ export function ConnectionStatusCard({
       <CardHeader>
         <CardTitle>Status</CardTitle>
         <CardAction className="flex gap-2">
-          {connection.status === "needs_auth" && (
+          {/* Reconnecting a connection that needs a sign-in fails the same way: only signing in fixes it. */}
+          {connection.status === "needs_auth" ? (
             <Button onClick={onSignIn} disabled={busy}>
               <LogIn className="size-4" />
               Sign in
             </Button>
+          ) : (
+            <Button variant="outline" onClick={onReconnect} disabled={busy}>
+              <RefreshCw className="size-4" />
+              Reconnect
+            </Button>
           )}
-          <Button variant="outline" onClick={onReconnect} disabled={busy}>
-            <RefreshCw className="size-4" />
-            Reconnect
-          </Button>
         </CardAction>
       </CardHeader>
       <CardContent className="space-y-2">
