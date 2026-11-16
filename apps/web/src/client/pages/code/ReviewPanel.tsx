@@ -41,6 +41,7 @@ import type {
   ReviewFile,
   ReviewFileDiff,
 } from "../../../shared/api/code";
+import { useSteadyKey } from "../../lib/code/use-live-changes";
 import { FileDiff, type LineSelection } from "./UnifiedDiff";
 
 const STATUS_TONE: Record<ReviewFile["status"], string> = {
@@ -70,6 +71,7 @@ export function ReviewPanel({
   /** Uncommitted changes or one commit, from the harness (when it serves diffs). */
   onOtherScopes?: () => void;
 }) {
+  const settledKey = useSteadyKey(refreshKey);
   const [files, setFiles] = useState<ReviewFile[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
@@ -97,7 +99,7 @@ export function ReviewPanel({
     return () => {
       cancelled = true;
     };
-  }, [threadId, refreshKey, reload]);
+  }, [threadId, settledKey, reload]);
 
   useEffect(() => {
     let cancelled = false;
@@ -122,7 +124,7 @@ export function ReviewPanel({
     return () => {
       cancelled = true;
     };
-  }, [threadId, refreshKey, reload, scope]);
+  }, [threadId, settledKey, reload, scope]);
 
   const currentHash = files?.find((f) => f.path === current)?.hash;
   const diffKey = `${scope}:${current ?? ""}`;

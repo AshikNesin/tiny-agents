@@ -16,6 +16,7 @@ import { SearchSelect, type SearchSelectOption } from "../../components/ui/searc
 import { Spinner } from "../../components/ui/spinner";
 import { errorMessage } from "../../lib/errors";
 import { codeApi, type GitDiff, type GitFile, type GitFileDiff } from "../../lib/code/api";
+import { useSteadyKey } from "../../lib/code/use-live-changes";
 import { FileDiff, type LineSelection } from "./UnifiedDiff";
 
 const STATUS_LETTER: Record<GitFile["status"], string> = {
@@ -38,7 +39,7 @@ export function ChangesPanel({
 }: {
   instanceId: string;
   cwd: string;
-  /** Changes when the agent's turn ends, to re-read the diff. */
+  /** Changes when the files may have changed (a pushed version, or transcript activity). */
   refreshKey: unknown;
   onComment(text: string): void;
   onClose(): void;
@@ -51,12 +52,8 @@ export function ChangesPanel({
   const files = listed?.diffId === diffId ? listed.files : null;
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
-  // Re-read at most every 1.5 s while the agent works (each message bumps the key).
-  const [settledKey, setSettledKey] = useState(refreshKey);
-  useEffect(() => {
-    const timer = setTimeout(() => setSettledKey(refreshKey), 1500);
-    return () => clearTimeout(timer);
-  }, [refreshKey]);
+  // Re-read on a steady beat while the key moves (a pushed change, or transcript activity).
+  const settledKey = useSteadyKey(refreshKey);
 
   useEffect(() => {
     let cancelled = false;

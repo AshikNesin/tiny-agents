@@ -110,6 +110,40 @@ describe("Changes panel", () => {
   });
 });
 
+describe("re-reading while the agent writes non-stop", () => {
+  it("keeps re-reading at a steady pace instead of waiting for a pause", async () => {
+    let reads = 0;
+    routes[`${harness}/diffs`] = () => ({ diffs: [working], gitRoot: "/r" });
+    routes[`${harness}/diffs/working/files`] = () => {
+      reads += 1;
+      return [file("src/a.ts", reads)];
+    };
+    routes[`${harness}/diffs/working/file?src/a.ts`] = () => ({
+      path: "src/a.ts",
+      oldContent: "",
+      newContent: "a\n",
+    });
+    const panel = (refreshKey: string) => (
+      <ChangesPanel
+        instanceId="claude-code"
+        cwd="/r"
+        refreshKey={refreshKey}
+        onComment={() => {}}
+        onClose={() => {}}
+      />
+    );
+    const { rerender } = render(panel("0"));
+    await wait(0);
+    const first = reads;
+    // A new key every 300 ms for 3 s: the agent never pauses.
+    for (let i = 1; i <= 10; i++) {
+      rerender(panel(String(i)));
+      await wait(300);
+    }
+    expect(reads - first).toBeGreaterThanOrEqual(3);
+  });
+});
+
 describe("Review panel", () => {
   it("shows the open file's new content when the agent changes it again", async () => {
     const thread = "/code/threads/claude-code%3At1";
@@ -140,7 +174,7 @@ describe("Review panel", () => {
     hash = "h2";
     content = "one\ntwo\n";
     rerender(panel("2"));
-    await wait(0);
+    await wait(750);
     expect(screen.getByText("two")).toBeInTheDocument();
   });
 });
