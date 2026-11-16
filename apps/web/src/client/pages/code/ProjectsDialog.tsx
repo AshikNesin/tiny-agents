@@ -20,6 +20,7 @@ import { useConfirm } from "@groot/ui/primitives";
 import { cn } from "@groot/ui/lib/utils";
 import { Spinner } from "../../components/ui/spinner";
 import { Switch } from "../../components/ui/switch";
+import { SearchSelect } from "../../components/ui/search-select";
 import { errorMessage } from "../../lib/errors";
 import { projectsApi } from "../../lib/code/projects";
 import type { HarnessInfo } from "../../lib/code/api";
@@ -434,23 +435,27 @@ export function ProjectsDialog({
             }}
           >
             {viaApp && appRepos ? (
-              <select
-                aria-label="Repository"
-                className="border-input bg-background h-9 min-w-56 flex-1 rounded-lg border px-2 text-sm"
-                value={repo}
-                onChange={(e) => setRepo(e.target.value)}
-              >
-                <option value="">
-                  {appRepos.length
-                    ? "Pick a repository the App is installed on"
-                    : "Install the App on a repository first"}
-                </option>
-                {appRepos.map((r) => (
-                  <option key={r.fullName} value={r.fullName}>
-                    {r.fullName}
-                  </option>
-                ))}
-              </select>
+              appRepos.length ? (
+                <SearchSelect
+                  label="Repository"
+                  value={repo}
+                  onValueChange={setRepo}
+                  options={appRepos.map((r) => ({
+                    value: r.fullName,
+                    label: r.fullName,
+                  }))}
+                  searchPlaceholder="Search repositories…"
+                  emptyText="No repository matches."
+                  placeholder="Pick a repository the App is installed on"
+                  triggerClassName="border-input bg-background text-foreground h-9 min-w-56 flex-1 justify-between rounded-lg border px-3 text-sm font-normal"
+                  contentClassName="w-(--radix-popover-trigger-width)"
+                  data-testid="code-project-repo"
+                />
+              ) : (
+                <p className="text-muted-foreground flex h-9 min-w-56 flex-1 items-center rounded-lg border border-dashed px-3 text-sm">
+                  Install the App on a repository first, then it is listed here.
+                </p>
+              )
             ) : (
               <Input
                 value={repo}
