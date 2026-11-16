@@ -117,10 +117,17 @@ folder):
   subagents go along), or **Select all**, then **Archive** (or **Restore** in
   the archived view) moves them all, with one Undo.
 
-**Review.** **Changes** (⌘⇧D) shows the uncommitted changes, or a recent
-commit, of the thread's directory, each changed file as a card with its
-diff. Select lines and press **Comment** to put `` `path:lines` `` in the
-composer.
+**Review.** **Changes** (⌘⇧D) shows the uncommitted changes (new files
+included), or a recent commit, of the thread's directory, each changed file
+as a card with its diff. Select lines and press **Comment** to put
+`` `path:lines` `` in the composer.
+
+- While it is open it stays live: the server watches the directory and the
+  panel re-reads when the files move, in place (the list, what you folded
+  and the scroll stay). Where a directory cannot be watched (Shelley), it
+  re-reads on transcript activity.
+- A binary file, or one over 2 MB, says so instead of showing its bytes. A
+  very long diff draws its first 4,000 lines.
 
 **Away.** A followed thread (started, opened or handed off here) sends a push
 (Settings → Notifications → _Code updates_) when it finishes, fails or asks
@@ -182,7 +189,8 @@ please fix the login flow when…" is `ta/fix-login-flow-users`). A name an
 earlier thread took, here or on the remote, gets `-2`, `-3`, ….
 
 **Review.** In a project thread, Changes (⌘⇧D) shows everything since the
-merge base with the base branch, committed or not: a file list with a
+merge base with the base branch, committed or not (new files included), live
+as above: a file list with a
 filter (generated files and lockfiles muted and last), **Viewed** marks that
 come back unmarked when the agent changes the file again, `[` / `]` between
 files, and line comments kept as drafts until **Send to agent** posts them
@@ -372,6 +380,9 @@ Known limits (register row C7):
     reconcile chain (`code-pr-reconcile`) and the PR tab.
   - `code.autofix.ts` (the pure `decide`), `code.passes.ts` (a pass).
   - `code.checkpoints.ts`: per-turn checkpoints and revert.
+  - `code.changes.ts`: live Changes and Review panels (ADR 0025): while one
+    is open, one poll per directory reads its change stamp and
+    `GET /code/threads/:id/changes` pushes a version when it moves.
   - `code.webhook.ts`: the GitHub App's signed webhook (public).
   - `code.projects.routes.ts`: `/api/v1/code/{projects,github}` and a
     thread's `pr`, `publish` and `review` routes.
@@ -391,6 +402,12 @@ Known limits (register row C7):
   - `lib/code/`: API, live thread hook, list tree, tool folding.
   - `store/code.ts`: the app-wide list stream.
   - `pages/code/`: the page; `CodeSettings.tsx` is `/code/settings`.
+
+- **Git reads:** `packages/claude-worker/src/git-reads.ts`, one module for
+  both panels (ADR 0025): the worker runs it next to the files and the
+  project workspace runs it over SSH. Plumbing commands only, so a read never
+  rewrites the index an agent commits through; `-z` paths; untracked files
+  count as added; a binary or oversized side is `unshowable`.
 
 A thread's stream (`GET /code/threads/:id/events`) starts with a snapshot.
 After that it upserts rows by id and sends partial text and state, so a

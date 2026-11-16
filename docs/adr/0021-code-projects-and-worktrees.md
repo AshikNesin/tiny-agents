@@ -1,6 +1,6 @@
 # 0021 — Code projects: a repository on the sandbox, a worktree per thread
 
-- Status: accepted (amends [0012](0012-claude-code-coding-mode.md) for project threads)
+- Status: accepted (amends [0012](0012-claude-code-coding-mode.md) for project threads; amended by [0025](0025-steady-code-diffs.md))
 - Date: 2026-11-16
 - Design: issue #297 (revision 3), phase 2
 
