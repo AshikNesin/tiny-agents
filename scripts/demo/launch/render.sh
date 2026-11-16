@@ -46,3 +46,13 @@ for cut in "${CUTS[@]}"; do
   [[ -f ".film/$cut/index.html" ]] || continue
   (cd ".film/$cut" && $HF render --quality "$QUALITY" --fps 30 -o "$OUT_ABS/${NAME[$cut]}.mp4")
 done
+
+# The film's poster (the inbox at 2.4 s, every row landed) and the site's web encode.
+if [[ " ${CUTS[*]} " == *" index "* && -f "$OUT_ABS/tiny-agents-launch.mp4" ]]; then
+  ffmpeg -v error -y -ss 2.4 -i "$OUT_ABS/tiny-agents-launch.mp4" -frames:v 1 -q:v 3 "$OUT_ABS/launch-poster.jpg"
+  if [[ "$OUT_ABS" == "$(cd ../../../docs/demo && pwd)" ]]; then
+    ffmpeg -v error -y -i "$OUT_ABS/tiny-agents-launch.mp4" -c:v libx264 -preset slow -crf 23 -tune animation \
+      -pix_fmt yuv420p -c:a aac -b:a 128k -movflags +faststart ../../../site/media/tiny-agents-demo.mp4
+    cp "$OUT_ABS/launch-poster.jpg" ../../../site/media/demo-poster.jpg
+  fi
+fi
