@@ -120,8 +120,13 @@ layout has no logo) and the call to action is not clicked, to keep a 2 s hold.
   browse.
 - **The establishing shots (3.5 to 6 s, and each return to the full window).**
   The whole app at 1.19x has small text; they are short on purpose.
+- **The montage's zoom (58 to 67 s).** Each shot now shows its whole card, edge
+  to edge, which caps the zoom at 1.4x to 1.8x: the app's cards are wide, so
+  their small print (timestamps, model ids) is not readable at that size, only
+  the names. An earlier pass zoomed further by cropping the cards, which cut off
+  their right edges; whole cards were the better trade.
 - **"Or let it run" (64.5 to 66 s).** The YOLO banner is pale by the app's
-  design and the rows are small; 1.5 s is not long to read it.
+  design; 1.5 s is not long to read it.
 - **The phone after Approve (38.8 to 41.5 s).** One line on a nearly empty
   screen.
 - **The score.** Generated in code and never heard. A licensed track would

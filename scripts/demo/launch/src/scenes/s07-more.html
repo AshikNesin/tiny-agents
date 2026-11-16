@@ -44,15 +44,39 @@
     };
     tl.fromTo(".m-eyebrow", { opacity: 0 }, { opacity: 1, duration: 0.2 }, 0.02);
 
-    /** One shot: cut in a little wide of the control, settle on it, and let the control do something. */
-    const shot = (i, target, opts, act) => {
+    /**
+     * One shot: the whole of `target` (an element, a list of them, or a
+     * function returning a box) fitted inside the screen with even margins,
+     * cutting in 7% wide and settling. A page saved scrolled is scrolled so the
+     * target is in view first. `max` caps the zoom.
+     */
+    const shot = (i, target, max, act) => {
       const el = shots[i];
       const cam = S.camera(el.querySelector(".cam"));
-      // `left` keeps only that share of the target's width: the side its words are on.
-      const box = cam.local(typeof target === "function" ? target(cam) : target);
-      const aim = { ...box, w: box.w * (opts.left ?? 1) };
-      const to = cam.frame(aim, opts);
-      const from = cam.frame(aim, { ...opts, scale: to.scale * 0.93, fit: undefined });
+      const els = typeof target === "function" ? null : [].concat(target);
+      const measure = () =>
+        els ? els.map((e) => cam.local(e)).reduce(union) : cam.local(target(cam));
+      const anchor = els ? els[0] : null;
+      // The pane that scrolls this page: one saved scrolled, or the nearest that can.
+      let pane = anchor && anchor.closest("[data-st]");
+      for (let e = anchor && anchor.parentElement; !pane && e && e !== el; e = e.parentElement)
+        if (e.scrollHeight > e.clientHeight + 4 && /auto|scroll/.test(getComputedStyle(e).overflowY)) pane = e;
+      if (pane) {
+        const sc = S.scroller(pane);
+        const top = cam.local(pane).y;
+        sc.set(sc.value + measure().y - top - 24);
+      }
+      // A fixed margin of page around the target, so no edge reaches into the
+      // UI beside it. The target fills the screen's width; if it is then too
+      // tall, its top is kept and the bottom runs off, like a scrolled page.
+      const M = 20;
+      const b = measure();
+      const box = { x: b.x - M, y: b.y - M, w: b.w + 2 * M, h: b.h + 2 * M };
+      const scale = Math.min(cam.vp.w / box.w, max);
+      const fits = box.h * scale <= cam.vp.h;
+      const place = fits ? { ax: 0.5, ay: 0.5 } : { ax: 0.5, ay: 0, py: 0 };
+      const to = cam.frame(box, { scale, ...place });
+      const from = cam.frame(box, { scale: scale * 0.93, ...place });
       cam.set(from);
       const t = CUT[i];
       if (i > 0) {
@@ -65,49 +89,43 @@
       S.cap(`.l${i + 1}`, t + 0.04, CUT[i + 1] - 0.02);
       if (act) act(el, t);
     };
+    const MAX = 2.2;
 
-    shot(0, has(shots[0], '[data-slot="card"]', "Prefers window seats"), { left: 0.56, fit: 0.86, maxScale: 2.8, ay: 0.5 }, (el, t) =>
-      S.show(t + 0.2, [...has(el, '[data-slot="card"]', "Prefers window seats").querySelectorAll("li")], { y: 8, stagger: 0.14 }),
-    );
+    // Memory: Travel Planner's saved facts, header to last card.
+    const mem = shots[0].querySelector('section[aria-label="Travel Planner memories"]');
+    shot(0, mem, MAX, (el, t) => S.show(t + 0.2, [...mem.querySelectorAll("li")], { y: 8, stagger: 0.14 }));
 
-    shot(
-      1,
-      (cam) => {
-        const rows = [...shots[1].querySelectorAll(".xterm-rows > div")].filter((r) => r.textContent.trim());
-        const tail = rows.slice(-5);
-        return union(cam.local(tail[0]), cam.local(tail[tail.length - 2]));
-      },
-      { fit: 0.94, maxScale: 2.6, ay: 0.5 },
-      (el, t) => {
-        const rows = [...el.querySelectorAll(".xterm-rows > div")].filter((r) => r.textContent.trim());
-        S.show(t + 0.15, rows.slice(-3, -1), { y: 0, d: 0.1, stagger: 0.22 });
-        S.sfx(t + 0.4, "tick");
-      },
-    );
+    // Terminal: the whole run, from the command to the prompt.
+    const termRows = [...shots[1].querySelectorAll(".xterm-rows > div")].filter((r) => r.textContent.trim());
+    const termBox = (cam) => {
+      const screen = cam.local(shots[1].querySelector(".xterm-screen"));
+      const rows = termRows.map((r) => cam.local(r)).reduce(union);
+      return { x: screen.x, w: screen.w, y: rows.y, h: rows.h };
+    };
+    shot(1, termBox, MAX, (el, t) => {
+      S.show(t + 0.15, termRows.slice(-3, -1), { y: 0, d: 0.1, stagger: 0.22 });
+      S.sfx(t + 0.4, "tick");
+    });
 
-    shot(2, has(shots[2], '[data-slot="card"]', "Linear"), { left: 0.6, fit: 0.86, maxScale: 2.8, ay: 0.5 }, (el, t) =>
-      S.show(t + 0.12, [...has(el, '[data-slot="card"]', "Linear").querySelectorAll("li")], { y: 8, stagger: 0.1 }),
-    );
+    // Connections: the card of connected servers.
+    const conn = has(shots[2], '[data-slot="card"]', "Linear");
+    shot(2, [shots[2].querySelector("main h1") || conn, conn], MAX, (el, t) => S.show(t + 0.12, [...conn.querySelectorAll("li")], { y: 8, stagger: 0.1 }));
 
-    shot(3, has(shots[3], '[data-slot="card"]', "Anthropic · Work"), { left: 0.7, fit: 0.92, maxScale: 2.6, py: 0, ay: 0.06 }, (el, t) =>
-      S.show(t + 0.2, [...has(el, '[data-slot="card"]', "Claude Opus 5.5").querySelectorAll("li")], { y: 8, stagger: 0.16 }),
-    );
+    // Models: the Anthropic account with its two models.
+    const acct = shots[3].querySelector('button[aria-label="Check Anthropic · Work again"]').closest('[data-slot="card"]');
+    shot(3, acct, MAX, (el, t) => S.show(t + 0.2, [...acct.querySelectorAll("li")], { y: 8, stagger: 0.16 }));
 
-    shot(
-      4,
-      (cam) => {
-        const banner = shots[4].querySelector('[data-testid="yolo-banner"]');
-        const rows = shots[4].querySelector('[data-slot="trace"]');
-        return union(cam.local(rows), cam.local(banner));
-      },
-      { left: 0.66, fit: 0.94, maxScale: 2.4, ay: 0.5 },
-      (el, t) => {
-        const rows = [...el.querySelectorAll('[data-slot="trace-collapsible-content-inner"] [data-slot="trace"]')];
-        S.show(t + 0.1, rows, { y: 6, d: 0.18, stagger: 0.16 });
-      },
-    );
+    // YOLO: the auto-approved rows, the answer, and the banner.
+    const trace = shots[4].querySelector('[data-slot="trace"]');
+    const banner = shots[4].querySelector('[data-testid="yolo-banner"]');
+    shot(4, [trace, banner], MAX, (el, t) => {
+      const rows = [...el.querySelectorAll('[data-slot="trace-collapsible-content-inner"] [data-slot="trace"]')];
+      S.show(t + 0.1, rows, { y: 6, d: 0.18, stagger: 0.16 });
+    });
 
-    shot(5, has(shots[5], '[data-slot="card"]', "Update & restart"), { fit: 0.86, maxScale: 2.4, ay: 0.5 }, (el, t) => {
+    // Updates: the card with the versions and Update & restart.
+    const upd = has(shots[5], '[data-slot="card"]', "Update & restart");
+    shot(5, upd, MAX, (el, t) => {
       const btn = has(el, "button", "Update & restart");
       tl.to(btn, { scale: 1.06, duration: 0.18, ease: "power2.out", yoyo: true, repeat: 1, transformOrigin: "50% 50%" }, t + 0.7);
     });
