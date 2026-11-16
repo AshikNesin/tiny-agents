@@ -1,6 +1,6 @@
 // Feature: code-extras (features/code-extras.md). The /code workspace beyond the basic
 // turn (journeys/code.mjs), on the keyless predictable Shelley (`ta-verify up --shelley`):
-// the folder browser, a new git worktree, the repository filter, the composer chips
+// the folder browser, a new git worktree, the thread list's repository groups, the composer chips
 // (model, reasoning; no permissions on Shelley), `/` command hints, `@` file completion,
 // skills for a message, attachments (an image and a text file) and how they render
 // (asset route), the usage popover, fork, change directory, the queued messages'
@@ -155,7 +155,8 @@ await journey(
     await step(
       "a second thread in the repo itself (directory remembered, no worktree)",
       async () => {
-        await page.getByRole("link", { name: "New thread" }).click();
+        // `exact`: each list group also has a "New thread in <label>" link.
+        await page.getByRole("link", { name: "New thread", exact: true }).click();
         await expect(page.getByRole("button", { name: "Working directory" })).toHaveText(short);
         await expect(page.getByRole("button", { name: "New worktree" })).toHaveAttribute(
           "aria-pressed",
@@ -185,20 +186,37 @@ await journey(
       await expect(list.getByRole("link", { name: new RegExp(`^wt-${stamp}`) })).toBeVisible();
     });
 
-    await step("repository filter: two repos listed; picking one narrows the list", async () => {
-      const filter = page.getByRole("button", { name: "Repository" });
-      await expect(filter).toBeVisible({ timeout: 20_000 });
-      await filter.click();
-      await expect(page.getByRole("option", { name: /All repositories/ })).toBeVisible();
-      await expect(page.getByRole("option", { name: new RegExp(escape(dir)) })).toHaveCount(2); // the repo and its worktree
-      await page.getByRole("option", { name: new RegExp(`${escape(worktree)}$`) }).click();
-      await expect(list.getByRole("link", { name: new RegExp(`^wt-${stamp}`) })).toBeVisible();
-      await expect(list.getByRole("link", { name: new RegExp(`^main-${stamp}`) })).toHaveCount(0);
-      await proof("repo-filter");
-      await filter.click();
-      await page.getByRole("option", { name: /All repositories/ }).click();
-      await expect(list.getByRole("link", { name: new RegExp(`^main-${stamp}`) })).toBeVisible();
-    });
+    await step(
+      "repository groups: the repo and its worktree each list their own thread",
+      async () => {
+        // A folder group is named by its basename: `work-<stamp>` is a prefix of the
+        // worktree's `work-<stamp>-<date>`, so match exactly.
+        const wtLabel = path.basename(worktree);
+        const repoGroup = list.getByRole("region", { name: `work-${stamp}`, exact: true });
+        const wtGroup = list.getByRole("region", { name: wtLabel, exact: true });
+        await expect(repoGroup).toBeVisible({ timeout: 20_000 });
+        await expect(
+          repoGroup.getByRole("link", { name: new RegExp(`^main-${stamp}`) }),
+        ).toBeVisible();
+        await expect(repoGroup.getByRole("link", { name: new RegExp(`^wt-${stamp}`) })).toHaveCount(
+          0,
+        );
+        await expect(wtGroup.getByRole("link", { name: new RegExp(`^wt-${stamp}`) })).toBeVisible();
+        await expect(
+          wtGroup.getByRole("link", { name: `New thread in ${wtLabel}`, exact: true }),
+        ).toHaveAttribute("href", `/code/new?cwd=${encodeURIComponent(worktree)}`);
+        // Folding the worktree's group hides its thread and leaves the repo's.
+        const fold = wtGroup.getByRole("button", { name: wtLabel, exact: true });
+        await fold.click();
+        await expect(fold).toHaveAttribute("aria-expanded", "false");
+        await expect(list.getByRole("link", { name: new RegExp(`^wt-${stamp}`) })).toHaveCount(0);
+        await expect(list.getByRole("link", { name: new RegExp(`^main-${stamp}`) })).toBeVisible();
+        await proof("repo-groups");
+        await fold.click();
+        await expect(fold).toHaveAttribute("aria-expanded", "true");
+        await expect(list.getByRole("link", { name: new RegExp(`^wt-${stamp}`) })).toBeVisible();
+      },
+    );
 
     // ---- composer chips -------------------------------------------------------------
     await step("Reasoning chip → High: saved on the thread, survives a reload", async () => {

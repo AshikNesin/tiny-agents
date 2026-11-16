@@ -1,7 +1,7 @@
 /**
  * The Code page's thread list: every harness's flat list (subagents
- * included) as a tree, split into "working now" and "recent", optionally
- * narrowed to one repository.
+ * included) as a tree, grouped the way t3code's sidebar is: by project,
+ * then by repository or folder for threads outside a project.
  */
 import type { ThreadSummary } from "./api";
 
@@ -14,25 +14,27 @@ export interface ListNode {
   unread: boolean;
 }
 
-export interface ListSections {
-  working: ListNode[];
-  recent: ListNode[];
+/** One sidebar group: a project, a repository or folder, or threads with neither. */
+export interface ListGroup {
+  /** `project:<id>`, `folder:<path>` or `none`. */
+  key: string;
+  label: string;
+  projectId?: string;
+  /** The folder a `folder:` group stands for. */
+  path?: string;
+  nodes: ListNode[];
 }
 
 function repoOf(row: Pick<ThreadSummary, "repoRoot" | "cwd">): string | null {
   return row.repoRoot || row.cwd || null;
 }
 
-/** Distinct repositories (or working directories) across the rows, most recent first. */
-export function repositories(rows: ThreadSummary[]): string[] {
-  const seen = new Map<string, string>();
-  for (const row of rows) {
-    const repo = repoOf(row);
-    if (!repo) continue;
-    const prev = seen.get(repo);
-    if (!prev || row.updatedAt > prev) seen.set(repo, row.updatedAt);
-  }
-  return [...seen.entries()].sort((a, b) => b[1].localeCompare(a[1])).map(([repo]) => repo);
+/** Newest activity in a node's subtree. */
+function lastActive(node: ListNode): string {
+  return node.children.reduce((latest, child) => {
+    const at = lastActive(child);
+    return at > latest ? at : latest;
+  }, node.row.updatedAt);
 }
 
 const newestFirst = (a: ListNode, b: ListNode) => b.row.updatedAt.localeCompare(a.row.updatedAt);
@@ -67,20 +69,49 @@ export function buildTree(rows: ThreadSummary[]): ListNode[] {
   return roots.sort(newestFirst);
 }
 
-export function buildSections(
+/**
+ * The sidebar's groups. Subagents stay under their parent wherever they
+ * work, so the tree is built first and only its roots are grouped. Inside a
+ * group anything working comes first, then the newest; groups come most
+ * recently active first, and a project with no thread yet comes last.
+ */
+export function buildGroups(
   rows: ThreadSummary[],
-  options: { repo?: string | null; instanceId?: string | null } = {},
-): ListSections {
-  const scoped = rows.filter(
-    (r) =>
-      (!options.repo || repoOf(r) === options.repo) &&
-      (!options.instanceId || r.instanceId === options.instanceId),
+  projects: ReadonlyArray<{ id: string; name: string }>,
+): ListGroup[] {
+  const groups = new Map<string, ListGroup>();
+  for (const project of projects) {
+    const key = `project:${project.id}`;
+    groups.set(key, { key, label: project.name, projectId: project.id, nodes: [] });
+  }
+  for (const node of buildTree(rows)) {
+    const projectKey = node.row.projectId ? `project:${node.row.projectId}` : null;
+    if (projectKey && groups.has(projectKey)) {
+      groups.get(projectKey)!.nodes.push(node);
+      continue;
+    }
+    const path = repoOf(node.row);
+    const key = path ? `folder:${path}` : "none";
+    let group = groups.get(key);
+    if (!group) {
+      group = path
+        ? { key, label: path.split("/").filter(Boolean).pop() ?? path, path, nodes: [] }
+        : { key, label: "No folder", nodes: [] };
+      groups.set(key, group);
+    }
+    group.nodes.push(node);
+  }
+  const active = new Map<string, string>();
+  for (const group of groups.values()) {
+    group.nodes.sort((a, b) => Number(b.busy) - Number(a.busy) || newestFirst(a, b));
+    active.set(
+      group.key,
+      group.nodes.map(lastActive).reduce((a, b) => (b > a ? b : a), ""),
+    );
+  }
+  return [...groups.values()].sort((a, b) =>
+    (active.get(b.key) ?? "").localeCompare(active.get(a.key) ?? ""),
   );
-  const tree = buildTree(scoped);
-  return {
-    working: tree.filter((n) => n.busy),
-    recent: tree.filter((n) => !n.busy),
-  };
 }
 
 /** The ancestry of a thread (root first), for the header breadcrumb. */

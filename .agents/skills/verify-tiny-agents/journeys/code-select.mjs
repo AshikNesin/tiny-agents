@@ -120,8 +120,11 @@ await journey(
         await list.getByRole("checkbox", { name: `Select ${t.title}` }).click();
       await bar.getByRole("button", { name: "Archive" }).click();
       await expect.poll(() => ids("archived"), { timeout: 15_000 }).toHaveLength(2);
-      await page.getByRole("radio", { name: "Archived" }).click();
+      // The list's footer (hidden while selecting) switches to the archived threads.
+      await page.getByTestId("code-archived-toggle").click();
+      await expect(page.getByTestId("code-archived-back")).toBeVisible();
       for (const t of picked) await expect(rowLink(t.title)).toBeVisible({ timeout: 15_000 });
+      await expect(rowLink(kept.title)).toHaveCount(0);
       await page.getByRole("button", { name: "Select threads" }).click();
       await bar.getByRole("button", { name: "Select all" }).click();
       await expect(bar.getByText("2 selected")).toBeVisible();
@@ -133,6 +136,10 @@ await journey(
         .poll(() => ids(), { timeout: 15_000 })
         .toEqual([...picked, kept].map((t) => t.id).sort());
       expect(await ids("archived")).toEqual([]);
+      await page.getByRole("button", { name: "Archived threads" }).click();
+      await Promise.all(
+        [...picked, kept].map((t) => expect(rowLink(t.title)).toBeVisible({ timeout: 15_000 })),
+      );
     });
     await proof("restored");
   },
