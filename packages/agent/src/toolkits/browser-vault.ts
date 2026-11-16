@@ -36,7 +36,7 @@ import {
   type SecretFill,
   type SecretFillField,
 } from "@tiny-agents/sandbox/browser";
-import { safeMessage, useFromSink, vaultGatePlan } from "./vault";
+import { safeMessage, vaultUseFromSink, vaultGatePlan } from "./vault";
 
 export interface BrowserVaultOptions {
   /** The vault broker: enables `browser_fill_secret` and `browser_enter_code`. */
@@ -349,7 +349,7 @@ export function createBrowserVaultTools(
           const s = await sessions.actionTurn(await targetOf(Number(api.conversationId)));
           const origin = await currentOrigin(s.session);
           let chosen = "password" as FillableField;
-          const result = await useFromSink(
+          const result = await vaultUseFromSink(
             broker,
             api,
             context,
@@ -500,7 +500,7 @@ export function createBrowserVaultTools(
           const s = await sessions.actionTurn(await targetOf(Number(api.conversationId)));
           const origin = await currentOrigin(s.session);
           let hasSeed = true;
-          const result = await useFromSink(
+          const result = await vaultUseFromSink(
             broker,
             api,
             context,

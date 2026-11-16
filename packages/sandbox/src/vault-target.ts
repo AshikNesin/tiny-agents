@@ -9,7 +9,7 @@
  * A sink's target moved after the use was allowed: the page navigated off
  * the origin, another window came to the front. The sink throws it before
  * any value leaves; the broker audits it as `refused_origin` with `reason`,
- * and `useFromSink` words it for the model. Sinks throw a subclass that
+ * and `vaultUseFromSink` words it for the model. Sinks throw a subclass that
  * says what moved (`OriginMismatchError`, `WindowMismatchError`).
  */
 export class VaultTargetMovedError extends Error {

@@ -33,7 +33,7 @@ import {
   type KeyModifier,
   type LiveComputer,
 } from "@tiny-agents/sandbox/computer";
-import { safeMessage, useFromSink, vaultGatePlan } from "./vault";
+import { safeMessage, vaultUseFromSink, vaultGatePlan } from "./vault";
 
 export { createComputerSessions, type ComputerSessions } from "@tiny-agents/sandbox/computer";
 
@@ -332,7 +332,7 @@ export function createComputerToolkit(options: ComputerToolkitOptions = {}): Cap
           live = await sessions.actionTurn(profile);
           const desktop = live.desktop;
           const field = args.field ?? "password";
-          await useFromSink(
+          await vaultUseFromSink(
             broker,
             api,
             context,

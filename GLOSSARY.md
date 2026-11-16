@@ -102,7 +102,7 @@ A message sent to a harness while its turn runs: it goes into that turn. Queue h
 _Avoid_: interrupt (Stop interrupts)
 
 **Vault use**:
-One resolution of a vault item's value into a sink, after policy, the owner's approval and a re-check of the target. `VaultUse` names the item, the sink tool, the target and its kind (origin, host, command, connection, window, provider); the audit row records what the sink did, never what was meant. `vault.service.ts` owns the policy and the audit, and `useItem`, `resolveConnectionSecret` and `resolveProviderSecret` share one path through it; in the agent package `useFromSink` (one item) and `useAllFromSink` (several, for a command's environment), planned by `vaultGatePlan`, are the one sequence every sink follows.
+One resolution of a vault item's value into a sink, after policy, the owner's approval and a re-check of the target. `VaultUse` names the item, the sink tool, the target and its kind (origin, host, command, connection, window, provider); the audit row records what the sink did, never what was meant. `vault.service.ts` owns the policy and the audit, and `runItemUse`, `resolveConnectionSecret` and `resolveProviderSecret` share one path through it; in the agent package `vaultUseFromSink` (one item) and `vaultUseAllFromSink` (several, for a command's environment), planned by `vaultGatePlan`, are the one sequence every sink follows.
 _Avoid_: fill, lookup, secret access
 
 **Sink**:

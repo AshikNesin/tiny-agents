@@ -116,6 +116,16 @@ interface Boundary {
   otherId: number; // merge: absorbed run; split: new lower run
   gapIndex: number; // bridging/deselected row — where the halves meet
   phase: "converge" | "commit" | "splitIn" | "diverge";
+  due: number; // performance.now() once its motion window is over
+}
+
+// A boundary's motion window is over: a merge swaps to one block, a split drops.
+function resolveBoundary(bs: Boundary[], tid: number): Boundary[] {
+  return bs.some((x) => x.tid === tid)
+    ? bs.flatMap((x) =>
+        x.tid !== tid ? [x] : x.kind === "merge" ? [{ ...x, phase: "commit" as const }] : [],
+      )
+    : bs;
 }
 
 // Two runs within `outer`, ordered, separated by exactly one row (a single-row
@@ -147,7 +157,6 @@ export function useMergeSplitBlocks(runs: Run[], itemRects: ItemRect[], R: numbe
   // it in the same batch as the boundaries it found.
   const [prevRuns, setPrevRuns] = useState<Run[]>([]);
   const tidRef = useRef(0);
-  const timersRef = useRef(new Map<number, ReturnType<typeof setTimeout>>());
   const runsSig = runs.map((g) => `${g.id}:${g.start}-${g.end}`).join("|");
 
   // Detect merges/splits before paint (so the first frame already shows the
@@ -157,6 +166,7 @@ export function useMergeSplitBlocks(runs: Run[], itemRects: ItemRect[], R: numbe
     const prev = prevRuns;
     const cur = runs;
     const found: Boundary[] = [];
+    const now = performance.now();
     for (const c of cur) {
       const p = bridgePair(c, prev); // two prev runs collapsed into one
       if (p && (c.id === p.up.id || c.id === p.lo.id))
@@ -167,6 +177,7 @@ export function useMergeSplitBlocks(runs: Run[], itemRects: ItemRect[], R: numbe
           otherId: c.id === p.up.id ? p.lo.id : p.up.id,
           gapIndex: p.gap,
           phase: "converge",
+          due: now + convergeMs,
         });
     }
     for (const p of prev) {
@@ -179,59 +190,37 @@ export function useMergeSplitBlocks(runs: Run[], itemRects: ItemRect[], R: numbe
           otherId: c.lo.id,
           gapIndex: c.gap,
           phase: "splitIn",
+          due: now + splitMs,
         });
     }
     setPrevRuns(cur.map((r) => ({ ...r })));
-    // Resolve each new boundary after its motion window (merge → swap to one
-    // block; split → drop), so an interrupted animation can't strand a half.
-    for (const b of found) {
-      timersRef.current.set(
-        b.tid,
-        setTimeout(
-          () => {
-            timersRef.current.delete(b.tid);
-            setBoundaries((bs) =>
-              bs.some((x) => x.tid === b.tid)
-                ? bs.flatMap((x) =>
-                    x.tid !== b.tid
-                      ? [x]
-                      : x.kind === "merge"
-                        ? [{ ...x, phase: "commit" as const }]
-                        : [],
-                  )
-                : bs,
-            );
-          },
-          b.kind === "merge" ? convergeMs : splitMs,
-        ),
-      );
-    }
     const stillValid = (b: Boundary) =>
       b.kind === "merge"
         ? cur.some((c) => c.id === b.survivorId && b.gapIndex > c.start && b.gapIndex < c.end)
         : cur.some((c) => c.id === b.survivorId && c.end === b.gapIndex - 1) &&
           cur.some((c) => c.id === b.otherId && c.start === b.gapIndex + 1);
-    setBoundaries((active) => {
-      // Cancel the resolve timer of any boundary the latest selection
-      // invalidated — otherwise it sits in timersRef until firing as a no-op.
-      // Clearing is idempotent, so a double-invoked updater is harmless.
-      for (const b of active) {
-        if (stillValid(b)) continue;
-        const timer = timersRef.current.get(b.tid);
-        if (timer !== undefined) {
-          clearTimeout(timer);
-          timersRef.current.delete(b.tid);
-        }
-      }
-      return [...active.filter(stillValid), ...found];
-    });
+    // Set from this layout pass, not during render: the boundaries come from
+    // the runs the last pass saw, and land before paint so the first frame
+    // already shows the halves.
+    // react-doctor-disable-next-line react-doctor/no-adjust-state-on-prop-change -- needs the previous runs, before paint
+    setBoundaries((active) => [...active.filter(stillValid), ...found]);
   }, [runsSig]);
 
-  // Clear any pending timers on unmount.
+  // Resolve each boundary once its motion window is over, so an interrupted
+  // animation can't strand a half. Re-armed with the time left whenever the
+  // boundaries change; one the latest selection invalidated has left the
+  // list, and its timer goes with it.
   useEffect(() => {
-    const timers = timersRef.current;
+    const timers = boundaries
+      .filter((b) => b.phase !== "commit")
+      .map((b) =>
+        setTimeout(
+          () => setBoundaries((bs) => resolveBoundary(bs, b.tid)),
+          Math.max(0, b.due - performance.now()),
+        ),
+      );
     return () => timers.forEach(clearTimeout);
-  }, []);
+  }, [boundaries]);
 
   // Follow-up frame: a fresh split holds its abutting frame once then
   // diverges; a committed merge is dropped.

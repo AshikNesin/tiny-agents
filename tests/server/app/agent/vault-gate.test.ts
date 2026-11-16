@@ -3,8 +3,8 @@
  * item-level approval on top of tool permissions, "for this chat" grants,
  * refusals that never ask, expiring approvals, and the canary invariant —
  * a resolved value never reaches the model or the transcript. Then the use
- * sequence every sink follows (`vaultGatePlan`, `useFromSink`,
- * `useAllFromSink`) at its own interface, on a fake broker and tool API.
+ * sequence every sink follows (`vaultGatePlan`, `vaultUseFromSink`,
+ * `vaultUseAllFromSink`) at its own interface, on a fake broker and tool API.
  */
 import type { Context } from "@earendil-works/chord";
 import { until } from "../../fixtures/until";
@@ -28,8 +28,8 @@ import {
 } from "../../../../packages/agent/src/testing";
 import { OriginMismatchError } from "../../../../packages/sandbox/src/browser-fill";
 import {
-  useAllFromSink,
-  useFromSink,
+  vaultUseAllFromSink,
+  vaultUseFromSink,
   vaultGatePlan,
   type IntendedUse,
 } from "../../../../packages/agent/src/toolkits/vault";
@@ -392,7 +392,7 @@ describe("expiring approvals", () => {
   }, 20_000);
 });
 
-// ── The use sequence itself (vaultGatePlan, useFromSink, useAllFromSink) ──
+// ── The use sequence itself (vaultGatePlan, vaultUseFromSink, vaultUseAllFromSink) ──
 
 const context = {} as Context;
 
@@ -575,7 +575,7 @@ describe("the vault use sequence", () => {
       context,
       false,
     );
-    const revealed = await useAllFromSink(
+    const revealed = await vaultUseAllFromSink(
       broker,
       api,
       context,
@@ -606,7 +606,7 @@ describe("the vault use sequence", () => {
       ran = true;
     };
     await expect(
-      useAllFromSink(
+      vaultUseAllFromSink(
         broker,
         fakeApi({ approved: true }),
         context,
@@ -616,7 +616,7 @@ describe("the vault use sequence", () => {
       ),
     ).rejects.toMatchObject({ code: "unknown_handle" });
     await expect(
-      useAllFromSink(
+      vaultUseAllFromSink(
         broker,
         fakeApi(),
         context,
@@ -635,7 +635,7 @@ describe("the vault use sequence", () => {
       uses: [commandUse("github", "cmd A"), commandUse("npm", "cmd A")],
     })).plan(undefined as never, api, context, false);
     await expect(
-      useAllFromSink(
+      vaultUseAllFromSink(
         broker,
         api,
         context,
@@ -656,7 +656,7 @@ describe("the vault use sequence", () => {
 
   it("words a target the sink found moved with the sink's own text", async () => {
     const { broker } = sequenceBroker([keyItem("github", "allowed")]);
-    const error = await useFromSink(
+    const error = await vaultUseFromSink(
       broker,
       fakeApi(),
       context,

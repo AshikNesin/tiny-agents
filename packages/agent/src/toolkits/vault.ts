@@ -216,7 +216,7 @@ const MOVED = (actual: string) =>
  * `VaultError`; `moved` words the refusal for a target that changed, before
  * the use or inside the sink (`VaultTargetMovedError`).
  */
-export async function useFromSink<T>(
+export async function vaultUseFromSink<T>(
   broker: VaultBroker,
   api: ToolExecutionApi,
   context: Context,
@@ -225,7 +225,7 @@ export async function useFromSink<T>(
   sink: (values: SecretValues, item: VaultItemMeta) => Promise<T>,
   moved: (actual: string) => string = MOVED,
 ): Promise<T> {
-  return useAllFromSink(
+  return vaultUseAllFromSink(
     broker,
     api,
     context,
@@ -242,7 +242,7 @@ export async function useFromSink<T>(
  * value outlives the call or leaves the broker's audited scope; the sink
  * gets the values and items in `intended`'s order.
  */
-export async function useAllFromSink<T>(
+export async function vaultUseAllFromSink<T>(
   broker: VaultBroker,
   api: ToolExecutionApi,
   context: Context,

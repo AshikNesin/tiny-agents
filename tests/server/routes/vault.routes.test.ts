@@ -30,7 +30,7 @@ import {
   forgetAppCredential,
   listFor,
   planUse,
-  useItem,
+  runItemUse,
   resolveConnectionSecret,
   resolveProviderSecret,
 } from "../../../apps/web/src/server/api/vault/vault.service";
@@ -312,7 +312,7 @@ describe("vault policy", () => {
     "audits a sink that threw %s as what happened, not as used",
     async (thrown, outcome, reason) => {
       await expect(
-        useItem(
+        runItemUse(
           { ...use("https://github.com"), approved: true },
           { unattended: false, botName: "Bot" },
           ["password"],
@@ -392,7 +392,7 @@ describe("vault policy", () => {
   it("resolves into the sink only after approval, registering the value", async () => {
     const sink = vi.fn(async () => "filled");
     await expect(
-      useItem(
+      runItemUse(
         { ...use("https://github.com"), approved: false },
         { unattended: false },
         ["password"],
@@ -401,7 +401,7 @@ describe("vault policy", () => {
     ).rejects.toMatchObject({ code: "refused_policy" });
     expect(sink).not.toHaveBeenCalled();
     await expect(
-      useItem(
+      runItemUse(
         { ...use("https://github.com"), approved: true },
         { unattended: false },
         ["password"],
@@ -527,7 +527,7 @@ describe("policy binding (local backend)", () => {
       policy: policyOf({ handle: "k", hosts: ["api.example.com"], tools: ["http_request"] }),
     });
     const use = (target: string) =>
-      useItem(
+      runItemUse(
         {
           handle: "k",
           tool: "http_request",
@@ -617,7 +617,7 @@ describe("card fills", () => {
       },
     });
     const sink = vi.fn(async (values: Record<string, { reveal(): string }>) => Object.keys(values));
-    const keys = await useItem(
+    const keys = await runItemUse(
       {
         handle: "visa",
         tool: "browser_fill_secret",

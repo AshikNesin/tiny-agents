@@ -42,7 +42,7 @@ import {
 } from "@tiny-agents/sandbox";
 import {
   safeMessage,
-  useAllFromSink,
+  vaultUseAllFromSink,
   vaultGatePlan,
   type IntendedUse,
   type IntendedUses,
@@ -280,7 +280,7 @@ export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capab
           const problem = secretsProblem(args);
           if (problem) return fail(problem);
           const env = args.secrets.map((s) => s.env);
-          result = await useAllFromSink(
+          result = await vaultUseAllFromSink(
             broker!,
             api,
             context,

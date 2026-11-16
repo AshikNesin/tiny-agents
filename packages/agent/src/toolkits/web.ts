@@ -18,7 +18,7 @@ import type { Capability } from "../capabilities";
 import { defineToolkit, tool } from "../toolkit";
 import { VAULT_RULE, type VaultBroker } from "../vault";
 import { checkPublicUrl, isPrivateAddress } from "@tiny-agents/sandbox";
-import { safeMessage, useFromSink, vaultGatePlan } from "./vault";
+import { safeMessage, vaultUseFromSink, vaultGatePlan } from "./vault";
 
 export interface WebToolkitOptions {
   /** TinyFish API key. Search and Fetch stay hidden without it. */
@@ -309,7 +309,7 @@ export function createWebToolkit(options: WebToolkitOptions): Capability {
             requestFollowingRedirects(target, args.method ?? "GET", headers, args.body, auth);
           try {
             const response = args.auth
-              ? await useFromSink(
+              ? await vaultUseFromSink(
                   broker,
                   api,
                   context,
