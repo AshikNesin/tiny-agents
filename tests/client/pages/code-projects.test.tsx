@@ -1,15 +1,16 @@
 /**
- * The Code page's Projects dialog, New project form (issue #297): with the
- * GitHub App on, the repository picker is the searchable SearchSelect the
- * composer's model picker uses, not a plain select; typing filters the App's
- * repositories and Enter picks one, and a repo can't be typed in by hand.
+ * Code settings, Add a project (issue #297): with the GitHub App set up, the
+ * repository picker is the searchable SearchSelect the composer's model
+ * picker uses, not a plain select; typing filters the App's repositories and
+ * Enter picks one, and a repo can't be typed in by hand.
  */
 import React from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { ConfirmProvider } from "@groot/ui/primitives";
-import { ProjectsDialog } from "@/pages/code/ProjectsDialog";
+import { MemoryRouter } from "react-router-dom";
+import { CodeSettings } from "@/pages/code/CodeSettings";
 import type { HarnessInfo } from "@/lib/code/api";
 
 const toastError = vi.fn();
@@ -52,13 +53,9 @@ const shelley: HarnessInfo = {
 function open() {
   render(
     <ConfirmProvider>
-      <ProjectsDialog
-        open
-        onOpenChange={() => {}}
-        harnesses={[shelley]}
-        projects={[]}
-        onChange={() => {}}
-      />
+      <MemoryRouter>
+        <CodeSettings section="projects" harnesses={[shelley]} projects={[]} onChange={() => {}} />
+      </MemoryRouter>
     </ConfirmProvider>,
   );
 }
@@ -76,7 +73,7 @@ describe("New project with the GitHub App", () => {
   it("searches the App's repositories and picks one", async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     open();
-    await user.click(screen.getByRole("switch", { name: "Use the GitHub App" }));
+    expect(await screen.findByRole("switch", { name: "Use the GitHub App" })).toBeChecked();
     const trigger = await screen.findByRole("button", { name: "Repository" });
     await user.click(trigger);
     const search = await screen.findByPlaceholderText("Search repositories…");
@@ -94,7 +91,7 @@ describe("New project with the GitHub App", () => {
   it("shows a search row only for installed repositories, never free text", async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     open();
-    await user.click(screen.getByRole("switch", { name: "Use the GitHub App" }));
+    expect(await screen.findByRole("switch", { name: "Use the GitHub App" })).toBeChecked();
     const trigger = await screen.findByRole("button", { name: "Repository" });
     await user.click(trigger);
     const search = await screen.findByPlaceholderText("Search repositories…");
@@ -108,9 +105,8 @@ describe("New project with the GitHub App", () => {
 
   it("says so when the App is installed on nothing yet", async () => {
     appRepositories.mockResolvedValue([]);
-    const user = userEvent.setup({ pointerEventsCheck: 0 });
     open();
-    await user.click(screen.getByRole("switch", { name: "Use the GitHub App" }));
+    expect(await screen.findByRole("switch", { name: "Use the GitHub App" })).toBeChecked();
     expect(await screen.findByText(/Install the App on a repository first/)).toBeInTheDocument();
   });
 });

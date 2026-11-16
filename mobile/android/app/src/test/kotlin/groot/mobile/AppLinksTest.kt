@@ -48,9 +48,17 @@ class AppLinksTest {
     }
 
     @Test
+    fun `a Code push opens the thread it is about`() {
+        assertEquals(AppLink.Screen("code/thread/claude-code%3Aabc-123"), parseAppLink("$server/code/claude-code%3Aabc-123", server))
+        // Links from before the harness layer name a bare Shelley id.
+        assertEquals(AppLink.Screen("code/thread/cXYZ"), parseAppLink("$server/code/cXYZ", server))
+        assertEquals(AppLink.Screen("code"), parseAppLink("$server/code", server))
+    }
+
+    @Test
     fun `another server's links and unknown paths open nothing in particular`() {
         assertNull(parseAppLink("https://evil.example.net/chats/c0abc?focus=approval:1", server))
-        assertNull(parseAppLink("$server/code/thread-1", server))
+        assertNull(parseAppLink("$server/code/a/b/c", server))
         assertNull(parseAppLink("$server/vault/requests/not-a-number", server))
         assertNull(parseAppLink("javascript:alert(1)", server))
         // Signed out, the manifest's host is the only filter.

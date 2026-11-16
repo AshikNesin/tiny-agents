@@ -70,6 +70,8 @@ export interface Workspace {
   addWorktree(checkout: string, path: string, branch: string, base: string): Promise<string>;
   /** A worktree on a branch that already exists (locally or on the remote): unarchive, a PR's head. */
   addWorktreeForBranch(checkout: string, path: string, branch: string): Promise<void>;
+  /** A local branch, or one the last fetch saw on the remote, already has this name. */
+  branchTaken(checkout: string, branch: string): Promise<boolean>;
   removeWorktree(checkout: string, path: string): Promise<void>;
   headSha(path: string): Promise<string>;
   /** Uncommitted changes, as `git status --porcelain` lines. */
@@ -154,17 +156,60 @@ export function checkpointRef(branch: string, seq: number): string {
   return `refs/tiny-agents/checkpoints/${branch.replaceAll("/", "_")}/${seq}`;
 }
 
-/** Branch names the app makes: `ta/<slug>-<suffix>`. */
-export function branchName(title: string, suffix: string): string {
-  const slug =
-    title
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .slice(0, 40)
-      .replace(/-+$/, "") || "thread";
-  return `ta/${slug}-${suffix}`;
+/** Words a task's wording carries that say nothing about the change. */
+const FILLER: readonly string[] = (
+  "a an the to for of in on at by with and or but so that this these those it its is are be " +
+  "can could would will should you your please pls i we us me my our lets let want need like " +
+  "help hey hi ok okay just also some there here when then now currently"
+).split(" ");
+
+/** Up to `maxWords` words joined by hyphens, stopping at a word before `maxLength`. */
+function joinSlug(words: readonly string[], maxWords: number, maxLength: number): string {
+  let slug = "";
+  for (const word of words.slice(0, maxWords)) {
+    const next = slug ? `${slug}-${word}` : word;
+    if (next.length > maxLength) break;
+    slug = next;
+  }
+  return slug || (words[0]?.slice(0, maxLength) ?? "");
 }
+
+const wordsOf = (text: string) =>
+  text
+    .toLowerCase()
+    .replace(/['’]/g, "")
+    .match(/[a-z0-9]+/g) ?? [];
+
+/**
+ * A branch slug from a task's own words when no model names it: the first
+ * few words that are not filler ("Can you please fix the login flow…" is
+ * `fix-login-flow`), short enough to read at a glance.
+ */
+export function branchSlug(task: string): string {
+  const words = wordsOf(task.slice(0, 300));
+  const kept = words.filter((word) => !FILLER.includes(word));
+  return joinSlug(kept.length ? kept : words, 4, 28) || "thread";
+}
+
+/**
+ * A model's branch name as a slug: its first line, without a label, quotes,
+ * a `ta/` prefix or a conventional `type/` slash; `null` when nothing usable
+ * is left.
+ */
+export function cleanBranchSlug(raw: string): string | null {
+  const line = raw
+    .replace(/<think>[\s\S]*?<\/think>/gi, "")
+    .split("\n")
+    .map((l) => l.trim())
+    .find(Boolean);
+  if (!line) return null;
+  const name = line.replace(/^(branch(\s+name)?)\s*:\s*/i, "").replace(/^[`'"\s]*ta\//i, "");
+  const slug = joinSlug(wordsOf(name), 5, 32);
+  return slug.length >= 3 ? slug : null;
+}
+
+/** The app's branches live under `ta/`. */
+export const branchName = (slug: string) => `ta/${slug}`;
 
 /** A glob over repository paths (`**` any depth, `*` one segment), as protected paths use. */
 export function matchesGlob(path: string, glob: string): boolean {
@@ -246,6 +291,13 @@ export function createWorkspace(options: WorkspaceOptions): Workspace {
         "Could not make the worktree",
       );
       return (await must(`${git(path)} rev-parse HEAD`, "Could not read HEAD")).trim();
+    },
+    async branchTaken(checkout, branch) {
+      for (const ref of [`refs/heads/${branch}`, `refs/remotes/origin/${branch}`]) {
+        const found = await run(`${git(checkout)} rev-parse --verify --quiet ${q(ref)}`);
+        if (found.exitCode === 0) return true;
+      }
+      return false;
     },
     async addWorktreeForBranch(checkout, path, branch) {
       const local = await run(

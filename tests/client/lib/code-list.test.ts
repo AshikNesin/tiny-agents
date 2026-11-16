@@ -1,10 +1,10 @@
 /**
  * The Code page list (issue #143, ADR 0011): every harness's threads as one
- * tree, subagents nested, working ones first, filtered by repository or
- * harness.
+ * tree, subagents nested, working ones first, grouped by project, then by
+ * repository or folder.
  */
 import { describe, expect, it } from "vite-plus/test";
-import { ancestry, buildSections, repositories } from "@/lib/code/list";
+import { ancestry, buildGroups } from "@/lib/code/list";
 import type { ThreadSummary } from "@/lib/code/api";
 
 const row = (id: string, extra: Partial<ThreadSummary> = {}): ThreadSummary => ({
@@ -25,20 +25,21 @@ const row = (id: string, extra: Partial<ThreadSummary> = {}): ThreadSummary => (
 });
 
 describe("Code page list", () => {
-  it("nests subagents under their parent and floats anything working to the top", () => {
+  it("nests subagents under their parent and floats anything working to the top of its group", () => {
     const rows = [
       row("old", { updatedAt: "2026-11-01T00:00:00Z" }),
       row("parent", { updatedAt: "2026-11-03T09:00:00Z" }),
-      row("child", { parentId: "shelley:parent", working: true }),
+      // A subagent stays under its parent, even working in another directory.
+      row("child", { parentId: "shelley:parent", working: true, cwd: "/tmp/elsewhere" }),
       row("grandchild", { parentId: "shelley:child", unread: true }),
       row("orphan", { parentId: "shelley:gone", updatedAt: "2026-11-03T11:00:00Z" }),
     ];
-    const { working, recent } = buildSections(rows);
-    expect(working.map((n) => n.row.nativeId)).toEqual(["parent"]);
-    expect(working[0]!.busy && working[0]!.unread).toBe(true);
-    expect(working[0]!.children[0]!.children[0]!.row.nativeId).toBe("grandchild");
-    // A subagent whose parent is not listed stands on its own.
-    expect(recent.map((n) => n.row.nativeId)).toEqual(["orphan", "old"]);
+    const groups = buildGroups(rows, []);
+    expect(groups.map((g) => g.label)).toEqual(["app"]);
+    const nodes = groups[0]!.nodes;
+    expect(nodes.map((n) => n.row.nativeId)).toEqual(["parent", "orphan", "old"]);
+    expect(nodes[0]!.busy && nodes[0]!.unread).toBe(true);
+    expect(nodes[0]!.children[0]!.children[0]!.row.nativeId).toBe("grandchild");
     expect(ancestry(rows, "shelley:grandchild").map((r) => r.nativeId)).toEqual([
       "parent",
       "child",
@@ -46,26 +47,31 @@ describe("Code page list", () => {
     ]);
   });
 
-  it("filters by repository (most recently used first) and by harness", () => {
+  it("groups by project, then by repository or folder, the most recently active first", () => {
     const rows = [
-      row("a", { repoRoot: "/repo/a", updatedAt: "2026-11-02T00:00:00Z" }),
-      row("b", { repoRoot: "/repo/b", updatedAt: "2026-11-03T00:00:00Z" }),
-      row("c", {
-        id: "claude-code:c",
-        instanceId: "claude-code",
-        kind: "claude-code",
-        repoRoot: "/repo/a",
-        updatedAt: "2026-11-01T00:00:00Z",
+      row("a", { repoRoot: "/repo/a", cwd: "/repo/a/src", updatedAt: "2026-11-02T00:00:00Z" }),
+      row("b", { repoRoot: "/repo/b", updatedAt: "2026-11-01T00:00:00Z" }),
+      row("p", {
+        projectId: "p1",
+        cwd: "/home/exedev/tiny-agents-code/o--site/worktrees/x",
+        updatedAt: "2026-11-03T00:00:00Z",
       }),
+      row("loose", { cwd: null, updatedAt: "2026-10-01T00:00:00Z" }),
     ];
-    expect(repositories(rows)).toEqual(["/repo/b", "/repo/a"]);
-    expect(buildSections(rows, { repo: "/repo/a" }).recent.map((n) => n.row.id)).toEqual([
-      "shelley:a",
-      "claude-code:c",
+    const groups = buildGroups(rows, [
+      { id: "p1", name: "site" },
+      { id: "p2", name: "idle" },
     ]);
-    expect(buildSections(rows, { instanceId: "claude-code" }).recent.map((n) => n.row.id)).toEqual([
-      "claude-code:c",
+    expect(groups.map((g) => [g.key, g.label, g.nodes.map((n) => n.row.nativeId)])).toEqual([
+      ["project:p1", "site", ["p"]],
+      ["folder:/repo/a", "a", ["a"]],
+      ["folder:/repo/b", "b", ["b"]],
+      ["none", "No folder", ["loose"]],
+      // A project with no thread yet comes last, ready to start one in.
+      ["project:p2", "idle", []],
     ]);
+    expect(groups[1]!.path).toBe("/repo/a");
+    expect(groups[0]!.projectId).toBe("p1");
   });
 });
 

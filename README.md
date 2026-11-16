@@ -147,3 +147,7 @@ layout (bots, chats, vault items, routines, memories, users, passkeys,
 settings). Routines re-arm their next run. Passwords keep working: the first
 sign-in replaces the old bcrypt hash. Keep the backup until you have checked
 the app, then delete it.
+
+## Credits
+
+Projects whose ideas shaped tiny-agents are in [CREDITS.md](./CREDITS.md).

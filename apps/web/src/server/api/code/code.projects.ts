@@ -28,7 +28,16 @@ import type {
 } from "../../../shared/api/code";
 import { DEFAULT_AUTOFIX } from "./code.autofix";
 import { codeGitHub } from "./code.github";
-import { branchName, checkpointRef, type ProjectScripts, type Workspace } from "./code.workspace";
+import type { SideCaller } from "../bots/side-call";
+import { app } from "../../app-root";
+import {
+  branchName,
+  branchSlug,
+  checkpointRef,
+  cleanBranchSlug,
+  type ProjectScripts,
+  type Workspace,
+} from "./code.workspace";
 
 const DEFAULT_PROJECT_SETTINGS: ProjectSettings = {
   scripts: {},
@@ -249,6 +258,54 @@ function projectPreamble(
   return lines.join("\n");
 }
 
+/** What naming a branch needs: the side-caller (on the `chat_title` model role). */
+export interface CodeBranchNamer {
+  sideCaller: SideCaller;
+}
+
+/** Boot wiring (entry.node.ts). Unset (tests, faux mode): branches are named from the task's words. */
+export function setCodeBranchNamer(next: CodeBranchNamer | undefined): void {
+  app().codeBranchNamer = next;
+}
+
+/** A thread start waits on the name, so the call is short. */
+const BRANCH_NAME_TIMEOUT_MS = 8_000;
+
+/**
+ * The branch slug for a task: what the naming model says the change is
+ * (`fix-google-callback`), or, with no model or no usable answer, the
+ * task's first words without the filler (`fix-login-flow-users`).
+ */
+async function slugFor(task: string): Promise<string> {
+  const namer = app().codeBranchNamer;
+  const text = task.trim().slice(0, 2_000);
+  if (namer && text) {
+    const answer = await namer.sideCaller.complete({
+      role: "chat_title",
+      system:
+        "You name git branches for coding tasks. Reply with the branch name only: 2 to 4 " +
+        "lowercase English words joined by hyphens that say what the change does, starting " +
+        "with a verb such as add, fix, update, remove or refactor (for example fix-login-redirect " +
+        "or add-dark-mode). No prefix, quotes or explanation.",
+      user: `Task:\n${text}\n\nBranch name:`,
+      timeoutMs: BRANCH_NAME_TIMEOUT_MS,
+      label: "Code branch name",
+    });
+    const slug = answer === undefined ? null : cleanBranchSlug(answer);
+    if (slug) return slug;
+  }
+  return branchSlug(task);
+}
+
+/** `ta/<slug>`, or `ta/<slug>-2`, `-3`, … when an earlier thread took the name. */
+async function freeBranch(ws: Workspace, checkout: string, slug: string): Promise<string> {
+  for (let n = 1; n <= 20; n += 1) {
+    const branch = branchName(n === 1 ? slug : `${slug}-${n}`);
+    if (!(await ws.branchTaken(checkout, branch))) return branch;
+  }
+  return branchName(`${slug}-${randomBytes(2).toString("hex")}`);
+}
+
 export interface ProjectThreadInput extends CreateThreadInput {
   /** Check out this existing branch (a PR's head) instead of cutting a new one. */
   branch?: string;
@@ -266,8 +323,8 @@ export async function startProjectThread(
   input: ProjectThreadInput,
 ): Promise<{ nativeId: string; branch: string; worktree: string }> {
   const ws = await codeGitHub().workspace(project);
-  const firstLine = input.message.split("\n")[0] ?? "";
-  const branch = input.branch ?? branchName(firstLine, randomBytes(3).toString("hex"));
+  const branch =
+    input.branch ?? (await freeBranch(ws, project.checkoutPath, await slugFor(input.message)));
   const path = worktreePath(project, branch);
   const baseSha = input.branch
     ? (await ws.addWorktreeForBranch(project.checkoutPath, path, branch), await ws.headSha(path))

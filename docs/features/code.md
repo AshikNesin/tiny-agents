@@ -27,17 +27,20 @@ Why: [ADR 0009](../adr/0009-shelley-is-the-coding-agent.md),
   ([Claude subscription](../claude-subscription.md)).
 
 With neither configured, the sidebar has no **Code** and bots have no
-`code_*` tools. With both, the list shows every thread with a harness
-label and a filter, and **New thread** offers a harness picker.
+`code_*` tools. With both, each thread in the list names its harness, and
+**New thread** offers a harness picker.
 
 ## What a developer can do
 
-The layout follows Cursor's cloud agents and Claude Code on the web:
+The layout follows [t3code](https://github.com/pingdotgg/t3code) (see
+[CREDITS](../../CREDITS.md)): minimal, with threads grouped by project.
 
-- a slim top bar with a way back to the app (the workspace owns the full
-  column — no app sidebar here) and the ⌘K trigger;
+- a sidebar with the way back to the app, the ⌘K trigger, search, and the
+  threads grouped by project (the workspace owns the full column; no app
+  sidebar here), with **Archived** and **Settings** at its foot;
 - one line per thread in the list;
-- a one-line header;
+- a one-line header: the title (its menu holds the actions and the cost),
+  the project or folder, PR and Changes;
 - every setting a turn needs (model, reasoning, permissions, context) as a
   chip inside the composer.
 
@@ -47,20 +50,28 @@ has no background jobs, so its threads show no job chips.
 
 **Find.**
 
-- _Working now_ on top, then _Recent_, with subagents nested under their
-  parent and an _Archived_ toggle.
-- Filters: harness and repository. Full-text search where the harness
-  searches; a title filter otherwise.
+- Threads are grouped by project, then by repository or folder for threads
+  outside a project; the most recently active group comes first, and a
+  project with no thread yet comes last. A group folds away (remembered),
+  shows its newest 8 threads with **Show more**, and offers **New thread**
+  in it (and, for a project, its settings) on hover. Inside a group,
+  working threads come first, with subagents nested under their parent.
+- **Archived** at the foot of the sidebar lists archived threads, grouped
+  the same way, with **Restore**.
+- Search: full-text where the harness searches; a title filter otherwise.
+  Several harnesses: each row names its harness.
 - Unread dots for turns that ended since you last looked, and ⌘K to jump to
   any thread.
 - `/code/s/<title>` opens a thread by title. Links from before the harness
   layer (`/code/<shelley id>`) still open.
 
-**Start.** `/code` (`/code/new` on phones):
+**Start.** `/code` (`/code/new` on phones), or a group's **New thread**
+(`/code/new?project=<id>` or `?cwd=<path>`, which picks that project or
+folder):
 
-- Pick the harness (remembered), the working directory (recent ones, a typed
-  path, a folder browser, checked by the harness) and, where the harness
-  makes them, a new worktree.
+- Pick a project, or the working directory (recent ones, a typed path, a
+  folder browser, checked by the harness) and, where the harness makes
+  them, a new worktree; and the harness (remembered) when there are several.
 - The model, reasoning and permission chips sit in the composer. Claude Code
   needs a working directory and starts in **Accept edits**.
 - If another thread is working in the same directory, a warning says both
@@ -122,21 +133,29 @@ Issue #297 (ADR 0021, ADR 0022, ADR 0023). Everything here sits above the
 harness contract, so it works for every harness whose `cwd` is on the
 sandbox. Owner-only: guests see none of it.
 
-**Set up.** **Projects** in the Code header opens the dialog:
+**Set up.** Projects are settings pages of their own, under **Settings**
+at the foot of the Code sidebar (`/code/settings`):
 
-- **GitHub.** Either save a fine-grained token for the project's
-  repositories (recommended: it is kept as an `app` vault item for the
-  `github` sink; API calls go from this server, and only `git push` runs on
-  the sandbox, with the token on that command's stdin), or sign `gh` in
-  with `gh auth login` from the Terminal page (every process on the sandbox
-  can then use that login). The dialog says which is active and whom it
-  acts as.
-- **New project:** `owner/name` or a GitHub URL. The app checks the sandbox
-  has `git` (and `gh` without a token) and that the credential reaches the
-  repository, then clones it to `~/tiny-agents-code/<owner>--<name>/checkout`.
-- **Per project:** the default harness, a `check` script override, trusted
-  review bots, archive the thread when its PR merges (on by default), and
-  Auto-fix new PRs (off by default).
+- **GitHub** (`/code/settings/github`). Either save a fine-grained token
+  for the project's repositories (recommended: it is kept as an `app` vault
+  item for the `github` sink; API calls go from this server, and only
+  `git push` runs on the sandbox, with the token on that command's stdin),
+  or sign `gh` in with `gh auth login` from the Terminal page (every process
+  on the sandbox can then use that login). The page says which is active and
+  whom it acts as, and sets up the optional GitHub App (below).
+- **Projects** (`/code/settings/projects`). **Add a project:** `owner/name`
+  or a GitHub URL, or, with the GitHub App, a searchable list of the
+  repositories it is installed on. The app checks the sandbox has `git`
+  (and `gh` without a token) and that the credential reaches the
+  repository, then clones it to
+  `~/tiny-agents-code/<owner>--<name>/checkout` and opens its page.
+- **A project's page** (`/code/settings/projects/<id>`, or the gear on its
+  sidebar group): its name, base branch, default agent and model; the
+  `setup`, `check` and `archive` script overrides; archive the thread when
+  its PR merges (on by default) and auto-merge new PRs; Auto-fix new PRs
+  (off by default), each Auto-fix trigger (failed checks, review comments,
+  merge conflicts, removed from the merge queue), the final check, trusted
+  review bots and protected paths; the Auto-fix limits; and **Remove**.
 
 **Scripts** are read from a checked-in `.tiny-agents/code.json`:
 
@@ -150,9 +169,17 @@ to run `check` before it reports done. `archive` runs before a worktree is
 removed.
 
 **Start.** Pick the project on the New thread screen. The thread gets its
-own worktree on a new branch `ta/<slug>-<hex>` from the freshly fetched base
-branch, and its first message starts with one line naming the branch and
-telling the agent to commit but not push.
+own worktree on a new branch from the freshly fetched base branch, and its
+first message starts with one line naming the branch and telling the agent
+to commit but not push.
+
+The branch is named for what the task does, short: `ta/fix-google-callback`,
+not the prompt's opening words. One side-call on the `chat_title` model role
+(Settings → Models) reads the task and names it (2 to 4 words, starting with
+a verb), with an 8-second limit. With no model, a failed call or an unusable
+answer, the name is the task's first words without the filler ("Can you
+please fix the login flow when…" is `ta/fix-login-flow-users`). A name an
+earlier thread took, here or on the remote, gets `-2`, `-3`, ….
 
 **Review.** In a project thread, Changes (⌘⇧D) shows everything since the
 merge base with the base branch, committed or not: a file list with a
@@ -175,7 +202,13 @@ unresolved comments (from authors Auto-fix does not trust, labelled
 **Ignored**), **Attach all comments** into the composer, the description,
 **Fix CI** (one pass now), **Merge** with the repository's methods, the
 **Auto-fix** switch with its state, the pass history, and **Unlink**.
-Opening the tab reconciles with GitHub.
+Opening the tab reconciles with GitHub, and while it is on screen it
+re-reads (and so reconciles) every 15 seconds, so a project on `gh` or a
+token, with no webhooks, shows a finished check within seconds. A hidden
+page stops reading and catches up when shown again; in the background the
+server's own poll (below) carries on.
+The actions sit in one row; the switches are plain rows, and the spend
+limit shows only where the harness reports cost.
 
 **Auto-fix.** While on, the app watches the PR (every minute while checks
 move, every 5 minutes idle) and starts a pass for a failed check, a trusted
@@ -229,12 +262,12 @@ it replaces is checkpointed first). Not while the agent works.
 - **Merge queue:** a PR the merge queue removed gets a pass (per project,
   on by default); a queued PR shows **queued**.
 
-**GitHub App (optional).** Projects → GitHub → **Create GitHub App**
+**GitHub App (optional).** Settings → GitHub → **Create GitHub App**
 (optionally under an organization). GitHub's App Manifest flow does the
 rest, as FeedbackBee's setup does: GitHub opens with the App already
 described (contents and pull requests read and write, checks, statuses and
 Actions read, and the pull request, review, check, status and issue comment
-events), you confirm, and GitHub returns to Code with the App's id, private
+events), you confirm, and GitHub returns to Code's GitHub settings with the App's id, private
 key and webhook secret, which are kept as `app` vault items. **Install on
 repositories** then picks the repositories; a new project with **GitHub
 App** on lists them. Projects on the App use short-lived installation tokens
@@ -357,7 +390,7 @@ Known limits (register row C7):
 - **Client:**
   - `lib/code/`: API, live thread hook, list tree, tool folding.
   - `store/code.ts`: the app-wide list stream.
-  - `pages/code/`: the page.
+  - `pages/code/`: the page; `CodeSettings.tsx` is `/code/settings`.
 
 A thread's stream (`GET /code/threads/:id/events`) starts with a snapshot.
 After that it upserts rows by id and sends partial text and state, so a

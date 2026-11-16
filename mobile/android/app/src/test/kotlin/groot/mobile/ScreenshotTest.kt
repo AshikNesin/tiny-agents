@@ -1,5 +1,18 @@
 package groot.mobile
 
+import groot.mobile.data.api.CodeCapabilities
+import groot.mobile.data.api.CodeHarness
+import groot.mobile.data.api.CodeModel
+import groot.mobile.data.api.CodeThreadEvent
+import groot.mobile.data.api.CodeThreadSnapshot
+import groot.mobile.data.api.CodeThreadSummary
+import groot.mobile.data.code.CodeThreadState
+import groot.mobile.data.code.reduceCodeThread
+import groot.mobile.feature.code.CodeListScreen
+import groot.mobile.feature.code.CodeListState
+import groot.mobile.feature.code.CodeRowActions
+import groot.mobile.feature.code.CodeThreadScreen
+import org.json.JSONObject
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -113,6 +126,34 @@ class ScreenshotTest {
 
     @Test fun chatApprovalsLight() = capture("chat_approvals_light", ThemeMode.Light) {
         Chat(sampleBots[2], sampleChatView(sampleApprovalMessages, busy = false))
+    }
+
+    @Test fun codeListDark() = capture("code_list_dark", ThemeMode.Dark) {
+        CodeListScreen(sampleCodeList(), onOpen = {}, onNew = {}, onFilter = {}, onShowArchived = {}, onRetry = {}, onBack = {}, now = { FIXED_NOW })
+    }
+
+    @Test fun codeThreadDark() = capture("code_thread_dark", ThemeMode.Dark) { CodeThread() }
+
+    @Test fun codeThreadLight() = capture("code_thread_light", ThemeMode.Light) { CodeThread(draft = "Use the faster runner") }
+
+    @Composable
+    private fun CodeThread(draft: String = "") {
+        CodeThreadScreen(
+            state = sampleCodeThread(),
+            connected = true,
+            harness = sampleHarness,
+            models = listOf(CodeModel("claude-opus", "Opus", isDefault = true, ready = true)),
+            draft = draft,
+            onDraftChange = {},
+            onSend = {},
+            onStop = {},
+            onQueued = { _, _ -> },
+            actions = CodeRowActions(false, null, emptyList(), { _, _ -> }, { _, _ -> }, {}, {}),
+            onSheet = {},
+            onChanges = {},
+            onPullRequest = {},
+            onBack = {},
+        )
     }
 
     @Test fun drawerDark() = capture("drawer_dark", ThemeMode.Dark) { Drawer() }
@@ -355,3 +396,57 @@ private val sampleShareDraft = ShareDraft(
         ),
     ),
 )
+
+private val sampleHarness = CodeHarness(
+    "claude-code",
+    "claude-code",
+    "Claude Code",
+    "connected",
+    null,
+    CodeCapabilities(
+        interrupt = true, steer = true, queue = true, manageQueue = true, recovery = listOf("retry"), archive = true, delete = true,
+        rename = true, modelSwitch = true, effortLevels = listOf("low", "medium", "high"),
+        permissionModes = listOf("default", "acceptEdits", "plan", "bypassPermissions"), diffs = true, requiresCwd = true,
+    ),
+)
+
+private fun codeThreadJson(id: String, title: String, minutesAgo: Int, working: Boolean = false, parent: String? = null, unread: Boolean = false, pr: String = "null") =
+    """{"id":"$id","instanceId":"claude-code","kind":"claude-code","nativeId":"$id","title":"$title","cwd":"/home/ashik/tiny-agents",
+       "model":"claude-opus","parentId":${parent?.let { "\"$it\"" } ?: "null"},"createdAt":"2026-11-16T09:00:00Z",
+       "updatedAt":"${java.time.Instant.ofEpochMilli(FIXED_NOW - minutesAgo * 60_000L)}","working":$working,"archived":false,"cursor":9,
+       "unread":$unread,"projectId":${if (pr == "null") "null" else "\"p1\""},"pr":$pr}"""
+
+private fun sampleCodeList(): CodeListState {
+    val threads = listOf(
+        codeThreadJson("t1", "Android: Code screens", 2, working = true, pr = """{"number":306,"loop":"fixing"}"""),
+        codeThreadJson("t1a", "Explore the web Code page", 3, working = true, parent = "t1"),
+        codeThreadJson("t2", "Fix flaky routine test", 45, unread = true),
+        codeThreadJson("t3", "Sandbox: bump Chrome", 300, pr = """{"number":301,"loop":"green"}"""),
+    ).map { CodeThreadSummary.from(JSONObject(it)) }
+    return CodeListState(loading = false, harnesses = listOf(sampleHarness), states = mapOf("claude-code" to "connected"), threads = threads, connected = true)
+}
+
+private fun sampleCodeThread(): CodeThreadState {
+    val snapshot = JSONObject(
+        """{"thread":${codeThreadJson("t1", "Android: Code screens", 2, working = true, pr = """{"number":306,"loop":"fixing"}""")},
+        "items":[
+          {"kind":"user","id":"u1","text":"Build the Code feature for the Android app.","attachments":[]},
+          {"kind":"thinking","id":"th1","text":"Start from the web client's API."},
+          {"kind":"tool","id":"k1","tool":"read","name":"Read","input":{},"summary":"apps/web/src/client/lib/code/api.ts","status":"done","images":[]},
+          {"kind":"tool","id":"k2","tool":"bash","name":"Bash","input":{},"summary":"pnpm test","status":"done","exitCode":0,"durationMs":8200,"images":[]},
+          {"kind":"tool","id":"k3","tool":"edit","name":"Edit","input":{},"summary":"CodeApi.kt","status":"error","images":[]},
+          {"kind":"assistant","id":"a1","text":"The wire types are in. Next, the **thread screen**."},
+          {"kind":"tool","id":"k4","tool":"todo","name":"TodoWrite","summary":"","status":"done","images":[],
+           "input":{"todos":[{"content":"Wire types","status":"completed"},{"content":"Thread screen","status":"in_progress"},{"content":"Changes and PR","status":"pending"}]}},
+          {"kind":"turn","id":"turn1","durationMs":72000,"costUsd":0.42},
+          {"kind":"user","id":"u2","text":"Run the Android tests too.","attachments":[]},
+          {"kind":"request","id":"r1","status":"open","request":{"kind":"tool","tool":"bash","name":"Bash","input":{"command":"./gradlew testDebugUnitTest"},"summary":"./gradlew testDebugUnitTest","reason":"Run the unit tests"}},
+          {"kind":"tool","id":"k5","tool":"bash","name":"Bash","input":{},"summary":"./gradlew :app:compileDebugKotlin","status":"running","live":true,"output":"> Task :app:compileDebugKotlin\nBUILD SUCCESSFUL","images":[]}
+        ],
+        "settings":{"model":"claude-opus","effort":"high","permissionMode":"acceptEdits"},
+        "queued":[{"id":"q1","text":"Then update the README","createdAt":"2026-11-16T10:00:00Z"}],
+        "jobs":[],"children":[],"context":{"used":84000,"max":200000},"costUsd":0.61}""",
+    )
+    return reduceCodeThread(CodeThreadState(), CodeThreadEvent.Snapshot(CodeThreadSnapshot.from(snapshot)))
+        .let { reduceCodeThread(it, CodeThreadEvent.Partial("Compiling now; ", "")) }
+}
