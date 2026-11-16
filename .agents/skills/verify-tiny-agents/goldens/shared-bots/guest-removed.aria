@@ -49,5 +49,3 @@
     - text: Share a bot with a guest from its settings → Sharing.
     - paragraph: No guests yet.
 - region "Notifications alt+T"
-- button "Feedback":
-  - img

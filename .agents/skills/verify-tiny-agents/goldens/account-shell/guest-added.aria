@@ -53,5 +53,3 @@
 - region "Notifications alt+T":
   - list:
     - listitem: Guest added Share a bot with them from its settings → Sharing.
-- button "Feedback":
-  - img

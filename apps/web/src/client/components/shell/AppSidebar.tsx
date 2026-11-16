@@ -142,9 +142,8 @@ export function AppSidebar() {
   const primaryNav = guest ? guestNav(PRIMARY_NAV) : PRIMARY_NAV;
   const secondaryNav = guest ? [] : SECONDARY_NAV;
 
-  // How "Send feedback" was chosen, so the panel opens the matching way.
-  const feedbackRequested = useRef<"pointer" | "keyboard" | null>(null);
-  const pointerOnFeedback = useRef(false);
+  // "Send feedback" was chosen: open the panel once the menu has closed.
+  const feedbackRequested = useRef(false);
   const isActive = (to: string) => pathname === to || pathname.startsWith(`${to}/`);
   // Code (issue #143) shows only with a coding agent configured, with its unread count.
   const codeConfigured = useCodeStore((s) => (s.harnesses?.length ?? 0) > 0);
@@ -282,11 +281,10 @@ export function AppSidebar() {
                 // Open the feedback panel once the menu has closed, and keep
                 // the menu from pulling focus back to its trigger, so typing
                 // goes straight into the panel's note.
-                const request = feedbackRequested.current;
-                if (!request) return;
-                feedbackRequested.current = null;
+                if (!feedbackRequested.current) return;
+                feedbackRequested.current = false;
                 e.preventDefault();
-                openFeedback({ keyboard: request === "keyboard" });
+                openFeedback();
               }}
             >
               {/* Amp-style order (upstream): Log out on top — farthest from
@@ -329,13 +327,9 @@ export function AppSidebar() {
               )}
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                onPointerDown={() => {
-                  pointerOnFeedback.current = true;
-                }}
                 onSelect={() => {
                   closeDrawer();
-                  feedbackRequested.current = pointerOnFeedback.current ? "pointer" : "keyboard";
-                  pointerOnFeedback.current = false;
+                  feedbackRequested.current = true;
                 }}
               >
                 <MessageSquareHeart className="size-4" /> Send feedback

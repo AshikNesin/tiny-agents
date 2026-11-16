@@ -183,7 +183,7 @@ export async function journey(feature, fn, { signIn = true, requires = [] } = {}
   // script, which still holds the page's load event: a slow answer stalls every
   // page.goto/reload that waits for "load". Fetch it with a 5 s cap and abort
   // when slower; the app then shows its "Feedback isn't available" path.
-  await context.route("https://feedbackbee.nesin.workers.dev/**", async (route) => {
+  await context.route("https://feedbackbee.nesin.io/**", async (route) => {
     try {
       await route.fulfill({ response: await route.fetch({ timeout: 5_000 }) });
     } catch {

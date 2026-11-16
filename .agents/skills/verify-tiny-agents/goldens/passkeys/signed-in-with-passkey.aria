@@ -51,5 +51,3 @@
         - button "Edit"
         - button "Delete" [disabled]
 - region "Notifications alt+T"
-- button "Feedback":
-  - img

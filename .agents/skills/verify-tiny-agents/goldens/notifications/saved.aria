@@ -97,5 +97,3 @@
     - heading "Recent notifications" [level=3]
     - text: The last 20, kept for 30 days. Titles only. Nothing sent yet.
 - region "Notifications alt+T"
-- button "Feedback":
-  - img

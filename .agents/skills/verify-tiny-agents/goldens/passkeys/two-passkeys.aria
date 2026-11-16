@@ -60,5 +60,3 @@
     - listitem: Passkey added successfully
     - listitem: Add failed This passkey is already registered to your account.
     - listitem: Passkey added successfully
-- button "Feedback":
-  - img

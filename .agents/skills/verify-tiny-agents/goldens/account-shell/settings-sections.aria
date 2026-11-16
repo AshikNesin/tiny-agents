@@ -73,5 +73,3 @@
     - text: "Auto-review A classifier model. Unset: auto-review asks you every time."
     - button "Auto-review": None
 - region "Notifications alt+T"
-- button "Feedback":
-  - img

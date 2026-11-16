@@ -40,6 +40,6 @@ Preconditions:
 
 - Regression check for #166 (fixed 2026-11): the palette used to list every destination twice (the shell's Navigation group plus the app's own). The step `⌘K palette lists each destination once` asserts one.
 - There is no profile page or profile editing: the account button shows the name (or email) and initial; identity is set at setup or by the admin API.
-- `getByRole("button", { name: "Back" })` also matches the FeedbackBee launcher `Feedback`; use `exact: true`. The embed is third-party (feedbackbee.nesin.workers.dev): a slow fetch can delay the page `load` event of any journey.
+- The FeedbackBee embed runs headless (`data-headless`): no floating `Feedback` launcher, only the account menu opens it. The embed is third-party (feedbackbee.nesin.io): a slow fetch can delay the page `load` event of any journey.
 - Claude Code sign-in (`Sign in to Claude`, `Check again`) is unreachable: it needs a sandbox (`up --sandbox`) with Claude Code installed and a real Claude subscription login.
 - Logging in as a guest (the guest shell) is not covered here.

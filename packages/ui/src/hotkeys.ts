@@ -212,8 +212,10 @@ export function isEditable(target: EventTarget | null): boolean {
 
 // Radix dialogs (Dialog, AlertDialog, the command menu) mark their open
 // panel with data-state="open"; other libraries use aria-modal or <dialog>.
+// A modal kept in the page while closed is inert (FeedbackBee's headless
+// panel), so an inert one is not open.
 const OPEN_DIALOG =
-  '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"], [aria-modal="true"], dialog[open]';
+  '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"], [aria-modal="true"]:not([inert]), dialog[open]';
 
 /** Whether a dialog is open on the page: one a `"dialog"` hotkey says is
  *  open, or any open `role="dialog"` / `role="alertdialog"` panel. */

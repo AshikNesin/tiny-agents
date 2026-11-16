@@ -178,7 +178,7 @@ await journey(
         viewport: { width: 1280, height: 860 },
       });
       cleanup(() => guestContext.close());
-      await guestContext.route("https://feedbackbee.nesin.workers.dev/**", (r) => r.abort());
+      await guestContext.route("https://feedbackbee.nesin.io/**", (r) => r.abort());
       guestPage = await guestContext.newPage();
       const guestCdp = await guestContext.newCDPSession(guestPage);
       await guestCdp.send("WebAuthn.enable");

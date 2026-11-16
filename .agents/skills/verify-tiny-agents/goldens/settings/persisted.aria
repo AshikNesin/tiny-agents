@@ -52,5 +52,3 @@
     - textbox
     - button "Save changes"
 - region "Notifications alt+T"
-- button "Feedback":
-  - img
