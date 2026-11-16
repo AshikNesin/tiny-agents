@@ -96,6 +96,62 @@ export interface Workspace {
   /** The checked-in scripts, if the file exists and parses. */
   readScripts(path: string): Promise<ProjectScripts>;
   runScript(path: string, script: string): Promise<{ ok: boolean; output: string }>;
+  /**
+   * Every commit made in the worktree gets `trailer` (`Thread-Id: <id>`):
+   * a per-worktree hooks directory whose `commit-msg` adds it, and whose
+   * every hook then runs the repository's own hook of that name.
+   */
+  installTrailer(path: string, hooksDir: string, trailer: string): Promise<void>;
+  /**
+   * A checkpoint: the worktree as it is now, uncommitted changes and new
+   * files included, as a commit on top of HEAD kept under `ref`. Nothing in
+   * the worktree, its index or its branch changes. Answers the commit.
+   */
+  checkpoint(path: string, ref: string): Promise<string>;
+  /** Files that differ between two commits (checkpoints), with blob ids. */
+  rangeFiles(path: string, from: string, to: string): Promise<Array<GitFile & { hash: string }>>;
+  rangeFile(
+    path: string,
+    from: string,
+    to: string,
+    file: string,
+  ): Promise<{ oldContent: string; newContent: string }>;
+  /**
+   * Put the worktree's files back as they were at a checkpoint, as
+   * uncommitted changes: HEAD and the branch's history are untouched, so
+   * nothing pushed is ever rewritten.
+   */
+  restore(path: string, sha: string): Promise<void>;
+}
+
+/** Every hook git runs, so a per-worktree hooks directory can hand each to the repository's own. */
+const HOOK_NAMES = [
+  "applypatch-msg",
+  "pre-applypatch",
+  "post-applypatch",
+  "pre-commit",
+  "pre-merge-commit",
+  "prepare-commit-msg",
+  "commit-msg",
+  "post-commit",
+  "pre-rebase",
+  "post-checkout",
+  "post-merge",
+  "pre-push",
+  "post-rewrite",
+  "pre-auto-gc",
+  "reference-transaction",
+  "fsmonitor-watchman",
+];
+
+/** The identity checkpoint commits are made under (the sandbox may have none configured). */
+const CHECKPOINT_ID =
+  "GIT_AUTHOR_NAME=tiny-agents GIT_AUTHOR_EMAIL=checkpoints@tiny-agents.invalid " +
+  "GIT_COMMITTER_NAME=tiny-agents GIT_COMMITTER_EMAIL=checkpoints@tiny-agents.invalid";
+
+/** Where a thread's checkpoint `seq` is kept in the project's clone (hidden from branches and tags). */
+export function checkpointRef(branch: string, seq: number): string {
+  return `refs/tiny-agents/checkpoints/${branch.replaceAll("/", "_")}/${seq}`;
 }
 
 /** Branch names the app makes: `ta/<slug>-<suffix>`. */
@@ -221,27 +277,7 @@ export function createWorkspace(options: WorkspaceOptions): Workspace {
     },
     async baseFiles(path, base) {
       const mb = await mergeBase(path, base);
-      const [numstat, names] = await Promise.all([
-        must(`${git(path)} diff --numstat ${q(mb)}`, "Could not diff"),
-        must(`${git(path)} diff --name-status --no-renames ${q(mb)}`, "Could not diff"),
-      ]);
-      const counts = new Map<string, { add: number; del: number }>();
-      for (const line of numstat.split("\n").filter(Boolean)) {
-        const [add, del, file] = line.split("\t");
-        counts.set(file!, {
-          add: add === "-" ? 0 : Number(add),
-          del: del === "-" ? 0 : Number(del),
-        });
-      }
-      const files = names
-        .split("\n")
-        .filter(Boolean)
-        .map((line) => {
-          const [code, file] = line.split("\t") as [string, string];
-          const status: GitFile["status"] =
-            code === "A" ? "added" : code === "D" ? "deleted" : "modified";
-          return { path: file, status };
-        });
+      const files = await changed(path, q(mb));
       const live = files.filter((f) => f.status !== "deleted").map((f) => f.path);
       const hashes = live.length
         ? (await must(`${git(path)} hash-object -- ${live.map(q).join(" ")}`, "Could not hash"))
@@ -249,14 +285,7 @@ export function createWorkspace(options: WorkspaceOptions): Workspace {
             .filter(Boolean)
         : [];
       const hashOf = new Map(live.map((file, i) => [file, hashes[i] ?? ""]));
-      return files.map((f) => ({
-        path: f.path,
-        status: f.status,
-        additions: counts.get(f.path)?.add ?? 0,
-        deletions: counts.get(f.path)?.del ?? 0,
-        isGenerated: isGenerated(f.path),
-        hash: hashOf.get(f.path) ?? "deleted",
-      }));
+      return files.map((f) => ({ ...f, hash: hashOf.get(f.path) ?? "deleted" }));
     },
     async baseFile(path, base, file) {
       const mb = await mergeBase(path, base);
@@ -331,6 +360,100 @@ export function createWorkspace(options: WorkspaceOptions): Workspace {
       }
       return sha;
     },
+    async installTrailer(path, hooksDir, trailer) {
+      // Per-worktree config, as `git sparse-checkout` sets it up.
+      await must(
+        `${git(path)} config core.repositoryformatversion 1 && ${git(path)} config extensions.worktreeConfig true`,
+        "Could not enable per-worktree config",
+      );
+      const own = await run(`${git(path)} config --get core.hooksPath`);
+      const original =
+        own.exitCode === 0 && own.stdout.trim()
+          ? own.stdout.trim()
+          : `${(await must(`${git(path)} rev-parse --path-format=absolute --git-common-dir`, "Could not find the repository")).trim()}/hooks`;
+      // A relative hooks path (husky's `.husky/_`) is relative to the worktree's top.
+      const resolve = [
+        `orig=${q(original)}`,
+        `case "$orig" in /*) ;; *) orig="$(git rev-parse --show-toplevel)/$orig" ;; esac`,
+      ];
+      const chain = (name: string) =>
+        [`[ -x "$orig/${name}" ] && exec "$orig/${name}" "$@"`, "exit 0"].join("\n");
+      const scripts = HOOK_NAMES.map((name) => {
+        const body =
+          name === "commit-msg"
+            ? [
+                `git interpret-trailers --in-place --if-exists doNothing --trailer ${q(trailer)} "$1" || exit 1`,
+                ...resolve,
+                chain(name),
+              ]
+            : [...resolve, chain(name)];
+        return { name, text: ["#!/bin/sh", ...body, ""].join("\n") };
+      });
+      for (const script of scripts) {
+        const file = `${hooksDir}/${script.name}`;
+        const result = await exec(
+          `mkdir -p ${q(hooksDir)} && cat > ${q(file)} && chmod +x ${q(file)}`,
+          { stdin: script.text, timeoutMs: 30_000 },
+        );
+        if (result.exitCode !== 0)
+          throw new WorkspaceError(`Could not write a hook: ${tail(result)}`);
+      }
+      await must(
+        `${git(path)} config --worktree core.hooksPath ${q(hooksDir)}`,
+        "Could not point the worktree at its hooks",
+      );
+    },
+    async checkpoint(path, ref) {
+      const script = [
+        `cd ${q(path)}`,
+        `tmp=$(mktemp)`,
+        `trap 'rm -f "$tmp"' EXIT`,
+        `cp "$(git rev-parse --git-path index)" "$tmp" 2>/dev/null || true`,
+        `export GIT_INDEX_FILE="$tmp"`,
+        `git add -A >/dev/null`,
+        `tree=$(git write-tree)`,
+        `sha=$(${CHECKPOINT_ID} git commit-tree "$tree" -p HEAD -m "tiny-agents checkpoint")`,
+        `git update-ref ${q(ref)} "$sha"`,
+        `echo "$sha"`,
+      ].join(" && ");
+      return (await must(`bash -c ${q(script)}`, "Could not make a checkpoint")).trim();
+    },
+    async rangeFiles(path, from, to) {
+      const files = await changed(path, `${q(from)} ${q(to)}`);
+      const live = files.filter((f) => f.status !== "deleted");
+      const ids = live.length
+        ? await must(
+            `${git(path)} ls-tree ${q(to)} -- ${live.map((f) => q(f.path)).join(" ")}`,
+            "Could not read the tree",
+          )
+        : "";
+      const hashOf = new Map(
+        ids
+          .split("\n")
+          .filter(Boolean)
+          .map((line) => {
+            const [meta, file] = line.split("\t");
+            return [file!, meta!.split(" ")[2] ?? ""] as const;
+          }),
+      );
+      return files.map((f) => ({ ...f, hash: hashOf.get(f.path) ?? "deleted" }));
+    },
+    async rangeFile(path, from, to, file) {
+      const [old, next] = await Promise.all([
+        run(`${git(path)} show ${q(`${from}:${file}`)}`),
+        run(`${git(path)} show ${q(`${to}:${file}`)}`),
+      ]);
+      return {
+        oldContent: old.exitCode === 0 ? old.stdout : "",
+        newContent: next.exitCode === 0 ? next.stdout : "",
+      };
+    },
+    async restore(path, sha) {
+      await must(
+        `${git(path)} add -A && ${git(path)} read-tree -u --reset ${q(`${sha}^{tree}`)} && ${git(path)} reset -q`,
+        "Could not restore the checkpoint",
+      );
+    },
     async readScripts(path) {
       const result = await run(`cat -- ${q(`${path}/${SCRIPTS_FILE}`)}`, 30_000);
       if (result.exitCode !== 0) return {};
@@ -346,6 +469,37 @@ export function createWorkspace(options: WorkspaceOptions): Workspace {
       };
     },
   };
+
+  /** Files changed by `git diff <range>` (a commit for the working tree, or `a b`). */
+  async function changed(path: string, range: string): Promise<Array<GitFile>> {
+    const [numstat, names] = await Promise.all([
+      must(`${git(path)} diff --numstat ${range}`, "Could not diff"),
+      must(`${git(path)} diff --name-status --no-renames ${range}`, "Could not diff"),
+    ]);
+    const counts = new Map<string, { add: number; del: number }>();
+    for (const line of numstat.split("\n").filter(Boolean)) {
+      const [add, del, file] = line.split("\t");
+      counts.set(file!, {
+        add: add === "-" ? 0 : Number(add),
+        del: del === "-" ? 0 : Number(del),
+      });
+    }
+    return names
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => {
+        const [code, file] = line.split("\t") as [string, string];
+        const status: GitFile["status"] =
+          code === "A" ? "added" : code === "D" ? "deleted" : "modified";
+        return {
+          path: file,
+          status,
+          additions: counts.get(file)?.add ?? 0,
+          deletions: counts.get(file)?.del ?? 0,
+          isGenerated: isGenerated(file),
+        };
+      });
+  }
 
   async function mergeBase(path: string, base: string): Promise<string> {
     return (

@@ -10,15 +10,17 @@ import type { AppEnv } from "@groot/core/types";
 import { Boom } from "@groot/core/errors";
 import { ok } from "@groot/core/utils/api-response.utils";
 import { parseBody } from "@groot/core/utils/controller.utils";
-import { codeReviewDrafts, codeReviewViewed, db } from "../../db";
+import { codeReviewDrafts, codeReviewViewed, db, type CodeCheckpoint } from "../../db";
 import type {
+  CheckpointView,
   GitHubStatus,
   ProjectView,
   ReviewDraft,
   ReviewFile,
   ThreadPullsView,
 } from "../../../shared/api/code";
-import { githubStatus, setGitHubToken, codeGitHub } from "./code.github";
+import { codeGitHub, githubStatus, setGitHubApp, setGitHubToken } from "./code.github";
+import { checkpointRange, checkpointsOf, revertTo } from "./code.checkpoints";
 import { codeHub } from "./code.hub";
 import {
   createProject,
@@ -33,12 +35,28 @@ import {
   manualPass,
   mergePull,
   publish,
+  setAutoMerge,
   setAutofix,
+  setSpendLimit,
   threadPulls,
   unlinkPull,
 } from "./code.pulls";
 
 const router = new Hono<AppEnv>();
+
+/** A repository-relative path from the query: no `..`, not absolute. */
+function safePath(raw: string | undefined): string {
+  const path = raw ?? "";
+  if (
+    !path ||
+    path.length > 1024 ||
+    path.startsWith("/") ||
+    path.split("/").some((s) => s === "..")
+  ) {
+    throw Boom.badRequest("Invalid path");
+  }
+  return path;
+}
 
 const threadParam = (raw: string | undefined) => {
   const id = decodeURIComponent(raw ?? "");
@@ -59,6 +77,24 @@ router.put("/code/github", async (c) => {
   return ok<GitHubStatus>(c, await githubStatus());
 });
 
+router.put("/code/github/app", async (c) => {
+  const body = await parseBody(
+    c,
+    z
+      .object({
+        appId: z
+          .string()
+          .trim()
+          .regex(/^\d{1,12}$/),
+        privateKey: z.string().trim().min(100).max(10_000).includes("PRIVATE KEY"),
+        webhookSecret: z.string().min(16).max(400),
+      })
+      .nullable(),
+  );
+  await setGitHubApp(body);
+  return ok<GitHubStatus>(c, await githubStatus());
+});
+
 // --- projects ------------------------------------------------------------------------------
 
 router.get("/code/projects", async (c) =>
@@ -67,6 +103,7 @@ router.get("/code/projects", async (c) =>
 
 const createSchema = z.object({
   repo: z.string().trim().min(3).max(300),
+  transport: z.enum(["gh", "app"]).optional(),
   name: z.string().trim().max(100).optional(),
   baseBranch: z.string().trim().max(200).optional(),
   defaultInstanceId: z.string().trim().max(40).optional(),
@@ -103,6 +140,7 @@ const updateSchema = z.strictObject({
               checks: z.boolean().optional(),
               reviews: z.boolean().optional(),
               conflicts: z.boolean().optional(),
+              mergeQueue: z.boolean().optional(),
             })
             .optional(),
           trustedBots: z.array(z.string().trim().min(1).max(100)).max(30).optional(),
@@ -110,6 +148,8 @@ const updateSchema = z.strictObject({
           noOwnerLimit: z.number().int().min(1).max(50).optional(),
           passMinutes: z.number().int().min(5).max(120).optional(),
           onByDefault: z.boolean().optional(),
+          finalCheck: z.boolean().optional(),
+          autoMergeByDefault: z.boolean().optional(),
         })
         .optional(),
     })
@@ -172,6 +212,62 @@ router.post("/code/threads/:id/pr/fix", async (c) => {
   return ok(c, { ...result, view: await threadPulls(id, false) });
 });
 
+router.post("/code/threads/:id/pr/automerge", async (c) => {
+  const id = threadParam(c.req.param("id"));
+  const { enabled } = await parseBody(c, z.object({ enabled: z.boolean() }));
+  await setAutoMerge(id, enabled);
+  return ok<ThreadPullsView>(c, await threadPulls(id, false));
+});
+
+router.post("/code/threads/:id/spend-limit", async (c) => {
+  const id = threadParam(c.req.param("id"));
+  const { limitUsd } = await parseBody(
+    c,
+    z.object({ limitUsd: z.number().min(0.01).max(10_000).nullable() }),
+  );
+  await setSpendLimit(id, limitUsd);
+  return ok<ThreadPullsView>(c, await threadPulls(id, false));
+});
+
+// --- per-turn checkpoints ---------------------------------------------------------------
+
+const checkpointView = (row: CodeCheckpoint): CheckpointView => ({
+  id: row.id,
+  seq: row.seq,
+  reason: row.reason as CheckpointView["reason"],
+  headSha: row.headSha,
+  createdAt: row.createdAt.toISOString(),
+});
+
+router.get("/code/threads/:id/checkpoints", async (c) => {
+  const id = threadParam(c.req.param("id"));
+  return ok<CheckpointView[]>(c, (await checkpointsOf(id)).map(checkpointView));
+});
+
+/** What one turn changed: its checkpoint against the one before it. */
+router.get("/code/threads/:id/checkpoints/:cp/files", async (c) => {
+  const id = threadParam(c.req.param("id"));
+  const { from, to, worktree, ws } = await checkpointRange(id, c.req.param("cp"));
+  const files = from.id === to.id ? [] : await ws.rangeFiles(worktree, from.sha, to.sha);
+  return ok<ReviewFile[]>(
+    c,
+    files.map((f) => ({ ...f, viewed: false })),
+  );
+});
+
+router.get("/code/threads/:id/checkpoints/:cp/file", async (c) => {
+  const id = threadParam(c.req.param("id"));
+  const path = safePath(c.req.query("path"));
+  const { from, to, worktree, ws } = await checkpointRange(id, c.req.param("cp"));
+  return ok(c, { path, ...(await ws.rangeFile(worktree, from.sha, to.sha, path)) });
+});
+
+router.post("/code/threads/:id/checkpoints/:cp/revert", async (c) => {
+  const id = threadParam(c.req.param("id"));
+  const before = await revertTo(id, c.req.param("cp"));
+  return ok(c, { reverted: true, undo: before ? checkpointView(before) : null });
+});
+
 router.post("/code/threads/:id/pr/merge", async (c) => {
   const id = threadParam(c.req.param("id"));
   const { method } = await parseBody(
@@ -189,7 +285,11 @@ async function reviewTarget(threadId: string) {
   if (!found?.thread.worktree) {
     throw Boom.notFound("Review against the base branch is for project threads with a worktree.");
   }
-  return { ...found, worktree: found.thread.worktree, ws: await codeGitHub().workspace() };
+  return {
+    ...found,
+    worktree: found.thread.worktree,
+    ws: await codeGitHub().workspace(found.project),
+  };
 }
 
 router.get("/code/threads/:id/review/files", async (c) => {
@@ -208,15 +308,7 @@ router.get("/code/threads/:id/review/files", async (c) => {
 
 router.get("/code/threads/:id/review/file", async (c) => {
   const id = threadParam(c.req.param("id"));
-  const path = c.req.query("path") ?? "";
-  if (
-    !path ||
-    path.length > 1024 ||
-    path.split("/").some((s) => s === "..") ||
-    path.startsWith("/")
-  ) {
-    throw Boom.badRequest("Invalid path");
-  }
+  const path = safePath(c.req.query("path"));
   const { project, worktree, ws } = await reviewTarget(id);
   return ok(c, { path, ...(await ws.baseFile(worktree, project.baseBranch, path)) });
 });

@@ -20,9 +20,14 @@ import { logger } from "@groot/core/logger";
 import { notificationService } from "@groot/core/notification/notification.service";
 import { addJob, cancelJob } from "@groot/jobs/server/queue";
 import { registerJobHandler } from "@groot/jobs/server/worker";
-import { GitHubError, type MergeMethod, type PullSnapshot } from "@tiny-agents/github";
+import {
+  GitHubError,
+  type GitHubClient,
+  type MergeMethod,
+  type PullSnapshot,
+} from "@tiny-agents/github";
 import type { TurnOutcome } from "@tiny-agents/code/server";
-import { db, jobs, type CodePullRow } from "../../db";
+import { codeThreads, db, jobs, type CodePullRow } from "../../db";
 import type { PullView, ThreadPullsView } from "../../../shared/api/code";
 import { codePullUpdate, type CodePullKind } from "../notifications/notifications.events";
 import {
@@ -36,6 +41,7 @@ import {
   stateHash,
   type AutofixSettings,
 } from "./code.autofix";
+import { checkpointTurn } from "./code.checkpoints";
 import { codeGitHub } from "./code.github";
 import { codeHub } from "./code.hub";
 import { finishPass, startPass, timeOutPass } from "./code.passes";
@@ -82,6 +88,7 @@ function autofixSettings(raw: string): AutofixSettings {
     hourlyLimit: s.hourlyLimit,
     noOwnerLimit: s.noOwnerLimit,
     passMinutes: s.passMinutes,
+    finalCheck: s.finalCheck,
   };
 }
 
@@ -118,7 +125,7 @@ export async function publish(
     throw Boom.badRequest("The thread has no worktree; unarchive it first.");
   }
   const services = codeGitHub();
-  const ws = await services.workspace();
+  const ws = await services.workspace(project);
   const repo = repoOf(project);
   const commits = await ws.commitsAhead(thread.worktree, project.baseBranch);
   const open = await openPullOf(threadId);
@@ -134,7 +141,7 @@ export async function publish(
     await reconcileNow(open.id);
     return (await getPull(open.id)) ?? open;
   }
-  const github = await services.client();
+  const github = await services.client(project);
   const existing = await github.openPullForBranch(repo, thread.branch);
   const created =
     existing ??
@@ -158,6 +165,7 @@ export async function publish(
     headRef: thread.branch,
     baseRef: project.baseBranch,
     autofix: projectSettings(project.settings).autofix.onByDefault,
+    autoMerge: projectSettings(project.settings).autofix.autoMergeByDefault,
   });
   await reconcileNow(row.id);
   await armReconcile(row.id, 60_000);
@@ -175,7 +183,7 @@ export async function linkPull(threadId: string, number: number): Promise<CodePu
   if (await openPullOf(threadId)) {
     throw Boom.conflict("The thread already has an open pull request; unlink it first.");
   }
-  const github = await codeGitHub().client();
+  const github = await codeGitHub().client(project);
   const snapshot = await github.snapshot(repoOf(project), number).catch((error: unknown) => {
     throw Boom.badRequest(`Cannot read #${number}: ${githubMessage(error)}`);
   });
@@ -210,7 +218,7 @@ export async function unlinkPull(threadId: string): Promise<void> {
 async function linkByBranch(threadId: string): Promise<CodePullRow | undefined> {
   const found = await projectThread(threadId);
   if (!found?.thread.branch || (await openPullOf(threadId))) return undefined;
-  const github = await codeGitHub().client();
+  const github = await codeGitHub().client(found.project);
   const pr = await github.openPullForBranch(repoOf(found.project), found.thread.branch);
   if (!pr || (await findPull(found.project.id, pr.number))) return undefined;
   const row = await insertPull({
@@ -222,6 +230,7 @@ async function linkByBranch(threadId: string): Promise<CodePullRow | undefined> 
     headRef: found.thread.branch,
     baseRef: found.project.baseBranch,
     autofix: projectSettings(found.project.settings).autofix.onByDefault,
+    autoMerge: projectSettings(found.project.settings).autofix.autoMergeByDefault,
   });
   await reconcileNow(row.id);
   await armReconcile(row.id, 60_000);
@@ -259,7 +268,7 @@ export async function mergePull(threadId: string, method: MergeMethod): Promise<
   const { project } = await requireProjectThread(threadId);
   const open = await openPullOf(threadId);
   if (!open) throw Boom.notFound("The thread has no open pull request.");
-  const github = await codeGitHub().client();
+  const github = await codeGitHub().client(project);
   await github.merge(repoOf(project), open.number, method).catch((error: unknown) => {
     throw Boom.conflict(`GitHub did not merge #${open.number}: ${githubMessage(error)}`);
   });
@@ -272,7 +281,7 @@ export async function manualPass(threadId: string): Promise<{ started: boolean; 
   const open = await openPullOf(threadId);
   if (!open) throw Boom.notFound("The thread has no open pull request.");
   if (await runningPass(open.id)) return { started: false, reason: "A pass is already running." };
-  const github = await codeGitHub().client();
+  const github = await codeGitHub().client(project);
   const snapshot = await github.snapshot(repoOf(project), open.number);
   const row = await cacheSnapshot(open.id, snapshot);
   const items = actionableItems({
@@ -281,7 +290,7 @@ export async function manualPass(threadId: string): Promise<{ started: boolean; 
     ownerLogin: (await github.viewer().catch(() => undefined))?.login ?? null,
     settings: {
       ...autofixSettings(project.settings),
-      triggers: { checks: true, reviews: true, conflicts: true },
+      triggers: { checks: true, reviews: true, conflicts: true, mergeQueue: true },
     },
   });
   if (items.length === 0) return { started: false, reason: "Nothing is failing or open." };
@@ -306,7 +315,7 @@ async function reconcile(pullId: string, now = Date.now()): Promise<number | nul
   if (!found) return null;
   const { project } = found;
   const services = codeGitHub();
-  const github = await services.client();
+  const github = await services.client(project);
   let snapshot: PullSnapshot;
   try {
     snapshot = await github.snapshot(repoOf(project), before.number);
@@ -349,7 +358,12 @@ async function reconcile(pullId: string, now = Date.now()): Promise<number | nul
     }
   }
 
-  const ownerLogin = (await github.viewer().catch(() => undefined))?.login ?? null;
+  // Under the App the client acts as the App's bot, not the owner.
+  const ownerLogin =
+    project.transport === "app"
+      ? null
+      : ((await github.viewer().catch(() => undefined))?.login ?? null);
+  const spend = await threadSpend(pull.threadId, found.thread.spendLimitUsd);
   let lastPushAt: number | null = null;
   for (let step = 0; step < 3; step += 1) {
     const passes = await passesOf(pull.id);
@@ -369,7 +383,14 @@ async function reconcile(pullId: string, now = Date.now()): Promise<number | nul
       ownerLogin,
       settings,
       now,
+      spend,
     });
+    // A green PR that needs acting on (a new failure, a limit) is watched again first:
+    // the machine moves green only to watching.
+    if (pull.loopStatus === "green" && decision.kind !== "none" && decision.kind !== "green") {
+      await moveLoop(pull.id, "watching", { headSha: snapshot.headSha });
+      pull = (await getPull(pull.id)) ?? pull;
+    }
     if (decision.kind === "resume") {
       await moveLoop(pull.id, "watching", { headSha: snapshot.headSha });
       pull = (await getPull(pull.id)) ?? pull;
@@ -419,6 +440,7 @@ async function reconcile(pullId: string, now = Date.now()): Promise<number | nul
     break;
   }
   const latest = (await getPull(pull.id)) ?? pull;
+  await applyAutoMerge(latest, snapshot, github);
   return nextLookMs(snapshot, latest.loopStatus, lastPushAt, now, settings.stallHours);
 }
 
@@ -453,7 +475,7 @@ export async function onThreadArchived(threadId: string, archived: boolean): Pro
  * only from `expected` (the run that is the current link) when given, so a
  * duplicate run never forks the chain. A job that lost is cancelled.
  */
-async function armReconcile(
+export async function armReconcile(
   pullId: string,
   delayMs: number,
   expected?: string | null,
@@ -506,12 +528,77 @@ export async function rearmReconcilers(): Promise<number> {
   return armed;
 }
 
+/** What the thread has cost and its limit, read only when a limit is set. */
+async function threadSpend(
+  threadId: string,
+  limitUsd: number | null,
+): Promise<{ usd: number | null; limitUsd: number | null }> {
+  if (limitUsd === null) return { usd: null, limitUsd: null };
+  const target = codeHub()?.resolve(threadId);
+  const snapshot = await target?.instance.getThread(target.nativeId).catch(() => undefined);
+  return { usd: snapshot ? snapshot.costUsd : null, limitUsd };
+}
+
+/** The merge method auto-merge asks for: the repository's first of squash, merge, rebase. */
+function autoMergeMethod(snapshot: PullSnapshot): MergeMethod | undefined {
+  return (["squash", "merge", "rebase"] as const).find((m) => snapshot.mergeMethods.includes(m));
+}
+
 /**
- * A thread's turn ended: finish its running pass, if it has one, or link a
- * PR the agent opened for its branch.
+ * Auto-merge (phase 6): with the PR's switch on and no pass running, turn
+ * on GitHub's native auto-merge (a draft is marked ready first), so branch
+ * protection and required reviews are GitHub's to enforce.
+ */
+async function applyAutoMerge(
+  pull: CodePullRow,
+  snapshot: PullSnapshot,
+  github: GitHubClient,
+): Promise<void> {
+  if (!pull.autoMerge || snapshot.state !== "open" || snapshot.autoMerge) return;
+  if (pull.loopStatus === "fixing" || (await runningPass(pull.id))) return;
+  const method = autoMergeMethod(snapshot);
+  if (!method) return;
+  try {
+    if (snapshot.draft) await github.markReady(snapshot.id);
+    await github.enableAutoMerge(snapshot.id, method);
+  } catch (error) {
+    logger.warn({ error, pull: pull.id }, "Code: could not turn on auto-merge");
+  }
+}
+
+/** The owner's auto-merge switch for the thread's open PR; off also turns GitHub's off. */
+export async function setAutoMerge(threadId: string, enabled: boolean): Promise<void> {
+  const { project } = await requireProjectThread(threadId);
+  const open = await openPullOf(threadId);
+  if (!open) throw Boom.notFound("The thread has no open pull request.");
+  await updatePull(open.id, { autoMerge: enabled });
+  if (!enabled) {
+    const snapshot = cachedSnapshot(open);
+    if (snapshot?.autoMerge) {
+      const github = await codeGitHub().client(project);
+      await github.disableAutoMerge(snapshot.id).catch((error: unknown) => {
+        throw Boom.conflict(`GitHub kept auto-merge on: ${githubMessage(error)}`);
+      });
+    }
+  }
+  await reconcileNow(open.id);
+}
+
+/** The thread's spend limit for Auto-fix passes (USD), or null for none. */
+export async function setSpendLimit(threadId: string, limitUsd: number | null): Promise<void> {
+  await requireProjectThread(threadId);
+  await db.update(codeThreads).set({ spendLimitUsd: limitUsd }).where(eq(codeThreads.id, threadId));
+}
+
+/**
+ * A thread's turn ended: checkpoint its worktree, finish its running pass,
+ * if it has one, or link a PR the agent opened for its branch.
  */
 export async function onTurnEnded(threadId: string, outcome: TurnOutcome): Promise<void> {
   if (outcome.working) return;
+  await checkpointTurn(threadId).catch((error: unknown) =>
+    logger.warn({ error, threadId }, "Code: could not checkpoint the turn"),
+  );
   const open = await openPullOf(threadId);
   if (!open) {
     if (await projectThread(threadId)) await linkByBranch(threadId).catch(() => undefined);
@@ -554,6 +641,7 @@ async function pullView(
     baseRef: row.baseRef,
     syncedAt: row.syncedAt?.toISOString() ?? null,
     autofix: row.autofix,
+    autoMerge: row.autoMerge,
     loop: { status: row.loopStatus, reason: row.loopReason },
     snapshot,
     stalled: snapshot
@@ -571,6 +659,7 @@ async function pullView(
         title,
       })),
       pushedSha: p.pushedSha,
+      costUsd: p.costUsd,
       createdAt: p.createdAt.toISOString(),
       finishedAt: p.finishedAt?.toISOString() ?? null,
     })),
@@ -581,7 +670,14 @@ async function pullView(
 export async function threadPulls(threadId: string, fresh = true): Promise<ThreadPullsView> {
   const found = await projectThread(threadId);
   if (!found) {
-    return { project: null, branch: null, active: null, earlier: [], ahead: null };
+    return {
+      project: null,
+      branch: null,
+      active: null,
+      earlier: [],
+      ahead: null,
+      spend: { usd: null, limitUsd: null },
+    };
   }
   const { project, thread } = found;
   if (fresh) {
@@ -595,13 +691,13 @@ export async function threadPulls(threadId: string, fresh = true): Promise<Threa
   if (thread.worktree) {
     // The tab still opens when the sandbox is unreachable; it just cannot count.
     ahead = await codeGitHub()
-      .workspace()
+      .workspace(project)
       .then((ws) => ws.commitsAhead(thread.worktree!, project.baseBranch))
       .then((c) => c.length)
       .catch(() => null);
   }
   const ownerLogin = await codeGitHub()
-    .client()
+    .client(project)
     .then((c) => c.viewer())
     .then((v) => v.login)
     .catch(() => null);
@@ -614,5 +710,9 @@ export async function threadPulls(threadId: string, fresh = true): Promise<Threa
       .filter((r) => r !== active)
       .map((r) => ({ number: r.number, url: r.url, title: r.title, state: r.state })),
     ahead,
+    spend: await threadSpend(threadId, thread.spendLimitUsd ?? 0).then((s) => ({
+      usd: s.usd,
+      limitUsd: thread.spendLimitUsd,
+    })),
   };
 }

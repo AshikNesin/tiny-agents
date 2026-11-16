@@ -12,16 +12,19 @@
  * The services live in the App root (`app().codeGitHub`), so tests install
  * a fake GitHub and a local git without a sandbox.
  */
-import { randomBytes } from "node:crypto";
+import { createSign, randomBytes } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { createNamespaceKv } from "@groot/core/kv";
 import {
+  createAppAuth,
   createGhTransport,
   createGitHubClient,
   createHttpsTransport,
+  type AppAuth,
   type ExecPort,
   type GitHubClient,
+  type RepoRef,
 } from "@tiny-agents/github";
 import type { SandboxConnection } from "@tiny-agents/sandbox";
 import { db, vaultItems } from "../../db";
@@ -31,23 +34,37 @@ import { createAppCredential, deleteItemRow } from "../vault/vault.admin.service
 import { resolveGitHubToken } from "../vault/vault.service";
 import { createWorkspace, type Workspace } from "./code.workspace";
 
+/** What decides how a project reaches GitHub: its transport and, for the App, its installation. */
+export interface ProjectTransport {
+  transport: "gh" | "app";
+  installationId: number | null;
+}
+
 export interface CodeGitHub {
-  /** The client for GitHub's API (HTTPS with the token, else `gh` on the sandbox). */
-  client(): Promise<GitHubClient>;
+  /**
+   * The client for GitHub's API: for an App project, HTTPS with an
+   * installation token; otherwise HTTPS with the vault token, else `gh` on
+   * the sandbox.
+   */
+  client(project?: ProjectTransport): Promise<GitHubClient>;
   /** Git on the sandbox, authenticated the same way. */
-  workspace(): Promise<Workspace>;
+  workspace(project?: ProjectTransport): Promise<Workspace>;
   /** A vault token, or `gh` signed in on the sandbox. */
   credential(): Promise<"token" | "gh">;
+  /** The GitHub App installation that reaches `repo` (an App project). */
+  installationFor(repo: RepoRef): Promise<number>;
 }
 
 interface GitHubSettings {
   /** The `app` vault item holding the token; unset means `gh auth login` on the sandbox. */
   tokenHandle?: string;
+  /** The GitHub App (phase 6): its id, and the vault items with its key and webhook secret. */
+  app?: { appId: string; keyHandle: string; webhookSecretHandle: string };
 }
 
 const settingsKv = () => createNamespaceKv("CODE_GITHUB");
 
-async function githubSettings(): Promise<GitHubSettings> {
+export async function githubSettings(): Promise<GitHubSettings> {
   return (await settingsKv().get<GitHubSettings>("settings")) ?? {};
 }
 
@@ -74,10 +91,42 @@ function requireSandbox(): ExecPort {
   return sandboxExec(connection);
 }
 
+/** RS256 with the App's private key (PKCS#1 or PKCS#8 PEM), base64url. */
+function rsaSign(pem: string, data: string): string {
+  return createSign("RSA-SHA256").update(data).sign(pem).toString("base64url");
+}
+
+/** The App's token source, kept in the App root so installation tokens are reused. */
+export async function gitHubApp(): Promise<AppAuth> {
+  const { app: config } = await githubSettings();
+  if (!config) throw Boom.badRequest("Set up the GitHub App in Projects → GitHub first.");
+  const key = `${config.appId}\0${config.keyHandle}`;
+  const root = app();
+  if (root.codeGitHubApp?.key === key) return root.codeGitHubApp.auth;
+  const auth = createAppAuth({
+    appId: config.appId,
+    sign: async (data) => rsaSign(await resolveGitHubToken(config.keyHandle), data),
+  });
+  root.codeGitHubApp = { key, auth };
+  return auth;
+}
+
+function installationOf(project: ProjectTransport): number {
+  if (!project.installationId) throw Boom.badRequest("The project has no App installation.");
+  return project.installationId;
+}
+
 /** The services as Settings → GitHub configures them now. */
 function defaultServices(): CodeGitHub {
   return {
-    async client() {
+    async client(project) {
+      if (project?.transport === "app") {
+        const installation = installationOf(project);
+        const auth = await gitHubApp();
+        return createGitHubClient(
+          createHttpsTransport({ token: () => auth.installationToken(installation) }),
+        );
+      }
       const { tokenHandle } = await githubSettings();
       if (tokenHandle) {
         return createGitHubClient(
@@ -86,7 +135,15 @@ function defaultServices(): CodeGitHub {
       }
       return createGitHubClient(createGhTransport(requireSandbox()));
     },
-    async workspace() {
+    async workspace(project) {
+      if (project?.transport === "app") {
+        const installation = installationOf(project);
+        const auth = await gitHubApp();
+        return createWorkspace({
+          exec: requireSandbox(),
+          credential: { kind: "token", token: () => auth.installationToken(installation) },
+        });
+      }
       const { tokenHandle } = await githubSettings();
       return createWorkspace({
         exec: requireSandbox(),
@@ -98,6 +155,9 @@ function defaultServices(): CodeGitHub {
     async credential() {
       return (await githubSettings()).tokenHandle ? "token" : "gh";
     },
+    async installationFor(repo) {
+      return (await gitHubApp()).installationFor(repo);
+    },
   };
 }
 
@@ -108,6 +168,8 @@ export function codeGitHub(): CodeGitHub {
 export interface GitHubStatusView {
   credential: "token" | "gh";
   tokenHandle: string | null;
+  /** The GitHub App, when one is set up (its id). */
+  appId: string | null;
   sandbox: boolean;
   tools: { git: boolean; gh: boolean } | null;
   /** Who the credential acts as, when it works. */
@@ -122,6 +184,7 @@ export async function githubStatus(): Promise<GitHubStatusView> {
   const view: GitHubStatusView = {
     credential: await services.credential(),
     tokenHandle: tokenHandle ?? null,
+    appId: (await githubSettings()).app?.appId ?? null,
     sandbox: Boolean(app().codeGitHub) || Boolean(sandboxConnection()),
     tools: null,
     login: null,
@@ -166,4 +229,44 @@ export async function setGitHubToken(token: string | null): Promise<void> {
     });
     if (old) await deleteItemRow(old, { purge: true });
   }
+}
+
+/** Store the GitHub App's id, private key and webhook secret (each secret an `app` vault item). */
+export async function setGitHubApp(
+  input: { appId: string; privateKey: string; webhookSecret: string } | null,
+): Promise<void> {
+  const kv = settingsKv();
+  const before = await githubSettings();
+  if (input) {
+    const suffix = randomBytes(3).toString("hex");
+    const store = (name: string, label: string, value: string) =>
+      createAppCredential({
+        handle: `code-github-app-${name}-${suffix}`,
+        label,
+        value,
+        hosts: ["api.github.com", "github.com"],
+        inject: { as: "header", name: "Authorization", format: "Bearer {value}" },
+        tools: ["github"],
+      });
+    const key = await store("key", "Code: GitHub App private key", input.privateKey);
+    const secret = await store("webhook", "Code: GitHub App webhook secret", input.webhookSecret);
+    await kv.set("settings", {
+      ...before,
+      app: { appId: input.appId, keyHandle: key.handle, webhookSecretHandle: secret.handle },
+    });
+  } else {
+    await kv.set("settings", { ...before, app: undefined });
+  }
+  app().codeGitHubApp = undefined;
+  for (const handle of [before.app?.keyHandle, before.app?.webhookSecretHandle]) {
+    if (!handle) continue;
+    const old = await db.query.vaultItems.findFirst({ where: eq(vaultItems.handle, handle) });
+    if (old) await deleteItemRow(old, { purge: true });
+  }
+}
+
+/** The webhook secret, or undefined when no App is set up. */
+export async function webhookSecret(): Promise<string | undefined> {
+  const { app: config } = await githubSettings();
+  return config ? resolveGitHubToken(config.webhookSecretHandle) : undefined;
 }

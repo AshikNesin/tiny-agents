@@ -12,7 +12,14 @@ import { Boom } from "@groot/core/errors";
 import { logger } from "@groot/core/logger";
 import { parseRepo, repoSlug, type RepoRef } from "@tiny-agents/github";
 import { threadIdOf, type CreateThreadInput, type HarnessInstance } from "@tiny-agents/code/server";
-import { codeProjects, codeThreads, db, type CodeProjectRow, type CodeThreadRow } from "../../db";
+import {
+  codeCheckpoints,
+  codeProjects,
+  codeThreads,
+  db,
+  type CodeProjectRow,
+  type CodeThreadRow,
+} from "../../db";
 import type {
   ProjectCreateBody,
   ProjectSettings,
@@ -21,7 +28,7 @@ import type {
 } from "../../../shared/api/code";
 import { DEFAULT_AUTOFIX } from "./code.autofix";
 import { codeGitHub } from "./code.github";
-import { branchName, type ProjectScripts, type Workspace } from "./code.workspace";
+import { branchName, checkpointRef, type ProjectScripts, type Workspace } from "./code.workspace";
 
 const DEFAULT_PROJECT_SETTINGS: ProjectSettings = {
   scripts: {},
@@ -34,6 +41,8 @@ const DEFAULT_PROJECT_SETTINGS: ProjectSettings = {
     noOwnerLimit: DEFAULT_AUTOFIX.noOwnerLimit,
     passMinutes: DEFAULT_AUTOFIX.passMinutes,
     onByDefault: false,
+    finalCheck: false,
+    autoMergeByDefault: false,
   },
 };
 
@@ -69,6 +78,7 @@ export function projectView(row: CodeProjectRow): ProjectView {
     id: row.id,
     name: row.name,
     repo: repoOf(row),
+    transport: row.transport,
     baseBranch: row.baseBranch,
     checkoutPath: row.checkoutPath,
     defaultInstanceId: row.defaultInstanceId,
@@ -109,19 +119,28 @@ export async function createProject(input: ProjectCreateBody): Promise<CodeProje
   if (taken) throw Boom.conflict(`${repoSlug(repo)} is already a project.`);
 
   const services = codeGitHub();
-  const ws = await services.workspace();
+  const app = input.transport === "app";
+  const installationId = app
+    ? await services.installationFor(repo).catch((error: unknown) => {
+        throw Boom.badRequest(
+          `The GitHub App is not installed on ${repoSlug(repo)}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      })
+    : null;
+  const transport = { transport: app ? ("app" as const) : ("gh" as const), installationId };
+  const ws = await services.workspace(transport);
   const tools = await ws.tools();
   const credential = await services.credential();
   const missing = [
     ...(tools.git ? [] : ["git"]),
-    ...(tools.gh || credential === "token" ? [] : ["gh"]),
+    ...(tools.gh || credential === "token" || app ? [] : ["gh"]),
   ];
   if (missing.length) {
     throw Boom.badRequest(
       `The sandbox has no ${missing.join(" or ")}. Install ${missing.length > 1 ? "them" : "it"} there first.`,
     );
   }
-  const github = await services.client();
+  const github = await services.client(transport);
   const info = await github.repository(repo).catch((error: unknown) => {
     throw Boom.badRequest(
       `Cannot reach ${repoSlug(repo)} on GitHub: ${error instanceof Error ? error.message : String(error)}`,
@@ -136,6 +155,8 @@ export async function createProject(input: ProjectCreateBody): Promise<CodeProje
       name: input.name?.trim() || repo.name,
       repoOwner: repo.owner,
       repoName: repo.name,
+      transport: transport.transport,
+      installationId,
       baseBranch: input.baseBranch?.trim() || info.defaultBranch,
       checkoutPath: checkout,
       defaultInstanceId: input.defaultInstanceId ?? null,
@@ -244,7 +265,7 @@ export async function startProjectThread(
   instance: HarnessInstance,
   input: ProjectThreadInput,
 ): Promise<{ nativeId: string; branch: string; worktree: string }> {
-  const ws = await codeGitHub().workspace();
+  const ws = await codeGitHub().workspace(project);
   const firstLine = input.message.split("\n")[0] ?? "";
   const branch = input.branch ?? branchName(firstLine, randomBytes(3).toString("hex"));
   const path = worktreePath(project, branch);
@@ -257,6 +278,10 @@ export async function startProjectThread(
     const result = await ws.runScript(path, scripts.setup);
     if (!result.ok) setupFailure = result.output || "It exited with an error.";
   }
+  // The start checkpoint: the worktree as the agent first sees it (seq 0).
+  const startCheckpoint = await ws
+    .checkpoint(path, checkpointRef(branch, 0))
+    .catch(() => undefined);
   const { branch: _branch, ...create } = input;
   let created: { nativeId: string };
   try {
@@ -276,7 +301,34 @@ export async function startProjectThread(
     .insert(codeThreads)
     .values({ id, instanceId: instance.id, nativeId: created.nativeId, ...set })
     .onConflictDoUpdate({ target: codeThreads.id, set });
+  if (startCheckpoint) {
+    await db
+      .insert(codeCheckpoints)
+      .values({ threadId: id, seq: 0, sha: startCheckpoint, headSha: baseSha, reason: "start" })
+      .onConflictDoNothing();
+  }
+  await installThreadTrailer(ws, project, branch, path, id);
   return { nativeId: created.nativeId, branch, worktree: path };
+}
+
+/**
+ * Every commit in the thread's worktree carries `Thread-Id: <thread id>`
+ * (issue #297 §6), so `git log` leads back to the conversation. Installed as
+ * soon as the harness has named the thread; a failure is logged, not fatal.
+ */
+async function installThreadTrailer(
+  ws: Workspace,
+  project: CodeProjectRow,
+  branch: string,
+  path: string,
+  threadId: string,
+): Promise<void> {
+  const hooks = `${project.checkoutPath.replace(/\/checkout$/, "")}/hooks/${branch.replaceAll("/", "_")}`;
+  await ws
+    .installTrailer(path, hooks, `Thread-Id: ${threadId}`)
+    .catch((error: unknown) =>
+      logger.warn({ error, threadId }, "Code: could not install the Thread-Id trailer"),
+    );
 }
 
 /**
@@ -288,7 +340,7 @@ export async function onProjectThreadArchived(threadId: string, archived: boolea
   const found = await projectThread(threadId);
   if (!found?.thread.branch) return;
   const { thread, project } = found;
-  const ws = await codeGitHub().workspace();
+  const ws = await codeGitHub().workspace(project);
   const path = thread.worktree ?? worktreePath(project, thread.branch!);
   if (archived) {
     if (!thread.worktree) return;
@@ -304,6 +356,7 @@ export async function onProjectThreadArchived(threadId: string, archived: boolea
   }
   if (thread.worktree && (await ws.exists(thread.worktree))) return;
   await ws.addWorktreeForBranch(project.checkoutPath, path, thread.branch!);
+  await installThreadTrailer(ws, project, thread.branch!, path, threadId);
   const scripts = await scriptsFor(project, ws, path);
   if (scripts.setup) await ws.runScript(path, scripts.setup);
   await db.update(codeThreads).set({ worktree: path }).where(eq(codeThreads.id, threadId));
@@ -313,6 +366,6 @@ export async function onProjectThreadArchived(threadId: string, archived: boolea
 export async function onProjectThreadDeleted(threadId: string): Promise<void> {
   const found = await projectThread(threadId);
   if (!found?.thread.worktree) return;
-  const ws = await codeGitHub().workspace();
+  const ws = await codeGitHub().workspace(found.project);
   await ws.removeWorktree(found.project.checkoutPath, found.thread.worktree);
 }

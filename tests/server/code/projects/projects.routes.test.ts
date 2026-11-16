@@ -5,18 +5,24 @@
  * GitHub's), with an in-memory GitHub API and the in-memory harness.
  */
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
+import { createHmac } from "node:crypto";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { eq } from "drizzle-orm";
 import { FIXED_NOW } from "../../../test-clock";
 import { api, createTestApp } from "../../helpers";
 import { authToken, resetAppTables } from "../../fixtures";
-import { codeAutofixPasses, codeThreads, db } from "../../../../apps/web/src/server/db";
+import { codeAutofixPasses, codeThreads, db, jobs } from "../../../../apps/web/src/server/db";
 import { installAppForTests } from "../../../../apps/web/src/server/app-root";
 import { createCodeHub, setCodeHub } from "../../../../apps/web/src/server/api/code/code.hub";
 import { createWorkspace } from "../../../../apps/web/src/server/api/code/code.workspace";
 import { onTurnEnded } from "../../../../apps/web/src/server/api/code/code.pulls";
-import type { ProjectView, ThreadPullsView } from "../../../../apps/web/src/shared/api/code";
+import type {
+  CheckpointView,
+  ProjectView,
+  ReviewFile,
+  ThreadPullsView,
+} from "../../../../apps/web/src/shared/api/code";
 import { fakeHarness, type FakeHarness } from "../fake-harness";
 import { bareRepo, localExec, sh, type LocalExec } from "./local-exec";
 import { fakeGitHub, type FakeGitHub } from "./fake-github";
@@ -46,6 +52,7 @@ beforeEach(async () => {
       client: async () => github,
       workspace: async () => ws,
       credential: async () => "token",
+      installationFor: async () => 4242,
     },
   });
   harness = fakeHarness("fake", {
@@ -127,6 +134,7 @@ describe("projects", () => {
         client: async () => github,
         workspace: async () => ({ ...ws, tools: async () => ({ git: true, gh: false }) }),
         credential: async () => "gh",
+        installationFor: async () => 4242,
       },
     });
     const res = await call<unknown>("POST", "/projects", { repo: "acme/web" });
@@ -426,5 +434,243 @@ describe("the reconcile chain", () => {
     await db.delete(jobs);
     expect(await rearmReconcilers()).toBe(1);
     expect((await pending()).map((j) => j.id)).toEqual([await link()]);
+  });
+});
+
+describe("the Thread-Id trailer and per-turn checkpoints", () => {
+  it("adds the thread's id to every commit in its worktree", async () => {
+    const project = await newProject();
+    const thread = await newThread(project.id);
+    await commit(thread.worktree, "src/login.ts");
+    expect(
+      await sh(
+        local,
+        `git -C ${thread.worktree} log -1 "--format=%(trailers:key=Thread-Id,valueonly)"`,
+      ),
+    ).toBe(thread.id);
+  });
+
+  it("checkpoints each turn, shows what the turn changed, and reverts to it without rewriting history", async () => {
+    const project = await newProject();
+    const thread = await newThread(project.id);
+    const enc = encodeURIComponent(thread.id);
+    const turnEnds = async () =>
+      onTurnEnded(thread.id, {
+        working: false,
+        title: "t",
+        cwd: null,
+        text: "Done.",
+        failed: false,
+        endedAt: NOW,
+        cursor: 1,
+      });
+
+    await sh(local, `cd ${thread.worktree} && printf 'turn one\\n' > notes.txt`);
+    await turnEnds();
+    await commit(thread.worktree, "notes.txt", "turn two");
+    await turnEnds();
+    // A turn that changed nothing takes no checkpoint.
+    await turnEnds();
+
+    const list = (await call<CheckpointView[]>("GET", `/threads/${enc}/checkpoints`)).body.data!;
+    expect(list.map((c) => [c.seq, c.reason])).toEqual([
+      [2, "turn"],
+      [1, "turn"],
+      [0, "start"],
+    ]);
+    const firstTurn = list.find((c) => c.seq === 1)!;
+    const files = (
+      await call<ReviewFile[]>("GET", `/threads/${enc}/checkpoints/${firstTurn.id}/files`)
+    ).body.data!;
+    expect(files.map((f) => [f.path, f.status])).toEqual([["notes.txt", "added"]]);
+    const file = (
+      await call<{ oldContent: string; newContent: string }>(
+        "GET",
+        `/threads/${enc}/checkpoints/${list[0]!.id}/file?path=notes.txt`,
+      )
+    ).body.data!;
+    expect(file).toMatchObject({ oldContent: "turn one\n", newContent: "turn two\n" });
+
+    const head = await sh(local, `git -C ${thread.worktree} rev-parse HEAD`);
+    const reverted = await call<{ undo: CheckpointView }>(
+      "POST",
+      `/threads/${enc}/checkpoints/${firstTurn.id}/revert`,
+    );
+    expect(reverted.status).toBe(200);
+    expect(reverted.body.data?.undo.reason).toBe("before_revert");
+    expect(await sh(local, `cat ${thread.worktree}/notes.txt`)).toBe("turn one");
+    expect(await sh(local, `git -C ${thread.worktree} rev-parse HEAD`)).toBe(head);
+
+    harness.outcomes.set(thread.nativeId, {
+      working: true,
+      title: "t",
+      cwd: null,
+      text: "",
+      failed: false,
+      cursor: 3,
+    });
+    expect((await call("POST", `/threads/${enc}/checkpoints/${firstTurn.id}/revert`)).status).toBe(
+      409,
+    );
+  });
+});
+
+describe("phase 6 on a published PR", () => {
+  async function published(settings: Record<string, unknown> = {}) {
+    const project = await newProject();
+    await call("PATCH", `/projects/${project.id}`, {
+      settings: { archiveOnMerge: false, ...settings },
+    });
+    const thread = await newThread(project.id);
+    await commit(thread.worktree, "src/login.ts");
+    await call("POST", `/threads/${encodeURIComponent(thread.id)}/publish`, {});
+    await call("POST", `/threads/${encodeURIComponent(thread.id)}/pr/autofix`, { enabled: true });
+    return { project, thread, enc: encodeURIComponent(thread.id) };
+  }
+  const green = () => ({
+    name: "test",
+    state: "success" as const,
+    startedAt: minutesAgo(10),
+    completedAt: minutesAgo(5),
+    url: null,
+    jobId: null,
+  });
+
+  it("pauses Auto-fix when the thread reached its spend limit", async () => {
+    const { thread, enc } = await published();
+    const real = harness.getThread.bind(harness);
+    harness.getThread = async (id) => ({ ...(await real(id)), costUsd: 6.5 });
+    await call("POST", `/threads/${enc}/spend-limit`, { limitUsd: 5 });
+    github.pull(1).checks = [{ ...green(), state: "failure" }];
+
+    const view = await pr(thread.id);
+    expect(view.spend).toEqual({ usd: 6.5, limitUsd: 5 });
+    expect(view.active?.loop).toEqual({
+      status: "paused",
+      reason: "The thread's spend limit is reached ($6.50 of $5.00). Raise it to go on.",
+    });
+  });
+
+  it("turns on GitHub's auto-merge, marking the draft ready first, and off again", async () => {
+    const { thread, enc } = await published();
+    github.pull(1).checks = [green()];
+    await call("POST", `/threads/${enc}/pr/automerge`, { enabled: true });
+    expect(github.autoMergeCalls).toEqual([
+      { pullId: "PR_1", action: "ready" },
+      { pullId: "PR_1", action: "enable", method: "squash" },
+    ]);
+    expect((await pr(thread.id)).active?.autoMerge).toBe(true);
+    await call("POST", `/threads/${enc}/pr/automerge`, { enabled: false });
+    expect(github.autoMergeCalls.at(-1)).toEqual({ pullId: "PR_1", action: "disable" });
+    expect(github.pull(1).autoMerge).toBe(false);
+  });
+
+  it("runs a final check when green, and settles green when it changes nothing", async () => {
+    const { thread } = await published({ autofix: { finalCheck: true } });
+    // The agent is busy with the pass until its turn ends.
+    harness.outcomes.set(thread.nativeId, {
+      working: true,
+      title: "t",
+      cwd: null,
+      text: "",
+      failed: false,
+      cursor: 1,
+    });
+    github.pull(1).checks = [green()];
+    expect((await pr(thread.id)).active?.loop.status).toBe("fixing");
+    expect(harness.sent.at(-1)?.message).toContain("Auto-fix final check");
+
+    const outcome = {
+      working: false,
+      title: "t",
+      cwd: null,
+      text: "Nothing to change.",
+      failed: false,
+      endedAt: NOW,
+      cursor: 2,
+    };
+    harness.outcomes.set(thread.nativeId, outcome);
+    await onTurnEnded(thread.id, outcome);
+    const view = await pr(thread.id);
+    expect(view.active?.passes.map((p) => [p.trigger, p.outcome])).toEqual([["final", "clean"]]);
+    expect(view.active?.loop.status).toBe("green");
+  });
+
+  it("starts a pass when the merge queue removes the PR", async () => {
+    const { thread } = await published();
+    github.pull(1).checks = [green()];
+    github.pull(1).queueRemovals = [
+      { id: "Q1", at: minutesAgo(5), reason: "The merge group's checks failed" },
+    ];
+    await pr(thread.id);
+    const sent = harness.sent.at(-1)!;
+    expect(sent.message).toContain("### queue:Q1");
+    expect(sent.message).toContain("The merge group's checks failed");
+  });
+});
+
+describe("the GitHub App", () => {
+  const PRIVATE_KEY = `-----BEGIN RSA PRIVATE KEY-----\n${"A".repeat(120)}\n-----END RSA PRIVATE KEY-----`;
+  const SECRET = "webhook-secret-for-tests";
+  const sign = (body: string) =>
+    `sha256=${createHmac("sha256", SECRET).update(body).digest("hex")}`;
+  const deliver = (body: string, headers: Record<string, string>) =>
+    app.request("/api/v1/code/github/webhook", {
+      method: "POST",
+      body,
+      headers: { "content-type": "application/json", ...headers },
+    });
+
+  it("creates a project on the App's installation", async () => {
+    const res = await call<ProjectView>("POST", "/projects", {
+      repo: "acme/web",
+      transport: "app",
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.data?.transport).toBe("app");
+    const row = await db.query.codeProjects.findFirst();
+    expect(row?.installationId).toBe(4242);
+  });
+
+  it("takes a signed delivery as a hint to look now, once, and refuses a bad signature", async () => {
+    expect(
+      (
+        await call("PUT", "/github/app", {
+          appId: "123",
+          privateKey: PRIVATE_KEY,
+          webhookSecret: SECRET,
+        })
+      ).status,
+    ).toBe(200);
+    const project = await newProject();
+    const thread = await newThread(project.id);
+    await commit(thread.worktree, "a.txt");
+    await call("POST", `/threads/${encodeURIComponent(thread.id)}/publish`, {});
+    await db.delete(jobs);
+
+    const body = JSON.stringify({
+      action: "submitted",
+      repository: { full_name: "acme/web" },
+      pull_request: { number: 1 },
+    });
+    const headers = { "x-github-event": "pull_request_review", "x-github-delivery": "d-1" };
+    expect((await deliver(body, { ...headers, "x-hub-signature-256": "sha256=00" })).status).toBe(
+      401,
+    );
+
+    const first = await deliver(body, { ...headers, "x-hub-signature-256": sign(body) });
+    expect(first.status).toBe(200);
+    expect(((await first.json()) as { data: unknown }).data).toEqual({
+      duplicate: false,
+      looked: 1,
+    });
+    const queued = (await db.select().from(jobs)).filter((j) => j.state === "created");
+    expect(queued.map((j) => j.runAt.getTime() - NOW)).toEqual([5_000]);
+
+    const again = await deliver(body, { ...headers, "x-hub-signature-256": sign(body) });
+    expect(((await again.json()) as { data: unknown }).data).toEqual({
+      duplicate: true,
+      looked: 0,
+    });
   });
 });

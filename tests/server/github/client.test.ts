@@ -300,3 +300,60 @@ describe("parseRepo", () => {
     expect(parseRepo("acme/..")).toBeUndefined();
   });
 });
+
+describe("the GitHub App", () => {
+  it("trades a signed app JWT for an installation token, and reuses it until it nearly expires", async () => {
+    const { createAppAuth } = await import("../../../packages/github/src/index");
+    let now = Date.parse("2026-11-05T12:00:00Z");
+    const signed: string[] = [];
+    const fake = fakeFetch((method, path) => {
+      if (method === "POST" && path === "/app/installations/77/access_tokens") {
+        return json(
+          {
+            token: `ghs_${fake.calls.length}`,
+            expires_at: new Date(now + 60 * 60_000).toISOString(),
+          },
+          201,
+        );
+      }
+      if (path === "/repos/acme/web/installation") return json({ id: 77 });
+      return json({ message: "Not Found" }, 404);
+    });
+    const auth = createAppAuth({
+      appId: "123",
+      sign: async (data) => {
+        signed.push(data);
+        return "sig";
+      },
+      fetch: fake.impl,
+      now: () => now,
+    });
+    expect(await auth.installationFor(repo)).toBe(77);
+    expect(await auth.installationToken(77)).toBe("ghs_2");
+    expect(await auth.installationToken(77)).toBe("ghs_2");
+    now += 59 * 60_000 + 1;
+    expect(await auth.installationToken(77)).toBe("ghs_3");
+
+    const [header, payload] = signed[0]!
+      .split(".")
+      .map((part) => JSON.parse(Buffer.from(part, "base64url").toString()));
+    expect(header).toEqual({ alg: "RS256", typ: "JWT" });
+    expect(payload).toEqual({
+      iat: Date.parse("2026-11-05T12:00:00Z") / 1000 - 60,
+      exp: Date.parse("2026-11-05T12:00:00Z") / 1000 + 540,
+      iss: "123",
+    });
+    expect(fake.calls[1]?.auth).toBe(`Bearer ${signed[1]?.split(".").slice(0, 2).join(".")}.sig`);
+  });
+
+  it("accepts a webhook only with the right signature", async () => {
+    const { verifyWebhook } = await import("../../../packages/github/src/index");
+    // GitHub's documented example: secret "It's a Secret to Everybody", body "Hello, World!".
+    const good = "sha256=757107ea0eb2509fc211221cce984b8a37570b6d7586c22c46f4379c8b043e17";
+    expect(await verifyWebhook("It's a Secret to Everybody", "Hello, World!", good)).toBe(true);
+    expect(await verifyWebhook("It's a Secret to Everybody", "Hello, World?", good)).toBe(false);
+    expect(await verifyWebhook("It's a Secret to Everybody", "Hello, World!", undefined)).toBe(
+      false,
+    );
+  });
+});

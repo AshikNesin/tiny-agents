@@ -16,7 +16,11 @@ interface ProjectScripts {
 }
 
 interface AutofixProjectSettings {
-  triggers: { checks: boolean; reviews: boolean; conflicts: boolean };
+  triggers: { checks: boolean; reviews: boolean; conflicts: boolean; mergeQueue: boolean };
+  /** One last review pass when the PR goes green. */
+  finalCheck: boolean;
+  /** New PRs start with GitHub's auto-merge on. */
+  autoMergeByDefault: boolean;
   /** Review bots whose comments are instructions (by login). */
   trustedBots: string[];
   hourlyLimit: number;
@@ -39,6 +43,8 @@ export interface ProjectView {
   id: string;
   name: string;
   repo: { owner: string; name: string };
+  /** `gh`: the CLI on the sandbox or the vault token; `app`: the GitHub App's installation. */
+  transport: "gh" | "app";
   baseBranch: string;
   checkoutPath: string;
   defaultInstanceId: string | null;
@@ -50,6 +56,8 @@ export interface ProjectView {
 export interface ProjectCreateBody {
   /** `owner/name` or a GitHub URL. */
   repo: string;
+  /** Reach it through the GitHub App (Projects → GitHub) instead of `gh` or the token. */
+  transport?: "gh" | "app";
   name?: string;
   baseBranch?: string;
   defaultInstanceId?: string;
@@ -71,6 +79,7 @@ export interface ProjectUpdateBody {
 export interface GitHubStatus {
   credential: "token" | "gh";
   tokenHandle: string | null;
+  appId: string | null;
   sandbox: boolean;
   tools: { git: boolean; gh: boolean } | null;
   login: string | null;
@@ -85,6 +94,8 @@ interface PassView {
   detail: string | null;
   items: Array<{ id: string; title: string }>;
   pushedSha: string | null;
+  /** What the pass cost (USD), where the harness reports cost. */
+  costUsd: number | null;
   createdAt: string;
   finishedAt: string | null;
 }
@@ -100,6 +111,8 @@ export interface PullView {
   baseRef: string;
   syncedAt: string | null;
   autofix: boolean;
+  /** The owner wants GitHub's auto-merge on for it. */
+  autoMerge: boolean;
   loop: { status: AutofixStatus; reason: string | null };
   /** The last snapshot, what the tab shows; null before the first sync. */
   snapshot: PullSnapshot | null;
@@ -118,6 +131,8 @@ export interface ThreadPullsView {
   earlier: Array<{ number: number; url: string; title: string; state: PullView["state"] }>;
   /** Commits on the branch not on the base yet (what Publish would push). */
   ahead: number | null;
+  /** What the thread has cost (where the harness reports it) and its Auto-fix spend limit. */
+  spend: { usd: number | null; limitUsd: number | null };
 }
 
 export interface ReviewFile {
@@ -148,4 +163,13 @@ export interface ReviewDraftBody {
   endLine: number;
   quote?: string;
   body: string;
+}
+
+/** One per-turn checkpoint of a project thread (newest first in lists). */
+export interface CheckpointView {
+  id: string;
+  seq: number;
+  reason: "start" | "turn" | "before_revert";
+  headSha: string;
+  createdAt: string;
 }

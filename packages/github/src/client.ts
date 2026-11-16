@@ -89,6 +89,12 @@ export interface PullSnapshot {
   fromFork: boolean;
   mergeable: "mergeable" | "conflicting" | "unknown";
   mergeMethods: MergeMethod[];
+  /** GitHub's native auto-merge is enabled. */
+  autoMerge: boolean;
+  /** Waiting in the repository's merge queue. */
+  inMergeQueue: boolean;
+  /** The latest times the merge queue removed it, newest last. */
+  queueRemovals: Array<{ id: string; at: string; reason: string }>;
   author: string | null;
   checks: Check[];
   reviews: Review[];
@@ -119,6 +125,11 @@ export interface GitHubClient {
   resolveThread(threadId: string): Promise<void>;
   comment(repo: RepoRef, number: number, body: string): Promise<{ databaseId: number }>;
   merge(repo: RepoRef, number: number, method: MergeMethod): Promise<void>;
+  /** GitHub's native auto-merge, by the PR's node id (branch protection still applies). */
+  enableAutoMerge(pullId: string, method: MergeMethod): Promise<void>;
+  disableAutoMerge(pullId: string): Promise<void>;
+  /** Draft → ready for review. */
+  markReady(pullId: string): Promise<void>;
 }
 
 /** `owner/name`, `https://github.com/owner/name(.git)` or `git@github.com:owner/name.git`. */
@@ -146,7 +157,11 @@ const SNAPSHOT_QUERY = `query PullSnapshot($owner: String!, $name: String!, $num
     mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed
     pullRequest(number: $number) {
       id number url title body state isDraft merged mergeable
-      headRefName headRefOid baseRefName isCrossRepository
+      headRefName headRefOid baseRefName isCrossRepository isInMergeQueue
+      autoMergeRequest { enabledAt }
+      timelineItems(last: 5, itemTypes: [REMOVED_FROM_MERGE_QUEUE_EVENT]) {
+        nodes { ... on RemovedFromMergeQueueEvent { id createdAt reason } }
+      }
       ${AUTHOR}
       reviews(last: 50) { nodes { id state body submittedAt authorAssociation ${AUTHOR} } }
       reviewThreads(first: 100) {
@@ -215,6 +230,9 @@ interface RawSnapshot {
       headRefOid: string;
       baseRefName: string;
       isCrossRepository: boolean;
+      isInMergeQueue?: boolean;
+      autoMergeRequest?: { enabledAt: string } | null;
+      timelineItems?: { nodes: Array<{ id?: string; createdAt?: string; reason?: string | null }> };
       author: RawAuthor | null;
       reviews: {
         nodes: Array<{
@@ -356,6 +374,11 @@ export function toSnapshot(raw: RawSnapshot): PullSnapshot {
       comments: t.comments.nodes.map(comment),
     })),
     comments: pr.comments.nodes.map(comment),
+    autoMerge: Boolean(pr.autoMergeRequest),
+    inMergeQueue: Boolean(pr.isInMergeQueue),
+    queueRemovals: (pr.timelineItems?.nodes ?? [])
+      .filter((n) => n.id && n.createdAt)
+      .map((n) => ({ id: n.id!, at: n.createdAt!, reason: n.reason ?? "" })),
   };
 }
 
@@ -441,6 +464,24 @@ export function createGitHubClient(api: GitHubApi): GitHubClient {
       await api.rest("PUT", `${repoPath(repo)}/pulls/${number}/merge`, {
         body: { merge_method: method },
       });
+    },
+    async enableAutoMerge(pullId, method) {
+      await api.graphql(
+        `mutation($pr: ID!, $method: PullRequestMergeMethod!) { enablePullRequestAutoMerge(input: { pullRequestId: $pr, mergeMethod: $method }) { clientMutationId } }`,
+        { pr: pullId, method: method.toUpperCase() },
+      );
+    },
+    async disableAutoMerge(pullId) {
+      await api.graphql(
+        `mutation($pr: ID!) { disablePullRequestAutoMerge(input: { pullRequestId: $pr }) { clientMutationId } }`,
+        { pr: pullId },
+      );
+    },
+    async markReady(pullId) {
+      await api.graphql(
+        `mutation($pr: ID!) { markPullRequestReadyForReview(input: { pullRequestId: $pr }) { clientMutationId } }`,
+        { pr: pullId },
+      );
     },
   };
 }

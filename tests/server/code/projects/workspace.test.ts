@@ -193,3 +193,70 @@ describe("names and paths", () => {
     expect(matchesGlob("src/deep/a.ts", "src/*.ts")).toBe(false);
   });
 });
+
+describe("the Thread-Id trailer", () => {
+  it("adds the thread's trailer to every commit in its worktree, and still runs the repository's hooks", async () => {
+    const a = join(local.home, "a");
+    const b = join(local.home, "b");
+    await ws.addWorktree(checkout, a, "ta/a-1", "main");
+    await ws.addWorktree(checkout, b, "ta/b-1", "main");
+    const marker = join(local.home, "pre-commit-ran");
+    await sh(
+      local,
+      `printf '#!/bin/sh\\ntouch ${marker}\\n' > ${checkout}/.git/hooks/pre-commit && chmod +x ${checkout}/.git/hooks/pre-commit`,
+    );
+    await ws.installTrailer(a, join(local.home, "hooks", "a"), "Thread-Id: shelley:c1");
+
+    await sh(
+      local,
+      `cd ${a} && printf 'x\\n' > x.txt && git add -A && git commit --quiet -m 'Fix it'`,
+    );
+    expect(await sh(local, `git -C ${a} log -1 --format=%B`)).toBe(
+      "Fix it\n\nThread-Id: shelley:c1",
+    );
+    expect(existsSync(marker)).toBe(true);
+
+    await sh(
+      local,
+      `cd ${b} && printf 'y\\n' > y.txt && git add -A && git commit --quiet -m 'Other'`,
+    );
+    expect(await sh(local, `git -C ${b} log -1 --format=%B`)).toBe("Other");
+  });
+});
+
+describe("checkpoints", () => {
+  it("records the worktree, uncommitted files included, without touching it, and restores it", async () => {
+    const a = join(local.home, "a");
+    await ws.addWorktree(checkout, a, "ta/a-1", "main");
+    const start = await ws.checkpoint(a, "refs/tiny-agents/checkpoints/a/0");
+    await sh(
+      local,
+      `cd ${a} && printf 'hello\\nturn one\\n' > README.md && printf 'new\\n' > new.txt`,
+    );
+    const one = await ws.checkpoint(a, "refs/tiny-agents/checkpoints/a/1");
+    // The worktree is as it was: nothing staged, nothing committed.
+    expect(await ws.uncommitted(a)).toEqual([" M README.md", "?? new.txt"]);
+    const head = await ws.headSha(a);
+
+    expect((await ws.rangeFiles(a, start, one)).map((f) => [f.path, f.status])).toEqual([
+      ["README.md", "modified"],
+      ["new.txt", "added"],
+    ]);
+    expect(await ws.rangeFile(a, start, one, "README.md")).toEqual({
+      oldContent: "hello\n",
+      newContent: "hello\nturn one\n",
+    });
+
+    await sh(
+      local,
+      `cd ${a} && printf 'broken\\n' > README.md && rm new.txt && printf 'z\\n' > later.txt && git add -A && git commit --quiet -m later`,
+    );
+    await ws.restore(a, one);
+    expect(readFileSync(join(a, "README.md"), "utf8")).toBe("hello\nturn one\n");
+    expect(readFileSync(join(a, "new.txt"), "utf8")).toBe("new\n");
+    expect(existsSync(join(a, "later.txt"))).toBe(false);
+    // History is untouched: the restore is a change on top of it.
+    expect(await sh(local, `git -C ${a} log -1 --format=%s`)).toBe("later");
+    expect(await ws.headSha(a)).not.toBe(head);
+  });
+});

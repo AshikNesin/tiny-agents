@@ -9,6 +9,7 @@
  */
 export { GitHubError, graphQlData, type GitHubApi, type HttpMethod } from "./api";
 export { createGhTransport, type ExecPort, type ExecResult } from "./gh-transport";
+export { createAppAuth, verifyWebhook, type AppAuth, type AppAuthOptions } from "./app-auth";
 export { createHttpsTransport, type HttpsTransportOptions } from "./https-transport";
 export {
   checkOf,

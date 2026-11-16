@@ -90,6 +90,16 @@ function passMessage(
   items: Array<AutofixItem & { log?: string }>,
   context: { check?: string; protectedPaths: string[] },
 ): string {
+  if (items.length > 0 && items.every((item) => item.kind === "final")) {
+    return [
+      "Auto-fix final check. The pull request's checks are green and no review is open.",
+      "Read the whole change against the base branch once more, as a careful reviewer would: leftover debug code, missing tests for what changed, unhandled edge cases, docs that no longer match.",
+      "If something needs changing, change it, run the project's check" +
+        (context.check ? ` (\`${context.check}\`)` : "") +
+        ", and commit. Do not push. If nothing needs changing, say so and make no commit.",
+      `Do not edit ${context.protectedPaths.join(", ") || "CI workflow files"}.`,
+    ].join("\n");
+  }
   const material = items
     .map((item) => {
       const where = item.path ? ` (${item.path}${item.line ? `:${item.line}` : ""})` : "";
@@ -143,6 +153,21 @@ function notifyNeedsYou(pull: CodePullRow, reason: string) {
   notificationService.notify(codePullUpdate(pull, "needs_input", reason));
 }
 
+/** What the thread has cost so far (USD), where its harness reports cost. */
+async function threadCost(threadId: string): Promise<number | null> {
+  const target = codeHub()?.resolve(threadId);
+  if (!target) return null;
+  const snapshot = await target.instance.getThread(target.nativeId).catch(() => undefined);
+  return snapshot && snapshot.costUsd > 0 ? snapshot.costUsd : null;
+}
+
+/** What a pass cost: the thread's cost now less its cost when the pass started. */
+async function passCost(pass: CodeAutofixPass, threadId: string): Promise<number | null> {
+  if (pass.startCostUsd === null) return null;
+  const now = await threadCost(threadId);
+  return now === null ? null : Math.max(0, now - pass.startCostUsd);
+}
+
 /** End a pass that cannot go on: the loop waits for the owner. */
 async function stop(
   pass: CodeAutofixPass,
@@ -150,7 +175,8 @@ async function stop(
   outcome: string,
   detail: string,
 ): Promise<void> {
-  await movePass(pass.id, "finished", { outcome, detail, finishedAt: new Date() });
+  const costUsd = await passCost(pass, pull.threadId);
+  await movePass(pass.id, "finished", { outcome, detail, costUsd, finishedAt: new Date() });
   if (await moveLoop(pull.id, "needs_input", { reason: detail, headSha: pull.headSha })) {
     notifyNeedsYou(pull, detail);
   }
@@ -207,7 +233,7 @@ export async function startPass(
     return undefined;
   }
   const services = codeGitHub();
-  const ws = await services.workspace();
+  const ws = await services.workspace(ctx.project);
   const repo = repoOf(ctx.project);
   try {
     await ws.syncToRemote(ctx.thread.worktree!, repo, ctx.thread.branch!);
@@ -221,7 +247,7 @@ export async function startPass(
     return undefined;
   }
   try {
-    const github = await services.client();
+    const github = await services.client(ctx.project);
     const settings = projectSettings(ctx.project.settings);
     const scripts = await scriptsFor(ctx.project, ws, ctx.thread.worktree!);
     const startSha = await ws.headSha(ctx.thread.worktree!);
@@ -230,9 +256,10 @@ export async function startPass(
       protectedPaths: settings.protectedPaths,
     });
     // Running before the send, so a turn that ends at once still finds it.
-    await movePass(pass.id, "running", { startSha, startedAt: new Date() });
+    const startCostUsd = await threadCost(pull.threadId);
+    await movePass(pass.id, "running", { startSha, startCostUsd, startedAt: new Date() });
     await ctx.instance.send(ctx.nativeId, { message, queue: true });
-    return { ...pass, status: "running", startSha };
+    return { ...pass, status: "running", startSha, startCostUsd };
   } catch (error) {
     await stop(pass, pull, "send_failed", error instanceof Error ? error.message : String(error));
     return undefined;
@@ -262,12 +289,23 @@ export async function finishPass(pass: CodeAutofixPass, outcome?: TurnOutcome): 
   const ctx = await contextOf(pull);
   if (typeof ctx === "string") return stop(pass, pull, "send_failed", ctx);
   const services = codeGitHub();
-  const ws = await services.workspace();
+  const ws = await services.workspace(ctx.project);
   const repo = repoOf(ctx.project);
   const worktree = ctx.thread.worktree!;
   const settings = projectSettings(ctx.project.settings);
 
   const head = await ws.headSha(worktree);
+  const finalOnly = pass.trigger === "final";
+  if (finalOnly && pass.startSha && head === pass.startSha) {
+    // The final check found nothing to change: that is its good ending.
+    const costUsd = await passCost(pass, pull.threadId);
+    if (
+      await movePass(pass.id, "finished", { outcome: "clean", costUsd, finishedAt: new Date() })
+    ) {
+      await moveLoop(pull.id, "watching", { headSha: head, from: ["fixing"] });
+    }
+    return;
+  }
   if (!pass.startSha || head === pass.startSha) {
     const dirty = (await ws.uncommitted(worktree).catch(() => [])).length;
     return stop(
@@ -301,18 +339,21 @@ export async function finishPass(pass: CodeAutofixPass, outcome?: TurnOutcome): 
     !(await movePass(pass.id, "finished", {
       outcome: "pushed",
       pushedSha: pushed,
+      costUsd: await passCost(pass, pull.threadId),
       finishedAt: new Date(),
     }))
   ) {
     return;
   }
 
-  const github = await services.client();
+  const github = await services.client(ctx.project);
   const items = (JSON.parse(pass.items) as Array<{ id: string; kind: string }>) ?? [];
   const report = parseReport(await lastAnswer(ctx, outcome));
   const short = pushed.slice(0, 7);
   try {
-    if (report) {
+    if (finalOnly) {
+      // A final check answers no reviewer.
+    } else if (report) {
       for (const entry of report) {
         const item = items.find((i) => i.id === entry.id);
         if (item?.kind !== "thread") continue;

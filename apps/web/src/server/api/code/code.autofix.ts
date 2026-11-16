@@ -25,7 +25,9 @@ import type { Author, PullSnapshot } from "@tiny-agents/github";
 import type { AutofixStatus } from "../../../shared/machines/autofix";
 
 export interface AutofixSettings {
-  triggers: { checks: boolean; reviews: boolean; conflicts: boolean };
+  triggers: { checks: boolean; reviews: boolean; conflicts: boolean; mergeQueue: boolean };
+  /** One last pass when the PR goes green, to review the whole change (phase 6). */
+  finalCheck: boolean;
   /** Review bots whose comments are instructions (matched by login). */
   trustedBots: string[];
   hourlyLimit: number;
@@ -37,7 +39,8 @@ export interface AutofixSettings {
 }
 
 export const DEFAULT_AUTOFIX: AutofixSettings = {
-  triggers: { checks: true, reviews: true, conflicts: true },
+  triggers: { checks: true, reviews: true, conflicts: true, mergeQueue: true },
+  finalCheck: false,
   trustedBots: [],
   hourlyLimit: 6,
   noOwnerLimit: 10,
@@ -50,7 +53,7 @@ export const DEFAULT_AUTOFIX: AutofixSettings = {
 /** The hidden marker on every comment the app posts (forging it only makes a comment ignored). */
 export const APP_MARKER = "<!-- tiny-agents:autofix";
 
-type ItemKind = "check" | "review" | "thread" | "conflict";
+type ItemKind = "check" | "review" | "thread" | "conflict" | "queue" | "final";
 
 /** One thing a pass is asked to handle. */
 export interface AutofixItem {
@@ -96,12 +99,19 @@ export interface DecideInput {
   ownerLogin: string | null;
   settings: AutofixSettings;
   now: number;
+  /** What the thread has cost and its limit, where the harness reports cost. */
+  spend?: { usd: number | null; limitUsd: number | null };
 }
 
 export type Decision =
   | { kind: "none"; reason?: string }
   | { kind: "wait"; until: number }
-  | { kind: "pass"; trigger: "checks" | "review" | "conflict"; items: AutofixItem[]; hash: string }
+  | {
+      kind: "pass";
+      trigger: "checks" | "review" | "conflict" | "queue" | "final";
+      items: AutofixItem[];
+      hash: string;
+    }
   | { kind: "green" }
   | { kind: "resume" }
   | { kind: "timeout"; passId: string }
@@ -131,6 +141,8 @@ export function isAppComment(
 ): boolean {
   return appCommentIds.has(comment.databaseId) || comment.body.includes(APP_MARKER);
 }
+
+const dollars = (usd: number) => "$" + usd.toFixed(2);
 
 const time = (iso: string | null | undefined) => (iso ? Date.parse(iso) || 0 : 0);
 
@@ -204,6 +216,18 @@ export function actionableItems(
       });
     }
   }
+  if (settings.triggers.mergeQueue && !snapshot.inMergeQueue) {
+    const removal = snapshot.queueRemovals.at(-1);
+    if (removal) {
+      items.push({
+        id: `queue:${removal.id}`,
+        kind: "queue",
+        at: time(removal.at),
+        title: "Removed from the merge queue",
+        text: removal.reason || "The merge queue removed the pull request.",
+      });
+    }
+  }
   return items;
 }
 
@@ -273,6 +297,13 @@ export function decide(input: DecideInput): Decision {
         reason: `${loop.passesWithoutOwner} passes in a row without you. Switch Auto-fix on again to continue.`,
       };
     }
+    const { usd, limitUsd } = input.spend ?? { usd: null, limitUsd: null };
+    if (usd !== null && limitUsd !== null && usd >= limitUsd) {
+      return {
+        kind: "pause",
+        reason: `The thread's spend limit is reached (${dollars(usd)} of ${dollars(limitUsd)}). Raise it to go on.`,
+      };
+    }
     const lastHour = passes.filter((p) => now - p.createdAt < HOUR_MS).length;
     if (lastHour >= settings.hourlyLimit) {
       return {
@@ -287,7 +318,9 @@ export function decide(input: DecideInput): Decision {
       ? "conflict"
       : items.some((i) => i.kind === "check")
         ? "checks"
-        : "review";
+        : items.some((i) => i.kind === "queue")
+          ? "queue"
+          : "review";
     return {
       kind: "pass",
       trigger,
@@ -300,7 +333,25 @@ export function decide(input: DecideInput): Decision {
   }
 
   if (loop.status === "green") return { kind: "none" };
-  return isGreen(input, all) ? { kind: "green" } : { kind: "none" };
+  if (!isGreen(input, all)) return { kind: "none" };
+  const final = `final:${snapshot.headSha}`;
+  if (settings.finalCheck && !handled.has(final)) {
+    return {
+      kind: "pass",
+      trigger: "final",
+      items: [
+        {
+          id: final,
+          kind: "final",
+          at: 0,
+          title: "Final check",
+          text: "Checks are green and nothing is open.",
+        },
+      ],
+      hash: stateHash(snapshot.headSha, [final]),
+    };
+  }
+  return { kind: "green" };
 }
 
 /**

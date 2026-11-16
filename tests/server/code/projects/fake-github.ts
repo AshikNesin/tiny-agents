@@ -28,6 +28,9 @@ interface FakePull {
   reviews: Review[];
   threads: ReviewThread[];
   fromFork: boolean;
+  autoMerge: boolean;
+  inMergeQueue: boolean;
+  queueRemovals: Array<{ id: string; at: string; reason: string }>;
 }
 
 export interface FakeGitHub extends GitHubClient {
@@ -36,6 +39,12 @@ export interface FakeGitHub extends GitHubClient {
   resolved: string[];
   comments: Array<{ number: number; body: string }>;
   merged: Array<{ number: number; method: string }>;
+  /** Native auto-merge calls, by PR node id. */
+  autoMergeCalls: Array<{
+    pullId: string;
+    action: "enable" | "disable" | "ready";
+    method?: string;
+  }>;
   pull(number: number): FakePull;
 }
 
@@ -50,6 +59,7 @@ export function fakeGitHub(local: LocalExec, bare: string, login = "ashik"): Fak
     resolved: [],
     comments: [],
     merged: [],
+    autoMergeCalls: [],
     pull(number) {
       const found = gh.pulls.find((p) => p.number === number);
       if (!found) throw new Error(`no PR ${number}`);
@@ -78,6 +88,9 @@ export function fakeGitHub(local: LocalExec, bare: string, login = "ashik"): Fak
         reviews: [],
         threads: [],
         fromFork: false,
+        autoMerge: false,
+        inMergeQueue: false,
+        queueRemovals: [],
       });
       return { number, url: `https://github.com/acme/web/pull/${number}` };
     },
@@ -98,6 +111,9 @@ export function fakeGitHub(local: LocalExec, bare: string, login = "ashik"): Fak
         mergeable: pr.mergeable,
         mergeMethods: ["squash", "merge"],
         author: login,
+        autoMerge: pr.autoMerge,
+        inMergeQueue: pr.inMergeQueue,
+        queueRemovals: pr.queueRemovals,
         checks: pr.checks,
         reviews: pr.reviews,
         threads: pr.threads,
@@ -117,6 +133,18 @@ export function fakeGitHub(local: LocalExec, bare: string, login = "ashik"): Fak
     async comment(_repo, number, body) {
       gh.comments.push({ number, body });
       return { databaseId: (nextComment += 1) };
+    },
+    async enableAutoMerge(pullId, method) {
+      gh.autoMergeCalls.push({ pullId, action: "enable", method });
+      gh.pull(Number(pullId.replace("PR_", ""))).autoMerge = true;
+    },
+    async disableAutoMerge(pullId) {
+      gh.autoMergeCalls.push({ pullId, action: "disable" });
+      gh.pull(Number(pullId.replace("PR_", ""))).autoMerge = false;
+    },
+    async markReady(pullId) {
+      gh.autoMergeCalls.push({ pullId, action: "ready" });
+      gh.pull(Number(pullId.replace("PR_", ""))).draft = false;
     },
     async merge(_repo, number, method) {
       gh.merged.push({ number, method });

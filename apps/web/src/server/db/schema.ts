@@ -277,6 +277,8 @@ export const codeThreads = sqliteTable(
     baseSha: text("base_sha"),
     /** A project thread's worktree on the sandbox, while it has one (removed on archive). */
     worktree: text("worktree"),
+    /** Stop Auto-fix passes once the thread has cost this much (USD; where the harness reports cost). */
+    spendLimitUsd: real("spend_limit_usd"),
     createdAt: createdAt(),
     updatedAt: ms("updated_at")
       .notNull()
@@ -306,6 +308,8 @@ export const codeProjects = sqliteTable(
     baseBranch: text("base_branch").notNull(),
     /** The clone on the sandbox; worktrees live beside it. */
     checkoutPath: text("checkout_path").notNull(),
+    /** The GitHub App installation that reaches the repository (transport `app`). */
+    installationId: integer("installation_id"),
     /** The harness instance and model a new thread starts on. */
     defaultInstanceId: text("default_instance_id"),
     defaultModel: text("default_model"),
@@ -342,6 +346,8 @@ export const codePullRequests = sqliteTable(
     baseRef: text("base_ref").notNull(),
     state: text("state").$type<"open" | "closed" | "merged">().notNull().default("open"),
     draft: bool("draft").notNull().default(true),
+    /** Enable GitHub's native auto-merge once no pass runs (phase 6); an owner's off is sticky. */
+    autoMerge: bool("auto_merge").notNull().default(false),
     /** The last snapshot (`PullSnapshot` JSON), what the PR tab shows. */
     snapshot: text("snapshot"),
     syncedAt: ms("synced_at"),
@@ -406,6 +412,9 @@ export const codeAutofixPasses = sqliteTable(
     /** The worktree's head when the pass was sent. */
     startSha: text("start_sha"),
     pushedSha: text("pushed_sha"),
+    /** The thread's cost when the pass started, and what the pass cost (where the harness reports cost). */
+    startCostUsd: real("start_cost_usd"),
+    costUsd: real("cost_usd"),
     /** pushed, no_progress, rejected, protected_path, timed_out, diverged, send_failed. */
     outcome: text("outcome"),
     detail: text("detail"),
@@ -418,6 +427,36 @@ export const codeAutofixPasses = sqliteTable(
     index("code_autofix_passes_pull_idx").on(t.pullId, t.createdAt),
   ],
 );
+
+/**
+ * Per-turn checkpoints of a project thread (phase 6): the worktree at each
+ * turn end, uncommitted files included, as a commit kept under a hidden ref
+ * (`refs/tiny-agents/checkpoints/…`). `seq` 0 is the thread's start.
+ */
+export const codeCheckpoints = sqliteTable(
+  "code_checkpoints",
+  {
+    id: id(),
+    threadId: text("thread_id").notNull(),
+    seq: integer("seq").notNull(),
+    sha: text("sha").notNull(),
+    /** The branch head when it was taken. */
+    headSha: text("head_sha").notNull(),
+    /** start, turn, before_revert. */
+    reason: text("reason").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("code_checkpoints_seq_idx").on(t.threadId, t.seq)],
+);
+
+/** GitHub App webhook deliveries (phase 6): the id is unique, so a redelivery is dropped. */
+export const codePrEvents = sqliteTable("code_pr_events", {
+  deliveryId: text("delivery_id").primaryKey(),
+  event: text("event").notNull(),
+  /** The linked PR the delivery was about, when one matched. */
+  pullId: text("pull_id"),
+  receivedAt: createdAt(),
+});
 
 /** Files the owner marked viewed in Changes, by content: a changed file comes back unmarked. */
 export const codeReviewViewed = sqliteTable(
@@ -1041,6 +1080,7 @@ export type CodeProjectRow = typeof codeProjects.$inferSelect;
 export type CodePullRow = typeof codePullRequests.$inferSelect;
 export type CodeAutofixPass = typeof codeAutofixPasses.$inferSelect;
 export type CodeReviewDraft = typeof codeReviewDrafts.$inferSelect;
+export type CodeCheckpoint = typeof codeCheckpoints.$inferSelect;
 export type BotGuest = typeof botGuests.$inferSelect;
 export type ProviderRow = typeof providers.$inferSelect;
 export type ModelRowRecord = typeof models.$inferSelect;

@@ -21,6 +21,7 @@ import vaultRoutes, { vaultNoStore } from "./api/vault/vault.routes";
 import modelsRoutes from "./api/models/models.routes";
 import codeRoutes from "./api/code/code.routes";
 import codeProjectRoutes from "./api/code/code.projects.routes";
+import codeWebhookRoutes from "./api/code/code.webhook";
 import { registerCodeJobs } from "./api/code/code.pulls";
 import peopleRoutes from "./api/people/people.routes";
 import updatesRoutes from "./api/system/updates.routes";
@@ -44,6 +45,8 @@ export function createWebApp(options: Omit<CreateAppOptions, "routes"> = {}) {
       app.route("/api/v1/passkey", passkeyRoutes);
       // OAuth client metadata document: fetched by authorization servers.
       app.route("/api/v1", publicConnectionsRouter);
+      // The GitHub App's webhook: signed by GitHub, not by a session.
+      app.route("/api/v1", codeWebhookRoutes);
       // Android App Links: lets the Android app open this server's notification links.
       app.route("/", appLinksRouter);
 

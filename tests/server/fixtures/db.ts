@@ -18,7 +18,9 @@ import {
   routines,
   codeHandoffFinishes,
   codeAutofixPasses,
+  codeCheckpoints,
   codeHandoffs,
+  codePrEvents,
   codePrComments,
   codeProjects,
   codePullRequests,
@@ -74,6 +76,8 @@ export async function resetAppTables(): Promise<void> {
   await db.delete(codeHandoffFinishes);
   await db.delete(codeHandoffs);
   await db.delete(codeReviewDrafts);
+  await db.delete(codeCheckpoints);
+  await db.delete(codePrEvents);
   await db.delete(codeReviewViewed);
   await db.delete(codePrComments);
   await db.delete(codeAutofixPasses);

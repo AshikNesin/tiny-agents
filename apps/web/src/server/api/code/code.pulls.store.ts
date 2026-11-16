@@ -61,6 +61,8 @@ export interface LinkInput {
   headRef: string;
   baseRef: string;
   autofix: boolean;
+  /** Start with GitHub's auto-merge wanted (the project's default). */
+  autoMerge?: boolean;
 }
 
 /** Record a link; the open-PR-per-thread index refuses a second open one. */
@@ -146,7 +148,12 @@ export async function updatePull(
   set: Partial<
     Pick<
       CodePullRow,
-      "autofix" | "passesWithoutOwner" | "ownerInputAt" | "pendingJobId" | "stalledNotifiedSha"
+      | "autofix"
+      | "autoMerge"
+      | "passesWithoutOwner"
+      | "ownerInputAt"
+      | "pendingJobId"
+      | "stalledNotifiedSha"
     >
   >,
 ): Promise<void> {
@@ -235,7 +242,14 @@ export async function movePass(
   set: Partial<
     Pick<
       CodeAutofixPass,
-      "startSha" | "pushedSha" | "outcome" | "detail" | "startedAt" | "finishedAt"
+      | "startSha"
+      | "pushedSha"
+      | "outcome"
+      | "detail"
+      | "startedAt"
+      | "finishedAt"
+      | "startCostUsd"
+      | "costUsd"
     >
   > = {},
 ): Promise<boolean> {
