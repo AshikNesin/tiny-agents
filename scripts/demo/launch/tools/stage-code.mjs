@@ -42,7 +42,7 @@ process.env.TA_URL = URL_;
 const { open, api, dumpCss, snap, verify } = await import("./snaplib.mjs");
 
 // ../CAST.md
-const OWNER = { name: "Ashik", email: "demo@example.com", password: "demo@example.com" };
+const OWNER = { name: "Ashik", email: "demo@example.com", password: "demo@example.com" }; // gitleaks:allow (throwaway instance)
 const BOT = { name: "Code Buddy", description: "Fixes bugs and ships code" };
 const ASK = "The checkout test is flaky. Fix it and run the suite.";
 const TITLE = "Fix flaky checkout test";

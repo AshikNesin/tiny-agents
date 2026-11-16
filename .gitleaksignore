@@ -1,0 +1,7 @@
+# Findings gitleaks reports on commits already made, by fingerprint. Mark new
+# lines with an inline `gitleaks:allow` comment instead; list one here only when
+# the commit that added it is already pushed.
+
+# The seeded demo account's sign-in (demo@example.com), used by a throwaway
+# local instance to stage the launch film; the line carries gitleaks:allow now.
+06684adf7a939b48df1e9a63f7e8980b9d72ea33:scripts/demo/launch/tools/stage-code.mjs:generic-password-assignment:45
