@@ -472,6 +472,8 @@ data class ChangedFile(
     val generated: Boolean,
     val hash: String? = null,
     val viewed: Boolean = false,
+    /** Git sees binary content: no line counts and no text diff. */
+    val binary: Boolean = false,
 ) {
     companion object {
         fun from(json: JSONObject) = ChangedFile(
@@ -482,13 +484,28 @@ data class ChangedFile(
             generated = json.bool("isGenerated"),
             hash = json.stringOrNull("hash"),
             viewed = json.bool("viewed"),
+            binary = json.bool("binary"),
         )
     }
 }
 
-data class FileContents(val path: String, val oldContent: String, val newContent: String) {
+/**
+ * One file's two sides. [unshowable] (`binary` or `tooLarge`) says the server sent neither side
+ * because it cannot be shown as text; both contents are then empty.
+ */
+data class FileContents(
+    val path: String,
+    val oldContent: String,
+    val newContent: String,
+    val unshowable: String? = null,
+) {
     companion object {
-        fun from(json: JSONObject) = FileContents(json.string("path"), json.string("oldContent"), json.string("newContent"))
+        fun from(json: JSONObject) = FileContents(
+            json.string("path"),
+            json.string("oldContent"),
+            json.string("newContent"),
+            json.stringOrNull("unshowable"),
+        )
     }
 }
 

@@ -13,6 +13,9 @@ import groot.mobile.data.code.buildCodeSections
 import groot.mobile.data.code.describeTools
 import groot.mobile.data.code.groupTools
 import groot.mobile.data.code.lastErrorId
+import groot.mobile.data.api.ChangedFile
+import groot.mobile.data.api.FileContents
+import groot.mobile.data.code.fileDiffView
 import groot.mobile.data.code.lineDiff
 import groot.mobile.data.code.reduceCodeThread
 import groot.mobile.data.code.turnLine
@@ -197,6 +200,25 @@ class CodeThreadTest {
         // A new file is all added; an unchanged one has nothing to show.
         assertEquals(2, lineDiff("", "a\nb\n").count { it.kind == DiffLine.Kind.Added })
         assertTrue(lineDiff(old, old).isEmpty())
+    }
+
+    @Test
+    fun `a file the server cannot show as text says why instead of drawing a change`() {
+        fun view(json: String) = fileDiffView(FileContents.from(JSONObject(json)))
+        val binary = view("""{"path":"logo.png","oldContent":"","newContent":"","unshowable":"binary"}""")
+        assertTrue(binary.lines.isEmpty())
+        assertEquals("Binary file. Its contents are not shown.", binary.notice)
+        val large = view("""{"path":"big.txt","oldContent":"","newContent":"","unshowable":"tooLarge"}""")
+        assertEquals("This file is too large to show here (over 2 MB).", large.notice)
+        // A file it can show is its line diff, with no notice.
+        val text = view("""{"path":"a.ts","oldContent":"a\n","newContent":"b\n"}""")
+        assertNull(text.notice)
+        assertEquals(listOf(DiffLine.Kind.Removed, DiffLine.Kind.Added), text.lines.map { it.kind })
+        // Git's binary flag on a changed file is read, so its row can say so before it opens.
+        val file = ChangedFile.from(
+            JSONObject("""{"path":"logo.png","status":"added","additions":0,"deletions":0,"isGenerated":false,"binary":true}"""),
+        )
+        assertTrue(file.binary)
     }
 
     @Test
