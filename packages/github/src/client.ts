@@ -125,6 +125,12 @@ export interface GitHubClient {
   resolveThread(threadId: string): Promise<void>;
   comment(repo: RepoRef, number: number, body: string): Promise<{ databaseId: number }>;
   merge(repo: RepoRef, number: number, method: MergeMethod): Promise<void>;
+  /** Change a pull request's title or description. */
+  updatePull(
+    repo: RepoRef,
+    number: number,
+    change: { title?: string; body?: string },
+  ): Promise<void>;
   /** GitHub's native auto-merge, by the PR's node id (branch protection still applies). */
   enableAutoMerge(pullId: string, method: MergeMethod): Promise<void>;
   disableAutoMerge(pullId: string): Promise<void>;
@@ -464,6 +470,9 @@ export function createGitHubClient(api: GitHubApi): GitHubClient {
       await api.rest("PUT", `${repoPath(repo)}/pulls/${number}/merge`, {
         body: { merge_method: method },
       });
+    },
+    async updatePull(repo, number, change) {
+      await api.rest("PATCH", `${repoPath(repo)}/pulls/${number}`, { body: change });
     },
     async enableAutoMerge(pullId, method) {
       await api.graphql(

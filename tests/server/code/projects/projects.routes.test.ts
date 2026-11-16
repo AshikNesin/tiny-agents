@@ -262,6 +262,23 @@ describe("publish and the PR tab", () => {
     expect(second.body.data?.active?.number).toBe(2);
   });
 
+  it("edits the pull request's description on GitHub", async () => {
+    const project = await newProject();
+    const thread = await newThread(project.id);
+    const enc = encodeURIComponent(thread.id);
+    await commit(thread.worktree, "src/login.ts");
+    await call("POST", `/threads/${enc}/publish`, {});
+
+    const body = "## What\n\n- **Login** keeps the session";
+    const edited = await call<ThreadPullsView>("PATCH", `/threads/${enc}/pr`, { body });
+    expect(edited.status).toBe(200);
+    expect(github.pull(1).body).toBe(body);
+    expect(edited.body.data?.active?.snapshot?.body).toBe(body);
+
+    const blank = await call("PATCH", `/threads/${enc}/pr`, {});
+    expect(blank.status).toBe(400);
+  });
+
   it("links a PR the agent opened for the thread's branch", async () => {
     const project = await newProject();
     const thread = await newThread(project.id);

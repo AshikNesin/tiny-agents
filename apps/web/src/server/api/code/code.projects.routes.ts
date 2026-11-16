@@ -41,6 +41,7 @@ import {
   updateProject,
 } from "./code.projects";
 import {
+  editPull,
   linkPull,
   manualPass,
   mergePull,
@@ -293,6 +294,21 @@ router.post("/code/threads/:id/checkpoints/:cp/revert", async (c) => {
   const id = threadParam(c.req.param("id"));
   const before = await revertTo(id, c.req.param("cp"));
   return ok(c, { reverted: true, undo: before ? checkpointView(before) : null });
+});
+
+router.patch("/code/threads/:id/pr", async (c) => {
+  const id = threadParam(c.req.param("id"));
+  const change = await parseBody(
+    c,
+    z
+      .object({
+        title: z.string().trim().min(1).max(256).optional(),
+        body: z.string().max(65_536).optional(),
+      })
+      .refine((v) => v.title !== undefined || v.body !== undefined, "Nothing to change."),
+  );
+  await editPull(id, change);
+  return ok<ThreadPullsView>(c, await threadPulls(id, false));
 });
 
 router.post("/code/threads/:id/pr/merge", async (c) => {

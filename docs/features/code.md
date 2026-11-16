@@ -230,7 +230,9 @@ Publish opens a new one; earlier PRs are listed.
 **The PR tab.** Checks at a glance (failures link to their log; a check
 pending for 6 hours is **Stalled** and no longer blocks green), reviews,
 unresolved comments (from authors Auto-fix does not trust, labelled
-**Ignored**), **Attach all comments** into the composer, the description,
+**Ignored**), **Attach all comments** into the composer, the description
+(rendered as markdown, template comments hidden; **Edit** saves it to GitHub
+while the PR is open),
 **Fix CI** (one pass now), **Merge** with the repository's methods, the
 **Auto-fix** switch with its state, the pass history, and **Unlink**.
 Opening the tab reconciles with GitHub, and while it is on screen it
