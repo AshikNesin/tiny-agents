@@ -30,6 +30,7 @@ import { SearchSelect } from "../../components/ui/search-select";
 import { Spinner } from "../../components/ui/spinner";
 import { errorMessage } from "../../lib/errors";
 import { projectsApi } from "../../lib/code/projects";
+import { useThreadPulls } from "../../lib/code/use-thread-pulls";
 import type { CheckpointView, ReviewFile, ReviewFileDiff } from "../../../shared/api/code";
 import { fileCommenting, type ThreadCommenting } from "../../lib/code/comments";
 import { useSteadyKey } from "../../lib/code/use-live-changes";
@@ -99,7 +100,6 @@ export function ReviewPanel({
   const [reload, setReload] = useState(0);
   // In the side panel: the list, or one file's diff.
   const [listing, setListing] = useState(!page);
-  const [branch, setBranch] = useState<{ name: string | null; ahead: number | null } | null>(null);
   // The file list beside the diff; hidden, the file bar still steps through files.
   const [tree, setTree] = useState(readTree);
   const toggleTree = () => {
@@ -116,17 +116,12 @@ export function ReviewPanel({
   const [checkpoints, setCheckpoints] = useState<CheckpointView[]>([]);
   const checkpoint = checkpoints.find((c) => c.id === scope);
 
-  useEffect(() => {
-    let cancelled = false;
-    // No reconcile with GitHub: only the branch and how far it is ahead.
-    projectsApi
-      .pulls(threadId, false)
-      .then((v) => !cancelled && setBranch({ name: v.branch, ahead: v.ahead }))
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [threadId, settledKey, reload]);
+  // No reconcile with GitHub: only the branch and how far it is ahead, shared with the PR tab.
+  const pulls = useThreadPulls(threadId, {
+    refreshKey: `${String(settledKey)}:${reload}`,
+    fresh: false,
+  });
+  const branch = pulls.view ? { name: pulls.view.branch, ahead: pulls.view.ahead } : null;
 
   useEffect(() => {
     let cancelled = false;

@@ -41,12 +41,12 @@ import { Switch } from "../../components/ui/switch";
 import { errorMessage } from "../../lib/errors";
 import { markdownComponents } from "../../lib/markdown";
 import { projectsApi } from "../../lib/code/projects";
+import { useThreadPulls } from "../../lib/code/use-thread-pulls";
 import type { MergeMethod, PullView, ThreadPullsView } from "../../../shared/api/code";
 import { PullChecks } from "./PullChecks";
 import { PullComments } from "./PullComments";
 
 /** How often the tab re-reads (and so reconciles) its PR while it is on screen. */
-const LIVE_MS = 15_000;
 
 const LOOP_LABEL: Record<PullView["loop"]["status"], string> = {
   watching: "Watching",
@@ -94,68 +94,24 @@ export function PullPanel({
   /** Put text in the composer. */
   onAttach(text: string): void;
 }) {
-  const [view, setView] = useState<ThreadPullsView | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { view, error, setView, reload } = useThreadPulls(threadId, { refreshKey, live: true });
   const [busy, setBusy] = useState<string | null>(null);
-  const [reload, setReload] = useState(0);
   const [linkNumber, setLinkNumber] = useState("");
 
-  useEffect(() => {
-    let cancelled = false;
-    setError(null);
-    projectsApi
-      .pulls(threadId)
-      .then((v) => !cancelled && setView(v))
-      .catch((e: unknown) => !cancelled && setError(errorMessage(e, "Could not read the PR.")));
-    return () => {
-      cancelled = true;
-    };
-  }, [threadId, refreshKey, reload]);
-
-  // While on screen, re-read: each read is a fresh reconcile with GitHub. A
-  // hidden page stops, and catches up as soon as it is shown again. A missed
-  // background read keeps what is shown; the next one tries again.
-  useEffect(() => {
-    let cancelled = false;
-    let reading = false;
-    const read = () => {
-      if (reading || document.visibilityState !== "visible") return;
-      reading = true;
-      projectsApi
-        .pulls(threadId)
-        .then((v) => {
-          if (cancelled) return;
-          setView(v);
-          setError(null);
-        })
-        .catch(() => undefined)
-        .finally(() => {
-          reading = false;
-        });
-    };
-    const timer = setInterval(read, LIVE_MS);
-    const onVisibility = () => {
-      if (document.visibilityState === "visible") read();
-    };
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-      document.removeEventListener("visibilitychange", onVisibility);
-    };
-  }, [threadId]);
-
-  const act = useCallback(async (what: string, work: () => Promise<ThreadPullsView | void>) => {
-    setBusy(what);
-    try {
-      const next = await work();
-      if (next) setView(next);
-    } catch (e) {
-      toast.error(errorMessage(e, `Could not ${what}.`));
-    } finally {
-      setBusy(null);
-    }
-  }, []);
+  const act = useCallback(
+    async (what: string, work: () => Promise<ThreadPullsView | void>) => {
+      setBusy(what);
+      try {
+        const next = await work();
+        if (next) setView(next);
+      } catch (e) {
+        toast.error(errorMessage(e, `Could not ${what}.`));
+      } finally {
+        setBusy(null);
+      }
+    },
+    [setView],
+  );
 
   const pr = view?.active ?? null;
   const snap = pr?.snapshot ?? null;
@@ -189,7 +145,7 @@ export function PullPanel({
             <Button
               variant="ghost"
               size="icon-xs"
-              onClick={() => setReload((n) => n + 1)}
+              onClick={reload}
               aria-label="Refresh"
               title="Refresh from GitHub"
               className="text-muted-foreground"
