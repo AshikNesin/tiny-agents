@@ -4,6 +4,7 @@
  * GitHub's timestamps, color codes and group markers taken out.
  */
 import { Boom } from "@groot/core/errors";
+import { GitHubError } from "@tiny-agents/github";
 import type { CheckLogView } from "../../../shared/api/code";
 import { codeGitHub } from "./code.github";
 import { projectThread, repoOf } from "./code.projects";
@@ -35,7 +36,7 @@ function clean(raw: string): string[] {
 }
 
 /** The excerpt of a raw Actions log: what a reader needs before opening the full one. */
-function logExcerpt(raw: string): Omit<CheckLogView, "name" | "url"> {
+function logExcerpt(raw: string): Omit<CheckLogView, "name" | "url" | "running"> {
   const all = clean(raw);
   const errors = all.flatMap((line, i) => (ERROR_LINE.test(line) ? [i] : []));
   const anchor = errors.find((i) => !EXIT_LINE.test(all[i]!));
@@ -64,7 +65,12 @@ function logExcerpt(raw: string): Omit<CheckLogView, "name" | "url"> {
   return { lines, highlight, summary: summary || null };
 }
 
-/** The log of one of the open pull request's checks; any other job is not found. */
+/**
+ * The log of one of the open pull request's checks; any other job is not
+ * found. GitHub serves a job's log only once the job completes (it answers
+ * 404 before that), so a check the snapshot still shows as pending is asked
+ * for its steps first, and its log only if it has finished since.
+ */
 export async function checkLog(threadId: string, jobId: number): Promise<CheckLogView> {
   const found = await projectThread(threadId);
   if (!found) throw Boom.badRequest("This thread is not in a project.");
@@ -72,8 +78,22 @@ export async function checkLog(threadId: string, jobId: number): Promise<CheckLo
   const check = open && cachedSnapshot(open)?.checks.find((c) => c.jobId === jobId);
   if (!check) throw Boom.notFound("That check is not on the open pull request.");
   const github = await codeGitHub().client(found.project);
-  const raw = await github.jobLogTail(repoOf(found.project), jobId, LOG_CHARS).catch(() => {
-    throw Boom.badGateway("GitHub did not send the log. It may have expired.");
+  const repo = repoOf(found.project);
+  const view = { name: check.name, url: check.url };
+  if (check.state === "pending") {
+    const job = await github.job(repo, jobId).catch(() => {
+      throw Boom.badGateway("GitHub did not say how the check is going.");
+    });
+    if (!job.completed) {
+      return { ...view, summary: null, lines: [], highlight: [], running: job.steps };
+    }
+  }
+  const raw = await github.jobLogTail(repo, jobId, LOG_CHARS).catch((error: unknown) => {
+    throw Boom.badGateway(
+      error instanceof GitHubError && error.status === 404
+        ? "GitHub no longer has this log. It may have expired."
+        : "GitHub did not send the log.",
+    );
   });
-  return { name: check.name, url: check.url, ...logExcerpt(raw) };
+  return { ...view, ...logExcerpt(raw), running: null };
 }

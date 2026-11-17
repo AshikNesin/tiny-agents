@@ -137,6 +137,19 @@ export interface CheckLogView {
   lines: string[];
   /** Indexes into `lines` that read as errors. */
   highlight: number[];
+  /**
+   * The job's steps while it still runs, when GitHub has no log to send yet;
+   * null once it has finished and `lines` is its log.
+   */
+  running: CheckStepView[] | null;
+}
+
+/** One step of a running Actions job. */
+export interface CheckStepView {
+  /** Its place in the job, from GitHub (unique within the job). */
+  number: number;
+  name: string;
+  state: "queued" | "running" | "success" | "failure" | "skipped";
 }
 
 /** The PR tab of one thread. */

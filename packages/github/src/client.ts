@@ -107,6 +107,32 @@ export interface PullRef {
   url: string;
 }
 
+/** One step of an Actions job, as GitHub reports it while the job runs. */
+export interface JobStep {
+  number: number;
+  name: string;
+  state: "queued" | "running" | "success" | "failure" | "skipped";
+}
+
+/** Where an Actions job is: GitHub serves its log only once it is `completed`. */
+interface JobProgress {
+  completed: boolean;
+  steps: JobStep[];
+}
+
+interface RawJob {
+  status: string;
+  steps?: Array<{ number: number; name: string; status: string; conclusion: string | null }>;
+}
+
+function stepState(step: NonNullable<RawJob["steps"]>[number]): JobStep["state"] {
+  if (step.status === "in_progress") return "running";
+  if (step.status !== "completed") return "queued";
+  if (step.conclusion === "success") return "success";
+  if (step.conclusion === "skipped") return "skipped";
+  return "failure";
+}
+
 export interface GitHubClient {
   readonly transport: GitHubApi["kind"];
   /** Who the credential acts as. */
@@ -119,6 +145,8 @@ export interface GitHubClient {
     input: { head: string; base: string; title: string; body: string; draft: boolean },
   ): Promise<PullRef>;
   snapshot(repo: RepoRef, number: number): Promise<PullSnapshot>;
+  /** An Actions job's status and steps (its log is not served until it completes). */
+  job(repo: RepoRef, jobId: number): Promise<JobProgress>;
   /** The end of one Actions job's log, at most `maxChars`. */
   jobLogTail(repo: RepoRef, jobId: number, maxChars: number): Promise<string>;
   replyToThread(threadId: string, body: string): Promise<{ databaseId: number | null }>;
@@ -458,6 +486,17 @@ export function createGitHubClient(api: GitHubApi): GitHubClient {
           number,
         }),
       );
+    },
+    async job(repo, jobId) {
+      const job = await api.rest<RawJob>("GET", `${repoPath(repo)}/actions/jobs/${jobId}`);
+      return {
+        completed: job.status === "completed",
+        steps: (job.steps ?? []).map((step) => ({
+          number: step.number,
+          name: step.name,
+          state: stepState(step),
+        })),
+      };
     },
     async jobLogTail(repo, jobId, maxChars) {
       const log = await api.rest<string>("GET", `${repoPath(repo)}/actions/jobs/${jobId}/logs`, {
