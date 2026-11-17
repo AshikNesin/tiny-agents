@@ -2,12 +2,17 @@
 
 When a bot needs the owner (an approval, a question) or unattended work ends
 (a routine, a failed or long reply), the owner gets a push on their phone with
-a link straight to where they answer. Two channels deliver, each optional and
-each with its own switch:
+a link straight to where they answer. The owner picks one place they go,
+never two at once (Settings → Notifications, `deliverTo`):
 
 - **Phone app** (Web Push, issue #306): the Android app registers itself after
   sign-in. Nothing to set up on the server. Approvals carry buttons.
 - **Pushover** (issue #57): two env vars and the paid Pushover app.
+- **Off**: nothing is sent or logged.
+
+Until the owner chooses (`deliverTo: "auto"`), the phone app delivers once a
+phone is registered, else Pushover. The page shows that as the selected
+choice, and changing it saves it.
 
 ## Phone app (Web Push)
 
@@ -36,9 +41,8 @@ Push services see ciphertext, its size, urgency and TTL.
 - **Taken back.** Answering an approval or question anywhere sends a dismiss
   for its tag. A reminder shares its request's tag, so it replaces the first
   push. A summary of several requests stays until opened.
-- **Devices.** Settings → Notifications → **Phone app** lists them, with
-  **Send test** and remove each, and **Send notifications to phones** turns
-  the channel off (`channels.webpush: false`).
+- **Devices.** With **Phone app** chosen, Settings → Notifications lists
+  them, with **Send test** and remove each.
 
 | Push service answer        | What happens                                                          |
 | -------------------------- | --------------------------------------------------------------------- |
@@ -131,8 +135,8 @@ One `notifications` app setting (zod-validated, defaults filled in):
     window send as one ("Ops bot needs you · 2 approvals and 1 question
     waiting").
 - **Device:** deliver to one Pushover device only.
-- **Channels:** `channels.<id>: false` turns a channel off (`pushover`,
-  `webpush`).
+- **Deliver to:** `deliverTo` is `webpush` (the phone app), `pushover`,
+  `off`, or `auto` (the default described above).
 - **Throttle:** at most 30 an hour and 5 a minute per bot. Beyond that,
   pushes are logged as `suppressed: throttled` and one "N notifications
   suppressed" goes out when the window ends.
@@ -142,11 +146,13 @@ One `notifications` app setting (zod-validated, defaults filled in):
 ```
 emit points (apps/web: runtime.onWait, the settled pipeline, routine runs/jobs, boot)
   → notificationService.notify(n)    NotificationHub    [packages/core/src/notification]
-  → per channel: switch → dedupe → channel state → quiet hours → coalesce → throttle
+  → per channel: chosen? → dedupe → channel state → quiet hours → coalesce → throttle
   → delivery queue (≤ 2 concurrent) → PushoverChannel | WebPushChannel → NotificationLog
 ```
 
-Each channel has its own pipeline, dedupe and log row (`channel` column).
+Each channel has its own pipeline, dedupe and log row (`channel` column);
+only the chosen channel's pipeline accepts a notification. Taking a push back
+when its request is answered still goes to every channel.
 
 - **`notify()` is fire-and-forget.** It returns at once and never throws, so
   tool calls and approval waits never wait on Pushover.

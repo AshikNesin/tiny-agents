@@ -27,8 +27,9 @@ host built into the APK.
   self-hosted ntfy that refuses anonymous writes answers every push with 403,
   and one path is simpler to support. A phone without Play services gets no
   phone notifications.
-- **Every channel runs its own pipeline** under one `NotificationHub`:
-  Pushover stays as an optional, parallel channel with its own switch.
+- **Every channel runs its own pipeline** under one `NotificationHub`, but
+  only one delivers: the owner picks the phone app, Pushover or off
+  (`deliverTo`, decided 2026-11-17), so nobody gets every alert twice.
 - **The payload is data the app renders**: a tag to replace or take back the
   notification, the event, the app path, and an approval's buttons. Answering
   anywhere sends a `dismiss` under the same `Topic`.
