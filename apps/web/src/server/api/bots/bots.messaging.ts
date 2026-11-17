@@ -6,7 +6,6 @@
 import { and, asc, eq, gte, ne } from "drizzle-orm";
 import { sanitizePeerText, type BotMessagingStore } from "@tiny-agents/agent";
 import { db, botMessages, bots } from "../../db";
-import { conversationRef } from "./bots.conversation";
 import { createDeliveries, type DeliveryRuntime } from "./bots.delivery";
 import { conversationOwner } from "./bots.owner";
 import { app } from "../../app-root";
@@ -118,19 +117,11 @@ export function createBotMessagingStore(rt: BotMessagingRuntime): BotMessagingSt
 
     async roster(conversationId) {
       const me = await senderOf(conversationId);
-      const rows = await db
-        .select({
-          name: bots.name,
-          description: bots.description,
-          conversationId: bots.conversationId,
-        })
+      return db
+        .select({ name: bots.name, description: bots.description })
         .from(bots)
         .where(me ? ne(bots.id, me.id) : undefined)
         .orderBy(asc(bots.name));
-      return rows.map(({ conversationId: botConversation, ...bot }) => ({
-        ...bot,
-        busy: rt.isBusy(conversationRef(botConversation)),
-      }));
     },
   };
 }

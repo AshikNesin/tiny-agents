@@ -13,6 +13,7 @@ import { defineDoc, UsageDoc, type UsageState } from "@earendil-works/pi-durable
 import type { Context } from "@earendil-works/chord";
 import type { ToolExecutionApi } from "@earendil-works/pi-durable";
 import { effectivePermission, type Capability, type CapabilitySelection } from "./capabilities";
+import { CONTEXT_TRIM } from "./context-trim";
 
 /**
  * Which tools of the conversation run without asking (`allow`), which of the
@@ -86,6 +87,9 @@ export function compilePolicy(
   const remove: ToolRegistration[] = [];
   const allow: string[] = [];
   const review: string[] = [];
+  // Every conversation trims what its requests re-send (context-trim.ts).
+  const trim = installed.extension(CONTEXT_TRIM);
+  if (trim) extensions.push(trim);
   for (const capability of selected) {
     const extension = installed.extension(capability.id);
     if (extension) extensions.push(extension);

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { logger } from "@groot/core/logger";
+import { secretRedactor } from "../../../../packages/agent/src/redact";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import { fauxAssistantMessage, fauxText } from "../../../../packages/agent/src/testing";
 import {
@@ -147,6 +148,22 @@ describe("createSideCaller: the model", () => {
     expect(context.messages).toEqual([
       expect.objectContaining({ role: "user", content: [{ type: "text", text: "Go." }] }),
     ]);
+  });
+});
+
+describe("createSideCaller: what it sends", () => {
+  it("scrubs vault values from the prompt and the user text before they reach the model", async () => {
+    const secret = "sk-side-call-test-9f3b2c";
+    secretRedactor.register(secret);
+    const { runtime, completeSimple } = fakeRuntime();
+    await createSideCaller(runtime).complete(
+      request({ system: `Memories: key is ${secret}`, user: `Owner: use ${secret} please` }),
+    );
+    const [, context] = completeSimple.mock.calls[0]!;
+    expect(context.systemPrompt).toBe("Memories: key is [vault]");
+    expect(context.messages[0]).toMatchObject({
+      content: [{ type: "text", text: "Owner: use [vault] please" }],
+    });
   });
 });
 

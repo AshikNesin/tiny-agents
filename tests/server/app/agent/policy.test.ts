@@ -3,6 +3,7 @@ import { Type } from "@earendil-works/pi-ai";
 import { describe, expect, it } from "vite-plus/test";
 import { applyPermissions, compilePolicy } from "../../../../packages/agent/src/policy";
 import type { Capability, CapabilitySelection } from "../../../../packages/agent/src/capabilities";
+import { createContextTrimExtension } from "../../../../packages/agent/src/context-trim";
 
 const tool = (name: string) =>
   defineTool({
@@ -81,6 +82,19 @@ describe("compilePolicy", () => {
     expect(policy.remove.map((t) => t.name)).toEqual(removed);
     expect(policy.extensions).toEqual([mail.extension]);
     expect(policy.permissions.unattended).toBe(selected.unattended ? true : undefined);
+  });
+
+  it("selects the installed context trim for every conversation, whatever it enabled", () => {
+    const trim = createContextTrimExtension();
+    const policy = compilePolicy(
+      catalog,
+      { enabled: ["mail"], permissions: {} },
+      {
+        extension: (id) =>
+          id === "context-trim" ? trim : id === "mail" ? mail.extension : undefined,
+      },
+    );
+    expect(policy.extensions.map((extension) => extension.name)).toEqual(["context-trim", "mail"]);
   });
 
   it("ignores capabilities that are not in the catalog or not installed", () => {

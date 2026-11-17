@@ -201,13 +201,11 @@ describe("messaging store (issues #13, #15, #16)", () => {
     });
   });
 
-  it("reports busy roster entries and a queued receipt (issue #15)", async () => {
+  it("queues a message to a busy bot and says so in the receipt (issue #15)", async () => {
     await seedBot("Sender", "1");
     await seedBot("Busy Bot", "2");
     runtime.isBusy.mockImplementation((ref: number) => ref === 2);
     const store = createBotMessagingStore(runtime);
-    const roster = await store.roster(1);
-    expect(roster.find((b) => b.name === "Busy Bot")?.busy).toBe(true);
     const result = await store.deliver({
       conversationId: 1,
       toName: "Busy Bot",

@@ -179,6 +179,24 @@ describe("bots toolkit", () => {
     ).toBeUndefined();
   });
 
+  it("renders the same roster whether or not a bot is busy, so the prompt section never churns", async () => {
+    // pi-durable re-sends a section into the transcript each time its text
+    // changes: a busy flag would add a fresh roster copy every time any bot
+    // starts or stops a reply.
+    const render = (busy: boolean) => {
+      const store = memoryStore();
+      // The app's roster rows once carried a busy flag; whatever extra a row
+      // carries, the section must not render it.
+      const row = { name: "Researcher", description: "Digs into sources", busy };
+      store.roster = async () => [row];
+      return createBotsToolkit(store)
+        .extension.sections!.find((s) => s.key === "bots")!
+        .render({ conversationId: 3 } as never, BACKGROUND_CONTEXT);
+    };
+    expect(await render(true)).toBe(await render(false));
+    expect(await render(true)).toContain("- Researcher: Digs into sources");
+  });
+
   it("exposes UI metadata: default ask, never read-only or ask-only", () => {
     const bots = createBotsToolkit(memoryStore());
     expect(bots.id).toBe("bots");
