@@ -48,6 +48,7 @@ import {
   linkPull,
   manualPass,
   mergePull,
+  readyPull,
   publish,
   setAutoMerge,
   setAutofix,
@@ -337,6 +338,12 @@ router.post("/code/threads/:id/pr/merge", async (c) => {
     z.object({ method: z.enum(["merge", "squash", "rebase"]) }),
   );
   await mergePull(id, method);
+  return ok<ThreadPullsView>(c, await threadPulls(id, false));
+});
+
+router.post("/code/threads/:id/pr/ready", async (c) => {
+  const id = threadParam(c.req.param("id"));
+  await readyPull(id);
   return ok<ThreadPullsView>(c, await threadPulls(id, false));
 });
 

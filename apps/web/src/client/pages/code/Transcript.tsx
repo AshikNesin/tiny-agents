@@ -16,6 +16,7 @@ import {
   CircleDashed,
   CircleX,
   Copy,
+  GitBranch,
   GitFork,
   Info,
   ListChecks,
@@ -25,6 +26,7 @@ import {
   ShieldQuestion,
   SquareTerminal,
   TriangleAlert,
+  Wrench,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -67,6 +69,7 @@ import {
   type WorkFold,
 } from "../../lib/code/transcript";
 import { parseReviewMessage, type SentComment } from "../../lib/code/comments";
+import { parseAutofixRequest, splitProjectPreamble } from "../../../shared/code-messages";
 import { formatDuration } from "../../lib/code/format";
 import { PatchView, diffStats } from "./UnifiedDiff";
 
@@ -406,6 +409,8 @@ function WorkFoldRow({
   const tools = fold.items.flatMap((item) =>
     item.kind === "tool" ? [item] : item.kind === "tool-group" ? item.tools : [],
   );
+  // A failure inside stays visible while folded, as a tool group's row says it.
+  const failed = tools.filter(failedTool).length;
   const label = [
     fold.durationMs !== undefined
       ? `Worked for ${formatDuration(fold.durationMs)}`
@@ -422,6 +427,9 @@ function WorkFoldRow({
         <TraceCollapsibleTrigger>
           <TraceLine className="text-xs">
             <TraceTitle>{label}</TraceTitle>
+            {failed > 0 && (
+              <TraceDescription className="text-destructive">· {failed} failed</TraceDescription>
+            )}
           </TraceLine>
         </TraceCollapsibleTrigger>
         <TraceCollapsibleContent className="border-border mt-1 flex flex-col gap-4 border-l pl-4">
@@ -597,9 +605,40 @@ function RequestRow({
   );
 }
 
-/** The owner's message; line comments sent with it read as comment cards above it. */
-function UserText({ text }: { text: string }) {
+/**
+ * The owner's message. What the app added reads short: a project thread's
+ * first line is its branch (the agent's instructions stay out of view), an
+ * Auto-fix request is one card, and line comments sent with a message read
+ * as comment cards above it.
+ */
+function UserText({ text: sent }: { text: string }) {
+  const project = splitProjectPreamble(sent);
+  const text = project ? project.message : sent;
+  return (
+    <>
+      {project && (
+        <p
+          aria-label="Branch"
+          className={cn("text-muted-foreground flex items-center gap-1.5 text-xs", monoClass)}
+        >
+          <GitBranch className="size-3.5 shrink-0" aria-hidden />
+          <span className="min-w-0 truncate">
+            <span className="text-foreground">{project.branch}</span> from {project.base}
+          </span>
+          {project.setupFailed && (
+            <span className="text-warning shrink-0">· setup script failed</span>
+          )}
+        </p>
+      )}
+      <MessageText text={text} />
+    </>
+  );
+}
+
+function MessageText({ text }: { text: string }) {
   if (!text) return null;
+  const autofix = parseAutofixRequest(text);
+  if (autofix) return <AutofixCard kind={autofix.kind} items={autofix.items} text={text} />;
   const review = parseReviewMessage(text);
   if (!review) {
     return (
@@ -634,6 +673,66 @@ function UserText({ text }: { text: string }) {
         </div>
       )}
     </>
+  );
+}
+
+/** An Auto-fix request the app sent: what it fixes, and the full request on demand. */
+function AutofixCard({
+  kind,
+  items,
+  text,
+}: {
+  kind: "pass" | "final";
+  items: string[];
+  text: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const title = kind === "final" ? "Auto-fix final check" : "Auto-fix pass";
+  return (
+    <article
+      aria-label={title}
+      className="ring-foreground/10 bg-card w-full max-w-[85%] overflow-hidden rounded-xl text-sm ring-1"
+    >
+      <header className="flex items-center gap-1.5 px-3 pt-2 text-xs">
+        <Wrench className="text-muted-foreground size-3.5 shrink-0" aria-hidden />
+        <span className="font-medium">{title}</span>
+        <span className="flex-1" />
+        <Button
+          size="xs"
+          variant="ghost"
+          className="text-muted-foreground -mr-1.5"
+          onClick={() => setOpen(!open)}
+          aria-expanded={open}
+        >
+          {open ? "Hide the full request" : "Show the full request"}
+        </Button>
+      </header>
+      {items.length > 0 ? (
+        <ul className="space-y-0.5 px-3 pt-1 pb-2">
+          {items.map((item, i) => (
+            <li key={i} className="truncate" title={item}>
+              {item}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-muted-foreground px-3 pt-1 pb-2">
+          {kind === "final"
+            ? "A last review of the whole change, now that the checks are green."
+            : "Fix what the checks and reviewers report."}
+        </p>
+      )}
+      {open && (
+        <pre
+          className={cn(
+            "text-muted-foreground border-border max-h-96 overflow-y-auto border-t px-3 py-2 text-xs whitespace-pre-wrap [overflow-wrap:anywhere]",
+            monoClass,
+          )}
+        >
+          {text}
+        </pre>
+      )}
+    </article>
   );
 }
 

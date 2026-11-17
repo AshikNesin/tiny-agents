@@ -39,10 +39,12 @@ function CheckIcon({ state, className }: { state: Check["state"]; className?: st
   return <CircleCheck className={cn("text-success size-3.5", className)} />;
 }
 
-const took = (c: Check) =>
-  c.startedAt && c.completedAt
-    ? formatDuration(Math.max(0, Date.parse(c.completedAt) - Date.parse(c.startedAt)))
-    : null;
+/** How long it ran; nothing under a second (a commit status has no run time, so it reads 0ms). */
+function took(c: Check): string | null {
+  if (!c.startedAt || !c.completedAt) return null;
+  const ms = Date.parse(c.completedAt) - Date.parse(c.startedAt);
+  return ms >= 1000 ? formatDuration(ms) : null;
+}
 
 const when = (iso: string | null) =>
   iso

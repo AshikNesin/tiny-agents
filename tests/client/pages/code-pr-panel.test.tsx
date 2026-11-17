@@ -29,6 +29,13 @@ const logs = new Map<number, CheckLogView>();
 /** The PR's description on GitHub, and the edits the tab sent. */
 let body = "";
 const edits: unknown[] = [];
+/** Whether the open PR is a draft, and the ready-for-review calls the tab made. */
+let draft = false;
+const readied: string[] = [];
+/** No PR yet: how far the branch is ahead, and what differs from the base (committed or not). */
+let noPull = false;
+let ahead = 1;
+let changed: string[] = [];
 
 // The network: the PR tab's one read.
 vi.mock("@groot/shell/lib/api", async (importOriginal) => {
@@ -43,9 +50,27 @@ vi.mock("@groot/shell/lib/api", async (importOriginal) => {
           if (!log) throw new Error("not found");
           return log;
         }
-        if (path !== "/code/threads/shelley%3At1/pr") throw new Error(`unexpected ${path}`);
+        if (path === "/code/threads/shelley%3At1/review/files") {
+          return changed.map((p) => ({
+            path: p,
+            status: "modified",
+            additions: 1,
+            deletions: 0,
+            isGenerated: false,
+            hash: "h",
+            viewed: false,
+          }));
+        }
+        if (!path.startsWith("/code/threads/shelley%3At1/pr"))
+          throw new Error(`unexpected ${path}`);
         reads += 1;
         if (failReads) throw new Error("GitHub is down");
+        return view(checkState);
+      },
+      post: async (path: string) => {
+        if (path !== "/code/threads/shelley%3At1/pr/ready") throw new Error(`unexpected ${path}`);
+        readied.push(path);
+        draft = false;
         return view(checkState);
       },
       patch: async (path: string, change: { body?: string }) => {
@@ -90,59 +115,61 @@ function view(state: CheckState): ThreadPullsView {
   return {
     project,
     branch: "ta/fix-1a2b",
-    ahead: 1,
+    ahead,
     spend: { usd: null, limitUsd: null },
     earlier: [],
-    active: {
-      id: "pr1",
-      number: 12,
-      url: "https://github.com/o/r/pull/12",
-      title: "Fix the login",
-      state: "open",
-      draft: false,
-      headRef: "ta/fix-1a2b",
-      baseRef: "main",
-      syncedAt: null,
-      autofix: false,
-      autoMerge: false,
-      loop: { status: "off", reason: null },
-      stalled: [],
-      ignored: [],
-      passes: [],
-      snapshot: {
-        id: "n1",
-        number: 12,
-        url: "https://github.com/o/r/pull/12",
-        title: "Fix the login",
-        body,
-        state: "open",
-        draft: false,
-        headRef: "ta/fix-1a2b",
-        headSha: "abc",
-        baseRef: "main",
-        fromFork: false,
-        mergeable: "mergeable",
-        mergeMethods: ["squash"],
-        autoMerge: false,
-        inMergeQueue: false,
-        queueRemovals: [],
-        author: "AshikNesin",
-        checks: [
-          {
-            name: "Tests",
-            state,
-            startedAt: null,
-            completedAt: null,
-            url: null,
-            jobId: null,
+    active: noPull
+      ? null
+      : {
+          id: "pr1",
+          number: 12,
+          url: "https://github.com/o/r/pull/12",
+          title: "Fix the login",
+          state: "open",
+          draft,
+          headRef: "ta/fix-1a2b",
+          baseRef: "main",
+          syncedAt: null,
+          autofix: false,
+          autoMerge: false,
+          loop: { status: "off", reason: null },
+          stalled: [],
+          ignored: [],
+          passes: [],
+          snapshot: {
+            id: "n1",
+            number: 12,
+            url: "https://github.com/o/r/pull/12",
+            title: "Fix the login",
+            body,
+            state: "open",
+            draft,
+            headRef: "ta/fix-1a2b",
+            headSha: "abc",
+            baseRef: "main",
+            fromFork: false,
+            mergeable: "mergeable",
+            mergeMethods: ["squash"],
+            autoMerge: false,
+            inMergeQueue: false,
+            queueRemovals: [],
+            author: "AshikNesin",
+            checks: [
+              {
+                name: "Tests",
+                state,
+                startedAt: null,
+                completedAt: null,
+                url: null,
+                jobId: null,
+              },
+            ],
+            reviews: [],
+            threads: [],
+            comments: [],
+            ...extra,
           },
-        ],
-        reviews: [],
-        threads: [],
-        comments: [],
-        ...extra,
-      },
-    },
+        },
   };
 }
 
@@ -156,6 +183,11 @@ beforeEach(() => {
   logs.clear();
   body = "";
   edits.length = 0;
+  draft = false;
+  readied.length = 0;
+  noPull = false;
+  ahead = 1;
+  changed = [];
   visibility = "visible";
   vi.spyOn(document, "visibilityState", "get").mockImplementation(() => visibility);
   vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "setTimeout", "clearTimeout"] });
@@ -219,6 +251,36 @@ describe("Code PR tab", () => {
     checkState = "success";
     await wait(15_000);
     expect(screen.getByText("1 passing")).toBeInTheDocument();
+  });
+});
+
+describe("getting it merged", () => {
+  it("offers Ready for review on a draft, and Merge once GitHub has it ready", async () => {
+    draft = true;
+    checkState = "success";
+    panel();
+    await wait(0);
+    expect(screen.getByRole("button", { name: "Merge" })).toBeDisabled();
+    act(() => screen.getByRole("button", { name: "Ready for review" }).click());
+    await wait(0);
+    expect(readied).toEqual(["/code/threads/shelley%3At1/pr/ready"]);
+    expect(screen.queryByRole("button", { name: "Ready for review" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Merge" })).toBeEnabled();
+  });
+
+  it("says the changes are not committed yet, and asks the agent to commit them", async () => {
+    noPull = true;
+    ahead = 0;
+    changed = ["src/a.ts", "src/b.ts"];
+    const attached: string[] = [];
+    render(
+      <PullPanel threadId="shelley:t1" refreshKey="k" onAttach={(text) => attached.push(text)} />,
+    );
+    await wait(0);
+    expect(screen.getByText("2 changed files are not committed yet.")).toBeInTheDocument();
+    expect(screen.getByTestId("code-publish")).toBeDisabled();
+    act(() => screen.getByRole("button", { name: "Ask to commit" }).click());
+    expect(attached).toEqual(["Commit your changes on this branch."]);
   });
 });
 
@@ -307,6 +369,24 @@ describe("a check's log", () => {
 });
 
 describe("the pull request's comments", () => {
+  it("leaves out a duration GitHub cannot know (a status, or a check with no run time)", async () => {
+    extra = {
+      checks: [
+        {
+          name: "Cloudflare Pages",
+          state: "success",
+          startedAt: "2026-11-17T10:00:00Z",
+          completedAt: "2026-11-17T10:00:00Z",
+          url: null,
+          jobId: null,
+        },
+      ],
+    };
+    panel();
+    await wait(0);
+    expect(screen.getByRole("button", { name: /Cloudflare Pages/ })).not.toHaveTextContent("0ms");
+  });
+
   it("sorts every comment into All, Humans and Bots", async () => {
     extra = {
       comments: [

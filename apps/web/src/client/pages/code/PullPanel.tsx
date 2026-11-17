@@ -12,6 +12,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import {
+  Eye,
   ExternalLink,
   GitMerge,
   GitPullRequest,
@@ -260,6 +261,13 @@ export function PullPanel({
               {view.ahead !== null &&
                 ` is ${view.ahead} ${view.ahead === 1 ? "commit" : "commits"} ahead of ${view.project.baseBranch}.`}
             </p>
+            {view.ahead === 0 && (
+              <Uncommitted
+                threadId={threadId}
+                refreshKey={refreshKey}
+                onAsk={() => onAttach("Commit your changes on this branch.")}
+              />
+            )}
             <Button
               onClick={() => void act("publish", () => projectsApi.publish(threadId))}
               disabled={busy !== null || view.ahead === 0}
@@ -306,6 +314,7 @@ export function PullPanel({
               })
             }
             onMerge={(method) => void act("merge", () => projectsApi.merge(threadId, method))}
+            onReady={() => void act("mark it ready", () => projectsApi.ready(threadId))}
             onAttachAll={() => {
               const text = commentsText(pr);
               if (text) onAttach(text);
@@ -349,6 +358,44 @@ export function PullPanel({
   );
 }
 
+/**
+ * Nothing to publish yet, though the agent changed files: they are not
+ * committed (Publish pushes commits only). Says so, with one way out.
+ */
+function Uncommitted({
+  threadId,
+  refreshKey,
+  onAsk,
+}: {
+  threadId: string;
+  refreshKey: unknown;
+  onAsk(): void;
+}) {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    let cancelled = false;
+    projectsApi
+      .reviewFiles(threadId)
+      .then((files) => !cancelled && setCount(files.length))
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [threadId, refreshKey]);
+  if (count === 0) return null;
+  return (
+    <div className="border-border flex items-center gap-3 rounded-xl border px-3 py-2.5">
+      <p className="min-w-0 flex-1">
+        {count === 1 ? "1 changed file is" : `${count} changed files are`} not committed yet.
+      </p>
+      <Button size="sm" variant="outline" onClick={onAsk}>
+        <MessageSquare />
+        Ask to commit
+      </Button>
+    </div>
+  );
+}
+
 const STATE_TONE: Record<string, string> = {
   open: "bg-success/10 text-success",
   draft: "bg-muted text-muted-foreground",
@@ -383,6 +430,7 @@ function ActivePull({
   onAutofix,
   onFix,
   onMerge,
+  onReady,
   onAttachAll,
   onAttach,
   onAutoMerge,
@@ -395,6 +443,8 @@ function ActivePull({
   onAutofix(enabled: boolean): void;
   onFix(): void;
   onMerge(method: MergeMethod): void;
+  /** Draft → ready for review (a draft cannot be merged). */
+  onReady(): void;
   onAttachAll(): void;
   onAttach(text: string): void;
   onAutoMerge(enabled: boolean): void;
@@ -412,6 +462,18 @@ function ActivePull({
       <PullChecks threadId={threadId} pr={pr} busy={busy} onFix={onFix} />
 
       <div className="flex flex-wrap gap-2">
+        {pr.state === "open" && pr.draft && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onReady}
+            disabled={busy !== null}
+            title="Mark it ready for review on GitHub, so it can be merged"
+          >
+            {busy === "mark it ready" ? <Spinner /> : <Eye />}
+            Ready for review
+          </Button>
+        )}
         {pr.state === "open" && methods.length > 0 && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

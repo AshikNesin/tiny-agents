@@ -37,6 +37,7 @@ import {
   type ProjectScripts,
   type Workspace,
 } from "./code.workspace";
+import { PROJECT_RULE, projectHeader } from "../../../shared/code-messages";
 
 const DEFAULT_PROJECT_SETTINGS: ProjectSettings = {
   scripts: {},
@@ -251,8 +252,8 @@ function projectPreamble(
   setupFailure?: string,
 ): string {
   const lines = [
-    `[Project ${repoSlug(repoOf(project))} · branch ${branch} · base ${project.baseBranch}]`,
-    "Work and commit on this branch. Do not push or open a pull request: the app publishes it.",
+    projectHeader(repoSlug(repoOf(project)), branch, project.baseBranch),
+    PROJECT_RULE,
   ];
   if (scripts.check) lines.push(`Run \`${scripts.check}\` before you report done.`);
   if (setupFailure) {
