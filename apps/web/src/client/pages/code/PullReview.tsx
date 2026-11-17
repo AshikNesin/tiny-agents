@@ -76,7 +76,6 @@ export function PullReview({
 
   const threadId = review?.threadId ?? null;
   const assistantRow = threadId ? rows.find((r) => r.id === threadId) : undefined;
-  const harness = threadId ? harnessOf(harnesses, instanceOf(threadId)) : undefined;
   // Comments wait under the review until the assistant exists, then under its thread.
   const commentKey = threadId ?? review?.key;
   const commenting = useThreadCommenting(commentKey, () => undefined);
@@ -208,33 +207,54 @@ export function PullReview({
         </main>
         <ResizablePane narrow className={side === "assistant" ? undefined : "hidden lg:flex"}>
           <div className="flex min-h-0 flex-1 flex-col">
-            {threadId && harness ? (
-              <ConversationView
-                key={threadId}
-                pane
-                id={threadId}
-                harness={harness}
-                rows={rows}
-                panelOpen={false}
-                onTogglePanel={() => undefined}
-                insert={null}
-              />
-            ) : threadId ? (
-              <EmptyState
-                icon={MessageSquare}
-                title="The assistant's coding agent is not connected"
-                description="Its thread belongs to a harness this server does not run now."
-              />
-            ) : (
-              <AskFirst
-                review={review}
-                onStarted={(id) => setReview({ ...review, threadId: id })}
-              />
-            )}
+            <Assistant
+              review={review}
+              harnesses={harnesses}
+              rows={rows}
+              onStarted={(id) => setReview({ ...review, threadId: id })}
+            />
           </div>
         </ResizablePane>
       </div>
     </div>
+  );
+}
+
+/** The assistant's side: its thread once asked, the first-question box before. */
+function Assistant({
+  review,
+  harnesses,
+  rows,
+  onStarted,
+}: {
+  review: PullReviewView;
+  harnesses: HarnessInfo[];
+  rows: ThreadSummary[];
+  onStarted(threadId: string): void;
+}) {
+  const threadId = review.threadId;
+  if (!threadId) return <AskFirst review={review} onStarted={onStarted} />;
+  const harness = harnessOf(harnesses, instanceOf(threadId));
+  if (!harness) {
+    return (
+      <EmptyState
+        icon={MessageSquare}
+        title="The assistant's coding agent is not connected"
+        description="Its thread belongs to a harness this server does not run now."
+      />
+    );
+  }
+  return (
+    <ConversationView
+      key={threadId}
+      pane
+      id={threadId}
+      harness={harness}
+      rows={rows}
+      panelOpen={false}
+      onTogglePanel={() => undefined}
+      insert={null}
+    />
   );
 }
 
