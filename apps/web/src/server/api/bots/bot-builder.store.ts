@@ -13,7 +13,7 @@
 import { botModelId } from "./bot-toolkits";
 import { HttpError } from "@groot/core/errors";
 import type { BotCreationStore } from "@tiny-agents/agent";
-import { conversationOwner, isUnattended, type ChatReader } from "./bots.owner";
+import { ownerTurnOf } from "./bots.owner";
 import { getAgentRuntime } from "./bots.runtime";
 import { createBotSchema } from "./bots.schema";
 import { createBot, type BotAgentRuntime } from "./bots.service";
@@ -23,12 +23,9 @@ export function createBotCreationStore(
 ): BotCreationStore {
   return {
     async create(conversationId, input) {
-      const owner = await conversationOwner(conversationId);
-      if (!owner) return { status: "disabled" };
-      // A runtime that can't be read counts as unattended (refuses, never allows).
-      const reader: ChatReader = { readChat: (ref) => runtime().readChat(ref) };
-      if (await isUnattended(conversationId, reader, owner)) return { status: "unattended" };
-      if (owner.bot.shared) return { status: "shared" };
+      const turn = await ownerTurnOf(conversationId, runtime);
+      if (turn.status !== "owner") return { status: turn.status };
+      const { owner } = turn;
 
       // The New bot dialog's own validation, so the tool and the dialog can't drift.
       const parsed = createBotSchema.safeParse({

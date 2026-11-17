@@ -7,7 +7,7 @@
  */
 import type { VaultBroker, VaultUse } from "@tiny-agents/agent";
 import { getAgentRuntime } from "../bots/bots.runtime";
-import { conversationOwner, isUnattended, type ChatReader } from "../bots/bots.owner";
+import { isUnattended, ownerTurnOf, type ChatReader } from "../bots/bots.owner";
 import { vaultAlert } from "./vault.alerts";
 import {
   audit,
@@ -20,11 +20,17 @@ import {
 } from "./vault.service";
 
 async function who(conversation: number, runtime: () => ChatReader): Promise<UseContext> {
-  const owner = await conversationOwner(conversation);
+  const turn = await ownerTurnOf(conversation, runtime);
+  // No bot behind it (a Past chat): no bot scope, and the turn as the chat reads.
+  if (turn.status === "disabled") {
+    return { unattended: await isUnattended(conversation, runtime(), null) };
+  }
+  const { bot } = turn.owner;
   return {
-    ...(owner ? { botId: owner.bot.id, botName: owner.bot.name } : {}),
-    ...(owner?.bot.shared ? { shared: true } : {}),
-    unattended: await isUnattended(conversation, runtime(), owner ?? null),
+    botId: bot.id,
+    botName: bot.name,
+    ...(bot.shared ? { shared: true } : {}),
+    unattended: turn.status === "unattended",
   };
 }
 
