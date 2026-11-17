@@ -67,9 +67,10 @@ owner send while questions wait → submit (steer) → AgentRuntime.dismissQuest
   first, then dismisses the waiting questions, so the bot reads it right
   after the tool result.
 
-Like approvals, questions asked during a bot-to-bot delivery wait until the
-owner opens that bot's chat. A routine run never waits: nobody watches a
-routine's conversation, so `ask_owner` returns at once and tells the model to
+Like approvals, questions asked while a bot answers an owner @mention wait
+until the owner opens that bot's chat. A routine run, or a bot answering
+another bot's message (in a conversation of its own), never waits: nobody
+watches those conversations, so `ask_owner` returns at once and tells the model to
 carry on and put open questions in its reply (see [routines](./routines.md)).
 
 ## Module structure

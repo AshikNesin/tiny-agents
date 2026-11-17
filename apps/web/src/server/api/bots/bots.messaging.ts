@@ -56,11 +56,14 @@ function botToBotText(fromName: string, text: string): string {
 export type BotMessagingRuntime = DeliveryRuntime;
 
 export function createBotMessagingStore(rt: BotMessagingRuntime): BotMessagingStore {
-  /** The sending bot; `fromRoutine` when the send comes from one of its routine runs. */
+  /**
+   * The sending bot; `unattended` when the send comes from a conversation
+   * of its own (a routine run, or its answer to another bot), not its chat.
+   */
   async function senderOf(conversationId: number) {
     const owner = await conversationOwner(conversationId);
     if (!owner) return null;
-    return { id: owner.bot.id, name: owner.bot.name, fromRoutine: owner.kind === "routine" };
+    return { id: owner.bot.id, name: owner.bot.name, unattended: owner.kind !== "chat" };
   }
 
   const turnBudget = turnBudgetOf(rt);
@@ -85,9 +88,10 @@ export function createBotMessagingStore(rt: BotMessagingRuntime): BotMessagingSt
           kind: "send",
           toBotId: target.id,
           fromBotId: sender.id,
-          // A routine run's message gets no relayed answer: it would land in
-          // the bot's chat, which routine runs never write to (issue #63).
-          replyToBotId: sender.fromRoutine ? null : sender.id,
+          // A message sent from a routine run, or from a bot answering
+          // another bot, gets no relayed answer: it would land in the bot's
+          // chat, which those conversations never write to (issue #63).
+          replyToBotId: sender.unattended ? null : sender.id,
           text: input.text,
           prompt: botToBotText(sender.name, sanitizePeerText(input.text)),
           peer: { kind: "message", name: sender.name },

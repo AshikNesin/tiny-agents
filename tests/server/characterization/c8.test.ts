@@ -62,8 +62,13 @@ describe("C8: answered sends stop counting toward the loop guard", () => {
     const deliveries = createDeliveries(runtime);
     for (let n = 1; n <= LOOP_LIMIT; n++) {
       expect(await send(store, n)).toMatchObject({ delivered: true });
-      runtime.script.answer(`c8-${n}`, { text: `answer ${n}` }, TARGET_CHAT);
-      expect(await deliveries.answer(TARGET_CHAT)).toBe(1);
+      // Each send is answered in the conversation pinned on its row (its own).
+      const row = await db.query.botMessages.findFirst({
+        where: eq(botMessages.requestId, `c8-${n}`),
+      });
+      const answeredIn = Number(row!.conversationId);
+      runtime.script.answer(`c8-${n}`, { text: `answer ${n}` }, answeredIn);
+      expect(await deliveries.answer(answeredIn)).toBe(1);
     }
     const kinds = (await db.select({ kind: botMessages.kind }).from(botMessages)).map(
       (r) => r.kind,

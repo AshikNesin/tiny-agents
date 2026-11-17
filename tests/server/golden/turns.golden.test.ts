@@ -303,11 +303,8 @@ describe("golden: turns that wait on the owner", () => {
         text: `/tool message_bot ${JSON.stringify({ to: "Helper", text: "what is 2+2?" })}`,
       },
     });
-    await waitFor(
-      helper.id,
-      "the helper answered",
-      (row) => !row.replying && row.lastMessagePreview !== null,
-    );
+    // The helper answers in a conversation of its own, not its chat: only
+    // the relayed reply shows, in the host's chat.
     await waitFor(host.id, "the relay answered", (row) =>
       String(row.lastMessagePreview ?? "").startsWith("Echo: **Reply from Helper:**"),
     );

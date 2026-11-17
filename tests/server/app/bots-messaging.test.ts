@@ -154,24 +154,52 @@ describe("messaging store (issues #13, #15, #16)", () => {
     expect(submitted.text).toContain("[attribute-stripped line]");
   });
 
-  it("reconciles the target's durable config before a bot-to-bot delivery", async () => {
-    // Same rule as owner sends and mentions: message_bot must not submit
-    // under a selection staler than the target's row.
+  it("answers a bot-to-bot message in a fresh, budgeted conversation, not the target's chat", async () => {
+    // The target's chat history must not ride along with every message
+    // another bot sends it, and a routine messaging a bot must not escape
+    // its own token budget that way.
     await seedBot("Sender", "1");
-    await seedBot("Target", "2");
+    const target = await seedBot("Target", "2");
     const store = createBotMessagingStore(runtime);
     await store.deliver({
       conversationId: 1,
       toName: "Target",
       text: "ping",
-      requestId: "reconcile-1",
-      sourceKey: "sk-reconcile-1",
+      requestId: "fresh-1",
+      sourceKey: "sk-fresh-1",
     });
-    const configure = vi.mocked(runtime.configure);
-    expect(configure).toHaveBeenCalledWith(2, expect.objectContaining({ modelId: "m1" }));
-    expect(configure.mock.invocationCallOrder[0]).toBeLessThan(
-      vi.mocked(runtime.submit).mock.invocationCallOrder[0]!,
-    );
+    const [created] = vi.mocked(runtime.createConversation).mock.calls.at(-1)!;
+    expect(created).toMatchObject({
+      modelId: "m1",
+      capabilities: { unattended: true, budgetTokens: 500_000 },
+    });
+    expect(created.systemPrompt).toContain("answers one message from another bot");
+    const fresh = await vi.mocked(runtime.createConversation).mock.results.at(-1)!.value;
+    expect(fresh).not.toBe(2);
+    const [submittedTo, input] = vi.mocked(runtime.submit).mock.calls.at(-1)!;
+    expect(submittedTo).toBe(fresh);
+    expect(input.text).toContain("Message from Sender (bot):");
+    expect(await ledgerRow("fresh-1")).toMatchObject({
+      toBotId: target.id,
+      conversationId: String(fresh),
+      ownConversation: true,
+    });
+
+    // A retried delivery of the same request reuses that conversation.
+    await db
+      .update(botMessages)
+      .set({ deliveredAt: null })
+      .where(eq(botMessages.requestId, "fresh-1"));
+    const conversations = vi.mocked(runtime.createConversation).mock.calls.length;
+    await store.deliver({
+      conversationId: 1,
+      toName: "Target",
+      text: "ping",
+      requestId: "fresh-1",
+      sourceKey: "sk-fresh-1",
+    });
+    expect(vi.mocked(runtime.createConversation).mock.calls.length).toBe(conversations);
+    expect(vi.mocked(runtime.submit).mock.calls.at(-1)![0]).toBe(fresh);
   });
 
   it("delivers from a routine run as its bot, with no answer relayed into the chat (issue #63)", async () => {
@@ -201,7 +229,7 @@ describe("messaging store (issues #13, #15, #16)", () => {
     });
   });
 
-  it("queues a message to a busy bot and says so in the receipt (issue #15)", async () => {
+  it("runs a message to a busy bot at once, in its own conversation (issue #15)", async () => {
     await seedBot("Sender", "1");
     await seedBot("Busy Bot", "2");
     runtime.isBusy.mockImplementation((ref: number) => ref === 2);
@@ -213,7 +241,7 @@ describe("messaging store (issues #13, #15, #16)", () => {
       requestId: "busy-1",
       sourceKey: "sk-busy-1",
     });
-    expect(result).toMatchObject({ delivered: true, queued: true });
+    expect(result).toEqual({ delivered: true });
   });
 
   it("caps sends per turn and does not charge replays (issue #16)", async () => {

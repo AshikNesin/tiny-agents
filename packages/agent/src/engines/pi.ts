@@ -9,6 +9,7 @@ import type { Context } from "@earendil-works/chord";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import {
   InboxDoc,
+  LiveDoc,
   watchEvents,
   type Conversation,
   type ConversationId,
@@ -329,6 +330,13 @@ function gateTool(
           context,
           answers: "document",
           userMessages: () => userMessages(Number(api.conversationId)),
+          // A run keeps its first input through every tool round (each
+          // round is a new generation task), so that names the run.
+          run: async () => {
+            const live = await api.snapshot(LiveDoc, api.conversationId, context);
+            const first = live?.run?.inputs[0];
+            return first === undefined ? undefined : `${api.conversationId}:${first}`;
+          },
           instructions: async () => (await api.agent(context)).instructions,
         },
         () => tool.execute(args, api, context),

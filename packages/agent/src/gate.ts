@@ -22,7 +22,9 @@
  *
  * Before all of that, a conversation with a token budget (a routine run's)
  * that has used it up refuses every call, so the model answers with what it
- * has; one far past it is stopped.
+ * has; one far past it is stopped. Likewise a run (one reply, through all
+ * its tool rounds) past `RUN_TOOL_CALL_LIMIT` calls is refused, and stopped
+ * if it keeps calling: a stuck loop must not run until someone presses Stop.
  *
  * Every decision is memoized on the call's api (`gate:*`), so a replay after
  * a restart, or a permission change mid-call, never flips it.
@@ -76,6 +78,12 @@ export interface GateCall {
   readonly answers: "document" | "memory";
   /** The conversation's user messages, newest first: whose turn it is and what the owner asked. */
   userMessages(): Promise<readonly GateUserMessage[]>;
+  /**
+   * A key for the run (the reply) this call belongs to, so the gate can cap
+   * its tool calls; undefined, or absent (the Claude plan, which has its own
+   * `maxTurns`), means no cap.
+   */
+  run?(): Promise<string | undefined>;
   /** The bot's instructions, for auto-review. */
   instructions(): Promise<string | undefined>;
 }
@@ -143,10 +151,25 @@ const heldKey = (conversation: number, taskId: number) => `${conversation}:${tas
 /** Past this multiple of its budget, a conversation's run is stopped, not just refused tools. */
 const BUDGET_STOP_FACTOR = 1.5;
 
+/** Tool calls one run (a reply, through all its tool rounds) may make. */
+const RUN_TOOL_CALL_LIMIT = 150;
+/** Calls past the limit after which the run is stopped, not just refused. */
+const RUN_STOP_AFTER = 20;
+/** Runs whose calls are counted at once; the oldest is forgotten past this. */
+const RUN_COUNTS_KEPT = 500;
+
+function runCapRefusal(name: string): string {
+  return (
+    `${name} did not run: this reply has already made ${RUN_TOOL_CALL_LIMIT} tool calls, ` +
+    `the most one reply may make. Do not call any more tools. ` +
+    `Reply now with what you have, say what was left undone, and let the owner decide how to go on.`
+  );
+}
+
 /** The refusal a call gets once its conversation has spent its token budget. */
 function budgetRefusal(name: string, used: number, budget: number): string {
   return (
-    `${name} did not run: this routine run has used ${used.toLocaleString("en-US")} tokens, ` +
+    `${name} did not run: this run has used ${used.toLocaleString("en-US")} tokens, ` +
     `over its budget of ${budget.toLocaleString("en-US")}. Do not call any more tools. ` +
     `Reply now with what you found so far, and say what was left undone.`
   );
@@ -159,6 +182,8 @@ export class ToolGate {
   readonly #store: GateStore;
   readonly #stop: ((conversation: number) => void) | undefined;
   readonly #held = new Map<string, HeldAnswer>();
+  /** Tool calls per run key, counted once per call. */
+  readonly #runCalls = new Map<string, number>();
 
   constructor(options: ToolGateOptions) {
     this.#approvals = options.approvals;
@@ -185,6 +210,13 @@ export class ToolGate {
         output: text(budgetRefusal(name, overBudget.used, overBudget.budget)),
         isError: true,
         details: { budget: { used: overBudget.used, limit: overBudget.budget } },
+      };
+    }
+    if (await this.#overRunCap(call)) {
+      return {
+        output: text(runCapRefusal(name)),
+        isError: true,
+        details: { runCap: { limit: RUN_TOOL_CALL_LIMIT } },
       };
     }
     const plan = hooks ? await planOnce(call, hooks) : undefined;
@@ -273,6 +305,33 @@ export class ToolGate {
       this.#stop?.(Number(api.conversationId));
     }
     return decided;
+  }
+
+  /**
+   * Whether this call is past its run's tool-call limit. Counted and decided
+   * once per call (a replay keeps the answer); a run that keeps calling well
+   * past the limit is stopped. Counts live in memory: a restart starts them
+   * over, which only ever allows more.
+   */
+  async #overRunCap(call: GateCall): Promise<boolean> {
+    const { api, context } = call;
+    if (!call.run) return false;
+    const decided = await api.memo<boolean>("gate:run-cap", context);
+    if (decided !== undefined) return decided;
+    const key = await call.run();
+    if (key === undefined) return false;
+    const count = (this.#runCalls.get(key) ?? 0) + 1;
+    this.#runCalls.delete(key);
+    this.#runCalls.set(key, count);
+    if (this.#runCalls.size > RUN_COUNTS_KEPT) {
+      const oldest = this.#runCalls.keys().next().value;
+      if (oldest !== undefined) this.#runCalls.delete(oldest);
+    }
+    const over = await api.memo("gate:run-cap", count > RUN_TOOL_CALL_LIMIT, context);
+    if (over && count > RUN_TOOL_CALL_LIMIT + RUN_STOP_AFTER) {
+      this.#stop?.(Number(api.conversationId));
+    }
+    return over;
   }
 
   /**

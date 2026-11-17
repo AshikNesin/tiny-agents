@@ -1,0 +1,1 @@
+ALTER TABLE `bot_messages` ADD `own_conversation` integer DEFAULT false NOT NULL;
