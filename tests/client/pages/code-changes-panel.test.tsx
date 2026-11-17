@@ -11,6 +11,15 @@ import { ConfirmProvider } from "@groot/ui/primitives";
 import { ChangesPanel } from "@/pages/code/ChangesPanel";
 import { ReviewPanel } from "@/pages/code/ReviewPanel";
 import { FileDiff } from "@/pages/code/UnifiedDiff";
+import { clickLine, diffText, line } from "../diff-dom";
+
+/** The drawn diff's shadow root (the renderer draws it there). */
+const drawn = () => document.querySelector("diffs-container")?.shadowRoot ?? null;
+/** The drawn diff's lines as text; none until a diff is drawn. */
+const shown = () => {
+  const root = drawn();
+  return root ? diffText(root) : [];
+};
 
 vi.mock("sonner", () => ({
   toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), message: vi.fn() }),
@@ -123,7 +132,7 @@ describe("commenting on a change", () => {
       />,
     );
     await wait(0);
-    fireEvent.click(screen.getByRole("button", { name: "Comment on line 2" }));
+    await clickLine(line(drawn()!, 2));
     fireEvent.change(screen.getByRole("textbox", { name: "Comment on src/a.ts line 2" }), {
       target: { value: "Keep it lowercase" },
     });
@@ -198,11 +207,11 @@ describe("Review panel", () => {
     expect(row).toHaveTextContent("M");
     expect(within(list).getByRole("button", { name: /README\.md/ })).toHaveTextContent("A");
     // The list alone: no diff until a file is picked.
-    expect(screen.queryByText("export const login = 1;")).toBeNull();
+    expect(shown()).not.toContain("export const login = 1;");
 
     act(() => row.click());
     await wait(0);
-    expect(screen.getByText("export const login = 1;")).toBeInTheDocument();
+    expect(shown()).toContain("export const login = 1;");
     expect(screen.queryByRole("navigation", { name: "Changed files" })).toBeNull();
 
     act(() => screen.getByRole("button", { name: "All files" }).click());
@@ -228,13 +237,13 @@ describe("Review panel", () => {
     );
     const { rerender } = render(panel("1"));
     await wait(0);
-    expect(screen.getByText("one")).toBeInTheDocument();
+    expect(shown()).toEqual(["one"]);
 
     hash = "h2";
     content = "one\ntwo\n";
     rerender(panel("2"));
     await wait(750);
-    expect(screen.getByText("two")).toBeInTheDocument();
+    expect(shown()).toEqual(["one", "two"]);
   });
 });
 
@@ -244,10 +253,11 @@ describe("a file that cannot be shown as text", () => {
     expect(screen.getByText(/Binary file/)).toBeInTheDocument();
   });
 
-  it("draws the first part of a very long diff and says how much it left out", () => {
+  it("draws the first part of a very long diff and says how much it left out", async () => {
     const newContent = Array.from({ length: 12_000 }, (_, i) => `line ${i}`).join("\n");
-    const { container } = render(<FileDiff path="big.ts" oldContent="" newContent={newContent} />);
-    expect(container.querySelectorAll("[data-kind=add]").length).toBeLessThanOrEqual(5_000);
+    render(<FileDiff path="big.ts" oldContent="" newContent={newContent} />);
+    await wait(0);
+    expect(shown().length).toBe(4_000);
     expect(screen.getByText(/more lines not shown/)).toBeInTheDocument();
   });
 });

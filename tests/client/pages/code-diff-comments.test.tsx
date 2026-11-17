@@ -1,22 +1,23 @@
 /**
- * The Code page's diff, as a reviewer uses it: a line's gutter offers
- * Comment, which opens a composer right under that line; a saved comment
- * stays under its lines until it is sent; and long unchanged runs fold into
- * "Show N more lines" so the change itself is what you read.
+ * The Code page's diff, as a reviewer uses it: click a line number to open a
+ * composer for that line, drag or shift-click to take a range, and saved
+ * comments stay under their lines until they are sent. The diff is drawn by
+ * @pierre/diffs (diffs.com); the composer and saved comments are ours.
  */
 import React from "react";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vite-plus/test";
-import { FileDiff } from "@/pages/code/UnifiedDiff";
+import { FileDiff, PatchView } from "@/pages/code/UnifiedDiff";
+import { clickLine, diffRoot, diffText, drag, line, lineNumber } from "../diff-dom";
 
 const numbered = (count: number, change?: { at: number; text: string }) =>
   Array.from({ length: count }, (_, i) =>
     change && i + 1 === change.at ? change.text : `line ${i + 1}`,
   ).join("\n") + "\n";
 
-describe("commenting on a line", () => {
-  it("opens a composer under the line and saves what you write for that line", async () => {
+describe("commenting on lines", () => {
+  it("clicking a line number opens a composer and saves what you write for that line", async () => {
     const user = userEvent.setup();
     const onComment = vi.fn(async () => {});
     render(
@@ -27,15 +28,9 @@ describe("commenting on a line", () => {
         onComment={onComment}
       />,
     );
+    await clickLine(line(await diffRoot(), 2));
 
-    await user.click(screen.getByRole("button", { name: "Comment on line 2" }));
-    const box = screen.getByRole("textbox", { name: "Comment on src/a.ts line 2" });
-    // The composer sits under the commented line, before the next one.
-    const rows = [...document.querySelectorAll("[data-kind], [data-composer]")];
-    const composerAt = rows.findIndex((el) => el.hasAttribute("data-composer"));
-    expect(rows[composerAt - 1]).toHaveTextContent("TWO");
-    expect(rows[composerAt + 1]).toHaveTextContent("three");
-
+    const box = await screen.findByRole("textbox", { name: "Comment on src/a.ts line 2" });
     await user.type(box, "Keep this lowercase");
     await user.click(screen.getByRole("button", { name: "Comment" }));
     expect(onComment).toHaveBeenCalledWith({ from: 2, to: 2, side: "new" }, "Keep this lowercase");
@@ -53,45 +48,27 @@ describe("commenting on a line", () => {
         onComment={onComment}
       />,
     );
-    await user.click(screen.getByRole("button", { name: "Comment on removed line 2" }));
-    await user.type(screen.getByRole("textbox"), "Why remove it?{Meta>}{Enter}{/Meta}");
+    await clickLine(line(await diffRoot(), 2, "old"));
+    await user.type(await screen.findByRole("textbox"), "Why remove it?{Meta>}{Enter}{/Meta}");
     expect(onComment).toHaveBeenCalledWith({ from: 2, to: 2, side: "old" }, "Why remove it?");
   });
 
-  it("shift-click on another line widens the range being commented on", async () => {
+  it("dragging down the line numbers takes that range, with one composer for it", async () => {
     const user = userEvent.setup();
     const onComment = vi.fn(async () => {});
     render(
       <FileDiff path="a.txt" oldContent="" newContent={"a\nb\nc\nd\n"} onComment={onComment} />,
     );
-    await user.click(screen.getByRole("button", { name: "Comment on line 1" }));
-    fireEvent.click(screen.getByRole("button", { name: "Comment on line 3" }), { shiftKey: true });
-    expect(screen.getByText("Commenting on lines 1–3")).toBeInTheDocument();
-  });
+    const root = await diffRoot();
+    await drag([line(root, 2), line(root, 3), line(root, 4)]);
 
-  it("dragging down the line numbers selects that range and opens one composer for it", async () => {
-    const user = userEvent.setup();
-    const onComment = vi.fn(async () => {});
-    render(
-      <FileDiff path="a.txt" oldContent="" newContent={"a\nb\nc\nd\n"} onComment={onComment} />,
-    );
-    const gutter = (no: number) => screen.getByRole("button", { name: `Comment on line ${no}` });
-    fireEvent.pointerDown(gutter(2), { button: 0, pointerId: 1 });
-    fireEvent.pointerEnter(gutter(3), { pointerId: 1 });
-    fireEvent.pointerEnter(gutter(4), { pointerId: 1 });
-    // No composer jumps around while the range is still being dragged.
-    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
-    fireEvent.pointerUp(window, { pointerId: 1 });
-
-    await user.type(
-      screen.getByRole("textbox", { name: "Comment on a.txt lines 2–4" }),
-      "Merge these",
-    );
+    const box = await screen.findByRole("textbox", { name: "Comment on a.txt lines 2–4" });
+    await user.type(box, "Merge these");
     await user.click(screen.getByRole("button", { name: "Comment" }));
     expect(onComment).toHaveBeenCalledWith({ from: 2, to: 4, side: "new" }, "Merge these");
   });
 
-  it("dragging up from a line selects from where the drag ended to where it began", () => {
+  it("dragging up takes the range from where it ended to where it began", async () => {
     render(
       <FileDiff
         path="a.txt"
@@ -100,14 +77,26 @@ describe("commenting on a line", () => {
         onComment={async () => {}}
       />,
     );
-    const gutter = (no: number) => screen.getByRole("button", { name: `Comment on line ${no}` });
-    fireEvent.pointerDown(gutter(4), { button: 0, pointerId: 1 });
-    fireEvent.pointerEnter(gutter(1), { pointerId: 1 });
-    fireEvent.pointerUp(window, { pointerId: 1 });
-    expect(screen.getByText("Commenting on lines 1–4")).toBeInTheDocument();
+    const root = await diffRoot();
+    await drag([line(root, 4), line(root, 1)]);
+    expect(await screen.findByText("Commenting on lines 1–4")).toBeInTheDocument();
   });
 
-  it("keeps what you typed when the range is widened", async () => {
+  it("a range from removed lines into added ones is commented on by its new lines", async () => {
+    render(
+      <FileDiff
+        path="a.txt"
+        oldContent={"keep\nold one\nold two\nkeep too\n"}
+        newContent={"keep\nnew one\nnew two\nkeep too\n"}
+        onComment={async () => {}}
+      />,
+    );
+    const root = await diffRoot();
+    await drag([line(root, 2, "old"), line(root, 3, "new")]);
+    expect(await screen.findByText("Commenting on lines 2–3")).toBeInTheDocument();
+  });
+
+  it("shift-click widens the range and keeps what you typed", async () => {
     const user = userEvent.setup();
     render(
       <FileDiff
@@ -117,10 +106,11 @@ describe("commenting on a line", () => {
         onComment={async () => {}}
       />,
     );
-    await user.click(screen.getByRole("button", { name: "Comment on line 1" }));
-    await user.type(screen.getByRole("textbox"), "Half a thought");
-    fireEvent.click(screen.getByRole("button", { name: "Comment on line 3" }), { shiftKey: true });
-    expect(screen.getByRole("textbox", { name: "Comment on a.txt lines 1–3" })).toHaveValue(
+    const root = await diffRoot();
+    await clickLine(line(root, 1));
+    await user.type(await screen.findByRole("textbox"), "Half a thought");
+    await clickLine(line(root, 3), { shiftKey: true });
+    expect(await screen.findByRole("textbox", { name: "Comment on a.txt lines 1–3" })).toHaveValue(
       "Half a thought",
     );
   });
@@ -138,16 +128,17 @@ describe("commenting on a line", () => {
         onRemoveComment={onRemove}
       />,
     );
-    const saved = screen.getByRole("note", { name: "Comment on line 2" });
+    const saved = await screen.findByRole("note", { name: "Comment on line 2" });
     expect(saved).toHaveTextContent("Lowercase, please");
+    // Slotted under its line: the slot names the line it follows.
+    expect(saved.closest("[slot]")?.getAttribute("slot")).toMatch(/additions-2/);
     await user.click(within(saved).getByRole("button", { name: "Remove comment" }));
     expect(onRemove).toHaveBeenCalledWith("d1");
   });
 });
 
 describe("unchanged lines", () => {
-  it("folds long unchanged runs and shows them on request", async () => {
-    const user = userEvent.setup();
+  it("folds long unchanged runs around a change", async () => {
     render(
       <FileDiff
         path="long.txt"
@@ -155,15 +146,31 @@ describe("unchanged lines", () => {
         newContent={numbered(100, { at: 50, text: "changed" })}
       />,
     );
-    // Three lines of context either side of line 50 are shown; the rest fold.
-    expect(screen.getByText("line 47")).toBeInTheDocument();
-    expect(screen.getByText("line 53")).toBeInTheDocument();
-    expect(screen.queryByText("line 10")).not.toBeInTheDocument();
-    expect(screen.queryByText("line 90")).not.toBeInTheDocument();
+    const text = diffText(await diffRoot());
+    expect(text).toContain("line 47");
+    expect(text).toContain("changed");
+    expect(text).toContain("line 53");
+    expect(text).not.toContain("line 10");
+    expect(text).not.toContain("line 90");
+  });
+});
 
-    await user.click(screen.getByRole("button", { name: "Show 46 more lines" }));
-    expect(screen.getByText("line 10")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Show 47 more lines" }));
-    expect(screen.getByText("line 90")).toBeInTheDocument();
+describe("a patch from the agent", () => {
+  it("draws a patch that starts at its first hunk, numbered from the hunk", async () => {
+    render(
+      <PatchView
+        path="src/app.ts"
+        patch={"@@ -10,3 +10,3 @@\n const a = 1;\n-const b = 2;\n+const b = 3;\n const c = 4;\n"}
+      />,
+    );
+    const root = await diffRoot();
+    expect(diffText(root)).toEqual([
+      "const a = 1;",
+      "const b = 2;",
+      "const b = 3;",
+      "const c = 4;",
+    ]);
+    expect(lineNumber(root, 11, "old").textContent).toBe("11");
+    expect(lineNumber(root, 11, "new").textContent).toBe("11");
   });
 });

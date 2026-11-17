@@ -150,8 +150,9 @@ request #N**. It opens on the tab it was left on; **Close panel** and **Open
 as a page** sit at the end of its tab strip. Outside a project, Source
 control shows the uncommitted changes (new files included), or a recent
 commit, of the thread's directory, each changed file as a card with its
-diff. Unchanged runs fold into **Show N more lines**, one
-gutter numbers the lines, and long lines wrap.
+diff. Every diff in the app (these panels and the transcript's patches) is
+drawn by @pierre/diffs (diffs.com): syntax colors, one gutter numbering the
+lines, unchanged runs folded behind expanders, and long lines wrapped.
 
 - **Comments.** Click a line number to open a composer right under that
   line. Drag down the numbers (mouse or finger) or shift-click another

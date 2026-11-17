@@ -18,6 +18,15 @@ trustPolicyExclude:
   # CLI maintainers, registry signatures intact, git tag matches
   # npm/node-semver@b717044 (release 6.3.1). Scoped to this exact version.
   - semver@6.3.1
+  # @pierre/theme@2.0.0 (2026-07-24) holds the color themes @pierre/diffs (the
+  # diffs.com renderer, ADR 0009) loads through @pierre/theming. It was
+  # published without provenance after 1.0.3 had it, and no attested version
+  # ships every theme file @pierre/theming imports. Allowed by the owner on
+  # 2026-11-17 after review: registry signatures intact, publisher is Pierre
+  # Computer (pierrecomputer/pierre packages/theme), and the tarball is only
+  # Shiki/VS Code theme JSON plus .mjs files that export it (no install
+  # scripts, imports, network or process access). Scoped to this version.
+  - "@pierre/theme@2.0.0"
 # Non-interactive CI builders (Heroku): when a restored node_modules is
 # incompatible with the current store/lockfile, pnpm wants to purge and
 # recreate it — but the purge confirmation requires a TTY and aborts with
