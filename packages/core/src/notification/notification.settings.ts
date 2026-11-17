@@ -8,6 +8,10 @@ import { createNamespaceKv } from "@groot/core/kv";
 
 export const NOTIFICATION_SETTINGS_KEY = "notifications";
 
+/** Where notifications go: one channel, or none. */
+export const DELIVERY_CHOICES = ["auto", "webpush", "pushover", "off"] as const;
+export type DeliveryChoice = (typeof DELIVERY_CHOICES)[number];
+
 const clock = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use HH:MM (24-hour)");
 
 function validTimeZone(zone: string): boolean {
@@ -32,8 +36,12 @@ export const notificationSettingsSchema = z.object({
       urgentBypass: z.boolean().default(false),
     })
     .prefault({}),
-  /** Channels switched off by id ("pushover", "webpush"); a missing entry is on. */
-  channels: z.record(z.string(), z.boolean()).prefault({}),
+  /**
+   * The one channel that delivers, by id ("webpush" is the phone app), or
+   * "off". "auto" (nothing chosen yet) is the phone app once a phone is
+   * registered, else Pushover. Never two at once.
+   */
+  deliverTo: z.enum(DELIVERY_CHOICES).default("auto"),
   /** Deliver to this Pushover device only (empty: all devices). */
   device: z
     .string()

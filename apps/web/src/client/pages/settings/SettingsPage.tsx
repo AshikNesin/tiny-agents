@@ -115,10 +115,15 @@ export function SettingsPage() {
               description: "Push notifications for waiting bots and routine results.",
               keywords: ["push", "pushover", "phone", "android", "quiet hours", "digest"],
               element: (
-                <div className="space-y-6">
-                  <PhoneNotificationSettings />
-                  <NotificationSettings />
-                </div>
+                <NotificationSettings
+                  destinations={[
+                    {
+                      id: "webpush",
+                      label: "Phone app",
+                      details: <PhoneNotificationSettings />,
+                    },
+                  ]}
+                />
               ),
             },
             {

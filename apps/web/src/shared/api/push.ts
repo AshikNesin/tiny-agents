@@ -54,12 +54,3 @@ export interface PushDeviceRemoved {
 
 /** `POST /notifications/devices/:id/test`. */
 export type PushDeviceTest = { ok: true } | { ok: false; reason: string };
-
-/**
- * `GET`/`PUT /notifications/settings` as far as the phone channel's switch
- * reads it: `channels.webpush === false` turns phones off. The rest of the
- * settings round-trip untouched.
- */
-export interface NotificationChannelSettings {
-  settings: { channels?: Record<string, boolean> } & Record<string, unknown>;
-}

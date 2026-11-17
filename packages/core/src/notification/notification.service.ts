@@ -150,6 +150,8 @@ export class NotificationService {
   #settingsCache: { value: NotificationSettings; at: number } | undefined;
   #lastTestAt = 0;
   #warnedUnconfigured = false;
+  /** Whether this channel is the one that delivers (the hub decides; alone, always). */
+  #delivers: (settings: NotificationSettings) => boolean = () => true;
 
   /** Dedupe keys accepted by this process, with when. */
   readonly #recent = new Map<string, number>();
@@ -209,6 +211,16 @@ export class NotificationService {
   /** The channel this service delivers through. */
   get channelId(): string {
     return this.#channel.id;
+  }
+
+  /** Whether the channel can deliver now (credentials set, a device registered). */
+  get configured(): boolean {
+    return this.#channel.configured();
+  }
+
+  /** Deliver only while `delivers` says so (the hub's one-channel choice). */
+  routeBy(delivers: (settings: NotificationSettings) => boolean): void {
+    this.#delivers = delivers;
   }
 
   /** Validate and store the owner's settings (400 on invalid input). */
@@ -301,8 +313,8 @@ export class NotificationService {
 
   async #accept(n: Notification, now: number, windowMs: number): Promise<void> {
     const settings = await this.getSettings();
-    // The owner switched this channel off: nothing to log, nothing to send.
-    if (settings.channels[this.#channel.id] === false) return;
+    // The owner chose another channel, or none: nothing to log, nothing to send.
+    if (!this.#delivers(settings)) return;
     const def = this.#events.get(n.event);
     const enabled = def?.locked || (settings.events[n.event] ?? def?.defaultEnabled ?? true);
     const row = {
@@ -805,10 +817,10 @@ export class NotificationService {
 }
 
 /**
- * Every channel at once: each notification goes through each channel's own
- * pipeline (its dedupe, throttle, retries and log row), with one set of
- * settings and events. The first channel (Pushover) answers the status,
- * validate and test routes; other channels bring their own.
+ * One channel at a time: every channel keeps its own pipeline (dedupe,
+ * throttle, retries, log row) and one set of settings and events, but only
+ * the channel `deliverTo` names sends. The first channel (Pushover) answers
+ * the status, validate and test routes; other channels bring their own.
  */
 export class NotificationHub {
   readonly primary: NotificationService;
@@ -817,11 +829,30 @@ export class NotificationHub {
   constructor(primary: NotificationService) {
     this.primary = primary;
     this.#services = [primary];
+    this.#route(primary);
+  }
+
+  /**
+   * The channel that delivers under `settings`, or null when off. Before the
+   * owner chooses: the first added channel (the phone app) that can deliver,
+   * else the primary.
+   */
+  deliveringTo(settings: NotificationSettings): string | null {
+    const choice = settings.deliverTo;
+    if (choice === "off") return null;
+    if (choice !== "auto") return choice;
+    const ready = this.#services.slice(1).find((service) => service.configured);
+    return (ready ?? this.primary).channelId;
+  }
+
+  #route(service: NotificationService): void {
+    service.routeBy((settings) => this.deliveringTo(settings) === service.channelId);
   }
 
   /** Add a channel's pipeline; returns a function that removes it again. */
   add(service: NotificationService): () => void {
     for (const def of this.primary.events()) service.defineEvents([def]);
+    this.#route(service);
     this.#services.push(service);
     return () => {
       const at = this.#services.indexOf(service);
@@ -850,15 +881,22 @@ export class NotificationHub {
     return this.primary.events();
   }
 
-  getSettings(): Promise<NotificationSettings> {
-    return this.primary.getSettings();
+  /** The settings with "auto" read as the channel it stands for, so the page shows a real choice. */
+  async getSettings(): Promise<NotificationSettings> {
+    return this.#resolved(await this.primary.getSettings());
   }
 
   async saveSettings(input: unknown): Promise<NotificationSettings> {
     const value = await this.primary.saveSettings(input);
     for (const service of this.#services)
       if (service !== this.primary) service.primeSettings(value);
-    return value;
+    return this.#resolved(value);
+  }
+
+  #resolved(settings: NotificationSettings): NotificationSettings {
+    if (settings.deliverTo !== "auto") return settings;
+    const to = this.deliveringTo(settings);
+    return { ...settings, deliverTo: to === "webpush" || to === "pushover" ? to : "auto" };
   }
 
   status(): NotificationStatus {

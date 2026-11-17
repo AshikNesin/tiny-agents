@@ -37,8 +37,13 @@
   - main:
     - heading "Notifications" [level=1]
     - text: Push notifications for waiting bots and routine results.
-    - heading "Push notifications" [level=3]
-    - text: Pushover alerts when a bot needs you or unattended work finishes. Not configured Set PUSHOVER_API_TOKEN and PUSHOVER_USER_KEY in the server environment (a Pushover application token and your user key), then restart. Bots work the same without them.
+    - heading "Send notifications to" [level=3]
+    - text: One place at a time, for when a bot needs you or work finishes.
+    - radiogroup "Send notifications to":
+      - radio "Phone app"
+      - radio "Pushover" [checked]
+      - radio "Off"
+    - text: Not configured Set PUSHOVER_API_TOKEN and PUSHOVER_USER_KEY in the server environment (a Pushover application token and your user key), then restart.
     - heading "What to send" [level=3]
     - text: Messages never include tool arguments, outputs or secrets.
     - region "System":
@@ -55,6 +60,8 @@
       - text: Sign-in needed A bot asked you to fill in a login it does not have.
       - checkbox "Still waiting reminder" [checked]
       - text: Still waiting reminder One reminder when an approval or question is still unanswered.
+      - checkbox "Auto-fix needs you" [checked]
+      - text: Auto-fix needs you A pull request's Auto-fix stopped for your input, switched itself off at a limit, or a check stalled.
     - region "Updates":
       - text: Updates
       - checkbox "Routine finished" [checked]
@@ -67,6 +74,8 @@
       - text: Long reply finished A long-running reply finished while you were away.
       - checkbox "Code updates" [checked]
       - text: Code updates A coding agent's conversation you follow (Shelley, Claude Code) finished, failed or asked for you while you were away.
+      - checkbox "Pull request updates" [checked]
+      - text: Pull request updates A Code pull request's checks went green or failed (with Auto-fix off), or it merged.
     - region "Security":
       - text: Security
       - checkbox "Vault alerts" [checked] [disabled]
@@ -89,8 +98,8 @@
       - spinbutton "Reminder (minutes)": "15"
       - text: One reminder for unanswered requests. 0 turns it off. Grouping window (seconds)
       - spinbutton "Grouping window (seconds)": "30"
-      - text: Requests from one chat within it arrive as one. Device (optional)
-      - textbox "Device (optional)":
+      - text: Requests from one chat within it arrive as one. Pushover device (optional)
+      - textbox "Pushover device (optional)":
         - /placeholder: All devices
         - text: verify-device-fixed
     - button "Save"

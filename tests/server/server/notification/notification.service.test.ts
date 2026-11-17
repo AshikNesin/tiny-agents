@@ -473,15 +473,6 @@ describe("NotificationService", () => {
     expect(channel.dismissed).toEqual([]);
     expect(log.rows.find((row) => row.dedupeKey === "approval:7:3")?.status).toBe("cancelled");
   });
-
-  it("sends nothing and logs nothing on a channel the owner switched off", async () => {
-    const { service, channel, log } = build();
-    await service.saveSettings({ channels: { pushover: false } });
-    service.notify(approval(1));
-    await flush();
-    expect(channel.send).not.toHaveBeenCalled();
-    expect(log.rows).toHaveLength(0);
-  });
 });
 
 describe("NotificationHub", () => {
@@ -493,38 +484,68 @@ describe("NotificationHub", () => {
     vi.useRealTimers();
   });
 
-  it("sends each notification through every channel, deduped per channel", async () => {
+  function hubOf(initial: Partial<NotificationSettings> = {}, phoneRegistered = true) {
     const log = createMemoryLogStore();
-    const settings = settingsStore();
+    const settings = settingsStore(initial);
     const pushover = build({ log, settings });
-    const webpush = build({ log, settings, channel: fakeChannel(undefined, "webpush") });
+    const phone = fakeChannel(undefined, "webpush");
+    phone.configuredFlag = phoneRegistered;
+    const webpush = build({ log, settings, channel: phone });
     const hub = new NotificationHub(pushover.service);
     hub.add(webpush.service);
-    hub.notify(approval(1));
-    hub.notify(approval(1));
+    return { hub, log, pushover, webpush };
+  }
+
+  it("delivers through the one channel the owner chose", async () => {
+    const toPushover = hubOf({ deliverTo: "pushover" });
+    toPushover.hub.notify(approval(1));
     await flush();
-    expect(pushover.channel.sent).toHaveLength(1);
-    expect(webpush.channel.sent).toHaveLength(1);
-    expect(log.rows.map((row) => [row.channel, row.status]).sort()).toEqual([
-      ["pushover", "sent"],
-      ["webpush", "sent"],
-    ]);
-    hub.cancel("approval:7:1");
+    expect(toPushover.pushover.channel.sent).toHaveLength(1);
+    expect(toPushover.webpush.channel.sent).toHaveLength(0);
+
+    const toPhone = hubOf({ deliverTo: "webpush" });
+    toPhone.hub.notify(approval(1));
+    toPhone.hub.notify(approval(1));
     await flush();
-    expect(webpush.channel.dismissed).toEqual(["approval:7:1"]);
+    expect(toPhone.pushover.channel.sent).toHaveLength(0);
+    expect(toPhone.webpush.channel.sent).toHaveLength(1);
+    expect(toPhone.log.rows.map((row) => [row.channel, row.status])).toEqual([["webpush", "sent"]]);
+    toPhone.hub.cancel("approval:7:1");
+    await flush();
+    expect(toPhone.webpush.channel.dismissed).toEqual(["approval:7:1"]);
   });
 
-  it("applies saved settings to every channel at once", async () => {
-    const settings = settingsStore();
-    const pushover = build({ settings });
-    const webpush = build({ settings, channel: fakeChannel(undefined, "webpush") });
-    const hub = new NotificationHub(pushover.service);
-    hub.add(webpush.service);
-    await webpush.service.getSettings(); // cache the old value
-    await hub.saveSettings({ channels: { webpush: false } });
+  it("sends and logs nothing when notifications are off", async () => {
+    const { hub, log, pushover, webpush } = hubOf({ deliverTo: "off" });
     hub.notify(approval(1));
     await flush();
-    expect(pushover.channel.sent).toHaveLength(1);
+    expect(pushover.channel.send).not.toHaveBeenCalled();
     expect(webpush.channel.send).not.toHaveBeenCalled();
+    expect(log.rows).toHaveLength(0);
+  });
+
+  it("before a choice, uses the phone app once a phone is registered, else Pushover", async () => {
+    const withPhone = hubOf({}, true);
+    expect((await withPhone.hub.getSettings()).deliverTo).toBe("webpush");
+    withPhone.hub.notify(approval(1));
+    await flush();
+    expect(withPhone.webpush.channel.sent).toHaveLength(1);
+    expect(withPhone.pushover.channel.sent).toHaveLength(0);
+
+    const noPhone = hubOf({}, false);
+    expect((await noPhone.hub.getSettings()).deliverTo).toBe("pushover");
+    noPhone.hub.notify(approval(1));
+    await flush();
+    expect(noPhone.pushover.channel.sent).toHaveLength(1);
+  });
+
+  it("switches every channel at once when the choice is saved", async () => {
+    const { hub, pushover, webpush } = hubOf({ deliverTo: "pushover" });
+    await webpush.service.getSettings(); // cache the old value
+    await hub.saveSettings({ deliverTo: "webpush" });
+    hub.notify(approval(1));
+    await flush();
+    expect(webpush.channel.sent).toHaveLength(1);
+    expect(pushover.channel.send).not.toHaveBeenCalled();
   });
 });

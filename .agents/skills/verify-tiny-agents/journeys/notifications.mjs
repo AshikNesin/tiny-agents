@@ -1,5 +1,5 @@
 // Feature: notifications (features/notifications.md). Settings → Notifications with Pushover
-// unconfigured (the off state), saving preferences, and the in-app "a bot needs you" signals
+// unconfigured (the off state), the one "Send notifications to" choice, saving preferences, and the in-app "a bot needs you" signals
 // (sidebar label, tab title count, badged favicon) while a bot waits on a question.
 import { journey, expect } from "../scripts/lib.mjs";
 
@@ -19,7 +19,12 @@ await journey("notifications", async ({ page, step, proof, cleanup, api, stamp }
       if (!res.ok()) throw new Error(`restore notification settings -> ${res.status()}`);
     });
     await page.goto("/settings/notifications");
-    await expect(page.getByRole("heading", { name: "Push notifications" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Notifications", exact: true })).toBeVisible();
+  });
+  await step("no phone registered: Pushover is the chosen channel", async () => {
+    const choice = page.getByRole("radiogroup", { name: "Send notifications to" });
+    await expect(choice.getByRole("radio", { name: "Pushover" })).toBeChecked();
+    await expect(choice.getByRole("radio")).toHaveText(["Phone app", "Pushover", "Off"]);
   });
   await step(
     "off state: Not configured, names the env vars, no test/re-check buttons",
@@ -29,8 +34,8 @@ await journey("notifications", async ({ page, step, proof, cleanup, api, stamp }
       await expect(panel.getByText("Not configured", { exact: true })).toBeVisible();
       await expect(panel).toContainText("PUSHOVER_API_TOKEN");
       await expect(panel).toContainText("PUSHOVER_USER_KEY");
-      await expect(panel.getByRole("button", { name: "Send test notification" })).toHaveCount(0);
-      await expect(panel.getByRole("button", { name: "Re-check" })).toHaveCount(0);
+      await expect(panel.getByRole("button", { name: "Send test" })).toHaveCount(0);
+      await expect(panel.getByRole("button", { name: "Re-check Pushover" })).toHaveCount(0);
       const status = await api.get("/notifications/status");
       expect(status.state).toBe("not_configured");
     },
@@ -44,6 +49,25 @@ await journey("notifications", async ({ page, step, proof, cleanup, api, stamp }
     await expect(page.getByText("Nothing sent yet.")).toBeVisible();
   });
   await proof("off-state");
+  await step("choose Off, then Phone app: one choice saved, only its details shown", async () => {
+    const choice = page.getByRole("radiogroup", { name: "Send notifications to" });
+    await choice.getByRole("radio", { name: "Off" }).click();
+    await expect(page.getByText("Nothing is sent. Bots work the same.")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "What to send" })).toHaveCount(0);
+    expect((await api.get("/notifications/settings")).settings.deliverTo).toBe("off");
+    await choice.getByRole("radio", { name: "Phone app" }).click();
+    await expect(page.getByText(/No phones yet/)).toBeVisible();
+    await expect(page.getByText("PUSHOVER_API_TOKEN")).toHaveCount(0);
+    expect((await api.get("/notifications/settings")).settings.deliverTo).toBe("webpush");
+  });
+  await proof("phone-chosen");
+  await step("back to Pushover", async () => {
+    await page
+      .getByRole("radiogroup", { name: "Send notifications to" })
+      .getByRole("radio", { name: "Pushover" })
+      .click();
+    await expect(page.getByLabel("Pushover device (optional)")).toBeVisible();
+  });
   await step("change preferences: an event off, quiet hours on, timing, device; Save", async () => {
     await page.getByRole("checkbox", { name: "Long reply finished" }).click();
     await expect(page.getByRole("checkbox", { name: "Long reply finished" })).not.toBeChecked();
@@ -51,7 +75,7 @@ await journey("notifications", async ({ page, step, proof, cleanup, api, stamp }
     await page.getByLabel("From").fill("22:30");
     await page.getByLabel("Until").fill("07:15");
     await page.getByLabel("Long reply (minutes)").fill("12");
-    await page.getByLabel("Device (optional)").fill(device);
+    await page.getByLabel("Pushover device (optional)").fill(device);
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByText("Notification settings saved")).toBeVisible();
   });
@@ -64,7 +88,7 @@ await journey("notifications", async ({ page, step, proof, cleanup, api, stamp }
     await expect(page.getByLabel("From")).toHaveValue("22:30");
     await expect(page.getByLabel("Until")).toHaveValue("07:15");
     await expect(page.getByLabel("Long reply (minutes)")).toHaveValue("12");
-    await expect(page.getByLabel("Device (optional)")).toHaveValue(device);
+    await expect(page.getByLabel("Pushover device (optional)")).toHaveValue(device);
     const { settings } = await api.get("/notifications/settings");
     expect(settings.events["run.long_done"]).toBe(false);
     expect(settings.quietHours).toMatchObject({ enabled: true, start: "22:30", end: "07:15" });
