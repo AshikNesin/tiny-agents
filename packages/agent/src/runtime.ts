@@ -303,6 +303,12 @@ export class AgentRuntime {
       // Harness opened below.
       const gate = new ToolGate({
         approvals,
+        // Out of the calling tool's own invocation: aborting joins it.
+        stop: (conversation) => {
+          setTimeout(() => {
+            runtime?.abort(conversation).catch(() => undefined);
+          }, 0);
+        },
         ...(options.reviewer ? { reviewer: options.reviewer } : {}),
         ...(options.ownerUserId ? { ownerUserId: options.ownerUserId } : {}),
         store: {
@@ -427,6 +433,11 @@ export class AgentRuntime {
   }
 
   // ── YOLO mode (issue #151) ────────────────────────────────────────────
+
+  /** Tokens the conversation has used so far: a routine run's spend, as it starts fresh each run. */
+  usedTokens(ref: ConversationRef): Promise<number> {
+    return this.#store.usedTokens(ref);
+  }
 
   /** Whether the conversation's YOLO mode is on. */
   async yolo(ref: ConversationRef): Promise<boolean> {

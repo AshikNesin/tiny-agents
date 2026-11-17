@@ -21,7 +21,7 @@
  *   recordBlocked   a run ended blocked: count it, and pause in the same
  *                   write once BLOCKED_RUNS_BEFORE_PAUSE did in a row
  *   clearBlockedStreak  a run finished some other way
- *   claimConversation   first fire stores the routine's own conversation
+ *   setLatestConversation  each fire records its run's fresh conversation
  *   moveToBot       the routine's conversation is retired with its old bot
  *   removeRoutine   the row goes, and its queued job with it
  *   rearmRoutines   boot: an armed routine whose job is gone gets it back
@@ -268,23 +268,11 @@ export async function clearBlockedStreak(id: string): Promise<void> {
 }
 
 /**
- * Store `created` as the routine's own conversation (issue #63) unless one is
- * stored already. Two fires racing the first create keep whichever stored
- * first; returns that one, so the other's empty conversation is never used.
+ * Record the conversation of the routine's newest run, the one a move or a
+ * delete stops. Each run has a fresh one (stored on its run row too).
  */
-export async function claimConversation(id: string, created: string): Promise<string> {
-  const claimed = await db
-    .update(routines)
-    .set({ conversationId: created })
-    .where(and(eq(routines.id, id), isNull(routines.conversationId)))
-    .returning({ id: routines.id });
-  if (claimed.length === 1) return created;
-  const row = await db.query.routines.findFirst({
-    where: eq(routines.id, id),
-    columns: { conversationId: true },
-  });
-  if (!row?.conversationId) throw new Error("The routine's conversation could not be stored");
-  return row.conversationId;
+export async function setLatestConversation(id: string, conversationId: string): Promise<void> {
+  await db.update(routines).set({ conversationId }).where(eq(routines.id, id));
 }
 
 /**

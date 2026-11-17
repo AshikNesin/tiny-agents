@@ -75,6 +75,8 @@ const run: RoutineRun = {
   finishedAt: "2026-10-21T03:31:04.000Z",
   output: "Echo: done",
   error: null,
+  conversationId: null,
+  tokens: null,
 };
 
 function loadPage(routines: Routine[] = [routine], runs: RoutineRun[] = [run]) {
@@ -134,6 +136,12 @@ describe("Routines page", { timeout: 15_000 }, () => {
     expect(screen.getByText(/took 1m 4s/)).toBeTruthy();
     expect(screen.getByText("succeeded")).toBeTruthy();
     expect(screen.getByText("manual")).toBeTruthy();
+  });
+
+  it("shows what a run spent in tokens beside how long it took", async () => {
+    loadPage([routine], [{ ...run, tokens: 42_300 }]);
+    mount();
+    expect(await screen.findByText(/took 1m 4s · 42k tokens/)).toBeTruthy();
   });
 
   it("creates a routine with the compiled interval schedule", async () => {

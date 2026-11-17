@@ -47,6 +47,7 @@ interface SetupOptions {
   ownerUserId?: () => Promise<number | undefined>;
   autoReview?: boolean;
   unattended?: boolean;
+  budgetTokens?: number;
   storePath?: string;
 }
 
@@ -66,6 +67,7 @@ async function open(kind: EngineKind, sent: string[], options: SetupOptions = {}
       permissions: {},
       ...(autoReview ? { autoReview: true } : {}),
       ...(options.unattended ? { unattended: true } : {}),
+      ...(options.budgetTokens ? { budgetTokens: options.budgetTokens } : {}),
     },
   });
   return { ...engine, config };
@@ -479,6 +481,19 @@ describe.each(ENGINES)("Tool gate on %s", (kind) => {
       expect(sent).toEqual([]);
     }, 15_000);
   });
+});
+
+describe("Tool gate token budget (pi)", () => {
+  it("refuses every call once the conversation has spent its budget, so the model wraps up", async () => {
+    const sent: string[] = [];
+    const { ref, chat, send } = await setup("pi", sent, { unattended: true, budgetTokens: 1 });
+    await send(ref, { requestId: "r1", text: "send_email ana@x.dev" });
+    expect(await until(() => chat.results()[0], "reply")).toMatch(
+      /send_email did not run: this routine run has used [\d,]+ tokens, over its budget of 1\./,
+    );
+    expect(sent).toEqual([]);
+    expect(chat.toolCall("send_email")).toMatchObject({ status: "error" });
+  }, 15_000);
 });
 
 /** pi keeps an Owner wait in a task document, so it outlives the process. */

@@ -36,6 +36,13 @@ function durationSeconds(run: RoutineRun): number | null {
   return seconds >= 0 ? seconds : null;
 }
 
+/** A run's token spend, short: "820 tokens", "42k tokens", "1.2M tokens". */
+function formatTokens(tokens: number): string {
+  if (tokens < 1000) return `${tokens} tokens`;
+  if (tokens < 1_000_000) return `${Math.round(tokens / 1000)}k tokens`;
+  return `${(tokens / 1_000_000).toFixed(1)}M tokens`;
+}
+
 function formatDuration(seconds: number): string {
   return seconds < 60 ? `${seconds}s` : `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
 }
@@ -91,6 +98,7 @@ export function RecentRuns({ runs }: { runs: RoutineRun[] }) {
                 {formatIst(run.scheduledFor)}
                 {durationSeconds(run) !== null &&
                   ` · took ${formatDuration(durationSeconds(run)!)}`}
+                {run.tokens != null && run.tokens > 0 && ` · ${formatTokens(run.tokens)}`}
                 {run.output && (
                   <>
                     {" · "}

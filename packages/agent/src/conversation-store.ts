@@ -17,9 +17,10 @@ import {
   type EntryRecord,
   type Harness,
   type TaskGraphWatch,
+  UsageDoc,
 } from "@earendil-works/pi-durable";
 import { ConversationNotFoundError, type CompiledConversation } from "./engine";
-import { applyPermissions, PermissionsDoc, YoloDoc } from "./policy";
+import { applyPermissions, PermissionsDoc, usedTokens, YoloDoc } from "./policy";
 import { attachmentsOf } from "./transcript";
 import type { ConversationRef } from "./types";
 
@@ -107,6 +108,15 @@ export class ConversationStore {
         applyPermissions(await tx.doc(PermissionsDoc, ref as ConversationId), compiled.permissions);
       }
     }, ctx);
+  }
+
+  /** Tokens the conversation has used so far (its `pi.usage`, every model and tool). */
+  async usedTokens(ref: ConversationRef): Promise<number> {
+    await this.conversation(ref);
+    return this.harness.commit(
+      async (tx) => usedTokens(await tx.doc(UsageDoc, ref as ConversationId)),
+      ctx,
+    );
   }
 
   /** The conversation's YOLO document: on, and whose messages it trusts. */

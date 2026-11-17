@@ -20,6 +20,10 @@
  *    memory (the Claude plan engine).
  * 7. The result leaves the gate scrubbed of registered vault values.
  *
+ * Before all of that, a conversation with a token budget (a routine run's)
+ * that has used it up refuses every call, so the model answers with what it
+ * has; one far past it is stopped.
+ *
  * Every decision is memoized on the call's api (`gate:*`), so a replay after
  * a restart, or a permission change mid-call, never flips it.
  */
@@ -36,7 +40,14 @@ import {
   type GatePlan,
 } from "./approvals";
 import { durableMemo, toJson } from "./durable-json";
-import { mayAutoReview, mustAsk, ownerTurn, yoloOf, type GateUserMessage } from "./policy";
+import {
+  mayAutoReview,
+  mustAsk,
+  ownerTurn,
+  tokenBudget,
+  yoloOf,
+  type GateUserMessage,
+} from "./policy";
 import { secretRedactor } from "./redact";
 import { ownerMessages, type Reviewer, type ReviewVerdict } from "./reviewer";
 import { refuseUnattended, unattendedOnce, type WaitInfo, type WaitTracker } from "./waiting";
@@ -91,6 +102,11 @@ export interface GateStore {
 export interface ToolGateOptions {
   /** Counts calls waiting on the owner's approval (shared with credential requests). */
   approvals: WaitTracker;
+  /**
+   * Stop the conversation's run: called (not awaited) when a budgeted
+   * conversation keeps calling tools far past its budget.
+   */
+  stop?: (conversation: number) => void;
   /** Auto-review (issue #65); without one every asking call shows its card. */
   reviewer?: Reviewer;
   /**
@@ -124,15 +140,29 @@ const noStore: GateStore = {
 
 const heldKey = (conversation: number, taskId: number) => `${conversation}:${taskId}`;
 
+/** Past this multiple of its budget, a conversation's run is stopped, not just refused tools. */
+const BUDGET_STOP_FACTOR = 1.5;
+
+/** The refusal a call gets once its conversation has spent its token budget. */
+function budgetRefusal(name: string, used: number, budget: number): string {
+  return (
+    `${name} did not run: this routine run has used ${used.toLocaleString("en-US")} tokens, ` +
+    `over its budget of ${budget.toLocaleString("en-US")}. Do not call any more tools. ` +
+    `Reply now with what you found so far, and say what was left undone.`
+  );
+}
+
 export class ToolGate {
   readonly #approvals: WaitTracker;
   readonly #reviewer: Reviewer | undefined;
   readonly #ownerUserId: () => Promise<number | undefined>;
   readonly #store: GateStore;
+  readonly #stop: ((conversation: number) => void) | undefined;
   readonly #held = new Map<string, HeldAnswer>();
 
   constructor(options: ToolGateOptions) {
     this.#approvals = options.approvals;
+    this.#stop = options.stop;
     this.#reviewer = options.reviewer;
     this.#ownerUserId = options.ownerUserId ?? (async () => undefined);
     this.#store = options.store ?? noStore;
@@ -149,6 +179,14 @@ export class ToolGate {
     execute: () => Promise<ToolExecutionResult>,
   ): Promise<ToolExecutionResult> {
     const { name, args, api, context, hooks } = call;
+    const overBudget = await this.#overBudget(call);
+    if (overBudget) {
+      return {
+        output: text(budgetRefusal(name, overBudget.used, overBudget.budget)),
+        isError: true,
+        details: { budget: { used: overBudget.used, limit: overBudget.budget } },
+      };
+    }
     const plan = hooks ? await planOnce(call, hooks) : undefined;
     if (plan?.refuse) {
       return { output: text(plan.refuse), isError: true, details: { refused: true } };
@@ -214,6 +252,27 @@ export class ToolGate {
             }
           : { approval: "approved", waitedMs: waitedMs ?? 0, result: result.details ?? null },
     };
+  }
+
+  /**
+   * The conversation's budget and use when it has spent its budget (decided
+   * once per call, so a replay keeps the answer); stops the run when it is
+   * far past it.
+   */
+  async #overBudget(call: GateCall): Promise<{ used: number; budget: number } | undefined> {
+    const { api, context } = call;
+    const state = await tokenBudget(api, context);
+    if (!state) return undefined;
+    const decided = await api.memo<{ used: number; budget: number } | null>(
+      "gate:budget",
+      state.used >= state.budget ? state : null,
+      context,
+    );
+    if (!decided) return undefined;
+    if (decided.used >= decided.budget * BUDGET_STOP_FACTOR) {
+      this.#stop?.(Number(api.conversationId));
+    }
+    return decided;
   }
 
   /**

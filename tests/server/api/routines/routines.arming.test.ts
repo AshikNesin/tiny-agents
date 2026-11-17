@@ -12,7 +12,7 @@ import {
   ROUTINE_FIRE_JOB,
   advanceRoutine,
   armRoutine,
-  claimConversation,
+  setLatestConversation,
   clearBlockedStreak,
   createRoutine,
   disarmRoutine,
@@ -129,7 +129,7 @@ describe("arm and disarm", () => {
 
   it("removing cancels the job and hands back the conversation to retire", async () => {
     const routine = await armed();
-    await claimConversation(routine.id, "70");
+    await setLatestConversation(routine.id, "70");
     expect(await removeRoutine(routine.id)).toBe("70");
     expect(await db.$count(routines)).toBe(0);
     expect(await liveJobIds()).toEqual([]);
@@ -212,16 +212,9 @@ describe("blocked runs", () => {
 });
 
 describe("the routine's conversation", () => {
-  it("the first claim wins; a racing one gets the stored conversation", async () => {
-    const routine = await armed();
-    expect(await claimConversation(routine.id, "70")).toBe("70");
-    expect(await claimConversation(routine.id, "71")).toBe("70");
-    expect((await row(routine.id)).conversationId).toBe("70");
-  });
-
   it("moving to another bot retires the conversation in the same write", async () => {
     const routine = await armed();
-    await claimConversation(routine.id, "70");
+    await setLatestConversation(routine.id, "70");
     const other = await seedBot({ name: "Other", conversationId: "8" });
     expect(await moveToBot(routine.id, other.id)).toBe("70");
     expect(await row(routine.id)).toMatchObject({ botId: other.id, conversationId: null });

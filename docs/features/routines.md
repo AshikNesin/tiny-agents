@@ -24,27 +24,41 @@ tests/server/api/routines/                 # arming, engine, once, rearm, schedu
 tests/client/pages/routines.test.tsx       # the page
 ```
 
-## One conversation per routine
+## A fresh conversation per run
 
-Each routine has a durable conversation of its own (`Routine.conversationId`).
-It is created on the routine's first fire, from the bot's config, and every
-later run of that routine is submitted to it. A run never adds anything to
-the bot's chat, or to the owner's queued messages.
+Each run gets a durable conversation of its own (`RoutineRun.conversationId`),
+created from the bot's config when it fires, like a cron job's isolated
+session in OpenClaw or Hermes Agent. A run never adds anything to the bot's
+chat, to the owner's queued messages, or to an earlier run's conversation.
 
-- **Context.** Runs of one routine share a conversation, so a routine that
-  should "only report new things" still sees what its earlier runs said, and
-  compaction works on that conversation alone. The bot's chat keeps only the
-  owner's messages.
-- **Reconcile.** Each fire goes through `submitToBot` with the routine's
-  conversation as its target, which reconciles that conversation from the
-  bot's row first, as it does for the chat.
-- **Moves and deletes.** Moving a routine to another bot clears its
-  conversation (the next fire starts a fresh one for the new bot), stops the
-  old one, and cancels a run still awaiting there. Deleting a routine or its
-  bot stops its conversation. Old conversations stay in agent.db, hidden
-  (a chat's after "New chat" becomes a [past chat](./past-chats.md) instead).
+- **Why.** Runs used to share one conversation per routine, so every model
+  request of every run re-sent the routine's whole history (earlier prompts,
+  replies and tool results such as fetched pages) until compaction kicked in
+  near the context window. A routine every 15 minutes sent well over 100k
+  tokens per request. Now a run pays only for its own prompt and tool calls.
+- **Continuity.** The prompt quotes the routine's three latest succeeded
+  results, newest first and trimmed to 500 characters each
+  (`recentResults`, `composeRoutinePrompt`), so a routine that should "only
+  report new things" still can. They are data, not instructions.
+- **Exactly once.** The conversation is recorded on the run row before the
+  submit (`reserveRunConversation`), so a redelivered or retried fire reuses
+  it and the request id dedupes the submit. `Routine.conversationId` names the
+  newest run's conversation, the one a move or a delete stops.
+- **One run at a time.** A fire while the routine's previous run is still
+  working is recorded `missed` ("Skipped: the previous run was still
+  working.") instead of queuing behind it; the chain moves on.
+- **Token budget.** A run's conversation carries a budget
+  (`ROUTINE_RUN_TOKEN_BUDGET`, 500k tokens, cache reads included,
+  `CapabilitySelection.budgetTokens`). Once it is spent, the Tool gate
+  refuses every call and tells the model to answer with what it has; at 1.5x
+  the run is stopped. The run's spend is stored on its row (`tokens`, shown
+  on the Routines page), and a run over budget is recorded `blocked` with the
+  reason, so three in a row pause the routine.
+- **Moves and deletes.** Moving a routine to another bot or deleting it (or
+  its bot) stops its newest run's conversation and cancels a run still
+  awaiting there. Old conversations stay in agent.db, hidden.
 
-Routine runs still have their bot's identity: tool calls in a routine's
+Routine runs still have their bot's identity: tool calls in a run's
 conversation resolve to the bot through `conversationOwner`
 (`bots/bots.owner.ts`), so a run gets the bot's skills, browser, memories and
 vault items. Memory capture reads only the chat, never a routine's
@@ -52,7 +66,7 @@ conversation.
 
 ## Nobody is there to ask
 
-A routine's conversation is configured `unattended`
+A run's conversation is configured `unattended`
 (`CapabilitySelection.unattended`, written to the conversation's permissions
 document). In it:
 
@@ -75,7 +89,7 @@ document). In it:
 
 The routine runs step of the settled pipeline (`routineRunsStep`,
 `routines.watcher.ts`; see Settled in GLOSSARY.md) resolves an awaiting run
-when its routine's conversation settles, reading only that conversation's
+when its run's conversation settles, reading only that conversation's
 awaiting runs. Its boot sweep resolves or marks interrupted the runs a
 restart left awaiting, and re-arms routines whose fire job is gone. Only routine prompts go into that
 conversation, so the run's output is always the routine's own reply, even if

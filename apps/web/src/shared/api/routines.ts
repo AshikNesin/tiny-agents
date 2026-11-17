@@ -50,6 +50,10 @@ export interface RoutineRunData {
   finishedAt: Date | null;
   output: string | null;
   error: string | null;
+  /** The run's own conversation (each run starts fresh); null for older runs. */
+  conversationId: string | null;
+  /** Tokens the run used, read when it settled; null while running or for older runs. */
+  tokens: number | null;
 }
 
 /** `GET /routines/runs/recent` adds whose run it was. */

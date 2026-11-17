@@ -1,8 +1,10 @@
 /**
  * routine-fire: the scheduling engine's only job. Loads the routine, applies
- * the missed-run grace policy, submits the labeled prompt into the routine's
- * own durable conversation (issue #63: never the bot's chat), records the run
- * (routines.runs.ts) and advances the chain to the next occurrence
+ * the missed-run grace policy, skips the occurrence while an earlier run is
+ * still working, submits the labeled prompt into a fresh durable
+ * conversation of the run's own (never the bot's chat, never an earlier
+ * run's, so a run's cost never grows with the routine's history), records
+ * the run (routines.runs.ts) and advances the chain to the next occurrence
  * (routines.arming.ts).
  * Fast and LLM-free: the run resolves when its Finished reply lands
  * (routines.watcher.ts).
@@ -21,11 +23,20 @@ import {
 import {
   ROUTINE_FIRE_JOB,
   advanceRoutine,
-  claimConversation,
   firePayloadSchema,
+  setLatestConversation,
   type RoutineFirePayload,
 } from "./routines.arming";
-import { recordAwaiting, recordMissed, recordSubmitFailed, runRequestId } from "./routines.runs";
+import {
+  hasRunningRun,
+  recentResults,
+  recordAwaiting,
+  recordMissed,
+  recordSkipped,
+  recordSubmitFailed,
+  reserveRunConversation,
+  runRequestId,
+} from "./routines.runs";
 import { composeRoutinePrompt, safeParseSchedule, withinGrace } from "./routines.schedule";
 
 /**
@@ -84,16 +95,33 @@ export async function dispatchOccurrence(
   }
 
   const runtime = getAgentRuntime();
+  // One run at a time: a fire while the last run still works is skipped,
+  // not queued behind it (a redelivery of a reserved fire is not new).
+  if (!existing && (await hasRunningRun(routine.id, runtime))) {
+    const runId = await recordSkipped(routine, scheduledFor, payload.trigger, now);
+    if (payload.trigger === "schedule" && routine.enabled) {
+      await advanceRoutine(routine, scheduledFor, now);
+    }
+    return runId;
+  }
   try {
-    const routineConversationId = await routineConversation(routine, runtime);
+    const conversationId = await runConversation(routine, scheduledFor, payload.trigger, runtime, {
+      reserved: existing?.conversationId ?? null,
+    });
     await submitToBot(
       routine.bot.id,
       {
         requestId: runRequestId(routine.id, scheduledFor),
-        text: composeRoutinePrompt(routine.name, routine.prompt, scheduledFor, lateMinutes),
+        text: composeRoutinePrompt(
+          routine.name,
+          routine.prompt,
+          scheduledFor,
+          lateMinutes,
+          await recentResults(routine.id, scheduledFor),
+        ),
       },
       runtime,
-      { routineConversationId },
+      { routineConversationId: conversationId },
     );
   } catch (error) {
     // A model removed from the catalog fails the reconcile step, so it lands here too.
@@ -108,18 +136,29 @@ export async function dispatchOccurrence(
 }
 
 /**
- * The routine's own conversation (issue #63): created from the bot's config
- * on its first fire, then reused by every run, so a recurring routine still
- * sees what its earlier runs said. Two fires racing the first create keep
- * whichever stored first; the other's empty conversation is never used.
+ * The run's own conversation: a fresh one from the bot's config, so the run
+ * pays only for its own prompt and tool calls, never for earlier runs. It is
+ * recorded on the run before the submit, so a redelivered or retried fire
+ * reuses it (and the request id dedupes the submit), and becomes the
+ * routine's latest, which moves and deletes retire.
  */
-async function routineConversation(
-  routine: { id: string; botId: string; conversationId: string | null },
+async function runConversation(
+  routine: { id: string; botId: string; name: string; bot: { id: string; name: string } },
+  scheduledFor: Date,
+  trigger: RoutineFirePayload["trigger"],
   runtime: BotConversationRuntime,
+  { reserved }: { reserved: string | null },
 ): Promise<string> {
-  if (routine.conversationId) return routine.conversationId;
+  if (reserved) return reserved;
   const created = await startBotConversation(routine.botId, runtime, { unattended: true });
-  return claimConversation(routine.id, created);
+  const conversationId = await reserveRunConversation(
+    { id: routine.id, name: routine.name, bot: routine.bot },
+    scheduledFor,
+    trigger,
+    created,
+  );
+  await setLatestConversation(routine.id, conversationId);
+  return conversationId;
 }
 
 const routineFireHandler: JobHandler<RoutineFirePayload> = async ({ id, data }) => {
