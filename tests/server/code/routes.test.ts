@@ -12,6 +12,7 @@ import { api, createTestApp } from "../helpers";
 import { authToken, eventually, resetAppTables } from "../fixtures";
 import { db, guests } from "../../../apps/web/src/server/db";
 import { createCodeHub, setCodeHub } from "../../../apps/web/src/server/api/code/code.hub";
+import { installAppForTests } from "../../../apps/web/src/server/app-root";
 import { isFollowed, markSeen } from "../../../apps/web/src/server/api/code/code.store";
 import { startFakeShelley, type FakeShelley } from "./shelley/fake-shelley";
 import { fakeHarness, type FakeHarness } from "./fake-harness";
@@ -489,5 +490,28 @@ describe("Code API for a guest (S3)", () => {
     expect((await asGuest("/status")).status).toBe(200);
     expect((await asGuest("/threads")).status).toBe(200);
     expect((await asGuest("/harnesses/fake/models")).status).not.toBe(403);
+  });
+});
+
+describe("a new thread's title", () => {
+  afterEach(() => installAppForTests({ codeBranchNamer: undefined }));
+
+  it("is a short summary of the task, from the naming model", async () => {
+    installAppForTests({
+      codeBranchNamer: {
+        sideCaller: {
+          complete: async () => "title: Debug gateway log schemas\nbranch: debug-gateway-logs",
+        },
+      },
+    });
+    const res = await post<{ threadId: string }>("/threads", {
+      instanceId: "fake",
+      cwd: "/repo",
+      message: "Can you figure out why the gateway log tools fail the schema check in CI?",
+    });
+    expect(res.status).toBe(201);
+    await eventually(() =>
+      expect(fake.renamed).toEqual([{ nativeId: "t1", title: "Debug gateway log schemas" }]),
+    );
   });
 });

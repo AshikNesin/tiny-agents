@@ -44,6 +44,7 @@ import {
 import { checkpointTurn } from "./code.checkpoints";
 import { codeGitHub } from "./code.github";
 import { codeHub } from "./code.hub";
+import { pullTitle } from "./code.naming";
 import { finishPass, startPass, timeOutPass } from "./code.passes";
 import {
   onProjectThreadArchived,
@@ -143,13 +144,23 @@ export async function publish(
   }
   const github = await services.client(project);
   const existing = await github.openPullForBranch(repo, thread.branch);
+  const threadTitle =
+    thread.title || (await codeHub()?.list())?.find((r) => r.id === threadId)?.title || null;
+  const title =
+    input.title?.trim() ||
+    (existing
+      ? ""
+      : await pullTitle({ thread: threadTitle, commits: commits.map((c) => c.subject) })) ||
+    threadTitle ||
+    commits.at(-1)?.subject ||
+    thread.branch;
   const created =
     existing ??
     (await github
       .createPull(repo, {
         head: thread.branch,
         base: project.baseBranch,
-        title: input.title?.trim() || thread.title || commits.at(-1)?.subject || thread.branch,
+        title,
         body: input.body?.trim() || pullBody(commits),
         draft: true,
       })
@@ -161,7 +172,7 @@ export async function publish(
     projectId: project.id,
     number: created.number,
     url: created.url,
-    title: input.title?.trim() || thread.title || "",
+    title,
     headRef: thread.branch,
     baseRef: project.baseBranch,
     autofix: projectSettings(project.settings).autofix.onByDefault,
