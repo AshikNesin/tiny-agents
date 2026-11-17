@@ -28,7 +28,7 @@ import { VaultPage } from "./pages/vault/Vault";
 import { TerminalPage } from "./pages/terminal";
 import { ComputerPage } from "./pages/computer";
 import { BrowserPage } from "./pages/browser";
-import { CodePage } from "./pages/code";
+import { CodePage, OpenReviewLink } from "./pages/code";
 import { AppShell } from "./components/shell/AppShell";
 import { BrandMark } from "./components/shell/BrandMark";
 import { APP_NAV, guestNav } from "./components/shell/nav";
@@ -153,6 +153,9 @@ export const appRoutes: RouteObject[] = [
               { path: "/code", element: <CodePage /> },
               { path: "/code/new", element: <CodePage /> },
               { path: "/code/threads", element: <CodePage /> },
+              { path: "/code/reviews", element: <CodePage /> },
+              { path: "/code/reviews/:reviewId", element: <CodePage /> },
+              { path: "/code/review/:owner/:repo/:number", element: <OpenReviewLink /> },
               { path: "/code/s/:slug", element: <CodePage /> },
               { path: "/code/settings", element: <CodePage /> },
               { path: "/code/settings/:section", element: <CodePage /> },

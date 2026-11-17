@@ -17,6 +17,7 @@ import {
   codeHandoffFinishes,
   codeHandoffs,
   codePullRequests,
+  codeReviews,
   codeThreads,
   db,
   shelleyHandoffs,
@@ -145,10 +146,12 @@ export async function seenMap(): Promise<Map<string, number>> {
 export interface ThreadDecoration {
   projectId: string | null;
   pr: { number: number; loop: string } | null;
+  /** The PR review this thread is the assistant of (issue #345). */
+  review: { id: string; number: number } | null;
 }
 
 export async function threadDecorations(): Promise<Map<string, ThreadDecoration>> {
-  const [threads, pulls] = await Promise.all([
+  const [threads, pulls, reviews] = await Promise.all([
     db
       .select({ id: codeThreads.id, projectId: codeThreads.projectId })
       .from(codeThreads)
@@ -161,14 +164,20 @@ export async function threadDecorations(): Promise<Map<string, ThreadDecoration>
       })
       .from(codePullRequests)
       .where(eq(codePullRequests.state, "open")),
+    db
+      .select({ id: codeReviews.id, number: codeReviews.number, threadId: codeReviews.threadId })
+      .from(codeReviews)
+      .where(isNotNull(codeReviews.threadId)),
   ]);
   const out = new Map<string, ThreadDecoration>();
-  for (const t of threads) out.set(t.id, { projectId: t.projectId, pr: null });
-  for (const p of pulls) {
-    const entry = out.get(p.threadId) ?? { projectId: null, pr: null };
-    entry.pr = { number: p.number, loop: p.loop };
-    out.set(p.threadId, entry);
-  }
+  const entry = (id: string) => {
+    const found = out.get(id) ?? { projectId: null, pr: null, review: null };
+    out.set(id, found);
+    return found;
+  };
+  for (const t of threads) entry(t.id).projectId = t.projectId;
+  for (const p of pulls) entry(p.threadId).pr = { number: p.number, loop: p.loop };
+  for (const r of reviews) entry(r.threadId!).review = { id: r.id, number: r.number };
   return out;
 }
 

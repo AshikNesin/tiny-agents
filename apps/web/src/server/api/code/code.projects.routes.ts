@@ -16,6 +16,7 @@ import type {
   CheckpointView,
   GitHubStatus,
   ProjectView,
+  PullReviewView,
   ReviewDraft,
   ReviewFile,
   ThreadPullsView,
@@ -34,6 +35,15 @@ import { checkpointRange, checkpointsOf, revertTo } from "./code.checkpoints";
 import { codeHub } from "./code.hub";
 import { checkLog } from "./code.checks";
 import { cleanBranchPrefix } from "./code.workspace";
+import {
+  archiveReview,
+  askReview,
+  getReview,
+  listReviews,
+  openReview,
+  reviewIdOfKey,
+  reviewWorktree,
+} from "./code.reviews";
 import {
   createProject,
   deleteProject,
@@ -348,30 +358,36 @@ router.post("/code/threads/:id/pr/ready", async (c) => {
 
 // --- review: base-branch diff, viewed marks, batched comments -----------------------------
 
+/**
+ * What a Review panel reads: a project thread's worktree against the
+ * project's base, or a PR review's (`review:<id>`) against the PR's base.
+ */
 async function reviewTarget(threadId: string) {
+  const reviewId = reviewIdOfKey(threadId);
+  if (reviewId) return reviewWorktree(reviewId);
   const found = await projectThread(threadId);
   if (!found?.thread.worktree) {
     throw Boom.notFound("Review against the base branch is for project threads with a worktree.");
   }
   return {
-    ...found,
     worktree: found.thread.worktree,
+    base: found.project.baseBranch,
     ws: await codeGitHub().workspace(found.project),
   };
 }
 
 router.get("/code/threads/:id/review/files", async (c) => {
   const id = threadParam(c.req.param("id"));
-  const { project, worktree, ws } = await reviewTarget(id);
-  const files = await ws.baseFiles(worktree, project.baseBranch);
+  const { base, worktree, ws } = await reviewTarget(id);
+  const files = await ws.baseFiles(worktree, base);
   return ok<ReviewFile[]>(c, await threadReview(id).withViewed(files));
 });
 
 router.get("/code/threads/:id/review/file", async (c) => {
   const id = threadParam(c.req.param("id"));
   const path = safePath(c.req.query("path"));
-  const { project, worktree, ws } = await reviewTarget(id);
-  return ok(c, { path, ...(await ws.baseFile(worktree, project.baseBranch, path)) });
+  const { base, worktree, ws } = await reviewTarget(id);
+  return ok(c, { path, ...(await ws.baseFile(worktree, base, path)) });
 });
 
 router.post("/code/threads/:id/review/viewed", async (c) => {
@@ -423,6 +439,32 @@ router.post("/code/threads/:id/review/send", async (c) => {
     return target.instance.send(target.nativeId, { message: review });
   });
   return ok(c, { sent, status: result.status });
+});
+
+// --- PR reviews (issue #345) ----------------------------------------------------------------
+
+router.get("/code/reviews", async (c) => ok<PullReviewView[]>(c, await listReviews()));
+
+router.post("/code/reviews", async (c) => {
+  const { pr } = await parseBody(c, z.object({ pr: z.string().trim().min(1).max(500) }));
+  return ok<PullReviewView>(c, await openReview(pr), 201);
+});
+
+router.get("/code/reviews/:review", async (c) =>
+  ok<PullReviewView>(c, await getReview(c.req.param("review"))),
+);
+
+router.post("/code/reviews/:review/ask", async (c) => {
+  const { message } = await parseBody(
+    c,
+    z.object({ message: z.string().trim().min(1).max(100_000) }),
+  );
+  return ok(c, await askReview(c.req.param("review"), message));
+});
+
+router.post("/code/reviews/:review/archive", async (c) => {
+  await archiveReview(c.req.param("review"));
+  return ok(c, { archived: true });
 });
 
 export default router;

@@ -53,9 +53,9 @@ interface ThreadPulls {
 
 export function useThreadPulls(
   threadId: string,
-  options: { refreshKey: unknown; fresh?: boolean; live?: boolean },
+  options: { refreshKey: unknown; fresh?: boolean; live?: boolean; enabled?: boolean },
 ): ThreadPulls {
-  const { refreshKey, fresh = true, live = false } = options;
+  const { refreshKey, fresh = true, live = false, enabled = true } = options;
   const view = useSyncExternalStore(
     useCallback((listener: () => void) => subscribe(threadId, listener), [threadId]),
     () => views.get(threadId) ?? null,
@@ -64,6 +64,7 @@ export function useThreadPulls(
   const [reloads, setReloads] = useState(0);
 
   useEffect(() => {
+    if (!enabled) return;
     let cancelled = false;
     setError(null);
     projectsApi
@@ -73,10 +74,10 @@ export function useThreadPulls(
     return () => {
       cancelled = true;
     };
-  }, [threadId, fresh, refreshKey, reloads]);
+  }, [threadId, fresh, refreshKey, reloads, enabled]);
 
   useEffect(() => {
-    if (!live) return;
+    if (!live || !enabled) return;
     let cancelled = false;
     let reading = false;
     const read = () => {
@@ -104,7 +105,7 @@ export function useThreadPulls(
       clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [threadId, fresh, live]);
+  }, [threadId, fresh, live, enabled]);
 
   return {
     view,

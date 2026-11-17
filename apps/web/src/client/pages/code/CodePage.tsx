@@ -14,6 +14,8 @@
  * `/code/:id/review` shows the same Changes and Pull request at full width
  * (each side pane's Open as a page goes there).
  * Projects and GitHub are settings pages of their own (`/code/settings`).
+ * `/code/reviews` lists PR reviews and opens one by link; a review
+ * (`/code/reviews/:reviewId`) takes the whole screen (issue #345).
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -39,7 +41,7 @@ import {
   threadPath,
   type HarnessInfo,
 } from "../../lib/code/api";
-import { useProjects } from "../../lib/code/projects";
+import { reviewPath, reviewsApi, useProjects } from "../../lib/code/projects";
 import { harnessOf, useCodeStore } from "../../store/code";
 import { ChangesPanel } from "./ChangesPanel";
 import { CodeSettings } from "./CodeSettings";
@@ -50,6 +52,8 @@ import { ReviewPanel } from "./ReviewPanel";
 import { ReviewPage, type ReviewTab } from "./ReviewPage";
 import { ResizablePane } from "./ResizablePane";
 import { ReviewSidebar, type SideTab } from "./ReviewSidebar";
+import { PullReview } from "./PullReview";
+import { ReviewsScreen } from "./ReviewsScreen";
 
 const SIDE_TAB_KEY = "tiny-agents:code-side-tab";
 
@@ -155,7 +159,13 @@ function SlugRedirect({ slug }: { slug: string }) {
 }
 
 export function CodePage() {
-  const { conversationId: rawId, slug, section, projectId: settingsProjectId } = useParams();
+  const {
+    conversationId: rawId,
+    slug,
+    section,
+    projectId: settingsProjectId,
+    reviewId,
+  } = useParams();
   const { pathname, search } = useLocation();
   const navigate = useNavigate();
   const { brand } = useShellConfig();
@@ -182,7 +192,11 @@ export function CodePage() {
   const composing = pathname === "/code/new";
   // `/code/threads`: every thread (or one project's) at full width, by status.
   const browsing = pathname === "/code/threads";
+  // `/code/reviews`: PR reviews (issue #345).
+  const reviewing = pathname === "/code/reviews";
   const rows = useMemo(() => threads ?? [], [threads]);
+  // A review's assistant lives on its review, not in the thread list.
+  const listed = useMemo(() => threads?.filter((t) => !t.review) ?? null, [threads]);
   const row = rows.find((r) => r.id === threadId);
   const cwd = row?.cwd ?? viewCwd;
   // While Changes is open the server pushes a version each time the files move;
@@ -264,6 +278,9 @@ export function CodePage() {
   }
 
   const offline = harnesses.filter((h) => h.status.state !== "connected");
+  if (reviewId) {
+    return <PullReview reviewId={reviewId} harnesses={harnesses} rows={rows} />;
+  }
 
   // The Changes and Pull request panels, for a side pane or the Review page.
   const openPage = (tab: ReviewTab) =>
@@ -278,6 +295,10 @@ export function CodePage() {
           // The composer is on the thread screen (on phones, and from the Review page).
           if (page || window.matchMedia("(max-width: 1023px)").matches)
             navigate(threadPath(threadId));
+        }}
+        onReview={async (url) => {
+          const review = await reviewsApi.open(url);
+          navigate(reviewPath(review.id));
         }}
       />
     ) : null;
@@ -319,7 +340,7 @@ export function CodePage() {
           data-state={sidebarOpen ? "open" : "closed"}
           className={cn(
             "border-border w-full shrink-0 flex-col border-r md:w-72 xl:w-80",
-            threadId || composing || browsing || inSettings ? "hidden" : "flex",
+            threadId || composing || browsing || reviewing || inSettings ? "hidden" : "flex",
             // With Changes open the list steps aside until there is room for all three.
             !sidebarOpen ? "md:hidden" : sideOpen ? "2xl:flex" : "md:flex",
           )}
@@ -341,7 +362,7 @@ export function CodePage() {
             </Button>
           </div>
           <ConversationList
-            threads={threads}
+            threads={listed}
             harnesses={harnesses}
             activeId={threadId}
             projects={projects}
@@ -357,7 +378,7 @@ export function CodePage() {
               ? sideOpen
                 ? "hidden lg:flex"
                 : "flex"
-              : composing || browsing || inSettings
+              : composing || browsing || reviewing || inSettings
                 ? "flex"
                 : "hidden md:flex",
           )}
@@ -386,7 +407,9 @@ export function CodePage() {
               onChange={reloadProjects}
             />
           ) : browsing ? (
-            <ThreadsScreen threads={threads} projects={projects} sidebarHidden={!sidebarOpen} />
+            <ThreadsScreen threads={listed} projects={projects} sidebarHidden={!sidebarOpen} />
+          ) : reviewing ? (
+            <ReviewsScreen sidebarHidden={!sidebarOpen} />
           ) : threadId && harness && reviewOpen ? (
             <ReviewPage
               threadId={threadId}

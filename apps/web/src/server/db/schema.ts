@@ -498,6 +498,46 @@ export const codeReviewDrafts = sqliteTable(
 );
 
 /**
+ * PR reviews (issue #345): any pull request of a project's repository, the
+ * owner's or someone else's, checked out at its head in a worktree of its
+ * own. The assistant thread is made on the first question (`threadId`), so
+ * opening a review costs no model call. Viewed marks and line comments are
+ * kept under the review's key (`review:<id>`) until then.
+ */
+export const codeReviews = sqliteTable(
+  "code_reviews",
+  {
+    id: id(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => codeProjects.id, { onDelete: "cascade" }),
+    number: integer("number").notNull(),
+    url: text("url").notNull(),
+    title: text("title").notNull().default(""),
+    author: text("author").notNull().default(""),
+    /** The PR's branch (on the fork, for a PR from one) and base. */
+    headRef: text("head_ref").notNull(),
+    baseRef: text("base_ref").notNull(),
+    /** The head the worktree is checked out at. */
+    headSha: text("head_sha").notNull(),
+    fromFork: bool("from_fork").notNull().default(false),
+    /** On the sandbox while the review is open (removed on archive). */
+    worktree: text("worktree"),
+    /** `<instanceId>:<nativeId>` of the assistant, once asked. */
+    threadId: text("thread_id"),
+    archivedAt: ms("archived_at"),
+    createdAt: createdAt(),
+    updatedAt: ms("updated_at")
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (t) => [
+    uniqueIndex("code_reviews_pull_idx").on(t.projectId, t.number),
+    index("code_reviews_thread_idx").on(t.threadId),
+  ],
+);
+
+/**
  * Coding work a bot handed to a harness (`code_start`, or `shelley_start`).
  * A start claims its row (`starting`) before the harness makes the thread,
  * so a replayed start never makes a second one. When that thread's turn

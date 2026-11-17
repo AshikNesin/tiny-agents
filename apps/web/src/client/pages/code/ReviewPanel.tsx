@@ -78,7 +78,9 @@ export function ReviewPanel({
   onOtherScopes,
   commenting,
   page = false,
+  pull,
 }: {
+  /** The thread, or a PR review's key (`review:<id>`, with `pull`). */
   threadId: string;
   baseBranch: string;
   refreshKey: unknown;
@@ -88,6 +90,8 @@ export function ReviewPanel({
   commenting?: ThreadCommenting;
   /** Uncommitted changes or one commit, from the harness (when it serves diffs). */
   onOtherScopes?: () => void;
+  /** A PR review (issue #345): its branch line, and no turns to step through. */
+  pull?: { headRef: string };
 }) {
   const settledKey = useSteadyKey(refreshKey);
   const [files, setFiles] = useState<ReviewFile[] | null>(null);
@@ -120,10 +124,16 @@ export function ReviewPanel({
   const pulls = useThreadPulls(threadId, {
     refreshKey: `${String(settledKey)}:${reload}`,
     fresh: false,
+    enabled: !pull,
   });
-  const branch = pulls.view ? { name: pulls.view.branch, ahead: pulls.view.ahead } : null;
+  const branch = pull
+    ? { name: pull.headRef, ahead: null }
+    : pulls.view
+      ? { name: pulls.view.branch, ahead: pulls.view.ahead }
+      : null;
 
   useEffect(() => {
+    if (pull) return;
     let cancelled = false;
     projectsApi
       .checkpoints(threadId)
@@ -132,7 +142,7 @@ export function ReviewPanel({
     return () => {
       cancelled = true;
     };
-  }, [threadId, settledKey, reload]);
+  }, [threadId, settledKey, reload, pull]);
 
   useEffect(() => {
     let cancelled = false;
@@ -265,35 +275,42 @@ export function ReviewPanel({
         </p>
       )}
       <div className="border-border flex h-11 shrink-0 items-center gap-1 border-b px-2">
-        <SearchSelect
-          label="Changes to show"
-          value={scope}
-          onValueChange={setScope}
-          options={[
-            {
-              value: "base",
-              label: `Since ${baseBranch}`,
-              description: "Everything, committed or not",
-            },
-            ...checkpoints.map((c) => ({
-              value: c.id,
-              label: scopeLabel(c),
-              description:
-                c.reason === "start"
-                  ? "The files as the agent first saw them"
-                  : `What it changed · on ${c.headSha.slice(0, 7)}`,
-              group: "Turns",
-            })),
-          ]}
-          triggerClassName="text-foreground h-8 text-sm"
-          data-testid="code-review-scope"
-        >
-          <FileDiffIcon className="text-muted-foreground size-4" />
-          <span className="max-w-48 truncate">
-            {checkpoint ? scopeLabel(checkpoint) : `Since ${baseBranch}`}
+        {pull ? (
+          <span className="text-foreground flex h-8 items-center gap-1.5 px-2 text-sm">
+            <FileDiffIcon className="text-muted-foreground size-4" />
+            Since {baseBranch}
           </span>
-          <ChevronDown className="opacity-50" />
-        </SearchSelect>
+        ) : (
+          <SearchSelect
+            label="Changes to show"
+            value={scope}
+            onValueChange={setScope}
+            options={[
+              {
+                value: "base",
+                label: `Since ${baseBranch}`,
+                description: "Everything, committed or not",
+              },
+              ...checkpoints.map((c) => ({
+                value: c.id,
+                label: scopeLabel(c),
+                description:
+                  c.reason === "start"
+                    ? "The files as the agent first saw them"
+                    : `What it changed · on ${c.headSha.slice(0, 7)}`,
+                group: "Turns",
+              })),
+            ]}
+            triggerClassName="text-foreground h-8 text-sm"
+            data-testid="code-review-scope"
+          >
+            <FileDiffIcon className="text-muted-foreground size-4" />
+            <span className="max-w-48 truncate">
+              {checkpoint ? scopeLabel(checkpoint) : `Since ${baseBranch}`}
+            </span>
+            <ChevronDown className="opacity-50" />
+          </SearchSelect>
+        )}
         {checkpoint && (
           <Button
             variant="ghost"

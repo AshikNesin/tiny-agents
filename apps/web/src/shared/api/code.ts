@@ -217,3 +217,25 @@ export interface CheckpointView {
 export interface NextPrompt {
   text: string | null;
 }
+
+/** A PR review (issue #345): any PR of a project's repository, checked out at its head. */
+export interface PullReviewView {
+  id: string;
+  /** Where its viewed marks and early line comments are kept (`review:<id>`). */
+  key: string;
+  projectId: string;
+  /** `owner/name`. */
+  repo: string;
+  number: number;
+  url: string;
+  title: string;
+  author: string;
+  headRef: string;
+  baseRef: string;
+  headSha: string;
+  fromFork: boolean;
+  /** The assistant's thread, once the owner asked it something. */
+  threadId: string | null;
+  archived: boolean;
+  updatedAt: string;
+}

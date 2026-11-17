@@ -165,7 +165,7 @@ export function createCodeHub(options: HubOptions): CodeHub {
             ...thread,
             followed: last !== undefined,
             unread: last !== undefined && !thread.working && thread.cursor > last,
-            ...(extra ? { projectId: extra.projectId, pr: extra.pr } : {}),
+            ...(extra ? { projectId: extra.projectId, pr: extra.pr, review: extra.review } : {}),
           });
         }
       }

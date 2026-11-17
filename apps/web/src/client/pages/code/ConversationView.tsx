@@ -184,6 +184,7 @@ export function ConversationView({
   projectName,
   pr = null,
   sidebarHidden = false,
+  pane = false,
 }: {
   id: string;
   harness: HarnessInfo;
@@ -204,6 +205,8 @@ export function ConversationView({
   pr?: { number: number; loop: string } | null;
   /** The thread list is folded away: leave room for Show sidebar. */
   sidebarHidden?: boolean;
+  /** Shown as a pane beside a page that has its own header (a PR review's assistant). */
+  pane?: boolean;
 }) {
   const navigate = useNavigate();
   const confirm = useConfirm();
@@ -324,151 +327,155 @@ export function ConversationView({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header
-        className={cn(
-          "border-border flex h-13 shrink-0 items-center gap-1 border-b px-2 sm:px-3",
-          sidebarHidden && "md:pl-12",
-        )}
-      >
-        <Button
-          asChild
-          variant="ghost"
-          size="icon-sm"
-          className="shrink-0 md:hidden"
-          aria-label="All threads"
+      {!pane && (
+        <header
+          className={cn(
+            "border-border flex h-13 shrink-0 items-center gap-1 border-b px-2 sm:px-3",
+            sidebarHidden && "md:pl-12",
+          )}
         >
-          <Link to="/code">
-            <ArrowLeft />
-          </Link>
-        </Button>
-        {(projectName || row?.cwd) && (
-          <span
-            className="text-muted-foreground hidden max-w-40 min-w-16 shrink items-center gap-1 pl-1 text-sm sm:flex"
-            title={row?.cwd ?? undefined}
+          <Button
+            asChild
+            variant="ghost"
+            size="icon-sm"
+            className="shrink-0 md:hidden"
+            aria-label="All threads"
           >
-            <FolderGit2 className="size-3.5 shrink-0" />
-            <span className="truncate">
-              {projectName ?? row!.cwd!.split("/").filter(Boolean).pop() ?? row!.cwd}
-            </span>
-            <span className="text-muted-foreground/60 pl-0.5" aria-hidden>
-              /
-            </span>
-          </span>
-        )}
-        <nav aria-label="Thread path" className="flex min-w-0 items-center gap-0.5 text-sm">
-          {chain.slice(0, -1).map((c) => (
-            <span key={c.id} className="hidden min-w-0 shrink items-center gap-0.5 sm:flex">
-              <Link
-                to={threadPath(c.id)}
-                className="text-muted-foreground hover:text-foreground max-w-40 truncate rounded-md px-1"
-              >
-                {c.title}
-              </Link>
-              <span className="text-muted-foreground/60" aria-hidden>
+            <Link to="/code">
+              <ArrowLeft />
+            </Link>
+          </Button>
+          {(projectName || row?.cwd) && (
+            <span
+              className="text-muted-foreground hidden max-w-40 min-w-16 shrink items-center gap-1 pl-1 text-sm sm:flex"
+              title={row?.cwd ?? undefined}
+            >
+              <FolderGit2 className="size-3.5 shrink-0" />
+              <span className="truncate">
+                {projectName ?? row!.cwd!.split("/").filter(Boolean).pop() ?? row!.cwd}
+              </span>
+              <span className="text-muted-foreground/60 pl-0.5" aria-hidden>
                 /
               </span>
             </span>
-          ))}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className="hover:bg-muted aria-expanded:bg-muted flex h-8 min-w-0 items-center gap-1 rounded-lg px-2 font-medium outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-                aria-label={`${title}: thread actions`}
-              >
-                {chain.length > 1 && <Bot className="text-muted-foreground size-4 shrink-0" />}
-                <span className="truncate" data-testid="code-title">
-                  {title}
+          )}
+          <nav aria-label="Thread path" className="flex min-w-0 items-center gap-0.5 text-sm">
+            {chain.slice(0, -1).map((c) => (
+              <span key={c.id} className="hidden min-w-0 shrink items-center gap-0.5 sm:flex">
+                <Link
+                  to={threadPath(c.id)}
+                  className="text-muted-foreground hover:text-foreground max-w-40 truncate rounded-md px-1"
+                >
+                  {c.title}
+                </Link>
+                <span className="text-muted-foreground/60" aria-hidden>
+                  /
                 </span>
-                <ChevronDown className="text-muted-foreground size-3.5 shrink-0" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-60">
-              <p className="text-muted-foreground flex items-center gap-2 px-2 py-1 text-xs">
-                <span className="flex-1">{harness.label}</span>
-                {state.costUsd > 0 && (
-                  <span
-                    className="tabular-nums"
-                    title="Cost of this thread, subagents included"
-                    data-testid="code-cost"
-                  >
-                    {formatCost(state.costUsd)}
-                  </span>
-                )}
-              </p>
-              {caps.threads.rename && (
-                <DropdownMenuItem onSelect={() => setDialog("rename")}>
-                  <Pencil />
-                  Rename
-                </DropdownMenuItem>
-              )}
-              {caps.threads.changeCwd && (
-                <DropdownMenuItem onSelect={() => setDialog("cwd")}>
-                  <FolderOpen />
-                  Change directory
-                </DropdownMenuItem>
-              )}
-              {(externalUrl ?? thread?.externalUrl) && (
-                <DropdownMenuItem asChild>
-                  <a href={externalUrl ?? thread?.externalUrl} target="_blank" rel="noreferrer">
-                    <ExternalLink />
-                    Open in {harness.label}
-                  </a>
-                </DropdownMenuItem>
-              )}
-              {(caps.threads.archive || caps.threads.delete) && <DropdownMenuSeparator />}
-              {caps.threads.archive && (
-                <DropdownMenuItem onSelect={toggleArchive}>
-                  {archived ? <ArchiveRestore /> : <Archive />}
-                  {archived ? "Restore" : "Archive"}
-                  {caps.threads.subagents && (
-                    <span className="text-muted-foreground ml-auto text-xs">with subagents</span>
-                  )}
-                </DropdownMenuItem>
-              )}
-              {caps.threads.delete && (
-                <DropdownMenuItem variant="destructive" onSelect={() => void remove()}>
-                  <Trash2 />
-                  Delete
-                </DropdownMenuItem>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </nav>
-        <span className="min-w-2 flex-1" />
-        {!working && row?.turnInterrupted && caps.turns.recovery.includes("resume") && (
-          <Button variant="outline" size="sm" onClick={() => actions.recover("resume")}>
-            <Play />
-            Resume
-          </Button>
-        )}
-        {(inProject || caps.workspace.diffs) && (
-          // One toggle for the right panel; it shows the PR's state when there is one.
-          <button
-            type="button"
-            onClick={onTogglePanel}
-            disabled={!row?.cwd && !inProject}
-            title="Review panel (⌘⇧D)"
-            aria-label="Review panel"
-            aria-pressed={panelOpen}
-            className={cn(
-              "flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50",
-              panelOpen
-                ? "bg-muted text-foreground"
-                : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
-            )}
-            data-testid="code-changes-toggle"
-          >
-            {pr ? <PullIcon loop={pr.loop} /> : <PanelRight className="size-3.5" />}
-            <span className="hidden tabular-nums sm:inline">{pr ? `#${pr.number}` : "Review"}</span>
-            {pr && pullState(pr.loop) && (
-              <span className={cn("hidden md:inline", PULL_TEXT[pr.loop])}>
-                {pullState(pr.loop)}
               </span>
-            )}
-          </button>
-        )}
-      </header>
+            ))}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="hover:bg-muted aria-expanded:bg-muted flex h-8 min-w-0 items-center gap-1 rounded-lg px-2 font-medium outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                  aria-label={`${title}: thread actions`}
+                >
+                  {chain.length > 1 && <Bot className="text-muted-foreground size-4 shrink-0" />}
+                  <span className="truncate" data-testid="code-title">
+                    {title}
+                  </span>
+                  <ChevronDown className="text-muted-foreground size-3.5 shrink-0" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-60">
+                <p className="text-muted-foreground flex items-center gap-2 px-2 py-1 text-xs">
+                  <span className="flex-1">{harness.label}</span>
+                  {state.costUsd > 0 && (
+                    <span
+                      className="tabular-nums"
+                      title="Cost of this thread, subagents included"
+                      data-testid="code-cost"
+                    >
+                      {formatCost(state.costUsd)}
+                    </span>
+                  )}
+                </p>
+                {caps.threads.rename && (
+                  <DropdownMenuItem onSelect={() => setDialog("rename")}>
+                    <Pencil />
+                    Rename
+                  </DropdownMenuItem>
+                )}
+                {caps.threads.changeCwd && (
+                  <DropdownMenuItem onSelect={() => setDialog("cwd")}>
+                    <FolderOpen />
+                    Change directory
+                  </DropdownMenuItem>
+                )}
+                {(externalUrl ?? thread?.externalUrl) && (
+                  <DropdownMenuItem asChild>
+                    <a href={externalUrl ?? thread?.externalUrl} target="_blank" rel="noreferrer">
+                      <ExternalLink />
+                      Open in {harness.label}
+                    </a>
+                  </DropdownMenuItem>
+                )}
+                {(caps.threads.archive || caps.threads.delete) && <DropdownMenuSeparator />}
+                {caps.threads.archive && (
+                  <DropdownMenuItem onSelect={toggleArchive}>
+                    {archived ? <ArchiveRestore /> : <Archive />}
+                    {archived ? "Restore" : "Archive"}
+                    {caps.threads.subagents && (
+                      <span className="text-muted-foreground ml-auto text-xs">with subagents</span>
+                    )}
+                  </DropdownMenuItem>
+                )}
+                {caps.threads.delete && (
+                  <DropdownMenuItem variant="destructive" onSelect={() => void remove()}>
+                    <Trash2 />
+                    Delete
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </nav>
+          <span className="min-w-2 flex-1" />
+          {!working && row?.turnInterrupted && caps.turns.recovery.includes("resume") && (
+            <Button variant="outline" size="sm" onClick={() => actions.recover("resume")}>
+              <Play />
+              Resume
+            </Button>
+          )}
+          {(inProject || caps.workspace.diffs) && (
+            // One toggle for the right panel; it shows the PR's state when there is one.
+            <button
+              type="button"
+              onClick={onTogglePanel}
+              disabled={!row?.cwd && !inProject}
+              title="Review panel (⌘⇧D)"
+              aria-label="Review panel"
+              aria-pressed={panelOpen}
+              className={cn(
+                "flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50",
+                panelOpen
+                  ? "bg-muted text-foreground"
+                  : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+              )}
+              data-testid="code-changes-toggle"
+            >
+              {pr ? <PullIcon loop={pr.loop} /> : <PanelRight className="size-3.5" />}
+              <span className="hidden tabular-nums sm:inline">
+                {pr ? `#${pr.number}` : "Review"}
+              </span>
+              {pr && pullState(pr.loop) && (
+                <span className={cn("hidden md:inline", PULL_TEXT[pr.loop])}>
+                  {pullState(pr.loop)}
+                </span>
+              )}
+            </button>
+          )}
+        </header>
+      )}
 
       <div className="relative min-h-0 flex-1">
         {!state.loaded ? (
@@ -478,7 +485,9 @@ export function ConversationView({
         ) : (
           <MessageScrollerProvider autoScroll defaultScrollPosition="end">
             <MessageScroller className="h-full">
-              <MessageScrollerViewport className="mx-auto w-full max-w-3xl px-4 pt-6 pb-4 sm:px-6">
+              <MessageScrollerViewport
+                className={cn("mx-auto w-full max-w-3xl pt-6 pb-4", pane ? "px-4" : "px-4 sm:px-6")}
+              >
                 <MessageScrollerContent className="gap-5" data-testid="code-transcript">
                   {display.map((item) => (
                     <MessageScrollerItem

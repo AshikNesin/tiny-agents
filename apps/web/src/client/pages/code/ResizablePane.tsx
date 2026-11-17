@@ -56,7 +56,16 @@ function useReviewWidth() {
  * (shrinking only as far as its minimum when the window narrows); otherwise
  * it takes about half.
  */
-export function ResizablePane({ children }: { children: ReactNode }) {
+export function ResizablePane({
+  children,
+  narrow = false,
+  className,
+}: {
+  children: ReactNode;
+  className?: string;
+  /** Start narrower than half (a PR review's assistant, beside the diff). */
+  narrow?: boolean;
+}) {
   const [width, setWidth] = useReviewWidth();
   const panelRef = useRef<HTMLElement>(null);
   return (
@@ -68,7 +77,12 @@ export function ResizablePane({ children }: { children: ReactNode }) {
         aria-label="Review panel"
         className={cn(
           "flex w-full min-w-0 flex-col",
-          width === null ? "lg:w-[48%] lg:max-w-3xl" : "lg:w-(--review-width) lg:min-w-80",
+          width === null
+            ? narrow
+              ? "lg:w-[36%] lg:max-w-xl"
+              : "lg:w-[48%] lg:max-w-3xl"
+            : "lg:w-(--review-width) lg:min-w-80",
+          className,
         )}
         style={width === null ? undefined : ({ "--review-width": `${width}px` } as CSSProperties)}
       >

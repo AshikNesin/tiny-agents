@@ -19,6 +19,7 @@
 - `code-handoff` a bot's `/code cwd=<dir> <task>` (faux trigger) starts a Shelley thread: hand-off card with `Open in Code`, then `Shelley reply relayed into this chat` with the outcome.
 - Covered by [Code extras](./code-extras.md): change directory, fork, attachments, `@` file completion, `/` commands, skills, usage popover, new worktree, repository groups, chips, queued Send now/Cancel, recover. Not driven anywhere: delete and archive from the title menu (cleanup uses the API; the row's Archive is driven), the thread cost in that menu (`code-cost`, Shelley reports none), `Show N more`, Open in Shelley, subagents (`subagent:` prompts), push notifications (off in verify runs).
 - The suggested next message: [`journeys/code-next-prompt.mjs`](../journeys/code-next-prompt.mjs) (a Shelley turn ends, the composer asks once; faux mode has no side-call model, so the journey answers that ask through `page.route`; Tab, Esc and the phone Use button).
+- PR reviews: [`journeys/code-reviews.mjs`](../journeys/code-reviews.mjs) (`/code/reviews` opens a PR by link; the review page, a line comment that waits for the first question, the assistant started as a real Shelley thread, and a phone. GitHub and the sandbox are out of reach, so the review's own routes answer from `page.route` fixtures).
 - Harness picker, Claude Code threads, permission chips and approval cards: need the Claude Code harness (see `claude-plan.md`); unreachable.
 
 ## How to get to it (user POV)
