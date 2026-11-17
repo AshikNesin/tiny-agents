@@ -170,6 +170,23 @@ const ROUTINE_RUN_GUIDANCE =
   "call report_routine_blocked with what they need to do, then reply in a sentence. If there " +
   "was simply nothing to do this time, just say so; that is not blocked.";
 
+const BOT_MESSAGE_GUIDANCE =
+  "This conversation answers one message from another bot, and nobody watches it live: you " +
+  "cannot ask the owner anything here. It starts fresh: your chat with the owner is not here, " +
+  "so work from what the message says. Your reply is relayed to the bot that wrote, so reply " +
+  "with what it needs. Keep it lean: fetch only what the answer needs, and stop once you have " +
+  "it; this conversation has a token budget and is cut off when it spends it.";
+
+/**
+ * What an unattended conversation runs: a routine run (issue #63) or the
+ * answer to one message from another bot. `false`: the bot's chat.
+ */
+type Unattended = false | "routine" | "bot-message";
+
+function unattendedGuidance(unattended: Exclude<Unattended, false>): string {
+  return unattended === "routine" ? ROUTINE_RUN_GUIDANCE : BOT_MESSAGE_GUIDANCE;
+}
+
 /**
  * Added to a shared bot's chat (issue #145): several people write in it, each
  * message prefixed with its sender's name, and the bot stays quiet when they
@@ -189,19 +206,20 @@ export function sharedChatGuidance(names: string[]): string {
 /**
  * What the bot's durable conversation runs with: persona, model and
  * capabilities (which ones is `botToolkits`'s decision, bot-toolkits.ts).
- * `unattended` (a routine's conversation): calls that would ask are refused.
+ * `unattended` (a routine run's or a bot message's conversation): calls that
+ * would ask are refused, and the run has a token budget.
  */
 function agentConfig(
   bot: BotDraft & { connections?: ConnectionLink[] },
   rt: Pick<AgentRuntime, "catalog">,
-  unattended = false,
+  unattended: Unattended = false,
   /** Everyone in a shared chat (issue #145); empty when it is not shared. */
   participants: string[] = [],
 ): BotAgentConfig {
   return {
     modelId: botModelId(rt.catalog, bot.modelId),
     systemPrompt: unattended
-      ? [bot.systemPrompt.trim(), ROUTINE_RUN_GUIDANCE].filter(Boolean).join("\n\n")
+      ? [bot.systemPrompt.trim(), unattendedGuidance(unattended)].filter(Boolean).join("\n\n")
       : participants.length > 0
         ? [bot.systemPrompt.trim(), sharedChatGuidance(participants)].filter(Boolean).join("\n\n")
         : bot.systemPrompt,
@@ -221,7 +239,7 @@ function agentConfig(
 async function rowConfig(
   row: BotWithLinks,
   rt: Pick<AgentRuntime, "catalog">,
-  unattended = false,
+  unattended: Unattended = false,
 ): Promise<BotAgentConfig> {
   const participants =
     !unattended && (row.guests?.length ?? 0) > 0 ? await participantNames(row.id) : [];
@@ -231,14 +249,15 @@ async function rowConfig(
 /**
  * Open a fresh durable conversation for a new bot (from its draft) or an
  * existing one (by id, from its row). Returns the id to store on the row.
- * `unattended`: a routine's conversation (issue #63) rather than a chat.
+ * `unattended`: a routine run's (issue #63) or a bot message's conversation
+ * rather than a chat.
  * A chat of a bot with `yoloByDefault` starts with YOLO mode on, trusting
  * the owner's messages; a routine's conversation never does.
  */
 export async function startBotConversation(
   bot: string | BotDraft,
   rt: BotConversationRuntime,
-  options: { unattended?: boolean } = {},
+  options: { unattended?: Unattended } = {},
 ): Promise<string> {
   const unattended = options.unattended ?? false;
   const row = typeof bot === "string" ? await findBotRow(bot) : undefined;
@@ -277,11 +296,14 @@ export interface BotSubmission {
 }
 
 /**
- * Where a submission goes: the bot's chat (the default) or one of its
- * routines' conversations, which run unattended (issue #63).
+ * Where a submission goes: the bot's chat (the default) or a conversation
+ * of its own that runs unattended: a routine run's (issue #63) or one
+ * started for a message from another bot.
  */
 export interface SubmitTarget {
-  routineConversationId: string;
+  unattendedConversationId: string;
+  /** What runs there; it picks the conversation's guidance. */
+  unattended: Exclude<Unattended, false>;
 }
 
 /**
@@ -299,8 +321,8 @@ export async function submitToBot(
   const row = await findBotRow(id);
   const resolved = await resolveAttachments(submission, modelSeesImages(rt.catalog, row.modelId));
   await sentInBot(submission.attachments ?? [], row.id);
-  const conversation = conversationRef(target?.routineConversationId ?? row.conversationId);
-  await rt.configure(conversation, await rowConfig(row, rt, target !== undefined));
+  const conversation = conversationRef(target?.unattendedConversationId ?? row.conversationId);
+  await rt.configure(conversation, await rowConfig(row, rt, target?.unattended ?? false));
   await rt.submit(conversation, {
     requestId: submission.requestId,
     text: resolved.text,

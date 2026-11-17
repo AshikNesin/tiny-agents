@@ -2,7 +2,8 @@
  * Who is behind a conversation, and behind its current turn. A bot has its
  * chat (`Bot.conversationId`) and a fresh conversation per routine run
  * (`RoutineRun.conversationId`; older runs shared `Routine.conversationId`,
- * issue #63); a conversation none of them names any
+ * issue #63) and per message another bot sent it (`BotMessage` with
+ * `ownConversation`); a conversation none of them names any
  * more was retired by "New chat" (a Past chat) or belongs to a deleted bot.
  *
  * Tool calls know their conversation, not their bot, so every lookup from a
@@ -22,9 +23,9 @@
  * - set-based joins over many rows (deliveries, routine runs), with their
  *   `coalesce` for legacy rows.
  */
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { AgentRuntime } from "@tiny-agents/agent";
-import { db, bots, routineRuns, routines } from "../../db";
+import { db, botMessages, bots, routineRuns, routines } from "../../db";
 
 /** The bot behind a conversation: the fields tool-side callers act on. */
 export interface ConversationBot {
@@ -42,7 +43,9 @@ export type ConversationOwner =
   /** The bot's own chat: the owner writes here. */
   | { kind: "chat"; bot: ConversationBot }
   /** One of the bot's routines runs here, unattended (issue #63). */
-  | { kind: "routine"; bot: ConversationBot; routineId: string };
+  | { kind: "routine"; bot: ConversationBot; routineId: string }
+  /** The bot answers one message from another bot here, unattended. */
+  | { kind: "delivery"; bot: ConversationBot; deliveryId: string };
 
 const botColumns = {
   id: true,
@@ -89,8 +92,15 @@ export async function conversationOwner(
     columns: { id: true },
     with: { bot: { columns: botColumns, with: sharedWith } },
   });
-  return routine
-    ? { kind: "routine", bot: conversationBot(routine.bot), routineId: routine.id }
+  if (routine) return { kind: "routine", bot: conversationBot(routine.bot), routineId: routine.id };
+  // A conversation started for one bot-to-bot message (bots.delivery.ts).
+  const delivery = await db.query.botMessages.findFirst({
+    where: and(eq(botMessages.conversationId, ref), eq(botMessages.ownConversation, true)),
+    columns: { id: true },
+    with: { to: { columns: botColumns, with: sharedWith } },
+  });
+  return delivery
+    ? { kind: "delivery", bot: conversationBot(delivery.to), deliveryId: delivery.id }
     : undefined;
 }
 
@@ -123,7 +133,7 @@ export async function isUnattended(
 ): Promise<boolean> {
   try {
     const resolved = owner === undefined ? await conversationOwner(conversation) : owner;
-    if (resolved?.kind === "routine") return true;
+    if (resolved?.kind === "routine" || resolved?.kind === "delivery") return true;
     const state = await runtime.readChat(conversation);
     const last = state.messages.findLast((message) => message.role === "user");
     if (!last) return true;

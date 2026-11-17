@@ -22,7 +22,7 @@ Re-apply a bot's row (model, persona, permissions, toolkits, connections) to its
 _Avoid_: reconfigure, sync
 
 **Delivery**:
-A message put in front of a bot from somewhere other than its own chat: an owner @mention or a bot-to-bot message. Each is a `bot_messages` row with an idempotent request id, pinned to the target conversation it was submitted to, and answered with that request's Finished reply, relayed into the asking bot's chat. `bots.delivery.ts` owns all of it.
+A message put in front of a bot from somewhere other than its own chat: an owner @mention or a bot-to-bot message. Each is a `bot_messages` row with an idempotent request id, pinned to the target conversation it was submitted to (for a bot-to-bot message, a fresh unattended conversation of its own), and answered with that request's Finished reply, relayed into the asking bot's chat. `bots.delivery.ts` owns all of it.
 _Avoid_: dispatch, forward
 
 **Finished reply**:
