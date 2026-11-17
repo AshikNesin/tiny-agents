@@ -136,6 +136,29 @@ describe("Memories API routes", () => {
     expect((await listMemories(app, botId)).body.data!.memories).toHaveLength(1);
   });
 
+  it("merges an edit into the memory that already has its text, never a second active copy", async () => {
+    const botId = await seedBot(app);
+    const kept = (await addMemory(app, botId, { text: "Works at exe.dev", category: "fact" })).body
+      .data!.memory.id;
+    const edited = (await addMemory(app, botId, { text: "Likes tea", category: "preference" })).body
+      .data!.memory.id;
+
+    const response = await api<{ memory: Record<string, unknown> }>(
+      app,
+      `/api/v1/memories/${edited}`,
+      { method: "PATCH", json: { text: "works at EXE.dev." }, token },
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.data!.memory).toMatchObject({ id: kept, status: "active" });
+    const active = (await listMemories(app, botId)).body.data!.memories.filter(
+      (m) => m.status === "active",
+    );
+    expect(active.map((m) => m.id)).toEqual([kept]);
+    const old = await db.query.memories.findFirst({ where: eq(memories.id, edited) });
+    expect(old).toMatchObject({ status: "superseded", supersededById: kept, text: "Likes tea" });
+  });
+
   it("restores an archived memory and keeps it past a full budget", async () => {
     const botId = await seedBot(app);
     await db.insert(memories).values({

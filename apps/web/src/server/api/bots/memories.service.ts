@@ -64,17 +64,11 @@ export async function create(id: string, data: CreateMemoryDTO): Promise<MemoryR
 
 export async function update(id: string, data: UpdateMemoryDTO): Promise<MemoryRecord> {
   const row = await findMemory(id);
-  const next: Partial<MemoryRow> = {};
-  if (data.text !== undefined) next.text = data.text;
-  if (data.category !== undefined) next.category = data.category;
-  if (data.until !== undefined) next.until = data.until ? new Date(data.until) : null;
-  // Nothing to write: the row as it is, updatedAt untouched.
-  let [updated] =
-    Object.keys(next).length > 0
-      ? await db.update(memories).set(next).where(eq(memories.id, id)).returning()
-      : [row];
+  const ledger = memoryLedger(row.botId);
+  const { restore, ...change } = data;
+  let updated = await ledger.edit(id, change);
   if (!updated) throw Boom.notFound("Memory not found");
-  if (data.restore) updated = (await memoryLedger(row.botId).restore(id)) ?? updated;
+  if (restore) updated = (await ledger.restore(updated.id)) ?? updated;
   return toRecord(updated);
 }
 
