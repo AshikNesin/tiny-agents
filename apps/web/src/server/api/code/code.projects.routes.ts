@@ -16,6 +16,7 @@ import type {
   CheckpointView,
   GitHubStatus,
   ProjectView,
+  InboxPullView,
   PullReviewView,
   PullThreadsView,
   ReviewDraft,
@@ -44,6 +45,7 @@ import {
   openReview,
   reviewComments,
   replyToReviewThread,
+  reviewInbox,
   resolveReviewThread,
   reviewIdOfKey,
   reviewThreads,
@@ -456,6 +458,8 @@ router.post("/code/reviews", async (c) => {
   const { pr } = await parseBody(c, z.object({ pr: z.string().trim().min(1).max(500) }));
   return ok<PullReviewView>(c, await openReview(pr), 201);
 });
+
+router.get("/code/reviews/inbox", async (c) => ok<InboxPullView[]>(c, await reviewInbox()));
 
 router.get("/code/reviews/:review", async (c) =>
   ok<PullReviewView>(c, await getReview(c.req.param("review"))),

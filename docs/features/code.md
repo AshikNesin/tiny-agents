@@ -400,8 +400,14 @@ Issue #345. Review any pull request of a project's repository, your own or
 someone else's, in focus mode, with an AI assistant scoped to that PR.
 Owner-only, like projects.
 
-**Open one.** **Reviews** in the sidebar (`/code/reviews`) lists the open
-reviews and takes a PR's link (any tab of it) or `owner/name#123`. A
+**Open one.** **Reviews** in the sidebar (`/code/reviews`) takes a PR's
+link (any tab of it) or `owner/name#123`, and lists the reviews open here.
+Above them is the inbox from GitHub, across every repository the GitHub
+credential (Settings → GitHub) sees, read in one query when the screen
+opens: **Needs your review** (review requested), **Updated since your
+review** (commits after your last review), **Waiting on author** (none
+since) and **Your pull requests**, with draft and approval state. A PR of
+a project opens its review here; another repository's opens on GitHub. A
 repository that is not a project yet says so. `/code/review/<owner>/<name>/<number>`
 opens one from a link, and a coding thread's **Pull request** tab offers
 **Review** for its own PR. Opening the same PR again reuses its review.
@@ -472,8 +478,8 @@ folded. GitHub places them at the PR's current head: when the review shows
 an older commit, or the code moved on (outdated), a file lists them above
 its diff instead, the first with a hint to **Update**.
 
-Not built yet (issue #345): the review-request inbox, changes since your
-last review, and pushing changes made during a review.
+Not built yet (issue #345): the diff of changes since your last review,
+and pushing changes made during a review.
 
 ## Bots hand off coding
 

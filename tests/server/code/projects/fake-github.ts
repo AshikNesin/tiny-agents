@@ -11,6 +11,7 @@ import {
   type GitHubClient,
   type JobStep,
   type PullSnapshot,
+  type InboxPull,
   type Review,
   type ReviewThread,
 } from "../../../../packages/github/src/index";
@@ -42,6 +43,8 @@ export interface FakeGitHub extends GitHubClient {
   replies: Array<{ threadId: string; body: string }>;
   resolved: string[];
   comments: Array<{ number: number; body: string }>;
+  /** What `reviewInbox` answers (GitHub's searches, deduplicated). */
+  inbox: InboxPull[];
   /** Reviews submitted with `submitReview`, as sent. */
   submitted: Array<{ number: number } & Parameters<GitHubClient["submitReview"]>[2]>;
   merged: Array<{ number: number; method: string }>;
@@ -69,6 +72,7 @@ export function fakeGitHub(local: LocalExec, bare: string, login = "ashik"): Fak
     resolved: [],
     comments: [],
     submitted: [],
+    inbox: [],
     merged: [],
     logs: new Map(),
     running: new Map(),
@@ -154,6 +158,9 @@ export function fakeGitHub(local: LocalExec, bare: string, login = "ashik"): Fak
     async comment(_repo, number, body) {
       gh.comments.push({ number, body });
       return { databaseId: (nextComment += 1) };
+    },
+    async reviewInbox() {
+      return gh.inbox;
     },
     async submitReview(_repo, number, review) {
       gh.submitted.push({ number, ...review });
