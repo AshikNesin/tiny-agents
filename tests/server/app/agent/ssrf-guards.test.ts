@@ -203,6 +203,12 @@ function fakeChrome() {
       }),
       keyboard: { press: async () => undefined },
       url: () => current,
+      waitForLoadState: async () => undefined,
+      title: async () => "",
+      // Enter starts no navigation here: the waits for one time out at once.
+      mainFrame: () => ({}),
+      waitForRequest: () => Promise.reject(new Error("Timeout")),
+      waitForEvent: () => Promise.reject(new Error("Timeout")),
       goto: async (start: string) => {
         const chain: string[] = [];
         for (let url: string | undefined = start; url; url = redirects[url]) {
@@ -403,6 +409,11 @@ describe("browser navigation guard (S7b)", () => {
       }
       if (path === "/popup") return html(`<script>window.open("${T}/popup")</script>hi`);
       if (path === "/popup-hop") return html(`<script>window.open("/hop")</script>hi`);
+      if (path === "/spin-on-load") {
+        return html(
+          `<title>Busy</title><script>addEventListener("load", () => { for (;;) {} })</script>busy`,
+        );
+      }
       if (path === "/spin") {
         return html(`<script>setTimeout(() => { for (;;) {} }, 50)</script>spinning`);
       }
@@ -432,6 +443,23 @@ describe("browser navigation guard (S7b)", () => {
         const started = Date.now();
         expect(await guard.watch(page, new Set(["localhost"]))).toEqual(expect.any(String));
         expect(Date.now() - started).toBeLessThan(5_000);
+      } finally {
+        await browser.close();
+      }
+    },
+    30_000,
+  );
+
+  it.skipIf(!chromiumPath)(
+    "in real Chromium, navigating to a page that loops once loaded still returns",
+    async () => {
+      const { browser, session, S } = await realChrome();
+      try {
+        const started = performance.now();
+        const result = await session.navigate(`${S}/spin-on-load`);
+        // No title (the renderer never answers), after the 5 s wait for load at most.
+        expect(result).toEqual({ url: `${S}/spin-on-load`, status: 200 });
+        expect(performance.now() - started).toBeLessThan(10_000);
       } finally {
         await browser.close();
       }

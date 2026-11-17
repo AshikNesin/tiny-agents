@@ -67,6 +67,8 @@ function fakeTransport() {
   const log: { method: string; args?: unknown }[] = [];
   let url = "about:blank";
   let snapshotText = '- body [ref=e1]\n  - input [ref=e2]\n  - button "Go" [ref=e3]';
+  let pageText = "Hello";
+  const history: string[] = [];
   /** One entry per session the transport opened: calling it reports that browser dead. */
   const deaths: (() => void)[] = [];
   const transport: BrowserTransport = async () => {
@@ -80,12 +82,24 @@ function fakeTransport() {
       },
       navigate: async (next) => {
         log.push({ method: "navigate", args: next });
+        if (url !== "about:blank") history.push(url);
         url = next;
         return { url: next, status: 200 };
       },
-      snapshot: async () => {
-        log.push({ method: "snapshot" });
+      snapshot: async (scope) => {
+        log.push({ method: "snapshot", args: scope });
         return snapshotText;
+      },
+      text: async (scope) => {
+        log.push({ method: "text", args: scope });
+        return pageText;
+      },
+      back: async () => {
+        log.push({ method: "back" });
+        const previous = history.pop();
+        if (!previous) return null;
+        url = previous;
+        return { url, title: "Earlier page" };
       },
       click: async (ref) => {
         log.push({ method: "click", args: ref });
@@ -116,6 +130,7 @@ function fakeTransport() {
     log,
     deaths,
     setSnapshot: (t: string) => (snapshotText = t),
+    setText: (t: string) => (pageText = t),
     get url() {
       return url;
     },
@@ -179,6 +194,69 @@ describe("browser toolkit", () => {
     expect(log.some((e) => e.method === "type")).toBe(true);
     const clicked = await run(tk, "browser_click", { ref: "e3" });
     expect(clicked.text).toContain("e3");
+  });
+
+  it("reads a long page in windows instead of cutting it at the top", async () => {
+    const { transport, setSnapshot } = fakeTransport();
+    const tk = toolkit({ transport, profilesDir: "/tmp/ta-test-profiles" });
+    // 1,000 lines of 30 characters: 30k characters, past one read's 20k.
+    const lines = Array.from(
+      { length: 1000 },
+      (_, i) => `- link "Story ${String(i).padStart(4, "0")}" [ref=e${i}]`,
+    );
+    setSnapshot(lines.join("\n"));
+
+    const first = await run(tk, "browser_snapshot", {});
+    expect(first.text).toContain('"Story 0000"');
+    expect(first.text).not.toContain('"Story 0999"');
+    const next = /offset (\d+)/.exec(first.text);
+    expect(next).not.toBeNull();
+
+    const second = await run(tk, "browser_snapshot", { offset: Number(next![1]) });
+    expect(second.text).toContain('"Story 0999"');
+    expect(second.text).not.toContain('"Story 0000"');
+    expect(second.text).not.toContain("more characters");
+  });
+
+  it("keeps only the snapshot lines a query names, refs included", async () => {
+    const { transport, setSnapshot } = fakeTransport();
+    const tk = toolkit({ transport, profilesDir: "/tmp/ta-test-profiles" });
+    setSnapshot(
+      '- heading "Cart"\n  - button "Proceed to checkout" [ref=e7]\n  - link "Help" [ref=e8]',
+    );
+
+    const found = await run(tk, "browser_snapshot", { query: "Checkout" });
+    expect(found.text).toBe('1 matching line:\n- button "Proceed to checkout" [ref=e7]');
+    const none = await run(tk, "browser_snapshot", { query: "coupon" });
+    expect(none.text).toBe('No line matches "coupon".');
+  });
+
+  it("snapshots and reads one region by its ref", async () => {
+    const { transport, log, setText } = fakeTransport();
+    const tk = toolkit({ transport, profilesDir: "/tmp/ta-test-profiles" });
+    setText("The article body.");
+    await run(tk, "browser_snapshot", { ref: "e4" });
+    const read = await run(tk, "browser_read_text", { ref: "e4" });
+    expect(read.text).toBe("The article body.");
+    expect(log.filter((e) => e.method === "snapshot" || e.method === "text")).toEqual([
+      { method: "snapshot", args: "e4" },
+      { method: "text", args: "e4" },
+    ]);
+    const bad = await run(tk, "browser_read_text", { ref: "main" });
+    expect(bad.isError).toBe(true);
+  });
+
+  it("goes back a page, and says so when there is none", async () => {
+    const { transport } = fakeTransport();
+    const tk = toolkit({ transport, profilesDir: "/tmp/ta-test-profiles" });
+    const none = await run(tk, "browser_back", {});
+    expect(none.isError).toBe(true);
+    expect(none.text).toBe("There is no earlier page in this tab.");
+
+    await run(tk, "browser_navigate", { url: "https://example.com/a" });
+    await run(tk, "browser_navigate", { url: "https://example.com/b" });
+    const back = await run(tk, "browser_back", {});
+    expect(back.text).toBe("back to https://example.com/a · Earlier page");
   });
 
   it("invalid refs are rejected", async () => {

@@ -1338,7 +1338,7 @@ describe("one declaration per tool (3.2)", () => {
               "replay": "unsafe",
             },
             {
-              "description": "Snapshot the page's interactive elements as a tree with refs (e12, or f1e12 inside a frame). Clicking and typing use these refs. Take a new snapshot whenever the page may have changed.",
+              "description": "Snapshot the page as an accessibility tree: headings, text, and every control with a ref (e12, or f1e12 inside a frame) and every link with its [url=…]. Clicking and typing use these refs. Take a new snapshot whenever the page may have changed. On a long page, pass \`query\` to keep only the lines with those words, or \`ref\` (a region such as main, a form or a dialog) to snapshot just that part. To read an article or results as text, browser_read_text is smaller.",
               "fields": [
                 "description",
                 "execute",
@@ -1349,10 +1349,74 @@ describe("one declaration per tool (3.2)", () => {
               "gated": false,
               "name": "browser_snapshot",
               "parameters": {
-                "properties": {},
+                "properties": {
+                  "offset": {
+                    "description": "Character to start from, from the last result's note",
+                    "minimum": 0,
+                    "type": "integer",
+                  },
+                  "query": {
+                    "description": "Words to find; only the lines containing all of them are returned",
+                    "maxLength": 200,
+                    "minLength": 1,
+                    "type": "string",
+                  },
+                  "ref": {
+                    "description": "Snapshot only this element and what is inside it",
+                    "maxLength": 32,
+                    "minLength": 2,
+                    "type": "string",
+                  },
+                },
                 "type": "object",
               },
               "replay": "safe",
+            },
+            {
+              "description": "Read the visible text of the page, or of one element by its ref (such as main or an article), without refs or roles. Use it to read an article, results or a long list; use browser_snapshot to find what to click.",
+              "fields": [
+                "description",
+                "execute",
+                "name",
+                "parameters",
+                "replay",
+              ],
+              "gated": false,
+              "name": "browser_read_text",
+              "parameters": {
+                "properties": {
+                  "offset": {
+                    "description": "Character to start from, from the last result's note",
+                    "minimum": 0,
+                    "type": "integer",
+                  },
+                  "ref": {
+                    "description": "Read only this element",
+                    "maxLength": 32,
+                    "minLength": 2,
+                    "type": "string",
+                  },
+                },
+                "type": "object",
+              },
+              "replay": "safe",
+            },
+            {
+              "description": "Go back to the previous page in this tab, like the browser's Back button.",
+              "fields": [
+                "description",
+                "execute",
+                "name",
+                "parameters",
+                "replay",
+              ],
+              "gated": false,
+              "name": "browser_back",
+              "parameters": {
+                "properties": {},
+                "type": "object",
+              },
+              "replay": "unsafe",
             },
             {
               "description": "Click an element by its ref from the last snapshot. The element is scrolled into view first.",
@@ -1557,7 +1621,7 @@ describe("one declaration per tool (3.2)", () => {
         "extensionKeys": "name,tools",
         "gates": {},
         "info": {
-          "description": "A real browser the bot drives: navigate, read, click, type, scroll.",
+          "description": "A real browser the bot drives: navigate, read, click, type, scroll, go back.",
           "id": "browser",
           "kind": "toolkit",
           "name": "Browser",
@@ -1570,10 +1634,23 @@ describe("one declaration per tool (3.2)", () => {
             },
             {
               "askLabel": "read the page",
-              "description": "Snapshot the page's interactive elements with refs.",
+              "description": "Snapshot the page's elements with refs.",
               "label": "Read the page",
               "name": "browser_snapshot",
               "readOnly": true,
+            },
+            {
+              "askLabel": "read the page's text",
+              "description": "Read the page's visible text.",
+              "label": "Read the text",
+              "name": "browser_read_text",
+              "readOnly": true,
+            },
+            {
+              "askLabel": "go back a page",
+              "description": "Go back to the previous page.",
+              "label": "Went back",
+              "name": "browser_back",
             },
             {
               "askLabel": "click on the page",
@@ -1612,6 +1689,8 @@ describe("one declaration per tool (3.2)", () => {
           "id,kind,name,description,tools",
           "name,label,askLabel,description",
           "name,label,askLabel,description,readOnly",
+          "name,label,askLabel,description,readOnly",
+          "name,label,askLabel,description",
           "name,label,askLabel,description",
           "name,label,askLabel,description",
           "name,label,askLabel,description",
@@ -1658,7 +1737,7 @@ describe("one declaration per tool (3.2)", () => {
               "replay": "unsafe",
             },
             {
-              "description": "Snapshot the page's interactive elements as a tree with refs (e12, or f1e12 inside a frame). Clicking and typing use these refs. Take a new snapshot whenever the page may have changed.",
+              "description": "Snapshot the page as an accessibility tree: headings, text, and every control with a ref (e12, or f1e12 inside a frame) and every link with its [url=…]. Clicking and typing use these refs. Take a new snapshot whenever the page may have changed. On a long page, pass \`query\` to keep only the lines with those words, or \`ref\` (a region such as main, a form or a dialog) to snapshot just that part. To read an article or results as text, browser_read_text is smaller.",
               "fields": [
                 "description",
                 "execute",
@@ -1669,10 +1748,74 @@ describe("one declaration per tool (3.2)", () => {
               "gated": false,
               "name": "browser_snapshot",
               "parameters": {
-                "properties": {},
+                "properties": {
+                  "offset": {
+                    "description": "Character to start from, from the last result's note",
+                    "minimum": 0,
+                    "type": "integer",
+                  },
+                  "query": {
+                    "description": "Words to find; only the lines containing all of them are returned",
+                    "maxLength": 200,
+                    "minLength": 1,
+                    "type": "string",
+                  },
+                  "ref": {
+                    "description": "Snapshot only this element and what is inside it",
+                    "maxLength": 32,
+                    "minLength": 2,
+                    "type": "string",
+                  },
+                },
                 "type": "object",
               },
               "replay": "safe",
+            },
+            {
+              "description": "Read the visible text of the page, or of one element by its ref (such as main or an article), without refs or roles. Use it to read an article, results or a long list; use browser_snapshot to find what to click.",
+              "fields": [
+                "description",
+                "execute",
+                "name",
+                "parameters",
+                "replay",
+              ],
+              "gated": false,
+              "name": "browser_read_text",
+              "parameters": {
+                "properties": {
+                  "offset": {
+                    "description": "Character to start from, from the last result's note",
+                    "minimum": 0,
+                    "type": "integer",
+                  },
+                  "ref": {
+                    "description": "Read only this element",
+                    "maxLength": 32,
+                    "minLength": 2,
+                    "type": "string",
+                  },
+                },
+                "type": "object",
+              },
+              "replay": "safe",
+            },
+            {
+              "description": "Go back to the previous page in this tab, like the browser's Back button.",
+              "fields": [
+                "description",
+                "execute",
+                "name",
+                "parameters",
+                "replay",
+              ],
+              "gated": false,
+              "name": "browser_back",
+              "parameters": {
+                "properties": {},
+                "type": "object",
+              },
+              "replay": "unsafe",
             },
             {
               "description": "Click an element by its ref from the last snapshot. The element is scrolled into view first.",
@@ -1956,7 +2099,7 @@ describe("one declaration per tool (3.2)", () => {
           "browser_fill_secret": "plan,settled",
         },
         "info": {
-          "description": "A real browser the bot drives: navigate, read, click, type, scroll.",
+          "description": "A real browser the bot drives: navigate, read, click, type, scroll, go back.",
           "id": "browser",
           "kind": "toolkit",
           "name": "Browser",
@@ -1969,10 +2112,23 @@ describe("one declaration per tool (3.2)", () => {
             },
             {
               "askLabel": "read the page",
-              "description": "Snapshot the page's interactive elements with refs.",
+              "description": "Snapshot the page's elements with refs.",
               "label": "Read the page",
               "name": "browser_snapshot",
               "readOnly": true,
+            },
+            {
+              "askLabel": "read the page's text",
+              "description": "Read the page's visible text.",
+              "label": "Read the text",
+              "name": "browser_read_text",
+              "readOnly": true,
+            },
+            {
+              "askLabel": "go back a page",
+              "description": "Go back to the previous page.",
+              "label": "Went back",
+              "name": "browser_back",
             },
             {
               "askLabel": "click on the page",
@@ -2025,6 +2181,8 @@ describe("one declaration per tool (3.2)", () => {
           "id,kind,name,description,tools",
           "name,label,askLabel,description",
           "name,label,askLabel,description,readOnly",
+          "name,label,askLabel,description,readOnly",
+          "name,label,askLabel,description",
           "name,label,askLabel,description",
           "name,label,askLabel,description",
           "name,label,askLabel,description",
@@ -2073,7 +2231,7 @@ describe("one declaration per tool (3.2)", () => {
               "replay": "unsafe",
             },
             {
-              "description": "Snapshot the page's interactive elements as a tree with refs (e12, or f1e12 inside a frame). Clicking and typing use these refs. Take a new snapshot whenever the page may have changed.",
+              "description": "Snapshot the page as an accessibility tree: headings, text, and every control with a ref (e12, or f1e12 inside a frame) and every link with its [url=…]. Clicking and typing use these refs. Take a new snapshot whenever the page may have changed. On a long page, pass \`query\` to keep only the lines with those words, or \`ref\` (a region such as main, a form or a dialog) to snapshot just that part. To read an article or results as text, browser_read_text is smaller.",
               "fields": [
                 "description",
                 "execute",
@@ -2084,10 +2242,74 @@ describe("one declaration per tool (3.2)", () => {
               "gated": false,
               "name": "browser_snapshot",
               "parameters": {
-                "properties": {},
+                "properties": {
+                  "offset": {
+                    "description": "Character to start from, from the last result's note",
+                    "minimum": 0,
+                    "type": "integer",
+                  },
+                  "query": {
+                    "description": "Words to find; only the lines containing all of them are returned",
+                    "maxLength": 200,
+                    "minLength": 1,
+                    "type": "string",
+                  },
+                  "ref": {
+                    "description": "Snapshot only this element and what is inside it",
+                    "maxLength": 32,
+                    "minLength": 2,
+                    "type": "string",
+                  },
+                },
                 "type": "object",
               },
               "replay": "safe",
+            },
+            {
+              "description": "Read the visible text of the page, or of one element by its ref (such as main or an article), without refs or roles. Use it to read an article, results or a long list; use browser_snapshot to find what to click.",
+              "fields": [
+                "description",
+                "execute",
+                "name",
+                "parameters",
+                "replay",
+              ],
+              "gated": false,
+              "name": "browser_read_text",
+              "parameters": {
+                "properties": {
+                  "offset": {
+                    "description": "Character to start from, from the last result's note",
+                    "minimum": 0,
+                    "type": "integer",
+                  },
+                  "ref": {
+                    "description": "Read only this element",
+                    "maxLength": 32,
+                    "minLength": 2,
+                    "type": "string",
+                  },
+                },
+                "type": "object",
+              },
+              "replay": "safe",
+            },
+            {
+              "description": "Go back to the previous page in this tab, like the browser's Back button.",
+              "fields": [
+                "description",
+                "execute",
+                "name",
+                "parameters",
+                "replay",
+              ],
+              "gated": false,
+              "name": "browser_back",
+              "parameters": {
+                "properties": {},
+                "type": "object",
+              },
+              "replay": "unsafe",
             },
             {
               "description": "Click an element by its ref from the last snapshot. The element is scrolled into view first.",
@@ -2416,7 +2638,7 @@ describe("one declaration per tool (3.2)", () => {
         "extensionKeys": "name,tools",
         "gates": {},
         "info": {
-          "description": "A real browser the bot drives: navigate, read, click, type, scroll.",
+          "description": "A real browser the bot drives: navigate, read, click, type, scroll, go back.",
           "id": "browser",
           "kind": "toolkit",
           "name": "Browser",
@@ -2429,10 +2651,23 @@ describe("one declaration per tool (3.2)", () => {
             },
             {
               "askLabel": "read the page",
-              "description": "Snapshot the page's interactive elements with refs.",
+              "description": "Snapshot the page's elements with refs.",
               "label": "Read the page",
               "name": "browser_snapshot",
               "readOnly": true,
+            },
+            {
+              "askLabel": "read the page's text",
+              "description": "Read the page's visible text.",
+              "label": "Read the text",
+              "name": "browser_read_text",
+              "readOnly": true,
+            },
+            {
+              "askLabel": "go back a page",
+              "description": "Go back to the previous page.",
+              "label": "Went back",
+              "name": "browser_back",
             },
             {
               "askLabel": "click on the page",
@@ -2478,6 +2713,8 @@ describe("one declaration per tool (3.2)", () => {
           "id,kind,name,description,tools",
           "name,label,askLabel,description",
           "name,label,askLabel,description,readOnly",
+          "name,label,askLabel,description,readOnly",
+          "name,label,askLabel,description",
           "name,label,askLabel,description",
           "name,label,askLabel,description",
           "name,label,askLabel,description",
@@ -2492,549 +2729,628 @@ describe("one declaration per tool (3.2)", () => {
   it("browser, with a vault and owner waits", () => {
     expect(full(createBrowserToolkit({ sessions: stub, vault: stub, ownerWaits: stub })))
       .toMatchInlineSnapshot(`
-      {
-        "extension": {
-          "hooks": 0,
-          "name": "browser",
-          "sections": [],
-          "tasks": 0,
-          "tools": [
-            {
-              "description": "Open a public http(s) URL in the browser. Private and local addresses are refused. Returns the final URL (after redirects) and the HTTP status.",
-              "fields": [
-                "description",
-                "execute",
-                "name",
-                "parameters",
-                "replay",
-              ],
-              "gated": false,
-              "name": "browser_navigate",
-              "parameters": {
-                "properties": {
-                  "url": {
-                    "maxLength": 2000,
-                    "minLength": 8,
-                    "type": "string",
-                  },
-                },
-                "required": [
-                  "url",
+        {
+          "extension": {
+            "hooks": 0,
+            "name": "browser",
+            "sections": [],
+            "tasks": 0,
+            "tools": [
+              {
+                "description": "Open a public http(s) URL in the browser. Private and local addresses are refused. Returns the final URL (after redirects) and the HTTP status.",
+                "fields": [
+                  "description",
+                  "execute",
+                  "name",
+                  "parameters",
+                  "replay",
                 ],
-                "type": "object",
-              },
-              "replay": "unsafe",
-            },
-            {
-              "description": "Snapshot the page's interactive elements as a tree with refs (e12, or f1e12 inside a frame). Clicking and typing use these refs. Take a new snapshot whenever the page may have changed.",
-              "fields": [
-                "description",
-                "execute",
-                "name",
-                "parameters",
-                "replay",
-              ],
-              "gated": false,
-              "name": "browser_snapshot",
-              "parameters": {
-                "properties": {},
-                "type": "object",
-              },
-              "replay": "safe",
-            },
-            {
-              "description": "Click an element by its ref from the last snapshot. The element is scrolled into view first.",
-              "fields": [
-                "description",
-                "execute",
-                "name",
-                "parameters",
-                "replay",
-              ],
-              "gated": false,
-              "name": "browser_click",
-              "parameters": {
-                "properties": {
-                  "ref": {
-                    "maxLength": 32,
-                    "minLength": 2,
-                    "type": "string",
+                "gated": false,
+                "name": "browser_navigate",
+                "parameters": {
+                  "properties": {
+                    "url": {
+                      "maxLength": 2000,
+                      "minLength": 8,
+                      "type": "string",
+                    },
                   },
+                  "required": [
+                    "url",
+                  ],
+                  "type": "object",
                 },
-                "required": [
-                  "ref",
+                "replay": "unsafe",
+              },
+              {
+                "description": "Snapshot the page as an accessibility tree: headings, text, and every control with a ref (e12, or f1e12 inside a frame) and every link with its [url=…]. Clicking and typing use these refs. Take a new snapshot whenever the page may have changed. On a long page, pass \`query\` to keep only the lines with those words, or \`ref\` (a region such as main, a form or a dialog) to snapshot just that part. To read an article or results as text, browser_read_text is smaller.",
+                "fields": [
+                  "description",
+                  "execute",
+                  "name",
+                  "parameters",
+                  "replay",
                 ],
-                "type": "object",
-              },
-              "replay": "unsafe",
-            },
-            {
-              "description": "Replace the text in an editable element by ref. The whole string is inserted at once. For a dropdown (combobox), pass the label or value of the option to choose. Never type credentials: use browser_fill_secret with a vault handle (see vault_list), or request_credentials if no item exists.",
-              "fields": [
-                "description",
-                "execute",
-                "name",
-                "parameters",
-                "replay",
-              ],
-              "gated": false,
-              "name": "browser_type",
-              "parameters": {
-                "properties": {
-                  "ref": {
-                    "maxLength": 32,
-                    "minLength": 2,
-                    "type": "string",
+                "gated": false,
+                "name": "browser_snapshot",
+                "parameters": {
+                  "properties": {
+                    "offset": {
+                      "description": "Character to start from, from the last result's note",
+                      "minimum": 0,
+                      "type": "integer",
+                    },
+                    "query": {
+                      "description": "Words to find; only the lines containing all of them are returned",
+                      "maxLength": 200,
+                      "minLength": 1,
+                      "type": "string",
+                    },
+                    "ref": {
+                      "description": "Snapshot only this element and what is inside it",
+                      "maxLength": 32,
+                      "minLength": 2,
+                      "type": "string",
+                    },
                   },
-                  "text": {
-                    "maxLength": 5000,
-                    "minLength": 1,
-                    "type": "string",
-                  },
+                  "type": "object",
                 },
-                "required": [
-                  "ref",
-                  "text",
+                "replay": "safe",
+              },
+              {
+                "description": "Read the visible text of the page, or of one element by its ref (such as main or an article), without refs or roles. Use it to read an article, results or a long list; use browser_snapshot to find what to click.",
+                "fields": [
+                  "description",
+                  "execute",
+                  "name",
+                  "parameters",
+                  "replay",
                 ],
-                "type": "object",
-              },
-              "replay": "unsafe",
-            },
-            {
-              "description": "Press a key: Enter, Tab, Escape, Backspace, arrows, Home, End, PageUp, PageDown.",
-              "fields": [
-                "description",
-                "execute",
-                "name",
-                "parameters",
-                "replay",
-              ],
-              "gated": false,
-              "name": "browser_press_key",
-              "parameters": {
-                "properties": {
-                  "key": {
-                    "anyOf": [
-                      {
-                        "const": "Enter",
-                        "type": "string",
-                      },
-                      {
-                        "const": "Tab",
-                        "type": "string",
-                      },
-                      {
-                        "const": "Escape",
-                        "type": "string",
-                      },
-                      {
-                        "const": "Backspace",
-                        "type": "string",
-                      },
-                      {
-                        "const": "Delete",
-                        "type": "string",
-                      },
-                      {
-                        "const": "ArrowUp",
-                        "type": "string",
-                      },
-                      {
-                        "const": "ArrowDown",
-                        "type": "string",
-                      },
-                      {
-                        "const": "ArrowLeft",
-                        "type": "string",
-                      },
-                      {
-                        "const": "ArrowRight",
-                        "type": "string",
-                      },
-                      {
-                        "const": "Home",
-                        "type": "string",
-                      },
-                      {
-                        "const": "End",
-                        "type": "string",
-                      },
-                      {
-                        "const": "PageUp",
-                        "type": "string",
-                      },
-                      {
-                        "const": "PageDown",
-                        "type": "string",
-                      },
-                    ],
+                "gated": false,
+                "name": "browser_read_text",
+                "parameters": {
+                  "properties": {
+                    "offset": {
+                      "description": "Character to start from, from the last result's note",
+                      "minimum": 0,
+                      "type": "integer",
+                    },
+                    "ref": {
+                      "description": "Read only this element",
+                      "maxLength": 32,
+                      "minLength": 2,
+                      "type": "string",
+                    },
                   },
+                  "type": "object",
                 },
-                "required": [
-                  "key",
+                "replay": "safe",
+              },
+              {
+                "description": "Go back to the previous page in this tab, like the browser's Back button.",
+                "fields": [
+                  "description",
+                  "execute",
+                  "name",
+                  "parameters",
+                  "replay",
                 ],
-                "type": "object",
-              },
-              "replay": "unsafe",
-            },
-            {
-              "description": "Scroll the page up or down.",
-              "fields": [
-                "description",
-                "execute",
-                "name",
-                "parameters",
-                "replay",
-              ],
-              "gated": false,
-              "name": "browser_scroll",
-              "parameters": {
-                "properties": {
-                  "amount": {
-                    "description": "Pixels; default 600",
-                    "maximum": 3000,
-                    "minimum": 50,
-                    "type": "integer",
-                  },
-                  "direction": {
-                    "anyOf": [
-                      {
-                        "const": "up",
-                        "type": "string",
-                      },
-                      {
-                        "const": "down",
-                        "type": "string",
-                      },
-                    ],
-                  },
+                "gated": false,
+                "name": "browser_back",
+                "parameters": {
+                  "properties": {},
+                  "type": "object",
                 },
-                "required": [
-                  "direction",
+                "replay": "unsafe",
+              },
+              {
+                "description": "Click an element by its ref from the last snapshot. The element is scrolled into view first.",
+                "fields": [
+                  "description",
+                  "execute",
+                  "name",
+                  "parameters",
+                  "replay",
                 ],
-                "type": "object",
-              },
-              "replay": "unsafe",
-            },
-            {
-              "description": "Capture the viewport as a JPEG. Use for layout or canvas questions a snapshot cannot answer.",
-              "fields": [
-                "description",
-                "execute",
-                "name",
-                "parameters",
-                "replay",
-              ],
-              "gated": false,
-              "name": "browser_screenshot",
-              "parameters": {
-                "properties": {
-                  "question": {
-                    "description": "What to look for",
-                    "maxLength": 500,
-                    "type": "string",
+                "gated": false,
+                "name": "browser_click",
+                "parameters": {
+                  "properties": {
+                    "ref": {
+                      "maxLength": 32,
+                      "minLength": 2,
+                      "type": "string",
+                    },
                   },
+                  "required": [
+                    "ref",
+                  ],
+                  "type": "object",
                 },
-                "type": "object",
+                "replay": "unsafe",
               },
-              "replay": "safe",
-            },
-            {
-              "description": "Fill a vault item into the current page without seeing its value: a login's password (or username), or a card's number, expiry, security code and name. Find the handle with vault_list. Only fills on the item's exact origins. Pass \`ref\` from the last snapshot for a single field; otherwise the fields are found by their form markup. Type the username yourself with browser_type if you prefer. Never type, ask for or repeat a password, card number, security code or one-time code yourself.",
-              "fields": [
-                "description",
-                "execute",
-                "name",
-                "parameters",
-                "replay",
-              ],
-              "gated": true,
-              "name": "browser_fill_secret",
-              "parameters": {
-                "properties": {
-                  "field": {
-                    "anyOf": [
-                      {
-                        "const": "password",
-                        "type": "string",
-                      },
-                      {
-                        "const": "username",
-                        "type": "string",
-                      },
-                      {
-                        "const": "card",
-                        "type": "string",
-                      },
-                    ],
-                    "description": "Default: password for logins, card for cards",
-                  },
-                  "handle": {
-                    "maxLength": 64,
-                    "minLength": 1,
-                    "type": "string",
-                  },
-                  "ref": {
-                    "maxLength": 32,
-                    "minLength": 2,
-                    "type": "string",
-                  },
-                },
-                "required": [
-                  "handle",
+              {
+                "description": "Replace the text in an editable element by ref. The whole string is inserted at once. For a dropdown (combobox), pass the label or value of the option to choose. Never type credentials: use browser_fill_secret with a vault handle (see vault_list), or request_credentials if no item exists.",
+                "fields": [
+                  "description",
+                  "execute",
+                  "name",
+                  "parameters",
+                  "replay",
                 ],
-                "type": "object",
-              },
-              "replay": "unsafe",
-            },
-            {
-              "description": "Enter a 2FA one-time code into the current page. With a vault handle whose item has a one-time-password seed, the server generates the code and fills it. Without one (codes sent by SMS or email), the owner is asked to type it into a secure sheet. Never type, ask for or repeat a password, card number, security code or one-time code yourself.",
-              "fields": [
-                "description",
-                "execute",
-                "name",
-                "parameters",
-                "replay",
-              ],
-              "gated": true,
-              "name": "browser_enter_code",
-              "parameters": {
-                "properties": {
-                  "handle": {
-                    "maxLength": 64,
-                    "minLength": 1,
-                    "type": "string",
+                "gated": false,
+                "name": "browser_type",
+                "parameters": {
+                  "properties": {
+                    "ref": {
+                      "maxLength": 32,
+                      "minLength": 2,
+                      "type": "string",
+                    },
+                    "text": {
+                      "maxLength": 5000,
+                      "minLength": 1,
+                      "type": "string",
+                    },
                   },
-                  "ref": {
-                    "maxLength": 32,
-                    "minLength": 2,
-                    "type": "string",
-                  },
+                  "required": [
+                    "ref",
+                    "text",
+                  ],
+                  "type": "object",
                 },
-                "type": "object",
+                "replay": "unsafe",
               },
-              "replay": "unsafe",
-            },
-            {
-              "description": "Ask the owner to type credentials for the current page into a secure sheet: a sign-in, a one-time code sent by SMS or email, or a card. The server fills what they type straight into the page (only on its current origin) and you only learn which fields were filled. Call vault_list first and prefer browser_fill_secret when a handle exists. Fields: 1-8, each with a slug key, a short label and a type; text, email and select fields need an identifier autocomplete (username, email, name, postal-code, …). Your reply pauses until the owner answers (10 minutes at most). Never type, ask for or repeat a password, card number, security code or one-time code yourself.",
-              "fields": [
-                "description",
-                "execute",
-                "name",
-                "parameters",
-                "replay",
-              ],
-              "gated": false,
-              "name": "request_credentials",
-              "parameters": {
-                "properties": {
-                  "fields": {
-                    "items": {
-                      "properties": {
-                        "autocomplete": {
-                          "description": "HTML autocomplete token (username, email, …)",
-                          "maxLength": 40,
+              {
+                "description": "Press a key: Enter, Tab, Escape, Backspace, arrows, Home, End, PageUp, PageDown.",
+                "fields": [
+                  "description",
+                  "execute",
+                  "name",
+                  "parameters",
+                  "replay",
+                ],
+                "gated": false,
+                "name": "browser_press_key",
+                "parameters": {
+                  "properties": {
+                    "key": {
+                      "anyOf": [
+                        {
+                          "const": "Enter",
                           "type": "string",
                         },
-                        "key": {
-                          "description": "Slug: password, email, code",
-                          "maxLength": 32,
-                          "minLength": 1,
+                        {
+                          "const": "Tab",
                           "type": "string",
                         },
-                        "label": {
-                          "maxLength": 60,
-                          "minLength": 1,
+                        {
+                          "const": "Escape",
                           "type": "string",
                         },
-                        "options": {
-                          "items": {
+                        {
+                          "const": "Backspace",
+                          "type": "string",
+                        },
+                        {
+                          "const": "Delete",
+                          "type": "string",
+                        },
+                        {
+                          "const": "ArrowUp",
+                          "type": "string",
+                        },
+                        {
+                          "const": "ArrowDown",
+                          "type": "string",
+                        },
+                        {
+                          "const": "ArrowLeft",
+                          "type": "string",
+                        },
+                        {
+                          "const": "ArrowRight",
+                          "type": "string",
+                        },
+                        {
+                          "const": "Home",
+                          "type": "string",
+                        },
+                        {
+                          "const": "End",
+                          "type": "string",
+                        },
+                        {
+                          "const": "PageUp",
+                          "type": "string",
+                        },
+                        {
+                          "const": "PageDown",
+                          "type": "string",
+                        },
+                      ],
+                    },
+                  },
+                  "required": [
+                    "key",
+                  ],
+                  "type": "object",
+                },
+                "replay": "unsafe",
+              },
+              {
+                "description": "Scroll the page up or down.",
+                "fields": [
+                  "description",
+                  "execute",
+                  "name",
+                  "parameters",
+                  "replay",
+                ],
+                "gated": false,
+                "name": "browser_scroll",
+                "parameters": {
+                  "properties": {
+                    "amount": {
+                      "description": "Pixels; default 600",
+                      "maximum": 3000,
+                      "minimum": 50,
+                      "type": "integer",
+                    },
+                    "direction": {
+                      "anyOf": [
+                        {
+                          "const": "up",
+                          "type": "string",
+                        },
+                        {
+                          "const": "down",
+                          "type": "string",
+                        },
+                      ],
+                    },
+                  },
+                  "required": [
+                    "direction",
+                  ],
+                  "type": "object",
+                },
+                "replay": "unsafe",
+              },
+              {
+                "description": "Capture the viewport as a JPEG. Use for layout or canvas questions a snapshot cannot answer.",
+                "fields": [
+                  "description",
+                  "execute",
+                  "name",
+                  "parameters",
+                  "replay",
+                ],
+                "gated": false,
+                "name": "browser_screenshot",
+                "parameters": {
+                  "properties": {
+                    "question": {
+                      "description": "What to look for",
+                      "maxLength": 500,
+                      "type": "string",
+                    },
+                  },
+                  "type": "object",
+                },
+                "replay": "safe",
+              },
+              {
+                "description": "Fill a vault item into the current page without seeing its value: a login's password (or username), or a card's number, expiry, security code and name. Find the handle with vault_list. Only fills on the item's exact origins. Pass \`ref\` from the last snapshot for a single field; otherwise the fields are found by their form markup. Type the username yourself with browser_type if you prefer. Never type, ask for or repeat a password, card number, security code or one-time code yourself.",
+                "fields": [
+                  "description",
+                  "execute",
+                  "name",
+                  "parameters",
+                  "replay",
+                ],
+                "gated": true,
+                "name": "browser_fill_secret",
+                "parameters": {
+                  "properties": {
+                    "field": {
+                      "anyOf": [
+                        {
+                          "const": "password",
+                          "type": "string",
+                        },
+                        {
+                          "const": "username",
+                          "type": "string",
+                        },
+                        {
+                          "const": "card",
+                          "type": "string",
+                        },
+                      ],
+                      "description": "Default: password for logins, card for cards",
+                    },
+                    "handle": {
+                      "maxLength": 64,
+                      "minLength": 1,
+                      "type": "string",
+                    },
+                    "ref": {
+                      "maxLength": 32,
+                      "minLength": 2,
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "handle",
+                  ],
+                  "type": "object",
+                },
+                "replay": "unsafe",
+              },
+              {
+                "description": "Enter a 2FA one-time code into the current page. With a vault handle whose item has a one-time-password seed, the server generates the code and fills it. Without one (codes sent by SMS or email), the owner is asked to type it into a secure sheet. Never type, ask for or repeat a password, card number, security code or one-time code yourself.",
+                "fields": [
+                  "description",
+                  "execute",
+                  "name",
+                  "parameters",
+                  "replay",
+                ],
+                "gated": true,
+                "name": "browser_enter_code",
+                "parameters": {
+                  "properties": {
+                    "handle": {
+                      "maxLength": 64,
+                      "minLength": 1,
+                      "type": "string",
+                    },
+                    "ref": {
+                      "maxLength": 32,
+                      "minLength": 2,
+                      "type": "string",
+                    },
+                  },
+                  "type": "object",
+                },
+                "replay": "unsafe",
+              },
+              {
+                "description": "Ask the owner to type credentials for the current page into a secure sheet: a sign-in, a one-time code sent by SMS or email, or a card. The server fills what they type straight into the page (only on its current origin) and you only learn which fields were filled. Call vault_list first and prefer browser_fill_secret when a handle exists. Fields: 1-8, each with a slug key, a short label and a type; text, email and select fields need an identifier autocomplete (username, email, name, postal-code, …). Your reply pauses until the owner answers (10 minutes at most). Never type, ask for or repeat a password, card number, security code or one-time code yourself.",
+                "fields": [
+                  "description",
+                  "execute",
+                  "name",
+                  "parameters",
+                  "replay",
+                ],
+                "gated": false,
+                "name": "request_credentials",
+                "parameters": {
+                  "properties": {
+                    "fields": {
+                      "items": {
+                        "properties": {
+                          "autocomplete": {
+                            "description": "HTML autocomplete token (username, email, …)",
+                            "maxLength": 40,
+                            "type": "string",
+                          },
+                          "key": {
+                            "description": "Slug: password, email, code",
+                            "maxLength": 32,
+                            "minLength": 1,
+                            "type": "string",
+                          },
+                          "label": {
                             "maxLength": 60,
                             "minLength": 1,
                             "type": "string",
                           },
-                          "maxItems": 20,
-                          "minItems": 1,
-                          "type": "array",
+                          "options": {
+                            "items": {
+                              "maxLength": 60,
+                              "minLength": 1,
+                              "type": "string",
+                            },
+                            "maxItems": 20,
+                            "minItems": 1,
+                            "type": "array",
+                          },
+                          "ref": {
+                            "maxLength": 32,
+                            "minLength": 2,
+                            "type": "string",
+                          },
+                          "required": {
+                            "type": "boolean",
+                          },
+                          "type": {
+                            "anyOf": [
+                              {
+                                "const": "text",
+                                "type": "string",
+                              },
+                              {
+                                "const": "email",
+                                "type": "string",
+                              },
+                              {
+                                "const": "password",
+                                "type": "string",
+                              },
+                              {
+                                "const": "otp",
+                                "type": "string",
+                              },
+                              {
+                                "const": "card_number",
+                                "type": "string",
+                              },
+                              {
+                                "const": "expiry",
+                                "type": "string",
+                              },
+                              {
+                                "const": "cvc",
+                                "type": "string",
+                              },
+                              {
+                                "const": "select",
+                                "type": "string",
+                              },
+                            ],
+                          },
                         },
-                        "ref": {
-                          "maxLength": 32,
-                          "minLength": 2,
-                          "type": "string",
-                        },
-                        "required": {
-                          "type": "boolean",
-                        },
-                        "type": {
-                          "anyOf": [
-                            {
-                              "const": "text",
-                              "type": "string",
-                            },
-                            {
-                              "const": "email",
-                              "type": "string",
-                            },
-                            {
-                              "const": "password",
-                              "type": "string",
-                            },
-                            {
-                              "const": "otp",
-                              "type": "string",
-                            },
-                            {
-                              "const": "card_number",
-                              "type": "string",
-                            },
-                            {
-                              "const": "expiry",
-                              "type": "string",
-                            },
-                            {
-                              "const": "cvc",
-                              "type": "string",
-                            },
-                            {
-                              "const": "select",
-                              "type": "string",
-                            },
-                          ],
-                        },
+                        "required": [
+                          "key",
+                          "label",
+                          "type",
+                        ],
+                        "type": "object",
                       },
-                      "required": [
-                        "key",
-                        "label",
-                        "type",
-                      ],
-                      "type": "object",
+                      "maxItems": 8,
+                      "minItems": 1,
+                      "type": "array",
                     },
-                    "maxItems": 8,
-                    "minItems": 1,
-                    "type": "array",
+                    "origin": {
+                      "description": "The page's origin; checked, not trusted",
+                      "maxLength": 300,
+                      "type": "string",
+                    },
+                    "purpose": {
+                      "maxLength": 200,
+                      "minLength": 1,
+                      "type": "string",
+                    },
+                    "title": {
+                      "description": "Sign in to Umami",
+                      "maxLength": 80,
+                      "minLength": 1,
+                      "type": "string",
+                    },
                   },
-                  "origin": {
-                    "description": "The page's origin; checked, not trusted",
-                    "maxLength": 300,
-                    "type": "string",
-                  },
-                  "purpose": {
-                    "maxLength": 200,
-                    "minLength": 1,
-                    "type": "string",
-                  },
-                  "title": {
-                    "description": "Sign in to Umami",
-                    "maxLength": 80,
-                    "minLength": 1,
-                    "type": "string",
-                  },
+                  "required": [
+                    "title",
+                    "purpose",
+                    "fields",
+                  ],
+                  "type": "object",
                 },
-                "required": [
-                  "title",
-                  "purpose",
-                  "fields",
-                ],
-                "type": "object",
+                "replay": "safe",
               },
-              "replay": "safe",
-            },
+            ],
+            "wraps": 0,
+          },
+          "extensionKeys": "name,tools",
+          "gates": {
+            "browser_enter_code": "replaySafe,plan,settled",
+            "browser_fill_secret": "plan,settled",
+          },
+          "info": {
+            "description": "A real browser the bot drives: navigate, read, click, type, scroll, go back.",
+            "id": "browser",
+            "kind": "toolkit",
+            "name": "Browser",
+            "tools": [
+              {
+                "askLabel": "open a page",
+                "description": "Open a URL in the bot's browser.",
+                "label": "Opened a page",
+                "name": "browser_navigate",
+              },
+              {
+                "askLabel": "read the page",
+                "description": "Snapshot the page's elements with refs.",
+                "label": "Read the page",
+                "name": "browser_snapshot",
+                "readOnly": true,
+              },
+              {
+                "askLabel": "read the page's text",
+                "description": "Read the page's visible text.",
+                "label": "Read the text",
+                "name": "browser_read_text",
+                "readOnly": true,
+              },
+              {
+                "askLabel": "go back a page",
+                "description": "Go back to the previous page.",
+                "label": "Went back",
+                "name": "browser_back",
+              },
+              {
+                "askLabel": "click on the page",
+                "description": "Click an element by ref.",
+                "label": "Clicked",
+                "name": "browser_click",
+              },
+              {
+                "askLabel": "type into the page",
+                "description": "Type text into an element by ref.",
+                "label": "Typed into",
+                "name": "browser_type",
+              },
+              {
+                "askLabel": "press a key",
+                "description": "Press a key (Enter, Tab, Escape, arrows).",
+                "label": "Pressed a key",
+                "name": "browser_press_key",
+              },
+              {
+                "askLabel": "scroll the page",
+                "description": "Scroll the page up or down.",
+                "label": "Scrolled",
+                "name": "browser_scroll",
+              },
+              {
+                "askLabel": "capture the screen",
+                "description": "JPEG screenshot for visual questions.",
+                "label": "Captured the screen",
+                "name": "browser_screenshot",
+                "readOnly": true,
+              },
+              {
+                "askLabel": "fill a saved login",
+                "description": "Fill a vault login or card into the page without seeing it.",
+                "label": "Filled a saved login",
+                "name": "browser_fill_secret",
+                "vault": true,
+              },
+              {
+                "askLabel": "enter a one-time code",
+                "description": "Fill a 2FA code from the vault, or ask you for it.",
+                "label": "Entered a one-time code",
+                "name": "browser_enter_code",
+                "vault": true,
+              },
+              {
+                "askLabel": "ask you to sign in",
+                "description": "Ask you to type a sign-in, code or card into a secure sheet.",
+                "label": "Asked you to sign in",
+                "name": "request_credentials",
+                "readOnly": true,
+              },
+            ],
+          },
+          "keyOrder": [
+            "id,kind,name,description,tools",
+            "name,label,askLabel,description",
+            "name,label,askLabel,description,readOnly",
+            "name,label,askLabel,description,readOnly",
+            "name,label,askLabel,description",
+            "name,label,askLabel,description",
+            "name,label,askLabel,description",
+            "name,label,askLabel,description",
+            "name,label,askLabel,description",
+            "name,label,askLabel,description,readOnly",
+            "name,label,askLabel,description,vault",
+            "name,label,askLabel,description,vault",
+            "name,label,askLabel,description,readOnly",
           ],
-          "wraps": 0,
-        },
-        "extensionKeys": "name,tools",
-        "gates": {
-          "browser_enter_code": "replaySafe,plan,settled",
-          "browser_fill_secret": "plan,settled",
-        },
-        "info": {
-          "description": "A real browser the bot drives: navigate, read, click, type, scroll.",
-          "id": "browser",
-          "kind": "toolkit",
-          "name": "Browser",
-          "tools": [
-            {
-              "askLabel": "open a page",
-              "description": "Open a URL in the bot's browser.",
-              "label": "Opened a page",
-              "name": "browser_navigate",
-            },
-            {
-              "askLabel": "read the page",
-              "description": "Snapshot the page's interactive elements with refs.",
-              "label": "Read the page",
-              "name": "browser_snapshot",
-              "readOnly": true,
-            },
-            {
-              "askLabel": "click on the page",
-              "description": "Click an element by ref.",
-              "label": "Clicked",
-              "name": "browser_click",
-            },
-            {
-              "askLabel": "type into the page",
-              "description": "Type text into an element by ref.",
-              "label": "Typed into",
-              "name": "browser_type",
-            },
-            {
-              "askLabel": "press a key",
-              "description": "Press a key (Enter, Tab, Escape, arrows).",
-              "label": "Pressed a key",
-              "name": "browser_press_key",
-            },
-            {
-              "askLabel": "scroll the page",
-              "description": "Scroll the page up or down.",
-              "label": "Scrolled",
-              "name": "browser_scroll",
-            },
-            {
-              "askLabel": "capture the screen",
-              "description": "JPEG screenshot for visual questions.",
-              "label": "Captured the screen",
-              "name": "browser_screenshot",
-              "readOnly": true,
-            },
-            {
-              "askLabel": "fill a saved login",
-              "description": "Fill a vault login or card into the page without seeing it.",
-              "label": "Filled a saved login",
-              "name": "browser_fill_secret",
-              "vault": true,
-            },
-            {
-              "askLabel": "enter a one-time code",
-              "description": "Fill a 2FA code from the vault, or ask you for it.",
-              "label": "Entered a one-time code",
-              "name": "browser_enter_code",
-              "vault": true,
-            },
-            {
-              "askLabel": "ask you to sign in",
-              "description": "Ask you to type a sign-in, code or card into a secure sheet.",
-              "label": "Asked you to sign in",
-              "name": "request_credentials",
-              "readOnly": true,
-            },
-          ],
-        },
-        "keyOrder": [
-          "id,kind,name,description,tools",
-          "name,label,askLabel,description",
-          "name,label,askLabel,description,readOnly",
-          "name,label,askLabel,description",
-          "name,label,askLabel,description",
-          "name,label,askLabel,description",
-          "name,label,askLabel,description",
-          "name,label,askLabel,description,readOnly",
-          "name,label,askLabel,description,vault",
-          "name,label,askLabel,description,vault",
-          "name,label,askLabel,description,readOnly",
-        ],
-      }
-    `);
+        }
+      `);
   });
 
   it("code, configured", () => {

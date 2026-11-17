@@ -37,6 +37,20 @@ const screenshot = defineExtension({
   ],
 });
 
+/** A browser that reads a long page each step, as `browser_snapshot` does. */
+const pageReads = defineExtension({
+  name: "pages",
+  tools: [
+    defineTool({
+      name: "browser_snapshot",
+      description: "Read the page",
+      parameters: Type.Object({}),
+      replay: "safe",
+      execute: async () => ({ output: [{ type: "text", text: `- text: ${"x".repeat(5_000)}` }] }),
+    }),
+  ],
+});
+
 function counts(context: PiContext) {
   let toolResults = 0;
   let images = 0;
@@ -88,6 +102,39 @@ describe("context trim", () => {
       expect(seen[14].toolResults).toBe(14);
       // The owner's attached image is never dropped.
       expect(seen.every((s) => s.userImages === 1)).toBe(true);
+    } finally {
+      await runtime.close();
+    }
+  });
+
+  it("sends only the newest page reads, dropping old ones five at a time", async () => {
+    const seen: number[] = [];
+    const runtime = await openTestRuntime({
+      storePath: ":memory:",
+      extensions: [pageReads],
+      respondWith: (context) => {
+        const results = context.messages.filter((m) => m.role === "toolResult");
+        const full = results.filter((m) =>
+          m.content.some((block) => block.type === "text" && block.text.length >= 5_000),
+        ).length;
+        seen.push(full);
+        if (results.length < 9) {
+          return {
+            ...fauxAssistantMessage(fauxToolCall("browser_snapshot", {})),
+            stopReason: "toolUse" as const,
+          };
+        }
+        return fauxAssistantMessage(fauxText("done"));
+      },
+    });
+    try {
+      const ref = await runtime.createConversation({ modelId: TEST_MODEL, systemPrompt: "" });
+      await runtime.submit(ref, { requestId: "reads", text: "browse" });
+      await until(() => seen.length === 10 && !runtime.isBusy(ref), "the run to finish");
+
+      // Request n carries n-1 reads. Up to 6 (2 kept + fewer than 5 over)
+      // all are sent; at 7 the oldest 5 drop at once, leaving 2.
+      expect(seen).toEqual([0, 1, 2, 3, 4, 5, 6, 2, 3, 4]);
     } finally {
       await runtime.close();
     }
