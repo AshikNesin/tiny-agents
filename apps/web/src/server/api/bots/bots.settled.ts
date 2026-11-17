@@ -25,8 +25,7 @@ import { conversationOwner, type ConversationOwner } from "./bots.owner";
 import { createDeliveries } from "./bots.delivery";
 import { botListStep } from "./bots.list";
 import { turnBudgetOf } from "./bots.messaging";
-import { createMemoryCapture } from "./memories.capture";
-import { captureConversation } from "./memories.runner";
+import { memoryCaptureStep } from "./memories.runner";
 import type { SideCaller } from "./side-call";
 import { routineRunsStep } from "../routines/routines.watcher";
 import { runNotificationsStep, type Notifier } from "../notifications/notifications.wiring";
@@ -96,16 +95,10 @@ export function startSettledPipeline(
   options: SettledPipelineOptions = {},
 ): () => void {
   const deliveries = createDeliveries(runtime);
-  const capture = options.memoryCapture;
-  const memoryCapture = capture
-    ? createMemoryCapture({
-        captureNow: (conversationId) =>
-          captureConversation(conversationId, {
-            sideCaller: capture.sideCaller,
-            readTranscript: async (id) => (await runtime.readChat(id)).messages,
-          }),
-      })
-    : undefined;
+  const memoryCapture = memoryCaptureStep(
+    options.memoryCapture?.sideCaller,
+    async (id) => (await runtime.readChat(id)).messages,
+  );
   const steps: SettledStep[] = [
     {
       name: "deliveries",

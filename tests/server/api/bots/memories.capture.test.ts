@@ -268,6 +268,24 @@ describe("captureConversation", () => {
     expect(old).toMatchObject({ text: "The owner lives in Pune." });
   });
 
+  it("supersedes only by the refs it showed, never by a row id the model made up", async () => {
+    const { botId, conversationId } = await seedBot();
+    const [old] = await db
+      .insert(memories)
+      .values({ botId, text: "The owner lives in Pune.", category: "fact" })
+      .returning();
+    const caller = sideCaller(
+      `[{"text":"The owner lives in Berlin.","category":"fact","confidence":0.9,"supersedesIds":["${old!.id}"]}]`,
+    );
+    await captureConversation(conversationId, {
+      sideCaller: caller,
+      readTranscript: ownerSays("I moved from Pune to Berlin last week."),
+    });
+    expect(await db.query.memories.findFirst({ where: eq(memories.id, old!.id) })).toMatchObject({
+      status: "active",
+    });
+  });
+
   it("marks what it captured as learned in that conversation", async () => {
     const { conversationId } = await seedBot();
     await captureConversation(conversationId, {
