@@ -19,7 +19,6 @@ import {
   MessageSquare,
   RefreshCw,
   Send,
-  SquareCheck,
   Sparkles,
   X,
 } from "lucide-react";
@@ -42,7 +41,7 @@ import { ConversationView } from "./ConversationView";
 import { PendingComments } from "./PendingComments";
 import { ResizablePane } from "./ResizablePane";
 import { ReviewPanel } from "./ReviewPanel";
-import { SubmitReview } from "./SubmitReview";
+import { SubmitReviewButton } from "./SubmitReview";
 
 /** Questions a reviewer asks first, one tap each. */
 const STARTERS = ["Summarize this PR", "What could break?", "Is it tested well?"];
@@ -63,7 +62,6 @@ export function PullReview({
   const [reload, setReload] = useState(0);
   // Phones: the diff or the assistant.
   const [side, setSide] = useState<"files" | "assistant">("files");
-  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -147,24 +145,7 @@ export function PullReview({
           {review.repo} · @{review.author}
         </span>
         <span className="flex-1" />
-        {github && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="shrink-0"
-            onClick={() => setSubmitting(true)}
-            aria-label="Submit review"
-            title="Submit your review on GitHub"
-          >
-            <SquareCheck />
-            <span className="hidden sm:inline">Submit review</span>
-            {github.comments.length > 0 && (
-              <span className="bg-primary text-primary-foreground rounded-full px-1.5 text-xs tabular-nums">
-                {github.comments.length}
-              </span>
-            )}
-          </Button>
-        )}
+        {github && <SubmitReviewButton review={review} github={github} />}
         <Button
           variant="ghost"
           size="sm"
@@ -253,14 +234,6 @@ export function PullReview({
           </div>
         </ResizablePane>
       </div>
-      {github && (
-        <SubmitReview
-          review={review}
-          github={github}
-          open={submitting}
-          onOpenChange={setSubmitting}
-        />
-      )}
     </div>
   );
 }

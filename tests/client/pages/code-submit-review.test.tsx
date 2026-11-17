@@ -5,11 +5,11 @@
  * the verdict go to the server in one call; on the owner's own PR only a
  * comment is offered. The network is the boundary: fetch is stubbed.
  */
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { MemoryRouter } from "react-router-dom";
-import { SubmitReview } from "@/pages/code/SubmitReview";
+import { SubmitReviewButton } from "@/pages/code/SubmitReview";
 import type { ThreadCommenting } from "@/lib/code/comments";
 import type { PullReviewView } from "../../../apps/web/src/shared/api/code";
 
@@ -60,12 +60,16 @@ function stubFetch() {
   return fetch;
 }
 
-const show = (review: PullReviewView, comments: ThreadCommenting) =>
-  render(
+/** The header's Submit review, opened. */
+async function show(review: PullReviewView, comments: ThreadCommenting) {
+  const view = render(
     <MemoryRouter>
-      <SubmitReview review={review} github={comments} open onOpenChange={() => {}} />
+      <SubmitReviewButton review={review} github={comments} />
     </MemoryRouter>,
   );
+  await userEvent.click(screen.getByRole("button", { name: "Submit review" }));
+  return view;
+}
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -73,16 +77,19 @@ describe("Submit review", () => {
   it("sends the verdict and summary for the waiting comments", async () => {
     const user = userEvent.setup();
     const fetch = stubFetch();
-    show(REVIEW, github(["Cap the delay"]));
+    await show(REVIEW, github(["Cap the delay"]));
 
     expect(screen.getByRole("list", { name: "Review comments" })).toHaveTextContent(
       "src/retry.ts:12Cap the delay",
     );
     await user.click(screen.getByRole("button", { name: "Request changes" }));
     // GitHub needs a summary to request changes.
-    expect(screen.getByRole("button", { name: "Submit review" })).toBeDisabled();
+    expect(
+      within(screen.getByRole("dialog")).getByRole("button", { name: "Submit review" }),
+    ).toBeDisabled();
     await user.type(screen.getByRole("textbox", { name: "Review summary" }), "One thing");
-    await user.click(screen.getByRole("button", { name: "Submit review" }));
+    const dialog = screen.getByRole("dialog", { name: "Submit review" });
+    await user.click(within(dialog).getByRole("button", { name: "Submit review" }));
 
     const call = fetch.mock.calls.find(([url]) => String(url).endsWith("/reviews/rv1/submit"));
     expect(JSON.parse(String(call?.[1]?.body))).toEqual({
@@ -91,8 +98,8 @@ describe("Submit review", () => {
     });
   });
 
-  it("on the owner's own PR offers only a comment", () => {
-    show({ ...REVIEW, mine: true }, github(["Note"]));
+  it("on the owner's own PR offers only a comment", async () => {
+    await show({ ...REVIEW, mine: true }, github(["Note"]));
 
     expect(screen.getByRole("button", { name: "Approve" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Request changes" })).toBeDisabled();
@@ -102,12 +109,12 @@ describe("Submit review", () => {
     ).toBeInTheDocument();
   });
 
-  it("offers the Code thread that opened the PR only when one did", () => {
-    const { unmount } = show(REVIEW, github(["Note"]));
+  it("offers the Code thread that opened the PR only when one did", async () => {
+    const { unmount } = await show(REVIEW, github(["Note"]));
     expect(screen.queryByRole("button", { name: "Send to coding thread" })).not.toBeInTheDocument();
     unmount();
 
-    show({ ...REVIEW, mine: true, codingThreadId: "shelley:t1" }, github(["Note"]));
+    await show({ ...REVIEW, mine: true, codingThreadId: "shelley:t1" }, github(["Note"]));
     expect(screen.getByRole("button", { name: "Send to coding thread" })).toBeEnabled();
   });
 });

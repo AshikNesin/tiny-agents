@@ -470,8 +470,10 @@ router.get("/code/reviews/:review/comments", async (c) =>
 );
 
 router.post("/code/reviews/:review/comments", async (c) => {
-  const body = await parseBody(c, draftSchema);
-  const comments = await reviewComments(c.req.param("review"));
+  const [body, comments] = await Promise.all([
+    parseBody(c, draftSchema),
+    reviewComments(c.req.param("review")),
+  ]);
   return ok<ReviewDraft>(c, await comments.addDraft(body), 201);
 });
 

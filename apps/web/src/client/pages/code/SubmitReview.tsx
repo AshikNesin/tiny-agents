@@ -6,7 +6,7 @@
  */
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Trash2 } from "lucide-react";
+import { SquareCheck, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button, Textarea, monoClass } from "@groot/ui";
 import {
@@ -34,7 +34,7 @@ const VERDICTS: Array<{ value: ReviewVerdict; label: string }> = [
 const lines = (c: { startLine: number; endLine: number }) =>
   c.startLine === c.endLine ? `${c.startLine}` : `${c.startLine}-${c.endLine}`;
 
-export function SubmitReview({
+function SubmitReview({
   review,
   github,
   open,
@@ -191,5 +191,37 @@ export function SubmitReview({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** The header's Submit review, with the count of pending comments, and its dialog. */
+export function SubmitReviewButton({
+  review,
+  github,
+}: {
+  review: PullReviewView;
+  github: ThreadCommenting;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Button
+        variant="outline"
+        size="sm"
+        className="shrink-0"
+        onClick={() => setOpen(true)}
+        aria-label="Submit review"
+        title="Submit your review on GitHub"
+      >
+        <SquareCheck />
+        <span className="hidden sm:inline">Submit review</span>
+        {github.comments.length > 0 && (
+          <span className="bg-primary text-primary-foreground rounded-full px-1.5 text-xs tabular-nums">
+            {github.comments.length}
+          </span>
+        )}
+      </Button>
+      <SubmitReview review={review} github={github} open={open} onOpenChange={setOpen} />
+    </>
   );
 }

@@ -140,8 +140,10 @@ export async function openReview(input: string): Promise<PullReviewView> {
       `Cannot read ${repoSlug(ref.repo)}#${ref.number} on GitHub: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
-  const viewer = await github.viewer().catch(() => undefined);
-  const ws = await services.workspace(project);
+  const [viewer, ws] = await Promise.all([
+    github.viewer().catch(() => undefined),
+    services.workspace(project),
+  ]);
   const path = reviewPath(project, pr.number);
   const headSha = await ws.pullWorktree(project.checkoutPath, path, pr.number, pr.baseRef);
   const values = {
