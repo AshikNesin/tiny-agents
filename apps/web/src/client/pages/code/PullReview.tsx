@@ -43,6 +43,7 @@ import { ResizablePane } from "./ResizablePane";
 import { ReviewPanel } from "./ReviewPanel";
 import { usePullConversations } from "./PullThreads";
 import { SubmitReviewButton } from "./SubmitReview";
+import { OpenInTerminal, YourChangesActions } from "./YourChanges";
 
 /** Questions a reviewer asks first, one tap each. */
 const STARTERS = ["Summarize this PR", "What could break?", "Is it tested well?"];
@@ -157,6 +158,7 @@ export function PullReview({
           {side === "files" ? <MessageSquare /> : <FileDiff />}
           {side === "files" ? "Assistant" : "Files"}
         </Button>
+        <OpenInTerminal review={review} />
         <Button
           variant="ghost"
           size="icon-sm"
@@ -203,6 +205,15 @@ export function PullReview({
             pull={{
               headRef: review.headRef,
               reviewedSha: review.reviewedSha !== review.headSha ? review.reviewedSha : null,
+              yourChanges: (done) => (
+                <YourChangesActions
+                  review={review}
+                  onChanged={(headSha) => {
+                    if (headSha) setReview({ ...review, headSha });
+                    done();
+                  }}
+                />
+              ),
             }}
             refreshKey={`${review.headSha}:${reload}:${assistantRow?.working}:${assistantRow?.cursor}`}
             page

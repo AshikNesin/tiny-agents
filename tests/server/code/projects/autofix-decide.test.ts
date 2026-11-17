@@ -49,6 +49,8 @@ function snapshot(extra: Partial<PullSnapshot> = {}): PullSnapshot {
     headSha: "sha1",
     baseRef: "main",
     fromFork: false,
+    headRepo: { owner: "acme", name: "web" },
+    maintainerCanModify: false,
     mergeable: "mergeable",
     mergeMethods: ["squash"],
     author: "ashik",

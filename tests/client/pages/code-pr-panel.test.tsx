@@ -148,6 +148,8 @@ function view(state: CheckState): ThreadPullsView {
             headSha: "abc",
             baseRef: "main",
             fromFork: false,
+            headRepo: { owner: "acme", name: "web" },
+            maintainerCanModify: false,
             mergeable: "mergeable",
             mergeMethods: ["squash"],
             autoMerge: false,

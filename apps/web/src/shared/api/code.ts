@@ -296,3 +296,21 @@ export interface SubmitReviewBody {
   event: ReviewVerdict;
   body?: string;
 }
+
+/** `POST /code/reviews/:id/push`: your changes, committed and pushed to the PR's branch. */
+export interface PushedReview {
+  sha: string;
+  branch: string;
+}
+
+/** `POST /code/reviews/:id/suggestions`: your changes as pending suggestion comments. */
+export interface SuggestedChanges {
+  added: number;
+  /** Hunks GitHub takes no comment on: outside the PR's diff, or in a new or deleted file. */
+  skipped: number;
+}
+
+/** `POST /code/reviews/:id/terminal`: the Terminal tab opened in the review's worktree. */
+export interface ReviewTerminal {
+  name: string;
+}

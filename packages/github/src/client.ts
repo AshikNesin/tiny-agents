@@ -94,6 +94,10 @@ export interface PullSnapshot {
   baseRef: string;
   /** The head branch lives in another repository. */
   fromFork: boolean;
+  /** The repository the head branch lives in (null when it was deleted). */
+  headRepo: RepoRef | null;
+  /** A fork's author lets maintainers push to the head branch. */
+  maintainerCanModify: boolean;
   mergeable: "mergeable" | "conflicting" | "unknown";
   mergeMethods: MergeMethod[];
   /** GitHub's native auto-merge is enabled. */
@@ -268,6 +272,7 @@ const SNAPSHOT_QUERY = `query PullSnapshot($owner: String!, $name: String!, $num
     pullRequest(number: $number) {
       id number url title body state isDraft merged mergeable
       headRefName headRefOid baseRefName isCrossRepository isInMergeQueue
+      maintainerCanModify headRepository { name owner { login } }
       autoMergeRequest { enabledAt }
       timelineItems(last: 5, itemTypes: [REMOVED_FROM_MERGE_QUEUE_EVENT]) {
         nodes { ... on RemovedFromMergeQueueEvent { id createdAt reason } }
@@ -340,6 +345,8 @@ interface RawSnapshot {
       headRefOid: string;
       baseRefName: string;
       isCrossRepository: boolean;
+      maintainerCanModify?: boolean;
+      headRepository?: { name: string; owner: { login: string } } | null;
       isInMergeQueue?: boolean;
       autoMergeRequest?: { enabledAt: string } | null;
       timelineItems?: { nodes: Array<{ id?: string; createdAt?: string; reason?: string | null }> };
@@ -484,6 +491,10 @@ export function toSnapshot(raw: RawSnapshot): PullSnapshot {
     headSha: head?.oid ?? pr.headRefOid,
     baseRef: pr.baseRefName,
     fromFork: pr.isCrossRepository,
+    headRepo: pr.headRepository
+      ? { owner: pr.headRepository.owner.login, name: pr.headRepository.name }
+      : null,
+    maintainerCanModify: pr.maintainerCanModify ?? false,
     mergeable:
       pr.mergeable === "MERGEABLE"
         ? "mergeable"

@@ -19,6 +19,9 @@ import type {
   InboxPullView,
   PullReviewView,
   PullThreadsView,
+  PushedReview,
+  ReviewTerminal,
+  SuggestedChanges,
   ReviewDraft,
   ReviewFile,
   ThreadPullsView,
@@ -40,18 +43,22 @@ import { WorkspaceError, cleanBranchPrefix } from "./code.workspace";
 import {
   archiveReview,
   askReview,
+  discardReviewChanges,
   getReview,
   listReviews,
   openReview,
+  pushReview,
   reviewComments,
   replyToReviewThread,
   reviewInbox,
   resolveReviewThread,
+  reviewTerminal,
   reviewIdOfKey,
   reviewThreads,
   reviewWorktree,
   sendCommentsToThread,
   submitReview,
+  suggestReviewChanges,
 } from "./code.reviews";
 import {
   createProject,
@@ -392,15 +399,18 @@ function saying(error: unknown): never {
 }
 
 /**
- * `?since=review`: a PR review's changes since the commit of the owner's
- * last review, instead of since its base.
+ * A PR review's other scopes, instead of since its base: `?since=review`,
+ * since the commit of the owner's last review; `?since=mine`, what the owner
+ * and the assistant changed on top of the PR's head.
  */
 async function sinceReview(threadId: string, since: string | undefined) {
-  if (since !== "review") return undefined;
+  if (since !== "review" && since !== "mine") return undefined;
   const reviewId = reviewIdOfKey(threadId);
-  const sha = reviewId ? (await reviewWorktree(reviewId)).reviewedSha : null;
-  if (!sha) throw Boom.badRequest("You have not reviewed this pull request yet.");
-  return sha;
+  const review = reviewId ? await reviewWorktree(reviewId) : undefined;
+  if (!review) throw Boom.badRequest("Only a pull request review has this view.");
+  if (since === "mine") return review.headSha;
+  if (!review.reviewedSha) throw Boom.badRequest("You have not reviewed this pull request yet.");
+  return review.reviewedSha;
 }
 
 router.get("/code/threads/:id/review/files", async (c) => {
@@ -549,6 +559,27 @@ router.post("/code/reviews/:review/threads/:thread/resolve", async (c) => {
   await resolveReviewThread(c.req.param("review"), c.req.param("thread"));
   return ok(c, { resolved: true });
 });
+
+router.post("/code/reviews/:review/push", async (c) => {
+  const { message } = await parseBody(
+    c,
+    z.object({ message: z.string().trim().min(1).max(10_000) }),
+  );
+  return ok<PushedReview>(c, await pushReview(c.req.param("review"), message));
+});
+
+router.post("/code/reviews/:review/discard", async (c) => {
+  await discardReviewChanges(c.req.param("review"));
+  return ok(c, { discarded: true });
+});
+
+router.post("/code/reviews/:review/suggestions", async (c) =>
+  ok<SuggestedChanges>(c, await suggestReviewChanges(c.req.param("review"))),
+);
+
+router.post("/code/reviews/:review/terminal", async (c) =>
+  ok<ReviewTerminal>(c, await reviewTerminal(c.req.param("review")), 201),
+);
 
 router.post("/code/reviews/:review/archive", async (c) => {
   await archiveReview(c.req.param("review"));

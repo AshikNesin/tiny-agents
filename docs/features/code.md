@@ -486,7 +486,24 @@ by sha if the worktree lacks it (a force-pushed commit GitHub no longer
 has says so). **Since <base>** still shows the whole PR. Viewed marks hold
 in both.
 
-Not built yet (issue #345): pushing changes made during a review.
+**Changing the code.** What you or the assistant change in the review's
+checkout shows under **Your changes** (the diff from the PR's head to the
+worktree, commits made there included), with three ways on:
+
+- **Push to PR** commits it (with your message, as the sandbox's git
+  identity or else your GitHub login's noreply address, hooks off) and
+  pushes it to the PR's branch, after a confirm that names the branch and
+  its author. Never forced: GitHub refuses the push when the branch moved.
+  A fork's branch takes it only when its author allows edits from
+  maintainers; otherwise the server says to post suggestions instead.
+- **Post as suggestions** turns each hunk into a pending GitHub suggestion
+  on the head lines it replaces (an added line is suggested with the line it
+  follows). GitHub takes comments only on lines of the PR's own diff, so a
+  hunk outside it, or in a file you added or deleted, is skipped and counted.
+- **Discard** (after a confirm) puts the checkout back at the PR's head.
+
+**Open in terminal** in the header opens a Terminal tab that starts in the
+review's checkout, for changes by hand; they show under **Your changes** too.
 
 ## Bots hand off coding
 

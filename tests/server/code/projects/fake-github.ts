@@ -33,6 +33,8 @@ interface FakePull {
   reviews: Review[];
   threads: ReviewThread[];
   fromFork: boolean;
+  /** A fork's author lets maintainers push (fork PRs only). */
+  maintainerCanModify?: boolean;
   autoMerge: boolean;
   inMergeQueue: boolean;
   queueRemovals: Array<{ id: string; at: string; reason: string }>;
@@ -128,6 +130,10 @@ export function fakeGitHub(local: LocalExec, bare: string, login = "ashik"): Fak
           : await headOf(pr.head),
         baseRef: pr.base,
         fromFork: pr.fromFork,
+        headRepo: pr.fromFork
+          ? { owner: pr.author ?? login, name: "web" }
+          : { owner: "acme", name: "web" },
+        maintainerCanModify: pr.maintainerCanModify ?? false,
         mergeable: pr.mergeable,
         mergeMethods: ["squash", "merge"],
         author: pr.author ?? login,

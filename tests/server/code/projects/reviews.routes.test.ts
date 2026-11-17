@@ -14,6 +14,8 @@ import { codePullRequests, db } from "../../../../apps/web/src/server/db";
 import { installAppForTests } from "../../../../apps/web/src/server/app-root";
 import { createCodeHub, setCodeHub } from "../../../../apps/web/src/server/api/code/code.hub";
 import { createWorkspace } from "../../../../apps/web/src/server/api/code/code.workspace";
+import { setTerminalServiceForTests } from "../../../../apps/web/src/server/api/terminal/terminal.instance";
+import type { TerminalService } from "../../../../packages/sandbox/src/terminal/terminal";
 import type {
   InboxPullView,
   ProjectView,
@@ -662,5 +664,149 @@ describe("changes since your review", () => {
     expect(
       (await call<PullReviewView>("GET", `/reviews/${review.id}`)).body.data!.reviewedSha,
     ).toBe(head);
+  });
+});
+
+describe("changing the PR's code", () => {
+  const WORKTREE = () => join(local.home, "tiny-agents-code/acme--web/reviews/pr-7");
+
+  /** Opens PR #7 (one file, three lines) with `edit` run in the review's worktree after. */
+  async function reviewWith(edit: string[], over: { maintainerCanModify?: boolean } = {}) {
+    await newProject();
+    const head = await forkPull([`printf 'one\\ntwo\\nthree\\n' > src/a.ts`]);
+    Object.assign(github.pull(7), {
+      head: "retry-webhooks",
+      maintainerCanModify: true,
+      ...over,
+    });
+    const review = (await call<PullReviewView>("POST", "/reviews", { pr: "acme/web#7" })).body
+      .data!;
+    if (edit.length) await sh(local, [`cd ${WORKTREE()}`, ...edit].join(" && "));
+    return { review, head, key: encodeURIComponent(review.key) };
+  }
+
+  const yours = async (key: string) =>
+    (await call<ReviewFile[]>("GET", `/threads/${key}/review/files?since=mine`)).body.data!;
+
+  it("shows only your changes on top of the PR's head", async () => {
+    const { key } = await reviewWith([`printf 'one\\nTWO\\nthree\\n' > src/a.ts`]);
+
+    expect((await yours(key)).map((f) => [f.path, f.status, f.additions, f.deletions])).toEqual([
+      ["src/a.ts", "modified", 1, 1],
+    ]);
+    const diff = (
+      await call<ReviewFileDiff>("GET", `/threads/${key}/review/file?path=src/a.ts&since=mine`)
+    ).body.data!;
+    expect(diff).toMatchObject({
+      oldContent: "one\ntwo\nthree\n",
+      newContent: "one\nTWO\nthree\n",
+    });
+  });
+
+  it("pushes your changes to the PR's branch as one commit, never forced", async () => {
+    const { review, head, key } = await reviewWith([`printf 'one\\nTWO\\nthree\\n' > src/a.ts`]);
+
+    const res = await call<{ sha: string; branch: string }>("POST", `/reviews/${review.id}/push`, {
+      message: "Shout the second line",
+    });
+
+    expect(res.status).toBe(200);
+    const { sha, branch } = res.body.data!;
+    expect(branch).toBe("retry-webhooks");
+    expect(await sh(local, `git -C ${bare} rev-parse refs/heads/retry-webhooks`)).toBe(sha);
+    expect(await sh(local, `git -C ${bare} log -1 --format=%s%n%P ${sha}`)).toBe(
+      `Shout the second line\n${head}`,
+    );
+    expect(await sh(local, `git -C ${bare} show ${sha}:src/a.ts`)).toBe("one\nTWO\nthree");
+    // The review now reads the pushed commit as the PR's head: nothing of yours is left.
+    expect((await call<PullReviewView>("GET", `/reviews/${review.id}`)).body.data!.headSha).toBe(
+      sha,
+    );
+    expect(await yours(key)).toEqual([]);
+  });
+
+  it("refuses to push to a fork that does not allow edits from maintainers", async () => {
+    const { review } = await reviewWith([`printf 'x\\n' > src/a.ts`], {
+      maintainerCanModify: false,
+    });
+
+    const res = await call("POST", `/reviews/${review.id}/push`, {
+      message: "Fix",
+    });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error?.message).toBe(
+      "@maria's fork does not allow edits from maintainers, so you cannot push to it. Post your changes as suggestions instead.",
+    );
+  });
+
+  it("refuses to push when you changed nothing", async () => {
+    const { review } = await reviewWith([]);
+
+    const res = await call("POST", `/reviews/${review.id}/push`, {
+      message: "Fix",
+    });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error?.message).toBe("You have not changed anything in this pull request.");
+  });
+
+  it("turns your changes into suggestion comments on the lines they replace", async () => {
+    const { review } = await reviewWith([
+      `printf 'one\\nTWO\\nthree\\nfour\\n' > src/a.ts`,
+      // Not part of the PR: GitHub takes no comment there.
+      `printf 'bye\\n' > README.md`,
+    ]);
+
+    const res = await call<{ added: number; skipped: number }>(
+      "POST",
+      `/reviews/${review.id}/suggestions`,
+    );
+
+    expect(res.body.data).toEqual({ added: 2, skipped: 1 });
+    const pending = (await call<ReviewDraft[]>("GET", `/reviews/${review.id}/comments`)).body.data!;
+    expect(pending.map((d) => [d.path, d.side, d.startLine, d.endLine, d.body])).toEqual([
+      ["src/a.ts", "new", 2, 2, "```suggestion\nTWO\n```"],
+      // An added line is suggested with the line it follows.
+      ["src/a.ts", "new", 3, 3, "```suggestion\nthree\nfour\n```"],
+    ]);
+  });
+
+  it("discards your changes, back to the PR's head", async () => {
+    const { review, head, key } = await reviewWith([
+      `printf 'x\\n' > src/a.ts`,
+      `printf 'new\\n' > src/new.ts`,
+      `git add -A && git -c user.name=me -c user.email=me@x commit --quiet -m local`,
+      `printf 'y\\n' > src/a.ts`,
+    ]);
+
+    expect((await call("POST", `/reviews/${review.id}/discard`)).status).toBe(200);
+
+    expect(await yours(key)).toEqual([]);
+    expect(await sh(local, `git -C ${WORKTREE()} rev-parse HEAD`)).toBe(head);
+    expect(existsSync(join(WORKTREE(), "src/new.ts"))).toBe(false);
+  });
+
+  it("opens a terminal tab in the review's worktree", async () => {
+    const { review } = await reviewWith([]);
+    const typed: string[] = [];
+    setTerminalServiceForTests({
+      create: async (_cols, _rows, options) => {
+        typed.push(options?.typeLine ?? "");
+        return {
+          name: "ta-term-2",
+          foreground: null,
+          attached: false,
+          createdAt: 1792605227,
+        };
+      },
+    } as Partial<TerminalService> as TerminalService);
+
+    const res = await call<{ name: string }>("POST", `/reviews/${review.id}/terminal`);
+
+    setTerminalServiceForTests(undefined);
+    expect(res.status).toBe(201);
+    expect(res.body.data!.name).toBe("ta-term-2");
+    expect(typed).toEqual([`cd '${WORKTREE()}'`]);
   });
 });
