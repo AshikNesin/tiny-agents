@@ -5,12 +5,14 @@
  * PR's head sha is read from the real bare repository the workspace pushes
  * to, so a push the app makes is what the next snapshot sees.
  */
-import type {
-  Check,
-  GitHubClient,
-  PullSnapshot,
-  Review,
-  ReviewThread,
+import {
+  GitHubError,
+  type Check,
+  type GitHubClient,
+  type JobStep,
+  type PullSnapshot,
+  type Review,
+  type ReviewThread,
 } from "../../../../packages/github/src/index";
 import type { LocalExec } from "./local-exec";
 import { sh } from "./local-exec";
@@ -41,6 +43,8 @@ export interface FakeGitHub extends GitHubClient {
   merged: Array<{ number: number; method: string }>;
   /** Each Actions job's raw log, by job id (a default when unset). */
   logs: Map<number, string>;
+  /** Jobs still running, by id; GitHub serves no log for these (404). */
+  running: Map<number, JobStep[]>;
   /** Native auto-merge calls, by PR node id. */
   autoMergeCalls: Array<{
     pullId: string;
@@ -62,6 +66,7 @@ export function fakeGitHub(local: LocalExec, bare: string, login = "ashik"): Fak
     comments: [],
     merged: [],
     logs: new Map(),
+    running: new Map(),
     autoMergeCalls: [],
     pull(number) {
       const found = gh.pulls.find((p) => p.number === number);
@@ -123,7 +128,12 @@ export function fakeGitHub(local: LocalExec, bare: string, login = "ashik"): Fak
         comments: [],
       };
     },
+    async job(_repo, jobId) {
+      const steps = gh.running.get(jobId);
+      return { completed: !steps, steps: steps ?? [] };
+    },
     async jobLogTail(_repo, jobId, maxChars) {
+      if (gh.running.has(jobId)) throw new GitHubError("Not Found", 404);
       return (gh.logs.get(jobId) ?? "FAIL src/a.test.ts\nExpected 1, received 2").slice(-maxChars);
     },
     async replyToThread(threadId, body) {

@@ -430,6 +430,43 @@ describe("a check's log excerpt", () => {
     ]);
   });
 
+  it("answers a running check's steps instead of a log GitHub does not serve yet", async () => {
+    const enc = await failingPull();
+    github.pull(1).checks[0] = {
+      ...github.pull(1).checks[0]!,
+      state: "pending",
+      completedAt: null,
+    };
+    github.running.set(77, [
+      { name: "Set up job", state: "success" },
+      { name: "Run pnpm test", state: "running" },
+      { name: "Post checkout", state: "queued" },
+    ]);
+    await pr(decodeURIComponent(enc));
+    const res = await call<CheckLogView>("GET", `/threads/${enc}/pr/checks/77/log`);
+    expect(res.status).toBe(200);
+    expect(res.body.data!.running).toEqual([
+      { name: "Set up job", state: "success" },
+      { name: "Run pnpm test", state: "running" },
+      { name: "Post checkout", state: "queued" },
+    ]);
+    expect(res.body.data!.lines).toEqual([]);
+  });
+
+  it("reads the log of a check that finished after the snapshot was taken", async () => {
+    const enc = await failingPull();
+    github.pull(1).checks[0] = {
+      ...github.pull(1).checks[0]!,
+      state: "pending",
+      completedAt: null,
+    };
+    await pr(decodeURIComponent(enc));
+    const res = await call<CheckLogView>("GET", `/threads/${enc}/pr/checks/77/log`);
+    expect(res.status).toBe(200);
+    expect(res.body.data!.running).toBeNull();
+    expect(res.body.data!.summary).toBe("AssertionError: expected 401 to be 200");
+  });
+
   it("reads only a job that is one of the open pull request's checks", async () => {
     const enc = await failingPull();
     const res = await call("GET", `/threads/${enc}/pr/checks/78/log`);

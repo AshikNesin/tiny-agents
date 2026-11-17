@@ -31,6 +31,7 @@ export {
   type CheckState,
   type GitHubClient,
   type IssueComment,
+  type JobStep,
   type MergeMethod,
   type PullRef,
   type PullSnapshot,

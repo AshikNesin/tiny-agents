@@ -350,6 +350,7 @@ describe("a check's log", () => {
         "Tests 1 failed",
       ],
       highlight: [0, 1],
+      running: null,
     });
     panel();
     await wait(0);
@@ -365,6 +366,45 @@ describe("a check's log", () => {
       "https://github.com/o/r/actions/runs/5/job/77",
     );
     expect(screen.getByText("1m 12s")).toBeInTheDocument();
+  });
+
+  it("shows a running check's steps, then its log once GitHub has one", async () => {
+    extra = {
+      checks: [
+        {
+          name: "test",
+          state: "pending",
+          startedAt: "2026-11-17T10:00:00Z",
+          completedAt: null,
+          url: "https://github.com/o/r/actions/runs/5/job/77",
+          jobId: 77,
+        },
+      ],
+    };
+    const base = { name: "test", url: "https://github.com/o/r/actions/runs/5/job/77" };
+    logs.set(77, {
+      ...base,
+      summary: null,
+      lines: [],
+      highlight: [],
+      running: [
+        { name: "Set up job", state: "success" },
+        { name: "Run pnpm test", state: "running" },
+      ],
+    });
+    panel();
+    await wait(0);
+    act(() => screen.getByRole("button", { name: /test/ }).click());
+    await wait(0);
+    const region = screen.getByRole("region", { name: "test log" });
+    expect(region).toHaveTextContent("Run pnpm test");
+    expect(region).toHaveTextContent("The log excerpt shows here when the check finishes.");
+    expect(region).not.toHaveTextContent("It may have expired");
+
+    logs.set(77, { ...base, summary: null, lines: ["ok 1 passes"], highlight: [], running: null });
+    await wait(5000);
+    expect(region).toHaveTextContent("ok 1 passes");
+    expect(region).not.toHaveTextContent("Run pnpm test");
   });
 });
 

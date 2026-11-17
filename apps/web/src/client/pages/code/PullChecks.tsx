@@ -2,7 +2,8 @@
  * The PR tab's checks: one line of how they stand (with Fix CI when one
  * fails), then a row each, failing first. A row opens to when it ran and,
  * for an Actions job, the lines of its log around what went wrong, with a
- * link to the full log on GitHub.
+ * link to the full log on GitHub. GitHub serves a job's log only once it
+ * finishes, so a running job shows its steps until then.
  */
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -23,7 +24,7 @@ import { copyText } from "../../lib/clipboard";
 import { errorMessage } from "../../lib/errors";
 import { formatDuration } from "../../lib/code/format";
 import { projectsApi } from "../../lib/code/projects";
-import type { CheckLogView, PullView } from "../../../shared/api/code";
+import type { CheckLogView, CheckStepView, PullView } from "../../../shared/api/code";
 
 type Check = NonNullable<PullView["snapshot"]>["checks"][number];
 
@@ -45,6 +46,9 @@ function took(c: Check): string | null {
   const ms = Date.parse(c.completedAt) - Date.parse(c.startedAt);
   return ms >= 1000 ? formatDuration(ms) : null;
 }
+
+/** How often a running job's steps are read again. */
+const STEPS_EVERY_MS = 5000;
 
 const when = (iso: string | null) =>
   iso
@@ -267,16 +271,29 @@ function LogExcerpt({ threadId, jobId, check }: { threadId: string; jobId: numbe
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
+  // Read again when the check's state changes, and every few seconds while
+  // the job runs, so its steps move and the log replaces them once it ends.
   useEffect(() => {
     let cancelled = false;
-    projectsApi
-      .checkLog(threadId, jobId)
-      .then((l) => !cancelled && setLog(l))
-      .catch((e: unknown) => !cancelled && setError(errorMessage(e, "Could not read the log.")));
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const read = () =>
+      projectsApi
+        .checkLog(threadId, jobId)
+        .then((l) => {
+          if (cancelled) return;
+          setLog(l);
+          setError(null);
+          if (l.running) timer = setTimeout(() => void read(), STEPS_EVERY_MS);
+        })
+        .catch((e: unknown) => !cancelled && setError(errorMessage(e, "Could not read the log.")));
+    void read();
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
-  }, [threadId, jobId]);
+  }, [threadId, jobId, check.state]);
+
+  const running = log?.running != null;
 
   const copy = async () => {
     if (!log || !(await copyText(log.lines.join("\n")))) return;
@@ -289,7 +306,7 @@ function LogExcerpt({ threadId, jobId, check }: { threadId: string; jobId: numbe
   return (
     <section aria-label={`${check.name} log`} className="min-w-0 space-y-1.5">
       <div className="flex items-center gap-2">
-        <h4 className={cn(metaLabelClass, "flex-1")}>Log excerpt</h4>
+        <h4 className={cn(metaLabelClass, "flex-1")}>{running ? "Steps" : "Log excerpt"}</h4>
         {log && log.lines.length > 0 && (
           <Button
             variant="ghost"
@@ -309,6 +326,8 @@ function LogExcerpt({ threadId, jobId, check }: { threadId: string; jobId: numbe
         <div className="flex justify-center p-3">
           <Spinner />
         </div>
+      ) : log.running ? (
+        <RunningSteps steps={log.running} />
       ) : (
         <>
           {log.summary && (
@@ -344,5 +363,45 @@ function LogExcerpt({ threadId, jobId, check }: { threadId: string; jobId: numbe
       )}
       {url && <FullLog url={url} />}
     </section>
+  );
+}
+
+function StepIcon({ state }: { state: CheckStepView["state"] }) {
+  if (state === "running") return <Spinner className="text-warning size-3.5" />;
+  if (state === "success") return <CircleCheck className="text-success size-3.5" />;
+  if (state === "failure") return <CircleX className="text-destructive size-3.5" />;
+  return <CircleDashed className="text-muted-foreground size-3.5" />;
+}
+
+/** A running job's steps: GitHub has no log to send until the job finishes. */
+function RunningSteps({ steps }: { steps: CheckStepView[] }) {
+  return (
+    <div className="space-y-1.5">
+      {steps.length > 0 && (
+        <ol className="space-y-1 text-xs">
+          {steps.map((step, i) => (
+            // Step names can repeat; their order in the job is what tells them apart.
+            // eslint-disable-next-line react/no-array-index-key
+            <li key={i} className="flex min-w-0 items-center gap-2">
+              <StepIcon state={step.state} />
+              <span
+                className={cn(
+                  "truncate",
+                  step.state === "queued" || step.state === "skipped"
+                    ? "text-muted-foreground"
+                    : undefined,
+                  step.state === "skipped" && "line-through",
+                )}
+              >
+                {step.name}
+              </span>
+            </li>
+          ))}
+        </ol>
+      )}
+      <p className="text-muted-foreground text-xs">
+        The log excerpt shows here when the check finishes.
+      </p>
+    </div>
   );
 }
