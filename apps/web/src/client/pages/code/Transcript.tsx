@@ -191,6 +191,32 @@ function Attachments({ assets, instanceId }: { assets: AssetRef[]; instanceId: s
   );
 }
 
+function SubagentStatus({ working, failed }: { working: boolean; failed: boolean }) {
+  if (working) return <Spinner className="size-3.5 shrink-0" aria-label="Working" />;
+  if (failed) return <CircleX className="text-destructive size-3.5 shrink-0" aria-label="Failed" />;
+  return <CircleCheck className="text-muted-foreground size-3.5 shrink-0" aria-label="Done" />;
+}
+
+/** What the subagent reported: markdown when done, raw text while live or failed. */
+function SubagentResult({
+  result,
+  live,
+  failed,
+}: {
+  result: string;
+  live?: boolean;
+  failed: boolean;
+}) {
+  if (live || failed) {
+    return <Output title={live ? "Output (live)" : "Output"} value={result} destructive={failed} />;
+  }
+  return (
+    <div className="bg-muted/40 max-h-96 overflow-y-auto overscroll-contain rounded-lg px-3 py-2 text-sm">
+      <Streamdown components={markdownComponents}>{result}</Streamdown>
+    </div>
+  );
+}
+
 /**
  * A subagent the agent started. The row opens to show what the subagent was
  * asked and what it reported back; a harness that gives it its own thread
@@ -204,7 +230,7 @@ function SubagentRow({ call, ctx }: { call: ToolItem; ctx: TranscriptContext }) 
   const input = call.input && typeof call.input === "object" ? call.input : undefined;
   const prompt =
     input && "prompt" in input ? String((input as { prompt?: unknown }).prompt ?? "") : "";
-  const working = row?.working || call.status === "running";
+  const working = Boolean(row?.working) || call.status === "running";
   const failed = failedTool(call);
   const result = call.output?.trim() ?? "";
   const hasDetail = Boolean(prompt || result);
@@ -215,13 +241,7 @@ function SubagentRow({ call, ctx }: { call: ToolItem; ctx: TranscriptContext }) 
         <div className="flex items-center gap-2 text-sm">
           <span className="font-medium">Subagent</span>
           <span className={cn("truncate", monoClass)}>{title}</span>
-          {working ? (
-            <Spinner className="size-3.5 shrink-0" aria-label="Working" />
-          ) : failed ? (
-            <CircleX className="text-destructive size-3.5 shrink-0" aria-label="Failed" />
-          ) : (
-            <CircleCheck className="text-muted-foreground size-3.5 shrink-0" aria-label="Done" />
-          )}
+          <SubagentStatus working={working} failed={failed} />
         </div>
         {prompt && !open && <p className="text-muted-foreground truncate text-xs">{prompt}</p>}
       </div>
@@ -266,18 +286,7 @@ function SubagentRow({ call, ctx }: { call: ToolItem; ctx: TranscriptContext }) 
         {link}
       </div>
       <CollapsibleContent className="space-y-2 px-3 pb-3">
-        {result &&
-          (call.live || failed ? (
-            <Output
-              title={call.live ? "Output (live)" : "Output"}
-              value={result}
-              destructive={failed}
-            />
-          ) : (
-            <div className="bg-muted/40 max-h-96 overflow-y-auto overscroll-contain rounded-lg px-3 py-2 text-sm">
-              <Streamdown components={markdownComponents}>{result}</Streamdown>
-            </div>
-          ))}
+        {result && <SubagentResult result={result} live={call.live} failed={failed} />}
         {prompt && <Output title="Prompt" value={prompt} />}
       </CollapsibleContent>
     </Collapsible>
