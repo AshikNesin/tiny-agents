@@ -11,7 +11,7 @@
 - `code-queue` Alt+Enter queues; `code-queued` lists it with `Send now` / `Cancel queued message`.
 - `code-stop` `Stop Shelley` → `[Operation cancelled]`.
 - `code-rename` thread actions (`<title>: thread actions`) → `Rename` dialog; `/code/s/<title>` opens a thread by title.
-- `code-changes` `Changes` panel (`code-changes`): one `code-file` card per changed file with its diff; `Close changes`.
+- `code-changes` `Review panel` (header toggle, `code-changes-toggle`) opens the right panel (`code-side-panel`, tabs `Source control` and, for a project thread, `Pull request #N`); Source control outside a project is `code-changes`: one `code-file` card per changed file with its diff; `Close panel`.
 - `code-list` navigation `Code threads`: by default one region per group (`Group by repository` in the footer's `List options` menu, a checked menu item, remembered in the browser; off, one flat list, working threads first, then newest first) (`code-group`, a `<section>` named by its heading: a project's name, a repository's or folder's basename, or `No folder`); the heading is a button (`aria-expanded`) that folds the group; links `New thread in <label>` (`/code/new?project=<id>` or `/code/new?cwd=<path>`) and, for a project, `<label> settings`; a group shows 8 threads, then `Show N more`. Rows: `Working` status (working threads float to the top of their group), `Unread` dot, `Archive <title>`; a PR chip only when it needs you. The `Search threads` row opens the search box (`Search threads`); Escape closes it.
 - `code-archived` footer button `Archived` (`code-archived-toggle`, `aria-pressed`) lists archived threads (no New thread links), row `Restore <title>`; `Archived threads` (`code-archived-back`) goes back.
 - `code-settings` footer link `Settings` (`code-settings`) → `/code/settings`, which opens its `Projects` section (heading `Projects`, region `Add a project`, `Your projects`); navigation `Settings sections` with `Projects` / `GitHub`. A project's page and the GitHub credential/App section are not driven (they need GitHub).
@@ -39,7 +39,7 @@ Preconditions:
 - **Stream.** Reload: a response for `/code/threads/<id>/events` has `content-type: text/event-stream`; `echo: hello-<stamp>` answers `hello-<stamp>`.
 - **Stop.** `delay: 60`, `Stop Shelley`: `[Operation cancelled]`, `Send` back, API `working: false`.
 - **Rename.** Thread actions → `Rename` → `verify-<stamp>`: `code-title` and the API agree; `/code/s/verify-<stamp>` opens the thread.
-- **Changes.** `bash: echo changed-<stamp> > b.txt` → `Done.`; `Changes` → `code-file` for `b.txt` containing `changed-<stamp>`; `git status` in the dir agrees. `Close changes`.
+- **Changes.** `bash: echo changed-<stamp> > b.txt` → `Done.`; `Review panel` → `code-file` for `b.txt` containing `changed-<stamp>`; `git status` in the dir agrees. `Close panel`.
 - **Unread.** `New thread` (exact name; directory remembered) → `delay: 15` → `Start`; open the first thread from the list; the second row shows `Working`, then an `Unread` dot; API `unread: true`.
 - **Group.** The group's heading button `work-<stamp>` (`aria-expanded` true) folds it: the rows go; again to unfold. `New thread in work-<stamp>` has href `/code/new?cwd=<encoded dir>` and opens `What should we build?` with `Working directory` reading `…/<run>/work-<stamp>`.
 - **Search.** `Search threads` button, then the `Search threads` box = `verify-<stamp>`: only that row; Escape closes the box.

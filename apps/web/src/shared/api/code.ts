@@ -124,6 +124,19 @@ export interface PullView {
   passes: PassView[];
 }
 
+/** A failing (or any) check's log, cut to the lines around what went wrong. */
+export interface CheckLogView {
+  name: string;
+  /** The full log on GitHub. */
+  url: string | null;
+  /** The line that says what went wrong, when one does. */
+  summary: string | null;
+  /** The excerpt, without timestamps or color codes. */
+  lines: string[];
+  /** Indexes into `lines` that read as errors. */
+  highlight: number[];
+}
+
 /** The PR tab of one thread. */
 export interface ThreadPullsView {
   project: ProjectView | null;

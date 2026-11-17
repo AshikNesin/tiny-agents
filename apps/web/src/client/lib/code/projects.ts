@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { apiClient } from "@groot/shell/lib/api";
 import type {
+  CheckLogView,
   CheckpointView,
   GitHubStatus,
   MergeMethod,
@@ -46,6 +47,8 @@ export const projectsApi = {
 
   pulls: (id: string, fresh = true) =>
     apiClient.get<ThreadPullsView>(`${thread(id)}/pr`, fresh ? {} : { fresh: "false" }),
+  checkLog: (id: string, jobId: number) =>
+    apiClient.get<CheckLogView>(`${thread(id)}/pr/checks/${jobId}/log`),
   publish: (id: string, body: { title?: string; body?: string } = {}) =>
     apiClient.post<ThreadPullsView>(`${thread(id)}/publish`, body),
   link: (id: string, number: number) =>

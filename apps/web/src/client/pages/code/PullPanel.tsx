@@ -1,28 +1,22 @@
 /**
- * The PR tab (issue #297 §7.5): beside Changes in the right panel, for a
- * thread started in a project. With no open PR it offers Publish (push the
- * branch, open a draft PR) and Link. With one: checks at a glance (failures
- * link to their log; stalled ones are marked), reviews and unresolved
- * comments (from authors Auto-fix does not trust, labelled Ignored), the
- * actions (Merge, Fix CI, Attach all comments) in one row, the Auto-fix and
- * Auto-merge switches (and a spend limit where the harness reports cost),
- * the pass history, the description (markdown, with Edit while it is open),
- * and earlier PRs. Opening the
- * tab reconciles with GitHub, and so does each re-read while it is on screen
- * (every 15 seconds), so a project without the App's webhooks (`gh` or a
- * token) keeps up as fast as one with them.
+ * The Pull request tab of the right panel (issue #297 §7.5), for a thread
+ * started in a project. With no open PR it offers Publish (push the branch,
+ * open a draft PR) and Link. With one: its number, state, title and branch;
+ * the checks (a failing one opens to its log excerpt, with Fix CI); Merge;
+ * every comment as All, Humans or Bots; the Auto-fix and Auto-merge
+ * switches (and a spend limit where the harness reports cost); the pass
+ * history; the description (markdown, with Edit while it is open); and
+ * earlier PRs. Opening the tab reconciles with GitHub, and so does each
+ * re-read while it is on screen (every 15 seconds), so a project without
+ * the App's webhooks (`gh` or a token) keeps up as fast as one with them.
  */
 import { useCallback, useEffect, useState } from "react";
 import {
-  CircleCheck,
-  CircleDashed,
-  CircleX,
   ExternalLink,
   GitMerge,
   GitPullRequest,
   GitPullRequestDraft,
   Link2,
-  Maximize2,
   MessageSquare,
   MoreHorizontal,
   Pencil,
@@ -33,7 +27,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Streamdown } from "streamdown";
-import { Badge, Button, EmptyState, Input, Textarea, metaLabelClass, monoClass } from "@groot/ui";
+import { Button, EmptyState, Input, Textarea, metaLabelClass, monoClass } from "@groot/ui";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -47,6 +41,8 @@ import { errorMessage } from "../../lib/errors";
 import { markdownComponents } from "../../lib/markdown";
 import { projectsApi } from "../../lib/code/projects";
 import type { MergeMethod, PullView, ThreadPullsView } from "../../../shared/api/code";
+import { PullChecks } from "./PullChecks";
+import { PullComments } from "./PullComments";
 
 /** How often the tab re-reads (and so reconciles) its PR while it is on screen. */
 const LIVE_MS = 15_000;
@@ -90,17 +86,12 @@ export function PullPanel({
   threadId,
   refreshKey,
   onAttach,
-  onClose,
-  onExpand,
 }: {
   threadId: string;
   /** Changes when the thread's turn ends, to re-read. */
   refreshKey: unknown;
   /** Put text in the composer. */
   onAttach(text: string): void;
-  onClose(): void;
-  /** Show this at full width on the thread's Review page. */
-  onExpand?: () => void;
 }) {
   const [view, setView] = useState<ThreadPullsView | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -170,85 +161,86 @@ export function PullPanel({
 
   return (
     <div className="flex h-full min-h-0 flex-col" data-testid="code-pr">
-      <div className="border-border flex h-13 shrink-0 items-center gap-1 border-b px-2">
-        <span className="flex min-w-0 items-center gap-2 px-2 text-sm font-medium">
-          {pr?.draft ? (
-            <GitPullRequestDraft className="text-muted-foreground size-4 shrink-0" />
-          ) : (
-            <GitPullRequest className="text-muted-foreground size-4 shrink-0" />
-          )}
-          {pr ? (
-            <a href={pr.url} target="_blank" rel="noreferrer" className="truncate hover:underline">
-              #{pr.number} {pr.title}
-            </a>
-          ) : (
-            "Pull request"
-          )}
-        </span>
-        <span className="flex-1" />
-        {pr && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label="PR actions"
-                className="text-muted-foreground"
-              >
-                <MoreHorizontal />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem asChild>
-                <a href={pr.url} target="_blank" rel="noreferrer">
-                  <ExternalLink />
-                  Open on GitHub
-                </a>
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                variant="destructive"
-                onSelect={() => void act("unlink", () => projectsApi.unlink(threadId))}
-              >
-                <X />
-                Unlink from this thread
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={() => setReload((n) => n + 1)}
-          aria-label="Refresh"
-          title="Refresh from GitHub"
-          className="text-muted-foreground"
-        >
-          <RefreshCw />
-        </Button>
-        {onExpand && (
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={onExpand}
-            aria-label="Open as a page"
-            title="Open as a page"
-            className="text-muted-foreground"
-          >
-            <Maximize2 />
-          </Button>
-        )}
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={onClose}
-          aria-label="Close pull request"
-          className="text-muted-foreground"
-        >
-          <X />
-        </Button>
-      </div>
-
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4 text-sm">
+        <header className="space-y-1">
+          <div className="flex min-h-7 items-center gap-2">
+            {pr?.draft ? (
+              <GitPullRequestDraft className="text-muted-foreground size-4 shrink-0" />
+            ) : (
+              <GitPullRequest className="text-muted-foreground size-4 shrink-0" />
+            )}
+            {pr ? (
+              <>
+                <a
+                  href={pr.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-medium tabular-nums hover:underline"
+                >
+                  #{pr.number}
+                </a>
+                <StateBadge pr={pr} />
+              </>
+            ) : (
+              <span className="font-medium">Pull request</span>
+            )}
+            <span className="flex-1" />
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={() => setReload((n) => n + 1)}
+              aria-label="Refresh"
+              title="Refresh from GitHub"
+              className="text-muted-foreground"
+            >
+              <RefreshCw />
+            </Button>
+            {pr && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label="PR actions"
+                    className="text-muted-foreground"
+                  >
+                    <MoreHorizontal />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem asChild>
+                    <a href={pr.url} target="_blank" rel="noreferrer">
+                      <ExternalLink />
+                      Open on GitHub
+                    </a>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    variant="destructive"
+                    onSelect={() => void act("unlink", () => projectsApi.unlink(threadId))}
+                  >
+                    <X />
+                    Unlink from this thread
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          </div>
+          {pr && (
+            <>
+              <h2 className="text-base leading-snug font-medium [overflow-wrap:anywhere]">
+                <a href={pr.url} target="_blank" rel="noreferrer" className="hover:underline">
+                  {pr.title}
+                </a>
+              </h2>
+              <p
+                className={cn("text-muted-foreground truncate text-xs", monoClass)}
+                aria-label="Status"
+              >
+                {pr.headRef} → {pr.baseRef}
+              </p>
+            </>
+          )}
+        </header>
         {error ? (
           <p className="text-destructive">{error}</p>
         ) : !view ? (
@@ -300,6 +292,7 @@ export function PullPanel({
           </section>
         ) : (
           <ActivePull
+            threadId={threadId}
             pr={pr}
             busy={busy}
             onAutofix={(enabled) =>
@@ -313,11 +306,12 @@ export function PullPanel({
               })
             }
             onMerge={(method) => void act("merge", () => projectsApi.merge(threadId, method))}
-            onAttach={() => {
+            onAttachAll={() => {
               const text = commentsText(pr);
               if (text) onAttach(text);
               else toast.message("No open review comments.");
             }}
+            onAttach={onAttach}
             onAutoMerge={(enabled) =>
               void act("switch auto-merge", () => projectsApi.autoMerge(threadId, enabled))
             }
@@ -355,143 +349,67 @@ export function PullPanel({
   );
 }
 
-/** Checks as one segmented bar: passed, failed, then pending (Hoplite). */
-function ChecksBar({
-  passed,
-  failed,
-  pending,
-}: {
-  passed: number;
-  failed: number;
-  pending: number;
-}) {
-  const total = passed + failed + pending;
+const STATE_TONE: Record<string, string> = {
+  open: "bg-success/10 text-success",
+  draft: "bg-muted text-muted-foreground",
+  queued: "bg-warning/10 text-warning",
+  merged: "bg-primary/10 text-primary",
+  closed: "bg-destructive/10 text-destructive",
+};
+
+function StateBadge({ pr }: { pr: PullView }) {
+  const state =
+    pr.state === "open" && pr.snapshot?.inMergeQueue
+      ? "queued"
+      : pr.state === "open" && pr.draft
+        ? "draft"
+        : pr.state;
   return (
     <span
-      role="img"
-      aria-label={`${passed} passed, ${failed} failed, ${pending} pending`}
-      className="bg-muted flex h-1.5 w-full gap-px overflow-hidden rounded-full"
-    >
-      {total > 0 && (
-        <>
-          <span className="bg-success" style={{ flexGrow: passed }} />
-          <span className="bg-destructive" style={{ flexGrow: failed }} />
-          <span className="bg-warning/70" style={{ flexGrow: pending }} />
-        </>
+      className={cn(
+        "rounded-full px-2 py-0.5 text-[11px] font-medium capitalize",
+        STATE_TONE[state],
       )}
+    >
+      {state}
     </span>
   );
 }
 
 function ActivePull({
+  threadId,
   pr,
   busy,
   onAutofix,
   onFix,
   onMerge,
+  onAttachAll,
   onAttach,
   onAutoMerge,
   spend,
   onSpendLimit,
 }: {
+  threadId: string;
   pr: PullView;
   busy: string | null;
   onAutofix(enabled: boolean): void;
   onFix(): void;
   onMerge(method: MergeMethod): void;
-  onAttach(): void;
+  onAttachAll(): void;
+  onAttach(text: string): void;
   onAutoMerge(enabled: boolean): void;
   spend: { usd: number | null; limitUsd: number | null };
   onSpendLimit(limitUsd: number | null): void;
 }) {
   const [limit, setLimit] = useState(spend.limitUsd === null ? "" : String(spend.limitUsd));
   const snap = pr.snapshot;
-  const checks = snap?.checks ?? [];
-  const passed = checks.filter((c) => c.state === "success" || c.state === "neutral").length;
-  const failed = checks.filter((c) => c.state === "failure");
+  const failing = (snap?.checks ?? []).some((c) => c.state === "failure");
   const open = (snap?.threads ?? []).filter((t) => !t.resolved);
-  const reviews = snap?.reviews ?? [];
   const methods = snap?.mergeMethods ?? [];
-  const [checksOpen, setChecksOpen] = useState(failed.length > 0);
 
   return (
     <>
-      <section className="space-y-3" aria-label="At a glance">
-        <p className="text-muted-foreground text-xs" aria-label="Status">
-          {pr.state === "open" && snap?.inMergeQueue
-            ? "queued"
-            : pr.state === "open" && pr.draft
-              ? "draft"
-              : pr.state}
-          {" · "}
-          <span className={monoClass}>
-            {pr.headRef} → {pr.baseRef}
-          </span>
-        </p>
-        <div className="border-border grid grid-cols-3 divide-x rounded-lg border">
-          <button
-            type="button"
-            onClick={() => setChecksOpen((o) => !o)}
-            className="hover:bg-muted/60 flex min-w-0 flex-col gap-1.5 rounded-l-lg px-3 py-2 text-left"
-            aria-expanded={checksOpen}
-          >
-            <span className="flex items-center gap-1.5 text-xs font-medium">
-              {failed.length ? (
-                <CircleX className="text-destructive size-3.5" />
-              ) : passed === checks.length ? (
-                <CircleCheck className="text-success size-3.5" />
-              ) : (
-                <CircleDashed className="text-warning size-3.5" />
-              )}
-              Checks {passed} of {checks.length}
-            </span>
-            <ChecksBar
-              passed={passed}
-              failed={failed.length}
-              pending={checks.length - passed - failed.length}
-            />
-          </button>
-          <div className="flex min-w-0 flex-col gap-0.5 px-3 py-2">
-            <span className="text-muted-foreground text-xs">Reviews</span>
-            <span className="text-sm font-medium tabular-nums">{reviews.length}</span>
-          </div>
-          <div className="flex min-w-0 flex-col gap-0.5 px-3 py-2">
-            <span className="text-muted-foreground flex items-center gap-1 text-xs">
-              <MessageSquare className="size-3" />
-              Open comments
-            </span>
-            <span className="text-sm font-medium tabular-nums">{open.length}</span>
-          </div>
-        </div>
-      </section>
-
-      {checksOpen && checks.length > 0 && (
-        <ul className="space-y-1" aria-label="Checks">
-          {checks.map((c) => (
-            <li key={c.name} className="flex items-center gap-2">
-              {c.state === "failure" ? (
-                <CircleX className="text-destructive size-3.5 shrink-0" />
-              ) : c.state === "pending" ? (
-                <CircleDashed className="text-warning size-3.5 shrink-0" />
-              ) : (
-                <CircleCheck className="text-success size-3.5 shrink-0" />
-              )}
-              <span className="truncate">{c.name}</span>
-              {pr.stalled.includes(c.name) && <Badge variant="secondary">Stalled</Badge>}
-              {c.url && (
-                <a
-                  href={c.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-muted-foreground ml-auto text-xs hover:underline"
-                >
-                  Log
-                </a>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
+      <PullChecks threadId={threadId} pr={pr} busy={busy} onFix={onFix} />
 
       <div className="flex flex-wrap gap-2">
         {pr.state === "open" && methods.length > 0 && (
@@ -515,22 +433,27 @@ function ActivePull({
             </DropdownMenuContent>
           </DropdownMenu>
         )}
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={onFix}
-          disabled={busy !== null || pr.state !== "open"}
-        >
-          {busy === "start a pass" ? <Spinner /> : <Wrench />}
-          Fix CI
-        </Button>
+        {!failing && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onFix}
+            disabled={busy !== null || pr.state !== "open"}
+            title="One Auto-fix pass on what is open now: comments, conflicts"
+          >
+            {busy === "start a pass" ? <Spinner /> : <Wrench />}
+            Fix
+          </Button>
+        )}
         {open.length > 0 && (
-          <Button size="sm" variant="outline" onClick={onAttach}>
+          <Button size="sm" variant="outline" onClick={onAttachAll}>
             <MessageSquare />
             Attach all comments
           </Button>
         )}
       </div>
+
+      <PullComments pr={pr} onAttach={onAttach} />
 
       <section
         className="border-border divide-border divide-y rounded-xl border"
@@ -604,37 +527,6 @@ function ActivePull({
           </form>
         )}
       </section>
-
-      {open.length > 0 && (
-        <section className="space-y-2" aria-label="Unresolved comments">
-          <h3 className={metaLabelClass}>Unresolved comments</h3>
-          <ul className="space-y-2">
-            {open.map((t) => (
-              <li key={t.id} className="border-border space-y-1 rounded-lg border p-2">
-                <p
-                  className={cn("text-muted-foreground flex items-center gap-2 text-xs", monoClass)}
-                >
-                  {t.path}
-                  {t.line ? `:${t.line}` : ""}
-                  {pr.ignored.includes(t.id) && (
-                    <Badge
-                      variant="secondary"
-                      title="Auto-fix does not take instructions from this author"
-                    >
-                      Ignored
-                    </Badge>
-                  )}
-                </p>
-                {t.comments.map((c) => (
-                  <p key={c.id} className="whitespace-pre-wrap">
-                    <span className="font-medium">{c.author.login}</span> {c.body}
-                  </p>
-                ))}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
 
       {pr.passes.length > 0 && (
         <section className="space-y-1" aria-label="Auto-fix passes">
@@ -751,7 +643,7 @@ function Description({
           </div>
         </div>
       ) : shown ? (
-        <div className="chat-md code-md min-w-0 text-sm [overflow-wrap:anywhere]">
+        <div className="chat-md code-md min-w-0 text-sm [overflow-wrap:anywhere] [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm">
           <Streamdown components={markdownComponents}>{shown}</Streamdown>
         </div>
       ) : (

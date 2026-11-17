@@ -18,7 +18,7 @@ import {
   CircleAlert,
   CircleCheck,
   ExternalLink,
-  FileDiff,
+  PanelRight,
   FolderGit2,
   FolderOpen,
   GitMerge,
@@ -155,15 +155,6 @@ function PromptDialog({
   );
 }
 
-/** One button of the header's Changes / PR switch. */
-const segment = (active: boolean) =>
-  cn(
-    "flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50",
-    active
-      ? "bg-background text-foreground shadow-sm"
-      : "text-muted-foreground hover:text-foreground",
-  );
-
 const PULL_TEXT: Record<string, string> = {
   needs_input: "text-warning",
   green: "text-success",
@@ -183,15 +174,14 @@ export function ConversationView({
   harness,
   rows,
   externalUrl,
-  changesOpen,
-  onToggleChanges,
+  panelOpen,
+  onTogglePanel,
+  onShowChanges,
   insert,
   onCwd,
   inProject = false,
   projectName,
   pr = null,
-  prOpen = false,
-  onTogglePr,
   sidebarHidden = false,
 }: {
   id: string;
@@ -199,8 +189,11 @@ export function ConversationView({
   rows: ThreadSummary[];
   /** "Open in <harness>", when it has its own UI (the list row's). */
   externalUrl?: string;
-  changesOpen: boolean;
-  onToggleChanges(): void;
+  /** The right panel (Source control, Pull request) is open. */
+  panelOpen: boolean;
+  onTogglePanel(): void;
+  /** Open Source control (absent while it is on screen). */
+  onShowChanges?: () => void;
   insert: { text: string; nonce: number } | null;
   onCwd?(cwd: string | null): void;
   /** Started in a project (issue #297): Changes against its base branch, and the PR tab. */
@@ -208,8 +201,6 @@ export function ConversationView({
   projectName?: string;
   /** Its open pull request, as the list knows it. */
   pr?: { number: number; loop: string } | null;
-  prOpen?: boolean;
-  onTogglePr?(): void;
   /** The thread list is folded away: leave room for Show sidebar. */
   sidebarHidden?: boolean;
 }) {
@@ -450,41 +441,30 @@ export function ConversationView({
           </Button>
         )}
         {(inProject || caps.workspace.diffs) && (
-          // Changes and the pull request as one quiet segmented switch (Hoplite's panel tabs).
-          <div className="bg-muted/60 flex shrink-0 items-center gap-0.5 rounded-lg p-0.5">
-            {(caps.workspace.diffs || inProject) && (
-              <button
-                type="button"
-                onClick={onToggleChanges}
-                disabled={!row?.cwd && !inProject}
-                title="Changes (⌘⇧D)"
-                aria-pressed={changesOpen}
-                className={segment(changesOpen)}
-                data-testid="code-changes-toggle"
-              >
-                <FileDiff className="size-3.5" />
-                <span className="hidden sm:inline">Changes</span>
-              </button>
+          // One toggle for the right panel; it shows the PR's state when there is one.
+          <button
+            type="button"
+            onClick={onTogglePanel}
+            disabled={!row?.cwd && !inProject}
+            title="Review panel (⌘⇧D)"
+            aria-label="Review panel"
+            aria-pressed={panelOpen}
+            className={cn(
+              "flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50",
+              panelOpen
+                ? "bg-muted text-foreground"
+                : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
             )}
-            {inProject && onTogglePr && (
-              <button
-                type="button"
-                onClick={onTogglePr}
-                aria-pressed={prOpen}
-                title={pr ? `Pull request #${pr.number}` : "Publish a pull request"}
-                className={segment(prOpen)}
-                data-testid="code-pr-toggle"
-              >
-                <PullIcon loop={pr?.loop} />
-                <span className="hidden tabular-nums sm:inline">{pr ? `#${pr.number}` : "PR"}</span>
-                {pr && pullState(pr.loop) && (
-                  <span className={cn("hidden md:inline", PULL_TEXT[pr.loop])}>
-                    {pullState(pr.loop)}
-                  </span>
-                )}
-              </button>
+            data-testid="code-changes-toggle"
+          >
+            {pr ? <PullIcon loop={pr.loop} /> : <PanelRight className="size-3.5" />}
+            <span className="hidden tabular-nums sm:inline">{pr ? `#${pr.number}` : "Review"}</span>
+            {pr && pullState(pr.loop) && (
+              <span className={cn("hidden md:inline", PULL_TEXT[pr.loop])}>
+                {pullState(pr.loop)}
+              </span>
             )}
-          </div>
+          </button>
         )}
       </header>
 
@@ -633,11 +613,7 @@ export function ConversationView({
           )}
           {!archived && (
             <>
-              <PendingComments
-                threadId={id}
-                enabled={!guest}
-                onShow={changesOpen ? undefined : onToggleChanges}
-              />
+              <PendingComments threadId={id} enabled={!guest} onShow={onShowChanges} />
               <Composer
                 draftKey={id}
                 harness={harness}
