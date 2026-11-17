@@ -123,7 +123,7 @@ export type Decision =
 const TRUSTED_ASSOCIATIONS: readonly string[] = ["OWNER", "MEMBER", "COLLABORATOR"];
 const HOUR_MS = 60 * 60_000;
 
-export function isTrusted(
+function isTrusted(
   author: Author,
   ownerLogin: string | null,
   settings: Pick<AutofixSettings, "trustedBots">,
@@ -135,7 +135,7 @@ export function isTrusted(
   return TRUSTED_ASSOCIATIONS.includes(author.association);
 }
 
-export function isAppComment(
+function isAppComment(
   comment: { databaseId: number; body: string },
   appCommentIds: ReadonlySet<number>,
 ): boolean {
