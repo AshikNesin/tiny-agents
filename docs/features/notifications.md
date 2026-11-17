@@ -15,8 +15,11 @@ The server makes a VAPID key pair on first use (KV `WEB_PUSH:vapid`, the
 private key sealed with `SECRETS_KEY` when it is set) and sends each
 registered device an end-to-end encrypted push (RFC 8291 `aes128gcm`, RFC 8292
 VAPID) to the endpoint its push service gave it: FCM on phones with Google
-Play services, ntfy or another UnifiedPush server otherwise. The server needs
-no Firebase account, relay or env var ([ADR 0026](../adr/0026-web-push-transport.md)).
+Play services (the app's default), ntfy or another UnifiedPush server when the
+phone has none or the owner picks one in the app's Settings. A self-hosted ntfy
+with `auth-default-access: deny-all` must let anyone write `up*` topics
+(`ntfy access everyone 'up*' write-only`), or it answers 403: ntfy ignores the
+VAPID `Authorization` header. The server needs no Firebase account, relay or env var ([ADR 0026](../adr/0026-web-push-transport.md)).
 Push services see ciphertext, its size, urgency and TTL.
 
 - **Payload.** JSON the app renders: `{ v: 1, kind: "show", id, tag, event,

@@ -98,7 +98,7 @@ class MainActivity : ComponentActivity() {
                     // Already on and still allowed: nothing to refresh on a plain return to the app.
                     val on = container.push.status.value.state == PushStatus.State.On
                     if (!explicit && on && container.pushNotifier.enabled()) return@collect
-                    container.push.ensure(this@MainActivity, ::askNotificationPermission)
+                    container.push.ensure(::askNotificationPermission)
                 }
             }
         }

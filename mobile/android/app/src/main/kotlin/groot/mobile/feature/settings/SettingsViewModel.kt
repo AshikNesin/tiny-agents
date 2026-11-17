@@ -8,6 +8,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import groot.kit.theme.ThemeMode
 import groot.mobile.AppContainer
 import groot.mobile.data.Session
+import groot.mobile.push.PushService
 import groot.mobile.push.PushStatus
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -43,6 +44,13 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     /** Register this phone again: after a server update, or when it failed. */
     fun retryPush() {
         container.push.retry()
+    }
+
+    /** The push services on this phone, for Settings' Push service row. */
+    fun pushServices(): List<PushService> = container.push.services()
+
+    fun choosePushService(id: String) {
+        viewModelScope.launch { container.push.choose(id) }
     }
 
     fun setThemeMode(mode: ThemeMode) {

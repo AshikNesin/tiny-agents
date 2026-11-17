@@ -5,6 +5,7 @@ import android.content.Intent
 import android.provider.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -19,6 +20,7 @@ import groot.kit.settings.SettingsSection
 import groot.kit.theme.ThemeMode
 import groot.mobile.R
 import groot.mobile.data.Session
+import groot.mobile.push.PushService
 import groot.mobile.push.PushStatus
 import groot.mobile.ui.brand.AppIcons
 import groot.mobile.ui.makerUrl
@@ -36,6 +38,8 @@ fun SettingsRoute(
     val push by viewModel.push.collectAsStateWithLifecycle()
     val testNote by viewModel.testNote.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    // Read again when the state changes: a push app installed or removed shows up on the next try.
+    val pushServices = remember(push) { viewModel.pushServices() }
     SettingsScreen(
         themeMode = themeMode,
         onThemeModeChange = viewModel::setThemeMode,
@@ -52,6 +56,8 @@ fun SettingsRoute(
         onSendTest = viewModel::sendTestNotification,
         onRetryPush = viewModel::retryPush,
         onOpenNotificationSettings = { openNotificationSettings(context) },
+        pushServices = pushServices,
+        onChoosePushService = viewModel::choosePushService,
     )
 }
 
@@ -73,6 +79,8 @@ fun SettingsScreen(
     onSendTest: () -> Unit = {},
     onRetryPush: () -> Unit = {},
     onOpenNotificationSettings: () -> Unit = {},
+    pushServices: List<PushService> = emptyList(),
+    onChoosePushService: (String) -> Unit = {},
 ) {
     GrootSettingsScreen(
         themeMode = themeMode,
@@ -117,6 +125,18 @@ fun SettingsScreen(
                     summary = pushSummary(push),
                     icon = rememberVectorPainter(AppIcons.Bell),
                 )
+                // Google, or a UnifiedPush app such as ntfy: shown when there is a choice.
+                if (pushServices.size > 1) {
+                    val current = pushServices.indexOfFirst { it.label == push.via }.coerceAtLeast(0)
+                    val next = pushServices[(current + 1).mod(pushServices.size)]
+                    SettingsNavigationRow(
+                        title = "Push service",
+                        value = push.via ?: pushServices.first().label,
+                        summary = "Tap to use ${next.label} instead",
+                        icon = rememberVectorPainter(AppIcons.Server),
+                        onClick = { onChoosePushService(next.id) },
+                    )
+                }
                 when (push.state) {
                     PushStatus.State.On -> SettingsActionRow(
                         title = "Send test notification",

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.2
+
+### Patch Changes
+
+- Notifications now come through Google by default whenever the phone has Google Play services, even with a
+  UnifiedPush app such as ntfy installed, so they work without setting anything up. Settings, Notifications has a
+  "Push service" row to switch to ntfy (or back) when you have one.
+
 ## 0.6.1
 
 ### Patch Changes

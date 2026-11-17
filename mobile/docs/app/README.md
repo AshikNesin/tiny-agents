@@ -183,8 +183,9 @@ screen for `TERM=xterm-256color`.
 
 - `PushRegistrar` registers after sign-in and on each launch: it fetches the server's VAPID key
   (`GET /notifications/vapid-key`, 403 for a guest, so a guest is never asked), asks for `POST_NOTIFICATIONS` on
-  Android 13+, picks the owner's UnifiedPush distributor (ntfy, say) or else the embedded FCM one, and posts the
-  endpoint to `POST /notifications/devices`. A new key or another server registers again; signing out removes the
+  Android 13+, picks Google's embedded FCM distributor when the phone has Play services (else the first
+  UnifiedPush app, such as ntfy; Settings' "Push service" switches), and posts the endpoint to
+  `POST /notifications/devices`. A new key or another server registers again; signing out removes the
   device.
 - `TinyAgentsPushService` gets the decrypted payload (`PushPayload`: `show` or `dismiss`) and `PushNotifier` shows
   it on one Android channel per category (Needs you, Updates, Security, System), keyed by its tag, so a reminder
