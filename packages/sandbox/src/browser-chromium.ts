@@ -358,9 +358,17 @@ async function settle(page: Page): Promise<void> {
   await page.waitForLoadState("load", { timeout: SETTLE_MS }).catch(() => undefined);
 }
 
-/** The page's title, or undefined when it has none or cannot say. */
+/** How long the title may take: the renderer answers it, and a busy page never does. */
+const TITLE_MS = 1_000;
+
+/** The page's title, or undefined when it has none or cannot say in time. */
 async function titleOf(page: Page): Promise<string | undefined> {
-  const title = await page.title().catch(() => "");
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<string>((resolve) => {
+    timer = setTimeout(() => resolve(""), TITLE_MS);
+  });
+  const title = await Promise.race([page.title().catch(() => ""), late]);
+  clearTimeout(timer);
   return title.trim() || undefined;
 }
 
