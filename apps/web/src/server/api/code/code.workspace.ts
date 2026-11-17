@@ -215,8 +215,24 @@ export function cleanBranchSlug(raw: string): string | null {
   return slug.length >= 3 ? slug : null;
 }
 
-/** The app's branches live under `ta/`. */
-export const branchName = (slug: string) => `ta/${slug}`;
+/** Where a new project's branches live, until its settings say otherwise. */
+export const DEFAULT_BRANCH_PREFIX = "ta/";
+
+/** A branch under the project's prefix: `ta/fix-login`. */
+export const branchName = (prefix: string, slug: string) => `${prefix}${slug}`;
+
+/**
+ * A branch prefix as typed, ready to put before a slug: trimmed, with a `/`
+ * added after a bare word (`ashik` → `ashik/`), or empty for none. `null`
+ * when git could not name a branch with it.
+ */
+export function cleanBranchPrefix(raw: string): string | null {
+  const text = raw.trim();
+  if (!text) return "";
+  if (!/^[A-Za-z0-9._/-]+$/.test(text)) return null;
+  if (/^[/.-]|\.\.|\/\/|\/\.|\.lock(\/|$)/.test(text)) return null;
+  return /[/_-]$/.test(text) ? text : `${text}/`;
+}
 
 /** A glob over repository paths (`**` any depth, `*` one segment), as protected paths use. */
 export function matchesGlob(path: string, glob: string): boolean {

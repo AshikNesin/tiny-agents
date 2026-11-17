@@ -70,6 +70,7 @@ const project: NonNullable<ThreadPullsView["project"]> = {
   settings: {
     scripts: {},
     archiveOnMerge: true,
+    branchPrefix: "ta/",
     protectedPaths: [],
     autofix: {
       triggers: { checks: true, reviews: true, conflicts: true, mergeQueue: true },

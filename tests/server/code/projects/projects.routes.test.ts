@@ -235,6 +235,23 @@ describe("branch names", () => {
     expect(asked[0]!.user.length).toBeLessThan(1_700);
   });
 
+  it("puts new branches under the project's own prefix", async () => {
+    const project = await newProject();
+    const saved = await call<ProjectView>("PATCH", `/projects/${project.id}`, {
+      settings: { branchPrefix: " ashik " },
+    });
+    expect(saved.body.data?.settings.branchPrefix).toBe("ashik/");
+    expect((await newThread(project.id, task)).branch).toBe("ashik/fix-login-flow-users");
+    // A prefix git cannot name a branch with is refused, and the saved one stays.
+    for (const branchPrefix of ["bad prefix/", "a..b/", "/lead", "x~1/"]) {
+      const res = await call("PATCH", `/projects/${project.id}`, { settings: { branchPrefix } });
+      expect(res.status).toBe(400);
+    }
+    expect((await newThread(project.id, task)).branch).toBe("ashik/fix-login-flow-users-2");
+    await call("PATCH", `/projects/${project.id}`, { settings: { branchPrefix: "" } });
+    expect((await newThread(project.id, task)).branch).toBe("fix-login-flow-users");
+  });
+
   it("falls back to the task's own words when the model gives no usable name", async () => {
     installAppForTests({
       codeBranchNamer: { sideCaller: { complete: async () => undefined } },
