@@ -14,6 +14,7 @@ import type {
   ProjectUpdateBody,
   ProjectView,
   PullReviewView,
+  PullThreadsView,
   ReviewDraft,
   ReviewDraftBody,
   ReviewFile,
@@ -123,6 +124,18 @@ export const reviewsApi = {
     apiClient.post<{ url: string; comments: number }>(
       `${base}/reviews/${encodeURIComponent(id)}/submit`,
       body,
+    ),
+  /** The PR's line conversations on GitHub. */
+  threads: (id: string) =>
+    apiClient.get<PullThreadsView>(`${base}/reviews/${encodeURIComponent(id)}/threads`),
+  reply: (id: string, threadId: string, body: string) =>
+    apiClient.post(
+      `${base}/reviews/${encodeURIComponent(id)}/threads/${encodeURIComponent(threadId)}/reply`,
+      { body },
+    ),
+  resolve: (id: string, threadId: string) =>
+    apiClient.post(
+      `${base}/reviews/${encodeURIComponent(id)}/threads/${encodeURIComponent(threadId)}/resolve`,
     ),
   /** Hand the waiting comments to the Code thread that opened the PR. */
   toThread: (id: string) =>

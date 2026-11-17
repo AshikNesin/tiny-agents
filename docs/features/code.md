@@ -464,9 +464,16 @@ comment, so the server refuses the others and the dialog offers only
 hands the pending comments to that thread as one message instead, for its
 agent to act on.
 
-Not built yet (issue #345): existing review threads inline with Reply and
-Resolve, the review-request inbox, changes since your last review, and
-pushing changes made during a review.
+**Conversations from GitHub.** The page reads the PR's line conversations
+when it opens (in the one GitHub query that reads the PR, no model) and
+shows each under the lines it is on, with its comments, **Reply** and
+**Resolve** (both as the GitHub account Code uses). A resolved one starts
+folded. GitHub places them at the PR's current head: when the review shows
+an older commit, or the code moved on (outdated), a file lists them above
+its diff instead, the first with a hint to **Update**.
+
+Not built yet (issue #345): the review-request inbox, changes since your
+last review, and pushing changes made during a review.
 
 ## Bots hand off coding
 
@@ -564,7 +571,7 @@ Known limits (register row C7):
     `GET /code/threads/:id/changes` pushes a version when it moves.
   - `code.webhook.ts`: the GitHub App's signed webhook (public).
   - `code.reviews.ts`: PR reviews (open, the assistant's first question,
-    pending GitHub comments, submit, close), with `/code/reviews` routes in `code.projects.routes.ts`.
+    pending GitHub comments, submit, the PR's conversations, close), with `/code/reviews` routes in `code.projects.routes.ts`.
   - `code.projects.routes.ts`: `/api/v1/code/{projects,github}` and a
     thread's `pr`, `publish` and `review` routes.
 - **Tables:**

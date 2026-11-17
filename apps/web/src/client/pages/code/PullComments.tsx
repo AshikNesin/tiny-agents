@@ -45,7 +45,8 @@ function Avatar({ login, bot }: { login: string; bot: boolean }) {
 /** Past this, a comment (a bot's walkthrough) starts folded. */
 const LONG = 700;
 
-function Body({ text }: { text: string }) {
+/** A GitHub comment's markdown, long ones folded. */
+export function CommentBody({ text }: { text: string }) {
   const shown = text.replace(HTML_COMMENT, "").trim();
   const long = shown.length > LONG;
   const [open, setOpen] = useState(false);
@@ -76,7 +77,7 @@ function Body({ text }: { text: string }) {
   );
 }
 
-function Byline({ author, bot, at }: { author: string; bot: boolean; at: string }) {
+export function CommentByline({ author, bot, at }: { author: string; bot: boolean; at: string }) {
   return (
     <div className="flex min-w-0 items-center gap-2 text-xs">
       <Avatar login={author} bot={bot} />
@@ -179,7 +180,7 @@ function CommentCard({
     >
       <div className="flex items-center gap-2">
         <div className="min-w-0 flex-1">
-          <Byline author={c.author} bot={c.bot} at={c.createdAt} />
+          <CommentByline author={c.author} bot={c.bot} at={c.createdAt} />
         </div>
         {c.verdict && (
           <Badge variant={c.verdict === "approved" ? "secondary" : "outline"}>
@@ -217,13 +218,13 @@ function CommentCard({
           ) : null}
         </p>
       )}
-      <Body text={c.body} />
+      <CommentBody text={c.body} />
       {c.replies.length > 0 && (
         <ul className="border-border space-y-2 border-l pl-3">
           {c.replies.map((r) => (
             <li key={r.id} className="space-y-1">
-              <Byline author={r.author} bot={r.bot} at={r.createdAt} />
-              <Body text={r.body} />
+              <CommentByline author={r.author} bot={r.bot} at={r.createdAt} />
+              <CommentBody text={r.body} />
             </li>
           ))}
         </ul>

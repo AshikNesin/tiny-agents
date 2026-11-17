@@ -57,7 +57,12 @@ export interface ReviewComment {
 export interface ReviewThread {
   id: string;
   path: string;
+  /** Its last line at the PR's head (null once the code moved on: outdated). */
   line: number | null;
+  /** Its first line, for a comment on a range. */
+  startLine?: number | null;
+  /** LEFT: old-file lines (removed code); RIGHT: new-file lines. */
+  side?: "LEFT" | "RIGHT";
   resolved: boolean;
   outdated: boolean;
   comments: ReviewComment[];
@@ -217,7 +222,7 @@ const SNAPSHOT_QUERY = `query PullSnapshot($owner: String!, $name: String!, $num
       reviews(last: 50) { nodes { id state body submittedAt authorAssociation ${AUTHOR} } }
       reviewThreads(first: 100) {
         nodes {
-          id path line isResolved isOutdated
+          id path line startLine diffSide isResolved isOutdated
           comments(first: 50) { nodes { id databaseId body createdAt authorAssociation ${AUTHOR} } }
         }
       }
@@ -300,6 +305,8 @@ interface RawSnapshot {
           id: string;
           path: string;
           line: number | null;
+          startLine?: number | null;
+          diffSide?: "LEFT" | "RIGHT";
           isResolved: boolean;
           isOutdated: boolean;
           comments: { nodes: RawComment[] };
@@ -442,6 +449,8 @@ export function toSnapshot(raw: RawSnapshot): PullSnapshot {
       id: t.id,
       path: t.path,
       line: t.line,
+      startLine: t.startLine ?? null,
+      side: t.diffSide ?? "RIGHT",
       resolved: t.isResolved,
       outdated: t.isOutdated,
       comments: t.comments.nodes.map(comment),

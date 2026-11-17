@@ -40,7 +40,12 @@ import {
   db,
   type CodeProjectRow,
 } from "../../db";
-import type { PullReviewView, ReviewDraft, ReviewVerdict } from "../../../shared/api/code";
+import type {
+  PullReviewView,
+  PullThreadsView,
+  ReviewDraft,
+  ReviewVerdict,
+} from "../../../shared/api/code";
 import { reviewCard } from "../../../shared/code-messages";
 import { codeGitHub } from "./code.github";
 import { codeHub } from "./code.hub";
@@ -377,4 +382,49 @@ export async function sendCommentsToThread(
     await target.instance.send(target.nativeId, { message });
   });
   return { threadId, sent };
+}
+
+// --- the PR's conversations on GitHub --------------------------------------------------------
+
+/**
+ * The PR's line conversations, read from GitHub when the page asks (one
+ * query, no model). Lines are at the PR's current head, which the page
+ * compares with the head its worktree shows.
+ */
+export async function reviewThreads(id: string): Promise<PullThreadsView> {
+  const { row, project } = await findReview(id);
+  const github = await codeGitHub().client(project);
+  const pr = await github.snapshot(repoOf(project), row.number);
+  return {
+    headSha: pr.headSha,
+    threads: pr.threads.map((t) => ({
+      id: t.id,
+      path: t.path,
+      side: t.side === "LEFT" ? "old" : "new",
+      line: t.line,
+      startLine: t.startLine ?? null,
+      resolved: t.resolved,
+      outdated: t.outdated,
+      comments: t.comments.map((c) => ({
+        id: c.id,
+        author: c.author.login,
+        bot: c.author.type === "bot",
+        body: c.body,
+        createdAt: c.createdAt,
+      })),
+    })),
+  };
+}
+
+/** Reply on one of the PR's conversations, as the GitHub account Code uses. */
+export async function replyToReviewThread(id: string, threadId: string, body: string) {
+  const { project } = await findReview(id);
+  const github = await codeGitHub().client(project);
+  await github.replyToThread(threadId, body);
+}
+
+export async function resolveReviewThread(id: string, threadId: string) {
+  const { project } = await findReview(id);
+  const github = await codeGitHub().client(project);
+  await github.resolveThread(threadId);
 }

@@ -56,6 +56,8 @@ const SNAPSHOT = {
             id: "T_1",
             path: "src/a.ts",
             line: 3,
+            startLine: 1,
+            diffSide: "LEFT",
             isResolved: false,
             isOutdated: false,
             comments: {
@@ -221,6 +223,8 @@ describe.each(TRANSPORTS)("the client over %s", (_, transport) => {
       association: "COLLABORATOR",
     });
     expect(snapshot.threads[0]?.comments[0]?.author.type).toBe("bot");
+    // Where the conversation sits: removed lines 1-3.
+    expect(snapshot.threads[0]).toMatchObject({ side: "LEFT", startLine: 1, line: 3 });
   });
 
   it("opens a pull request", async () => {

@@ -118,7 +118,10 @@ export function fakeGitHub(local: LocalExec, bare: string, login = "ashik"): Fak
         state: pr.state,
         draft: pr.draft,
         headRef: pr.head,
-        headSha: await headOf(pr.head),
+        // A fork's head lives only under refs/pull/N/head, as on GitHub.
+        headSha: pr.fromFork
+          ? await sh(local, `git -C ${bare} rev-parse refs/pull/${number}/head`)
+          : await headOf(pr.head),
         baseRef: pr.base,
         fromFork: pr.fromFork,
         mergeable: pr.mergeable,

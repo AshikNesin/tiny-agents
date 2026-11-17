@@ -41,6 +41,7 @@ import { ConversationView } from "./ConversationView";
 import { PendingComments } from "./PendingComments";
 import { ResizablePane } from "./ResizablePane";
 import { ReviewPanel } from "./ReviewPanel";
+import { usePullConversations } from "./PullThreads";
 import { SubmitReviewButton } from "./SubmitReview";
 
 /** Questions a reviewer asks first, one tap each. */
@@ -80,6 +81,7 @@ export function PullReview({
   const commentKey = threadId ?? review?.key;
   const commenting = useThreadCommenting(commentKey, () => undefined);
   const github = useThreadCommenting(githubCommentsKey(reviewId), () => undefined);
+  const conversations = usePullConversations(review, `${review?.headSha}:${reload}`);
 
   const update = async () => {
     if (!review) return;
@@ -203,6 +205,7 @@ export function PullReview({
             page
             commenting={commenting}
             githubCommenting={github}
+            conversations={conversations}
           />
         </main>
         <ResizablePane narrow className={side === "assistant" ? undefined : "hidden lg:flex"}>
