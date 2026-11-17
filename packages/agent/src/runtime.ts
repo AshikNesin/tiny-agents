@@ -29,6 +29,7 @@ import {
   type CredentialRequestOutcome,
 } from "./credentials";
 import { capabilityInfo, type Capability, type CapabilityInfo } from "./capabilities";
+import { withContextCeiling } from "./context-ceiling";
 import { createContextTrimExtension } from "./context-trim";
 import { acquireStoreLock, type StoreLock } from "./lock";
 import {
@@ -347,7 +348,14 @@ export class AgentRuntime {
         {
           models,
           registry,
-          settings: { compaction: { enabled: true }, ...options.settings },
+          settings: {
+            ...options.settings,
+            // Long chats are summarized past the context ceiling on every model.
+            compaction: withContextCeiling(models, {
+              enabled: true,
+              ...options.settings?.compaction,
+            }),
+          },
           onReport: options.onReport,
         },
         ctx,
