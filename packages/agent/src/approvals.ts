@@ -305,7 +305,12 @@ function vaultSubject(plan: GatePlan | undefined): { subject?: string } {
 
 /** What the approvals tracker's listeners (push notifications) learn about a waiting call. */
 export function approvalWaitInfo(tool: string, plan: GatePlan | undefined): WaitInfo {
-  return { tool, ...vaultSubject(plan) };
+  const vault = plan?.details?.vault as { grantable?: unknown } | undefined;
+  return {
+    tool,
+    ...vaultSubject(plan),
+    ...(vault ? { vault: { grantable: vault.grantable === true } } : {}),
+  };
 }
 
 /**

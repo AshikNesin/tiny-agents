@@ -25,7 +25,7 @@ import {
 } from "node:crypto";
 import { appEnv } from "../env";
 
-export type SecretPurpose = "vault-local" | "connection";
+export type SecretPurpose = "vault-local" | "connection" | "push";
 
 /** What a ciphertext is bound to. Every field is part of the AAD. */
 export interface SecretBinding {

@@ -27,6 +27,7 @@ import { isBotWatched } from "../bots/bots.viewers";
 import { chatOwner } from "../bots/bots.owner";
 import type { SettledStep } from "../bots/bots.settled";
 import {
+  approvalActions,
   approvalRequested,
   credentialRequested,
   inputReminder,
@@ -82,6 +83,15 @@ export function startNotifications(
   async function onAdded(event: WaitEvent): Promise<void> {
     const bot = await botFor(event.conversation);
     if (!bot) return;
+    // A plain approval can be answered from the phone; takeovers and sign-ins need the app.
+    const plainApproval =
+      event.kind === "approval" &&
+      event.tool !== undefined &&
+      event.tool !== "request_credentials" &&
+      event.tool !== "computer_request_takeover";
+    const actions = plainApproval
+      ? approvalActions(bot, event.task, event.tool!, event.vault)
+      : undefined;
     send(
       event.kind === "question"
         ? questionAsked(bot, event.task, event.preview)
@@ -89,7 +99,7 @@ export function startNotifications(
           ? credentialRequested(bot, event.task, event.subject, event.expiresAt)
           : event.tool === "computer_request_takeover"
             ? takeoverRequested(bot, event.task, event.preview)
-            : approvalRequested(bot, event.task, event.tool ?? "a tool", event),
+            : approvalRequested(bot, event.task, event.tool ?? "a tool", { ...event, actions }),
     );
     const { reminderMinutes } = await notifier.getSettings();
     const key = waitKey(event.kind, event.conversation, event.task);
@@ -100,7 +110,7 @@ export function startNotifications(
     }
     const timer = setTimeout(() => {
       reminders.delete(key);
-      send(inputReminder(bot, event.kind, event.task, reminderMinutes));
+      send(inputReminder(bot, event.kind, event.task, reminderMinutes, actions));
     }, reminderMinutes * 60_000);
     timer.unref?.();
     reminders.set(key, timer);

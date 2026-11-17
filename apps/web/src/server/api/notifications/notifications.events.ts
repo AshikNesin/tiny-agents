@@ -5,7 +5,11 @@
  * the app, every piece of model-authored or error text goes through
  * `scrubText`, and nothing ever includes tool arguments or outputs.
  */
-import type { Notification, NotificationEventDef } from "@groot/core/notification/notifier";
+import type {
+  Notification,
+  NotificationActions,
+  NotificationEventDef,
+} from "@groot/core/notification/notifier";
 import { scrubText } from "@groot/core/notification/scrub";
 
 export const NOTIFICATION_EVENTS: NotificationEventDef[] = [
@@ -137,11 +141,27 @@ const ttlUntil = (expiresAt: number | undefined) =>
     ? {}
     : { ttlSeconds: Math.max(1, Math.round((expiresAt - Date.now()) / 1000)) };
 
+/**
+ * The buttons an approval's push offers on the phone (issue #306): the same
+ * answers its chat card gives. A tool card: Approve, Deny, Always allow. A
+ * vault card: Approve, Deny, and For this chat when the use is grantable.
+ */
+export function approvalActions(
+  bot: BotRef,
+  task: number,
+  tool: string,
+  vault?: { grantable: boolean },
+): NotificationActions {
+  return vault
+    ? { kind: "vault", botId: bot.id, taskId: task, tool, grantable: vault.grantable }
+    : { kind: "tool", botId: bot.id, taskId: task, tool };
+}
+
 export function approvalRequested(
   bot: BotRef,
   task: number,
   tool: string,
-  options: { subject?: string; expiresAt?: number } = {},
+  options: { subject?: string; expiresAt?: number; actions?: NotificationActions } = {},
 ): Notification {
   const subject = scrubText(options.subject, 120);
   return {
@@ -158,6 +178,7 @@ export function approvalRequested(
     dedupeKey: waitKey("approval", bot.conversationId, task),
     botId: bot.id,
     coalesce: needsYou(bot),
+    ...(options.actions ? { actions: options.actions } : {}),
   };
 }
 
@@ -212,11 +233,16 @@ export function questionAsked(bot: BotRef, task: number, preview?: string): Noti
   };
 }
 
+/**
+ * The reminder replaces its request's push on a phone (same tag) and keeps
+ * an approval's buttons, so answering either takes it back.
+ */
 export function inputReminder(
   bot: BotRef,
   kind: "approval" | "question",
   task: number,
   minutes: number,
+  actions?: NotificationActions,
 ): Notification {
   return {
     event: "input.reminder",
@@ -227,7 +253,9 @@ export function inputReminder(
     urlTitle: kind === "approval" ? "Open approval" : "Answer",
     priority: 1,
     dedupeKey: `reminder:${waitKey(kind, bot.conversationId, task)}`,
+    tag: waitKey(kind, bot.conversationId, task),
     botId: bot.id,
+    ...(actions ? { actions } : {}),
   };
 }
 

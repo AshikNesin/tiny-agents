@@ -18,6 +18,7 @@ import type { ConnectionManager } from "./api/connections/connections.manager";
 import type { HeldLiveAccess } from "./api/people/live-access";
 import type { VaultAlertSink } from "./api/vault/vault.alerts";
 import type { SupervisorChannel } from "./api/system/updates.service";
+import type { VapidKeys } from "@groot/core/notification/webpush.crypto";
 
 /**
  * The composition root (docs/rewrite/DECISIONS.md, D8): the app's long-lived
@@ -89,6 +90,14 @@ export interface App {
   updateStatus: UpdateStatus | null;
   /** Stops listening to the supervisor channel (`startUpdates`). */
   updatesUnlisten: () => void;
+  /**
+   * Web Push (issue #306): the VAPID keys once read (`vapidKeys`) and how
+   * many devices can receive (the channel's synchronous `configured()`).
+   */
+  webPush: {
+    keys?: VapidKeys;
+    activeDevices: number;
+  };
 }
 
 const current: App = {
@@ -108,6 +117,7 @@ const current: App = {
   modelListeners: new Set(),
   updateStatus: null,
   updatesUnlisten: () => {},
+  webPush: { activeDevices: 0 },
 };
 
 /** The app's services, as boot (or a test) set them. */

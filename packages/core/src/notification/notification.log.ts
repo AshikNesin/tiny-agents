@@ -39,8 +39,8 @@ export type LogUpdate = Partial<
 export interface NotificationLogStore {
   create(row: NewLogRow): Promise<string>;
   update(ids: readonly string[], update: LogUpdate): Promise<void>;
-  /** A queued or sent row with this key created at or after `since`. */
-  hasRecent(dedupeKey: string, since: Date): Promise<boolean>;
+  /** A queued or sent row with this key created at or after `since` (on `channel`, when given). */
+  hasRecent(dedupeKey: string, since: Date, channel?: string): Promise<boolean>;
   list(limit: number): Promise<NotificationLogRow[]>;
   /** Delete rows created before `before`; returns how many. */
   prune(before: Date): Promise<number>;
@@ -65,7 +65,7 @@ export function createDbLogStore(): NotificationLogStore {
         .set(update)
         .where(inArray(notificationLog.id, [...ids]));
     },
-    async hasRecent(dedupeKey, since) {
+    async hasRecent(dedupeKey, since, channel) {
       const [row] = await db
         .select({ id: notificationLog.id })
         .from(notificationLog)
@@ -74,6 +74,7 @@ export function createDbLogStore(): NotificationLogStore {
             eq(notificationLog.dedupeKey, dedupeKey),
             gte(notificationLog.createdAt, since),
             inArray(notificationLog.status, ["queued", "sent"]),
+            channel === undefined ? undefined : eq(notificationLog.channel, channel),
           ),
         )
         .limit(1);
@@ -121,10 +122,11 @@ export function createMemoryLogStore(): NotificationLogStore & { rows: Notificat
     async update(ids, update) {
       for (const row of rows) if (ids.includes(row.id)) Object.assign(row, update);
     },
-    async hasRecent(dedupeKey, since) {
+    async hasRecent(dedupeKey, since, channel) {
       return rows.some(
         (row) =>
           row.dedupeKey === dedupeKey &&
+          (channel === undefined || row.channel === channel) &&
           row.createdAt >= since &&
           (row.status === "queued" || row.status === "sent"),
       );

@@ -1,11 +1,58 @@
-# Push Notifications (Pushover)
+# Push Notifications
 
 When a bot needs the owner (an approval, a question) or unattended work ends
 (a routine, a failed or long reply), the owner gets a push on their phone with
-a link straight to where they answer. Pushover is the only channel for now
-(issue #57).
+a link straight to where they answer. Two channels deliver, each optional and
+each with its own switch:
 
-## Setup
+- **Phone app** (Web Push, issue #306): the Android app registers itself after
+  sign-in. Nothing to set up on the server. Approvals carry buttons.
+- **Pushover** (issue #57): two env vars and the paid Pushover app.
+
+## Phone app (Web Push)
+
+The server makes a VAPID key pair on first use (KV `WEB_PUSH:vapid`, the
+private key sealed with `SECRETS_KEY` when it is set) and sends each
+registered device an end-to-end encrypted push (RFC 8291 `aes128gcm`, RFC 8292
+VAPID) to the endpoint its push service gave it: FCM on phones with Google
+Play services, ntfy or another UnifiedPush server otherwise. The server needs
+no Firebase account, relay or env var ([ADR 0026](../adr/0026-web-push-transport.md)).
+Push services see ciphertext, its size, urgency and TTL.
+
+- **Payload.** JSON the app renders: `{ v: 1, kind: "show", id, tag, event,
+  category, title, message, path, priority, actions? }`, or `{ v: 1, kind:
+  "dismiss", tag }`. Priority becomes `Urgency` (1 `high`, 0 `normal`, -1
+  `low`, -2 `very-low`), `ttlSeconds` becomes `TTL` (default 24 h), and the
+  tag becomes `Topic`, so a dismiss replaces a show the push service still
+  holds.
+- **Buttons.** An approval's push carries the chat card's answers in
+  `actions` (`kind`, `botId`, `taskId`, `tool`, `grantable`): a tool approval
+  offers **Approve**, **Deny** and **Always allow**; a vault approval offers
+  **Approve**, **Deny** and, when the use is grantable, **For this chat**.
+  The app answers through `POST /bots/:id/approvals/:taskId`, after the phone
+  is unlocked. Questions, takeovers and sign-in requests have no buttons.
+  A coalesced summary has none either.
+- **Taken back.** Answering an approval or question anywhere sends a dismiss
+  for its tag. A reminder shares its request's tag, so it replaces the first
+  push. A summary of several requests stays until opened.
+- **Devices.** Settings → Notifications → **Phone app** lists them, with
+  **Send test** and remove each, and **Send notifications to phones** turns
+  the channel off (`channels.webpush: false`).
+
+| Push service answer        | What happens                                                          |
+| -------------------------- | --------------------------------------------------------------------- |
+| 2xx                        | Delivered; the device's failure count resets                          |
+| 404, 410                   | The device is `revoked` and no longer sent to                         |
+| 429, 5xx, network, timeout | Retried like Pushover; five failures in a row mark the device failing |
+| Other 4xx                  | Not retried                                                           |
+
+A push counts as sent when any device took it. Endpoints must be `https` and,
+unless `PUSH_ALLOW_PRIVATE_ENDPOINTS=true` (ntfy on a LAN or tailnet), resolve
+to public addresses. An account registers at most 10 devices. Changing
+`SECRETS_KEY` without rotating makes a new key and revokes every device; the
+app registers again.
+
+## Pushover setup
 
 Set two env vars in the server environment (Coolify) and restart:
 
@@ -84,6 +131,8 @@ One `notifications` app setting (zod-validated, defaults filled in):
     window send as one ("Ops bot needs you · 2 approvals and 1 question
     waiting").
 - **Device:** deliver to one Pushover device only.
+- **Channels:** `channels.<id>: false` turns a channel off (`pushover`,
+  `webpush`).
 - **Throttle:** at most 30 an hour and 5 a minute per bot. Beyond that,
   pushes are logged as `suppressed: throttled` and one "N notifications
   suppressed" goes out when the window ends.
@@ -92,10 +141,12 @@ One `notifications` app setting (zod-validated, defaults filled in):
 
 ```
 emit points (apps/web: runtime.onWait, the settled pipeline, routine runs/jobs, boot)
-  → notificationService.notify(n)                  [packages/core/src/notification]
-      switch → dedupe → channel state → quiet hours → coalesce → throttle
-  → delivery queue (≤ 2 concurrent) → PushoverChannel → NotificationLog
+  → notificationService.notify(n)    NotificationHub    [packages/core/src/notification]
+  → per channel: switch → dedupe → channel state → quiet hours → coalesce → throttle
+  → delivery queue (≤ 2 concurrent) → PushoverChannel | WebPushChannel → NotificationLog
 ```
+
+Each channel has its own pipeline, dedupe and log row (`channel` column).
 
 - **`notify()` is fire-and-forget.** It returns at once and never throws, so
   tool calls and approval waits never wait on Pushover.
@@ -104,7 +155,8 @@ emit points (apps/web: runtime.onWait, the settled pipeline, routine runs/jobs, 
   check, so a waiting call that re-runs after a restart (and re-registers its
   wait) does not push again.
 - **Cancel on resolve.** Answering an approval or question drops its push if
-  it is still coalescing, and cancels its reminder.
+  it is still coalescing or queued, cancels its reminder, and takes a sent
+  push back from phones (Pushover can't).
 - **Response handling:**
 
   | Pushover response          | What happens                                                                                 |
@@ -133,6 +185,16 @@ All routes are behind the session (JWT), under `/api/v1/notifications`.
 | `POST /validate`         | Re-run `users/validate.json` and refresh the quota               |
 | `GET /log?limit=50`      | Recent rows (metadata only)                                      |
 
+The phone app's devices (owner only; guests get 403):
+
+| Route                    | Purpose                                                |
+| ------------------------ | ------------------------------------------------------ |
+| `GET /vapid-key`         | `{ publicKey }` the device registers with              |
+| `POST /devices`          | Register or refresh by endpoint; returns `{ id }`      |
+| `GET /devices`           | The account's devices (no keys or endpoint paths)      |
+| `DELETE /devices/:id`    | Remove one                                             |
+| `POST /devices/:id/test` | Send a test now; `{ ok }` or the push service's answer |
+
 ## Not yet
 
 These are not built yet:
@@ -140,7 +202,8 @@ These are not built yet:
 - Emergency priority (2) with receipts.
 - Per-bot mute.
 - `job.failed` and `peer.reply`.
-- Other channels (ntfy, web push, Telegram).
+- Browser Web Push for the web app (the same channel; needs a service worker).
+- Other channels (Telegram).
 - A model-facing `notify_owner` tool. It is left out on purpose, so prompt
   injection cannot push.
 - Durable (job-queue) delivery.

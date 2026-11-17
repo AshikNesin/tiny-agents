@@ -24,6 +24,7 @@ import {
   Users,
 } from "lucide-react";
 import { PeopleSettings } from "../../components/PeopleSettings";
+import { PhoneNotificationSettings } from "../../components/PhoneNotificationSettings";
 import { UpdatesSettings } from "../../components/UpdatesSettings";
 import { useIsGuest } from "../../store/people";
 import { ModelsSettings } from "./models/ModelsSettings";
@@ -112,8 +113,13 @@ export function SettingsPage() {
               group: "App",
               icon: Bell,
               description: "Push notifications for waiting bots and routine results.",
-              keywords: ["push", "pushover", "quiet hours", "digest"],
-              element: <NotificationSettings />,
+              keywords: ["push", "pushover", "phone", "android", "quiet hours", "digest"],
+              element: (
+                <div className="space-y-6">
+                  <PhoneNotificationSettings />
+                  <NotificationSettings />
+                </div>
+              ),
             },
             {
               id: "people",

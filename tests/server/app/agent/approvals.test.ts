@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { Type, type Context as PiContext, type JsonObject } from "@earendil-works/pi-ai";
 import { defineExtension, defineTool } from "@earendil-works/pi-durable";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
-import { approvalOf } from "../../../../packages/agent/src/approvals";
+import { approvalOf, approvalWaitInfo } from "../../../../packages/agent/src/approvals";
 import type { Capability } from "../../../../packages/agent/src/capabilities";
 import { ApprovalNotPendingError, type AgentRuntime } from "../../../../packages/agent/src/runtime";
 import {
@@ -517,5 +517,23 @@ describe("the pending card's vault details", () => {
     } finally {
       warn.mockRestore();
     }
+  });
+});
+
+describe("what a waiting vault call tells the push", () => {
+  it("names the item and host, and whether the card offers For this chat", () => {
+    const plan = (grantable: boolean) => ({
+      ask: true,
+      details: {
+        vault: { label: "GitHub login", target: "https://www.github.com/login", grantable },
+      },
+    });
+    expect(approvalWaitInfo("browser_fill", plan(true))).toEqual({
+      tool: "browser_fill",
+      subject: "GitHub login on github.com",
+      vault: { grantable: true },
+    });
+    expect(approvalWaitInfo("browser_fill", plan(false)).vault).toEqual({ grantable: false });
+    expect(approvalWaitInfo("run_command", undefined)).toEqual({ tool: "run_command" });
   });
 });

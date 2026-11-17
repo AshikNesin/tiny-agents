@@ -92,6 +92,8 @@ export interface WaitInfo {
   subject?: string;
   /** Epoch ms after which the wait settles as expired (set from the document). */
   expiresAt?: number;
+  /** A vault use waits: whether its card offers "For this chat" (approvals only). */
+  vault?: { grantable: boolean };
 }
 
 /** One call starting or stopping to wait on the owner. */

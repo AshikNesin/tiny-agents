@@ -14,6 +14,7 @@ import { autofixMachine } from "../../../apps/web/src/shared/machines/autofix";
 import { autofixPassMachine } from "../../../apps/web/src/shared/machines/autofix-pass";
 import { handoffMachine } from "../../../apps/web/src/shared/machines/handoff";
 import { memoryMachine } from "../../../apps/web/src/shared/machines/memory";
+import { pushSubscriptionMachine } from "../../../apps/web/src/shared/machines/push-subscription";
 import { routineRunMachine } from "../../../apps/web/src/shared/machines/routine-run";
 import { taskMachine, type TaskStatus } from "../../../apps/web/src/shared/machines/task";
 import { routineState } from "../../../apps/web/src/shared/machines/routine";
@@ -26,6 +27,7 @@ const MACHINES: StateMachine<string>[] = [
   handoffMachine,
   autofixMachine,
   autofixPassMachine,
+  pushSubscriptionMachine,
 ];
 
 describe.each(MACHINES.map((machine) => [machine.name, machine] as const))(

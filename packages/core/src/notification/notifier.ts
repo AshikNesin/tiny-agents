@@ -1,6 +1,6 @@
 /**
  * The notification port: what the notification service hands a channel
- * (Pushover today; ntfy, web push or Telegram later) and what it gets back.
+ * (Pushover and Web Push today; ntfy or Telegram later) and what it gets back.
  * Call sites never talk to a channel — they call `notificationService.notify`.
  */
 
@@ -50,6 +50,29 @@ export interface Notification {
     key: string;
     summarize: (batch: readonly Notification[]) => { title: string; message: string };
   };
+  /**
+   * What replaces or takes back this notification on a device (Web Push).
+   * Default: `dedupeKey`. A reminder shares its request's tag, so it replaces
+   * the first push and an answer takes back either.
+   */
+  tag?: string;
+  /** Buttons a channel that can show them offers (approvals); others ignore it. */
+  actions?: NotificationActions;
+}
+
+/**
+ * Answer an approval from the notification itself, through the same route
+ * the chat card uses. `tool` cards offer "Always allow" (that tool, for this
+ * bot); `vault` cards offer "For this chat" only when `grantable`.
+ */
+export interface NotificationActions {
+  kind: "tool" | "vault";
+  botId: string;
+  taskId: number;
+  /** The waiting call's tool ("Always allow" switches this one on). */
+  tool: string;
+  /** Vault cards: the use can be granted for the rest of the chat. */
+  grantable?: boolean;
 }
 
 /** What a channel sends: the rendered, clamped message. */
@@ -62,6 +85,17 @@ export interface OutgoingMessage {
   ttlSeconds?: number;
   /** Deliver to this device only. */
   device?: string;
+  /**
+   * What a channel that renders the notification itself (Web Push) needs:
+   * the log row, a tag that replaces or dismisses it, the event and category,
+   * the app path, and its buttons. Pushover ignores these.
+   */
+  id?: string;
+  tag?: string;
+  event?: string;
+  category?: NotificationCategory;
+  path?: string;
+  actions?: NotificationActions;
 }
 
 export type SendFailureReason =
@@ -102,6 +136,11 @@ export interface NotificationChannel {
   /** The monthly message quota, when the provider reports one. */
   quota(): Promise<ChannelQuota | undefined>;
   send(message: OutgoingMessage): Promise<SendResult>;
+  /**
+   * Take back a notification already sent with this `tag` (its approval or
+   * question was answered). Channels that can't simply leave it out.
+   */
+  dismiss?(tag: string): Promise<void>;
 }
 
 /** An event the owner can turn on or off in Settings. */
