@@ -242,6 +242,9 @@ is the task's first words without the filler ("Can you please fix the login
 flow when…" is `ta/fix-login-flow-users`). Shelley stores titles as slugs,
 so there it reads `fix-google-sign-in-callback`. A name an
 earlier thread took, here or on the remote, gets `-2`, `-3`, ….
+The `ta/` before it is the project's **Branch prefix** (Code settings →
+the project → General): a bare word gets a `/` (`ashik` is `ashik/`),
+empty means none, and a prefix git cannot use is refused.
 
 **Review.** In a project thread, Source control (⌘⇧D) shows the branch, its
 base and how many commits it is ahead, then everything since the merge base

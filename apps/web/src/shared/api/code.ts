@@ -34,6 +34,8 @@ export interface ProjectSettings {
   /** Overrides of the checked-in `.tiny-agents/code.json`. */
   scripts: ProjectScripts;
   archiveOnMerge: boolean;
+  /** Put before a new thread's branch name: `ta/` by default, empty for none. */
+  branchPrefix: string;
   /** Paths a pass may not push changes to (globs). */
   protectedPaths: string[];
   autofix: AutofixProjectSettings;

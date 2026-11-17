@@ -29,11 +29,19 @@ import type {
 import { DEFAULT_AUTOFIX } from "./code.autofix";
 import { codeGitHub } from "./code.github";
 import { applyTitle, threadNames } from "./code.naming";
-import { branchName, checkpointRef, type ProjectScripts, type Workspace } from "./code.workspace";
+import {
+  branchName,
+  checkpointRef,
+  cleanBranchPrefix,
+  DEFAULT_BRANCH_PREFIX,
+  type ProjectScripts,
+  type Workspace,
+} from "./code.workspace";
 
 const DEFAULT_PROJECT_SETTINGS: ProjectSettings = {
   scripts: {},
   archiveOnMerge: true,
+  branchPrefix: DEFAULT_BRANCH_PREFIX,
   protectedPaths: [".github/workflows/**"],
   autofix: {
     triggers: { ...DEFAULT_AUTOFIX.triggers },
@@ -60,6 +68,9 @@ export function projectSettings(raw: string): ProjectSettings {
   return {
     scripts: { ...d.scripts, ...value.scripts },
     archiveOnMerge: value.archiveOnMerge ?? d.archiveOnMerge,
+    branchPrefix:
+      (typeof value.branchPrefix === "string" ? cleanBranchPrefix(value.branchPrefix) : null) ??
+      d.branchPrefix,
     protectedPaths: Array.isArray(value.protectedPaths) ? value.protectedPaths : d.protectedPaths,
     autofix: {
       ...d.autofix,
@@ -250,13 +261,18 @@ function projectPreamble(
   return lines.join("\n");
 }
 
-/** `ta/<slug>`, or `ta/<slug>-2`, `-3`, … when an earlier thread took the name. */
-async function freeBranch(ws: Workspace, checkout: string, slug: string): Promise<string> {
+/** `<prefix><slug>`, or `<prefix><slug>-2`, `-3`, … when an earlier thread took the name. */
+async function freeBranch(
+  ws: Workspace,
+  checkout: string,
+  prefix: string,
+  slug: string,
+): Promise<string> {
   for (let n = 1; n <= 20; n += 1) {
-    const branch = branchName(n === 1 ? slug : `${slug}-${n}`);
+    const branch = branchName(prefix, n === 1 ? slug : `${slug}-${n}`);
     if (!(await ws.branchTaken(checkout, branch))) return branch;
   }
-  return branchName(`${slug}-${randomBytes(2).toString("hex")}`);
+  return branchName(prefix, `${slug}-${randomBytes(2).toString("hex")}`);
 }
 
 export interface ProjectThreadInput extends CreateThreadInput {
@@ -278,7 +294,8 @@ export async function startProjectThread(
   const ws = await codeGitHub().workspace(project);
   // A new branch and the thread's short title come from one naming call.
   const names = input.branch ? null : await threadNames(input.message);
-  const branch = input.branch ?? (await freeBranch(ws, project.checkoutPath, names!.slug));
+  const prefix = projectSettings(project.settings).branchPrefix;
+  const branch = input.branch ?? (await freeBranch(ws, project.checkoutPath, prefix, names!.slug));
   const path = worktreePath(project, branch);
   const baseSha = input.branch
     ? (await ws.addWorktreeForBranch(project.checkoutPath, path, branch), await ws.headSha(path))

@@ -590,6 +590,19 @@ function GeneralGroup({
           onSave={(baseBranch) => update({ baseBranch })}
         />
       </SettingsRow>
+      <SettingsRow
+        label="Branch prefix"
+        description="Goes before a new thread's branch name. Leave it empty for none."
+        htmlFor={field("prefix")}
+      >
+        <TextField
+          id={field("prefix")}
+          value={project.settings.branchPrefix}
+          placeholder="No prefix"
+          mono
+          onSave={(branchPrefix) => update({ settings: { branchPrefix } })}
+        />
+      </SettingsRow>
       <SettingsRow label="Default agent" description="Picked for a new thread in this project.">
         <SearchSelect
           label="Default agent"

@@ -58,6 +58,7 @@ const project: ProjectView = {
   settings: {
     scripts: {},
     archiveOnMerge: true,
+    branchPrefix: "ta/",
     protectedPaths: [".github/workflows/**"],
     autofix: {
       triggers: { checks: true, reviews: true, conflicts: true, mergeQueue: true },
@@ -142,6 +143,18 @@ describe("Code settings", () => {
     await userEvent.tab();
     await waitFor(() =>
       expect(patches).toContainEqual(["/code/projects/p1", { baseBranch: "develop" }]),
+    );
+
+    const prefix = screen.getByRole("textbox", { name: "Branch prefix" });
+    expect(prefix).toHaveValue("ta/");
+    await userEvent.clear(prefix);
+    await userEvent.type(prefix, "ashik/");
+    await userEvent.tab();
+    await waitFor(() =>
+      expect(patches.at(-1)).toEqual([
+        "/code/projects/p1",
+        { settings: { branchPrefix: "ashik/" } },
+      ]),
     );
 
     // Rules the dialog never offered: the setup script and each Auto-fix trigger.

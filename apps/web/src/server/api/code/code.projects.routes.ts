@@ -34,6 +34,7 @@ import { draftView, pendingReview, reviewMessage, unsentDrafts } from "./code.re
 import { checkpointRange, checkpointsOf, revertTo } from "./code.checkpoints";
 import { codeHub } from "./code.hub";
 import { checkLog } from "./code.checks";
+import { cleanBranchPrefix } from "./code.workspace";
 import {
   createProject,
   deleteProject,
@@ -162,6 +163,16 @@ const updateSchema = z.strictObject({
     .strictObject({
       scripts: scriptsSchema.optional(),
       archiveOnMerge: z.boolean().optional(),
+      branchPrefix: z
+        .string()
+        .max(40)
+        .transform((text, ctx) => {
+          const prefix = cleanBranchPrefix(text);
+          if (prefix !== null) return prefix;
+          ctx.addIssue({ code: "custom", message: "Git can't start a branch name with that." });
+          return z.NEVER;
+        })
+        .optional(),
       protectedPaths: z.array(z.string().trim().min(1).max(300)).max(50).optional(),
       autofix: z
         .strictObject({
