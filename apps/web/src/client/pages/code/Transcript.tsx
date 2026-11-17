@@ -12,6 +12,7 @@ import {
   ArrowUpRight,
   Bot,
   Check,
+  ChevronRight,
   CircleCheck,
   CircleDashed,
   CircleX,
@@ -52,6 +53,11 @@ import {
   CodeBlockTitle,
 } from "../../components/ui/code-block";
 import { Spinner } from "../../components/ui/spinner";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "../../components/ui/collapsible";
 import {
   codeApi,
   threadPath,
@@ -185,37 +191,96 @@ function Attachments({ assets, instanceId }: { assets: AssetRef[]; instanceId: s
   );
 }
 
+/**
+ * A subagent the agent started. The row opens to show what the subagent was
+ * asked and what it reported back; a harness that gives it its own thread
+ * also links there.
+ */
 function SubagentRow({ call, ctx }: { call: ToolItem; ctx: TranscriptContext }) {
+  const [open, setOpen] = useState(false);
   const child = call.child;
   const row = child ? ctx.rows.find((r) => r.id === child.threadId) : undefined;
   const title = child?.title ?? call.summary;
   const input = call.input && typeof call.input === "object" ? call.input : undefined;
   const prompt =
     input && "prompt" in input ? String((input as { prompt?: unknown }).prompt ?? "") : "";
-  return (
-    <div className="border-border flex min-w-0 items-center gap-3 rounded-xl border px-3 py-2">
+  const working = row?.working || call.status === "running";
+  const failed = failedTool(call);
+  const result = call.output?.trim() ?? "";
+  const hasDetail = Boolean(prompt || result);
+  const head = (
+    <>
       <Bot className="text-muted-foreground size-4 shrink-0" />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 text-sm">
           <span className="font-medium">Subagent</span>
           <span className={cn("truncate", monoClass)}>{title}</span>
-          {row?.working || call.status === "running" ? (
-            <Spinner className="size-3.5" aria-label="Working" />
+          {working ? (
+            <Spinner className="size-3.5 shrink-0" aria-label="Working" />
+          ) : failed ? (
+            <CircleX className="text-destructive size-3.5 shrink-0" aria-label="Failed" />
           ) : (
-            <CircleCheck className="text-muted-foreground size-3.5" aria-label="Idle" />
+            <CircleCheck className="text-muted-foreground size-3.5 shrink-0" aria-label="Done" />
           )}
         </div>
-        {prompt && <p className="text-muted-foreground truncate text-xs">{prompt}</p>}
+        {prompt && !open && <p className="text-muted-foreground truncate text-xs">{prompt}</p>}
       </div>
-      {child && (
-        <Button asChild size="sm" variant="outline">
-          <Link to={threadPath(child.threadId)}>
-            Open
-            <ArrowUpRight />
-          </Link>
-        </Button>
+      {hasDetail && (
+        <ChevronRight
+          aria-hidden="true"
+          className={cn(
+            "text-muted-foreground size-4 shrink-0 transition-transform",
+            open && "rotate-90",
+          )}
+        />
       )}
-    </div>
+    </>
+  );
+  const link = child && (
+    <Button asChild size="sm" variant="outline">
+      <Link to={threadPath(child.threadId)}>
+        Open
+        <ArrowUpRight />
+      </Link>
+    </Button>
+  );
+  if (!hasDetail) {
+    return (
+      <div className="border-border flex min-w-0 items-center gap-3 rounded-xl border px-3 py-2">
+        {head}
+        {link}
+      </div>
+    );
+  }
+  return (
+    <Collapsible
+      open={open}
+      onOpenChange={setOpen}
+      className="border-border min-w-0 rounded-xl border"
+      data-testid="code-subagent"
+    >
+      <div className="flex min-w-0 items-center gap-3 py-2 pr-3">
+        <CollapsibleTrigger className="hover:bg-muted/40 -my-2 flex min-w-0 flex-1 cursor-pointer items-center gap-3 rounded-xl py-2 pl-3 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
+          {head}
+        </CollapsibleTrigger>
+        {link}
+      </div>
+      <CollapsibleContent className="space-y-2 px-3 pb-3">
+        {result &&
+          (call.live || failed ? (
+            <Output
+              title={call.live ? "Output (live)" : "Output"}
+              value={result}
+              destructive={failed}
+            />
+          ) : (
+            <div className="bg-muted/40 max-h-96 overflow-y-auto overscroll-contain rounded-lg px-3 py-2 text-sm">
+              <Streamdown components={markdownComponents}>{result}</Streamdown>
+            </div>
+          ))}
+        {prompt && <Output title="Prompt" value={prompt} />}
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 
