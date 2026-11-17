@@ -22,6 +22,7 @@ import {
   FolderTree,
   ListChecks,
   Plus,
+  Rows3,
   Search,
   Settings2,
   SquarePen,
@@ -301,6 +302,22 @@ function Group({
             <span className="truncate">{group.label}</span>
           </button>
         </h2>
+        {group.projectId && (
+          <Button
+            asChild
+            variant="ghost"
+            size="icon-xs"
+            className="text-muted-foreground opacity-0 group-focus-within/head:opacity-100 group-hover/head:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
+          >
+            <Link
+              to={`/code/threads?project=${encodeURIComponent(group.projectId)}`}
+              aria-label={`${group.label} threads`}
+              title="All of its threads"
+            >
+              <Rows3 />
+            </Link>
+          </Button>
+        )}
         {offerNew && group.projectId && (
           <Button
             asChild
@@ -561,13 +578,25 @@ export function ConversationList({
           asChild
           variant="ghost"
           size="sm"
-          className="text-muted-foreground hover:text-foreground min-w-0 flex-1 justify-start"
+          className="text-muted-foreground hover:text-foreground min-w-0 justify-start"
         >
           <Link to="/code/new" data-testid="code-new" aria-label="New thread">
             <SquarePen />
             New thread
           </Link>
         </Button>
+        <Button
+          asChild
+          variant="ghost"
+          size="sm"
+          className="text-muted-foreground hover:text-foreground min-w-0 justify-start"
+        >
+          <Link to="/code/threads" data-testid="code-threads">
+            <Rows3 />
+            Threads
+          </Link>
+        </Button>
+        <span className="flex-1" />
         <Button
           size="icon-sm"
           variant="ghost"

@@ -152,6 +152,7 @@ export const appRoutes: RouteObject[] = [
               { path: "/browser", element: <BrowserPage /> },
               { path: "/code", element: <CodePage /> },
               { path: "/code/new", element: <CodePage /> },
+              { path: "/code/threads", element: <CodePage /> },
               { path: "/code/s/:slug", element: <CodePage /> },
               { path: "/code/settings", element: <CodePage /> },
               { path: "/code/settings/:section", element: <CodePage /> },

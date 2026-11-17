@@ -155,3 +155,38 @@ export function selectionRoots(
   for (const tree of trees) walk(tree, 0);
   return { roots, covered };
 }
+
+/** One status section of the Threads screen (Hoplite's Done / Archived list). */
+export interface StatusSection {
+  key: "working" | "needs-you" | "review" | "done";
+  label: string;
+  nodes: ListNode[];
+}
+
+const SECTIONS: Array<Pick<StatusSection, "key" | "label">> = [
+  { key: "working", label: "Working" },
+  { key: "needs-you", label: "Needs you" },
+  { key: "review", label: "In review" },
+  { key: "done", label: "Done" },
+];
+
+function sectionOf(node: ListNode): StatusSection["key"] {
+  if (node.busy) return "working";
+  const loop = node.row.pr?.loop;
+  if (loop === "needs_input") return "needs-you";
+  if (node.row.pr && loop !== "merged") return "review";
+  return "done";
+}
+
+/**
+ * A list of threads by where they stand: working, waiting on you (its PR
+ * needs input), in review (an open PR), or done; newest first, empty
+ * sections left out. Subagents stay under their parent.
+ */
+export function statusSections(rows: ThreadSummary[]): StatusSection[] {
+  const nodes = buildTree(rows);
+  return SECTIONS.map((section) => ({
+    ...section,
+    nodes: nodes.filter((node) => sectionOf(node) === section.key),
+  })).filter((section) => section.nodes.length > 0);
+}

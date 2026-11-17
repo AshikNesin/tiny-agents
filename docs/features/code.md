@@ -53,6 +53,13 @@ has no background jobs, so its threads show no job chips.
 - The list is one flat list, working threads first, then newest first: a
   status, the title and a time per row, like Hoplite. Search sits behind
   its icon (Escape closes it).
+- **Threads** (beside New thread, `/code/threads`; a project group's list
+  icon opens `/code/threads?project=<id>`) shows every thread, or one
+  project's, at full width, after Hoplite: sections **Working**, **Needs
+  you** (its PR needs input), **In review** (an open PR) and **Done**, each
+  row with its status, title, PR chips and date, then **Archived**, folded,
+  loaded when opened. The project menu switches project, and the search box
+  filters by title.
 - **Group by repository** at the foot of the sidebar (remembered) groups
   threads by project, then by repository or folder for threads outside a
   project; the most recently active group comes first, and a
