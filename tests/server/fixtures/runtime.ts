@@ -89,6 +89,7 @@ const FAKE_METHODS = [
   "readChatPage",
   "watchChat",
   "isBusy",
+  "usedTokens",
   "busyConversations",
   "onActivity",
   "onWait",
@@ -338,6 +339,7 @@ export function createFakeRuntime(overrides: Partial<FakeRuntime> = {}): FakeRun
       return { initial, stop: async () => undefined };
     }),
     isBusy: vi.fn<AgentRuntime["isBusy"]>(() => false),
+    usedTokens: vi.fn<AgentRuntime["usedTokens"]>(async () => 0),
     busyConversations: vi.fn<AgentRuntime["busyConversations"]>(() => []),
     onActivity: vi.fn<AgentRuntime["onActivity"]>((listener) => {
       activity.add(listener);

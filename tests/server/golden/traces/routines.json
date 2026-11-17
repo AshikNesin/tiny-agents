@@ -271,7 +271,9 @@
             "startedAt": "2026-11-06T06:30:00.000Z",
             "finishedAt": "2026-11-06T06:30:00.000Z",
             "output": "Echo: **Routine \"Morning check\" (scheduled Fri, 06 Nov 2026, 12:00 IST):** Check the weather",
-            "error": null
+            "error": null,
+            "conversationId": "30",
+            "tokens": 5703
           }
         ]
       }
@@ -336,7 +338,9 @@
             "startedAt": "2026-11-06T06:32:00.000Z",
             "finishedAt": "2026-11-06T06:32:00.000Z",
             "output": "Echo: **Routine \"Soon\" (scheduled Fri, 06 Nov 2026, 12:01 IST) (late by 1m):** Say good morning",
-            "error": null
+            "error": null,
+            "conversationId": "42",
+            "tokens": 5704
           }
         ]
       }
@@ -363,6 +367,8 @@
             "finishedAt": "2026-11-06T06:32:00.000Z",
             "output": "Echo: **Routine \"Soon\" (scheduled Fri, 06 Nov 2026, 12:01 IST) (late by 1m):** Say good morning",
             "error": null,
+            "conversationId": "42",
+            "tokens": 5704,
             "routineName": "Soon",
             "botName": "Routiner"
           },
@@ -378,6 +384,8 @@
             "finishedAt": "2026-11-06T06:30:00.000Z",
             "output": "Echo: **Routine \"Morning check\" (scheduled Fri, 06 Nov 2026, 12:00 IST):** Check the weather",
             "error": null,
+            "conversationId": "30",
+            "tokens": 5703,
             "routineName": "Morning check",
             "botName": "Routiner"
           }
@@ -489,7 +497,9 @@
           "startedAt": "2026-11-06T06:30:00.000Z",
           "finishedAt": "2026-11-06T06:30:00.000Z",
           "output": "Echo: **Routine \"Morning check\" (scheduled Fri, 06 Nov 2026, 12:00 IST):** Check the weather",
-          "error": null
+          "error": null,
+          "conversationId": "30",
+          "tokens": 5703
         },
         {
           "id": "<id5>",
@@ -502,7 +512,9 @@
           "startedAt": "2026-11-06T06:32:00.000Z",
           "finishedAt": "2026-11-06T06:32:00.000Z",
           "output": "Echo: **Routine \"Soon\" (scheduled Fri, 06 Nov 2026, 12:01 IST) (late by 1m):** Say good morning",
-          "error": null
+          "error": null,
+          "conversationId": "42",
+          "tokens": 5704
         }
       ]
     }

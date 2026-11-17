@@ -9,7 +9,7 @@
  * `tiny.permissions` document the approval gate reads.
  */
 import type { Extension, Registry, ToolRegistration } from "@earendil-works/pi-durable";
-import { defineDoc } from "@earendil-works/pi-durable";
+import { defineDoc, UsageDoc, type UsageState } from "@earendil-works/pi-durable";
 import type { Context } from "@earendil-works/chord";
 import type { ToolExecutionApi } from "@earendil-works/pi-durable";
 import { effectivePermission, type Capability, type CapabilitySelection } from "./capabilities";
@@ -25,6 +25,7 @@ export const PermissionsDoc = defineDoc<{
   allow: string[];
   review?: string[];
   unattended?: boolean;
+  budgetTokens?: number;
 }>({
   kind: "tiny.permissions",
   version: 1,
@@ -57,6 +58,8 @@ export interface Permissions {
   allow: string[];
   review?: string[];
   unattended?: boolean;
+  /** Tokens the conversation may use before its tool calls are refused (`CapabilitySelection.budgetTokens`). */
+  budgetTokens?: number;
 }
 
 /** What a selection compiles to: what the model sees, and what the gate lets through. */
@@ -108,6 +111,9 @@ export function compilePolicy(
       allow,
       ...(review.length > 0 ? { review } : {}),
       ...(selection.unattended ? { unattended: true } : {}),
+      ...(selection.budgetTokens !== undefined && selection.budgetTokens > 0
+        ? { budgetTokens: selection.budgetTokens }
+        : {}),
     },
   };
 }
@@ -119,9 +125,45 @@ export function applyPermissions(doc: Permissions, permissions: Permissions): vo
   else delete doc.review;
   if (permissions.unattended) doc.unattended = true;
   else delete doc.unattended;
+  if (permissions.budgetTokens !== undefined) doc.budgetTokens = permissions.budgetTokens;
+  else delete doc.budgetTokens;
 }
 
 // ── What a running tool call reads ──────────────────────────────────────
+
+/** Tokens a conversation's `pi.usage` counts: every model response and tool spend, cache reads included. */
+export function usedTokens(usage: Readonly<UsageState> | undefined): number {
+  if (!usage) return 0;
+  let total = 0;
+  for (const bucket of [usage.models, usage.tools]) {
+    for (const entry of Object.values(bucket ?? {})) {
+      const tokens = (entry as { totalTokens?: unknown }).totalTokens;
+      if (typeof tokens === "number" && Number.isFinite(tokens)) total += tokens;
+    }
+  }
+  return total;
+}
+
+/**
+ * The conversation's token budget and what it has used so far, or undefined
+ * when it has none (every chat). An engine whose api cannot read the usage
+ * document (the Claude plan's partial one) reads as nothing used.
+ */
+export async function tokenBudget(
+  api: ToolExecutionApi,
+  context: Context,
+): Promise<{ budget: number; used: number } | undefined> {
+  const permissions = await api.snapshot(PermissionsDoc, api.conversationId, context);
+  const budget = permissions?.budgetTokens;
+  if (budget === undefined || budget <= 0) return undefined;
+  let usage: UsageState | undefined;
+  try {
+    usage = await api.snapshot(UsageDoc, api.conversationId, context);
+  } catch {
+    usage = undefined;
+  }
+  return { budget, used: usedTokens(usage) };
+}
 
 /** The conversation's permissions say nobody is there to answer (a routine's, issue #63). */
 export async function isUnattendedConversation(

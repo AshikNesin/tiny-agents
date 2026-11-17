@@ -3,7 +3,7 @@ import { defineMachine } from "../state-machine";
 /**
  * One run of a routine at one slot (`routines.runs.ts` writes every move):
  *
- *   fire ─┬─ missed   (past the grace window; never submitted)
+ *   fire ─┬─ missed   (past the grace window, or the last run was still working; never submitted)
  *         ├─ failed   (the submit failed; the routine pauses)
  *         └─ awaiting ─┬─ succeeded
  *                      ├─ blocked    (it finished but could not do its job, issue #87)

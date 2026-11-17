@@ -83,6 +83,12 @@ export interface CapabilitySelection {
    * would ask the owner is refused instead, and auto-review never runs.
    */
   unattended?: boolean;
+  /**
+   * Token budget of the whole conversation (a routine run's, which starts
+   * fresh every run): once the model has used this many tokens, tool calls
+   * are refused so the run wraps up, and well past it the run is stopped.
+   */
+  budgetTokens?: number;
 }
 
 export function defaultPermission(tool: ToolInfo): ToolPermission {

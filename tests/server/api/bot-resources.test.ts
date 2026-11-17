@@ -40,7 +40,7 @@ import { setBrowserSessionsForTests } from "../../../apps/web/src/server/api/bot
 import { setComputerSessionsForTests } from "../../../apps/web/src/server/api/bots/computer.sessions";
 import { holdLiveAccess } from "../../../apps/web/src/server/api/people/live-access";
 import {
-  claimConversation,
+  setLatestConversation,
   createRoutine,
 } from "../../../apps/web/src/server/api/routines/routines.arming";
 import {
@@ -235,7 +235,7 @@ const seeds: Record<SeededKind, (world: World) => Promise<Check>> = {
     const conversation = String(
       await rt.createConversation({ modelId: bot.modelId ?? "test-model", systemPrompt: "" }),
     );
-    await claimConversation(id, conversation);
+    await setLatestConversation(id, conversation);
     const routine = await db.query.routines.findFirst({ where: eq(schema.routines.id, id) });
     return async () => {
       const [job] = await db.select().from(jobs).where(eq(jobs.id, routine!.pendingJobId!));

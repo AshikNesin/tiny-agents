@@ -146,13 +146,26 @@ export interface BotDraft {
 }
 
 /**
- * Added to a routine conversation's persona (issue #87): nobody watches a
- * routine run, so a run that cannot do its job must say so through the tool
- * that records it, or it reads as succeeded.
+ * Added to a routine run's persona (issue #87): nobody watches a routine
+ * run, so a run that cannot do its job must say so through the tool that
+ * records it, or it reads as succeeded. It also says the run starts fresh
+ * and has a budget, so the model works lean.
  */
+/**
+ * Tokens one routine run may use (every model request and tool spend of its
+ * conversation, cache reads included). Each run starts a fresh conversation,
+ * so this bounds what one run costs: past it, tool calls are refused so the
+ * model answers with what it has, and at 1.5x the run is stopped.
+ */
+export const ROUTINE_RUN_TOKEN_BUDGET = 500_000;
+
 const ROUTINE_RUN_GUIDANCE =
-  "This conversation runs your scheduled routines, and nobody watches it live: you cannot " +
-  "ask the owner anything here. If a run cannot do its job until the owner fixes something " +
+  "This conversation runs one scheduled routine run, and nobody watches it live: you cannot " +
+  "ask the owner anything here. It starts fresh each run: earlier runs' conversations are not " +
+  "here, only the short results the prompt quotes. Keep the run lean: fetch only what the task " +
+  "needs, prefer small, specific tool results, and stop once you have the answer; a run has a " +
+  "token budget and is cut off when it spends it. " +
+  "If a run cannot do its job until the owner fixes something " +
   "(a missing vault login, an account you cannot reach, an approval routines cannot get), " +
   "call report_routine_blocked with what they need to do, then reply in a sentence. If there " +
   "was simply nothing to do this time, just say so; that is not blocked.";
@@ -199,7 +212,7 @@ function agentConfig(
       ),
       permissions: bot.toolPermissions,
       ...(bot.autoReview ? { autoReview: true } : {}),
-      ...(unattended ? { unattended: true } : {}),
+      ...(unattended ? { unattended: true, budgetTokens: ROUTINE_RUN_TOKEN_BUDGET } : {}),
     },
   };
 }

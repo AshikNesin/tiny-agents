@@ -1,7 +1,8 @@
 /**
  * Who is behind a conversation, and behind its current turn. A bot has its
- * chat (`Bot.conversationId`) and one conversation per routine
- * (`Routine.conversationId`, issue #63); a conversation neither names any
+ * chat (`Bot.conversationId`) and a fresh conversation per routine run
+ * (`RoutineRun.conversationId`; older runs shared `Routine.conversationId`,
+ * issue #63); a conversation none of them names any
  * more was retired by "New chat" (a Past chat) or belongs to a deleted bot.
  *
  * Tool calls know their conversation, not their bot, so every lookup from a
@@ -23,7 +24,7 @@
  */
 import { eq } from "drizzle-orm";
 import type { AgentRuntime } from "@tiny-agents/agent";
-import { db, bots, routines } from "../../db";
+import { db, bots, routineRuns, routines } from "../../db";
 
 /** The bot behind a conversation: the fields tool-side callers act on. */
 export interface ConversationBot {
@@ -78,8 +79,13 @@ export async function conversationOwner(
     with: sharedWith,
   });
   if (bot) return { kind: "chat", bot: conversationBot(bot) };
+  // A run's own conversation (each run starts a fresh one); older runs used the routine's.
+  const run = await db.query.routineRuns.findFirst({
+    where: eq(routineRuns.conversationId, ref),
+    columns: { routineId: true },
+  });
   const routine = await db.query.routines.findFirst({
-    where: eq(routines.conversationId, ref),
+    where: run ? eq(routines.id, run.routineId) : eq(routines.conversationId, ref),
     columns: { id: true },
     with: { bot: { columns: botColumns, with: sharedWith } },
   });

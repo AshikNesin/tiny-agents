@@ -166,16 +166,77 @@ describe("routine-fire dispatch", () => {
     expect(row?.pendingJobId).toBe(queued[0]!.id);
   });
 
-  it("every run of a routine shares its conversation, so later runs see earlier ones", async () => {
+  it("each run starts a fresh conversation, so a run never re-sends earlier runs", async () => {
     const { routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
+    vi.mocked(runtime.createConversation)
+      .mockResolvedValueOnce(ROUTINE_CONVERSATION)
+      .mockResolvedValueOnce(43);
     await dispatchOccurrence(payloadOf(routine.id, SLOT), ON_TIME);
     const nextSlot = new Date("2026-10-22T03:30:00.000Z");
     await dispatchOccurrence(payloadOf(routine.id, nextSlot), new Date(nextSlot.getTime() + 5000));
-    expect(vi.mocked(runtime.createConversation)).toHaveBeenCalledTimes(1);
+
     expect(vi.mocked(runtime.submit).mock.calls.map(([ref]) => ref)).toEqual([
       ROUTINE_CONVERSATION,
-      ROUTINE_CONVERSATION,
+      43,
     ]);
+    expect((await runOf(routine.id, SLOT))?.conversationId).toBe(String(ROUTINE_CONVERSATION));
+    expect((await runOf(routine.id, nextSlot))?.conversationId).toBe("43");
+    // The routine names its newest run's conversation: the one a move or delete stops.
+    expect((await routineRow(routine.id))?.conversationId).toBe("43");
+  });
+
+  it("a run's prompt quotes the latest results, newest first and trimmed", async () => {
+    const { routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
+    await db.insert(routineRuns).values([
+      {
+        routineId: routine.id,
+        scheduledFor: new Date("2026-10-19T03:30:00.000Z"),
+        status: "succeeded",
+        requestId: "older",
+        output: "Two new PRs: #12 and #13.",
+      },
+      {
+        routineId: routine.id,
+        scheduledFor: new Date("2026-10-20T03:30:00.000Z"),
+        status: "succeeded",
+        requestId: "newer",
+        output: `One new PR: #14. ${"y".repeat(900)}`,
+      },
+      {
+        routineId: routine.id,
+        scheduledFor: new Date("2026-10-20T04:30:00.000Z"),
+        status: "failed",
+        requestId: "failed",
+        error: "model error",
+      },
+    ]);
+    await dispatchOccurrence(payloadOf(routine.id, SLOT), ON_TIME);
+
+    const text = vi.mocked(runtime.submit).mock.calls[0]![1].text;
+    expect(text).toContain("Do the thing.");
+    expect(text).toContain("- Tue, 20 Oct 2026, 09:00 IST: One new PR: #14.");
+    expect(text).toContain("- Mon, 19 Oct 2026, 09:00 IST: Two new PRs: #12 and #13.");
+    expect(text.indexOf("#14")).toBeLessThan(text.indexOf("#12"));
+    expect(text).not.toContain("y".repeat(501));
+    expect(text).not.toContain("model error");
+  });
+
+  it("a fire while the previous run is still working is skipped, and the chain moves on", async () => {
+    const { routine } = await seedBotAndRoutine({ kind: "interval", minutes: 15 });
+    await dispatchOccurrence(payloadOf(routine.id, SLOT), ON_TIME);
+    vi.mocked(runtime.isBusy).mockImplementation((ref) => ref === ROUTINE_CONVERSATION);
+    const nextSlot = new Date(SLOT.getTime() + 15 * 60_000);
+    await dispatchOccurrence(payloadOf(routine.id, nextSlot), new Date(nextSlot.getTime() + 5000));
+
+    expect(vi.mocked(runtime.submit)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(runtime.createConversation)).toHaveBeenCalledTimes(1);
+    expect(await runOf(routine.id, nextSlot)).toMatchObject({
+      status: "missed",
+      error: "Skipped: the previous run was still working.",
+    });
+    expect((await routineRow(routine.id))?.nextRunAt?.toISOString()).toBe(
+      new Date(nextSlot.getTime() + 15 * 60_000).toISOString(),
+    );
   });
 
   it("two routines of one bot get conversations of their own", async () => {
@@ -402,6 +463,34 @@ describe("completion watcher", () => {
     expect(after?.status).toBe("succeeded");
     expect(after?.output?.length).toBe(2000);
     expect(after?.finishedAt).toBeTruthy();
+  });
+
+  it("records what a run spent when it settles", async () => {
+    const { routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
+    await dispatchOccurrence(payloadOf(routine.id, SLOT), ON_TIME);
+    const run = await runOf(routine.id);
+    answer(run!, { text: "All quiet." });
+    vi.mocked(runtime.usedTokens).mockResolvedValue(18_400);
+    await createRoutinesCompletionWatcher(runtime).resolveConversation(ROUTINE_CONVERSATION);
+    expect(await runById(run!.id)).toMatchObject({ status: "succeeded", tokens: 18_400 });
+  });
+
+  it("a run that spent its token budget is recorded blocked, saying so", async () => {
+    const { routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
+    await dispatchOccurrence(payloadOf(routine.id, SLOT), ON_TIME);
+    const run = await runOf(routine.id);
+    answer(run!, { text: "Partial: checked 3 of 9 sites." });
+    vi.mocked(runtime.usedTokens).mockResolvedValue(612_000);
+    await createRoutinesCompletionWatcher(runtime).resolveConversation(ROUTINE_CONVERSATION);
+
+    const after = await runById(run!.id);
+    expect(after).toMatchObject({
+      status: "blocked",
+      tokens: 612_000,
+      output: "Partial: checked 3 of 9 sites.",
+    });
+    expect(after?.error).toMatch(/^Used 612k tokens, over the 500k budget a run gets/);
+    expect((await routineRow(routine.id))?.blockedStreak).toBe(1);
   });
 
   it("resolves a run fired before routines had conversations from the bot's chat", async () => {

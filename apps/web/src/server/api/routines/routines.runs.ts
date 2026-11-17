@@ -13,12 +13,13 @@
  * in for the answer and two queued runs never swap replies. Every finished
  * run is announced: a push notification and a card in its bot's chat.
  */
-import { and, asc, desc, eq, inArray, notInArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, lt, notInArray, sql } from "drizzle-orm";
 import { logger } from "@groot/core/logger";
 import { finishedReplyTo, type AgentRuntime, type FinishedReply } from "@tiny-agents/agent";
 import { conversationRef } from "../bots/bots.conversation";
 import type { ChatRead } from "../bots/bots.settled";
 import { db, bots, routineRuns, routines, type RoutineRun } from "../../db";
+import { ROUTINE_RUN_TOKEN_BUDGET } from "../bots/bots.conversation";
 import {
   routineRunMachine,
   type RoutineRunStatus,
@@ -33,7 +34,10 @@ const OUTPUT_PREVIEW_CHARS = 2000;
 const ERROR_PREVIEW_CHARS = 500;
 
 /** Minimal runtime surface run resolution needs (the full AgentRuntime satisfies it). */
-export type RoutineRunsRuntime = Pick<AgentRuntime, "isBusy" | "readChat" | "listCapabilities">;
+export type RoutineRunsRuntime = Pick<
+  AgentRuntime,
+  "isBusy" | "readChat" | "listCapabilities" | "usedTokens"
+>;
 
 /** Stable submit id: one per (routine, occurrence), so replays dedupe. */
 export function runRequestId(routineId: string, scheduledFor: Date): string {
@@ -62,7 +66,9 @@ async function upsertRun(
   routine: RunRoutine,
   scheduledFor: Date,
   trigger: RoutineRun["trigger"],
-  fields: Partial<Pick<RoutineRun, "submittedAt" | "startedAt" | "finishedAt" | "error">> & {
+  fields: Partial<
+    Pick<RoutineRun, "submittedAt" | "startedAt" | "finishedAt" | "error" | "conversationId">
+  > & {
     /** Only a state a run may be recorded in at its fire. */
     status: (typeof routineRunMachine.initial)[number];
   },
@@ -101,6 +107,107 @@ async function pruneRuns(routineId: string): Promise<void> {
         keep.map((run) => run.id),
       ),
     ),
+  );
+}
+
+/**
+ * Give the occurrence its own fresh conversation before anything is
+ * submitted: the run row is created awaiting with `created`, unless a fire
+ * of the same occurrence (a redelivered or racing job) recorded one first.
+ * Returns the conversation the run uses, so a retried submit lands where
+ * the first one did and the request id dedupes it.
+ */
+export async function reserveRunConversation(
+  routine: RunRoutine,
+  scheduledFor: Date,
+  trigger: RoutineRun["trigger"],
+  created: string,
+): Promise<string> {
+  await db
+    .insert(routineRuns)
+    .values({
+      routineId: routine.id,
+      scheduledFor,
+      trigger,
+      requestId: runRequestId(routine.id, scheduledFor),
+      status: "awaiting",
+      conversationId: created,
+    })
+    .onConflictDoUpdate({
+      target: [routineRuns.routineId, routineRuns.scheduledFor],
+      set: { conversationId: sql`coalesce(${routineRuns.conversationId}, ${created})` },
+    });
+  const row = await db.query.routineRuns.findFirst({
+    where: and(eq(routineRuns.routineId, routine.id), eq(routineRuns.scheduledFor, scheduledFor)),
+    columns: { conversationId: true },
+  });
+  if (!row?.conversationId) throw new Error("The routine run's conversation could not be stored");
+  return row.conversationId;
+}
+
+/**
+ * Another run of the routine is still working: an occurrence that fires
+ * meanwhile is skipped (recorded missed, never submitted), so runs never
+ * pile up behind a slow one and each one's spend stays its own.
+ */
+export async function recordSkipped(
+  routine: RunRoutine,
+  scheduledFor: Date,
+  trigger: RoutineRun["trigger"],
+  now: Date,
+): Promise<string> {
+  const error = "Skipped: the previous run was still working.";
+  const runId = await upsertRun(routine, scheduledFor, trigger, {
+    status: "missed",
+    finishedAt: now,
+    error,
+  });
+  announceRun(refOf(runId, routine), { status: "missed", error });
+  return runId;
+}
+
+/** How many earlier results a run's prompt carries, and how much of each. */
+const RECENT_RESULTS = 3;
+const RECENT_RESULT_CHARS = 500;
+
+/**
+ * The routine's latest results, newest first, trimmed: what a run that
+ * starts in a fresh conversation still knows about earlier runs.
+ */
+export async function recentResults(
+  routineId: string,
+  before: Date,
+): Promise<{ scheduledFor: Date; output: string }[]> {
+  const rows = await db
+    .select({ scheduledFor: routineRuns.scheduledFor, output: routineRuns.output })
+    .from(routineRuns)
+    .where(
+      and(
+        eq(routineRuns.routineId, routineId),
+        eq(routineRuns.status, "succeeded"),
+        lt(routineRuns.scheduledFor, before),
+      ),
+    )
+    .orderBy(desc(routineRuns.scheduledFor))
+    .limit(RECENT_RESULTS);
+  return rows.flatMap((row) =>
+    row.output
+      ? [{ scheduledFor: row.scheduledFor, output: preview(row.output, RECENT_RESULT_CHARS) }]
+      : [],
+  );
+}
+
+/** The routine has a run still working in its own conversation. */
+export async function hasRunningRun(
+  routineId: string,
+  rt: Pick<AgentRuntime, "isBusy">,
+): Promise<boolean> {
+  const awaiting = await db
+    .select({ conversationId: routineRuns.conversationId })
+    .from(routineRuns)
+    .where(and(eq(routineRuns.routineId, routineId), eq(routineRuns.status, "awaiting")));
+  return awaiting.some(
+    (run) => run.conversationId !== null && rt.isBusy(conversationRef(run.conversationId)),
   );
 }
 
@@ -174,6 +281,15 @@ export async function recordAwaiting(
   return runId;
 }
 
+/** Why a run that spent its token budget was stopped early, and what the owner can do. */
+function overBudgetReason(tokens: number): string {
+  const k = (value: number) => `${Math.round(value / 1000)}k`;
+  return (
+    `Used ${k(tokens)} tokens, over the ${k(ROUTINE_RUN_TOKEN_BUDGET)} budget a run gets, so it was ` +
+    `stopped early. Make the prompt narrower (fewer pages, smaller results) or run it less often.`
+  );
+}
+
 /** Tools that ask the owner to type a sign-in: refused unattended, never allowable. */
 const CREDENTIAL_TOOLS = new Set(["request_credentials"]);
 
@@ -209,7 +325,7 @@ export function refusalReason(tools: string[], askOnly: ReadonlySet<string>): st
 async function settleRun(
   id: string,
   status: SettledRoutineRunStatus,
-  data: Partial<Pick<RoutineRun, "error" | "output">>,
+  data: Partial<Pick<RoutineRun, "error" | "output" | "tokens">>,
 ): Promise<void> {
   const from: RoutineRunStatus[] = routineRunMachine.sourcesOf(status);
   const updated = await db
@@ -222,8 +338,11 @@ async function settleRun(
   }
 }
 
-/** The conversation a run awaits (runs fired before routines had their own awaited the chat). */
-const awaitedConversation = sql<string>`coalesce(${routines.conversationId}, ${bots.conversationId})`;
+/**
+ * The conversation a run awaits: its own; runs fired before each run had one
+ * awaited the routine's, and before that the bot's chat.
+ */
+const awaitedConversation = sql<string>`coalesce(${routineRuns.conversationId}, ${routines.conversationId}, ${bots.conversationId})`;
 
 /** Awaiting runs, oldest slot first: every one, or only those awaiting one conversation. */
 async function awaitingRuns(conversationId?: number) {
@@ -236,6 +355,7 @@ async function awaitingRuns(conversationId?: number) {
       botId: bots.id,
       botName: bots.name,
       conversationId: awaitedConversation,
+      ownConversation: routineRuns.conversationId,
     })
     .from(routineRuns)
     .innerJoin(routines, eq(routines.id, routineRuns.routineId))
@@ -248,7 +368,12 @@ async function awaitingRuns(conversationId?: number) {
     )
     .orderBy(asc(routineRuns.scheduledFor));
   return rows.map((row) => ({
-    run: { id: row.id, routineId: row.routineId, requestId: row.requestId },
+    run: {
+      id: row.id,
+      routineId: row.routineId,
+      requestId: row.requestId,
+      ownConversation: row.ownConversation !== null,
+    },
     conversationId: conversationRef(row.conversationId),
     ref: {
       runId: row.id,
@@ -284,27 +409,53 @@ export function createRoutineRunResolver(rt: RoutineRunsRuntime): RoutineRunReso
     }
   }
 
-  async function resolveRun(ref: RoutineRunRef, routineId: string, reply: FinishedReply) {
+  /** What a run with a conversation of its own spent; undefined for older runs or when unreadable. */
+  async function runTokens(conversationId: number, own: boolean): Promise<number | undefined> {
+    if (!own) return undefined;
+    try {
+      return await rt.usedTokens(conversationId);
+    } catch {
+      return undefined;
+    }
+  }
+
+  async function resolveRun(
+    ref: RoutineRunRef,
+    run: { routineId: string; ownConversation: boolean },
+    conversationId: number,
+    reply: FinishedReply,
+  ) {
+    const routineId = run.routineId;
+    const tokens = await runTokens(conversationId, run.ownConversation);
+    const spent = tokens !== undefined ? { tokens } : {};
     if (reply.error !== undefined) {
-      const error = preview(reply.error, ERROR_PREVIEW_CHARS);
-      await settleRun(ref.runId, "failed", { error });
+      const error = preview(
+        tokens !== undefined && tokens >= ROUTINE_RUN_TOKEN_BUDGET
+          ? `${overBudgetReason(tokens)} ${reply.error}`
+          : reply.error,
+        ERROR_PREVIEW_CHARS,
+      );
+      await settleRun(ref.runId, "failed", { error, ...spent });
       await clearBlockedStreak(routineId);
       announceRun(ref, { status: "failed", error });
       return;
     }
     const output = preview(reply.text, OUTPUT_PREVIEW_CHARS);
     const reasons = [
+      tokens !== undefined && tokens >= ROUTINE_RUN_TOKEN_BUDGET
+        ? overBudgetReason(tokens)
+        : undefined,
       reply.blocked,
       reply.refused?.length ? refusalReason(reply.refused, askOnlyTools()) : undefined,
     ].filter((reason): reason is string => reason !== undefined);
     if (reasons.length > 0) {
       const error = preview(reasons.join(" "), ERROR_PREVIEW_CHARS);
-      await settleRun(ref.runId, "blocked", { error, output: output || null });
+      await settleRun(ref.runId, "blocked", { error, output: output || null, ...spent });
       const pausedReason = await recordBlocked(routineId, error);
       announceRun(ref, { status: "blocked", error, pausedReason });
       return;
     }
-    await settleRun(ref.runId, "succeeded", { output });
+    await settleRun(ref.runId, "succeeded", { output, ...spent });
     await clearBlockedStreak(routineId);
     announceRun(ref, { status: "succeeded", output });
   }
@@ -328,7 +479,7 @@ export function createRoutineRunResolver(rt: RoutineRunsRuntime): RoutineRunReso
         // Not finished, or not placed in the transcript yet: a later idle
         // resolves it (the boot sweep settles any that never will).
         if (outcome.status !== "answered") continue;
-        await resolveRun(ref, run.routineId, outcome.reply);
+        await resolveRun(ref, run, conversationId, outcome.reply);
         resolved += 1;
       } catch (error) {
         logger.warn({ error, runId: run.id }, "Failed to resolve an awaiting routine run");
@@ -346,8 +497,9 @@ export function createRoutineRunResolver(rt: RoutineRunsRuntime): RoutineRunReso
       if (rt.isBusy(conversationId)) continue;
       try {
         const outcome = finishedReplyTo(await rt.readChat(conversationId), run.requestId);
-        if (outcome.status === "answered") await resolveRun(ref, run.routineId, outcome.reply);
-        else await markInterrupted(ref);
+        if (outcome.status === "answered") {
+          await resolveRun(ref, run, conversationId, outcome.reply);
+        } else await markInterrupted(ref);
         resolved += 1;
       } catch (error) {
         logger.warn({ error, runId: run.id }, "Boot sweep failed to resolve an awaiting run");
