@@ -18,6 +18,7 @@ import type {
   ReviewDraftBody,
   ReviewFile,
   ReviewFileDiff,
+  SubmitReviewBody,
   ThreadPullsView,
 } from "../../../shared/api/code";
 
@@ -108,6 +109,26 @@ export const reviewsApi = {
       message,
     }),
   archive: (id: string) => apiClient.post(`${base}/reviews/${encodeURIComponent(id)}/archive`),
+  /** Comments waiting for the review on GitHub. */
+  comments: (id: string) =>
+    apiClient.get<ReviewDraft[]>(`${base}/reviews/${encodeURIComponent(id)}/comments`),
+  addComment: (id: string, body: ReviewDraftBody) =>
+    apiClient.post<ReviewDraft>(`${base}/reviews/${encodeURIComponent(id)}/comments`, body),
+  removeComment: (id: string, commentId: string) =>
+    apiClient.delete(
+      `${base}/reviews/${encodeURIComponent(id)}/comments/${encodeURIComponent(commentId)}`,
+    ),
+  /** Post the review on GitHub with every waiting comment. */
+  submit: (id: string, body: SubmitReviewBody) =>
+    apiClient.post<{ url: string; comments: number }>(
+      `${base}/reviews/${encodeURIComponent(id)}/submit`,
+      body,
+    ),
+  /** Hand the waiting comments to the Code thread that opened the PR. */
+  toThread: (id: string) =>
+    apiClient.post<{ threadId: string; sent: number }>(
+      `${base}/reviews/${encodeURIComponent(id)}/comments/to-thread`,
+    ),
 };
 
 /** The page of a review. */

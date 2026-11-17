@@ -5,6 +5,9 @@
  * message). Kept on the server per thread, so they survive a reload and work
  * for every harness. A guest has none: the panels put a guest's comment in
  * the composer instead.
+ *
+ * A PR review's pending GitHub comments (issue #345) live in the same store
+ * under `githubCommentsKey(reviewId)`, read from and saved to the review.
  */
 import { useEffect, useMemo, useRef } from "react";
 import { create } from "zustand";
@@ -12,7 +15,29 @@ import { toast } from "sonner";
 import { errorMessage } from "../errors";
 import { useIsGuest } from "../../store/people";
 import type { ReviewDraft, ReviewDraftBody } from "../../../shared/api/code";
-import { projectsApi } from "./projects";
+import { projectsApi, reviewsApi } from "./projects";
+
+const GITHUB = "github:";
+
+/** Where a PR review's pending GitHub comments are kept in the store. */
+export const githubCommentsKey = (reviewId: string) => `${GITHUB}${reviewId}`;
+
+/** The server's comments behind a store key: a thread's (or review's) for the agent, or GitHub's. */
+function draftsOf(key: string) {
+  if (key.startsWith(GITHUB)) {
+    const review = key.slice(GITHUB.length);
+    return {
+      list: () => reviewsApi.comments(review),
+      add: (body: ReviewDraftBody) => reviewsApi.addComment(review, body),
+      remove: (id: string) => reviewsApi.removeComment(review, id),
+    };
+  }
+  return {
+    list: () => projectsApi.drafts(key),
+    add: (body: ReviewDraftBody) => projectsApi.addDraft(key, body),
+    remove: (id: string) => projectsApi.removeDraft(key, id),
+  };
+}
 
 interface CommentsState {
   byThread: Record<string, ReviewDraft[] | undefined>;
@@ -31,20 +56,20 @@ export const useCommentStore = create<CommentsState>((set, get) => ({
   load(threadId) {
     const pending = reading.get(threadId);
     if (pending) return pending;
-    const read = projectsApi
-      .drafts(threadId)
+    const read = draftsOf(threadId)
+      .list()
       .then((drafts) => set({ byThread: { ...get().byThread, [threadId]: drafts } }))
       .finally(() => reading.delete(threadId));
     reading.set(threadId, read);
     return read;
   },
   async add(threadId, body) {
-    const draft = await projectsApi.addDraft(threadId, body);
+    const draft = await draftsOf(threadId).add(body);
     const list = get().byThread[threadId] ?? [];
     set({ byThread: { ...get().byThread, [threadId]: [...list, draft] } });
   },
   async remove(threadId, draftId) {
-    await projectsApi.removeDraft(threadId, draftId);
+    await draftsOf(threadId).remove(draftId);
     const list = get().byThread[threadId] ?? [];
     set({ byThread: { ...get().byThread, [threadId]: list.filter((d) => d.id !== draftId) } });
   },
@@ -84,18 +109,34 @@ export interface ThreadCommenting {
 
 /**
  * One file's share of the thread's comments, as `FileDiff` takes them: a new
- * comment carries its quoted lines (from the side it was made on).
+ * comment carries its quoted lines (from the side it was made on). With
+ * `github` (a PR review), comments for the PR's review sit beside the
+ * assistant's, each tagged with where it goes.
  */
 export function fileCommenting(
   commenting: ThreadCommenting | undefined,
   file: { path: string; oldContent: string; newContent: string },
+  github?: ThreadCommenting,
 ) {
   if (!commenting) return {};
+  const mine = (list: ReviewDraft[]) => list.filter((c) => c.path === file.path);
+  const githubIds = new Set(github?.comments.map((c) => c.id));
   return {
-    comments: commenting.comments.filter((c) => c.path === file.path),
-    onRemoveComment: commenting.remove,
-    onComment: (selection: { from: number; to: number; side: "old" | "new" }, body: string) =>
-      commenting.add({
+    comments: github
+      ? [
+          ...mine(github.comments).map((c) => ({ ...c, tag: "Pending" })),
+          ...mine(commenting.comments).map((c) => ({ ...c, tag: "For the assistant" })),
+        ]
+      : mine(commenting.comments),
+    onRemoveComment: (id: string) =>
+      github && githubIds.has(id) ? github.remove(id) : commenting.remove(id),
+    reviewing: github ? true : undefined,
+    onComment: (
+      selection: { from: number; to: number; side: "old" | "new" },
+      body: string,
+      target: "agent" | "github" = "agent",
+    ) =>
+      (target === "github" && github ? github : commenting).add({
         path: file.path,
         side: selection.side,
         startLine: selection.from,

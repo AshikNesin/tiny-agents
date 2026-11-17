@@ -19,6 +19,8 @@ import { sh } from "./local-exec";
 
 interface FakePull {
   number: number;
+  /** Who opened it (the credential's login when unset). */
+  author?: string;
   head: string;
   base: string;
   title: string;
@@ -40,6 +42,8 @@ export interface FakeGitHub extends GitHubClient {
   replies: Array<{ threadId: string; body: string }>;
   resolved: string[];
   comments: Array<{ number: number; body: string }>;
+  /** Reviews submitted with `submitReview`, as sent. */
+  submitted: Array<{ number: number } & Parameters<GitHubClient["submitReview"]>[2]>;
   merged: Array<{ number: number; method: string }>;
   /** Each Actions job's raw log, by job id (a default when unset). */
   logs: Map<number, string>;
@@ -64,6 +68,7 @@ export function fakeGitHub(local: LocalExec, bare: string, login = "ashik"): Fak
     replies: [],
     resolved: [],
     comments: [],
+    submitted: [],
     merged: [],
     logs: new Map(),
     running: new Map(),
@@ -118,7 +123,7 @@ export function fakeGitHub(local: LocalExec, bare: string, login = "ashik"): Fak
         fromFork: pr.fromFork,
         mergeable: pr.mergeable,
         mergeMethods: ["squash", "merge"],
-        author: login,
+        author: pr.author ?? login,
         autoMerge: pr.autoMerge,
         inMergeQueue: pr.inMergeQueue,
         queueRemovals: pr.queueRemovals,
@@ -146,6 +151,12 @@ export function fakeGitHub(local: LocalExec, bare: string, login = "ashik"): Fak
     async comment(_repo, number, body) {
       gh.comments.push({ number, body });
       return { databaseId: (nextComment += 1) };
+    },
+    async submitReview(_repo, number, review) {
+      gh.submitted.push({ number, ...review });
+      return {
+        url: `https://github.com/acme/web/pull/${number}#pullrequestreview-${gh.submitted.length}`,
+      };
     },
     async enableAutoMerge(pullId, method) {
       gh.autoMergeCalls.push({ pullId, action: "enable", method });

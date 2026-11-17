@@ -133,6 +133,17 @@ function stepState(step: NonNullable<RawJob["steps"]>[number]): JobStep["state"]
   return "failure";
 }
 
+/** One line comment of a submitted review: `line` is its last line, `startLine` its first. */
+export interface ReviewCommentInput {
+  path: string;
+  side: "LEFT" | "RIGHT";
+  line: number;
+  startLine?: number;
+  body: string;
+}
+
+export type ReviewEvent = "COMMENT" | "APPROVE" | "REQUEST_CHANGES";
+
 export interface GitHubClient {
   readonly transport: GitHubApi["kind"];
   /** Who the credential acts as. */
@@ -152,6 +163,12 @@ export interface GitHubClient {
   replyToThread(threadId: string, body: string): Promise<{ databaseId: number | null }>;
   resolveThread(threadId: string): Promise<void>;
   comment(repo: RepoRef, number: number, body: string): Promise<{ databaseId: number }>;
+  /** Submit a review with its line comments in one go, pinned to `commitId`. */
+  submitReview(
+    repo: RepoRef,
+    number: number,
+    review: { commitId: string; event: ReviewEvent; body: string; comments: ReviewCommentInput[] },
+  ): Promise<{ url: string }>;
   merge(repo: RepoRef, number: number, method: MergeMethod): Promise<void>;
   /** Change a pull request's title or description. */
   updatePull(
@@ -526,6 +543,29 @@ export function createGitHubClient(api: GitHubApi): GitHubClient {
         { body: { body } },
       );
       return { databaseId: created.id };
+    },
+    async submitReview(repo, number, review) {
+      const created = await api.rest<{ html_url: string }>(
+        "POST",
+        `${repoPath(repo)}/pulls/${number}/reviews`,
+        {
+          body: {
+            commit_id: review.commitId,
+            event: review.event,
+            body: review.body,
+            comments: review.comments.map((c) => ({
+              path: c.path,
+              body: c.body,
+              line: c.line,
+              side: c.side,
+              ...(c.startLine !== undefined && c.startLine !== c.line
+                ? { start_line: c.startLine, start_side: c.side }
+                : {}),
+            })),
+          },
+        },
+      );
+      return { url: created.html_url };
     },
     async merge(repo, number, method) {
       await api.rest("PUT", `${repoPath(repo)}/pulls/${number}/merge`, {

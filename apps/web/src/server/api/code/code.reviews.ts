@@ -15,14 +15,32 @@
  * Until the assistant exists, viewed marks and line comments are kept under
  * the review's key (`review:<id>`), and those comments go with the first
  * question.
+ *
+ * Review comments for GitHub wait under the same key, apart from the
+ * assistant's (`threadReview(key, "github")`), until the owner submits the
+ * review: one REST call posts them all with the verdict, pinned to the head
+ * the owner read. On their own PR GitHub allows only a comment, and if a
+ * Code thread opened that PR the comments can go to it instead.
  */
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { logger } from "@groot/core/logger";
-import { repoSlug, type PullSnapshot, type RepoRef } from "@tiny-agents/github";
+import {
+  repoSlug,
+  type PullSnapshot,
+  type RepoRef,
+  type ReviewCommentInput,
+} from "@tiny-agents/github";
 import { threadIdOf } from "@tiny-agents/code/server";
-import { codeProjects, codeReviews, codeThreads, db, type CodeProjectRow } from "../../db";
-import type { PullReviewView } from "../../../shared/api/code";
+import {
+  codeProjects,
+  codePullRequests,
+  codeReviews,
+  codeThreads,
+  db,
+  type CodeProjectRow,
+} from "../../db";
+import type { PullReviewView, ReviewDraft, ReviewVerdict } from "../../../shared/api/code";
 import { reviewCard } from "../../../shared/code-messages";
 import { codeGitHub } from "./code.github";
 import { codeHub } from "./code.hub";
@@ -59,7 +77,16 @@ function parsePullRef(input: string): { repo: RepoRef; number: number } | undefi
 const reviewPath = (project: CodeProjectRow, number: number) =>
   `${project.checkoutPath.replace(/\/checkout$/, "")}/reviews/pr-${number}`;
 
-function reviewView(row: CodeReviewRow, project: CodeProjectRow): PullReviewView {
+/** The Code thread that opened PR `number` of the project, if one did. */
+async function codingThreadOf(projectId: string, number: number): Promise<string | null> {
+  const pull = await db.query.codePullRequests.findFirst({
+    where: and(eq(codePullRequests.projectId, projectId), eq(codePullRequests.number, number)),
+    orderBy: desc(codePullRequests.createdAt),
+  });
+  return pull?.threadId ?? null;
+}
+
+async function reviewView(row: CodeReviewRow, project: CodeProjectRow): Promise<PullReviewView> {
   return {
     id: row.id,
     key: reviewKey(row.id),
@@ -73,7 +100,9 @@ function reviewView(row: CodeReviewRow, project: CodeProjectRow): PullReviewView
     baseRef: row.baseRef,
     headSha: row.headSha,
     fromFork: row.fromFork,
+    mine: row.mine,
     threadId: row.threadId,
+    codingThreadId: await codingThreadOf(project.id, row.number),
     archived: row.archivedAt !== null,
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -111,7 +140,10 @@ export async function openReview(input: string): Promise<PullReviewView> {
       `Cannot read ${repoSlug(ref.repo)}#${ref.number} on GitHub: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
-  const ws = await services.workspace(project);
+  const [viewer, ws] = await Promise.all([
+    github.viewer().catch(() => undefined),
+    services.workspace(project),
+  ]);
   const path = reviewPath(project, pr.number);
   const headSha = await ws.pullWorktree(project.checkoutPath, path, pr.number, pr.baseRef);
   const values = {
@@ -122,6 +154,7 @@ export async function openReview(input: string): Promise<PullReviewView> {
     baseRef: pr.baseRef,
     headSha,
     fromFork: pr.fromFork,
+    mine: !!viewer && !!pr.author && viewer.login.toLowerCase() === pr.author.toLowerCase(),
     worktree: path,
     archivedAt: null,
     updatedAt: new Date(),
@@ -142,7 +175,7 @@ export async function listReviews(): Promise<PullReviewView[]> {
     .innerJoin(codeProjects, eq(codeProjects.id, codeReviews.projectId))
     .where(isNull(codeReviews.archivedAt))
     .orderBy(desc(codeReviews.updatedAt));
-  return rows.map((r) => reviewView(r.review, r.project));
+  return Promise.all(rows.map((r) => reviewView(r.review, r.project)));
 }
 
 async function findReview(id: string): Promise<{ row: CodeReviewRow; project: CodeProjectRow }> {
@@ -274,4 +307,74 @@ export async function archiveReview(id: string): Promise<void> {
     .update(codeReviews)
     .set({ worktree: null, archivedAt: new Date(), updatedAt: new Date() })
     .where(eq(codeReviews.id, id));
+}
+
+// --- review comments for GitHub, and submitting the review ----------------------------------
+
+/** The review's pending GitHub comments (404 for no such review). */
+export async function reviewComments(id: string) {
+  await findReview(id);
+  return threadReview(reviewKey(id), "github");
+}
+
+/** GitHub's side and lines for a saved comment: the old side is LEFT, a range ends at `line`. */
+function toGitHubComment(d: ReviewDraft): ReviewCommentInput {
+  return {
+    path: d.path,
+    side: d.side === "old" ? "LEFT" : "RIGHT",
+    line: d.endLine,
+    ...(d.startLine !== d.endLine ? { startLine: d.startLine } : {}),
+    body: d.body,
+  };
+}
+
+/**
+ * Submit the review on GitHub with every pending comment, at the head the
+ * worktree shows (so each comment lands on the lines the owner read).
+ */
+export async function submitReview(
+  id: string,
+  input: { event: ReviewVerdict; body?: string },
+): Promise<{ url: string; comments: number }> {
+  const { row, project } = await findReview(id);
+  if (row.mine && input.event !== "COMMENT") {
+    throw Boom.badRequest(
+      "GitHub does not let you approve or request changes on your own pull request. Submit it as a comment.",
+    );
+  }
+  const body = input.body?.trim() ?? "";
+  if (input.event === "REQUEST_CHANGES" && !body) {
+    throw Boom.badRequest("Say what to change: GitHub needs a summary to request changes.");
+  }
+  const github = await codeGitHub().client(project);
+  const { result, sent } = await threadReview(reviewKey(id), "github").send(
+    async (_message, drafts) => {
+      if (input.event === "COMMENT" && !body && drafts.length === 0) {
+        throw Boom.badRequest("Add a comment or a summary first.");
+      }
+      return github.submitReview(repoOf(project), row.number, {
+        commitId: row.headSha,
+        event: input.event,
+        body,
+        comments: drafts.map(toGitHubComment),
+      });
+    },
+  );
+  await db.update(codeReviews).set({ updatedAt: new Date() }).where(eq(codeReviews.id, id));
+  return { url: result.url, comments: sent };
+}
+
+/** Hand the pending comments to the Code thread that opened the PR, as one message. */
+export async function sendCommentsToThread(
+  id: string,
+): Promise<{ threadId: string; sent: number }> {
+  const { row, project } = await findReview(id);
+  const threadId = await codingThreadOf(project.id, row.number);
+  const target = threadId ? codeHub()?.resolve(threadId) : undefined;
+  if (!threadId || !target) throw Boom.notFound("No Code thread opened this pull request.");
+  const { sent } = await threadReview(reviewKey(id), "github").send(async (message) => {
+    if (message === null) throw Boom.badRequest("No comments to send.");
+    await target.instance.send(target.nativeId, { message });
+  });
+  return { threadId, sent };
 }

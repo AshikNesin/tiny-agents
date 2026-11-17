@@ -11,10 +11,14 @@
  * under its last line once you let go. Saved comments stay under their lines
  * until they are sent. The library draws the diff in a shadow root; the
  * composer and saved comments are ours, slotted in as annotations.
+ *
+ * In a PR review (`reviewing`), a comment is for the PR's review on GitHub
+ * (Comment, ⌘↵) or for the assistant (Ask assistant), and Suggest change
+ * starts a GitHub suggestion block with the selected lines.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { diffLines } from "diff";
-import { Trash2 } from "lucide-react";
+import { FilePen, Trash2 } from "lucide-react";
 import {
   parseDiffFromFile,
   type DiffLineAnnotation,
@@ -33,6 +37,9 @@ interface LineSelection {
   side: "old" | "new";
 }
 
+/** Who a comment is for: the agent (or the review's assistant), or the PR's review on GitHub. */
+export type CommentTarget = "agent" | "github";
+
 /** A saved comment, drawn under the last line it covers. */
 export interface LineComment {
   id: string;
@@ -40,6 +47,13 @@ export interface LineComment {
   startLine: number;
   endLine: number;
   body: string;
+  /** What it waits for, shown beside it (default "Not sent"). */
+  tag?: string;
+}
+
+/** A GitHub suggestion block replacing the selected lines with `lines` (edit them in place). */
+function suggestionBlock(lines: string): string {
+  return `\`\`\`suggestion\n${lines}\n\`\`\``;
 }
 
 /** +added / −removed counts of a unified diff. */
@@ -149,26 +163,33 @@ function Composer({
   setBody,
   onSubmit,
   onCancel,
+  reviewing,
+  selected,
 }: {
   path: string;
   selection: LineSelection;
   /** Held by the diff, so widening the range keeps what was typed. */
   body: string;
   setBody(body: string): void;
-  onSubmit(body: string): Promise<void>;
+  onSubmit(body: string, target: CommentTarget): Promise<void>;
   onCancel(): void;
+  /** A PR review: Comment goes to GitHub, Ask assistant to the assistant. */
+  reviewing?: boolean;
+  /** The selected new-side lines, for Suggest change. */
+  selected?: string;
 }) {
-  const [busy, setBusy] = useState(false);
-  const submit = async () => {
+  const [busy, setBusy] = useState<CommentTarget | null>(null);
+  const submit = async (target: CommentTarget) => {
     if (!body.trim() || busy) return;
-    setBusy(true);
+    setBusy(target);
     try {
-      await onSubmit(body.trim());
+      await onSubmit(body.trim(), target);
     } catch {
       // The caller says what went wrong; the text stays to try again.
-      setBusy(false);
+      setBusy(null);
     }
   };
+  const primary: CommentTarget = reviewing ? "github" : "agent";
   return (
     <div
       className="border-border bg-background border-y px-3 py-2 font-sans [contain:inline-size]"
@@ -180,7 +201,7 @@ function Composer({
         onKeyDown={(e) => {
           if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
             e.preventDefault();
-            void submit();
+            void submit(primary);
           } else if (e.key === "Escape") {
             e.preventDefault();
             onCancel();
@@ -188,7 +209,7 @@ function Composer({
         }}
         autoFocus
         rows={2}
-        placeholder="Tell the agent what to change here…"
+        placeholder={reviewing ? "Leave a review comment…" : "Tell the agent what to change here…"}
         aria-label={`Comment on ${path} ${rangeLabel(selection)}`}
         className="min-h-14 text-sm"
       />
@@ -197,17 +218,45 @@ function Composer({
           Commenting on {rangeLabel(selection)}
           <span className="pointer-coarse:hidden"> · shift-click or drag to widen</span>
         </span>
+        {reviewing && selected !== undefined && (
+          <Button
+            type="button"
+            size="icon-xs"
+            variant="ghost"
+            aria-label="Suggest change"
+            title="Suggest change"
+            className="text-muted-foreground"
+            onClick={() =>
+              setBody(`${body.trimEnd()}${body.trim() ? "\n\n" : ""}${suggestionBlock(selected)}`)
+            }
+          >
+            <FilePen />
+          </Button>
+        )}
         <Button type="button" size="xs" variant="ghost" onClick={onCancel}>
           Cancel
         </Button>
+        {reviewing && (
+          <Button
+            type="button"
+            size="xs"
+            variant="outline"
+            disabled={!body.trim() || busy !== null}
+            onClick={() => void submit("agent")}
+            title="Ask the assistant about these lines"
+          >
+            {busy === "agent" && <Spinner className="size-3" />}
+            Ask assistant
+          </Button>
+        )}
         <Button
           type="button"
           size="xs"
-          disabled={!body.trim() || busy}
-          onClick={() => void submit()}
-          title="Comment (⌘↵)"
+          disabled={!body.trim() || busy !== null}
+          onClick={() => void submit(primary)}
+          title={reviewing ? "Add to your review (⌘↵)" : "Comment (⌘↵)"}
         >
-          {busy && <Spinner className="size-3" />}
+          {busy === primary && <Spinner className="size-3" />}
           Comment
         </Button>
       </div>
@@ -231,7 +280,9 @@ function SavedComment({
     >
       <span className="bg-primary/70 mt-1.5 size-1.5 shrink-0 rounded-full" aria-hidden />
       <p className="min-w-0 flex-1 whitespace-pre-wrap [overflow-wrap:anywhere]">{comment.body}</p>
-      <span className="text-muted-foreground shrink-0 pt-0.5 text-xs">Not sent</span>
+      <span className="text-muted-foreground shrink-0 pt-0.5 text-xs">
+        {comment.tag ?? "Not sent"}
+      </span>
       {onRemove && (
         <Button
           type="button"
@@ -297,6 +348,7 @@ export function FileDiff({
   onComment,
   comments,
   onRemoveComment,
+  reviewing,
 }: {
   path: string;
   oldContent: string;
@@ -304,10 +356,12 @@ export function FileDiff({
   /** The server could not send this file as text: say why. */
   unshowable?: keyof typeof UNSHOWABLE_TEXT;
   /** Takes comments on lines: the line numbers select a range to comment on. */
-  onComment?(selection: LineSelection, body: string): Promise<void> | void;
+  onComment?(selection: LineSelection, body: string, target: CommentTarget): Promise<void> | void;
   /** Saved, unsent comments on this file, shown under their lines. */
   comments?: LineComment[];
   onRemoveComment?(id: string): void;
+  /** A PR review: comments for GitHub or the assistant, and suggestions. */
+  reviewing?: boolean;
 }) {
   const base = useBaseOptions();
   const all = useMemo(
@@ -415,8 +469,17 @@ export function FileDiff({
                 body={draft}
                 setBody={setDraft}
                 onCancel={() => setSelection(null)}
-                onSubmit={async (text) => {
-                  await onComment(selection, text);
+                reviewing={reviewing}
+                selected={
+                  selection.side === "new"
+                    ? newContent
+                        .split("\n")
+                        .slice(selection.from - 1, selection.to)
+                        .join("\n")
+                    : undefined
+                }
+                onSubmit={async (text, target) => {
+                  await onComment(selection, text, target);
                   setSelection(null);
                   setDraft("");
                 }}

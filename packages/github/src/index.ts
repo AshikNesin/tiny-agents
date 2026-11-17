@@ -38,5 +38,7 @@ export {
   type RepoRef,
   type Review,
   type ReviewComment,
+  type ReviewCommentInput,
+  type ReviewEvent,
   type ReviewThread,
 } from "./client";

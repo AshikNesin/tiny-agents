@@ -2,7 +2,8 @@
  * A PR review (`/code/reviews/<id>`, issue #345): the pull request's
  * changes at full height (file list beside the diff, Viewed marks, line
  * comments), and its assistant on the right, behind the same divider as a
- * thread's panel. Focus mode: no thread list.
+ * thread's panel. Focus mode: no thread list. A line comment is for the
+ * PR's review on GitHub (sent with Submit review) or for the assistant.
  *
  * The assistant starts on the first question (nothing calls a model until
  * then): its first message carries a short card of the PR, any line comments
@@ -28,13 +29,19 @@ import { Spinner } from "../../components/ui/spinner";
 import { errorMessage } from "../../lib/errors";
 import { instanceOf, type HarnessInfo, type ThreadSummary } from "../../lib/code/api";
 import { reviewsApi } from "../../lib/code/projects";
-import { useCommentStore, useThreadCommenting, useThreadComments } from "../../lib/code/comments";
+import {
+  githubCommentsKey,
+  useCommentStore,
+  useThreadCommenting,
+  useThreadComments,
+} from "../../lib/code/comments";
 import { harnessOf } from "../../store/code";
 import type { PullReviewView } from "../../../shared/api/code";
 import { ConversationView } from "./ConversationView";
 import { PendingComments } from "./PendingComments";
 import { ResizablePane } from "./ResizablePane";
 import { ReviewPanel } from "./ReviewPanel";
+import { SubmitReviewButton } from "./SubmitReview";
 
 /** Questions a reviewer asks first, one tap each. */
 const STARTERS = ["Summarize this PR", "What could break?", "Is it tested well?"];
@@ -69,10 +76,10 @@ export function PullReview({
 
   const threadId = review?.threadId ?? null;
   const assistantRow = threadId ? rows.find((r) => r.id === threadId) : undefined;
-  const harness = threadId ? harnessOf(harnesses, instanceOf(threadId)) : undefined;
   // Comments wait under the review until the assistant exists, then under its thread.
   const commentKey = threadId ?? review?.key;
   const commenting = useThreadCommenting(commentKey, () => undefined);
+  const github = useThreadCommenting(githubCommentsKey(reviewId), () => undefined);
 
   const update = async () => {
     if (!review) return;
@@ -137,6 +144,7 @@ export function PullReview({
           {review.repo} · @{review.author}
         </span>
         <span className="flex-1" />
+        {github && <SubmitReviewButton review={review} github={github} />}
         <Button
           variant="ghost"
           size="sm"
@@ -194,37 +202,59 @@ export function PullReview({
             refreshKey={`${review.headSha}:${reload}:${assistantRow?.working}:${assistantRow?.cursor}`}
             page
             commenting={commenting}
+            githubCommenting={github}
           />
         </main>
         <ResizablePane narrow className={side === "assistant" ? undefined : "hidden lg:flex"}>
           <div className="flex min-h-0 flex-1 flex-col">
-            {threadId && harness ? (
-              <ConversationView
-                key={threadId}
-                pane
-                id={threadId}
-                harness={harness}
-                rows={rows}
-                panelOpen={false}
-                onTogglePanel={() => undefined}
-                insert={null}
-              />
-            ) : threadId ? (
-              <EmptyState
-                icon={MessageSquare}
-                title="The assistant's coding agent is not connected"
-                description="Its thread belongs to a harness this server does not run now."
-              />
-            ) : (
-              <AskFirst
-                review={review}
-                onStarted={(id) => setReview({ ...review, threadId: id })}
-              />
-            )}
+            <Assistant
+              review={review}
+              harnesses={harnesses}
+              rows={rows}
+              onStarted={(id) => setReview({ ...review, threadId: id })}
+            />
           </div>
         </ResizablePane>
       </div>
     </div>
+  );
+}
+
+/** The assistant's side: its thread once asked, the first-question box before. */
+function Assistant({
+  review,
+  harnesses,
+  rows,
+  onStarted,
+}: {
+  review: PullReviewView;
+  harnesses: HarnessInfo[];
+  rows: ThreadSummary[];
+  onStarted(threadId: string): void;
+}) {
+  const threadId = review.threadId;
+  if (!threadId) return <AskFirst review={review} onStarted={onStarted} />;
+  const harness = harnessOf(harnesses, instanceOf(threadId));
+  if (!harness) {
+    return (
+      <EmptyState
+        icon={MessageSquare}
+        title="The assistant's coding agent is not connected"
+        description="Its thread belongs to a harness this server does not run now."
+      />
+    );
+  }
+  return (
+    <ConversationView
+      key={threadId}
+      pane
+      id={threadId}
+      harness={harness}
+      rows={rows}
+      panelOpen={false}
+      onTogglePanel={() => undefined}
+      insert={null}
+    />
   );
 }
 

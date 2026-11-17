@@ -77,6 +77,7 @@ export function ReviewPanel({
   refreshKey,
   onOtherScopes,
   commenting,
+  githubCommenting,
   page = false,
   pull,
 }: {
@@ -88,6 +89,8 @@ export function ReviewPanel({
   page?: boolean;
   /** The thread's line comments: absent, the diff takes none. */
   commenting?: ThreadCommenting;
+  /** A PR review's comments for GitHub, beside the assistant's. */
+  githubCommenting?: ThreadCommenting;
   /** Uncommitted changes or one commit, from the harness (when it serves diffs). */
   onOtherScopes?: () => void;
   /** A PR review (issue #345): its branch line, and no turns to step through. */
@@ -484,7 +487,7 @@ export function ReviewPanel({
                   oldContent={diff.oldContent}
                   newContent={diff.newContent}
                   unshowable={diff.unshowable}
-                  {...fileCommenting(commenting, diff)}
+                  {...fileCommenting(commenting, diff, githubCommenting)}
                 />
               )}
             </div>

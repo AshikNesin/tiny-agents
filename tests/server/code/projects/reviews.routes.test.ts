@@ -10,6 +10,7 @@ import { join } from "node:path";
 import { createNamespaceKv } from "@groot/core/kv";
 import { api, createTestApp } from "../../helpers";
 import { authToken, resetAppTables } from "../../fixtures";
+import { codePullRequests, db } from "../../../../apps/web/src/server/db";
 import { installAppForTests } from "../../../../apps/web/src/server/app-root";
 import { createCodeHub, setCodeHub } from "../../../../apps/web/src/server/api/code/code.hub";
 import { createWorkspace } from "../../../../apps/web/src/server/api/code/code.workspace";
@@ -97,12 +98,13 @@ async function newProject(): Promise<ProjectView> {
  * `refs/pull/7/head` in the "GitHub" repository, never as a branch there.
  * Answers the head sha.
  */
-async function forkPull(lines: string[]): Promise<string> {
+async function forkPull(lines: string[], author = "maria"): Promise<string> {
   const fork = join(local.home, "fork");
   if (!existsSync(fork)) {
     await sh(local, `git clone --quiet ${bare} ${fork}`);
     github.pulls.push({
       number: 7,
+      author,
       head: "maria:retry-webhooks",
       base: "main",
       title: "Retry webhooks with backoff",
@@ -282,5 +284,169 @@ describe("PR reviews", () => {
     expect((await call<PullReviewView[]>("GET", "/reviews")).body.data).toEqual([]);
     const files = await call("GET", `/threads/${encodeURIComponent(review.key)}/review/files`);
     expect(files.status).toBe(404);
+  });
+});
+
+describe("submitting a PR review", () => {
+  const open = async () =>
+    (await call<PullReviewView>("POST", "/reviews", { pr: "acme/web#7" })).body.data!;
+  const comments = (id: string) => `/reviews/${id}/comments`;
+
+  it("posts the pending comments with the verdict at the head the owner read, apart from the assistant's", async () => {
+    await newProject();
+    const head = await forkPull([
+      `printf 'export const a = 2;\\nexport const b = 3;\\n' > src/a.ts`,
+    ]);
+    const review = await open();
+    expect(review.mine).toBe(false);
+    await call("POST", comments(review.id), {
+      path: "src/a.ts",
+      startLine: 2,
+      endLine: 2,
+      body: "Name this",
+    });
+    await call("POST", comments(review.id), {
+      path: "src/a.ts",
+      side: "old",
+      startLine: 1,
+      endLine: 1,
+      body: "Why drop 1?",
+    });
+    // A comment for the assistant stays out of the review.
+    await call("POST", `/threads/${encodeURIComponent(review.key)}/review/drafts`, {
+      path: "src/a.ts",
+      startLine: 1,
+      endLine: 2,
+      body: "Explain this",
+    });
+
+    const res = await call<{ url: string; comments: number }>(
+      "POST",
+      `/reviews/${review.id}/submit`,
+      { event: "REQUEST_CHANGES", body: "Two small things" },
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toEqual({
+      url: "https://github.com/acme/web/pull/7#pullrequestreview-1",
+      comments: 2,
+    });
+    expect(github.submitted).toEqual([
+      {
+        number: 7,
+        commitId: head,
+        event: "REQUEST_CHANGES",
+        body: "Two small things",
+        comments: [
+          { path: "src/a.ts", side: "RIGHT", line: 2, body: "Name this" },
+          { path: "src/a.ts", side: "LEFT", line: 1, body: "Why drop 1?" },
+        ],
+      },
+    ]);
+    expect((await call<ReviewDraft[]>("GET", comments(review.id))).body.data).toEqual([]);
+    const forAgent = (
+      await call<ReviewDraft[]>("GET", `/threads/${encodeURIComponent(review.key)}/review/drafts`)
+    ).body.data!;
+    expect(forAgent.map((d) => d.body)).toEqual(["Explain this"]);
+  });
+
+  it("sends a range as its first and last line", async () => {
+    await newProject();
+    await forkPull([`printf 'a\\nb\\nc\\n' > src/r.ts`]);
+    const review = await open();
+    await call("POST", comments(review.id), {
+      path: "src/r.ts",
+      startLine: 1,
+      endLine: 3,
+      body: "Simplify",
+    });
+
+    await call("POST", `/reviews/${review.id}/submit`, { event: "COMMENT" });
+
+    expect(github.submitted[0]?.comments).toEqual([
+      { path: "src/r.ts", side: "RIGHT", startLine: 1, line: 3, body: "Simplify" },
+    ]);
+  });
+
+  it("on the owner's own PR allows only a comment, as GitHub does", async () => {
+    await newProject();
+    await forkPull([`printf 'x\\n' > src/x.ts`], "ashik");
+    const review = await open();
+    expect(review.mine).toBe(true);
+    await call("POST", comments(review.id), {
+      path: "src/x.ts",
+      startLine: 1,
+      endLine: 1,
+      body: "Note to self",
+    });
+
+    const approve = await call("POST", `/reviews/${review.id}/submit`, { event: "APPROVE" });
+
+    expect(approve.status).toBe(400);
+    expect(approve.body.error?.message).toBe(
+      "GitHub does not let you approve or request changes on your own pull request. Submit it as a comment.",
+    );
+    expect(github.submitted).toEqual([]);
+    // The comment still waits, and goes as a comment.
+    const comment = await call("POST", `/reviews/${review.id}/submit`, { event: "COMMENT" });
+    expect(comment.status).toBe(200);
+    expect(github.submitted.map((r) => [r.event, r.comments.length])).toEqual([["COMMENT", 1]]);
+  });
+
+  it("refuses an empty comment review and a change request without a summary", async () => {
+    await newProject();
+    await forkPull([`printf 'x\\n' > src/x.ts`]);
+    const review = await open();
+
+    const empty = await call("POST", `/reviews/${review.id}/submit`, { event: "COMMENT" });
+    const bare = await call("POST", `/reviews/${review.id}/submit`, {
+      event: "REQUEST_CHANGES",
+      body: "  ",
+    });
+
+    expect([empty.status, empty.body.error?.message]).toEqual([
+      400,
+      "Add a comment or a summary first.",
+    ]);
+    expect([bare.status, bare.body.error?.message]).toEqual([
+      400,
+      "Say what to change: GitHub needs a summary to request changes.",
+    ]);
+    expect(github.submitted).toEqual([]);
+  });
+
+  it("sends the comments to the Code thread that opened the PR instead", async () => {
+    const project = await newProject();
+    await forkPull([`printf 'x\\n' > src/x.ts`], "ashik");
+    await db.insert(codePullRequests).values({
+      threadId: "fake:t9",
+      projectId: project.id,
+      number: 7,
+      url: "https://github.com/acme/web/pull/7",
+      headRef: "ta/x",
+      baseRef: "main",
+    });
+    const review = await open();
+    expect(review.codingThreadId).toBe("fake:t9");
+    await call("POST", comments(review.id), {
+      path: "src/x.ts",
+      startLine: 1,
+      endLine: 1,
+      quote: "x",
+      body: "Rename x",
+    });
+
+    const res = await call("POST", `/reviews/${review.id}/comments/to-thread`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toEqual({ threadId: "fake:t9", sent: 1 });
+    expect(harness.sent).toEqual([
+      {
+        nativeId: "t9",
+        message: "Review comments (1):\n\n**`src/x.ts:1`**\n```\nx\n```\nRename x",
+      },
+    ]);
+    expect(github.submitted).toEqual([]);
+    expect((await call<ReviewDraft[]>("GET", comments(review.id))).body.data).toEqual([]);
   });
 });

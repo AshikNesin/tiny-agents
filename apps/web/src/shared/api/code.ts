@@ -234,8 +234,21 @@ export interface PullReviewView {
   baseRef: string;
   headSha: string;
   fromFork: boolean;
+  /** The owner opened this PR: GitHub lets them comment on it, not approve it. */
+  mine: boolean;
   /** The assistant's thread, once the owner asked it something. */
   threadId: string | null;
+  /** The Code thread that opened this PR, when one did: its comments can go there instead. */
+  codingThreadId: string | null;
   archived: boolean;
   updatedAt: string;
+}
+
+/** How a PR review is submitted on GitHub. */
+export type ReviewVerdict = "COMMENT" | "APPROVE" | "REQUEST_CHANGES";
+
+/** `POST /code/reviews/:id/submit`. */
+export interface SubmitReviewBody {
+  event: ReviewVerdict;
+  body?: string;
 }

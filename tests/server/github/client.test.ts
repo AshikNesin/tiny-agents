@@ -282,6 +282,48 @@ describe("a check that ran more than once", () => {
   });
 });
 
+describe("submitting a review", () => {
+  it("sends its line comments with GitHub's sides, a range as start_line and line", async () => {
+    const fake = fakeFetch(() =>
+      json({ html_url: "https://github.com/acme/web/pull/7#pullrequestreview-1" }, 200),
+    );
+    const client = createGitHubClient(
+      createHttpsTransport({ token: async () => "t0ken", fetch: fake.impl }),
+    );
+    const out = await client.submitReview(repo, 7, {
+      commitId: "abc123",
+      event: "REQUEST_CHANGES",
+      body: "A few things",
+      comments: [
+        { path: "src/a.ts", side: "RIGHT", line: 12, body: "Cap this" },
+        { path: "src/b.ts", side: "LEFT", startLine: 3, line: 5, body: "Why remove?" },
+      ],
+    });
+    expect(out.url).toBe("https://github.com/acme/web/pull/7#pullrequestreview-1");
+    expect(fake.calls[0]).toMatchObject({
+      method: "POST",
+      path: "/repos/acme/web/pulls/7/reviews",
+      body: {
+        commit_id: "abc123",
+        event: "REQUEST_CHANGES",
+        body: "A few things",
+        comments: [
+          { path: "src/a.ts", side: "RIGHT", line: 12, body: "Cap this" },
+          {
+            path: "src/b.ts",
+            side: "LEFT",
+            start_side: "LEFT",
+            start_line: 3,
+            line: 5,
+            body: "Why remove?",
+          },
+        ],
+      },
+    });
+    expect(fake.calls[0]?.body).not.toHaveProperty("comments.0.start_line");
+  });
+});
+
 describe("the gh transport", () => {
   it("sends request bodies on stdin, never on the command line", async () => {
     const gh = fakeGh(() => ({ stdout: JSON.stringify({ id: 5 }) }));
