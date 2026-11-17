@@ -181,6 +181,10 @@ gutter numbers the lines, and long lines wrap.
 - **Hide sidebar** (top of the thread list) or ⌘B folds the list away on
   wide screens so the thread and Changes get the room; **Show sidebar** at
   the top left brings it back. The choice is remembered in this browser.
+- Drag the divider between the thread and its right panel to resize them
+  (or focus it: arrow keys, Shift for bigger steps, Home/End, Enter to
+  reset). The width is remembered in this browser; a double-click goes back
+  to the default split. Phones show one column, as before.
 - The thread's header reads `folder / title` (the project's name for a
   project thread), and each row in the list shows its pull request (`#12`,
   toned when it needs you, is fixing, passes or merged).

@@ -8,7 +8,8 @@
  * Layout, after t3code: a sidebar of threads grouped by project (with the
  * way back to the app, ⌘K, Archived and Settings) | thread | changes on wide
  * screens (the list steps aside for Changes until 2xl, and Hide sidebar or ⌘B
- * folds it away, remembered in this browser); one column at a time
+ * folds it away, remembered in this browser; the divider before the right
+ * panel resizes it, see ResizablePane); one column at a time
  * on phones (`/code` → `/code/new` or `/code/:id` → `/code/:id/changes`).
  * `/code/:id/review` shows the same Changes and Pull request at full width
  * (each side pane's Open as a page goes there).
@@ -47,6 +48,7 @@ import { useThreadCommenting } from "../../lib/code/comments";
 import { PullPanel } from "./PullPanel";
 import { ReviewPanel } from "./ReviewPanel";
 import { ReviewPage, type ReviewTab } from "./ReviewPage";
+import { ResizablePane } from "./ResizablePane";
 import { ReviewSidebar, type SideTab } from "./ReviewSidebar";
 
 const SIDE_TAB_KEY = "tiny-agents:code-side-tab";
@@ -305,7 +307,6 @@ export function CodePage() {
       />
     );
   };
-  const sidePane = "border-border flex w-full min-w-0 flex-col lg:w-[48%] lg:max-w-3xl lg:border-l";
   const sideTab: SideTab = prOpen && row?.projectId ? "pr" : "source";
   const sideContent = !sideOpen ? null : sideTab === "pr" ? pullPanel(false) : changesPanel(false);
 
@@ -351,6 +352,7 @@ export function CodePage() {
         <main
           className={cn(
             "relative min-w-0 flex-1 flex-col",
+            sideOpen && "lg:min-w-90",
             threadId
               ? sideOpen
                 ? "hidden lg:flex"
@@ -425,7 +427,7 @@ export function CodePage() {
         </main>
 
         {sideContent && threadId && (
-          <section className={sidePane} aria-label="Review panel">
+          <ResizablePane>
             <ReviewSidebar
               tab={sideTab}
               onTab={showTab}
@@ -439,7 +441,7 @@ export function CodePage() {
             >
               {sideContent}
             </ReviewSidebar>
-          </section>
+          </ResizablePane>
         )}
       </div>
     </div>
