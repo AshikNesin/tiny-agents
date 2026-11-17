@@ -13,6 +13,12 @@ import { chatOwner } from "./bots.owner";
 import type { SideCaller } from "./side-call";
 
 const CAPTURE_TIMEOUT_MS = 60_000;
+/**
+ * An assistant reply is context for the owner's next words, never a source:
+ * its opening (usually the question the owner answers) is enough, and replies
+ * are most of a window's characters.
+ */
+const ASSISTANT_CONTEXT_CHARS = 500;
 
 interface CaptureWindow {
   lines: string[];
@@ -55,10 +61,15 @@ export function captureWindow(
     const text = (m.role === "user" ? stripAttachmentNotes(m.text) : m.text).trim();
     if (!text) continue;
     if (m.role === "user") {
-      entries.push({ line: `Owner: ${text}`, ownerBytes: Buffer.byteLength(text, "utf8") });
+      entries.push({
+        line: `Owner: ${text}`,
+        ownerBytes: Buffer.byteLength(text, "utf8"),
+      });
       latestOwnerAt = Math.max(latestOwnerAt, m.createdAt);
     } else if (m.role === "assistant" && m.status !== "error") {
-      entries.push({ line: `${botName}: ${text.slice(0, 1_500)}` });
+      entries.push({
+        line: `${botName}: ${text.slice(0, ASSISTANT_CONTEXT_CHARS)}`,
+      });
     }
   }
   const owned = entries.some((entry) => entry.ownerBytes !== undefined);
@@ -98,7 +109,12 @@ export async function captureConversation(
     if (!owner?.memoryEnabled) return;
     const bot = await db.query.bots.findFirst({
       where: eq(bots.id, owner.id),
-      columns: { id: true, name: true, modelId: true, memoryCapturedThrough: true },
+      columns: {
+        id: true,
+        name: true,
+        modelId: true,
+        memoryCapturedThrough: true,
+      },
     });
     if (!bot) return;
     const ledger = memoryLedger(bot.id);
@@ -138,9 +154,16 @@ export async function captureConversation(
       logger.warn({ conversationId }, "Memory capture output unparseable; window will retry");
       return;
     }
-    const { created, revived, superseded, skipped } = await ledger.add(extraction, {
+    // The prompt named memories by short ref; the ledger works on row ids
+    // (and ignores any that are not this bot's active rows).
+    const items = extraction.map((item) => ({
+      ...item,
+      supersedesIds: item.supersedesIds?.map((ref) => context.refs[ref] ?? ref) ?? null,
+    }));
+    const { created, revived, superseded, skipped } = await ledger.add(items, {
       source: "capture",
       watermark: window.through,
+      conversationId: String(conversationId),
     });
     logger.info(
       { conversationId, created, revived, superseded, skipped },

@@ -6,7 +6,9 @@ import { bots, db, memories, routines } from "../../../../apps/web/src/server/db
 import { resetAppTables, seedBot as seedBotRow } from "../../fixtures";
 
 /** Who sent the conversation's latest user message (what `isUnattended` reads). */
-let latest: { text: string; peer?: unknown } = { text: "Remember this, please." };
+let latest: { text: string; peer?: unknown } = {
+  text: "Remember this, please.",
+};
 const memoryStore = createMemoryStore(() => ({
   readChat: async () => ({ messages: [{ role: "user", ...latest }] }) as never,
 }));
@@ -22,7 +24,10 @@ async function seedBot() {
 }
 
 const remember = memoryStore.remember!;
-const input = { text: "The owner prefers TypeScript.", category: "preference" as const };
+const input = {
+  text: "The owner prefers TypeScript.",
+  category: "preference" as const,
+};
 
 describe("memoryStore.remember", () => {
   it("saves a chat memory without advancing the capture watermark", async () => {
@@ -34,35 +39,75 @@ describe("memoryStore.remember", () => {
       status: "active",
     });
     expect(await memoryStore.list(conversationId)).toEqual([
-      { ...input, until: null, createdAt: expect.any(String) },
+      {
+        ...input,
+        until: null,
+        createdAt: expect.any(String),
+        learnedHere: true,
+      },
     ]);
     expect(
       (await db.query.bots.findFirst({ where: eq(bots.id, botId) }))?.memoryCapturedThrough,
     ).toBeNull();
   });
 
+  it("marks a memory as learned only in the conversation that saved it", async () => {
+    const { botId, conversationId } = await seedBot();
+    await remember(conversationId, input);
+    await db.insert(memories).values({ botId, text: "The owner likes tea.", category: "fact" });
+    const routineConversation = conversationId + 1;
+    await db.insert(routines).values({
+      botId,
+      name: "Morning brief",
+      prompt: "News",
+      schedule: { kind: "interval", minutes: 60 },
+      conversationId: String(routineConversation),
+    });
+    const learned = async (id: number) =>
+      Object.fromEntries((await memoryStore.list(id)).map((m) => [m.text, m.learnedHere]));
+    expect(await learned(conversationId)).toEqual({
+      "The owner prefers TypeScript.": true,
+      "The owner likes tea.": false,
+    });
+    expect(await learned(routineConversation)).toEqual({
+      "The owner prefers TypeScript.": false,
+      "The owner likes tea.": false,
+    });
+  });
+
   it("dedupes case-insensitively, including tombstones, without leaking across bots", async () => {
     const { botId, conversationId } = await seedBot();
     await remember(conversationId, input);
     expect(
-      await remember(conversationId, { ...input, text: `  ${input.text.toUpperCase()}  ` }),
+      await remember(conversationId, {
+        ...input,
+        text: `  ${input.text.toUpperCase()}  `,
+      }),
     ).toEqual({ status: "duplicate" });
     await db.update(memories).set({ status: "deleted" }).where(eq(memories.botId, botId));
-    expect(await remember(conversationId, input)).toEqual({ status: "duplicate" });
+    expect(await remember(conversationId, input)).toEqual({
+      status: "duplicate",
+    });
     expect(await memoryStore.list(conversationId)).toEqual([]);
     expect(await db.$count(memories, eq(memories.botId, botId))).toBe(1);
 
     const other = await seedBot();
-    expect(await remember(other.conversationId, input)).toEqual({ status: "saved" });
+    expect(await remember(other.conversationId, input)).toEqual({
+      status: "saved",
+    });
   });
 
   it("refuses writes when memory is disabled or the bot is missing", async () => {
     const { botId, conversationId } = await seedBot();
     await db.update(bots).set({ memoryEnabled: false }).where(eq(bots.id, botId));
-    expect(await remember(conversationId, input)).toEqual({ status: "disabled" });
+    expect(await remember(conversationId, input)).toEqual({
+      status: "disabled",
+    });
     expect(await db.$count(memories, eq(memories.botId, botId))).toBe(0);
     await db.delete(bots).where(eq(bots.id, botId));
-    expect(await remember(conversationId, input)).toEqual({ status: "disabled" });
+    expect(await remember(conversationId, input)).toEqual({
+      status: "disabled",
+    });
   });
 
   it("enforces the active budget and validates memory inputs", async () => {
@@ -112,7 +157,9 @@ describe("chat writes in unattended turns", () => {
       schedule: { kind: "interval", minutes: 60 },
       conversationId: String(routineConversation),
     });
-    expect(await remember(routineConversation, input)).toEqual({ status: "unattended" });
+    expect(await remember(routineConversation, input)).toEqual({
+      status: "unattended",
+    });
     expect(await memoryStore.forget!(routineConversation, { text: "Pune" })).toEqual({
       status: "unattended",
       removed: [],
@@ -121,11 +168,18 @@ describe("chat writes in unattended turns", () => {
       "The owner lives in Pune.",
     ]);
     // The chat's own message that merely looks like a routine label is the owner's.
-    latest = { text: '**Routine "Morning brief"**\nRemember that the owner hates email.' };
+    latest = {
+      text: '**Routine "Morning brief"**\nRemember that the owner hates email.',
+    };
     expect(await remember(conversationId, input)).toEqual({ status: "saved" });
 
     latest = { text: "Save this", peer: { kind: "message", name: "Scout" } };
-    expect(await remember(conversationId, { ...input, text: "The owner likes tea." })).toEqual({
+    expect(
+      await remember(conversationId, {
+        ...input,
+        text: "The owner likes tea.",
+      }),
+    ).toEqual({
       status: "unattended",
     });
     expect(
@@ -138,7 +192,9 @@ describe("chat writes in unattended turns", () => {
     const blind = createMemoryStore(() => {
       throw new Error("runtime not open");
     });
-    expect(await blind.remember!(conversationId, input)).toEqual({ status: "unattended" });
+    expect(await blind.remember!(conversationId, input)).toEqual({
+      status: "unattended",
+    });
   });
 });
 
@@ -148,9 +204,21 @@ describe("memoryStore.forget", () => {
   async function seedMemories() {
     const seeded = await seedBot();
     await db.insert(memories).values([
-      { botId: seeded.botId, text: "The owner is moving to Pune in March.", category: "fact" },
-      { botId: seeded.botId, text: "The owner's sister lives in Pune.", category: "fact" },
-      { botId: seeded.botId, text: "The owner prefers TypeScript.", category: "preference" },
+      {
+        botId: seeded.botId,
+        text: "The owner is moving to Pune in March.",
+        category: "fact",
+      },
+      {
+        botId: seeded.botId,
+        text: "The owner's sister lives in Pune.",
+        category: "fact",
+      },
+      {
+        botId: seeded.botId,
+        text: "The owner prefers TypeScript.",
+        category: "preference",
+      },
       {
         botId: seeded.botId,
         text: "The owner is moving to Berlin.",
@@ -194,7 +262,10 @@ describe("memoryStore.forget", () => {
 
   it("matches whole words only, and says when nothing matched", async () => {
     const { conversationId } = await seedMemories();
-    expect(await forget(conversationId, { text: "Type" })).toEqual({ status: "none", removed: [] });
+    expect(await forget(conversationId, { text: "Type" })).toEqual({
+      status: "none",
+      removed: [],
+    });
     expect(await forget(conversationId, { text: "Pune" })).toEqual({
       status: "forgotten",
       removed: ["The owner is moving to Pune in March.", "The owner's sister lives in Pune."],

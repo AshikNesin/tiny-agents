@@ -134,6 +134,13 @@
       "when": 1794894003180,
       "tag": "0018_push_subscriptions",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1794920761368,
+      "tag": "0019_memory_conversation",
+      "breakpoints": true
     }
   ]
 }

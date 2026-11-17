@@ -54,6 +54,8 @@ interface AddOptions {
   source: MemorySource;
   /** A capture's window end: the watermark advances in the same transaction. */
   watermark?: Date;
+  /** The conversation the items were learned in (capture or `remember`). */
+  conversationId?: string;
 }
 
 interface AddResult {
@@ -67,10 +69,16 @@ interface AddResult {
   rows: MemoryRow[];
 }
 
-/** What the capture prompt lists: current memories with ids, and what the owner removed. */
+/**
+ * What the capture prompt lists: current memories under short refs (`m1`,
+ * `m2`, … in prompt order, as mem0 does), and what the owner removed. A
+ * 36-character row id costs tokens on every line and invites a misspelled
+ * supersede; `refs` maps each ref back to its row.
+ */
 interface PromptContext {
   current: string | null;
   removed: string | null;
+  refs: Record<string, string>;
 }
 
 export interface MemoryLedger {
@@ -94,7 +102,16 @@ export interface MemoryLedger {
 
 type Tx = Pick<AppDatabase, "select" | "insert" | "update">;
 
-const key = (text: string) => text.trim().toLowerCase();
+/**
+ * The dedupe key: case, runs of whitespace and end punctuation never make a
+ * second memory ("The owner prefers pnpm." is "the owner  prefers pnpm").
+ */
+const key = (text: string) =>
+  text
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/[\s.!?;:,]+$/u, "");
 
 const notExpired = (now: Date) => or(isNull(memories.until), gt(memories.until, now));
 
@@ -141,7 +158,13 @@ export function memoryLedger(botId: string): MemoryLedger {
   }
 
   async function add(items: readonly LedgerItem[], options: AddOptions): Promise<AddResult> {
-    const result: AddResult = { created: 0, revived: 0, superseded: 0, skipped: 0, rows: [] };
+    const result: AddResult = {
+      created: 0,
+      revived: 0,
+      superseded: 0,
+      skipped: 0,
+      rows: [],
+    };
     return db.transaction((tx) => {
       const now = new Date();
       expire(tx, now);
@@ -156,6 +179,7 @@ export function memoryLedger(botId: string): MemoryLedger {
           until: item.until ? new Date(item.until) : null,
           confidence: item.confidence ?? null,
           source: options.source,
+          conversationId: options.conversationId ?? null,
         };
         const match = byText.get(key(text));
         if (match && (activeIds.has(match.id) || options.source !== "manual")) {
@@ -193,7 +217,11 @@ export function memoryLedger(botId: string): MemoryLedger {
         );
         if (replaced.length === 0) continue;
         tx.update(memories)
-          .set({ status: "superseded", supersededById: row.id, supersededAt: now })
+          .set({
+            status: "superseded",
+            supersededById: row.id,
+            supersededAt: now,
+          })
           .where(inArray(memories.id, replaced))
           .run();
         for (const id of replaced) activeIds.delete(id);
@@ -266,10 +294,12 @@ export function memoryLedger(botId: string): MemoryLedger {
   }
 
   async function promptContext(now = new Date()): Promise<PromptContext> {
-    const current = (await active(now))
+    const rows = await active(now);
+    const refs = Object.fromEntries(rows.map((m, i) => [`m${i + 1}`, m.id]));
+    const current = rows
       .map(
-        (m) =>
-          `- ${m.id} — ${m.text}${m.until ? ` (until ${m.until.toISOString().slice(0, 10)})` : ""}`,
+        (m, i) =>
+          `- m${i + 1} — ${m.text}${m.until ? ` (until ${m.until.toISOString().slice(0, 10)})` : ""}`,
       )
       .join("\n");
     const removed = db
@@ -281,12 +311,20 @@ export function memoryLedger(botId: string): MemoryLedger {
       .all()
       .map((m) => `- ${m.text}`)
       .join("\n");
-    return { current: current || null, removed: removed || null };
+    return { current: current || null, removed: removed || null, refs };
   }
 
   async function advanceWatermark(at: Date): Promise<void> {
     setWatermark(db, at);
   }
 
-  return { add, tombstone, restore, active, history, promptContext, advanceWatermark };
+  return {
+    add,
+    tombstone,
+    restore,
+    active,
+    history,
+    promptContext,
+    advanceWatermark,
+  };
 }

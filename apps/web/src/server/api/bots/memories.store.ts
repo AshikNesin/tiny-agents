@@ -53,7 +53,10 @@ export function createMemoryStore(
       if (typeof bot === "string") return { status: bot };
       const item = extractedMemorySchema.parse({ ...input, confidence: 1 });
       // No watermark: background capture still reads this turn.
-      const result = await memoryLedger(bot.id).add([item], { source: "capture" });
+      const result = await memoryLedger(bot.id).add([item], {
+        source: "capture",
+        conversationId: String(conversationId),
+      });
       return { status: result.created > 0 ? "saved" : "duplicate" };
     },
 
@@ -83,6 +86,7 @@ export function createMemoryStore(
           category: m.category,
           until: m.until?.toISOString() ?? null,
           createdAt: m.createdAt.toISOString(),
+          learnedHere: m.conversationId === String(conversationId),
         }))
         .sort((a, b) => order(a.category) - order(b.category));
     },
