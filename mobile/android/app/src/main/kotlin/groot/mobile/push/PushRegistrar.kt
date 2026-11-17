@@ -15,8 +15,11 @@ import groot.mobile.data.api.ApiException
 import groot.mobile.data.api.PushDeviceBody
 import groot.mobile.data.api.TinyAgentsApi
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
@@ -36,7 +39,20 @@ data class PushStatus(
     val via: String? = null,
     val detail: String? = null,
 ) {
-    enum class State { Unknown, Registering, On, PermissionOff, NoDistributor, Failed, Unsupported }
+    enum class State { Unknown, Registering, On, PermissionOff, NoDistributor, ServerTooOld, Failed, Unsupported }
+
+    companion object {
+        /**
+         * Where the server's answer to `GET /notifications/vapid-key` leaves this phone. A guest
+         * gets 403 and no notifications; a server from before issue #306 has no such route (404,
+         * or a page that isn't JSON), which the owner fixes by updating the server.
+         */
+        fun ofKeyError(error: ApiException): PushStatus = when {
+            error.status == 403 -> PushStatus(State.Unsupported)
+            error.status == 404 || error.code == "BAD_RESPONSE" -> PushStatus(State.ServerTooOld)
+            else -> PushStatus(State.Failed, detail = error.message)
+        }
+    }
 }
 
 /**
@@ -54,6 +70,14 @@ class PushRegistrar(
     private val store = appContext.pushDataStore
     private val _status = MutableStateFlow(PushStatus())
     val status: StateFlow<PushStatus> = _status.asStateFlow()
+    private val _retries = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+
+    /** Settings' "Try again": the open activity registers again (it can ask for the permission). */
+    val retries: SharedFlow<Unit> = _retries.asSharedFlow()
+
+    fun retry() {
+        _retries.tryEmit(Unit)
+    }
 
     /**
      * After sign-in, on each launch: fetch the server's key, ask for the notification
@@ -65,8 +89,7 @@ class PushRegistrar(
         val key = try {
             api.vapidKey()
         } catch (error: ApiException) {
-            // A guest (403) or an older server (404): no phone notifications here.
-            _status.value = PushStatus(PushStatus.State.Unsupported)
+            _status.value = PushStatus.ofKeyError(error)
             return
         } catch (error: Exception) {
             _status.update { it.copy(state = PushStatus.State.Failed, detail = error.message) }
