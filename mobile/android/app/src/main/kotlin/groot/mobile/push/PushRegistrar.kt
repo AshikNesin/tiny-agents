@@ -1,7 +1,6 @@
 package groot.mobile.push
 
 import android.content.Context
-import android.content.pm.PackageManager
 import android.os.Build
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -33,11 +32,9 @@ private val Context.pushDataStore: DataStore<Preferences> by preferencesDataStor
 /** Where this phone stands with the server's notifications, for Settings. */
 data class PushStatus(
     val state: State = State.Unknown,
-    /** "Google" for the embedded FCM distributor, else the distributor app's name (ntfy, say). */
-    val via: String? = null,
     val detail: String? = null,
 ) {
-    enum class State { Unknown, Registering, On, PermissionOff, NoDistributor, ServerTooOld, Failed, Unsupported }
+    enum class State { Unknown, Registering, On, PermissionOff, NoGooglePlay, ServerTooOld, Failed, Unsupported }
 
     companion object {
         /**
@@ -53,24 +50,10 @@ data class PushStatus(
     }
 }
 
-/** A push service this phone can deliver through: Google (the embedded distributor) or a UnifiedPush app. */
-data class PushService(val id: String, val label: String)
-
-/**
- * Which distributor to register with: the owner's choice while it is installed, else Google
- * when the phone has Play services (no setup), else the first UnifiedPush app (ntfy, say).
- * [own] is this app's package, which is the embedded Google distributor.
- */
-fun pickDistributor(own: String, installed: List<String>, chosen: String?, hasPlayServices: Boolean): String? =
-    chosen?.takeIf { it in installed }
-        ?: own.takeIf { hasPlayServices && it in installed }
-        ?: installed.firstOrNull { it != own }
-        ?: own.takeIf { it in installed }
-
 /**
  * Registers this phone for the server's Web Push notifications (issue #306) through
- * UnifiedPush: Google's embedded FCM distributor by default (Play services, no Firebase
- * project), or a UnifiedPush app such as ntfy when the owner picks it in Settings. The server's VAPID key binds the
+ * UnifiedPush's embedded FCM distributor, which delivers through Google Play services and needs
+ * no Firebase project. Only Google: UnifiedPush apps such as ntfy are not offered. The server's VAPID key binds the
  * endpoint to that server; a different key (another server, a rotated key) registers again.
  */
 class PushRegistrar(
@@ -89,24 +72,6 @@ class PushRegistrar(
 
     fun retry() {
         _retries.tryEmit(Unit)
-    }
-
-    /** The push services installed on this phone, Google first. */
-    fun services(): List<PushService> =
-        UnifiedPush.getDistributors(appContext)
-            .sortedBy { it != appContext.packageName }
-            .map { PushService(it, labelOf(it)) }
-
-    /** Register through [id] from now on (Settings' Push service). */
-    suspend fun choose(id: String) {
-        store.edit { it[CHOICE] = id }
-        retry()
-    }
-
-    private fun labelOf(distributor: String): String {
-        if (distributor == appContext.packageName) return "Google"
-        val pm = appContext.packageManager
-        return runCatching { pm.getApplicationLabel(pm.getApplicationInfo(distributor, 0)).toString() }.getOrDefault(distributor)
     }
 
     private fun hasPlayServices(): Boolean =
@@ -143,15 +108,15 @@ class PushRegistrar(
             }
         }
         _status.value = PushStatus(PushStatus.State.Registering)
-        val installed = UnifiedPush.getDistributors(appContext)
-        val target = pickDistributor(appContext.packageName, installed, prefs[CHOICE], hasPlayServices())
-        if (target == null) {
-            _status.value = PushStatus(PushStatus.State.NoDistributor)
+        if (!hasPlayServices()) {
+            _status.value = PushStatus(PushStatus.State.NoGooglePlay)
             return
         }
+        // This app's package is the embedded Google distributor.
+        val target = appContext.packageName
         val current = UnifiedPush.getSavedDistributor(appContext)
         if (current != target) {
-            // Moving to another push service: the server drops the old endpoint, the old service the app.
+            // 0.6.0 and 0.6.1 could register through a UnifiedPush app (ntfy): drop that endpoint.
             if (current != null) {
                 forgetDevice()
                 withContext(Dispatchers.Main) { UnifiedPush.removeDistributor(appContext) }
@@ -168,20 +133,19 @@ class PushRegistrar(
             return
         }
         if (session.token == null) return
-        val embedded = UnifiedPush.getAckDistributor(appContext) == appContext.packageName
         try {
             val id = api.registerPushDevice(
                 PushDeviceBody(
                     endpoint = endpoint.url,
                     p256dh = keys.pubKey,
                     auth = keys.auth,
-                    distributor = if (embedded) "fcm" else "unifiedpush",
+                    distributor = "fcm",
                     label = "${Build.MANUFACTURER.replaceFirstChar(Char::titlecase)} ${Build.MODEL}".trim(),
                     appVersion = BuildConfig.VERSION_NAME,
                 ),
             )
             store.edit { it[DEVICE_ID] = id }
-            _status.value = PushStatus(PushStatus.State.On, via = UnifiedPush.getAckDistributor(appContext)?.let(::labelOf))
+            _status.value = PushStatus(PushStatus.State.On)
         } catch (error: Exception) {
             Log.w(TAG, error) { "Registering the push endpoint failed" }
             _status.value = PushStatus(PushStatus.State.Failed, detail = error.message)
@@ -200,10 +164,10 @@ class PushRegistrar(
         )
     }
 
-    /** The distributor dropped this app (uninstalled, or the owner removed it there). */
+    /** Google dropped this registration: Settings' "Try again" registers afresh. */
     suspend fun onUnregistered() {
         forgetDevice()
-        _status.value = PushStatus(PushStatus.State.NoDistributor)
+        _status.value = PushStatus(PushStatus.State.Failed, detail = "Google stopped delivering to this phone")
     }
 
     /** Before signing out: the server stops sending here, and the distributor forgets the app. */
@@ -235,8 +199,6 @@ class PushRegistrar(
         val SERVER = stringPreferencesKey("server")
         val VAPID = stringPreferencesKey("vapid")
         val DEVICE_ID = stringPreferencesKey("device_id")
-        /** The push service the owner picked; none means Google when the phone has it. */
-        val CHOICE = stringPreferencesKey("distributor")
         const val GOOGLE_PLAY_SERVICES = "com.google.android.gms"
     }
 }

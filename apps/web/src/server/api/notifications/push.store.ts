@@ -14,7 +14,6 @@ import type {
 import { checkPublicUrl, isPrivateAddress } from "@tiny-agents/sandbox";
 import { db, pushSubscriptions } from "../../db";
 import { app } from "../../app-root";
-import { appEnv } from "../../env";
 import { pushSubscriptionMachine } from "../../../shared/machines/push-subscription";
 import type { PushDeviceBody, PushDeviceData } from "../../../shared/api/push";
 
@@ -25,12 +24,9 @@ const FAILING_AFTER = 5;
 
 const ERROR_MAX = 200;
 
-const allowPrivate = () => appEnv().PUSH_ALLOW_PRIVATE_ENDPOINTS?.trim().toLowerCase() === "true";
-
 /**
- * An endpoint the server may POST to: https, no credentials, and (unless
- * PUSH_ALLOW_PRIVATE_ENDPOINTS) not a local name or private address, also
- * after DNS.
+ * An endpoint the server may POST to: https, no credentials, and not a local
+ * name or private address, also after DNS.
  */
 async function checkEndpoint(endpoint: string): Promise<URL> {
   let url: URL;
@@ -42,21 +38,16 @@ async function checkEndpoint(endpoint: string): Promise<URL> {
   if (url.protocol !== "https:") throw Boom.badRequest("The push endpoint must use https");
   if (url.username || url.password)
     throw Boom.badRequest("The push endpoint can't hold credentials");
-  if (allowPrivate()) return url;
   try {
     checkPublicUrl(endpoint);
   } catch {
-    throw Boom.badRequest(
-      "The push endpoint is on a private address. Set PUSH_ALLOW_PRIVATE_ENDPOINTS=true to allow it.",
-    );
+    throw Boom.badRequest("The push endpoint is on a private address");
   }
   const host = url.hostname.replace(/^\[|\]$/g, "");
   const addresses = await lookup(host, { all: true }).catch(() => []);
   if (addresses.length === 0) throw Boom.badRequest("The push endpoint's host doesn't resolve");
   if (addresses.some((entry) => isPrivateAddress(entry.address))) {
-    throw Boom.badRequest(
-      "The push endpoint resolves to a private address. Set PUSH_ALLOW_PRIVATE_ENDPOINTS=true to allow it.",
-    );
+    throw Boom.badRequest("The push endpoint resolves to a private address");
   }
   return url;
 }

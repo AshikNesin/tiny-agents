@@ -20,11 +20,13 @@ host built into the APK.
   encryption, RFC 8292 VAPID). Its contract with a device is an endpoint URL
   plus `p256dh` and `auth`. It makes its own VAPID key on first use, sealed
   with `SECRETS_KEY` when one is set.
-- **The app receives through UnifiedPush** with the embedded FCM distributor:
-  on a phone with Google Play services, FCM's Web Push endpoint delivers; on
-  one without, a distributor such as ntfy (self-hosted if the owner likes).
-  The Firebase project for `io.nesin.tinyagents` belongs to the app, not to
-  any server.
+- **The app receives through Google only**, with UnifiedPush's embedded FCM
+  distributor: it registers through Google Play services with the server's
+  VAPID key and gets FCM's Web Push endpoint. No Firebase project is needed.
+  UnifiedPush apps such as ntfy are not offered (decided 2026-11-17): a
+  self-hosted ntfy that refuses anonymous writes answers every push with 403,
+  and one path is simpler to support. A phone without Play services gets no
+  phone notifications.
 - **Every channel runs its own pipeline** under one `NotificationHub`:
   Pushover stays as an optional, parallel channel with its own switch.
 - **The payload is data the app renders**: a tag to replace or take back the
@@ -40,8 +42,9 @@ host built into the APK.
 - If Google's Web Push path for FCM stops working, an author-run relay that
   exposes a Web Push endpoint can replace it with a change to the app alone;
   servers keep working unchanged.
-- The release-hub APK carries the proprietary Firebase library. A FOSS build
-  would drop the embedded distributor and rely on ntfy.
+- Phones without Google Play services get no phone notifications. The server
+  stays plain Web Push, so a UnifiedPush or browser path could return later
+  with a change to the app alone.
 - Changing `SECRETS_KEY` without rotating makes a new VAPID key and revokes
   every device; the app registers again when it next sees the key changed.
 

@@ -5,7 +5,6 @@ import android.content.Intent
 import android.provider.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -20,7 +19,6 @@ import groot.kit.settings.SettingsSection
 import groot.kit.theme.ThemeMode
 import groot.mobile.R
 import groot.mobile.data.Session
-import groot.mobile.push.PushService
 import groot.mobile.push.PushStatus
 import groot.mobile.ui.brand.AppIcons
 import groot.mobile.ui.makerUrl
@@ -38,8 +36,6 @@ fun SettingsRoute(
     val push by viewModel.push.collectAsStateWithLifecycle()
     val testNote by viewModel.testNote.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    // Read again when the state changes: a push app installed or removed shows up on the next try.
-    val pushServices = remember(push) { viewModel.pushServices() }
     SettingsScreen(
         themeMode = themeMode,
         onThemeModeChange = viewModel::setThemeMode,
@@ -56,8 +52,6 @@ fun SettingsRoute(
         onSendTest = viewModel::sendTestNotification,
         onRetryPush = viewModel::retryPush,
         onOpenNotificationSettings = { openNotificationSettings(context) },
-        pushServices = pushServices,
-        onChoosePushService = viewModel::choosePushService,
     )
 }
 
@@ -79,8 +73,6 @@ fun SettingsScreen(
     onSendTest: () -> Unit = {},
     onRetryPush: () -> Unit = {},
     onOpenNotificationSettings: () -> Unit = {},
-    pushServices: List<PushService> = emptyList(),
-    onChoosePushService: (String) -> Unit = {},
 ) {
     GrootSettingsScreen(
         themeMode = themeMode,
@@ -125,18 +117,6 @@ fun SettingsScreen(
                     summary = pushSummary(push),
                     icon = rememberVectorPainter(AppIcons.Bell),
                 )
-                // Google, or a UnifiedPush app such as ntfy: shown when there is a choice.
-                if (pushServices.size > 1) {
-                    val current = pushServices.indexOfFirst { it.label == push.via }.coerceAtLeast(0)
-                    val next = pushServices[(current + 1).mod(pushServices.size)]
-                    SettingsNavigationRow(
-                        title = "Push service",
-                        value = push.via ?: pushServices.first().label,
-                        summary = "Tap to use ${next.label} instead",
-                        icon = rememberVectorPainter(AppIcons.Server),
-                        onClick = { onChoosePushService(next.id) },
-                    )
-                }
                 when (push.state) {
                     PushStatus.State.On -> SettingsActionRow(
                         title = "Send test notification",
@@ -166,17 +146,17 @@ private fun pushTitle(push: PushStatus): String = when (push.state) {
     PushStatus.State.On -> "On"
     PushStatus.State.Registering, PushStatus.State.Unknown -> "Setting up"
     PushStatus.State.PermissionOff -> "Off"
-    PushStatus.State.NoDistributor -> "No push service"
+    PushStatus.State.NoGooglePlay -> "Needs Google Play services"
     PushStatus.State.ServerTooOld -> "Your server needs an update"
     PushStatus.State.Failed -> "Not working"
     PushStatus.State.Unsupported -> "Not offered"
 }
 
 private fun pushSummary(push: PushStatus): String? = when (push.state) {
-    PushStatus.State.On -> push.via?.let { "Through $it" }
+    PushStatus.State.On -> "Through Google"
     PushStatus.State.Registering, PushStatus.State.Unknown -> null
     PushStatus.State.PermissionOff -> "Allow notifications for this app in Android settings"
-    PushStatus.State.NoDistributor -> "Install a UnifiedPush app such as ntfy, or Google Play services"
+    PushStatus.State.NoGooglePlay -> "Phone notifications come through Google Play services, which this phone doesn't have"
     PushStatus.State.ServerTooOld -> "It doesn't send phone notifications yet. Update it (Settings, Updates on the web), then try again."
     PushStatus.State.Failed -> push.detail
     PushStatus.State.Unsupported -> null

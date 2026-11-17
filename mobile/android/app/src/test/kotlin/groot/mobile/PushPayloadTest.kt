@@ -9,7 +9,6 @@ import groot.mobile.push.PushChannel
 import groot.mobile.push.PushPayload
 import groot.mobile.push.PushStatus
 import groot.mobile.push.decisionOf
-import groot.mobile.push.pickDistributor
 import groot.mobile.push.spec
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -86,19 +85,5 @@ class PushPayloadTest {
             PushStatus(PushStatus.State.Failed, detail = "Server error"),
             PushStatus.ofKeyError(ApiException(500, "INTERNAL", "Server error")),
         )
-    }
-
-    @Test
-    fun `Google is the default push service, and the owner's pick wins while it is installed`() {
-        val own = "io.nesin.tinyagents"
-        val installed = listOf(own, "io.heckel.ntfy")
-        // ntfy installed, nothing picked: Google, which needs no setup.
-        assertEquals(own, pickDistributor(own, installed, chosen = null, hasPlayServices = true))
-        // The owner picked ntfy in Settings.
-        assertEquals("io.heckel.ntfy", pickDistributor(own, installed, chosen = "io.heckel.ntfy", hasPlayServices = true))
-        // No Play services: the UnifiedPush app.
-        assertEquals("io.heckel.ntfy", pickDistributor(own, installed, chosen = null, hasPlayServices = false))
-        // A pick that was uninstalled falls back to Google.
-        assertEquals(own, pickDistributor(own, listOf(own), chosen = "io.heckel.ntfy", hasPlayServices = true))
     }
 }

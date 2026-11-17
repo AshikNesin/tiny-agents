@@ -129,8 +129,8 @@ the branch `chore/groot-mobile-sync`.
 
 ## Limits
 
-- Android only. Phone notifications come through Web Push (UnifiedPush, or
-  Google's embedded distributor), with Approve and Deny buttons on approvals;
+- Android only. Phone notifications come through Web Push via Google
+  Play services, with Approve and Deny buttons on approvals;
   Pushover still works alongside. Tapping one opens the app (see "Links from
   notifications").
 - The Code page, the Models section of Settings, passkey sign-in, creating

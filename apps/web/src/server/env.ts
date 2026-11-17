@@ -31,7 +31,6 @@ const appEnvSchema = z.object({
   COMPUTER_EXTRA_PACKAGES: z.string().optional(),
   TINYFISH_API_KEY: z.string().optional(),
   /** "true": phones may register Web Push endpoints on private or local addresses (ntfy on a LAN or Tailscale). */
-  PUSH_ALLOW_PRIVATE_ENDPOINTS: z.string().optional(),
   TZ: z.string().optional(),
   TINY_AGENTS_FAUX_TOKENS_PER_SECOND: z.string().optional(),
   /** Set by Vitest, which cannot load the .ts upload-extraction worker. */
