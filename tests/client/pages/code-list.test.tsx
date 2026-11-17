@@ -271,7 +271,7 @@ describe("Code thread list", () => {
     expect(within(bar).getByText("Select threads")).toBeInTheDocument();
   });
 
-  it("lists every thread flat, newest first, until grouping by repository is on", async () => {
+  it("groups by repository by default, and lists every thread flat, newest first, with it off", async () => {
     const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
     render(
       <MemoryRouter>
@@ -286,7 +286,11 @@ describe("Code thread list", () => {
         />
       </MemoryRouter>,
     );
-    // No folder headers: one list, newest first.
+    const group = screen.getByRole("button", { name: "Group by repository" });
+    expect(group).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getAllByTestId("code-group")).toHaveLength(2);
+    // Off: no folder headers, one list, newest first.
+    await userEvent.click(group);
     expect(screen.queryAllByTestId("code-group")).toHaveLength(0);
     expect(
       screen
@@ -298,12 +302,11 @@ describe("Code thread list", () => {
     await userEvent.click(screen.getByRole("button", { name: "Search threads" }));
     expect(screen.getByRole("textbox", { name: "Search threads" })).toHaveFocus();
 
-    await userEvent.click(screen.getByRole("button", { name: "Group by repository" }));
-    expect(screen.getAllByTestId("code-group")).toHaveLength(2);
+    // The choice is remembered in this browser.
+    expect(window.localStorage.getItem("tiny-agents:code-grouped")).toBe("0");
   });
 
   it("groups threads by project, then by folder, each group with its own New thread", async () => {
-    window.localStorage.setItem("tiny-agents:code-grouped", "1");
     render(
       <MemoryRouter>
         <ConversationList

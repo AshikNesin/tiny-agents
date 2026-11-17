@@ -80,8 +80,7 @@ await journey(
         await expect(page.getByRole("button", { name: "Model" })).toHaveText(/predictable/);
         // One harness configured: no harness picker (that needs Claude Code as well).
         await expect(page.getByTestId("code-harness")).toHaveCount(0);
-        // The list is flat by default; the groups below come with Group by repository.
-        await page.getByRole("button", { name: "Group by repository" }).click();
+        // The list is grouped by repository by default.
         await expect(page.getByRole("button", { name: "Group by repository" })).toHaveAttribute(
           "aria-pressed",
           "true",

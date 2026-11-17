@@ -191,7 +191,6 @@ await journey(
       async () => {
         // A folder group is named by its basename: `work-<stamp>` is a prefix of the
         // worktree's `work-<stamp>-<date>`, so match exactly.
-        await page.getByRole("button", { name: "Group by repository" }).click();
         const wtLabel = path.basename(worktree);
         const repoGroup = list.getByRole("region", { name: `work-${stamp}`, exact: true });
         const wtGroup = list.getByRole("region", { name: wtLabel, exact: true });

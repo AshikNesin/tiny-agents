@@ -50,9 +50,6 @@ has no background jobs, so its threads show no job chips.
 
 **Find.**
 
-- The list is one flat list, working threads first, then newest first: a
-  status, the title and a time per row, like Hoplite. Search sits behind
-  its icon (Escape closes it).
 - **Threads** (beside New thread, `/code/threads`; a project group's list
   icon opens `/code/threads?project=<id>`) shows every thread, or one
   project's, at full width, after Hoplite: sections **Working**, **Needs
@@ -60,9 +57,11 @@ has no background jobs, so its threads show no job chips.
   row with its status, title, PR chips and date, then **Archived**, folded,
   loaded when opened. The project menu switches project, and the search box
   filters by title.
-- **Group by repository** at the foot of the sidebar (remembered) groups
-  threads by project, then by repository or folder for threads outside a
-  project; the most recently active group comes first, and a
+- By default (**Group by repository** at the foot of the sidebar, on)
+  threads are grouped by project, then by repository or folder for threads
+  outside a project. Turned off (remembered), the list is one flat list,
+  working threads first, then newest first, like Hoplite. Search sits behind
+  its icon (Escape closes it). With grouping on, the most recently active group comes first, and a
   project with no thread yet comes last. A group folds away (remembered),
   shows its newest 8 threads with **Show more**, and offers **New thread**
   in it (and, for a project, its settings) on hover. Inside a group,

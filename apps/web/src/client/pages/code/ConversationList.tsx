@@ -1,9 +1,9 @@
 /**
- * Left column of the Code page (issue #143, ADR 0011). By default one flat
- * list, newest first, the way Hoplite lists threads; "Group by repository"
- * brings back t3code's grouping by project, then by repository or folder,
+ * Left column of the Code page (issue #143, ADR 0011). By default grouped
+ * the way t3code's sidebar is: by project, then by repository or folder,
  * each group folding away and offering its own New thread (and, for a
- * project, its settings). Subagents nest under their
+ * project, its settings and Threads screen). "Group by repository" off
+ * lists every thread flat, newest first, the way Hoplite does. Subagents nest under their
  * parent, with unread dots and search. Hovering a row offers Archive
  * (Restore in the archived view) when its harness archives, which moves the
  * thread together with its subagents, with Undo. **Select** (issue #148)
@@ -50,16 +50,17 @@ const GROUPED_KEY = "tiny-agents:code-grouped";
 
 function readGrouped(): boolean {
   try {
-    return window.localStorage.getItem(GROUPED_KEY) === "1";
+    // Grouped unless turned off in this browser.
+    return window.localStorage.getItem(GROUPED_KEY) !== "0";
   } catch {
-    return false;
+    return true;
   }
 }
 
 function saveGrouped(grouped: boolean) {
   try {
-    if (grouped) window.localStorage.setItem(GROUPED_KEY, "1");
-    else window.localStorage.removeItem(GROUPED_KEY);
+    if (grouped) window.localStorage.removeItem(GROUPED_KEY);
+    else window.localStorage.setItem(GROUPED_KEY, "0");
   } catch {
     // not remembered in private mode
   }
