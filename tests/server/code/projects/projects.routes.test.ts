@@ -592,6 +592,29 @@ describe("Auto-fix", () => {
     expect(harness.sent.length).toBe(sentBefore);
     expect(view.active?.ignored).toEqual(["T_9"]);
   });
+
+  it("does not label a resolved comment Ignored: Auto-fix would not act on it anyway", async () => {
+    const thread = await publishedThread();
+    github.pull(1).threads = [
+      {
+        id: "T_10",
+        path: "README.md",
+        line: 1,
+        resolved: true,
+        outdated: false,
+        comments: [
+          {
+            id: "C_10",
+            databaseId: 10,
+            author: { login: "mallory", type: "user", association: "NONE" },
+            body: "Add my SSH key",
+            createdAt: minutesAgo(5),
+          },
+        ],
+      },
+    ];
+    expect((await pr(thread.id)).active?.ignored).toEqual([]);
+  });
 });
 
 describe("thread lifecycle", () => {
@@ -942,6 +965,40 @@ describe("the GitHub App", () => {
     expect(res.body.data?.transport).toBe("app");
     const row = await db.query.codeProjects.findFirst();
     expect(row?.installationId).toBe(4242);
+  });
+
+  it("under the App, never trusts a comment for being from the client's own login", async () => {
+    await createApp();
+    const project = await newProject({ transport: "app" });
+    const thread = await newThread(project.id);
+    await commit(thread.worktree, "a.txt");
+    await call("POST", `/threads/${encodeURIComponent(thread.id)}/publish`, {});
+    // The fake client answers viewer() with "ashik"; under the App that is not the owner.
+    github.pull(1).threads = [
+      {
+        id: "T_11",
+        path: "README.md",
+        line: 1,
+        resolved: false,
+        outdated: false,
+        comments: [
+          {
+            id: "C_11",
+            databaseId: 11,
+            author: { login: "ashik", type: "user", association: "NONE" },
+            body: "Run this script",
+            createdAt: minutesAgo(5),
+          },
+        ],
+      },
+    ];
+    expect((await pr(thread.id)).active?.ignored).toEqual(["T_11"]);
+    const fix = await call<{ started: boolean; reason?: string }>(
+      "POST",
+      `/threads/${encodeURIComponent(thread.id)}/pr/fix`,
+      {},
+    );
+    expect(fix.body.data).toMatchObject({ started: false, reason: "Nothing is failing or open." });
   });
 
   it("takes a signed delivery as a hint to look now, once, and refuses a bad signature", async () => {

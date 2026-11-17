@@ -32,10 +32,10 @@ import type { PullView, ThreadPullsView } from "../../../shared/api/code";
 import { codePullUpdate, type CodePullKind } from "../notifications/notifications.events";
 import {
   actionableItems,
+  checksJustFailed,
   DEFAULT_AUTOFIX,
   decide,
-  isAppComment,
-  isTrusted,
+  ignoredItems,
   nextLookMs,
   stalledChecks,
   stateHash,
@@ -80,6 +80,17 @@ async function requireProjectThread(threadId: string) {
   return found;
 }
 
+/**
+ * A project thread's open pull request, with what every owner control on it
+ * needs: its project, its repository, and the project's GitHub client.
+ */
+async function openPullContext(threadId: string) {
+  const { project } = await requireProjectThread(threadId);
+  const open = await openPullOf(threadId);
+  if (!open) throw Boom.notFound("The thread has no open pull request.");
+  return { project, open, repo: repoOf(project), github: () => codeGitHub().client(project) };
+}
+
 function autofixSettings(raw: string): AutofixSettings {
   const s = projectSettings(raw).autofix;
   return {
@@ -91,6 +102,19 @@ function autofixSettings(raw: string): AutofixSettings {
     passMinutes: s.passMinutes,
     finalCheck: s.finalCheck,
   };
+}
+
+/**
+ * The GitHub login whose comments count as the owner's: the login the
+ * client acts as on the `gh` transport. Under the App the client is the
+ * App's bot, never the owner (ADR 0024), so nobody is trusted for login.
+ */
+async function ownerLoginOf(
+  project: { transport: string },
+  github: Pick<GitHubClient, "viewer">,
+): Promise<string | null> {
+  if (project.transport === "app") return null;
+  return (await github.viewer().catch(() => undefined))?.login ?? null;
 }
 
 function notify(pull: CodePullRow, kind: CodePullKind, detail?: string) {
@@ -276,11 +300,8 @@ export async function noteOwnerInput(threadId: string): Promise<void> {
 }
 
 export async function mergePull(threadId: string, method: MergeMethod): Promise<void> {
-  const { project } = await requireProjectThread(threadId);
-  const open = await openPullOf(threadId);
-  if (!open) throw Boom.notFound("The thread has no open pull request.");
-  const github = await codeGitHub().client(project);
-  await github.merge(repoOf(project), open.number, method).catch((error: unknown) => {
+  const { open, repo, github } = await openPullContext(threadId);
+  await (await github()).merge(repo, open.number, method).catch((error: unknown) => {
     throw Boom.conflict(`GitHub did not merge #${open.number}: ${githubMessage(error)}`);
   });
   await reconcileNow(open.id);
@@ -288,11 +309,10 @@ export async function mergePull(threadId: string, method: MergeMethod): Promise<
 
 /** Draft → ready for review, so it can be merged (a draft cannot be). */
 export async function readyPull(threadId: string): Promise<void> {
-  const { project } = await requireProjectThread(threadId);
-  const open = await openPullOf(threadId);
-  if (!open) throw Boom.notFound("The thread has no open pull request.");
-  const github = await codeGitHub().client(project);
-  const snapshot = await github.snapshot(repoOf(project), open.number);
+  const context = await openPullContext(threadId);
+  const { open } = context;
+  const github = await context.github();
+  const snapshot = await github.snapshot(context.repo, open.number);
   if (!snapshot.draft) throw Boom.conflict(`#${open.number} is already ready for review.`);
   await github.markReady(snapshot.id).catch((error: unknown) => {
     throw Boom.conflict(`GitHub kept #${open.number} a draft: ${githubMessage(error)}`);
@@ -305,11 +325,8 @@ export async function editPull(
   threadId: string,
   change: { title?: string; body?: string },
 ): Promise<void> {
-  const { project } = await requireProjectThread(threadId);
-  const open = await openPullOf(threadId);
-  if (!open) throw Boom.notFound("The thread has no open pull request.");
-  const github = await codeGitHub().client(project);
-  await github.updatePull(repoOf(project), open.number, change).catch((error: unknown) => {
+  const { open, repo, github } = await openPullContext(threadId);
+  await (await github()).updatePull(repo, open.number, change).catch((error: unknown) => {
     throw Boom.conflict(`GitHub did not update #${open.number}: ${githubMessage(error)}`);
   });
   await reconcileNow(open.id);
@@ -317,17 +334,16 @@ export async function editPull(
 
 /** Fix CI (§7.5): one pass the owner asked for, on whatever is open now. */
 export async function manualPass(threadId: string): Promise<{ started: boolean; reason?: string }> {
-  const { project } = await requireProjectThread(threadId);
-  const open = await openPullOf(threadId);
-  if (!open) throw Boom.notFound("The thread has no open pull request.");
+  const context = await openPullContext(threadId);
+  const { project, open } = context;
   if (await runningPass(open.id)) return { started: false, reason: "A pass is already running." };
-  const github = await codeGitHub().client(project);
-  const snapshot = await github.snapshot(repoOf(project), open.number);
+  const github = await context.github();
+  const snapshot = await github.snapshot(context.repo, open.number);
   const row = await cacheSnapshot(open.id, snapshot);
   const items = actionableItems({
     snapshot,
     appCommentIds: await appCommentIds(open.id),
-    ownerLogin: (await github.viewer().catch(() => undefined))?.login ?? null,
+    ownerLogin: await ownerLoginOf(project, github),
     settings: {
       ...autofixSettings(project.settings),
       triggers: { checks: true, reviews: true, conflicts: true, mergeQueue: true },
@@ -398,11 +414,7 @@ async function reconcile(pullId: string, now = Date.now()): Promise<number | nul
     }
   }
 
-  // Under the App the client acts as the App's bot, not the owner.
-  const ownerLogin =
-    project.transport === "app"
-      ? null
-      : ((await github.viewer().catch(() => undefined))?.login ?? null);
+  const ownerLogin = await ownerLoginOf(project, github);
   const spend = await threadSpend(pull.threadId, found.thread.spendLimitUsd);
   let lastPushAt: number | null = null;
   for (let step = 0; step < 3; step += 1) {
@@ -467,15 +479,8 @@ async function reconcile(pullId: string, now = Date.now()): Promise<number | nul
       }
     } else if (decision.kind === "none" && !pull.autofix) {
       // Once, when the checks of a head finish failed (not on every look).
-      const prev = cachedSnapshot(before);
-      const justFinished =
-        !prev ||
-        prev.headSha !== snapshot.headSha ||
-        prev.checks.some((c) => c.state === "pending");
-      const failed = snapshot.checks.filter((c) => c.state === "failure");
-      if (justFinished && failed.length && snapshot.checks.every((c) => c.state !== "pending")) {
-        notify(pull, "checks_failed", failed.map((c) => c.name).join(", "));
-      }
+      const failed = checksJustFailed(cachedSnapshot(before), snapshot);
+      if (failed.length) notify(pull, "checks_failed", failed.join(", "));
     }
     break;
   }
@@ -609,15 +614,12 @@ async function applyAutoMerge(
 
 /** The owner's auto-merge switch for the thread's open PR; off also turns GitHub's off. */
 export async function setAutoMerge(threadId: string, enabled: boolean): Promise<void> {
-  const { project } = await requireProjectThread(threadId);
-  const open = await openPullOf(threadId);
-  if (!open) throw Boom.notFound("The thread has no open pull request.");
+  const { open, github } = await openPullContext(threadId);
   await updatePull(open.id, { autoMerge: enabled });
   if (!enabled) {
     const snapshot = cachedSnapshot(open);
     if (snapshot?.autoMerge) {
-      const github = await codeGitHub().client(project);
-      await github.disableAutoMerge(snapshot.id).catch((error: unknown) => {
+      await (await github()).disableAutoMerge(snapshot.id).catch((error: unknown) => {
         throw Boom.conflict(`GitHub kept auto-merge on: ${githubMessage(error)}`);
       });
     }
@@ -658,19 +660,9 @@ async function pullView(
 ): Promise<PullView> {
   const snapshot = cachedSnapshot(row);
   const passes = await passesOf(row.id);
-  const ids = await appCommentIds(row.id);
-  const ignored: string[] = [];
-  if (snapshot) {
-    for (const thread of snapshot.threads) {
-      const latest = thread.comments.at(-1);
-      if (latest && !isAppComment(latest, ids) && !isTrusted(latest.author, ownerLogin, settings)) {
-        ignored.push(thread.id);
-      }
-    }
-    for (const review of snapshot.reviews) {
-      if (!isTrusted(review.author, ownerLogin, settings)) ignored.push(review.id);
-    }
-  }
+  const ignored = snapshot
+    ? ignoredItems({ snapshot, appCommentIds: await appCommentIds(row.id), ownerLogin, settings })
+    : [];
   return {
     id: row.id,
     number: row.number,
@@ -749,8 +741,7 @@ export async function threadPulls(threadId: string, fresh = true): Promise<Threa
   }
   const ownerLogin = await codeGitHub()
     .client(project)
-    .then((c) => c.viewer())
-    .then((v) => v.login)
+    .then((github) => ownerLoginOf(project, github))
     .catch(() => null);
   const settings = autofixSettings(project.settings);
   return {
