@@ -450,25 +450,42 @@ describe("page session tabs (shared profiles)", () => {
 });
 
 describe("page snapshot", () => {
-  it("reads Playwright's AI accessibility snapshot", async () => {
-    const seen: { selector?: string; mode?: string } = {};
+  /** A page whose snapshot is one button in a layout wrapper; records where it was taken. */
+  function snapshotPage() {
+    const seen: { root?: string; mode?: string }[] = [];
+    const root = (name: string) => ({
+      ariaSnapshot: async (options: { mode?: string }) => {
+        seen.push({ root: name, mode: options.mode });
+        return '- generic [ref=e1]:\n  - button "Sign in" [ref=e2] [cursor=pointer]';
+      },
+      innerText: async () => `Text of ${name}\n\n\n\nEnd  `,
+    });
     const page = {
       once: () => undefined,
-      locator: (selector: string) => ({
-        ariaSnapshot: async (options: { mode?: string }) => {
-          seen.selector = selector;
-          seen.mode = options.mode;
-          return '- button "Sign in" [ref=e2]';
-        },
-      }),
+      locator: (selector: string) => root(selector),
+      getByRef: (ref: string) => root(`ref:${ref}`),
     } as unknown as Page;
     const session = pageSession(
       page,
       { viewportWidth: 1, viewportHeight: 1 },
       { close: async () => {} },
     );
-    expect(await session.snapshot()).toContain("[ref=e2]");
-    expect(seen).toEqual({ selector: "body", mode: "ai" });
+    return { seen, session };
+  }
+
+  it("reads Playwright's AI accessibility snapshot of the page, made compact", async () => {
+    const { seen, session } = snapshotPage();
+    expect(await session.snapshot()).toBe('- button "Sign in" [ref=e2]');
+    expect(seen).toEqual([{ root: "body", mode: "ai" }]);
+  });
+
+  it("snapshots and reads the text of one element by its ref", async () => {
+    const { seen, session } = snapshotPage();
+    await session.snapshot("e7");
+    expect(seen).toEqual([{ root: "ref:e7", mode: "ai" }]);
+    expect(await session.text!("e7")).toBe("Text of ref:e7\n\nEnd");
+    expect(await session.text!()).toBe("Text of body\n\nEnd");
+    await expect(session.text!("main")).rejects.toThrow("Invalid ref");
   });
 });
 
@@ -478,10 +495,15 @@ describe("page interaction", () => {
   /** Records the Playwright calls click and type make against a stub element. */
   function harness(element: Record<string, unknown>) {
     const calls: string[] = [];
+    // Nothing here navigates: the waits for a navigation to start time out at once.
+    const noNavigation = () => Promise.reject(new Error("Timeout"));
     const page = {
       once: () => undefined,
       url: () => "https://example.com/form",
       viewportSize: () => null,
+      mainFrame: () => ({}),
+      waitForRequest: noNavigation,
+      waitForEvent: noNavigation,
       getByRef: (ref: string) => {
         calls.push(`ref:${ref}`);
         return {

@@ -27,4 +27,5 @@ export {
   isBlockedPrivateUrl,
   parseExemptHosts,
 } from "../browser-guard";
+export { filterSnapshot, pageWindow } from "../browser-snapshot";
 export type { SecretFill, SecretFillField } from "../browser-fill";

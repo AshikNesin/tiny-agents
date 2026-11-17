@@ -94,8 +94,16 @@ export interface BrowserSession {
    */
   onDisconnect?(listener: () => void): void;
   url(): string;
-  navigate(url: string): Promise<{ url: string; status: number | null }>;
-  snapshot(): Promise<string>;
+  navigate(url: string): Promise<{ url: string; status: number | null; title?: string }>;
+  /** Go back one page in the tab's history; `null` when there is nothing to go back to. */
+  back?(): Promise<{ url: string; title?: string } | null>;
+  /**
+   * The page's compact accessibility snapshot (`compactSnapshot`), or only
+   * the element `scope` names (a ref from an earlier snapshot) and what is in it.
+   */
+  snapshot(scope?: string): Promise<string>;
+  /** The visible text of the page, or of the element `scope` names. */
+  text?(scope?: string): Promise<string>;
   /** The top-level page's origin as the live document reports it ("null" for about:blank). */
   origin?(): Promise<string>;
   /**

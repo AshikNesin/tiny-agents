@@ -32,11 +32,33 @@ the agent can browse, but there is nothing to stream (the panel says so)
   (SSH transport), `browser-vm-setup.ts` (shell scripts that install and
   launch the VM stack). Wired in `bots.runtime.ts` beside the sandbox.
 - Perception: `browser_snapshot` is Playwright's accessibility snapshot
-  in `ai` mode. It lists the interactive elements and gives each a ref
-  (`e12`, or `f1e12` inside a frame). Clicking and typing resolve those
-  refs with `getByRef`, the same path Playwright MCP uses. Vision is the
-  `browser_screenshot` fallback (CSS-pixel scale, so a 2x desktop does not
-  double the image the model pays for).
+  in `ai` mode, made compact (`browser-snapshot.ts`): unnamed layout
+  wrappers (`generic`, `rowgroup`, `cell`) are unwrapped, refs stay only on
+  controls, clickable nodes and regions (`main`, `form`, `dialog`, …), and a
+  link's URL goes on its own line as `[url=…]`. That is 50 to 70 percent of
+  Playwright's output on real pages, with every piece of text kept. Clicking
+  and typing resolve refs (`e12`, or `f1e12` inside a frame) with
+  `getByRef`, the same path Playwright MCP uses. Refs stay the same across
+  snapshots of one page, so the model can narrow a long page with `ref` (a
+  region's subtree) or `query` (only the lines with those words).
+- Long reads come in windows of 20,000 characters (about 5k tokens). The
+  window ends at a line break and its note gives the `offset` to read on.
+  Before, a snapshot was cut at the top and the rest of a long page could
+  not be reached: scrolling does not change an accessibility snapshot.
+- `browser_read_text` reads a page's or an element's `innerText`. On an
+  article it is a fifth of the snapshot or less (Wikipedia: 101k characters
+  of text against a 700k snapshot).
+- Navigation waits up to 5 s past `domcontentloaded` for `load`, so a
+  script-built page has something to read, and reports the page title. A
+  click or Enter that starts a navigation (a new document or a script route
+  change, watched for 500 ms) waits for that page the same way, so its
+  result names where it landed and the next read is of the new page.
+  `browser_back` goes back in the tab's history, behind the same guard.
+- Context: only the newest two long page reads (snapshot or text) are sent
+  to the model; older ones become a one-line note, dropped five at a time
+  so the prompt cache keeps working (`context-trim.ts`, like screenshots).
+  Vision is the `browser_screenshot` fallback (CSS-pixel scale, so a 2x
+  desktop does not double the image the model pays for).
 - Interaction uses those Playwright actions. `browser_click` clicks the
   ref: it scrolls the element into view and retries until that element is
   the one under the cursor. `browser_type` replaces the field with one

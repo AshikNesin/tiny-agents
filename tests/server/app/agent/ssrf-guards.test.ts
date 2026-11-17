@@ -203,6 +203,12 @@ function fakeChrome() {
       }),
       keyboard: { press: async () => undefined },
       url: () => current,
+      waitForLoadState: async () => undefined,
+      title: async () => "",
+      // Enter starts no navigation here: the waits for one time out at once.
+      mainFrame: () => ({}),
+      waitForRequest: () => Promise.reject(new Error("Timeout")),
+      waitForEvent: () => Promise.reject(new Error("Timeout")),
       goto: async (start: string) => {
         const chain: string[] = [];
         for (let url: string | undefined = start; url; url = redirects[url]) {

@@ -3,8 +3,10 @@
  * owner watches live, and the owner can take over mid-run.
  *
  * Three ideas carry the design (research: `tmp/browser-use-patterns.md`):
- * - Perception is AX-tree-first with stable refs (playwright-mcp's model);
- *   vision is the `browser_screenshot` fallback.
+ * - Perception is AX-tree-first with stable refs (playwright-mcp's model),
+ *   compacted and read in windows so a long page costs what it must and no
+ *   more; `browser_read_text` reads prose, and vision is the
+ *   `browser_screenshot` fallback.
  * - The owner watches and drives the same Chrome over VNC (see `BrowserVnc`);
  *   takeover is a driver flag that suspends tool dispatch, not a focus lock.
  * - Secrets never enter model context: the owner types them into the real
@@ -27,6 +29,8 @@ import {
   conversationBrowserTarget,
   createBrowserSessions,
   describeBrowserError,
+  filterSnapshot,
+  pageWindow,
   type BrowserSessions,
   type BrowserSessionsOptions,
   type BrowserTarget,
@@ -67,6 +71,23 @@ export interface BrowserToolkitOptions extends BrowserSessionsOptions {
   ownerWaits?: WaitTracker;
 }
 
+/**
+ * Most characters one page read returns (about 5k tokens). A longer page
+ * comes in windows the model asks for with `offset`, or narrowed with `ref`
+ * or `query`; before, it was cut here and the rest was out of reach.
+ */
+const READ_LIMIT = 20_000;
+
+/** "200 https://… · Title": what a page the tab landed on says about itself. */
+const landed = (head: string, url: string, title?: string) =>
+  `${head}${url}${title ? ` · ${title}` : ""}`;
+
+const ref = (description: string) =>
+  Type.Optional(Type.String({ minLength: 2, maxLength: 32, description }));
+const offset = Type.Optional(
+  Type.Integer({ minimum: 0, description: "Character to start from, from the last result's note" }),
+);
+
 const fail = (text: string): ToolExecutionResult => ({
   output: [{ type: "text", text }],
   isError: true,
@@ -87,7 +108,7 @@ export function createBrowserToolkit(options: BrowserToolkitOptions = {}): Capab
   return defineToolkit({
     id: "browser",
     name: "Browser",
-    description: "A real browser the bot drives: navigate, read, click, type, scroll.",
+    description: "A real browser the bot drives: navigate, read, click, type, scroll, go back.",
     tools: [
       tool({
         name: "browser_navigate",
@@ -113,8 +134,9 @@ export function createBrowserToolkit(options: BrowserToolkitOptions = {}): Capab
             // other effect (navigating away mid-secret breaks the contract).
             const s = await actionTurn(Number(api.conversationId));
             const result = await s.session.navigate(url.href);
+            const head = `${result.status ?? "no status"} `;
             return {
-              output: [{ type: "text", text: `${result.status ?? "no status"} ${result.url}` }],
+              output: [{ type: "text", text: landed(head, result.url, result.title) }],
               details: { url: result.url, status: result.status ?? null },
             };
           } catch (error) {
@@ -126,19 +148,97 @@ export function createBrowserToolkit(options: BrowserToolkitOptions = {}): Capab
         name: "browser_snapshot",
         label: "Read the page",
         askLabel: "read the page",
-        summary: "Snapshot the page's interactive elements with refs.",
+        summary: "Snapshot the page's elements with refs.",
         policy: { readOnly: true },
         description:
-          "Snapshot the page's interactive elements as a tree with refs (e12, or f1e12 inside a frame). " +
-          "Clicking and typing use these refs. Take a new snapshot whenever the page may have changed.",
-        parameters: Type.Object({}),
+          "Snapshot the page as an accessibility tree: headings, text, and every control with a ref " +
+          "(e12, or f1e12 inside a frame) and every link with its [url=…]. Clicking and typing use these refs. " +
+          "Take a new snapshot whenever the page may have changed. On a long page, pass `query` to keep only " +
+          "the lines with those words, or `ref` (a region such as main, a form or a dialog) to snapshot " +
+          "just that part. To read an article or results as text, browser_read_text is smaller.",
+        parameters: Type.Object({
+          ref: ref("Snapshot only this element and what is inside it"),
+          query: Type.Optional(
+            Type.String({
+              minLength: 1,
+              maxLength: 200,
+              description: "Words to find; only the lines containing all of them are returned",
+            }),
+          ),
+          offset,
+        }),
         replay: "safe",
+        execute: async (args, api) => {
+          try {
+            if (args.ref) assertRefShape(args.ref);
+            const s = await readTurn(Number(api.conversationId));
+            const tree = await s.session.snapshot(args.ref);
+            if (args.query) {
+              const found = filterSnapshot(tree, args.query);
+              if (found.matches === 0) {
+                return { output: [{ type: "text", text: `No line matches "${args.query}".` }] };
+              }
+              const window = pageWindow(found.text, args.offset ?? 0, READ_LIMIT, "");
+              const head = `${found.matches} matching line${found.matches === 1 ? "" : "s"}:\n`;
+              return { output: [{ type: "text", text: head + window.text }] };
+            }
+            const window = pageWindow(
+              tree,
+              args.offset ?? 0,
+              READ_LIMIT,
+              ", or pass query or a region's ref to read less",
+            );
+            return { output: [{ type: "text", text: window.text }] };
+          } catch (error) {
+            return fail(describe(error));
+          }
+        },
+      }),
+      tool({
+        name: "browser_read_text",
+        label: "Read the text",
+        askLabel: "read the page's text",
+        summary: "Read the page's visible text.",
+        policy: { readOnly: true },
+        description:
+          "Read the visible text of the page, or of one element by its ref (such as main or an article), " +
+          "without refs or roles. Use it to read an article, results or a long list; use browser_snapshot " +
+          "to find what to click.",
+        parameters: Type.Object({ ref: ref("Read only this element"), offset }),
+        replay: "safe",
+        execute: async (args, api) => {
+          try {
+            if (args.ref) assertRefShape(args.ref);
+            const s = await readTurn(Number(api.conversationId));
+            if (!s.session.text)
+              return fail("This browser cannot read page text; use browser_snapshot.");
+            const text = await s.session.text(args.ref);
+            if (!text) return { output: [{ type: "text", text: "The page has no visible text." }] };
+            const window = pageWindow(text, args.offset ?? 0, READ_LIMIT, "");
+            return { output: [{ type: "text", text: window.text }] };
+          } catch (error) {
+            return fail(describe(error));
+          }
+        },
+      }),
+      tool({
+        name: "browser_back",
+        label: "Went back",
+        askLabel: "go back a page",
+        summary: "Go back to the previous page.",
+        description: "Go back to the previous page in this tab, like the browser's Back button.",
+        parameters: Type.Object({}),
+        replay: "unsafe",
         execute: async (_args, api) => {
           try {
-            const s = await readTurn(Number(api.conversationId));
-            const text = await s.session.snapshot();
-            const capped = text.length > 20_000 ? text.slice(0, 20_000) + "\n…(truncated)" : text;
-            return { output: [{ type: "text", text: capped }] };
+            const s = await actionTurn(Number(api.conversationId));
+            if (!s.session.back) return fail("This browser cannot go back; use browser_navigate.");
+            const result = await s.session.back();
+            if (!result) return fail("There is no earlier page in this tab.");
+            return {
+              output: [{ type: "text", text: landed("back to ", result.url, result.title) }],
+              details: { url: result.url },
+            };
           } catch (error) {
             return fail(describe(error));
           }

@@ -10,6 +10,7 @@ import { chromium } from "playwright-core";
 import type { Locator, Page, Response } from "playwright-core";
 import { fillSecretFields, pageOrigin } from "./browser-fill";
 import { assertRefShape, isBlockedPrivateUrl, parseExemptHosts } from "./browser-guard";
+import { compactSnapshot, tidyText } from "./browser-snapshot";
 import type { BrowserSession, BrowserVnc, OpenBrowserOptions } from "./browser-sessions";
 import { navigationGuard, type NavigationGuard } from "./navigation-guard";
 
@@ -32,6 +33,22 @@ const DEBIAN_CHROMIUM = "/usr/bin/chromium";
  * killed. Long enough for a slow VM round trip and a few retries.
  */
 const ACTION_TIMEOUT_MS = 15_000;
+
+/**
+ * How long a navigation waits past `domcontentloaded` for the `load` event.
+ * A script-built page (most of the web) has nothing to read at
+ * `domcontentloaded`; a page whose load never settles (a stuck ad, a
+ * stream) is read as it is once this runs out.
+ */
+const SETTLE_MS = 5_000;
+
+/**
+ * How long after a click or Enter a navigation may take to start. A link's
+ * navigation begins a moment after the click resolves; returning at once
+ * gave the old URL and let the next snapshot read the page being left. A
+ * click that navigates nowhere pays this once.
+ */
+const NAVIGATION_START_MS = 500;
 
 function resolveExecutable(explicit?: string): string | undefined {
   if (explicit) return explicit;
@@ -198,14 +215,40 @@ export function pageSession(
           `Blocked: the page redirected to a private address (${new URL(bad).host}).`,
         );
       }
-      return { url: current.url(), status: response?.status() ?? null };
+      await settle(current);
+      return {
+        url: current.url(),
+        status: response?.status() ?? null,
+        title: await titleOf(current),
+      };
     },
-    snapshot: () => snapshotOf(page),
+    back: () =>
+      guarded(async (current) => {
+        // The guard watches every main-frame request of a held tab, so a
+        // history entry on a private address is refused like a navigation.
+        const before = current.url();
+        const response = await current.goBack({ waitUntil: "domcontentloaded", timeout: 30_000 });
+        if (!response && current.url() === before) return null; // no history to go back to
+        await settle(current);
+        return { url: current.url(), title: await titleOf(current) };
+      }),
+    snapshot: (scope) => snapshotOf(page, scope),
+    text: (scope) => textOf(page, scope),
     origin: () => pageOrigin(page),
     fillSecret: (fill) => guarded((current) => fillSecretFields(current, fill)),
-    click: (ref) => guarded((current) => clickRef(current, ref)),
+    click: (ref) =>
+      guarded(async (current) => {
+        await settleAfter(current, () => clickRef(current, ref));
+        return { url: current.url() }; // where the click led, once it settled
+      }),
     type: (ref, text) => guarded((current) => typeRef(current, ref, text)),
-    press: (key) => guarded((current) => current.keyboard.press(key)),
+    press: (key) =>
+      guarded((current) =>
+        // Enter submits forms; the other keys move within the page.
+        key === "Enter"
+          ? settleAfter(current, () => current.keyboard.press(key))
+          : current.keyboard.press(key),
+      ),
     scroll: (direction, amount) =>
       guarded((current) => scrollPage(current, open, direction, amount)),
     screenshot: async () => ({
@@ -265,13 +308,60 @@ function visiblePage(pages: Page[]): Promise<Page | undefined> {
 }
 
 /**
- * Playwright's AI accessibility snapshot. Each interactive element is
- * labeled `[ref=e12]` (or `[ref=f1e12]` inside a frame). `getByRef`
- * resolves those refs against this latest snapshot, which is how
- * Playwright MCP clicks and types.
+ * Playwright's AI accessibility snapshot, made compact (`compactSnapshot`).
+ * Each control is labeled `[ref=e12]` (or `[ref=f1e12]` inside a frame).
+ * `getByRef` resolves those refs against the latest snapshot, which is how
+ * Playwright MCP clicks and types. Refs stay the same across snapshots of
+ * one page, so a snapshot scoped to a region (`scope`) keeps the refs the
+ * whole-page one gave.
  */
-async function snapshotOf(page: Page): Promise<string> {
-  return page.locator("body").ariaSnapshot({ mode: "ai", timeout: ACTION_TIMEOUT_MS });
+async function snapshotOf(page: Page, scope?: string): Promise<string> {
+  const root = scope ? (assertRefShape(scope), page.getByRef(scope)) : page.locator("body");
+  return compactSnapshot(await root.ariaSnapshot({ mode: "ai", timeout: ACTION_TIMEOUT_MS }));
+}
+
+/**
+ * The text a reader sees (`innerText`: hidden elements left out, blocks on
+ * lines of their own), of the page or of one element. On an article it is a
+ * fifth of the snapshot or less, because it carries no roles, refs or URLs.
+ */
+async function textOf(page: Page, scope?: string): Promise<string> {
+  const root = scope ? (assertRefShape(scope), page.getByRef(scope)) : page.locator("body");
+  return tidyText(await root.innerText({ timeout: ACTION_TIMEOUT_MS }));
+}
+
+/**
+ * Run a click or key press, then, if it started a navigation of the tab
+ * (a new document, or a script-driven route change), wait for that page to
+ * settle so the result's URL and the next read are of the page it led to.
+ */
+async function settleAfter<T>(page: Page, action: () => Promise<T>): Promise<T> {
+  const main = page.mainFrame();
+  const window = { timeout: NAVIGATION_START_MS };
+  const navigation = Promise.any([
+    page.waitForRequest((r) => r.isNavigationRequest() && r.frame() === main, window),
+    page.waitForEvent("framenavigated", { predicate: (f) => f === main, ...window }),
+  ]).then(
+    () => true,
+    () => false,
+  );
+  const result = await action();
+  if (await navigation) {
+    await page.waitForLoadState("domcontentloaded", { timeout: SETTLE_MS }).catch(() => undefined);
+    await settle(page);
+  }
+  return result;
+}
+
+/** Wait for `load`, up to `SETTLE_MS`; a page that never settles is used as it is. */
+async function settle(page: Page): Promise<void> {
+  await page.waitForLoadState("load", { timeout: SETTLE_MS }).catch(() => undefined);
+}
+
+/** The page's title, or undefined when it has none or cannot say. */
+async function titleOf(page: Page): Promise<string | undefined> {
+  const title = await page.title().catch(() => "");
+  return title.trim() || undefined;
 }
 
 async function clickRef(page: Page, ref: string) {
