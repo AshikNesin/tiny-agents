@@ -31,6 +31,7 @@ import {
   type RepoRef,
   type ReviewCommentInput,
 } from "@tiny-agents/github";
+import type { Hunk } from "@tiny-agents/git";
 import { threadIdOf } from "@tiny-agents/code/server";
 import {
   codeProjects,
@@ -40,20 +41,31 @@ import {
   db,
   type CodeProjectRow,
 } from "../../db";
+import { shQuote } from "@tiny-agents/sandbox";
+import {
+  SessionLimitError,
+  TerminalUnreachableError,
+  TmuxMissingError,
+} from "@tiny-agents/sandbox/terminal";
 import type {
   InboxPullView,
   PullReviewView,
   PullThreadsView,
+  PushedReview,
   ReviewDraft,
+  ReviewTerminal,
   ReviewVerdict,
+  SuggestedChanges,
 } from "../../../shared/api/code";
+import { getTerminalService } from "../terminal/terminal.instance";
 import { reviewCard } from "../../../shared/code-messages";
 import { codeGitHub } from "./code.github";
 import { codeHub } from "./code.hub";
 import { applyTitle } from "./code.naming";
 import { repoOf } from "./code.projects";
-import { threadReview } from "./code.review";
+import { threadReview, type DraftInput } from "./code.review";
 import { follow } from "./code.store";
+import { WorkspaceError } from "./code.workspace";
 
 type CodeReviewRow = typeof codeReviews.$inferSelect;
 
@@ -83,6 +95,14 @@ function parsePullRef(input: string): { repo: RepoRef; number: number } | undefi
 const reviewPath = (project: CodeProjectRow, number: number) =>
   `${project.checkoutPath.replace(/\/checkout$/, "")}/reviews/pr-${number}`;
 
+/** The commit of `login`'s latest review of the PR that names one. */
+function lastReviewed(pr: PullSnapshot, login: string): string | null {
+  const mine = pr.reviews
+    .filter((r) => r.commit && r.author.login.toLowerCase() === login.toLowerCase())
+    .sort((a, b) => a.submittedAt.localeCompare(b.submittedAt));
+  return mine.at(-1)?.commit ?? null;
+}
+
 /** The Code thread that opened PR `number` of the project, if one did. */
 async function codingThreadOf(projectId: string, number: number): Promise<string | null> {
   const pull = await db.query.codePullRequests.findFirst({
@@ -107,6 +127,7 @@ async function reviewView(row: CodeReviewRow, project: CodeProjectRow): Promise<
     headSha: row.headSha,
     fromFork: row.fromFork,
     mine: row.mine,
+    reviewedSha: row.reviewedSha,
     threadId: row.threadId,
     codingThreadId: await codingThreadOf(project.id, row.number),
     archived: row.archivedAt !== null,
@@ -161,6 +182,7 @@ export async function openReview(input: string): Promise<PullReviewView> {
     headSha,
     fromFork: pr.fromFork,
     mine: !!viewer && !!pr.author && viewer.login.toLowerCase() === pr.author.toLowerCase(),
+    ...(viewer ? { reviewedSha: lastReviewed(pr, viewer.login) } : {}),
     worktree: path,
     archivedAt: null,
     updatedAt: new Date(),
@@ -199,13 +221,18 @@ export async function getReview(id: string): Promise<PullReviewView> {
   return reviewView(row, project);
 }
 
-/** What the review's file list and diffs read: its worktree, against the PR's base. */
+/**
+ * What the review's file list and diffs read: its worktree, against the
+ * PR's base, or (`since`) against the commit of the owner's last review.
+ */
 export async function reviewWorktree(id: string) {
   const { row, project } = await findReview(id);
   if (!row.worktree) throw Boom.notFound("This review is archived. Open the PR again.");
   return {
     worktree: row.worktree,
     base: row.baseRef,
+    headSha: row.headSha,
+    reviewedSha: row.reviewedSha,
     ws: await codeGitHub().workspace(project),
   };
 }
@@ -366,7 +393,10 @@ export async function submitReview(
       });
     },
   );
-  await db.update(codeReviews).set({ updatedAt: new Date() }).where(eq(codeReviews.id, id));
+  await db
+    .update(codeReviews)
+    .set({ reviewedSha: row.headSha, updatedAt: new Date() })
+    .where(eq(codeReviews.id, id));
   return { url: result.url, comments: sent };
 }
 
@@ -481,4 +511,163 @@ export async function reviewInbox(): Promise<InboxPullView[]> {
       reviewId: projectId ? (reviewOf.get(`${projectId}#${pr.number}`) ?? null) : null,
     };
   });
+}
+
+// --- changing the PR's code -------------------------------------------------------------------
+
+/** A review with a worktree to change, its project and its workspace. */
+async function openWorktree(id: string) {
+  const { row, project } = await findReview(id);
+  if (!row.worktree) throw Boom.badRequest("This review is archived. Open the PR again.");
+  return {
+    row,
+    project,
+    worktree: row.worktree,
+    ws: await codeGitHub().workspace(project),
+  };
+}
+
+/** A git failure the owner can act on, said as it is (409). */
+function saying(error: unknown): never {
+  if (error instanceof WorkspaceError) throw Boom.conflict(error.message);
+  throw error;
+}
+
+/**
+ * Commit what the owner and the assistant changed in the review's worktree
+ * and push it to the PR's branch, never forced: GitHub rejects the push when
+ * the branch moved on. A fork's branch takes it only when its author allows
+ * edits from maintainers.
+ */
+export async function pushReview(id: string, message: string): Promise<PushedReview> {
+  const { row, project, worktree, ws } = await openWorktree(id);
+  const github = await codeGitHub().client(project);
+  const pr = await github.snapshot(repoOf(project), row.number);
+  if (pr.state !== "open") {
+    throw Boom.badRequest("This pull request is closed: there is no branch to push to.");
+  }
+  if (!pr.headRepo) throw Boom.badRequest("The pull request's branch was deleted.");
+  if (pr.fromFork && !pr.maintainerCanModify) {
+    throw Boom.badRequest(
+      `@${pr.author ?? row.author}'s fork does not allow edits from maintainers, so you cannot push to it. Post your changes as suggestions instead.`,
+    );
+  }
+  const [dirty, head, viewer] = await Promise.all([
+    ws.uncommitted(worktree),
+    ws.headSha(worktree),
+    github.viewer().catch(() => undefined),
+  ]);
+  if (dirty.length === 0 && head === row.headSha) {
+    throw Boom.badRequest("You have not changed anything in this pull request.");
+  }
+  if (dirty.length > 0) {
+    const login = viewer?.login ?? "tiny-agents";
+    await ws
+      .commitAll(worktree, message, {
+        name: login,
+        email: `${login}@users.noreply.github.com`,
+      })
+      .catch(saying);
+  }
+  const sha = await ws.push(worktree, pr.headRepo, pr.headRef).catch(saying);
+  await db
+    .update(codeReviews)
+    .set({ headSha: sha, updatedAt: new Date() })
+    .where(eq(codeReviews.id, id));
+  return { sha, branch: pr.headRef };
+}
+
+/** Put the review's worktree back at the PR's head. */
+export async function discardReviewChanges(id: string): Promise<void> {
+  const { row, worktree, ws } = await openWorktree(id);
+  await ws.discard(worktree, row.headSha).catch(saying);
+}
+
+/** A suggestion block of `lines`, fenced longer than any fence inside them. */
+function suggestion(lines: string[]): string {
+  const longest = Math.max(2, ...lines.map((l) => /^`{3,}/.exec(l)?.[0].length ?? 0));
+  const fence = "`".repeat(longest + 1);
+  return `${fence}suggestion\n${lines.map((l) => `${l}\n`).join("")}${fence}`;
+}
+
+/**
+ * The owner's changes as pending suggestion comments, one per hunk, on the
+ * PR head's lines each replaces (an added line is suggested with the line it
+ * follows), for when they cannot push. GitHub takes a comment only on lines
+ * of the PR's own diff, so a hunk outside it, or in a file the owner added
+ * or deleted, is skipped and counted.
+ */
+export async function suggestReviewChanges(id: string): Promise<SuggestedChanges> {
+  const { row, worktree, ws } = await openWorktree(id);
+  const files = await ws.sinceFiles(worktree, row.headSha).catch(saying);
+  const read = await Promise.all(
+    files.map(async (file) => {
+      if (file.status !== "modified" || file.binary) return { drafts: [], skipped: 1 };
+      const [mine, pull, sides] = await Promise.all([
+        ws.hunks(worktree, file.path, row.headSha, null),
+        ws.hunks(worktree, file.path, `merge-base:${row.baseRef}:${row.headSha}`, row.headSha, 3),
+        ws.sinceFile(worktree, row.headSha, file.path),
+      ]);
+      return suggestionsFor(file.path, mine, pull, sides.oldContent.split("\n"));
+    }),
+  );
+  const drafts = read.flatMap((r) => r.drafts);
+  const comments = threadReview(reviewKey(id), "github");
+  // One at a time, so they list in the order of the diff.
+  await drafts.reduce<Promise<unknown>>(
+    (previous, draft) => previous.then(() => comments.addDraft(draft)),
+    Promise.resolve(),
+  );
+  const skipped = read.reduce((sum, r) => sum + r.skipped, 0);
+  return { added: drafts.length, skipped };
+}
+
+/** One file's hunks as suggestions on the PR head's lines, those GitHub can take. */
+function suggestionsFor(path: string, mine: Hunk[], pull: Hunk[], headLines: string[]) {
+  const drafts: DraftInput[] = [];
+  let skipped = 0;
+  for (const hunk of mine) {
+    const insertion = hunk.oldCount === 0;
+    const start = insertion ? Math.max(hunk.oldStart, 1) : hunk.oldStart;
+    const end = insertion ? start : hunk.oldStart + hunk.oldCount - 1;
+    const inDiff = pull.some(
+      (p) => p.newCount > 0 && start >= p.newStart && end < p.newStart + p.newCount,
+    );
+    if (!inDiff) {
+      skipped += 1;
+      continue;
+    }
+    const anchor = headLines[start - 1] ?? "";
+    const lines = !insertion
+      ? hunk.added
+      : hunk.oldStart === 0
+        ? [...hunk.added, anchor]
+        : [anchor, ...hunk.added];
+    drafts.push({
+      path,
+      side: "new",
+      startLine: start,
+      endLine: end,
+      quote: headLines.slice(start - 1, end).join("\n"),
+      body: suggestion(lines),
+    });
+  }
+  return { drafts, skipped };
+}
+
+/** A Terminal tab that starts in the review's worktree. */
+export async function reviewTerminal(id: string): Promise<ReviewTerminal> {
+  const { worktree } = await openWorktree(id);
+  try {
+    const tab = await getTerminalService().create(120, 34, {
+      typeLine: `cd ${shQuote(worktree)}`,
+    });
+    return { name: tab.name };
+  } catch (error) {
+    if (error instanceof SessionLimitError) throw Boom.conflict(error.message);
+    if (error instanceof TmuxMissingError || error instanceof TerminalUnreachableError) {
+      throw Boom.unavailable(error.message);
+    }
+    throw error;
+  }
 }

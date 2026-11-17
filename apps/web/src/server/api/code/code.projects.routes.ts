@@ -19,6 +19,9 @@ import type {
   InboxPullView,
   PullReviewView,
   PullThreadsView,
+  PushedReview,
+  ReviewTerminal,
+  SuggestedChanges,
   ReviewDraft,
   ReviewFile,
   ThreadPullsView,
@@ -36,22 +39,26 @@ import { threadReview } from "./code.review";
 import { checkpointRange, checkpointsOf, revertTo } from "./code.checkpoints";
 import { codeHub } from "./code.hub";
 import { checkLog } from "./code.checks";
-import { cleanBranchPrefix } from "./code.workspace";
+import { WorkspaceError, cleanBranchPrefix } from "./code.workspace";
 import {
   archiveReview,
   askReview,
+  discardReviewChanges,
   getReview,
   listReviews,
   openReview,
+  pushReview,
   reviewComments,
   replyToReviewThread,
   reviewInbox,
   resolveReviewThread,
+  reviewTerminal,
   reviewIdOfKey,
   reviewThreads,
   reviewWorktree,
   sendCommentsToThread,
   submitReview,
+  suggestReviewChanges,
 } from "./code.reviews";
 import {
   createProject,
@@ -385,18 +392,50 @@ async function reviewTarget(threadId: string) {
   };
 }
 
+/** A workspace failure the owner can act on, said as it is (409). */
+function saying(error: unknown): never {
+  if (error instanceof WorkspaceError) throw Boom.conflict(error.message);
+  throw error;
+}
+
+/**
+ * A PR review's other scopes, instead of since its base: `?since=review`,
+ * since the commit of the owner's last review; `?since=mine`, what the owner
+ * and the assistant changed on top of the PR's head.
+ */
+async function sinceReview(threadId: string, since: string | undefined) {
+  if (since !== "review" && since !== "mine") return undefined;
+  const reviewId = reviewIdOfKey(threadId);
+  const review = reviewId ? await reviewWorktree(reviewId) : undefined;
+  if (!review) throw Boom.badRequest("Only a pull request review has this view.");
+  if (since === "mine") return review.headSha;
+  if (!review.reviewedSha) throw Boom.badRequest("You have not reviewed this pull request yet.");
+  return review.reviewedSha;
+}
+
 router.get("/code/threads/:id/review/files", async (c) => {
   const id = threadParam(c.req.param("id"));
-  const { base, worktree, ws } = await reviewTarget(id);
-  const files = await ws.baseFiles(worktree, base);
+  const [{ base, worktree, ws }, since] = await Promise.all([
+    reviewTarget(id),
+    sinceReview(id, c.req.query("since")),
+  ]);
+  const files = since
+    ? await ws.sinceFiles(worktree, since).catch(saying)
+    : await ws.baseFiles(worktree, base);
   return ok<ReviewFile[]>(c, await threadReview(id).withViewed(files));
 });
 
 router.get("/code/threads/:id/review/file", async (c) => {
   const id = threadParam(c.req.param("id"));
   const path = safePath(c.req.query("path"));
-  const { base, worktree, ws } = await reviewTarget(id);
-  return ok(c, { path, ...(await ws.baseFile(worktree, base, path)) });
+  const [{ base, worktree, ws }, since] = await Promise.all([
+    reviewTarget(id),
+    sinceReview(id, c.req.query("since")),
+  ]);
+  const sides = since
+    ? await ws.sinceFile(worktree, since, path).catch(saying)
+    : await ws.baseFile(worktree, base, path);
+  return ok(c, { path, ...sides });
 });
 
 router.post("/code/threads/:id/review/viewed", async (c) => {
@@ -520,6 +559,27 @@ router.post("/code/reviews/:review/threads/:thread/resolve", async (c) => {
   await resolveReviewThread(c.req.param("review"), c.req.param("thread"));
   return ok(c, { resolved: true });
 });
+
+router.post("/code/reviews/:review/push", async (c) => {
+  const { message } = await parseBody(
+    c,
+    z.object({ message: z.string().trim().min(1).max(10_000) }),
+  );
+  return ok<PushedReview>(c, await pushReview(c.req.param("review"), message));
+});
+
+router.post("/code/reviews/:review/discard", async (c) => {
+  await discardReviewChanges(c.req.param("review"));
+  return ok(c, { discarded: true });
+});
+
+router.post("/code/reviews/:review/suggestions", async (c) =>
+  ok<SuggestedChanges>(c, await suggestReviewChanges(c.req.param("review"))),
+);
+
+router.post("/code/reviews/:review/terminal", async (c) =>
+  ok<ReviewTerminal>(c, await reviewTerminal(c.req.param("review")), 201),
+);
 
 router.post("/code/reviews/:review/archive", async (c) => {
   await archiveReview(c.req.param("review"));

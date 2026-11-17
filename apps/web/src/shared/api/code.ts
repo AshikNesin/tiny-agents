@@ -236,6 +236,8 @@ export interface PullReviewView {
   fromFork: boolean;
   /** The owner opened this PR: GitHub lets them comment on it, not approve it. */
   mine: boolean;
+  /** The commit of the owner's last review of it, if any. */
+  reviewedSha: string | null;
   /** The assistant's thread, once the owner asked it something. */
   threadId: string | null;
   /** The Code thread that opened this PR, when one did: its comments can go there instead. */
@@ -293,4 +295,22 @@ export type ReviewVerdict = "COMMENT" | "APPROVE" | "REQUEST_CHANGES";
 export interface SubmitReviewBody {
   event: ReviewVerdict;
   body?: string;
+}
+
+/** `POST /code/reviews/:id/push`: your changes, committed and pushed to the PR's branch. */
+export interface PushedReview {
+  sha: string;
+  branch: string;
+}
+
+/** `POST /code/reviews/:id/suggestions`: your changes as pending suggestion comments. */
+export interface SuggestedChanges {
+  added: number;
+  /** Hunks GitHub takes no comment on: outside the PR's diff, or in a new or deleted file. */
+  skipped: number;
+}
+
+/** `POST /code/reviews/:id/terminal`: the Terminal tab opened in the review's worktree. */
+export interface ReviewTerminal {
+  name: string;
 }

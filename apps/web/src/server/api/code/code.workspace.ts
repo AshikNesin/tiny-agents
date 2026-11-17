@@ -20,10 +20,12 @@ import type { GitFile, GitFileDiff } from "@tiny-agents/code/contracts";
 import {
   changeStamp,
   changedFiles,
+  fileHunks,
   fileSides,
   isGenerated,
   type ChangedFile,
   type GitReadPort,
+  type Hunk,
 } from "@tiny-agents/git";
 
 const q = shQuote;
@@ -97,6 +99,12 @@ export interface Workspace {
   baseFiles(path: string, base: string): Promise<Array<GitFile & { hash: string }>>;
   /** One file's merge-base and working-tree content (or why it cannot be shown). */
   baseFile(path: string, base: string, file: string): Promise<FileContents>;
+  /**
+   * Files changed since commit `sha` (an earlier head of a PR: the one its
+   * reviewer last read), fetched first when the worktree lacks it.
+   */
+  sinceFiles(path: string, sha: string): Promise<Array<GitFile & { hash: string }>>;
+  sinceFile(path: string, sha: string, file: string): Promise<FileContents>;
   /** A fingerprint of the worktree's changes: it moves when the Review panel would change. */
   changeStamp(path: string): Promise<string>;
   /** Commits on HEAD that are not on `origin/<base>`, newest first. */
@@ -110,6 +118,26 @@ export interface Workspace {
   syncToRemote(path: string, repo: RepoRef, branch: string): Promise<void>;
   /** Push HEAD to `branch` on the repository, never forced; answers the pushed sha. */
   push(path: string, repo: RepoRef, branch: string): Promise<string>;
+  /**
+   * Commit every change in the worktree (new files included) with `message`,
+   * as the configured git identity or else `as`. The repository's hooks do
+   * not run: a review's checkout has none of its tools installed.
+   */
+  commitAll(path: string, message: string, as: { name: string; email: string }): Promise<void>;
+  /** Put the worktree back at commit `sha` exactly: changes, new files and later commits go. */
+  discard(path: string, sha: string): Promise<void>;
+  /**
+   * One file's hunks from commit `from` to `to` (the working tree when null),
+   * with `context` lines around each. `from` may be `merge-base:<base>:<sha>`:
+   * the merge base of `sha` with `origin/<base>`, as a PR's own diff starts.
+   */
+  hunks(
+    path: string,
+    file: string,
+    from: string,
+    to: string | null,
+    context?: number,
+  ): Promise<Hunk[]>;
   /** The checked-in scripts, if the file exists and parses. */
   readScripts(path: string): Promise<ProjectScripts>;
   runScript(path: string, script: string): Promise<{ ok: boolean; output: string }>;
@@ -444,6 +472,14 @@ export function createWorkspace(options: WorkspaceOptions): Workspace {
       const mb = await mergeBase(path, base);
       return fileSides(reads(path), file, { rev: mb }, { worktree: true });
     },
+    async sinceFiles(path, sha) {
+      await haveCommit(path, sha);
+      return hashed(path, () => changedFiles(reads(path), sha));
+    },
+    async sinceFile(path, sha, file) {
+      await haveCommit(path, sha);
+      return fileSides(reads(path), file, { rev: sha }, { worktree: true });
+    },
     async changeStamp(path) {
       return changeStamp(reads(path));
     },
@@ -508,6 +544,36 @@ export function createWorkspace(options: WorkspaceOptions): Workspace {
         );
       }
       return sha;
+    },
+    async commitAll(path, message, as) {
+      const named = await run(`${git(path)} config user.email`, 30_000);
+      const identity =
+        named.exitCode === 0 && named.stdout.trim()
+          ? ""
+          : `-c ${q(`user.name=${as.name}`)} -c ${q(`user.email=${as.email}`)} `;
+      await must(
+        `${git(path)} add -A && ${git(path)} ${identity}-c core.hooksPath=/dev/null commit --quiet --no-verify -m ${q(message)}`,
+        "Could not commit",
+      );
+    },
+    async discard(path, sha) {
+      if (!/^[0-9a-f]{40}$/.test(sha)) throw new WorkspaceError("Not a commit sha");
+      await must(
+        `${git(path)} reset --hard --quiet ${q(sha)} && ${git(path)} clean -fdq`,
+        "Could not discard the changes",
+      );
+    },
+    async hunks(path, file, from, to, context = 0) {
+      const base = /^merge-base:(.+):([0-9a-f]{40})$/.exec(from);
+      const start = base
+        ? (
+            await must(
+              `${git(path)} merge-base ${q(base[2]!)} ${q(`origin/${base[1]}`)}`,
+              "Could not find the merge base",
+            )
+          ).trim()
+        : from;
+      return fileHunks(reads(path), file, start, to, context);
     },
     async installTrailer(path, hooksDir, trailer) {
       // Per-worktree config, as `git sparse-checkout` sets it up.
@@ -616,6 +682,20 @@ export function createWorkspace(options: WorkspaceOptions): Workspace {
       };
     },
   };
+
+  /** Fetch commit `sha` unless the worktree has it (GitHub serves a reachable commit by sha). */
+  async function haveCommit(path: string, sha: string): Promise<void> {
+    if (!/^[0-9a-f]{40}$/.test(sha)) throw new WorkspaceError("Not a commit sha");
+    if ((await run(`${git(path)} cat-file -e ${q(`${sha}^{commit}`)}`, 30_000)).exitCode === 0) {
+      return;
+    }
+    const fetched = await authed(`-C ${q(path)} fetch --quiet origin ${q(sha)}`);
+    if (fetched.exitCode !== 0) {
+      throw new WorkspaceError(
+        "The commit you last reviewed is no longer on GitHub (the branch was likely force-pushed).",
+      );
+    }
+  }
 
   async function mergeBase(path: string, base: string): Promise<string> {
     return (

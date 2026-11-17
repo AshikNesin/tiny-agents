@@ -528,6 +528,8 @@ export const codeReviews = sqliteTable(
     fromFork: bool("from_fork").notNull().default(false),
     /** The owner opened the PR: GitHub lets them only comment on it, not approve. */
     mine: bool("mine").notNull().default(false),
+    /** The commit of the owner's last review of it on GitHub, for "Since your review". */
+    reviewedSha: text("reviewed_sha"),
     /** On the sandbox while the review is open (removed on archive). */
     worktree: text("worktree"),
     /** `<instanceId>:<nativeId>` of the assistant, once asked. */

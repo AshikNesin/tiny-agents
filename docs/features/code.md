@@ -478,8 +478,32 @@ folded. GitHub places them at the PR's current head: when the review shows
 an older commit, or the code moved on (outdated), a file lists them above
 its diff instead, the first with a hint to **Update**.
 
-Not built yet (issue #345): the diff of changes since your last review,
-and pushing changes made during a review.
+**Since your review.** Opening a review reads which commit your last
+GitHub review of the PR was on (from the same query), and submitting one
+here records its head. When the PR has moved on since, the diff opens on
+**Since your review**: the changes from that commit to the head, fetched
+by sha if the worktree lacks it (a force-pushed commit GitHub no longer
+has says so). **Since <base>** still shows the whole PR. Viewed marks hold
+in both.
+
+**Changing the code.** What you or the assistant change in the review's
+checkout shows under **Your changes** (the diff from the PR's head to the
+worktree, commits made there included), with three ways on:
+
+- **Push to PR** commits it (with your message, as the sandbox's git
+  identity or else your GitHub login's noreply address, hooks off) and
+  pushes it to the PR's branch, after a confirm that names the branch and
+  its author. Never forced: GitHub refuses the push when the branch moved.
+  A fork's branch takes it only when its author allows edits from
+  maintainers; otherwise the server says to post suggestions instead.
+- **Post as suggestions** turns each hunk into a pending GitHub suggestion
+  on the head lines it replaces (an added line is suggested with the line it
+  follows). GitHub takes comments only on lines of the PR's own diff, so a
+  hunk outside it, or in a file you added or deleted, is skipped and counted.
+- **Discard** (after a confirm) puts the checkout back at the PR's head.
+
+**Open in terminal** in the header opens a Terminal tab that starts in the
+review's checkout, for changes by hand; they show under **Your changes** too.
 
 ## Bots hand off coding
 

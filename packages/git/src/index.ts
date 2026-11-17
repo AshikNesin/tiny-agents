@@ -344,3 +344,67 @@ export function guardSides<T extends FileSides>(diff: T): T {
       : undefined;
   return unshowable ? { ...diff, oldContent: "", newContent: "", unshowable } : diff;
 }
+
+/** One hunk of a file's diff: the lines it replaces on the old side, and the new lines. */
+export interface Hunk {
+  /** First old line the hunk touches; after a pure insertion, the line it follows (0 at the top). */
+  oldStart: number;
+  oldCount: number;
+  newStart: number;
+  newCount: number;
+  /** The hunk's new lines, in order (empty for a pure deletion). */
+  added: string[];
+}
+
+const HUNK_HEADER = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
+
+/** The hunks of one file's unified diff. */
+function parseHunks(diff: string): Hunk[] {
+  const hunks: Hunk[] = [];
+  let current: Hunk | undefined;
+  for (const line of diff.split("\n")) {
+    const header = HUNK_HEADER.exec(line);
+    if (header) {
+      current = {
+        oldStart: Number(header[1]),
+        oldCount: header[2] === undefined ? 1 : Number(header[2]),
+        newStart: Number(header[3]),
+        newCount: header[4] === undefined ? 1 : Number(header[4]),
+        added: [],
+      };
+      hunks.push(current);
+    } else if (current && line.startsWith("+")) {
+      current.added.push(line.slice(1));
+    }
+  }
+  return hunks;
+}
+
+/**
+ * One file's hunks from commit `from` to `to` (a commit, or the working tree
+ * when null), with `context` unchanged lines around each.
+ */
+export async function fileHunks(
+  port: GitReadPort,
+  path: string,
+  from: string,
+  to: string | null,
+  context = 0,
+): Promise<Hunk[]> {
+  const out = await read(
+    port,
+    [
+      "diff",
+      "--no-ext-diff",
+      "--no-color",
+      "--no-renames",
+      `-U${context}`,
+      from,
+      ...(to ? [to] : []),
+      "--",
+      path,
+    ],
+    `Could not diff ${path}`,
+  );
+  return parseHunks(out);
+}

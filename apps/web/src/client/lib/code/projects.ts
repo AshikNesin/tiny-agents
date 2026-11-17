@@ -16,6 +16,9 @@ import type {
   InboxPullView,
   PullReviewView,
   PullThreadsView,
+  PushedReview,
+  ReviewTerminal,
+  SuggestedChanges,
   ReviewDraft,
   ReviewDraftBody,
   ReviewFile,
@@ -86,9 +89,11 @@ export const projectsApi = {
   merge: (id: string, method: MergeMethod) =>
     apiClient.post<ThreadPullsView>(`${thread(id)}/pr/merge`, { method }),
 
-  reviewFiles: (id: string) => apiClient.get<ReviewFile[]>(`${thread(id)}/review/files`),
-  reviewFile: (id: string, path: string) =>
-    apiClient.get<ReviewFileDiff>(`${thread(id)}/review/file`, { path }),
+  /** `since: "review"`: a PR review's changes since the owner's last review. */
+  reviewFiles: (id: string, since?: "review" | "mine") =>
+    apiClient.get<ReviewFile[]>(`${thread(id)}/review/files`, since ? { since } : undefined),
+  reviewFile: (id: string, path: string, since?: "review" | "mine") =>
+    apiClient.get<ReviewFileDiff>(`${thread(id)}/review/file`, since ? { path, since } : { path }),
   setViewed: (id: string, path: string, hash: string, viewed: boolean) =>
     apiClient.post(`${thread(id)}/review/viewed`, { path, hash, viewed }),
   drafts: (id: string) => apiClient.get<ReviewDraft[]>(`${thread(id)}/review/drafts`),
@@ -145,6 +150,16 @@ export const reviewsApi = {
     apiClient.post<{ threadId: string; sent: number }>(
       `${base}/reviews/${encodeURIComponent(id)}/comments/to-thread`,
     ),
+  /** Commit your changes in the review's checkout and push them to the PR's branch. */
+  push: (id: string, message: string) =>
+    apiClient.post<PushedReview>(`${base}/reviews/${encodeURIComponent(id)}/push`, { message }),
+  /** Your changes as pending suggestion comments. */
+  suggest: (id: string) =>
+    apiClient.post<SuggestedChanges>(`${base}/reviews/${encodeURIComponent(id)}/suggestions`),
+  discard: (id: string) => apiClient.post(`${base}/reviews/${encodeURIComponent(id)}/discard`),
+  /** A Terminal tab in the review's checkout. */
+  terminal: (id: string) =>
+    apiClient.post<ReviewTerminal>(`${base}/reviews/${encodeURIComponent(id)}/terminal`),
 };
 
 /** The page of a review. */

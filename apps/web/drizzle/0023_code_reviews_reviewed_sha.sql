@@ -1,0 +1,1 @@
+ALTER TABLE `code_reviews` ADD `reviewed_sha` text;

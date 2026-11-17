@@ -38,7 +38,7 @@ function reviewMessage(drafts: ReviewDraft[]): string {
   return `Review comments (${drafts.length}):\n\n${parts.join("\n\n---\n\n")}`;
 }
 
-interface DraftInput {
+export interface DraftInput {
   path: string;
   side?: "old" | "new";
   startLine: number;

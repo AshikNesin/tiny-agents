@@ -44,6 +44,8 @@ export interface Review {
   state: "APPROVED" | "CHANGES_REQUESTED" | "COMMENTED" | "DISMISSED" | "PENDING";
   body: string;
   submittedAt: string;
+  /** The commit it was submitted on. */
+  commit?: string | null;
 }
 
 export interface ReviewComment {
@@ -92,6 +94,10 @@ export interface PullSnapshot {
   baseRef: string;
   /** The head branch lives in another repository. */
   fromFork: boolean;
+  /** The repository the head branch lives in (null when it was deleted). */
+  headRepo: RepoRef | null;
+  /** A fork's author lets maintainers push to the head branch. */
+  maintainerCanModify: boolean;
   mergeable: "mergeable" | "conflicting" | "unknown";
   mergeMethods: MergeMethod[];
   /** GitHub's native auto-merge is enabled. */
@@ -266,12 +272,13 @@ const SNAPSHOT_QUERY = `query PullSnapshot($owner: String!, $name: String!, $num
     pullRequest(number: $number) {
       id number url title body state isDraft merged mergeable
       headRefName headRefOid baseRefName isCrossRepository isInMergeQueue
+      maintainerCanModify headRepository { name owner { login } }
       autoMergeRequest { enabledAt }
       timelineItems(last: 5, itemTypes: [REMOVED_FROM_MERGE_QUEUE_EVENT]) {
         nodes { ... on RemovedFromMergeQueueEvent { id createdAt reason } }
       }
       ${AUTHOR}
-      reviews(last: 50) { nodes { id state body submittedAt authorAssociation ${AUTHOR} } }
+      reviews(last: 50) { nodes { id state body submittedAt authorAssociation ${AUTHOR} commit { oid } } }
       reviewThreads(first: 100) {
         nodes {
           id path line startLine diffSide isResolved isOutdated
@@ -338,6 +345,8 @@ interface RawSnapshot {
       headRefOid: string;
       baseRefName: string;
       isCrossRepository: boolean;
+      maintainerCanModify?: boolean;
+      headRepository?: { name: string; owner: { login: string } } | null;
       isInMergeQueue?: boolean;
       autoMergeRequest?: { enabledAt: string } | null;
       timelineItems?: { nodes: Array<{ id?: string; createdAt?: string; reason?: string | null }> };
@@ -350,6 +359,7 @@ interface RawSnapshot {
           submittedAt: string;
           authorAssociation: string;
           author: RawAuthor | null;
+          commit?: { oid: string } | null;
         }>;
       };
       reviewThreads: {
@@ -481,6 +491,10 @@ export function toSnapshot(raw: RawSnapshot): PullSnapshot {
     headSha: head?.oid ?? pr.headRefOid,
     baseRef: pr.baseRefName,
     fromFork: pr.isCrossRepository,
+    headRepo: pr.headRepository
+      ? { owner: pr.headRepository.owner.login, name: pr.headRepository.name }
+      : null,
+    maintainerCanModify: pr.maintainerCanModify ?? false,
     mergeable:
       pr.mergeable === "MERGEABLE"
         ? "mergeable"
@@ -496,6 +510,7 @@ export function toSnapshot(raw: RawSnapshot): PullSnapshot {
       state: r.state,
       body: r.body,
       submittedAt: r.submittedAt,
+      commit: r.commit?.oid ?? null,
     })),
     threads: pr.reviewThreads.nodes.map((t) => ({
       id: t.id,

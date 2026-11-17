@@ -10,7 +10,7 @@
  * wait above the thread's composer and go to the agent with the next message. The scope picker also shows what one turn changed (its
  * checkpoint against the one before), with Revert to here.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   ChevronDown,
   ChevronLeft,
@@ -97,8 +97,21 @@ export function ReviewPanel({
   conversations?: (path: string) => FileConversations;
   /** Uncommitted changes or one commit, from the harness (when it serves diffs). */
   onOtherScopes?: () => void;
-  /** A PR review (issue #345): its branch line, and no turns to step through. */
-  pull?: { headRef: string };
+  /**
+   * A PR review (issue #345): its branch line, no turns to step through, and
+   * with `reviewedSha` (the owner's last review, older than the head) a
+   * "Since your review" scope, shown first.
+   */
+  pull?: {
+    headRef: string;
+    reviewedSha?: string | null;
+    /**
+     * With it, a "Your changes" scope (what was changed in the review's
+     * checkout on top of the PR's head) shows these actions over its files;
+     * `done` reads the changes again.
+     */
+    yourChanges?: (done: () => void) => ReactNode;
+  };
 }) {
   const settledKey = useSteadyKey(refreshKey);
   const [files, setFiles] = useState<ReviewFile[] | null>(null);
@@ -122,8 +135,16 @@ export function ReviewPanel({
     }
   };
   const confirm = useConfirm();
-  /** `base`, or a checkpoint id (what that turn changed). */
-  const [scope, setScope] = useState("base");
+  /**
+   * `base`, `review` (since the owner's last review of a PR), `mine` (the
+   * owner's changes on top of a PR's head), or a checkpoint id.
+   */
+  const [picked, setScope] = useState<string | null>(null);
+  const scope = picked ?? (pull?.reviewedSha ? "review" : "base");
+  // Viewed marks are per file content, so they hold in either whole-PR scope.
+  const viewable = scope === "base" || scope === "review";
+  const worktreeScope = viewable || scope === "mine";
+  const since = scope === "review" || scope === "mine" ? scope : undefined;
   const [checkpoints, setCheckpoints] = useState<CheckpointView[]>([]);
   const checkpoint = checkpoints.find((c) => c.id === scope);
 
@@ -154,10 +175,9 @@ export function ReviewPanel({
   useEffect(() => {
     let cancelled = false;
     setError(null);
-    const list =
-      scope === "base"
-        ? projectsApi.reviewFiles(threadId)
-        : projectsApi.checkpointFiles(threadId, scope);
+    const list = worktreeScope
+      ? projectsApi.reviewFiles(threadId, since)
+      : projectsApi.checkpointFiles(threadId, scope);
     list
       .then((list) => {
         if (cancelled) return;
@@ -173,7 +193,7 @@ export function ReviewPanel({
     return () => {
       cancelled = true;
     };
-  }, [threadId, settledKey, reload, scope]);
+  }, [threadId, settledKey, reload, scope, worktreeScope, since]);
 
   const currentFile = files?.find((f) => f.path === current);
   const currentHash = currentFile?.hash;
@@ -184,8 +204,8 @@ export function ReviewPanel({
   useEffect(() => {
     if (!current || !reading) return;
     let cancelled = false;
-    (scope === "base"
-      ? projectsApi.reviewFile(threadId, current)
+    (worktreeScope
+      ? projectsApi.reviewFile(threadId, current, since)
       : projectsApi.checkpointFile(threadId, scope, current)
     )
       .then((d) => !cancelled && setShown({ key: `${scope}:${current}`, diff: d }))
@@ -193,7 +213,7 @@ export function ReviewPanel({
     return () => {
       cancelled = true;
     };
-  }, [threadId, current, currentHash, reload, scope, reading]);
+  }, [threadId, current, currentHash, reload, scope, reading, worktreeScope, since]);
 
   const listedFiles = useMemo(
     () =>
@@ -282,7 +302,49 @@ export function ReviewPanel({
         </p>
       )}
       <div className="border-border flex h-11 shrink-0 items-center gap-1 border-b px-2">
-        {pull ? (
+        {pull?.reviewedSha || pull?.yourChanges ? (
+          <SearchSelect
+            label="Changes to show"
+            value={scope}
+            onValueChange={setScope}
+            options={[
+              ...(pull.reviewedSha
+                ? [
+                    {
+                      value: "review",
+                      label: "Since your review",
+                      description: `What changed after ${pull.reviewedSha.slice(0, 7)}`,
+                    },
+                  ]
+                : []),
+              {
+                value: "base",
+                label: `Since ${baseBranch}`,
+                description: "The whole pull request",
+              },
+              ...(pull.yourChanges
+                ? [
+                    {
+                      value: "mine",
+                      label: "Your changes",
+                      description: "Changed in this checkout, not on GitHub yet",
+                    },
+                  ]
+                : []),
+            ]}
+            triggerClassName="text-foreground h-8 text-sm"
+          >
+            <FileDiffIcon className="text-muted-foreground size-4" />
+            <span className="max-w-48 truncate">
+              {scope === "review"
+                ? "Since your review"
+                : scope === "mine"
+                  ? "Your changes"
+                  : `Since ${baseBranch}`}
+            </span>
+            <ChevronDown className="opacity-50" />
+          </SearchSelect>
+        ) : pull ? (
           <span className="text-foreground flex h-8 items-center gap-1.5 px-2 text-sm">
             <FileDiffIcon className="text-muted-foreground size-4" />
             Since {baseBranch}
@@ -332,14 +394,18 @@ export function ReviewPanel({
         )}
         {files && files.length > 0 && (
           <span className="text-muted-foreground shrink-0 px-1 text-xs tabular-nums">
-            {scope === "base"
+            {viewable
               ? `${totals.viewed}/${files.length} viewed `
-              : `${files.length} files `}
+              : `${files.length === 1 ? "1 file" : `${files.length} files`} `}
             <span className="text-success">+{totals.add}</span>{" "}
             <span className="text-destructive">−{totals.del}</span>
           </span>
         )}
         <span className="flex-1" />
+        {scope === "mine" &&
+          files &&
+          files.length > 0 &&
+          pull?.yourChanges?.(() => setReload((n) => n + 1))}
         {page && files && files.length > 0 && (
           <Button
             variant="ghost"
@@ -380,6 +446,12 @@ export function ReviewPanel({
         <div className="flex justify-center p-6">
           <Spinner />
         </div>
+      ) : files.length === 0 && scope === "mine" ? (
+        <EmptyState
+          icon={FileDiffIcon}
+          title="You have not changed anything"
+          description="Ask the assistant to change something, or open a terminal in this checkout."
+        />
       ) : files.length === 0 ? (
         <EmptyState
           icon={FileDiffIcon}
@@ -412,7 +484,7 @@ export function ReviewPanel({
                   const [name, dir] = splitPath(f.path);
                   return (
                     <li key={f.path} className="flex items-center gap-1">
-                      {scope === "base" && (
+                      {viewable && (
                         <Checkbox
                           checked={f.viewed}
                           onCheckedChange={() => toggleViewed(f)}
@@ -476,7 +548,7 @@ export function ReviewPanel({
                     const next = listedFiles[index + step];
                     if (next) setCurrent(next.path);
                   }}
-                  onViewed={scope === "base" ? () => toggleViewed(currentFile) : undefined}
+                  onViewed={viewable ? () => toggleViewed(currentFile) : undefined}
                   onList={page ? undefined : () => setListing(true)}
                 />
               )}

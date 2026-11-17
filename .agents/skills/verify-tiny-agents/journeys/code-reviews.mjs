@@ -3,7 +3,8 @@
 // assistant beside them. A line comment for the assistant waits under the review, and the
 // first question starts the assistant (a real predictable Shelley thread,
 // `ta-verify up --shelley`). A comment for GitHub, with a suggestion, goes with Submit review,
-// and a conversation already on GitHub shows under its line, with Reply and Resolve.
+// and a conversation already on GitHub shows under its line, with Reply and Resolve. Your
+// changes in the review's checkout show apart from the PR's and go to its branch with Push to PR.
 //
 // The verify instance reaches neither GitHub nor a sandbox, so the review's own routes
 // (the PR from GitHub, its files and diffs from the sandbox's worktree) are answered with
@@ -39,11 +40,12 @@ await journey(
       url: "https://github.com/acme/api/pull/482",
       title: "Retry webhooks with backoff",
       author: "maria",
-      headRef: "maria:retry-webhooks",
+      headRef: "retry-webhooks",
       baseRef: "main",
       headSha: "0123456789abcdef0123456789abcdef01234567",
       fromFork: true,
       mine: false,
+      reviewedSha: null,
       threadId: null,
       codingThreadId: null,
       archived: false,
@@ -84,6 +86,7 @@ await journey(
     const githubComments = [];
     const submitted = [];
     const replies = [];
+    const pushed = [];
     const conversation = {
       id: "T_1",
       path: "src/webhooks/retry.ts",
@@ -167,8 +170,27 @@ await journey(
       await context.route(`**/api/v1/code/threads/${key}/review/files`, (route) =>
         route.fulfill(ok(files)),
       );
+      // Your changes on top of the PR's head: one line of retry.ts.
+      await context.route(`**/api/v1/code/threads/${key}/review/files?since=mine`, (route) =>
+        route.fulfill(ok([{ ...files[0], additions: 1, deletions: 1, hash: "mine1" }])),
+      );
+      await context.route(`**/api/v1/code/reviews/${review.id}/push`, (route) => {
+        pushed.push(route.request().postDataJSON());
+        return route.fulfill(ok({ sha: "89abcdef".repeat(5), branch: review.headRef }));
+      });
       await context.route(`**/api/v1/code/threads/${key}/review/file?*`, (route) => {
-        const file = new URL(route.request().url()).searchParams.get("path");
+        const query = new URL(route.request().url()).searchParams;
+        const file = query.get("path");
+        if (query.get("since") === "mine") {
+          const mine = NEW.map((l) => l.replace("30_000", "20_000"));
+          return route.fulfill(
+            ok({
+              path: file,
+              oldContent: `${NEW.join("\n")}\n`,
+              newContent: `${mine.join("\n")}\n`,
+            }),
+          );
+        }
         return route.fulfill(
           ok(
             file === "src/webhooks/retry.ts"
@@ -366,6 +388,26 @@ await journey(
       ).toBeVisible();
       expect(replies).toEqual([`Added it (${stamp})`]);
     });
+
+    await step(
+      "your changes show apart from the PR's, and go to its branch after a confirm",
+      async () => {
+        const pr = page.getByTestId("code-pull-review");
+        await pr.getByRole("button", { name: "Changes to show" }).click();
+        await page.getByRole("option", { name: /Your changes/ }).click();
+        await expect(pr.getByRole("navigation", { name: "Changed files" })).not.toContainText(
+          "queue.ts",
+        );
+        await pr.getByRole("button", { name: "Push to PR" }).click();
+        const dialog = page.getByRole("dialog", { name: "Push to the pull request" });
+        await expect(dialog).toContainText("Adds a commit to @maria's branch retry-webhooks.");
+        await dialog.getByRole("textbox", { name: "Commit message" }).fill("Cap the delay at 20s");
+        await proof("push-to-pr");
+        await dialog.getByRole("button", { name: "Push" }).click();
+        await expect(page.getByText("Pushed 89abcde to retry-webhooks.")).toBeVisible();
+        expect(pushed).toEqual([{ message: "Cap the delay at 20s" }]);
+      },
+    );
 
     await step("a phone shows one side at a time", async () => {
       const phone = await context.browser().newContext({
