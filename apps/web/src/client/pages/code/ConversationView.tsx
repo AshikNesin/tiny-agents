@@ -72,6 +72,7 @@ import {
 import { ancestry } from "../../lib/code/list";
 import { foldTurns, lastErrorId } from "../../lib/code/transcript";
 import { useCodeThread } from "../../lib/code/use-thread";
+import { useNextPrompt } from "../../lib/code/use-next-prompt";
 import { useCodeStore } from "../../store/code";
 import { useIsGuest } from "../../store/people";
 import { useCommentStore, useThreadComments } from "../../lib/code/comments";
@@ -217,6 +218,7 @@ export function ConversationView({
   const archive = useArchive();
   const guest = useIsGuest();
   const comments = useThreadComments(id, !guest);
+  const nextPrompt = useNextPrompt(id, items, working, state.loaded && !guest);
   const commentsSent = useCommentStore((s) => s.sent);
 
   useEffect(() => {
@@ -621,6 +623,7 @@ export function ConversationView({
                 threadId={id}
                 working={working}
                 insert={insert}
+                nextPrompt={nextPrompt}
                 onStop={caps.turns.interrupt ? stop : undefined}
                 controls={
                   <>

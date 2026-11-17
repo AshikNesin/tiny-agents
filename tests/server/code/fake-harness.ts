@@ -12,12 +12,15 @@ import {
   type InstanceEvent,
   type ThreadEvent,
   type ThreadSummary,
+  type TranscriptItem,
   type TurnOutcome,
 } from "@tiny-agents/code/contracts";
 
 export interface FakeHarness extends HarnessInstance {
   threads: ThreadSummary[];
   outcomes: Map<string, TurnOutcome>;
+  /** Each thread's rows (`getThread`); none by default. */
+  items: Map<string, TranscriptItem[]>;
   sent: Array<{ nativeId: string; message: string; queue?: boolean }>;
   created: Array<Record<string, unknown>>;
   /** Titles the app gave threads (`rename`), in order. */
@@ -66,6 +69,7 @@ export function fakeHarness(id = "fake", capabilities: Partial<Capabilities> = {
     label: "Fake",
     threads: [],
     outcomes: new Map(),
+    items: new Map(),
     sent: [],
     created: [],
     renamed: [],
@@ -98,7 +102,7 @@ export function fakeHarness(id = "fake", capabilities: Partial<Capabilities> = {
     async getThread(nativeId) {
       return {
         thread: harness.threads.find((t) => t.nativeId === nativeId) ?? thread(nativeId),
-        items: [],
+        items: harness.items.get(nativeId) ?? [],
         settings: { model: null, effort: null, permissionMode: null },
         queued: [],
         jobs: [],
