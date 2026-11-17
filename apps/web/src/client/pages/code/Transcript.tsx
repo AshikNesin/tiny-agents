@@ -683,7 +683,7 @@ function AutofixCard({
   text,
 }: {
   kind: "pass" | "final";
-  items: string[];
+  items: Array<{ id: string; title: string }>;
   text: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -709,9 +709,9 @@ function AutofixCard({
       </header>
       {items.length > 0 ? (
         <ul className="space-y-0.5 px-3 pt-1 pb-2">
-          {items.map((item, i) => (
-            <li key={i} className="truncate" title={item}>
-              {item}
+          {items.map((item) => (
+            <li key={item.id} className="truncate" title={item.title}>
+              {item.title}
             </li>
           ))}
         </ul>

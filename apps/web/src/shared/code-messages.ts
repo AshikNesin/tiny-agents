@@ -42,22 +42,22 @@ export function splitProjectPreamble(
 }
 
 /**
- * An Auto-fix request: which kind, and the title of each item it lists (a
+ * An Auto-fix request: which kind, and the id and title of each item it lists (a
  * failing check, a review comment), or null for any other message.
  */
 export function parseAutofixRequest(
   text: string,
-): { kind: "pass" | "final"; items: string[] } | null {
+): { kind: "pass" | "final"; items: Array<{ id: string; title: string }> } | null {
   if (text.startsWith(FINAL_HEAD)) return { kind: "final", items: [] };
   if (!text.startsWith(PASS_HEAD)) return null;
   const begin = text.indexOf("----- BEGIN UNTRUSTED PR DATA -----\n");
   const end = text.lastIndexOf("\n----- END UNTRUSTED PR DATA -----");
   if (begin < 0 || end < begin) return { kind: "pass", items: [] };
   const lines = text.slice(begin, end).split("\n");
-  const items: string[] = [];
+  const items: Array<{ id: string; title: string }> = [];
   lines.forEach((line, i) => {
     const title = lines[i + 1];
-    if (line.startsWith("### ") && title) items.push(title);
+    if (line.startsWith("### ") && title) items.push({ id: line.slice(4), title });
   });
   return { kind: "pass", items };
 }
