@@ -29,8 +29,13 @@ export interface BotMessagingStore {
     /** True when the target is mid-reply; the message runs after it settles. */
     queued?: boolean;
   }>;
-  /** Bot names the model can message (roster section). */
-  roster(conversationId: number): Promise<{ name: string; description: string; busy?: boolean }[]>;
+  /**
+   * Bot names the model can message (roster section). Only stable fields: a
+   * section whose text changes is sent to the model again, so a live "busy"
+   * flag would append a fresh roster to the transcript every time a bot
+   * starts or stops a reply. `message_bot` says when a message is queued.
+   */
+  roster(conversationId: number): Promise<{ name: string; description: string }[]>;
 }
 
 const ok = (text: string): ToolExecutionResult => ({ output: [{ type: "text", text }] });
@@ -90,9 +95,7 @@ export function createBotsToolkit(store: BotMessagingStore): Capability {
   const roster = section("bots", async (input) => {
     const bots = await store.roster(Number(input.conversationId));
     if (bots.length === 0) return undefined;
-    const lines = bots.map(
-      (bot) => `- ${bot.name}${bot.busy ? " (working right now)" : ""}: ${bot.description}`,
-    );
+    const lines = bots.map((bot) => `- ${bot.name}: ${bot.description}`);
     return ["You can message these bots with message_bot(to, text).", ...lines, CUSTODY_RULE].join(
       "\n",
     );

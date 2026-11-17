@@ -29,6 +29,7 @@ import {
   type CredentialRequestOutcome,
 } from "./credentials";
 import { capabilityInfo, type Capability, type CapabilityInfo } from "./capabilities";
+import { createContextTrimExtension } from "./context-trim";
 import { acquireStoreLock, type StoreLock } from "./lock";
 import {
   buildProviders,
@@ -296,6 +297,9 @@ export class AgentRuntime {
       // Questions for the owner wait on a document this runtime answers, so
       // the runtime brings their capability; conversations select it by id.
       const capabilities = [...(options.capabilities ?? []), createQuestionsCapability(questions)];
+      // Installed first, so conversations that never chose capabilities (they
+      // select every installed extension) get the trim too.
+      registry.install(createContextTrimExtension());
       for (const extension of options.extensions ?? []) registry.install(extension);
       // Capabilities must be installed before resume(): interrupted calls of
       // their tools (e.g. a pending approval or question) re-run against them.

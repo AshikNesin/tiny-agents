@@ -12,11 +12,15 @@
  * - Failure: a thrown error, an `error` or `aborted` stop, a timeout or no
  *   model at all are logged here and come back as `undefined`.
  * - The answer: the reply's text blocks, joined.
+ * - What it sends: the prompt and the user text pass the secret redactor
+ *   first, as tool results and logs do, so a vault value that reached a
+ *   transcript or a memory never travels on to a side model.
  *
  * Faux mode makes no side-calls: boot passes no side-caller there.
  */
 import type { MutableModels } from "@earendil-works/pi-ai/models";
 import { logger } from "@groot/core/logger";
+import { secretRedactor } from "@tiny-agents/agent";
 import type { ModelCatalog } from "@tiny-agents/models";
 
 /** What a side-caller needs from the runtime: its Model catalog and the registry that calls models. */
@@ -84,11 +88,11 @@ export function createSideCaller(runtime: SideCallRuntime): SideCaller {
         const call = runtime.models.completeSimple(
           model,
           {
-            systemPrompt: request.system,
+            systemPrompt: secretRedactor.scrub(request.system),
             messages: [
               {
                 role: "user",
-                content: [{ type: "text", text: request.user }],
+                content: [{ type: "text", text: secretRedactor.scrub(request.user) }],
                 timestamp: Date.now(),
               },
             ],
