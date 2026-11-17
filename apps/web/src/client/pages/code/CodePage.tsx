@@ -47,6 +47,17 @@ import { useThreadCommenting } from "../../lib/code/comments";
 import { PullPanel } from "./PullPanel";
 import { ReviewPanel } from "./ReviewPanel";
 import { ReviewPage, type ReviewTab } from "./ReviewPage";
+import { ReviewSidebar, type SideTab } from "./ReviewSidebar";
+
+const SIDE_TAB_KEY = "tiny-agents:code-side-tab";
+
+function readSideTab(): SideTab {
+  try {
+    return window.localStorage.getItem(SIDE_TAB_KEY) === "pr" ? "pr" : "source";
+  } catch {
+    return "source";
+  }
+}
 import { ConversationList } from "./ConversationList";
 import { ConversationView } from "./ConversationView";
 import { NewConversation } from "./NewConversation";
@@ -207,18 +218,32 @@ export function CodePage() {
     }
   }, [rawId, changesOpen, navigate]);
 
-  const toggleChanges = useCallback(() => {
-    if (!threadId) return;
-    navigate(changesOpen ? threadPath(threadId) : threadPath(threadId, "/changes"));
-  }, [threadId, changesOpen, navigate]);
-  const togglePr = useCallback(() => {
-    if (!threadId) return;
-    navigate(prOpen ? threadPath(threadId) : threadPath(threadId, "/pr"));
-  }, [threadId, prOpen, navigate]);
-  const project = row?.projectId ? projects?.find((p) => p.id === row.projectId) : undefined;
   const sideOpen = changesOpen || prOpen;
+  // The right panel's tab: Source control (`/changes`) or Pull request (`/pr`).
+  const [lastTab, setLastTab] = useState<SideTab>(readSideTab);
+  const showTab = useCallback(
+    (tab: SideTab) => {
+      if (!threadId) return;
+      setLastTab(tab);
+      try {
+        window.localStorage.setItem(SIDE_TAB_KEY, tab);
+      } catch {
+        // not remembered in private mode
+      }
+      navigate(threadPath(threadId, tab === "pr" ? "/pr" : "/changes"));
+    },
+    [threadId, navigate],
+  );
+  // One toggle opens the panel where it was left (a thread outside a project has no PR tab).
+  const togglePanel = useCallback(() => {
+    if (!threadId) return;
+    if (sideOpen) navigate(threadPath(threadId));
+    else showTab(lastTab === "pr" && row?.projectId ? "pr" : "source");
+  }, [threadId, sideOpen, lastTab, row?.projectId, navigate, showTab]);
+  const showChanges = useCallback(() => showTab("source"), [showTab]);
+  const project = row?.projectId ? projects?.find((p) => p.id === row.projectId) : undefined;
 
-  useCodeShortcuts(threadId, toggleChanges, toggleSidebar);
+  useCodeShortcuts(threadId, togglePanel, toggleSidebar);
 
   if (slug) return <SlugRedirect slug={slug} />;
   if (harnessList !== null && harnessList.length === 0) return <NotConfigured brand={brand} />;
@@ -241,13 +266,11 @@ export function CodePage() {
   // The Changes and Pull request panels, for a side pane or the Review page.
   const openPage = (tab: ReviewTab) =>
     threadId && navigate(threadPath(threadId, `/review${tab === "pr" ? "?tab=pr" : ""}`));
-  const pullPanel = (onClose: () => void, page: boolean) =>
+  const pullPanel = (page: boolean) =>
     threadId ? (
       <PullPanel
         threadId={threadId}
         refreshKey={`${row?.working}:${row?.cursor}:${row?.pr?.loop}`}
-        onClose={onClose}
-        onExpand={page ? undefined : () => openPage("pr")}
         onAttach={(text) => {
           setInsert({ text, nonce: Date.now() });
           // The composer is on the thread screen (on phones, and from the Review page).
@@ -256,7 +279,7 @@ export function CodePage() {
         }}
       />
     ) : null;
-  const changesPanel = (onClose: () => void, page: boolean) => {
+  const changesPanel = (page: boolean) => {
     if (!threadId) return null;
     if (project && reviewScope === "base") {
       return (
@@ -264,8 +287,7 @@ export function CodePage() {
           threadId={threadId}
           baseBranch={project.baseBranch}
           refreshKey={changesKey}
-          onClose={onClose}
-          onExpand={page ? undefined : () => openPage("changes")}
+          page={page}
           commenting={commenting}
           onOtherScopes={
             harness?.capabilities.workspace.diffs ? () => setReviewScope("harness") : undefined
@@ -279,19 +301,13 @@ export function CodePage() {
         instanceId={harness.id}
         cwd={cwd}
         refreshKey={changesKey}
-        onClose={() => {
-          setReviewScope("base");
-          onClose();
-        }}
-        onExpand={page ? undefined : () => openPage("changes")}
         commenting={commenting}
       />
     );
   };
   const sidePane = "border-border flex w-full min-w-0 flex-col lg:w-[48%] lg:max-w-3xl lg:border-l";
-  const backToThread = () => threadId && navigate(threadPath(threadId));
-  const sidePull = prOpen ? pullPanel(togglePr, false) : null;
-  const sideChanges = changesOpen ? changesPanel(toggleChanges, false) : null;
+  const sideTab: SideTab = prOpen && row?.projectId ? "pr" : "source";
+  const sideContent = !sideOpen ? null : sideTab === "pr" ? pullPanel(false) : changesPanel(false);
 
   return (
     <div className="flex h-dvh min-h-0 flex-col">
@@ -376,8 +392,8 @@ export function CodePage() {
               pr={row?.pr ?? null}
               tab={reviewTab}
               onTab={(tab) => openPage(tab)}
-              changes={changesPanel(backToThread, true)}
-              pull={row?.projectId ? pullPanel(backToThread, true) : null}
+              changes={changesPanel(true)}
+              pull={row?.projectId ? pullPanel(true) : null}
               sidebarHidden={!sidebarOpen}
             />
           ) : threadId && harness ? (
@@ -388,13 +404,12 @@ export function CodePage() {
               harness={harness}
               rows={rows}
               externalUrl={row?.externalUrl}
-              changesOpen={changesOpen}
-              onToggleChanges={toggleChanges}
+              panelOpen={sideOpen}
+              onTogglePanel={togglePanel}
+              onShowChanges={changesOpen ? undefined : showChanges}
               inProject={Boolean(row?.projectId)}
               projectName={project?.name}
               pr={row?.pr ?? null}
-              prOpen={prOpen}
-              onTogglePr={togglePr}
               insert={insert}
               onCwd={setViewCwd}
             />
@@ -409,14 +424,21 @@ export function CodePage() {
           )}
         </main>
 
-        {sidePull && (
-          <section className={sidePane} aria-label="Pull request">
-            {sidePull}
-          </section>
-        )}
-        {sideChanges && (
-          <section className={sidePane} aria-label="Changes">
-            {sideChanges}
+        {sideContent && threadId && (
+          <section className={sidePane} aria-label="Review panel">
+            <ReviewSidebar
+              tab={sideTab}
+              onTab={showTab}
+              pr={row?.pr ?? null}
+              hasPull={Boolean(row?.projectId)}
+              onExpand={() => openPage(sideTab === "pr" ? "pr" : "changes")}
+              onClose={() => {
+                setReviewScope("base");
+                navigate(threadPath(threadId));
+              }}
+            >
+              {sideContent}
+            </ReviewSidebar>
           </section>
         )}
       </div>

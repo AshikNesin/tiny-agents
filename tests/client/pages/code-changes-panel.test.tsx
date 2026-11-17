@@ -79,7 +79,7 @@ describe("Changes panel", () => {
       newContent: "b\n",
     });
     const panel = (refreshKey: string) => (
-      <ChangesPanel instanceId="claude-code" cwd="/r" refreshKey={refreshKey} onClose={() => {}} />
+      <ChangesPanel instanceId="claude-code" cwd="/r" refreshKey={refreshKey} />
     );
     const { rerender } = render(panel("1"));
     await wait(0);
@@ -120,7 +120,6 @@ describe("commenting on a change", () => {
         cwd="/r"
         refreshKey="1"
         commenting={{ comments: [], add, remove: () => {} }}
-        onClose={() => {}}
       />,
     );
     await wait(0);
@@ -155,7 +154,7 @@ describe("re-reading while the agent writes non-stop", () => {
       newContent: "a\n",
     });
     const panel = (refreshKey: string) => (
-      <ChangesPanel instanceId="claude-code" cwd="/r" refreshKey={refreshKey} onClose={() => {}} />
+      <ChangesPanel instanceId="claude-code" cwd="/r" refreshKey={refreshKey} />
     );
     const { rerender } = render(panel("0"));
     await wait(0);
@@ -170,6 +169,46 @@ describe("re-reading while the agent writes non-stop", () => {
 });
 
 describe("Review panel", () => {
+  it("lists the changed files first, opens one to its diff, and goes back to the list", async () => {
+    const thread = "/code/threads/claude-code%3At1";
+    routes[`${thread}/checkpoints`] = () => [];
+    routes[`${thread}/review/drafts`] = () => [];
+    routes[`${thread}/pr`] = () => ({ branch: "ta/fix-login", ahead: 2 });
+    routes[`${thread}/review/files`] = () => [
+      { ...file("src/auth/login.ts", 4), hash: "h1", viewed: false },
+      { ...file("README.md", 1), status: "added", hash: "h2", viewed: false },
+    ];
+    routes[`${thread}/review/file?src/auth/login.ts`] = () => ({
+      path: "src/auth/login.ts",
+      oldContent: "",
+      newContent: "export const login = 1;\n",
+    });
+    render(
+      <ConfirmProvider>
+        <ReviewPanel threadId="claude-code:t1" baseBranch="main" refreshKey="1" />
+      </ConfirmProvider>,
+    );
+    await wait(0);
+    expect(screen.getByText("ta/fix-login")).toBeInTheDocument();
+    expect(screen.getByText("2 ahead")).toBeInTheDocument();
+    const list = screen.getByRole("navigation", { name: "Changed files" });
+    const row = within(list).getByRole("button", { name: /login\.ts/ });
+    expect(row).toHaveTextContent("login.ts");
+    expect(row).toHaveTextContent("src/auth");
+    expect(row).toHaveTextContent("M");
+    expect(within(list).getByRole("button", { name: /README\.md/ })).toHaveTextContent("A");
+    // The list alone: no diff until a file is picked.
+    expect(screen.queryByText("export const login = 1;")).toBeNull();
+
+    act(() => row.click());
+    await wait(0);
+    expect(screen.getByText("export const login = 1;")).toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "Changed files" })).toBeNull();
+
+    act(() => screen.getByRole("button", { name: "All files" }).click());
+    expect(screen.getByRole("navigation", { name: "Changed files" })).toBeInTheDocument();
+  });
+
   it("shows the open file's new content when the agent changes it again", async () => {
     const thread = "/code/threads/claude-code%3At1";
     let hash = "h1";
@@ -184,12 +223,7 @@ describe("Review panel", () => {
     });
     const panel = (refreshKey: string) => (
       <ConfirmProvider>
-        <ReviewPanel
-          threadId="claude-code:t1"
-          baseBranch="main"
-          refreshKey={refreshKey}
-          onClose={() => {}}
-        />
+        <ReviewPanel threadId="claude-code:t1" baseBranch="main" refreshKey={refreshKey} page />
       </ConfirmProvider>
     );
     const { rerender } = render(panel("1"));

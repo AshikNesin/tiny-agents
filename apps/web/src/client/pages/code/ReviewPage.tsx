@@ -1,6 +1,6 @@
 /**
  * A thread's Review page (`/code/<id>/review`): what the side panes show
- * beside the thread, at full width. **Changes** (Review against the base
+ * beside the thread, at full width. **Source control** (Review against the base
  * branch for a project thread, else the harness's own changes) and, for a
  * project thread, **Pull request**, each a tab (`?tab=pr`). Line comments
  * work as in the panes and wait in the tray at the bottom (Send now), or go
@@ -8,7 +8,7 @@
  */
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, FileDiff, GitPullRequest } from "lucide-react";
+import { ArrowLeft, GitBranch, GitPullRequest } from "lucide-react";
 import { Button } from "@groot/ui";
 import { cn } from "@groot/ui/lib/utils";
 import { threadPath } from "../../lib/code/api";
@@ -42,8 +42,8 @@ export function ReviewPage({
 }) {
   const guest = useIsGuest();
   const state = pr ? pullState(pr.loop) : null;
-  const tabs: Array<{ id: ReviewTab; label: string; icon: typeof FileDiff; hint?: string }> = [];
-  if (changes) tabs.push({ id: "changes", label: "Changes", icon: FileDiff });
+  const tabs: Array<{ id: ReviewTab; label: string; icon: typeof GitBranch; hint?: string }> = [];
+  if (changes) tabs.push({ id: "changes", label: "Source control", icon: GitBranch });
   if (pull)
     tabs.push({
       id: "pr",

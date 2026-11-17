@@ -40,7 +40,7 @@ The layout follows [t3code](https://github.com/pingdotgg/t3code) (see
   sidebar here), with **Archived** and **Settings** at its foot;
 - one line per thread in the list;
 - a one-line header: the title (its menu holds the actions and the cost),
-  the project or folder, PR and Changes;
+  the project or folder, and one Review panel toggle;
 - every setting a turn needs (model, reasoning, permissions, context) as a
   chip inside the composer.
 
@@ -139,9 +139,13 @@ folder):
   subagents go along), or **Select all**, then **Archive** (or **Restore** in
   the archived view) moves them all, with one Undo.
 
-**Review.** **Changes** (⌘⇧D) shows the uncommitted changes (new files
-included), or a recent commit, of the thread's directory, each changed file
-as a card with its diff. Unchanged runs fold into **Show N more lines**, one
+**Review.** **Review panel** in the thread header (⌘⇧D) opens one panel on
+the right with tabs: **Source control** and, for a project thread, **Pull
+request #N**. It opens on the tab it was left on; **Close panel** and **Open
+as a page** sit at the end of its tab strip. Outside a project, Source
+control shows the uncommitted changes (new files included), or a recent
+commit, of the thread's directory, each changed file as a card with its
+diff. Unchanged runs fold into **Show N more lines**, one
 gutter numbers the lines, and long lines wrap.
 
 - **Comments.** Hover a line and press its **+** to open a composer right
@@ -154,8 +158,8 @@ gutter numbers the lines, and long lines wrap.
   Comments are kept per thread on the server, so they survive a reload, and
   work for every harness. A guest's comment, which cannot be saved, goes into
   the composer as `` `path:lines` `` and its text.
-- **Review page.** Each side pane's **Open as a page** opens the thread's
-  Review page (`/code/<id>/review`): **Changes** and, for a project thread,
+- **Review page.** The panel's **Open as a page** opens the thread's
+  Review page (`/code/<id>/review`): **Source control** and, for a project thread,
   **Pull request** (`?tab=pr`), each a tab at full width. Comments work there
   as in the pane and wait in a tray at the bottom (**Send now**); **Back to
   the thread** returns to the composer, where they go with the next message.
@@ -233,29 +237,46 @@ answer, the name is the task's first words without the filler ("Can you
 please fix the login flow when…" is `ta/fix-login-flow-users`). A name an
 earlier thread took, here or on the remote, gets `-2`, `-3`, ….
 
-**Review.** In a project thread, Changes (⌘⇧D) shows everything since the
-merge base with the base branch, committed or not (new files included), live
-as above: a file list with a
-filter (generated files and lockfiles muted and last), **Viewed** marks that
+**Review.** In a project thread, Source control (⌘⇧D) shows the branch, its
+base and how many commits it is ahead, then everything since the merge base
+with the base branch, committed or not (new files included), live as above:
+a file list (name, folder, +/−, a status letter A, M or D) with a filter
+(generated files and lockfiles muted and last). In the panel a file opens to
+its diff and **All files** goes back; on the Review page the list sits beside
+the diff. **Viewed** marks that
 come back unmarked when the agent changes the file again, `[` / `]` between
 files (or the file bar over the diff: previous, next, `n of N`, **Viewed**;
-**Hide file list** gives the diff the panel's full width), and line comments
-as above. **Uncommitted or a commit** switches to the harness's own Changes.
+on the Review page **Hide file list** gives the diff the full width), and
+line comments as above. **Uncommitted or a commit** switches to the
+harness's own changes.
 
-**Publish.** The **PR** button in the thread header opens the PR tab.
+**Publish.** The panel's **Pull request** tab (the header's toggle shows
+`#N` and its state once there is one) offers Publish.
 **Publish draft PR** pushes the branch (never forced, hooks off) and opens a
 draft PR with the commits as its body; with a PR open, Publish pushes new
 commits. **Link pull request** links an existing one, and a PR the agent
 opened for the branch is linked on its own. After a PR merges, the next
 Publish opens a new one; earlier PRs are listed.
 
-**The PR tab.** Checks at a glance (failures link to their log; a check
-pending for 6 hours is **Stalled** and no longer blocks green), reviews,
-unresolved comments (from authors Auto-fix does not trust, labelled
-**Ignored**), **Attach all comments** into the composer, the description
+**The PR tab.** The PR's number, state (open, draft, queued, merged or
+closed), title and `branch → base`. **Checks**: `N passing · N failing ·
+N pending` over a bar, **N failing checks** with **Fix CI** when one fails,
+then a row per check, failing first (duration, age, a link to GitHub; past
+six, the passing ones fold behind **Show N passing**; a check pending for 6
+hours is **Stalled** and no longer blocks green). A row opens to its status,
+start and end and, for an Actions job, its **Log excerpt**: the lines around
+the first failure (GitHub's timestamps and color codes taken out, error
+lines marked, the error itself on top), **Copy**, and **View full log**.
+**Comments**: every conversation comment, review and line thread, newest
+first, under **All**, **Humans** or **Bots** (a GitHub App, a `[bot]` login
+or a known review service such as CodeRabbit or Greptile), each with its
+author, age and markdown body; a line thread names `path:line`, shows its
+replies and Resolved or Outdated, and an open one can be added to the
+message. Authors Auto-fix does not trust are labelled **Ignored**. Then
+**Attach all comments** into the composer, the description
 (rendered as markdown, template comments hidden; **Edit** saves it to GitHub
 while the PR is open),
-**Fix CI** (one pass now), **Merge** with the repository's methods, the
+**Fix** (one pass now, when no check fails), **Merge** with the repository's methods, the
 **Auto-fix** switch with its state, the pass history, and **Unlink**.
 Opening the tab reconciles with GitHub, and while it is on screen it
 re-reads (and so reconciles) every 15 seconds, so a project on `gh` or a
@@ -297,7 +318,7 @@ then runs the repository's hooks as usual.
 
 **Turns and revert.** Every turn that changed something is checkpointed:
 the worktree, uncommitted files included, under a hidden ref in the
-project's clone. In Changes, the scope picker shows what any one turn
+project's clone. In Source control, the scope picker shows what any one turn
 changed, and **Revert to here** puts the files back as they were after that
 turn, as uncommitted changes (commits, and anything pushed, stay; the state
 it replaces is checkpointed first). Not while the agent works.
@@ -426,6 +447,8 @@ Known limits (register row C7):
   - `code.pulls.ts`, `code.pulls.store.ts`: PR links, Publish, the
     reconcile chain (`code-pr-reconcile`) and the PR tab.
   - `code.autofix.ts` (the pure `decide`), `code.passes.ts` (a pass).
+  - `code.checks.ts`: a check's log excerpt for the PR tab (`GET
+    /code/threads/:id/pr/checks/:job/log`, only for the open PR's checks).
   - `code.checkpoints.ts`: per-turn checkpoints and revert.
   - `code.changes.ts`: live Changes and Review panels (ADR 0025): while one
     is open, one poll per directory reads its change stamp and

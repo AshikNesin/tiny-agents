@@ -79,6 +79,8 @@ const renderAt = (path: string) =>
         <Routes>
           <Route path="/code/:conversationId" element={<CodePage />} />
           <Route path="/code/:conversationId/review" element={<CodePage />} />
+          <Route path="/code/:conversationId/changes" element={<CodePage />} />
+          <Route path="/code/:conversationId/pr" element={<CodePage />} />
         </Routes>
         <Where />
       </MemoryRouter>
@@ -93,7 +95,10 @@ describe("a thread's Review page", () => {
   it("shows the thread's changes full width, with the way back", async () => {
     renderAt("/code/shelley%3Ac1/review");
     expect(await screen.findByRole("heading", { name: "Fix the login" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Changes" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Source control" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
     expect(await screen.findByTestId("code-changes")).toBeInTheDocument();
     // No project: no pull request to review.
     expect(screen.queryByRole("tab", { name: /Pull request/ })).toBeNull();
@@ -115,5 +120,37 @@ describe("a thread's Review page", () => {
     expect(screen.getByTestId("where")).toHaveTextContent("/code/shelley%3Ac1/review?tab=pr");
     expect(await screen.findByTestId("code-pr")).toBeInTheDocument();
     expect(screen.queryByTestId("code-changes")).toBeNull();
+  });
+});
+
+describe("the right panel", () => {
+  beforeEach(() => {
+    useCodeStore.setState({
+      harnesses: [shelley],
+      statuses: {},
+      threads: [thread({ projectId: "p1", pr: { number: 12, loop: "green" } })],
+    });
+  });
+
+  it("holds Source control and the pull request as tabs of one panel", async () => {
+    const user = userEvent.setup();
+    renderAt("/code/shelley%3Ac1/changes");
+    const panel = await screen.findByRole("region", { name: "Review panel" });
+    expect(screen.getByRole("tab", { name: "Source control" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+
+    await user.click(screen.getByRole("tab", { name: "Pull request #12" }));
+    expect(screen.getByTestId("where")).toHaveTextContent("/code/shelley%3Ac1/pr");
+    expect(await screen.findByTestId("code-pr")).toBeInTheDocument();
+    expect(panel).toBeInTheDocument();
+
+    // The header's one toggle closes it, and opens it again on the tab it was left on.
+    await user.click(screen.getByRole("button", { name: "Review panel" }));
+    expect(screen.getByTestId("where")).toHaveTextContent(/^\/code\/shelley%3Ac1$/);
+    expect(screen.queryByRole("region", { name: "Review panel" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Review panel" }));
+    expect(screen.getByTestId("where")).toHaveTextContent("/code/shelley%3Ac1/pr");
   });
 });

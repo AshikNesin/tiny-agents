@@ -8,14 +8,7 @@
  * (capability `workspace.diffs`).
  */
 import { useEffect, useMemo, useState } from "react";
-import {
-  ChevronDown,
-  ChevronRight,
-  FileDiff as FileDiffIcon,
-  Maximize2,
-  RefreshCw,
-  X,
-} from "lucide-react";
+import { ChevronDown, ChevronRight, FileDiff as FileDiffIcon, RefreshCw } from "lucide-react";
 import { Button, EmptyState, monoClass } from "@groot/ui";
 import { cn } from "@groot/ui/lib/utils";
 import { formatRelativeTime } from "@groot/shell/lib/date.utils";
@@ -43,8 +36,6 @@ export function ChangesPanel({
   cwd,
   refreshKey,
   commenting,
-  onClose,
-  onExpand,
 }: {
   instanceId: string;
   cwd: string;
@@ -52,9 +43,6 @@ export function ChangesPanel({
   refreshKey: unknown;
   /** The thread's line comments: absent, the diff takes none. */
   commenting?: ThreadCommenting;
-  onClose(): void;
-  /** Show this at full width on the thread's Review page. */
-  onExpand?: () => void;
 }) {
   const [diffs, setDiffs] = useState<GitDiff[] | null>(null);
   const [diffId, setDiffId] = useState<string>("working");
@@ -143,7 +131,7 @@ export function ChangesPanel({
 
   return (
     <div className="flex h-full min-h-0 flex-col" data-testid="code-changes">
-      <div className="border-border flex h-13 shrink-0 items-center gap-1 border-b px-2">
+      <div className="border-border flex h-11 shrink-0 items-center gap-1 border-b px-2">
         {diffs && diffs.length > 0 ? (
           <SearchSelect
             label="Changes to show"
@@ -186,28 +174,6 @@ export function ChangesPanel({
           className="text-muted-foreground"
         >
           <RefreshCw />
-        </Button>
-        {onExpand && (
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={onExpand}
-            aria-label="Open as a page"
-            title="Open as a page"
-            className="text-muted-foreground"
-          >
-            <Maximize2 />
-          </Button>
-        )}
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={onClose}
-          aria-label="Close changes"
-          title="Close (⌘⇧D)"
-          className="text-muted-foreground"
-        >
-          <X />
         </Button>
       </div>
 

@@ -1,7 +1,10 @@
 /**
- * Review for a project thread (issue #297 §8): every change since the merge
- * base with the project's base branch, committed or not. A file list with
- * +/− and a filter (generated files and lockfiles muted and last), Viewed
+ * Source control for a project thread (issue #297 §8): every change since
+ * the merge base with the project's base branch, committed or not. The
+ * branch and how far it is ahead, then a file list (name, folder, +/−, a
+ * status letter) with a filter (generated files and lockfiles muted and
+ * last). In the side panel the list comes first and a file opens to its
+ * diff (All files goes back); on the Review page they sit side by side. Viewed
  * marks that come back unmarked when the agent changes the file again,
  * `[` / `]` between files, and line comments written under their lines that
  * wait above the thread's composer and go to the agent with the next message. The scope picker also shows what one turn changed (its
@@ -13,11 +16,11 @@ import {
   ChevronLeft,
   ChevronRight,
   FileDiff as FileDiffIcon,
-  Maximize2,
+  GitBranch,
+  List,
   PanelLeft,
   RefreshCw,
   RotateCcw,
-  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button, Checkbox, EmptyState, Input, monoClass } from "@groot/ui";
@@ -37,6 +40,18 @@ const STATUS_TONE: Record<ReviewFile["status"], string> = {
   modified: "text-warning",
   deleted: "text-destructive",
 };
+
+const STATUS_LETTER: Record<ReviewFile["status"], string> = {
+  added: "A",
+  modified: "M",
+  deleted: "D",
+};
+
+/** "src/auth/login.ts" → ["login.ts", "src/auth"]. */
+function splitPath(path: string): [string, string] {
+  const slash = path.lastIndexOf("/");
+  return [path.slice(slash + 1), slash > 0 ? path.slice(0, slash) : ""];
+}
 
 const TREE_KEY = "tiny-agents:code-review-files";
 
@@ -59,17 +74,15 @@ export function ReviewPanel({
   threadId,
   baseBranch,
   refreshKey,
-  onClose,
-  onExpand,
   onOtherScopes,
   commenting,
+  page = false,
 }: {
   threadId: string;
   baseBranch: string;
   refreshKey: unknown;
-  onClose(): void;
-  /** Show this at full width on the thread's Review page. */
-  onExpand?: () => void;
+  /** At full width on the Review page: the list beside the diff. */
+  page?: boolean;
   /** The thread's line comments: absent, the diff takes none. */
   commenting?: ThreadCommenting;
   /** Uncommitted changes or one commit, from the harness (when it serves diffs). */
@@ -84,6 +97,9 @@ export function ReviewPanel({
   // re-read after the agent changed the file swaps it in place.
   const [shown, setShown] = useState<{ key: string; diff: ReviewFileDiff } | null>(null);
   const [reload, setReload] = useState(0);
+  // In the side panel: the list, or one file's diff.
+  const [listing, setListing] = useState(!page);
+  const [branch, setBranch] = useState<{ name: string | null; ahead: number | null } | null>(null);
   // The file list beside the diff; hidden, the file bar still steps through files.
   const [tree, setTree] = useState(readTree);
   const toggleTree = () => {
@@ -99,6 +115,18 @@ export function ReviewPanel({
   const [scope, setScope] = useState("base");
   const [checkpoints, setCheckpoints] = useState<CheckpointView[]>([]);
   const checkpoint = checkpoints.find((c) => c.id === scope);
+
+  useEffect(() => {
+    let cancelled = false;
+    // No reconcile with GitHub: only the branch and how far it is ahead.
+    projectsApi
+      .pulls(threadId, false)
+      .then((v) => !cancelled && setBranch({ name: v.branch, ahead: v.ahead }))
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [threadId, settledKey, reload]);
 
   useEffect(() => {
     let cancelled = false;
@@ -140,8 +168,9 @@ export function ReviewPanel({
   const diffKey = `${scope}:${current ?? ""}`;
   const diff = shown?.key === diffKey ? shown.diff : null;
 
+  const reading = page || !listing;
   useEffect(() => {
-    if (!current) return;
+    if (!current || !reading) return;
     let cancelled = false;
     (scope === "base"
       ? projectsApi.reviewFile(threadId, current)
@@ -152,7 +181,7 @@ export function ReviewPanel({
     return () => {
       cancelled = true;
     };
-  }, [threadId, current, currentHash, reload, scope]);
+  }, [threadId, current, currentHash, reload, scope, reading]);
 
   const listedFiles = useMemo(
     () =>
@@ -160,8 +189,9 @@ export function ReviewPanel({
     [files, filter],
   );
 
-  // `[` and `]` move between files (not while typing).
+  // `[` and `]` move between files (not while typing), once one is open.
   useEffect(() => {
+    if (!reading) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "[" && event.key !== "]") return;
       const target = event.target as HTMLElement | null;
@@ -175,7 +205,7 @@ export function ReviewPanel({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [listedFiles, current]);
+  }, [listedFiles, current, reading]);
 
   const toggleViewed = (file: ReviewFile) => {
     const viewed = !file.viewed;
@@ -223,7 +253,23 @@ export function ReviewPanel({
 
   return (
     <div className="flex h-full min-h-0 flex-col" data-testid="code-review">
-      <div className="border-border flex h-13 shrink-0 items-center gap-1 border-b px-2">
+      {branch?.name && (
+        <p className="border-border text-muted-foreground flex h-9 shrink-0 items-center gap-1.5 border-b px-4 text-xs">
+          <GitBranch className="size-3.5 shrink-0" aria-hidden />
+          <span className={cn("text-foreground min-w-0 truncate", monoClass)}>{branch.name}</span>
+          <span aria-hidden>→</span>
+          <span className={cn("shrink-0", monoClass)}>{baseBranch}</span>
+          {branch.ahead !== null && branch.ahead > 0 && (
+            <>
+              <span aria-hidden>·</span>
+              <span className="shrink-0 tabular-nums" title="Commits not on the base yet">
+                {branch.ahead} ahead
+              </span>
+            </>
+          )}
+        </p>
+      )}
+      <div className="border-border flex h-11 shrink-0 items-center gap-1 border-b px-2">
         <SearchSelect
           label="Changes to show"
           value={scope}
@@ -275,7 +321,7 @@ export function ReviewPanel({
           </span>
         )}
         <span className="flex-1" />
-        {files && files.length > 0 && (
+        {page && files && files.length > 0 && (
           <Button
             variant="ghost"
             size="icon-sm"
@@ -307,27 +353,6 @@ export function ReviewPanel({
         >
           <RefreshCw />
         </Button>
-        {onExpand && (
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={onExpand}
-            aria-label="Open as a page"
-            title="Open as a page"
-            className="text-muted-foreground"
-          >
-            <Maximize2 />
-          </Button>
-        )}
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={onClose}
-          aria-label="Close changes"
-          className="text-muted-foreground"
-        >
-          <X />
-        </Button>
       </div>
 
       {error ? (
@@ -344,9 +369,14 @@ export function ReviewPanel({
         />
       ) : (
         <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-          {tree && (
+          {(page ? tree : listing) && (
             <nav
-              className="border-border flex max-h-56 shrink-0 flex-col border-b md:max-h-none md:w-64 md:border-r md:border-b-0"
+              className={cn(
+                "flex min-h-0 flex-col",
+                page
+                  ? "border-border max-h-56 shrink-0 border-b md:max-h-none md:w-72 md:border-r md:border-b-0"
+                  : "flex-1",
+              )}
               aria-label="Changed files"
             >
               <div className="p-2">
@@ -359,66 +389,94 @@ export function ReviewPanel({
                 />
               </div>
               <ul className="min-h-0 flex-1 overflow-y-auto px-1 pb-2">
-                {listedFiles.map((f) => (
-                  <li key={f.path} className="flex items-center gap-1">
-                    {scope === "base" && (
-                      <Checkbox
-                        checked={f.viewed}
-                        onCheckedChange={() => toggleViewed(f)}
-                        aria-label={`Viewed ${f.path}`}
-                        className="ml-1 shrink-0"
-                      />
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => setCurrent(f.path)}
-                      aria-current={f.path === current}
-                      className={cn(
-                        "hover:bg-muted flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-xs",
-                        f.path === current && "bg-muted",
-                        (f.isGenerated || f.viewed) && "text-muted-foreground",
+                {listedFiles.map((f) => {
+                  const [name, dir] = splitPath(f.path);
+                  return (
+                    <li key={f.path} className="flex items-center gap-1">
+                      {scope === "base" && (
+                        <Checkbox
+                          checked={f.viewed}
+                          onCheckedChange={() => toggleViewed(f)}
+                          aria-label={`Viewed ${f.path}`}
+                          className="ml-1.5 shrink-0"
+                        />
                       )}
-                      title={f.path}
-                    >
-                      <span className={cn("min-w-0 flex-1 truncate", monoClass)}>{f.path}</span>
-                      <span className={cn("shrink-0 tabular-nums", STATUS_TONE[f.status])}>
-                        +{f.additions} −{f.deletions}
-                      </span>
-                    </button>
-                  </li>
-                ))}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCurrent(f.path);
+                          setListing(false);
+                        }}
+                        aria-current={page && f.path === current}
+                        className={cn(
+                          "hover:bg-muted flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-left text-xs",
+                          page && f.path === current && "bg-muted",
+                          (f.isGenerated || f.viewed) && "opacity-60",
+                        )}
+                        title={f.path}
+                      >
+                        <span className="min-w-0 flex-1 truncate">
+                          <span className="font-medium">{name}</span>
+                          {dir && (
+                            <span className={cn("text-muted-foreground ml-2", monoClass)}>
+                              {dir}
+                            </span>
+                          )}
+                        </span>
+                        <span className="shrink-0 tabular-nums">
+                          {f.additions > 0 && <span className="text-success">+{f.additions}</span>}
+                          {f.deletions > 0 && (
+                            <span className="text-destructive ml-1">−{f.deletions}</span>
+                          )}
+                        </span>
+                        <span
+                          className={cn(
+                            "w-3 shrink-0 text-center font-medium",
+                            STATUS_TONE[f.status],
+                          )}
+                          title={f.status}
+                        >
+                          {STATUS_LETTER[f.status]}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
               </ul>
             </nav>
           )}
-          <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
-            {currentFile && (
-              <FileBar
-                file={currentFile}
-                index={listedFiles.findIndex((f) => f.path === currentFile.path)}
-                count={listedFiles.length}
-                onStep={(step) => {
-                  const index = listedFiles.findIndex((f) => f.path === currentFile.path);
-                  const next = listedFiles[index + step];
-                  if (next) setCurrent(next.path);
-                }}
-                onViewed={scope === "base" ? () => toggleViewed(currentFile) : undefined}
-              />
-            )}
-            {!diff ? (
-              <div className="flex justify-center p-6">
-                <Spinner />
-              </div>
-            ) : (
-              <FileDiff
-                key={diffKey}
-                path={current ?? ""}
-                oldContent={diff.oldContent}
-                newContent={diff.newContent}
-                unshowable={diff.unshowable}
-                {...fileCommenting(commenting, diff)}
-              />
-            )}
-          </div>
+          {reading && (
+            <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
+              {currentFile && (
+                <FileBar
+                  file={currentFile}
+                  index={listedFiles.findIndex((f) => f.path === currentFile.path)}
+                  count={listedFiles.length}
+                  onStep={(step) => {
+                    const index = listedFiles.findIndex((f) => f.path === currentFile.path);
+                    const next = listedFiles[index + step];
+                    if (next) setCurrent(next.path);
+                  }}
+                  onViewed={scope === "base" ? () => toggleViewed(currentFile) : undefined}
+                  onList={page ? undefined : () => setListing(true)}
+                />
+              )}
+              {!diff ? (
+                <div className="flex justify-center p-6">
+                  <Spinner />
+                </div>
+              ) : (
+                <FileDiff
+                  key={diffKey}
+                  path={current ?? ""}
+                  oldContent={diff.oldContent}
+                  newContent={diff.newContent}
+                  unshowable={diff.unshowable}
+                  {...fileCommenting(commenting, diff)}
+                />
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -432,16 +490,30 @@ function FileBar({
   count,
   onStep,
   onViewed,
+  onList,
 }: {
   file: ReviewFile;
   index: number;
   count: number;
   onStep(step: -1 | 1): void;
   onViewed?: () => void;
+  /** Back to the file list (the side panel). */
+  onList?: () => void;
 }) {
   const slash = file.path.lastIndexOf("/");
   return (
     <div className="bg-background/95 border-border sticky top-0 z-10 flex h-9 items-center gap-1 border-b px-2 text-xs backdrop-blur">
+      {onList && (
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          aria-label="All files"
+          title="All files"
+          onClick={onList}
+        >
+          <List />
+        </Button>
+      )}
       <Button
         variant="ghost"
         size="icon-xs"
