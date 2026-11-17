@@ -212,6 +212,29 @@ describe("branch names", () => {
     expect(asked[0]?.user).toContain("It 500s on the callback.");
   });
 
+  it("names the thread with a short title from the same call", async () => {
+    const asked: SideCallRequest[] = [];
+    installAppForTests({
+      codeBranchNamer: {
+        sideCaller: {
+          complete: async (request) => {
+            asked.push(request);
+            return 'title: "Fix Google sign-in callback."\nbranch: fix-google-callback';
+          },
+        },
+      },
+    });
+    const project = await newProject();
+    const thread = await newThread(project.id, task);
+    expect(thread.branch).toBe("ta/fix-google-callback");
+    expect(harness.renamed).toEqual([
+      { nativeId: thread.nativeId, title: "Fix Google sign-in callback" },
+    ]);
+    // One small call: the task, cut short, and nothing else.
+    expect(asked).toHaveLength(1);
+    expect(asked[0]!.user.length).toBeLessThan(1_700);
+  });
+
   it("falls back to the task's own words when the model gives no usable name", async () => {
     installAppForTests({
       codeBranchNamer: { sideCaller: { complete: async () => undefined } },
@@ -261,6 +284,27 @@ describe("publish and the PR tab", () => {
     await commit(thread.worktree, "src/follow-up.ts");
     const second = await call<ThreadPullsView>("POST", `/threads/${enc}/publish`, {});
     expect(second.body.data?.active?.number).toBe(2);
+  });
+
+  it("titles the pull request from its commits, short and clean", async () => {
+    const asked: SideCallRequest[] = [];
+    const project = await newProject();
+    const thread = await newThread(project.id);
+    await commit(thread.worktree, "src/login.ts");
+    installAppForTests({
+      codeBranchNamer: {
+        sideCaller: {
+          complete: async (request) => {
+            asked.push(request);
+            return "`feat: Keep the session when the login token refreshes.`";
+          },
+        },
+      },
+    });
+    await call("POST", `/threads/${encodeURIComponent(thread.id)}/publish`, {});
+    expect(github.pull(1).title).toBe("Keep the session when the login token refreshes");
+    expect(asked).toHaveLength(1);
+    expect(asked[0]!.user).toContain("change src/login.ts");
   });
 
   it("edits the pull request's description on GitHub", async () => {

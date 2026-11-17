@@ -20,6 +20,8 @@ export interface FakeHarness extends HarnessInstance {
   outcomes: Map<string, TurnOutcome>;
   sent: Array<{ nativeId: string; message: string; queue?: boolean }>;
   created: Array<Record<string, unknown>>;
+  /** Titles the app gave threads (`rename`), in order. */
+  renamed: Array<{ nativeId: string; title: string }>;
   emit(event: InstanceEvent): void;
   /** Report a turn end with the thread's outcome now (`outcomes`, else a finished "Done."). */
   endTurn(nativeId: string): void;
@@ -66,6 +68,7 @@ export function fakeHarness(id = "fake", capabilities: Partial<Capabilities> = {
     outcomes: new Map(),
     sent: [],
     created: [],
+    renamed: [],
     capabilities: () => ({ ...NO_CAPABILITIES, ...capabilities }),
     start: () => harness.emit({ type: "connected" }),
     stop: () => {},
@@ -120,6 +123,11 @@ export function fakeHarness(id = "fake", capabilities: Partial<Capabilities> = {
       const nativeId = `t${created}`;
       harness.threads.push(thread(nativeId, { cwd: input.cwd ?? null }));
       return { nativeId };
+    },
+    async rename(nativeId, title) {
+      harness.renamed.push({ nativeId, title });
+      const found = harness.threads.find((t) => t.nativeId === nativeId);
+      if (found) found.title = title;
     },
     async send(nativeId, input) {
       harness.sent.push({ nativeId, message: input.message, queue: input.queue });

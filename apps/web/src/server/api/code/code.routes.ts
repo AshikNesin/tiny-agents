@@ -36,6 +36,7 @@ import {
   projectThread,
   startProjectThread,
 } from "./code.projects";
+import { titleLater } from "./code.naming";
 import { codeChanges } from "./code.changes";
 import { guardSides } from "@tiny-agents/git";
 import { codeGitHub } from "./code.github";
@@ -242,6 +243,8 @@ router.post("/code/threads", async (c) => {
   const { nativeId } = project
     ? await run(() => startProjectThread(project, instance, { ...input, branch }))
     : await run(() => instance.createThread(input));
+  // A project thread was titled with its branch name; any other gets its short title now.
+  if (!project) titleLater(instance, nativeId, input.message);
   await follow(instance.id, nativeId);
   void hub().refresh(instance.id);
   return ok(c, { threadId: threadIdOf(instance.id, nativeId) }, 201);

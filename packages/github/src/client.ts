@@ -322,6 +322,28 @@ export function checkOf(raw: RawContext): Check {
   };
 }
 
+/**
+ * One check per name: its latest run. A workflow that runs on every PR event
+ * (an edited description, a label) adds a run to the same commit each time,
+ * and GitHub's own checks list shows only the newest. First-seen order stays.
+ */
+function latestRuns(checks: Check[]): Check[] {
+  const latest = new Map<string, Check>();
+  for (const check of checks) {
+    const seen = latest.get(check.name);
+    if (!seen || newer(check, seen)) latest.set(check.name, check);
+  }
+  const order = [...new Set(checks.map((c) => c.name))];
+  return order.map((name) => latest.get(name)!);
+}
+
+/** Started later, or (a run not started yet) queued after. */
+function newer(a: Check, b: Check): boolean {
+  if (a.startedAt && b.startedAt && a.startedAt !== b.startedAt) return a.startedAt > b.startedAt;
+  if (!a.startedAt !== !b.startedAt) return !a.startedAt;
+  return (a.jobId ?? 0) > (b.jobId ?? 0);
+}
+
 function comment(raw: RawComment): ReviewComment {
   return {
     id: raw.id,
@@ -363,7 +385,7 @@ export function toSnapshot(raw: RawSnapshot): PullSnapshot {
           : "unknown",
     mergeMethods: methods,
     author: pr.author?.login ?? null,
-    checks: (head?.statusCheckRollup?.contexts.nodes ?? []).map(checkOf),
+    checks: latestRuns((head?.statusCheckRollup?.contexts.nodes ?? []).map(checkOf)),
     reviews: pr.reviews.nodes.map((r) => ({
       id: r.id,
       author: author(r.author, r.authorAssociation),

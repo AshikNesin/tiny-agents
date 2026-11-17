@@ -11,7 +11,7 @@ import type { SseStream } from "./api/bots/bots.sse";
 import type { ChatTitler } from "./api/bots/chats.title";
 import type { AppAuth } from "@tiny-agents/github";
 import type { CodeGitHub } from "./api/code/code.github";
-import type { CodeBranchNamer } from "./api/code/code.projects";
+import type { CodeBranchNamer } from "./api/code/code.naming";
 import type { CodeHub } from "./api/code/code.hub";
 import type { CodeChanges } from "./api/code/code.changes";
 import type { ConnectionManager } from "./api/connections/connections.manager";

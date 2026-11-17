@@ -231,10 +231,16 @@ to commit but not push.
 
 The branch is named for what the task does, short: `ta/fix-google-callback`,
 not the prompt's opening words. One side-call on the `chat_title` model role
-(Settings → Models) reads the task and names it (2 to 4 words, starting with
-a verb), with an 8-second limit. With no model, a failed call or an unusable
-answer, the name is the task's first words without the filler ("Can you
-please fix the login flow when…" is `ta/fix-login-flow-users`). A name an
+(Settings → Models) reads the task (its first 1,500 characters, nothing else)
+and answers two lines: the thread's short title ("Fix Google sign-in
+callback", 3 to 6 words, shown in the thread list) and the branch (2 to 4
+words naming the outcome, so "figure out why the export fails" is
+`debug-export-failure`), with an 8-second limit. Threads outside a project
+get the same short title, named after they start. With no model, a failed
+call or an unusable answer, the harness keeps its own title and the branch
+is the task's first words without the filler ("Can you please fix the login
+flow when…" is `ta/fix-login-flow-users`). Shelley stores titles as slugs,
+so there it reads `fix-google-sign-in-callback`. A name an
 earlier thread took, here or on the remote, gets `-2`, `-3`, ….
 
 **Review.** In a project thread, Source control (⌘⇧D) shows the branch, its
@@ -253,7 +259,9 @@ harness's own changes.
 **Publish.** The panel's **Pull request** tab (the header's toggle shows
 `#N` and its state once there is one) offers Publish.
 **Publish draft PR** pushes the branch (never forced, hooks off) and opens a
-draft PR with the commits as its body; with a PR open, Publish pushes new
+draft PR with the commits as its body and a short title (one `chat_title`
+call over the thread's title and the commit subjects: imperative, under 60
+characters, no `feat:` prefix; the thread's title when there is no model); with a PR open, Publish pushes new
 commits. **Link pull request** links an existing one, and a PR the agent
 opened for the branch is linked on its own. After a PR merges, the next
 Publish opens a new one; earlier PRs are listed.
@@ -261,7 +269,8 @@ Publish opens a new one; earlier PRs are listed.
 **The PR tab.** The PR's number, state (open, draft, queued, merged or
 closed), title and `branch → base`. **Checks**: `N passing · N failing ·
 N pending` over a bar, **N failing checks** with **Fix CI** when one fails,
-then a row per check, failing first (duration, age, a link to GitHub; past
+then a row per check (its latest run: a workflow re-run on every PR event
+shows once), failing first (duration, age, a link to GitHub; past
 six, the passing ones fold behind **Show N passing**; a check pending for 6
 hours is **Stalled** and no longer blocks green). A row opens to its status,
 start and end and, for an Actions job, its **Log excerpt**: the lines around

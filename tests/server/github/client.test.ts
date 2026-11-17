@@ -243,6 +243,45 @@ describe.each(TRANSPORTS)("the client over %s", (_, transport) => {
   });
 });
 
+describe("a check that ran more than once", () => {
+  it("shows each check once: its latest run", async () => {
+    const raw = structuredClone(SNAPSHOT);
+    const nodes = raw.repository.pullRequest.commits.nodes[0]!.commit.statusCheckRollup.contexts
+      .nodes as Array<Record<string, unknown>>;
+    // The PR's description was edited twice: each edit ran "test" again.
+    nodes.push(
+      {
+        __typename: "CheckRun",
+        name: "test",
+        status: "COMPLETED",
+        conclusion: "SUCCESS",
+        startedAt: "2026-11-04T23:00:00Z",
+        completedAt: "2026-11-04T23:05:00Z",
+        detailsUrl: "https://github.com/acme/web/actions/runs/8/job/40",
+        databaseId: 40,
+      },
+      {
+        __typename: "CheckRun",
+        name: "test",
+        status: "COMPLETED",
+        conclusion: "SUCCESS",
+        startedAt: "2026-11-04T23:30:00Z",
+        completedAt: "2026-11-04T23:35:00Z",
+        detailsUrl: "https://github.com/acme/web/actions/runs/8/job/41",
+        databaseId: 41,
+      },
+    );
+    const gh = createGhTransport(fakeGh(() => ({ stdout: JSON.stringify({ data: raw }) })).exec);
+    const snapshot = await createGitHubClient(gh).snapshot(repo, 7);
+    expect(snapshot.checks.map((c) => [c.name, c.state, c.jobId])).toEqual([
+      ["test", "failure", 42],
+      ["lint", "pending", null],
+      ["old", "neutral", null],
+      ["deploy", "success", null],
+    ]);
+  });
+});
+
 describe("the gh transport", () => {
   it("sends request bodies on stdin, never on the command line", async () => {
     const gh = fakeGh(() => ({ stdout: JSON.stringify({ id: 5 }) }));
