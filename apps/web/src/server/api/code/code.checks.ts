@@ -51,11 +51,12 @@ function logExcerpt(raw: string): Omit<CheckLogView, "name" | "url"> {
   const picked = all.slice(start, end).map((line, i) => ({ line, at: start + i }));
   // The step's own verdict at the very end is worth keeping when it was cut.
   const last = all.length - 1;
-  if (end <= last && errors.includes(last)) {
+  const isError = new Set(errors);
+  if (end <= last && isError.has(last)) {
     picked.splice(MAX_LINES - 1, picked.length, { line: all[last]!, at: last });
   }
   const lines = picked.map((p) => p.line);
-  const highlight = picked.flatMap((p, i) => (errors.includes(p.at) ? [i] : []));
+  const highlight = picked.flatMap((p, i) => (isError.has(p.at) ? [i] : []));
   const message = picked.find((p) => MESSAGE_LINE.test(p.line) && !EXIT_LINE.test(p.line));
   const summary = (message ?? (anchor === undefined ? undefined : picked[anchor - start]))?.line
     .replace("##[error]", "")

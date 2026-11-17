@@ -4,7 +4,7 @@
  * for an Actions job, the lines of its log around what went wrong, with a
  * link to the full log on GitHub.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Check,
   ChevronRight,
@@ -72,6 +72,24 @@ function ChecksBar({
   );
 }
 
+/** Failing first, then pending, then passing; and how many of each as one line. */
+function checksSummary(raw: Check[]) {
+  const checks = [...raw].sort(
+    (a, b) => ORDER[a.state] - ORDER[b.state] || a.name.localeCompare(b.name),
+  );
+  const passed = checks.filter((c) => c.state === "success" || c.state === "neutral").length;
+  const failed = checks.filter((c) => c.state === "failure").length;
+  const pending = checks.length - passed - failed;
+  const tally = [
+    passed && `${passed} passing`,
+    failed && `${failed} failing`,
+    pending && `${pending} pending`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  return { checks, passed, failed, pending, tally };
+}
+
 export function PullChecks({
   threadId,
   pr,
@@ -83,24 +101,15 @@ export function PullChecks({
   busy: string | null;
   onFix(): void;
 }) {
-  const checks = [...(pr.snapshot?.checks ?? [])].sort(
-    (a, b) => ORDER[a.state] - ORDER[b.state] || a.name.localeCompare(b.name),
+  const { checks, passed, failed, pending, tally } = useMemo(
+    () => checksSummary(pr.snapshot?.checks ?? []),
+    [pr.snapshot?.checks],
   );
-  const passed = checks.filter((c) => c.state === "success" || c.state === "neutral").length;
-  const failed = checks.filter((c) => c.state === "failure").length;
-  const pending = checks.length - passed - failed;
+  const stalled = useMemo(() => new Set(pr.stalled), [pr.stalled]);
   const [open, setOpen] = useState<string | null>(null);
   const [showPassing, setShowPassing] = useState(false);
   const fold = checks.length > FOLD_AFTER && passed > 0 && passed < checks.length && !showPassing;
   const shown = fold ? checks.filter((c) => ORDER[c.state] < 2) : checks;
-
-  const tally = [
-    passed && `${passed} passing`,
-    failed && `${failed} failing`,
-    pending && `${pending} pending`,
-  ]
-    .filter(Boolean)
-    .join(" · ");
 
   return (
     <section aria-label="Checks" className="space-y-2">
@@ -131,7 +140,7 @@ export function PullChecks({
                 key={c.name}
                 threadId={threadId}
                 check={c}
-                stalled={pr.stalled.includes(c.name)}
+                stalled={stalled.has(c.name)}
                 open={open === c.name}
                 onToggle={() => setOpen((o) => (o === c.name ? null : c.name))}
               />
@@ -274,6 +283,7 @@ function LogExcerpt({ threadId, jobId, check }: { threadId: string; jobId: numbe
   };
 
   const url = log?.url ?? check.url;
+  const marked = new Set(log?.highlight);
   return (
     <section aria-label={`${check.name} log`} className="min-w-0 space-y-1.5">
       <div className="flex items-center gap-2">
@@ -320,7 +330,7 @@ function LogExcerpt({ threadId, jobId, check }: { threadId: string; jobId: numbe
                   key={i}
                   className={cn(
                     "px-3 whitespace-pre-wrap break-all",
-                    log.highlight.includes(i) && "bg-destructive/10 text-destructive",
+                    marked.has(i) && "bg-destructive/10 text-destructive",
                   )}
                 >
                   {line || " "}
