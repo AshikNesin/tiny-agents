@@ -116,8 +116,10 @@ export async function encryptPayload(
   const keyInfo = concat(utf8Encode("WebPush: info\0"), uaPublic, asPublic);
   const ikm = await expand(prkKey, keyInfo, 32);
   const prk = await hmac(salt, ikm);
-  const cek = await expand(prk, utf8Encode("Content-Encoding: aes128gcm\0"), 16);
-  const nonce = await expand(prk, utf8Encode("Content-Encoding: nonce\0"), 12);
+  const [cek, nonce] = await Promise.all([
+    expand(prk, utf8Encode("Content-Encoding: aes128gcm\0"), 16),
+    expand(prk, utf8Encode("Content-Encoding: nonce\0"), 12),
+  ]);
 
   // One record: the plaintext, then the last-record delimiter (0x02), no padding.
   const record = concat(plaintext, new Uint8Array([2]));
