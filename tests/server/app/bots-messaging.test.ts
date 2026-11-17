@@ -8,6 +8,7 @@ import { asc, eq } from "drizzle-orm";
 import { beforeEach, afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { api, createTestApp, type TestApp } from "../helpers";
 import { db, botMessages, bots, routines } from "../../../apps/web/src/server/db";
+import { FIXED_NOW } from "../../test-clock";
 import { createDeliveries } from "../../../apps/web/src/server/api/bots/bots.delivery";
 import { createBotMessagingStore } from "../../../apps/web/src/server/api/bots/bots.messaging";
 import { startSettledPipeline } from "../../../apps/web/src/server/api/bots/bots.settled";
@@ -386,7 +387,7 @@ describe("answering Deliveries (real runtime)", () => {
       text: "hello",
       deliveredAt: new Date(),
     });
-    expect(await createDeliveries(rt).sweep()).toBe(0);
+    expect(await createDeliveries(rt).answer(guest.ref)).toBe(0);
     expect((await ledgerRow("not-placed"))?.answeredAt).toBeNull();
     expect(await userTexts(host.ref)).toEqual([]);
   });
@@ -435,5 +436,51 @@ describe("answering Deliveries (failed replies)", () => {
     expect(await createDeliveries(runtime).answer(2)).toBe(1);
     const relayed = runtime.submit.mock.calls[0]![1] as { text: string };
     expect(relayed.text).toBe("**Reply from Guest:** (couldn't answer: the model failed)");
+  });
+});
+
+describe("answering Deliveries (boot sweep)", () => {
+  beforeEach(clearTables);
+  afterEach(clearTables);
+
+  async function seedInterrupted(requestId: string, deliveredAt: Date) {
+    const host = await seedBot("Host", "1");
+    const guest = await seedBot("Guest", "2");
+    await db.insert(botMessages).values({
+      fromBotId: host.id,
+      toBotId: guest.id,
+      conversationId: "2",
+      ownConversation: true,
+      replyToBotId: host.id,
+      kind: "send",
+      requestId,
+      text: "hello",
+      deliveredAt,
+    });
+  }
+
+  it("closes a Delivery a restart interrupted and tells the asking bot", async () => {
+    await seedInterrupted("r-cut", new Date());
+    const runtime = createFakeRuntime();
+
+    expect(await createDeliveries(runtime).sweep()).toBe(1);
+
+    expect((await ledgerRow("r-cut"))?.answeredAt).toEqual(new Date(FIXED_NOW));
+    expect(runtime.submit).toHaveBeenCalledTimes(1);
+    const [ref, relayed] = runtime.submit.mock.calls[0]! as [unknown, { text: string }];
+    expect(ref).toBe(1);
+    expect(relayed.text).toBe(
+      "**Reply from Guest:** (couldn't answer: interrupted by a server restart)",
+    );
+  });
+
+  it("closes an interrupted Delivery older than a day without waking the asking bot", async () => {
+    await seedInterrupted("r-old", new Date(Date.parse(FIXED_NOW) - 25 * 3_600_000));
+    const runtime = createFakeRuntime();
+
+    expect(await createDeliveries(runtime).sweep()).toBe(1);
+
+    expect((await ledgerRow("r-old"))?.answeredAt).toEqual(new Date(FIXED_NOW));
+    expect(runtime.submit).not.toHaveBeenCalled();
   });
 });
