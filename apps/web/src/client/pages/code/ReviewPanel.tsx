@@ -33,6 +33,7 @@ import { projectsApi } from "../../lib/code/projects";
 import { useThreadPulls } from "../../lib/code/use-thread-pulls";
 import type { CheckpointView, ReviewFile, ReviewFileDiff } from "../../../shared/api/code";
 import { fileCommenting, type ThreadCommenting } from "../../lib/code/comments";
+import type { FileConversations } from "./PullThreads";
 import { useSteadyKey } from "../../lib/code/use-live-changes";
 import { FileDiff } from "./UnifiedDiff";
 
@@ -78,6 +79,7 @@ export function ReviewPanel({
   onOtherScopes,
   commenting,
   githubCommenting,
+  conversations,
   page = false,
   pull,
 }: {
@@ -91,6 +93,8 @@ export function ReviewPanel({
   commenting?: ThreadCommenting;
   /** A PR review's comments for GitHub, beside the assistant's. */
   githubCommenting?: ThreadCommenting;
+  /** A PR review's conversations from GitHub, per file. */
+  conversations?: (path: string) => FileConversations;
   /** Uncommitted changes or one commit, from the harness (when it serves diffs). */
   onOtherScopes?: () => void;
   /** A PR review (issue #345): its branch line, and no turns to step through. */
@@ -476,6 +480,7 @@ export function ReviewPanel({
                   onList={page ? undefined : () => setListing(true)}
                 />
               )}
+              {current && conversations?.(current).aside}
               {!diff ? (
                 <div className="flex justify-center p-6">
                   <Spinner />
@@ -488,6 +493,7 @@ export function ReviewPanel({
                   newContent={diff.newContent}
                   unshowable={diff.unshowable}
                   {...fileCommenting(commenting, diff, githubCommenting)}
+                  notes={current ? conversations?.(current).notes : undefined}
                 />
               )}
             </div>

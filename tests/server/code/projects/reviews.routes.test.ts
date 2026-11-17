@@ -17,6 +17,7 @@ import { createWorkspace } from "../../../../apps/web/src/server/api/code/code.w
 import type {
   ProjectView,
   PullReviewView,
+  PullThreadsView,
   ReviewDraft,
   ReviewFile,
   ReviewFileDiff,
@@ -448,5 +449,101 @@ describe("submitting a PR review", () => {
     ]);
     expect(github.submitted).toEqual([]);
     expect((await call<ReviewDraft[]>("GET", comments(review.id))).body.data).toEqual([]);
+  });
+});
+
+describe("the PR's conversations on GitHub", () => {
+  it("lists them with their side and lines, and replies and resolves as the owner", async () => {
+    await newProject();
+    const head = await forkPull([`printf 'x\\n' > src/x.ts`]);
+    const review = (await call<PullReviewView>("POST", "/reviews", { pr: "acme/web#7" })).body
+      .data!;
+    github.pull(7).threads.push(
+      {
+        id: "T_1",
+        path: "src/x.ts",
+        line: 1,
+        startLine: null,
+        side: "RIGHT",
+        resolved: false,
+        outdated: false,
+        comments: [
+          {
+            id: "C_1",
+            databaseId: 11,
+            author: { login: "carol", type: "user", association: "MEMBER" },
+            body: "Why x?",
+            createdAt: "2026-11-16T10:00:00Z",
+          },
+        ],
+      },
+      {
+        id: "T_2",
+        path: "src/a.ts",
+        line: null,
+        side: "LEFT",
+        resolved: true,
+        outdated: true,
+        comments: [],
+      },
+    );
+
+    const res = await call<PullThreadsView>("GET", `/reviews/${review.id}/threads`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toEqual({
+      headSha: head,
+      threads: [
+        {
+          id: "T_1",
+          path: "src/x.ts",
+          side: "new",
+          line: 1,
+          startLine: null,
+          resolved: false,
+          outdated: false,
+          comments: [
+            {
+              id: "C_1",
+              author: "carol",
+              bot: false,
+              body: "Why x?",
+              createdAt: "2026-11-16T10:00:00Z",
+            },
+          ],
+        },
+        {
+          id: "T_2",
+          path: "src/a.ts",
+          side: "old",
+          line: null,
+          startLine: null,
+          resolved: true,
+          outdated: true,
+          comments: [],
+        },
+      ],
+    });
+
+    const reply = await call("POST", `/reviews/${review.id}/threads/T_1/reply`, {
+      body: "Renamed, thanks",
+    });
+    const resolve = await call("POST", `/reviews/${review.id}/threads/T_1/resolve`);
+
+    expect([reply.status, resolve.status]).toEqual([200, 200]);
+    expect(github.replies).toEqual([{ threadId: "T_1", body: "Renamed, thanks" }]);
+    expect(github.resolved).toEqual(["T_1"]);
+  });
+
+  it("refuses an empty reply", async () => {
+    await newProject();
+    await forkPull([`printf 'x\\n' > src/x.ts`]);
+    const review = (await call<PullReviewView>("POST", "/reviews", { pr: "acme/web#7" })).body
+      .data!;
+
+    const res = await call("POST", `/reviews/${review.id}/threads/T_1/reply`, { body: " " });
+
+    expect(res.status).toBe(400);
+    expect(github.replies).toEqual([]);
   });
 });

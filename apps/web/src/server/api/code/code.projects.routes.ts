@@ -17,6 +17,7 @@ import type {
   GitHubStatus,
   ProjectView,
   PullReviewView,
+  PullThreadsView,
   ReviewDraft,
   ReviewFile,
   ThreadPullsView,
@@ -42,7 +43,10 @@ import {
   listReviews,
   openReview,
   reviewComments,
+  replyToReviewThread,
+  resolveReviewThread,
   reviewIdOfKey,
+  reviewThreads,
   reviewWorktree,
   sendCommentsToThread,
   submitReview,
@@ -496,6 +500,21 @@ router.post("/code/reviews/:review/submit", async (c) => {
     }),
   );
   return ok(c, await submitReview(c.req.param("review"), body));
+});
+
+router.get("/code/reviews/:review/threads", async (c) =>
+  ok<PullThreadsView>(c, await reviewThreads(c.req.param("review"))),
+);
+
+router.post("/code/reviews/:review/threads/:thread/reply", async (c) => {
+  const { body } = await parseBody(c, z.object({ body: z.string().trim().min(1).max(65_000) }));
+  await replyToReviewThread(c.req.param("review"), c.req.param("thread"), body);
+  return ok(c, { replied: true });
+});
+
+router.post("/code/reviews/:review/threads/:thread/resolve", async (c) => {
+  await resolveReviewThread(c.req.param("review"), c.req.param("thread"));
+  return ok(c, { resolved: true });
 });
 
 router.post("/code/reviews/:review/archive", async (c) => {

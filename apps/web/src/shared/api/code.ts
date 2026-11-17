@@ -244,6 +244,25 @@ export interface PullReviewView {
   updatedAt: string;
 }
 
+/** A conversation on a PR's lines, as GitHub has it (issue #345). */
+export interface PullThreadView {
+  id: string;
+  path: string;
+  side: "old" | "new";
+  /** Last line at the PR's head; null when the code moved on (outdated). */
+  line: number | null;
+  startLine: number | null;
+  resolved: boolean;
+  outdated: boolean;
+  comments: Array<{ id: string; author: string; bot: boolean; body: string; createdAt: string }>;
+}
+
+/** `GET /code/reviews/:id/threads`: the conversations, and the head GitHub placed them at. */
+export interface PullThreadsView {
+  headSha: string;
+  threads: PullThreadView[];
+}
+
 /** How a PR review is submitted on GitHub. */
 export type ReviewVerdict = "COMMENT" | "APPROVE" | "REQUEST_CHANGES";
 

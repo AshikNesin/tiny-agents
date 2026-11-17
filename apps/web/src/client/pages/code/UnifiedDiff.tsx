@@ -16,7 +16,7 @@
  * (Comment, ⌘↵) or for the assistant (Ask assistant), and Suggest change
  * starts a GitHub suggestion block with the selected lines.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { diffLines } from "diff";
 import { FilePen, Trash2 } from "lucide-react";
 import {
@@ -49,6 +49,14 @@ export interface LineComment {
   body: string;
   /** What it waits for, shown beside it (default "Not sent"). */
   tag?: string;
+}
+
+/** Something else drawn under a line, such as a PR's conversation from GitHub. */
+export interface LineNote {
+  id: string;
+  side: "old" | "new";
+  line: number;
+  node: ReactNode;
 }
 
 /** A GitHub suggestion block replacing the selected lines with `lines` (edit them in place). */
@@ -337,7 +345,10 @@ const UNSHOWABLE_TEXT = {
 } as const;
 
 /** What sits under a line: a saved comment, or the composer for the selection. */
-type Note = { kind: "comment"; comment: LineComment } | { kind: "composer" };
+type Note =
+  | { kind: "comment"; comment: LineComment }
+  | { kind: "composer" }
+  | { kind: "note"; id: string };
 
 /** One file's old → new contents (the Changes and Review panels). */
 export function FileDiff({
@@ -349,6 +360,7 @@ export function FileDiff({
   comments,
   onRemoveComment,
   reviewing,
+  notes,
 }: {
   path: string;
   oldContent: string;
@@ -362,6 +374,8 @@ export function FileDiff({
   onRemoveComment?(id: string): void;
   /** A PR review: comments for GitHub or the assistant, and suggestions. */
   reviewing?: boolean;
+  /** Drawn under their lines whether or not the diff takes comments. */
+  notes?: LineNote[];
 }) {
   const base = useBaseOptions();
   const all = useMemo(
@@ -418,22 +432,29 @@ export function FileDiff({
     };
   }, [base, onComment, rows]);
 
+  const noteNodes = useMemo(() => new Map(notes?.map((n) => [n.id, n.node])), [notes]);
   const lineAnnotations = useMemo<DiffLineAnnotation<Note>[]>(() => {
-    if (!onComment) return [];
-    const notes: DiffLineAnnotation<Note>[] = (comments ?? []).map((comment) => ({
+    const extra: DiffLineAnnotation<Note>[] = (notes ?? []).map((n) => ({
+      side: SIDE[n.side],
+      lineNumber: n.line,
+      metadata: { kind: "note", id: n.id },
+    }));
+    if (!onComment) return extra;
+    const all: DiffLineAnnotation<Note>[] = (comments ?? []).map((comment) => ({
       side: SIDE[comment.side],
       lineNumber: comment.endLine,
       metadata: { kind: "comment", comment },
     }));
+    all.push(...extra);
     if (selection && !dragging) {
-      notes.push({
+      all.push({
         side: SIDE[selection.side],
         lineNumber: selection.to,
         metadata: { kind: "composer" },
       });
     }
-    return notes;
-  }, [onComment, comments, selection, dragging]);
+    return all;
+  }, [onComment, comments, notes, selection, dragging]);
 
   if (unshowable) {
     return <p className="text-muted-foreground p-4 text-sm">{UNSHOWABLE_TEXT[unshowable]}</p>;
@@ -458,7 +479,9 @@ export function FileDiff({
             : null
         }
         renderAnnotation={({ metadata }) =>
-          metadata.kind === "comment" ? (
+          metadata.kind === "note" ? (
+            noteNodes.get(metadata.id)
+          ) : metadata.kind === "comment" ? (
             <SavedComment comment={metadata.comment} onRemove={onRemoveComment} />
           ) : (
             selection &&

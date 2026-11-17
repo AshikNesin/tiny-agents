@@ -2,11 +2,13 @@
 // pull request by its link; its page shows the PR's changes at full height with the
 // assistant beside them. A line comment for the assistant waits under the review, and the
 // first question starts the assistant (a real predictable Shelley thread,
-// `ta-verify up --shelley`). A comment for GitHub, with a suggestion, goes with Submit review.
+// `ta-verify up --shelley`). A comment for GitHub, with a suggestion, goes with Submit review,
+// and a conversation already on GitHub shows under its line, with Reply and Resolve.
 //
 // The verify instance reaches neither GitHub nor a sandbox, so the review's own routes
 // (the PR from GitHub, its files and diffs from the sandbox's worktree) are answered with
-// page.route fixtures, and so are the review's GitHub comments and its submit. The
+// page.route fixtures, and so are the review's GitHub comments, its submit and the PR's
+// conversations. The
 // assistant's comments, viewed marks and its thread are the real app.
 import { execFileSync } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
@@ -81,6 +83,25 @@ await journey(
     const asked = [];
     const githubComments = [];
     const submitted = [];
+    const replies = [];
+    const conversation = {
+      id: "T_1",
+      path: "src/webhooks/retry.ts",
+      side: "new",
+      line: 12,
+      startLine: null,
+      resolved: false,
+      outdated: false,
+      comments: [
+        {
+          id: "C_1",
+          author: "carol",
+          bot: false,
+          body: "Should this have **jitter**?",
+          createdAt: new Date(Date.now() - 3_600_000).toISOString(),
+        },
+      ],
+    };
 
     await step("setup: a throwaway checkout for the assistant, and the PR fixtures", async () => {
       mkdirSync(dir, { recursive: true });
@@ -133,6 +154,24 @@ await journey(
         };
         githubComments.push(comment);
         return route.fulfill({ ...ok(comment), status: 201 });
+      });
+      await context.route(`**/api/v1/code/reviews/${review.id}/threads`, (route) =>
+        route.fulfill(ok({ headSha: review.headSha, threads: [conversation] })),
+      );
+      await context.route(`**/api/v1/code/reviews/${review.id}/threads/T_1/*`, (route) => {
+        const action = route.request().url().split("/").pop();
+        if (action === "reply") {
+          const { body } = route.request().postDataJSON();
+          replies.push(body);
+          conversation.comments.push({
+            id: `C_${conversation.comments.length + 1}`,
+            author: "demo",
+            bot: false,
+            body,
+            createdAt: new Date().toISOString(),
+          });
+        } else conversation.resolved = true;
+        return route.fulfill(ok({}));
       });
       await context.route(`**/api/v1/code/reviews/${review.id}/submit`, (route) => {
         submitted.push(route.request().postDataJSON());
@@ -269,6 +308,23 @@ await journey(
       await expect(page.getByText("Review submitted on GitHub.")).toBeVisible();
       expect(submitted).toEqual([{ event: "APPROVE", body: "Looks good." }]);
       await expect(pr.getByRole("note", { name: "Comment on line 25" })).toHaveCount(0);
+    });
+
+    await step("a conversation from GitHub sits under its line: reply, then resolve", async () => {
+      const pr = page.getByTestId("code-pull-review");
+      const card = pr.getByRole("group", { name: "Conversation on line 12" });
+      await expect(card).toContainText("Should this have jitter?");
+      await card.getByRole("button", { name: "Reply" }).click();
+      await card.getByRole("textbox", { name: "Reply on line 12" }).fill(`Added it (${stamp})`);
+      await card.getByRole("button", { name: "Reply" }).click();
+      await expect(card.getByRole("textbox")).toHaveCount(0);
+      await expect(card).toContainText(`Added it (${stamp})`);
+      await proof("conversation");
+      await card.getByRole("button", { name: "Resolve" }).click();
+      await expect(
+        pr.getByRole("group", { name: "Resolved conversation on line 12" }),
+      ).toBeVisible();
+      expect(replies).toEqual([`Added it (${stamp})`]);
     });
 
     await step("a phone shows one side at a time", async () => {
