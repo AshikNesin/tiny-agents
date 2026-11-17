@@ -18,6 +18,11 @@ await journey(
     );
     const list = page.getByRole("navigation", { name: "Code threads" });
     const bar = page.getByRole("toolbar", { name: "Selected threads" });
+    // Select threads sits in the list's options menu.
+    const selectThreads = async () => {
+      await page.getByRole("button", { name: "List options" }).click();
+      await page.getByRole("menuitem", { name: "Select threads" }).click();
+    };
     const threads = async (view) =>
       (await api.get(`/code/threads${view ? `?view=${view}` : ""}`)).filter((t) => t.cwd === dir);
     const rowLink = (title) => list.getByRole("link", { name: new RegExp(`^${title}\\b`) });
@@ -79,7 +84,7 @@ await journey(
       await page.goto("/code");
       for (const t of [...picked, kept])
         await expect(rowLink(t.title)).toBeVisible({ timeout: 20_000 });
-      await page.getByRole("button", { name: "Select threads" }).click();
+      await selectThreads();
       await expect(bar).toBeVisible();
       await expect(bar.getByText("Select threads")).toBeVisible();
       await expect(list.getByRole("button", { name: `Archive ${kept.title}` })).toHaveCount(0);
@@ -115,17 +120,18 @@ await journey(
     await proof("undone");
 
     await step("archive both again, then Restore both from the Archived view", async () => {
-      await page.getByRole("button", { name: "Select threads" }).click();
+      await selectThreads();
       for (const t of picked)
         await list.getByRole("checkbox", { name: `Select ${t.title}` }).click();
       await bar.getByRole("button", { name: "Archive" }).click();
       await expect.poll(() => ids("archived"), { timeout: 15_000 }).toHaveLength(2);
-      // The list's footer (hidden while selecting) switches to the archived threads.
+      // The list's options (hidden while selecting) switch to the archived threads.
+      await page.getByRole("button", { name: "List options" }).click();
       await page.getByTestId("code-archived-toggle").click();
       await expect(page.getByTestId("code-archived-back")).toBeVisible();
       for (const t of picked) await expect(rowLink(t.title)).toBeVisible({ timeout: 15_000 });
       await expect(rowLink(kept.title)).toHaveCount(0);
-      await page.getByRole("button", { name: "Select threads" }).click();
+      await selectThreads();
       await bar.getByRole("button", { name: "Select all" }).click();
       await expect(bar.getByText("2 selected")).toBeVisible();
       await proof("archived-view-selected");

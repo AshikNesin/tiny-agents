@@ -50,14 +50,28 @@ has no background jobs, so its threads show no job chips.
 
 **Find.**
 
-- Threads are grouped by project, then by repository or folder for threads
-  outside a project; the most recently active group comes first, and a
+- **Threads** (below New thread, `/code/threads`; a project group's list
+  icon opens `/code/threads?project=<id>`) shows every thread, or one
+  project's, at full width, after Hoplite: sections **Working**, **Needs
+  you** (its PR needs input), **In review** (an open PR) and **Done**, each
+  row with its status, title, PR chips and date, then **Archived**, folded,
+  loaded when opened. The project menu switches project, and the search box
+  filters by title.
+- The sidebar is a short column, like Hoplite: **New thread**, **Threads**
+  and **Search** rows on top, the threads, then **Settings** and one **…**
+  menu (Group by repository, Show archived, Select threads). A row shows its
+  PR only when the PR needs you.
+- By default (**Group by repository** in that menu, on)
+  threads are grouped by project, then by repository or folder for threads
+  outside a project. Turned off (remembered), the list is one flat list,
+  working threads first, then newest first, like Hoplite. Search sits behind
+  its icon (Escape closes it). With grouping on, the most recently active group comes first, and a
   project with no thread yet comes last. A group folds away (remembered),
   shows its newest 8 threads with **Show more**, and offers **New thread**
   in it (and, for a project, its settings) on hover. Inside a group,
   working threads come first, with subagents nested under their parent.
-- **Archived** at the foot of the sidebar lists archived threads, grouped
-  the same way, with **Restore**.
+- **Show archived** in the same menu lists archived threads, listed the
+  same way, with **Restore**.
 - Search: full-text where the harness searches; a title filter otherwise.
   Several harnesses: each row names its harness.
 - Unread dots for turns that ended since you last looked, and ⌘K to jump to
@@ -103,7 +117,14 @@ folder):
   only for a harness that asks.
 - Errors come with **Retry** or **Try another model** where the harness
   offers them; usage limits say when they reset.
-- A turn ends with "Worked for 12s · $0.04".
+- A finished turn folds its work (thinking, progress notes, tools) behind one
+  quiet "Worked for 12s · $0.04" row (or "Ran 2 commands · $0.04" when the
+  harness reports no duration), leaving the first message and the answer in
+  view, as Amp and Hoplite read. A running turn stays fully in view.
+- Inline code is neutral gray mono, and the composer shows one
+  "Model · Reasoning" label.
+- An archived thread offers one **Unarchive to continue** in place of the
+  composer.
 - The context ring opens the usage report: per-model token bands and cost,
   indirect usage, subagents, and **Compact in place**.
 
@@ -112,7 +133,8 @@ folder):
 - Stop, Resume, rename, change directory, fork from a message, delete,
   Open in Shelley — each where the harness has it.
 - **Archive** moves a thread **with its subagents**, with Undo.
-- **Select** (the checklist button beside New thread) turns the list into
+- **Select** (**Select threads** in the list options menu, **…** at the
+  foot of the sidebar) turns the list into
   checkboxes: pick threads (a click on a row picks it; a picked thread's
   subagents go along), or **Select all**, then **Archive** (or **Restore** in
   the archived view) moves them all, with one Undo.

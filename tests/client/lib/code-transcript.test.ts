@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from "vite-plus/test";
 import type { ThreadSnapshot, ToolItem, TranscriptItem } from "@/lib/code/api";
-import { describeTools, groupTools, lastErrorId } from "@/lib/code/transcript";
+import { describeTools, foldTurns, groupTools, lastErrorId } from "@/lib/code/transcript";
 import { applyThreadEvent } from "@/lib/code/use-thread";
 
 const tool = (id: string, extra: Partial<ToolItem> = {}): ToolItem => ({
@@ -71,6 +71,61 @@ describe("groupTools", () => {
     const error: TranscriptItem = { kind: "notice", id: "e", level: "error", text: "boom" };
     expect(lastErrorId([text("a"), error])).toBe("e");
     expect(lastErrorId([error, text("a")])).toBeNull();
+  });
+});
+
+describe("foldTurns", () => {
+  const user = (id: string): TranscriptItem => ({ kind: "user", id, text: id, attachments: [] });
+  const turn = (id: string): TranscriptItem => ({
+    kind: "turn",
+    id,
+    durationMs: 214_000,
+    costUsd: 0.4,
+  });
+
+  it("folds a finished turn's work into one 'Worked for' row and keeps the answer in view", () => {
+    const out = foldTurns([
+      user("u1"),
+      thinking("th1"),
+      text("progress"),
+      tool("t1"),
+      tool("t2"),
+      thinking("th2"),
+      text("answer"),
+      turn("end1"),
+    ]);
+    expect(out.map((i) => i.id)).toEqual(["u1", "work:th1", "answer"]);
+    const work = out[1]!;
+    expect(work.kind).toBe("work");
+    if (work.kind !== "work") return;
+    expect(work.durationMs).toBe(214_000);
+    expect(work.costUsd).toBe(0.4);
+    // Inside the fold the tool runs still group the way they always have.
+    expect(work.items.map((i) => i.id)).toEqual(["th1", "progress", "group:t1", "th2"]);
+  });
+
+  it("leaves a running turn in view, and a turn with nothing to fold as it was", () => {
+    const out = foldTurns([
+      user("u1"),
+      text("hi"),
+      turn("end1"),
+      user("u2"),
+      thinking("th"),
+      tool("t"),
+    ]);
+    expect(out.map((i) => i.id)).toEqual(["u1", "hi", "end1", "u2", "th", "t"]);
+  });
+
+  it("keeps a steer the user sent mid-turn inside its turn's fold", () => {
+    const out = foldTurns([
+      user("u1"),
+      tool("t1"),
+      user("steer"),
+      tool("t2"),
+      text("done"),
+      turn("e"),
+    ]);
+    expect(out.map((i) => i.id)).toEqual(["u1", "work:t1", "done"]);
   });
 });
 

@@ -50,6 +50,7 @@ import { ReviewPage, type ReviewTab } from "./ReviewPage";
 import { ConversationList } from "./ConversationList";
 import { ConversationView } from "./ConversationView";
 import { NewConversation } from "./NewConversation";
+import { ThreadsScreen } from "./ThreadsScreen";
 
 const SIDEBAR_KEY = "tiny-agents:code-sidebar";
 
@@ -166,6 +167,8 @@ export function CodePage() {
   const [reviewScope, setReviewScope] = useState<"base" | "harness">("base");
   // `/code/new` is the new-thread screen on phones (`/code` is the list there).
   const composing = pathname === "/code/new";
+  // `/code/threads`: every thread (or one project's) at full width, by status.
+  const browsing = pathname === "/code/threads";
   const rows = useMemo(() => threads ?? [], [threads]);
   const row = rows.find((r) => r.id === threadId);
   const cwd = row?.cwd ?? viewCwd;
@@ -299,7 +302,7 @@ export function CodePage() {
           data-state={sidebarOpen ? "open" : "closed"}
           className={cn(
             "border-border w-full shrink-0 flex-col border-r md:w-72 xl:w-80",
-            threadId || composing || inSettings ? "hidden" : "flex",
+            threadId || composing || browsing || inSettings ? "hidden" : "flex",
             // With Changes open the list steps aside until there is room for all three.
             !sidebarOpen ? "md:hidden" : sideOpen ? "2xl:flex" : "md:flex",
           )}
@@ -307,7 +310,6 @@ export function CodePage() {
           <div className="flex h-12 shrink-0 items-center gap-1 px-2">
             <BackToApp brand={brand} />
             <span className="flex-1" />
-            <CommandPaletteTrigger />
             <Button
               variant="ghost"
               size="icon-sm"
@@ -337,7 +339,7 @@ export function CodePage() {
               ? sideOpen
                 ? "hidden lg:flex"
                 : "flex"
-              : composing || inSettings
+              : composing || browsing || inSettings
                 ? "flex"
                 : "hidden md:flex",
           )}
@@ -365,6 +367,8 @@ export function CodePage() {
               projects={projects}
               onChange={reloadProjects}
             />
+          ) : browsing ? (
+            <ThreadsScreen threads={threads} projects={projects} sidebarHidden={!sidebarOpen} />
           ) : threadId && harness && reviewOpen ? (
             <ReviewPage
               threadId={threadId}

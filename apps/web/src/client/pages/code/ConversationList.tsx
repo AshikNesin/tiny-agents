@@ -1,8 +1,9 @@
 /**
- * Left column of the Code page (issue #143, ADR 0011), laid out like
- * t3code's sidebar: every thread of every harness grouped by project, then
- * by repository or folder, each group folding away and offering its own New
- * thread (and, for a project, its settings). Subagents nest under their
+ * Left column of the Code page (issue #143, ADR 0011). By default grouped
+ * the way t3code's sidebar is: by project, then by repository or folder,
+ * each group folding away and offering its own New thread (and, for a
+ * project, its settings and Threads screen). "Group by repository" off
+ * lists every thread flat, newest first, the way Hoplite does. Subagents nest under their
  * parent, with unread dots and search. Hovering a row offers Archive
  * (Restore in the archived view) when its harness archives, which moves the
  * thread together with its subagents, with Undo. **Select** (issue #148)
@@ -16,11 +17,9 @@ import {
   ArrowLeft,
   Bot,
   ChevronRight,
-  Folder,
-  FolderGit2,
-  FolderPlus,
-  ListChecks,
+  MoreHorizontal,
   Plus,
+  Rows3,
   Search,
   Settings2,
   SquarePen,
@@ -28,6 +27,13 @@ import {
 } from "lucide-react";
 import { Button, metaLabelClass } from "@groot/ui";
 import { Checkbox } from "@groot/ui/checkbox";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@groot/ui/dropdown-menu";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@groot/ui/input-group";
 import { cn } from "@groot/ui/lib/utils";
 import { Spinner } from "../../components/ui/spinner";
@@ -44,6 +50,29 @@ import { PullChip, useArchive, useArchiveMany } from "./controls";
 import { shortAgo } from "./NewConversation";
 
 const COLLAPSED_KEY = "tiny-agents:code-collapsed";
+
+/** A Hoplite-style row at the top of the list: New thread, Threads, Search. */
+const navRow =
+  "text-muted-foreground hover:bg-muted hover:text-foreground flex h-8 items-center gap-2 rounded-lg px-2 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50 [&_svg]:size-4";
+const GROUPED_KEY = "tiny-agents:code-grouped";
+
+function readGrouped(): boolean {
+  try {
+    // Grouped unless turned off in this browser.
+    return window.localStorage.getItem(GROUPED_KEY) !== "0";
+  } catch {
+    return true;
+  }
+}
+
+function saveGrouped(grouped: boolean) {
+  try {
+    if (grouped) window.localStorage.removeItem(GROUPED_KEY);
+    else window.localStorage.setItem(GROUPED_KEY, "0");
+  } catch {
+    // not remembered in private mode
+  }
+}
 /** Threads a group shows before "Show more". */
 const GROUP_LIMIT = 8;
 
@@ -178,7 +207,8 @@ function Row({
             {label && <span className={cn(metaLabelClass, "shrink-0")}>{label}</span>}
             {/* The status / time slot makes room for the archive button on hover. */}
             <span className="flex shrink-0 items-center gap-1.5 pointer-fine:group-focus-within/row:invisible pointer-fine:group-hover/row:invisible">
-              {row.pr && <PullChip pr={row.pr} />}
+              {/* Only a PR that waits on you; the Threads screen shows them all. */}
+              {row.pr?.loop === "needs_input" && <PullChip pr={row.pr} />}
               {row.working ? (
                 <Spinner className="size-3.5" aria-label="Working" />
               ) : node.unread ? (
@@ -262,7 +292,6 @@ function Group({
           index < GROUP_LIMIT || (rest.activeId ? contains(node, rest.activeId) : false),
       );
   const hidden = group.nodes.length - shown.length;
-  const Icon = group.projectId ? FolderGit2 : Folder;
   return (
     <section aria-labelledby={headingId} className="pb-1.5" data-testid="code-group">
       <div className="group/head flex h-8 items-center gap-0.5 rounded-lg pr-1 hover:bg-muted/60">
@@ -278,10 +307,25 @@ function Group({
               aria-hidden
               className={cn("size-3.5 shrink-0 transition-transform", !collapsed && "rotate-90")}
             />
-            <Icon aria-hidden className="size-3.5 shrink-0" />
             <span className="truncate">{group.label}</span>
           </button>
         </h2>
+        {group.projectId && (
+          <Button
+            asChild
+            variant="ghost"
+            size="icon-xs"
+            className="text-muted-foreground opacity-0 group-focus-within/head:opacity-100 group-hover/head:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
+          >
+            <Link
+              to={`/code/threads?project=${encodeURIComponent(group.projectId)}`}
+              aria-label={`${group.label} threads`}
+              title="All of its threads"
+            >
+              <Rows3 />
+            </Link>
+          </Button>
+        )}
         {offerNew && group.projectId && (
           <Button
             asChild
@@ -359,6 +403,9 @@ export function ConversationList({
     });
   }, []);
   useEffect(() => saveCollapsed(collapsed), [collapsed]);
+  const [grouped, setGrouped] = useState(readGrouped);
+  useEffect(() => saveGrouped(grouped), [grouped]);
+  const [searching, setSearching] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<ThreadSummary[] | null>(null);
   const caps = useMemo(() => new Map(harnesses.map((h) => [h.id, h.capabilities])), [harnesses]);
@@ -445,11 +492,23 @@ export function ConversationList({
     return view === "archived" ? all.filter((g) => g.nodes.length > 0) : all;
   }, [rows, projects, view]);
   const searchTree = useMemo(() => (results ? buildTree(results) : null), [results]);
+  // The flat list: working threads first, then newest first.
+  const flat = useMemo(
+    () =>
+      buildTree(rows ?? []).sort(
+        (a, b) =>
+          Number(b.busy) - Number(a.busy) ||
+          Date.parse(b.row.updatedAt) - Date.parse(a.row.updatedAt),
+      ),
+    [rows],
+  );
 
-  // Select mode works on what is on screen: the search results, or the open groups.
+  // Select mode works on what is on screen: the search results, the list, or the open groups.
   const visible = useMemo(
-    () => searchTree ?? groups.filter((g) => !collapsed.has(g.key)).flatMap((g) => g.nodes),
-    [searchTree, groups, collapsed],
+    () =>
+      searchTree ??
+      (grouped ? groups.filter((g) => !collapsed.has(g.key)).flatMap((g) => g.nodes) : flat),
+    [searchTree, groups, collapsed, grouped, flat],
   );
   const picked = useMemo(
     () => (selected ? selectionRoots(visible, selected) : null),
@@ -522,38 +581,52 @@ export function ConversationList({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex h-13 shrink-0 items-center gap-1.5 px-2">
-        <InputGroup className="min-w-0 flex-1">
-          <InputGroupAddon>
-            <Search />
-          </InputGroupAddon>
-          <InputGroupInput
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => e.key === "Escape" && setQuery("")}
-            placeholder="Search threads"
+      <nav aria-label="Code" className="shrink-0 space-y-px px-2 pb-2">
+        <Link to="/code/new" data-testid="code-new" aria-label="New thread" className={navRow}>
+          <SquarePen />
+          New thread
+        </Link>
+        <Link to="/code/threads" data-testid="code-threads" className={navRow}>
+          <Rows3 />
+          Threads
+        </Link>
+        {!searching && (
+          <button
+            type="button"
+            className={cn(navRow, "w-full")}
             aria-label="Search threads"
-          />
-        </InputGroup>
-        {anyArchives && (
-          <Button
-            size="icon"
-            variant="ghost"
-            aria-label={selected ? "Stop selecting" : "Select threads"}
-            title={selected ? "Stop selecting" : "Select threads"}
-            aria-pressed={Boolean(selected)}
-            onClick={() => setSelected((prev) => (prev ? null : new Set()))}
-            data-testid="code-select"
+            onClick={() => {
+              setSearching(true);
+              setQuery("");
+            }}
           >
-            {selected ? <X /> : <ListChecks />}
-          </Button>
+            <Search />
+            Search
+          </button>
         )}
-        <Button asChild size="icon" variant="ghost" aria-label="New thread" title="New thread">
-          <Link to="/code/new" data-testid="code-new">
-            <SquarePen />
-          </Link>
-        </Button>
-      </div>
+      </nav>
+      {searching && (
+        <div className="shrink-0 px-2 pb-2">
+          <InputGroup>
+            <InputGroupAddon>
+              <Search />
+            </InputGroupAddon>
+            <InputGroupInput
+              autoFocus
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key !== "Escape") return;
+                setQuery("");
+                setSearching(false);
+              }}
+              onBlur={() => !query && setSearching(false)}
+              placeholder="Search threads"
+              aria-label="Search threads"
+            />
+          </InputGroup>
+        </div>
+      )}
       {view === "archived" && (
         <div className="flex items-center gap-1 px-2 pb-1">
           <Button
@@ -579,10 +652,16 @@ export function ConversationList({
           <div className="flex justify-center p-4">
             <Spinner />
           </div>
-        ) : groups.length === 0 ? (
+        ) : (grouped ? groups.length : flat.length) === 0 ? (
           <p className="text-muted-foreground p-3 text-sm">
             {view === "archived" ? "No archived threads." : "No threads yet. Start one."}
           </p>
+        ) : !grouped ? (
+          <ul className="space-y-px">
+            {flat.map((node) => (
+              <Row key={node.row.id} node={node} depth={0} {...listProps} />
+            ))}
+          </ul>
         ) : (
           groups.map((group) => (
             <Group
@@ -623,6 +702,15 @@ export function ConversationList({
             </Button>
           )}
           <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label="Stop selecting"
+            title="Stop selecting"
+            onClick={() => setSelected(null)}
+          >
+            <X />
+          </Button>
+          <Button
             size="sm"
             disabled={picked.roots.length === 0 || moving}
             onClick={() => void onArchiveSelected()}
@@ -634,42 +722,51 @@ export function ConversationList({
         </div>
       )}
       {!selected && (
-        <div className="border-border flex shrink-0 items-center gap-0.5 border-t px-2 py-1.5">
-          {anyArchives && (
-            <Button
-              variant="ghost"
-              size="sm"
-              aria-pressed={view === "archived"}
-              onClick={() => setView((v) => (v === "archived" ? "active" : "archived"))}
-              className={cn(view !== "archived" && "text-muted-foreground")}
-              data-testid="code-archived-toggle"
-            >
-              <Archive />
-              Archived
+        <div className="flex shrink-0 items-center gap-0.5 px-2 py-1.5">
+          {projects && (
+            <Button asChild variant="ghost" size="sm" className="text-muted-foreground">
+              <Link to="/code/settings" data-testid="code-settings">
+                <Settings2 />
+                Settings
+              </Link>
             </Button>
           )}
           <span className="flex-1" />
-          {projects && (
-            <>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
               <Button
-                asChild
                 variant="ghost"
                 size="icon-sm"
                 className="text-muted-foreground"
-                title="Add project"
+                aria-label="List options"
+                title="List options"
               >
-                <Link to="/code/settings/projects" aria-label="Add project">
-                  <FolderPlus />
-                </Link>
+                <MoreHorizontal />
               </Button>
-              <Button asChild variant="ghost" size="sm" className="text-muted-foreground">
-                <Link to="/code/settings" data-testid="code-settings">
-                  <Settings2 />
-                  Settings
-                </Link>
-              </Button>
-            </>
-          )}
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" side="top" className="w-56">
+              <DropdownMenuCheckboxItem
+                checked={grouped}
+                onCheckedChange={(on) => setGrouped(on === true)}
+              >
+                Group by repository
+              </DropdownMenuCheckboxItem>
+              {anyArchives && (
+                <DropdownMenuCheckboxItem
+                  checked={view === "archived"}
+                  onCheckedChange={(on) => setView(on === true ? "archived" : "active")}
+                  data-testid="code-archived-toggle"
+                >
+                  Show archived
+                </DropdownMenuCheckboxItem>
+              )}
+              {anyArchives && (
+                <DropdownMenuItem onSelect={() => setSelected(new Set())} data-testid="code-select">
+                  Select threads
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       )}
     </div>

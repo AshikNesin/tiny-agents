@@ -80,6 +80,12 @@ await journey(
         await expect(page.getByRole("button", { name: "Model" })).toHaveText(/predictable/);
         // One harness configured: no harness picker (that needs Claude Code as well).
         await expect(page.getByTestId("code-harness")).toHaveCount(0);
+        // The list is grouped by repository by default (an option in List options).
+        await page.getByRole("button", { name: "List options" }).click();
+        await expect(
+          page.getByRole("menuitemcheckbox", { name: "Group by repository" }),
+        ).toHaveAttribute("aria-checked", "true");
+        await page.keyboard.press("Escape");
       },
     );
 
@@ -264,12 +270,14 @@ await journey(
     });
 
     await step("search threads filters the list by title", async () => {
+      await page.getByRole("button", { name: "Search threads" }).click();
       await page.getByRole("textbox", { name: "Search threads" }).fill(title);
       await expect(list.getByRole("link", { name: new RegExp(`^${title}`) })).toBeVisible({
         timeout: 15_000,
       });
       await expect(list.getByRole("listitem").filter({ hasText: otherTitle })).toHaveCount(0);
-      await page.getByRole("textbox", { name: "Search threads" }).fill("");
+      await page.getByRole("textbox", { name: "Search threads" }).press("Escape");
+      await expect(page.getByRole("textbox", { name: "Search threads" })).toHaveCount(0);
     });
 
     await step("archive a thread from its row; it moves to Archived; restore it", async () => {
@@ -280,9 +288,10 @@ await journey(
       await expect
         .poll(async () => (await threads("archived")).some((t) => t.id === mainId))
         .toBe(true);
-      const archivedToggle = page.getByTestId("code-archived-toggle");
-      await archivedToggle.click();
-      await expect(archivedToggle).toHaveAttribute("aria-pressed", "true");
+      // Show archived sits in the list's options menu.
+      await page.getByRole("button", { name: "List options" }).click();
+      await page.getByTestId("code-archived-toggle").click();
+      await expect(page.getByTestId("code-archived-back")).toBeVisible();
       await expect(list.getByRole("link", { name: new RegExp(`^${title}`) })).toBeVisible({
         timeout: 15_000,
       });
@@ -292,7 +301,7 @@ await journey(
       await list.getByRole("button", { name: `Restore ${title}` }).click();
       await expect.poll(async () => (await threads()).some((t) => t.id === mainId)).toBe(true);
       await page.getByRole("button", { name: "Archived threads" }).click();
-      await expect(archivedToggle).toHaveAttribute("aria-pressed", "false");
+      await expect(page.getByTestId("code-archived-back")).toHaveCount(0);
       await expect(list.getByRole("link", { name: new RegExp(`^${title}`) })).toBeVisible({
         timeout: 15_000,
       });

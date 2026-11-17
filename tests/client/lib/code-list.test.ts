@@ -4,7 +4,7 @@
  * repository or folder.
  */
 import { describe, expect, it } from "vite-plus/test";
-import { ancestry, buildGroups } from "@/lib/code/list";
+import { ancestry, buildGroups, statusSections } from "@/lib/code/list";
 import type { ThreadSummary } from "@/lib/code/api";
 
 const row = (id: string, extra: Partial<ThreadSummary> = {}): ThreadSummary => ({
@@ -97,5 +97,28 @@ describe("selectionRoots", () => {
       "shelley:parent",
     ]);
     expect(selectionRoots(tree, new Set()).roots).toEqual([]);
+  });
+});
+
+describe("Threads screen sections", () => {
+  it("sorts a project's threads into Working, Needs you, In review and Done, newest first", () => {
+    const sections = statusSections([
+      row("done-old", { updatedAt: "2026-11-01T00:00:00Z" }),
+      row("merged", { pr: { number: 7, loop: "merged" }, updatedAt: "2026-11-02T00:00:00Z" }),
+      row("running", { working: true }),
+      row("blocked", { pr: { number: 9, loop: "needs_input" } }),
+      row("review", { pr: { number: 8, loop: "green" } }),
+      row("sub", { parentId: "shelley:running" }),
+    ]);
+    expect(sections.map((s) => [s.key, s.nodes.map((n) => n.row.nativeId)])).toEqual([
+      ["working", ["running"]],
+      ["needs-you", ["blocked"]],
+      ["review", ["review"]],
+      ["done", ["merged", "done-old"]],
+    ]);
+  });
+
+  it("leaves out empty sections", () => {
+    expect(statusSections([row("a")]).map((s) => s.key)).toEqual(["done"]);
   });
 });

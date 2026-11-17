@@ -55,11 +55,14 @@ export function ModelPicker({
   value,
   onChange,
   withDefault,
+  bare,
 }: {
   models: ModelOption[];
   value: string;
   onChange(value: string): void;
   withDefault?: boolean;
+  /** Text only, no icon or chevron: half of the composer's "Model · Reasoning" label. */
+  bare?: boolean;
 }) {
   const ready = models.filter((m) => m.ready !== false || m.id === value);
   const harnessDefault = models.find((m) => m.isDefault);
@@ -112,9 +115,9 @@ export function ModelPicker({
       contentClassName="w-80"
       data-testid="code-model"
     >
-      <Cpu className="opacity-70" />
+      {!bare && <Cpu className="opacity-70" />}
       <span className="max-w-24 truncate @xs:max-w-40">{current}</span>
-      <ChevronDown className="opacity-50" />
+      {!bare && <ChevronDown className="opacity-50" />}
     </SearchSelect>
   );
 }
@@ -142,10 +145,12 @@ export function ReasoningPicker({
   levels,
   value,
   onChange,
+  bare,
 }: {
   levels: string[];
   value: string;
   onChange(value: string): void;
+  bare?: boolean;
 }) {
   if (levels.length === 0) return null;
   const options: SearchSelectOption[] = [
@@ -169,9 +174,9 @@ export function ReasoningPicker({
       contentClassName="w-64"
       data-testid="code-reasoning"
     >
-      <Brain className="opacity-70" />
-      <span className="hidden truncate @[16rem]:inline">{current ?? "Auto"}</span>
-      <ChevronDown className="opacity-50" />
+      {!bare && <Brain className="opacity-70" />}
+      <span className={cn("truncate", !bare && "hidden @[16rem]:inline")}>{current ?? "Auto"}</span>
+      {!bare && <ChevronDown className="opacity-50" />}
     </SearchSelect>
   );
 }

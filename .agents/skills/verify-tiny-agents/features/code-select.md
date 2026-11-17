@@ -8,12 +8,12 @@ On the Code page the owner can turn the thread list into checkboxes, pick severa
 - `select-bar` toolbar `Selected threads`: `Select threads` with nothing picked, then `N selected` (`+ M subagents` when subagents go along), `Select all` / `Clear`, and `Archive` (or `Restore` in Archived).
 - `select-archive` Archive: toast `Archived N threads` with `Undo`; the rows leave the list; Select mode ends.
 - `select-undo` one `Undo` restores every thread the batch moved.
-- `select-restore` Archived view (footer `Archived`): Select all → `Restore`: toast `Restored N threads`; the rows return to Active.
+- `select-restore` Archived view (footer `List options` → `Show archived`): Select all → `Restore`: toast `Restored N threads`; the rows return to Active.
 - Not driven: subagent rows (shown ticked and disabled under a picked parent), covered by `tests/client/pages/code-list.test.tsx`.
 
 ## How to get to it (user POV)
 
-- Sidebar navigation `Primary` → `Code`, then the `Select threads` button beside `Search threads`.
+- Sidebar navigation `Primary` → `Code`, then `List options` (footer) → `Select threads`.
 
 ## Driving it with ta-verify
 

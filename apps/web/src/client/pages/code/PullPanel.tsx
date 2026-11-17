@@ -355,6 +355,34 @@ export function PullPanel({
   );
 }
 
+/** Checks as one segmented bar: passed, failed, then pending (Hoplite). */
+function ChecksBar({
+  passed,
+  failed,
+  pending,
+}: {
+  passed: number;
+  failed: number;
+  pending: number;
+}) {
+  const total = passed + failed + pending;
+  return (
+    <span
+      role="img"
+      aria-label={`${passed} passed, ${failed} failed, ${pending} pending`}
+      className="bg-muted flex h-1.5 w-full gap-px overflow-hidden rounded-full"
+    >
+      {total > 0 && (
+        <>
+          <span className="bg-success" style={{ flexGrow: passed }} />
+          <span className="bg-destructive" style={{ flexGrow: failed }} />
+          <span className="bg-warning/70" style={{ flexGrow: pending }} />
+        </>
+      )}
+    </span>
+  );
+}
+
 function ActivePull({
   pr,
   busy,
@@ -388,36 +416,53 @@ function ActivePull({
 
   return (
     <>
-      <section className="flex flex-wrap items-center gap-2" aria-label="At a glance">
-        <button
-          type="button"
-          onClick={() => setChecksOpen((o) => !o)}
-          className="hover:bg-muted flex items-center gap-1.5 rounded-lg px-2 py-1"
-          aria-expanded={checksOpen}
-        >
-          {failed.length ? (
-            <CircleX className="text-destructive size-4" />
-          ) : passed === checks.length ? (
-            <CircleCheck className="text-success size-4" />
-          ) : (
-            <CircleDashed className="text-warning size-4" />
-          )}
-          Checks {passed} of {checks.length}
-        </button>
-        <span className="text-muted-foreground px-2">
-          {reviews.length} {reviews.length === 1 ? "review" : "reviews"}
-        </span>
-        <span className="text-muted-foreground flex items-center gap-1 px-2">
-          <MessageSquare className="size-3.5" />
-          {open.length} open
-        </span>
-        <Badge variant="outline">
+      <section className="space-y-3" aria-label="At a glance">
+        <p className="text-muted-foreground text-xs" aria-label="Status">
           {pr.state === "open" && snap?.inMergeQueue
             ? "queued"
             : pr.state === "open" && pr.draft
               ? "draft"
               : pr.state}
-        </Badge>
+          {" · "}
+          <span className={monoClass}>
+            {pr.headRef} → {pr.baseRef}
+          </span>
+        </p>
+        <div className="border-border grid grid-cols-3 divide-x rounded-lg border">
+          <button
+            type="button"
+            onClick={() => setChecksOpen((o) => !o)}
+            className="hover:bg-muted/60 flex min-w-0 flex-col gap-1.5 rounded-l-lg px-3 py-2 text-left"
+            aria-expanded={checksOpen}
+          >
+            <span className="flex items-center gap-1.5 text-xs font-medium">
+              {failed.length ? (
+                <CircleX className="text-destructive size-3.5" />
+              ) : passed === checks.length ? (
+                <CircleCheck className="text-success size-3.5" />
+              ) : (
+                <CircleDashed className="text-warning size-3.5" />
+              )}
+              Checks {passed} of {checks.length}
+            </span>
+            <ChecksBar
+              passed={passed}
+              failed={failed.length}
+              pending={checks.length - passed - failed.length}
+            />
+          </button>
+          <div className="flex min-w-0 flex-col gap-0.5 px-3 py-2">
+            <span className="text-muted-foreground text-xs">Reviews</span>
+            <span className="text-sm font-medium tabular-nums">{reviews.length}</span>
+          </div>
+          <div className="flex min-w-0 flex-col gap-0.5 px-3 py-2">
+            <span className="text-muted-foreground flex items-center gap-1 text-xs">
+              <MessageSquare className="size-3" />
+              Open comments
+            </span>
+            <span className="text-sm font-medium tabular-nums">{open.length}</span>
+          </div>
+        </div>
       </section>
 
       {checksOpen && checks.length > 0 && (
@@ -706,7 +751,7 @@ function Description({
           </div>
         </div>
       ) : shown ? (
-        <div className="chat-md min-w-0 text-sm [overflow-wrap:anywhere]">
+        <div className="chat-md code-md min-w-0 text-sm [overflow-wrap:anywhere]">
           <Streamdown components={markdownComponents}>{shown}</Streamdown>
         </div>
       ) : (

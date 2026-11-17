@@ -14,7 +14,16 @@ export interface ToolGroup {
   items: Array<ToolItem | Extract<TranscriptItem, { kind: "thinking" }>>;
 }
 
-export type DisplayItem = TranscriptItem | ToolGroup;
+/** A finished turn's work (thinking, progress notes, tools) folded behind one "Worked for" row. */
+export interface WorkFold {
+  kind: "work";
+  id: string;
+  items: Array<TranscriptItem | ToolGroup>;
+  durationMs?: number;
+  costUsd?: number;
+}
+
+export type DisplayItem = TranscriptItem | ToolGroup | WorkFold;
 
 /** Tools that stand on their own: cards, messages, and steps whose screenshots matter. */
 function standsAlone(item: ToolItem): boolean {
@@ -33,8 +42,8 @@ function standsAlone(item: ToolItem): boolean {
  * them) into one collapsible group; running tools, subagents, plans and
  * screenshots stay in view.
  */
-export function groupTools(items: TranscriptItem[]): DisplayItem[] {
-  const out: DisplayItem[] = [];
+export function groupTools(items: TranscriptItem[]): Array<TranscriptItem | ToolGroup> {
+  const out: Array<TranscriptItem | ToolGroup> = [];
   let run: ToolGroup["items"] = [];
   const flush = () => {
     // Thinking after the last tool belongs to what follows, not the group.
@@ -61,6 +70,54 @@ export function groupTools(items: TranscriptItem[]): DisplayItem[] {
     }
   }
   flush();
+  return out;
+}
+
+/** Rows that are the agent working rather than answering. */
+const isWork = (item: TranscriptItem) =>
+  item.kind === "tool" ||
+  item.kind === "thinking" ||
+  item.kind === "job" ||
+  item.kind === "report" ||
+  item.kind === "request";
+
+/**
+ * Folds each finished turn into its first message, one "Worked for 3m 34s"
+ * row, and the answer (the text after its last piece of work), the way Amp
+ * and Hoplite read. A turn still running stays fully in view.
+ */
+export function foldTurns(items: TranscriptItem[]): DisplayItem[] {
+  const out: DisplayItem[] = [];
+  let start = 0;
+  const finishTurn = (end: number, turn?: Extract<TranscriptItem, { kind: "turn" }>) => {
+    const segment = items.slice(start, end);
+    const first = segment.findIndex((i) => i.kind === "user");
+    let lastWork = -1;
+    segment.forEach((item, i) => {
+      if (i > first && (isWork(item) || item.kind === "user")) lastWork = i;
+    });
+    const folded = segment.slice(first + 1, lastWork + 1);
+    if (!turn || lastWork < 0 || !folded.some(isWork)) {
+      out.push(...groupTools(segment));
+      if (turn) out.push(turn);
+      return;
+    }
+    out.push(...groupTools(segment.slice(0, first + 1)));
+    out.push({
+      kind: "work",
+      id: `work:${folded[0]!.id}`,
+      items: groupTools(folded),
+      durationMs: turn.durationMs,
+      costUsd: turn.costUsd,
+    });
+    out.push(...groupTools(segment.slice(lastWork + 1)));
+  };
+  items.forEach((item, i) => {
+    if (item.kind !== "turn") return;
+    finishTurn(i, item);
+    start = i + 1;
+  });
+  finishTurn(items.length);
   return out;
 }
 
