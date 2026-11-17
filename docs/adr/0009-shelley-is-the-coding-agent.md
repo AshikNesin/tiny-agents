@@ -52,6 +52,6 @@ Tailscale.
   agent change.
 - A Shelley outage shows on the Code page and makes bot tools fail clearly;
   nothing else in tiny-agents depends on it.
-- The diff viewer renders with jsdiff for now; the agreed renderer is
-  @pierre/diffs, pending a supply-chain exception for `@pierre/theme@2.0.0`
-  (published without provenance after an earlier release had it).
+- Every diff renders with @pierre/diffs (diffs.com). Its themes package,
+  `@pierre/theme@2.0.0`, was published without provenance; the owner allowed
+  that one version as a scoped `trustPolicyExclude` entry on 2026-11-17.

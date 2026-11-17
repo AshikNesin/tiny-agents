@@ -444,7 +444,11 @@ function ToolRow({ call, ctx }: { call: ToolItem; ctx: TranscriptContext }) {
                   <CodeBlockHeader>
                     <CodeBlockTitle>{call.diff.path}</CodeBlockTitle>
                   </CodeBlockHeader>
-                  <PatchView patch={call.diff.diff} className="max-h-96 overflow-y-auto" />
+                  <PatchView
+                    patch={call.diff.diff}
+                    path={call.diff.path}
+                    className="max-h-96 overflow-y-auto"
+                  />
                 </CodeBlock>
               )}
               {call.output && !call.diff && (
