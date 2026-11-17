@@ -40,7 +40,9 @@ function ThreadCard({
   onReply(body: string): Promise<void>;
   onResolve(): Promise<void>;
 }) {
-  const [open, setOpen] = useState(!thread.resolved);
+  // Open unless resolved, until the owner folds or unfolds it.
+  const [toggled, setToggled] = useState<boolean | null>(null);
+  const open = toggled ?? !thread.resolved;
   const [replying, setReplying] = useState(false);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState<"reply" | "resolve" | null>(null);
@@ -69,7 +71,7 @@ function ThreadCard({
     >
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => setToggled(!open)}
         aria-expanded={open}
         className="text-muted-foreground hover:text-foreground flex w-full min-w-0 items-center gap-1.5 text-xs"
       >
@@ -227,7 +229,8 @@ export function usePullConversations(
     return (path: string) => {
       const mine = data.threads.filter((t) => t.path === path);
       const placed = newer ? [] : mine.filter((t) => t.line !== null);
-      const elsewhere = mine.filter((t) => !placed.includes(t));
+      const placedIds = new Set(placed.map((t) => t.id));
+      const elsewhere = mine.filter((t) => !placedIds.has(t.id));
       return {
         notes: placed.map((t) => ({ id: t.id, side: t.side, line: t.line!, node: card(t) })),
         aside:
