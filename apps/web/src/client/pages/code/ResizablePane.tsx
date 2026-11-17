@@ -7,11 +7,15 @@
  */
 import {
   useCallback,
+  useRef,
   useState,
+  type CSSProperties,
   type KeyboardEvent,
   type PointerEvent,
+  type ReactNode,
   type RefObject,
 } from "react";
+import { cn } from "@groot/ui/lib/utils";
 
 const WIDTH_KEY = "code:review-width";
 const MIN_PANEL = 320;
@@ -38,7 +42,7 @@ function saveWidth(width: number | null) {
 }
 
 /** The panel's chosen width in px, or null for the default split. */
-export function useReviewWidth() {
+function useReviewWidth() {
   const [width, setWidth] = useState(readWidth);
   const change = useCallback((next: number | null, persist: boolean) => {
     setWidth(next);
@@ -47,7 +51,34 @@ export function useReviewWidth() {
   return [width, change] as const;
 }
 
-export function PanelResizer({
+/**
+ * The right panel with its divider. Dragged to a width, the panel keeps it
+ * (shrinking only as far as its minimum when the window narrows); otherwise
+ * it takes about half.
+ */
+export function ResizablePane({ children }: { children: ReactNode }) {
+  const [width, setWidth] = useReviewWidth();
+  const panelRef = useRef<HTMLElement>(null);
+  return (
+    <>
+      <PanelResizer panelRef={panelRef} width={width} onWidth={setWidth} />
+      <section
+        ref={panelRef}
+        id="code-review-panel"
+        aria-label="Review panel"
+        className={cn(
+          "flex w-full min-w-0 flex-col",
+          width === null ? "lg:w-[48%] lg:max-w-3xl" : "lg:w-(--review-width) lg:min-w-80",
+        )}
+        style={width === null ? undefined : ({ "--review-width": `${width}px` } as CSSProperties)}
+      >
+        {children}
+      </section>
+    </>
+  );
+}
+
+function PanelResizer({
   panelRef,
   width,
   onWidth,

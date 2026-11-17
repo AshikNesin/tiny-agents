@@ -9,13 +9,13 @@
  * way back to the app, ⌘K, Archived and Settings) | thread | changes on wide
  * screens (the list steps aside for Changes until 2xl, and Hide sidebar or ⌘B
  * folds it away, remembered in this browser; the divider before the right
- * panel resizes it, see PanelResizer); one column at a time
+ * panel resizes it, see ResizablePane); one column at a time
  * on phones (`/code` → `/code/new` or `/code/:id` → `/code/:id/changes`).
  * `/code/:id/review` shows the same Changes and Pull request at full width
  * (each side pane's Open as a page goes there).
  * Projects and GitHub are settings pages of their own (`/code/settings`).
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Link,
   Navigate,
@@ -48,7 +48,7 @@ import { useThreadCommenting } from "../../lib/code/comments";
 import { PullPanel } from "./PullPanel";
 import { ReviewPanel } from "./ReviewPanel";
 import { ReviewPage, type ReviewTab } from "./ReviewPage";
-import { PanelResizer, useReviewWidth } from "./PanelResizer";
+import { ResizablePane } from "./ResizablePane";
 import { ReviewSidebar, type SideTab } from "./ReviewSidebar";
 
 const SIDE_TAB_KEY = "tiny-agents:code-side-tab";
@@ -164,8 +164,6 @@ export function CodePage() {
   const threads = useCodeStore((s) => s.threads);
   const [insert, setInsert] = useState<{ text: string; nonce: number } | null>(null);
   const [sidebarOpen, toggleSidebar] = useSidebar();
-  const [panelWidth, setPanelWidth] = useReviewWidth();
-  const panelRef = useRef<HTMLElement>(null);
   // The open thread's directory, for Changes even when it is not in the
   // active list (archived, or not in the list yet).
   const [viewCwd, setViewCwd] = useState<string | null>(null);
@@ -309,12 +307,6 @@ export function CodePage() {
       />
     );
   };
-  // Dragged to a width, the panel keeps it (shrinking only as far as its
-  // minimum when the window narrows); otherwise it takes about half.
-  const sidePane = cn(
-    "flex w-full min-w-0 flex-col",
-    panelWidth === null ? "lg:w-[48%] lg:max-w-3xl" : "lg:w-(--review-width) lg:min-w-80",
-  );
   const sideTab: SideTab = prOpen && row?.projectId ? "pr" : "source";
   const sideContent = !sideOpen ? null : sideTab === "pr" ? pullPanel(false) : changesPanel(false);
 
@@ -435,20 +427,7 @@ export function CodePage() {
         </main>
 
         {sideContent && threadId && (
-          <PanelResizer panelRef={panelRef} width={panelWidth} onWidth={setPanelWidth} />
-        )}
-        {sideContent && threadId && (
-          <section
-            ref={panelRef}
-            id="code-review-panel"
-            className={sidePane}
-            style={
-              panelWidth === null
-                ? undefined
-                : ({ "--review-width": `${panelWidth}px` } as CSSProperties)
-            }
-            aria-label="Review panel"
-          >
+          <ResizablePane>
             <ReviewSidebar
               tab={sideTab}
               onTab={showTab}
@@ -462,7 +441,7 @@ export function CodePage() {
             >
               {sideContent}
             </ReviewSidebar>
-          </section>
+          </ResizablePane>
         )}
       </div>
     </div>
