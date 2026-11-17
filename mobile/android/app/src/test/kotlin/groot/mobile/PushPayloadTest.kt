@@ -1,11 +1,13 @@
 package groot.mobile
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import groot.mobile.data.api.ApiException
 import groot.mobile.push.ApprovalActions
 import groot.mobile.push.ApprovalAnswer
 import groot.mobile.push.ApprovalDecision
 import groot.mobile.push.PushChannel
 import groot.mobile.push.PushPayload
+import groot.mobile.push.PushStatus
 import groot.mobile.push.decisionOf
 import groot.mobile.push.spec
 import org.junit.Assert.assertEquals
@@ -69,5 +71,19 @@ class PushPayloadTest {
         assertEquals(ApprovalDecision(approved = true, alwaysAllow = null, grant = false), decisionOf(ApprovalAnswer.Approve, "bash"))
         assertEquals(ApprovalDecision(approved = true, alwaysAllow = "bash", grant = false), decisionOf(ApprovalAnswer.AlwaysAllow, "bash"))
         assertEquals(ApprovalDecision(approved = true, alwaysAllow = null, grant = true), decisionOf(ApprovalAnswer.ForThisChat, "vault_use"))
+    }
+
+    @Test
+    fun `a server without phone notifications says to update it, and only a guest is left out`() {
+        assertEquals(PushStatus.State.ServerTooOld, PushStatus.ofKeyError(ApiException(404, "NOT_FOUND", "Not found.")).state)
+        assertEquals(
+            PushStatus.State.ServerTooOld,
+            PushStatus.ofKeyError(ApiException(200, "BAD_RESPONSE", "The server sent something that is not JSON.")).state,
+        )
+        assertEquals(PushStatus.State.Unsupported, PushStatus.ofKeyError(ApiException(403, "FORBIDDEN", "No")).state)
+        assertEquals(
+            PushStatus(PushStatus.State.Failed, detail = "Server error"),
+            PushStatus.ofKeyError(ApiException(500, "INTERNAL", "Server error")),
+        )
     }
 }

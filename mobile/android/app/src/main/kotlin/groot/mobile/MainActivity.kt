@@ -12,7 +12,10 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import groot.mobile.push.PushStatus
 import groot.kit.theme.GrootTheme
 import groot.kit.theme.ThemeMode
 import groot.mobile.data.parseAppLink
@@ -23,6 +26,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 
@@ -68,26 +72,43 @@ class MainActivity : ComponentActivity() {
         openLink(intent)
     }
 
+    /** Asked for POST_NOTIFICATIONS on its own already in this launch: later checks don't ask again. */
+    private var askedPermission = false
+
     /**
-     * Phone notifications (issue #306): once signed in (each launch, and after a sign-in or a
-     * switch of server), register this phone. The permission is asked only when the server
-     * offers push, so a guest is never asked.
+     * Phone notifications (issue #306): register this phone whenever the app comes to the front
+     * signed in (a server updated meanwhile, or a permission granted in Android settings, takes
+     * effect then), after a sign-in or a switch of server, and on Settings' "Try again". The
+     * permission is asked only once the server offers push, so a guest is never asked.
      */
     private fun registerForPush() {
         val container = (application as GrootMobileApp).container
         container.pushNotifier.createChannels()
         lifecycleScope.launch {
-            container.session.state
-                .map { if (it.signedIn) it.serverUrl else null }
-                .distinctUntilChanged()
-                .filter { it != null }
-                .collect { container.push.ensure(this@MainActivity, ::askNotificationPermission) }
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                val signedIn = container.session.state
+                    .map { if (it.signedIn) it.serverUrl else null }
+                    .distinctUntilChanged()
+                    .filter { it != null }
+                    .map { false }
+                val retried = container.push.retries.map { true }
+                merge(signedIn, retried).collect { explicit ->
+                    if (!container.session.state.value.signedIn) return@collect
+                    if (explicit) askedPermission = false
+                    // Already on and still allowed: nothing to refresh on a plain return to the app.
+                    val on = container.push.status.value.state == PushStatus.State.On
+                    if (!explicit && on && container.pushNotifier.enabled()) return@collect
+                    container.push.ensure(this@MainActivity, ::askNotificationPermission)
+                }
+            }
         }
     }
 
     private suspend fun askNotificationPermission(): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return true
         if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) return true
+        if (askedPermission) return false
+        askedPermission = true
         val answer = CompletableDeferred<Boolean>()
         permissionAnswer = answer
         notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)

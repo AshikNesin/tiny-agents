@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.1
+
+### Patch Changes
+
+- Notifications: when your server is too old to send phone notifications, Settings now says to update it, instead
+  of hiding the Notifications section without a word. The app registers again each time you come back to it, so
+  updating the server or allowing notifications in Android settings turns them on without a restart, and Settings
+  has "Try again" and "Allow notifications" for the states that need them.
+
 ## 0.6.0
 
 ### Minor Changes

@@ -40,6 +40,11 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    /** Register this phone again: after a server update, or when it failed. */
+    fun retryPush() {
+        container.push.retry()
+    }
+
     fun setThemeMode(mode: ThemeMode) {
         viewModelScope.launch { container.themeModeStore.setThemeMode(mode) }
     }
