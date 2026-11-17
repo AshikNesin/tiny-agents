@@ -4,14 +4,13 @@
  * the guest guard refuses them before they get here.
  */
 import { Hono } from "hono";
-import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import type { AppEnv } from "@groot/core/types";
 import { env } from "@groot/core/env";
 import { Boom } from "@groot/core/errors";
 import { ok } from "@groot/core/utils/api-response.utils";
 import { parseBody } from "@groot/core/utils/controller.utils";
-import { codeReviewDrafts, codeReviewViewed, db, type CodeCheckpoint } from "../../db";
+import type { CodeCheckpoint } from "../../db";
 import type {
   CheckLogView,
   CheckpointView,
@@ -30,7 +29,7 @@ import {
   startManifest,
 } from "./code.github";
 import { setFlowCookie } from "./code.webhook";
-import { draftView, pendingReview, reviewMessage, unsentDrafts } from "./code.review";
+import { threadReview } from "./code.review";
 import { checkpointRange, checkpointsOf, revertTo } from "./code.checkpoints";
 import { codeHub } from "./code.hub";
 import { checkLog } from "./code.checks";
@@ -364,15 +363,8 @@ async function reviewTarget(threadId: string) {
 router.get("/code/threads/:id/review/files", async (c) => {
   const id = threadParam(c.req.param("id"));
   const { project, worktree, ws } = await reviewTarget(id);
-  const [files, viewed] = await Promise.all([
-    ws.baseFiles(worktree, project.baseBranch),
-    db.select().from(codeReviewViewed).where(eq(codeReviewViewed.threadId, id)),
-  ]);
-  const marks = new Map(viewed.map((v) => [v.path, v.contentHash]));
-  return ok<ReviewFile[]>(
-    c,
-    files.map((f) => ({ ...f, viewed: marks.get(f.path) === f.hash })),
-  );
+  const files = await ws.baseFiles(worktree, project.baseBranch);
+  return ok<ReviewFile[]>(c, await threadReview(id).withViewed(files));
 });
 
 router.get("/code/threads/:id/review/file", async (c) => {
@@ -392,26 +384,13 @@ router.post("/code/threads/:id/review/viewed", async (c) => {
       viewed: z.boolean(),
     }),
   );
-  if (body.viewed) {
-    await db
-      .insert(codeReviewViewed)
-      .values({ threadId: id, path: body.path, contentHash: body.hash })
-      .onConflictDoUpdate({
-        target: [codeReviewViewed.threadId, codeReviewViewed.path],
-        set: { contentHash: body.hash },
-      });
-  } else {
-    await db
-      .delete(codeReviewViewed)
-      .where(and(eq(codeReviewViewed.threadId, id), eq(codeReviewViewed.path, body.path)));
-  }
+  await threadReview(id).markViewed(body.path, body.hash, body.viewed);
   return ok(c, { viewed: body.viewed });
 });
 
 router.get("/code/threads/:id/review/drafts", async (c) => {
   const id = threadParam(c.req.param("id"));
-  const rows = await db.select().from(codeReviewDrafts).where(unsentDrafts(id));
-  return ok<ReviewDraft[]>(c, rows.map(draftView));
+  return ok<ReviewDraft[]>(c, await threadReview(id).drafts());
 });
 
 const draftSchema = z.object({
@@ -426,33 +405,24 @@ const draftSchema = z.object({
 router.post("/code/threads/:id/review/drafts", async (c) => {
   const id = threadParam(c.req.param("id"));
   const body = await parseBody(c, draftSchema);
-  if (body.endLine < body.startLine) throw Boom.badRequest("The range ends before it starts.");
-  const [row] = await db
-    .insert(codeReviewDrafts)
-    .values({ threadId: id, ...body, side: body.side ?? "new", quote: body.quote ?? "" })
-    .returning();
-  return ok<ReviewDraft>(c, draftView(row!), 201);
+  return ok<ReviewDraft>(c, await threadReview(id).addDraft(body), 201);
 });
 
 router.delete("/code/threads/:id/review/drafts/:draft", async (c) => {
   const id = threadParam(c.req.param("id"));
-  await db
-    .delete(codeReviewDrafts)
-    .where(and(unsentDrafts(id), eq(codeReviewDrafts.id, c.req.param("draft"))));
+  await threadReview(id).removeDraft(c.req.param("draft"));
   return ok(c, { deleted: true });
 });
 
 router.post("/code/threads/:id/review/send", async (c) => {
   const id = threadParam(c.req.param("id"));
-  const review = await pendingReview(id);
-  if (review.drafts.length === 0) throw Boom.badRequest("No comments to send.");
-  const target = codeHub()?.resolve(id);
-  if (!target) throw Boom.notFound("No harness serves this thread");
-  const result = await target.instance.send(target.nativeId, {
-    message: reviewMessage(review.drafts),
+  const { result, sent } = await threadReview(id).send(async (review) => {
+    if (review === null) throw Boom.badRequest("No comments to send.");
+    const target = codeHub()?.resolve(id);
+    if (!target) throw Boom.notFound("No harness serves this thread");
+    return target.instance.send(target.nativeId, { message: review });
   });
-  await review.sent();
-  return ok(c, { sent: review.drafts.length, status: result.status });
+  return ok(c, { sent, status: result.status });
 });
 
 export default router;

@@ -29,7 +29,14 @@ export function finishedReplyOf(message: ChatMessage): FinishedReply | undefined
     ?.filter((call) => call.approval === "refused")
     .map((call) => call.name);
   const blocked = blockedReasonOf(message.toolCalls);
-  if (!message.text && error === undefined && !refused?.length && blocked === undefined) {
+  const stoppedBy = message.toolCalls?.findLast((call) => call.limit)?.limit;
+  if (
+    !message.text &&
+    error === undefined &&
+    !refused?.length &&
+    blocked === undefined &&
+    stoppedBy === undefined
+  ) {
     return undefined;
   }
   return {
@@ -38,6 +45,7 @@ export function finishedReplyOf(message: ChatMessage): FinishedReply | undefined
     ...(error !== undefined ? { error } : {}),
     ...(refused?.length ? { refused } : {}),
     ...(blocked !== undefined ? { blocked } : {}),
+    ...(stoppedBy !== undefined ? { stoppedBy } : {}),
   };
 }
 
@@ -45,7 +53,8 @@ export function finishedReplyOf(message: ChatMessage): FinishedReply | undefined
  * What a submission's turn came to, read from a conversation's chat state:
  * - `answered`: the turn's reply. Text and error come from its last message
  *   that has text or an error; `refused` collects every tool refused anywhere
- *   in the turn and `blocked` is the newest reason given. A turn that said
+ *   in the turn, `blocked` is the newest reason given and `stoppedBy` the
+ *   newest run limit the gate refused a call on. A turn that said
  *   nothing at all answers with empty text.
  * - `pending`: not finished yet: the conversation is busy, the submission
  *   still waits in the inbox, or no assistant message follows it yet.
@@ -75,6 +84,7 @@ export function finishedReplyTo(
   let answer: FinishedReply | undefined;
   const refused = new Set<string>();
   let blocked: string | undefined;
+  let stoppedBy: FinishedReply["stoppedBy"];
   let closed = false;
   for (const message of messages.slice(start + 1)) {
     if (message.role === "user") {
@@ -87,6 +97,7 @@ export function finishedReplyTo(
     if (!reply) continue;
     for (const name of reply.refused ?? []) refused.add(name);
     if (reply.blocked !== undefined) blocked = reply.blocked;
+    if (reply.stoppedBy !== undefined) stoppedBy = reply.stoppedBy;
     if (reply.text || reply.error !== undefined) answer = reply;
   }
   if (!last && !closed) return { status: "pending" };
@@ -95,13 +106,14 @@ export function finishedReplyTo(
     text: "",
     createdAt: last?.createdAt ?? messages[start].createdAt,
   };
-  const { refused: _refused, blocked: _blocked, ...rest } = base;
+  const { refused: _refused, blocked: _blocked, stoppedBy: _stoppedBy, ...rest } = base;
   return {
     status: "answered",
     reply: {
       ...rest,
       ...(refused.size > 0 ? { refused: [...refused] } : {}),
       ...(blocked !== undefined ? { blocked } : {}),
+      ...(stoppedBy !== undefined ? { stoppedBy } : {}),
     },
   };
 }

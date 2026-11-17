@@ -14,6 +14,9 @@
  *   chat and never confused with a mid-turn message or another Delivery's
  *   reply.
  * - Relay rows (kind="relay") never relay again: one answer per Delivery.
+ * - Answering is an Awaited submission (bots.awaited.ts): a Delivery whose
+ *   turn a restart cut off is closed at boot, and the asking bot is told,
+ *   unless it was sent more than a day ago (an old stuck row stays quiet).
  * - A bot-to-bot send runs in a fresh conversation of the target's own,
  *   unattended and on a routine run's token budget, so answering it never
  *   re-sends the target's whole chat history (and a routine that messages a
@@ -24,7 +27,6 @@
 import { and, asc, eq, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import { logger } from "@groot/core/logger";
 import {
-  finishedReplyTo,
   sanitizePeerText,
   type AgentRuntime,
   type ChatMessage,
@@ -38,6 +40,7 @@ import {
   type Bot,
   type BotConversationRuntime,
 } from "./bots.conversation";
+import { awaitedSubmissions } from "./bots.awaited";
 import type { ChatRead } from "./bots.settled";
 
 /** What the Delivery module needs from the runtime. */
@@ -81,7 +84,7 @@ export interface Deliveries {
    * conversation. `chat` is its state when the caller already read it.
    */
   answer(conversationId: number, chat?: ChatRead): Promise<number>;
-  /** Answer every conversation with unanswered Deliveries (boot, tests). */
+  /** Boot: answer, or close as interrupted, every unanswered Delivery on an idle conversation. */
   sweep(): Promise<number>;
 }
 
@@ -94,8 +97,18 @@ export function relayText(fromName: string, text: string): string {
 function answerText(reply: FinishedReply): string {
   if (reply.text) return sanitizePeerText(reply.text);
   // The provider's message stays out of another bot's transcript.
-  return reply.error !== undefined ? "(couldn't answer: the model failed)" : "(no reply)";
+  if (reply.error !== undefined) return "(couldn't answer: the model failed)";
+  if (reply.stoppedBy === "runCap")
+    return "(couldn't finish: it made the most tool calls one reply may)";
+  if (reply.stoppedBy === "budget") return "(couldn't finish: it used up its token budget)";
+  return "(no reply)";
 }
+
+/** What an interrupted Delivery relays as. */
+const INTERRUPTED_TEXT = "(couldn't answer: interrupted by a server restart)";
+
+/** An interrupted Delivery older than this is closed without waking the asking bot. */
+const INTERRUPTED_RELAY_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 /** The conversation a row's answer is read from (rows before pinning: the target's chat). */
 const targetConversation = sql<string>`coalesce(${botMessages.conversationId}, ${bots.conversationId})`;
@@ -163,27 +176,36 @@ export function createDeliveries(rt: DeliveryRuntime): Deliveries {
     // delivered had its idle pass skip this row: answer it now. A target
     // still busy answers it on its own idle.
     if (!rt.isBusy(conversationId)) {
-      void answer(conversationId).catch((error: unknown) =>
-        logger.warn({ error, conversationId }, "Answering a fast Delivery failed"),
-      );
+      void awaited
+        .answer(conversationId)
+        .catch((error: unknown) =>
+          logger.warn({ error, conversationId }, "Answering a fast Delivery failed"),
+        );
     }
     return { status: "delivered", queued };
   }
 
-  async function markAnswered(id: string, replyCreatedAt: number) {
+  /** Close the row; `replyCreatedAt` is the answering reply's, absent when interrupted. */
+  async function markAnswered(id: string, replyCreatedAt?: number) {
     const [updated] = await db
       .update(botMessages)
-      .set({ answeredAt: new Date(), answerReplyAt: new Date(replyCreatedAt), kind: "relay" })
+      .set({
+        answeredAt: new Date(),
+        answerReplyAt: replyCreatedAt !== undefined ? new Date(replyCreatedAt) : null,
+        kind: "relay",
+      })
       .where(eq(botMessages.id, id))
       .returning({ id: botMessages.id });
     // A row gone meanwhile (its bot deleted) fails the relay.
     if (!updated) throw new Error(`Bot message ${id} not found`);
   }
 
+  /** Relay `text` into the asking bot's chat (when there is one), then close the row. */
   async function relay(
     row: { id: string; replyToBotId: string | null },
     fromName: string,
-    reply: FinishedReply,
+    text: string,
+    replyCreatedAt?: number,
   ): Promise<void> {
     const host = row.replyToBotId
       ? await db.query.bots.findFirst({
@@ -196,62 +218,51 @@ export function createDeliveries(rt: DeliveryRuntime): Deliveries {
         host.id,
         {
           requestId: `botmsg-reply-${row.id}`,
-          text: relayText(fromName, answerText(reply)),
+          text: relayText(fromName, text),
           peer: { kind: "reply", name: fromName },
         },
         rt,
       );
     }
-    await markAnswered(row.id, reply.createdAt);
+    await markAnswered(row.id, replyCreatedAt);
   }
 
-  async function answer(
-    conversationId: number,
-    chat: ChatRead = () => rt.readChat(conversationId),
-  ): Promise<number> {
-    const rows = await db
-      .select({
-        id: botMessages.id,
-        requestId: botMessages.requestId,
-        replyToBotId: botMessages.replyToBotId,
-        targetName: bots.name,
-      })
-      .from(botMessages)
-      .innerJoin(bots, eq(bots.id, botMessages.toBotId))
-      .where(and(unanswered, eq(targetConversation, String(conversationId))))
-      .orderBy(asc(botMessages.createdAt));
-    if (rows.length === 0) return 0;
-    const state = await chat();
-    let answered = 0;
-    for (const row of rows) {
-      try {
-        const outcome = finishedReplyTo(state, row.requestId);
-        // Not finished, or not in the transcript (yet: an input the runtime
-        // has admitted but not placed; or ever: a row from before the target
-        // conversation was pinned, whose chat has since been retired).
-        if (outcome.status !== "answered") continue;
-        await relay(row, row.targetName, outcome.reply);
-        answered += 1;
-      } catch (error) {
-        logger.warn({ error, rowId: row.id }, "Delivery relay failed; will retry on next idle");
-      }
-    }
-    return answered;
-  }
+  // Rows from before pinning, whose chat has since been retired, read as
+  // interrupted at boot: their request is in no transcript the row names.
+  const awaited = awaitedSubmissions(rt, {
+    name: "delivery",
+    async pending(conversationId?: number) {
+      const rows = await db
+        .select({
+          id: botMessages.id,
+          requestId: botMessages.requestId,
+          replyToBotId: botMessages.replyToBotId,
+          deliveredAt: botMessages.deliveredAt,
+          targetName: bots.name,
+          conversationId: targetConversation,
+        })
+        .from(botMessages)
+        .innerJoin(bots, eq(bots.id, botMessages.toBotId))
+        .where(
+          and(
+            unanswered,
+            conversationId === undefined
+              ? undefined
+              : eq(targetConversation, String(conversationId)),
+          ),
+        )
+        .orderBy(asc(botMessages.createdAt));
+      return rows.map((row) => ({ ...row, conversationId: conversationRef(row.conversationId) }));
+    },
+    answered: (row, reply) => relay(row, row.targetName, answerText(reply), reply.createdAt),
+    async interrupted(row) {
+      const sentAt = row.deliveredAt?.getTime() ?? 0;
+      if (Date.now() - sentAt > INTERRUPTED_RELAY_WINDOW_MS) await markAnswered(row.id);
+      else await relay(row, row.targetName, INTERRUPTED_TEXT);
+    },
+  });
 
-  async function sweep(): Promise<number> {
-    const pending = await db
-      .selectDistinct({ conversationId: targetConversation })
-      .from(botMessages)
-      .innerJoin(bots, eq(bots.id, botMessages.toBotId))
-      .where(unanswered);
-    let answered = 0;
-    for (const { conversationId } of pending)
-      answered += await answer(conversationRef(conversationId));
-    return answered;
-  }
-
-  return { deliver, answer, sweep };
+  return { deliver, answer: awaited.answer, sweep: awaited.sweep };
 }
 
 /** The text a tagged bot receives: enough context to answer in-place. */

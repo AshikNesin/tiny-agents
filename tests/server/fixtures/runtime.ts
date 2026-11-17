@@ -163,8 +163,8 @@ const FAKE_MODELS: CatalogModel[] = [
 /**
  * The fake's transcripts. A submit becomes a user message in its
  * conversation; `answer(requestId, reply)` ends that Turn with an assistant
- * message carrying the reply's text, error, refused tools and blocked
- * reason, the shapes `finishedReplyTo` reads. `say` scripts a conversation
+ * message carrying the reply's text, error, refused tools, blocked reason
+ * and run limit, the shapes `finishedReplyTo` reads. `say` scripts a conversation
  * outright (owner, bot, owner, bot…).
  */
 interface TranscriptScript {
@@ -210,6 +210,17 @@ function createScript(): Script {
               name: REPORT_ROUTINE_BLOCKED,
               args: { reason: reply.blocked },
               status: "done" as const,
+            },
+          ]
+        : []),
+      ...(reply.stoppedBy !== undefined
+        ? [
+            {
+              id: "",
+              name: "web_fetch",
+              args: {},
+              status: "error" as const,
+              limit: reply.stoppedBy,
             },
           ]
         : []),

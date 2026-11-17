@@ -15,7 +15,7 @@
 import { CATEGORY_ORDER, extractedMemorySchema, type MemoryCategory } from "./memories.domain";
 import { memoryLedger } from "./memories.ledger";
 import { getAgentRuntime } from "./bots.runtime";
-import { conversationOwner, isUnattended, type ChatReader } from "./bots.owner";
+import { conversationOwner, ownerTurnOf, type ChatReader } from "./bots.owner";
 import type { MemoryStore } from "@tiny-agents/agent";
 
 function order(category: string): number {
@@ -39,12 +39,11 @@ export function createMemoryStore(
 ): MemoryStore {
   /** The bot behind the conversation, when memory may change in this turn. */
   const writable = async (conversationId: number) => {
-    const owner = await conversationOwner(conversationId);
-    if (!owner?.bot.memoryEnabled) return "disabled" as const;
-    // A runtime that can't be read counts as unattended (refuses, never allows).
-    const reader: ChatReader = { readChat: (ref) => runtime().readChat(ref) };
-    if (await isUnattended(conversationId, reader, owner)) return "unattended" as const;
-    return owner.bot;
+    const turn = await ownerTurnOf(conversationId, runtime);
+    // A shared bot never has memory on (conversationOwner), so `shared` is `disabled`.
+    if (turn.status === "disabled" || !turn.owner.bot.memoryEnabled) return "disabled" as const;
+    if (turn.status === "unattended") return "unattended" as const;
+    return turn.owner.bot;
   };
 
   return {

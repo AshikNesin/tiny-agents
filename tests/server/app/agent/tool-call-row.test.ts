@@ -236,6 +236,19 @@ describe("a finished tool call's row", () => {
     expect(finishedToolRow(outcome)).toEqual(row);
   });
 
+  it("marks a call the gate refused for a run limit", () => {
+    expect(
+      finishedToolRow({ output: "no", isError: true, details: { runCap: { limit: 150 } } }),
+    ).toMatchObject({ limit: "runCap" });
+    expect(
+      finishedToolRow({
+        output: "no",
+        isError: true,
+        details: { budget: { used: 600_000, limit: 500_000 } },
+      }),
+    ).toMatchObject({ limit: "budget" });
+  });
+
   it("keeps a long output bounded", () => {
     const row = finishedToolRow({ output: "x".repeat(5_000) });
     expect(row.output).toHaveLength(4_001);

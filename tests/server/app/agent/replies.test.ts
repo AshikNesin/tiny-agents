@@ -78,6 +78,20 @@ describe("finishedReplyTo", () => {
     });
   });
 
+  it("says when the turn hit a run limit, so callers need not guess", () => {
+    const messages = [
+      user("run", 1),
+      assistant("", 2, {
+        toolCalls: [{ id: "a", name: "web_fetch", args: {}, status: "error", limit: "runCap" }],
+      }),
+      assistant("Stopping here.", 3),
+    ];
+    expect(finishedReplyTo(idle(messages), "run")).toEqual({
+      status: "answered",
+      reply: { text: "Stopping here.", createdAt: 3, stoppedBy: "runCap" },
+    });
+  });
+
   it("carries a model error as the answer", () => {
     const messages = [user("r", 1), assistant("", 2, { status: "error", error: "Provider down" })];
     expect(finishedReplyTo(idle(messages), "r")).toEqual({

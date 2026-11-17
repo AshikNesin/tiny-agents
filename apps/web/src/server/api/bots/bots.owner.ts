@@ -11,7 +11,7 @@
  * row's tool-facing fields: callers ask questions, they never join. A
  * routine's turn gets its bot's skills, browser, memories and vault items
  * like the chat does; writes the owner must make themselves (vault uses,
- * memory changes) ask `isUnattended`.
+ * memory changes, a new bot, its prompt) ask `ownerTurnOf`.
  *
  * This is the app's one reverse lookup from a conversation to its owner
  * (docs/rewrite/README.md §4.4, `Conversations.ownerOf`). Three kinds of
@@ -141,4 +141,31 @@ export async function isUnattended(
   } catch {
     return true;
   }
+}
+
+/**
+ * May the owner be acting in this turn? One answer for every write only the
+ * owner may make (memory, a new bot, the bot's prompt, a vault use):
+ * - `disabled`: no bot is behind the conversation any more;
+ * - `unattended`: a routine run, another bot's message, a peer delivery in
+ *   the chat, or a runtime that can't be read (refuses, never allows);
+ * - `shared`: the bot's chat has guests, so a guest may be writing (and may
+ *   answer an approval card), whoever sent the latest message;
+ * - `owner`: the owner's own chat turn.
+ */
+export type OwnerTurn =
+  | { status: "disabled" }
+  | { status: "unattended" | "shared" | "owner"; owner: ConversationOwner };
+
+export async function ownerTurnOf(
+  conversation: number,
+  runtime: () => ChatReader,
+): Promise<OwnerTurn> {
+  const owner = await conversationOwner(conversation).catch(() => undefined);
+  if (!owner) return { status: "disabled" };
+  // Read lazily: a runtime that is not open yet throws, which reads as unattended.
+  const reader: ChatReader = { readChat: (ref) => runtime().readChat(ref) };
+  if (await isUnattended(conversation, reader, owner)) return { status: "unattended", owner };
+  if (owner.bot.shared) return { status: "shared", owner };
+  return { status: "owner", owner };
 }

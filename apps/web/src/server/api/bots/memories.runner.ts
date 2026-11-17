@@ -5,7 +5,12 @@
 import { eq } from "drizzle-orm";
 import { logger } from "@groot/core/logger";
 import { stripAttachmentNotes } from "@tiny-agents/agent";
-import { buildCapturePrompt, parseExtraction } from "./memories.capture";
+import {
+  buildCapturePrompt,
+  createMemoryCapture,
+  parseExtraction,
+  type MemoryCapture,
+} from "./memories.capture";
 import { MEMORY_CAPTURE_CHAR_CAP, MEMORY_TRIVIAL_BYTES } from "./memories.domain";
 import { memoryLedger } from "./memories.ledger";
 import { bots, db } from "../../db";
@@ -154,11 +159,13 @@ export async function captureConversation(
       logger.warn({ conversationId }, "Memory capture output unparseable; window will retry");
       return;
     }
-    // The prompt named memories by short ref; the ledger works on row ids
-    // (and ignores any that are not this bot's active rows).
+    // The prompt named memories by short ref only: a ref maps to its row,
+    // and anything else (a made-up id) supersedes nothing.
     const items = extraction.map((item) => ({
       ...item,
-      supersedesIds: item.supersedesIds?.map((ref) => context.refs[ref] ?? ref) ?? null,
+      supersedesIds:
+        item.supersedesIds?.flatMap((ref) => (context.refs[ref] ? [context.refs[ref]] : [])) ??
+        null,
     }));
     const { created, revived, superseded, skipped } = await ledger.add(items, {
       source: "capture",
@@ -172,4 +179,20 @@ export async function captureConversation(
   } catch (error) {
     logger.warn({ error, conversationId }, "Memory capture skipped after error");
   }
+}
+
+/**
+ * Memory capture as one settled step: the debounce (memories.capture.ts)
+ * running `captureConversation` on this side-caller. What bots.settled.ts
+ * wires; undefined without a side-caller (faux mode), so nothing is armed.
+ */
+export function memoryCaptureStep(
+  sideCaller: SideCaller | undefined,
+  readTranscript: CaptureDeps["readTranscript"],
+): MemoryCapture | undefined {
+  if (!sideCaller) return undefined;
+  return createMemoryCapture({
+    captureNow: (conversationId) =>
+      captureConversation(conversationId, { sideCaller, readTranscript }),
+  });
 }

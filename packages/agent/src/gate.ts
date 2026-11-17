@@ -152,7 +152,7 @@ const heldKey = (conversation: number, taskId: number) => `${conversation}:${tas
 const BUDGET_STOP_FACTOR = 1.5;
 
 /** Tool calls one run (a reply, through all its tool rounds) may make. */
-const RUN_TOOL_CALL_LIMIT = 150;
+export const RUN_TOOL_CALL_LIMIT = 150;
 /** Calls past the limit after which the run is stopped, not just refused. */
 const RUN_STOP_AFTER = 20;
 /** Runs whose calls are counted at once; the oldest is forgotten past this. */

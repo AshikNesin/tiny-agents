@@ -71,8 +71,8 @@ export interface BotMessagingStore {
 The first step of the settled pipeline (`startSettledPipeline`,
 `bots.settled.ts`; see Settled and Delivery in GLOSSARY.md) answers a
 conversation's Deliveries when it settles; its boot sweep answers those a
-restart left behind. Both use the Delivery answerer built from the opened
-runtime.
+restart left behind. Both are the Delivery adapter of the Awaited submission
+module (`bots.awaited.ts`), which Routine runs share.
 
 1. Find `deliveredAt != null AND answeredAt = null` rows pinned to the
    conversation that settled.
@@ -82,7 +82,12 @@ runtime.
    conversation through `submitToBot` (`bots.conversation.ts`, which
    reconciles the host first) with requestId `botmsg-reply-{rowId}`; then
    set `answeredAt`.
-4. Relay rows (`kind="relay"`) never relay again. Only `send` and `mention`
+4. At boot, a row on an idle conversation with no Finished reply was cut off
+   by the restart (the runtime resumes interrupted turns before the sweep, so
+   one still running shows busy and waits for its idle). It is closed, and
+   the asking bot gets `(couldn't answer: interrupted by a server restart)`,
+   unless the row was delivered more than a day ago: then it closes quietly.
+5. Relay rows (`kind="relay"`) never relay again. Only `send` and `mention`
    kinds produce relays.
 
 ### 3. Mention routing (chats.service.ts)

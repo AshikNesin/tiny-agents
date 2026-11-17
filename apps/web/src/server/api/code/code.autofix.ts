@@ -123,7 +123,7 @@ export type Decision =
 const TRUSTED_ASSOCIATIONS: readonly string[] = ["OWNER", "MEMBER", "COLLABORATOR"];
 const HOUR_MS = 60 * 60_000;
 
-export function isTrusted(
+function isTrusted(
   author: Author,
   ownerLogin: string | null,
   settings: Pick<AutofixSettings, "trustedBots">,
@@ -135,7 +135,7 @@ export function isTrusted(
   return TRUSTED_ASSOCIATIONS.includes(author.association);
 }
 
-export function isAppComment(
+function isAppComment(
   comment: { databaseId: number; body: string },
   appCommentIds: ReadonlySet<number>,
 ): boolean {
@@ -229,6 +229,48 @@ export function actionableItems(
     }
   }
   return items;
+}
+
+/**
+ * What the PR tab labels Ignored: the reviews and open comment threads a
+ * pass would act on but for their author (the same rules as
+ * `actionableItems`, so the label never drifts from what Auto-fix does).
+ */
+export function ignoredItems(
+  input: Pick<DecideInput, "snapshot" | "appCommentIds" | "ownerLogin" | "settings">,
+): string[] {
+  const { snapshot, settings } = input;
+  const untrusted = (author: Author) => !isTrusted(author, input.ownerLogin, settings);
+  const ignored: string[] = [];
+  for (const thread of snapshot.threads) {
+    if (thread.resolved) continue;
+    const latest = thread.comments.at(-1);
+    if (latest && !isAppComment(latest, input.appCommentIds) && untrusted(latest.author)) {
+      ignored.push(thread.id);
+    }
+  }
+  for (const review of snapshot.reviews) {
+    const wanted =
+      review.state === "CHANGES_REQUESTED" ||
+      (review.state === "COMMENTED" && review.body.trim() !== "");
+    if (wanted && !review.body.includes(APP_MARKER) && untrusted(review.author)) {
+      ignored.push(review.id);
+    }
+  }
+  return ignored;
+}
+
+/**
+ * The failed checks to tell the owner about, once per head: when the
+ * checks of a head just finished (none pending now, and before there was
+ * no snapshot, another head, or a pending check) and some failed.
+ */
+export function checksJustFailed(prev: PullSnapshot | null, next: PullSnapshot): string[] {
+  if (next.checks.some((c) => c.state === "pending")) return [];
+  const justFinished =
+    !prev || prev.headSha !== next.headSha || prev.checks.some((c) => c.state === "pending");
+  if (!justFinished) return [];
+  return next.checks.filter((c) => c.state === "failure").map((c) => c.name);
 }
 
 /** The claim key of a pass: one per head sha and set of items. */

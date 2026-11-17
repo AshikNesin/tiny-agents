@@ -29,6 +29,10 @@ _Avoid_: dispatch, forward
 What a submission's turn came to once its conversation is no longer busy: the turn's last message with text or an error, plus every tool refused in the turn and the newest blocked reason. Found by the submission's request id (`finishedReplyTo`), never by time. Deliveries and routine runs are answered only by Finished replies.
 _Avoid_: last message, answer
 
+**Awaited submission**:
+A submission pinned to a conversation and waiting on its Finished reply: a Delivery or a Routine run. On settle it is answered by that reply; at boot, once the runtime has resumed interrupted turns, one on an idle conversation with no Finished reply is closed as interrupted. `bots.awaited.ts` owns these rules; Deliveries and Routine runs are its two adapters and supply only what answered and interrupted mean.
+_Avoid_: pending reply, waiter
+
 **Tool-call row**:
 A tool call's row in the chat (`tool-call-row.ts`): status, output, timing, the approval and any Owner wait's card, taken from the call's finished result or its live details. Both engines project through it; callers never re-derive a row.
 _Avoid_: tool view, tool card (a card is one Owner wait's part of the row)

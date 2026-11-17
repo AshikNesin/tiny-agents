@@ -14,9 +14,9 @@
  * run is announced: a push notification and a card in its bot's chat.
  */
 import { and, asc, desc, eq, inArray, lt, notInArray, sql } from "drizzle-orm";
-import { logger } from "@groot/core/logger";
-import { finishedReplyTo, type AgentRuntime, type FinishedReply } from "@tiny-agents/agent";
+import { RUN_TOOL_CALL_LIMIT, type AgentRuntime, type FinishedReply } from "@tiny-agents/agent";
 import { conversationRef } from "../bots/bots.conversation";
+import { awaitedSubmissions } from "../bots/bots.awaited";
 import type { ChatRead } from "../bots/bots.settled";
 import { db, bots, routineRuns, routines, type RoutineRun } from "../../db";
 import { ROUTINE_RUN_TOKEN_BUDGET } from "../bots/bots.conversation";
@@ -290,6 +290,11 @@ function overBudgetReason(tokens: number): string {
   );
 }
 
+/** Why a run that hit the tool-call cap was stopped early, and what the owner can do. */
+const RUN_CAP_REASON =
+  `Made ${RUN_TOOL_CALL_LIMIT} tool calls, the most one run may make, so it was stopped early. ` +
+  `Split the routine or ask for less per run.`;
+
 /** Tools that ask the owner to type a sign-in: refused unattended, never allowable. */
 const CREDENTIAL_TOOLS = new Set(["request_credentials"]);
 
@@ -445,6 +450,7 @@ export function createRoutineRunResolver(rt: RoutineRunsRuntime): RoutineRunReso
       tokens !== undefined && tokens >= ROUTINE_RUN_TOKEN_BUDGET
         ? overBudgetReason(tokens)
         : undefined,
+      reply.stoppedBy === "runCap" ? RUN_CAP_REASON : undefined,
       reply.blocked,
       reply.refused?.length ? refusalReason(reply.refused, askOnlyTools()) : undefined,
     ].filter((reason): reason is string => reason !== undefined);
@@ -465,48 +471,17 @@ export function createRoutineRunResolver(rt: RoutineRunsRuntime): RoutineRunReso
     announceRun(ref, { status: "failed", error: "Interrupted by a server restart." });
   }
 
-  async function resolveConversation(
-    conversationId: number,
-    chat: ChatRead = () => rt.readChat(conversationId),
-  ): Promise<number> {
-    const runs = await awaitingRuns(conversationId);
-    if (runs.length === 0) return 0;
-    const state = await chat();
-    let resolved = 0;
-    for (const { run, ref } of runs) {
-      try {
-        const outcome = finishedReplyTo(state, run.requestId);
-        // Not finished, or not placed in the transcript yet: a later idle
-        // resolves it (the boot sweep settles any that never will).
-        if (outcome.status !== "answered") continue;
-        await resolveRun(ref, run, conversationId, outcome.reply);
-        resolved += 1;
-      } catch (error) {
-        logger.warn({ error, runId: run.id }, "Failed to resolve an awaiting routine run");
-      }
-    }
-    return resolved;
-  }
+  const awaited = awaitedSubmissions(rt, {
+    name: "routine run",
+    async pending(conversationId?: number) {
+      return (await awaitingRuns(conversationId)).map((row) => ({
+        ...row,
+        requestId: row.run.requestId,
+      }));
+    },
+    answered: ({ ref, run, conversationId }, reply) => resolveRun(ref, run, conversationId, reply),
+    interrupted: ({ ref }) => markInterrupted(ref),
+  });
 
-  async function bootSweep(): Promise<number> {
-    let resolved = 0;
-    for (const { run, conversationId, ref } of await awaitingRuns()) {
-      // Idle at boot: the reply may have finished just before the restart
-      // (resolve it), or never will (interrupted). A busy conversation may
-      // still be finishing its turn; the idle listener resolves it later.
-      if (rt.isBusy(conversationId)) continue;
-      try {
-        const outcome = finishedReplyTo(await rt.readChat(conversationId), run.requestId);
-        if (outcome.status === "answered") {
-          await resolveRun(ref, run, conversationId, outcome.reply);
-        } else await markInterrupted(ref);
-        resolved += 1;
-      } catch (error) {
-        logger.warn({ error, runId: run.id }, "Boot sweep failed to resolve an awaiting run");
-      }
-    }
-    return resolved;
-  }
-
-  return { resolveConversation, bootSweep };
+  return { resolveConversation: awaited.answer, bootSweep: awaited.sweep };
 }

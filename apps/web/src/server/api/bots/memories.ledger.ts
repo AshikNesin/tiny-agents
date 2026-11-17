@@ -13,6 +13,10 @@
  *   counts toward the budget and never reaches a prompt.
  * - Budget: at most MEMORY_MAX_ACTIVE active rows; overflow archives the
  *   oldest first, never the new fact. A row the owner just restored is kept.
+ * - Edit: the owner's change to a row's text, category or expiry. An edit
+ *   whose text matches another row of the bot lands on that row (it becomes
+ *   active with the edit) and the edited row, when active, is superseded by
+ *   it, so an edit never makes a second copy either.
  * - The capture watermark: advanced with the rows a capture adds, in the
  *   same transaction, so a failed write retries the window.
  *
@@ -81,8 +85,21 @@ interface PromptContext {
   refs: Record<string, string>;
 }
 
+/** The owner's change to one memory; absent fields stay as they are. */
+interface LedgerEdit {
+  text?: string;
+  category?: MemoryCategory;
+  /** ISO date or datetime; null clears the expiry. */
+  until?: string | null;
+}
+
 export interface MemoryLedger {
   add(items: readonly LedgerItem[], options: AddOptions): Promise<AddResult>;
+  /**
+   * Edit a row of this bot. Returns the row the edit landed on (another row
+   * when the new text matches it), or undefined when the row is not this bot's.
+   */
+  edit(id: string, change: LedgerEdit): Promise<MemoryRow | undefined>;
   /** Tombstone rows of this bot (the owner removed them). Returns how many changed. */
   tombstone(ids: readonly string[]): Promise<number>;
   /**
@@ -233,6 +250,51 @@ export function memoryLedger(botId: string): MemoryLedger {
     });
   }
 
+  async function edit(id: string, change: LedgerEdit): Promise<MemoryRow | undefined> {
+    return db.transaction((tx) => {
+      const row = tx
+        .select()
+        .from(memories)
+        .where(and(ofBot, eq(memories.id, id)))
+        .get();
+      if (!row) return undefined;
+      const fields: Partial<MemoryRow> = {};
+      if (change.text !== undefined) fields.text = change.text.trim();
+      if (change.category !== undefined) fields.category = change.category;
+      if (change.until !== undefined) fields.until = change.until ? new Date(change.until) : null;
+      // Nothing to write: the row as it is, updatedAt untouched.
+      if (Object.keys(fields).length === 0) return row;
+      const match =
+        fields.text !== undefined && key(fields.text) !== key(row.text)
+          ? tx
+              .select()
+              .from(memories)
+              .where(ofBot)
+              .all()
+              .find((other) => other.id !== id && key(other.text) === key(fields.text!))
+          : undefined;
+      if (!match) {
+        return tx.update(memories).set(fields).where(eq(memories.id, id)).returning().get();
+      }
+      const now = new Date();
+      const landed = tx
+        .update(memories)
+        .set({ ...fields, status: "active", supersededById: null, supersededAt: null })
+        .where(eq(memories.id, match.id))
+        .returning()
+        .get();
+      if (row.status === "active") {
+        tx.update(memories)
+          .set({ status: "superseded", supersededById: match.id, supersededAt: now })
+          .where(eq(memories.id, id))
+          .run();
+      }
+      expire(tx, now);
+      enforceBudget(tx, match.id);
+      return tx.select().from(memories).where(eq(memories.id, landed.id)).get() ?? landed;
+    });
+  }
+
   async function tombstone(ids: readonly string[]): Promise<number> {
     if (ids.length === 0) return 0;
     const { changes } = db
@@ -320,6 +382,7 @@ export function memoryLedger(botId: string): MemoryLedger {
 
   return {
     add,
+    edit,
     tombstone,
     restore,
     active,

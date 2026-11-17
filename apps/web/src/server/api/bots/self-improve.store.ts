@@ -15,7 +15,7 @@
  */
 import { and, eq } from "drizzle-orm";
 import { db, bots, promptRevisions } from "../../db";
-import { chatOwner, conversationOwner, isUnattended, type ChatReader } from "./bots.owner";
+import { chatOwner, ownerTurnOf, type ChatReader } from "./bots.owner";
 import { getAgentRuntime } from "./bots.runtime";
 import type { InstructionsStore } from "@tiny-agents/agent";
 
@@ -36,14 +36,10 @@ export function createInstructionsStore(
 
     async update(conversationId, input) {
       const refuse = (status: "disabled" | "unattended" | "shared") => ({ status });
-      const owner = await conversationOwner(conversationId);
-      if (!owner) return refuse("disabled");
-      // A runtime that can't be read counts as unattended (refuses, never allows).
-      const reader: ChatReader = { readChat: (ref) => runtime().readChat(ref) };
-      if (await isUnattended(conversationId, reader, owner)) return refuse("unattended");
-      // A guest's turn reads as attended, and a guest can answer the card,
-      // so a shared chat never changes the prompt (as bot-builder; S1).
-      if (owner.bot.shared) return refuse("shared");
+      // A shared chat never changes the prompt: a guest may be writing (S1).
+      const turn = await ownerTurnOf(conversationId, runtime);
+      if (turn.status !== "owner") return refuse(turn.status);
+      const { owner } = turn;
 
       // The bot the owner lookup found, while this is still its chat.
       const bot = await db.query.bots.findFirst({

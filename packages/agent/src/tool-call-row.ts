@@ -58,6 +58,7 @@ export function finishedToolRow(outcome: ToolOutcome): ToolCallRow {
   const { questions, answers } = questionsOf(details);
   const credentials = credentialsOf(details);
   const takeover = takeoverOf(approved?.result ?? details);
+  const limit = limitOf(details);
   // The tool's clock includes any wait for the owner's approval: report
   // the run and the wait apart.
   const waitedMs = approved?.waitedMs;
@@ -81,7 +82,16 @@ export function finishedToolRow(outcome: ToolOutcome): ToolCallRow {
     ...(answers ? { answers } : {}),
     ...(credentials ? { credentials } : {}),
     ...(takeover ? { takeover } : {}),
+    ...(limit ? { limit } : {}),
   };
+}
+
+/** The run limit a gate refusal names in its details (gate.ts `budget` / `runCap`). */
+function limitOf(details: unknown): ChatToolCall["limit"] {
+  const outer = record(details);
+  if (record(outer?.budget)) return "budget";
+  if (record(outer?.runCap)) return "runCap";
+  return undefined;
 }
 
 /** The row of a running call: the card it waits on, if any, else running or pending. */

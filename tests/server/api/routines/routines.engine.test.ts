@@ -544,6 +544,23 @@ describe("completion watcher", () => {
     });
   });
 
+  it("a run stopped by the tool-call limit is blocked, saying so", async () => {
+    const { routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
+    await dispatchOccurrence(payloadOf(routine.id, SLOT), ON_TIME);
+    const run = await runOf(routine.id);
+    answer(run!, { text: "Partial digest.", stoppedBy: "runCap" });
+    expect(
+      await createRoutinesCompletionWatcher(runtime).resolveConversation(ROUTINE_CONVERSATION),
+    ).toBe(1);
+
+    expect(await runById(run!.id)).toMatchObject({
+      status: "blocked",
+      error:
+        "Made 150 tool calls, the most one run may make, so it was stopped early. Split the routine or ask for less per run.",
+      output: "Partial digest.",
+    });
+  });
+
   /** Fire the next hourly slot and resolve it with `reply` (issue #87 helpers). */
   async function runOnce(routineId: string, hour: number, reply: Omit<FinishedReply, "createdAt">) {
     const slot = new Date(SLOT.getTime() + hour * 60 * 60_000);

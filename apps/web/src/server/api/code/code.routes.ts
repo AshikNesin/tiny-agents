@@ -41,7 +41,7 @@ import { codeChanges } from "./code.changes";
 import { guardSides } from "@tiny-agents/git";
 import { codeGitHub } from "./code.github";
 import { noteOwnerInput, onThreadArchived } from "./code.pulls";
-import { pendingReview, reviewMessage } from "./code.review";
+import { threadReview } from "./code.review";
 
 const UPLOAD_MAX_BYTES = 25 * 1024 * 1024;
 
@@ -330,15 +330,18 @@ router.post("/code/threads/:id/messages", async (c) => {
   const { instance, nativeId } = thread(c);
   const { withReview, ...body } = await parseBody(c, sendSchema);
   const owner = c.get("viewer").kind === "owner";
+  const submit = (review: string | null) =>
+    run(() =>
+      instance.send(nativeId, {
+        ...body,
+        message: review ? `${review}\n\n---\n\n${body.message}` : body.message,
+      }),
+    );
   // Line comments are the owner's (a guest cannot read or write them).
-  const review =
-    withReview && owner ? await pendingReview(threadIdOf(instance.id, nativeId)) : null;
-  const message =
-    review && review.drafts.length > 0
-      ? `${reviewMessage(review.drafts)}\n\n---\n\n${body.message}`
-      : body.message;
-  const result = await run(() => instance.send(nativeId, { ...body, message }));
-  await review?.sent();
+  const result =
+    withReview && owner
+      ? (await threadReview(threadIdOf(instance.id, nativeId)).send(submit)).result
+      : await submit(null);
   await follow(instance.id, nativeId);
   // The owner's own words: a waiting Auto-fix loop may go on (issue #297 §9.4).
   if (owner) await noteOwnerInput(threadIdOf(instance.id, nativeId));
