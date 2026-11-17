@@ -15,6 +15,7 @@ import groot.kit.settings.SettingsSection
 import groot.kit.theme.ThemeMode
 import groot.mobile.R
 import groot.mobile.data.Session
+import groot.mobile.push.PushStatus
 import groot.mobile.ui.brand.AppIcons
 import groot.mobile.ui.makerUrl
 
@@ -28,6 +29,8 @@ fun SettingsRoute(
 ) {
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
     val session by viewModel.session.collectAsStateWithLifecycle()
+    val push by viewModel.push.collectAsStateWithLifecycle()
+    val testNote by viewModel.testNote.collectAsStateWithLifecycle()
     SettingsScreen(
         themeMode = themeMode,
         onThemeModeChange = viewModel::setThemeMode,
@@ -39,6 +42,9 @@ fun SettingsRoute(
         buildInfo = buildInfo,
         onNavigateUp = onNavigateUp,
         onOpenAbout = onOpenAbout,
+        push = push,
+        testNote = testNote,
+        onSendTest = viewModel::sendTestNotification,
     )
 }
 
@@ -55,6 +61,9 @@ fun SettingsScreen(
     buildInfo: BuildInfo,
     onNavigateUp: () -> Unit,
     onOpenAbout: () -> Unit,
+    push: PushStatus = PushStatus(),
+    testNote: String? = null,
+    onSendTest: () -> Unit = {},
 ) {
     GrootSettingsScreen(
         themeMode = themeMode,
@@ -91,5 +100,41 @@ fun SettingsScreen(
             }
             SettingsActionRow(title = "Sign out", icon = rememberVectorPainter(AppIcons.LogOut), onClick = onSignOut)
         }
+        // Phone notifications (issue #306) are for owners: the server offers guests none.
+        if (!guest && push.state != PushStatus.State.Unsupported) {
+            SettingsSection(title = "Notifications") {
+                SettingsInfoRow(
+                    title = pushTitle(push),
+                    summary = pushSummary(push),
+                    icon = rememberVectorPainter(AppIcons.Bell),
+                )
+                if (push.state == PushStatus.State.On) {
+                    SettingsActionRow(
+                        title = "Send test notification",
+                        summary = testNote,
+                        icon = rememberVectorPainter(AppIcons.Zap),
+                        onClick = onSendTest,
+                    )
+                }
+            }
+        }
     }
+}
+
+private fun pushTitle(push: PushStatus): String = when (push.state) {
+    PushStatus.State.On -> "On"
+    PushStatus.State.Registering, PushStatus.State.Unknown -> "Setting up"
+    PushStatus.State.PermissionOff -> "Off"
+    PushStatus.State.NoDistributor -> "No push service"
+    PushStatus.State.Failed -> "Not working"
+    PushStatus.State.Unsupported -> "Not offered"
+}
+
+private fun pushSummary(push: PushStatus): String? = when (push.state) {
+    PushStatus.State.On -> push.via?.let { "Through $it" }
+    PushStatus.State.Registering, PushStatus.State.Unknown -> null
+    PushStatus.State.PermissionOff -> "Allow notifications for this app in Android settings"
+    PushStatus.State.NoDistributor -> "Install a UnifiedPush app such as ntfy, or Google Play services"
+    PushStatus.State.Failed -> push.detail
+    PushStatus.State.Unsupported -> null
 }

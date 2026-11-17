@@ -53,6 +53,10 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.compose.material3)
     implementation(libs.okhttp)
+    // Phone notifications (issue #306): Web Push through the owner's UnifiedPush distributor, else
+    // Google's, embedded (no Firebase project). Size budget: mobile/docs/app/README.md.
+    implementation(libs.unifiedpush.connector)
+    implementation(libs.unifiedpush.embedded.fcm)
 
     testImplementation(libs.roborazzi)
     testImplementation(libs.roborazzi.compose)
