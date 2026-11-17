@@ -55,11 +55,14 @@ export interface BotMessagingStore {
 - Unknown target name or the sender itself → `{ delivered: false, reason }`.
 - Loop guard: more than 8 `kind="send"` rows from the same sender to the same
   target in the last 10 minutes → `{ delivered: false, reason: "loop" }`.
-- Target currently busy (its conversation is generating) → still deliver:
-  pi-durable queues the input; it is answered next turn. `busy_target` reason
-  is reserved and not returned in v1.
+- A send runs in a fresh conversation of the target's own
+  (`ownConversation` on the row), unattended and with a routine run's
+  500k-token budget, like a routine run: the target's chat history never
+  rides along, and a routine that messages a bot cannot escape its own
+  budget. So a busy target answers at once, and the message must carry its
+  own context. Owner @mentions still land in the target's chat.
 - Success: the row exists with `deliveredAt` set and the message was submitted
-  into the target's conversation (the store owns the `submit` call).
+  into the conversation pinned on the row (the store owns the `submit` call).
 - Fire-and-forget: the tool returns immediately; the reply arrives later as a
   new user turn in the sender's conversation (relayed by the app's relay).
 

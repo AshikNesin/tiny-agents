@@ -341,6 +341,23 @@ describe("publish and the PR tab", () => {
     expect(blank.status).toBe(400);
   });
 
+  it("marks a draft pull request ready for review, so it can be merged", async () => {
+    const project = await newProject();
+    const thread = await newThread(project.id);
+    const enc = encodeURIComponent(thread.id);
+    await commit(thread.worktree, "src/login.ts");
+    await call("POST", `/threads/${enc}/publish`, {});
+    expect(github.pull(1).draft).toBe(true);
+
+    const ready = await call<ThreadPullsView>("POST", `/threads/${enc}/pr/ready`, {});
+    expect(ready.status).toBe(200);
+    expect(github.pull(1).draft).toBe(false);
+    expect(ready.body.data?.active?.draft).toBe(false);
+
+    const again = await call("POST", `/threads/${enc}/pr/ready`, {});
+    expect(again.status).toBe(409);
+  });
+
   it("links a PR the agent opened for the thread's branch", async () => {
     const project = await newProject();
     const thread = await newThread(project.id);

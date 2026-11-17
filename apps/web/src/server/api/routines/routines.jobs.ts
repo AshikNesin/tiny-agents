@@ -121,7 +121,7 @@ export async function dispatchOccurrence(
         ),
       },
       runtime,
-      { routineConversationId: conversationId },
+      { unattendedConversationId: conversationId, unattended: "routine" },
     );
   } catch (error) {
     // A model removed from the catalog fails the reconcile step, so it lands here too.
@@ -150,7 +150,7 @@ async function runConversation(
   { reserved }: { reserved: string | null },
 ): Promise<string> {
   if (reserved) return reserved;
-  const created = await startBotConversation(routine.botId, runtime, { unattended: true });
+  const created = await startBotConversation(routine.botId, runtime, { unattended: "routine" });
   const conversationId = await reserveRunConversation(
     { id: routine.id, name: routine.name, bot: routine.bot },
     scheduledFor,

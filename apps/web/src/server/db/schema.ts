@@ -176,6 +176,13 @@ export const botMessages = sqliteTable(
      * before it was recorded (read from the target's current chat).
      */
     conversationId: text("conversation_id"),
+    /**
+     * The conversation was started for this message alone (a bot-to-bot
+     * send runs fresh, unattended and on a token budget, like a routine
+     * run), not the target's chat. Lets the conversation be traced back to
+     * its bot (bots.owner.ts).
+     */
+    ownConversation: bool("own_conversation").notNull().default(false),
     /** Conversation that receives this message's answer (the host of a mention, or the sender). Null = only the owner. */
     replyToBotId: text("reply_to_bot_id").references(() => bots.id, { onDelete: "cascade" }),
     /** "send" (message_bot tool) | "mention" (owner @tag) | "relay" (relayed reply). */

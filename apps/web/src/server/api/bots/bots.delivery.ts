@@ -14,6 +14,12 @@
  *   chat and never confused with a mid-turn message or another Delivery's
  *   reply.
  * - Relay rows (kind="relay") never relay again: one answer per Delivery.
+ * - A bot-to-bot send runs in a fresh conversation of the target's own,
+ *   unattended and on a routine run's token budget, so answering it never
+ *   re-sends the target's whole chat history (and a routine that messages a
+ *   bot cannot escape its own budget that way). An owner @mention still
+ *   lands in the target's chat. The text must carry its own context, as
+ *   `message_bot` tells the model.
  */
 import { and, asc, eq, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import { logger } from "@groot/core/logger";
@@ -27,6 +33,7 @@ import {
 import { db, botMessages, bots } from "../../db";
 import {
   conversationRef,
+  startBotConversation,
   submitToBot,
   type Bot,
   type BotConversationRuntime,
@@ -102,7 +109,7 @@ export function createDeliveries(rt: DeliveryRuntime): Deliveries {
   ): Promise<DeliveryOutcome<Reason>> {
     const existing = await db.query.botMessages.findFirst({
       where: eq(botMessages.requestId, input.requestId),
-      columns: { deliveredAt: true },
+      columns: { deliveredAt: true, conversationId: true, ownConversation: true },
     });
     if (existing?.deliveredAt) return { status: "replayed" };
     if (!existing && admit) {
@@ -115,13 +122,22 @@ export function createDeliveries(rt: DeliveryRuntime): Deliveries {
     });
     if (!target) throw new Error(`Bot ${input.toBotId} not found`);
 
+    // A send gets a conversation of its own, kept on the row before the
+    // submit, so a retried delivery reuses it.
+    const own = input.kind === "send";
+    const pinned = existing
+      ? (existing.conversationId ?? target.conversationId)
+      : own
+        ? await startBotConversation(input.toBotId, rt, { unattended: "bot-message" })
+        : target.conversationId;
     if (!existing) {
       await db
         .insert(botMessages)
         .values({
           fromBotId: input.fromBotId,
           toBotId: input.toBotId,
-          conversationId: target.conversationId,
+          conversationId: pinned,
+          ownConversation: own,
           replyToBotId: input.replyToBotId,
           kind: input.kind,
           requestId: input.requestId,
@@ -130,11 +146,14 @@ export function createDeliveries(rt: DeliveryRuntime): Deliveries {
         })
         .onConflictDoNothing();
     }
-    const queued = rt.isBusy(conversationRef(target.conversationId));
+    const conversationId = conversationRef(pinned);
+    const ownConversation = existing ? existing.ownConversation : own;
+    const queued = rt.isBusy(conversationId);
     await submitToBot(
       input.toBotId,
       { requestId: input.requestId, text: input.prompt, peer: input.peer },
       rt,
+      ownConversation ? { unattendedConversationId: pinned, unattended: "bot-message" } : undefined,
     );
     await db
       .update(botMessages)
@@ -143,7 +162,6 @@ export function createDeliveries(rt: DeliveryRuntime): Deliveries {
     // A target that already replied and went idle before the row was marked
     // delivered had its idle pass skip this row: answer it now. A target
     // still busy answers it on its own idle.
-    const conversationId = conversationRef(target.conversationId);
     if (!rt.isBusy(conversationId)) {
       void answer(conversationId).catch((error: unknown) =>
         logger.warn({ error, conversationId }, "Answering a fast Delivery failed"),

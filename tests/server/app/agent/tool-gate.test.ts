@@ -489,7 +489,7 @@ describe("Tool gate token budget (pi)", () => {
     const { ref, chat, send } = await setup("pi", sent, { unattended: true, budgetTokens: 1 });
     await send(ref, { requestId: "r1", text: "send_email ana@x.dev" });
     expect(await until(() => chat.results()[0], "reply")).toMatch(
-      /send_email did not run: this routine run has used [\d,]+ tokens, over its budget of 1\./,
+      /send_email did not run: this run has used [\d,]+ tokens, over its budget of 1\./,
     );
     expect(sent).toEqual([]);
     expect(chat.toolCall("send_email")).toMatchObject({ status: "error" });

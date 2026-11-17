@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "fdeec795-99ce-4485-9f24-c26048edacac",
+  "id": "4388c38a-f3fa-410d-af4b-007131aec41c",
   "prevId": "d2c4ef5e-dcf9-4323-8eaf-8fb30926c61a",
   "tables": {
     "bot_chats": {
@@ -251,6 +251,14 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
+        },
+        "own_conversation": {
+          "name": "own_conversation",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
         },
         "reply_to_bot_id": {
           "name": "reply_to_bot_id",
@@ -1959,13 +1967,6 @@
         "until": {
           "name": "until",
           "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "conversation_id": {
-          "name": "conversation_id",
-          "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false

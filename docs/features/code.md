@@ -120,7 +120,12 @@ folder):
 - A finished turn folds its work (thinking, progress notes, tools) behind one
   quiet "Worked for 12s · $0.04" row (or "Ran 2 commands · $0.04" when the
   harness reports no duration), leaving the first message and the answer in
-  view, as Amp and Hoplite read. A running turn stays fully in view.
+  view, as Amp and Hoplite read. A running turn stays fully in view. A failed tool
+  call inside still shows on the folded row ("· 1 failed").
+- What the app wrote for you reads short: a project thread's first message
+  shows its branch (and a failed setup script) above your words instead of
+  the agent's instructions, and an Auto-fix request is one card listing what
+  it fixes, with **Show the full request**.
 - Inline code is neutral gray mono, and the composer shows one
   "Model · Reasoning" label.
 - An archived thread offers one **Unarchive to continue** in place of the
@@ -266,7 +271,10 @@ draft PR with the commits as its body and a short title (one `chat_title`
 call over the thread's title and the commit subjects: imperative, under 60
 characters, no `feat:` prefix; the thread's title when there is no model); with a PR open, Publish pushes new
 commits. **Link pull request** links an existing one, and a PR the agent
-opened for the branch is linked on its own. After a PR merges, the next
+opened for the branch is linked on its own. When nothing is ahead but the
+agent changed files, the tab says they are not committed yet, and **Ask to
+commit** puts that request in the composer. A draft offers **Ready for
+review**, which marks it ready on GitHub so **Merge** can run. After a PR merges, the next
 Publish opens a new one; earlier PRs are listed.
 
 **The PR tab.** The PR's number, state (open, draft, queued, merged or

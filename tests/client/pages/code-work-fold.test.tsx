@@ -56,4 +56,29 @@ describe("a finished turn's work", () => {
     );
     expect(screen.getByRole("button", { name: "Ran 1 command" })).toBeInTheDocument();
   });
+
+  it("says when a command in the folded work failed", () => {
+    const bash = (id: string, exitCode: number) => ({
+      kind: "tool" as const,
+      id,
+      tool: "bash" as const,
+      name: "bash",
+      input: {},
+      summary: "git commit",
+      status: "done" as const,
+      exitCode,
+      images: [],
+    });
+    render(
+      <TranscriptRow
+        item={{ kind: "work", id: "work:f", costUsd: 0.01, items: [bash("a", 0), bash("b", 128)] }}
+        ctx={{ instanceId: "shelley", rows: [] }}
+        actions={{ recovery: [], recover: () => {}, respond: async () => {} }}
+        isLastNotice={false}
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: /^Ran 2 commands · \$0\.01\s*· 1 failed$/ }),
+    ).toBeInTheDocument();
+  });
 });

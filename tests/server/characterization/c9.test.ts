@@ -63,10 +63,13 @@ describe("C9: where a relayed answer lands", () => {
       .where(eq(bots.id, sender.id));
     runtime.submit.mockClear();
 
-    runtime.script.answer("c9-ask", { text: "all green" }, TARGET_CHAT);
-    expect(await createDeliveries(runtime).answer(TARGET_CHAT)).toBe(1);
-
+    // The target answers in the conversation pinned on the row (its own).
     const row = await ledgerRow("c9-ask");
+    const answeredIn = Number(row!.conversationId);
+    expect(answeredIn).not.toBe(TARGET_CHAT);
+    runtime.script.answer("c9-ask", { text: "all green" }, answeredIn);
+    expect(await createDeliveries(runtime).answer(answeredIn)).toBe(1);
+
     expect(runtime.submit).toHaveBeenCalledTimes(1);
     const [conversation, input] = runtime.submit.mock.calls[0]!;
     expect(conversation).toBe(NEW_CHAT);
@@ -102,8 +105,9 @@ describe("C9: where a relayed answer lands", () => {
     expect(await ledgerRow("c9-routine")).toMatchObject({ replyToBotId: null });
     runtime.submit.mockClear();
 
-    runtime.script.answer("c9-routine", { text: "here you go" }, TARGET_CHAT);
-    expect(await createDeliveries(runtime).answer(TARGET_CHAT)).toBe(1);
+    const answeredIn = Number((await ledgerRow("c9-routine"))!.conversationId);
+    runtime.script.answer("c9-routine", { text: "here you go" }, answeredIn);
+    expect(await createDeliveries(runtime).answer(answeredIn)).toBe(1);
 
     expect(runtime.submit).not.toHaveBeenCalled();
     expect(await ledgerRow("c9-routine")).toMatchObject({

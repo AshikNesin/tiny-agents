@@ -170,32 +170,10 @@
       {
         "type": "snapshot",
         "state": {
-          "messages": [
-            {
-              "id": "<e6>",
-              "role": "user",
-              "text": "**Message from Host (bot):** what is 2+2?",
-              "requestId": "botmsg-pi:<id5>:143",
-              "peer": {
-                "kind": "message",
-                "name": "Host"
-              },
-              "status": "done",
-              "createdAt": 1793946600000
-            },
-            {
-              "id": "<e7>",
-              "role": "assistant",
-              "text": "Echo: **Message from Host (bot):** what is 2+2?",
-              "status": "done",
-              "model": "test-model",
-              "createdAt": 1793946600000
-            }
-          ],
+          "messages": [],
           "busy": false,
           "queued": [],
-          "hasMore": false,
-          "cursor": "<e6>"
+          "hasMore": false
         }
       },
       {
@@ -286,7 +264,7 @@
               "createdAt": 1793946600000
             },
             {
-              "id": "<e8>",
+              "id": "<e6>",
               "role": "user",
               "text": "@Helper say hi",
               "requestId": "golden-b2b-00002",
@@ -294,7 +272,7 @@
               "createdAt": 1793946600000
             },
             {
-              "id": "<e9>",
+              "id": "<e7>",
               "role": "assistant",
               "text": "Echo: @Helper say hi",
               "status": "done",
@@ -302,10 +280,10 @@
               "createdAt": 1793946600000
             },
             {
-              "id": "<e10>",
+              "id": "<e8>",
               "role": "user",
               "text": "**Reply from Helper:** Echo: [From the owner, in Host's chat] @Helper say hi",
-              "requestId": "botmsg-reply-<id6>",
+              "requestId": "botmsg-reply-<id5>",
               "peer": {
                 "kind": "reply",
                 "name": "Helper"
@@ -314,7 +292,7 @@
               "createdAt": 1793946600000
             },
             {
-              "id": "<e11>",
+              "id": "<e9>",
               "role": "assistant",
               "text": "Echo: **Reply from Helper:** Echo: [From the owner, in Host's chat] @Helper say hi",
               "status": "done",
@@ -347,12 +325,12 @@
       "success": true,
       "data": [
         {
-          "id": "<id7>",
+          "id": "<id6>",
           "conversationId": "2",
           "name": "Improver",
           "description": "",
           "modelId": "test-model",
-          "lastMessagePreview": "Tool said: Created task [<id8>] Book flights · medium · todo",
+          "lastMessagePreview": "Tool said: Created task [<id7>] Book flights · medium · todo",
           "lastActivityAt": "2026-11-06T06:30:00.000Z",
           "lastReadAt": null,
           "unread": true,
@@ -362,7 +340,7 @@
           "pinnedAt": null
         },
         {
-          "id": "<id9>",
+          "id": "<id8>",
           "conversationId": "20",
           "name": "Denied",
           "description": "",
@@ -377,7 +355,7 @@
           "pinnedAt": null
         },
         {
-          "id": "<id10>",
+          "id": "<id9>",
           "conversationId": "38",
           "name": "Asker",
           "description": "",
@@ -392,12 +370,12 @@
           "pinnedAt": null
         },
         {
-          "id": "<id11>",
+          "id": "<id10>",
           "conversationId": "65",
           "name": "Yolo",
           "description": "",
           "modelId": "test-model",
-          "lastMessagePreview": "Tool said: Created task [<id12>] Buy milk · medium · todo",
+          "lastMessagePreview": "Tool said: Created task [<id11>] Buy milk · medium · todo",
           "lastActivityAt": "2026-11-06T06:30:00.000Z",
           "lastReadAt": null,
           "unread": true,
@@ -407,12 +385,12 @@
           "pinnedAt": null
         },
         {
-          "id": "<id13>",
+          "id": "<id12>",
           "conversationId": "82",
           "name": "Tasker",
           "description": "",
           "modelId": "test-model",
-          "lastMessagePreview": "Tool said: Created task [<id14>] Call mom · medium · todo",
+          "lastMessagePreview": "Tool said: Created task [<id13>] Call mom · medium · todo",
           "lastActivityAt": "2026-11-06T06:30:00.000Z",
           "lastReadAt": null,
           "unread": true,
@@ -422,7 +400,7 @@
           "pinnedAt": null
         },
         {
-          "id": "<id15>",
+          "id": "<id14>",
           "conversationId": "99",
           "name": "Busy",
           "description": "",
@@ -477,11 +455,12 @@
           "id": "<id4>",
           "fromBotId": "<id1>",
           "toBotId": "<id2>",
-          "conversationId": "131",
+          "conversationId": "144",
+          "ownConversation": true,
           "replyToBotId": "<id1>",
           "kind": "relay",
-          "requestId": "botmsg-pi:<id5>:143",
-          "sourceKey": "pi:<id5>:143",
+          "requestId": "botmsg-pi:<id15>:143",
+          "sourceKey": "pi:<id15>:143",
           "text": "what is 2+2?",
           "deliveredAt": "2026-11-06T06:30:00.000Z",
           "answeredAt": "2026-11-06T06:30:00.000Z",
@@ -489,10 +468,11 @@
           "createdAt": "2026-11-06T06:30:00.000Z"
         },
         {
-          "id": "<id6>",
+          "id": "<id5>",
           "fromBotId": null,
           "toBotId": "<id2>",
           "conversationId": "131",
+          "ownConversation": false,
           "replyToBotId": "<id1>",
           "kind": "relay",
           "requestId": "mention-golden-b2b-00002-<id2>",

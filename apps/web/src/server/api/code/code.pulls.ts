@@ -286,6 +286,20 @@ export async function mergePull(threadId: string, method: MergeMethod): Promise<
   await reconcileNow(open.id);
 }
 
+/** Draft → ready for review, so it can be merged (a draft cannot be). */
+export async function readyPull(threadId: string): Promise<void> {
+  const { project } = await requireProjectThread(threadId);
+  const open = await openPullOf(threadId);
+  if (!open) throw Boom.notFound("The thread has no open pull request.");
+  const github = await codeGitHub().client(project);
+  const snapshot = await github.snapshot(repoOf(project), open.number);
+  if (!snapshot.draft) throw Boom.conflict(`#${open.number} is already ready for review.`);
+  await github.markReady(snapshot.id).catch((error: unknown) => {
+    throw Boom.conflict(`GitHub kept #${open.number} a draft: ${githubMessage(error)}`);
+  });
+  await reconcileNow(open.id);
+}
+
 /** The owner edits the open pull request's title or description, on GitHub. */
 export async function editPull(
   threadId: string,
