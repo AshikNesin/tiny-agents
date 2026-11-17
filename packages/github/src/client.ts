@@ -109,6 +109,7 @@ export interface PullRef {
 
 /** One step of an Actions job, as GitHub reports it while the job runs. */
 export interface JobStep {
+  number: number;
   name: string;
   state: "queued" | "running" | "success" | "failure" | "skipped";
 }
@@ -121,7 +122,7 @@ interface JobProgress {
 
 interface RawJob {
   status: string;
-  steps?: Array<{ name: string; status: string; conclusion: string | null }>;
+  steps?: Array<{ number: number; name: string; status: string; conclusion: string | null }>;
 }
 
 function stepState(step: NonNullable<RawJob["steps"]>[number]): JobStep["state"] {
@@ -490,7 +491,11 @@ export function createGitHubClient(api: GitHubApi): GitHubClient {
       const job = await api.rest<RawJob>("GET", `${repoPath(repo)}/actions/jobs/${jobId}`);
       return {
         completed: job.status === "completed",
-        steps: (job.steps ?? []).map((step) => ({ name: step.name, state: stepState(step) })),
+        steps: (job.steps ?? []).map((step) => ({
+          number: step.number,
+          name: step.name,
+          state: stepState(step),
+        })),
       };
     },
     async jobLogTail(repo, jobId, maxChars) {

@@ -438,17 +438,17 @@ describe("a check's log excerpt", () => {
       completedAt: null,
     };
     github.running.set(77, [
-      { name: "Set up job", state: "success" },
-      { name: "Run pnpm test", state: "running" },
-      { name: "Post checkout", state: "queued" },
+      { number: 1, name: "Set up job", state: "success" },
+      { number: 2, name: "Run pnpm test", state: "running" },
+      { number: 3, name: "Post checkout", state: "queued" },
     ]);
     await pr(decodeURIComponent(enc));
     const res = await call<CheckLogView>("GET", `/threads/${enc}/pr/checks/77/log`);
     expect(res.status).toBe(200);
     expect(res.body.data!.running).toEqual([
-      { name: "Set up job", state: "success" },
-      { name: "Run pnpm test", state: "running" },
-      { name: "Post checkout", state: "queued" },
+      { number: 1, name: "Set up job", state: "success" },
+      { number: 2, name: "Run pnpm test", state: "running" },
+      { number: 3, name: "Post checkout", state: "queued" },
     ]);
     expect(res.body.data!.lines).toEqual([]);
   });

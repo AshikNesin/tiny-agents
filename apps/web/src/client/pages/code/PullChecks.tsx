@@ -271,27 +271,30 @@ function LogExcerpt({ threadId, jobId, check }: { threadId: string; jobId: numbe
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
+  const [reads, setReads] = useState(0);
+
   // Read again when the check's state changes, and every few seconds while
   // the job runs, so its steps move and the log replaces them once it ends.
   useEffect(() => {
     let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const read = () =>
-      projectsApi
-        .checkLog(threadId, jobId)
-        .then((l) => {
-          if (cancelled) return;
-          setLog(l);
-          setError(null);
-          if (l.running) timer = setTimeout(() => void read(), STEPS_EVERY_MS);
-        })
-        .catch((e: unknown) => !cancelled && setError(errorMessage(e, "Could not read the log.")));
-    void read();
+    projectsApi
+      .checkLog(threadId, jobId)
+      .then((l) => {
+        if (cancelled) return;
+        setLog(l);
+        setError(null);
+      })
+      .catch((e: unknown) => !cancelled && setError(errorMessage(e, "Could not read the log.")));
     return () => {
       cancelled = true;
-      clearTimeout(timer);
     };
-  }, [threadId, jobId, check.state]);
+  }, [threadId, jobId, check.state, reads]);
+
+  useEffect(() => {
+    if (!log?.running) return;
+    const timer = setTimeout(() => setReads((n) => n + 1), STEPS_EVERY_MS);
+    return () => clearTimeout(timer);
+  }, [log]);
 
   const running = log?.running != null;
 
@@ -302,7 +305,6 @@ function LogExcerpt({ threadId, jobId, check }: { threadId: string; jobId: numbe
   };
 
   const url = log?.url ?? check.url;
-  const marked = new Set(log?.highlight);
   return (
     <section aria-label={`${check.name} log`} className="min-w-0 space-y-1.5">
       <div className="flex items-center gap-2">
@@ -329,40 +331,48 @@ function LogExcerpt({ threadId, jobId, check }: { threadId: string; jobId: numbe
       ) : log.running ? (
         <RunningSteps steps={log.running} />
       ) : (
-        <>
-          {log.summary && (
-            <p className={cn("text-destructive text-xs font-medium break-words", monoClass)}>
-              {log.summary}
-            </p>
-          )}
-          {log.lines.length === 0 ? (
-            <p className="text-muted-foreground text-xs">The log is empty.</p>
-          ) : (
-            <pre
-              className={cn(
-                "bg-muted/50 border-border max-h-72 overflow-auto rounded-md border py-2 text-[11px] leading-relaxed",
-                monoClass,
-              )}
-            >
-              {log.lines.map((line, i) => (
-                <div
-                  // Lines repeat; their place in the excerpt is what tells them apart.
-                  // eslint-disable-next-line react/no-array-index-key
-                  key={i}
-                  className={cn(
-                    "px-3 whitespace-pre-wrap break-all",
-                    marked.has(i) && "bg-destructive/10 text-destructive",
-                  )}
-                >
-                  {line || " "}
-                </div>
-              ))}
-            </pre>
-          )}
-        </>
+        <FinishedLog log={log} />
       )}
       {url && <FullLog url={url} />}
     </section>
+  );
+}
+
+/** A finished job's excerpt: the line that says what went wrong, then the lines around it. */
+function FinishedLog({ log }: { log: CheckLogView }) {
+  const marked = new Set(log.highlight);
+  return (
+    <>
+      {log.summary && (
+        <p className={cn("text-destructive text-xs font-medium break-words", monoClass)}>
+          {log.summary}
+        </p>
+      )}
+      {log.lines.length === 0 ? (
+        <p className="text-muted-foreground text-xs">The log is empty.</p>
+      ) : (
+        <pre
+          className={cn(
+            "bg-muted/50 border-border max-h-72 overflow-auto rounded-md border py-2 text-[11px] leading-relaxed",
+            monoClass,
+          )}
+        >
+          {log.lines.map((line, i) => (
+            <div
+              // Lines repeat; their place in the excerpt is what tells them apart.
+              // eslint-disable-next-line react/no-array-index-key
+              key={i}
+              className={cn(
+                "px-3 whitespace-pre-wrap break-all",
+                marked.has(i) && "bg-destructive/10 text-destructive",
+              )}
+            >
+              {line || " "}
+            </div>
+          ))}
+        </pre>
+      )}
+    </>
   );
 }
 
@@ -379,10 +389,8 @@ function RunningSteps({ steps }: { steps: CheckStepView[] }) {
     <div className="space-y-1.5">
       {steps.length > 0 && (
         <ol className="space-y-1 text-xs">
-          {steps.map((step, i) => (
-            // Step names can repeat; their order in the job is what tells them apart.
-            // eslint-disable-next-line react/no-array-index-key
-            <li key={i} className="flex min-w-0 items-center gap-2">
+          {steps.map((step) => (
+            <li key={step.number} className="flex min-w-0 items-center gap-2">
               <StepIcon state={step.state} />
               <span
                 className={cn(

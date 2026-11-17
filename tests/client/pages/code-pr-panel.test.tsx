@@ -388,8 +388,8 @@ describe("a check's log", () => {
       lines: [],
       highlight: [],
       running: [
-        { name: "Set up job", state: "success" },
-        { name: "Run pnpm test", state: "running" },
+        { number: 1, name: "Set up job", state: "success" },
+        { number: 2, name: "Run pnpm test", state: "running" },
       ],
     });
     panel();

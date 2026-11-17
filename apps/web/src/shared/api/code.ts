@@ -146,6 +146,8 @@ export interface CheckLogView {
 
 /** One step of a running Actions job. */
 export interface CheckStepView {
+  /** Its place in the job, from GitHub (unique within the job). */
+  number: number;
   name: string;
   state: "queued" | "running" | "success" | "failure" | "skipped";
 }
