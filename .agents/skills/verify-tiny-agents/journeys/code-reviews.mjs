@@ -1,11 +1,13 @@
 // Feature: code (features/code.md), PR reviews (issue #345). The Reviews screen opens a
 // pull request by its link; its page shows the PR's changes at full height with the
-// assistant beside them. A line comment waits under the review, and the first question
-// starts the assistant (a real predictable Shelley thread, `ta-verify up --shelley`).
+// assistant beside them. A line comment for the assistant waits under the review, and the
+// first question starts the assistant (a real predictable Shelley thread,
+// `ta-verify up --shelley`). A comment for GitHub, with a suggestion, goes with Submit review.
 //
 // The verify instance reaches neither GitHub nor a sandbox, so the review's own routes
 // (the PR from GitHub, its files and diffs from the sandbox's worktree) are answered with
-// page.route fixtures. Comments, viewed marks and the assistant's thread are the real app.
+// page.route fixtures, and so are the review's GitHub comments and its submit. The
+// assistant's comments, viewed marks and its thread are the real app.
 import { execFileSync } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -39,7 +41,9 @@ await journey(
       baseRef: "main",
       headSha: "0123456789abcdef0123456789abcdef01234567",
       fromFork: true,
+      mine: false,
       threadId: null,
+      codingThreadId: null,
       archived: false,
       updatedAt: new Date().toISOString(),
     };
@@ -75,6 +79,8 @@ await journey(
     ];
     const ok = (data) => ({ json: { success: true, data } });
     const asked = [];
+    const githubComments = [];
+    const submitted = [];
 
     await step("setup: a throwaway checkout for the assistant, and the PR fixtures", async () => {
       mkdirSync(dir, { recursive: true });
@@ -115,6 +121,23 @@ await journey(
               : { path: file, oldContent: "", newContent: "export const queue = [];\n" },
           ),
         );
+      });
+      await context.route(`**/api/v1/code/reviews/${review.id}/comments`, (route) => {
+        if (route.request().method() !== "POST") return route.fulfill(ok(githubComments));
+        const comment = {
+          id: `g${githubComments.length + 1}`,
+          side: "new",
+          quote: "",
+          createdAt: new Date().toISOString(),
+          ...route.request().postDataJSON(),
+        };
+        githubComments.push(comment);
+        return route.fulfill({ ...ok(comment), status: 201 });
+      });
+      await context.route(`**/api/v1/code/reviews/${review.id}/submit`, (route) => {
+        submitted.push(route.request().postDataJSON());
+        const count = githubComments.splice(0).length;
+        return route.fulfill(ok({ url: review.url, comments: count }));
       });
       // The first question: the app starts the assistant; here a real Shelley thread in
       // the throwaway checkout, given the message the server would send.
@@ -176,23 +199,28 @@ await journey(
     });
     await proof("review-open");
 
-    await step("a line comment waits under the review for the first question", async () => {
-      const pr = page.getByTestId("code-pull-review");
-      // The diff draws in a shadow root; Playwright's CSS reaches into it. Click line 12's number.
-      await pr
-        .locator(
-          '[data-gutter] > [data-column-number="12"]:not([data-line-type="change-deletion"])',
-        )
-        .click();
-      await pr
-        .getByRole("textbox", { name: "Comment on src/webhooks/retry.ts line 12" })
-        .fill(`Can this overflow for large attempts? (${stamp})`);
-      await pr.getByRole("button", { name: "Comment", exact: true }).click();
-      await expect(pr.getByRole("note", { name: "Comment on line 12" })).toBeVisible();
-      const tray = pr.getByRole("region", { name: "Comments for the agent" });
-      await expect(tray).toContainText("1 comment goes with your next message");
-      await expect(tray.getByRole("button", { name: "Send now" })).toHaveCount(0);
-    });
+    await step(
+      "a comment for the assistant waits under the review for the first question",
+      async () => {
+        const pr = page.getByTestId("code-pull-review");
+        // The diff draws in a shadow root; Playwright's CSS reaches into it. Click line 12's number.
+        await pr
+          .locator(
+            '[data-gutter] > [data-column-number="12"]:not([data-line-type="change-deletion"])',
+          )
+          .click();
+        await pr
+          .getByRole("textbox", { name: "Comment on src/webhooks/retry.ts line 12" })
+          .fill(`Can this overflow for large attempts? (${stamp})`);
+        await pr.getByRole("button", { name: "Ask assistant" }).click();
+        await expect(pr.getByRole("note", { name: "Comment on line 12" })).toContainText(
+          "For the assistant",
+        );
+        const tray = pr.getByRole("region", { name: "Comments for the agent" });
+        await expect(tray).toContainText("1 comment goes with your next message");
+        await expect(tray.getByRole("button", { name: "Send now" })).toHaveCount(0);
+      },
+    );
     await proof("comment-waiting");
 
     await step("the first question starts the assistant with the comment", async () => {
@@ -213,6 +241,35 @@ await journey(
       await expect(pr.getByRole("note", { name: "Comment on line 12" })).toHaveCount(0);
     });
     await proof("assistant-started");
+
+    await step("a suggestion for GitHub goes with Submit review, approved", async () => {
+      const pr = page.getByTestId("code-pull-review");
+      await pr
+        .locator(
+          '[data-gutter] > [data-column-number="25"]:not([data-line-type="change-deletion"])',
+        )
+        .click();
+      const box = pr.getByRole("textbox", { name: "Comment on src/webhooks/retry.ts line 25" });
+      await box.fill("Export it from the config instead:");
+      await pr.getByRole("button", { name: "Suggest change" }).click();
+      await expect(box).toHaveValue(
+        "Export it from the config instead:\n\n```suggestion\nexport const MAX_DELAY_MS = 30_000;\n```",
+      );
+      await pr.getByRole("button", { name: "Comment", exact: true }).click();
+      await expect(pr.getByRole("note", { name: "Comment on line 25" })).toContainText("Pending");
+      await page.getByRole("button", { name: /Submit review/ }).click();
+      const dialog = page.getByRole("dialog", { name: "Submit review" });
+      await expect(dialog.getByRole("list", { name: "Review comments" })).toContainText(
+        "src/webhooks/retry.ts:25",
+      );
+      await dialog.getByRole("button", { name: "Approve" }).click();
+      await dialog.getByRole("textbox", { name: "Review summary" }).fill("Looks good.");
+      await proof("submit-review");
+      await dialog.getByRole("button", { name: "Submit review" }).click();
+      await expect(page.getByText("Review submitted on GitHub.")).toBeVisible();
+      expect(submitted).toEqual([{ event: "APPROVE", body: "Looks good." }]);
+      await expect(pr.getByRole("note", { name: "Comment on line 25" })).toHaveCount(0);
+    });
 
     await step("a phone shows one side at a time", async () => {
       const phone = await context.browser().newContext({

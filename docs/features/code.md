@@ -443,9 +443,30 @@ that the pane is the thread itself, without its header. Line comments go
 to it with your next message, as in any thread. The assistant's thread is
 titled `Review #N: <title>` and stays off the thread list.
 
-Not built yet (issue #345): posting review comments and a review to
-GitHub, suggestions, the review-request inbox, changes since your last
-review, and pushing changes made during a review.
+**Review comments.** In a review, the composer under selected lines has
+two ways out. **Comment** (⌘↵) adds the comment to your review on GitHub:
+it waits as **Pending** under its lines, apart from the assistant's
+comments (`code_review_drafts.target` is `github`). **Ask assistant** makes
+it a comment for the assistant, tagged **For the assistant**, which goes
+with your next question. **Suggest change** (on new lines only) puts a
+GitHub suggestion block with the selected lines into the comment, to edit
+in place.
+
+**Submit review** in the header (with the count of pending comments) lists
+them, takes a summary and the verdict (**Comment**, **Approve**, **Request
+changes**, which needs a summary) and posts them in one REST call
+(`POST /pulls/N/reviews`), pinned to the head the review shows, so each
+comment lands on the lines you read. A comment on removed lines goes on
+GitHub's left side; a range as its first and last line. On your own PR
+(the PR's author is the GitHub account Code uses) GitHub allows only a
+comment, so the server refuses the others and the dialog offers only
+**Comment**. When a Code thread opened the PR, **Send to coding thread**
+hands the pending comments to that thread as one message instead, for its
+agent to act on.
+
+Not built yet (issue #345): existing review threads inline with Reply and
+Resolve, the review-request inbox, changes since your last review, and
+pushing changes made during a review.
 
 ## Bots hand off coding
 
@@ -543,7 +564,7 @@ Known limits (register row C7):
     `GET /code/threads/:id/changes` pushes a version when it moves.
   - `code.webhook.ts`: the GitHub App's signed webhook (public).
   - `code.reviews.ts`: PR reviews (open, the assistant's first question,
-    close), with `/code/reviews` routes in `code.projects.routes.ts`.
+    pending GitHub comments, submit, close), with `/code/reviews` routes in `code.projects.routes.ts`.
   - `code.projects.routes.ts`: `/api/v1/code/{projects,github}` and a
     thread's `pr`, `publish` and `review` routes.
 - **Tables:**

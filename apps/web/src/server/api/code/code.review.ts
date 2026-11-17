@@ -59,14 +59,24 @@ export interface ThreadReview {
   addDraft(input: DraftInput): Promise<ReviewDraft>;
   removeDraft(id: string): Promise<void>;
   /**
-   * Hand the unsent comments, as one message (null when there are none), to
-   * `deliver`; once it resolves, exactly those are marked sent.
+   * Hand the unsent comments, as one message (null when there are none) and
+   * as they are, to `deliver`; once it resolves, exactly those are marked sent.
    */
-  send<R>(deliver: (review: string | null) => Promise<R>): Promise<{ result: R; sent: number }>;
+  send<R>(
+    deliver: (review: string | null, drafts: ReviewDraft[]) => Promise<R>,
+  ): Promise<{ result: R; sent: number }>;
 }
 
-export function threadReview(threadId: string): ThreadReview {
-  const unsent = and(eq(codeReviewDrafts.threadId, threadId), isNull(codeReviewDrafts.sentAt));
+/**
+ * `target` picks which comments: the agent's (the default), or a PR review's
+ * pending GitHub comments (`github`, issue #345), kept apart under the same key.
+ */
+export function threadReview(threadId: string, target: "agent" | "github" = "agent"): ThreadReview {
+  const unsent = and(
+    eq(codeReviewDrafts.threadId, threadId),
+    eq(codeReviewDrafts.target, target),
+    isNull(codeReviewDrafts.sentAt),
+  );
   const ofThread = eq(codeReviewViewed.threadId, threadId);
 
   async function drafts(): Promise<ReviewDraft[]> {
@@ -106,7 +116,13 @@ export function threadReview(threadId: string): ThreadReview {
         throw Boom.badRequest("The range ends before it starts.");
       const [row] = await db
         .insert(codeReviewDrafts)
-        .values({ threadId, ...input, side: input.side ?? "new", quote: input.quote ?? "" })
+        .values({
+          threadId,
+          ...input,
+          side: input.side ?? "new",
+          quote: input.quote ?? "",
+          target,
+        })
         .returning();
       return draftView(row!);
     },
@@ -117,7 +133,7 @@ export function threadReview(threadId: string): ThreadReview {
 
     async send(deliver) {
       const pending = await drafts();
-      const result = await deliver(pending.length > 0 ? reviewMessage(pending) : null);
+      const result = await deliver(pending.length > 0 ? reviewMessage(pending) : null, pending);
       if (pending.length > 0) {
         await db
           .update(codeReviewDrafts)

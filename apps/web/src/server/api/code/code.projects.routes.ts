@@ -41,8 +41,11 @@ import {
   getReview,
   listReviews,
   openReview,
+  reviewComments,
   reviewIdOfKey,
   reviewWorktree,
+  sendCommentsToThread,
+  submitReview,
 } from "./code.reviews";
 import {
   createProject,
@@ -460,6 +463,37 @@ router.post("/code/reviews/:review/ask", async (c) => {
     z.object({ message: z.string().trim().min(1).max(100_000) }),
   );
   return ok(c, await askReview(c.req.param("review"), message));
+});
+
+router.get("/code/reviews/:review/comments", async (c) =>
+  ok<ReviewDraft[]>(c, await (await reviewComments(c.req.param("review"))).drafts()),
+);
+
+router.post("/code/reviews/:review/comments", async (c) => {
+  const body = await parseBody(c, draftSchema);
+  const comments = await reviewComments(c.req.param("review"));
+  return ok<ReviewDraft>(c, await comments.addDraft(body), 201);
+});
+
+router.delete("/code/reviews/:review/comments/:comment", async (c) => {
+  const comments = await reviewComments(c.req.param("review"));
+  await comments.removeDraft(c.req.param("comment"));
+  return ok(c, { deleted: true });
+});
+
+router.post("/code/reviews/:review/comments/to-thread", async (c) =>
+  ok(c, await sendCommentsToThread(c.req.param("review"))),
+);
+
+router.post("/code/reviews/:review/submit", async (c) => {
+  const body = await parseBody(
+    c,
+    z.object({
+      event: z.enum(["COMMENT", "APPROVE", "REQUEST_CHANGES"]),
+      body: z.string().max(65_000).optional(),
+    }),
+  );
+  return ok(c, await submitReview(c.req.param("review"), body));
 });
 
 router.post("/code/reviews/:review/archive", async (c) => {

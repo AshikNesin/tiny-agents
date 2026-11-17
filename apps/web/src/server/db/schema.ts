@@ -491,6 +491,11 @@ export const codeReviewDrafts = sqliteTable(
     /** The lines commented on, quoted, so the comment still reads after they move. */
     quote: text("quote").notNull().default(""),
     body: text("body").notNull(),
+    /**
+     * Who it is for: the agent (sent with the next message), or GitHub (a PR
+     * review's pending comment, posted with its review, issue #345).
+     */
+    target: text("target").$type<"agent" | "github">().notNull().default("agent"),
     createdAt: createdAt(),
     sentAt: ms("sent_at"),
   },
@@ -521,6 +526,8 @@ export const codeReviews = sqliteTable(
     /** The head the worktree is checked out at. */
     headSha: text("head_sha").notNull(),
     fromFork: bool("from_fork").notNull().default(false),
+    /** The owner opened the PR: GitHub lets them only comment on it, not approve. */
+    mine: bool("mine").notNull().default(false),
     /** On the sandbox while the review is open (removed on archive). */
     worktree: text("worktree"),
     /** `<instanceId>:<nativeId>` of the assistant, once asked. */

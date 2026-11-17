@@ -2,7 +2,8 @@
  * A PR review (`/code/reviews/<id>`, issue #345): the pull request's
  * changes at full height (file list beside the diff, Viewed marks, line
  * comments), and its assistant on the right, behind the same divider as a
- * thread's panel. Focus mode: no thread list.
+ * thread's panel. Focus mode: no thread list. A line comment is for the
+ * PR's review on GitHub (sent with Submit review) or for the assistant.
  *
  * The assistant starts on the first question (nothing calls a model until
  * then): its first message carries a short card of the PR, any line comments
@@ -18,6 +19,7 @@ import {
   MessageSquare,
   RefreshCw,
   Send,
+  SquareCheck,
   Sparkles,
   X,
 } from "lucide-react";
@@ -28,13 +30,19 @@ import { Spinner } from "../../components/ui/spinner";
 import { errorMessage } from "../../lib/errors";
 import { instanceOf, type HarnessInfo, type ThreadSummary } from "../../lib/code/api";
 import { reviewsApi } from "../../lib/code/projects";
-import { useCommentStore, useThreadCommenting, useThreadComments } from "../../lib/code/comments";
+import {
+  githubCommentsKey,
+  useCommentStore,
+  useThreadCommenting,
+  useThreadComments,
+} from "../../lib/code/comments";
 import { harnessOf } from "../../store/code";
 import type { PullReviewView } from "../../../shared/api/code";
 import { ConversationView } from "./ConversationView";
 import { PendingComments } from "./PendingComments";
 import { ResizablePane } from "./ResizablePane";
 import { ReviewPanel } from "./ReviewPanel";
+import { SubmitReview } from "./SubmitReview";
 
 /** Questions a reviewer asks first, one tap each. */
 const STARTERS = ["Summarize this PR", "What could break?", "Is it tested well?"];
@@ -55,6 +63,7 @@ export function PullReview({
   const [reload, setReload] = useState(0);
   // Phones: the diff or the assistant.
   const [side, setSide] = useState<"files" | "assistant">("files");
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -73,6 +82,7 @@ export function PullReview({
   // Comments wait under the review until the assistant exists, then under its thread.
   const commentKey = threadId ?? review?.key;
   const commenting = useThreadCommenting(commentKey, () => undefined);
+  const github = useThreadCommenting(githubCommentsKey(reviewId), () => undefined);
 
   const update = async () => {
     if (!review) return;
@@ -137,6 +147,24 @@ export function PullReview({
           {review.repo} · @{review.author}
         </span>
         <span className="flex-1" />
+        {github && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="shrink-0"
+            onClick={() => setSubmitting(true)}
+            aria-label="Submit review"
+            title="Submit your review on GitHub"
+          >
+            <SquareCheck />
+            <span className="hidden sm:inline">Submit review</span>
+            {github.comments.length > 0 && (
+              <span className="bg-primary text-primary-foreground rounded-full px-1.5 text-xs tabular-nums">
+                {github.comments.length}
+              </span>
+            )}
+          </Button>
+        )}
         <Button
           variant="ghost"
           size="sm"
@@ -194,6 +222,7 @@ export function PullReview({
             refreshKey={`${review.headSha}:${reload}:${assistantRow?.working}:${assistantRow?.cursor}`}
             page
             commenting={commenting}
+            githubCommenting={github}
           />
         </main>
         <ResizablePane narrow className={side === "assistant" ? undefined : "hidden lg:flex"}>
@@ -224,6 +253,14 @@ export function PullReview({
           </div>
         </ResizablePane>
       </div>
+      {github && (
+        <SubmitReview
+          review={review}
+          github={github}
+          open={submitting}
+          onOpenChange={setSubmitting}
+        />
+      )}
     </div>
   );
 }

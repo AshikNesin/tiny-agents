@@ -33,7 +33,11 @@ describe("commenting on lines", () => {
     const box = await screen.findByRole("textbox", { name: "Comment on src/a.ts line 2" });
     await user.type(box, "Keep this lowercase");
     await user.click(screen.getByRole("button", { name: "Comment" }));
-    expect(onComment).toHaveBeenCalledWith({ from: 2, to: 2, side: "new" }, "Keep this lowercase");
+    expect(onComment).toHaveBeenCalledWith(
+      { from: 2, to: 2, side: "new" },
+      "Keep this lowercase",
+      "agent",
+    );
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
   });
 
@@ -50,7 +54,11 @@ describe("commenting on lines", () => {
     );
     await clickLine(line(await diffRoot(), 2, "old"));
     await user.type(await screen.findByRole("textbox"), "Why remove it?{Meta>}{Enter}{/Meta}");
-    expect(onComment).toHaveBeenCalledWith({ from: 2, to: 2, side: "old" }, "Why remove it?");
+    expect(onComment).toHaveBeenCalledWith(
+      { from: 2, to: 2, side: "old" },
+      "Why remove it?",
+      "agent",
+    );
   });
 
   it("dragging down the line numbers takes that range, with one composer for it", async () => {
@@ -65,7 +73,7 @@ describe("commenting on lines", () => {
     const box = await screen.findByRole("textbox", { name: "Comment on a.txt lines 2–4" });
     await user.type(box, "Merge these");
     await user.click(screen.getByRole("button", { name: "Comment" }));
-    expect(onComment).toHaveBeenCalledWith({ from: 2, to: 4, side: "new" }, "Merge these");
+    expect(onComment).toHaveBeenCalledWith({ from: 2, to: 4, side: "new" }, "Merge these", "agent");
   });
 
   it("dragging up takes the range from where it ended to where it began", async () => {
@@ -134,6 +142,93 @@ describe("commenting on lines", () => {
     expect(saved.closest("[slot]")?.getAttribute("slot")).toMatch(/additions-2/);
     await user.click(within(saved).getByRole("button", { name: "Remove comment" }));
     expect(onRemove).toHaveBeenCalledWith("d1");
+  });
+});
+
+describe("commenting in a PR review", () => {
+  it("Comment adds to the GitHub review, Ask assistant goes to the assistant", async () => {
+    const user = userEvent.setup();
+    const onComment = vi.fn(async () => {});
+    render(
+      <FileDiff
+        path="src/a.ts"
+        oldContent={"one\ntwo\n"}
+        newContent={"one\nTWO\n"}
+        onComment={onComment}
+        reviewing
+      />,
+    );
+    const root = await diffRoot();
+    await clickLine(line(root, 2));
+    const box = await screen.findByRole("textbox", { name: "Comment on src/a.ts line 2" });
+    expect(box).toHaveAttribute("placeholder", "Leave a review comment…");
+    await user.type(box, "Why caps?{Meta>}{Enter}{/Meta}");
+    expect(onComment).toHaveBeenLastCalledWith(
+      { from: 2, to: 2, side: "new" },
+      "Why caps?",
+      "github",
+    );
+
+    await clickLine(line(root, 2));
+    await user.type(await screen.findByRole("textbox"), "Is this used elsewhere?");
+    await user.click(screen.getByRole("button", { name: "Ask assistant" }));
+    expect(onComment).toHaveBeenLastCalledWith(
+      { from: 2, to: 2, side: "new" },
+      "Is this used elsewhere?",
+      "agent",
+    );
+  });
+
+  it("Suggest change starts a suggestion block with the selected lines", async () => {
+    const user = userEvent.setup();
+    render(
+      <FileDiff
+        path="a.txt"
+        oldContent=""
+        newContent={"a\nb\nc\nd\n"}
+        onComment={async () => {}}
+        reviewing
+      />,
+    );
+    const root = await diffRoot();
+    await drag([line(root, 2), line(root, 3)]);
+    const box = await screen.findByRole("textbox", { name: "Comment on a.txt lines 2–3" });
+    await user.type(box, "Join these");
+    await user.click(screen.getByRole("button", { name: "Suggest change" }));
+    expect(box).toHaveValue("Join these\n\n```suggestion\nb\nc\n```");
+  });
+
+  it("offers no suggestion on removed lines, which GitHub cannot change", async () => {
+    render(
+      <FileDiff
+        path="a.txt"
+        oldContent={"keep\ngone\n"}
+        newContent={"keep\n"}
+        onComment={async () => {}}
+        reviewing
+      />,
+    );
+    await clickLine(line(await diffRoot(), 2, "old"));
+    await screen.findByRole("textbox");
+    expect(screen.queryByRole("button", { name: "Suggest change" })).not.toBeInTheDocument();
+  });
+
+  it("shows where each saved comment goes", async () => {
+    render(
+      <FileDiff
+        path="a.txt"
+        oldContent={"one\ntwo\n"}
+        newContent={"one\nTWO\n"}
+        onComment={async () => {}}
+        reviewing
+        comments={[
+          { id: "g1", side: "new", startLine: 2, endLine: 2, body: "Lowercase", tag: "Pending" },
+        ]}
+      />,
+    );
+    expect(await screen.findByRole("note", { name: "Comment on line 2" })).toHaveTextContent(
+      "LowercasePending",
+    );
   });
 });
 
