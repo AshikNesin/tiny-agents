@@ -38,11 +38,11 @@ Everything from one user message up to the next: the assistant messages (often s
 _Avoid_: exchange, round (a turn has several tool rounds)
 
 **Armed state**:
-Whether a routine will fire, and when: enabled with exactly one queued routine-fire job for its next run (`pendingJobId`, `nextRunAt`), plus its blocked-run count, the app's paused reason and its own conversation. `routines.arming.ts` owns every change (create, arm, disarm, advance, record blocked, clear streak, claim conversation, move to bot, remove), each one compare-and-set write that cancels the job it replaces.
+Whether a routine will fire, and when: enabled with exactly one queued routine-fire job for its next run (`pendingJobId`, `nextRunAt`), plus its blocked-run count, the app's paused reason and its newest run's conversation. `routines.arming.ts` owns every change (create, arm, disarm, advance, record blocked, clear streak, set latest conversation, move to bot, remove), each one compare-and-set write that cancels the job it replaces.
 _Avoid_: schedule (that is the routine's cron/slot rule), enabled (one column of it)
 
 **Routine run**:
-One firing of a routine at one slot: a `routine_runs` row that is missed, failed, or awaiting its Finished reply in the routine's own conversation, then succeeded, blocked or failed. `routines.runs.ts` writes every move of the routine-run machine (`apps/web/src/shared/machines/routine-run.ts`) and the card and push that follow.
+One firing of a routine at one slot: a `routine_runs` row that is missed, failed, or awaiting its Finished reply in a fresh conversation of its own (with its token spend recorded when it settles), then succeeded, blocked or failed. `routines.runs.ts` writes every move of the routine-run machine (`apps/web/src/shared/machines/routine-run.ts`) and the card and push that follow.
 _Avoid_: job, execution
 
 **Bot chat**:

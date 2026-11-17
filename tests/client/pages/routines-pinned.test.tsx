@@ -140,6 +140,8 @@ const run = (overrides: Partial<RoutineRun>): RoutineRun => ({
   finishedAt: "2026-11-05T03:31:04.000Z",
   output: "**Echo**: done",
   error: null,
+  conversationId: null,
+  tokens: null,
   ...overrides,
 });
 

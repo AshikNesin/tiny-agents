@@ -845,7 +845,7 @@ export const routines = sqliteTable(
     pendingJobId: text("pending_job_id").unique(),
     /** Durable tool-call id: exactly-once row create across pi-durable replays. */
     sourceKey: text("source_key").unique(),
-    /** The routine's own durable conversation (issue #63): every run is submitted here, never into the bot's chat. Null until first fire. */
+    /** The conversation of the routine's latest run: each run starts a fresh one (never the bot's chat). Null until first fire. */
     conversationId: text("conversation_id").unique(),
     /** Runs in a row that ended blocked (issue #87); a run that finishes any other way, or arming the routine again, resets it. */
     blockedStreak: integer("blocked_streak").notNull().default(0),
@@ -930,10 +930,15 @@ export const routineRuns = sqliteTable(
     output: text("output"),
     /** Failure or blocked reason, max 500 chars. */
     error: text("error"),
+    /** The run's own fresh durable conversation; null for runs from before runs had one. */
+    conversationId: text("conversation_id"),
+    /** Tokens the run's conversation used, read when the run settled. */
+    tokens: integer("tokens"),
   },
   (t) => [
     unique("routine_runs_routine_id_scheduled_for_unique").on(t.routineId, t.scheduledFor),
     index("routine_runs_status_idx").on(t.status),
+    index("routine_runs_conversation_id_idx").on(t.conversationId),
   ],
 );
 
