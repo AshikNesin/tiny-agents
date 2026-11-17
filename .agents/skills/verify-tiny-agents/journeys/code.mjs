@@ -82,9 +82,10 @@ await journey(
         await expect(page.getByTestId("code-harness")).toHaveCount(0);
         // The list is flat by default; the groups below come with Group by repository.
         await page.getByRole("button", { name: "Group by repository" }).click();
-        await expect(
-          page.getByRole("button", { name: "Group by repository" }),
-        ).toHaveAttribute("aria-pressed", "true");
+        await expect(page.getByRole("button", { name: "Group by repository" })).toHaveAttribute(
+          "aria-pressed",
+          "true",
+        );
       },
     );
 
