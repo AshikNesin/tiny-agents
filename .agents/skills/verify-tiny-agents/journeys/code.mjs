@@ -208,7 +208,7 @@ await journey(
       await composer.fill(`bash: echo changed-${stamp} > b.txt`);
       await composer.press("Enter");
       await expect(transcript.getByText("Done.").last()).toBeVisible({ timeout: 30_000 });
-      await page.getByRole("button", { name: "Changes" }).click();
+      await page.getByRole("button", { name: "Review panel" }).click();
       const changes = page.getByTestId("code-changes");
       await expect(changes).toBeVisible();
       const file = changes.getByTestId("code-file").filter({ hasText: "b.txt" });
@@ -220,7 +220,7 @@ await journey(
     });
     await proof("changes");
     await step("close Changes", async () => {
-      await page.getByRole("button", { name: "Close changes" }).click();
+      await page.getByRole("button", { name: "Close panel" }).click();
       await expect(page.getByTestId("code-changes")).toHaveCount(0);
     });
 

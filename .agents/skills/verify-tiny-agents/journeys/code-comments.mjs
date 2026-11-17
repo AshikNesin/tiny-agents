@@ -141,10 +141,10 @@ await journey(
     await proof("comment-sent");
 
     await step("Open as a page: the Review page shows the changes full width", async () => {
-      await changes.getByRole("button", { name: "Open as a page" }).click();
+      await page.getByRole("button", { name: "Open as a page" }).click();
       await expect(page).toHaveURL(/\/code\/shelley%3A[^/]+\/review$/);
       const review = page.getByTestId("code-review-page");
-      await expect(review.getByRole("tab", { name: "Changes" })).toHaveAttribute(
+      await expect(review.getByRole("tab", { name: "Source control" })).toHaveAttribute(
         "aria-selected",
         "true",
       );

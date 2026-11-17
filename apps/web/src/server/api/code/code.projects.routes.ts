@@ -13,6 +13,7 @@ import { ok } from "@groot/core/utils/api-response.utils";
 import { parseBody } from "@groot/core/utils/controller.utils";
 import { codeReviewDrafts, codeReviewViewed, db, type CodeCheckpoint } from "../../db";
 import type {
+  CheckLogView,
   CheckpointView,
   GitHubStatus,
   ProjectView,
@@ -32,6 +33,7 @@ import { setFlowCookie } from "./code.webhook";
 import { draftView, pendingReview, reviewMessage, unsentDrafts } from "./code.review";
 import { checkpointRange, checkpointsOf, revertTo } from "./code.checkpoints";
 import { codeHub } from "./code.hub";
+import { checkLog } from "./code.checks";
 import {
   createProject,
   deleteProject,
@@ -199,6 +201,12 @@ router.delete("/code/projects/:project", async (c) => {
 router.get("/code/threads/:id/pr", async (c) => {
   const fresh = c.req.query("fresh") !== "false";
   return ok<ThreadPullsView>(c, await threadPulls(threadParam(c.req.param("id")), fresh));
+});
+
+router.get("/code/threads/:id/pr/checks/:job/log", async (c) => {
+  const job = Number(c.req.param("job"));
+  if (!Number.isSafeInteger(job) || job < 1) throw Boom.badRequest("Not a job id.");
+  return ok<CheckLogView>(c, await checkLog(threadParam(c.req.param("id")), job));
 });
 
 router.post("/code/threads/:id/publish", async (c) => {

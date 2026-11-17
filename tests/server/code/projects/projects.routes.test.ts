@@ -19,6 +19,7 @@ import { createCodeHub, setCodeHub } from "../../../../apps/web/src/server/api/c
 import { createWorkspace } from "../../../../apps/web/src/server/api/code/code.workspace";
 import { onTurnEnded } from "../../../../apps/web/src/server/api/code/code.pulls";
 import type {
+  CheckLogView,
   CheckpointView,
   GitHubStatus,
   ProjectView,
@@ -293,6 +294,68 @@ describe("publish and the PR tab", () => {
     );
 
     expect((await pr(thread.id)).active?.number).toBe(1);
+  });
+});
+
+describe("a check's log excerpt", () => {
+  const RAW = [
+    "2026-11-17T10:00:00.0000000Z ##[group]Run pnpm test",
+    "2026-11-17T10:00:00.1000000Z \u001b[36;1mpnpm test\u001b[0m",
+    "2026-11-17T10:00:00.2000000Z ##[endgroup]",
+    ...Array.from({ length: 40 }, (_, i) => `2026-11-17T10:00:01.0000000Z ok ${i + 1} passes`),
+    "2026-11-17T10:00:02.0000000Z FAIL tests/login.test.ts > keeps the session",
+    "2026-11-17T10:00:02.1000000Z AssertionError: expected 401 to be 200",
+    "2026-11-17T10:00:02.2000000Z  at tests/login.test.ts:42:7",
+    "2026-11-17T10:00:03.0000000Z Tests  1 failed | 40 passed",
+    "2026-11-17T10:00:03.5000000Z ##[error]Process completed with exit code 1.",
+  ].join("\n");
+
+  async function failingPull() {
+    const project = await newProject();
+    const thread = await newThread(project.id);
+    const enc = encodeURIComponent(thread.id);
+    await commit(thread.worktree, "src/login.ts");
+    await call("POST", `/threads/${enc}/publish`, {});
+    github.pull(1).checks = [
+      {
+        name: "test",
+        state: "failure",
+        startedAt: minutesAgo(3),
+        completedAt: minutesAgo(1),
+        url: "https://github.com/acme/web/actions/runs/5/job/77",
+        jobId: 77,
+      },
+    ];
+    github.logs.set(77, RAW);
+    await pr(thread.id);
+    return enc;
+  }
+
+  it("answers the lines around the failure, without timestamps, and names it", async () => {
+    const enc = await failingPull();
+    const res = await call<CheckLogView>("GET", `/threads/${enc}/pr/checks/77/log`);
+    expect(res.status).toBe(200);
+    const log = res.body.data!;
+    expect(log.summary).toBe("AssertionError: expected 401 to be 200");
+    expect(log.url).toBe("https://github.com/acme/web/actions/runs/5/job/77");
+    expect(log.lines).toContain("FAIL tests/login.test.ts > keeps the session");
+    expect(log.lines.at(-1)).toBe("##[error]Process completed with exit code 1.");
+    expect(log.lines).not.toContain("##[endgroup]");
+    expect(log.lines.some((l) => /^2026-|\u001b/.test(l))).toBe(false);
+    // The excerpt, not the whole log: the early passes are left out.
+    expect(log.lines).not.toContain("ok 1 passes");
+    expect(log.lines.length).toBeLessThanOrEqual(30);
+    expect(log.highlight.map((i) => log.lines[i])).toEqual([
+      "FAIL tests/login.test.ts > keeps the session",
+      "AssertionError: expected 401 to be 200",
+      "##[error]Process completed with exit code 1.",
+    ]);
+  });
+
+  it("reads only a job that is one of the open pull request's checks", async () => {
+    const enc = await failingPull();
+    const res = await call("GET", `/threads/${enc}/pr/checks/78/log`);
+    expect(res.status).toBe(404);
   });
 });
 

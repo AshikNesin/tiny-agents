@@ -39,6 +39,8 @@ export interface FakeGitHub extends GitHubClient {
   resolved: string[];
   comments: Array<{ number: number; body: string }>;
   merged: Array<{ number: number; method: string }>;
+  /** Each Actions job's raw log, by job id (a default when unset). */
+  logs: Map<number, string>;
   /** Native auto-merge calls, by PR node id. */
   autoMergeCalls: Array<{
     pullId: string;
@@ -59,6 +61,7 @@ export function fakeGitHub(local: LocalExec, bare: string, login = "ashik"): Fak
     resolved: [],
     comments: [],
     merged: [],
+    logs: new Map(),
     autoMergeCalls: [],
     pull(number) {
       const found = gh.pulls.find((p) => p.number === number);
@@ -120,8 +123,8 @@ export function fakeGitHub(local: LocalExec, bare: string, login = "ashik"): Fak
         comments: [],
       };
     },
-    async jobLogTail() {
-      return "FAIL src/a.test.ts\nExpected 1, received 2";
+    async jobLogTail(_repo, jobId, maxChars) {
+      return (gh.logs.get(jobId) ?? "FAIL src/a.test.ts\nExpected 1, received 2").slice(-maxChars);
     },
     async replyToThread(threadId, body) {
       gh.replies.push({ threadId, body });
