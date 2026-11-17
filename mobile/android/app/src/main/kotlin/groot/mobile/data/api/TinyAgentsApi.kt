@@ -132,6 +132,25 @@ class TinyAgentsApi(private val client: ApiClient) {
         )
     }
 
+    // ── Phone notifications (issue #306) ──────────────────────────────────
+
+    /** The server's VAPID public key: what this device registers its push subscription with. */
+    suspend fun vapidKey(): String = client.getObject("/notifications/vapid-key").string("publicKey")
+
+    /** Register (or refresh) this device's push endpoint; returns the device id. */
+    suspend fun registerPushDevice(device: PushDeviceBody): String =
+        client.postObject("/notifications/devices", device.toJson()).string("id")
+
+    suspend fun removePushDevice(id: String) {
+        client.delete("/notifications/devices/${enc(id)}")
+    }
+
+    /** Send a test push to this device; null when it went out, else the push service's answer. */
+    suspend fun testPushDevice(id: String): String? {
+        val result = client.postObject("/notifications/devices/${enc(id)}/test")
+        return if (result.bool("ok")) null else result.string("reason", "failed")
+    }
+
     /** Answer a bot's questions, one answer per question; null dismisses them. */
     suspend fun answerQuestions(botId: String, taskId: Int, answers: List<OwnerAnswer>?) {
         val body = if (answers != null) jsonOf("answers" to answers.map { it.toJson() }) else jsonOf("dismissed" to true)

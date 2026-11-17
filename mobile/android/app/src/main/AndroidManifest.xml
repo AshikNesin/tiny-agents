@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Android 13+: the server's notifications (issue #306), asked for after sign-in. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:name=".GrootMobileApp"
@@ -59,6 +61,26 @@
                 <data android:mimeType="*/*" />
             </intent-filter>
         </activity>
+        <!-- Phone notifications (issue #306): the UnifiedPush distributor delivers here. -->
+        <service
+            android:name=".push.TinyAgentsPushService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="org.unifiedpush.android.connector.PUSH_EVENT" />
+            </intent-filter>
+        </service>
+        <!-- A notification's Approve, Deny and third button: Android 12+ runs it once unlocked. -->
+        <receiver
+            android:name=".push.NotificationActionReceiver"
+            android:exported="false" />
+        <!-- The same buttons on Android 10 and 11: asks for the unlock, answers, closes. -->
+        <activity
+            android:name=".push.UnlockToAnswerActivity"
+            android:theme="@style/Theme.GrootMobile.Share"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:exported="false" />
     </application>
 
 </manifest>

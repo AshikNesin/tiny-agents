@@ -195,6 +195,54 @@ describe("needs-input notifications", () => {
     expect(notifier.sent[0].ttlSeconds).toBeLessThanOrEqual(600);
   });
 
+  it("give approvals the chat card's buttons, and nothing else any", async () => {
+    const runtime = fakeRuntime();
+    const notifier = fakeNotifier();
+    wiring = startNotifications(runtime, notifier);
+    const base = { kind: "approval", change: "added", conversation: CONVERSATION } as const;
+    runtime.wait({ ...base, task: 1, tool: "run_command" });
+    runtime.wait({ ...base, task: 2, tool: "browser_fill", vault: { grantable: true } });
+    runtime.wait({ ...base, task: 3, tool: "use_secret", vault: { grantable: false } });
+    runtime.wait({ ...base, task: 4, tool: "request_credentials", subject: "Bank" });
+    runtime.wait({ ...base, task: 5, tool: "computer_request_takeover" });
+    runtime.wait({ ...base, kind: "question", task: 6, tool: "ask_owner" });
+    await until(() => notifier.sent.length === 6, "six pushes");
+    const byTask = (task: number) =>
+      notifier.sent.find((n) => n.dedupeKey.endsWith(`:${task}`))?.actions;
+    expect(byTask(1)).toEqual({ kind: "tool", botId, taskId: 1, tool: "run_command" });
+    expect(byTask(2)).toEqual({
+      kind: "vault",
+      botId,
+      taskId: 2,
+      tool: "browser_fill",
+      grantable: true,
+    });
+    expect(byTask(3)).toMatchObject({ kind: "vault", grantable: false });
+    expect([byTask(4), byTask(5), byTask(6)]).toEqual([undefined, undefined, undefined]);
+  });
+
+  it("send an approval's reminder under its tag, with the same buttons", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"], shouldAdvanceTime: true });
+    const runtime = fakeRuntime();
+    const notifier = fakeNotifier({ reminderMinutes: 1 });
+    wiring = startNotifications(runtime, notifier);
+    runtime.wait({
+      kind: "approval",
+      change: "added",
+      conversation: CONVERSATION,
+      task: 8,
+      tool: "run_command",
+    });
+    await until(() => notifier.sent.length === 1, "approval push");
+    await vi.advanceTimersByTimeAsync(60_000);
+    await until(() => notifier.sent.length === 2, "reminder");
+    expect(notifier.sent[1]).toMatchObject({
+      event: "input.reminder",
+      tag: `approval:${CONVERSATION}:8`,
+      actions: { kind: "tool", botId, taskId: 8, tool: "run_command" },
+    });
+  });
+
   it("push a credential request to its vault page, with no reminder past its expiry", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"], shouldAdvanceTime: true });
     const runtime = fakeRuntime();

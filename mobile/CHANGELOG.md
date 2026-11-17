@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.0
+
+### Minor Changes
+
+- Notifications on your phone. After you sign in, the app asks to show notifications and registers with your
+  server, through a UnifiedPush app such as ntfy when you have one, else through Google Play services; neither
+  needs a Firebase project, so it works for any server. An approval comes with the chat card's buttons (Deny,
+  Approve, and Always allow or For this chat), which work once the phone is unlocked, and it goes away when you
+  answer it anywhere. Settings shows whether notifications are on and sends a test.
+
 ## 0.5.1
 
 ### Patch Changes

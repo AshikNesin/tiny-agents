@@ -21,6 +21,9 @@ import groot.mobile.data.api.CodeApi
 import groot.mobile.data.api.TinyAgentsApi
 import groot.mobile.data.chat.ChatStore
 import groot.mobile.data.shareTargetBots
+import groot.mobile.push.ApprovalAnswerer
+import groot.mobile.push.PushNotifier
+import groot.mobile.push.PushRegistrar
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -82,6 +85,19 @@ class AppContainer(context: Context) {
 
     /** Links the app was opened with (a push notification's), waiting for the signed-in screens. */
     val links = AppLinks()
+
+    /** The server's notifications on this phone (issue #306): showing them, and registering for them. */
+    val pushNotifier = PushNotifier(appContext)
+
+    val push = PushRegistrar(appContext, api, session)
+
+    /** Approve, Deny and the rest from a notification's buttons. */
+    val approvalAnswerer = ApprovalAnswerer(api, pushNotifier, session)
+
+    /** A push or a notification button can start the process: read the stored session first. */
+    suspend fun ensureSessionLoaded() {
+        if (!session.state.value.signedIn) session.load()
+    }
 
     /** The top bots, offered by name and face in Android's share sheet. */
     val shareTargets = ShareTargets(appContext, avatars)

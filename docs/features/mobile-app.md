@@ -129,8 +129,10 @@ the branch `chore/groot-mobile-sync`.
 
 ## Limits
 
-- Android only. Push notifications come through Pushover; tapping one opens
-  the app (see "Links from notifications").
+- Android only. Phone notifications come through Web Push (UnifiedPush, or
+  Google's embedded distributor), with Approve and Deny buttons on approvals;
+  Pushover still works alongside. Tapping one opens the app (see "Links from
+  notifications").
 - The Code page, the Models section of Settings, passkey sign-in, creating
   vault items, importing skills from GitHub and the connection tool
   playground stay in the web app.

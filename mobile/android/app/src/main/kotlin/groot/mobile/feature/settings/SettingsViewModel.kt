@@ -8,8 +8,11 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import groot.kit.theme.ThemeMode
 import groot.mobile.AppContainer
 import groot.mobile.data.Session
+import groot.mobile.push.PushStatus
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -21,6 +24,22 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
 
     val guest: Boolean get() = container.bots.state.value.guest
 
+    /** Where this phone stands with the server's notifications. */
+    val push: StateFlow<PushStatus> = container.push.status
+
+    private val _testNote = MutableStateFlow<String?>(null)
+
+    /** What the last "Send test notification" came to. */
+    val testNote: StateFlow<String?> = _testNote.asStateFlow()
+
+    fun sendTestNotification() {
+        _testNote.value = "Sending…"
+        viewModelScope.launch {
+            val failure = runCatching { container.push.sendTest() }.getOrElse { it.message ?: "Couldn't send" }
+            _testNote.value = failure ?: "Sent. It should arrive in a few seconds."
+        }
+    }
+
     fun setThemeMode(mode: ThemeMode) {
         viewModelScope.launch { container.themeModeStore.setThemeMode(mode) }
     }
@@ -28,6 +47,8 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     /** Sign out here and tell the server; the token is forgotten either way. */
     fun signOut() {
         container.scope.launch {
+            // While the token still works: the server stops pushing to this phone.
+            runCatching { container.push.signOut() }
             runCatching { container.api.logout() }
             container.session.signOut()
         }
@@ -36,6 +57,7 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     /** "Reset all data": signed out, the server forgotten, preferences cleared, theme back to System. */
     fun resetAll() {
         container.scope.launch {
+            runCatching { container.push.signOut() }
             runCatching { container.api.logout() }
             container.session.forgetServer()
             container.appPreferences.clear()

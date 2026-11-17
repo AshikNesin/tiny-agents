@@ -32,6 +32,8 @@ export const notificationSettingsSchema = z.object({
       urgentBypass: z.boolean().default(false),
     })
     .prefault({}),
+  /** Channels switched off by id ("pushover", "webpush"); a missing entry is on. */
+  channels: z.record(z.string(), z.boolean()).prefault({}),
   /** Deliver to this Pushover device only (empty: all devices). */
   device: z
     .string()

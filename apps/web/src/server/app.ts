@@ -27,6 +27,7 @@ import peopleRoutes from "./api/people/people.routes";
 import updatesRoutes from "./api/system/updates.routes";
 import appLinksRouter from "./api/system/app-links";
 import { guestGuard } from "./api/people/guest.guard";
+import pushRoutes from "./api/notifications/push.routes";
 import { registerRoutineJobs } from "./api/routines/routines.jobs";
 
 /** Register every feature's job handlers. Call before `startWorkers()` / the first tick. */
@@ -74,6 +75,7 @@ export function createWebApp(options: Omit<CreateAppOptions, "routes"> = {}) {
       api.route("/jobs", jobRoutes);
       api.route("/storage", storageRoutes);
       api.route("/settings", appSettingsRoutes);
+      api.route("/", pushRoutes);
       api.route("/notifications", notificationRoutes);
       app.route("/api/v1", api);
     },

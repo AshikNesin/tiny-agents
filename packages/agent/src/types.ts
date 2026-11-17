@@ -274,6 +274,8 @@ export interface WaitEvent {
   subject?: string;
   /** Epoch ms when the wait expires, for calls that expire (added only). */
   expiresAt?: number;
+  /** A vault use: whether its card offers "For this chat" (added approvals only). */
+  vault?: { grantable: boolean };
 }
 
 export interface LastMessage {

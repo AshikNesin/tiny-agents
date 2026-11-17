@@ -17,6 +17,7 @@ import type { AutofixStatus } from "../../shared/machines/autofix";
 import type { AutofixPassStatus } from "../../shared/machines/autofix-pass";
 import type { HandoffStatus } from "../../shared/machines/handoff";
 import type { MemoryStatus } from "../../shared/machines/memory";
+import type { PushSubscriptionStatus } from "../../shared/machines/push-subscription";
 import type { RoutineRunStatus } from "../../shared/machines/routine-run";
 import type { TaskStatus } from "../../shared/machines/task";
 
@@ -970,6 +971,41 @@ export const botGuests = sqliteTable(
     primaryKey({ columns: [t.botId, t.userId] }),
     index("bot_guests_user_id_idx").on(t.userId),
   ],
+);
+
+/**
+ * Devices that receive Web Push notifications (issue #306): the Android app
+ * through UnifiedPush (FCM or a distributor such as ntfy), later browsers.
+ * The endpoint and keys are what the device's push service gave it; the
+ * server encrypts each push for `p256dh` + `auth`.
+ */
+export const pushSubscriptions = sqliteTable(
+  "push_subscriptions",
+  {
+    id: id(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    endpoint: text("endpoint").notNull().unique(),
+    p256dh: text("p256dh").notNull(),
+    auth: text("auth").notNull(),
+    /** fcm | unifiedpush | browser */
+    distributor: text("distributor").$type<"fcm" | "unifiedpush" | "browser">().notNull(),
+    /** What the device calls itself, e.g. "Pixel 8". */
+    label: text("label").notNull().default(""),
+    appVersion: text("app_version"),
+    status: text("status").$type<PushSubscriptionStatus>().notNull().default("active"),
+    /** Consecutive failed sends; reset by a delivery. */
+    failureCount: integer("failure_count").notNull().default(0),
+    lastError: text("last_error"),
+    lastSuccessAt: ms("last_success_at"),
+    createdAt: createdAt(),
+    /** The device last registered (or re-registered) this endpoint. */
+    lastSeenAt: ms("last_seen_at")
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (t) => [index("push_subscriptions_user_id_idx").on(t.userId)],
 );
 
 export * from "@groot/core/notification/notification.schema";

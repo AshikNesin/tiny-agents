@@ -1,23 +1,37 @@
 package groot.mobile
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
 import groot.kit.theme.GrootTheme
 import groot.kit.theme.ThemeMode
 import groot.mobile.data.parseAppLink
 import groot.mobile.ui.brand.BrandPalette
 import groot.mobile.ui.components.LocalAvatars
 import groot.mobile.ui.components.LocalContainer
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 
 class MainActivity : ComponentActivity() {
+    private var permissionAnswer: CompletableDeferred<Boolean>? = null
+    private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        permissionAnswer?.complete(granted)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
@@ -37,6 +51,7 @@ class MainActivity : ComponentActivity() {
         runBlocking { container.session.load() }
         // A cold start from a link; a running app gets it in onNewIntent (singleTask).
         if (savedInstanceState == null) openLink(intent)
+        registerForPush()
 
         setContent {
             val themeMode by store.themeMode.collectAsStateWithLifecycle(initialValue = initialMode)
@@ -51,6 +66,32 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         openLink(intent)
+    }
+
+    /**
+     * Phone notifications (issue #306): once signed in (each launch, and after a sign-in or a
+     * switch of server), register this phone. The permission is asked only when the server
+     * offers push, so a guest is never asked.
+     */
+    private fun registerForPush() {
+        val container = (application as GrootMobileApp).container
+        container.pushNotifier.createChannels()
+        lifecycleScope.launch {
+            container.session.state
+                .map { if (it.signedIn) it.serverUrl else null }
+                .distinctUntilChanged()
+                .filter { it != null }
+                .collect { container.push.ensure(this@MainActivity, ::askNotificationPermission) }
+        }
+    }
+
+    private suspend fun askNotificationPermission(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return true
+        if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) return true
+        val answer = CompletableDeferred<Boolean>()
+        permissionAnswer = answer
+        notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        return answer.await()
     }
 
     private fun openLink(intent: Intent?) {

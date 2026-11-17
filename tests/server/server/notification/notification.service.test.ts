@@ -7,6 +7,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { createMemoryLogStore } from "@groot/core/notification/notification.log";
 import {
+  NotificationHub,
   NotificationService,
   type NotificationServiceOptions,
 } from "@groot/core/notification/notification.service";
@@ -27,11 +28,20 @@ vi.mock("@groot/core/logger", () => ({
 
 type Responder = (message: OutgoingMessage) => SendResult | Promise<SendResult>;
 
-function fakeChannel(respond: Responder = () => ({ ok: true, providerId: "req" })) {
+function fakeChannel(
+  respond: Responder = () => ({ ok: true, providerId: "req" }),
+  id = "pushover",
+) {
   const sent: OutgoingMessage[] = [];
-  const channel: NotificationChannel & { sent: OutgoingMessage[]; configuredFlag: boolean } = {
-    id: "pushover",
+  const dismissed: string[] = [];
+  const channel: NotificationChannel & {
+    sent: OutgoingMessage[];
+    dismissed: string[];
+    configuredFlag: boolean;
+  } = {
+    id,
     sent,
+    dismissed,
     configuredFlag: true,
     configured() {
       return this.configuredFlag;
@@ -42,6 +52,9 @@ function fakeChannel(respond: Responder = () => ({ ok: true, providerId: "req" }
       sent.push(message);
       return respond(message);
     }),
+    dismiss: async (tag: string) => {
+      dismissed.push(tag);
+    },
   };
   return channel;
 }
@@ -390,5 +403,128 @@ describe("NotificationService", () => {
     vi.advanceTimersByTime(10_000);
     expect(await service.sendTest()).toMatchObject({ ok: true });
     expect(channel.send).toHaveBeenCalledTimes(2);
+  });
+
+  it("hands a channel the tag, event, path and buttons of a single notification", async () => {
+    const { service, channel } = build();
+    const actions = { kind: "tool" as const, botId: "b1", taskId: 1, tool: "run_command" };
+    service.notify(approval(1, { actions }));
+    await flush();
+    expect(channel.sent[0]).toMatchObject({
+      tag: "approval:7:1",
+      event: "approval.requested",
+      category: "needs_input",
+      path: "/chats/b1?focus=approval:1",
+      actions,
+    });
+  });
+
+  it("gives a coalesced summary no buttons and a tag of its own", async () => {
+    const { service, channel } = build();
+    const actions = { kind: "tool" as const, botId: "b1", taskId: 1, tool: "run_command" };
+    service.notify(approval(1, { coalesce, actions }));
+    service.notify(approval(2, { coalesce, actions: { ...actions, taskId: 2 } }));
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(channel.sent).toHaveLength(1);
+    expect(channel.sent[0]!.actions).toBeUndefined();
+    expect(channel.sent[0]!.tag).toBe("batch:needs:7");
+  });
+
+  it("takes back a sent notification when its request is answered, and only then", async () => {
+    const { service, channel } = build();
+    service.notify(approval(1));
+    await flush();
+    expect(channel.sent).toHaveLength(1);
+    service.cancel("approval:7:1");
+    service.cancel("approval:7:1");
+    service.cancel("approval:7:9"); // never sent
+    await flush();
+    expect(channel.dismissed).toEqual(["approval:7:1"]);
+  });
+
+  it("takes back a reminder by the tag it shares with its request", async () => {
+    const { service, channel } = build();
+    service.notify(approval(1, { dedupeKey: "reminder:approval:7:1", tag: "approval:7:1" }));
+    await flush();
+    expect(channel.sent[0]!.tag).toBe("approval:7:1");
+    service.cancel("approval:7:1");
+    await flush();
+    expect(channel.dismissed).toEqual(["approval:7:1"]);
+  });
+
+  it("drops a queued send answered before it went out, with nothing to take back", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const channel = fakeChannel(async () => {
+      await gate;
+      return { ok: true, providerId: "req" };
+    });
+    const { service, log } = build({ channel });
+    // Two in flight fill the queue's slots; the third waits.
+    service.notify(approval(1));
+    service.notify(approval(2));
+    service.notify(approval(3));
+    await flush();
+    expect(channel.send).toHaveBeenCalledTimes(2);
+    service.cancel("approval:7:3");
+    release();
+    await flush();
+    expect(channel.send).toHaveBeenCalledTimes(2);
+    expect(channel.dismissed).toEqual([]);
+    expect(log.rows.find((row) => row.dedupeKey === "approval:7:3")?.status).toBe("cancelled");
+  });
+
+  it("sends nothing and logs nothing on a channel the owner switched off", async () => {
+    const { service, channel, log } = build();
+    await service.saveSettings({ channels: { pushover: false } });
+    service.notify(approval(1));
+    await flush();
+    expect(channel.send).not.toHaveBeenCalled();
+    expect(log.rows).toHaveLength(0);
+  });
+});
+
+describe("NotificationHub", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-29T06:00:00Z"));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("sends each notification through every channel, deduped per channel", async () => {
+    const log = createMemoryLogStore();
+    const settings = settingsStore();
+    const pushover = build({ log, settings });
+    const webpush = build({ log, settings, channel: fakeChannel(undefined, "webpush") });
+    const hub = new NotificationHub(pushover.service);
+    hub.add(webpush.service);
+    hub.notify(approval(1));
+    hub.notify(approval(1));
+    await flush();
+    expect(pushover.channel.sent).toHaveLength(1);
+    expect(webpush.channel.sent).toHaveLength(1);
+    expect(log.rows.map((row) => [row.channel, row.status]).sort()).toEqual([
+      ["pushover", "sent"],
+      ["webpush", "sent"],
+    ]);
+    hub.cancel("approval:7:1");
+    await flush();
+    expect(webpush.channel.dismissed).toEqual(["approval:7:1"]);
+  });
+
+  it("applies saved settings to every channel at once", async () => {
+    const settings = settingsStore();
+    const pushover = build({ settings });
+    const webpush = build({ settings, channel: fakeChannel(undefined, "webpush") });
+    const hub = new NotificationHub(pushover.service);
+    hub.add(webpush.service);
+    await webpush.service.getSettings(); // cache the old value
+    await hub.saveSettings({ channels: { webpush: false } });
+    hub.notify(approval(1));
+    await flush();
+    expect(pushover.channel.sent).toHaveLength(1);
+    expect(webpush.channel.send).not.toHaveBeenCalled();
   });
 });

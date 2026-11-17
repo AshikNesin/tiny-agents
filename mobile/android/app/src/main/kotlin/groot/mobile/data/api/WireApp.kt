@@ -688,3 +688,22 @@ data class Guest(val id: Int, val email: String, val name: String?, val botIds: 
         fun from(json: JSONObject) = Guest(json.int("id"), json.string("email"), json.stringOrNull("name"), json.arr("botIds").strings())
     }
 }
+
+/** `POST /notifications/devices` (`apps/web/src/shared/api/push.ts`, `PushDeviceBody`). */
+data class PushDeviceBody(
+    val endpoint: String,
+    val p256dh: String,
+    val auth: String,
+    /** "fcm" (the embedded distributor, through Google) or "unifiedpush" (ntfy or another app). */
+    val distributor: String,
+    val label: String?,
+    val appVersion: String?,
+) {
+    fun toJson(): JSONObject = jsonOfNotNull(
+        "endpoint" to endpoint,
+        "keys" to jsonOf("p256dh" to p256dh, "auth" to auth),
+        "distributor" to distributor,
+        "label" to label,
+        "appVersion" to appVersion,
+    )
+}

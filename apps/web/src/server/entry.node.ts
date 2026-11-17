@@ -27,6 +27,7 @@ import { createLifecycle } from "./lifecycle";
 import { startNotifications, notifyVaultAlert } from "./api/notifications/notifications.wiring";
 import { extractionSweep } from "./api/uploads/uploads.extraction";
 import { systemStarted } from "./api/notifications/notifications.events";
+import { attachWebPush } from "./api/notifications/push.channel";
 import {
   closeAgentRuntime,
   openAgentRuntime,
@@ -226,11 +227,14 @@ async function main(): Promise<void> {
   // through a port; pushes are their destination.
   let notifications!: ReturnType<typeof startNotifications>;
   let unsetVaultAlerts = () => {};
+  let detachWebPush = () => {};
   add({
     name: "notifications",
     needs: ["agent runtime"],
     start: () => {
       notifications = startNotifications(runtime);
+      // Phones registered through the app (issue #306), beside Pushover.
+      detachWebPush = attachWebPush();
       notificationService.start();
       unsetVaultAlerts = setVaultAlertSink((kind, title, message) =>
         notifyVaultAlert(kind, title, message),
@@ -240,6 +244,7 @@ async function main(): Promise<void> {
       unsetVaultAlerts();
       notifications.stop();
       notificationService.stop();
+      detachWebPush();
     },
   });
 

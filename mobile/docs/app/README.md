@@ -14,8 +14,10 @@ run are in the [README](../../README.md).
 | `android/kit` | The boilerplate's theme, tokens, settings screen and build info (synced, never edited here) |
 
 The `vnc` and `terminal` modules know nothing about tiny-agents: they take byte streams and draw. The app module
-connects them to the server's WebSockets. The one runtime dependency added to the boilerplate is OkHttp, used for
-HTTP, server-sent events and WebSockets.
+connects them to the server's WebSockets. The runtime dependencies added to the boilerplate are OkHttp, used for
+HTTP, server-sent events and WebSockets, and UnifiedPush's connector and embedded FCM distributor, for phone
+notifications (`push/`, issue #306). Those two are about 230 KB of AAR, plus Tink for the Web Push decryption,
+all shrunk by R8 in release (`pnpm size:android` holds the 3 MB budget). Neither needs a Firebase SDK or project.
 
 ## Architecture
 
@@ -174,6 +176,24 @@ screen for `TERM=xterm-256color`.
   the process and asks before it sends `?force=1`.
 - The screen detaches when it leaves the screen, so the server's idle timer can free the attach.
 
+## Phone notifications
+
+`push/` receives the server's Web Push notifications (issue #306; the server side is in the tiny-agents
+[notifications guide](../../../docs/features/notifications.md)).
+
+- `PushRegistrar` registers after sign-in and on each launch: it fetches the server's VAPID key
+  (`GET /notifications/vapid-key`, 403 for a guest, so a guest is never asked), asks for `POST_NOTIFICATIONS` on
+  Android 13+, picks the owner's UnifiedPush distributor (ntfy, say) or else the embedded FCM one, and posts the
+  endpoint to `POST /notifications/devices`. A new key or another server registers again; signing out removes the
+  device.
+- `TinyAgentsPushService` gets the decrypted payload (`PushPayload`: `show` or `dismiss`) and `PushNotifier` shows
+  it on one Android channel per category (Needs you, Updates, Security, System), keyed by its tag, so a reminder
+  replaces the first push and an answer elsewhere takes it back.
+- An approval has the chat card's buttons: Deny, Approve, and Always allow (a tool) or For this chat (a grantable
+  vault use). They need the phone unlocked: Android 12+ runs `NotificationActionReceiver` after the unlock, and on
+  10 and 11 `UnlockToAnswerActivity` asks for it. `ApprovalAnswerer` posts the chat card's body.
+- Settings, Notifications shows the state and sends a test.
+
 ## Links from notifications
 
 `data/AppLinks.kt` maps the server's notification links (`/chats/<bot>?focus=approval:<task>`,
@@ -265,7 +285,6 @@ not count environment variables as test inputs and would otherwise reuse an earl
 ## Known limits
 
 - Android only. There is no iOS app.
-- No push notifications. The app shows activity only while it is open.
 - These stay in the web app: setting up Code projects and GitHub, the Models section of Settings (providers), passkey sign-in,
   creating vault items, importing skills from GitHub, and the connection tool playground.
 - Routine schedules are entered and shown in IST, like the server.

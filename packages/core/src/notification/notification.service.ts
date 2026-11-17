@@ -103,6 +103,8 @@ interface Accepted {
 
 interface Delivery {
   logIds: string[];
+  /** The tag of a single notification (cancel drops it while still queued). */
+  tag?: string;
   message: OutgoingMessage;
   botId?: string;
   attempts: number;
@@ -153,6 +155,8 @@ export class NotificationService {
   readonly #recent = new Map<string, number>();
   /** Keys cancelled while their notification may still be on its way in. */
   readonly #cancelled = new Map<string, number>();
+  /** Tags handed to the channel, with when: an answer takes them back (`dismiss`). */
+  readonly #dispatched = new Map<string, number>();
   readonly #buckets = new Map<string, Bucket>();
   #held: Accepted[] = [];
   #heldTimer: ReturnType<typeof setTimeout> | undefined;
@@ -195,6 +199,16 @@ export class NotificationService {
     const value = await this.#settingsStore.load();
     this.#settingsCache = { value, at: this.#now() };
     return value;
+  }
+
+  /** Use settings another service saved to the same store (multi-channel fan-out). */
+  primeSettings(value: NotificationSettings): void {
+    this.#settingsCache = { value, at: this.#now() };
+  }
+
+  /** The channel this service delivers through. */
+  get channelId(): string {
+    return this.#channel.id;
   }
 
   /** Validate and store the owner's settings (400 on invalid input). */
@@ -263,15 +277,32 @@ export class NotificationService {
       cancelled.push(item.logId);
       return false;
     });
+    // Still queued for delivery: drop it rather than send and take back.
+    let dropped = false;
+    for (let i = this.#queue.length - 1; i >= 0; i--) {
+      const delivery = this.#queue[i]!;
+      if (delivery.tag !== dedupeKey) continue;
+      this.#queue.splice(i, 1);
+      cancelled.push(...delivery.logIds);
+      dropped = true;
+    }
     if (cancelled.length > 0) {
       void this.#log
         .update(cancelled, { status: "cancelled" })
         .catch((error: unknown) => logger.warn({ error }, "notification log update failed"));
     }
+    // Already sent (or on its way): take it back from the device.
+    if (this.#dispatched.delete(dedupeKey) && !dropped && this.#channel.dismiss) {
+      void this.#channel
+        .dismiss(dedupeKey)
+        .catch((error: unknown) => logger.warn({ error }, "notification dismiss failed"));
+    }
   }
 
   async #accept(n: Notification, now: number, windowMs: number): Promise<void> {
     const settings = await this.getSettings();
+    // The owner switched this channel off: nothing to log, nothing to send.
+    if (settings.channels[this.#channel.id] === false) return;
     const def = this.#events.get(n.event);
     const enabled = def?.locked || (settings.events[n.event] ?? def?.defaultEnabled ?? true);
     const row = {
@@ -289,7 +320,9 @@ export class NotificationService {
       return;
     }
     // Replays after a restart: the log remembers what this process forgot.
-    if (await this.#log.hasRecent(n.dedupeKey, new Date(now - windowMs))) return;
+    if (await this.#log.hasRecent(n.dedupeKey, new Date(now - windowMs), this.#channel.id)) {
+      return;
+    }
 
     const blocked = this.#blockedReason(now);
     if (blocked) {
@@ -425,10 +458,19 @@ export class NotificationService {
     const ttlSeconds = ttls.every((ttl) => ttl !== undefined)
       ? Math.max(...(ttls as number[]))
       : undefined;
+    // One notification keeps its tag and buttons; a batch is a summary, tagged by its batch.
+    const single = items.length === 1 && !summary;
+    const tag = single
+      ? (first.n.tag ?? first.n.dedupeKey)
+      : summary
+        ? `digest:${first.logId}`
+        : `batch:${first.n.coalesce?.key ?? first.logId}`;
+    if (single) this.#dispatched.set(tag, now);
     this.#enqueue({
       logIds,
       botId,
       attempts: 0,
+      ...(single ? { tag } : {}),
       message: {
         title,
         message,
@@ -436,6 +478,12 @@ export class NotificationService {
         priority: maxPriority(items),
         ttlSeconds,
         device: settings.device || undefined,
+        id: first.logId,
+        tag,
+        event: single ? first.n.event : summary ? "notify.digest" : first.n.event,
+        category: first.n.category,
+        ...(path ? { path } : {}),
+        ...(single && first.n.actions ? { actions: first.n.actions } : {}),
       },
     });
   }
@@ -673,6 +721,11 @@ export class NotificationService {
       ...this.#link("/settings", "Open settings"),
       priority: 0,
       device: settings.device || undefined,
+      id: logId,
+      tag: `test:${now}`,
+      event: "notify.test",
+      category: "system",
+      path: "/settings",
     });
     if (result.ok) {
       this.#onSent(result);
@@ -745,17 +798,107 @@ export class NotificationService {
     for (const [key, at] of this.#cancelled) {
       if (now - at >= 60 * 60_000) this.#cancelled.delete(key);
     }
+    for (const [tag, at] of this.#dispatched) {
+      if (now - at >= DEFAULT_DEDUPE_SECONDS * 1000) this.#dispatched.delete(tag);
+    }
   }
 }
 
-/** The app's notification service: Pushover with credentials from the environment. */
-export const notificationService = new NotificationService({
-  channel: createPushoverChannel({
-    token: () => env.PUSHOVER_API_TOKEN,
-    user: () => env.PUSHOVER_USER_KEY,
+/**
+ * Every channel at once: each notification goes through each channel's own
+ * pipeline (its dedupe, throttle, retries and log row), with one set of
+ * settings and events. The first channel (Pushover) answers the status,
+ * validate and test routes; other channels bring their own.
+ */
+export class NotificationHub {
+  readonly primary: NotificationService;
+  readonly #services: NotificationService[];
+
+  constructor(primary: NotificationService) {
+    this.primary = primary;
+    this.#services = [primary];
+  }
+
+  /** Add a channel's pipeline; returns a function that removes it again. */
+  add(service: NotificationService): () => void {
+    for (const def of this.primary.events()) service.defineEvents([def]);
+    this.#services.push(service);
+    return () => {
+      const at = this.#services.indexOf(service);
+      if (at > 0) this.#services.splice(at, 1);
+    };
+  }
+
+  /** The pipeline of channel `id`. */
+  channel(id: string): NotificationService | undefined {
+    return this.#services.find((service) => service.channelId === id);
+  }
+
+  notify(n: Notification): void {
+    for (const service of this.#services) service.notify(n);
+  }
+
+  cancel(dedupeKey: string): void {
+    for (const service of this.#services) service.cancel(dedupeKey);
+  }
+
+  defineEvents(defs: readonly NotificationEventDef[]): void {
+    for (const service of this.#services) service.defineEvents(defs);
+  }
+
+  events(): NotificationEventDef[] {
+    return this.primary.events();
+  }
+
+  getSettings(): Promise<NotificationSettings> {
+    return this.primary.getSettings();
+  }
+
+  async saveSettings(input: unknown): Promise<NotificationSettings> {
+    const value = await this.primary.saveSettings(input);
+    for (const service of this.#services)
+      if (service !== this.primary) service.primeSettings(value);
+    return value;
+  }
+
+  status(): NotificationStatus {
+    return this.primary.status();
+  }
+
+  validate(): Promise<NotificationStatus> {
+    return this.primary.validate();
+  }
+
+  sendTest(): Promise<TestResult> {
+    return this.primary.sendTest();
+  }
+
+  recent(limit = 50) {
+    return this.primary.recent(limit);
+  }
+
+  start(): void {
+    for (const service of this.#services) service.start();
+  }
+
+  stop(): void {
+    for (const service of this.#services) service.stop();
+  }
+}
+
+/**
+ * The app's notifications: Pushover with credentials from the environment,
+ * plus whatever channels the app adds (Web Push, issue #306).
+ */
+export const notificationService = new NotificationHub(
+  new NotificationService({
+    channel: createPushoverChannel({
+      token: () => env.PUSHOVER_API_TOKEN,
+      user: () => env.PUSHOVER_USER_KEY,
+    }),
+    log: createDbLogStore(),
+    settings: createKvSettingsStore(),
+    origin: () => env.ORIGIN,
+    requiredEnv: ["PUSHOVER_API_TOKEN", "PUSHOVER_USER_KEY"],
   }),
-  log: createDbLogStore(),
-  settings: createKvSettingsStore(),
-  origin: () => env.ORIGIN,
-  requiredEnv: ["PUSHOVER_API_TOKEN", "PUSHOVER_USER_KEY"],
-});
+);
