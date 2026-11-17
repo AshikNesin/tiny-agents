@@ -149,6 +149,52 @@ export interface ReviewCommentInput {
 
 export type ReviewEvent = "COMMENT" | "APPROVE" | "REQUEST_CHANGES";
 
+/** An open PR in the viewer's review inbox, and why it is there. */
+export interface InboxPull {
+  /** `requested`: asks for the viewer's review; `reviewed`: the viewer reviewed it; `authored`: theirs. */
+  reason: "requested" | "reviewed" | "authored";
+  repo: RepoRef;
+  number: number;
+  title: string;
+  url: string;
+  author: string;
+  draft: boolean;
+  updatedAt: string;
+  headSha: string;
+  /** GitHub's verdict from the reviews so far. */
+  decision: "approved" | "changes_requested" | "review_required" | null;
+  /** The viewer's last review: when, and on which commit. */
+  lastReview: { at: string; commit: string | null } | null;
+}
+
+const INBOX_PULL = `fragment InboxPull on PullRequest {
+  number title url isDraft updatedAt headRefOid reviewDecision
+  repository { owner { login } name }
+  author { login }
+  reviews(author: $login, last: 1) { nodes { submittedAt commit { oid } } }
+}`;
+
+/** The three searches, most recently updated first, in one query. */
+const INBOX_QUERY = `query ReviewInbox($login: String!) {
+  requested: search(query: "is:open is:pr archived:false review-requested:@me sort:updated-desc", type: ISSUE, first: 50) { nodes { ...InboxPull } }
+  reviewed: search(query: "is:open is:pr archived:false reviewed-by:@me -author:@me sort:updated-desc", type: ISSUE, first: 50) { nodes { ...InboxPull } }
+  authored: search(query: "is:open is:pr archived:false author:@me sort:updated-desc", type: ISSUE, first: 50) { nodes { ...InboxPull } }
+}
+${INBOX_PULL}`;
+
+interface RawInboxPull {
+  number: number;
+  title: string;
+  url: string;
+  isDraft: boolean;
+  updatedAt: string;
+  headRefOid: string;
+  reviewDecision: "APPROVED" | "CHANGES_REQUESTED" | "REVIEW_REQUIRED" | null;
+  repository: { owner: { login: string }; name: string };
+  author: { login: string } | null;
+  reviews: { nodes: Array<{ submittedAt: string | null; commit: { oid: string } | null }> };
+}
+
 export interface GitHubClient {
   readonly transport: GitHubApi["kind"];
   /** Who the credential acts as. */
@@ -168,6 +214,12 @@ export interface GitHubClient {
   replyToThread(threadId: string, body: string): Promise<{ databaseId: number | null }>;
   resolveThread(threadId: string): Promise<void>;
   comment(repo: RepoRef, number: number, body: string): Promise<{ databaseId: number }>;
+  /**
+   * The viewer's review inbox across every repository the credential sees:
+   * open PRs asking for their review, ones they reviewed, and their own. A
+   * PR in more than one is listed once, by the first reason.
+   */
+  reviewInbox(): Promise<InboxPull[]>;
   /** Submit a review with its line comments in one go, pinned to `commitId`. */
   submitReview(
     repo: RepoRef,
@@ -473,6 +525,47 @@ export function createGitHubClient(api: GitHubApi): GitHubClient {
     async viewer() {
       const data = await api.graphql<{ viewer: { login: string } }>(`query { viewer { login } }`);
       return { login: data.viewer.login };
+    },
+    async reviewInbox() {
+      const { viewer } = await api.graphql<{ viewer: { login: string } }>(
+        `query { viewer { login } }`,
+      );
+      const login = viewer.login;
+      const data = await api.graphql<
+        Record<
+          "requested" | "reviewed" | "authored",
+          { nodes: Array<RawInboxPull | Record<string, never>> }
+        >
+      >(INBOX_QUERY, { login });
+      const seen = new Set<string>();
+      const out: InboxPull[] = [];
+      for (const reason of ["requested", "reviewed", "authored"] as const) {
+        for (const node of data[reason].nodes) {
+          if (!("number" in node)) continue;
+          const key = `${node.repository.owner.login}/${node.repository.name}#${node.number}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          const last = node.reviews.nodes[0];
+          out.push({
+            reason,
+            repo: { owner: node.repository.owner.login, name: node.repository.name },
+            number: node.number,
+            title: node.title,
+            url: node.url,
+            author: node.author?.login ?? "ghost",
+            draft: node.isDraft,
+            updatedAt: node.updatedAt,
+            headSha: node.headRefOid,
+            decision: node.reviewDecision
+              ? (node.reviewDecision.toLowerCase() as InboxPull["decision"])
+              : null,
+            lastReview: last?.submittedAt
+              ? { at: last.submittedAt, commit: last.commit?.oid ?? null }
+              : null,
+          });
+        }
+      }
+      return out;
     },
     async repository(repo) {
       const data = await api.graphql<{

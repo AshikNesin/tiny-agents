@@ -286,6 +286,73 @@ describe("a check that ran more than once", () => {
   });
 });
 
+describe("the review inbox", () => {
+  const node = (number: number, extra: Record<string, unknown> = {}) => ({
+    number,
+    title: `PR ${number}`,
+    url: `https://github.com/acme/web/pull/${number}`,
+    isDraft: false,
+    updatedAt: "2026-11-17T09:00:00Z",
+    headRefOid: `head${number}`,
+    reviewDecision: "REVIEW_REQUIRED",
+    repository: { owner: { login: "acme" }, name: "web" },
+    author: { login: "maria" },
+    reviews: { nodes: [] },
+    ...extra,
+  });
+
+  it("asks for the viewer's own reviews, and lists each PR once by its first reason", async () => {
+    const fake = fakeFetch((_method, _path, body) => {
+      const { query } = body as { query: string };
+      if (!query.includes("ReviewInbox")) return json({ data: { viewer: { login: "ashik" } } });
+      return json({
+        data: {
+          requested: { nodes: [node(1)] },
+          reviewed: {
+            nodes: [
+              node(1),
+              node(2, {
+                reviewDecision: "CHANGES_REQUESTED",
+                reviews: {
+                  nodes: [{ submittedAt: "2026-11-16T08:00:00Z", commit: { oid: "old2" } }],
+                },
+              }),
+              {},
+            ],
+          },
+          authored: { nodes: [node(3, { author: { login: "ashik" }, isDraft: true })] },
+        },
+      });
+    });
+    const client = createGitHubClient(
+      createHttpsTransport({ token: async () => "t0ken", fetch: fake.impl }),
+    );
+
+    const inbox = await client.reviewInbox();
+
+    expect((fake.calls[1]?.body as { variables: unknown }).variables).toEqual({ login: "ashik" });
+    expect(inbox.map((p) => [p.reason, p.number])).toEqual([
+      ["requested", 1],
+      ["reviewed", 2],
+      ["authored", 3],
+    ]);
+    expect(inbox[1]).toEqual({
+      reason: "reviewed",
+      repo: { owner: "acme", name: "web" },
+      number: 2,
+      title: "PR 2",
+      url: "https://github.com/acme/web/pull/2",
+      author: "maria",
+      draft: false,
+      updatedAt: "2026-11-17T09:00:00Z",
+      headSha: "head2",
+      decision: "changes_requested",
+      lastReview: { at: "2026-11-16T08:00:00Z", commit: "old2" },
+    });
+    expect(inbox[2]?.draft).toBe(true);
+  });
+});
+
 describe("submitting a review", () => {
   it("sends its line comments with GitHub's sides, a range as start_line and line", async () => {
     const fake = fakeFetch(() =>

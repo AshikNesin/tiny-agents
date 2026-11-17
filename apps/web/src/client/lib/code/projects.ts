@@ -13,6 +13,7 @@ import type {
   ProjectCreateBody,
   ProjectUpdateBody,
   ProjectView,
+  InboxPullView,
   PullReviewView,
   PullThreadsView,
   ReviewDraft,
@@ -101,6 +102,8 @@ export const projectsApi = {
 /** PR reviews (issue #345): any PR of a project's repository, with an assistant scoped to it. */
 export const reviewsApi = {
   list: () => apiClient.get<PullReviewView[]>(`${base}/reviews`),
+  /** The owner's review inbox from GitHub, across every repository. */
+  inbox: () => apiClient.get<InboxPullView[]>(`${base}/reviews/inbox`),
   /** Open (or reopen) a review: `pr` is the PR's URL or `owner/name#123`. */
   open: (pr: string) => apiClient.post<PullReviewView>(`${base}/reviews`, { pr }),
   get: (id: string) => apiClient.get<PullReviewView>(`${base}/reviews/${encodeURIComponent(id)}`),

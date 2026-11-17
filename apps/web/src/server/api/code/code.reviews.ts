@@ -41,6 +41,7 @@ import {
   type CodeProjectRow,
 } from "../../db";
 import type {
+  InboxPullView,
   PullReviewView,
   PullThreadsView,
   ReviewDraft,
@@ -427,4 +428,57 @@ export async function resolveReviewThread(id: string, threadId: string) {
   const { project } = await findReview(id);
   const github = await codeGitHub().client(project);
   await github.resolveThread(threadId);
+}
+
+// --- the review inbox ----------------------------------------------------------------------------
+
+/**
+ * The owner's review inbox from GitHub, across every repository their
+ * credential sees (one query, no model): what asks for their review, what
+ * changed since they reviewed, what waits on its author, and their own.
+ * Each says whether its repository is a project, and its open review here.
+ */
+export async function reviewInbox(): Promise<InboxPullView[]> {
+  const github = await codeGitHub().client();
+  let pulls;
+  try {
+    pulls = await github.reviewInbox();
+  } catch (error) {
+    throw Boom.badRequest(
+      `Cannot read your review requests on GitHub: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  const [projects, open] = await Promise.all([
+    db.select().from(codeProjects),
+    db.select().from(codeReviews).where(isNull(codeReviews.archivedAt)),
+  ]);
+  const projectOf = new Map(
+    projects.map((p) => [`${p.repoOwner}/${p.repoName}`.toLowerCase(), p.id]),
+  );
+  const reviewOf = new Map(open.map((r) => [`${r.projectId}#${r.number}`, r.id]));
+  return pulls.map((pr) => {
+    const projectId = projectOf.get(repoSlug(pr.repo).toLowerCase()) ?? null;
+    const section: InboxPullView["section"] =
+      pr.reason === "requested"
+        ? "needs"
+        : pr.reason === "authored"
+          ? "mine"
+          : pr.lastReview?.commit && pr.lastReview.commit !== pr.headSha
+            ? "updated"
+            : "waiting";
+    return {
+      section,
+      repo: repoSlug(pr.repo),
+      number: pr.number,
+      title: pr.title,
+      url: pr.url,
+      author: pr.author,
+      draft: pr.draft,
+      updatedAt: pr.updatedAt,
+      decision: pr.decision,
+      lastReviewAt: pr.lastReview?.at ?? null,
+      projectId,
+      reviewId: projectId ? (reviewOf.get(`${projectId}#${pr.number}`) ?? null) : null,
+    };
+  });
 }

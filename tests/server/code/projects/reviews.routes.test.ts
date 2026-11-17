@@ -15,6 +15,7 @@ import { installAppForTests } from "../../../../apps/web/src/server/app-root";
 import { createCodeHub, setCodeHub } from "../../../../apps/web/src/server/api/code/code.hub";
 import { createWorkspace } from "../../../../apps/web/src/server/api/code/code.workspace";
 import type {
+  InboxPullView,
   ProjectView,
   PullReviewView,
   PullThreadsView,
@@ -545,5 +546,64 @@ describe("the PR's conversations on GitHub", () => {
 
     expect(res.status).toBe(400);
     expect(github.replies).toEqual([]);
+  });
+});
+
+describe("the review inbox", () => {
+  const pull = (number: number, over: Partial<FakeGitHub["inbox"][number]> = {}) => ({
+    reason: "requested" as const,
+    repo: { owner: "acme", name: "web" },
+    number,
+    title: `PR ${number}`,
+    url: `https://github.com/acme/web/pull/${number}`,
+    author: "maria",
+    draft: false,
+    updatedAt: "2026-11-17T09:00:00Z",
+    headSha: `head${number}`,
+    decision: null,
+    lastReview: null,
+    ...over,
+  });
+
+  it("sorts GitHub's PRs into needs review, updated since your review, waiting and yours", async () => {
+    const project = await newProject();
+    await forkPull([`printf 'x\\n' > src/x.ts`]);
+    const review = (await call<PullReviewView>("POST", "/reviews", { pr: "acme/web#7" })).body
+      .data!;
+    github.inbox = [
+      pull(7),
+      pull(8, {
+        reason: "reviewed",
+        lastReview: { at: "2026-11-16T08:00:00Z", commit: "older" },
+      }),
+      pull(9, { reason: "reviewed", lastReview: { at: "2026-11-16T08:00:00Z", commit: "head9" } }),
+      pull(4, { reason: "authored", repo: { owner: "other", name: "lib" }, author: "ashik" }),
+    ];
+
+    const res = await call<InboxPullView[]>("GET", "/reviews/inbox");
+
+    expect(res.status).toBe(200);
+    expect(
+      res.body.data!.map((p) => [p.section, p.repo, p.number, p.projectId, p.reviewId]),
+    ).toEqual([
+      ["needs", "acme/web", 7, project.id, review.id],
+      ["updated", "acme/web", 8, project.id, null],
+      ["waiting", "acme/web", 9, project.id, null],
+      ["mine", "other/lib", 4, null, null],
+    ]);
+    expect(res.body.data![1]?.lastReviewAt).toBe("2026-11-16T08:00:00Z");
+  });
+
+  it("says when GitHub cannot be read", async () => {
+    github.reviewInbox = async () => {
+      throw new Error("Bad credentials");
+    };
+
+    const res = await call("GET", "/reviews/inbox");
+
+    expect(res.status).toBe(400);
+    expect(res.body.error?.message).toBe(
+      "Cannot read your review requests on GitHub: Bad credentials",
+    );
   });
 });

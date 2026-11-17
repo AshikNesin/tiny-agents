@@ -127,6 +127,40 @@ await journey(
           ? route.fulfill({ ...ok(review), status: 201 })
           : route.fulfill(ok([review])),
       );
+      await context.route("**/api/v1/code/reviews/inbox", (route) =>
+        route.fulfill(
+          ok([
+            {
+              section: "needs",
+              repo: review.repo,
+              number: review.number,
+              title: review.title,
+              url: review.url,
+              author: review.author,
+              draft: false,
+              updatedAt: review.updatedAt,
+              decision: "review_required",
+              lastReviewAt: null,
+              projectId: review.projectId,
+              reviewId: null,
+            },
+            {
+              section: "mine",
+              repo: "acme/web",
+              number: 77,
+              title: "Dark mode toggle",
+              url: "https://github.com/acme/web/pull/77",
+              author: "demo",
+              draft: true,
+              updatedAt: review.updatedAt,
+              decision: null,
+              lastReviewAt: null,
+              projectId: null,
+              reviewId: null,
+            },
+          ]),
+        ),
+      );
       await context.route(`**/api/v1/code/reviews/${review.id}`, (route) =>
         route.fulfill(ok(review)),
       );
@@ -214,6 +248,12 @@ await journey(
         await expect(page).toHaveURL(/\/code\/reviews$/);
         await expect(page.getByRole("list", { name: "Open reviews" })).toContainText(
           "Retry webhooks with backoff",
+        );
+        await expect(page.getByRole("region", { name: "Needs your review" })).toContainText(
+          "Retry webhooks with backoff",
+        );
+        await expect(page.getByRole("region", { name: "Your pull requests" })).toContainText(
+          "Draft",
         );
       },
     );

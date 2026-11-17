@@ -263,6 +263,29 @@ export interface PullThreadsView {
   threads: PullThreadView[];
 }
 
+/**
+ * One open PR in the owner's review inbox (`GET /code/reviews/inbox`):
+ * `needs` asks for their review; `updated` has commits since their last
+ * review; `waiting` is on the author since it; `mine` is their own.
+ */
+export interface InboxPullView {
+  section: "needs" | "updated" | "waiting" | "mine";
+  /** `owner/name`. */
+  repo: string;
+  number: number;
+  title: string;
+  url: string;
+  author: string;
+  draft: boolean;
+  updatedAt: string;
+  decision: "approved" | "changes_requested" | "review_required" | null;
+  lastReviewAt: string | null;
+  /** Its repository's project, when it is one (a review needs one). */
+  projectId: string | null;
+  /** The open review of it here, if any. */
+  reviewId: string | null;
+}
+
 /** How a PR review is submitted on GitHub. */
 export type ReviewVerdict = "COMMENT" | "APPROVE" | "REQUEST_CHANGES";
 
