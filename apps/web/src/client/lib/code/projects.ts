@@ -13,6 +13,7 @@ import type {
   ProjectCreateBody,
   ProjectUpdateBody,
   ProjectView,
+  PullReviewView,
   ReviewDraft,
   ReviewDraftBody,
   ReviewFile,
@@ -94,6 +95,23 @@ export const projectsApi = {
     apiClient.delete(`${thread(id)}/review/drafts/${encodeURIComponent(draftId)}`),
   sendDrafts: (id: string) => apiClient.post<{ sent: number }>(`${thread(id)}/review/send`),
 };
+
+/** PR reviews (issue #345): any PR of a project's repository, with an assistant scoped to it. */
+export const reviewsApi = {
+  list: () => apiClient.get<PullReviewView[]>(`${base}/reviews`),
+  /** Open (or reopen) a review: `pr` is the PR's URL or `owner/name#123`. */
+  open: (pr: string) => apiClient.post<PullReviewView>(`${base}/reviews`, { pr }),
+  get: (id: string) => apiClient.get<PullReviewView>(`${base}/reviews/${encodeURIComponent(id)}`),
+  /** A question for the assistant: the first starts it, with the PR card and waiting comments. */
+  ask: (id: string, message: string) =>
+    apiClient.post<{ threadId: string }>(`${base}/reviews/${encodeURIComponent(id)}/ask`, {
+      message,
+    }),
+  archive: (id: string) => apiClient.post(`${base}/reviews/${encodeURIComponent(id)}/archive`),
+};
+
+/** The page of a review. */
+export const reviewPath = (id: string) => `/code/reviews/${encodeURIComponent(id)}`;
 
 /** The owner's projects; `null` while loading or when they are not the owner's to see. */
 export function useProjects(): {

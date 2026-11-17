@@ -9,6 +9,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vite-plus/test";
 import { TranscriptRow } from "@/pages/code/Transcript";
+import { reviewCard } from "../../../apps/web/src/shared/code-messages";
 
 const row = (text: string) => (
   <TranscriptRow
@@ -45,6 +46,29 @@ describe("a project thread's first message", () => {
     );
     expect(screen.getByLabelText("Branch")).toHaveTextContent("setup script failed");
     expect(screen.getByText("Fix the login redirect")).toBeInTheDocument();
+  });
+});
+
+describe("a PR review assistant's first message", () => {
+  it("shows which PR it reviews and the owner's question, not the PR card", () => {
+    const card = reviewCard({
+      repo: "acme/web",
+      number: 7,
+      title: "Retry webhooks with backoff",
+      author: "maria",
+      headRef: "maria:retry",
+      baseRef: "main",
+      headSha: "0123456789abcdef0123",
+      body: "Retries failed webhooks.",
+      files: [
+        { path: "src/a.ts", status: "modified", additions: 1, deletions: 1, isGenerated: false },
+      ],
+    });
+    render(row(`${card}\n\nIs this safe to merge?`));
+    expect(screen.getByText("Is this safe to merge?")).toBeInTheDocument();
+    expect(screen.getByLabelText("Pull request")).toHaveTextContent("Reviewing acme/web#7");
+    expect(screen.queryByText(/Retry webhooks/)).toBeNull();
+    expect(screen.queryByText(/src\/a\.ts/)).toBeNull();
   });
 });
 

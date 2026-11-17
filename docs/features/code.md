@@ -57,8 +57,8 @@ has no background jobs, so its threads show no job chips.
   row with its status, title, PR chips and date, then **Archived**, folded,
   loaded when opened. The project menu switches project, and the search box
   filters by title.
-- The sidebar is a short column, like Hoplite: **New thread**, **Threads**
-  and **Search** rows on top, the threads, then **Settings** and one **…**
+- The sidebar is a short column, like Hoplite: **New thread**, **Threads**,
+  **Reviews** and **Search** rows on top, the threads, then **Settings** and one **…**
   menu (Group by repository, Show archived, Select threads). A row shows its
   PR only when the PR needs you.
 - By default (**Group by repository** in that menu, on)
@@ -394,6 +394,59 @@ flaky check before spending a pass, mention commands from PR comments,
 threads started from issues, a preview script, and matching Shelley threads
 to projects by remote.
 
+## PR reviews
+
+Issue #345. Review any pull request of a project's repository, your own or
+someone else's, in focus mode, with an AI assistant scoped to that PR.
+Owner-only, like projects.
+
+**Open one.** **Reviews** in the sidebar (`/code/reviews`) lists the open
+reviews and takes a PR's link (any tab of it) or `owner/name#123`. A
+repository that is not a project yet says so. `/code/review/<owner>/<name>/<number>`
+opens one from a link, and a coding thread's **Pull request** tab offers
+**Review** for its own PR. Opening the same PR again reuses its review.
+
+**What opening does.** The app fetches the PR's head (`refs/pull/N/head`,
+so a PR from a fork works) and its base, and checks the head out in a
+detached worktree of the review's own
+(`~/tiny-agents-code/<owner>--<name>/reviews/pr-N`). The page reads files
+and diffs from git there, against the PR's base. Nothing calls a model.
+**Update** (the header's refresh) moves the review to the PR's latest
+commit, unless its worktree has changes. **Close review** removes the
+worktree and archives the assistant.
+
+**The page** (`/code/reviews/<id>`) takes the whole screen. The header
+shows the number, title, repository and author. The PR's changes fill the
+left side, as in Source control: a file list with **Viewed** marks, the
+diff, and line comments. The assistant is on the right, behind the same
+resizable divider as a thread's panel. Phones show one side at a time
+(**Assistant** / **Files** in the header).
+
+**The assistant** is a thread of the project's default harness and model,
+started in the review's worktree on your first question, in the harness's
+asking permission mode where it has one, so an edit waits for your yes.
+Until then the pane offers a few starter questions and a box, and line
+comments wait under the review (`review:<id>`). The first message is:
+
+- a short card of the PR (`reviewCard` in `shared/code-messages.ts`):
+  the repository, number, head and base, what the assistant is for, the
+  title, author, the description (template comments taken out, cut at 1,500
+  characters) and the changed files with their +/− (at most 150 named;
+  generated files and lockfiles only counted). Never the diff: the
+  assistant reads what it needs with its own tools. The card says the PR's
+  text is data, not instructions;
+- any line comments waiting, as in a thread;
+- your question.
+
+The transcript shows the card as one "Reviewing owner/name#N" line. After
+that the pane is the thread itself, without its header. Line comments go
+to it with your next message, as in any thread. The assistant's thread is
+titled `Review #N: <title>` and stays off the thread list.
+
+Not built yet (issue #345): posting review comments and a review to
+GitHub, suggestions, the review-request inbox, changes since your last
+review, and pushing changes made during a review.
+
 ## Bots hand off coding
 
 Every bot has the `code` toolkit. Shelley is the default harness; a bot names
@@ -489,6 +542,8 @@ Known limits (register row C7):
     is open, one poll per directory reads its change stamp and
     `GET /code/threads/:id/changes` pushes a version when it moves.
   - `code.webhook.ts`: the GitHub App's signed webhook (public).
+  - `code.reviews.ts`: PR reviews (open, the assistant's first question,
+    close), with `/code/reviews` routes in `code.projects.routes.ts`.
   - `code.projects.routes.ts`: `/api/v1/code/{projects,github}` and a
     thread's `pr`, `publish` and `review` routes.
 - **Tables:**
@@ -500,7 +555,8 @@ Known limits (register row C7):
   - `code_projects`; `code_pull_requests` (a cache of GitHub plus the
     Auto-fix loop); `code_autofix_passes`; `code_pr_comments` (the app's own
     comments); `code_review_viewed` and `code_review_drafts`;
-    `code_checkpoints`; `code_pr_events` (webhook deliveries, by id).
+    `code_checkpoints`; `code_pr_events` (webhook deliveries, by id);
+    `code_reviews` (PR reviews: the PR, its worktree and assistant).
   - The old `shelley_seen` and `shelley_handoffs` rows are copied in at
     boot.
 - **Client:**

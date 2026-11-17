@@ -17,12 +17,15 @@ export function PendingComments({
   threadId,
   enabled = true,
   onShow,
+  sendNow: canSendNow = true,
 }: {
   threadId: string;
   /** False for a guest, who has no saved comments. */
   enabled?: boolean;
   /** Open the diff the comments are on. */
   onShow?(): void;
+  /** Offer Send now (not before there is an agent to send them to). */
+  sendNow?: boolean;
 }) {
   const comments = useThreadComments(threadId, enabled);
   const remove = useCommentStore((s) => s.remove);
@@ -68,10 +71,12 @@ export function PendingComments({
         >
           <ChevronDown className={cn("transition-transform", open && "rotate-180")} />
         </Button>
-        <Button size="xs" variant="outline" onClick={() => void sendNow()} disabled={sending}>
-          {sending ? <Spinner className="size-3" /> : <Send />}
-          Send now
-        </Button>
+        {canSendNow && (
+          <Button size="xs" variant="outline" onClick={() => void sendNow()} disabled={sending}>
+            {sending ? <Spinner className="size-3" /> : <Send />}
+            Send now
+          </Button>
+        )}
       </div>
       {open && (
         <ul className="border-border max-h-48 space-y-0.5 overflow-y-auto border-t px-1.5 py-1.5">

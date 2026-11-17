@@ -22,6 +22,7 @@ import {
   MoreHorizontal,
   Pencil,
   RefreshCw,
+  ScanEye,
   Upload,
   Wrench,
   X,
@@ -87,12 +88,15 @@ export function PullPanel({
   threadId,
   refreshKey,
   onAttach,
+  onReview,
 }: {
   threadId: string;
   /** Changes when the thread's turn ends, to re-read. */
   refreshKey: unknown;
   /** Put text in the composer. */
   onAttach(text: string): void;
+  /** Open this PR in review mode (issue #345). */
+  onReview?: (url: string) => Promise<void>;
 }) {
   const { view, error, setView, reload } = useThreadPulls(threadId, { refreshKey, live: true });
   const [busy, setBusy] = useState<string | null>(null);
@@ -142,6 +146,7 @@ export function PullPanel({
               <span className="font-medium">Pull request</span>
             )}
             <span className="flex-1" />
+            {pr && onReview && <ReviewButton onOpen={() => onReview(pr.url)} />}
             <Button
               variant="ghost"
               size="icon-xs"
@@ -668,5 +673,28 @@ function Description({
         <p className="text-muted-foreground text-sm">No description.</p>
       )}
     </section>
+  );
+}
+
+/** Review the thread's own PR in review mode (issue #345), with a fresh assistant. */
+function ReviewButton({ onOpen }: { onOpen(): Promise<void> }) {
+  const [opening, setOpening] = useState(false);
+  return (
+    <Button
+      variant="ghost"
+      size="xs"
+      disabled={opening}
+      title="Review this PR with an assistant that did not write it"
+      className="text-muted-foreground"
+      onClick={() => {
+        setOpening(true);
+        onOpen()
+          .catch((error: unknown) => toast.error(errorMessage(error, "Could not open the review.")))
+          .finally(() => setOpening(false));
+      }}
+    >
+      {opening ? <Spinner className="size-3" /> : <ScanEye />}
+      Review
+    </Button>
   );
 }

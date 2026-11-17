@@ -18,6 +18,7 @@ import {
   CircleX,
   Copy,
   GitBranch,
+  GitPullRequest,
   GitFork,
   Info,
   ListChecks,
@@ -75,7 +76,11 @@ import {
   type WorkFold,
 } from "../../lib/code/transcript";
 import { parseReviewMessage, type SentComment } from "../../lib/code/comments";
-import { parseAutofixRequest, splitProjectPreamble } from "../../../shared/code-messages";
+import {
+  parseAutofixRequest,
+  splitProjectPreamble,
+  splitReviewCard,
+} from "../../../shared/code-messages";
 import { formatDuration } from "../../lib/code/format";
 import { PatchView, diffStats } from "./UnifiedDiff";
 
@@ -723,9 +728,25 @@ function RequestRow({
  */
 function UserText({ text: sent }: { text: string }) {
   const project = splitProjectPreamble(sent);
-  const text = project ? project.message : sent;
+  // A PR review's assistant got the PR as a card: one line here, not the card.
+  const review = project ? null : splitReviewCard(sent);
+  const text = project ? project.message : review ? review.message : sent;
   return (
     <>
+      {review && (
+        <p
+          aria-label="Pull request"
+          className={cn("text-muted-foreground flex items-center gap-1.5 text-xs", monoClass)}
+        >
+          <GitPullRequest className="size-3.5 shrink-0" aria-hidden />
+          <span className="min-w-0 truncate">
+            Reviewing{" "}
+            <span className="text-foreground">
+              {review.repo}#{review.number}
+            </span>
+          </span>
+        </p>
+      )}
       {project && (
         <p
           aria-label="Branch"

@@ -17,6 +17,7 @@ import {
   ArrowLeft,
   Bot,
   ChevronRight,
+  GitPullRequest,
   MoreHorizontal,
   Plus,
   Rows3,
@@ -589,6 +590,10 @@ export function ConversationList({
         <Link to="/code/threads" data-testid="code-threads" className={navRow}>
           <Rows3 />
           Threads
+        </Link>
+        <Link to="/code/reviews" data-testid="code-reviews" className={navRow}>
+          <GitPullRequest />
+          Reviews
         </Link>
         {!searching && (
           <button

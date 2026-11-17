@@ -43,6 +43,8 @@ export interface ThreadSummary {
   projectId?: string | null;
   /** App-decorated: its open pull request and Auto-fix loop state. */
   pr?: { number: number; loop: string } | null;
+  /** App-decorated: the PR review it is the assistant of (issue #345). */
+  review?: { id: string; number: number } | null;
 }
 
 export interface ThreadSettings {
