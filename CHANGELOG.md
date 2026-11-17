@@ -399,3 +399,5 @@
   `CLAUDE_CODE_ENGINE_ENABLED` turns it off without redeploying the worker.
   See `docs/claude-subscription.md`. Boot now refuses an `sk-ant-oat` token
   in model-provider config.
+
+- Code page end to end test (throwaway, will be closed).
