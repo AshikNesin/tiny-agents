@@ -27,6 +27,8 @@ import type {
   UsageReport,
 } from "@tiny-agents/code/contracts";
 
+import type { NextPrompt } from "../../../shared/api/code";
+
 export type * from "@tiny-agents/code/contracts";
 export type { CodeListEvent, CodeThreadEvent };
 
@@ -112,6 +114,9 @@ export const codeApi = {
   fork: (id: string, at: string) =>
     apiClient.post<{ threadId: string }>(`${thread(id)}/fork`, { at }),
   usage: (id: string) => apiClient.get<UsageReport>(`${thread(id)}/usage`),
+  /** The likely next message once the turn whose newest row is `after` ended (one model call per turn). */
+  nextPrompt: (id: string, after: string) =>
+    apiClient.get<NextPrompt>(`${thread(id)}/next-prompt`, { after }),
 
   models: (instanceId: string) => apiClient.get<ModelOption[]>(`${harness(instanceId)}/models`),
   skills: (instanceId: string, cwd: string, threadId?: string) =>

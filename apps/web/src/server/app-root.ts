@@ -50,6 +50,8 @@ export interface App {
   chatTitler?: ChatTitler;
   /** Names a project thread's branch from its task (`setCodeBranchNamer`); unset in tests and faux mode. */
   codeBranchNamer?: CodeBranchNamer;
+  /** Next-prompt suggestions by thread and newest row, in flight too (`nextPrompt`); made on first use. */
+  codeNextPrompts?: Map<string, Promise<string | null>>;
   /** The sandbox's SSH connections, one per endpoint (`sandboxConnection`, ADR 0013). */
   sandboxConnections: Map<string, SandboxConnection>;
   /** The sandbox's pinned host keys, kept in KV (`sandbox-host.ts`). */

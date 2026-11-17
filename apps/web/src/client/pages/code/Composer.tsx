@@ -92,6 +92,8 @@ export interface ComposerProps {
   /** A quiet line under the composer when idle (keyboard hints while working). */
   hint?: string;
   submitLabel?: string;
+  /** The likely next message: the empty composer's placeholder, Tab (or Use) fills it, Esc dismisses. */
+  nextPrompt?: { text: string | null; dismiss(): void };
   onSend(
     message: string,
     options: { queue: boolean; skills: string[]; attachments: string[] },
@@ -111,6 +113,7 @@ export function Composer({
   onStop,
   hint,
   submitLabel,
+  nextPrompt,
   onSend,
 }: ComposerProps) {
   const reduceMotion = useReducedMotion() ?? false;
@@ -269,8 +272,33 @@ export function Composer({
     });
   };
 
+  // Offered only where the default placeholder would show.
+  const offered =
+    !working && !dragging && !hasContent(draft) && nextPrompt?.text ? nextPrompt.text : null;
+  const acceptOffered = () => {
+    if (!offered) return;
+    setDraft((current) => editText(current, offered));
+    requestAnimationFrame(() => {
+      area.current?.focus();
+      area.current?.setSelectionRange(offered.length, offered.length);
+    });
+  };
+
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.nativeEvent.isComposing) return;
+    if (offered && !text) {
+      const bare = !event.shiftKey && !event.altKey && !event.metaKey && !event.ctrlKey;
+      if (event.key === "Tab" && bare) {
+        event.preventDefault();
+        acceptOffered();
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        nextPrompt?.dismiss();
+        return;
+      }
+    }
     if (suggestions.length > 0) {
       if (event.key === "ArrowDown") {
         event.preventDefault();
@@ -415,7 +443,8 @@ export function Composer({
           placeholder={
             dragging
               ? "Drop files to attach them"
-              : (placeholder ??
+              : (offered ??
+                placeholder ??
                 (working
                   ? steers
                     ? `Steer ${name}: goes into the running turn`
@@ -544,6 +573,20 @@ export function Composer({
               <ListPlus />
             </Button>
           )}
+          {offered && (
+            // Touch has no Tab key: one quiet tap fills the suggestion in.
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground hidden shrink-0 rounded-full pointer-coarse:inline-flex"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={acceptOffered}
+              aria-label="Use the suggested message"
+              data-testid="code-next-prompt-use"
+            >
+              Use
+            </Button>
+          )}
           <Button
             size="icon"
             onMouseDown={(e) => e.preventDefault()}
@@ -587,7 +630,7 @@ export function Composer({
           </Button>
         </div>
       </div>
-      {(working || hint) && (
+      {(working || hint || offered) && (
         <p
           className="text-muted-foreground mt-1.5 truncate text-center text-[11px] leading-4 pointer-coarse:hidden"
           data-testid="code-composer-hint"
@@ -596,7 +639,9 @@ export function Composer({
             ? steers
               ? `Enter steers${canQueue ? " · Alt+Enter queues" : ""} · ⌘. stops`
               : "Enter queues for the end of this turn · ⌘. stops"
-            : hint}
+            : offered
+              ? "Tab uses the suggestion · Esc dismisses it"
+              : hint}
         </p>
       )}
     </div>

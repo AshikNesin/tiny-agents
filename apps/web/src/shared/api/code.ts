@@ -199,3 +199,8 @@ export interface CheckpointView {
   headSha: string;
   createdAt: string;
 }
+
+/** `GET /code/threads/:id/next-prompt`: the owner's likely next message, or null. */
+export interface NextPrompt {
+  text: string | null;
+}
