@@ -191,6 +191,7 @@ export {
   SKIP_REPLY,
 } from "./transcript";
 export type * from "./types";
+export { RUN_TOOL_CALL_LIMIT } from "./gate";
 // Image preparation re-exports (issue #17): apps/web must not import
 // pi-durable directly (PRD §7.2), so the Photon helpers flow through here.
 export { createNodePhotonImages } from "@earendil-works/pi-durable/images/node";

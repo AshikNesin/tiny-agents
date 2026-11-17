@@ -439,6 +439,47 @@ describe("answering Deliveries (failed replies)", () => {
   });
 });
 
+describe("answering Deliveries (run limits)", () => {
+  beforeEach(clearTables);
+  afterEach(clearTables);
+
+  it("tells the asking bot the target hit its tool-call limit, not just '(no reply)'", async () => {
+    const host = await seedBot("Host", "1");
+    const guest = await seedBot("Guest", "2");
+    await db.insert(botMessages).values({
+      fromBotId: host.id,
+      toBotId: guest.id,
+      conversationId: "2",
+      replyToBotId: host.id,
+      kind: "send",
+      requestId: "r-cap",
+      text: "crawl everything",
+      deliveredAt: new Date(),
+    });
+    const runtime = createFakeRuntime();
+    runtime.readChat.mockResolvedValue({
+      busy: false,
+      queued: [],
+      messages: [
+        { id: "e1", role: "user", text: "crawl", requestId: "r-cap", status: "done", createdAt: 1 },
+        {
+          id: "e2",
+          role: "assistant",
+          text: "",
+          status: "done",
+          createdAt: 2,
+          toolCalls: [{ id: "c", name: "web_fetch", args: {}, status: "error", limit: "runCap" }],
+        },
+      ],
+    });
+    expect(await createDeliveries(runtime).answer(2)).toBe(1);
+    const relayed = runtime.submit.mock.calls[0]![1] as { text: string };
+    expect(relayed.text).toBe(
+      "**Reply from Guest:** (couldn't finish: it made the most tool calls one reply may)",
+    );
+  });
+});
+
 describe("answering Deliveries (boot sweep)", () => {
   beforeEach(clearTables);
   afterEach(clearTables);

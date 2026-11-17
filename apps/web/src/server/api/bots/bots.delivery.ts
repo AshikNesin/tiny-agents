@@ -97,7 +97,11 @@ export function relayText(fromName: string, text: string): string {
 function answerText(reply: FinishedReply): string {
   if (reply.text) return sanitizePeerText(reply.text);
   // The provider's message stays out of another bot's transcript.
-  return reply.error !== undefined ? "(couldn't answer: the model failed)" : "(no reply)";
+  if (reply.error !== undefined) return "(couldn't answer: the model failed)";
+  if (reply.stoppedBy === "runCap")
+    return "(couldn't finish: it made the most tool calls one reply may)";
+  if (reply.stoppedBy === "budget") return "(couldn't finish: it used up its token budget)";
+  return "(no reply)";
 }
 
 /** What an interrupted Delivery relays as. */

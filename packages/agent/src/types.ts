@@ -56,6 +56,8 @@ export interface ChatToolCall {
    * `refused`: it would have asked in a conversation nobody watches.
    */
   approval?: "approved" | "denied" | "auto" | "yolo" | "refused";
+  /** The gate refused the call for a run limit: the token budget or the tool-call cap. */
+  limit?: RunLimit;
   /** Epoch ms after which a pending approval or credential request expires. */
   expiresAt?: number;
   /** Vault sinks: the item and target the approval card shows (never a value). */
@@ -295,7 +297,12 @@ export interface FinishedReply {
   refused?: string[];
   /** The reason this message's `report_routine_blocked` call gave (routine runs, issue #87). */
   blocked?: string;
+  /** The run limit the gate stopped the turn's tool calls on, newest in the turn. */
+  stoppedBy?: RunLimit;
 }
+
+/** A limit one run is held to (gate.ts): its token budget, or its tool-call cap. */
+export type RunLimit = "budget" | "runCap";
 
 /** Result of withdrawing a message by its request id (see `AgentRuntime.withdraw`). */
 export type WithdrawOutcome = "withdrawn" | "already_placed" | "settled" | "not_found";
