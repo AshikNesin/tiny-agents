@@ -16,7 +16,7 @@
             "timezone": "Asia/Kolkata",
             "urgentBypass": false
           },
-          "channels": {},
+          "deliverTo": "pushover",
           "device": "",
           "longRunMinutes": 5,
           "coalesceSeconds": 30,
