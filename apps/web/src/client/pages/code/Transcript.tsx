@@ -60,7 +60,12 @@ import {
   type ToolItem,
   type TranscriptItem,
 } from "../../lib/code/api";
-import { describeTools, type DisplayItem, type ToolGroup } from "../../lib/code/transcript";
+import {
+  describeTools,
+  type DisplayItem,
+  type ToolGroup,
+  type WorkFold,
+} from "../../lib/code/transcript";
 import { parseReviewMessage, type SentComment } from "../../lib/code/comments";
 import { PatchView, diffStats } from "./UnifiedDiff";
 
@@ -394,6 +399,54 @@ function ToolGroupRow({ group, ctx }: { group: ToolGroup; ctx: TranscriptContext
   );
 }
 
+/** A finished turn's work behind one quiet "Worked for 3m 34s" row (Amp, Hoplite). */
+function WorkFoldRow({
+  fold,
+  ctx,
+  actions,
+}: {
+  fold: WorkFold;
+  ctx: TranscriptContext;
+  actions: TranscriptActions;
+}) {
+  // Without a turn duration, say what the work was ("Ran 2 commands, edited 1 file").
+  const tools = fold.items.flatMap((item) =>
+    item.kind === "tool" ? [item] : item.kind === "tool-group" ? item.tools : [],
+  );
+  const label = [
+    fold.durationMs !== undefined
+      ? `Worked for ${formatDuration(fold.durationMs)}`
+      : tools.length > 0
+        ? describeTools(tools)
+        : "Worked",
+    fold.costUsd !== undefined ? formatCost(fold.costUsd) : undefined,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  return (
+    <Trace data-testid="code-work">
+      <TraceCollapsible>
+        <TraceCollapsibleTrigger>
+          <TraceLine className="text-xs">
+            <TraceTitle>{label}</TraceTitle>
+          </TraceLine>
+        </TraceCollapsibleTrigger>
+        <TraceCollapsibleContent className="border-border mt-1 flex flex-col gap-4 border-l pl-4">
+          {fold.items.map((item) => (
+            <TranscriptRow
+              key={item.id}
+              item={item}
+              ctx={ctx}
+              actions={actions}
+              isLastNotice={false}
+            />
+          ))}
+        </TraceCollapsibleContent>
+      </TraceCollapsible>
+    </Trace>
+  );
+}
+
 function Notice({
   item,
   actions,
@@ -556,7 +609,16 @@ function UserText({ text }: { text: string }) {
   if (!text) return null;
   const review = parseReviewMessage(text);
   if (!review) {
-    return <div className={cn(USER_PILL, "max-w-[85%] whitespace-pre-wrap")}>{text}</div>;
+    return (
+      <div
+        className={cn(
+          USER_PILL,
+          "max-w-[85%] rounded-xl text-sm leading-[22px] whitespace-pre-wrap",
+        )}
+      >
+        {text}
+      </div>
+    );
   }
   return (
     <>
@@ -569,7 +631,14 @@ function UserText({ text }: { text: string }) {
         ))}
       </div>
       {review.message && (
-        <div className={cn(USER_PILL, "max-w-[85%] whitespace-pre-wrap")}>{review.message}</div>
+        <div
+          className={cn(
+            USER_PILL,
+            "max-w-[85%] rounded-xl text-sm leading-[22px] whitespace-pre-wrap",
+          )}
+        >
+          {review.message}
+        </div>
       )}
     </>
   );
@@ -649,7 +718,7 @@ export function TranscriptRow({
       );
     case "assistant":
       return (
-        <div className="chat-md min-w-0 px-0.5">
+        <div className="chat-md code-md min-w-0 px-0.5">
           <Streamdown components={markdownComponents}>{item.text}</Streamdown>
         </div>
       );
@@ -676,7 +745,7 @@ export function TranscriptRow({
             <p className="text-muted-foreground text-xs">
               Subagent <span className={monoClass}>{item.from}</span> reported
             </p>
-            <div className="chat-md min-w-0">
+            <div className="chat-md code-md min-w-0">
               <Streamdown components={markdownComponents}>{item.text}</Streamdown>
             </div>
           </div>
@@ -717,6 +786,8 @@ export function TranscriptRow({
       return <ToolRow call={item} ctx={ctx} />;
     case "tool-group":
       return <ToolGroupRow group={item} ctx={ctx} />;
+    case "work":
+      return <WorkFoldRow fold={item} ctx={ctx} actions={actions} />;
   }
 }
 
@@ -724,7 +795,7 @@ export function TranscriptRow({
 export function StreamingTail({ text, thinking }: { text: string; thinking: string }) {
   if (text) {
     return (
-      <div className="chat-md min-w-0 px-0.5">
+      <div className="chat-md code-md min-w-0 px-0.5">
         <Streamdown components={markdownComponents}>{text}</Streamdown>
       </div>
     );

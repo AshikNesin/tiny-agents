@@ -15,10 +15,13 @@ import {
   ArrowLeft,
   Bot,
   ChevronDown,
+  CircleAlert,
+  CircleCheck,
   ExternalLink,
   FileDiff,
   FolderGit2,
   FolderOpen,
+  GitMerge,
   GitPullRequest,
   Pencil,
   Play,
@@ -67,7 +70,7 @@ import {
   type ThreadSummary,
 } from "../../lib/code/api";
 import { ancestry } from "../../lib/code/list";
-import { groupTools, lastErrorId } from "../../lib/code/transcript";
+import { foldTurns, lastErrorId } from "../../lib/code/transcript";
 import { useCodeThread } from "../../lib/code/use-thread";
 import { useCodeStore } from "../../store/code";
 import { useIsGuest } from "../../store/people";
@@ -150,6 +153,29 @@ function PromptDialog({
       </DialogContent>
     </Dialog>
   );
+}
+
+/** One button of the header's Changes / PR switch. */
+const segment = (active: boolean) =>
+  cn(
+    "flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50",
+    active
+      ? "bg-background text-foreground shadow-sm"
+      : "text-muted-foreground hover:text-foreground",
+  );
+
+const PULL_TEXT: Record<string, string> = {
+  needs_input: "text-warning",
+  green: "text-success",
+};
+
+/** The PR's state at a glance: CI passing, failing on you, being fixed, or merged. */
+function PullIcon({ loop }: { loop?: string }) {
+  if (loop === "merged") return <GitMerge className="size-3.5" />;
+  if (loop === "green") return <CircleCheck className="text-success size-3.5" />;
+  if (loop === "needs_input") return <CircleAlert className="text-warning size-3.5" />;
+  if (loop === "fixing") return <Spinner className="size-3.5" />;
+  return <GitPullRequest className="size-3.5" />;
 }
 
 export function ConversationView({
@@ -264,7 +290,7 @@ export function ConversationView({
   const model = models.find((m) => m.id === (settings?.model || row?.model));
   const canReason = model?.supportsReasoning !== false;
   const chain = ancestry(rows, id);
-  const display = useMemo(() => groupTools(items), [items]);
+  const display = useMemo(() => foldTurns(items), [items]);
   const lastNoticeKey = useMemo(() => lastErrorId(items), [items]);
   const runningSubagents = state.children
     .map((s) => rows.find((r) => r.id === s.id) ?? s)
@@ -423,37 +449,42 @@ export function ConversationView({
             Resume
           </Button>
         )}
-        {inProject && onTogglePr && (
-          <Button
-            variant={prOpen ? "secondary" : "ghost"}
-            size="sm"
-            onClick={onTogglePr}
-            aria-pressed={prOpen}
-            title={pr ? `Pull request #${pr.number}` : "Publish a pull request"}
-            className={cn(!prOpen && "text-muted-foreground")}
-            data-testid="code-pr-toggle"
-          >
-            <GitPullRequest />
-            <span className="hidden sm:inline">
-              {pr ? `#${pr.number}` : "PR"}
-              {pr && pullState(pr.loop) && ` · ${pullState(pr.loop)}`}
-            </span>
-          </Button>
-        )}
-        {(caps.workspace.diffs || inProject) && (
-          <Button
-            variant={changesOpen ? "secondary" : "ghost"}
-            size="sm"
-            onClick={onToggleChanges}
-            disabled={!row?.cwd && !inProject}
-            title="Changes (⌘⇧D)"
-            aria-pressed={changesOpen}
-            className={cn(!changesOpen && "text-muted-foreground")}
-            data-testid="code-changes-toggle"
-          >
-            <FileDiff />
-            <span className="hidden sm:inline">Changes</span>
-          </Button>
+        {(inProject || caps.workspace.diffs) && (
+          // Changes and the pull request as one quiet segmented switch (Hoplite's panel tabs).
+          <div className="bg-muted/60 flex shrink-0 items-center gap-0.5 rounded-lg p-0.5">
+            {(caps.workspace.diffs || inProject) && (
+              <button
+                type="button"
+                onClick={onToggleChanges}
+                disabled={!row?.cwd && !inProject}
+                title="Changes (⌘⇧D)"
+                aria-pressed={changesOpen}
+                className={segment(changesOpen)}
+                data-testid="code-changes-toggle"
+              >
+                <FileDiff className="size-3.5" />
+                <span className="hidden sm:inline">Changes</span>
+              </button>
+            )}
+            {inProject && onTogglePr && (
+              <button
+                type="button"
+                onClick={onTogglePr}
+                aria-pressed={prOpen}
+                title={pr ? `Pull request #${pr.number}` : "Publish a pull request"}
+                className={segment(prOpen)}
+                data-testid="code-pr-toggle"
+              >
+                <PullIcon loop={pr?.loop} />
+                <span className="hidden tabular-nums sm:inline">{pr ? `#${pr.number}` : "PR"}</span>
+                {pr && pullState(pr.loop) && (
+                  <span className={cn("hidden md:inline", PULL_TEXT[pr.loop])}>
+                    {pullState(pr.loop)}
+                  </span>
+                )}
+              </button>
+            )}
+          </div>
         )}
       </header>
 
@@ -502,17 +533,16 @@ export function ConversationView({
             </p>
           )}
           {archived && (
-            <div
-              className="bg-muted/60 text-muted-foreground flex items-center gap-2 rounded-xl px-3 py-2 text-sm"
+            // Archived: one way back in instead of a banner over a composer (Amp).
+            <Button
+              variant="outline"
+              className="text-muted-foreground h-11 w-full rounded-2xl"
+              onClick={toggleArchive}
               data-testid="code-archived"
             >
-              <Archive className="size-4 shrink-0" />
-              <span className="min-w-0 flex-1">This thread is archived.</span>
-              <Button size="xs" variant="outline" onClick={toggleArchive}>
-                <ArchiveRestore />
-                Restore
-              </Button>
-            </div>
+              <ArchiveRestore />
+              Unarchive to continue
+            </Button>
           )}
           {(state.jobs.length > 0 || runningSubagents.length > 0) && (
             <div
@@ -601,69 +631,83 @@ export function ConversationView({
               ))}
             </ul>
           )}
-          <PendingComments
-            threadId={id}
-            enabled={!guest}
-            onShow={changesOpen ? undefined : onToggleChanges}
-          />
-          <Composer
-            draftKey={id}
-            harness={harness}
-            cwd={row?.cwd}
-            threadId={id}
-            working={working}
-            insert={insert}
-            onStop={caps.turns.interrupt ? stop : undefined}
-            controls={
-              <>
-                {caps.settings.modelSwitch && models.length > 0 && settings && (
-                  <ModelPicker
-                    models={models}
-                    value={settings.model || row?.model || ""}
-                    onChange={(m) => changeSetting({ model: m })}
-                  />
-                )}
-                {caps.settings.modelSwitch && settings && canReason && (
-                  <ReasoningPicker
-                    levels={caps.settings.effortLevels}
-                    value={settings.effort || DEFAULT}
-                    onChange={(v) => changeSetting({ effort: v === DEFAULT ? null : v })}
-                  />
-                )}
-                {permission && caps.settings.permissionModes.length > 0 && (
-                  <PermissionPicker
-                    modes={caps.settings.permissionModes}
-                    value={permission}
-                    onChange={(mode) =>
-                      changeSetting({ permissionMode: mode }, "Permissions changed")
-                    }
-                  />
-                )}
-                <ContextRing
-                  used={state.context.used}
-                  max={state.context.max ?? model?.contextWindow}
-                  threadId={id}
-                  usage={caps.extras.usageReport}
-                  hasSubagents={state.children.length > 0}
-                  {...(caps.turns.compact
-                    ? {
-                        onCompact: () =>
-                          void run("compact", async () => {
-                            await codeApi.send(id, "/compact", { queue: working });
-                            toast.success("Compacting the context");
-                          }),
-                      }
-                    : {})}
-                />
-              </>
-            }
-            onSend={async (message, options) => {
-              // Waiting line comments go ahead of the message, in the same turn.
-              const withReview = comments.length > 0;
-              await codeApi.send(id, message, { ...options, withReview });
-              if (withReview) commentsSent(id);
-            }}
-          />
+          {!archived && (
+            <>
+              <PendingComments
+                threadId={id}
+                enabled={!guest}
+                onShow={changesOpen ? undefined : onToggleChanges}
+              />
+              <Composer
+                draftKey={id}
+                harness={harness}
+                cwd={row?.cwd}
+                threadId={id}
+                working={working}
+                insert={insert}
+                onStop={caps.turns.interrupt ? stop : undefined}
+                controls={
+                  <>
+                    {caps.settings.modelSwitch && models.length > 0 && settings && (
+                      <ModelPicker
+                        bare
+                        models={models}
+                        value={settings.model || row?.model || ""}
+                        onChange={(m) => changeSetting({ model: m })}
+                      />
+                    )}
+                    {caps.settings.modelSwitch &&
+                      settings &&
+                      canReason &&
+                      caps.settings.effortLevels.length > 0 && (
+                        <span className="text-muted-foreground/60 -mx-1.5 text-xs" aria-hidden>
+                          ·
+                        </span>
+                      )}
+                    {caps.settings.modelSwitch && settings && canReason && (
+                      <ReasoningPicker
+                        bare
+                        levels={caps.settings.effortLevels}
+                        value={settings.effort || DEFAULT}
+                        onChange={(v) => changeSetting({ effort: v === DEFAULT ? null : v })}
+                      />
+                    )}
+                    {permission && caps.settings.permissionModes.length > 0 && (
+                      <PermissionPicker
+                        modes={caps.settings.permissionModes}
+                        value={permission}
+                        onChange={(mode) =>
+                          changeSetting({ permissionMode: mode }, "Permissions changed")
+                        }
+                      />
+                    )}
+                    <ContextRing
+                      used={state.context.used}
+                      max={state.context.max ?? model?.contextWindow}
+                      threadId={id}
+                      usage={caps.extras.usageReport}
+                      hasSubagents={state.children.length > 0}
+                      {...(caps.turns.compact
+                        ? {
+                            onCompact: () =>
+                              void run("compact", async () => {
+                                await codeApi.send(id, "/compact", { queue: working });
+                                toast.success("Compacting the context");
+                              }),
+                          }
+                        : {})}
+                    />
+                  </>
+                }
+                onSend={async (message, options) => {
+                  // Waiting line comments go ahead of the message, in the same turn.
+                  const withReview = comments.length > 0;
+                  await codeApi.send(id, message, { ...options, withReview });
+                  if (withReview) commentsSent(id);
+                }}
+              />
+            </>
+          )}
         </div>
       </div>
 

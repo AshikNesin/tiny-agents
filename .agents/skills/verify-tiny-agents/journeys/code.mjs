@@ -80,6 +80,11 @@ await journey(
         await expect(page.getByRole("button", { name: "Model" })).toHaveText(/predictable/);
         // One harness configured: no harness picker (that needs Claude Code as well).
         await expect(page.getByTestId("code-harness")).toHaveCount(0);
+        // The list is flat by default; the groups below come with Group by repository.
+        await page.getByRole("button", { name: "Group by repository" }).click();
+        await expect(
+          page.getByRole("button", { name: "Group by repository" }),
+        ).toHaveAttribute("aria-pressed", "true");
       },
     );
 
@@ -264,12 +269,14 @@ await journey(
     });
 
     await step("search threads filters the list by title", async () => {
+      await page.getByRole("button", { name: "Search threads" }).click();
       await page.getByRole("textbox", { name: "Search threads" }).fill(title);
       await expect(list.getByRole("link", { name: new RegExp(`^${title}`) })).toBeVisible({
         timeout: 15_000,
       });
       await expect(list.getByRole("listitem").filter({ hasText: otherTitle })).toHaveCount(0);
-      await page.getByRole("textbox", { name: "Search threads" }).fill("");
+      await page.getByRole("textbox", { name: "Search threads" }).press("Escape");
+      await expect(page.getByRole("textbox", { name: "Search threads" })).toHaveCount(0);
     });
 
     await step("archive a thread from its row; it moves to Archived; restore it", async () => {

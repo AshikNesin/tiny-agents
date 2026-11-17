@@ -100,6 +100,7 @@ const project = (id: string, name: string): ProjectView => ({
 });
 
 beforeEach(() => {
+  window.localStorage.clear();
   archiveMock.mockReset();
   toastSuccess.mockReset();
 });
@@ -270,7 +271,39 @@ describe("Code thread list", () => {
     expect(within(bar).getByText("Select threads")).toBeInTheDocument();
   });
 
+  it("lists every thread flat, newest first, until grouping by repository is on", async () => {
+    const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
+    render(
+      <MemoryRouter>
+        <ConversationList
+          harnesses={[shelley]}
+          projects={[project("p1", "tiny-agents")]}
+          threads={[
+            row("older", { projectId: "p1", updatedAt: ago(90) }),
+            row("newest", { cwd: "/home/exedev/notes", updatedAt: ago(1) }),
+            row("middle", { projectId: "p1", updatedAt: ago(30) }),
+          ]}
+        />
+      </MemoryRouter>,
+    );
+    // No folder headers: one list, newest first.
+    expect(screen.queryAllByTestId("code-group")).toHaveLength(0);
+    expect(
+      screen
+        .getAllByTestId("code-conversation-row")
+        .map((r) => r.textContent?.replace(/\d+[mh]$/, "")),
+    ).toEqual(["newest", "middle", "older"]);
+    // Search sits behind an icon.
+    expect(screen.queryByRole("textbox", { name: "Search threads" })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Search threads" }));
+    expect(screen.getByRole("textbox", { name: "Search threads" })).toHaveFocus();
+
+    await userEvent.click(screen.getByRole("button", { name: "Group by repository" }));
+    expect(screen.getAllByTestId("code-group")).toHaveLength(2);
+  });
+
   it("groups threads by project, then by folder, each group with its own New thread", async () => {
+    window.localStorage.setItem("tiny-agents:code-grouped", "1");
     render(
       <MemoryRouter>
         <ConversationList

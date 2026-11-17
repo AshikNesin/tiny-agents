@@ -158,6 +158,15 @@ const panel = () =>
 const wait = (ms: number) => act(() => vi.advanceTimersByTimeAsync(ms));
 
 describe("Code PR tab", () => {
+  it("leads with one status line and a checks bar", async () => {
+    checkState = "success";
+    panel();
+    await wait(0);
+    expect(screen.getByLabelText("Status")).toHaveTextContent("open · ta/fix-1a2b → main");
+    const bar = screen.getByRole("img", { name: "1 passed, 0 failed, 0 pending" });
+    expect(bar).toBeInTheDocument();
+  });
+
   it("re-reads the pull request every 15 seconds while it is on screen", async () => {
     panel();
     await wait(0);

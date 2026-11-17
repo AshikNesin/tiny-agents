@@ -307,7 +307,6 @@ export function CodePage() {
           <div className="flex h-12 shrink-0 items-center gap-1 px-2">
             <BackToApp brand={brand} />
             <span className="flex-1" />
-            <CommandPaletteTrigger />
             <Button
               variant="ghost"
               size="icon-sm"

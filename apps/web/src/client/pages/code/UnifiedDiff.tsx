@@ -144,8 +144,9 @@ function foldContext(lines: DiffLine[], opened: ReadonlySet<number>): Row[] {
 }
 
 const ROW: Record<DiffLine["kind"], string> = {
-  add: "bg-success/10",
-  del: "bg-destructive/10",
+  // A quiet tint and a colored edge, not a wall of red and green (Hoplite).
+  add: "bg-success/[0.06] shadow-[inset_2px_0_0_var(--color-success)]",
+  del: "bg-destructive/[0.06] shadow-[inset_2px_0_0_var(--color-destructive)]",
   context: "",
   hunk: "bg-muted text-muted-foreground",
   meta: "text-muted-foreground",

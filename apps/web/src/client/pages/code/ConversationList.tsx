@@ -1,8 +1,9 @@
 /**
- * Left column of the Code page (issue #143, ADR 0011), laid out like
- * t3code's sidebar: every thread of every harness grouped by project, then
- * by repository or folder, each group folding away and offering its own New
- * thread (and, for a project, its settings). Subagents nest under their
+ * Left column of the Code page (issue #143, ADR 0011). By default one flat
+ * list, newest first, the way Hoplite lists threads; "Group by repository"
+ * brings back t3code's grouping by project, then by repository or folder,
+ * each group folding away and offering its own New thread (and, for a
+ * project, its settings). Subagents nest under their
  * parent, with unread dots and search. Hovering a row offers Archive
  * (Restore in the archived view) when its harness archives, which moves the
  * thread together with its subagents, with Undo. **Select** (issue #148)
@@ -18,7 +19,7 @@ import {
   ChevronRight,
   Folder,
   FolderGit2,
-  FolderPlus,
+  FolderTree,
   ListChecks,
   Plus,
   Search,
@@ -44,6 +45,24 @@ import { PullChip, useArchive, useArchiveMany } from "./controls";
 import { shortAgo } from "./NewConversation";
 
 const COLLAPSED_KEY = "tiny-agents:code-collapsed";
+const GROUPED_KEY = "tiny-agents:code-grouped";
+
+function readGrouped(): boolean {
+  try {
+    return window.localStorage.getItem(GROUPED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function saveGrouped(grouped: boolean) {
+  try {
+    if (grouped) window.localStorage.setItem(GROUPED_KEY, "1");
+    else window.localStorage.removeItem(GROUPED_KEY);
+  } catch {
+    // not remembered in private mode
+  }
+}
 /** Threads a group shows before "Show more". */
 const GROUP_LIMIT = 8;
 
@@ -359,6 +378,9 @@ export function ConversationList({
     });
   }, []);
   useEffect(() => saveCollapsed(collapsed), [collapsed]);
+  const [grouped, setGrouped] = useState(readGrouped);
+  useEffect(() => saveGrouped(grouped), [grouped]);
+  const [searching, setSearching] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<ThreadSummary[] | null>(null);
   const caps = useMemo(() => new Map(harnesses.map((h) => [h.id, h.capabilities])), [harnesses]);
@@ -445,11 +467,23 @@ export function ConversationList({
     return view === "archived" ? all.filter((g) => g.nodes.length > 0) : all;
   }, [rows, projects, view]);
   const searchTree = useMemo(() => (results ? buildTree(results) : null), [results]);
+  // The flat list: working threads first, then newest first.
+  const flat = useMemo(
+    () =>
+      buildTree(rows ?? []).sort(
+        (a, b) =>
+          Number(b.busy) - Number(a.busy) ||
+          Date.parse(b.row.updatedAt) - Date.parse(a.row.updatedAt),
+      ),
+    [rows],
+  );
 
-  // Select mode works on what is on screen: the search results, or the open groups.
+  // Select mode works on what is on screen: the search results, the list, or the open groups.
   const visible = useMemo(
-    () => searchTree ?? groups.filter((g) => !collapsed.has(g.key)).flatMap((g) => g.nodes),
-    [searchTree, groups, collapsed],
+    () =>
+      searchTree ??
+      (grouped ? groups.filter((g) => !collapsed.has(g.key)).flatMap((g) => g.nodes) : flat),
+    [searchTree, groups, collapsed, grouped, flat],
   );
   const picked = useMemo(
     () => (selected ? selectionRoots(visible, selected) : null),
@@ -522,23 +556,37 @@ export function ConversationList({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex h-13 shrink-0 items-center gap-1.5 px-2">
-        <InputGroup className="min-w-0 flex-1">
-          <InputGroupAddon>
-            <Search />
-          </InputGroupAddon>
-          <InputGroupInput
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => e.key === "Escape" && setQuery("")}
-            placeholder="Search threads"
-            aria-label="Search threads"
-          />
-        </InputGroup>
+      <div className="flex h-10 shrink-0 items-center gap-0.5 px-2">
+        <Button
+          asChild
+          variant="ghost"
+          size="sm"
+          className="text-muted-foreground hover:text-foreground min-w-0 flex-1 justify-start"
+        >
+          <Link to="/code/new" data-testid="code-new" aria-label="New thread">
+            <SquarePen />
+            New thread
+          </Link>
+        </Button>
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          className="text-muted-foreground"
+          aria-label="Search threads"
+          title="Search threads"
+          aria-pressed={searching}
+          onClick={() => {
+            setSearching((on) => !on);
+            setQuery("");
+          }}
+        >
+          <Search />
+        </Button>
         {anyArchives && (
           <Button
-            size="icon"
+            size="icon-sm"
             variant="ghost"
+            className="text-muted-foreground"
             aria-label={selected ? "Stop selecting" : "Select threads"}
             title={selected ? "Stop selecting" : "Select threads"}
             aria-pressed={Boolean(selected)}
@@ -548,12 +596,28 @@ export function ConversationList({
             {selected ? <X /> : <ListChecks />}
           </Button>
         )}
-        <Button asChild size="icon" variant="ghost" aria-label="New thread" title="New thread">
-          <Link to="/code/new" data-testid="code-new">
-            <SquarePen />
-          </Link>
-        </Button>
       </div>
+      {searching && (
+        <div className="shrink-0 px-2 pb-1.5">
+          <InputGroup>
+            <InputGroupAddon>
+              <Search />
+            </InputGroupAddon>
+            <InputGroupInput
+              autoFocus
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key !== "Escape") return;
+                setQuery("");
+                setSearching(false);
+              }}
+              placeholder="Search threads"
+              aria-label="Search threads"
+            />
+          </InputGroup>
+        </div>
+      )}
       {view === "archived" && (
         <div className="flex items-center gap-1 px-2 pb-1">
           <Button
@@ -579,10 +643,16 @@ export function ConversationList({
           <div className="flex justify-center p-4">
             <Spinner />
           </div>
-        ) : groups.length === 0 ? (
+        ) : (grouped ? groups.length : flat.length) === 0 ? (
           <p className="text-muted-foreground p-3 text-sm">
             {view === "archived" ? "No archived threads." : "No threads yet. Start one."}
           </p>
+        ) : !grouped ? (
+          <ul className="space-y-px">
+            {flat.map((node) => (
+              <Row key={node.row.id} node={node} depth={0} {...listProps} />
+            ))}
+          </ul>
         ) : (
           groups.map((group) => (
             <Group
@@ -649,19 +719,19 @@ export function ConversationList({
             </Button>
           )}
           <span className="flex-1" />
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Group by repository"
+            title="Group by repository"
+            aria-pressed={grouped}
+            onClick={() => setGrouped((on) => !on)}
+            className={cn(!grouped && "text-muted-foreground")}
+          >
+            <FolderTree />
+          </Button>
           {projects && (
             <>
-              <Button
-                asChild
-                variant="ghost"
-                size="icon-sm"
-                className="text-muted-foreground"
-                title="Add project"
-              >
-                <Link to="/code/settings/projects" aria-label="Add project">
-                  <FolderPlus />
-                </Link>
-              </Button>
               <Button asChild variant="ghost" size="sm" className="text-muted-foreground">
                 <Link to="/code/settings" data-testid="code-settings">
                   <Settings2 />
