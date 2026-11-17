@@ -694,7 +694,7 @@ data class PushDeviceBody(
     val endpoint: String,
     val p256dh: String,
     val auth: String,
-    /** "fcm" (the embedded distributor, through Google) or "unifiedpush" (ntfy or another app). */
+    /** "fcm": the app registers through Google's embedded distributor only. */
     val distributor: String,
     val label: String?,
     val appVersion: String?,

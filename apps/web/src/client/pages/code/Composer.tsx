@@ -137,6 +137,9 @@ export function Composer({
   const [token, setToken] = useState<ReturnType<typeof tokenAt>>();
   const [dragging, setDragging] = useState(false);
   const area = useRef<HTMLTextAreaElement>(null);
+  // The blur that closes the mention list waits a beat for a click on it; cleared on unmount.
+  const blurTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(blurTimer.current), []);
   const fileInput = useRef<HTMLInputElement>(null);
 
   // A new conversation key loads its own draft.
@@ -424,7 +427,9 @@ export function Composer({
             updateToken(e.target.value, e.target.selectionStart);
           }}
           onSelect={(e) => updateToken(e.currentTarget.value, e.currentTarget.selectionStart)}
-          onBlur={() => setTimeout(() => setToken(undefined), 100)}
+          onBlur={() => {
+            blurTimer.current = setTimeout(() => setToken(undefined), 100);
+          }}
           onKeyDown={onKeyDown}
           onPaste={(e) => {
             const files = Array.from(e.clipboardData.files);

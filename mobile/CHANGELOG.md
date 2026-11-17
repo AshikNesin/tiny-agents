@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.2
+
+### Patch Changes
+
+- Notifications now always come through Google Play services, so they work without setting anything up. The app
+  no longer registers through a UnifiedPush app such as ntfy; a phone registered through one moves to Google the
+  next time the app opens. A phone without Play services says so in Settings, Notifications.
+
 ## 0.6.1
 
 ### Patch Changes

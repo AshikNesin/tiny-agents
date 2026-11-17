@@ -146,17 +146,17 @@ private fun pushTitle(push: PushStatus): String = when (push.state) {
     PushStatus.State.On -> "On"
     PushStatus.State.Registering, PushStatus.State.Unknown -> "Setting up"
     PushStatus.State.PermissionOff -> "Off"
-    PushStatus.State.NoDistributor -> "No push service"
+    PushStatus.State.NoGooglePlay -> "Needs Google Play services"
     PushStatus.State.ServerTooOld -> "Your server needs an update"
     PushStatus.State.Failed -> "Not working"
     PushStatus.State.Unsupported -> "Not offered"
 }
 
 private fun pushSummary(push: PushStatus): String? = when (push.state) {
-    PushStatus.State.On -> push.via?.let { "Through $it" }
+    PushStatus.State.On -> "Through Google"
     PushStatus.State.Registering, PushStatus.State.Unknown -> null
     PushStatus.State.PermissionOff -> "Allow notifications for this app in Android settings"
-    PushStatus.State.NoDistributor -> "Install a UnifiedPush app such as ntfy, or Google Play services"
+    PushStatus.State.NoGooglePlay -> "Phone notifications come through Google Play services, which this phone doesn't have"
     PushStatus.State.ServerTooOld -> "It doesn't send phone notifications yet. Update it (Settings, Updates on the web), then try again."
     PushStatus.State.Failed -> push.detail
     PushStatus.State.Unsupported -> null

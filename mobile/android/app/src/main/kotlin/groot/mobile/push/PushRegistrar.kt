@@ -1,6 +1,5 @@
 package groot.mobile.push
 
-import android.app.Activity
 import android.content.Context
 import android.os.Build
 import androidx.datastore.core.DataStore
@@ -23,23 +22,19 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import org.unifiedpush.android.connector.FailedReason
 import org.unifiedpush.android.connector.UnifiedPush
 import org.unifiedpush.android.connector.data.PushEndpoint
-import kotlin.coroutines.resume
 
 private val Context.pushDataStore: DataStore<Preferences> by preferencesDataStore(name = "push")
 
 /** Where this phone stands with the server's notifications, for Settings. */
 data class PushStatus(
     val state: State = State.Unknown,
-    /** "Google" for the embedded FCM distributor, else the distributor app's package. */
-    val via: String? = null,
     val detail: String? = null,
 ) {
-    enum class State { Unknown, Registering, On, PermissionOff, NoDistributor, ServerTooOld, Failed, Unsupported }
+    enum class State { Unknown, Registering, On, PermissionOff, NoGooglePlay, ServerTooOld, Failed, Unsupported }
 
     companion object {
         /**
@@ -57,8 +52,8 @@ data class PushStatus(
 
 /**
  * Registers this phone for the server's Web Push notifications (issue #306) through
- * UnifiedPush: the distributor the owner uses (ntfy, say), else the embedded FCM distributor,
- * which needs Google Play services and no Firebase project. The server's VAPID key binds the
+ * UnifiedPush's embedded FCM distributor, which delivers through Google Play services and needs
+ * no Firebase project. Only Google: UnifiedPush apps such as ntfy are not offered. The server's VAPID key binds the
  * endpoint to that server; a different key (another server, a rotated key) registers again.
  */
 class PushRegistrar(
@@ -79,12 +74,15 @@ class PushRegistrar(
         _retries.tryEmit(Unit)
     }
 
+    private fun hasPlayServices(): Boolean =
+        runCatching { appContext.packageManager.getPackageInfo(GOOGLE_PLAY_SERVICES, 0) }.isSuccess
+
     /**
      * After sign-in, on each launch: fetch the server's key, ask for the notification
      * permission ([askPermission], Android 13+), pick a distributor and register. Registering
      * again on every launch keeps the server's copy fresh and brings back a device it revoked.
      */
-    suspend fun ensure(activity: Activity, askPermission: suspend () -> Boolean) {
+    suspend fun ensure(askPermission: suspend () -> Boolean) {
         val server = session.serverUrl ?: return
         val key = try {
             api.vapidKey()
@@ -110,14 +108,20 @@ class PushRegistrar(
             }
         }
         _status.value = PushStatus(PushStatus.State.Registering)
-        val distributor = withContext(Dispatchers.Main) {
-            suspendCancellableCoroutine { done ->
-                UnifiedPush.tryUseCurrentOrDefaultDistributor(activity) { ok -> if (done.isActive) done.resume(ok) }
-            }
-        }
-        if (!distributor) {
-            _status.value = PushStatus(PushStatus.State.NoDistributor)
+        if (!hasPlayServices()) {
+            _status.value = PushStatus(PushStatus.State.NoGooglePlay)
             return
+        }
+        // This app's package is the embedded Google distributor.
+        val target = appContext.packageName
+        val current = UnifiedPush.getSavedDistributor(appContext)
+        if (current != target) {
+            // 0.6.0 and 0.6.1 could register through a UnifiedPush app (ntfy): drop that endpoint.
+            if (current != null) {
+                forgetDevice()
+                withContext(Dispatchers.Main) { UnifiedPush.removeDistributor(appContext) }
+            }
+            UnifiedPush.saveDistributor(appContext, target)
         }
         withContext(Dispatchers.Main) { UnifiedPush.register(appContext, vapid = key) }
     }
@@ -129,20 +133,19 @@ class PushRegistrar(
             return
         }
         if (session.token == null) return
-        val embedded = UnifiedPush.getAckDistributor(appContext) == appContext.packageName
         try {
             val id = api.registerPushDevice(
                 PushDeviceBody(
                     endpoint = endpoint.url,
                     p256dh = keys.pubKey,
                     auth = keys.auth,
-                    distributor = if (embedded) "fcm" else "unifiedpush",
+                    distributor = "fcm",
                     label = "${Build.MANUFACTURER.replaceFirstChar(Char::titlecase)} ${Build.MODEL}".trim(),
                     appVersion = BuildConfig.VERSION_NAME,
                 ),
             )
             store.edit { it[DEVICE_ID] = id }
-            _status.value = PushStatus(PushStatus.State.On, via = if (embedded) "Google" else UnifiedPush.getAckDistributor(appContext))
+            _status.value = PushStatus(PushStatus.State.On)
         } catch (error: Exception) {
             Log.w(TAG, error) { "Registering the push endpoint failed" }
             _status.value = PushStatus(PushStatus.State.Failed, detail = error.message)
@@ -161,17 +164,21 @@ class PushRegistrar(
         )
     }
 
-    /** The distributor dropped this app (uninstalled, or the owner removed it there). */
+    /** Google dropped this registration: Settings' "Try again" registers afresh. */
     suspend fun onUnregistered() {
         forgetDevice()
-        _status.value = PushStatus(PushStatus.State.NoDistributor)
+        _status.value = PushStatus(PushStatus.State.Failed, detail = "Google stopped delivering to this phone")
     }
 
     /** Before signing out: the server stops sending here, and the distributor forgets the app. */
     suspend fun signOut() {
         forgetDevice()
         withContext(Dispatchers.Main) { UnifiedPush.unregister(appContext) }
-        store.edit { it.clear() }
+        store.edit {
+            it.remove(SERVER)
+            it.remove(VAPID)
+            it.remove(DEVICE_ID)
+        }
         _status.value = PushStatus()
     }
 
@@ -192,5 +199,6 @@ class PushRegistrar(
         val SERVER = stringPreferencesKey("server")
         val VAPID = stringPreferencesKey("vapid")
         val DEVICE_ID = stringPreferencesKey("device_id")
+        const val GOOGLE_PLAY_SERVICES = "com.google.android.gms"
     }
 }

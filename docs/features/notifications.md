@@ -15,8 +15,9 @@ The server makes a VAPID key pair on first use (KV `WEB_PUSH:vapid`, the
 private key sealed with `SECRETS_KEY` when it is set) and sends each
 registered device an end-to-end encrypted push (RFC 8291 `aes128gcm`, RFC 8292
 VAPID) to the endpoint its push service gave it: FCM on phones with Google
-Play services, ntfy or another UnifiedPush server otherwise. The server needs
-no Firebase account, relay or env var ([ADR 0026](../adr/0026-web-push-transport.md)).
+Play services. The Android app registers through Google only. The server
+accepts any Web Push endpoint, so a UnifiedPush server or a browser could be
+added later with an app change. The server needs no Firebase account, relay or env var ([ADR 0026](../adr/0026-web-push-transport.md)).
 Push services see ciphertext, its size, urgency and TTL.
 
 - **Payload.** JSON the app renders: `{ v: 1, kind: "show", id, tag, event,
@@ -46,9 +47,8 @@ Push services see ciphertext, its size, urgency and TTL.
 | 429, 5xx, network, timeout | Retried like Pushover; five failures in a row mark the device failing |
 | Other 4xx                  | Not retried                                                           |
 
-A push counts as sent when any device took it. Endpoints must be `https` and,
-unless `PUSH_ALLOW_PRIVATE_ENDPOINTS=true` (ntfy on a LAN or tailnet), resolve
-to public addresses. An account registers at most 10 devices. Changing
+A push counts as sent when any device took it. Endpoints must be `https` and
+resolve to public addresses. An account registers at most 10 devices. Changing
 `SECRETS_KEY` without rotating makes a new key and revokes every device; the
 app registers again.
 
