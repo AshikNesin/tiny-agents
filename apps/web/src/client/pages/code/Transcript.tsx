@@ -222,19 +222,27 @@ function SubagentResult({
  * asked and what it reported back; a harness that gives it its own thread
  * also links there.
  */
-function SubagentRow({ call, ctx }: { call: ToolItem; ctx: TranscriptContext }) {
-  const [open, setOpen] = useState(false);
-  const child = call.child;
-  const row = child ? ctx.rows.find((r) => r.id === child.threadId) : undefined;
-  const title = child?.title ?? call.summary;
+function subagentPrompt(call: ToolItem): string {
   const input = call.input && typeof call.input === "object" ? call.input : undefined;
-  const prompt =
-    input && "prompt" in input ? String((input as { prompt?: unknown }).prompt ?? "") : "";
-  const working = Boolean(row?.working) || call.status === "running";
-  const failed = failedTool(call);
-  const result = call.output?.trim() ?? "";
-  const hasDetail = Boolean(prompt || result);
-  const head = (
+  return input && "prompt" in input ? String((input as { prompt?: unknown }).prompt ?? "") : "";
+}
+
+function SubagentHead({
+  title,
+  prompt,
+  working,
+  failed,
+  open,
+  expandable,
+}: {
+  title: string;
+  prompt: string;
+  working: boolean;
+  failed: boolean;
+  open: boolean;
+  expandable: boolean;
+}) {
+  return (
     <>
       <Bot className="text-muted-foreground size-4 shrink-0" />
       <div className="min-w-0 flex-1">
@@ -245,7 +253,7 @@ function SubagentRow({ call, ctx }: { call: ToolItem; ctx: TranscriptContext }) 
         </div>
         {prompt && !open && <p className="text-muted-foreground truncate text-xs">{prompt}</p>}
       </div>
-      {hasDetail && (
+      {expandable && (
         <ChevronRight
           aria-hidden="true"
           className={cn(
@@ -256,15 +264,39 @@ function SubagentRow({ call, ctx }: { call: ToolItem; ctx: TranscriptContext }) 
       )}
     </>
   );
-  const link = child && (
+}
+
+function OpenThreadLink({ threadId }: { threadId: string }) {
+  return (
     <Button asChild size="sm" variant="outline">
-      <Link to={threadPath(child.threadId)}>
+      <Link to={threadPath(threadId)}>
         Open
         <ArrowUpRight />
       </Link>
     </Button>
   );
-  if (!hasDetail) {
+}
+
+function SubagentRow({ call, ctx }: { call: ToolItem; ctx: TranscriptContext }) {
+  const [open, setOpen] = useState(false);
+  const child = call.child;
+  const row = child ? ctx.rows.find((r) => r.id === child.threadId) : undefined;
+  const prompt = subagentPrompt(call);
+  const failed = failedTool(call);
+  const result = call.output?.trim() ?? "";
+  const expandable = Boolean(prompt || result);
+  const head = (
+    <SubagentHead
+      title={child?.title ?? call.summary}
+      prompt={prompt}
+      working={Boolean(row?.working) || call.status === "running"}
+      failed={failed}
+      open={open}
+      expandable={expandable}
+    />
+  );
+  const link = child && <OpenThreadLink threadId={child.threadId} />;
+  if (!expandable) {
     return (
       <div className="border-border flex min-w-0 items-center gap-3 rounded-xl border px-3 py-2">
         {head}
