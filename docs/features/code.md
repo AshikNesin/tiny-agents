@@ -50,14 +50,18 @@ has no background jobs, so its threads show no job chips.
 
 **Find.**
 
-- **Threads** (beside New thread, `/code/threads`; a project group's list
+- **Threads** (below New thread, `/code/threads`; a project group's list
   icon opens `/code/threads?project=<id>`) shows every thread, or one
   project's, at full width, after Hoplite: sections **Working**, **Needs
   you** (its PR needs input), **In review** (an open PR) and **Done**, each
   row with its status, title, PR chips and date, then **Archived**, folded,
   loaded when opened. The project menu switches project, and the search box
   filters by title.
-- By default (**Group by repository** at the foot of the sidebar, on)
+- The sidebar is a short column, like Hoplite: **New thread**, **Threads**
+  and **Search** rows on top, the threads, then **Settings** and one **…**
+  menu (Group by repository, Show archived, Select threads). A row shows its
+  PR only when the PR needs you.
+- By default (**Group by repository** in that menu, on)
   threads are grouped by project, then by repository or folder for threads
   outside a project. Turned off (remembered), the list is one flat list,
   working threads first, then newest first, like Hoplite. Search sits behind
@@ -66,8 +70,8 @@ has no background jobs, so its threads show no job chips.
   shows its newest 8 threads with **Show more**, and offers **New thread**
   in it (and, for a project, its settings) on hover. Inside a group,
   working threads come first, with subagents nested under their parent.
-- **Archived** at the foot of the sidebar lists archived threads, listed
-  the same way, with **Restore**.
+- **Show archived** in the same menu lists archived threads, listed the
+  same way, with **Restore**.
 - Search: full-text where the harness searches; a title filter otherwise.
   Several harnesses: each row names its harness.
 - Unread dots for turns that ended since you last looked, and ⌘K to jump to
@@ -129,7 +133,8 @@ folder):
 - Stop, Resume, rename, change directory, fork from a message, delete,
   Open in Shelley — each where the harness has it.
 - **Archive** moves a thread **with its subagents**, with Undo.
-- **Select** (the checklist button beside New thread) turns the list into
+- **Select** (**Select threads** in the list options menu, **…** at the
+  foot of the sidebar) turns the list into
   checkboxes: pick threads (a click on a row picks it; a picked thread's
   subagents go along), or **Select all**, then **Archive** (or **Restore** in
   the archived view) moves them all, with one Undo.

@@ -17,10 +17,7 @@ import {
   ArrowLeft,
   Bot,
   ChevronRight,
-  Folder,
-  FolderGit2,
-  FolderTree,
-  ListChecks,
+  MoreHorizontal,
   Plus,
   Rows3,
   Search,
@@ -30,6 +27,13 @@ import {
 } from "lucide-react";
 import { Button, metaLabelClass } from "@groot/ui";
 import { Checkbox } from "@groot/ui/checkbox";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@groot/ui/dropdown-menu";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@groot/ui/input-group";
 import { cn } from "@groot/ui/lib/utils";
 import { Spinner } from "../../components/ui/spinner";
@@ -46,6 +50,10 @@ import { PullChip, useArchive, useArchiveMany } from "./controls";
 import { shortAgo } from "./NewConversation";
 
 const COLLAPSED_KEY = "tiny-agents:code-collapsed";
+
+/** A Hoplite-style row at the top of the list: New thread, Threads, Search. */
+const navRow =
+  "text-muted-foreground hover:bg-muted hover:text-foreground flex h-8 items-center gap-2 rounded-lg px-2 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50 [&_svg]:size-4";
 const GROUPED_KEY = "tiny-agents:code-grouped";
 
 function readGrouped(): boolean {
@@ -199,7 +207,8 @@ function Row({
             {label && <span className={cn(metaLabelClass, "shrink-0")}>{label}</span>}
             {/* The status / time slot makes room for the archive button on hover. */}
             <span className="flex shrink-0 items-center gap-1.5 pointer-fine:group-focus-within/row:invisible pointer-fine:group-hover/row:invisible">
-              {row.pr && <PullChip pr={row.pr} />}
+              {/* Only a PR that waits on you; the Threads screen shows them all. */}
+              {row.pr?.loop === "needs_input" && <PullChip pr={row.pr} />}
               {row.working ? (
                 <Spinner className="size-3.5" aria-label="Working" />
               ) : node.unread ? (
@@ -283,7 +292,6 @@ function Group({
           index < GROUP_LIMIT || (rest.activeId ? contains(node, rest.activeId) : false),
       );
   const hidden = group.nodes.length - shown.length;
-  const Icon = group.projectId ? FolderGit2 : Folder;
   return (
     <section aria-labelledby={headingId} className="pb-1.5" data-testid="code-group">
       <div className="group/head flex h-8 items-center gap-0.5 rounded-lg pr-1 hover:bg-muted/60">
@@ -299,7 +307,6 @@ function Group({
               aria-hidden
               className={cn("size-3.5 shrink-0 transition-transform", !collapsed && "rotate-90")}
             />
-            <Icon aria-hidden className="size-3.5 shrink-0" />
             <span className="truncate">{group.label}</span>
           </button>
         </h2>
@@ -574,61 +581,32 @@ export function ConversationList({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex h-10 shrink-0 items-center gap-0.5 px-2">
-        <Button
-          asChild
-          variant="ghost"
-          size="sm"
-          className="text-muted-foreground hover:text-foreground min-w-0 justify-start"
-        >
-          <Link to="/code/new" data-testid="code-new" aria-label="New thread">
-            <SquarePen />
-            New thread
-          </Link>
-        </Button>
-        <Button
-          asChild
-          variant="ghost"
-          size="sm"
-          className="text-muted-foreground hover:text-foreground min-w-0 justify-start"
-        >
-          <Link to="/code/threads" data-testid="code-threads">
-            <Rows3 />
-            Threads
-          </Link>
-        </Button>
-        <span className="flex-1" />
-        <Button
-          size="icon-sm"
-          variant="ghost"
-          className="text-muted-foreground"
-          aria-label="Search threads"
-          title="Search threads"
-          aria-pressed={searching}
-          onClick={() => {
-            setSearching((on) => !on);
-            setQuery("");
-          }}
-        >
-          <Search />
-        </Button>
-        {anyArchives && (
-          <Button
-            size="icon-sm"
-            variant="ghost"
-            className="text-muted-foreground"
-            aria-label={selected ? "Stop selecting" : "Select threads"}
-            title={selected ? "Stop selecting" : "Select threads"}
-            aria-pressed={Boolean(selected)}
-            onClick={() => setSelected((prev) => (prev ? null : new Set()))}
-            data-testid="code-select"
+      <nav aria-label="Code" className="shrink-0 space-y-px px-2 pb-2">
+        <Link to="/code/new" data-testid="code-new" aria-label="New thread" className={navRow}>
+          <SquarePen />
+          New thread
+        </Link>
+        <Link to="/code/threads" data-testid="code-threads" className={navRow}>
+          <Rows3 />
+          Threads
+        </Link>
+        {!searching && (
+          <button
+            type="button"
+            className={cn(navRow, "w-full")}
+            aria-label="Search threads"
+            onClick={() => {
+              setSearching(true);
+              setQuery("");
+            }}
           >
-            {selected ? <X /> : <ListChecks />}
-          </Button>
+            <Search />
+            Search
+          </button>
         )}
-      </div>
+      </nav>
       {searching && (
-        <div className="shrink-0 px-2 pb-1.5">
+        <div className="shrink-0 px-2 pb-2">
           <InputGroup>
             <InputGroupAddon>
               <Search />
@@ -642,6 +620,7 @@ export function ConversationList({
                 setQuery("");
                 setSearching(false);
               }}
+              onBlur={() => !query && setSearching(false)}
               placeholder="Search threads"
               aria-label="Search threads"
             />
@@ -723,6 +702,15 @@ export function ConversationList({
             </Button>
           )}
           <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label="Stop selecting"
+            title="Stop selecting"
+            onClick={() => setSelected(null)}
+          >
+            <X />
+          </Button>
+          <Button
             size="sm"
             disabled={picked.roots.length === 0 || moving}
             onClick={() => void onArchiveSelected()}
@@ -734,42 +722,51 @@ export function ConversationList({
         </div>
       )}
       {!selected && (
-        <div className="border-border flex shrink-0 items-center gap-0.5 border-t px-2 py-1.5">
-          {anyArchives && (
-            <Button
-              variant="ghost"
-              size="sm"
-              aria-pressed={view === "archived"}
-              onClick={() => setView((v) => (v === "archived" ? "active" : "archived"))}
-              className={cn(view !== "archived" && "text-muted-foreground")}
-              data-testid="code-archived-toggle"
-            >
-              <Archive />
-              Archived
+        <div className="flex shrink-0 items-center gap-0.5 px-2 py-1.5">
+          {projects && (
+            <Button asChild variant="ghost" size="sm" className="text-muted-foreground">
+              <Link to="/code/settings" data-testid="code-settings">
+                <Settings2 />
+                Settings
+              </Link>
             </Button>
           )}
           <span className="flex-1" />
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Group by repository"
-            title="Group by repository"
-            aria-pressed={grouped}
-            onClick={() => setGrouped((on) => !on)}
-            className={cn(!grouped && "text-muted-foreground")}
-          >
-            <FolderTree />
-          </Button>
-          {projects && (
-            <>
-              <Button asChild variant="ghost" size="sm" className="text-muted-foreground">
-                <Link to="/code/settings" data-testid="code-settings">
-                  <Settings2 />
-                  Settings
-                </Link>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="text-muted-foreground"
+                aria-label="List options"
+                title="List options"
+              >
+                <MoreHorizontal />
               </Button>
-            </>
-          )}
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" side="top" className="w-56">
+              <DropdownMenuCheckboxItem
+                checked={grouped}
+                onCheckedChange={(on) => setGrouped(on === true)}
+              >
+                Group by repository
+              </DropdownMenuCheckboxItem>
+              {anyArchives && (
+                <DropdownMenuCheckboxItem
+                  checked={view === "archived"}
+                  onCheckedChange={(on) => setView(on === true ? "archived" : "active")}
+                  data-testid="code-archived-toggle"
+                >
+                  Show archived
+                </DropdownMenuCheckboxItem>
+              )}
+              {anyArchives && (
+                <DropdownMenuItem onSelect={() => setSelected(new Set())} data-testid="code-select">
+                  Select threads
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       )}
     </div>

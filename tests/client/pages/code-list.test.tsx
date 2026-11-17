@@ -99,6 +99,11 @@ const project = (id: string, name: string): ProjectView => ({
   createdAt: "2026-11-01T10:00:00Z",
 });
 
+const openMenuItem = async (name: string) => {
+  await userEvent.click(screen.getByRole("button", { name: "List options" }));
+  await userEvent.click(screen.getByRole("menuitem", { name }));
+};
+
 beforeEach(() => {
   window.localStorage.clear();
   archiveMock.mockReset();
@@ -106,7 +111,7 @@ beforeEach(() => {
 });
 
 describe("Code thread list", () => {
-  it("shows each thread's pull request, and when it needs you", () => {
+  it("shows a pull request only when it needs you (the Threads screen shows them all)", () => {
     render(
       <MemoryRouter>
         <ConversationList
@@ -124,9 +129,7 @@ describe("Code thread list", () => {
     expect(
       within(rowOf("fixing-ci")).getByLabelText("Pull request #12, needs you"),
     ).toHaveTextContent("#12");
-    expect(
-      within(rowOf("merged-one")).getByLabelText("Pull request #9, merged"),
-    ).toBeInTheDocument();
+    expect(within(rowOf("merged-one")).queryByText(/#\d/)).toBeNull();
     expect(within(rowOf("no-pr")).queryByText(/#\d/)).toBeNull();
   });
 
@@ -214,7 +217,7 @@ describe("Code thread list", () => {
         />
       </MemoryRouter>,
     );
-    await userEvent.click(screen.getByRole("button", { name: "Select threads" }));
+    await openMenuItem("Select threads");
     // Rows become checkboxes; a harness that cannot archive offers none.
     expect(screen.queryByRole("checkbox", { name: "Select c1" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Archive parent" })).toBeNull();
@@ -262,7 +265,7 @@ describe("Code thread list", () => {
         <ConversationList harnesses={[shelley]} threads={[row("a"), row("b"), row("c")]} />
       </MemoryRouter>,
     );
-    await userEvent.click(screen.getByRole("button", { name: "Select threads" }));
+    await openMenuItem("Select threads");
     const bar = screen.getByRole("toolbar", { name: "Selected threads" });
     expect(within(bar).getByRole("button", { name: "Archive" })).toBeDisabled();
     await userEvent.click(within(bar).getByRole("button", { name: "Select all" }));
@@ -286,9 +289,11 @@ describe("Code thread list", () => {
         />
       </MemoryRouter>,
     );
-    const group = screen.getByRole("button", { name: "Group by repository" });
-    expect(group).toHaveAttribute("aria-pressed", "true");
     expect(screen.getAllByTestId("code-group")).toHaveLength(2);
+    // The list's options sit behind one menu; grouping is on.
+    await userEvent.click(screen.getByRole("button", { name: "List options" }));
+    const group = screen.getByRole("menuitemcheckbox", { name: "Group by repository" });
+    expect(group).toHaveAttribute("aria-checked", "true");
     // Off: no folder headers, one list, newest first.
     await userEvent.click(group);
     expect(screen.queryAllByTestId("code-group")).toHaveLength(0);
@@ -300,6 +305,7 @@ describe("Code thread list", () => {
     // Search sits behind an icon.
     expect(screen.queryByRole("textbox", { name: "Search threads" })).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "Search threads" }));
+    // Nothing typed: leaving the box puts the Search row back.
     expect(screen.getByRole("textbox", { name: "Search threads" })).toHaveFocus();
 
     // The choice is remembered in this browser.
