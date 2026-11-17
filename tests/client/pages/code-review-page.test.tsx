@@ -4,9 +4,9 @@
  * half-width side pane, with the way back to the thread.
  */
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { ConfirmProvider } from "@groot/ui/primitives";
 import { NO_CAPABILITIES } from "@tiny-agents/code/contracts";
@@ -152,5 +152,51 @@ describe("the right panel", () => {
     expect(screen.queryByRole("region", { name: "Review panel" })).toBeNull();
     await user.click(screen.getByRole("button", { name: "Review panel" }));
     expect(screen.getByTestId("where")).toHaveTextContent("/code/shelley%3Ac1/pr");
+  });
+
+  describe("resizing", () => {
+    afterEach(() => window.localStorage.clear());
+    const divider = () => screen.getByRole("separator", { name: "Resize review panel" });
+    const panelWidth = () =>
+      screen.getByRole("region", { name: "Review panel" }).style.getPropertyValue("--review-width");
+
+    // jsdom's window is 1024px wide and lays nothing out, so the panel may
+    // grow until the conversation keeps 360px (664px) and shrinks to 320px.
+    it("resizes from the keyboard within its limits, and remembers the width", async () => {
+      const { unmount } = renderAt("/code/shelley%3Ac1/changes");
+      await screen.findByRole("region", { name: "Review panel" });
+      expect(panelWidth()).toBe("");
+
+      fireEvent.keyDown(divider(), { key: "Home" });
+      expect(divider()).toHaveAttribute("aria-valuenow", "320");
+      fireEvent.keyDown(divider(), { key: "ArrowLeft" });
+      expect(divider()).toHaveAttribute("aria-valuenow", "336");
+      expect(panelWidth()).toBe("336px");
+      fireEvent.keyDown(divider(), { key: "ArrowRight", shiftKey: true });
+      expect(divider()).toHaveAttribute("aria-valuenow", "320");
+      fireEvent.keyDown(divider(), { key: "End" });
+      expect(divider()).toHaveAttribute("aria-valuenow", "664");
+      expect(divider()).toHaveAttribute("aria-valuemin", "320");
+      expect(divider()).toHaveAttribute("aria-valuemax", "664");
+
+      unmount();
+      renderAt("/code/shelley%3Ac1/changes");
+      await screen.findByRole("region", { name: "Review panel" });
+      expect(panelWidth()).toBe("664px");
+    });
+
+    it("goes back to its default width on double-click", async () => {
+      window.localStorage.setItem("code:review-width", "500");
+      const { unmount } = renderAt("/code/shelley%3Ac1/changes");
+      await screen.findByRole("region", { name: "Review panel" });
+      expect(panelWidth()).toBe("500px");
+
+      fireEvent.doubleClick(divider());
+      expect(panelWidth()).toBe("");
+      unmount();
+      renderAt("/code/shelley%3Ac1/changes");
+      await screen.findByRole("region", { name: "Review panel" });
+      expect(panelWidth()).toBe("");
+    });
   });
 });
