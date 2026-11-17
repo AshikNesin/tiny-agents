@@ -607,3 +607,60 @@ describe("the review inbox", () => {
     );
   });
 });
+
+describe("changes since your review", () => {
+  it("diffs the PR from the commit of your last review on GitHub", async () => {
+    await newProject();
+    const reviewed = await forkPull([`printf 'one\\n' > src/one.ts`]);
+    github.pull(7).reviews.push({
+      id: "R_1",
+      author: { login: "ashik", type: "user", association: "MEMBER" },
+      state: "CHANGES_REQUESTED",
+      body: "Split it",
+      submittedAt: "2026-11-16T08:00:00Z",
+      commit: reviewed,
+    });
+    await forkPull([`printf 'ONE\\n' > src/one.ts`, `printf 'two\\n' > src/two.ts`]);
+
+    const review = (await call<PullReviewView>("POST", "/reviews", { pr: "acme/web#7" })).body
+      .data!;
+    expect(review.reviewedSha).toBe(reviewed);
+    const key = encodeURIComponent(review.key);
+    const files = (await call<ReviewFile[]>("GET", `/threads/${key}/review/files?since=review`))
+      .body.data!;
+    const diff = (
+      await call<ReviewFileDiff>("GET", `/threads/${key}/review/file?path=src/one.ts&since=review`)
+    ).body.data!;
+
+    expect(files.map((f) => [f.path, f.status])).toEqual([
+      ["src/one.ts", "modified"],
+      ["src/two.ts", "added"],
+    ]);
+    expect(diff).toMatchObject({ oldContent: "one\n", newContent: "ONE\n" });
+    // Against the base, src/one.ts is new.
+    const all = (await call<ReviewFile[]>("GET", `/threads/${key}/review/files`)).body.data!;
+    expect(all.find((f) => f.path === "src/one.ts")?.status).toBe("added");
+  });
+
+  it("submitting a review makes its commit the one to diff from next", async () => {
+    await newProject();
+    const head = await forkPull([`printf 'x\\n' > src/x.ts`]);
+    const review = (await call<PullReviewView>("POST", "/reviews", { pr: "acme/web#7" })).body
+      .data!;
+    expect(review.reviewedSha).toBeNull();
+    const before = await call(
+      "GET",
+      `/threads/${encodeURIComponent(review.key)}/review/files?since=review`,
+    );
+    expect([before.status, before.body.error?.message]).toEqual([
+      400,
+      "You have not reviewed this pull request yet.",
+    ]);
+
+    await call("POST", `/reviews/${review.id}/submit`, { event: "APPROVE" });
+
+    expect(
+      (await call<PullReviewView>("GET", `/reviews/${review.id}`)).body.data!.reviewedSha,
+    ).toBe(head);
+  });
+});

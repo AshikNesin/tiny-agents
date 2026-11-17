@@ -97,6 +97,12 @@ export interface Workspace {
   baseFiles(path: string, base: string): Promise<Array<GitFile & { hash: string }>>;
   /** One file's merge-base and working-tree content (or why it cannot be shown). */
   baseFile(path: string, base: string, file: string): Promise<FileContents>;
+  /**
+   * Files changed since commit `sha` (an earlier head of a PR: the one its
+   * reviewer last read), fetched first when the worktree lacks it.
+   */
+  sinceFiles(path: string, sha: string): Promise<Array<GitFile & { hash: string }>>;
+  sinceFile(path: string, sha: string, file: string): Promise<FileContents>;
   /** A fingerprint of the worktree's changes: it moves when the Review panel would change. */
   changeStamp(path: string): Promise<string>;
   /** Commits on HEAD that are not on `origin/<base>`, newest first. */
@@ -444,6 +450,14 @@ export function createWorkspace(options: WorkspaceOptions): Workspace {
       const mb = await mergeBase(path, base);
       return fileSides(reads(path), file, { rev: mb }, { worktree: true });
     },
+    async sinceFiles(path, sha) {
+      await haveCommit(path, sha);
+      return hashed(path, () => changedFiles(reads(path), sha));
+    },
+    async sinceFile(path, sha, file) {
+      await haveCommit(path, sha);
+      return fileSides(reads(path), file, { rev: sha }, { worktree: true });
+    },
     async changeStamp(path) {
       return changeStamp(reads(path));
     },
@@ -616,6 +630,20 @@ export function createWorkspace(options: WorkspaceOptions): Workspace {
       };
     },
   };
+
+  /** Fetch commit `sha` unless the worktree has it (GitHub serves a reachable commit by sha). */
+  async function haveCommit(path: string, sha: string): Promise<void> {
+    if (!/^[0-9a-f]{40}$/.test(sha)) throw new WorkspaceError("Not a commit sha");
+    if ((await run(`${git(path)} cat-file -e ${q(`${sha}^{commit}`)}`, 30_000)).exitCode === 0) {
+      return;
+    }
+    const fetched = await authed(`-C ${q(path)} fetch --quiet origin ${q(sha)}`);
+    if (fetched.exitCode !== 0) {
+      throw new WorkspaceError(
+        "The commit you last reviewed is no longer on GitHub (the branch was likely force-pushed).",
+      );
+    }
+  }
 
   async function mergeBase(path: string, base: string): Promise<string> {
     return (

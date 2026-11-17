@@ -36,7 +36,7 @@ import { threadReview } from "./code.review";
 import { checkpointRange, checkpointsOf, revertTo } from "./code.checkpoints";
 import { codeHub } from "./code.hub";
 import { checkLog } from "./code.checks";
-import { cleanBranchPrefix } from "./code.workspace";
+import { WorkspaceError, cleanBranchPrefix } from "./code.workspace";
 import {
   archiveReview,
   askReview,
@@ -385,18 +385,47 @@ async function reviewTarget(threadId: string) {
   };
 }
 
+/** A workspace failure the owner can act on, said as it is (409). */
+function saying(error: unknown): never {
+  if (error instanceof WorkspaceError) throw Boom.conflict(error.message);
+  throw error;
+}
+
+/**
+ * `?since=review`: a PR review's changes since the commit of the owner's
+ * last review, instead of since its base.
+ */
+async function sinceReview(threadId: string, since: string | undefined) {
+  if (since !== "review") return undefined;
+  const reviewId = reviewIdOfKey(threadId);
+  const sha = reviewId ? (await reviewWorktree(reviewId)).reviewedSha : null;
+  if (!sha) throw Boom.badRequest("You have not reviewed this pull request yet.");
+  return sha;
+}
+
 router.get("/code/threads/:id/review/files", async (c) => {
   const id = threadParam(c.req.param("id"));
-  const { base, worktree, ws } = await reviewTarget(id);
-  const files = await ws.baseFiles(worktree, base);
+  const [{ base, worktree, ws }, since] = await Promise.all([
+    reviewTarget(id),
+    sinceReview(id, c.req.query("since")),
+  ]);
+  const files = since
+    ? await ws.sinceFiles(worktree, since).catch(saying)
+    : await ws.baseFiles(worktree, base);
   return ok<ReviewFile[]>(c, await threadReview(id).withViewed(files));
 });
 
 router.get("/code/threads/:id/review/file", async (c) => {
   const id = threadParam(c.req.param("id"));
   const path = safePath(c.req.query("path"));
-  const { base, worktree, ws } = await reviewTarget(id);
-  return ok(c, { path, ...(await ws.baseFile(worktree, base, path)) });
+  const [{ base, worktree, ws }, since] = await Promise.all([
+    reviewTarget(id),
+    sinceReview(id, c.req.query("since")),
+  ]);
+  const sides = since
+    ? await ws.sinceFile(worktree, since, path).catch(saying)
+    : await ws.baseFile(worktree, base, path);
+  return ok(c, { path, ...sides });
 });
 
 router.post("/code/threads/:id/review/viewed", async (c) => {

@@ -83,6 +83,14 @@ function parsePullRef(input: string): { repo: RepoRef; number: number } | undefi
 const reviewPath = (project: CodeProjectRow, number: number) =>
   `${project.checkoutPath.replace(/\/checkout$/, "")}/reviews/pr-${number}`;
 
+/** The commit of `login`'s latest review of the PR that names one. */
+function lastReviewed(pr: PullSnapshot, login: string): string | null {
+  const mine = pr.reviews
+    .filter((r) => r.commit && r.author.login.toLowerCase() === login.toLowerCase())
+    .sort((a, b) => a.submittedAt.localeCompare(b.submittedAt));
+  return mine.at(-1)?.commit ?? null;
+}
+
 /** The Code thread that opened PR `number` of the project, if one did. */
 async function codingThreadOf(projectId: string, number: number): Promise<string | null> {
   const pull = await db.query.codePullRequests.findFirst({
@@ -107,6 +115,7 @@ async function reviewView(row: CodeReviewRow, project: CodeProjectRow): Promise<
     headSha: row.headSha,
     fromFork: row.fromFork,
     mine: row.mine,
+    reviewedSha: row.reviewedSha,
     threadId: row.threadId,
     codingThreadId: await codingThreadOf(project.id, row.number),
     archived: row.archivedAt !== null,
@@ -161,6 +170,7 @@ export async function openReview(input: string): Promise<PullReviewView> {
     headSha,
     fromFork: pr.fromFork,
     mine: !!viewer && !!pr.author && viewer.login.toLowerCase() === pr.author.toLowerCase(),
+    ...(viewer ? { reviewedSha: lastReviewed(pr, viewer.login) } : {}),
     worktree: path,
     archivedAt: null,
     updatedAt: new Date(),
@@ -199,13 +209,17 @@ export async function getReview(id: string): Promise<PullReviewView> {
   return reviewView(row, project);
 }
 
-/** What the review's file list and diffs read: its worktree, against the PR's base. */
+/**
+ * What the review's file list and diffs read: its worktree, against the
+ * PR's base, or (`since`) against the commit of the owner's last review.
+ */
 export async function reviewWorktree(id: string) {
   const { row, project } = await findReview(id);
   if (!row.worktree) throw Boom.notFound("This review is archived. Open the PR again.");
   return {
     worktree: row.worktree,
     base: row.baseRef,
+    reviewedSha: row.reviewedSha,
     ws: await codeGitHub().workspace(project),
   };
 }
@@ -366,7 +380,10 @@ export async function submitReview(
       });
     },
   );
-  await db.update(codeReviews).set({ updatedAt: new Date() }).where(eq(codeReviews.id, id));
+  await db
+    .update(codeReviews)
+    .set({ reviewedSha: row.headSha, updatedAt: new Date() })
+    .where(eq(codeReviews.id, id));
   return { url: result.url, comments: sent };
 }
 

@@ -236,6 +236,8 @@ export interface PullReviewView {
   fromFork: boolean;
   /** The owner opened this PR: GitHub lets them comment on it, not approve it. */
   mine: boolean;
+  /** The commit of the owner's last review of it, if any. */
+  reviewedSha: string | null;
   /** The assistant's thread, once the owner asked it something. */
   threadId: string | null;
   /** The Code thread that opened this PR, when one did: its comments can go there instead. */

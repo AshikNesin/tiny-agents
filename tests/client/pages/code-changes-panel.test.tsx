@@ -34,7 +34,9 @@ vi.mock("@groot/shell/lib/api", async (importOriginal) => {
     ...original,
     apiClient: Object.assign(Object.create(original.apiClient) as typeof original.apiClient, {
       get: async (path: string, query?: Record<string, string>) => {
-        const key = query?.path ? `${path}?${query.path}` : path;
+        const key =
+          (query?.path ? `${path}?${query.path}` : path) +
+          (query?.since ? `#since=${query.since}` : "");
         const route = routes[key];
         if (!route) throw new Error(`unexpected ${key}`);
         return route();
@@ -244,6 +246,48 @@ describe("Review panel", () => {
     rerender(panel("2"));
     await wait(750);
     expect(shown()).toEqual(["one", "two"]);
+  });
+});
+
+describe("a PR review you reviewed before", () => {
+  it("opens on the changes since your review", async () => {
+    const thread = "/code/threads/review%3Arv1";
+    routes[`${thread}/review/drafts`] = () => [];
+    routes[`${thread}/review/files#since=review`] = () => [
+      { ...file("src/new.ts", 3), hash: "h1", viewed: false },
+    ];
+    routes[`${thread}/review/file?src/new.ts#since=review`] = () => ({
+      path: "src/new.ts",
+      oldContent: "old\n",
+      newContent: "after review\n",
+    });
+    routes[`${thread}/review/files`] = () => [
+      { ...file("src/new.ts", 4), hash: "h1", viewed: false },
+      { ...file("src/old.ts", 9), hash: "h2", viewed: true },
+    ];
+    routes[`${thread}/review/file?src/new.ts`] = () => ({
+      path: "src/new.ts",
+      oldContent: "",
+      newContent: "whole\n",
+    });
+    render(
+      <ConfirmProvider>
+        <ReviewPanel
+          threadId="review:rv1"
+          baseBranch="main"
+          refreshKey="1"
+          page
+          pull={{ headRef: "maria:x", reviewedSha: "abc1234def" }}
+        />
+      </ConfirmProvider>,
+    );
+    await wait(0);
+    const scope = screen.getByRole("button", { name: "Changes to show" });
+    expect(scope).toHaveTextContent("Since your review");
+    expect(screen.getByRole("navigation", { name: "Changed files" })).not.toHaveTextContent(
+      "old.ts",
+    );
+    expect(shown()).toEqual(["old", "after review"]);
   });
 });
 

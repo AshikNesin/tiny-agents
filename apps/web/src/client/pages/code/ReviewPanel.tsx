@@ -97,8 +97,12 @@ export function ReviewPanel({
   conversations?: (path: string) => FileConversations;
   /** Uncommitted changes or one commit, from the harness (when it serves diffs). */
   onOtherScopes?: () => void;
-  /** A PR review (issue #345): its branch line, and no turns to step through. */
-  pull?: { headRef: string };
+  /**
+   * A PR review (issue #345): its branch line, no turns to step through, and
+   * with `reviewedSha` (the owner's last review, older than the head) a
+   * "Since your review" scope, shown first.
+   */
+  pull?: { headRef: string; reviewedSha?: string | null };
 }) {
   const settledKey = useSteadyKey(refreshKey);
   const [files, setFiles] = useState<ReviewFile[] | null>(null);
@@ -122,8 +126,11 @@ export function ReviewPanel({
     }
   };
   const confirm = useConfirm();
-  /** `base`, or a checkpoint id (what that turn changed). */
-  const [scope, setScope] = useState("base");
+  /** `base`, `review` (since the owner's last review of a PR), or a checkpoint id. */
+  const [picked, setScope] = useState<string | null>(null);
+  const scope = picked ?? (pull?.reviewedSha ? "review" : "base");
+  // Viewed marks are per file content, so they hold in either whole-PR scope.
+  const viewable = scope === "base" || scope === "review";
   const [checkpoints, setCheckpoints] = useState<CheckpointView[]>([]);
   const checkpoint = checkpoints.find((c) => c.id === scope);
 
@@ -155,8 +162,8 @@ export function ReviewPanel({
     let cancelled = false;
     setError(null);
     const list =
-      scope === "base"
-        ? projectsApi.reviewFiles(threadId)
+      scope === "base" || scope === "review"
+        ? projectsApi.reviewFiles(threadId, scope === "review" ? "review" : undefined)
         : projectsApi.checkpointFiles(threadId, scope);
     list
       .then((list) => {
@@ -184,8 +191,8 @@ export function ReviewPanel({
   useEffect(() => {
     if (!current || !reading) return;
     let cancelled = false;
-    (scope === "base"
-      ? projectsApi.reviewFile(threadId, current)
+    (scope === "base" || scope === "review"
+      ? projectsApi.reviewFile(threadId, current, scope === "review" ? "review" : undefined)
       : projectsApi.checkpointFile(threadId, scope, current)
     )
       .then((d) => !cancelled && setShown({ key: `${scope}:${current}`, diff: d }))
@@ -282,7 +289,32 @@ export function ReviewPanel({
         </p>
       )}
       <div className="border-border flex h-11 shrink-0 items-center gap-1 border-b px-2">
-        {pull ? (
+        {pull?.reviewedSha ? (
+          <SearchSelect
+            label="Changes to show"
+            value={scope}
+            onValueChange={setScope}
+            options={[
+              {
+                value: "review",
+                label: "Since your review",
+                description: `What changed after ${pull.reviewedSha.slice(0, 7)}`,
+              },
+              {
+                value: "base",
+                label: `Since ${baseBranch}`,
+                description: "The whole pull request",
+              },
+            ]}
+            triggerClassName="text-foreground h-8 text-sm"
+          >
+            <FileDiffIcon className="text-muted-foreground size-4" />
+            <span className="max-w-48 truncate">
+              {scope === "review" ? "Since your review" : `Since ${baseBranch}`}
+            </span>
+            <ChevronDown className="opacity-50" />
+          </SearchSelect>
+        ) : pull ? (
           <span className="text-foreground flex h-8 items-center gap-1.5 px-2 text-sm">
             <FileDiffIcon className="text-muted-foreground size-4" />
             Since {baseBranch}
@@ -332,9 +364,7 @@ export function ReviewPanel({
         )}
         {files && files.length > 0 && (
           <span className="text-muted-foreground shrink-0 px-1 text-xs tabular-nums">
-            {scope === "base"
-              ? `${totals.viewed}/${files.length} viewed `
-              : `${files.length} files `}
+            {viewable ? `${totals.viewed}/${files.length} viewed ` : `${files.length} files `}
             <span className="text-success">+{totals.add}</span>{" "}
             <span className="text-destructive">−{totals.del}</span>
           </span>
@@ -412,7 +442,7 @@ export function ReviewPanel({
                   const [name, dir] = splitPath(f.path);
                   return (
                     <li key={f.path} className="flex items-center gap-1">
-                      {scope === "base" && (
+                      {viewable && (
                         <Checkbox
                           checked={f.viewed}
                           onCheckedChange={() => toggleViewed(f)}
@@ -476,7 +506,7 @@ export function ReviewPanel({
                     const next = listedFiles[index + step];
                     if (next) setCurrent(next.path);
                   }}
-                  onViewed={scope === "base" ? () => toggleViewed(currentFile) : undefined}
+                  onViewed={viewable ? () => toggleViewed(currentFile) : undefined}
                   onList={page ? undefined : () => setListing(true)}
                 />
               )}

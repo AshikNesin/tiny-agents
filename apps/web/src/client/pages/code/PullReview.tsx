@@ -200,7 +200,10 @@ export function PullReview({
           <ReviewPanel
             threadId={review.key}
             baseBranch={review.baseRef}
-            pull={{ headRef: review.headRef }}
+            pull={{
+              headRef: review.headRef,
+              reviewedSha: review.reviewedSha !== review.headSha ? review.reviewedSha : null,
+            }}
             refreshKey={`${review.headSha}:${reload}:${assistantRow?.working}:${assistantRow?.cursor}`}
             page
             commenting={commenting}

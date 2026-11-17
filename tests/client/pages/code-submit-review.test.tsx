@@ -27,6 +27,7 @@ const REVIEW: PullReviewView = {
   headSha: "abc",
   fromFork: true,
   mine: false,
+  reviewedSha: null,
   threadId: null,
   codingThreadId: null,
   archived: false,

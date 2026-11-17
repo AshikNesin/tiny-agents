@@ -86,9 +86,11 @@ export const projectsApi = {
   merge: (id: string, method: MergeMethod) =>
     apiClient.post<ThreadPullsView>(`${thread(id)}/pr/merge`, { method }),
 
-  reviewFiles: (id: string) => apiClient.get<ReviewFile[]>(`${thread(id)}/review/files`),
-  reviewFile: (id: string, path: string) =>
-    apiClient.get<ReviewFileDiff>(`${thread(id)}/review/file`, { path }),
+  /** `since: "review"`: a PR review's changes since the owner's last review. */
+  reviewFiles: (id: string, since?: "review") =>
+    apiClient.get<ReviewFile[]>(`${thread(id)}/review/files`, since ? { since } : undefined),
+  reviewFile: (id: string, path: string, since?: "review") =>
+    apiClient.get<ReviewFileDiff>(`${thread(id)}/review/file`, since ? { path, since } : { path }),
   setViewed: (id: string, path: string, hash: string, viewed: boolean) =>
     apiClient.post(`${thread(id)}/review/viewed`, { path, hash, viewed }),
   drafts: (id: string) => apiClient.get<ReviewDraft[]>(`${thread(id)}/review/drafts`),

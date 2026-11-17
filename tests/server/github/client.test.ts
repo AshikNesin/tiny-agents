@@ -47,6 +47,7 @@ const SNAPSHOT = {
             submittedAt: "2026-11-05T00:00:00Z",
             authorAssociation: "COLLABORATOR",
             author: { login: "carol", __typename: "User" },
+            commit: { oid: "rev1" },
           },
         ],
       },
@@ -217,6 +218,7 @@ describe.each(TRANSPORTS)("the client over %s", (_, transport) => {
       ["old", "neutral", null],
       ["deploy", "success", null],
     ]);
+    expect(snapshot.reviews[0]?.commit).toBe("rev1");
     expect(snapshot.reviews[0]?.author).toEqual({
       login: "carol",
       type: "user",

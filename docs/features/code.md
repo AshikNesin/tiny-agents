@@ -478,8 +478,15 @@ folded. GitHub places them at the PR's current head: when the review shows
 an older commit, or the code moved on (outdated), a file lists them above
 its diff instead, the first with a hint to **Update**.
 
-Not built yet (issue #345): the diff of changes since your last review,
-and pushing changes made during a review.
+**Since your review.** Opening a review reads which commit your last
+GitHub review of the PR was on (from the same query), and submitting one
+here records its head. When the PR has moved on since, the diff opens on
+**Since your review**: the changes from that commit to the head, fetched
+by sha if the worktree lacks it (a force-pushed commit GitHub no longer
+has says so). **Since <base>** still shows the whole PR. Viewed marks hold
+in both.
+
+Not built yet (issue #345): pushing changes made during a review.
 
 ## Bots hand off coding
 

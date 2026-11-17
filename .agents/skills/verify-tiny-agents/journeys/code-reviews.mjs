@@ -44,6 +44,7 @@ await journey(
       headSha: "0123456789abcdef0123456789abcdef01234567",
       fromFork: true,
       mine: false,
+      reviewedSha: null,
       threadId: null,
       codingThreadId: null,
       archived: false,

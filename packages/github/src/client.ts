@@ -44,6 +44,8 @@ export interface Review {
   state: "APPROVED" | "CHANGES_REQUESTED" | "COMMENTED" | "DISMISSED" | "PENDING";
   body: string;
   submittedAt: string;
+  /** The commit it was submitted on. */
+  commit?: string | null;
 }
 
 export interface ReviewComment {
@@ -271,7 +273,7 @@ const SNAPSHOT_QUERY = `query PullSnapshot($owner: String!, $name: String!, $num
         nodes { ... on RemovedFromMergeQueueEvent { id createdAt reason } }
       }
       ${AUTHOR}
-      reviews(last: 50) { nodes { id state body submittedAt authorAssociation ${AUTHOR} } }
+      reviews(last: 50) { nodes { id state body submittedAt authorAssociation ${AUTHOR} commit { oid } } }
       reviewThreads(first: 100) {
         nodes {
           id path line startLine diffSide isResolved isOutdated
@@ -350,6 +352,7 @@ interface RawSnapshot {
           submittedAt: string;
           authorAssociation: string;
           author: RawAuthor | null;
+          commit?: { oid: string } | null;
         }>;
       };
       reviewThreads: {
@@ -496,6 +499,7 @@ export function toSnapshot(raw: RawSnapshot): PullSnapshot {
       state: r.state,
       body: r.body,
       submittedAt: r.submittedAt,
+      commit: r.commit?.oid ?? null,
     })),
     threads: pr.reviewThreads.nodes.map((t) => ({
       id: t.id,
