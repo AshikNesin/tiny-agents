@@ -6,15 +6,16 @@
  *
  * A `FileDiff` reads like a review: one line-number gutter, long lines
  * wrapped, unchanged runs folded into "Show N more lines", and, when the
- * caller takes comments, a Comment button in each line's gutter that opens a
- * composer right under that line (shift-click another line to widen the
- * range). Saved comments stay under their lines until they are sent.
+ * caller takes comments, each line number is a Comment button: click one,
+ * then shift-click another or drag down the numbers (mouse or finger) to
+ * take a range, and a composer opens under its last line. Saved comments stay
+ * under their lines until they are sent.
  *
  * Today this renders with jsdiff (`diff`); the agreed renderer is
  * @pierre/diffs (diffs.com), pending a supply-chain exception for its
  * `@pierre/theme@2.0.0` dependency (see the PR notes).
  */
-import { Fragment, useMemo, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import { diffLines, parsePatch } from "diff";
 import { Plus, Trash2, UnfoldVertical } from "lucide-react";
 import { Button, Textarea } from "@groot/ui";
@@ -184,15 +185,19 @@ export interface Commenting {
 function Composer({
   path,
   selection,
+  body,
+  setBody,
   onSubmit,
   onCancel,
 }: {
   path: string;
   selection: LineSelection;
+  /** Held by the diff, so widening the range keeps what was typed. */
+  body: string;
+  setBody(body: string): void;
   onSubmit(body: string): Promise<void>;
   onCancel(): void;
 }) {
-  const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
   const submit = async () => {
     if (!body.trim() || busy) return;
@@ -227,7 +232,8 @@ function Composer({
       <div className="mt-1.5 flex items-center gap-1.5">
         <span className="text-muted-foreground min-w-0 flex-1 truncate text-xs">
           Commenting on {rangeLabel(selection)}
-          <span className="pointer-coarse:hidden"> · shift-click a line to widen</span>
+          <span className="pointer-coarse:hidden"> · shift-click or drag to widen</span>
+          <span className="pointer-fine:hidden"> · drag the numbers to widen</span>
         </span>
         <Button type="button" size="xs" variant="ghost" onClick={onCancel}>
           Cancel
@@ -293,14 +299,39 @@ function DiffRows({
   className?: string;
 }) {
   const [selection, setSelection] = useState<LineSelection | null>(null);
+  const [draft, setDraft] = useState("");
+  // The line a drag began on, while a button or finger is down on the numbers.
+  const [dragFrom, setDragFrom] = useState<{ side: "old" | "new"; no: number } | null>(null);
+  useEffect(() => {
+    if (!dragFrom) return;
+    const end = () => setDragFrom(null);
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
+    return () => {
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+    };
+  }, [dragFrom]);
   const pick = (line: DiffLine, extend: boolean) => {
     const at = anchor(line);
     if (!at) return;
-    setSelection((prev) =>
-      extend && prev && prev.side === at.side
-        ? { side: at.side, from: Math.min(prev.from, at.no), to: Math.max(prev.to, at.no) }
-        : { side: at.side, from: at.no, to: at.no },
-    );
+    if (extend && selection && selection.side === at.side) {
+      setSelection({
+        side: at.side,
+        from: Math.min(selection.from, at.no),
+        to: Math.max(selection.to, at.no),
+      });
+      return;
+    }
+    setDraft("");
+    setSelection({ side: at.side, from: at.no, to: at.no });
+  };
+  // A drag reaches another line: the range runs from where it began to here.
+  const dragOver = (line: DiffLine) => {
+    const from = dragFrom;
+    const at = anchor(line);
+    if (!from || !at || at.side !== from.side) return;
+    setSelection({ side: at.side, from: Math.min(from.no, at.no), to: Math.max(from.no, at.no) });
   };
   const inSelection = (line: DiffLine) => {
     const at = anchor(line);
@@ -351,27 +382,55 @@ function DiffRows({
     }
     const at = anchor(row);
     const composerHere =
-      commenting && selection && at && at.side === selection.side && at.no === selection.to;
+      commenting &&
+      !dragFrom &&
+      selection &&
+      at &&
+      at.side === selection.side &&
+      at.no === selection.to;
+    const number = row.newNo ?? row.oldNo ?? "";
     return (
       <Fragment key={row.id}>
         <div
           className={cn("group/line flex", ROW[row.kind], inSelection(row) && "bg-primary/15")}
           data-kind={row.kind}
+          onPointerEnter={commenting && at ? () => dragOver(row) : undefined}
         >
-          <span className="text-muted-foreground relative w-12 shrink-0 pr-2 text-right tabular-nums select-none">
-            {commenting && at && (
-              <button
-                type="button"
-                onClick={(event) => pick(row, event.shiftKey)}
-                aria-label={`Comment on ${rangeLabel({ from: at.no, to: at.no, side: at.side })}`}
-                title="Comment (shift-click to widen)"
-                className="bg-primary text-primary-foreground absolute top-0.5 left-0.5 flex size-4 items-center justify-center rounded opacity-0 group-hover/line:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-40"
+          {commenting && at ? (
+            <button
+              type="button"
+              // Pointers pick on press (so a drag can follow); a keyboard picks on click.
+              onPointerDown={(event) => {
+                if (event.button !== 0) return;
+                event.preventDefault();
+                // A finger captures the pointer; release it so the rows it
+                // slides over hear about it.
+                const target = event.currentTarget;
+                if (target.hasPointerCapture?.(event.pointerId))
+                  target.releasePointerCapture(event.pointerId);
+                pick(row, event.shiftKey);
+                if (!event.shiftKey) setDragFrom(at);
+              }}
+              onClick={(event) => {
+                if (event.detail === 0) pick(row, event.shiftKey);
+              }}
+              aria-label={`Comment on ${rangeLabel({ from: at.no, to: at.no, side: at.side })}`}
+              title="Comment (drag or shift-click for more lines)"
+              className="text-muted-foreground hover:text-foreground relative flex w-12 shrink-0 cursor-pointer touch-none items-start justify-end pr-2 tabular-nums select-none"
+            >
+              <span
+                className="bg-primary text-primary-foreground absolute top-0.5 left-0.5 flex size-4 items-center justify-center rounded opacity-0 group-hover/line:opacity-100 pointer-coarse:hidden"
+                aria-hidden
               >
                 <Plus className="size-3" />
-              </button>
-            )}
-            {row.newNo ?? row.oldNo ?? ""}
-          </span>
+              </span>
+              {number}
+            </button>
+          ) : (
+            <span className="text-muted-foreground w-12 shrink-0 pr-2 text-right tabular-nums select-none">
+              {number}
+            </span>
+          )}
           <span className="text-muted-foreground w-4 shrink-0 select-none">{SIGN[row.kind]}</span>
           <span className="min-w-0 flex-1 pr-4 whitespace-pre-wrap [overflow-wrap:anywhere]">
             {row.text || " "}
@@ -383,13 +442,15 @@ function DiffRows({
           ))}
         {composerHere && (
           <Composer
-            key={`${selection.side}:${selection.from}`}
             path={commenting.path}
             selection={selection}
+            body={draft}
+            setBody={setDraft}
             onCancel={() => setSelection(null)}
             onSubmit={async (text) => {
               await commenting.onComment(selection, text);
               setSelection(null);
+              setDraft("");
             }}
           />
         )}

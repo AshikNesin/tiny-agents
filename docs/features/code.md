@@ -153,8 +153,10 @@ commit, of the thread's directory, each changed file as a card with its
 diff. Unchanged runs fold into **Show N more lines**, one
 gutter numbers the lines, and long lines wrap.
 
-- **Comments.** Hover a line and press its **+** to open a composer right
-  under it (shift-click another line's **+** to widen the range); ⌘↵ saves.
+- **Comments.** Click a line number to open a composer right under that
+  line. Drag down the numbers (mouse or finger) or shift-click another
+  number to take a range; the composer moves under its last line and keeps
+  what you typed. ⌘↵ saves.
   The comment stays under its line and waits above the thread's composer
   ("N comments go with your next message"), where each can be removed. The
   next message you send takes them along in the same turn, ahead of your

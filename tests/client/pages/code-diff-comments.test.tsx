@@ -69,6 +69,62 @@ describe("commenting on a line", () => {
     expect(screen.getByText("Commenting on lines 1–3")).toBeInTheDocument();
   });
 
+  it("dragging down the line numbers selects that range and opens one composer for it", async () => {
+    const user = userEvent.setup();
+    const onComment = vi.fn(async () => {});
+    render(
+      <FileDiff path="a.txt" oldContent="" newContent={"a\nb\nc\nd\n"} onComment={onComment} />,
+    );
+    const gutter = (no: number) => screen.getByRole("button", { name: `Comment on line ${no}` });
+    fireEvent.pointerDown(gutter(2), { button: 0, pointerId: 1 });
+    fireEvent.pointerEnter(gutter(3), { pointerId: 1 });
+    fireEvent.pointerEnter(gutter(4), { pointerId: 1 });
+    // No composer jumps around while the range is still being dragged.
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    fireEvent.pointerUp(window, { pointerId: 1 });
+
+    await user.type(
+      screen.getByRole("textbox", { name: "Comment on a.txt lines 2–4" }),
+      "Merge these",
+    );
+    await user.click(screen.getByRole("button", { name: "Comment" }));
+    expect(onComment).toHaveBeenCalledWith({ from: 2, to: 4, side: "new" }, "Merge these");
+  });
+
+  it("dragging up from a line selects from where the drag ended to where it began", () => {
+    render(
+      <FileDiff
+        path="a.txt"
+        oldContent=""
+        newContent={"a\nb\nc\nd\n"}
+        onComment={async () => {}}
+      />,
+    );
+    const gutter = (no: number) => screen.getByRole("button", { name: `Comment on line ${no}` });
+    fireEvent.pointerDown(gutter(4), { button: 0, pointerId: 1 });
+    fireEvent.pointerEnter(gutter(1), { pointerId: 1 });
+    fireEvent.pointerUp(window, { pointerId: 1 });
+    expect(screen.getByText("Commenting on lines 1–4")).toBeInTheDocument();
+  });
+
+  it("keeps what you typed when the range is widened", async () => {
+    const user = userEvent.setup();
+    render(
+      <FileDiff
+        path="a.txt"
+        oldContent=""
+        newContent={"a\nb\nc\nd\n"}
+        onComment={async () => {}}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Comment on line 1" }));
+    await user.type(screen.getByRole("textbox"), "Half a thought");
+    fireEvent.click(screen.getByRole("button", { name: "Comment on line 3" }), { shiftKey: true });
+    expect(screen.getByRole("textbox", { name: "Comment on a.txt lines 1–3" })).toHaveValue(
+      "Half a thought",
+    );
+  });
+
   it("keeps a saved comment under its lines, and removes it on request", async () => {
     const user = userEvent.setup();
     const onRemove = vi.fn();
