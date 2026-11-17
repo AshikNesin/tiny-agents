@@ -882,6 +882,12 @@ export const memories = sqliteTable(
     confidence: real("confidence"),
     /** Optional expiry; null = no expiry. Expired rows stay rows, leave the prompt. */
     until: ms("until"),
+    /**
+     * The conversation it was learned in (capture of that chat, or `remember`
+     * there); null for the Memory page. That conversation already holds the
+     * fact, so the memory alone never re-sends its prompt section there.
+     */
+    conversationId: text("conversation_id"),
     /** Set when a newer memory replaced this one (strike-through in the UI). */
     supersededById: text("superseded_by_id"),
     supersededAt: ms("superseded_at"),

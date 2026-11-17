@@ -15,6 +15,7 @@ import {
   captureWindow,
   captureConversation,
 } from "../../../../apps/web/src/server/api/bots/memories.runner";
+import { memoryStore } from "../../../../apps/web/src/server/api/bots/memories.store";
 import type { SideCaller } from "../../../../apps/web/src/server/api/bots/side-call";
 import type { ConversationOwner } from "../../../../apps/web/src/server/api/bots/bots.owner";
 import { bots, db, memories, routines } from "../../../../apps/web/src/server/db";
@@ -73,7 +74,10 @@ describe("buildCapturePrompt", () => {
       currentMemories: null,
       today: "2026-10-29",
     };
-    const prompt = buildCapturePrompt({ ...input, removedMemories: "- The owner prefers tea." });
+    const prompt = buildCapturePrompt({
+      ...input,
+      removedMemories: "- The owner prefers tea.",
+    });
     expect(prompt).toContain(
       "The owner removed these memories. Never add them again, reworded or not:",
     );
@@ -105,7 +109,12 @@ describe("parseExtraction", () => {
 describe("captureWindow", () => {
   const msgs = [
     { role: "user", text: "old turn", createdAt: 1, peer: undefined },
-    { role: "user", text: "peer delivery", createdAt: 5, peer: { kind: "reply", name: "Bot" } },
+    {
+      role: "user",
+      text: "peer delivery",
+      createdAt: 5,
+      peer: { kind: "reply", name: "Bot" },
+    },
     { role: "assistant", text: "reply", createdAt: 6 },
     { role: "user", text: "I prefer pnpm", createdAt: 10 },
   ];
@@ -127,7 +136,12 @@ describe("captureWindow", () => {
       { role: "assistant", text: "Where do you live?", createdAt: 3 },
       { role: "user", text: "In Chennai, near my office.", createdAt: 4 },
       { role: "assistant", text: "Got it.", createdAt: 5 },
-      { role: "user", text: "Peer's request", createdAt: 6, peer: { kind: "request" } },
+      {
+        role: "user",
+        text: "Peer's request",
+        createdAt: 6,
+        peer: { kind: "request" },
+      },
       { role: "assistant", text: "Peer's answer", createdAt: 7 },
     ];
     const window = captureWindow(messages, new Date(1), "Scout");
@@ -146,13 +160,19 @@ describe("captureWindow", () => {
       [
         { role: "user", text: "你好", createdAt: 1 },
         { role: "assistant", text: "x".repeat(3_000), createdAt: 2 },
-        { role: "assistant", text: "model error", createdAt: 3, status: "error" },
+        {
+          role: "assistant",
+          text: "model error",
+          createdAt: 3,
+          status: "error",
+        },
       ],
       null,
       "Scout",
     );
     expect(window.ownerBytes).toBe(6);
-    expect(window.lines).toEqual(["Owner: 你好", `Scout: ${"x".repeat(1_500)}`]);
+    // Replies are only context for the owner's words: the first 500 characters.
+    expect(window.lines).toEqual(["Owner: 你好", `Scout: ${"x".repeat(500)}`]);
   });
 
   it("caps a long window to its newest lines but still ends at the newest owner turn", () => {
@@ -179,7 +199,11 @@ describe("captureConversation", () => {
       '[{"text":"The owner prefers TypeScript, never JavaScript.","category":"preference","confidence":0.9}]',
     );
     const messages = [
-      { role: "user", text: "I prefer TypeScript, never JavaScript", createdAt: Date.now() },
+      {
+        role: "user",
+        text: "I prefer TypeScript, never JavaScript",
+        createdAt: Date.now(),
+      },
     ];
     await captureConversation(conversationId, {
       sideCaller: caller,
@@ -201,15 +225,77 @@ describe("captureConversation", () => {
     expect((await findBot(botId))?.memoryCapturedThrough?.getTime()).toBe(messages[0]!.createdAt);
   });
 
+  it("shows the extractor short memory refs, not row ids, and maps a supersede back", async () => {
+    const { botId, conversationId } = await seedBot();
+    const [old] = await db
+      .insert(memories)
+      .values([
+        {
+          botId,
+          text: "The owner lives in Pune.",
+          category: "fact",
+          createdAt: new Date(1_000),
+        },
+        {
+          botId,
+          text: "The owner likes tea.",
+          category: "preference",
+          createdAt: new Date(2_000),
+        },
+      ])
+      .returning();
+    const caller = sideCaller(
+      '[{"text":"The owner lives in Berlin.","category":"fact","confidence":0.9,"supersedesIds":["m1"]}]',
+    );
+    await captureConversation(conversationId, {
+      sideCaller: caller,
+      readTranscript: ownerSays("I moved from Pune to Berlin last week."),
+    });
+    const prompt = caller.complete.mock.calls[0]![0].system;
+    expect(prompt).toContain("- m1 — The owner lives in Pune.\n- m2 — The owner likes tea.");
+    expect(prompt).not.toContain(old!.id);
+    expect(await db.query.memories.findFirst({ where: eq(memories.id, old!.id) })).toMatchObject({
+      status: "superseded",
+    });
+    const berlin = await db.query.memories.findFirst({
+      where: and(
+        eq(memories.botId, botId),
+        eq(memories.status, "active"),
+        eq(memories.category, "fact"),
+      ),
+    });
+    expect(berlin).toMatchObject({ text: "The owner lives in Berlin." });
+    expect(old).toMatchObject({ text: "The owner lives in Pune." });
+  });
+
+  it("marks what it captured as learned in that conversation", async () => {
+    const { conversationId } = await seedBot();
+    await captureConversation(conversationId, {
+      sideCaller: sideCaller(
+        '[{"text":"The owner prefers TypeScript.","category":"preference","confidence":0.9}]',
+      ),
+      readTranscript: ownerSays("I prefer TypeScript for everything."),
+    });
+    expect(await memoryStore.list(conversationId)).toMatchObject([
+      { text: "The owner prefers TypeScript.", learnedHere: true },
+    ]);
+  });
+
   it("makes no call without a side-caller (faux mode) or with memory off", async () => {
     const { botId, conversationId } = await seedBot();
     const readTranscript = vi.fn(ownerSays("x".repeat(300)));
-    await captureConversation(conversationId, { sideCaller: undefined, readTranscript });
+    await captureConversation(conversationId, {
+      sideCaller: undefined,
+      readTranscript,
+    });
     expect(readTranscript).not.toHaveBeenCalled();
 
     await db.update(bots).set({ memoryEnabled: false }).where(eq(bots.id, botId));
     const caller = sideCaller();
-    await captureConversation(conversationId, { sideCaller: caller, readTranscript });
+    await captureConversation(conversationId, {
+      sideCaller: caller,
+      readTranscript,
+    });
     expect(caller.complete).not.toHaveBeenCalled();
     expect((await findBot(botId))?.memoryCapturedThrough).toBeNull();
   });
@@ -228,7 +314,11 @@ describe("captureConversation", () => {
   it("retries the unchanged window after no answer or an unparseable one", async () => {
     const { botId, conversationId } = await seedBot();
     const messages = [
-      { role: "user", text: "I prefer TypeScript, never JavaScript", createdAt: Date.now() },
+      {
+        role: "user",
+        text: "I prefer TypeScript, never JavaScript",
+        createdAt: Date.now(),
+      },
     ];
     const caller = sideCaller();
     caller.complete.mockResolvedValue(undefined);
@@ -250,7 +340,12 @@ describe("captureConversation", () => {
     await captureConversation(conversationId, {
       sideCaller: caller,
       readTranscript: async () => [
-        { role: "user", text: "Peer ".repeat(60), peer: { kind: "request" }, createdAt: 1 },
+        {
+          role: "user",
+          text: "Peer ".repeat(60),
+          peer: { kind: "request" },
+          createdAt: 1,
+        },
         { role: "assistant", text: "Peer reply", createdAt: 2 },
       ],
     });
@@ -271,7 +366,10 @@ describe("captureConversation", () => {
     });
     const caller = sideCaller();
     const readTranscript = vi.fn(ownerSays("I prefer TypeScript, never JavaScript"));
-    await captureConversation(routineConversation, { sideCaller: caller, readTranscript });
+    await captureConversation(routineConversation, {
+      sideCaller: caller,
+      readTranscript,
+    });
     expect(readTranscript).not.toHaveBeenCalled();
     expect(caller.complete).not.toHaveBeenCalled();
     expect(await db.$count(memories, eq(memories.botId, botId))).toBe(0);
@@ -302,8 +400,16 @@ describe("captureConversation", () => {
     caller.complete.mockImplementation(async ({ system }) =>
       JSON.stringify(
         [
-          { text: "The owner likes tea.", category: "preference", confidence: 0.9 },
-          { text: "The owner lives in Chennai.", category: "fact", confidence: 0.9 },
+          {
+            text: "The owner likes tea.",
+            category: "preference",
+            confidence: 0.9,
+          },
+          {
+            text: "The owner lives in Chennai.",
+            category: "fact",
+            confidence: 0.9,
+          },
         ].filter((m) => !(m.text.includes("tea") && system.includes("Owner prefers tea"))),
       ),
     );
@@ -348,7 +454,11 @@ describe("memory capture debounce (a settled step)", () => {
   it("fires on the quiet window and pushes back on new turns", async () => {
     vi.useFakeTimers();
     const captureNow = vi.fn().mockResolvedValue(undefined);
-    const capture = createMemoryCapture({ captureNow, quietMs: 100, turnLimit: 6 });
+    const capture = createMemoryCapture({
+      captureNow,
+      quietMs: 100,
+      turnLimit: 6,
+    });
     await capture.onSettled.run(settled(7)); // turn 1
     vi.advanceTimersByTime(50);
     await capture.onSettled.run(settled(7)); // turn 2 pushes the window back
@@ -362,7 +472,11 @@ describe("memory capture debounce (a settled step)", () => {
   it("arms only for a bot's own chat with memory on", async () => {
     vi.useFakeTimers();
     const captureNow = vi.fn().mockResolvedValue(undefined);
-    const capture = createMemoryCapture({ captureNow, quietMs: 100, turnLimit: 6 });
+    const capture = createMemoryCapture({
+      captureNow,
+      quietMs: 100,
+      turnLimit: 6,
+    });
     const bot = {
       id: "b",
       name: "B",
@@ -375,7 +489,10 @@ describe("memory capture debounce (a settled step)", () => {
     await capture.onSettled.run(
       settled(2, { kind: "chat", bot: { ...bot, memoryEnabled: false } }),
     );
-    await capture.onSettled.run({ ...settled(3), owner: async () => undefined });
+    await capture.onSettled.run({
+      ...settled(3),
+      owner: async () => undefined,
+    });
     vi.advanceTimersByTime(500);
     expect(captureNow).not.toHaveBeenCalled();
     capture.stop();
@@ -385,7 +502,11 @@ describe("memory capture debounce (a settled step)", () => {
     vi.useFakeTimers();
     const gates: Array<() => void> = [];
     const captureNow = vi.fn(() => new Promise<void>((resolve) => gates.push(resolve)));
-    const capture = createMemoryCapture({ captureNow, quietMs: 100_000, turnLimit: 3 });
+    const capture = createMemoryCapture({
+      captureNow,
+      quietMs: 100_000,
+      turnLimit: 3,
+    });
     const emit = (times: number) =>
       Array.from({ length: times }).reduce<Promise<unknown>>(
         (previous) => previous.then(() => capture.onSettled.run(settled(9))),
@@ -409,7 +530,11 @@ describe("memory capture debounce (a settled step)", () => {
     vi.useFakeTimers();
     const gates: Array<() => void> = [];
     const captureNow = vi.fn(() => new Promise<void>((resolve) => gates.push(resolve)));
-    const capture = createMemoryCapture({ captureNow, quietMs: 100, turnLimit: 10 });
+    const capture = createMemoryCapture({
+      captureNow,
+      quietMs: 100,
+      turnLimit: 10,
+    });
     await capture.onSettled.run(settled(11));
     await vi.advanceTimersByTimeAsync(100);
     expect(captureNow).toHaveBeenCalledTimes(1);
@@ -425,7 +550,11 @@ describe("memory capture debounce (a settled step)", () => {
   it("forces a capture at the turn limit", async () => {
     vi.useFakeTimers();
     const captureNow = vi.fn().mockResolvedValue(undefined);
-    const capture = createMemoryCapture({ captureNow, quietMs: 100_000, turnLimit: 3 });
+    const capture = createMemoryCapture({
+      captureNow,
+      quietMs: 100_000,
+      turnLimit: 3,
+    });
     await capture.onSettled.run(settled(9));
     await capture.onSettled.run(settled(9));
     expect(captureNow).not.toHaveBeenCalled();

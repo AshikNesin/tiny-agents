@@ -16,6 +16,8 @@ supersession, expiry, and the never-re-add tombstone structural:
 - `source` — `capture | manual` (the page's source line)
 - `until` — optional expiry; expired rows stay rows, leave the prompt
 - `supersededById/At` — strike-through chain when a newer fact replaces one
+- `conversationId` — the conversation it was learned in (capture or
+  `remember`); null for the Memory page
 
 `Bot.memoryEnabled` gates capture, chat-side saves and forgets, and injection. `Bot.memoryCapturedThrough`
 is the transcript watermark: capture commits it in the same transaction as
@@ -37,10 +39,16 @@ prompt section through the store-adapter pattern (`memories.store.ts`) with
 `createdAt`) win as whole lines, and the block ends with an accurate
 `…N older memories omitted` line. The kept lines render in fixed category
 order then createdAt ascending. Sections render before every request, and
-pi-durable sends only what changed, so a saved, deleted or forgotten memory
-reaches the prompt on the next message. It renders nothing when memory is off
-or empty (zero prompt delta), and its content only changes when memories
-change, so provider prompt caching survives between captures.
+pi-durable re-sends a section into the transcript each time its text
+changes. So the block changes only for what the conversation can't already
+know: a memory learned in that same conversation (its own capture, or
+`remember` there) leaves the block it shows as it is, since the fact is
+already in its context (Hermes Agent's frozen snapshot). A memory from
+anywhere else, or any removal (delete, forget, supersede, expiry), refreshes
+the block on the next message, and then it includes the conversation's own
+new memories too. A new chat, or a compaction that drops the block, starts
+from the full current set. It renders nothing when memory is off or empty
+(zero prompt delta).
 
 ## Capture
 
@@ -62,16 +70,19 @@ never enter the chat, see [routines](./routines.md)). One capture reads at most 
 24 000 characters of whole lines; when the cap applies (a long backlog, or a
 bot that predates memory with no watermark) the watermark still advances to
 the window's end, so an oversized window never retries forever. Assistant replies provide context for the
-owner's words, clipped to 1,500 characters each; error replies and replies
-to peers stay out. Role labels and assistant text do not count
+owner's words; error replies and replies to peers stay out. Assistant replies are clipped to their first 500 characters:
+they are only context for the owner's words. Role labels and assistant text do not count
 toward the trivial threshold.
 
 The extraction prompt carries the anti-junk contract (owner's words only,
 third-person single sentences, no secrets or quoted text, `until` dates,
 `supersedesIds` for contradictions), includes today's date for computing
-temporary expiries, and returns JSON. The memory ledger
+temporary expiries, and returns JSON. Current memories are listed under short
+refs (`m1`, `m2`, … as mem0 does), not row ids: a 36-character id on every
+line costs tokens and invites a misspelled supersede. The runner maps the
+refs back to rows before the ledger applies them. The memory ledger
 (`memories.ledger.ts`, see Memory ledger in GLOSSARY.md) applies it in code:
-trimmed, case-insensitive text dedupe against all rows including tombstones
+text dedupe (ignoring case, runs of whitespace and end punctuation) against all rows including tombstones
 (a deleted fact is never re-added), supersession of the same bot's active
 rows only, expiry, budget archival of the oldest active rows and the
 watermark bump — one transaction. Unparseable output

@@ -28,7 +28,9 @@ const count = (botId: string, status: MemoryStatus) =>
 describe("memoryLedger.add: dedupe", () => {
   it("never adds a second row for the same text, trimmed and case-insensitive", async () => {
     const { botId, ledger } = await newLedger();
-    const first = await ledger.add([fact("Prefers pnpm")], { source: "capture" });
+    const first = await ledger.add([fact("Prefers pnpm")], {
+      source: "capture",
+    });
     expect(first).toMatchObject({ created: 1, skipped: 0 });
     const again = await ledger.add([fact("  prefers PNPM "), fact("Prefers pnpm")], {
       source: "capture",
@@ -38,9 +40,22 @@ describe("memoryLedger.add: dedupe", () => {
     expect(await db.$count(memories, eq(memories.botId, botId))).toBe(1);
   });
 
+  it("treats text differing only in spacing, case or end punctuation as the same memory", async () => {
+    const { botId, ledger } = await newLedger();
+    await ledger.add([fact("The owner prefers pnpm.")], { source: "capture" });
+    expect(
+      await ledger.add([fact("the owner  prefers pnpm"), fact("The owner prefers pnpm!")], {
+        source: "capture",
+      }),
+    ).toMatchObject({ created: 0, skipped: 2 });
+    expect(await db.$count(memories, eq(memories.botId, botId))).toBe(1);
+  });
+
   it("never re-adds a tombstone from capture or chat", async () => {
     const { botId, ledger } = await newLedger();
-    const { rows } = await ledger.add([fact("Prefers pnpm")], { source: "capture" });
+    const { rows } = await ledger.add([fact("Prefers pnpm")], {
+      source: "capture",
+    });
     expect(await ledger.tombstone([rows[0]!.id])).toBe(1);
     expect(await ledger.add([fact("Prefers pnpm")], { source: "capture" })).toMatchObject({
       created: 0,
@@ -52,7 +67,9 @@ describe("memoryLedger.add: dedupe", () => {
 
   it("lets the owner add a removed memory again, as a new one, on the same row", async () => {
     const { botId, ledger } = await newLedger();
-    const { rows } = await ledger.add([fact("Prefers pnpm")], { source: "capture" });
+    const { rows } = await ledger.add([fact("Prefers pnpm")], {
+      source: "capture",
+    });
     await ledger.tombstone([rows[0]!.id]);
     const added = await ledger.add([{ text: "prefers pnpm", category: "preference" }], {
       source: "manual",
@@ -72,7 +89,10 @@ describe("memoryLedger.add: dedupe", () => {
       source: "manual",
     });
     expect(twice).toMatchObject({ created: 0, revived: 0, skipped: 1 });
-    expect(twice.rows[0]).toMatchObject({ id: rows[0]!.id, category: "preference" });
+    expect(twice.rows[0]).toMatchObject({
+      id: rows[0]!.id,
+      category: "preference",
+    });
     expect(await db.$count(memories, eq(memories.botId, botId))).toBe(1);
   });
 
@@ -91,13 +111,19 @@ describe("memoryLedger.add: supersede", () => {
     const a = await newLedger();
     const b = await newLedger();
     const [old, removed] = (
-      await a.ledger.add([fact("Lives in Bangalore"), fact("Works nights")], { source: "capture" })
+      await a.ledger.add([fact("Lives in Bangalore"), fact("Works nights")], {
+        source: "capture",
+      })
     ).rows;
     await a.ledger.tombstone([removed!.id]);
     const [other] = (await b.ledger.add([fact("Other bot fact")], { source: "capture" })).rows;
 
     const result = await a.ledger.add(
-      [fact("Lives in Chennai now", { supersedesIds: [old!.id, removed!.id, other!.id] })],
+      [
+        fact("Lives in Chennai now", {
+          supersedesIds: [old!.id, removed!.id, other!.id],
+        }),
+      ],
       { source: "capture" },
     );
     expect(result.superseded).toBe(1);
@@ -171,7 +197,10 @@ describe("memoryLedger: the watermark", () => {
   it("advances with the rows a capture adds, and with nothing when there is nothing", async () => {
     const { botId, ledger } = await newLedger();
     const through = new Date(1_700_000_000_000);
-    await ledger.add([fact("Prefers pnpm")], { source: "capture", watermark: through });
+    await ledger.add([fact("Prefers pnpm")], {
+      source: "capture",
+      watermark: through,
+    });
     const bot = await db.query.bots.findFirst({ where: eq(bots.id, botId) });
     expect(bot?.memoryCapturedThrough?.getTime()).toBe(through.getTime());
     const later = new Date(1_700_000_100_000);
@@ -184,7 +213,10 @@ describe("memoryLedger: the watermark", () => {
   it("writes nothing when the watermark cannot move (the bot is gone)", async () => {
     const ghost = memoryLedger("missing-bot");
     await expect(
-      ghost.add([fact("Prefers pnpm")], { source: "capture", watermark: new Date() }),
+      ghost.add([fact("Prefers pnpm")], {
+        source: "capture",
+        watermark: new Date(),
+      }),
     ).rejects.toThrow();
     await expect(ghost.advanceWatermark(new Date())).rejects.toThrow();
   });
@@ -200,7 +232,9 @@ describe("memoryLedger.restore", () => {
       status: "archived",
       createdAt: new Date(10),
     });
-    const archived = await db.query.memories.findFirst({ where: eq(memories.botId, botId) });
+    const archived = await db.query.memories.findFirst({
+      where: eq(memories.botId, botId),
+    });
     await db.insert(memories).values(
       Array.from({ length: 100 }, (_, i) => ({
         botId,
@@ -209,7 +243,9 @@ describe("memoryLedger.restore", () => {
         createdAt: new Date(1_000 + i),
       })),
     );
-    expect(await ledger.restore(archived!.id)).toMatchObject({ status: "active" });
+    expect(await ledger.restore(archived!.id)).toMatchObject({
+      status: "active",
+    });
     expect(await count(botId, "active")).toBe(100);
     const nowArchived = await db.query.memories.findFirst({
       where: and(eq(memories.botId, botId), eq(memories.status, "archived")),
@@ -236,13 +272,14 @@ describe("memoryLedger.promptContext", () => {
     );
     await ledger.tombstone([rows[2]!.id]);
     const context = await ledger.promptContext();
-    expect(context.current).toBe(
-      `- ${rows[0]!.id} — Prefers pnpm\n- ${rows[1]!.id} — Is in Goa (until 2999-01-01)`,
-    );
+    // Short refs, not 36-character row ids: fewer tokens, nothing to misspell.
+    expect(context.current).toBe("- m1 — Prefers pnpm\n- m2 — Is in Goa (until 2999-01-01)");
+    expect(context.refs).toEqual({ m1: rows[0]!.id, m2: rows[1]!.id });
     expect(context.removed).toBe("- Likes tea");
     expect(await (await newLedger()).ledger.promptContext()).toEqual({
       current: null,
       removed: null,
+      refs: {},
     });
   });
 });

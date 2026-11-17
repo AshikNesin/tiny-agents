@@ -5,6 +5,17 @@ import path from "node:path";
 const rootDir = path.resolve();
 // Most server test files wait on timers and child processes, not the CPU.
 const WORKERS_PER_CORE = 2;
+/**
+ * Suites that type-check whole copies of the repo in child processes (tsx,
+ * tsc): CPU-bound for a minute or more each. Run alongside the rest on CI's
+ * runner they starved it, and unrelated tests hit their 5-second timeout
+ * (even a synchronous snapshot test). They run as their own group, after
+ * every other server test.
+ */
+const REPO_TYPECHECK_SUITES = [
+  "tests/server/checks/kit-exports.test.ts",
+  "tests/server/checks/typecheck-coverage.test.ts",
+];
 
 // Never reach real services from tests, whatever the shell exports: with real
 // Pushover keys in the environment, the notification route tests sent actual
@@ -37,10 +48,28 @@ export default defineConfig({
     // https://viteplus.dev/guide/vitest-v5#remove-unneeded-compatibility-settings
     // https://vitest.dev/guide/migration/#clearmocks-is-enabled-by-default
     clearMocks: false,
-    include: ["tests/server/**/*.test.ts"],
     environment: "node",
     setupFiles: ["./tests/server/setup.ts"],
     maxWorkers: availableParallelism() * WORKERS_PER_CORE,
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: "server",
+          include: ["tests/server/**/*.test.ts"],
+          exclude: REPO_TYPECHECK_SUITES,
+          sequence: { groupOrder: 0 },
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: "server:repo-typecheck",
+          include: REPO_TYPECHECK_SUITES,
+          sequence: { groupOrder: 1 },
+        },
+      },
+    ],
   },
   resolve: {
     alias: {
