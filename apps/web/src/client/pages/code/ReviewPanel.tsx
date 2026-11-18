@@ -19,6 +19,7 @@ import {
   GitBranch,
   List,
   PanelLeft,
+  Pencil,
   RefreshCw,
   RotateCcw,
 } from "lucide-react";
@@ -36,6 +37,7 @@ import { fileCommenting, type ThreadCommenting } from "../../lib/code/comments";
 import type { FileConversations } from "./PullThreads";
 import { useSteadyKey } from "../../lib/code/use-live-changes";
 import { FileDiff } from "./UnifiedDiff";
+import { LightEditor } from "./LightEditor";
 
 const STATUS_TONE: Record<ReviewFile["status"], string> = {
   added: "text-success",
@@ -81,6 +83,7 @@ export function ReviewPanel({
   githubCommenting,
   conversations,
   page = false,
+  editable = false,
   pull,
 }: {
   /** The thread, or a PR review's key (`review:<id>`, with `pull`). */
@@ -89,6 +92,8 @@ export function ReviewPanel({
   refreshKey: unknown;
   /** At full width on the Review page: the list beside the diff. */
   page?: boolean;
+  /** The open file has Edit: the light editor, saving to the worktree. */
+  editable?: boolean;
   /** The thread's line comments: absent, the diff takes none. */
   commenting?: ThreadCommenting;
   /** A PR review's comments for GitHub, beside the assistant's. */
@@ -122,6 +127,8 @@ export function ReviewPanel({
   // re-read after the agent changed the file swaps it in place.
   const [shown, setShown] = useState<{ key: string; diff: ReviewFileDiff } | null>(null);
   const [reload, setReload] = useState(0);
+  // The file open in the light editor (a PR review's).
+  const [editing, setEditing] = useState<string | null>(null);
   // In the side panel: the list, or one file's diff.
   const [listing, setListing] = useState(!page);
   // The file list beside the diff; hidden, the file bar still steps through files.
@@ -550,6 +557,16 @@ export function ReviewPanel({
                   }}
                   onViewed={viewable ? () => toggleViewed(currentFile) : undefined}
                   onList={page ? undefined : () => setListing(true)}
+                  onEdit={
+                    editable &&
+                    worktreeScope &&
+                    diff &&
+                    !diff.unshowable &&
+                    currentFile.status !== "deleted" &&
+                    editing !== currentFile.path
+                      ? () => setEditing(currentFile.path)
+                      : undefined
+                  }
                 />
               )}
               {current && conversations?.(current).aside}
@@ -557,6 +574,23 @@ export function ReviewPanel({
                 <div className="flex justify-center p-6">
                   <Spinner />
                 </div>
+              ) : editing && editing === current ? (
+                <LightEditor
+                  key={diffKey}
+                  path={editing}
+                  content={diff.newContent}
+                  onCancel={() => setEditing(null)}
+                  onSave={async (text) => {
+                    await projectsApi.editFile(threadId, {
+                      path: editing,
+                      original: diff.newContent,
+                      content: text,
+                    });
+                    setEditing(null);
+                    setReload((n) => n + 1);
+                    toast.success(pull ? "Saved. It shows under Your changes." : "Saved.");
+                  }}
+                />
               ) : (
                 <FileDiff
                   key={diffKey}
@@ -584,6 +618,7 @@ function FileBar({
   onStep,
   onViewed,
   onList,
+  onEdit,
 }: {
   file: ReviewFile;
   index: number;
@@ -592,6 +627,8 @@ function FileBar({
   onViewed?: () => void;
   /** Back to the file list (the side panel). */
   onList?: () => void;
+  /** Open the file in the light editor. */
+  onEdit?: () => void;
 }) {
   const slash = file.path.lastIndexOf("/");
   return (
@@ -639,6 +676,18 @@ function FileBar({
       <span className={cn("shrink-0 tabular-nums", STATUS_TONE[file.status])}>
         +{file.additions} −{file.deletions}
       </span>
+      {onEdit && (
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          aria-label={`Edit ${file.path}`}
+          title="Edit this file (small changes)"
+          onClick={onEdit}
+          className="text-muted-foreground"
+        >
+          <Pencil />
+        </Button>
+      )}
       {onViewed && (
         <label className="text-muted-foreground flex shrink-0 items-center gap-1.5 pl-1">
           <Checkbox

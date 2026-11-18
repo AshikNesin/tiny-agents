@@ -810,3 +810,70 @@ describe("changing the PR's code", () => {
     expect(typed).toEqual([`cd '${WORKTREE()}'`]);
   });
 });
+
+describe("editing a file of the PR in place", () => {
+  const WORKTREE = () => join(local.home, "tiny-agents-code/acme--web/reviews/pr-7");
+
+  async function opened() {
+    await newProject();
+    await forkPull([`printf 'one\\ntwo\\nthree\\n' > src/a.ts`]);
+    const review = (await call<PullReviewView>("POST", "/reviews", { pr: "acme/web#7" })).body
+      .data!;
+    return { review, key: encodeURIComponent(review.key) };
+  }
+
+  it("saves the edit in the review's checkout, where Your changes shows it", async () => {
+    const { review, key } = await opened();
+
+    const res = await call("PUT", `/threads/${encodeURIComponent(review.key)}/review/file`, {
+      path: "src/a.ts",
+      original: "one\ntwo\nthree\n",
+      content: "one\nTWO\nthree\n",
+    });
+
+    expect(res.status).toBe(200);
+    expect(await sh(local, `cat ${WORKTREE()}/src/a.ts`)).toBe("one\nTWO\nthree");
+    const yours = (await call<ReviewFile[]>("GET", `/threads/${key}/review/files?since=mine`)).body
+      .data!;
+    expect(yours.map((f) => [f.path, f.additions, f.deletions])).toEqual([["src/a.ts", 1, 1]]);
+  });
+
+  it("refuses when the file changed after you opened it, keeping that change", async () => {
+    const { review } = await opened();
+    await sh(local, `printf 'one\\nTwo\\nthree\\n' > ${WORKTREE()}/src/a.ts`);
+
+    const res = await call("PUT", `/threads/${encodeURIComponent(review.key)}/review/file`, {
+      path: "src/a.ts",
+      original: "one\ntwo\nthree\n",
+      content: "one\nTWO\nthree\n",
+    });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error?.message).toBe(
+      "src/a.ts changed after you opened it (the agent may have edited it). Open it again to edit.",
+    );
+    expect(await sh(local, `cat ${WORKTREE()}/src/a.ts`)).toBe("one\nTwo\nthree");
+  });
+
+  it("refuses a file that leads outside the checkout, or into git's own files", async () => {
+    const { review } = await opened();
+    const outside = join(local.home, "outside.txt");
+    await sh(local, `printf 'keep\\n' > ${outside} && ln -s ${outside} ${WORKTREE()}/src/link.ts`);
+
+    const results = await Promise.all(
+      ["src/link.ts", ".git"].map((path) =>
+        call("PUT", `/threads/${encodeURIComponent(review.key)}/review/file`, {
+          path,
+          original: "keep\n",
+          content: "x\n",
+        }),
+      ),
+    );
+
+    expect(results.map((r) => [r.status, r.body.error?.message])).toEqual([
+      [400, "Only a file inside the worktree can be edited here."],
+      [400, "Only a file inside the worktree can be edited here."],
+    ]);
+    expect(await sh(local, `cat ${outside}`)).toBe("keep");
+  });
+});

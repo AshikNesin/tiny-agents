@@ -3,6 +3,7 @@
  * `/api/v1/code`. Owner-only: none of these paths is in `GUEST_ACCESS`, so
  * the guest guard refuses them before they get here.
  */
+import { createHash } from "node:crypto";
 import { Hono } from "hono";
 import { z } from "zod";
 import type { AppEnv } from "@groot/core/types";
@@ -85,6 +86,9 @@ import {
 const router = new Hono<AppEnv>();
 
 /** A repository-relative path from the query: no `..`, not absolute. */
+/** The largest file the review's light editor saves (characters). */
+const MAX_EDIT_BYTES = 1_000_000;
+
 function safePath(raw: string | undefined): string {
   const path = raw ?? "";
   if (
@@ -436,6 +440,37 @@ router.get("/code/threads/:id/review/file", async (c) => {
     ? await ws.sinceFile(worktree, since, path).catch(saying)
     : await ws.baseFile(worktree, base, path);
   return ok(c, { path, ...sides });
+});
+
+/**
+ * The light editor's save: one file's whole new content, written in the
+ * thread's (or PR review's) worktree when the file is still as the owner
+ * opened it. An edit by the agent meanwhile is kept, and the owner is told
+ * to open the file again. Only a regular file inside the worktree is written.
+ */
+router.put("/code/threads/:id/review/file", async (c) => {
+  const id = threadParam(c.req.param("id"));
+  const body = await parseBody(
+    c,
+    z.object({
+      path: z.string().min(1).max(1024),
+      original: z.string().max(MAX_EDIT_BYTES),
+      content: z.string().max(MAX_EDIT_BYTES),
+    }),
+  );
+  const path = safePath(body.path);
+  const { worktree, ws } = await reviewTarget(id);
+  const expected = createHash("sha256").update(body.original, "utf8").digest("hex");
+  const outcome = await ws.writeFile(worktree, path, expected, body.content).catch(saying);
+  if (outcome === "outside") {
+    throw Boom.badRequest("Only a file inside the worktree can be edited here.");
+  }
+  if (outcome === "changed") {
+    throw Boom.conflict(
+      `${path} changed after you opened it (the agent may have edited it). Open it again to edit.`,
+    );
+  }
+  return ok(c, { saved: true });
 });
 
 router.post("/code/threads/:id/review/viewed", async (c) => {

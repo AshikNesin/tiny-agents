@@ -217,6 +217,7 @@ export function PullReview({
             }}
             refreshKey={`${review.headSha}:${reload}:${assistantRow?.working}:${assistantRow?.cursor}`}
             page
+            editable
             commenting={commenting}
             githubCommenting={github}
             conversations={conversations}
