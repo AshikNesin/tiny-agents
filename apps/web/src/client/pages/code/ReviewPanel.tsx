@@ -38,6 +38,7 @@ import type { FileConversations } from "./PullThreads";
 import { useSteadyKey } from "../../lib/code/use-live-changes";
 import { FileDiff } from "./UnifiedDiff";
 import { LightEditor } from "./LightEditor";
+import { FileListPane } from "./ResizablePane";
 
 const STATUS_TONE: Record<ReviewFile["status"], string> = {
   added: "text-success",
@@ -291,6 +292,68 @@ export function ReviewPanel({
     { add: 0, del: 0, viewed: 0 },
   );
 
+  const fileList = (
+    <>
+      <div className="p-2">
+        <Input
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          placeholder="Filter files"
+          aria-label="Filter files"
+          className="h-8"
+        />
+      </div>
+      <ul className="min-h-0 flex-1 overflow-y-auto px-1 pb-2">
+        {listedFiles.map((f) => {
+          const [name, dir] = splitPath(f.path);
+          return (
+            <li key={f.path} className="flex items-center gap-1">
+              {viewable && (
+                <Checkbox
+                  checked={f.viewed}
+                  onCheckedChange={() => toggleViewed(f)}
+                  aria-label={`Viewed ${f.path}`}
+                  className="ml-1.5 shrink-0"
+                />
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setCurrent(f.path);
+                  setListing(false);
+                }}
+                aria-current={page && f.path === current}
+                className={cn(
+                  "hover:bg-muted flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-left text-xs",
+                  page && f.path === current && "bg-muted",
+                  (f.isGenerated || f.viewed) && "opacity-60",
+                )}
+                title={f.path}
+              >
+                <span className="min-w-0 flex-1 truncate">
+                  <span className="font-medium">{name}</span>
+                  {dir && (
+                    <span className={cn("text-muted-foreground ml-2", monoClass)}>{dir}</span>
+                  )}
+                </span>
+                <span className="shrink-0 tabular-nums">
+                  {f.additions > 0 && <span className="text-success">+{f.additions}</span>}
+                  {f.deletions > 0 && <span className="text-destructive ml-1">−{f.deletions}</span>}
+                </span>
+                <span
+                  className={cn("w-3 shrink-0 text-center font-medium", STATUS_TONE[f.status])}
+                  title={f.status}
+                >
+                  {STATUS_LETTER[f.status]}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </>
+  );
+
   return (
     <div className="flex h-full min-h-0 flex-col" data-testid="code-review">
       {branch?.name && (
@@ -468,82 +531,13 @@ export function ReviewPanel({
         />
       ) : (
         <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-          {(page ? tree : listing) && (
-            <nav
-              className={cn(
-                "flex min-h-0 flex-col",
-                page
-                  ? "border-border max-h-56 shrink-0 border-b md:max-h-none md:w-72 md:border-r md:border-b-0"
-                  : "flex-1",
+          {page
+            ? tree && <FileListPane>{fileList}</FileListPane>
+            : listing && (
+                <nav className="flex min-h-0 flex-1 flex-col" aria-label="Changed files">
+                  {fileList}
+                </nav>
               )}
-              aria-label="Changed files"
-            >
-              <div className="p-2">
-                <Input
-                  value={filter}
-                  onChange={(e) => setFilter(e.target.value)}
-                  placeholder="Filter files"
-                  aria-label="Filter files"
-                  className="h-8"
-                />
-              </div>
-              <ul className="min-h-0 flex-1 overflow-y-auto px-1 pb-2">
-                {listedFiles.map((f) => {
-                  const [name, dir] = splitPath(f.path);
-                  return (
-                    <li key={f.path} className="flex items-center gap-1">
-                      {viewable && (
-                        <Checkbox
-                          checked={f.viewed}
-                          onCheckedChange={() => toggleViewed(f)}
-                          aria-label={`Viewed ${f.path}`}
-                          className="ml-1.5 shrink-0"
-                        />
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setCurrent(f.path);
-                          setListing(false);
-                        }}
-                        aria-current={page && f.path === current}
-                        className={cn(
-                          "hover:bg-muted flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-left text-xs",
-                          page && f.path === current && "bg-muted",
-                          (f.isGenerated || f.viewed) && "opacity-60",
-                        )}
-                        title={f.path}
-                      >
-                        <span className="min-w-0 flex-1 truncate">
-                          <span className="font-medium">{name}</span>
-                          {dir && (
-                            <span className={cn("text-muted-foreground ml-2", monoClass)}>
-                              {dir}
-                            </span>
-                          )}
-                        </span>
-                        <span className="shrink-0 tabular-nums">
-                          {f.additions > 0 && <span className="text-success">+{f.additions}</span>}
-                          {f.deletions > 0 && (
-                            <span className="text-destructive ml-1">−{f.deletions}</span>
-                          )}
-                        </span>
-                        <span
-                          className={cn(
-                            "w-3 shrink-0 text-center font-medium",
-                            STATUS_TONE[f.status],
-                          )}
-                          title={f.status}
-                        >
-                          {STATUS_LETTER[f.status]}
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </nav>
-          )}
           {reading && (
             <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
               {currentFile && (

@@ -1,9 +1,10 @@
 /**
- * The divider between a thread and its right panel on wide screens: drag it,
- * or focus it and use the arrow keys (Shift for bigger steps, Home and End
- * for the limits), to give either side the room. The width is remembered in
- * this browser; a double-click or Enter goes back to the default split.
- * The conversation always keeps `MIN_THREAD` and the panel `MIN_PANEL`.
+ * Dividers that let you give a side panel more or less room on wide screens:
+ * the right panel beside a thread (or a PR review's assistant beside its
+ * diff), and a review's file list on the left of its diff. Drag one, or
+ * focus it and use the arrow keys (Shift for bigger steps, Home and End for
+ * the limits). Each width is remembered in this browser on its own; a
+ * double-click or Enter goes back to the default.
  */
 import {
   useCallback,
@@ -17,37 +18,65 @@ import {
 } from "react";
 import { cn } from "@groot/ui/lib/utils";
 
-const WIDTH_KEY = "code:review-width";
-const MIN_PANEL = 320;
-const MIN_THREAD = 360;
 const STEP = 16;
 const BIG_STEP = 64;
 
-function readWidth(): number | null {
+/** How one panel may be sized, and where its width is remembered. */
+interface PanelLimits {
+  key: string;
+  /** Which side of its divider the panel sits. */
+  side: "left" | "right";
+  min: number;
+  /** At most this wide, whatever the room. */
+  max?: number;
+  /** What the content on the divider's other side always keeps. */
+  keep: number;
+}
+
+/** The right panel: a thread's conversation keeps 360px. */
+const REVIEW_PANEL: PanelLimits = {
+  key: "code:review-width",
+  side: "right",
+  min: 320,
+  keep: 360,
+};
+/** A review's file list: 200px to 640px, and the diff keeps 360px. */
+const FILE_LIST: PanelLimits = {
+  key: "code:files-width",
+  side: "left",
+  min: 200,
+  max: 640,
+  keep: 360,
+};
+
+function readWidth(key: string): number | null {
   try {
-    const stored = Number(window.localStorage.getItem(WIDTH_KEY));
+    const stored = Number(window.localStorage.getItem(key));
     return stored > 0 ? stored : null;
   } catch {
     return null;
   }
 }
 
-function saveWidth(width: number | null) {
+function saveWidth(key: string, width: number | null) {
   try {
-    if (width === null) window.localStorage.removeItem(WIDTH_KEY);
-    else window.localStorage.setItem(WIDTH_KEY, String(Math.round(width)));
+    if (width === null) window.localStorage.removeItem(key);
+    else window.localStorage.setItem(key, String(Math.round(width)));
   } catch {
     // not remembered in private mode
   }
 }
 
-/** The panel's chosen width in px, or null for the default split. */
-function useReviewWidth() {
-  const [width, setWidth] = useState(readWidth);
-  const change = useCallback((next: number | null, persist: boolean) => {
-    setWidth(next);
-    if (persist) saveWidth(next);
-  }, []);
+/** A panel's chosen width in px, or null for its default. */
+function useStoredWidth(key: string) {
+  const [width, setWidth] = useState(() => readWidth(key));
+  const change = useCallback(
+    (next: number | null, persist: boolean) => {
+      setWidth(next);
+      if (persist) saveWidth(key, next);
+    },
+    [key],
+  );
   return [width, change] as const;
 }
 
@@ -66,11 +95,19 @@ export function ResizablePane({
   /** Start narrower than half (a PR review's assistant, beside the diff). */
   narrow?: boolean;
 }) {
-  const [width, setWidth] = useReviewWidth();
+  const [width, setWidth] = useStoredWidth(REVIEW_PANEL.key);
   const panelRef = useRef<HTMLElement>(null);
   return (
     <>
-      <PanelResizer panelRef={panelRef} width={width} onWidth={setWidth} />
+      <PanelResizer
+        limits={REVIEW_PANEL}
+        label="Resize review panel"
+        controls="code-review-panel"
+        className="lg:block"
+        panelRef={panelRef}
+        width={width}
+        onWidth={setWidth}
+      />
       <section
         ref={panelRef}
         id="code-review-panel"
@@ -92,27 +129,78 @@ export function ResizablePane({
   );
 }
 
+/**
+ * A review's list of changed files, left of its diff, with its divider (from
+ * `md`, where the two sit side by side). Below that the list sits above the
+ * diff at full width.
+ */
+export function FileListPane({ children }: { children: ReactNode }) {
+  const [width, setWidth] = useStoredWidth(FILE_LIST.key);
+  const panelRef = useRef<HTMLElement>(null);
+  return (
+    <>
+      <nav
+        ref={panelRef}
+        id="code-review-files"
+        aria-label="Changed files"
+        className={cn(
+          "border-border flex max-h-56 min-h-0 shrink-0 flex-col border-b md:max-h-none md:border-b-0",
+          width === null ? "md:w-72" : "md:w-(--files-width)",
+        )}
+        style={width === null ? undefined : ({ "--files-width": `${width}px` } as CSSProperties)}
+      >
+        {children}
+      </nav>
+      <PanelResizer
+        limits={FILE_LIST}
+        label="Resize file list"
+        controls="code-review-files"
+        className="md:block"
+        panelRef={panelRef}
+        width={width}
+        onWidth={setWidth}
+      />
+    </>
+  );
+}
+
 function PanelResizer({
+  limits,
+  label,
+  controls,
+  className,
   panelRef,
   width,
   onWidth,
 }: {
+  limits: PanelLimits;
+  label: string;
+  /** The panel's id. */
+  controls: string;
+  /** From which breakpoint the divider shows, such as `lg:block`. */
+  className: string;
   /** The panel being resized; its parent row bounds how wide it may grow. */
   panelRef: RefObject<HTMLElement | null>;
   width: number | null;
   onWidth(width: number | null, persist: boolean): void;
 }) {
   const [dragging, setDragging] = useState(false);
-  // The panel and the conversation share what the row leaves after the thread list.
+  const { min, keep, side } = limits;
+  // The panel and what sits past the divider share the room they have now.
   const bounds = () => {
     const panel = panelRef.current;
-    const thread = panel?.previousElementSibling?.previousElementSibling;
-    const shared = (panel?.offsetWidth ?? 0) + ((thread as HTMLElement | null)?.offsetWidth ?? 0);
-    const max = Math.max(MIN_PANEL, (shared || window.innerWidth) - MIN_THREAD);
-    return { max, current: width ?? panel?.offsetWidth ?? MIN_PANEL };
+    const other =
+      side === "right"
+        ? panel?.previousElementSibling?.previousElementSibling
+        : panel?.nextElementSibling?.nextElementSibling;
+    const shared = (panel?.offsetWidth ?? 0) + ((other as HTMLElement | null)?.offsetWidth ?? 0);
+    const room = Math.max(min, (shared || window.innerWidth) - keep);
+    const max = Math.min(limits.max ?? room, room);
+    return { max, current: width ?? panel?.offsetWidth ?? min };
   };
-  const clamp = (value: number, max: number) =>
-    Math.round(Math.min(max, Math.max(MIN_PANEL, value)));
+  const clamp = (value: number, max: number) => Math.round(Math.min(max, Math.max(min, value)));
+  // Moving the divider right grows a panel on its left and shrinks one on its right.
+  const grow = side === "left" ? 1 : -1;
   const { max, current } = bounds();
   const now = clamp(current, max);
 
@@ -126,7 +214,7 @@ function PanelResizer({
     let latest = clamp(start, limit);
     setDragging(true);
     const move = (e: globalThis.PointerEvent) => {
-      latest = clamp(start + (startX - e.clientX), limit);
+      latest = clamp(start + grow * (e.clientX - startX), limit);
       onWidth(latest, false);
     };
     const stop = () => {
@@ -145,11 +233,11 @@ function PanelResizer({
     const step = event.shiftKey ? BIG_STEP : STEP;
     const next =
       event.key === "ArrowLeft"
-        ? now + step
+        ? now - grow * step
         : event.key === "ArrowRight"
-          ? now - step
+          ? now + grow * step
           : event.key === "Home"
-            ? MIN_PANEL
+            ? min
             : event.key === "End"
               ? max
               : event.key === "Enter"
@@ -164,9 +252,9 @@ function PanelResizer({
     <div
       role="separator"
       aria-orientation="vertical"
-      aria-label="Resize review panel"
-      aria-controls="code-review-panel"
-      aria-valuemin={MIN_PANEL}
+      aria-label={label}
+      aria-controls={controls}
+      aria-valuemin={min}
       aria-valuemax={max}
       aria-valuenow={now}
       tabIndex={0}
@@ -175,7 +263,10 @@ function PanelResizer({
       onPointerDown={startDrag}
       onDoubleClick={() => onWidth(null, true)}
       onKeyDown={onKeyDown}
-      className="group bg-border relative z-10 hidden w-px shrink-0 cursor-col-resize touch-none outline-none select-none before:absolute before:inset-y-0 before:-left-1.5 before:w-3 before:content-[''] lg:block"
+      className={cn(
+        "group bg-border relative z-10 hidden w-px shrink-0 cursor-col-resize touch-none outline-none select-none before:absolute before:inset-y-0 before:-left-1.5 before:w-3 before:content-['']",
+        className,
+      )}
     >
       <span
         aria-hidden
