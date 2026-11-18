@@ -93,7 +93,9 @@ folder):
   folder browser, checked by the harness) and, where the harness makes
   them, a new worktree; and the harness (remembered) when there are several.
 - The model, reasoning and permission chips sit in the composer. Claude Code
-  needs a working directory and starts in **Accept edits**.
+  needs a working directory. A new thread starts in **Bypass** (YOLO, no
+  permission prompts) wherever the harness offers it; a guest, who has no
+  Bypass, starts in **Accept edits**. The chip changes it per thread.
 - If another thread is working in the same directory, a warning says both
   threads will edit the same files.
 
