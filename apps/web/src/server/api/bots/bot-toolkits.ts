@@ -3,8 +3,8 @@
  *
  * Every bot gets every built-in toolkit (ADR 0004); on top of those come the
  * automatic ones (vision for a model that cannot see images, tool search
- * while one of its connections is large) and one `mcp:<slug>` per linked
- * connection. The selection names capabilities by id, and an id the runtime
+ * for the deferred toolkits and large connections) and one `mcp:<slug>` per
+ * linked connection. The selection names capabilities by id, and an id the runtime
  * has not installed is silently ignored at configure, so `missingToolkits`
  * checks the list against the runtime at boot (and a test checks it in CI).
  *
@@ -12,7 +12,7 @@
  * here too, so the ConnectionManager (which installs a connection's tools and
  * tool search) and the selection count a connection's tools the same way.
  */
-import { MCP_DEFER_THRESHOLD, type McpToolInfo } from "@tiny-agents/agent";
+import type { McpToolInfo } from "@tiny-agents/agent";
 import type { ModelCatalog } from "@tiny-agents/models";
 
 /**
@@ -42,7 +42,7 @@ export const BOT_TOOLKITS = [
 /** The see_image side-call, selected for models without native vision. */
 export const VISION_TOOLKIT = "vision";
 
-/** `tool_search`, selected while one of the bot's connections defers its tools. */
+/** `tool_search`: every bot has deferred tools (browser, computer; large connections). */
 export const TOOL_SEARCH_TOOLKIT = "tool-search";
 
 /** Capability id of a connection (`mcp:<slug>`); also its tool-name prefix source. */
@@ -93,14 +93,6 @@ export function connectionTools(
 }
 
 /**
- * A connection with more installed tools than `MCP_DEFER_THRESHOLD` defers
- * them; the model finds them through `tool_search`.
- */
-export function needsToolSearch(installedTools: readonly unknown[]): boolean {
-  return installedTools.length > MCP_DEFER_THRESHOLD;
-}
-
-/**
  * The model a bot runs on: its own, or the `bot_default` role when it has
  * none (its model was never set, or the row predates models as data).
  */
@@ -127,28 +119,27 @@ export interface BotConnectionTools extends ConnectionToolColumns {
 /**
  * The capability ids a bot's conversation enables: every built-in toolkit,
  * vision when its model cannot see images, each linked connection, and tool
- * search when one of them is large.
+ * search.
  */
 export function botToolkits(
   bot: { modelId: string | null; connections?: readonly BotConnectionTools[] },
   catalog: Pick<ModelCatalog, "get" | "forRole">,
 ): string[] {
   const connections = bot.connections ?? [];
-  const large = connections.some((connection) => needsToolSearch(connectionTools(connection)));
   return [
     ...BOT_TOOLKITS,
     ...(modelSeesImages(catalog, bot.modelId) ? [] : [VISION_TOOLKIT]),
     ...connections.map((connection) => connectionCapabilityId(connection.slug)),
-    ...(large ? [TOOL_SEARCH_TOOLKIT] : []),
+    TOOL_SEARCH_TOOLKIT,
   ];
 }
 
 /**
  * Ids a bot may select that the runtime has not installed (`installed`: the
- * runtime's capability ids). Connections and tool search come and go with
- * the ConnectionManager, so only the built-ins and vision are checked.
+ * runtime's capability ids). Connections come and go with the
+ * ConnectionManager, so only the built-ins, vision and tool search are checked.
  */
 export function missingToolkits(installed: Iterable<string>): string[] {
   const have = new Set(installed);
-  return [...BOT_TOOLKITS, VISION_TOOLKIT].filter((id) => !have.has(id));
+  return [...BOT_TOOLKITS, VISION_TOOLKIT, TOOL_SEARCH_TOOLKIT].filter((id) => !have.has(id));
 }

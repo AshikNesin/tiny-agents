@@ -172,6 +172,8 @@ export function createBrowserToolkit(options: BrowserToolkitOptions = {}): Capab
     name: "Browser",
     description:
       "A real browser the bot drives: navigate, read, click, type, scroll, wait, go back.",
+    // Large and used in few conversations: loaded with tool_search (issue #360).
+    deferred: true,
     tools: [
       tool({
         name: "browser_navigate",

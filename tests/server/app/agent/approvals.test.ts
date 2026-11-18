@@ -132,10 +132,12 @@ async function open(
 describe("capabilities and approvals", () => {
   it("lists installed capabilities without their extensions", async () => {
     const runtime = await open({ sent: [] }, callThenReport("read_inbox", {}));
-    // The runtime brings its own `questions` capability (ask_owner) after the given ones.
+    // The runtime brings its own `questions` (ask_owner) and `tool-search`
+    // capabilities after the given ones.
     expect(runtime.listCapabilities()).toEqual([
       expect.objectContaining({ id: "mail", kind: "toolkit", name: "Mail" }),
       expect.objectContaining({ id: "questions", kind: "toolkit" }),
+      expect.objectContaining({ id: "tool-search", kind: "toolkit", auto: true }),
     ]);
     expect(runtime.listCapabilities()[0]).not.toHaveProperty("extension");
   });

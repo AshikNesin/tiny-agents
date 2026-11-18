@@ -4,6 +4,7 @@
  * store's refusals reach the model.
  */
 import type { Context as PiContext } from "@earendil-works/pi-ai";
+import { loaded } from "../../fixtures/loaded-tools";
 import { until } from "../../fixtures/until";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import type { AgentRuntime } from "../../../../packages/agent/src/runtime";
@@ -53,7 +54,7 @@ async function openBuilder(
   const results: string[] = [];
   const runtime = await openTestRuntime({
     storePath: ":memory:",
-    capabilities: [createBotBuilderCapability(store)],
+    capabilities: [loaded(createBotBuilderCapability(store))],
     respondWith: (context: PiContext) => {
       const last = context.messages.at(-1);
       if (last?.role === "toolResult") {

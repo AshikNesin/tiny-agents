@@ -763,19 +763,15 @@ describe("MCP connection lifecycle (the manager owns it)", () => {
     expect(configured.filter((c) => c === 960)).toHaveLength(1);
   }, 30_000);
 
-  it("installs tool_search while any connection defers its tools, and uninstalls it after the last", async () => {
+  it("leaves tool_search to the runtime, however large its connections are", async () => {
     await new Promise<void>((resolve) => mcpServer.server.close(() => resolve()));
     await manager.close();
     await startManager(await startMcpServer(MCP_DEFER_THRESHOLD));
     const app = buildApp();
-    const first = await createDemo(app, { name: "Big one" });
-    const second = await createDemo(app, { name: "Big two" });
-    expect(runtimeCalls.install.filter((id) => id === "tool-search")).toHaveLength(1);
-
-    await call(app, `/api/v1/connections/${first.data.id}`, 200, { method: "DELETE" });
+    const big = await createDemo(app, { name: "Big one" });
+    await call(app, `/api/v1/connections/${big.data.id}`, 200, { method: "DELETE" });
+    expect(runtimeCalls.install).not.toContain("tool-search");
     expect(runtimeCalls.uninstall).not.toContain("tool-search");
-    await call(app, `/api/v1/connections/${second.data.id}`, 200, { method: "DELETE" });
-    expect(runtimeCalls.uninstall).toContain("tool-search");
   }, 30_000);
 });
 

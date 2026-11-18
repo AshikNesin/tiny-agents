@@ -23,9 +23,10 @@ first:
 Turning a tool on or off re-installs the capability from the cached tool list
 and re-applies every linked bot's configuration (`ConnectionManager.reinstall`).
 Servers with more than `MCP_DEFER_THRESHOLD` tools defer them behind
-`tool_search`; the count uses the tools that are on. The rule, the parsers for
-the tool columns and a bot's whole selection live in
-`apps/web/src/server/api/bots/bot-toolkits.ts`.
+`tool_search` (`packages/agent/src/mcp.ts`), as the browser and computer
+toolkits do; the runtime's tool search capability names each deferred group
+in the prompt. The parsers for the tool columns and a bot's whole selection
+live in `apps/web/src/server/api/bots/bot-toolkits.ts`.
 
 ## Tool page
 

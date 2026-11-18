@@ -28,7 +28,12 @@ import {
   type CredentialRequest,
   type CredentialRequestOutcome,
 } from "./credentials";
-import { capabilityInfo, type Capability, type CapabilityInfo } from "./capabilities";
+import {
+  capabilityInfo,
+  createToolSearchCapability,
+  type Capability,
+  type CapabilityInfo,
+} from "./capabilities";
 import { withContextCeiling } from "./context-ceiling";
 import { createContextTrimExtension } from "./context-trim";
 import { acquireStoreLock, type StoreLock } from "./lock";
@@ -297,7 +302,13 @@ export class AgentRuntime {
       const questions = new WaitTracker();
       // Questions for the owner wait on a document this runtime answers, so
       // the runtime brings their capability; conversations select it by id.
-      const capabilities = [...(options.capabilities ?? []), createQuestionsCapability(questions)];
+      // Tool search is the runtime's too: every bot has deferred toolkits
+      // (browser, computer), and large connections defer theirs.
+      const capabilities = [
+        ...(options.capabilities ?? []),
+        createQuestionsCapability(questions),
+        createToolSearchCapability((id) => runtime?.capabilityInfo(id)),
+      ];
       // Installed first, so conversations that never chose capabilities (they
       // select every installed extension) get the trim too.
       registry.install(createContextTrimExtension());
@@ -552,6 +563,12 @@ export class AgentRuntime {
 
   listCapabilities(): CapabilityInfo[] {
     return [...this.#capabilities.values()].map(capabilityInfo);
+  }
+
+  /** One installed capability's info, by id. */
+  capabilityInfo(id: string): CapabilityInfo | undefined {
+    const capability = this.#capabilities.get(id);
+    return capability ? capabilityInfo(capability) : undefined;
   }
 
   /**

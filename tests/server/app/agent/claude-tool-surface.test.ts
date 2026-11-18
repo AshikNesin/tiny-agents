@@ -6,6 +6,7 @@ import { Type } from "@earendil-works/pi-ai";
 import { describe, expect, it } from "vite-plus/test";
 import { z } from "zod";
 import { claudeToolSurface } from "../../../../packages/agent/src/engines/claude-code/tools";
+import { createToolSearchCapability } from "../../../../packages/agent/src/capabilities";
 import { defineToolkit, tool } from "../../../../packages/agent/src/toolkit";
 import {
   createSdkQueryFactory,
@@ -63,6 +64,19 @@ describe("claudeToolSurface", () => {
       permissions: {},
     });
     expect(surface.tools.map((t) => t.name)).toEqual(["desk_read"]);
+  });
+
+  it("offers deferred tools directly and leaves out tool_search, which needs the pi runtime", () => {
+    const desk = deskToolkit(true);
+    const search = createToolSearchCapability();
+    const surface = claudeToolSurface(
+      new Map([
+        [desk.id, desk],
+        [search.id, search],
+      ]),
+      { enabled: ["desk", "tool-search"], permissions: {} },
+    );
+    expect(surface.tools.map((t) => t.name)).toEqual(["desk_read", "desk_tidy"]);
   });
 });
 

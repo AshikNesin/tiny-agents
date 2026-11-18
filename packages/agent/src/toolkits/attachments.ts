@@ -475,6 +475,8 @@ export function createAttachmentsToolkit(
 
   return defineToolkit({
     id: "attachments",
+    // Used in few conversations: loaded with tool_search (issue #360).
+    deferred: true,
     name: "Attachments",
     description: "Read, search and copy the files you attach",
     tools: [listAttachments, readAttachment, searchAttachment, copy],

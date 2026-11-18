@@ -339,6 +339,8 @@ export function createVaultToolkit(options: VaultToolkitOptions = {}): Capabilit
 
   return defineToolkit({
     id: "vault",
+    // Used in few conversations: loaded with tool_search (issue #360).
+    deferred: true,
     name: "Vault",
     description: "Uses your saved logins, cards and API keys without seeing them",
     tools: [vaultList],

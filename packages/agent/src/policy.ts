@@ -12,7 +12,13 @@ import type { Extension, Registry, ToolRegistration } from "@earendil-works/pi-d
 import { defineDoc, UsageDoc, type UsageState } from "@earendil-works/pi-durable";
 import type { Context } from "@earendil-works/chord";
 import type { ToolExecutionApi } from "@earendil-works/pi-durable";
-import { effectivePermission, type Capability, type CapabilitySelection } from "./capabilities";
+import { TOOL_SEARCH_TOOL_NAME } from "@earendil-works/pi-durable/tool-search";
+import {
+  effectivePermission,
+  TOOL_SEARCH_CAPABILITY,
+  type Capability,
+  type CapabilitySelection,
+} from "./capabilities";
 import { CONTEXT_TRIM } from "./context-trim";
 
 /**
@@ -107,6 +113,19 @@ export function compilePolicy(
         review.push(tool.name);
       }
     }
+  }
+  // tool_search only where it has something to load (pi activates it the same way).
+  const searchable = extensions.some((extension) =>
+    extension.tools?.some(
+      (tool) => tool.deferred === true && !remove.some((gone) => gone.name === tool.name),
+    ),
+  );
+  if (!searchable) {
+    const search = installed
+      .extension(TOOL_SEARCH_CAPABILITY)
+      ?.tools?.find((tool) => tool.name === TOOL_SEARCH_TOOL_NAME);
+    if (search && extensions.some((extension) => extension.name === TOOL_SEARCH_CAPABILITY))
+      remove.push(search);
   }
   return {
     extensions,

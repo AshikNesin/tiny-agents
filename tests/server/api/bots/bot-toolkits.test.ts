@@ -1,6 +1,6 @@
 /**
  * A bot's toolkits (bot-toolkits.ts): the selection every bot's conversation
- * runs with, the tool-search rule for large connections, and the check that
+ * runs with, a connection's tools, and the check that
  * every id a bot can select is one the runtime installs.
  */
 import { mkdtemp, rm } from "node:fs/promises";
@@ -10,7 +10,6 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import {
   createMcpCapability,
   createToolSearchCapability,
-  MCP_DEFER_THRESHOLD,
 } from "../../../../packages/agent/src/index";
 import {
   BOT_TOOLKITS,
@@ -18,7 +17,6 @@ import {
   connectionCapabilityId,
   connectionTools,
   missingToolkits,
-  needsToolSearch,
   parseDisabledTools,
   parseTools,
   TOOL_SEARCH_TOOLKIT,
@@ -43,23 +41,23 @@ function connection(slug: string, count: number, off = 0) {
 }
 
 describe("botToolkits", () => {
-  it("gives every bot every built-in toolkit, plus vision for a model that cannot see images", () => {
+  it("gives every bot every built-in toolkit and tool search, plus vision for a model that cannot see images", () => {
     expect(botToolkits({ modelId: "known-model" }, catalog)).toEqual([
       ...BOT_TOOLKITS,
       VISION_TOOLKIT,
+      TOOL_SEARCH_TOOLKIT,
     ]);
-    expect(botToolkits({ modelId: "vision-model" }, catalog)).toEqual([...BOT_TOOLKITS]);
+    expect(botToolkits({ modelId: "vision-model" }, catalog)).toEqual([
+      ...BOT_TOOLKITS,
+      TOOL_SEARCH_TOOLKIT,
+    ]);
     // A model the catalog does not know is treated as text-only.
     expect(botToolkits({ modelId: "gone-model" }, catalog)).toContain(VISION_TOOLKIT);
   });
 
-  it("adds each linked connection, and tool search only while one is large", () => {
-    const small = connection("small", MCP_DEFER_THRESHOLD);
-    const large = connection("large", MCP_DEFER_THRESHOLD + 1);
-    expect(botToolkits({ modelId: "vision-model", connections: [small] }, catalog)).toEqual([
-      ...BOT_TOOLKITS,
-      "mcp:small",
-    ]);
+  it("adds each linked connection", () => {
+    const small = connection("small", 3);
+    const large = connection("large", 40);
     expect(botToolkits({ modelId: "vision-model", connections: [small, large] }, catalog)).toEqual([
       ...BOT_TOOLKITS,
       "mcp:small",
@@ -67,21 +65,9 @@ describe("botToolkits", () => {
       TOOL_SEARCH_TOOLKIT,
     ]);
   });
-
-  it("counts only the tools that are on", () => {
-    const trimmed = connection("big", MCP_DEFER_THRESHOLD + 5, 5);
-    expect(botToolkits({ modelId: "vision-model", connections: [trimmed] }, catalog)).not.toContain(
-      TOOL_SEARCH_TOOLKIT,
-    );
-  });
 });
 
 describe("a connection's tools", () => {
-  it("needs tool search above the defer threshold, not at it", () => {
-    expect(needsToolSearch(Array.from({ length: MCP_DEFER_THRESHOLD }))).toBe(false);
-    expect(needsToolSearch(Array.from({ length: MCP_DEFER_THRESHOLD + 1 }))).toBe(true);
-  });
-
   it("installs the cached (or live) tools minus those turned off", () => {
     const row = { toolsCache: '[{"name":"a"},{"name":"b"}]', disabledTools: '["a"]' };
     expect(connectionTools(row).map((tool) => tool.name)).toEqual(["b"]);
@@ -110,7 +96,7 @@ describe("selected ids match installed ones", () => {
   });
 
   it("reports an id the runtime lacks", () => {
-    expect(missingToolkits(BOT_TOOLKITS)).toEqual([VISION_TOOLKIT]);
+    expect(missingToolkits(BOT_TOOLKITS)).toEqual([VISION_TOOLKIT, TOOL_SEARCH_TOOLKIT]);
   });
 
   it("every built-in a bot selects is installed by the server's runtime", async () => {
@@ -127,7 +113,7 @@ describe("selected ids match installed ones", () => {
     await runtime.close();
   }, 20_000);
 
-  it("names connections and tool search as the ConnectionManager installs them", () => {
+  it("names connections as the ConnectionManager installs them, and tool search as the runtime does", () => {
     expect(createToolSearchCapability().id).toBe(TOOL_SEARCH_TOOLKIT);
     const mcp = createMcpCapability({
       slug: "demo",

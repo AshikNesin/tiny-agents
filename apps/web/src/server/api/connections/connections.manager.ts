@@ -13,8 +13,8 @@
  *   that use it (their permissions are per tool). Bots linked or unlinked by
  *   the owner are Reconciled here too, each bot once per change, however
  *   many steps of the change asked for it.
- * - `tool_search` is installed while any connection defers its tools
- *   (`needsToolSearch`, bot-toolkits.ts) and uninstalled once none does.
+ * - A large connection's tools are deferred (`MCP_DEFER_THRESHOLD`); the
+ *   runtime's own `tool_search` loads them.
  * - A server that needs (re)authorization marks the connection
  *   "needs_auth" and withdraws its tools until the owner signs in (D11).
  * - Tools the owner turned off on the connection are never installed, so no
@@ -26,7 +26,6 @@ import { logger } from "@groot/core/logger";
 import {
   connectMcp,
   createMcpCapability,
-  createToolSearchCapability,
   isUnauthorized,
   mcpAuth,
   type AgentRuntime,
@@ -36,13 +35,7 @@ import {
 } from "@tiny-agents/agent";
 import { botConnections, connections, db, type Connection } from "../../db";
 import { reconcileBotConversation } from "../bots/bots.conversation";
-import {
-  connectionCapabilityId,
-  connectionTools,
-  needsToolSearch,
-  parseTools,
-  TOOL_SEARCH_TOOLKIT,
-} from "../bots/bot-toolkits";
+import { connectionCapabilityId, connectionTools, parseTools } from "../bots/bot-toolkits";
 import { connectionForState, createOAuthProvider, readOAuthState } from "./oauth";
 import { SecretLockedError } from "../../crypto/secret-box";
 import { ownHeaderHandle } from "./connection-secrets";
@@ -86,9 +79,6 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 export class ConnectionManager {
   readonly #live = new Map<string, Live>();
   readonly #listeners = new Set<(id: string, state: ConnectionLiveState) => void>();
-  /** Connections whose installed tools are deferred behind `tool_search`. */
-  readonly #deferred = new Set<string>();
-  #toolSearchInstalled = false;
   /** Bots waiting for one Reconcile; flushed together on the next tick. */
   readonly #reconcilePending = new Set<string>();
   #reconcileFlush: Promise<void> | undefined;
@@ -201,7 +191,7 @@ export class ConnectionManager {
         // A sign-in the app can no longer open (an old format, another
         // SECRETS_KEY) is fixed by signing in again, which replaces it.
         if (row.authType === "oauth" && error.reason !== "no_key") {
-          this.#withdraw(id, row.slug);
+          this.#withdraw(row.slug);
           this.#set(id, {
             status: "needs_auth",
             error: "The saved sign-in can't be read anymore. Sign in again.",
@@ -212,7 +202,7 @@ export class ConnectionManager {
         return;
       }
       if (row.authType === "oauth" && isUnauthorized(error)) {
-        this.#withdraw(id, row.slug);
+        this.#withdraw(row.slug);
         this.#set(id, { status: "needs_auth", error: "Sign in to use this connection" });
         return;
       }
@@ -292,25 +282,10 @@ export class ConnectionManager {
         call: (tool, args, signal) => this.call(row.id, tool, args, signal),
       }),
     );
-    // A server with many tools defers them; the model finds them via tool_search.
-    if (needsToolSearch(tools)) this.#deferred.add(row.id);
-    else this.#deferred.delete(row.id);
-    this.#syncToolSearch();
   }
 
-  #withdraw(id: string, slug: string): void {
+  #withdraw(slug: string): void {
     this.#runtime?.uninstallCapability(connectionCapabilityId(slug));
-    this.#deferred.delete(id);
-    this.#syncToolSearch();
-  }
-
-  /** `tool_search` lives exactly as long as some connection defers its tools. */
-  #syncToolSearch(): void {
-    const wanted = this.#deferred.size > 0;
-    if (wanted === this.#toolSearchInstalled) return;
-    if (wanted) this.#runtime?.installCapability(createToolSearchCapability());
-    else this.#runtime?.uninstallCapability(TOOL_SEARCH_TOOLKIT);
-    this.#toolSearchInstalled = wanted;
   }
 
   /**
@@ -418,7 +393,7 @@ export class ConnectionManager {
       live.connection = undefined;
       await connection?.close().catch(() => undefined);
     }
-    this.#withdraw(id, slug);
+    this.#withdraw(slug);
     await this.#reconcile(botIds);
   }
 
