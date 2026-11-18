@@ -60,7 +60,7 @@ export interface FakeGitHub extends GitHubClient {
   /** Native auto-merge calls, by PR node id. */
   autoMergeCalls: Array<{
     pullId: string;
-    action: "enable" | "disable" | "ready";
+    action: "enable" | "disable" | "ready" | "draft";
     method?: string;
   }>;
   pull(number: number): FakePull;
@@ -190,6 +190,10 @@ export function fakeGitHub(local: LocalExec, bare: string, login = "ashik"): Fak
     async markReady(pullId) {
       gh.autoMergeCalls.push({ pullId, action: "ready" });
       gh.pull(Number(pullId.replace("PR_", ""))).draft = false;
+    },
+    async convertToDraft(pullId) {
+      gh.autoMergeCalls.push({ pullId, action: "draft" });
+      gh.pull(Number(pullId.replace("PR_", ""))).draft = true;
     },
     async updatePull(_repo, number, change) {
       const pr = gh.pull(number);

@@ -708,6 +708,12 @@ function PullRequestGroups({ project, update }: { project: ProjectView; update: 
     <>
       <SettingsGroup title="Pull requests">
         <SwitchRow
+          label="Open new PRs as drafts"
+          description="Off opens them ready for review. Each PR's Draft switch flips it later."
+          checked={settings.draftPulls}
+          onChange={(draftPulls) => update({ settings: { draftPulls } })}
+        />
+        <SwitchRow
           label="Archive the thread when its PR merges"
           checked={settings.archiveOnMerge}
           onChange={(archiveOnMerge) => update({ settings: { archiveOnMerge } })}

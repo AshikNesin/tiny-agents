@@ -58,6 +58,7 @@ const project: ProjectView = {
   settings: {
     scripts: {},
     archiveOnMerge: true,
+    draftPulls: true,
     branchPrefix: "ta/",
     protectedPaths: [".github/workflows/**"],
     autofix: {
@@ -172,6 +173,12 @@ describe("Code settings", () => {
         "/code/projects/p1",
         { settings: { autofix: { triggers: { conflicts: false } } } },
       ]),
+    );
+    const drafts = screen.getByRole("switch", { name: "Open new PRs as drafts" });
+    expect(drafts).toBeChecked();
+    await userEvent.click(drafts);
+    await waitFor(() =>
+      expect(patches.at(-1)).toEqual(["/code/projects/p1", { settings: { draftPulls: false } }]),
     );
   });
 

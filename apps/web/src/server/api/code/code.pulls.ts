@@ -88,7 +88,12 @@ async function openPullContext(threadId: string) {
   const { project } = await requireProjectThread(threadId);
   const open = await openPullOf(threadId);
   if (!open) throw Boom.notFound("The thread has no open pull request.");
-  return { project, open, repo: repoOf(project), github: () => codeGitHub().client(project) };
+  return {
+    project,
+    open,
+    repo: repoOf(project),
+    github: () => codeGitHub().client(project),
+  };
 }
 
 function autofixSettings(raw: string): AutofixSettings {
@@ -137,7 +142,8 @@ function pullBody(commits: Array<{ sha: string; subject: string }>): string {
 }
 
 /**
- * Publish (§7.3): push the branch and open a draft PR, or, when the thread
+ * Publish (§7.3): push the branch and open a PR (a draft unless the project
+ * says ready for review), or, when the thread
  * already has an open one, push its new commits. A manual publish is not
  * held to the protected-path rule; a pass is.
  */
@@ -174,7 +180,10 @@ export async function publish(
     input.title?.trim() ||
     (existing
       ? ""
-      : await pullTitle({ thread: threadTitle, commits: commits.map((c) => c.subject) })) ||
+      : await pullTitle({
+          thread: threadTitle,
+          commits: commits.map((c) => c.subject),
+        })) ||
     threadTitle ||
     commits.at(-1)?.subject ||
     thread.branch;
@@ -186,7 +195,7 @@ export async function publish(
         base: project.baseBranch,
         title,
         body: input.body?.trim() || pullBody(commits),
-        draft: true,
+        draft: projectSettings(project.settings).draftPulls,
       })
       .catch((error: unknown) => {
         throw Boom.badRequest(`GitHub refused the pull request: ${githubMessage(error)}`);
@@ -278,8 +287,15 @@ export async function setAutofix(threadId: string, enabled: boolean): Promise<vo
   const open = await openPullOf(threadId);
   if (!open) throw Boom.notFound("The thread has no open pull request.");
   if (enabled) {
-    await updatePull(open.id, { autofix: true, ownerInputAt: new Date(), passesWithoutOwner: 0 });
-    await moveLoop(open.id, "watching", { headSha: open.headSha, autofix: true });
+    await updatePull(open.id, {
+      autofix: true,
+      ownerInputAt: new Date(),
+      passesWithoutOwner: 0,
+    });
+    await moveLoop(open.id, "watching", {
+      headSha: open.headSha,
+      autofix: true,
+    });
     await reconcileNow(open.id);
     await armReconcile(open.id, 60_000, open.pendingJobId);
   } else {
@@ -292,10 +308,16 @@ export async function setAutofix(threadId: string, enabled: boolean): Promise<vo
 export async function noteOwnerInput(threadId: string): Promise<void> {
   const open = await openPullOf(threadId);
   if (!open) return;
-  await updatePull(open.id, { ownerInputAt: new Date(), passesWithoutOwner: 0 });
+  await updatePull(open.id, {
+    ownerInputAt: new Date(),
+    passesWithoutOwner: 0,
+  });
   // needs_input and paused wait for exactly this.
   if (open.loopStatus === "needs_input" || open.loopStatus === "paused") {
-    await moveLoop(open.id, "watching", { headSha: open.headSha, from: ["needs_input", "paused"] });
+    await moveLoop(open.id, "watching", {
+      headSha: open.headSha,
+      from: ["needs_input", "paused"],
+    });
   }
 }
 
@@ -307,15 +329,20 @@ export async function mergePull(threadId: string, method: MergeMethod): Promise<
   await reconcileNow(open.id);
 }
 
-/** Draft → ready for review, so it can be merged (a draft cannot be). */
-export async function readyPull(threadId: string): Promise<void> {
+/** Draft ↔ ready for review, either way, any time (a draft cannot be merged). */
+export async function setPullDraft(threadId: string, draft: boolean): Promise<void> {
   const context = await openPullContext(threadId);
   const { open } = context;
   const github = await context.github();
   const snapshot = await github.snapshot(context.repo, open.number);
-  if (!snapshot.draft) throw Boom.conflict(`#${open.number} is already ready for review.`);
-  await github.markReady(snapshot.id).catch((error: unknown) => {
-    throw Boom.conflict(`GitHub kept #${open.number} a draft: ${githubMessage(error)}`);
+  if (snapshot.draft === draft) {
+    throw Boom.conflict(`#${open.number} is already ${draft ? "a draft" : "ready for review"}.`);
+  }
+  const change = draft ? github.convertToDraft(snapshot.id) : github.markReady(snapshot.id);
+  await change.catch((error: unknown) => {
+    throw Boom.conflict(
+      `GitHub kept #${open.number} ${draft ? "ready for review" : "a draft"}: ${githubMessage(error)}`,
+    );
   });
   await reconcileNow(open.id);
 }
@@ -346,7 +373,12 @@ export async function manualPass(threadId: string): Promise<{ started: boolean; 
     ownerLogin: await ownerLoginOf(project, github),
     settings: {
       ...autofixSettings(project.settings),
-      triggers: { checks: true, reviews: true, conflicts: true, mergeQueue: true },
+      triggers: {
+        checks: true,
+        reviews: true,
+        conflicts: true,
+        mergeQueue: true,
+      },
     },
   });
   if (items.length === 0) return { started: false, reason: "Nothing is failing or open." };
@@ -389,7 +421,10 @@ async function reconcile(pullId: string, now = Date.now()): Promise<number | nul
     return null;
   }
   if (snapshot.state === "closed") {
-    await moveLoop(pull.id, "off", { reason: "The pull request was closed.", autofix: false });
+    await moveLoop(pull.id, "off", {
+      reason: "The pull request was closed.",
+      autofix: false,
+    });
     return null;
   }
 
@@ -469,12 +504,20 @@ async function reconcile(pullId: string, now = Date.now()): Promise<number | nul
       }
     } else if (decision.kind === "pause") {
       if (
-        await moveLoop(pull.id, "paused", { reason: decision.reason, headSha: snapshot.headSha })
+        await moveLoop(pull.id, "paused", {
+          reason: decision.reason,
+          headSha: snapshot.headSha,
+        })
       ) {
         notify(pull, "needs_input", decision.reason);
       }
     } else if (decision.kind === "off") {
-      if (await moveLoop(pull.id, "off", { reason: decision.reason, autofix: false })) {
+      if (
+        await moveLoop(pull.id, "off", {
+          reason: decision.reason,
+          autofix: false,
+        })
+      ) {
         notify(pull, "off", decision.reason);
       }
     } else if (decision.kind === "none" && !pull.autofix) {
@@ -508,7 +551,10 @@ export async function onThreadArchived(threadId: string, archived: boolean): Pro
   if (archived) {
     const open = await openPullOf(threadId);
     if (open)
-      await moveLoop(open.id, "off", { reason: "The thread was archived.", autofix: false });
+      await moveLoop(open.id, "off", {
+        reason: "The thread was archived.",
+        autofix: false,
+      });
   }
   await onProjectThreadArchived(threadId, archived);
 }
@@ -582,7 +628,10 @@ async function threadSpend(
   const target = codeHub()?.resolve(threadId);
   const snapshot = await target?.instance.getThread(target.nativeId).catch(() => undefined);
   // A harness that reports no cost reports 0: unknown, never "spent nothing".
-  return { usd: snapshot && snapshot.costUsd > 0 ? snapshot.costUsd : null, limitUsd };
+  return {
+    usd: snapshot && snapshot.costUsd > 0 ? snapshot.costUsd : null,
+    limitUsd,
+  };
 }
 
 /** The merge method auto-merge asks for: the repository's first of squash, merge, rebase. */
@@ -661,7 +710,12 @@ async function pullView(
   const snapshot = cachedSnapshot(row);
   const passes = await passesOf(row.id);
   const ignored = snapshot
-    ? ignoredItems({ snapshot, appCommentIds: await appCommentIds(row.id), ownerLogin, settings })
+    ? ignoredItems({
+        snapshot,
+        appCommentIds: await appCommentIds(row.id),
+        ownerLogin,
+        settings,
+      })
     : [];
   return {
     id: row.id,
@@ -703,7 +757,10 @@ function passItems(raw: string): Array<{ id: string; title: string }> {
     if (!Array.isArray(value)) return [];
     return value
       .filter((i): i is { id: string; title?: unknown } => typeof i?.id === "string")
-      .map((i) => ({ id: i.id, title: typeof i.title === "string" ? i.title : i.id }));
+      .map((i) => ({
+        id: i.id,
+        title: typeof i.title === "string" ? i.title : i.id,
+      }));
   } catch {
     return [];
   }
@@ -750,7 +807,12 @@ export async function threadPulls(threadId: string, fresh = true): Promise<Threa
     active: active ? await pullView(active, ownerLogin, settings) : null,
     earlier: rows
       .filter((r) => r !== active)
-      .map((r) => ({ number: r.number, url: r.url, title: r.title, state: r.state })),
+      .map((r) => ({
+        number: r.number,
+        url: r.url,
+        title: r.title,
+        state: r.state,
+      })),
     ahead,
     spend: await threadSpend(threadId, thread.spendLimitUsd ?? 0).then((s) => ({
       usd: s.usd,

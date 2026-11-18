@@ -1,18 +1,17 @@
 /**
  * The Pull request tab of the right panel (issue #297 §7.5), for a thread
  * started in a project. With no open PR it offers Publish (push the branch,
- * open a draft PR) and Link. With one: its number, state, title and branch;
+ * open a PR, a draft unless the project says ready) and Link. With one: its number, state, title and branch;
  * the checks (a failing one opens to its log excerpt, with Fix CI); Merge;
- * every comment as All, Humans or Bots; the Auto-fix and Auto-merge
- * switches (and a spend limit where the harness reports cost); the pass
- * history; the description (markdown, with Edit while it is open); and
+ * the Draft, Auto-fix and Auto-merge switches (and a spend limit where the
+ * harness reports cost); the pass history; every comment as All, Humans or
+ * Bots; the description (markdown, with Edit while it is open); and
  * earlier PRs. Opening the tab reconciles with GitHub, and so does each
  * re-read while it is on screen (every 15 seconds), so a project without
  * the App's webhooks (`gh` or a token) keeps up as fast as one with them.
  */
 import { useCallback, useEffect, useState } from "react";
 import {
-  Eye,
   ExternalLink,
   GitMerge,
   GitPullRequest,
@@ -98,7 +97,10 @@ export function PullPanel({
   /** Open this PR in review mode (issue #345). */
   onReview?: (url: string) => Promise<void>;
 }) {
-  const { view, error, setView, reload } = useThreadPulls(threadId, { refreshKey, live: true });
+  const { view, error, setView, reload } = useThreadPulls(threadId, {
+    refreshKey,
+    live: true,
+  });
   const [busy, setBusy] = useState<string | null>(null);
   const [linkNumber, setLinkNumber] = useState("");
 
@@ -235,7 +237,7 @@ export function PullPanel({
               data-testid="code-publish"
             >
               {busy === "publish" ? <Spinner /> : <Upload />}
-              Publish draft PR
+              {view.project?.settings.draftPulls === false ? "Publish PR" : "Publish draft PR"}
             </Button>
             <form
               className="flex items-center gap-2"
@@ -275,7 +277,11 @@ export function PullPanel({
               })
             }
             onMerge={(method) => void act("merge", () => projectsApi.merge(threadId, method))}
-            onReady={() => void act("mark it ready", () => projectsApi.ready(threadId))}
+            onDraft={(draft) =>
+              void act(draft ? "convert it to a draft" : "mark it ready", () =>
+                projectsApi.setDraft(threadId, draft),
+              )
+            }
             onAttachAll={() => {
               const text = commentsText(pr);
               if (text) onAttach(text);
@@ -391,7 +397,7 @@ function ActivePull({
   onAutofix,
   onFix,
   onMerge,
-  onReady,
+  onDraft,
   onAttachAll,
   onAttach,
   onAutoMerge,
@@ -404,8 +410,8 @@ function ActivePull({
   onAutofix(enabled: boolean): void;
   onFix(): void;
   onMerge(method: MergeMethod): void;
-  /** Draft → ready for review (a draft cannot be merged). */
-  onReady(): void;
+  /** Draft ↔ ready for review (a draft cannot be merged). */
+  onDraft(draft: boolean): void;
   onAttachAll(): void;
   onAttach(text: string): void;
   onAutoMerge(enabled: boolean): void;
@@ -423,22 +429,14 @@ function ActivePull({
       <PullChecks threadId={threadId} pr={pr} busy={busy} onFix={onFix} />
 
       <div className="flex flex-wrap gap-2">
-        {pr.state === "open" && pr.draft && (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={onReady}
-            disabled={busy !== null}
-            title="Mark it ready for review on GitHub, so it can be merged"
-          >
-            {busy === "mark it ready" ? <Spinner /> : <Eye />}
-            Ready for review
-          </Button>
-        )}
         {pr.state === "open" && methods.length > 0 && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button size="sm" disabled={busy !== null || pr.draft}>
+              <Button
+                size="sm"
+                disabled={busy !== null || pr.draft}
+                title={pr.draft ? "A draft cannot be merged; switch Draft off first" : undefined}
+              >
                 {busy === "merge" ? <Spinner /> : <GitMerge />}
                 Merge
               </Button>
@@ -476,8 +474,6 @@ function ActivePull({
         )}
       </div>
 
-      <PullComments pr={pr} onAttach={onAttach} />
-
       <section
         className="border-border divide-border divide-y rounded-xl border"
         aria-label="Auto-fix"
@@ -508,6 +504,22 @@ function ActivePull({
             <p className="text-muted-foreground text-xs">{pr.loop.reason}</p>
           )}
         </div>
+        {pr.state === "open" && (
+          <label
+            className="flex items-center gap-3 px-3 py-2.5"
+            title="A draft is not ready for review, and cannot be merged"
+          >
+            <span className="min-w-0 flex-1">Draft</span>
+            {(busy === "mark it ready" || busy === "convert it to a draft") && <Spinner />}
+            <Switch
+              checked={pr.draft}
+              onCheckedChange={onDraft}
+              disabled={busy !== null}
+              aria-label="Draft"
+              data-testid="code-draft"
+            />
+          </label>
+        )}
         <label className="flex items-center gap-3 px-3 py-2.5">
           <span className="min-w-0 flex-1">Auto-merge when GitHub allows it</span>
           {snap?.autoMerge && <span className="text-muted-foreground text-xs">On at GitHub</span>}
@@ -576,6 +588,9 @@ function ActivePull({
           </ul>
         </section>
       )}
+
+      {/* Last: a PR's comments run long (bots), so the switches above stay in reach. */}
+      <PullComments pr={pr} onAttach={onAttach} />
     </>
   );
 }
