@@ -6,6 +6,7 @@
  */
 import type { Context as PiContext, JsonObject } from "@earendil-works/pi-ai";
 import { until } from "../../fixtures/until";
+import { loaded } from "../../fixtures/loaded-tools";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { secretRedactor } from "../../../../packages/agent/src/redact";
 import type { AgentRuntime } from "../../../../packages/agent/src/runtime";
@@ -185,7 +186,7 @@ async function open(
   const browser = createBrowserToolkit({ sessions, vault: broker, ownerWaits: tracker });
   const runtime = await openTestRuntime({
     storePath: ":memory:",
-    capabilities: [browser],
+    capabilities: [loaded(browser)],
     approvalTracker: tracker,
     respondWith: script(steps),
   });

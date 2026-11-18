@@ -100,13 +100,19 @@ interface ToolkitDeclaration {
    */
   offered?: (name: string) => boolean;
   sections?: readonly PromptSection[];
+  /**
+   * Not sent to the model until it loads them with `tool_search` (pi's
+   * `deferred` exposure): for large toolkits most conversations never use.
+   * The tool search section names the toolkit, so the model knows to load it.
+   */
+  deferred?: boolean;
   /** Why the toolkit can't run yet; absent when it is ready. */
   setupHint?: string;
 }
 
 export function defineToolkit(declaration: ToolkitDeclaration): Capability {
   const { id, kind = "toolkit", name, description, auto, offered = () => true } = declaration;
-  const { sections, setupHint } = declaration;
+  const { sections, setupHint, deferred } = declaration;
   const tools = (declaration.tools ?? []).filter((declared): declared is DeclaredTool =>
     Boolean(declared),
   );
@@ -119,7 +125,11 @@ export function defineToolkit(declaration: ToolkitDeclaration): Capability {
     extension: defineExtension({
       name: id,
       ...(declaration.tools
-        ? { tools: tools.filter((t) => offered(t.info.name)).map((t) => t.registration) }
+        ? {
+            tools: tools
+              .filter((t) => offered(t.info.name))
+              .map((t) => (deferred ? { ...t.registration, deferred: true } : t.registration)),
+          }
         : {}),
       ...(sections ? { sections } : {}),
     }),

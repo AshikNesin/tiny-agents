@@ -35,6 +35,10 @@ by default. The toolkit switch was a second, redundant layer.
 
 - All built-in tools together add about 3k tokens per request, cached by
   the provider; acceptable against the setup friction it removes.
+- Amended 2026-11-18 (issue #360): the built-ins had grown to about 11k
+  tokens. The browser and computer toolkits (about 5k of them) are now
+  deferred: every bot still has them, but the model loads them with
+  `tool_search` when it needs them, and a stable prompt section names them.
 - Existing bots gain the toolkits they had off. Effectful tools still ask
   first; a tool the owner does not want for a bot is set to Off.
 - Bots know the date but not the exact clock time. A bot asked for the time

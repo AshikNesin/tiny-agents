@@ -294,6 +294,22 @@
             ]
           },
           {
+            "id": "tool-search",
+            "kind": "toolkit",
+            "name": "Tool search",
+            "description": "Loads deferred tools on demand",
+            "auto": true,
+            "tools": [
+              {
+                "name": "tool_search",
+                "label": "Searched tools",
+                "askLabel": "search tools",
+                "description": "Load deferred tools",
+                "readOnly": true
+              }
+            ]
+          },
+          {
             "id": "bots",
             "kind": "toolkit",
             "name": "Bots",

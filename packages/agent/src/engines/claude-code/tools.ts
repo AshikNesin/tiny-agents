@@ -11,6 +11,7 @@ import type {
   ToolExecutionApi,
   ToolRegistration,
 } from "@earendil-works/pi-durable";
+import { TOOL_SEARCH_TOOL_NAME } from "@earendil-works/pi-durable/tool-search";
 import type { ToolSpec } from "@tiny-agents/claude-worker";
 import {
   effectivePermission,
@@ -50,6 +51,9 @@ export function claudeToolSurface(
       // it is listed for the owner's settings, never offered to the model.
       const registration = declared.find((tool) => tool.name === info.name);
       if (!registration) continue;
+      // Deferred tools are offered directly: Claude Code defers MCP tools
+      // itself, and tool_search loads through the pi runtime.
+      if (registration.name === TOOL_SEARCH_TOOL_NAME) continue;
       const parameters = registration.parameters as
         | { type?: string; properties?: Record<string, unknown>; required?: string[] }
         | undefined;
