@@ -46,13 +46,18 @@ export function claudeToolSurface(
       permissions[info.name] = permission;
       if (permission === "off") continue;
       if (info.unattendedOnly && !selection?.unattended) continue;
+      // A tool its toolkit does not offer (not configured) has no registration:
+      // it is listed for the owner's settings, never offered to the model.
       const registration = declared.find((tool) => tool.name === info.name);
-      const parameters = registration?.parameters as
+      if (!registration) continue;
+      const parameters = registration.parameters as
         | { type?: string; properties?: Record<string, unknown>; required?: string[] }
         | undefined;
       tools.push({
         name: info.name,
-        description: info.description,
+        // What the model reads, as a pi conversation gets it; `info.description`
+        // is the owner's one-line summary.
+        description: registration.description,
         inputSchema:
           parameters && parameters.type === "object"
             ? {
@@ -62,7 +67,7 @@ export function claudeToolSurface(
               }
             : { type: "object", additionalProperties: true },
       });
-      if (registration) runners.set(info.name, registration);
+      runners.set(info.name, registration);
     }
   }
   return { tools, permissions, runners };

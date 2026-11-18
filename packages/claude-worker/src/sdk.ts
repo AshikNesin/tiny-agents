@@ -117,18 +117,37 @@ function zodShape(schema: JsonSchema): Record<string, z.ZodType> {
   const required = new Set(schema.required ?? []);
   const shape: Record<string, z.ZodType> = {};
   for (const [key, value] of Object.entries(properties)) {
-    const type =
-      value && typeof value === "object" && "type" in value ? String(value.type) : "string";
+    const property = (value && typeof value === "object" ? value : {}) as {
+      type?: unknown;
+      enum?: unknown;
+      anyOf?: unknown;
+      description?: unknown;
+    };
+    const type = "type" in property ? String(property.type) : "string";
+    // A string enum, or TypeBox's union of string literals (`anyOf` of `const`s).
+    const choices = Array.isArray(property.enum)
+      ? property.enum
+      : Array.isArray(property.anyOf)
+        ? property.anyOf.map((variant) =>
+            variant && typeof variant === "object"
+              ? (variant as { const?: unknown }).const
+              : undefined,
+          )
+        : [];
     let field: z.ZodType =
-      type === "number" || type === "integer"
-        ? z.number()
-        : type === "boolean"
-          ? z.boolean()
-          : type === "array"
-            ? z.array(z.unknown())
-            : type === "object"
-              ? z.record(z.string(), z.unknown())
-              : z.string();
+      choices.length > 0 && choices.every((choice) => typeof choice === "string")
+        ? z.enum(choices as [string, ...string[]])
+        : type === "number" || type === "integer"
+          ? z.number()
+          : type === "boolean"
+            ? z.boolean()
+            : type === "array"
+              ? z.array(z.unknown())
+              : type === "object"
+                ? z.record(z.string(), z.unknown())
+                : z.string();
+    // The parameter's own description is most of what the model knows of it.
+    if (typeof property.description === "string") field = field.describe(property.description);
     if (!required.has(key)) field = field.optional();
     shape[key] = field;
   }
