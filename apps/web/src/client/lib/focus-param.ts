@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 
-const FOCUS = /^(approval|question|takeover):\d+$/;
+const FOCUS = /^(approval|question|takeover|credentials):\d+$/;
 /** How long to wait for the card to render (the chat stream loads first). */
 const WAIT_MS = 10_000;
 
@@ -28,7 +28,9 @@ export function useFocusParam(): void {
       const target = document.querySelector<HTMLElement>(`[data-waiting="${focus}"]`);
       if (!target) return false;
       target.scrollIntoView({ block: "center", behavior: "smooth" });
-      target.querySelector<HTMLElement>("button, [tabindex]")?.focus({ preventScroll: true });
+      target
+        .querySelector<HTMLElement>("input, button, [tabindex]")
+        ?.focus({ preventScroll: true });
       return true;
     };
     if (scroll()) {
