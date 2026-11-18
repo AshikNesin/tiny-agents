@@ -93,15 +93,20 @@ await journey(
       await page.getByTestId("code-changes-toggle").click();
       await expect(changes.getByTestId("code-file")).toHaveCount(1, { timeout: 20_000 });
       await expect(changes.getByText(`"${stamp}"`, { exact: false })).toBeVisible();
-      await expect(changes.getByRole("button", { name: "Show 26 more lines" })).toBeVisible();
-      await expect(changes.getByRole("button", { name: "Show 27 more lines" })).toBeVisible();
+      // diffs.com folds the unchanged runs around the change's context.
+      await expect(changes.getByText("25 unmodified lines").first()).toBeVisible();
+      await expect(changes.getByText("26 unmodified lines").first()).toBeVisible();
       await expect(changes.getByText("const line10 = 10;")).toHaveCount(0);
     });
     await proof("changes-folded");
 
     await step("a line's gutter opens a composer right under the line", async () => {
-      await changes.getByText(`"${stamp}"`, { exact: false }).hover();
-      await changes.getByRole("button", { name: "Comment on line 30" }).click();
+      // The diff draws in a shadow root; Playwright's CSS reaches into it. Click line 30's number.
+      await changes
+        .locator(
+          '[data-gutter] > [data-column-number="30"]:not([data-line-type="change-deletion"])',
+        )
+        .click();
       const box = changes.getByRole("textbox", { name: "Comment on src/app.ts line 30" });
       await expect(box).toBeFocused();
       await box.fill(`Split this call over several lines (${stamp})`);
@@ -151,8 +156,11 @@ await journey(
       await expect(review.getByTestId("code-file")).toHaveCount(1);
       await expect(transcript).toHaveCount(0);
       // Comments work here too, and wait in the tray at the bottom.
-      await review.getByText(`"${stamp}"`, { exact: false }).hover();
-      await review.getByRole("button", { name: "Comment on line 30" }).click();
+      await review
+        .locator(
+          '[data-gutter] > [data-column-number="30"]:not([data-line-type="change-deletion"])',
+        )
+        .click();
       await review
         .getByRole("textbox", { name: "Comment on src/app.ts line 30" })
         .fill(`From the review page (${stamp})`);

@@ -191,7 +191,8 @@ export function YourChangesActions({
 }
 
 /** The header's Open in terminal: a Terminal tab that starts in the review's checkout. */
-export function OpenInTerminal({ review }: { review: PullReviewView }) {
+/** Opens a terminal tab in the PR's checkout on the sandbox. */
+export function useOpenInTerminal(review: PullReviewView) {
   const navigate = useNavigate();
   const [opening, setOpening] = useState(false);
   const open = async () => {
@@ -204,6 +205,11 @@ export function OpenInTerminal({ review }: { review: PullReviewView }) {
       setOpening(false);
     }
   };
+  return { open, opening };
+}
+
+export function OpenInTerminal({ review }: { review: PullReviewView }) {
+  const { open, opening } = useOpenInTerminal(review);
   return (
     <Button
       variant="ghost"

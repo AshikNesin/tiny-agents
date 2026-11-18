@@ -274,12 +274,11 @@ await journey(
         await page.goto("/code", { waitUntil: "domcontentloaded" });
         await page.getByTestId("code-reviews").click();
         await expect(page).toHaveURL(/\/code\/reviews$/);
-        await expect(page.getByRole("list", { name: "Open reviews" })).toContainText(
-          "Retry webhooks with backoff",
-        );
         await expect(page.getByRole("region", { name: "Needs your review" })).toContainText(
           "Retry webhooks with backoff",
         );
+        // Open here already, it shows once: in the inbox.
+        await expect(page.getByRole("list", { name: "Open reviews" })).toHaveCount(0);
         await expect(page.getByRole("region", { name: "Your pull requests" })).toContainText(
           "Draft",
         );

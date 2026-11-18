@@ -1,10 +1,10 @@
 # Code comments
 
-Reviewing a Code thread's changes as a reviewer does: the Changes panel folds unchanged runs into `Show N more lines`, each line's gutter offers a Comment button that opens a composer right under the line, a saved comment stays under its line and waits above the thread's composer, and the next message carries it to the agent, where the thread shows it as a comment card.
+Reviewing a Code thread's changes as a reviewer does: the Changes panel folds unchanged runs into `N unmodified lines` (diffs.com), each line's gutter offers a Comment button that opens a composer right under the line, a saved comment stays under its line and waits above the thread's composer, and the next message carries it to the agent, where the thread shows it as a comment card.
 
 ## Sub-features
 
-- `code-diff-fold` unchanged runs longer than three lines either side of a change fold into a button `Show N more lines`.
+- `code-diff-fold` unchanged runs longer than three lines either side of a change fold into a `N unmodified lines` bar (diffs.com).
 - `code-line-comment` a line's gutter button `Comment on line N` (`Comment on removed line N` for a removed line) opens a textbox `Comment on <path> line N` (placeholder `Tell the agent what to change here…`) with `Cancel` and `Comment` (⌘↵); shift-click widens the range (`Commenting on lines A–B`).
 - `code-comment-saved` a saved comment is a `note` named `Comment on line N` under its line, with `Remove comment`.
 - `code-comment-tray` region `Comments for the agent` above the composer: `N comment(s) go(es) with your next message`, `Show comments` / `Hide comments`, `Send now`, `Remove comment` per comment.
@@ -23,7 +23,7 @@ Preconditions: `ta-verify up --shelley` (the journey requires `shelley`).
 
 - **Setup.** `setup:` a throwaway git repo `data/verify/<run>/work-<stamp>` with `src/app.ts` (60 lines, committed), then line 30 changed on disk (uncommitted). Cleanup deletes every thread in that dir and the dir.
 - **Start.** `/code/new` → `Working directory` = the repo → `echo: review-<stamp>` → `Start`.
-- **Fold.** `Changes`: one `code-file`; `Show 26 more lines` and `Show 27 more lines`; `const line10 = 10;` not shown.
+- **Fold.** `Changes`: one `code-file`; `25 unmodified lines` and `26 unmodified lines`; `const line10 = 10;` not shown.
 - **Comment.** Hover line 30 → `Comment on line 30` → textbox focused → type → `Comment`: POST `/review/drafts` 201, a `note` `Comment on line 30`, the tray reads `1 comment goes with your next message`, `Show comments` lists `src/app.ts:30`; the API lists the draft.
 - **Send.** `echo: thanks-<stamp>` + Enter: the tray goes, an `article` with `src/app.ts:30` and the comment, then `echo: thanks-<stamp>`; no `note` left; the API lists no drafts.
 - **Review page.** `Open as a page` in the panel: URL ends `/review`, tab `Source control` selected, one `code-file`, no transcript; a comment on line 30 there shows in the page's tray; `Back to the thread`: the thread's tray reads `1 comment…`.

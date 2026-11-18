@@ -34,11 +34,12 @@ const answer = (data: unknown, status = 200) =>
     headers: { "content-type": "application/json" },
   });
 
-function stubFetch(inbox: InboxPullView[] | Response) {
+function stubFetch(inbox: InboxPullView[] | Response, open: unknown[] = []) {
   const fetch = vi.fn(async (url: string, init?: RequestInit) => {
     const path = new URL(String(url), "http://x").pathname;
     if (path.endsWith("/reviews/inbox")) return inbox instanceof Response ? inbox : answer(inbox);
     if (path.endsWith("/reviews") && init?.method === "POST") return answer({ id: "rv9" });
+    if (path.endsWith("/reviews")) return answer(open);
     return answer([]);
   });
   vi.stubGlobal("fetch", fetch);
@@ -96,6 +97,28 @@ describe("the review inbox", () => {
     expect(JSON.parse(String(post?.[1]?.body))).toEqual({
       pr: "https://github.com/acme/web/pull/1",
     });
+  });
+
+  it("shows a PR once: an open review in the inbox is not listed again under Open here", async () => {
+    const review = (number: number, repo = "acme/web") => ({
+      id: `rv${number}`,
+      number,
+      title: `PR ${number}`,
+      repo,
+      author: "maria",
+      url: `https://github.com/${repo}/pull/${number}`,
+      updatedAt: "2026-11-17T09:00:00Z",
+    });
+    stubFetch([pull(1, { reviewId: "rv1" })], [review(1), review(8, "acme/api")]);
+    show();
+
+    expect(await screen.findByRole("region", { name: "Needs your review" })).toHaveTextContent(
+      "#1PR 1",
+    );
+    const open = await screen.findByRole("list", { name: "Open reviews" });
+    expect(within(open).getAllByRole("listitem")).toHaveLength(1);
+    expect(open).toHaveTextContent("#8PR 8");
+    expect(open).not.toHaveTextContent("PR 1");
   });
 
   it("says why when GitHub cannot be read", async () => {

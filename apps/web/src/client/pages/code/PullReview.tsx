@@ -14,17 +14,25 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react
 import { Link, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
+  Ellipsis,
   ExternalLink,
   FileDiff,
   MessageSquare,
   RefreshCw,
   Send,
   Sparkles,
+  SquareTerminal,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button, EmptyState, Textarea, monoClass } from "@groot/ui";
 import { cn } from "@groot/ui/lib/utils";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@groot/ui/dropdown-menu";
 import { Spinner } from "../../components/ui/spinner";
 import { errorMessage } from "../../lib/errors";
 import { instanceOf, type HarnessInfo, type ThreadSummary } from "../../lib/code/api";
@@ -43,7 +51,7 @@ import { ResizablePane } from "./ResizablePane";
 import { ReviewPanel } from "./ReviewPanel";
 import { usePullConversations } from "./PullThreads";
 import { SubmitReviewButton } from "./SubmitReview";
-import { OpenInTerminal, YourChangesActions } from "./YourChanges";
+import { OpenInTerminal, useOpenInTerminal, YourChangesActions } from "./YourChanges";
 
 /** Questions a reviewer asks first, one tap each. */
 const STARTERS = ["Summarize this PR", "What could break?", "Is it tested well?"];
@@ -142,9 +150,13 @@ export function PullReview({
         </span>
         <h1 className="min-w-0 truncate text-sm font-medium">{review.title}</h1>
         <span
-          className={cn("text-muted-foreground hidden shrink-0 px-2 text-xs md:inline", monoClass)}
+          className={cn(
+            "text-muted-foreground hidden min-w-0 truncate px-2 text-xs md:inline",
+            monoClass,
+          )}
+          title={`${review.headRef} into ${review.baseRef}`}
         >
-          {review.repo} · @{review.author}
+          {review.repo} · @{review.author} · {review.headRef} → {review.baseRef}
         </span>
         <span className="flex-1" />
         {github && <SubmitReviewButton review={review} github={github} />}
@@ -158,29 +170,33 @@ export function PullReview({
           {side === "files" ? <MessageSquare /> : <FileDiff />}
           {side === "files" ? "Assistant" : "Files"}
         </Button>
-        <OpenInTerminal review={review} />
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={() => void update()}
-          disabled={updating}
-          aria-label="Update to the latest commit"
-          title="Update to the PR's latest commit"
-          className="text-muted-foreground"
-        >
-          {updating ? <Spinner /> : <RefreshCw />}
-        </Button>
-        <Button asChild variant="ghost" size="icon-sm" className="text-muted-foreground">
-          <a
-            href={review.url}
-            target="_blank"
-            rel="noreferrer"
-            aria-label="Open on GitHub"
-            title="Open on GitHub"
+        {/* Phones keep the title readable: the checkout's tools fold into one menu. */}
+        <div className="hidden items-center gap-1 sm:flex">
+          <OpenInTerminal review={review} />
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => void update()}
+            disabled={updating}
+            aria-label="Update to the latest commit"
+            title="Update to the PR's latest commit"
+            className="text-muted-foreground"
           >
-            <ExternalLink />
-          </a>
-        </Button>
+            {updating ? <Spinner /> : <RefreshCw />}
+          </Button>
+          <Button asChild variant="ghost" size="icon-sm" className="text-muted-foreground">
+            <a
+              href={review.url}
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Open on GitHub"
+              title="Open on GitHub"
+            >
+              <ExternalLink />
+            </a>
+          </Button>
+        </div>
+        <MoreActions review={review} updating={updating} onUpdate={() => void update()} />
         <Button
           variant="ghost"
           size="icon-sm"
@@ -203,7 +219,6 @@ export function PullReview({
             threadId={review.key}
             baseBranch={review.baseRef}
             pull={{
-              headRef: review.headRef,
               reviewedSha: review.reviewedSha !== review.headSha ? review.reviewedSha : null,
               yourChanges: (done) => (
                 <YourChangesActions
@@ -235,6 +250,49 @@ export function PullReview({
         </ResizablePane>
       </div>
     </div>
+  );
+}
+
+/** Phones: the checkout's terminal, Update and Open on GitHub, in one menu. */
+function MoreActions({
+  review,
+  updating,
+  onUpdate,
+}: {
+  review: PullReviewView;
+  updating: boolean;
+  onUpdate(): void;
+}) {
+  const terminal = useOpenInTerminal(review);
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="More actions"
+          className="text-muted-foreground sm:hidden"
+        >
+          {updating || terminal.opening ? <Spinner /> : <Ellipsis />}
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuItem disabled={terminal.opening} onSelect={() => void terminal.open()}>
+          <SquareTerminal />
+          Open in terminal
+        </DropdownMenuItem>
+        <DropdownMenuItem disabled={updating} onSelect={onUpdate}>
+          <RefreshCw />
+          Update to the latest commit
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <a href={review.url} target="_blank" rel="noreferrer">
+            <ExternalLink />
+            Open on GitHub
+          </a>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

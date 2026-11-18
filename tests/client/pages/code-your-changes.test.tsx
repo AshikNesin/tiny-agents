@@ -83,7 +83,6 @@ function showPanel(answers: Record<string, unknown>) {
         page
         editable
         pull={{
-          headRef: REVIEW.headRef,
           yourChanges: (done) => <YourChangesActions review={REVIEW} onChanged={done} />,
         }}
       />

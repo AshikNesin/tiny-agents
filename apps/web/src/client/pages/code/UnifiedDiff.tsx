@@ -187,6 +187,13 @@ function Composer({
   selected?: string;
 }) {
   const [busy, setBusy] = useState<CommentTarget | null>(null);
+  // The diff slots the composer in after React mounts it, so autoFocus finds
+  // it detached: take the keyboard once it is in the page.
+  const box = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => box.current?.focus({ preventScroll: true }));
+    return () => cancelAnimationFrame(frame);
+  }, []);
   const submit = async (target: CommentTarget) => {
     if (!body.trim() || busy) return;
     setBusy(target);
@@ -215,7 +222,7 @@ function Composer({
             onCancel();
           }
         }}
-        autoFocus
+        ref={box}
         rows={2}
         placeholder={reviewing ? "Leave a review comment…" : "Tell the agent what to change here…"}
         aria-label={`Comment on ${path} ${rangeLabel(selection)}`}

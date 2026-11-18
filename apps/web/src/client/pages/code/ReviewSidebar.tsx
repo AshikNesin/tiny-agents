@@ -57,8 +57,9 @@ export function ReviewSidebar({
               onClick={() => onTab(id)}
               className={cn(
                 "flex h-8 min-w-0 items-center gap-1.5 rounded-lg px-2.5 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                // A lone tab reads as the panel's title, not a pressed button.
                 tab === id
-                  ? "bg-muted text-foreground"
+                  ? cn("text-foreground", tabs.length > 1 && "bg-muted")
                   : "text-muted-foreground hover:text-foreground",
               )}
             >

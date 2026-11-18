@@ -5,7 +5,7 @@
  * @pierre/diffs (diffs.com); the composer and saved comments are ours.
  */
 import React from "react";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { FileDiff, PatchView } from "@/pages/code/UnifiedDiff";
@@ -39,6 +39,21 @@ describe("commenting on lines", () => {
       "agent",
     );
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+  });
+
+  it("the composer takes the keyboard as it opens, so you can type straight away", async () => {
+    render(
+      <FileDiff
+        path="src/a.ts"
+        oldContent={"one\ntwo\nthree\n"}
+        newContent={"one\nTWO\nthree\n"}
+        onComment={vi.fn(async () => {})}
+      />,
+    );
+    await clickLine(line(await diffRoot(), 2));
+
+    const box = await screen.findByRole("textbox", { name: "Comment on src/a.ts line 2" });
+    await waitFor(() => expect(box).toHaveFocus());
   });
 
   it("comments on a removed line by its old line number", async () => {
