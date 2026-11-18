@@ -332,7 +332,12 @@ describe("the review inbox", () => {
 
     const inbox = await client.reviewInbox();
 
-    expect((fake.calls[1]?.body as { variables: unknown }).variables).toEqual({ login: "ashik" });
+    expect((fake.calls[1]?.body as { variables: unknown }).variables).toEqual({
+      login: "ashik",
+      requested: "is:open is:pr archived:false review-requested:@me sort:updated-desc",
+      reviewed: "is:open is:pr archived:false reviewed-by:@me -author:@me sort:updated-desc",
+      authored: "is:open is:pr archived:false author:@me sort:updated-desc",
+    });
     expect(inbox.map((p) => [p.reason, p.number])).toEqual([
       ["requested", 1],
       ["reviewed", 2],
@@ -352,6 +357,41 @@ describe("the review inbox", () => {
       lastReview: { at: "2026-11-16T08:00:00Z", commit: "old2" },
     });
     expect(inbox[2]?.draft).toBe(true);
+  });
+
+  it("narrows each search by when it was updated, its repositories and drafts", async () => {
+    const fake = fakeFetch((_method, _path, body) => {
+      const { query } = body as { query: string };
+      if (!query.includes("ReviewInbox")) return json({ data: { viewer: { login: "ashik" } } });
+      return json({
+        data: {
+          requested: {
+            nodes: [node(1), node(2, { repository: { owner: { login: "other" }, name: "lib" } })],
+          },
+          reviewed: { nodes: [] },
+          authored: { nodes: [] },
+        },
+      });
+    });
+    const client = createGitHubClient(
+      createHttpsTransport({ token: async () => "t0ken", fetch: fake.impl }),
+    );
+
+    const inbox = await client.reviewInbox({
+      updatedSince: "2026-10-07",
+      repos: [{ owner: "acme", name: "web" }],
+      drafts: false,
+    });
+
+    const { variables } = fake.calls[1]?.body as { variables: Record<string, string> };
+    expect(variables.requested).toBe(
+      "is:open is:pr archived:false review-requested:@me updated:>=2026-10-07 draft:false repo:acme/web sort:updated-desc",
+    );
+    expect(variables.authored).toBe(
+      "is:open is:pr archived:false author:@me updated:>=2026-10-07 draft:false repo:acme/web sort:updated-desc",
+    );
+    // GitHub ignored the repository; the inbox still keeps to it.
+    expect(inbox.map((p) => p.number)).toEqual([1]);
   });
 });
 

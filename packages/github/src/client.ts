@@ -181,12 +181,59 @@ const INBOX_PULL = `fragment InboxPull on PullRequest {
 }`;
 
 /** The three searches, most recently updated first, in one query. */
-const INBOX_QUERY = `query ReviewInbox($login: String!) {
-  requested: search(query: "is:open is:pr archived:false review-requested:@me sort:updated-desc", type: ISSUE, first: 50) { nodes { ...InboxPull } }
-  reviewed: search(query: "is:open is:pr archived:false reviewed-by:@me -author:@me sort:updated-desc", type: ISSUE, first: 50) { nodes { ...InboxPull } }
-  authored: search(query: "is:open is:pr archived:false author:@me sort:updated-desc", type: ISSUE, first: 50) { nodes { ...InboxPull } }
+const INBOX_QUERY = `query ReviewInbox($login: String!, $requested: String!, $reviewed: String!, $authored: String!) {
+  requested: search(query: $requested, type: ISSUE, first: 50) { nodes { ...InboxPull } }
+  reviewed: search(query: $reviewed, type: ISSUE, first: 50) { nodes { ...InboxPull } }
+  authored: search(query: $authored, type: ISSUE, first: 50) { nodes { ...InboxPull } }
 }
 ${INBOX_PULL}`;
+
+/** What the review inbox keeps; each is left out to keep everything. */
+export interface InboxFilter {
+  /** `YYYY-MM-DD`: only PRs updated on or after it. */
+  updatedSince?: string;
+  /** Only these repositories' PRs. */
+  repos?: RepoRef[];
+  /** `false` leaves drafts out. */
+  drafts?: boolean;
+}
+
+const INBOX_SEARCHES = {
+  requested: "review-requested:@me",
+  reviewed: "reviewed-by:@me -author:@me",
+  authored: "author:@me",
+} as const;
+
+/** GitHub refuses a search query longer than this. */
+const SEARCH_MAX = 256;
+
+/**
+ * Each inbox search with the filter's qualifiers. The repositories go in only
+ * while the query fits GitHub's limit; past it, the caller keeps to them.
+ */
+function inboxSearches(filter: InboxFilter): Record<keyof typeof INBOX_SEARCHES, string> {
+  const narrow = [
+    filter.updatedSince ? `updated:>=${filter.updatedSince}` : "",
+    filter.drafts === false ? "draft:false" : "",
+  ].filter(Boolean);
+  const repos = (filter.repos ?? []).map((r) => `repo:${repoSlug(r)}`);
+  const build = (who: string, withRepos: boolean) =>
+    [
+      "is:open is:pr archived:false",
+      who,
+      ...narrow,
+      ...(withRepos ? repos : []),
+      "sort:updated-desc",
+    ].join(" ");
+  const out = {} as Record<keyof typeof INBOX_SEARCHES, string>;
+  for (const [key, who] of Object.entries(INBOX_SEARCHES) as Array<
+    [keyof typeof INBOX_SEARCHES, string]
+  >) {
+    const full = build(who, repos.length > 0);
+    out[key] = full.length <= SEARCH_MAX ? full : build(who, false);
+  }
+  return out;
+}
 
 interface RawInboxPull {
   number: number;
@@ -225,7 +272,7 @@ export interface GitHubClient {
    * open PRs asking for their review, ones they reviewed, and their own. A
    * PR in more than one is listed once, by the first reason.
    */
-  reviewInbox(): Promise<InboxPull[]>;
+  reviewInbox(filter?: InboxFilter): Promise<InboxPull[]>;
   /** Submit a review with its line comments in one go, pinned to `commitId`. */
   submitReview(
     repo: RepoRef,
@@ -541,7 +588,7 @@ export function createGitHubClient(api: GitHubApi): GitHubClient {
       const data = await api.graphql<{ viewer: { login: string } }>(`query { viewer { login } }`);
       return { login: data.viewer.login };
     },
-    async reviewInbox() {
+    async reviewInbox(filter = {}) {
       const { viewer } = await api.graphql<{ viewer: { login: string } }>(
         `query { viewer { login } }`,
       );
@@ -551,13 +598,18 @@ export function createGitHubClient(api: GitHubApi): GitHubClient {
           "requested" | "reviewed" | "authored",
           { nodes: Array<RawInboxPull | Record<string, never>> }
         >
-      >(INBOX_QUERY, { login });
+      >(INBOX_QUERY, { login, ...inboxSearches(filter) });
+      const keep = filter.repos?.length
+        ? new Set(filter.repos.map((r) => repoSlug(r).toLowerCase()))
+        : null;
       const seen = new Set<string>();
       const out: InboxPull[] = [];
       for (const reason of ["requested", "reviewed", "authored"] as const) {
         for (const node of data[reason].nodes) {
           if (!("number" in node)) continue;
-          const key = `${node.repository.owner.login}/${node.repository.name}#${node.number}`;
+          const slug = `${node.repository.owner.login}/${node.repository.name}`;
+          if (keep && !keep.has(slug.toLowerCase())) continue;
+          const key = `${slug}#${node.number}`;
           if (seen.has(key)) continue;
           seen.add(key);
           const last = node.reviews.nodes[0];

@@ -30,6 +30,7 @@ export {
   type Check,
   type CheckState,
   type GitHubClient,
+  type InboxFilter,
   type InboxPull,
   type IssueComment,
   type JobStep,
