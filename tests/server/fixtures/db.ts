@@ -13,6 +13,7 @@ import {
   botSkills,
   connections,
   jobs,
+  llmCalls,
   memories,
   routineRuns,
   routines,
@@ -95,6 +96,7 @@ export async function resetAppTables(): Promise<void> {
   await db.delete(botSkills);
   await db.delete(botConnections);
   await db.delete(memories);
+  await db.delete(llmCalls);
   await db.delete(uploads);
   await db.delete(jobs);
   await db.delete(skills);

@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import {
+  Activity,
   Brain,
   CalendarClock,
   Code2,
@@ -33,6 +34,7 @@ export const SECONDARY_NAV: AppNavItem[] = [
   { label: "Routines", icon: CalendarClock, to: "/routines" },
   { label: "Skills", icon: Sparkles, to: "/skills" },
   { label: "Memory", icon: Brain, to: "/memory" },
+  { label: "Traces", icon: Activity, to: "/traces" },
   { label: "Connections", icon: Plug, to: "/connections" },
   { label: "Vault", icon: KeyRound, to: "/vault" },
 ];

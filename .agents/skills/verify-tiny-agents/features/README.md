@@ -61,6 +61,7 @@ Chats
 - [Bot-to-bot](./bot-to-bot.md): `@` mentions and relayed peer replies.
 - [Shared bots and guests](./shared-bots.md): guests, sharing, what a guest can and can't reach.
 - [Memory](./memory.md): `/memory` add, edit, search, learning switch, delete.
+- [Traces](./traces.md): `/traces` sessions with model, tokens and cost; a session's calls; side-calls.
 
 Work
 

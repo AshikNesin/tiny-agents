@@ -12,6 +12,7 @@ import tasksRoutes from "./api/tasks/task.routes";
 import routinesRoutes from "./api/routines/routines.routes";
 import botsRoutes from "./api/bots/bots.routes";
 import memoriesRoutes from "./api/bots/memories.routes";
+import tracesRoutes from "./api/traces/traces.routes";
 import liveRoutes from "./api/live/live.routes";
 import terminalRoutes from "./api/terminal/terminal.routes";
 import uploadsRoutes from "./api/uploads/uploads.routes";
@@ -59,6 +60,7 @@ export function createWebApp(options: Omit<CreateAppOptions, "routes"> = {}) {
       api.route("/", peopleRoutes);
       api.route("/", botsRoutes);
       api.route("/", memoriesRoutes);
+      api.route("/", tracesRoutes);
       api.route("/", liveRoutes);
       api.route("/", terminalRoutes);
       api.route("/", uploadsRoutes);

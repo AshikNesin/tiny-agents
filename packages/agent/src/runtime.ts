@@ -81,6 +81,7 @@ import type {
 import { WaitTracker } from "./waiting";
 import type { Reviewer } from "./reviewer";
 import { GrantsDoc } from "./vault";
+import type { ConversationTrace, ConversationUsage } from "./trace";
 
 // The three wait kinds own their not-pending errors; the app imports them from here.
 export { ApprovalNotPendingError, CredentialRequestNotPendingError, QuestionNotPendingError };
@@ -460,6 +461,16 @@ export class AgentRuntime {
   /** Tokens the conversation has used so far: a routine run's spend, as it starts fresh each run. */
   usedTokens(ref: ConversationRef): Promise<number> {
     return this.#store.usedTokens(ref);
+  }
+
+  /** The conversation's token and cost totals (Traces, issue #363). */
+  usage(ref: ConversationRef): Promise<ConversationUsage> {
+    return this.#store.usage(ref);
+  }
+
+  /** The conversation's model and tool calls, turn by turn (Traces, issue #363). */
+  trace(ref: ConversationRef): Promise<ConversationTrace> {
+    return this.#store.trace(ref);
   }
 
   /** Whether the conversation's YOLO mode is on. */

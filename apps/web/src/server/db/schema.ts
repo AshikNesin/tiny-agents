@@ -1070,6 +1070,40 @@ export const pushSubscriptions = sqliteTable(
   (t) => [index("push_subscriptions_user_id_idx").on(t.userId)],
 );
 
+/**
+ * Side-calls as trace metadata (Traces, issue #363): one row per one-shot
+ * model call the app makes outside a conversation (memory capture, titles,
+ * Code naming, auto-review). Never the prompt or the answer: a conversation's
+ * own calls are read from its entries in agent.db instead. Rows older than
+ * 30 days are pruned as new ones are written.
+ */
+export const llmCalls = sqliteTable(
+  "llm_calls",
+  {
+    id: id(),
+    /** What the call was for, as its side-call label ("Memory capture", "Chat title"). */
+    purpose: text("purpose").notNull(),
+    /** The bot it ran for, when there is one. */
+    botId: text("bot_id").references(() => bots.id, { onDelete: "cascade" }),
+    /** The model row the call resolved to. */
+    modelId: text("model_id"),
+    provider: text("provider"),
+    model: text("model"),
+    inputTokens: integer("input_tokens").notNull().default(0),
+    outputTokens: integer("output_tokens").notNull().default(0),
+    cacheReadTokens: integer("cache_read_tokens").notNull().default(0),
+    cacheWriteTokens: integer("cache_write_tokens").notNull().default(0),
+    costUsd: real("cost_usd").notNull().default(0),
+    durationMs: integer("duration_ms"),
+    /** ok | error | timeout | aborted. Written once, never moved. */
+    outcome: text("outcome").$type<"ok" | "error" | "timeout" | "aborted">().notNull(),
+    /** The failure, max 200 chars. */
+    error: text("error"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("llm_calls_created_at_idx").on(t.createdAt)],
+);
+
 export * from "@groot/core/notification/notification.schema";
 
 // ── Relations (relational queries: `db.query.bots.findMany({ with: … })`) ──
@@ -1147,6 +1181,10 @@ export const routinesRelations = relations(routines, ({ one, many }) => ({
   runs: many(routineRuns),
 }));
 
+export const llmCallsRelations = relations(llmCalls, ({ one }) => ({
+  bot: one(bots, { fields: [llmCalls.botId], references: [bots.id] }),
+}));
+
 export const routineRunsRelations = relations(routineRuns, ({ one }) => ({
   routine: one(routines, { fields: [routineRuns.routineId], references: [routines.id] }),
 }));
@@ -1176,6 +1214,7 @@ export type Upload = typeof uploads.$inferSelect;
 export type Routine = typeof routines.$inferSelect;
 export type Memory = typeof memories.$inferSelect;
 export type RoutineRun = typeof routineRuns.$inferSelect;
+export type LlmCall = typeof llmCalls.$inferSelect;
 export type ShelleyHandoff = typeof shelleyHandoffs.$inferSelect;
 export type CodeThreadRow = typeof codeThreads.$inferSelect;
 export type CodeHandoff = typeof codeHandoffs.$inferSelect;

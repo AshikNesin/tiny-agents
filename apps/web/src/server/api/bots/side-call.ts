@@ -16,12 +16,17 @@
  *   first, as tool results and logs do, so a vault value that reached a
  *   transcript or a memory never travels on to a side model.
  *
+ * - The trace: every call that reached a model leaves one metadata row
+ *   (`llm_calls`, Traces): model, tokens, cost, duration and outcome, never
+ *   the prompt or the answer.
+ *
  * Faux mode makes no side-calls: boot passes no side-caller there.
  */
 import type { MutableModels } from "@earendil-works/pi-ai/models";
 import { logger } from "@groot/core/logger";
 import { secretRedactor } from "@tiny-agents/agent";
 import type { ModelCatalog } from "@tiny-agents/models";
+import { recordLlmCall, type LlmCallRecord } from "../traces/traces.calls";
 
 /** What a side-caller needs from the runtime: its Model catalog and the registry that calls models. */
 export interface SideCallRuntime {
@@ -37,8 +42,10 @@ export interface SideCallRequest {
   system: string;
   user: string;
   timeoutMs: number;
-  /** What the call is for, in logs ("Chat title", "Memory capture"). */
+  /** What the call is for, in logs and Traces ("Chat title", "Memory capture"). */
   label: string;
+  /** The bot the call runs for, when there is one (Traces). */
+  botId?: string;
   /** Extra fields for the logs (a chat id, a conversation id). */
   context?: Record<string, unknown>;
   /** The caller's own cancel. */
@@ -73,6 +80,17 @@ export function createSideCaller(runtime: SideCallRuntime): SideCaller {
         return undefined;
       }
 
+      const startedAt = performance.now();
+      const trace = (call: Omit<LlmCallRecord, "purpose">) =>
+        recordLlmCall({
+          purpose: label,
+          botId: request.botId,
+          modelId,
+          provider: model.provider,
+          model: model.id,
+          durationMs: performance.now() - startedAt,
+          ...call,
+        });
       const controller = new AbortController();
       const signal = request.signal
         ? AbortSignal.any([controller.signal, request.signal])
@@ -103,10 +121,17 @@ export function createSideCaller(runtime: SideCallRuntime): SideCaller {
         call.catch(() => undefined);
         const reply = await Promise.race([call, deadline]);
         if (reply === TIMED_OUT) {
+          await trace({ outcome: "timeout" });
           logger.warn({ ...fields, timeoutMs: request.timeoutMs }, `${label}: timed out`);
           return undefined;
         }
-        if (reply.stopReason === "error" || reply.stopReason === "aborted") {
+        const failed = reply.stopReason === "error" || reply.stopReason === "aborted";
+        await trace({
+          usage: reply.usage,
+          outcome: reply.stopReason === "aborted" ? "aborted" : failed ? "error" : "ok",
+          error: reply.errorMessage,
+        });
+        if (failed) {
           logger.warn(
             { ...fields, stopReason: reply.stopReason, errorMessage: reply.errorMessage },
             `${label}: the model failed`,
@@ -117,6 +142,10 @@ export function createSideCaller(runtime: SideCallRuntime): SideCaller {
           .map((block) => (block.type === "text" ? block.text : ""))
           .join("\n");
       } catch (error) {
+        await trace({
+          outcome: "error",
+          error: error instanceof Error ? error.message : String(error),
+        });
         logger.warn({ ...fields, error }, `${label}: the call failed`);
         return undefined;
       } finally {
