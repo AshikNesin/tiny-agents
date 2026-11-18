@@ -28,6 +28,7 @@ const row = (id: string, extra: Record<string, unknown> = {}) => ({
   created_at: "2026-11-05T00:00:00Z",
   cwd: "/repo",
   model: null,
+  tags: '["tiny-agents"]',
   ...extra,
 });
 
@@ -261,6 +262,70 @@ describe("Shelley harness", () => {
     });
     await harness.interrupt(nativeId);
     expect(shelley.seen.map((s) => s.url)).toContain("/api/conversation/cNew1/cancel");
+  });
+
+  it('tags each conversation it starts or forks "tiny-agents", keeping a fork\'s other tags', async () => {
+    harness.start();
+    const { nativeId } = await harness.createThread({ message: "Add a test" });
+    const tagged = shelley.seen.find((s) => s.url === `/api/conversation/${nativeId}/tags`);
+    expect(JSON.parse(tagged!.body.toString())).toEqual({ tags: ["tiny-agents"] });
+
+    shelley.rows[0]!.tags = '["release"]';
+    await shelley.waitForStreams(1);
+    await harness.fork!("cA", "m1");
+    const forked = shelley.seen.filter((s) => s.url.endsWith("/tags")).at(-1)!;
+    expect(forked.url).not.toBe("/api/conversation/cA/tags");
+    expect(JSON.parse(forked.body.toString())).toEqual({ tags: ["release", "tiny-agents"] });
+  });
+
+  it('lists and finds only conversations tagged "tiny-agents", with their subagents', async () => {
+    shelley.rows.push(
+      row("cB", { parent_conversation_id: "cA", tags: "[]" }),
+      row("cMine", { tags: '["x", "tiny-agents"]' }),
+      row("cTheirs", { tags: "[]" }),
+      row("cBare", { tags: undefined }),
+      row("cTheirKid", { parent_conversation_id: "cTheirs", tags: "[]" }),
+    );
+    shelley.archived.push({ conversation_id: "cGone", slug: "gone", archived: true, tags: "[]" });
+    harness.start();
+    await shelley.waitForStreams(1);
+    const active = await harness.listThreads("active");
+    expect(active.map((t) => t.nativeId)).toEqual(["cA", "cB", "cMine"]);
+    const archived = await harness.listThreads("archived");
+    expect(archived.map((t) => t.nativeId)).toEqual(["cOld"]);
+    const found = await harness.searchThreads!("slug-c", false);
+    expect(found.map((t) => t.nativeId)).toEqual(["cA", "cMine"]);
+  });
+
+  it("tags the untagged conversations tiny-agents already tracks once Shelley connects", async () => {
+    const host = testHost();
+    await host.index.upsert({ instanceId: "shelley", nativeId: "cOurs" });
+    await host.index.upsert({ instanceId: "shelley", nativeId: "cShelved" });
+    shelley.rows.push(row("cOurs", { tags: '["wip"]' }), row("cTheirs", { tags: "[]" }));
+    shelley.archived.push({ conversation_id: "cShelved", slug: "s", archived: true, tags: "[]" });
+    harness.stop();
+    harness = createShelleyHarness({
+      url: shelley.url,
+      host,
+      stream: { listDebounceMs: 10, minBackoffMs: 20, maxBackoffMs: 40 },
+    });
+    harness.start();
+    await eventually(async () => {
+      const active = await harness.listThreads("active");
+      expect(active.map((t) => t.nativeId)).toEqual(["cA", "cOurs"]);
+    });
+    expect(shelley.rows.find((r) => r.conversation_id === "cOurs")!.tags).toBe(
+      '["wip","tiny-agents"]',
+    );
+    expect((await harness.listThreads("archived")).map((t) => t.nativeId)).toEqual([
+      "cOld",
+      "cShelved",
+    ]);
+    const tagged = shelley.seen.filter((s) => s.url.endsWith("/tags")).map((s) => s.url);
+    expect(tagged.sort()).toEqual([
+      "/api/conversation/cOurs/tags",
+      "/api/conversation/cShelved/tags",
+    ]);
   });
 
   it("archives a thread with its subagents", async () => {

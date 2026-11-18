@@ -25,6 +25,8 @@ export interface ShelleyRow {
   git_repo_root?: string;
   git_commit?: string;
   git_subject?: string;
+  /** A JSON array of strings, as a string (Shelley's `tags` column). */
+  tags?: string | string[];
   [field: string]: unknown;
 }
 
@@ -117,4 +119,20 @@ export interface ModelCost {
 
 export function isWorking(row: Pick<ShelleyRow, "working" | "agent_working"> | undefined): boolean {
   return Boolean(row?.working ?? row?.agent_working);
+}
+
+/** The tag every conversation tiny-agents starts carries; the Code page lists only these. */
+export const TINY_AGENTS_TAG = "tiny-agents";
+
+/** A row's tags: Shelley serves them as a JSON string; anything unreadable is none. */
+export function tagsOf(row: Pick<ShelleyRow, "tags"> | undefined): string[] {
+  let tags: unknown = row?.tags;
+  if (typeof tags === "string") {
+    try {
+      tags = JSON.parse(tags);
+    } catch {
+      return [];
+    }
+  }
+  return Array.isArray(tags) ? tags.filter((t): t is string => typeof t === "string") : [];
 }

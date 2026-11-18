@@ -47,6 +47,8 @@ import { createShelleyStream, type ShelleyStream, type StreamOptions } from "./s
 import { distinctModels, otherUsageEntries, usageEntries, usageReport } from "./usage";
 import {
   isWorking,
+  tagsOf,
+  TINY_AGENTS_TAG,
   type ModelCost,
   type ShelleyDetail,
   type ShelleyMessage,
@@ -109,7 +111,8 @@ const CAPABILITIES: Capabilities = {
     changeCwd: true,
     subagents: true,
     search: true,
-    discover: true,
+    // Only conversations tagged `tiny-agents` are listed (see `ours`).
+    discover: false,
   },
   settings: {
     modelSwitch: true,
@@ -151,6 +154,38 @@ export function descendantIds(rows: ShelleyRow[], id: string): string[] {
     }
   }
   return found;
+}
+
+/**
+ * The rows tiny-agents shows: those tagged `tiny-agents`, and subagents under
+ * one (Shelley does not copy tags onto subagents). `context` holds rows that
+ * may be ancestors without being in `rows` (a search's hits).
+ */
+function ours(rows: ShelleyRow[], context: ShelleyRow[] = []): ShelleyRow[] {
+  const byId = new Map<string, ShelleyRow>();
+  for (const row of [...context, ...rows]) byId.set(row.conversation_id, row);
+  const verdict = new Map<string, boolean>();
+  const tagged = (start: ShelleyRow): boolean => {
+    const path: string[] = [];
+    let row: ShelleyRow | undefined = start;
+    let found = false;
+    while (row && !path.includes(row.conversation_id)) {
+      const known = verdict.get(row.conversation_id);
+      if (known !== undefined) {
+        found = known;
+        break;
+      }
+      path.push(row.conversation_id);
+      if (tagsOf(row).includes(TINY_AGENTS_TAG)) {
+        found = true;
+        break;
+      }
+      row = row.parent_conversation_id ? byId.get(row.parent_conversation_id) : undefined;
+    }
+    for (const id of path) verdict.set(id, found);
+    return found;
+  };
+  return rows.filter(tagged);
 }
 
 /** `[path]` tokens Shelley reads as attachments. */
@@ -214,6 +249,48 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
         });
       }
     }
+  });
+
+  /** Replace a conversation's tags with `existing` plus ours (Shelley has no add); a failure is logged. */
+  async function tag(nativeId: string, existing: string[] = []): Promise<void> {
+    const tags = [...new Set([...existing, TINY_AGENTS_TAG])];
+    try {
+      await json(`${conv(nativeId)}/tags`, { method: "POST", json: { tags } });
+    } catch (error) {
+      host.logger.warn("Could not tag a Shelley conversation", { nativeId, error: String(error) });
+    }
+  }
+
+  /**
+   * Conversations tiny-agents started or opened before it tagged them: the
+   * ones in its thread index that have no tag yet get one, once per process,
+   * so they stay in the list. Subagents follow their parent.
+   */
+  let adopted = false;
+  async function adopt(): Promise<void> {
+    if (adopted) return;
+    const indexed = new Set((await host.index.list(id)).map((t) => t.nativeId));
+    if (indexed.size === 0) {
+      adopted = true;
+      return;
+    }
+    const rows = [...(await activeRows()), ...rowsOf(await json("/conversations/archived"))];
+    const untagged = rows.filter(
+      (row) =>
+        !row.parent_conversation_id &&
+        indexed.has(row.conversation_id) &&
+        !tagsOf(row).includes(TINY_AGENTS_TAG),
+    );
+    adopted = true;
+    if (untagged.length === 0) return;
+    await Promise.all(untagged.map((row) => tag(row.conversation_id, tagsOf(row))));
+    host.logger.info(`Tagged ${untagged.length} existing Shelley conversation(s) tiny-agents`);
+    await stream.refreshList();
+  }
+  stream.onConnected(() => {
+    adopt().catch((error: unknown) =>
+      host.logger.warn("Could not tag existing Shelley conversations", { error: String(error) }),
+    );
   });
 
   let modelsPromise: Promise<ShelleyModel[]> | undefined;
@@ -369,16 +446,16 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
 
     async listThreads(view) {
       if (view === "archived") {
-        return rowsOf(await json("/conversations/archived")).map(summary);
+        return ours(rowsOf(await json("/conversations/archived"))).map(summary);
       }
-      return (await activeRows()).map(summary);
+      return ours(await activeRows()).map(summary);
     },
 
     async searchThreads(query, archived) {
       const rows = await json(
         `/conversations/search${qs({ q: query, archived: archived ? "true" : undefined })}`,
       );
-      return rowsOf(rows).map(summary);
+      return ours(rowsOf(rows), stream.list() ?? []).map(summary);
     },
 
     async getThread(nativeId) {
@@ -510,6 +587,7 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
         },
       });
       if (!created.conversation_id) throw badGateway("Shelley did not return a conversation id");
+      await tag(created.conversation_id);
       void stream.refreshList();
       return { nativeId: created.conversation_id };
     },
@@ -562,6 +640,9 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
         json: { message_id: at },
       });
       if (!forked.conversation_id) throw badGateway("Shelley did not return the fork's id");
+      // Shelley copies the source's tags; a subagent's fork has none of its own.
+      const source = stream.list()?.find((r) => r.conversation_id === nativeId);
+      await tag(forked.conversation_id, tagsOf(source));
       void stream.refreshList();
       return { nativeId: forked.conversation_id };
     },
