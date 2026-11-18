@@ -116,11 +116,21 @@ async function newProject(extra: Record<string, unknown> = {}): Promise<ProjectV
 }
 
 async function newThread(projectId: string, message = "Fix the login flow") {
-  const res = await call<{ threadId: string }>("POST", "/threads", { projectId, message });
+  const res = await call<{ threadId: string }>("POST", "/threads", {
+    projectId,
+    message,
+  });
   expect(res.status).toBe(201);
   const id = res.body.data!.threadId;
-  const row = (await db.query.codeThreads.findFirst({ where: eq(codeThreads.id, id) }))!;
-  return { id, nativeId: row.nativeId, worktree: row.worktree!, branch: row.branch! };
+  const row = (await db.query.codeThreads.findFirst({
+    where: eq(codeThreads.id, id),
+  }))!;
+  return {
+    id,
+    nativeId: row.nativeId,
+    worktree: row.worktree!,
+    branch: row.branch!,
+  };
 }
 
 const commit = (worktree: string, file: string, text = "x") =>
@@ -155,7 +165,10 @@ describe("projects", () => {
     installAppForTests({
       codeGitHub: {
         client: async () => github,
-        workspace: async () => ({ ...ws, tools: async () => ({ git: true, gh: false }) }),
+        workspace: async () => ({
+          ...ws,
+          tools: async () => ({ git: true, gh: false }),
+        }),
         credential: async () => "gh",
         installationFor: async () => 4242,
         appRepositories: async () => [],
@@ -264,11 +277,15 @@ describe("branch names", () => {
     expect((await newThread(project.id, task)).branch).toBe("ashik/fix-login-flow-users");
     // A prefix git cannot name a branch with is refused, and the saved one stays.
     for (const branchPrefix of ["bad prefix/", "a..b/", "/lead", "x~1/"]) {
-      const res = await call("PATCH", `/projects/${project.id}`, { settings: { branchPrefix } });
+      const res = await call("PATCH", `/projects/${project.id}`, {
+        settings: { branchPrefix },
+      });
       expect(res.status).toBe(400);
     }
     expect((await newThread(project.id, task)).branch).toBe("ashik/fix-login-flow-users-2");
-    await call("PATCH", `/projects/${project.id}`, { settings: { branchPrefix: "" } });
+    await call("PATCH", `/projects/${project.id}`, {
+      settings: { branchPrefix: "" },
+    });
     expect((await newThread(project.id, task)).branch).toBe("fix-login-flow-users");
   });
 
@@ -284,7 +301,9 @@ describe("branch names", () => {
 describe("publish and the PR tab", () => {
   it("pushes the branch, opens a draft PR and links it; a later PR follows a merge", async () => {
     const project = await newProject();
-    await call("PATCH", `/projects/${project.id}`, { settings: { archiveOnMerge: false } });
+    await call("PATCH", `/projects/${project.id}`, {
+      settings: { archiveOnMerge: false },
+    });
     const thread = await newThread(project.id);
     const enc = encodeURIComponent(thread.id);
 
@@ -352,7 +371,9 @@ describe("publish and the PR tab", () => {
     await call("POST", `/threads/${enc}/publish`, {});
 
     const body = "## What\n\n- **Login** keeps the session";
-    const edited = await call<ThreadPullsView>("PATCH", `/threads/${enc}/pr`, { body });
+    const edited = await call<ThreadPullsView>("PATCH", `/threads/${enc}/pr`, {
+      body,
+    });
     expect(edited.status).toBe(200);
     expect(github.pull(1).body).toBe(body);
     expect(edited.body.data?.active?.snapshot?.body).toBe(body);
@@ -361,7 +382,7 @@ describe("publish and the PR tab", () => {
     expect(blank.status).toBe(400);
   });
 
-  it("marks a draft pull request ready for review, so it can be merged", async () => {
+  it("flips the pull request between draft and ready for review, either way", async () => {
     const project = await newProject();
     const thread = await newThread(project.id);
     const enc = encodeURIComponent(thread.id);
@@ -369,13 +390,29 @@ describe("publish and the PR tab", () => {
     await call("POST", `/threads/${enc}/publish`, {});
     expect(github.pull(1).draft).toBe(true);
 
-    const ready = await call<ThreadPullsView>("POST", `/threads/${enc}/pr/ready`, {});
+    const ready = await call<ThreadPullsView>("POST", `/threads/${enc}/pr/draft`, { draft: false });
     expect(ready.status).toBe(200);
     expect(github.pull(1).draft).toBe(false);
     expect(ready.body.data?.active?.draft).toBe(false);
+    expect((await call("POST", `/threads/${enc}/pr/draft`, { draft: false })).status).toBe(409);
 
-    const again = await call("POST", `/threads/${enc}/pr/ready`, {});
-    expect(again.status).toBe(409);
+    const back = await call<ThreadPullsView>("POST", `/threads/${enc}/pr/draft`, { draft: true });
+    expect(back.status).toBe(200);
+    expect(github.pull(1).draft).toBe(true);
+    expect(back.body.data?.active?.draft).toBe(true);
+    expect((await call("POST", `/threads/${enc}/pr/draft`, { draft: true })).status).toBe(409);
+  });
+
+  it("opens the PR ready for review when the project says so", async () => {
+    const project = await newProject();
+    const patched = await call<ProjectView>("PATCH", `/projects/${project.id}`, {
+      settings: { draftPulls: false },
+    });
+    expect(patched.body.data?.settings.draftPulls).toBe(false);
+    const thread = await newThread(project.id);
+    await commit(thread.worktree, "src/login.ts");
+    await call("POST", `/threads/${encodeURIComponent(thread.id)}/publish`, {});
+    expect(github.pulls[0]).toMatchObject({ number: 1, draft: false });
   });
 
   it("links a PR the agent opened for the thread's branch", async () => {
@@ -388,7 +425,13 @@ describe("publish and the PR tab", () => {
     );
     await github.createPull(
       { owner: "acme", name: "web" },
-      { head: thread.branch, base: "main", title: "By agent", body: "", draft: false },
+      {
+        head: thread.branch,
+        base: "main",
+        title: "By agent",
+        body: "",
+        draft: false,
+      },
     );
 
     expect((await pr(thread.id)).active?.number).toBe(1);
@@ -503,7 +546,9 @@ describe("Auto-fix", () => {
     const thread = await newThread(project.id);
     await commit(thread.worktree, "src/login.ts");
     await call("POST", `/threads/${encodeURIComponent(thread.id)}/publish`, {});
-    await call("POST", `/threads/${encodeURIComponent(thread.id)}/pr/autofix`, { enabled: true });
+    await call("POST", `/threads/${encodeURIComponent(thread.id)}/pr/autofix`, {
+      enabled: true,
+    });
     return thread;
   }
 
@@ -545,7 +590,11 @@ describe("Auto-fix", () => {
           {
             id: "C_1",
             databaseId: 1,
-            author: { login: "carol", type: "user", association: "COLLABORATOR" },
+            author: {
+              login: "carol",
+              type: "user",
+              association: "COLLABORATOR",
+            },
             body: "Please handle the empty case",
             createdAt: minutesAgo(3),
           },
@@ -578,7 +627,14 @@ describe("Auto-fix", () => {
       ["finished", "pushed", head],
     ]);
     // CI runs again on the pushed commit.
-    p.checks = [{ ...failing(), state: "pending", completedAt: null, startedAt: minutesAgo(0) }];
+    p.checks = [
+      {
+        ...failing(),
+        state: "pending",
+        completedAt: null,
+        startedAt: minutesAgo(0),
+      },
+    ];
     expect((await pr(thread.id)).active?.loop.status).toBe("watching");
   });
 
@@ -790,7 +846,10 @@ describe("the Thread-Id trailer and per-turn checkpoints", () => {
         `/threads/${enc}/checkpoints/${list[0]!.id}/file?path=notes.txt`,
       )
     ).body.data!;
-    expect(file).toMatchObject({ oldContent: "turn one\n", newContent: "turn two\n" });
+    expect(file).toMatchObject({
+      oldContent: "turn one\n",
+      newContent: "turn two\n",
+    });
 
     const head = await sh(local, `git -C ${thread.worktree} rev-parse HEAD`);
     const reverted = await call<{ undo: CheckpointView }>(
@@ -825,7 +884,9 @@ describe("phase 6 on a published PR", () => {
     const thread = await newThread(project.id);
     await commit(thread.worktree, "src/login.ts");
     await call("POST", `/threads/${encodeURIComponent(thread.id)}/publish`, {});
-    await call("POST", `/threads/${encodeURIComponent(thread.id)}/pr/autofix`, { enabled: true });
+    await call("POST", `/threads/${encodeURIComponent(thread.id)}/pr/autofix`, {
+      enabled: true,
+    });
     return { project, thread, enc: encodeURIComponent(thread.id) };
   }
   const green = () => ({
@@ -862,7 +923,10 @@ describe("phase 6 on a published PR", () => {
     ]);
     expect((await pr(thread.id)).active?.autoMerge).toBe(true);
     await call("POST", `/threads/${enc}/pr/automerge`, { enabled: false });
-    expect(github.autoMergeCalls.at(-1)).toEqual({ pullId: "PR_1", action: "disable" });
+    expect(github.autoMergeCalls.at(-1)).toEqual({
+      pullId: "PR_1",
+      action: "disable",
+    });
     expect(github.pull(1).autoMerge).toBe(false);
   });
 
@@ -901,7 +965,11 @@ describe("phase 6 on a published PR", () => {
     const { thread } = await published();
     github.pull(1).checks = [green()];
     github.pull(1).queueRemovals = [
-      { id: "Q1", at: minutesAgo(5), reason: "The merge group's checks failed" },
+      {
+        id: "Q1",
+        at: minutesAgo(5),
+        reason: "The merge group's checks failed",
+      },
     ];
     await pr(thread.id);
     const sent = harness.sent.at(-1)!;
@@ -935,9 +1003,16 @@ describe("the GitHub App", () => {
 
   /** Start the one-click setup, and come back from GitHub with `code`. */
   async function createApp(code = "manifest-code") {
-    const started = await browser("/api/v1/code/github/app/manifest", { method: "POST", json: {} });
+    const started = await browser("/api/v1/code/github/app/manifest", {
+      method: "POST",
+      json: {},
+    });
     const body = (await started.json()) as {
-      data: { url: string; manifest: Record<string, unknown>; webhooks: boolean };
+      data: {
+        url: string;
+        manifest: Record<string, unknown>;
+        webhooks: boolean;
+      };
     };
     const state = new URL(body.data.url).searchParams.get("state")!;
     const cookie = flowCookie(started)!;
@@ -954,7 +1029,11 @@ describe("the GitHub App", () => {
       redirect_url: "http://localhost:3000/api/v1/code/github/callback",
       setup_url: "http://localhost:3000/api/v1/code/github/installed",
       public: false,
-      default_permissions: { contents: "write", pull_requests: "write", checks: "read" },
+      default_permissions: {
+        contents: "write",
+        pull_requests: "write",
+        checks: "read",
+      },
     });
     // GitHub cannot deliver webhooks to a plain-http origin: Code polls instead.
     expect(started.webhooks).toBe(false);
@@ -979,7 +1058,10 @@ describe("the GitHub App", () => {
   });
 
   it("refuses a callback in a browser that did not start the setup", async () => {
-    const started = await browser("/api/v1/code/github/app/manifest", { method: "POST", json: {} });
+    const started = await browser("/api/v1/code/github/app/manifest", {
+      method: "POST",
+      json: {},
+    });
     const { data } = (await started.json()) as { data: { url: string } };
     const state = new URL(data.url).searchParams.get("state")!;
     const res = await app.request(`/api/v1/code/github/callback?code=x&state=${state}`, {
@@ -993,7 +1075,9 @@ describe("the GitHub App", () => {
   it("installs the App, accepting only an installation of this App", async () => {
     await createApp();
     const install = async (id: number) => {
-      const started = await browser("/api/v1/code/github/app/install", { method: "POST" });
+      const started = await browser("/api/v1/code/github/app/install", {
+        method: "POST",
+      });
       const { data } = (await started.json()) as { data: { url: string } };
       expect(
         data.url.startsWith("https://github.com/apps/tiny-agents-test/installations/new?state="),
@@ -1055,7 +1139,10 @@ describe("the GitHub App", () => {
       `/threads/${encodeURIComponent(thread.id)}/pr/fix`,
       {},
     );
-    expect(fix.body.data).toMatchObject({ started: false, reason: "Nothing is failing or open." });
+    expect(fix.body.data).toMatchObject({
+      started: false,
+      reason: "Nothing is failing or open.",
+    });
   });
 
   it("takes a signed delivery as a hint to look now, once, and refuses a bad signature", async () => {
@@ -1071,12 +1158,18 @@ describe("the GitHub App", () => {
       repository: { full_name: "acme/web" },
       pull_request: { number: 1 },
     });
-    const headers = { "x-github-event": "pull_request_review", "x-github-delivery": "d-1" };
+    const headers = {
+      "x-github-event": "pull_request_review",
+      "x-github-delivery": "d-1",
+    };
     expect((await deliver(body, { ...headers, "x-hub-signature-256": "sha256=00" })).status).toBe(
       401,
     );
 
-    const first = await deliver(body, { ...headers, "x-hub-signature-256": sign(body) });
+    const first = await deliver(body, {
+      ...headers,
+      "x-hub-signature-256": sign(body),
+    });
     expect(first.status).toBe(200);
     expect(((await first.json()) as { data: unknown }).data).toEqual({
       duplicate: false,
@@ -1085,7 +1178,10 @@ describe("the GitHub App", () => {
     const queued = (await db.select().from(jobs)).filter((j) => j.state === "created");
     expect(queued.map((j) => j.runAt.getTime() - NOW)).toEqual([5_000]);
 
-    const again = await deliver(body, { ...headers, "x-hub-signature-256": sign(body) });
+    const again = await deliver(body, {
+      ...headers,
+      "x-hub-signature-256": sign(body),
+    });
     expect(((await again.json()) as { data: unknown }).data).toEqual({
       duplicate: true,
       looked: 0,

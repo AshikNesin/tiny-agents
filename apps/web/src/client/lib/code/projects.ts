@@ -86,8 +86,9 @@ export const projectsApi = {
     ),
   editPull: (id: string, change: { title?: string; body?: string }) =>
     apiClient.patch<ThreadPullsView>(`${thread(id)}/pr`, change),
-  /** Draft → ready for review. */
-  ready: (id: string) => apiClient.post<ThreadPullsView>(`${thread(id)}/pr/ready`, {}),
+  /** Draft ↔ ready for review. */
+  setDraft: (id: string, draft: boolean) =>
+    apiClient.post<ThreadPullsView>(`${thread(id)}/pr/draft`, { draft }),
   merge: (id: string, method: MergeMethod) =>
     apiClient.post<ThreadPullsView>(`${thread(id)}/pr/merge`, { method }),
 

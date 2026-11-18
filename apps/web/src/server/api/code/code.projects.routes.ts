@@ -74,7 +74,7 @@ import {
   linkPull,
   manualPass,
   mergePull,
-  readyPull,
+  setPullDraft,
   publish,
   setAutoMerge,
   setAutofix,
@@ -193,6 +193,7 @@ const updateSchema = z.strictObject({
     .strictObject({
       scripts: scriptsSchema.optional(),
       archiveOnMerge: z.boolean().optional(),
+      draftPulls: z.boolean().optional(),
       branchPrefix: z
         .string()
         .max(40)
@@ -370,9 +371,10 @@ router.post("/code/threads/:id/pr/merge", async (c) => {
   return ok<ThreadPullsView>(c, await threadPulls(id, false));
 });
 
-router.post("/code/threads/:id/pr/ready", async (c) => {
+router.post("/code/threads/:id/pr/draft", async (c) => {
   const id = threadParam(c.req.param("id"));
-  await readyPull(id);
+  const { draft } = await parseBody(c, z.object({ draft: z.boolean() }));
+  await setPullDraft(id, draft);
   return ok<ThreadPullsView>(c, await threadPulls(id, false));
 });
 

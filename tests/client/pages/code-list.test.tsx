@@ -84,6 +84,7 @@ const project = (id: string, name: string): ProjectView => ({
   settings: {
     scripts: {},
     archiveOnMerge: true,
+    draftPulls: true,
     branchPrefix: "ta/",
     protectedPaths: [],
     autofix: {

@@ -291,6 +291,8 @@ export interface GitHubClient {
   disableAutoMerge(pullId: string): Promise<void>;
   /** Draft → ready for review. */
   markReady(pullId: string): Promise<void>;
+  /** Ready for review → draft. */
+  convertToDraft(pullId: string): Promise<void>;
 }
 
 /** `owner/name`, `https://github.com/owner/name(.git)` or `git@github.com:owner/name.git`. */
@@ -759,6 +761,12 @@ export function createGitHubClient(api: GitHubApi): GitHubClient {
     async markReady(pullId) {
       await api.graphql(
         `mutation($pr: ID!) { markPullRequestReadyForReview(input: { pullRequestId: $pr }) { clientMutationId } }`,
+        { pr: pullId },
+      );
+    },
+    async convertToDraft(pullId) {
+      await api.graphql(
+        `mutation($pr: ID!) { convertPullRequestToDraft(input: { pullRequestId: $pr }) { clientMutationId } }`,
         { pr: pullId },
       );
     },

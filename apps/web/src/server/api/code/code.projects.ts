@@ -42,6 +42,7 @@ import { PROJECT_RULE, projectHeader } from "../../../shared/code-messages";
 const DEFAULT_PROJECT_SETTINGS: ProjectSettings = {
   scripts: {},
   archiveOnMerge: true,
+  draftPulls: true,
   branchPrefix: DEFAULT_BRANCH_PREFIX,
   protectedPaths: [".github/workflows/**"],
   autofix: {
@@ -69,6 +70,7 @@ export function projectSettings(raw: string): ProjectSettings {
   return {
     scripts: { ...d.scripts, ...value.scripts },
     archiveOnMerge: value.archiveOnMerge ?? d.archiveOnMerge,
+    draftPulls: typeof value.draftPulls === "boolean" ? value.draftPulls : d.draftPulls,
     branchPrefix:
       (typeof value.branchPrefix === "string" ? cleanBranchPrefix(value.branchPrefix) : null) ??
       d.branchPrefix,

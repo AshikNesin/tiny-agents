@@ -29,9 +29,9 @@ const logs = new Map<number, CheckLogView>();
 /** The PR's description on GitHub, and the edits the tab sent. */
 let body = "";
 const edits: unknown[] = [];
-/** Whether the open PR is a draft, and the ready-for-review calls the tab made. */
+/** Whether the open PR is a draft, and the draft switches the tab asked for. */
 let draft = false;
-const readied: string[] = [];
+const readied: boolean[] = [];
 /** No PR yet: how far the branch is ahead, and what differs from the base (committed or not). */
 let noPull = false;
 let ahead = 1;
@@ -67,10 +67,10 @@ vi.mock("@groot/shell/lib/api", async (importOriginal) => {
         if (failReads) throw new Error("GitHub is down");
         return view(checkState);
       },
-      post: async (path: string) => {
-        if (path !== "/code/threads/shelley%3At1/pr/ready") throw new Error(`unexpected ${path}`);
-        readied.push(path);
-        draft = false;
+      post: async (path: string, body: { draft: boolean }) => {
+        if (path !== "/code/threads/shelley%3At1/pr/draft") throw new Error(`unexpected ${path}`);
+        readied.push(body.draft);
+        draft = body.draft;
         return view(checkState);
       },
       patch: async (path: string, change: { body?: string }) => {
@@ -95,6 +95,7 @@ const project: NonNullable<ThreadPullsView["project"]> = {
   settings: {
     scripts: {},
     archiveOnMerge: true,
+    draftPulls: true,
     branchPrefix: "ta/",
     protectedPaths: [],
     autofix: {
@@ -257,17 +258,23 @@ describe("Code PR tab", () => {
 });
 
 describe("getting it merged", () => {
-  it("offers Ready for review on a draft, and Merge once GitHub has it ready", async () => {
+  it("switches a draft to ready for review, so Merge opens, and back to a draft", async () => {
     draft = true;
     checkState = "success";
     panel();
     await wait(0);
+    const toggle = screen.getByRole("switch", { name: "Draft" });
+    expect(toggle).toBeChecked();
     expect(screen.getByRole("button", { name: "Merge" })).toBeDisabled();
-    act(() => screen.getByRole("button", { name: "Ready for review" }).click());
+    act(() => toggle.click());
     await wait(0);
-    expect(readied).toEqual(["/code/threads/shelley%3At1/pr/ready"]);
-    expect(screen.queryByRole("button", { name: "Ready for review" })).toBeNull();
+    expect(screen.getByRole("switch", { name: "Draft" })).not.toBeChecked();
     expect(screen.getByRole("button", { name: "Merge" })).toBeEnabled();
+    act(() => screen.getByRole("switch", { name: "Draft" }).click());
+    await wait(0);
+    expect(readied).toEqual([false, true]);
+    expect(screen.getByRole("switch", { name: "Draft" })).toBeChecked();
+    expect(screen.getByRole("button", { name: "Merge" })).toBeDisabled();
   });
 
   it("says the changes are not committed yet, and asks the agent to commit them", async () => {

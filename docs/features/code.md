@@ -247,7 +247,11 @@ at the foot of the Code sidebar (`/code/settings`):
 **Scripts** are read from a checked-in `.tiny-agents/code.json`:
 
 ```json
-{ "setup": "pnpm install", "check": "pnpm test", "archive": "rm -rf node_modules" }
+{
+  "setup": "pnpm install",
+  "check": "pnpm test",
+  "archive": "rm -rf node_modules"
+}
 ```
 
 `setup` runs in a new worktree before the first turn and after unarchive (a
@@ -289,14 +293,16 @@ harness's own changes.
 **Publish.** The panel's **Pull request** tab (the header's toggle shows
 `#N` and its state once there is one) offers Publish.
 **Publish draft PR** pushes the branch (never forced, hooks off) and opens a
-draft PR with the commits as its body and a short title (one `chat_title`
+draft PR (**Publish PR**, ready for review, when the project's **Open new PRs
+as drafts** is off) with the commits as its body and a short title (one `chat_title`
 call over the thread's title and the commit subjects: imperative, under 60
 characters, no `feat:` prefix; the thread's title when there is no model); with a PR open, Publish pushes new
 commits. **Link pull request** links an existing one, and a PR the agent
 opened for the branch is linked on its own. When nothing is ahead but the
 agent changed files, the tab says they are not committed yet, and **Ask to
-commit** puts that request in the composer. A draft offers **Ready for
-review**, which marks it ready on GitHub so **Merge** can run. After a PR merges, the next
+commit** puts that request in the composer. The **Draft** switch flips
+the open PR between draft and ready for review on GitHub, either way, any time
+(`POST /code/threads/:id/pr/draft`); **Merge** runs once it is off. After a PR merges, the next
 Publish opens a new one; earlier PRs are listed.
 
 **The PR tab.** The PR's number, state (open, draft, queued, merged or
