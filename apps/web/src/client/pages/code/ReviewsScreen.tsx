@@ -133,6 +133,72 @@ function Inbox({
   );
 }
 
+/** Reviews open here whose PR is not in the inbox; while they read, a spinner. */
+function OpenHere({
+  reviews,
+  others,
+  onClose,
+}: {
+  reviews: PullReviewView[] | null;
+  others: PullReviewView[] | null;
+  onClose(review: PullReviewView): void;
+}) {
+  if (!reviews) {
+    return (
+      <div className="flex justify-center p-6">
+        <Spinner />
+      </div>
+    );
+  }
+  if (!others) return null;
+  if (reviews.length === 0) {
+    return (
+      <p className="text-muted-foreground px-3 text-sm">
+        No open reviews. Paste any pull request of a project's repository, yours or someone else's.
+      </p>
+    );
+  }
+  if (others.length === 0) return null;
+  return (
+    <>
+      <h2 className={cn(metaLabelClass, "px-3")}>Open here</h2>
+      <ul className="space-y-px" aria-label="Open reviews">
+        {others.map((review) => (
+          <li key={review.id} className="group relative flex items-center">
+            <Link
+              to={reviewPath(review.id)}
+              className="hover:bg-muted/60 flex h-10 min-w-0 flex-1 items-center gap-3 rounded-lg px-3 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+            >
+              <GitPullRequest className="text-muted-foreground size-3.5 shrink-0" aria-hidden />
+              <span className="text-muted-foreground shrink-0 tabular-nums">#{review.number}</span>
+              <span className="min-w-0 flex-1 truncate">{review.title}</span>
+              <span
+                className={cn("text-muted-foreground hidden shrink-0 text-xs sm:inline", monoClass)}
+              >
+                {review.repo} · @{review.author}
+              </span>
+              <span className="text-muted-foreground w-14 shrink-0 text-right text-xs tabular-nums">
+                {dateOf(review.updatedAt)}
+              </span>
+              <span className={trailClass} aria-hidden />
+            </Link>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label={`Close review of #${review.number}`}
+              title="Close review"
+              onClick={() => onClose(review)}
+              className="text-muted-foreground absolute right-1.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
+            >
+              <X />
+            </Button>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
 export function ReviewsScreen({ sidebarHidden = false }: { sidebarHidden?: boolean }) {
   const navigate = useNavigate();
   const [reviews, setReviews] = useState<PullReviewView[] | null>(null);
@@ -231,59 +297,7 @@ export function ReviewsScreen({ sidebarHidden = false }: { sidebarHidden?: boole
             </Button>
           </form>
           <Inbox pulls={pulls} error={inboxError} onOpen={(pull) => void openPull(pull)} />
-          {others && others.length > 0 && <h2 className={cn(metaLabelClass, "px-3")}>Open here</h2>}
-          {!reviews ? (
-            <div className="flex justify-center p-6">
-              <Spinner />
-            </div>
-          ) : !others ? null : reviews.length === 0 ? (
-            <p className="text-muted-foreground px-3 text-sm">
-              No open reviews. Paste any pull request of a project's repository, yours or someone
-              else's.
-            </p>
-          ) : others.length === 0 ? null : (
-            <ul className="space-y-px" aria-label="Open reviews">
-              {others.map((review) => (
-                <li key={review.id} className="group relative flex items-center">
-                  <Link
-                    to={reviewPath(review.id)}
-                    className="hover:bg-muted/60 flex h-10 min-w-0 flex-1 items-center gap-3 rounded-lg px-3 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-                  >
-                    <GitPullRequest
-                      className="text-muted-foreground size-3.5 shrink-0"
-                      aria-hidden
-                    />
-                    <span className="text-muted-foreground shrink-0 tabular-nums">
-                      #{review.number}
-                    </span>
-                    <span className="min-w-0 flex-1 truncate">{review.title}</span>
-                    <span
-                      className={cn(
-                        "text-muted-foreground hidden shrink-0 text-xs sm:inline",
-                        monoClass,
-                      )}
-                    >
-                      {review.repo} · @{review.author}
-                    </span>
-                    <span className="text-muted-foreground w-14 shrink-0 text-right text-xs tabular-nums">
-                      {dateOf(review.updatedAt)}
-                    </span>
-                    <span className={trailClass} aria-hidden />
-                  </Link>
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    aria-label={`Close review of #${review.number}`}
-                    title="Close review"
-                    onClick={() => void close(review)}
-                    className="text-muted-foreground absolute right-1.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
-                  >
-                    <X />
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          )}
+          <OpenHere reviews={reviews} others={others} onClose={(review) => void close(review)} />
         </div>
       </div>
     </div>
