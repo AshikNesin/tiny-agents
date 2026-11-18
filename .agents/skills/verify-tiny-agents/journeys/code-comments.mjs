@@ -100,6 +100,16 @@ await journey(
     });
     await proof("changes-folded");
 
+    await step("Files opens the changed files as a tree over the column", async () => {
+      await changes.getByRole("button", { name: "Files" }).click();
+      const tree = changes.getByRole("navigation", { name: "Changed files" });
+      await expect(tree.getByRole("treeitem", { name: /app\.ts/ })).toBeVisible();
+      await expect(changes.getByRole("region", { name: "Diff stats" })).toContainText("Files1");
+      await proof("changes-tree");
+      await changes.getByRole("button", { name: "Close files" }).first().click();
+      await expect(tree).toHaveCount(0);
+    });
+
     await step("a line's gutter opens a composer right under the line", async () => {
       // The diff draws in a shadow root; Playwright's CSS reaches into it. Click line 30's number.
       await changes
@@ -154,6 +164,12 @@ await journey(
         "true",
       );
       await expect(review.getByTestId("code-file")).toHaveCount(1);
+      // The tree sits beside the column here.
+      await expect(
+        review
+          .getByRole("navigation", { name: "Changed files" })
+          .getByRole("treeitem", { name: /app\.ts/ }),
+      ).toBeVisible();
       await expect(transcript).toHaveCount(0);
       // Comments work here too, and wait in the tray at the bottom.
       await review
@@ -169,6 +185,16 @@ await journey(
         "1 comment goes with your next message",
       );
       await proof("review-page");
+      // On a phone the tree waits in a drawer behind Files.
+      const size = page.viewportSize();
+      await page.setViewportSize({ width: 390, height: 844 });
+      await expect(review.getByRole("navigation", { name: "Changed files" })).toBeHidden();
+      await proof("review-page-phone");
+      await review.getByRole("button", { name: "Files" }).click();
+      await expect(page.getByRole("treeitem", { name: /app\.ts/ }).last()).toBeVisible();
+      await proof("review-page-phone-files");
+      await page.getByRole("button", { name: "Close files" }).first().click();
+      if (size) await page.setViewportSize(size);
       await review.getByRole("link", { name: "Back to the thread" }).click();
       await expect(transcript).toBeVisible();
       await expect(tray).toContainText("1 comment goes with your next message");

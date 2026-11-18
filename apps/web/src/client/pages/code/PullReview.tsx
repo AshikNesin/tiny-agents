@@ -12,31 +12,20 @@
  * without its header. Phones show one side at a time, the file tree in a
  * drawer and the diffs unified.
  */
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useSyncExternalStore,
-  useState,
-  type FormEvent,
-} from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
-  Columns2,
   Ellipsis,
   ExternalLink,
   FileDiff,
-  FoldVertical,
   ListTree,
   MessageSquare,
   PanelLeftClose,
   RefreshCw,
-  Rows2,
   Send,
   Sparkles,
   SquareTerminal,
-  UnfoldVertical,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -69,37 +58,14 @@ import { ConversationView } from "./ConversationView";
 import { DEFAULT, ModelPicker, loadModels } from "./controls";
 import { PendingComments } from "./PendingComments";
 import { AssistantPane } from "./ResizablePane";
-import { PullDiffs, type DiffStyle } from "./PullDiffs";
+import { PullDiffs } from "./PullDiffs";
+import { DiffViewButtons, useDiffStyle, useWide, type CollapseAll } from "./DiffWorkspace";
 import { usePullConversations } from "./PullThreads";
 import { SubmitReviewButton } from "./SubmitReview";
 import { OpenInTerminal, useOpenInTerminal, YourChangesActions } from "./YourChanges";
 
 /** Questions a reviewer asks first, one tap each. */
 const STARTERS = ["Summarize this PR", "What could break?", "Is it tested well?"];
-
-const STYLE_KEY = "code:diff-style";
-const WIDE = "(min-width: 1024px)";
-
-function readStyle(): DiffStyle {
-  try {
-    return window.localStorage.getItem(STYLE_KEY) === "unified" ? "unified" : "split";
-  } catch {
-    return "split";
-  }
-}
-
-/** Whether the window is wide enough for side-by-side diffs and the assistant beside them. */
-function useWide(): boolean {
-  return useSyncExternalStore(
-    (change) => {
-      if (typeof window.matchMedia !== "function") return () => undefined;
-      const query = window.matchMedia(WIDE);
-      query.addEventListener("change", change);
-      return () => query.removeEventListener("change", change);
-    },
-    () => typeof window.matchMedia === "function" && window.matchMedia(WIDE).matches,
-  );
-}
 
 export function PullReview({
   reviewId,
@@ -120,8 +86,8 @@ export function PullReview({
   // Wide screens: the assistant folded to a rail (by default) or open beside the files.
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [filesOpen, setFilesOpen] = useState(false);
-  const [style, setStyle] = useState<DiffStyle>(readStyle);
-  const [collapse, setCollapse] = useState<{ all: boolean; at: number } | null>(null);
+  const [style, changeStyle] = useDiffStyle();
+  const [collapse, setCollapse] = useState<CollapseAll>(null);
   const wide = useWide();
 
   useEffect(() => {
@@ -144,15 +110,6 @@ export function PullReview({
   const conversations = usePullConversations(review, `${review?.headSha}:${reload}`);
   const waiting = useThreadComments(review?.key).length;
   const drawer = useMemo(() => ({ open: filesOpen, onOpenChange: setFilesOpen }), [filesOpen]);
-
-  const changeStyle = (next: DiffStyle) => {
-    setStyle(next);
-    try {
-      window.localStorage.setItem(STYLE_KEY, next);
-    } catch {
-      // not remembered in private mode
-    }
-  };
 
   const update = async () => {
     if (!review) return;
@@ -199,7 +156,6 @@ export function PullReview({
     );
   }
 
-  const allFolded = collapse?.all ?? false;
   const showAssistant = side === "assistant" || assistantOpen;
 
   return (
@@ -237,26 +193,12 @@ export function PullReview({
         </span>
         <span className="flex-1" />
         <div className="hidden items-center gap-0.5 lg:flex">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="text-muted-foreground"
-            aria-label={style === "split" ? "Switch to unified view" : "Switch to split view"}
-            title={style === "split" ? "Unified view" : "Split view"}
-            onClick={() => changeStyle(style === "split" ? "unified" : "split")}
-          >
-            {style === "split" ? <Rows2 /> : <Columns2 />}
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="text-muted-foreground"
-            aria-label={allFolded ? "Unfold all files" : "Fold all files"}
-            title={allFolded ? "Unfold all files" : "Fold all files"}
-            onClick={() => setCollapse({ all: !allFolded, at: Date.now() })}
-          >
-            {allFolded ? <UnfoldVertical /> : <FoldVertical />}
-          </Button>
+          <DiffViewButtons
+            style={style}
+            onStyle={changeStyle}
+            collapse={collapse}
+            onCollapse={setCollapse}
+          />
           <span className="bg-border mx-1 h-4 w-px" aria-hidden />
         </div>
         {github && <SubmitReviewButton review={review} github={github} />}

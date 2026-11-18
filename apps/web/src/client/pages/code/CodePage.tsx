@@ -326,6 +326,7 @@ export function CodePage() {
         cwd={cwd}
         refreshKey={changesKey}
         commenting={commenting}
+        page={page}
       />
     );
   };
