@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { logger } from "@groot/core/logger";
+import { db, llmCalls } from "../../../../apps/web/src/server/db";
 import { secretRedactor } from "../../../../packages/agent/src/redact";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import { fauxAssistantMessage, fauxText } from "../../../../packages/agent/src/testing";
@@ -222,5 +223,63 @@ describe("createSideCaller: failures", () => {
     await createSideCaller(runtime).complete(request({ signal: cancel.signal }));
     cancel.abort();
     expect(signal?.aborted).toBe(true);
+  });
+});
+
+describe("createSideCaller: the trace", () => {
+  it("keeps one metadata row per call, with no prompt or answer", async () => {
+    await db.delete(llmCalls);
+    const usage = {
+      input: 1_200,
+      output: 40,
+      cacheRead: 800,
+      cacheWrite: 0,
+      totalTokens: 2_040,
+      cost: { input: 0.001, output: 0.0005, cacheRead: 0.0001, cacheWrite: 0, total: 0.0016 },
+    };
+    const { runtime } = fakeRuntime(async () => ({
+      ...fauxAssistantMessage([fauxText("Secret answer")]),
+      usage,
+    }));
+    await createSideCaller(runtime).complete(
+      request({ label: "Chat title", botId: undefined, user: "Secret prompt" }),
+    );
+    const rows = await db.select().from(llmCalls);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      purpose: "Chat title",
+      modelId: "bot-model",
+      provider: "p",
+      model: "bot-model-upstream",
+      inputTokens: 1_200,
+      outputTokens: 40,
+      cacheReadTokens: 800,
+      costUsd: 0.0016,
+      outcome: "ok",
+      error: null,
+    });
+    expect(JSON.stringify(rows[0])).not.toMatch(/Secret/);
+  });
+
+  it("records a failed call's outcome and error", async () => {
+    await db.delete(llmCalls);
+    const { runtime } = fakeRuntime(async () => {
+      throw new Error("gateway down");
+    });
+    await createSideCaller(runtime).complete(request());
+    const rows = await db.select().from(llmCalls);
+    expect(rows).toMatchObject([{ purpose: "Test call", outcome: "error", error: "gateway down" }]);
+  });
+
+  it("prunes rows older than 30 days as it writes", async () => {
+    await db.delete(llmCalls);
+    await db.insert(llmCalls).values({
+      purpose: "Old",
+      outcome: "ok",
+      createdAt: new Date(Date.now() - 31 * 24 * 60 * 60 * 1000),
+    });
+    await createSideCaller(fakeRuntime().runtime).complete(request());
+    const rows = await db.select().from(llmCalls);
+    expect(rows.map((row) => row.purpose)).toEqual(["Test call"]);
   });
 });

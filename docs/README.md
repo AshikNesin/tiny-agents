@@ -49,6 +49,7 @@ What ships in the box and how to use or extend it.
 | [`features/chat-attachments.md`](./features/chat-attachments.md)             | tiny-agents: attachments, vision, bots reading files                              |
 | [`features/message-steering.md`](./features/message-steering.md)             | tiny-agents: steering a running reply; queued follow-ups                          |
 | [`features/memory.md`](./features/memory.md)                                 | tiny-agents: per-bot long-term memory, capture off the reply path                 |
+| [`features/traces.md`](./features/traces.md)                                 | tiny-agents: every LLM call with tokens, cost and timing, read-only               |
 | [`features/questions.md`](./features/questions.md)                           | tiny-agents: bots ask the owner clarifying questions                              |
 | [`features/self-improve.md`](./features/self-improve.md)                     | tiny-agents: bots edit their own instructions, owner-gated                        |
 | [`features/bot-builder.md`](./features/bot-builder.md)                       | tiny-agents: a bot creates a new bot when asked, owner-gated                      |

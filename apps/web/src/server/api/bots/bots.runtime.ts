@@ -41,6 +41,7 @@ import {
   TEST_MODEL,
 } from "@tiny-agents/agent/testing";
 import { logger, setScrubber } from "@groot/core/logger";
+import { recordLlmCall } from "../traces/traces.calls";
 import { taskStore } from "../tasks/task.store";
 import { codeStore } from "../code/code.bots";
 import { skillStore } from "../skills/skills.store";
@@ -215,7 +216,7 @@ export function agentRuntimeReady(): boolean {
 function autoReviewer(runtime: () => AgentRuntime | undefined): Reviewer {
   const classifier = createClassifier({
     catalog: () => runtime()!.catalog,
-    models: { classify: (...args) => runtime()!.models.classify(...args) },
+    models: { classify: (...args) => tracedClassify(runtime()!, ...args) },
   });
   return createReviewer(classifier, {
     // Scores and outcome only: never the call's arguments.
@@ -225,6 +226,36 @@ function autoReviewer(runtime: () => AgentRuntime | undefined): Reviewer {
         ? logger.warn({ tool, ...verdict, durationMs }, "Auto-review failed; asking the owner")
         : logger.info({ tool, ...verdict, durationMs }, "Auto-review"),
   });
+}
+
+/** One classifier call, with its metadata kept for Traces (`llm_calls`, issue #363). */
+async function tracedClassify(
+  runtime: AgentRuntime,
+  ...args: Parameters<AgentRuntime["models"]["classify"]>
+): ReturnType<AgentRuntime["models"]["classify"]> {
+  const [model] = args;
+  const startedAt = performance.now();
+  const base = { purpose: "Auto-review", provider: model.provider, model: model.id };
+  try {
+    const result = await runtime.models.classify(...args);
+    await recordLlmCall({
+      ...base,
+      usage: result.usage,
+      durationMs: performance.now() - startedAt,
+      outcome:
+        result.stopReason === "stop" ? "ok" : result.stopReason === "aborted" ? "aborted" : "error",
+      error: result.errorMessage,
+    });
+    return result;
+  } catch (error) {
+    await recordLlmCall({
+      ...base,
+      durationMs: performance.now() - startedAt,
+      outcome: "error",
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
 }
 
 /** Boot: open the runtime (exclusive store lock + Harness resume). */

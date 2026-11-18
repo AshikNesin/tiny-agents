@@ -21,6 +21,7 @@ import {
 } from "@earendil-works/pi-durable";
 import { ConversationNotFoundError, type CompiledConversation } from "./engine";
 import { applyPermissions, PermissionsDoc, usedTokens, YoloDoc } from "./policy";
+import { traceOf, usageTotalsOf, type ConversationTrace, type ConversationUsage } from "./trace";
 import { attachmentsOf } from "./transcript";
 import type { ConversationRef } from "./types";
 
@@ -117,6 +118,22 @@ export class ConversationStore {
       async (tx) => usedTokens(await tx.doc(UsageDoc, ref as ConversationId)),
       ctx,
     );
+  }
+
+  /** The conversation's `pi.usage` totals as trace usage (issue #363). */
+  async usage(ref: ConversationRef): Promise<ConversationUsage> {
+    await this.conversation(ref);
+    return this.harness.commit(
+      async (tx) => usageTotalsOf(await tx.doc(UsageDoc, ref as ConversationId)),
+      ctx,
+    );
+  }
+
+  /** The conversation's calls, turn by turn, from its stored entries (issue #363). */
+  async trace(ref: ConversationRef): Promise<ConversationTrace> {
+    const conversation = await this.conversation(ref);
+    const entries = await loadHistory(conversation);
+    return traceOf(entries, await this.usage(ref));
   }
 
   /** The conversation's YOLO document: on, and whose messages it trusts. */
