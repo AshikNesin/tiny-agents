@@ -15,6 +15,20 @@ export function projectHeader(repo: string, branch: string, base: string): strin
   return `[Project ${repo} · branch ${branch} · base ${base}]`;
 }
 
+/**
+ * A short title from a branch name, for a thread the naming model could not
+ * title: `ta/fix-login-flow` is "Fix login flow". Null when nothing is left.
+ */
+export function branchTitle(branch: string | null | undefined): string | null {
+  const words = (branch ?? "").split("/").pop()!.replace(/[-_]+/g, " ").trim();
+  return words ? words[0]!.toUpperCase() + words.slice(1) : null;
+}
+
+/** A title that is still a project thread's first line, `[Project …]`. */
+export function isProjectHeaderTitle(title: string): boolean {
+  return title.startsWith("[Project ");
+}
+
 /** The first sentence of an Auto-fix pass's request. */
 export const PASS_HEAD = "Auto-fix pass.";
 /** The first sentence of the final check's request. */
