@@ -10,7 +10,7 @@
  * wait above the thread's composer and go to the agent with the next message. The scope picker also shows what one turn changed (its
  * checkpoint against the one before), with Revert to here.
  */
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ChevronDown,
   ChevronLeft,
@@ -34,7 +34,6 @@ import { projectsApi } from "../../lib/code/projects";
 import { useThreadPulls } from "../../lib/code/use-thread-pulls";
 import type { CheckpointView, ReviewFile, ReviewFileDiff } from "../../../shared/api/code";
 import { fileCommenting, type ThreadCommenting } from "../../lib/code/comments";
-import type { FileConversations } from "./PullThreads";
 import { useSteadyKey } from "../../lib/code/use-live-changes";
 import { FileDiff } from "./UnifiedDiff";
 import { LightEditor } from "./LightEditor";
@@ -81,13 +80,10 @@ export function ReviewPanel({
   refreshKey,
   onOtherScopes,
   commenting,
-  githubCommenting,
-  conversations,
   page = false,
   editable = false,
-  pull,
 }: {
-  /** The thread, or a PR review's key (`review:<id>`, with `pull`). */
+  /** The thread. */
   threadId: string;
   baseBranch: string;
   refreshKey: unknown;
@@ -97,27 +93,8 @@ export function ReviewPanel({
   editable?: boolean;
   /** The thread's line comments: absent, the diff takes none. */
   commenting?: ThreadCommenting;
-  /** A PR review's comments for GitHub, beside the assistant's. */
-  githubCommenting?: ThreadCommenting;
-  /** A PR review's conversations from GitHub, per file. */
-  conversations?: (path: string) => FileConversations;
   /** Uncommitted changes or one commit, from the harness (when it serves diffs). */
   onOtherScopes?: () => void;
-  /**
-   * A PR review (issue #345): no turns to step through (its header names the
-   * branches), and
-   * with `reviewedSha` (the owner's last review, older than the head) a
-   * "Since your review" scope, shown first.
-   */
-  pull?: {
-    reviewedSha?: string | null;
-    /**
-     * With it, a "Your changes" scope (what was changed in the review's
-     * checkout on top of the PR's head) shows these actions over its files;
-     * `done` reads the changes again.
-     */
-    yourChanges?: (done: () => void) => ReactNode;
-  };
 }) {
   const settledKey = useSteadyKey(refreshKey);
   const [files, setFiles] = useState<ReviewFile[] | null>(null);
@@ -126,7 +103,10 @@ export function ReviewPanel({
   const [current, setCurrent] = useState<string | null>(null);
   // The open file's diff, with the file and content (hash) it was read for: a
   // re-read after the agent changed the file swaps it in place.
-  const [shown, setShown] = useState<{ key: string; diff: ReviewFileDiff } | null>(null);
+  const [shown, setShown] = useState<{
+    key: string;
+    diff: ReviewFileDiff;
+  } | null>(null);
   const [reload, setReload] = useState(0);
   // The file open in the light editor (a PR review's).
   const [editing, setEditing] = useState<string | null>(null);
@@ -143,16 +123,10 @@ export function ReviewPanel({
     }
   };
   const confirm = useConfirm();
-  /**
-   * `base`, `review` (since the owner's last review of a PR), `mine` (the
-   * owner's changes on top of a PR's head), or a checkpoint id.
-   */
-  const [picked, setScope] = useState<string | null>(null);
-  const scope = picked ?? (pull?.reviewedSha ? "review" : "base");
-  // Viewed marks are per file content, so they hold in either whole-PR scope.
-  const viewable = scope === "base" || scope === "review";
-  const worktreeScope = viewable || scope === "mine";
-  const since = scope === "review" || scope === "mine" ? scope : undefined;
+  /** `base` or a checkpoint id. */
+  const [scope, setScope] = useState("base");
+  const viewable = scope === "base";
+  const worktreeScope = viewable;
   const [checkpoints, setCheckpoints] = useState<CheckpointView[]>([]);
   const checkpoint = checkpoints.find((c) => c.id === scope);
 
@@ -160,17 +134,10 @@ export function ReviewPanel({
   const pulls = useThreadPulls(threadId, {
     refreshKey: `${String(settledKey)}:${reload}`,
     fresh: false,
-    enabled: !pull,
   });
-  // A PR review names its branches in the page's header.
-  const branch = pull
-    ? null
-    : pulls.view
-      ? { name: pulls.view.branch, ahead: pulls.view.ahead }
-      : null;
+  const branch = pulls.view ? { name: pulls.view.branch, ahead: pulls.view.ahead } : null;
 
   useEffect(() => {
-    if (pull) return;
     let cancelled = false;
     projectsApi
       .checkpoints(threadId)
@@ -179,13 +146,13 @@ export function ReviewPanel({
     return () => {
       cancelled = true;
     };
-  }, [threadId, settledKey, reload, pull]);
+  }, [threadId, settledKey, reload]);
 
   useEffect(() => {
     let cancelled = false;
     setError(null);
     const list = worktreeScope
-      ? projectsApi.reviewFiles(threadId, since)
+      ? projectsApi.reviewFiles(threadId)
       : projectsApi.checkpointFiles(threadId, scope);
     list
       .then((list) => {
@@ -202,7 +169,7 @@ export function ReviewPanel({
     return () => {
       cancelled = true;
     };
-  }, [threadId, settledKey, reload, scope, worktreeScope, since]);
+  }, [threadId, settledKey, reload, scope, worktreeScope]);
 
   const currentFile = files?.find((f) => f.path === current);
   const currentHash = currentFile?.hash;
@@ -214,7 +181,7 @@ export function ReviewPanel({
     if (!current || !reading) return;
     let cancelled = false;
     (worktreeScope
-      ? projectsApi.reviewFile(threadId, current, since)
+      ? projectsApi.reviewFile(threadId, current)
       : projectsApi.checkpointFile(threadId, scope, current)
     )
       .then((d) => !cancelled && setShown({ key: `${scope}:${current}`, diff: d }))
@@ -222,7 +189,7 @@ export function ReviewPanel({
     return () => {
       cancelled = true;
     };
-  }, [threadId, current, currentHash, reload, scope, reading, worktreeScope, since]);
+  }, [threadId, current, currentHash, reload, scope, reading, worktreeScope]);
 
   const listedFiles = useMemo(
     () =>
@@ -373,84 +340,35 @@ export function ReviewPanel({
         </p>
       )}
       <div className="border-border flex h-11 shrink-0 items-center gap-1 border-b px-2">
-        {pull?.reviewedSha || pull?.yourChanges ? (
-          <SearchSelect
-            label="Changes to show"
-            value={scope}
-            onValueChange={setScope}
-            options={[
-              ...(pull.reviewedSha
-                ? [
-                    {
-                      value: "review",
-                      label: "Since your review",
-                      description: `What changed after ${pull.reviewedSha.slice(0, 7)}`,
-                    },
-                  ]
-                : []),
-              {
-                value: "base",
-                label: `Since ${baseBranch}`,
-                description: "The whole pull request",
-              },
-              ...(pull.yourChanges
-                ? [
-                    {
-                      value: "mine",
-                      label: "Your changes",
-                      description: "Changed in this checkout, not on GitHub yet",
-                    },
-                  ]
-                : []),
-            ]}
-            triggerClassName="text-foreground h-8 text-sm"
-          >
-            <FileDiffIcon className="text-muted-foreground size-4" />
-            <span className="max-w-48 truncate">
-              {scope === "review"
-                ? "Since your review"
-                : scope === "mine"
-                  ? "Your changes"
-                  : `Since ${baseBranch}`}
-            </span>
-            <ChevronDown className="opacity-50" />
-          </SearchSelect>
-        ) : pull ? (
-          <span className="text-foreground flex h-8 items-center gap-1.5 px-2 text-sm">
-            <FileDiffIcon className="text-muted-foreground size-4" />
-            Since {baseBranch}
+        <SearchSelect
+          label="Changes to show"
+          value={scope}
+          onValueChange={setScope}
+          options={[
+            {
+              value: "base",
+              label: `Since ${baseBranch}`,
+              description: "Everything, committed or not",
+            },
+            ...checkpoints.map((c) => ({
+              value: c.id,
+              label: scopeLabel(c),
+              description:
+                c.reason === "start"
+                  ? "The files as the agent first saw them"
+                  : `What it changed · on ${c.headSha.slice(0, 7)}`,
+              group: "Turns",
+            })),
+          ]}
+          triggerClassName="text-foreground h-8 text-sm"
+          data-testid="code-review-scope"
+        >
+          <FileDiffIcon className="text-muted-foreground size-4" />
+          <span className="max-w-48 truncate">
+            {checkpoint ? scopeLabel(checkpoint) : `Since ${baseBranch}`}
           </span>
-        ) : (
-          <SearchSelect
-            label="Changes to show"
-            value={scope}
-            onValueChange={setScope}
-            options={[
-              {
-                value: "base",
-                label: `Since ${baseBranch}`,
-                description: "Everything, committed or not",
-              },
-              ...checkpoints.map((c) => ({
-                value: c.id,
-                label: scopeLabel(c),
-                description:
-                  c.reason === "start"
-                    ? "The files as the agent first saw them"
-                    : `What it changed · on ${c.headSha.slice(0, 7)}`,
-                group: "Turns",
-              })),
-            ]}
-            triggerClassName="text-foreground h-8 text-sm"
-            data-testid="code-review-scope"
-          >
-            <FileDiffIcon className="text-muted-foreground size-4" />
-            <span className="max-w-48 truncate">
-              {checkpoint ? scopeLabel(checkpoint) : `Since ${baseBranch}`}
-            </span>
-            <ChevronDown className="opacity-50" />
-          </SearchSelect>
-        )}
+          <ChevronDown className="opacity-50" />
+        </SearchSelect>
         {checkpoint && (
           <Button
             variant="ghost"
@@ -473,10 +391,6 @@ export function ReviewPanel({
           </span>
         )}
         <span className="flex-1" />
-        {scope === "mine" &&
-          files &&
-          files.length > 0 &&
-          pull?.yourChanges?.(() => setReload((n) => n + 1))}
         {page && files && files.length > 0 && (
           <Button
             variant="ghost"
@@ -517,12 +431,6 @@ export function ReviewPanel({
         <div className="flex justify-center p-6">
           <Spinner />
         </div>
-      ) : files.length === 0 && scope === "mine" ? (
-        <EmptyState
-          icon={FileDiffIcon}
-          title="You have not changed anything"
-          description="Ask the assistant to change something, or open a terminal in this checkout."
-        />
       ) : files.length === 0 ? (
         <EmptyState
           icon={FileDiffIcon}
@@ -564,7 +472,6 @@ export function ReviewPanel({
                   }
                 />
               )}
-              {current && conversations?.(current).aside}
               {!diff ? (
                 <div className="flex justify-center p-6">
                   <Spinner />
@@ -583,7 +490,7 @@ export function ReviewPanel({
                     });
                     setEditing(null);
                     setReload((n) => n + 1);
-                    toast.success(pull ? "Saved. It shows under Your changes." : "Saved.");
+                    toast.success("Saved.");
                   }}
                 />
               ) : (
@@ -593,8 +500,7 @@ export function ReviewPanel({
                   oldContent={diff.oldContent}
                   newContent={diff.newContent}
                   unshowable={diff.unshowable}
-                  {...fileCommenting(commenting, diff, githubCommenting)}
-                  notes={current ? conversations?.(current).notes : undefined}
+                  {...fileCommenting(commenting, diff)}
                 />
               )}
             </div>

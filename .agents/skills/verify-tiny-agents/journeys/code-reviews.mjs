@@ -25,6 +25,7 @@ const NEW = OLD.map((l, i) =>
 await journey(
   "code-reviews",
   async ({ page, context, step, proof, cleanup, api, stamp }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
     const dir = path.join(
       process.cwd(),
       "data",
@@ -294,17 +295,29 @@ await journey(
       const pr = page.getByTestId("code-pull-review");
       await expect(pr.getByRole("heading", { name: "Retry webhooks with backoff" })).toBeVisible();
       await expect(pr.getByText("acme/api · @maria")).toBeVisible();
-      const list = pr.getByRole("navigation", { name: "Changed files" });
-      await expect(list).toContainText("retry.ts");
-      await list.getByRole("button", { name: /retry\.ts/ }).click();
+      // The tree (a shadow root; Playwright's role queries reach into it) jumps to a file.
+      await pr.getByRole("treeitem", { name: "retry.ts" }).click();
       await expect(
-        pr.getByText("const delay = base * 2 ** attempt", { exact: false }),
+        pr.getByText("const delay = base * 2 ** attempt", { exact: false }).first(),
       ).toBeVisible();
+      // The assistant starts folded to a rail on the left.
+      await expect(pr.getByRole("button", { name: "Summarize this PR" })).toHaveCount(0);
+      await pr.getByRole("button", { name: "Open assistant" }).click();
       await expect(pr.getByRole("button", { name: "Summarize this PR" })).toBeVisible();
+      await pr.getByRole("button", { name: "Collapse assistant" }).click();
       // Focus mode: no thread list.
       await expect(page.getByRole("complementary", { name: "Threads" })).toHaveCount(0);
     });
     await proof("review-open");
+
+    await step("marking a file viewed folds it away", async () => {
+      const pr = page.getByTestId("code-pull-review");
+      await pr.getByRole("checkbox", { name: "Viewed src/webhooks/queue.ts" }).click();
+      await expect(pr.getByRole("button", { name: "Unfold src/webhooks/queue.ts" })).toBeVisible();
+      await expect(pr.getByRole("region", { name: "Diff stats" })).toContainText("1 of 3");
+      await pr.getByRole("checkbox", { name: "Viewed src/webhooks/queue.ts" }).click();
+      await expect(pr.getByRole("button", { name: "Fold src/webhooks/queue.ts" })).toBeVisible();
+    });
 
     await step(
       "a comment for the assistant waits under the review for the first question",
@@ -323,6 +336,8 @@ await journey(
         await expect(pr.getByRole("note", { name: "Comment on line 12" })).toContainText(
           "For the assistant",
         );
+        // A comment for the assistant opens it.
+        await expect(pr.getByRole("button", { name: "Collapse assistant" })).toBeVisible();
         const tray = pr.getByRole("region", { name: "Comments for the agent" });
         await expect(tray).toContainText("1 comment goes with your next message");
         await expect(tray.getByRole("button", { name: "Send now" })).toHaveCount(0);
@@ -404,9 +419,8 @@ await journey(
         const pr = page.getByTestId("code-pull-review");
         await pr.getByRole("button", { name: "Changes to show" }).click();
         await page.getByRole("option", { name: /Your changes/ }).click();
-        await expect(pr.getByRole("navigation", { name: "Changed files" })).not.toContainText(
-          "queue.ts",
-        );
+        await expect(pr.getByRole("treeitem", { name: "retry.ts" })).toBeVisible();
+        await expect(pr.getByRole("treeitem", { name: "queue.ts" })).toHaveCount(0);
         await pr.getByRole("button", { name: "Push to PR" }).click();
         const dialog = page.getByRole("dialog", { name: "Push to the pull request" });
         await expect(dialog).toContainText("Adds a commit to @maria's branch retry-webhooks.");
@@ -432,7 +446,7 @@ await journey(
       expect(edits[0].content).toContain("const firstLine = 1;");
     });
 
-    await step("a phone shows one side at a time", async () => {
+    await step("a phone shows one side at a time, the files in a drawer", async () => {
       const phone = await context.browser().newContext({
         ...devices["Pixel 7"],
         baseURL: new URL(page.url()).origin,
@@ -460,8 +474,12 @@ await journey(
         await phone.route(pattern, handler);
       const p = await phone.newPage();
       await p.goto(`/code/reviews/${review.id}`, { waitUntil: "domcontentloaded" });
-      await p.getByRole("button", { name: /retry\.ts/ }).tap();
-      await expect(p.getByText("2 of 3")).toBeVisible({ timeout: 15_000 });
+      await p.getByRole("button", { name: "Files", exact: true }).tap();
+      await p.getByRole("treeitem", { name: "retry.ts" }).tap();
+      await expect(p.getByRole("treeitem", { name: "retry.ts" })).toHaveCount(0);
+      await expect(
+        p.getByText("const delay = base * 2 ** attempt", { exact: false }).first(),
+      ).toBeVisible({ timeout: 15_000 });
       const shots = path.join(process.env.TA_VERIFY_EVIDENCE, "code-reviews");
       await p.screenshot({ path: path.join(shots, "phone-files.png") });
       await p.getByRole("button", { name: "Assistant" }).tap();

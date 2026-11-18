@@ -9,7 +9,9 @@ import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { ConfirmProvider } from "@groot/ui/primitives";
 import { ChangesPanel } from "@/pages/code/ChangesPanel";
+import { PullDiffs } from "@/pages/code/PullDiffs";
 import { ReviewPanel } from "@/pages/code/ReviewPanel";
+import type { PullReviewView } from "../../../apps/web/src/shared/api/code";
 import { FileDiff } from "@/pages/code/UnifiedDiff";
 import { clickLine, diffText, line } from "../diff-dom";
 
@@ -272,21 +274,29 @@ describe("a PR review you reviewed before", () => {
     });
     render(
       <ConfirmProvider>
-        <ReviewPanel
-          threadId="review:rv1"
-          baseBranch="main"
+        <PullDiffs
+          review={
+            {
+              id: "rv1",
+              key: "review:rv1",
+              baseRef: "main",
+              headSha: "head2",
+              reviewedSha: "abc1234def",
+            } as PullReviewView
+          }
           refreshKey="1"
-          page
-          pull={{ reviewedSha: "abc1234def" }}
+          diffStyle="unified"
+          collapse={null}
+          drawer={{ open: false, onOpenChange: () => undefined }}
         />
       </ConfirmProvider>,
     );
     await wait(0);
     const scope = screen.getByRole("button", { name: "Changes to show" });
     expect(scope).toHaveTextContent("Since your review");
-    expect(screen.getByRole("navigation", { name: "Changed files" })).not.toHaveTextContent(
-      "old.ts",
-    );
+    expect(screen.getByRole("button", { name: "Fold src/new.ts" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Fold src/old.ts" })).not.toBeInTheDocument();
+    await wait(50);
     expect(shown()).toEqual(["old", "after review"]);
   });
 });

@@ -1,7 +1,7 @@
 /**
  * Dividers that let you give a side panel more or less room on wide screens:
- * the right panel beside a thread (or a PR review's assistant beside its
- * diff), and a review's file list on the left of its diff. Drag one, or
+ * the right panel beside a thread, a review's file list on the left of its
+ * diff, and a PR review's assistant on the far left. Drag one, or
  * focus it and use the arrow keys (Shift for bigger steps, Home and End for
  * the limits). Each width is remembered in this browser on its own; a
  * double-click or Enter goes back to the default.
@@ -49,6 +49,15 @@ const FILE_LIST: PanelLimits = {
   keep: 360,
 };
 
+/** A PR review's assistant, open on the left: the files and diff keep 560px. */
+const ASSISTANT: PanelLimits = {
+  key: "code:assistant-width",
+  side: "left",
+  min: 300,
+  max: 720,
+  keep: 560,
+};
+
 function readWidth(key: string): number | null {
   try {
     const stored = Number(window.localStorage.getItem(key));
@@ -87,13 +96,10 @@ function useStoredWidth(key: string) {
  */
 export function ResizablePane({
   children,
-  narrow = false,
   className,
 }: {
   children: ReactNode;
   className?: string;
-  /** Start narrower than half (a PR review's assistant, beside the diff). */
-  narrow?: boolean;
 }) {
   const [width, setWidth] = useStoredWidth(REVIEW_PANEL.key);
   const panelRef = useRef<HTMLElement>(null);
@@ -114,11 +120,7 @@ export function ResizablePane({
         aria-label="Review panel"
         className={cn(
           "flex w-full min-w-0 flex-col",
-          width === null
-            ? narrow
-              ? "lg:w-[36%] lg:max-w-xl"
-              : "lg:w-[48%] lg:max-w-3xl"
-            : "lg:w-(--review-width) lg:min-w-80",
+          width === null ? "lg:w-[48%] lg:max-w-3xl" : "lg:w-(--review-width) lg:min-w-80",
           className,
         )}
         style={width === null ? undefined : ({ "--review-width": `${width}px` } as CSSProperties)}
@@ -134,7 +136,7 @@ export function ResizablePane({
  * `md`, where the two sit side by side). Below that the list sits above the
  * diff at full width.
  */
-export function FileListPane({ children }: { children: ReactNode }) {
+export function FileListPane({ children, className }: { children: ReactNode; className?: string }) {
   const [width, setWidth] = useStoredWidth(FILE_LIST.key);
   const panelRef = useRef<HTMLElement>(null);
   return (
@@ -146,6 +148,7 @@ export function FileListPane({ children }: { children: ReactNode }) {
         className={cn(
           "border-border flex max-h-56 min-h-0 shrink-0 flex-col border-b md:max-h-none md:border-b-0",
           width === null ? "md:w-72" : "md:w-(--files-width)",
+          className,
         )}
         style={width === null ? undefined : ({ "--files-width": `${width}px` } as CSSProperties)}
       >
@@ -156,6 +159,52 @@ export function FileListPane({ children }: { children: ReactNode }) {
         label="Resize file list"
         controls="code-review-files"
         className="md:block"
+        panelRef={panelRef}
+        width={width}
+        onWidth={setWidth}
+      />
+    </>
+  );
+}
+
+/**
+ * A PR review's assistant when it is open, on the left of the files and the
+ * diff, with its divider (from `lg`; below that it takes the whole screen).
+ */
+export function AssistantPane({
+  children,
+  className,
+  resizable = true,
+}: {
+  children: ReactNode;
+  className?: string;
+  /** Off while the pane shows only on a phone (folded on wide screens). */
+  resizable?: boolean;
+}) {
+  const [width, setWidth] = useStoredWidth(ASSISTANT.key);
+  const panelRef = useRef<HTMLElement>(null);
+  return (
+    <>
+      <section
+        ref={panelRef}
+        id="code-review-assistant"
+        aria-label="Assistant"
+        className={cn(
+          "flex w-full min-w-0 shrink-0 flex-col",
+          width === null ? "lg:w-96" : "lg:w-(--assistant-width)",
+          className,
+        )}
+        style={
+          width === null ? undefined : ({ "--assistant-width": `${width}px` } as CSSProperties)
+        }
+      >
+        {children}
+      </section>
+      <PanelResizer
+        limits={ASSISTANT}
+        label="Resize assistant"
+        controls="code-review-assistant"
+        className={resizable ? "lg:block" : ""}
         panelRef={panelRef}
         width={width}
         onWidth={setWidth}
