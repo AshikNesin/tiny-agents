@@ -104,6 +104,12 @@ export interface BrowserSession {
   snapshot(scope?: string): Promise<string>;
   /** The visible text of the page, or of the element `scope` names. */
   text?(scope?: string): Promise<string>;
+  /**
+   * Wait until `text` is visible on the page (or, with `gone`, until it is
+   * not), up to `timeoutMs`; without `text`, just wait `timeoutMs`. Resolves
+   * false when the time ran out first.
+   */
+  waitFor?(wait: { text?: string; gone?: boolean; timeoutMs: number }): Promise<boolean>;
   /** The top-level page's origin as the live document reports it ("null" for about:blank). */
   origin?(): Promise<string>;
   /**

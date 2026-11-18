@@ -1312,7 +1312,7 @@ describe("one declaration per tool (3.2)", () => {
           "tasks": 0,
           "tools": [
             {
-              "description": "Open a public http(s) URL in the browser. Private and local addresses are refused. Returns the final URL (after redirects) and the HTTP status.",
+              "description": "Open a public http(s) URL in the browser. Private and local addresses are refused. Returns the final URL (after redirects), the HTTP status and the first part of the page's snapshot. To only read a page's content, web_fetch (when you have it) is faster and cheaper; the browser is for pages you interact with, sign in to, or that need scripts.",
               "fields": [
                 "description",
                 "execute",
@@ -1338,7 +1338,7 @@ describe("one declaration per tool (3.2)", () => {
               "replay": "unsafe",
             },
             {
-              "description": "Snapshot the page as an accessibility tree: headings, text, and every control with a ref (e12, or f1e12 inside a frame) and every link with its [url=…]. Clicking and typing use these refs. Take a new snapshot whenever the page may have changed. On a long page, pass \`query\` to keep only the lines with those words, or \`ref\` (a region such as main, a form or a dialog) to snapshot just that part. To read an article or results as text, browser_read_text is smaller.",
+              "description": "Snapshot the page as an accessibility tree: headings, text, and every control with a ref (e12, or f1e12 inside a frame) and every link with its [url=…]. Clicking and typing use these refs. Actions return what they changed, so take a new snapshot only to read the whole page again. On a long page, pass \`query\` to keep only the lines with those words, or \`ref\` (a region such as main, a form or a dialog) to snapshot just that part. To read an article or results as text, browser_read_text is smaller.",
               "fields": [
                 "description",
                 "execute",
@@ -1419,7 +1419,7 @@ describe("one declaration per tool (3.2)", () => {
               "replay": "unsafe",
             },
             {
-              "description": "Click an element by its ref from the last snapshot. The element is scrolled into view first.",
+              "description": "Click an element by its ref from the last snapshot. The element is scrolled into view first. Returns what changed on the page, or the new page's first part if the click opened one.",
               "fields": [
                 "description",
                 "execute",
@@ -1552,6 +1552,39 @@ describe("one declaration per tool (3.2)", () => {
                 "type": "object",
               },
               "replay": "unsafe",
+            },
+            {
+              "description": "Wait until text shows on the page (search results, a confirmation), or with gone: true until it goes away (a spinner, "Loading…"). Without text, pause for the given seconds. Returns what changed on the page meanwhile. Use it instead of snapshotting again and again while a page loads.",
+              "fields": [
+                "description",
+                "execute",
+                "name",
+                "parameters",
+                "replay",
+              ],
+              "gated": false,
+              "name": "browser_wait_for",
+              "parameters": {
+                "properties": {
+                  "gone": {
+                    "description": "Wait for the text to go away instead",
+                    "type": "boolean",
+                  },
+                  "seconds": {
+                    "description": "Longest wait; default 10, or 2 without text",
+                    "maximum": 30,
+                    "minimum": 1,
+                    "type": "integer",
+                  },
+                  "text": {
+                    "maxLength": 200,
+                    "minLength": 1,
+                    "type": "string",
+                  },
+                },
+                "type": "object",
+              },
+              "replay": "safe",
             },
             {
               "description": "Scroll the page up or down.",
@@ -1621,7 +1654,7 @@ describe("one declaration per tool (3.2)", () => {
         "extensionKeys": "name,tools",
         "gates": {},
         "info": {
-          "description": "A real browser the bot drives: navigate, read, click, type, scroll, go back.",
+          "description": "A real browser the bot drives: navigate, read, click, type, scroll, wait, go back.",
           "id": "browser",
           "kind": "toolkit",
           "name": "Browser",
@@ -1671,6 +1704,13 @@ describe("one declaration per tool (3.2)", () => {
               "name": "browser_press_key",
             },
             {
+              "askLabel": "wait for the page",
+              "description": "Wait for text to appear or go away.",
+              "label": "Waited",
+              "name": "browser_wait_for",
+              "readOnly": true,
+            },
+            {
               "askLabel": "scroll the page",
               "description": "Scroll the page up or down.",
               "label": "Scrolled",
@@ -1694,6 +1734,7 @@ describe("one declaration per tool (3.2)", () => {
           "name,label,askLabel,description",
           "name,label,askLabel,description",
           "name,label,askLabel,description",
+          "name,label,askLabel,description,readOnly",
           "name,label,askLabel,description",
           "name,label,askLabel,description,readOnly",
         ],
@@ -1711,7 +1752,7 @@ describe("one declaration per tool (3.2)", () => {
           "tasks": 0,
           "tools": [
             {
-              "description": "Open a public http(s) URL in the browser. Private and local addresses are refused. Returns the final URL (after redirects) and the HTTP status.",
+              "description": "Open a public http(s) URL in the browser. Private and local addresses are refused. Returns the final URL (after redirects), the HTTP status and the first part of the page's snapshot. To only read a page's content, web_fetch (when you have it) is faster and cheaper; the browser is for pages you interact with, sign in to, or that need scripts.",
               "fields": [
                 "description",
                 "execute",
@@ -1737,7 +1778,7 @@ describe("one declaration per tool (3.2)", () => {
               "replay": "unsafe",
             },
             {
-              "description": "Snapshot the page as an accessibility tree: headings, text, and every control with a ref (e12, or f1e12 inside a frame) and every link with its [url=…]. Clicking and typing use these refs. Take a new snapshot whenever the page may have changed. On a long page, pass \`query\` to keep only the lines with those words, or \`ref\` (a region such as main, a form or a dialog) to snapshot just that part. To read an article or results as text, browser_read_text is smaller.",
+              "description": "Snapshot the page as an accessibility tree: headings, text, and every control with a ref (e12, or f1e12 inside a frame) and every link with its [url=…]. Clicking and typing use these refs. Actions return what they changed, so take a new snapshot only to read the whole page again. On a long page, pass \`query\` to keep only the lines with those words, or \`ref\` (a region such as main, a form or a dialog) to snapshot just that part. To read an article or results as text, browser_read_text is smaller.",
               "fields": [
                 "description",
                 "execute",
@@ -1818,7 +1859,7 @@ describe("one declaration per tool (3.2)", () => {
               "replay": "unsafe",
             },
             {
-              "description": "Click an element by its ref from the last snapshot. The element is scrolled into view first.",
+              "description": "Click an element by its ref from the last snapshot. The element is scrolled into view first. Returns what changed on the page, or the new page's first part if the click opened one.",
               "fields": [
                 "description",
                 "execute",
@@ -1951,6 +1992,39 @@ describe("one declaration per tool (3.2)", () => {
                 "type": "object",
               },
               "replay": "unsafe",
+            },
+            {
+              "description": "Wait until text shows on the page (search results, a confirmation), or with gone: true until it goes away (a spinner, "Loading…"). Without text, pause for the given seconds. Returns what changed on the page meanwhile. Use it instead of snapshotting again and again while a page loads.",
+              "fields": [
+                "description",
+                "execute",
+                "name",
+                "parameters",
+                "replay",
+              ],
+              "gated": false,
+              "name": "browser_wait_for",
+              "parameters": {
+                "properties": {
+                  "gone": {
+                    "description": "Wait for the text to go away instead",
+                    "type": "boolean",
+                  },
+                  "seconds": {
+                    "description": "Longest wait; default 10, or 2 without text",
+                    "maximum": 30,
+                    "minimum": 1,
+                    "type": "integer",
+                  },
+                  "text": {
+                    "maxLength": 200,
+                    "minLength": 1,
+                    "type": "string",
+                  },
+                },
+                "type": "object",
+              },
+              "replay": "safe",
             },
             {
               "description": "Scroll the page up or down.",
@@ -2099,7 +2173,7 @@ describe("one declaration per tool (3.2)", () => {
           "browser_fill_secret": "plan,settled",
         },
         "info": {
-          "description": "A real browser the bot drives: navigate, read, click, type, scroll, go back.",
+          "description": "A real browser the bot drives: navigate, read, click, type, scroll, wait, go back.",
           "id": "browser",
           "kind": "toolkit",
           "name": "Browser",
@@ -2149,6 +2223,13 @@ describe("one declaration per tool (3.2)", () => {
               "name": "browser_press_key",
             },
             {
+              "askLabel": "wait for the page",
+              "description": "Wait for text to appear or go away.",
+              "label": "Waited",
+              "name": "browser_wait_for",
+              "readOnly": true,
+            },
+            {
               "askLabel": "scroll the page",
               "description": "Scroll the page up or down.",
               "label": "Scrolled",
@@ -2186,6 +2267,7 @@ describe("one declaration per tool (3.2)", () => {
           "name,label,askLabel,description",
           "name,label,askLabel,description",
           "name,label,askLabel,description",
+          "name,label,askLabel,description,readOnly",
           "name,label,askLabel,description",
           "name,label,askLabel,description,readOnly",
           "name,label,askLabel,description,vault",
@@ -2205,7 +2287,7 @@ describe("one declaration per tool (3.2)", () => {
           "tasks": 0,
           "tools": [
             {
-              "description": "Open a public http(s) URL in the browser. Private and local addresses are refused. Returns the final URL (after redirects) and the HTTP status.",
+              "description": "Open a public http(s) URL in the browser. Private and local addresses are refused. Returns the final URL (after redirects), the HTTP status and the first part of the page's snapshot. To only read a page's content, web_fetch (when you have it) is faster and cheaper; the browser is for pages you interact with, sign in to, or that need scripts.",
               "fields": [
                 "description",
                 "execute",
@@ -2231,7 +2313,7 @@ describe("one declaration per tool (3.2)", () => {
               "replay": "unsafe",
             },
             {
-              "description": "Snapshot the page as an accessibility tree: headings, text, and every control with a ref (e12, or f1e12 inside a frame) and every link with its [url=…]. Clicking and typing use these refs. Take a new snapshot whenever the page may have changed. On a long page, pass \`query\` to keep only the lines with those words, or \`ref\` (a region such as main, a form or a dialog) to snapshot just that part. To read an article or results as text, browser_read_text is smaller.",
+              "description": "Snapshot the page as an accessibility tree: headings, text, and every control with a ref (e12, or f1e12 inside a frame) and every link with its [url=…]. Clicking and typing use these refs. Actions return what they changed, so take a new snapshot only to read the whole page again. On a long page, pass \`query\` to keep only the lines with those words, or \`ref\` (a region such as main, a form or a dialog) to snapshot just that part. To read an article or results as text, browser_read_text is smaller.",
               "fields": [
                 "description",
                 "execute",
@@ -2312,7 +2394,7 @@ describe("one declaration per tool (3.2)", () => {
               "replay": "unsafe",
             },
             {
-              "description": "Click an element by its ref from the last snapshot. The element is scrolled into view first.",
+              "description": "Click an element by its ref from the last snapshot. The element is scrolled into view first. Returns what changed on the page, or the new page's first part if the click opened one.",
               "fields": [
                 "description",
                 "execute",
@@ -2445,6 +2527,39 @@ describe("one declaration per tool (3.2)", () => {
                 "type": "object",
               },
               "replay": "unsafe",
+            },
+            {
+              "description": "Wait until text shows on the page (search results, a confirmation), or with gone: true until it goes away (a spinner, "Loading…"). Without text, pause for the given seconds. Returns what changed on the page meanwhile. Use it instead of snapshotting again and again while a page loads.",
+              "fields": [
+                "description",
+                "execute",
+                "name",
+                "parameters",
+                "replay",
+              ],
+              "gated": false,
+              "name": "browser_wait_for",
+              "parameters": {
+                "properties": {
+                  "gone": {
+                    "description": "Wait for the text to go away instead",
+                    "type": "boolean",
+                  },
+                  "seconds": {
+                    "description": "Longest wait; default 10, or 2 without text",
+                    "maximum": 30,
+                    "minimum": 1,
+                    "type": "integer",
+                  },
+                  "text": {
+                    "maxLength": 200,
+                    "minLength": 1,
+                    "type": "string",
+                  },
+                },
+                "type": "object",
+              },
+              "replay": "safe",
             },
             {
               "description": "Scroll the page up or down.",
@@ -2638,7 +2753,7 @@ describe("one declaration per tool (3.2)", () => {
         "extensionKeys": "name,tools",
         "gates": {},
         "info": {
-          "description": "A real browser the bot drives: navigate, read, click, type, scroll, go back.",
+          "description": "A real browser the bot drives: navigate, read, click, type, scroll, wait, go back.",
           "id": "browser",
           "kind": "toolkit",
           "name": "Browser",
@@ -2688,6 +2803,13 @@ describe("one declaration per tool (3.2)", () => {
               "name": "browser_press_key",
             },
             {
+              "askLabel": "wait for the page",
+              "description": "Wait for text to appear or go away.",
+              "label": "Waited",
+              "name": "browser_wait_for",
+              "readOnly": true,
+            },
+            {
               "askLabel": "scroll the page",
               "description": "Scroll the page up or down.",
               "label": "Scrolled",
@@ -2718,6 +2840,7 @@ describe("one declaration per tool (3.2)", () => {
           "name,label,askLabel,description",
           "name,label,askLabel,description",
           "name,label,askLabel,description",
+          "name,label,askLabel,description,readOnly",
           "name,label,askLabel,description",
           "name,label,askLabel,description,readOnly",
           "name,label,askLabel,description,readOnly",
@@ -2737,7 +2860,7 @@ describe("one declaration per tool (3.2)", () => {
             "tasks": 0,
             "tools": [
               {
-                "description": "Open a public http(s) URL in the browser. Private and local addresses are refused. Returns the final URL (after redirects) and the HTTP status.",
+                "description": "Open a public http(s) URL in the browser. Private and local addresses are refused. Returns the final URL (after redirects), the HTTP status and the first part of the page's snapshot. To only read a page's content, web_fetch (when you have it) is faster and cheaper; the browser is for pages you interact with, sign in to, or that need scripts.",
                 "fields": [
                   "description",
                   "execute",
@@ -2763,7 +2886,7 @@ describe("one declaration per tool (3.2)", () => {
                 "replay": "unsafe",
               },
               {
-                "description": "Snapshot the page as an accessibility tree: headings, text, and every control with a ref (e12, or f1e12 inside a frame) and every link with its [url=…]. Clicking and typing use these refs. Take a new snapshot whenever the page may have changed. On a long page, pass \`query\` to keep only the lines with those words, or \`ref\` (a region such as main, a form or a dialog) to snapshot just that part. To read an article or results as text, browser_read_text is smaller.",
+                "description": "Snapshot the page as an accessibility tree: headings, text, and every control with a ref (e12, or f1e12 inside a frame) and every link with its [url=…]. Clicking and typing use these refs. Actions return what they changed, so take a new snapshot only to read the whole page again. On a long page, pass \`query\` to keep only the lines with those words, or \`ref\` (a region such as main, a form or a dialog) to snapshot just that part. To read an article or results as text, browser_read_text is smaller.",
                 "fields": [
                   "description",
                   "execute",
@@ -2844,7 +2967,7 @@ describe("one declaration per tool (3.2)", () => {
                 "replay": "unsafe",
               },
               {
-                "description": "Click an element by its ref from the last snapshot. The element is scrolled into view first.",
+                "description": "Click an element by its ref from the last snapshot. The element is scrolled into view first. Returns what changed on the page, or the new page's first part if the click opened one.",
                 "fields": [
                   "description",
                   "execute",
@@ -2977,6 +3100,39 @@ describe("one declaration per tool (3.2)", () => {
                   "type": "object",
                 },
                 "replay": "unsafe",
+              },
+              {
+                "description": "Wait until text shows on the page (search results, a confirmation), or with gone: true until it goes away (a spinner, "Loading…"). Without text, pause for the given seconds. Returns what changed on the page meanwhile. Use it instead of snapshotting again and again while a page loads.",
+                "fields": [
+                  "description",
+                  "execute",
+                  "name",
+                  "parameters",
+                  "replay",
+                ],
+                "gated": false,
+                "name": "browser_wait_for",
+                "parameters": {
+                  "properties": {
+                    "gone": {
+                      "description": "Wait for the text to go away instead",
+                      "type": "boolean",
+                    },
+                    "seconds": {
+                      "description": "Longest wait; default 10, or 2 without text",
+                      "maximum": 30,
+                      "minimum": 1,
+                      "type": "integer",
+                    },
+                    "text": {
+                      "maxLength": 200,
+                      "minLength": 1,
+                      "type": "string",
+                    },
+                  },
+                  "type": "object",
+                },
+                "replay": "safe",
               },
               {
                 "description": "Scroll the page up or down.",
@@ -3249,7 +3405,7 @@ describe("one declaration per tool (3.2)", () => {
             "browser_fill_secret": "plan,settled",
           },
           "info": {
-            "description": "A real browser the bot drives: navigate, read, click, type, scroll, go back.",
+            "description": "A real browser the bot drives: navigate, read, click, type, scroll, wait, go back.",
             "id": "browser",
             "kind": "toolkit",
             "name": "Browser",
@@ -3299,6 +3455,13 @@ describe("one declaration per tool (3.2)", () => {
                 "name": "browser_press_key",
               },
               {
+                "askLabel": "wait for the page",
+                "description": "Wait for text to appear or go away.",
+                "label": "Waited",
+                "name": "browser_wait_for",
+                "readOnly": true,
+              },
+              {
                 "askLabel": "scroll the page",
                 "description": "Scroll the page up or down.",
                 "label": "Scrolled",
@@ -3343,6 +3506,7 @@ describe("one declaration per tool (3.2)", () => {
             "name,label,askLabel,description",
             "name,label,askLabel,description",
             "name,label,askLabel,description",
+            "name,label,askLabel,description,readOnly",
             "name,label,askLabel,description",
             "name,label,askLabel,description,readOnly",
             "name,label,askLabel,description,vault",

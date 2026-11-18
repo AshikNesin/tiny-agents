@@ -73,7 +73,8 @@ const UNNAMED_REST = /^((?: \[[^\]]*\])*)(:.*)?$/;
 /**
  * The snapshot with unnamed wrappers unwrapped (their children dedented one
  * level), bare structural leaves dropped, refs kept only on controls,
- * clickable nodes and scopes (`REF_ROLES`), `[cursor=pointer]` removed, and
+ * clickable nodes and scopes (`REF_ROLES`), `[cursor=pointer]` and
+ * `[active]` removed, and
  * a link's URL moved onto its line (`[url=…]`, cut when long). Text is kept
  * as it was.
  */
@@ -83,7 +84,9 @@ export function compactSnapshot(snapshot: string): string {
   const unwrapped: number[] = [];
   for (const raw of snapshot.split("\n")) {
     const clickable = raw.includes(" [cursor=pointer]");
-    let line = raw.replaceAll(" [cursor=pointer]", "");
+    // `[active]` marks focus, which moves on every click and type: kept, it
+    // made each action's change show two lines that only lost or gained it.
+    let line = raw.replaceAll(" [cursor=pointer]", "").replace(" [active]", "");
     const indent = indentOf(line);
     while (unwrapped.length > 0 && indent <= unwrapped[unwrapped.length - 1]) unwrapped.pop();
     const node = NODE.exec(line);
@@ -153,6 +156,8 @@ export function pageWindow(
   offset: number,
   limit: number,
   hint: string,
+  /** Who reads on: the same tool ("again"), or another one named here. */
+  via = "again",
 ): { text: string; nextOffset: number | null } {
   const start = Math.min(Math.max(0, offset), text.length);
   if (start === 0 && text.length <= limit) return { text, nextOffset: null };
@@ -167,7 +172,7 @@ export function pageWindow(
   const next = text[end] === "\n" ? end + 1 : end;
   const rest = text.length - next;
   return {
-    text: `${head}${body}\n…(${rest} more characters. Call again with offset ${next} to read on${hint})`,
+    text: `${head}${body}\n…(${rest} more characters. Call ${via} with offset ${next} to read on${hint})`,
     nextOffset: next,
   };
 }
@@ -180,4 +185,47 @@ export function tidyText(text: string): string {
     .join("\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+/**
+ * What an action changed on the page: the lines of `after` that `before`
+ * did not have, each under the nearest line above it that stayed (so the
+ * model can tell where), and how many lines went. Compared as multisets of
+ * lines, so a list that grew by one row shows one row, not the whole list.
+ * Refs are stable across snapshots of one page, so an element that only
+ * changed state (`[checked]`, a new value) shows as that one line.
+ */
+export function snapshotDiff(
+  before: string,
+  after: string,
+): { added: number; removed: number; text: string } {
+  const remaining = new Map<string, number>();
+  for (const line of before.split("\n")) remaining.set(line, (remaining.get(line) ?? 0) + 1);
+  const lines = after.split("\n");
+  const isNew = lines.map((line) => {
+    const left = remaining.get(line) ?? 0;
+    if (left === 0) return true;
+    remaining.set(line, left - 1);
+    return false;
+  });
+  let removed = 0;
+  for (const left of remaining.values()) removed += left;
+  const out: string[] = [];
+  let lastContext = -1;
+  lines.forEach((line, i) => {
+    if (!isNew[i]) return;
+    // The nearest unchanged ancestor, once per run under it.
+    const indent = indentOf(line);
+    for (let j = i - 1; j >= 0; j--) {
+      if (indentOf(lines[j]) < indent) {
+        if (!isNew[j] && j !== lastContext) {
+          out.push(`  ${lines[j]}`);
+          lastContext = j;
+        }
+        break;
+      }
+    }
+    out.push(`+ ${line}`);
+  });
+  return { added: isNew.filter(Boolean).length, removed, text: out.join("\n") };
 }
