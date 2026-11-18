@@ -202,7 +202,7 @@ export function ConversationView({
   inProject?: boolean;
   projectName?: string;
   /** Its open pull request, as the list knows it. */
-  pr?: { number: number; loop: string } | null;
+  pr?: { number: number; loop: string; url: string } | null;
   /** The thread list is folded away: leave room for Show sidebar. */
   sidebarHidden?: boolean;
   /** Shown as a pane beside a page that has its own header (a PR review's assistant). */
@@ -473,6 +473,25 @@ export function ConversationView({
                 </span>
               )}
             </button>
+          )}
+          {pr && (
+            // The PR on GitHub in one click; the toggle beside it opens the panel.
+            <Button
+              asChild
+              variant="ghost"
+              size="icon-sm"
+              className="text-muted-foreground -ml-1.5"
+            >
+              <a
+                href={pr.url}
+                target="_blank"
+                rel="noreferrer"
+                title="Open on GitHub"
+                aria-label={`Open pull request #${pr.number} on GitHub`}
+              >
+                <ExternalLink />
+              </a>
+            </Button>
           )}
         </header>
       )}
