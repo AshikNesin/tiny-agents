@@ -113,7 +113,12 @@ describe("a thread's Review page", () => {
   it("offers a project thread's pull request on its own tab", async () => {
     const user = userEvent.setup();
     useCodeStore.setState({
-      threads: [thread({ projectId: "p1", pr: { number: 12, loop: "needs_input" } })],
+      threads: [
+        thread({
+          projectId: "p1",
+          pr: { number: 12, loop: "needs_input", url: "https://github.com/acme/web/pull/12" },
+        }),
+      ],
     });
     renderAt("/code/shelley%3Ac1/review");
     await user.click(await screen.findByRole("tab", { name: "Pull request #12" }));
@@ -128,7 +133,12 @@ describe("the right panel", () => {
     useCodeStore.setState({
       harnesses: [shelley],
       statuses: {},
-      threads: [thread({ projectId: "p1", pr: { number: 12, loop: "green" } })],
+      threads: [
+        thread({
+          projectId: "p1",
+          pr: { number: 12, loop: "green", url: "https://github.com/acme/web/pull/12" },
+        }),
+      ],
     });
   });
 
@@ -152,6 +162,19 @@ describe("the right panel", () => {
     expect(screen.queryByRole("region", { name: "Review panel" })).toBeNull();
     await user.click(screen.getByRole("button", { name: "Review panel" }));
     expect(screen.getByTestId("where")).toHaveTextContent("/code/shelley%3Ac1/pr");
+  });
+
+  it("opens the pull request on GitHub straight from the header", async () => {
+    const url = "https://github.com/acme/web/pull/12";
+    useCodeStore.setState({
+      threads: [thread({ projectId: "p1", pr: { number: 12, loop: "green", url } })],
+    });
+    renderAt("/code/shelley%3Ac1");
+    const link = await screen.findByRole("link", { name: "Open pull request #12 on GitHub" });
+    expect(link).toHaveAttribute("href", url);
+    expect(link).toHaveAttribute("target", "_blank");
+    // The panel toggle is still there beside it.
+    expect(screen.getByRole("button", { name: "Review panel" })).toBeInTheDocument();
   });
 
   describe("resizing", () => {

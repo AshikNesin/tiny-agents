@@ -42,7 +42,7 @@ export interface ThreadSummary {
   /** App-decorated: the Code project it was started in (issue #297). */
   projectId?: string | null;
   /** App-decorated: its open pull request and Auto-fix loop state. */
-  pr?: { number: number; loop: string } | null;
+  pr?: { number: number; loop: string; url: string } | null;
   /** App-decorated: the PR review it is the assistant of (issue #345). */
   review?: { id: string; number: number } | null;
 }

@@ -104,10 +104,17 @@ describe("Threads screen sections", () => {
   it("sorts a project's threads into Working, Needs you, In review and Done, newest first", () => {
     const sections = statusSections([
       row("done-old", { updatedAt: "2026-11-01T00:00:00Z" }),
-      row("merged", { pr: { number: 7, loop: "merged" }, updatedAt: "2026-11-02T00:00:00Z" }),
+      row("merged", {
+        pr: { number: 7, loop: "merged", url: "https://github.com/acme/web/pull/7" },
+        updatedAt: "2026-11-02T00:00:00Z",
+      }),
       row("running", { working: true }),
-      row("blocked", { pr: { number: 9, loop: "needs_input" } }),
-      row("review", { pr: { number: 8, loop: "green" } }),
+      row("blocked", {
+        pr: { number: 9, loop: "needs_input", url: "https://github.com/acme/web/pull/9" },
+      }),
+      row("review", {
+        pr: { number: 8, loop: "green", url: "https://github.com/acme/web/pull/8" },
+      }),
       row("sub", { parentId: "shelley:running" }),
     ]);
     expect(sections.map((s) => [s.key, s.nodes.map((n) => n.row.nativeId)])).toEqual([
