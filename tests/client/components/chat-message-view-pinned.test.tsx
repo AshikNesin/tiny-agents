@@ -19,6 +19,13 @@ import { ChatMessageView, PeerIncomingCard } from "@/components/ChatMessageView"
 import type { ChatMessage, ChatToolCall } from "@/lib/chat-types";
 import { OwnerActionsProvider, type OwnerActions } from "@/lib/owner-actions";
 import { markup, outline } from "../dom-outline";
+import { AppQueryProvider } from "../query-provider";
+
+// The credential card's form loads its request; pinned while it loads.
+vi.mock("@/lib/vault-api", () => ({
+  apiError: (_error: unknown, fallback: string) => fallback,
+  vaultApi: { request: () => new Promise(() => {}) },
+}));
 
 vi.mock("streamdown", () => ({
   Streamdown: ({ children }: { children?: React.ReactNode }) => (
@@ -73,9 +80,11 @@ function mount(msg: ChatMessage, owner: OwnerActions | null = actions) {
     />
   );
   return render(
-    <MemoryRouter>
-      {owner ? <OwnerActionsProvider actions={owner}>{view}</OwnerActionsProvider> : view}
-    </MemoryRouter>,
+    <AppQueryProvider>
+      <MemoryRouter>
+        {owner ? <OwnerActionsProvider actions={owner}>{view}</OwnerActionsProvider> : view}
+      </MemoryRouter>
+    </AppQueryProvider>,
   );
 }
 
@@ -457,16 +466,18 @@ describe("ChatMessageView, pinned", () => {
     const running = message({ status: "streaming", reasoning: "Let me think", createdAt: NOW });
     const { container, rerender } = mount(running);
     rerender(
-      <MemoryRouter>
-        <OwnerActionsProvider actions={actions}>
-          <ChatMessageView
-            message={{ ...running, status: "done", text: "Done" }}
-            botName="Chief"
-            toolLabels={toolLabels}
-            toolAskLabels={toolAskLabels}
-          />
-        </OwnerActionsProvider>
-      </MemoryRouter>,
+      <AppQueryProvider>
+        <MemoryRouter>
+          <OwnerActionsProvider actions={actions}>
+            <ChatMessageView
+              message={{ ...running, status: "done", text: "Done" }}
+              botName="Chief"
+              toolLabels={toolLabels}
+              toolAskLabels={toolAskLabels}
+            />
+          </OwnerActionsProvider>
+        </MemoryRouter>
+      </AppQueryProvider>,
     );
     pin(container);
     await user.click(screen.getByRole("button", { name: /Reasoning/ }));

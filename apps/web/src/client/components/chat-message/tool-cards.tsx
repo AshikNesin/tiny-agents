@@ -4,7 +4,6 @@
  */
 import { useState } from "react";
 import { Hand, KeyRound } from "lucide-react";
-import { Link } from "react-router-dom";
 import { Button } from "@groot/ui/button";
 import type { ChatToolCall } from "../../lib/chat-types";
 import {
@@ -14,6 +13,8 @@ import {
   type ToolLabelCatalog,
 } from "../../lib/tool-call-text";
 import { type OwnerActions, showComputerPanel, useOwnerDecision } from "../../lib/owner-actions";
+import { useCredentialRequest } from "../../queries/vault";
+import { CredentialRequestForm } from "../vault/CredentialRequestForm";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "../ui/item";
 
 /**
@@ -141,29 +142,36 @@ export function VaultApprovalCard({
   );
 }
 
-/** A credential request (issue #56): opens the sheet where the owner types. */
+/**
+ * A credential request (issue #56), filled right here: what the owner types
+ * goes to the server and into the bot's page, never into the chat.
+ */
 export function CredentialRequestCard({
   call,
   botName,
 }: {
-  call: ChatToolCall & { credentials: NonNullable<ChatToolCall["credentials"]> };
+  call: ChatToolCall & {
+    taskId: number;
+    credentials: NonNullable<ChatToolCall["credentials"]>;
+  };
   botName: string;
 }) {
   const text = credentialRequestText(call, botName);
+  const { data: request, loadError } = useCredentialRequest(call.taskId);
   return (
-    <Item className="border-primary/40 bg-primary/5 my-1 max-w-lg">
-      <ItemContent>
+    <Item className="border-primary/40 bg-primary/5 my-1 max-w-lg" data-testid="credential-card">
+      <ItemContent className="gap-3">
         <ItemTitle>
           <KeyRound className="size-4" />
           {text.title}
         </ItemTitle>
-        <ItemDescription>{text.description}</ItemDescription>
+        <ItemDescription>{call.credentials.purpose}</ItemDescription>
+        {request ? (
+          <CredentialRequestForm taskId={call.taskId} request={request} />
+        ) : (
+          <ItemDescription>{loadError ?? "Loading…"}</ItemDescription>
+        )}
       </ItemContent>
-      <ItemActions>
-        <Button size="xs" asChild>
-          <Link to={`/vault/requests/${call.taskId}`}>Open</Link>
-        </Button>
-      </ItemActions>
     </Item>
   );
 }

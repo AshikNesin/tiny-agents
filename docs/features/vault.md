@@ -168,11 +168,14 @@ such as `username`, `email` or `postal-code` — no free text, so the form
 can't become a side channel), and waits like an approval. One request may be
 open per chat, three per chat per hour, each for 10 minutes.
 
-The chat shows a card that opens `/vault/requests/:taskId`: the **origin
-prominently**, the bot's title and purpose, masked inputs with `autocomplete`
-(so the owner's own password manager can fill them), a **Securely save to
-vault** switch, **Continue**, **Live browser** and **Cancel**. On submit the
-server re-checks the page's origin, fills over CDP, optionally saves a login
+The chat shows the form right in its card (the request's link,
+`/vault/requests/:taskId`, opens that chat on it): the **origin**, the bot's
+purpose, masked inputs with `autocomplete` (so the owner's own password
+manager can fill them), a **Securely save to vault** switch, **Continue** and
+**Cancel**. What the owner types goes to the submit route, never into the
+chat. On submit the server re-checks the page's origin, fills over CDP
+(submitting a sign-in's email step to reach its password step), optionally
+saves a login
 or card (**never a one-time code or a security code**), audits the keys
 filled and resumes the bot with `{status, filled_fields, saved_item_handle?}`.
 Typed values exist only in that request's memory.

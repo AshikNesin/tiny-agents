@@ -96,7 +96,7 @@ describe("viewOf: Owner waits", () => {
     [
       "a credential request",
       call("awaiting_credentials", { credentials }),
-      { waitingOn: "credentials", card: "credentials" },
+      { waitingOn: "credentials", card: "credentials", anchor: "credentials:7" },
     ],
     [
       "a credential request without its form",

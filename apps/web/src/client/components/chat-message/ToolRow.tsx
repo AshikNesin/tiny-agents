@@ -147,10 +147,12 @@ export function ToolRow({
       );
     case "credentials":
       return (
-        <CredentialRequestCard
-          call={{ ...call, credentials: call.credentials! }}
-          botName={botName}
-        />
+        <div data-waiting={view.anchor}>
+          <CredentialRequestCard
+            call={{ ...call, taskId: call.taskId!, credentials: call.credentials! }}
+            botName={botName}
+          />
+        </div>
       );
     case "takeover":
       return (
