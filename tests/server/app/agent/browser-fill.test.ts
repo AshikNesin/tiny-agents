@@ -39,6 +39,19 @@ const CHECKOUT = `<!doctype html><form>
   <input name="holder" placeholder="Name on card">
 </form>`;
 
+/** Amazon's sign-in as amazon.in serves it: the email step first, with an
+ * `autocomplete="webauthn"` email field and a hidden password autofill
+ * hint; the password on a page of its own after submitting. */
+const EMAIL_STEP = `<!doctype html><form action="/password" method="get">
+  <input type="text" name="email" id="ap_email_login" autocomplete="webauthn">
+  <input type="password" name="password" id="hint" style="display:none">
+  <input type="submit" value="Continue">
+</form>`;
+
+const PASSWORD_STEP = `<!doctype html><form action="/done" method="get">
+  <input type="password" name="password" id="ap_password" autocomplete="current-password">
+</form>`;
+
 const OTP = `<!doctype html><form><input name="otp" inputmode="numeric" placeholder="Verification code"></form>`;
 
 describe.skipIf(!executable)("vault fills in the page", () => {
@@ -46,10 +59,22 @@ describe.skipIf(!executable)("vault fills in the page", () => {
   let server: Server;
   let origin: string;
   let page: Page;
+  const submitted: string[] = [];
 
   beforeAll(async () => {
     server = createServer((req, res) => {
-      const body = req.url === "/checkout" ? CHECKOUT : req.url === "/otp" ? OTP : LOGIN;
+      const path = (req.url ?? "/").split("?")[0];
+      if (path === "/password") submitted.push(req.url ?? "");
+      const body =
+        path === "/checkout"
+          ? CHECKOUT
+          : path === "/otp"
+            ? OTP
+            : path === "/email"
+              ? EMAIL_STEP
+              : path === "/password"
+                ? PASSWORD_STEP
+                : LOGIN;
       res.writeHead(200, { "content-type": "text/html" }).end(body);
     });
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -145,5 +170,21 @@ describe.skipIf(!executable)("vault fills in the page", () => {
       ],
     });
     expect(result.filled).toEqual([]);
+  });
+
+  it("fills a two-step sign-in: the email, submits it, then the password on the next page", async () => {
+    await page.goto(`${origin}/email`);
+    const result = await fillSecretFields(page, {
+      origin,
+      steps: true,
+      fields: [
+        { key: "email", autocomplete: "username", value: new SecretValue("ana@example.com") },
+        { key: "password", autocomplete: "current-password", value: new SecretValue("canary-4") },
+      ],
+    });
+    expect(result).toEqual({ filled: ["email", "password"] });
+    expect(submitted).toEqual(["/password?email=ana%40example.com&password="]);
+    expect(new URL(page.url()).pathname).toBe("/password");
+    expect(await page.inputValue("#ap_password")).toBe("canary-4");
   });
 });

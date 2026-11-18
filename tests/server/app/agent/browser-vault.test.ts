@@ -312,6 +312,23 @@ describe("request_credentials", () => {
     await expect(runtime.credentialRequest(waiting.taskId!)).rejects.toThrow(/not waiting/);
   }, 20_000);
 
+  it("tells the bot which fields the page never showed (a sign-in stopped between steps)", async () => {
+    const page = fakePage("https://hi.nesin.io");
+    const { runtime, ref, events } = await open(page, [["request_credentials", ask]]);
+    await runtime.submit(ref, { requestId: "r1", text: "check umami" });
+    const waiting = await until(
+      () =>
+        lastCall(events, "request_credentials")?.status === "awaiting_credentials"
+          ? lastCall(events, "request_credentials")
+          : undefined,
+      "credential request",
+    );
+    await runtime.settleCredentialRequest(waiting.taskId!, { status: "filled", filled: ["email"] });
+    const text = await until(() => result(events), "result");
+    expect(text).toContain('"filled_fields":["email"]');
+    expect(text).toMatch(/Not filled: password\./);
+  }, 20_000);
+
   it("never opens a sheet in an unattended conversation (a routine run, issue #63)", async () => {
     const page = fakePage("https://hi.nesin.io");
     const { runtime, ref, events } = await open(page, [["request_credentials", ask]], {

@@ -302,9 +302,14 @@ export function createBrowserVaultTools(
         filled_fields: doc.filled,
         ...(doc.savedHandle ? { saved_item_handle: doc.savedHandle } : {}),
       };
+      const unfilled = stored.fields
+        .map((field) => field.key)
+        .filter((key) => !doc.filled?.includes(key));
       const next =
         doc.status === "filled"
-          ? " Submit the form (take a snapshot to find the button)."
+          ? unfilled.length
+            ? ` Not filled: ${unfilled.join(", ")}. The page didn't show ${unfilled.length > 1 ? "those fields" : "that field"} (a captcha or another step may be in the way): take a snapshot, and ask again once ${unfilled.length > 1 ? "they show" : "it shows"}.`
+            : " Submit the form (take a snapshot to find the button)."
           : doc.status === "cancelled"
             ? " The owner cancelled: don't ask again unless they say so."
             : " Nobody answered in time.";
