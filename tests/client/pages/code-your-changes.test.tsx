@@ -60,7 +60,7 @@ const posts = (fetch: ReturnType<typeof stubFetch>) =>
 
 const thread = "/api/v1/code/threads/review%3Arv1/review";
 
-function showPanel(answers: Record<string, unknown>) {
+function showPanel(answers: Record<string, unknown>, review: PullReviewView = REVIEW) {
   const fetch = stubFetch({
     [`GET ${thread}/files`]: [file("src/a.ts"), file("src/b.ts")],
     [`GET ${thread}/file`]: {
@@ -77,16 +77,26 @@ function showPanel(answers: Record<string, unknown>) {
     ...answers,
   });
   render(
-    <ConfirmProvider>
-      <PullDiffs
-        review={REVIEW}
-        refreshKey="1"
-        diffStyle="unified"
-        collapse={null}
-        drawer={{ open: false, onOpenChange: () => undefined }}
-        yourChanges={(done) => <YourChangesActions review={REVIEW} onChanged={done} />}
-      />
-    </ConfirmProvider>,
+    <MemoryRouter initialEntries={["/code/reviews/rv1"]}>
+      <Routes>
+        <Route
+          path="/code/reviews/rv1"
+          element={
+            <ConfirmProvider>
+              <PullDiffs
+                review={review}
+                refreshKey="1"
+                diffStyle="unified"
+                collapse={null}
+                drawer={{ open: false, onOpenChange: () => undefined }}
+                yourChanges={(done) => <YourChangesActions review={review} onChanged={done} />}
+              />
+            </ConfirmProvider>
+          }
+        />
+        <Route path="/code/:id" element={<p>Thread page</p>} />
+      </Routes>
+    </MemoryRouter>,
   );
   return fetch;
 }
@@ -147,6 +157,26 @@ describe("your changes to a PR", () => {
       ["/api/v1/code/reviews/rv1/suggestions", null],
       ["/api/v1/code/reviews/rv1/discard", null],
     ]);
+  });
+
+  it("sends Push and Discard to the coding thread whose worktree the review shows", async () => {
+    const user = userEvent.setup();
+    const fetch = showPanel(
+      {
+        [`GET ${thread}/files#mine`]: [file("src/a.ts")],
+        "POST /api/v1/code/reviews/rv1/suggestions": { added: 1, skipped: 0 },
+      },
+      { ...REVIEW, worktreeThreadId: "fake:t9" },
+    );
+    await pickYourChanges(user);
+
+    await user.click(await screen.findByRole("button", { name: "Post as suggestions" }));
+    expect(screen.queryByRole("button", { name: "Push to PR" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Discard" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Push from the thread" }));
+
+    expect(await screen.findByText("Thread page")).toBeInTheDocument();
+    expect(posts(fetch)).toEqual([["/api/v1/code/reviews/rv1/suggestions", null]]);
   });
 
   it("says how to change code when there is nothing of yours yet", async () => {

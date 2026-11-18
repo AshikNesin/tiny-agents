@@ -426,13 +426,19 @@ the PR), and a coding thread's **Pull request** tab offers
 **Review** for its own PR. Opening the same PR again reuses its review.
 
 **What opening does.** The app fetches the PR's head (`refs/pull/N/head`,
-so a PR from a fork works) and its base, and checks the head out in a
-detached worktree of the review's own
+so a PR from a fork works) and its base into the project's clone (never a
+new clone). When a Code thread opened the PR and its worktree is at that
+head (on the PR's branch, nothing unpushed, nothing newer on GitHub), the
+review shows that worktree as it is, uncommitted work included; there,
+**Push to PR** and **Discard** give way to **Push from the thread**, and
+archiving the thread takes the worktree from the review (opening the PR
+again checks it out). Otherwise the app checks the head out in a detached
+worktree of the review's own
 (`~/tiny-agents-code/<owner>--<name>/reviews/pr-N`). The page reads files
 and diffs from git there, against the PR's base. Nothing calls a model.
 **Update** (the header's refresh) moves the review to the PR's latest
-commit, unless its worktree has changes. **Close review** removes the
-worktree and archives the assistant.
+commit, unless its own worktree has changes. **Close review** removes the
+review's own worktree (never a thread's) and archives the assistant.
 
 **The page** (`/code/reviews/<id>`) takes the whole screen, laid out like
 [diffshub](https://diffshub.com) (see `CREDITS.md`). The header shows the

@@ -15,6 +15,7 @@ import { threadIdOf, type CreateThreadInput, type HarnessInstance } from "@tiny-
 import {
   codeCheckpoints,
   codeProjects,
+  codeReviews,
   codeThreads,
   db,
   type CodeProjectRow,
@@ -382,6 +383,7 @@ export async function onProjectThreadArchived(threadId: string, archived: boolea
     }
     await ws.removeWorktree(project.checkoutPath, path);
     await db.update(codeThreads).set({ worktree: null }).where(eq(codeThreads.id, threadId));
+    await releaseReviews(path);
     return;
   }
   if (thread.worktree && (await ws.exists(thread.worktree))) return;
@@ -398,4 +400,13 @@ export async function onProjectThreadDeleted(threadId: string): Promise<void> {
   if (!found?.thread.worktree) return;
   const ws = await codeGitHub().workspace(found.project);
   await ws.removeWorktree(found.project.checkoutPath, found.thread.worktree);
+  await releaseReviews(found.thread.worktree);
+}
+
+/** Reviews that showed a thread's worktree lose it with the thread: opening the PR again checks it out. */
+async function releaseReviews(worktree: string): Promise<void> {
+  await db
+    .update(codeReviews)
+    .set({ worktree: null, updatedAt: new Date() })
+    .where(eq(codeReviews.worktree, worktree));
 }
