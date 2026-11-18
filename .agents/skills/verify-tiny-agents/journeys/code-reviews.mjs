@@ -435,9 +435,13 @@ await journey(
     await step("a small change goes in with the light editor", async () => {
       const pr = page.getByTestId("code-pull-review");
       await pr.getByRole("button", { name: "Edit src/webhooks/retry.ts" }).click();
-      const editor = pr.getByRole("textbox", { name: "Edit src/webhooks/retry.ts" });
-      const text = await editor.inputValue();
-      await editor.fill(text.replace("const line1 = 1;", "const firstLine = 1;"));
+      // diffs.com's editor: the code keeps its colors while you type.
+      const editor = pr.getByRole("group", { name: "Edit src/webhooks/retry.ts" });
+      await editor.getByText("line1", { exact: true }).first().dblclick();
+      // The editor takes keys once it has synced the new selection (a frame or two).
+      await page.waitForTimeout(300);
+      await page.keyboard.type("firstLine");
+      await expect(editor.getByText("firstLine", { exact: true })).toBeVisible();
       await proof("light-editor");
       await pr.getByRole("button", { name: "Save" }).click();
       await expect(page.getByText("Saved. It shows under Your changes.")).toBeVisible();
