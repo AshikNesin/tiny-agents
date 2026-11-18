@@ -103,12 +103,12 @@ export function ReviewPanel({
   /** Uncommitted changes or one commit, from the harness (when it serves diffs). */
   onOtherScopes?: () => void;
   /**
-   * A PR review (issue #345): its branch line, no turns to step through, and
+   * A PR review (issue #345): no turns to step through (its header names the
+   * branches), and
    * with `reviewedSha` (the owner's last review, older than the head) a
    * "Since your review" scope, shown first.
    */
   pull?: {
-    headRef: string;
     reviewedSha?: string | null;
     /**
      * With it, a "Your changes" scope (what was changed in the review's
@@ -161,8 +161,9 @@ export function ReviewPanel({
     fresh: false,
     enabled: !pull,
   });
+  // A PR review names its branches in the page's header.
   const branch = pull
-    ? { name: pull.headRef, ahead: null }
+    ? null
     : pulls.view
       ? { name: pulls.view.branch, ahead: pulls.view.ahead }
       : null;

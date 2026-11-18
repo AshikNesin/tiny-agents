@@ -277,7 +277,7 @@ describe("a PR review you reviewed before", () => {
           baseBranch="main"
           refreshKey="1"
           page
-          pull={{ headRef: "maria:x", reviewedSha: "abc1234def" }}
+          pull={{ reviewedSha: "abc1234def" }}
         />
       </ConfirmProvider>,
     );
