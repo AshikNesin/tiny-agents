@@ -235,7 +235,12 @@ async function fillRequest(
   }));
   let result: { filled: string[] };
   try {
-    result = await getBrowserSessions().fillSecret(target, { origin: request.origin, fields });
+    // Sign-ins split over pages (Amazon's email, then password) are walked through.
+    result = await getBrowserSessions().fillSecret(target, {
+      origin: request.origin,
+      fields,
+      steps: true,
+    });
   } catch (error) {
     if (error instanceof VaultTargetMovedError) {
       throw Boom.conflict("The page moved before the fill. Nothing was filled.");
