@@ -4,9 +4,9 @@
  * the bot's page on the origin shown here, and never to the bot.
  */
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { Lock, MonitorPlay, ShieldAlert } from "lucide-react";
+import { Lock, ShieldAlert } from "lucide-react";
 import { Button } from "@groot/ui/button";
 import { Card, CardContent } from "@groot/ui/card";
 import { EmptyState } from "@groot/ui/empty-state";
@@ -123,7 +123,7 @@ export function CredentialRequestSheet({ taskId }: { taskId: number }) {
               <ShieldAlert className="mt-0.5 size-4 shrink-0" />
               <span>
                 The bot's page is now on <span className={monoClass}>{request.liveOrigin}</span>.
-                Nothing will be filled there; check the live browser.
+                Nothing will be filled there.
               </span>
             </div>
           )}
@@ -201,25 +201,9 @@ export function CredentialRequestSheet({ taskId }: { taskId: number }) {
               <Button type="submit" disabled={busy || missing || moved}>
                 Continue
               </Button>
-              <div className="flex gap-2">
-                {request.bot && (
-                  <Button variant="outline" className="flex-1" asChild>
-                    <Link to={`/chats/${request.bot.id}`}>
-                      <MonitorPlay className="size-4" />
-                      Live browser
-                    </Link>
-                  </Button>
-                )}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="flex-1"
-                  disabled={busy}
-                  onClick={() => void cancel()}
-                >
-                  Cancel
-                </Button>
-              </div>
+              <Button type="button" variant="ghost" disabled={busy} onClick={() => void cancel()}>
+                Cancel
+              </Button>
             </div>
           </form>
         </CardContent>
