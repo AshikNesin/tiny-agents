@@ -35,7 +35,12 @@ import {
 } from "@groot/ui/dropdown-menu";
 import { Spinner } from "../../components/ui/spinner";
 import { errorMessage } from "../../lib/errors";
-import { instanceOf, type HarnessInfo, type ThreadSummary } from "../../lib/code/api";
+import {
+  instanceOf,
+  type HarnessInfo,
+  type ModelOption,
+  type ThreadSummary,
+} from "../../lib/code/api";
 import { reviewsApi } from "../../lib/code/projects";
 import {
   githubCommentsKey,
@@ -46,6 +51,7 @@ import {
 import { harnessOf } from "../../store/code";
 import type { PullReviewView } from "../../../shared/api/code";
 import { ConversationView } from "./ConversationView";
+import { DEFAULT, ModelPicker, loadModels } from "./controls";
 import { PendingComments } from "./PendingComments";
 import { ResizablePane } from "./ResizablePane";
 import { ReviewPanel } from "./ReviewPanel";
@@ -344,6 +350,20 @@ function AskFirst({
 }) {
   const [text, setText] = useState("");
   const [asking, setAsking] = useState(false);
+  // The model the assistant starts on; after that, its thread's composer picks.
+  const [model, setModel] = useState(review.assistant?.model ?? DEFAULT);
+  const [models, setModels] = useState<ModelOption[]>([]);
+  const instanceId = review.assistant?.instanceId;
+  useEffect(() => {
+    if (!instanceId) return;
+    let cancelled = false;
+    loadModels(instanceId)
+      .then((list) => !cancelled && setModels(list))
+      .catch(() => !cancelled && setModels([]));
+    return () => {
+      cancelled = true;
+    };
+  }, [instanceId]);
   const comments = useThreadComments(review.key);
   const sent = useCommentStore((s) => s.sent);
   const count = comments.length;
@@ -353,7 +373,10 @@ function AskFirst({
       if (!question.trim() || asking) return;
       setAsking(true);
       try {
-        const { threadId } = await reviewsApi.ask(review.id, question.trim());
+        const { threadId } = await reviewsApi.ask(review.id, {
+          message: question.trim(),
+          ...(model !== DEFAULT ? { model } : {}),
+        });
         sent(review.key);
         onStarted(threadId);
       } catch (e) {
@@ -361,7 +384,7 @@ function AskFirst({
         setAsking(false);
       }
     },
-    [asking, review.id, review.key, sent, onStarted],
+    [asking, review.id, review.key, sent, onStarted, model],
   );
   const placeholder = useMemo(
     () => (count > 0 ? "Ask about your comments, or the PR…" : "Ask about this PR…"),
@@ -402,7 +425,7 @@ function AskFirst({
             e.preventDefault();
             void ask(text);
           }}
-          className="bg-muted/40 border-border focus-within:ring-ring/50 flex items-end gap-2 rounded-2xl border p-2 focus-within:ring-3"
+          className="bg-muted/40 border-border focus-within:ring-ring/50 @container flex flex-col gap-1 rounded-2xl border p-2 focus-within:ring-3"
         >
           <Textarea
             value={text}
@@ -418,15 +441,21 @@ function AskFirst({
             rows={2}
             className="max-h-40 min-h-10 resize-none border-0 bg-transparent shadow-none focus-visible:ring-0"
           />
-          <Button
-            type="submit"
-            size="icon-sm"
-            aria-label="Ask"
-            disabled={asking || !text.trim()}
-            className="shrink-0 rounded-full"
-          >
-            {asking ? <Spinner /> : <Send />}
-          </Button>
+          <div className="flex items-center gap-1">
+            {models.length > 0 && (
+              <ModelPicker models={models} value={model} onChange={setModel} withDefault />
+            )}
+            <span className="flex-1" />
+            <Button
+              type="submit"
+              size="icon-sm"
+              aria-label="Ask"
+              disabled={asking || !text.trim()}
+              className="shrink-0 rounded-full"
+            >
+              {asking ? <Spinner /> : <Send />}
+            </Button>
+          </div>
         </form>
       </div>
     </div>

@@ -30,6 +30,7 @@ const REVIEW: PullReviewView = {
   reviewedSha: null,
   threadId: null,
   codingThreadId: null,
+  assistant: null,
   archived: false,
   updatedAt: "2026-11-17T00:00:00.000Z",
 };

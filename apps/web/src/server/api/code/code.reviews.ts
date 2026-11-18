@@ -112,6 +112,16 @@ async function codingThreadOf(projectId: string, number: number): Promise<string
   return pull?.threadId ?? null;
 }
 
+/** The harness a review's assistant starts on: the project's default, else the first. */
+function assistantInstance(project: CodeProjectRow) {
+  const hub = codeHub();
+  if (!hub) return undefined;
+  return (
+    (project.defaultInstanceId ? hub.instance(project.defaultInstanceId) : undefined) ??
+    hub.instances()[0]
+  );
+}
+
 async function reviewView(row: CodeReviewRow, project: CodeProjectRow): Promise<PullReviewView> {
   return {
     id: row.id,
@@ -130,6 +140,10 @@ async function reviewView(row: CodeReviewRow, project: CodeProjectRow): Promise<
     reviewedSha: row.reviewedSha,
     threadId: row.threadId,
     codingThreadId: await codingThreadOf(project.id, row.number),
+    assistant: (() => {
+      const instance = assistantInstance(project);
+      return instance ? { instanceId: instance.id, model: project.defaultModel ?? null } : null;
+    })(),
     archived: row.archivedAt !== null,
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -242,7 +256,11 @@ export async function reviewWorktree(id: string) {
  * assistant in the review's worktree, with the PR card and any line comments
  * ahead of the question; a later one goes to that thread like any message.
  */
-export async function askReview(id: string, question: string): Promise<{ threadId: string }> {
+export async function askReview(
+  id: string,
+  question: string,
+  model?: string,
+): Promise<{ threadId: string }> {
   const hub = codeHub();
   if (!hub) throw Boom.notFound("No coding agent is connected.");
   return hub.serial(reviewKey(id), async () => {
@@ -255,7 +273,7 @@ export async function askReview(id: string, question: string): Promise<{ threadI
         await known.instance.send(known.nativeId, { message });
         return row.threadId!;
       }
-      return startAssistant(row, project, row.worktree!, message);
+      return startAssistant(row, project, row.worktree!, message, model);
     });
     return { threadId: result };
   });
@@ -266,11 +284,10 @@ async function startAssistant(
   project: CodeProjectRow,
   worktree: string,
   message: string,
+  model: string | undefined,
 ): Promise<string> {
   const hub = codeHub()!;
-  const instance =
-    (project.defaultInstanceId ? hub.instance(project.defaultInstanceId) : undefined) ??
-    hub.instances()[0];
+  const instance = assistantInstance(project);
   if (!instance) throw Boom.notFound("No coding agent is connected.");
   const ws = await codeGitHub().workspace(project);
   const files = await ws.baseFiles(worktree, row.baseRef);
@@ -293,7 +310,7 @@ async function startAssistant(
   const { nativeId } = await instance.createThread({
     cwd: worktree,
     message: `${card}\n\n${message}`,
-    model: project.defaultModel ?? undefined,
+    model: model ?? project.defaultModel ?? undefined,
     ...(permissionMode ? { permissionMode } : {}),
   });
   const threadId = threadIdOf(instance.id, nativeId);

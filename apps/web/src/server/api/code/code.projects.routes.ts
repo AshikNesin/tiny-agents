@@ -540,11 +540,14 @@ router.get("/code/reviews/:review", async (c) =>
 );
 
 router.post("/code/reviews/:review/ask", async (c) => {
-  const { message } = await parseBody(
+  const { message, model } = await parseBody(
     c,
-    z.object({ message: z.string().trim().min(1).max(100_000) }),
+    z.object({
+      message: z.string().trim().min(1).max(100_000),
+      model: z.string().trim().min(1).max(200).optional(),
+    }),
   );
-  return ok(c, await askReview(c.req.param("review"), message));
+  return ok(c, await askReview(c.req.param("review"), message, model));
 });
 
 router.get("/code/reviews/:review/comments", async (c) =>
