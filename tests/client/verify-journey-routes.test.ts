@@ -31,11 +31,11 @@ const recipes = filesIn("features", ".md");
 /** A template literal's `${…}` parts become one path segment's worth of text. */
 const concrete = (raw: string) => raw.replace(/\$\{[^}]*\}/g, "x").replace(/[?#].*$/, "");
 
-/** The section ids `SettingsPage` mounts (owner and guest alike). */
+/** The section ids `SettingsPage` mounts, from `sections.ts` (owner and guest alike). */
 const sectionIds = new Set(
   [
     ...readFileSync(
-      path.join(ROOT, "apps/web/src/client/pages/settings/SettingsPage.tsx"),
+      path.join(ROOT, "apps/web/src/client/pages/settings/sections.ts"),
       "utf8",
     ).matchAll(/\bid: "([a-z-]+)"/g),
   ].map((m) => m[1]),
