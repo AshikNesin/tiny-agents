@@ -19,6 +19,8 @@ export interface FakeShelley {
   url: string;
   seen: Seen[];
   rows: Array<Record<string, unknown>>;
+  /** `/conversations/archived`'s rows; one tagged `tiny-agents` by default. */
+  archived: Array<Record<string, unknown>>;
   conversations: Map<string, { messages: unknown[]; conversation: Record<string, unknown> }>;
   /** Send a stream2 frame to every open stream. */
   push(frame: unknown): void;
@@ -34,6 +36,9 @@ export async function startFakeShelley(): Promise<FakeShelley> {
   const seen: Seen[] = [];
   const streams = new Set<ServerResponse>();
   const rows: Array<Record<string, unknown>> = [];
+  const archived: Array<Record<string, unknown>> = [
+    { conversation_id: "cOld", slug: "old", archived: true, tags: '["tiny-agents"]' },
+  ];
   const conversations = new Map<
     string,
     { messages: unknown[]; conversation: Record<string, unknown> }
@@ -65,8 +70,17 @@ export async function startFakeShelley(): Promise<FakeShelley> {
       }
       if (path === "/api/conversations/snapshot")
         return json(res, 200, { conversations: rows, hash: "h" });
-      if (path === "/api/conversations/archived")
-        return json(res, 200, [{ conversation_id: "cOld", slug: "old", archived: true }]);
+      if (path === "/api/conversations/archived") return json(res, 200, archived);
+      if (path === "/api/conversations/search") {
+        const q = new URL(url, "http://x").searchParams;
+        const list = q.get("archived") === "true" ? archived : rows;
+        const term = q.get("q") ?? "";
+        return json(
+          res,
+          200,
+          list.filter((r) => !r.parent_conversation_id && String(r.slug).includes(term)),
+        );
+      }
       if (path === "/api/conversations/new") {
         created += 1;
         const id = `cNew${created}`;
@@ -89,6 +103,21 @@ export async function startFakeShelley(): Promise<FakeShelley> {
         const known = conversations.get(id);
         if (!action) return known ? json(res, 200, known) : json(res, 404, { error: "not found" });
         if (action === "subagents") return json(res, 200, []);
+        if (action === "fork") {
+          // Shelley copies the source's tags onto the fork.
+          created += 1;
+          const forkId = `cFork${created}`;
+          const source = rows.find((r) => r.conversation_id === id);
+          rows.push({ ...source, conversation_id: forkId, slug: null });
+          return json(res, 201, { conversation_id: forkId });
+        }
+        if (action === "tags") {
+          // Shelley stores the list as a JSON string and replaces it whole.
+          const tags = JSON.stringify((JSON.parse(body.toString()) as { tags: string[] }).tags);
+          for (const r of [...rows, ...archived]) if (r.conversation_id === id) r.tags = tags;
+          if (known) known.conversation.tags = tags;
+          return json(res, 200, { conversation_id: id, tags });
+        }
         if (action === "chat") {
           if (!known) {
             res.writeHead(404);
@@ -148,6 +177,7 @@ export async function startFakeShelley(): Promise<FakeShelley> {
     url,
     seen,
     rows,
+    archived,
     conversations,
     push(frame) {
       for (const res of streams) res.write(`data: ${JSON.stringify(frame)}\n\n`);

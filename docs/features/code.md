@@ -21,6 +21,12 @@ Why: [ADR 0009](../adr/0009-shelley-is-the-coding-agent.md),
   - Every request sends `X-Exedev-Userid`: exe.dev's `-require-header`
     guard needs it when you reach Shelley directly over Tailscale.
   - "Open in Shelley" links to the same address.
+  - Every conversation tiny-agents starts or forks is tagged `tiny-agents`,
+    and the Code list, archive and search show only those and their
+    subagents. Conversations started in Shelley's own UI stay there. On its
+    first connection the app tags the untagged conversations it already
+    tracks (started, opened or handed off here before tagging), so they keep
+    their place in the list.
 - **Claude Code:** add the Claude plan account in Settings → Models, with a
   sandbox (`SANDBOX_HOST` or `pnpm sandbox:up`), then sign in once
   from Settings → Models → Claude plan. The app sets up the worker on the sandbox
