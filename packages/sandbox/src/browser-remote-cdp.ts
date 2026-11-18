@@ -30,6 +30,10 @@ import type {
 export interface RemoteCdpTransportOptions {
   /** The app's connection to the sandbox VM, which runs the browser. */
   connection: SandboxConnection;
+  /** The language Chrome reports, e.g. `en-IN`. */
+  locale?: string;
+  /** The IANA time zone of Chrome's clock, e.g. `Asia/Kolkata`. */
+  timezone?: string;
 }
 
 /** A stalled link must not hang the viewer's resize request. */
@@ -186,6 +190,8 @@ export function createRemoteCdpTransport(options: RemoteCdpTransportOptions): Br
         width: open.viewportWidth,
         height: open.viewportHeight,
         scale,
+        ...(options.locale ? { locale: options.locale } : {}),
+        ...(options.timezone ? { timezone: options.timezone } : {}),
       }),
     );
 

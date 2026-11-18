@@ -23,11 +23,47 @@ import { app } from "../../app-root";
  * the exe.dev VM); with neither, Playwright's bundled Chromium.
  */
 function browserTransport(env: AppEnv = appEnv()): BrowserTransport {
+  const region = browserRegion(env);
   const executable = unquoteEnv(env.BROWSER_EXECUTABLE_PATH);
-  if (executable) return createChromiumTransport({ executablePath: executable });
+  if (executable) return createChromiumTransport({ executablePath: executable, ...region });
   const connection = sandboxConnection(env);
-  if (connection) return createRemoteCdpTransport({ connection });
-  return createChromiumTransport();
+  if (connection) return createRemoteCdpTransport({ connection, ...region });
+  return createChromiumTransport(region);
+}
+
+/** The owner's time zone (routines run in IST too) and language, as defaults. */
+const DEFAULT_REGION = { locale: "en-IN", timezone: "Asia/Kolkata" };
+
+/**
+ * The language and time zone the browser tells sites. Bot checks such as
+ * Amazon's compare them with where the IP is: a UTC clock and en-US from a
+ * home IP in India reads as automation. A value Chrome would not take falls
+ * back to the default.
+ */
+function browserRegion(env: AppEnv = appEnv()): { locale: string; timezone: string } {
+  const locale = unquoteEnv(env.BROWSER_LOCALE)?.trim();
+  const timezone = unquoteEnv(env.BROWSER_TIMEZONE)?.trim();
+  return {
+    locale: locale && isLocale(locale) ? locale : DEFAULT_REGION.locale,
+    timezone: timezone && isTimeZone(timezone) ? timezone : DEFAULT_REGION.timezone,
+  };
+}
+
+function isLocale(value: string): boolean {
+  try {
+    return Intl.getCanonicalLocales(value).length === 1;
+  } catch {
+    return false;
+  }
+}
+
+function isTimeZone(value: string): boolean {
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: value });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**

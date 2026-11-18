@@ -345,7 +345,17 @@ another bot) and `url` is the bot's own tab, `null` until it has one.
 ## Env
 
 `BROWSER_EXECUTABLE_PATH`, `BROWSER_IDLE_MINUTES`, `BROWSER_SCALE`,
-`BROWSER_ALLOWED_PRIVATE_HOSTS` (all optional; see `.env.schema`).
+`BROWSER_ALLOWED_PRIVATE_HOSTS`, `BROWSER_LOCALE` (default `en-IN`),
+`BROWSER_TIMEZONE` (default `Asia/Kolkata`) (all optional; see `.env.schema`).
+
+**Bot checks.** Sites behind AWS WAF (Amazon) or Cloudflare first answer a
+browser they have not seen with a challenge page (an empty 202 on amazon.in)
+whose script sets a token cookie and reloads. `browser_navigate` waits up to
+15 s for that reload and returns the real page. Checks also compare what the
+browser says with where its IP is, so Chrome reports `BROWSER_LOCALE` and
+`BROWSER_TIMEZONE` rather than the VM's UTC and en-US, and the local headless
+browser drops `navigator.webdriver` and the `HeadlessChrome` user agent. A
+CAPTCHA is left for you to solve in the live view.
 
 **Where Chrome runs** — on deploys, not in the app container:
 
