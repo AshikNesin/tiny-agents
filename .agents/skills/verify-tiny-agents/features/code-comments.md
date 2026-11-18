@@ -23,10 +23,11 @@ Preconditions: `ta-verify up --shelley` (the journey requires `shelley`).
 
 - **Setup.** `setup:` a throwaway git repo `data/verify/<run>/work-<stamp>` with `src/app.ts` (60 lines, committed), then line 30 changed on disk (uncommitted). Cleanup deletes every thread in that dir and the dir.
 - **Start.** `/code/new` → `Working directory` = the repo → `echo: review-<stamp>` → `Start`.
-- **Fold.** `Changes`: one `code-file`; `25 unmodified lines` and `26 unmodified lines`; `const line10 = 10;` not shown.
+- **Fold.** `Changes`: one `code-file` (a file header's fold button); `25 unmodified lines` and `26 unmodified lines`; `const line10 = 10;` not shown.
+- **Tree.** `Files` in the panel opens the `Changed files` drawer: treeitem `app.ts`, `Diff stats` with `Files 1`; `Close files` shuts it.
 - **Comment.** Hover line 30 → `Comment on line 30` → textbox focused → type → `Comment`: POST `/review/drafts` 201, a `note` `Comment on line 30`, the tray reads `1 comment goes with your next message`, `Show comments` lists `src/app.ts:30`; the API lists the draft.
 - **Send.** `echo: thanks-<stamp>` + Enter: the tray goes, an `article` with `src/app.ts:30` and the comment, then `echo: thanks-<stamp>`; no `note` left; the API lists no drafts.
-- **Review page.** `Open as a page` in the panel: URL ends `/review`, tab `Source control` selected, one `code-file`, no transcript; a comment on line 30 there shows in the page's tray; `Back to the thread`: the thread's tray reads `1 comment…`.
+- **Review page.** `Open as a page` in the panel: URL ends `/review`, tab `Source control` selected, one `code-file`, the `Changed files` tree beside it, no transcript; at phone width the tree hides behind `Files`; a comment on line 30 there shows in the page's tray; `Back to the thread`: the thread's tray reads `1 comment…`.
 - **Sidebar.** `Hide sidebar`: `Threads` closed, `Show sidebar` visible; `Show sidebar`: open again.
 - **Proof.** `ta-verify drive $S/journeys/code-comments.mjs` → `code-comments/changes-folded`, `composer-inline`, `comment-waiting`, `comment-sent`, `review-page`, `sidebar-hidden`.
 

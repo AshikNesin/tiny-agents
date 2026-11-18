@@ -163,8 +163,13 @@ the right with tabs: **Source control** and, for a project thread, **Pull
 request #N**. It opens on the tab it was left on; **Close panel** and **Open
 as a page** sit at the end of its tab strip. Outside a project, Source
 control shows the uncommitted changes (new files included), or a recent
-commit, of the thread's directory, each changed file as a card with its
-diff. Every diff in the app (these panels and the transcript's patches) is
+commit, of the thread's directory. Both kinds of Source control, like a PR
+review, lay the changes out as diffshub does: every changed file in one
+scrolling column, each under a sticky header with its fold and +/−, and the
+files as a tree (Files and Comments tabs, search, a filter by status, diff
+stats). In the panel the tree is a drawer behind **Files**; on the Review
+page it sits beside the column, with split or unified view and **Fold all
+files** (a drawer again on phones). Generated files start folded. Every diff in the app (these panels and the transcript's patches) is
 drawn by @pierre/diffs (diffs.com): syntax colors, one gutter numbering the
 lines, unchanged runs folded behind expanders, and long lines wrapped.
 
@@ -274,14 +279,10 @@ empty means none, and a prefix git cannot use is refused.
 
 **Review.** In a project thread, Source control (⌘⇧D) shows the branch, its
 base and how many commits it is ahead, then everything since the merge base
-with the base branch, committed or not (new files included), live as above:
-a file list (name, folder, +/−, a status letter A, M or D) with a filter
-(generated files and lockfiles muted and last). In the panel a file opens to
-its diff and **All files** goes back; on the Review page the list sits beside
-the diff. **Viewed** marks that
-come back unmarked when the agent changes the file again, `[` / `]` between
-files (or the file bar over the diff: previous, next, `n of N`, **Viewed**;
-on the Review page **Hide file list** gives the diff the full width), and
+with the base branch, committed or not (new files included), live as above,
+in the same column and tree. **Viewed** in a file's header folds it, and the
+mark comes back unmarked when the agent changes the file again; **Edit**
+opens the light editor; and
 line comments as above. **Uncommitted or a commit** switches to the
 harness's own changes.
 
