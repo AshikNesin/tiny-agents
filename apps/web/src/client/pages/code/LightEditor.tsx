@@ -35,6 +35,7 @@ export function LightEditor({
       await onSave(text);
     } catch (e) {
       toast.error(errorMessage(e, "Could not save."));
+    } finally {
       setSaving(false);
     }
   };
