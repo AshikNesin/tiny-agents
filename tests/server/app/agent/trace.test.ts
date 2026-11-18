@@ -11,6 +11,7 @@ import { defineToolkit, tool } from "../../../../packages/agent/src/toolkit";
 import {
   fauxAssistantMessage,
   fauxText,
+  fauxThinking,
   fauxToolCall,
   openTestRuntime,
   TEST_MODEL,
@@ -29,7 +30,7 @@ const pingToolkit = defineToolkit({
       summary: "Ping",
       description: "Ping once",
       policy: { readOnly: true },
-      parameters: Type.Object({}),
+      parameters: Type.Object({ host: Type.Optional(Type.String()) }),
       replay: "safe",
       execute: async () => ({ output: [{ type: "text", text: "pong" }] }),
     }),
@@ -41,6 +42,20 @@ function respond(context: PiContext) {
   const last = context.messages.at(-1);
   if (last?.role === "toolResult") return fauxAssistantMessage(fauxText("done"));
   return { ...fauxAssistantMessage(fauxToolCall("ping", {})), stopReason: "toolUse" as const };
+}
+
+/** Thinks, says it will look, calls `ping` with a host, then answers. */
+function respondWithThoughts(context: PiContext) {
+  const last = context.messages.at(-1);
+  if (last?.role === "toolResult") return fauxAssistantMessage(fauxText("The server is up."));
+  return {
+    ...fauxAssistantMessage([
+      fauxThinking("The owner wants a health check."),
+      fauxText("Let me ping it."),
+      fauxToolCall("ping", { host: "example.com" }),
+    ]),
+    stopReason: "toolUse" as const,
+  };
 }
 
 describe("conversation trace", () => {
@@ -94,6 +109,43 @@ describe("conversation trace", () => {
         0,
       );
       expect(usage.input).toBe(callInput);
+    } finally {
+      await runtime.close();
+    }
+  });
+
+  it("returns each turn's transcript: prompt, thought, reply, tool input and output", async () => {
+    const runtime = await openTestRuntime({
+      storePath: ":memory:",
+      capabilities: [pingToolkit],
+      respondWith: respondWithThoughts,
+    });
+    try {
+      const ref = await runtime.createConversation({
+        modelId: TEST_MODEL,
+        systemPrompt: "",
+        capabilities: { enabled: ["ping"], permissions: {} },
+      });
+      await runtime.submit(ref, { requestId: "one", text: "Is the\nserver up?" });
+      await until(
+        async () => finishedReplyTo(await runtime.readChat(ref), "one").status === "answered",
+        "the reply",
+      );
+
+      const [turn] = (await runtime.trace(ref)).turns;
+      expect(turn.events.map(({ at: _at, ...event }) => event)).toEqual([
+        { type: "prompt", text: "Is the\nserver up?", peer: false },
+        { type: "thinking", text: "The owner wants a health check." },
+        { type: "response", text: "Let me ping it." },
+        expect.objectContaining({
+          type: "tool",
+          name: "ping",
+          input: { host: "example.com" },
+          output: "pong",
+          error: false,
+        }),
+        { type: "response", text: "The server is up." },
+      ]);
     } finally {
       await runtime.close();
     }

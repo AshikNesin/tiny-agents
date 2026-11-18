@@ -3,7 +3,7 @@
  * cost, and a session's page shows its totals and each call, failures in red.
  */
 import React from "react";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { GrootUIProvider } from "@groot/ui";
@@ -72,6 +72,21 @@ const detail: TraceSessionDetail = {
             toolCalls: [],
           },
         ],
+        events: [
+          { type: "prompt", at: session.startedAt, text: "Summarize the news", peer: false },
+          { type: "thinking", at: session.startedAt, text: "Fetch the front page first." },
+          { type: "response", at: session.startedAt, text: "Let me read the **front page**." },
+          {
+            type: "tool",
+            at: session.startedAt,
+            name: "web_fetch",
+            input: { url: "https://news.example" },
+            output: "403 Forbidden",
+            error: true,
+            durationMs: 850,
+          },
+          { type: "response", at: session.startedAt + 4_200, text: "Error: Provider overloaded" },
+        ],
       },
     ],
   },
@@ -116,19 +131,47 @@ describe("Traces", () => {
     );
   });
 
-  it("shows a session's totals and each call, with failures marked", async () => {
+  it("shows the whole interaction: prompt, thought, reply and a tool's input and output", async () => {
     renderAt("/traces/7");
-    const calls = await screen.findAllByTestId("trace-call");
-    expect(calls).toHaveLength(2);
-    expect(calls[0]).toHaveTextContent("5K in · 4K cached · 100 out");
-    expect(calls[0]).toHaveTextContent("3.2 s");
-    expect(calls[0]).toHaveTextContent("asked for 1 tool");
-    expect(calls[1]).toHaveTextContent("usage not reported");
-    expect(within(calls[1]!).getByText("Provider overloaded")).toHaveClass("text-destructive");
-    expect(screen.getByTestId("trace-tool")).toHaveTextContent("web_fetchfailed850 ms");
-    // 8k of 10k input tokens were cache reads; two failures (the tool and the errored call).
-    expect(screen.getByText("80% cached")).toBeInTheDocument();
-    expect(screen.getByText("Failed").parentElement).toHaveTextContent("Failed2");
+    expect(await screen.findByTestId("trace-prompt")).toHaveTextContent("Summarize the news");
+    expect(screen.getAllByTestId("trace-response")[0]).toHaveTextContent(
+      "Let me read the front page.",
+    );
+    // Totals: 8k of 10k input tokens were cache reads; two failures.
+    expect(screen.getByTestId("trace-totals")).toHaveTextContent(
+      "$0.01 · 10K in (80% cached) · 300 out · 2 model calls · 1 tool call · 2 failed",
+    );
+
+    const tool = screen.getByTestId("trace-tool");
+    expect(tool).toHaveTextContent("web fetch “https://news.example”failed850 ms");
+    fireEvent.click(within(tool).getByRole("button"));
+    expect(within(tool).getByText('"url": "https://news.example"', { exact: false })).toBeVisible();
+    expect(within(tool).getByText("403 Forbidden")).toHaveClass("text-destructive");
+
+    fireEvent.click(within(screen.getByTestId("trace-thinking")).getByRole("button"));
+    expect(screen.getByText("Fetch the front page first.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open chat" })).toHaveAttribute("href", "/routines");
+  });
+
+  it("counts each kind of event and filters the transcript to the checked ones", async () => {
+    renderAt("/traces/7");
+    await screen.findByTestId("trace-prompt");
+    const [filters] = screen.getAllByTestId("trace-filters");
+    const row = (name: string) => within(filters!).getByText(name).closest("label")!;
+    expect(row("Prompts")).toHaveTextContent("1");
+    expect(row("Agent responses")).toHaveTextContent("2");
+    expect(row("Thinking")).toHaveTextContent("1");
+    expect(row("Tool calls")).toHaveTextContent("1");
+    expect(row("Web fetch")).toHaveTextContent("1");
+    expect(row("Compaction")).toHaveTextContent("0");
+
+    fireEvent.click(within(row("Web fetch")).getByRole("checkbox"));
+    expect(screen.getByTestId("trace-tool")).toBeInTheDocument();
+    expect(screen.queryByTestId("trace-prompt")).toBeNull();
+    expect(screen.queryByTestId("trace-response")).toBeNull();
+
+    fireEvent.click(within(row("Compaction")).getByRole("checkbox"));
+    fireEvent.click(within(row("Web fetch")).getByRole("checkbox"));
+    expect(screen.getByText("Nothing matches these filters.")).toBeInTheDocument();
   });
 });

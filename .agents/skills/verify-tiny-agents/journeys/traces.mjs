@@ -1,5 +1,6 @@
 // Feature: traces (features/traces.md). A chat turn shows up in /traces with
-// its model and tokens; the session page lists the turn's model call.
+// its model and tokens; the session page shows the whole interaction (prompt,
+// thoughts, replies, a tool's input and output) with a filter by type.
 import { journey, expect } from "../scripts/lib.mjs";
 
 await journey("traces", async ({ page, step, proof, cleanup, api, stamp }) => {
@@ -16,11 +17,11 @@ await journey("traces", async ({ page, step, proof, cleanup, api, stamp }) => {
     });
   });
 
-  await step("send a message and get the echo", async () => {
+  await step("send a message that thinks and runs a tool", async () => {
     await page.goto(`/chats/${botId}`);
-    await composer.fill(`trace me ${stamp}`);
+    await composer.fill(`/trace me ${stamp}`);
     await composer.press("Enter");
-    await expect(page.getByText(new RegExp(`Echo: trace me ${stamp}`, "i")).first()).toBeVisible({
+    await expect(page.getByText("Here is where things stand").first()).toBeVisible({
       timeout: 30_000,
     });
   });
@@ -41,18 +42,51 @@ await journey("traces", async ({ page, step, proof, cleanup, api, stamp }) => {
   });
   await proof("list");
 
-  await step("the session page lists the turn and its model call", async () => {
+  await step("the session page shows the prompt, thoughts, replies and tool call", async () => {
     await row.click();
     await expect(page).toHaveURL(/\/traces\/\d+$/);
     const turn = page.getByTestId("trace-turn").first();
-    await expect(turn).toContainText(`trace me ${stamp}`);
-    await expect(turn.getByTestId("trace-call")).toContainText("test-model");
+    await expect(turn.getByTestId("trace-prompt")).toContainText(`/trace me ${stamp}`);
+    await expect(turn.getByTestId("trace-thinking")).toHaveCount(2);
+    await expect(turn.getByTestId("trace-response").first()).toContainText(
+      "Let me look at your open tasks first.",
+    );
+    await expect(turn).toContainText("test-model");
     await expect(page.getByRole("link", { name: "Open chat" })).toHaveAttribute(
       "href",
       `/chats/${botId}`,
     );
   });
   await proof("session");
+
+  await step("a tool call opens to its input and output", async () => {
+    const tool = page.getByTestId("trace-tool").first();
+    await tool.getByRole("button").click();
+    await expect(tool.getByText('"status": "todo"')).toBeVisible();
+    await expect(tool.getByText("Output")).toBeVisible();
+    await page.getByTestId("trace-thinking").first().getByRole("button").click();
+    await expect(page.getByText("The owner wants a status check.", { exact: false })).toBeVisible();
+  });
+  await proof("tool-open");
+
+  await step("filter to tool calls only", async () => {
+    const filters = page.getByRole("group", { name: "Filter the transcript" }).last();
+    await expect(filters.locator("label").filter({ hasText: "Thinking" })).toContainText("2");
+    await filters.getByText("Tool calls").click();
+    await expect(page.getByTestId("trace-tool")).toHaveCount(1);
+    await expect(page.getByTestId("trace-prompt")).toHaveCount(0);
+    await expect(page.getByTestId("trace-response")).toHaveCount(0);
+  });
+  await proof("filtered");
+
+  await step("phone width: the filter folds above the transcript", async () => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.reload();
+    await expect(page.getByTestId("trace-prompt")).toBeVisible();
+    await page.getByText("Filter", { exact: true }).click();
+    await expect(page.getByRole("group", { name: "Filter the transcript" }).first()).toBeVisible();
+  });
+  await proof("phone-session");
 
   await step("Side-calls filter (faux mode makes none)", async () => {
     await page.goto("/traces");
@@ -61,7 +95,6 @@ await journey("traces", async ({ page, step, proof, cleanup, api, stamp }) => {
   });
 
   await step("phone width", async () => {
-    await page.setViewportSize({ width: 390, height: 844 });
     await page.getByRole("button", { name: "All", exact: true }).click();
     await expect(row).toBeVisible();
   });

@@ -26,6 +26,7 @@ export { finishedReplyOf, finishedReplyTo } from "./replies";
 export type {
   ConversationTrace,
   ConversationUsage,
+  TraceEvent,
   TraceHarness,
   TraceStep,
   TraceTurn,

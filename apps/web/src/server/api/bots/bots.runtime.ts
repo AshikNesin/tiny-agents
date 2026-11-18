@@ -37,6 +37,7 @@ import type { Context as PiContext, ToolCall } from "@earendil-works/pi-ai";
 import {
   fauxAssistantMessage,
   fauxText,
+  fauxThinking,
   fauxToolCall,
   TEST_MODEL,
 } from "@tiny-agents/agent/testing";
@@ -351,7 +352,9 @@ const FAUX_ASK: ToolCall["arguments"] = {
  * "/improve" proposes appending a line to the bot's own instructions
  * (update_instructions), so e2e can drive the self-improvement approval.
  * "/newbot NAME" asks to create a bot named NAME (create_bot), so e2e can
- * drive the bot-builder approval.
+ * drive the bot-builder approval. "/trace" thinks, says what it will do, lists
+ * the owner's tasks (list_tasks), then thinks again and answers, so e2e can
+ * see every kind of event on the Traces page.
  */
 export async function openFauxAgentRuntime(
   storePath: string,
@@ -385,6 +388,20 @@ export async function openFauxAgentRuntime(
     if (browse && toolResults < Math.min(Number(browse[1] ?? 1), 10)) {
       const call = fauxAssistantMessage(fauxToolCall("browser_snapshot", {}));
       return { ...call, stopReason: "toolUse" as const };
+    }
+    if (text.startsWith("/trace")) {
+      if (toolResults === 0) {
+        const call = fauxAssistantMessage([
+          fauxThinking("The owner wants a status check. Their open tasks are the place to start."),
+          fauxText("Let me look at your open tasks first."),
+          fauxToolCall("list_tasks", { status: "todo" }),
+        ]);
+        return { ...call, stopReason: "toolUse" as const };
+      }
+      return fauxAssistantMessage([
+        fauxThinking("The tasks are listed. Summarize them in one line."),
+        fauxText(`Here is where things stand:\n\n- **Tasks:** ${textOf(last!)}`),
+      ]);
     }
     if (last?.role === "toolResult") return fauxAssistantMessage(fauxText(`Echo: ${textOf(last)}`));
     if (text.startsWith("/ask")) {
