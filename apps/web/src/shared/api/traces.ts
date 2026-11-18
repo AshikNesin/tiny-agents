@@ -5,7 +5,7 @@
  */
 import type { ConversationTrace, ConversationUsage } from "@tiny-agents/agent";
 
-export type { TraceStep, TraceTurn } from "@tiny-agents/agent";
+export type { TraceEvent, TraceTurn } from "@tiny-agents/agent";
 
 /** chat: a bot's current chat; past_chat: a retired one; routine: one run; delivery: one bot-to-bot message. */
 export type TraceSessionKind = "chat" | "past_chat" | "routine" | "delivery";

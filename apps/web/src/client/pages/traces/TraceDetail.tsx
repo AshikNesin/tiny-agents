@@ -1,28 +1,57 @@
 /**
- * One session's trace (issue #363): its totals, then each turn's input
- * preview and the model and tool calls that answered it, one compact row per
- * call. The full messages stay in the chat; this page shows metadata only.
+ * One session's trace: the whole interaction as a transcript, read from the
+ * conversation's stored entries. Each turn shows its prompt, then the
+ * model's thoughts, replies and tool calls in order (a tool opens to its
+ * input and output), and where the context was summarized. A sidebar counts
+ * each kind of event and filters to the checked ones (a sheet on a phone).
  */
+import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import {
+  BrainIcon,
+  FilePenIcon,
+  FileTextIcon,
+  GlobeIcon,
+  ListCollapseIcon,
+  MessageSquareIcon,
+  SlidersHorizontalIcon,
+  SquareTerminalIcon,
+  UserIcon,
+  WrenchIcon,
+} from "lucide-react";
+import { Streamdown } from "streamdown";
 import { Breadcrumbs } from "@groot/ui/breadcrumb";
 import { Button } from "@groot/ui/button";
+import { Checkbox } from "@groot/ui/checkbox";
 import { ErrorState } from "@groot/ui/empty-state";
 import { SkeletonList } from "@groot/ui/loading-skeleton";
-import { StatTile } from "@groot/ui/stat-tile";
 import { metaLabelClass, monoClass } from "@groot/ui/typography";
 import { cn } from "@groot/ui/lib/utils";
 import { PageLayout } from "@groot/shell/components/layout/PageLayout";
 import type {
+  TraceEvent,
   TraceSession,
   TraceSessionDetail,
-  TraceStep,
   TraceTurn,
 } from "../../../shared/api/traces";
+import { markdownComponents } from "../../lib/markdown";
+import { stepTitle, type ToolLabelCatalog } from "../../lib/tool-call-text";
+import { useToolLabels } from "../../lib/use-tool-labels";
+import {
+  TraceCollapsible,
+  TraceCollapsibleContent,
+  TraceCollapsibleTrigger,
+  TraceDescription,
+  TraceIcon,
+  TraceLine,
+  TraceTitle,
+} from "../../components/ui/trace";
 import { useTraceSession } from "../../queries/traces";
+import { countEvents, shows, toolDisplayName, type FilterKey } from "./filters";
 import { formatCost, formatDuration, formatTime, formatTokens, dayLabel } from "./format";
 import { HARNESS_LABEL, KIND_LABEL } from "./Traces";
 
-/** Where the session's messages can be read in full. */
+/** Where the session's messages can be read in the app. */
 function chatLink(session: TraceSession): string | undefined {
   if (session.kind === "chat") return `/chats/${session.bot.id}`;
   if (session.kind === "past_chat" && session.chatId) {
@@ -34,6 +63,7 @@ function chatLink(session: TraceSession): string | undefined {
 
 const NORMAL_STOPS = new Set(["stop", "toolUse", "done", "streaming"]);
 
+/** The session's totals as one line: cost, tokens, calls and failures. */
 function Totals({ detail }: { detail: TraceSessionDetail }) {
   const { usage } = detail.trace;
   const steps = detail.trace.turns.flatMap((turn) => turn.steps);
@@ -45,144 +75,330 @@ function Totals({ detail }: { detail: TraceSessionDetail }) {
   const input = usage.input + usage.cacheRead + usage.cacheWrite;
   const cached = input > 0 ? Math.round((usage.cacheRead / input) * 100) : 0;
   const reported = input + usage.output > 0;
+  const parts = [
+    reported ? formatCost(usage.costUsd) : "Usage not reported",
+    ...(reported
+      ? [
+          `${formatTokens(input)} in${cached > 0 ? ` (${cached}% cached)` : ""}`,
+          `${formatTokens(usage.output)} out`,
+        ]
+      : []),
+    `${calls.length} model call${calls.length === 1 ? "" : "s"}`,
+    `${tools.length} tool call${tools.length === 1 ? "" : "s"}`,
+  ];
   return (
-    <div className="border-border/60 grid grid-cols-3 gap-y-1 rounded-xl border py-1 sm:grid-cols-6">
-      <StatTile
-        className="px-4 py-2"
-        label="Cost"
-        value={reported ? formatCost(usage.costUsd) : "n/a"}
+    <p className="text-muted-foreground text-sm tabular-nums" data-testid="trace-totals">
+      {parts.join(" · ")}
+      {failed > 0 ? <span className="text-destructive"> · {failed} failed</span> : null}
+    </p>
+  );
+}
+
+/** One filter row: a checkbox, icon, label and count, dotted between. */
+function FilterRow({
+  label,
+  icon,
+  count,
+  checked,
+  onChange,
+  nested = false,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  count: number;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  nested?: boolean;
+}) {
+  return (
+    <label
+      className={cn(
+        "hover:text-foreground flex cursor-pointer items-center gap-2 py-1.5 text-sm",
+        nested && "pl-6",
+        checked ? "text-foreground" : "text-muted-foreground",
+      )}
+    >
+      <Checkbox checked={checked} onCheckedChange={(value) => onChange(value === true)} />
+      <span className="flex size-4 shrink-0 items-center justify-center [&_svg]:size-4">
+        {icon}
+      </span>
+      <span className="min-w-0 truncate">{label}</span>
+      <span className="border-border mx-1 min-w-4 flex-1 border-b border-dotted" />
+      <span className="tabular-nums">{count}</span>
+    </label>
+  );
+}
+
+function toolIcon(name: string) {
+  if (/bash|command|exec|shell|terminal|run/i.test(name)) return <SquareTerminalIcon />;
+  if (/edit|write|patch|replace/i.test(name)) return <FilePenIcon />;
+  if (/read|file|list|grep|glob/i.test(name)) return <FileTextIcon />;
+  if (/web|fetch|search|browse|page|url/i.test(name)) return <GlobeIcon />;
+  return <WrenchIcon />;
+}
+
+function Filters({
+  turns,
+  selected,
+  onToggle,
+}: {
+  turns: readonly TraceTurn[];
+  selected: ReadonlySet<FilterKey>;
+  onToggle: (key: FilterKey, checked: boolean) => void;
+}) {
+  const counts = useMemo(() => countEvents(turns), [turns]);
+  return (
+    <div role="group" aria-label="Filter the transcript" data-testid="trace-filters">
+      <FilterRow
+        label="Prompts"
+        icon={<UserIcon />}
+        count={counts.prompt}
+        checked={selected.has("prompt")}
+        onChange={(checked) => onToggle("prompt", checked)}
       />
-      <StatTile
-        className="px-4 py-2"
-        label="Input"
-        value={
-          <>
-            {reported ? formatTokens(input) : "n/a"}
-            {reported && cached > 0 ? (
-              <span className="text-muted-foreground text-xs font-normal"> {cached}% cached</span>
-            ) : null}
-          </>
-        }
+      <FilterRow
+        label="Agent responses"
+        icon={<MessageSquareIcon />}
+        count={counts.response}
+        checked={selected.has("response")}
+        onChange={(checked) => onToggle("response", checked)}
       />
-      <StatTile
-        className="px-4 py-2"
-        label="Output"
-        value={reported ? formatTokens(usage.output) : "n/a"}
+      <FilterRow
+        label="Thinking"
+        icon={<BrainIcon />}
+        count={counts.thinking}
+        checked={selected.has("thinking")}
+        onChange={(checked) => onToggle("thinking", checked)}
       />
-      <StatTile className="px-4 py-2" label="Model calls" value={calls.length} />
-      <StatTile className="px-4 py-2" label="Tool calls" value={tools.length} />
-      <StatTile
-        className="px-4 py-2"
-        label="Failed"
-        value={failed}
-        {...(failed > 0 ? { valueClassName: "text-destructive" } : {})}
+      <FilterRow
+        label="Tool calls"
+        icon={<WrenchIcon />}
+        count={counts.tool}
+        checked={selected.has("tool")}
+        onChange={(checked) => onToggle("tool", checked)}
+      />
+      {counts.tools.map(([name, count]) => (
+        <FilterRow
+          key={name}
+          nested
+          label={toolDisplayName(name)}
+          icon={toolIcon(name)}
+          count={count}
+          checked={selected.has("tool") || selected.has(`tool:${name}`)}
+          onChange={(checked) => onToggle(`tool:${name}`, checked)}
+        />
+      ))}
+      <FilterRow
+        label="Compaction"
+        icon={<ListCollapseIcon />}
+        count={counts.compaction}
+        checked={selected.has("compaction")}
+        onChange={(checked) => onToggle("compaction", checked)}
       />
     </div>
   );
 }
 
-function usageText(step: Extract<TraceStep, { type: "llm" }>): string {
-  if (!step.usage) return "usage not reported";
-  const { input, cacheRead, cacheWrite, output } = step.usage;
-  const parts = [`${formatTokens(input + cacheRead + cacheWrite)} in`];
-  if (cacheRead > 0) parts.push(`${formatTokens(cacheRead)} cached`);
-  parts.push(`${formatTokens(output)} out`);
-  return parts.join(" · ");
-}
+const preClass = cn(
+  monoClass,
+  "bg-muted/50 text-foreground max-h-96 overflow-auto rounded-md px-3 py-2 text-xs whitespace-pre-wrap break-words",
+);
 
-function StepRow({ step }: { step: TraceStep }) {
-  if (step.type === "compaction") {
-    return (
-      <li className="text-muted-foreground px-3 py-1.5 text-xs">
-        Context summarized ({step.reason})
-      </li>
-    );
+/** Arguments that read best as plain text when they are the only one. */
+const RAW_ARGS = new Set(["command", "cmd", "script", "code", "query"]);
+
+/** A tool call's input as text: a lone command or query as is, else JSON. */
+function inputText(input: Record<string, unknown>): string {
+  const entries = Object.entries(input);
+  if (entries.length === 1 && RAW_ARGS.has(entries[0]![0]) && typeof entries[0]![1] === "string") {
+    return entries[0]![1];
   }
-  return step.type === "tool" ? <ToolRow step={step} /> : <CallRow step={step} />;
+  return JSON.stringify(input, null, 2);
 }
 
-function ToolRow({ step }: { step: Extract<TraceStep, { type: "tool" }> }) {
+function ToolEvent({
+  event,
+  labels,
+}: {
+  event: Extract<TraceEvent, { type: "tool" }>;
+  labels: ToolLabelCatalog;
+}) {
+  const title = stepTitle({ id: "", name: event.name, args: event.input, status: "done" }, labels);
+  const hasInput = Object.keys(event.input).length > 0;
   return (
-    <li
-      className="text-muted-foreground flex items-center gap-2 py-1.5 pr-3 pl-7 text-xs"
-      data-testid="trace-tool"
-    >
-      <span className={cn(monoClass, "min-w-0 truncate", step.error && "text-destructive")}>
-        {step.name}
-      </span>
-      {step.error ? <span className="text-destructive">failed</span> : null}
-      <span className="ml-auto shrink-0 tabular-nums">
-        {step.usage ? `${formatCost(step.usage.costUsd)} · ` : ""}
-        {step.durationMs !== undefined ? formatDuration(step.durationMs) : ""}
-      </span>
-    </li>
+    <TraceCollapsible data-testid="trace-tool">
+      <TraceCollapsibleTrigger>
+        <TraceLine status={event.error ? "error" : undefined}>
+          <TraceIcon>{toolIcon(event.name)}</TraceIcon>
+          <TraceTitle>{title}</TraceTitle>
+          {event.error ? (
+            <TraceDescription className="text-destructive">failed</TraceDescription>
+          ) : null}
+          {event.durationMs !== undefined ? (
+            <TraceDescription>{formatDuration(event.durationMs)}</TraceDescription>
+          ) : null}
+        </TraceLine>
+      </TraceCollapsibleTrigger>
+      <TraceCollapsibleContent className="space-y-2">
+        <p className={metaLabelClass}>Input</p>
+        <pre className={preClass}>{hasInput ? inputText(event.input) : "No input"}</pre>
+        <p className={metaLabelClass}>Output</p>
+        <pre className={cn(preClass, event.error && "text-destructive")}>
+          {event.output === undefined ? "No result" : event.output || "Empty"}
+        </pre>
+      </TraceCollapsibleContent>
+    </TraceCollapsible>
   );
 }
 
-function CallRow({ step }: { step: Extract<TraceStep, { type: "llm" }> }) {
-  const unusual = !NORMAL_STOPS.has(step.stopReason);
-  return (
-    <li className="space-y-0.5 px-3 py-1.5" data-testid="trace-call">
-      <div className="flex items-center gap-2 text-sm">
-        <span className={cn(monoClass, "min-w-0 truncate")}>{step.model}</span>
-        {step.thinkingLevel && step.thinkingLevel !== "off" ? (
-          <span className="text-muted-foreground text-xs">{step.thinkingLevel}</span>
-        ) : null}
-        {unusual ? (
-          <span
-            className={cn(
-              "text-xs",
-              step.stopReason === "length" ? "text-warning" : "text-destructive",
-            )}
-          >
-            {step.stopReason}
-          </span>
-        ) : null}
-        <span className="ml-auto shrink-0 tabular-nums">
-          {step.usage ? formatCost(step.usage.costUsd) : ""}
-        </span>
-      </div>
-      <p className="text-muted-foreground flex flex-wrap gap-x-1 text-xs tabular-nums">
-        <span>{formatTime(step.at)}</span>
-        <span>· {usageText(step)}</span>
-        {step.durationMs !== undefined ? <span>· {formatDuration(step.durationMs)}</span> : null}
-        {step.toolCalls.length > 0 ? (
-          <span>
-            · asked for {step.toolCalls.length} tool{step.toolCalls.length === 1 ? "" : "s"}
-          </span>
-        ) : null}
-      </p>
-      {step.error ? <p className="text-destructive text-xs">{step.error}</p> : null}
-    </li>
-  );
+function EventRow({ event, labels }: { event: TraceEvent; labels: ToolLabelCatalog }) {
+  switch (event.type) {
+    case "prompt":
+      return (
+        <div
+          className="bg-muted/60 rounded-xl px-3.5 py-2.5 text-sm whitespace-pre-wrap break-words"
+          data-testid="trace-prompt"
+        >
+          {event.peer ? <p className={cn(metaLabelClass, "mb-1")}>From a bot</p> : null}
+          {event.text || <span className="text-muted-foreground">No input</span>}
+        </div>
+      );
+    case "response":
+      return (
+        <div className="chat-md min-w-0 py-1 text-sm" data-testid="trace-response">
+          <Streamdown components={markdownComponents}>{event.text}</Streamdown>
+        </div>
+      );
+    case "thinking":
+      return (
+        <TraceCollapsible data-testid="trace-thinking">
+          <TraceCollapsibleTrigger>
+            <TraceLine>
+              <TraceIcon>
+                <BrainIcon />
+              </TraceIcon>
+              <TraceTitle>Thought</TraceTitle>
+            </TraceLine>
+          </TraceCollapsibleTrigger>
+          <TraceCollapsibleContent className="text-sm whitespace-pre-wrap">
+            {event.redacted ? "Redacted by the provider." : event.text}
+          </TraceCollapsibleContent>
+        </TraceCollapsible>
+      );
+    case "tool":
+      return <ToolEvent event={event} labels={labels} />;
+    case "compaction":
+      return (
+        <TraceCollapsible data-testid="trace-compaction">
+          <TraceCollapsibleTrigger>
+            <TraceLine>
+              <TraceIcon>
+                <ListCollapseIcon />
+              </TraceIcon>
+              <TraceTitle>Context summarized</TraceTitle>
+              <TraceDescription>{event.reason}</TraceDescription>
+            </TraceLine>
+          </TraceCollapsibleTrigger>
+          <TraceCollapsibleContent className="text-sm whitespace-pre-wrap">
+            {event.summary || "No summary stored."}
+          </TraceCollapsibleContent>
+        </TraceCollapsible>
+      );
+  }
 }
 
-function TurnCard({ turn, index }: { turn: TraceTurn; index: number }) {
-  const cost = turn.steps.reduce(
-    (sum, step) => sum + (step.type !== "compaction" ? (step.usage?.costUsd ?? 0) : 0),
-    0,
-  );
+/** A turn's model calls, tokens, cost and time, under its events. */
+function turnMeta(turn: TraceTurn, index: number): string {
+  const calls = turn.steps.filter((step) => step.type === "llm");
+  let input = 0;
+  let output = 0;
+  let cost = 0;
+  for (const step of turn.steps) {
+    if (step.type === "compaction" || !step.usage) continue;
+    input += step.usage.input + step.usage.cacheRead + step.usage.cacheWrite;
+    output += step.usage.output;
+    cost += step.usage.costUsd;
+  }
   const last = turn.steps.findLast((step) => step.type !== "compaction");
   const end = last ? last.at + (last.durationMs ?? 0) : undefined;
+  const models = [...new Set(calls.map((step) => step.model))];
+  return [
+    `Turn ${index + 1}`,
+    `${dayLabel(turn.at)} ${formatTime(turn.at)}`,
+    ...(end && end > turn.at ? [formatDuration(end - turn.at)] : []),
+    ...(models.length ? [models.join(", ")] : []),
+    `${calls.length} model call${calls.length === 1 ? "" : "s"}`,
+    ...(input + output > 0 ? [`${formatTokens(input)} in · ${formatTokens(output)} out`] : []),
+    ...(cost > 0 ? [formatCost(cost)] : []),
+  ].join(" · ");
+}
+
+function Transcript({
+  turns,
+  selected,
+}: {
+  turns: readonly TraceTurn[];
+  selected: ReadonlySet<FilterKey>;
+}) {
+  const labels = useToolLabels();
+  const shown = turns
+    .map((turn, index) => ({
+      turn,
+      index,
+      events: turn.events.filter((event) => shows(selected, event)),
+    }))
+    .filter(({ events }) => events.length > 0);
+  if (shown.length === 0) {
+    return (
+      <p className="text-muted-foreground py-8 text-center text-sm">
+        {turns.length === 0 ? "Nothing in this session yet." : "Nothing matches these filters."}
+      </p>
+    );
+  }
   return (
-    <section className="border-border/60 rounded-xl border" data-testid="trace-turn">
-      <header className="border-border/60 space-y-0.5 border-b px-3 py-2">
-        <p className={metaLabelClass}>
-          Turn {index + 1} · {dayLabel(turn.at)} {formatTime(turn.at)}
-          {end && end > turn.at ? ` · ${formatDuration(end - turn.at)}` : ""}
-          {cost > 0 ? ` · ${formatCost(cost)}` : ""}
-        </p>
-        <p className="line-clamp-2 text-sm">
-          {turn.peer ? <span className="text-muted-foreground">From a bot: </span> : null}
-          {turn.input || <span className="text-muted-foreground">No input</span>}
-        </p>
-      </header>
-      <ul className="py-1">
-        {turn.steps.map((step, i) => (
-          <StepRow key={i} step={step} />
-        ))}
-      </ul>
-    </section>
+    <ol className="space-y-8">
+      {shown.map(({ turn, index, events }) => (
+        <li key={index} className="space-y-2" data-testid="trace-turn">
+          {events.map((event, i) => (
+            <EventRow key={i} event={event} labels={labels} />
+          ))}
+          <p className="text-muted-foreground/80 pt-1 text-xs tabular-nums">
+            {turnMeta(turn, index)}
+          </p>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function SessionTrace({ detail }: { detail: TraceSessionDetail }) {
+  const [selected, setSelected] = useState<ReadonlySet<FilterKey>>(new Set());
+  const toggle = (key: FilterKey, checked: boolean) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(key);
+      else next.delete(key);
+      return next;
+    });
+  const { turns } = detail.trace;
+  const filters = <Filters turns={turns} selected={selected} onToggle={toggle} />;
+  return (
+    <div className="space-y-4">
+      <Totals detail={detail} />
+      <details className="border-border/60 rounded-xl border px-3 py-1 lg:hidden">
+        <summary className="text-muted-foreground flex cursor-pointer list-none items-center gap-2 py-1.5 text-sm">
+          <SlidersHorizontalIcon className="size-4" />
+          Filter{selected.size > 0 ? ` · ${selected.size} on` : ""}
+        </summary>
+        <div className="pb-2">{filters}</div>
+      </details>
+      <div className="grid gap-8 lg:grid-cols-[220px_minmax(0,1fr)]">
+        <aside className="hidden lg:block">
+          <div className="sticky top-4">{filters}</div>
+        </aside>
+        <Transcript turns={turns} selected={selected} />
+      </div>
+    </div>
   );
 }
 
@@ -201,7 +417,7 @@ export function TraceDetailPage() {
       title={session?.title ?? "Trace"}
       breadcrumb={breadcrumb}
       backTo="/traces"
-      maxWidth="4xl"
+      maxWidth="6xl"
       description={
         session ? (
           <>
@@ -235,17 +451,7 @@ export function TraceDetailPage() {
       ) : !data ? (
         <SkeletonList />
       ) : (
-        <div className="space-y-4">
-          <Totals detail={data} />
-          {data.trace.turns.length === 0 ? (
-            <p className="text-muted-foreground text-sm">No model calls in this session yet.</p>
-          ) : (
-            [...data.trace.turns]
-              .map((turn, index) => ({ turn, index }))
-              .reverse()
-              .map(({ turn, index }) => <TurnCard key={index} turn={turn} index={index} />)
-          )}
-        </div>
+        <SessionTrace detail={data} />
       )}
     </PageLayout>
   );
