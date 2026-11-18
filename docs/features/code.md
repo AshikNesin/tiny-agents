@@ -417,8 +417,11 @@ above it narrow GitHub's searches themselves (`GET /code/reviews/inbox?days=30&r
 or `repo=projects`), so they reach past the first 50 of each, and the
 browser remembers them. A click on a project's PR opens its review here;
 every row also has its own **GitHub** link. A repository that is not a
-project yet says so, and opens only on GitHub. `/code/review/<owner>/<name>/<number>`
-opens one from a link, and a coding thread's **Pull request** tab offers
+project yet says so, and opens only on GitHub. A link opens one straight into review:
+`/code/review?pr=<its GitHub link, or owner/name#123>`,
+`/code/review/<owner>/<name>/<number>`, or GitHub's own path after
+`/code/review/` (swap `https://github.com` for the app's address, any tab of
+the PR), and a coding thread's **Pull request** tab offers
 **Review** for its own PR. Opening the same PR again reuses its review.
 
 **What opening does.** The app fetches the PR's head (`refs/pull/N/head`,

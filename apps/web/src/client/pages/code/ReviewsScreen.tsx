@@ -6,10 +6,11 @@
  * changed since they reviewed, what waits on its author, and their own,
  * narrowed by filters (how recent, which repository, drafts) this browser
  * remembers. Each row reviews the PR here, and its own link opens it on GitHub.
- * `/code/review/<owner>/<name>/<number>` opens one straight from a link.
+ * `/code/review?pr=<link>` (or GitHub's own path after `/code/review/`)
+ * opens one straight from a link, see `OpenReviewLink`.
  */
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ArrowLeft, ArrowRight, ExternalLink, GitPullRequest, X } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -529,19 +530,31 @@ export function ReviewsScreen({ sidebarHidden = false }: { sidebarHidden?: boole
   );
 }
 
-/** `/code/review/<owner>/<name>/<number>`: open (or reopen) that PR's review and go there. */
+/**
+ * Open (or reopen) a PR's review and go there, from a link:
+ * `/code/review?pr=<its GitHub link, or owner/name#123>`,
+ * `/code/review/<owner>/<name>/<number>`, or GitHub's own path after
+ * `/code/review/` (`…/<owner>/<name>/pull/<number>/files`), so swapping
+ * github.com for this app's host opens it here.
+ */
 export function OpenReviewLink() {
   const { owner, repo, number } = useParams();
+  const [search] = useSearchParams();
   const navigate = useNavigate();
+  const pr = owner && repo && number ? `${owner}/${repo}#${number}` : search.get("pr")?.trim();
   useEffect(() => {
+    if (!pr) {
+      navigate("/code/reviews", { replace: true });
+      return;
+    }
     reviewsApi
-      .open(`${owner}/${repo}#${number}`)
+      .open(pr)
       .then((review) => navigate(reviewPath(review.id), { replace: true }))
       .catch((error: unknown) => {
         toast.error(errorMessage(error, "Could not open that pull request."));
         navigate("/code/reviews", { replace: true });
       });
-  }, [owner, repo, number, navigate]);
+  }, [pr, navigate]);
   return (
     <div className="flex h-dvh items-center justify-center">
       <Spinner />
