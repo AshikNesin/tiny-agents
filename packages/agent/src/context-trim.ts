@@ -18,8 +18,10 @@
  * tokens), and the agent takes one after nearly every action. Once the page
  * has been read again, the old one's refs are stale and its text rode along
  * on every request until compaction: 20 steps of browsing re-sent about
- * 100k tokens a request. Only the newest `KEEP_PAGE_READS` long reads are
- * sent; older ones become a one-line note, dropped in steps like images.
+ * 100k tokens a request. Browser actions return the page after them too.
+ * Only the newest `KEEP_PAGE_READS` long reads are sent; older ones become a
+ * one-line note (after the action's own first line), dropped in steps like
+ * images.
  */
 import type { ImageContent, Message, TextContent } from "@earendil-works/pi-ai";
 import { defineExtension, GenerationTask, hook, type Extension } from "@earendil-works/pi-durable";
@@ -34,7 +36,19 @@ const KEEP_PAGE_READS = 2;
 /** Older page reads are dropped in steps of this many. */
 const PAGE_READ_STEP = 5;
 /** Tools whose result is a read of the page as it was, superseded by the next read. */
-const PAGE_READ_TOOLS = new Set(["browser_snapshot", "browser_read_text"]);
+const PAGE_READ_TOOLS = new Set([
+  "browser_snapshot",
+  "browser_read_text",
+  // Actions return the page after them (its first part, or what changed).
+  "browser_navigate",
+  "browser_back",
+  "browser_click",
+  "browser_type",
+  "browser_press_key",
+  "browser_wait_for",
+]);
+/** Tools whose whole result is the page, with no line about an action to keep. */
+const SNAPSHOT_TOOLS = new Set(["browser_snapshot", "browser_read_text"]);
 /** A read shorter than this costs less than the cache miss its drop would cause. */
 const LONG_READ_CHARS = 2_000;
 
@@ -103,9 +117,14 @@ function trimOldPageReads(
   if (over < step) return messages;
   let drop = over - (over % step);
   return messages.map((message) => {
-    if (drop === 0 || !isLongPageRead(message)) return message;
+    if (drop === 0 || message.role !== "toolResult" || !isLongPageRead(message)) return message;
     drop--;
-    return { ...message, content: [READ_DROPPED_NOTE] } as Message;
+    // An action's first line (what it did, where it landed) stays; its page goes.
+    const text = message.content.find((block): block is TextContent => block.type === "text");
+    const first = text?.text.split("\n")[0];
+    const kept: TextContent[] =
+      first && !SNAPSHOT_TOOLS.has(message.toolName) ? [{ type: "text", text: first }] : [];
+    return { ...message, content: [...kept, READ_DROPPED_NOTE] };
   });
 }
 

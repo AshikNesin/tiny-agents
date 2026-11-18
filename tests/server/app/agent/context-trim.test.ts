@@ -51,6 +51,24 @@ const pageReads = defineExtension({
   ],
 });
 
+/** A click whose result carries the page after it, as `browser_click` does. */
+const clicks = defineExtension({
+  name: "clicks",
+  tools: [
+    defineTool({
+      name: "browser_click",
+      description: "Click",
+      parameters: Type.Object({}),
+      replay: "safe",
+      execute: async () => ({
+        output: [
+          { type: "text", text: `clicked e3 — https://example.com/\nPage:\n${"x".repeat(5_000)}` },
+        ],
+      }),
+    }),
+  ],
+});
+
 function counts(context: PiContext) {
   let toolResults = 0;
   let images = 0;
@@ -135,6 +153,42 @@ describe("context trim", () => {
       // Request n carries n-1 reads. Up to 6 (2 kept + fewer than 5 over)
       // all are sent; at 7 the oldest 5 drop at once, leaving 2.
       expect(seen).toEqual([0, 1, 2, 3, 4, 5, 6, 2, 3, 4]);
+    } finally {
+      await runtime.close();
+    }
+  });
+
+  it("keeps the first line of an old action's result and drops the page it returned", async () => {
+    let last: PiContext | undefined;
+    const runtime = await openTestRuntime({
+      storePath: ":memory:",
+      extensions: [clicks],
+      respondWith: (context) => {
+        last = context;
+        if (context.messages.filter((m) => m.role === "toolResult").length < 7) {
+          return {
+            ...fauxAssistantMessage(fauxToolCall("browser_click", {})),
+            stopReason: "toolUse" as const,
+          };
+        }
+        return fauxAssistantMessage(fauxText("done"));
+      },
+    });
+    try {
+      const ref = await runtime.createConversation({ modelId: TEST_MODEL, systemPrompt: "" });
+      await runtime.submit(ref, { requestId: "clicks", text: "click around" });
+      await until(() => !runtime.isBusy(ref) && last !== undefined, "the run to finish");
+      const results = last!.messages.filter((m) => m.role === "toolResult");
+      const texts = results.map((m) =>
+        m.content.map((block) => (block.type === "text" ? block.text : "")).join("|"),
+      );
+      // 7 results: the oldest 5 dropped at once, the newest 2 whole.
+      expect(texts.slice(0, 5)).toEqual(
+        Array(5).fill(
+          "clicked e3 — https://example.com/|[Older page read left out to save context; its refs are stale. Read the page again if you need it.]",
+        ),
+      );
+      expect(texts.slice(5).every((t) => t.length > 5_000)).toBe(true);
     } finally {
       await runtime.close();
     }

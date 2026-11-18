@@ -8,6 +8,7 @@ import {
   compactSnapshot,
   filterSnapshot,
   pageWindow,
+  snapshotDiff,
   tidyText,
 } from "../../../../packages/sandbox/src/browser-snapshot";
 
@@ -50,6 +51,12 @@ describe("compact snapshot", () => {
         "    - text: 731 points by",
         "    - generic [ref=e48]: jasondavies",
       ].join("\n"),
+    );
+  });
+
+  it("leaves out focus, which moves with every action", () => {
+    expect(compactSnapshot('- textbox "Query" [active] [ref=e4]: cables')).toBe(
+      '- textbox "Query" [ref=e4]: cables',
     );
   });
 
@@ -110,5 +117,38 @@ describe("page window", () => {
 describe("tidy text", () => {
   it("squeezes blank runs and trailing spaces", () => {
     expect(tidyText("Title  \n\n\n\nBody\t\n")).toBe("Title\n\nBody");
+  });
+});
+
+describe("snapshot diff", () => {
+  it("shows the new lines under the unchanged line they belong to, and counts what went", () => {
+    const before = ["- list [ref=e1]:", '  - link "One" [ref=e2]', '- button "More" [ref=e9]'].join(
+      "\n",
+    );
+    const after = [
+      "- list [ref=e1]:",
+      '  - link "One" [ref=e2]',
+      '  - link "Two" [ref=e3]',
+      '  - link "Three" [ref=e4]',
+      '- button "More" [ref=e9] [disabled]',
+    ].join("\n");
+    expect(snapshotDiff(before, after)).toEqual({
+      added: 3,
+      removed: 1,
+      text: [
+        "  - list [ref=e1]:",
+        '+   - link "Two" [ref=e3]',
+        '+   - link "Three" [ref=e4]',
+        '+ - button "More" [ref=e9] [disabled]',
+      ].join("\n"),
+    });
+  });
+
+  it("counts a repeated line once per copy", () => {
+    expect(snapshotDiff('- text: "|"', '- text: "|"\n- text: "|"')).toEqual({
+      added: 1,
+      removed: 0,
+      text: '+ - text: "|"',
+    });
   });
 });

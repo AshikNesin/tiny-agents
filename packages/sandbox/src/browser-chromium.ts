@@ -234,6 +234,7 @@ export function pageSession(
       }),
     snapshot: (scope) => snapshotOf(page, scope),
     text: (scope) => textOf(page, scope),
+    waitFor: (wait) => waitForText(page, wait),
     origin: () => pageOrigin(page),
     fillSecret: (fill) => guarded((current) => fillSecretFields(current, fill)),
     click: (ref) =>
@@ -351,6 +352,30 @@ async function settleAfter<T>(page: Page, action: () => Promise<T>): Promise<T> 
     await settle(page);
   }
   return result;
+}
+
+/**
+ * Wait for text to show (a result, a confirmation) or to go (a spinner,
+ * "Loading…"), checked by Playwright against what is rendered, in any frame
+ * of the page's main document. Without text, a plain pause.
+ */
+async function waitForText(
+  page: Page,
+  wait: { text?: string; gone?: boolean; timeoutMs: number },
+): Promise<boolean> {
+  if (!wait.text) {
+    await new Promise((resolve) => setTimeout(resolve, wait.timeoutMs));
+    return true;
+  }
+  const state = wait.gone ? "hidden" : "visible";
+  return page
+    .getByText(wait.text)
+    .first()
+    .waitFor({ state, timeout: wait.timeoutMs })
+    .then(
+      () => true,
+      () => false,
+    );
 }
 
 /** Wait for `load`, up to `SETTLE_MS`; a page that never settles is used as it is. */

@@ -54,8 +54,23 @@ the agent can browse, but there is nothing to stream (the panel says so)
   change, watched for 500 ms) waits for that page the same way, so its
   result names where it landed and the next read is of the new page.
   `browser_back` goes back in the tab's history, behind the same guard.
-- Context: only the newest two long page reads (snapshot or text) are sent
-  to the model; older ones become a one-line note, dropped five at a time
+- **Actions return the page after them**, so most steps need no separate
+  snapshot. Navigate, back, and a click or key that opens a new page return
+  that page's first 6,000 characters. On the same page, click, type, Enter
+  and `browser_wait_for` return only the lines that changed since the last
+  whole-page snapshot (`snapshotDiff`: lines compared as multisets, each new
+  line under the unchanged line above it), or a one-line note when nothing
+  changed or the change is over 4,000 characters. Refs are stable across
+  snapshots, so a control that only changed state is one line. Focus
+  (`[active]`) is left out of snapshots, because it moves with every action.
+  Text that `browser_type` typed is replaced with `[typed text]` in its own
+  result.
+- `browser_wait_for` waits until text shows or, with `gone`, goes away
+  (Playwright's `getByText`, up to 30 s, default 10), or pauses a few
+  seconds, instead of the model snapshotting in a loop while a page loads.
+- Context: only the newest two long page reads (snapshot, text, or an
+  action's page) are sent to the model; older ones become a one-line note
+  after the action's own first line, dropped five at a time
   so the prompt cache keeps working (`context-trim.ts`, like screenshots).
   Vision is the `browser_screenshot` fallback (CSS-pixel scale, so a 2x
   desktop does not double the image the model pays for).
