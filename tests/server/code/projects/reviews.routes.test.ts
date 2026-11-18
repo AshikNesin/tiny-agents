@@ -608,6 +608,39 @@ describe("the review inbox", () => {
     expect(res.body.data![1]?.lastReviewAt).toBe("2026-11-16T08:00:00Z");
   });
 
+  it("asks GitHub for only what the filter keeps: recent, one repository, no drafts", async () => {
+    const res = await call<InboxPullView[]>(
+      "GET",
+      "/reviews/inbox?days=30&repo=acme/web&drafts=hide",
+    );
+
+    expect(res.status).toBe(200);
+    // FIXED_NOW is 2026-11-06, so 30 days back is 2026-10-07.
+    expect(github.inboxFilter).toEqual({
+      updatedSince: "2026-10-07",
+      repos: [{ owner: "acme", name: "web" }],
+      drafts: false,
+    });
+  });
+
+  it("keeps to the projects' repositories, and lists nothing when there is no project", async () => {
+    github.inbox = [pull(7)];
+    const none = await call<InboxPullView[]>("GET", "/reviews/inbox?repo=projects");
+    expect(none.body.data).toEqual([]);
+
+    await newProject();
+    const res = await call<InboxPullView[]>("GET", "/reviews/inbox?repo=projects");
+
+    expect(github.inboxFilter).toEqual({ repos: [{ owner: "acme", name: "web" }] });
+    expect(res.body.data!.map((p) => p.number)).toEqual([7]);
+  });
+
+  it("refuses a filter it cannot read", async () => {
+    const res = await call("GET", "/reviews/inbox?days=soon");
+
+    expect(res.status).toBe(400);
+  });
+
   it("says when GitHub cannot be read", async () => {
     github.reviewInbox = async () => {
       throw new Error("Bad credentials");

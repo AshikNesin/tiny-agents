@@ -26,7 +26,9 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { logger } from "@groot/core/logger";
 import {
+  parseRepo,
   repoSlug,
+  type InboxFilter,
   type PullSnapshot,
   type RepoRef,
   type ReviewCommentInput,
@@ -49,6 +51,7 @@ import {
 } from "@tiny-agents/sandbox/terminal";
 import type {
   InboxPullView,
+  InboxQuery,
   PullReviewView,
   PullThreadsView,
   PushedReview,
@@ -484,21 +487,34 @@ export async function resolveReviewThread(id: string, threadId: string) {
  * credential sees (one query, no model): what asks for their review, what
  * changed since they reviewed, what waits on its author, and their own.
  * Each says whether its repository is a project, and its open review here.
+ * `query` narrows GitHub's searches themselves, so a filter reaches past the
+ * first page of each.
  */
-export async function reviewInbox(): Promise<InboxPullView[]> {
+export async function reviewInbox(query: InboxQuery = {}): Promise<InboxPullView[]> {
+  const projects = await db.select().from(codeProjects);
+  const filter: InboxFilter = {};
+  if (query.days) {
+    filter.updatedSince = new Date(Date.now() - query.days * 86_400_000).toISOString().slice(0, 10);
+  }
+  if (query.repo === "projects") {
+    if (projects.length === 0) return [];
+    filter.repos = projects.map((p) => ({ owner: p.repoOwner, name: p.repoName }));
+  } else if (query.repo) {
+    const repo = parseRepo(query.repo);
+    if (!repo) throw Boom.badRequest(`Not a repository: ${query.repo}`);
+    filter.repos = [repo];
+  }
+  if (query.drafts === "hide") filter.drafts = false;
   const github = await codeGitHub().client();
   let pulls;
   try {
-    pulls = await github.reviewInbox();
+    pulls = await github.reviewInbox(filter);
   } catch (error) {
     throw Boom.badRequest(
       `Cannot read your review requests on GitHub: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
-  const [projects, open] = await Promise.all([
-    db.select().from(codeProjects),
-    db.select().from(codeReviews).where(isNull(codeReviews.archivedAt)),
-  ]);
+  const open = await db.select().from(codeReviews).where(isNull(codeReviews.archivedAt));
   const projectOf = new Map(
     projects.map((p) => [`${p.repoOwner}/${p.repoName}`.toLowerCase(), p.id]),
   );

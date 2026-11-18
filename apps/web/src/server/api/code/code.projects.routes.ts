@@ -533,7 +533,17 @@ router.post("/code/reviews", async (c) => {
   return ok<PullReviewView>(c, await openReview(pr), 201);
 });
 
-router.get("/code/reviews/inbox", async (c) => ok<InboxPullView[]>(c, await reviewInbox()));
+const inboxQuery = z.object({
+  days: z.coerce.number().int().min(1).max(365).optional(),
+  repo: z.string().trim().min(1).max(200).optional(),
+  drafts: z.enum(["hide"]).optional(),
+});
+
+router.get("/code/reviews/inbox", async (c) => {
+  const query = inboxQuery.safeParse(c.req.query());
+  if (!query.success) throw Boom.badRequest("Cannot read that filter.");
+  return ok<InboxPullView[]>(c, await reviewInbox(query.data));
+});
 
 router.get("/code/reviews/:review", async (c) =>
   ok<PullReviewView>(c, await getReview(c.req.param("review"))),

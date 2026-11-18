@@ -293,6 +293,18 @@ export interface InboxPullView {
   reviewId: string | null;
 }
 
+/**
+ * `GET /code/reviews/inbox`'s filter, as query parameters; each is left out
+ * to keep everything. `repo` is `owner/name`, or `projects` for every
+ * project's repository.
+ */
+export interface InboxQuery {
+  /** Only PRs updated in this many days. */
+  days?: number;
+  repo?: string;
+  drafts?: "hide";
+}
+
 /** How a PR review is submitted on GitHub. */
 export type ReviewVerdict = "COMMENT" | "APPROVE" | "REQUEST_CHANGES";
 
