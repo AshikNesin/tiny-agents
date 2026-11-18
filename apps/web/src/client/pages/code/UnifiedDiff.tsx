@@ -31,7 +31,7 @@ import { Button, Textarea } from "@groot/ui";
 import { Spinner } from "../../components/ui/spinner";
 
 /** Lines commented on: new-file numbers, or old-file ones for removed lines. */
-interface LineSelection {
+export interface LineSelection {
   from: number;
   to: number;
   side: "old" | "new";
@@ -65,7 +65,10 @@ function suggestionBlock(lines: string): string {
 }
 
 /** +added / −removed counts of a unified diff. */
-export function diffStats(patchText: string): { additions: number; deletions: number } {
+export function diffStats(patchText: string): {
+  additions: number;
+  deletions: number;
+} {
   let additions = 0;
   let deletions = 0;
   for (const line of patchText.split("\n")) {
@@ -86,7 +89,7 @@ const MAX_DRAWN_ROWS = 4_000;
  * The look every diff shares: stacked, wrapped, the app's theme, no header of
  * its own (callers draw theirs), and the app's mono font and size.
  */
-function useBaseOptions() {
+export function useBaseOptions() {
   const { resolvedTheme } = useTheme();
   return useMemo(
     () =>
@@ -105,14 +108,16 @@ function useBaseOptions() {
 }
 
 /** Where a diff row is, in the order the diff reads. */
-interface Row {
+export interface Row {
   oldNo?: number;
   newNo?: number;
 }
 
 /** Every line of old → new in reading order; null when diffing took too long. */
-function rowsOf(oldContent: string, newContent: string): Row[] | null {
-  const changes = diffLines(oldContent, newContent, { timeout: DIFF_TIMEOUT_MS });
+export function rowsOf(oldContent: string, newContent: string): Row[] | null {
+  const changes = diffLines(oldContent, newContent, {
+    timeout: DIFF_TIMEOUT_MS,
+  });
   if (!changes) return null;
   const rows: Row[] = [];
   let oldNo = 1;
@@ -128,7 +133,7 @@ function rowsOf(oldContent: string, newContent: string): Row[] | null {
   return rows;
 }
 
-const SIDE = { old: "deletions", new: "additions" } as const;
+export const SIDE = { old: "deletions", new: "additions" } as const;
 const sideOf = (side: SelectedLineRange["side"]): "old" | "new" =>
   side === "deletions" ? "old" : "new";
 
@@ -137,7 +142,7 @@ const sideOf = (side: SelectedLineRange["side"]): "old" | "new" =>
  * on removed lines and ends on added ones (or the reverse) is commented on by
  * the new-file lines inside it, or the old ones when it has none.
  */
-function toSelection(range: SelectedLineRange, rows: Row[]): LineSelection {
+export function toSelection(range: SelectedLineRange, rows: Row[]): LineSelection {
   const startSide = sideOf(range.side);
   const endSide = sideOf(range.endSide ?? range.side);
   if (startSide === endSide) {
@@ -164,7 +169,7 @@ function rangeLabel(sel: { from: number; to: number; side: "old" | "new" }): str
   return sel.from === sel.to ? `${what} ${sel.from}` : `${what}s ${sel.from}–${sel.to}`;
 }
 
-function Composer({
+export function Composer({
   path,
   selection,
   body,
@@ -279,7 +284,7 @@ function Composer({
   );
 }
 
-function SavedComment({
+export function SavedComment({
   comment,
   onRemove,
 }: {
@@ -346,7 +351,7 @@ export function PatchView({
   );
 }
 
-const UNSHOWABLE_TEXT = {
+export const UNSHOWABLE_TEXT = {
   binary: "Binary file. Its contents are not shown.",
   tooLarge: "This file is too large to show here (over 2 MB).",
 } as const;
@@ -482,7 +487,11 @@ export function FileDiff({
         lineAnnotations={lineAnnotations}
         selectedLines={
           selection
-            ? { start: selection.from, end: selection.to, side: SIDE[selection.side] }
+            ? {
+                start: selection.from,
+                end: selection.to,
+                side: SIDE[selection.side],
+              }
             : null
         }
         renderAnnotation={({ metadata }) =>

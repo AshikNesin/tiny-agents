@@ -7,11 +7,12 @@
  * suggestions and Discard; Open in terminal opens a tab in the checkout.
  * The network is the boundary: fetch is stubbed.
  */
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { ConfirmProvider } from "@groot/ui/primitives";
+import { PullDiffs } from "@/pages/code/PullDiffs";
 import { ReviewPanel } from "@/pages/code/ReviewPanel";
 import { OpenInTerminal, YourChangesActions } from "@/pages/code/YourChanges";
 import type { PullReviewView } from "../../../apps/web/src/shared/api/code";
@@ -22,6 +23,7 @@ const REVIEW = {
   number: 7,
   author: "maria",
   headRef: "retry-webhooks",
+  baseRef: "main",
   headSha: "a".repeat(40),
   mine: false,
 } as PullReviewView;
@@ -76,15 +78,13 @@ function showPanel(answers: Record<string, unknown>) {
   });
   render(
     <ConfirmProvider>
-      <ReviewPanel
-        threadId="review:rv1"
-        baseBranch="main"
+      <PullDiffs
+        review={REVIEW}
         refreshKey="1"
-        page
-        editable
-        pull={{
-          yourChanges: (done) => <YourChangesActions review={REVIEW} onChanged={done} />,
-        }}
+        diffStyle="unified"
+        collapse={null}
+        drawer={{ open: false, onOpenChange: () => undefined }}
+        yourChanges={(done) => <YourChangesActions review={REVIEW} onChanged={done} />}
       />
     </ConfirmProvider>,
   );
@@ -107,11 +107,11 @@ describe("your changes to a PR", () => {
 
     await pickYourChanges(user);
 
-    const list = await screen.findByRole("navigation", {
-      name: "Changed files",
-    });
-    expect(list).toHaveTextContent("a.ts");
-    expect(list).not.toHaveTextContent("b.ts");
+    // Each file's header in the column: only yours.
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: "Fold src/b.ts" })).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole("button", { name: "Fold src/a.ts" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Push to PR" }));
     const dialog = screen.getByRole("dialog", {
       name: "Push to the pull request",

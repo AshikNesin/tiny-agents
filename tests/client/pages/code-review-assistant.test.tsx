@@ -73,6 +73,8 @@ describe("the review assistant's model", () => {
       </MemoryRouter>,
     );
 
+    // The assistant starts folded to a rail.
+    await user.click(await screen.findByRole("button", { name: "Open assistant" }));
     const picker = await screen.findByRole("button", { name: "Model" });
     expect(picker).toHaveTextContent("Sonnet");
     await user.click(picker);

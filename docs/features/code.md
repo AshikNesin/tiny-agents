@@ -433,12 +433,27 @@ and diffs from git there, against the PR's base. Nothing calls a model.
 commit, unless its worktree has changes. **Close review** removes the
 worktree and archives the assistant.
 
-**The page** (`/code/reviews/<id>`) takes the whole screen. The header
-shows the number, title, repository and author. The PR's changes fill the
-left side, as in Source control: a file list with **Viewed** marks, the
-diff, and line comments. The assistant is on the right, behind the same
-resizable divider as a thread's panel. Phones show one side at a time
-(**Assistant** / **Files** in the header).
+**The page** (`/code/reviews/<id>`) takes the whole screen, laid out like
+[diffshub](https://diffshub.com) (see `CREDITS.md`). The header shows the
+number, title, repository and author, a split or unified view toggle (the
+choice is remembered) and **Fold all files**. On the left, a resizable
+sidebar holds the changed files as a tree (@pierre/trees: status letters,
+a check on viewed files, search, a filter by status) or, on its
+**Comments** tab, the comments waiting to be sent and GitHub's
+conversations, each a jump to its line; under them, the diff stats. Every
+changed file then sits in one scrolling column (@pierre/diffs `CodeView`,
+which draws only what is in view), each under a sticky header with its
+fold, +/−, **Edit** and **Viewed**. A file's two sides are read as it is
+unfolded, four at a time; generated and viewed files start folded, and
+marking a file viewed folds it. Select line numbers, or the + beside a
+line, to comment.
+
+The assistant sits on the far left as a thin rail, folded by default (a
+badge counts the comments waiting for it). **Open assistant** opens it as a
+resizable pane, **Collapse assistant** folds it again, and a comment sent
+with **Ask assistant** opens it. Phones show one side at a time
+(**Assistant** / **Files** in the header), the diffs unified and the file
+tree in a drawer.
 
 **The assistant** is a thread of the project's default harness, started in
 the review's worktree on your first question, in the harness's asking
@@ -489,8 +504,8 @@ when it opens (in the one GitHub query that reads the PR, no model) and
 shows each under the lines it is on, with its comments, **Reply** and
 **Resolve** (both as the GitHub account Code uses). A resolved one starts
 folded. GitHub places them at the PR's current head: when the review shows
-an older commit, or the code moved on (outdated), a file lists them above
-its diff instead, the first with a hint to **Update**.
+an older commit, or the code moved on (outdated), the **Comments** tab
+lists them under their file instead, the first with a hint to **Update**.
 
 **Since your review.** Opening a review reads which commit your last
 GitHub review of the PR was on (from the same query), and submitting one

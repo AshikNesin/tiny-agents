@@ -1,27 +1,42 @@
 /**
- * A PR review (`/code/reviews/<id>`, issue #345): the pull request's
- * changes at full height (file list beside the diff, Viewed marks, line
- * comments), and its assistant on the right, behind the same divider as a
- * thread's panel. Focus mode: no thread list. A line comment is for the
- * PR's review on GitHub (sent with Submit review) or for the assistant.
+ * A PR review (`/code/reviews/<id>`, issue #345), laid out like diffshub:
+ * the changed files as a tree on the left and every diff in one scrolling
+ * column beside it (`PullDiffs`). The assistant sits on the far left as a
+ * thin rail, folded by default; opened, it is a resizable pane. A line
+ * comment is for the PR's review on GitHub (sent with Submit review) or for
+ * the assistant.
  *
  * The assistant starts on the first question (nothing calls a model until
  * then): its first message carries a short card of the PR, any line comments
  * waiting, and the question. After that it is the thread itself, shown
- * without its header. Phones show one side at a time.
+ * without its header. Phones show one side at a time, the file tree in a
+ * drawer and the diffs unified.
  */
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useSyncExternalStore,
+  useState,
+  type FormEvent,
+} from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
+  Columns2,
   Ellipsis,
   ExternalLink,
   FileDiff,
+  FoldVertical,
+  ListTree,
   MessageSquare,
+  PanelLeftClose,
   RefreshCw,
+  Rows2,
   Send,
   Sparkles,
   SquareTerminal,
+  UnfoldVertical,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -53,14 +68,38 @@ import type { PullReviewView } from "../../../shared/api/code";
 import { ConversationView } from "./ConversationView";
 import { DEFAULT, ModelPicker, loadModels } from "./controls";
 import { PendingComments } from "./PendingComments";
-import { ResizablePane } from "./ResizablePane";
-import { ReviewPanel } from "./ReviewPanel";
+import { AssistantPane } from "./ResizablePane";
+import { PullDiffs, type DiffStyle } from "./PullDiffs";
 import { usePullConversations } from "./PullThreads";
 import { SubmitReviewButton } from "./SubmitReview";
 import { OpenInTerminal, useOpenInTerminal, YourChangesActions } from "./YourChanges";
 
 /** Questions a reviewer asks first, one tap each. */
 const STARTERS = ["Summarize this PR", "What could break?", "Is it tested well?"];
+
+const STYLE_KEY = "code:diff-style";
+const WIDE = "(min-width: 1024px)";
+
+function readStyle(): DiffStyle {
+  try {
+    return window.localStorage.getItem(STYLE_KEY) === "unified" ? "unified" : "split";
+  } catch {
+    return "split";
+  }
+}
+
+/** Whether the window is wide enough for side-by-side diffs and the assistant beside them. */
+function useWide(): boolean {
+  return useSyncExternalStore(
+    (change) => {
+      if (typeof window.matchMedia !== "function") return () => undefined;
+      const query = window.matchMedia(WIDE);
+      query.addEventListener("change", change);
+      return () => query.removeEventListener("change", change);
+    },
+    () => typeof window.matchMedia === "function" && window.matchMedia(WIDE).matches,
+  );
+}
 
 export function PullReview({
   reviewId,
@@ -78,6 +117,12 @@ export function PullReview({
   const [reload, setReload] = useState(0);
   // Phones: the diff or the assistant.
   const [side, setSide] = useState<"files" | "assistant">("files");
+  // Wide screens: the assistant folded to a rail (by default) or open beside the files.
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [filesOpen, setFilesOpen] = useState(false);
+  const [style, setStyle] = useState<DiffStyle>(readStyle);
+  const [collapse, setCollapse] = useState<{ all: boolean; at: number } | null>(null);
+  const wide = useWide();
 
   useEffect(() => {
     let cancelled = false;
@@ -97,6 +142,17 @@ export function PullReview({
   const commenting = useThreadCommenting(commentKey, () => undefined);
   const github = useThreadCommenting(githubCommentsKey(reviewId), () => undefined);
   const conversations = usePullConversations(review, `${review?.headSha}:${reload}`);
+  const waiting = useThreadComments(review?.key).length;
+  const drawer = useMemo(() => ({ open: filesOpen, onOpenChange: setFilesOpen }), [filesOpen]);
+
+  const changeStyle = (next: DiffStyle) => {
+    setStyle(next);
+    try {
+      window.localStorage.setItem(STYLE_KEY, next);
+    } catch {
+      // not remembered in private mode
+    }
+  };
 
   const update = async () => {
     if (!review) return;
@@ -143,14 +199,29 @@ export function PullReview({
     );
   }
 
+  const allFolded = collapse?.all ?? false;
+  const showAssistant = side === "assistant" || assistantOpen;
+
   return (
     <div className="flex h-dvh min-h-0 flex-col" data-testid="code-pull-review">
-      <header className="border-border flex h-13 shrink-0 items-center gap-1 border-b px-2 sm:px-3">
+      <header className="border-border flex h-12 shrink-0 items-center gap-1 border-b px-2 sm:px-3">
         <Button asChild variant="ghost" size="icon-sm" className="shrink-0">
           <Link to="/code/reviews" aria-label="All reviews" title="All reviews">
             <ArrowLeft />
           </Link>
         </Button>
+        {side === "files" && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="text-muted-foreground shrink-0 md:hidden"
+            aria-label="Files"
+            aria-expanded={filesOpen}
+            onClick={() => setFilesOpen(!filesOpen)}
+          >
+            <ListTree />
+          </Button>
+        )}
         <span className="text-muted-foreground shrink-0 px-1 text-sm tabular-nums">
           #{review.number}
         </span>
@@ -165,6 +236,29 @@ export function PullReview({
           {review.repo} · @{review.author} · {review.headRef} → {review.baseRef}
         </span>
         <span className="flex-1" />
+        <div className="hidden items-center gap-0.5 lg:flex">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="text-muted-foreground"
+            aria-label={style === "split" ? "Switch to unified view" : "Switch to split view"}
+            title={style === "split" ? "Unified view" : "Split view"}
+            onClick={() => changeStyle(style === "split" ? "unified" : "split")}
+          >
+            {style === "split" ? <Rows2 /> : <Columns2 />}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="text-muted-foreground"
+            aria-label={allFolded ? "Unfold all files" : "Fold all files"}
+            title={allFolded ? "Unfold all files" : "Fold all files"}
+            onClick={() => setCollapse({ all: !allFolded, at: Date.now() })}
+          >
+            {allFolded ? <UnfoldVertical /> : <FoldVertical />}
+          </Button>
+          <span className="bg-border mx-1 h-4 w-px" aria-hidden />
+        </div>
         {github && <SubmitReviewButton review={review} github={github} />}
         <Button
           variant="ghost"
@@ -215,46 +309,101 @@ export function PullReview({
         </Button>
       </header>
       <div className="flex min-h-0 flex-1">
+        {!assistantOpen && (
+          <AssistantRail waiting={waiting} onOpen={() => setAssistantOpen(true)} />
+        )}
+        {showAssistant && (
+          <AssistantPane
+            resizable={assistantOpen}
+            className={cn(
+              "border-border lg:border-r",
+              side === "assistant" ? undefined : "hidden lg:flex",
+              !assistantOpen && "lg:hidden",
+            )}
+          >
+            <div className="flex h-10 shrink-0 items-center gap-2 px-3">
+              <Sparkles className="text-muted-foreground size-4" aria-hidden />
+              <h2 className="flex-1 text-sm font-medium">Assistant</h2>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="text-muted-foreground hidden lg:inline-flex"
+                aria-label="Collapse assistant"
+                title="Collapse assistant"
+                onClick={() => setAssistantOpen(false)}
+              >
+                <PanelLeftClose />
+              </Button>
+            </div>
+            <div className="flex min-h-0 flex-1 flex-col">
+              <Assistant
+                review={review}
+                harnesses={harnesses}
+                rows={rows}
+                onStarted={(id) => setReview({ ...review, threadId: id })}
+              />
+            </div>
+          </AssistantPane>
+        )}
         <main
-          className={cn(
-            "min-w-0 flex-1 flex-col lg:min-w-90",
-            side === "files" ? "flex" : "hidden lg:flex",
-          )}
+          className={cn("min-w-0 flex-1 flex-col", side === "files" ? "flex" : "hidden lg:flex")}
         >
-          <ReviewPanel
-            threadId={review.key}
-            baseBranch={review.baseRef}
-            pull={{
-              reviewedSha: review.reviewedSha !== review.headSha ? review.reviewedSha : null,
-              yourChanges: (done) => (
-                <YourChangesActions
-                  review={review}
-                  onChanged={(headSha) => {
-                    if (headSha) setReview({ ...review, headSha });
-                    done();
-                  }}
-                />
-              ),
-            }}
+          <PullDiffs
+            review={review}
             refreshKey={`${review.headSha}:${reload}:${assistantRow?.working}:${assistantRow?.cursor}`}
-            page
-            editable
+            diffStyle={wide ? style : "unified"}
+            collapse={collapse}
             commenting={commenting}
-            githubCommenting={github}
+            github={github}
             conversations={conversations}
+            drawer={drawer}
+            onAskedAssistant={() => {
+              if (wide) setAssistantOpen(true);
+            }}
+            yourChanges={(done) => (
+              <YourChangesActions
+                review={review}
+                onChanged={(headSha) => {
+                  if (headSha) setReview({ ...review, headSha });
+                  done();
+                }}
+              />
+            )}
           />
         </main>
-        <ResizablePane narrow className={side === "assistant" ? undefined : "hidden lg:flex"}>
-          <div className="flex min-h-0 flex-1 flex-col">
-            <Assistant
-              review={review}
-              harnesses={harnesses}
-              rows={rows}
-              onStarted={(id) => setReview({ ...review, threadId: id })}
-            />
-          </div>
-        </ResizablePane>
       </div>
+    </div>
+  );
+}
+
+/** The folded assistant: a thin rail on the left, with how many comments wait for it. */
+function AssistantRail({ waiting, onOpen }: { waiting: number; onOpen(): void }) {
+  return (
+    <div className="border-border hidden w-11 shrink-0 flex-col items-center gap-1 border-r py-2 lg:flex">
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        className="text-muted-foreground relative"
+        aria-label={waiting > 0 ? `Open assistant, ${waiting} comments waiting` : "Open assistant"}
+        title="Open assistant"
+        onClick={onOpen}
+      >
+        <Sparkles />
+        {waiting > 0 && (
+          <span className="bg-primary text-primary-foreground absolute -top-0.5 -right-0.5 flex size-4 items-center justify-center rounded-full text-[10px] tabular-nums">
+            {waiting}
+          </span>
+        )}
+      </Button>
+      <button
+        type="button"
+        onClick={onOpen}
+        tabIndex={-1}
+        aria-hidden
+        className="text-muted-foreground hover:text-foreground mt-1 text-xs [writing-mode:vertical-rl]"
+      >
+        Assistant
+      </button>
     </div>
   );
 }
@@ -393,12 +542,8 @@ function AskFirst({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-6">
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-2">
         <div className="mx-auto max-w-xl space-y-3">
-          <p className="flex items-center gap-2 text-sm font-medium">
-            <Sparkles className="text-muted-foreground size-4" aria-hidden />
-            Assistant
-          </p>
           <p className="text-muted-foreground text-sm">
             Ask anything about #{review.number}. It works in a checkout of the PR and reads the code
             it needs. Select lines in the diff to ask about them. Nothing runs until you ask.
