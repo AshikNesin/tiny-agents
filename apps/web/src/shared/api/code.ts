@@ -310,6 +310,14 @@ export interface SuggestedChanges {
   skipped: number;
 }
 
+/** `PUT /code/reviews/:id/file`: the light editor's save. */
+export interface EditReviewFileBody {
+  path: string;
+  /** The content the editor opened with: the save is refused if the file changed since. */
+  original: string;
+  content: string;
+}
+
 /** `POST /code/reviews/:id/terminal`: the Terminal tab opened in the review's worktree. */
 export interface ReviewTerminal {
   name: string;

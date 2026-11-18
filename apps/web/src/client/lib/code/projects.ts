@@ -16,6 +16,7 @@ import type {
   InboxPullView,
   PullReviewView,
   PullThreadsView,
+  EditReviewFileBody,
   PushedReview,
   ReviewTerminal,
   SuggestedChanges,
@@ -94,6 +95,9 @@ export const projectsApi = {
     apiClient.get<ReviewFile[]>(`${thread(id)}/review/files`, since ? { since } : undefined),
   reviewFile: (id: string, path: string, since?: "review" | "mine") =>
     apiClient.get<ReviewFileDiff>(`${thread(id)}/review/file`, since ? { path, since } : { path }),
+  /** The light editor's save: the file's new content, and what it was opened with. */
+  editFile: (id: string, body: EditReviewFileBody) =>
+    apiClient.put(`${thread(id)}/review/file`, body),
   setViewed: (id: string, path: string, hash: string, viewed: boolean) =>
     apiClient.post(`${thread(id)}/review/viewed`, { path, hash, viewed }),
   drafts: (id: string) => apiClient.get<ReviewDraft[]>(`${thread(id)}/review/drafts`),

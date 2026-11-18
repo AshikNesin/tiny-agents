@@ -311,6 +311,7 @@ export function CodePage() {
           baseBranch={project.baseBranch}
           refreshKey={changesKey}
           page={page}
+          editable
           commenting={commenting}
           onOtherScopes={
             harness?.capabilities.workspace.diffs ? () => setReviewScope("harness") : undefined

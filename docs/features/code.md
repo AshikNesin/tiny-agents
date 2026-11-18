@@ -504,6 +504,13 @@ worktree, commits made there included), with three ways on:
 
 **Open in terminal** in the header opens a Terminal tab that starts in the
 review's checkout, for changes by hand; they show under **Your changes** too.
+For a typo or a rename, **Edit** (the pencil over a file's diff) opens the
+file as plain text (no highlighting or completion) and **Save** writes it in
+the checkout (`PUT /code/threads/:id/review/file`, the same save a coding
+thread's Review panel uses for its worktree). The save is refused when the
+file changed since it was opened (the agent may have edited it), and for
+anything that is not a regular file inside the checkout (a symlink out, or
+git's own files).
 
 ## Bots hand off coding
 

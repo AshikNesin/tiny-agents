@@ -81,6 +81,7 @@ function showPanel(answers: Record<string, unknown>) {
         baseBranch="main"
         refreshKey="1"
         page
+        editable
         pull={{
           headRef: REVIEW.headRef,
           yourChanges: (done) => <YourChangesActions review={REVIEW} onChanged={done} />,
@@ -184,5 +185,76 @@ describe("your changes to a PR", () => {
 
     expect(await screen.findByText("Terminal ?tab=ta-term-2")).toBeInTheDocument();
     expect(posts(fetch)).toEqual([["/api/v1/code/reviews/rv1/terminal", null]]);
+  });
+});
+
+describe("the light editor", () => {
+  it("edits the open file in place and saves it to the checkout", async () => {
+    const user = userEvent.setup();
+    const fetch = showPanel({});
+
+    await user.click(await screen.findByRole("button", { name: "Edit src/a.ts" }));
+    const editor = screen.getByRole("textbox", { name: "Edit src/a.ts" });
+    expect(editor).toHaveValue("b\n");
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    await user.clear(editor);
+    await user.type(editor, "B{Enter}");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    const save = fetch.mock.calls.find(([, init]) => init?.method === "PUT");
+    expect(new URL(String(save?.[0]), "http://x").pathname).toBe(
+      "/api/v1/code/threads/review%3Arv1/review/file",
+    );
+    expect(JSON.parse(String(save?.[1]?.body))).toEqual({
+      path: "src/a.ts",
+      original: "b\n",
+      content: "B\n",
+    });
+    // Back to the diff once saved.
+    expect(await screen.findByRole("button", { name: "Edit src/a.ts" })).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "Edit src/a.ts" })).not.toBeInTheDocument();
+  });
+
+  it("cancels without saving", async () => {
+    const user = userEvent.setup();
+    const fetch = showPanel({});
+
+    await user.click(await screen.findByRole("button", { name: "Edit src/a.ts" }));
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(screen.queryByRole("textbox", { name: "Edit src/a.ts" })).not.toBeInTheDocument();
+    expect(fetch.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(false);
+  });
+});
+
+describe("the light editor in a coding thread", () => {
+  it("saves to the thread's worktree from its Review panel", async () => {
+    const user = userEvent.setup();
+    const at = "/api/v1/code/threads/shelley%3At1/review";
+    const fetch = stubFetch({
+      [`GET ${at}/files`]: [file("README.md")],
+      [`GET ${at}/file`]: { path: "README.md", oldContent: "", newContent: "helo\n" },
+      [`GET ${at}/drafts`]: [],
+      "GET /api/v1/code/threads/shelley%3At1/checkpoints": [],
+    });
+    render(
+      <ConfirmProvider>
+        <ReviewPanel threadId="shelley:t1" baseBranch="main" refreshKey="1" page editable />
+      </ConfirmProvider>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "Edit README.md" }));
+    const editor = screen.getByRole("textbox", { name: "Edit README.md" });
+    await user.clear(editor);
+    await user.type(editor, "hello{Enter}");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    const save = fetch.mock.calls.find(([, init]) => init?.method === "PUT");
+    expect(new URL(String(save?.[0]), "http://x").pathname).toBe(`${at}/file`);
+    expect(JSON.parse(String(save?.[1]?.body))).toEqual({
+      path: "README.md",
+      original: "helo\n",
+      content: "hello\n",
+    });
   });
 });

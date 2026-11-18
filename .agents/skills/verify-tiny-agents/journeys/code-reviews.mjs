@@ -87,6 +87,7 @@ await journey(
     const submitted = [];
     const replies = [];
     const pushed = [];
+    const edits = [];
     const conversation = {
       id: "T_1",
       path: "src/webhooks/retry.ts",
@@ -174,6 +175,11 @@ await journey(
       await context.route(`**/api/v1/code/threads/${key}/review/files?since=mine`, (route) =>
         route.fulfill(ok([{ ...files[0], additions: 1, deletions: 1, hash: "mine1" }])),
       );
+      await context.route(`**/api/v1/code/threads/${key}/review/file`, (route) => {
+        if (route.request().method() !== "PUT") return route.fallback();
+        edits.push(route.request().postDataJSON());
+        return route.fulfill(ok({ saved: true }));
+      });
       await context.route(`**/api/v1/code/reviews/${review.id}/push`, (route) => {
         pushed.push(route.request().postDataJSON());
         return route.fulfill(ok({ sha: "89abcdef".repeat(5), branch: review.headRef }));
@@ -408,6 +414,20 @@ await journey(
         expect(pushed).toEqual([{ message: "Cap the delay at 20s" }]);
       },
     );
+
+    await step("a small change goes in with the light editor", async () => {
+      const pr = page.getByTestId("code-pull-review");
+      await pr.getByRole("button", { name: "Edit src/webhooks/retry.ts" }).click();
+      const editor = pr.getByRole("textbox", { name: "Edit src/webhooks/retry.ts" });
+      const text = await editor.inputValue();
+      await editor.fill(text.replace("const line1 = 1;", "const firstLine = 1;"));
+      await proof("light-editor");
+      await pr.getByRole("button", { name: "Save" }).click();
+      await expect(page.getByText("Saved. It shows under Your changes.")).toBeVisible();
+      expect(edits).toHaveLength(1);
+      expect(edits[0].path).toBe("src/webhooks/retry.ts");
+      expect(edits[0].content).toContain("const firstLine = 1;");
+    });
 
     await step("a phone shows one side at a time", async () => {
       const phone = await context.browser().newContext({

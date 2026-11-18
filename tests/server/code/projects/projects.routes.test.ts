@@ -184,6 +184,26 @@ describe("projects", () => {
   });
 });
 
+describe("the light editor", () => {
+  it("saves a small edit in a coding thread's worktree, where its Review panel shows it", async () => {
+    const project = await newProject();
+    const thread = await newThread(project.id);
+    const key = encodeURIComponent(thread.id);
+
+    const res = await call("PUT", `/threads/${key}/review/file`, {
+      path: "README.md",
+      original: "hello\n",
+      content: "Hello\n",
+    });
+
+    expect(res.status).toBe(200);
+    expect(await sh(local, `cat ${thread.worktree}/README.md`)).toBe("Hello");
+    const files = (await call<Array<{ path: string }>>("GET", `/threads/${key}/review/files`)).body
+      .data!;
+    expect(files.map((f) => f.path)).toEqual(["README.md"]);
+  });
+});
+
 describe("branch names", () => {
   const task =
     "Can you please fix the login flow when users sign in with Google? It 500s on the callback.";

@@ -124,6 +124,17 @@ export interface Workspace {
    * not run: a review's checkout has none of its tools installed.
    */
   commitAll(path: string, message: string, as: { name: string; email: string }): Promise<void>;
+  /**
+   * Replace a file's content in the worktree, only when it is a regular file
+   * inside it (no symlink out, nothing of git's) whose content still hashes to
+   * `expected` (sha256 hex): `outside` or `changed` otherwise.
+   */
+  writeFile(
+    path: string,
+    file: string,
+    expected: string,
+    content: string,
+  ): Promise<"written" | "outside" | "changed">;
   /** Put the worktree back at commit `sha` exactly: changes, new files and later commits go. */
   discard(path: string, sha: string): Promise<void>;
   /**
@@ -555,6 +566,23 @@ export function createWorkspace(options: WorkspaceOptions): Workspace {
         `${git(path)} add -A && ${git(path)} ${identity}-c core.hooksPath=/dev/null commit --quiet --no-verify -m ${q(message)}`,
         "Could not commit",
       );
+    },
+    async writeFile(path, file, expected, content) {
+      const script = [
+        `cd ${q(path)}`,
+        `root=$(pwd -P)`,
+        `real=$(realpath -e -- ${q(file)}) || exit 3`,
+        `case "$real" in "$root"/.git|"$root"/.git/*) exit 3;; "$root"/*) ;; *) exit 3;; esac`,
+        `[ -f "$real" ] || exit 3`,
+        `[ "$(sha256sum < "$real" | cut -d' ' -f1)" = ${q(expected)} ] || exit 4`,
+        `cat > "$real"`,
+      ].join(" && ");
+      const result = await exec(`bash -c ${q(script)}`, { stdin: content, timeoutMs: 30_000 });
+      if (result.exitCode === 3) return "outside";
+      if (result.exitCode === 4) return "changed";
+      if (result.exitCode !== 0)
+        throw new WorkspaceError(`Could not save ${file}: ${tail(result)}`);
+      return "written";
     },
     async discard(path, sha) {
       if (!/^[0-9a-f]{40}$/.test(sha)) throw new WorkspaceError("Not a commit sha");
