@@ -50,10 +50,14 @@ time.sleep(600)
   vncconfig: `#!/bin/sh
 exec sleep 600
 `,
-  // Answers /json/version on the DevTools port, like Chrome once it is up.
+  // Answers /json/version on the DevTools port, like Chrome once it is up,
+  // and notes how it was started (its clock's zone and its flags).
   "google-chrome-stable": `#!/usr/bin/env python3
-import socket, sys
+import json, os, socket, sys
 
+profile = next(a for a in sys.argv if a.startswith("--user-data-dir=")).split("=", 1)[1]
+with open(os.path.join(profile, ".fake-chrome.json"), "w") as f:
+    json.dump({"tz": os.environ.get("TZ"), "args": sys.argv[1:]}, f)
 port = int(next(a for a in sys.argv if a.startswith("--remote-debugging-port=")).split("=")[1])
 server = socket.socket()
 server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -215,10 +219,21 @@ runIfPython("browser stack launch script", () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  async function launch(name: string, options: { lockWaitSeconds?: number } = {}) {
+  async function launch(
+    name: string,
+    options: { lockWaitSeconds?: number; locale?: string; timezone?: string } = {},
+  ) {
     const profile = join(root, "profiles", name);
     profiles.push(profile);
-    let command = launchStackCommand({ profileDir: profile, width: 1280, height: 800, scale: 2 });
+    const { locale, timezone } = options;
+    let command = launchStackCommand({
+      profileDir: profile,
+      width: 1280,
+      height: 800,
+      scale: 2,
+      ...(locale ? { locale } : {}),
+      ...(timezone ? { timezone } : {}),
+    });
     // The script names the VM's real X socket directory; aim it at the fake one.
     expect(command).toContain("/tmp/.X11-unix");
     command = command
@@ -277,6 +292,18 @@ runIfPython("browser stack launch script", () => {
     expect(pids).toHaveLength(3); // Xtigervnc, vncconfig, Chrome
     expect(pids.every(alive)).toBe(true);
     expect(lockHeld()).toBe(false);
+  }, 60_000);
+
+  it("starts Chrome in the owner's time zone and language, as a site reads them", async () => {
+    const a = await launch("a", { locale: "en-IN", timezone: "Asia/Kolkata" });
+    expect(a.code).toBe(0);
+    const chrome = JSON.parse(readFileSync(join(a.profile, ".fake-chrome.json"), "utf8")) as {
+      tz: string | null;
+      args: string[];
+    };
+    expect(chrome.tz).toBe("Asia/Kolkata");
+    expect(chrome.args).toContain("--lang=en-IN");
+    expect(chrome.args).toContain("--accept-lang=en-IN,en");
   }, 60_000);
 
   it("starts a second bot's browser while the first is still running", async () => {

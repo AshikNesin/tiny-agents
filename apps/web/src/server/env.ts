@@ -26,6 +26,8 @@ const appEnvSchema = z.object({
   BROWSER_IDLE_MINUTES: z.string().optional(),
   BROWSER_SCALE: z.string().optional(),
   BROWSER_ALLOWED_PRIVATE_HOSTS: z.string().optional(),
+  BROWSER_LOCALE: z.string().optional(),
+  BROWSER_TIMEZONE: z.string().optional(),
   COMPUTER_DESKTOP_SIZE: z.string().optional(),
   COMPUTER_IDLE_MINUTES: z.string().optional(),
   COMPUTER_EXTRA_PACKAGES: z.string().optional(),

@@ -8,6 +8,7 @@
  * through the SSH channel the transport opens, which is the same trust
  * boundary the CDP port already had.
  */
+import { shQuote } from "./shell";
 import {
   createVmStack,
   installScript,
@@ -25,7 +26,7 @@ import {
 
 // Where the browser setup suite imports them from.
 export { LAUNCH_LOCK_FILE } from "./vm-stack";
-export { shQuote } from "./shell";
+export { shQuote };
 
 /** Bump when the install steps change so existing VMs re-run them. */
 export const STACK_VERSION = "v1";
@@ -38,6 +39,10 @@ export interface LaunchStackOptions {
   height: number;
   /** Device pixel ratio of the desktop (1 or 2). */
   scale: number;
+  /** The language Chrome reports (`navigator.language`, Accept-Language), e.g. `en-IN`. */
+  locale?: string;
+  /** The IANA time zone of Chrome's clock, e.g. `Asia/Kolkata`; the VM's own is UTC. */
+  timezone?: string;
 }
 
 export interface LaunchedStack {
@@ -64,6 +69,22 @@ function stopProfileChromeLines(): string[] {
     `TA_STOP=$((SECONDS + ${STOP_WAIT_SECONDS}))`,
     `while pgrep -f -- ${match} >/dev/null 2>&1 && [ "$SECONDS" -lt "$TA_STOP" ]; do sleep 0.2; done`,
   ];
+}
+
+/**
+ * Where the owner is, as Chrome tells sites: a UTC clock and en-US from a
+ * home IP in India read as a bot to checks like Amazon's. `TZ` sets Chrome's
+ * clock; `--accept-lang` overrides a profile's saved languages, `--lang` the
+ * UI's. Both stay Chrome's defaults when unset.
+ */
+function regionOf(options: LaunchStackOptions) {
+  const tz = options.timezone ? `TZ=${shQuote(options.timezone)} ` : "";
+  const { locale } = options;
+  if (!locale) return { tz, flags: "" };
+  const language = locale.split("-")[0];
+  const languages = language && language !== locale ? `${locale},${language}` : locale;
+  const flags = `--lang=${shQuote(locale)} --accept-lang=${shQuote(languages)} `;
+  return { tz, flags };
 }
 
 /** CSS size, pixel density and the display's pixel geometry of a launch. */
@@ -126,9 +147,11 @@ print(free(), free())')"`,
     xPidVariable: "XPID",
     start: (options) => {
       const { scale, cssW, cssH } = sizeOf(options);
+      const region = regionOf(options);
       return [
-        'DISPLAY=":$DISP" setsid nohup google-chrome-stable ' +
+        `DISPLAY=":$DISP" ${region.tz}setsid nohup google-chrome-stable ` +
           '--user-data-dir="$PROFILE" ' +
+          region.flags +
           '--remote-debugging-port="$CDP" --remote-debugging-address=127.0.0.1 ' +
           `--window-position=0,0 --window-size=${cssW},${cssH} --force-device-scale-factor=${scale} ` +
           "--no-first-run --no-default-browser-check --password-store=basic --use-mock-keychain " +
