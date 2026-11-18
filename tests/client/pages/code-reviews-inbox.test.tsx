@@ -5,7 +5,7 @@
  * PR needs from the owner; a PR of a project opens its review here, one of
  * another repository opens on GitHub. The network is the boundary.
  */
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -56,7 +56,16 @@ const show = () =>
     </MemoryRouter>,
   );
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  window.localStorage.clear();
+});
+
+const inboxQuery = (fetch: ReturnType<typeof stubFetch>) =>
+  fetch.mock.calls
+    .map(([url]) => new URL(String(url), "http://x"))
+    .filter((url) => url.pathname.endsWith("/reviews/inbox"))
+    .map((url) => url.search);
 
 describe("the review inbox", () => {
   it("lists PRs by what they need from you", async () => {
@@ -77,7 +86,7 @@ describe("the review inbox", () => {
     expect(screen.getByRole("region", { name: "Your pull requests" })).toHaveTextContent("Draft");
   });
 
-  it("opens a project's PR as a review here, and another repository's on GitHub", async () => {
+  it("gives each row its own review action and its own GitHub link", async () => {
     const user = userEvent.setup();
     const fetch = stubFetch([
       pull(1),
@@ -86,11 +95,19 @@ describe("the review inbox", () => {
     show();
     const needs = await screen.findByRole("region", { name: "Needs your review" });
 
-    expect(within(needs).getByRole("link", { name: /#5/ })).toHaveAttribute(
+    expect(within(needs).getByRole("link", { name: "Open #1 on GitHub" })).toHaveAttribute(
+      "href",
+      "https://github.com/acme/web/pull/1",
+    );
+    expect(within(needs).getByRole("link", { name: "Open #5 on GitHub" })).toHaveAttribute(
       "href",
       "https://github.com/other/lib/pull/5",
     );
-    await user.click(within(needs).getByRole("button", { name: /#1/ }));
+    // Another repository's PR cannot be reviewed here, and says why.
+    expect(within(needs).queryByRole("button", { name: /#5/ })).toBeNull();
+    expect(within(needs).getByText("Not a project")).toBeInTheDocument();
+
+    await user.click(within(needs).getByRole("button", { name: /^Review #1/ }));
 
     expect(await screen.findByText("Review page")).toBeInTheDocument();
     const post = fetch.mock.calls.find(([, init]) => init?.method === "POST");
@@ -136,5 +153,47 @@ describe("the review inbox", () => {
     expect(
       await screen.findByText("Cannot read your review requests on GitHub: Bad credentials"),
     ).toBeInTheDocument();
+  });
+});
+
+describe("filtering the inbox", () => {
+  it("asks again for what the filters keep, and remembers them next time", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const fetch = stubFetch([
+      pull(1),
+      pull(2, { repo: "acme/api", url: "https://github.com/acme/api/pull/2" }),
+    ]);
+    const { unmount } = show();
+    await screen.findByRole("region", { name: "Needs your review" });
+
+    await user.click(screen.getByRole("combobox", { name: "Updated" }));
+    await user.click(await screen.findByRole("option", { name: "Past 30 days" }));
+    await user.click(screen.getByRole("combobox", { name: "Repository" }));
+    await user.click(await screen.findByRole("option", { name: "acme/api" }));
+    await user.click(screen.getByRole("checkbox", { name: "Hide drafts" }));
+
+    await waitFor(() =>
+      expect(inboxQuery(fetch).at(-1)).toBe("?days=30&repo=acme%2Fapi&drafts=hide"),
+    );
+    expect(inboxQuery(fetch)[0]).toBe("");
+
+    unmount();
+    fetch.mockClear();
+    show();
+    await screen.findByRole("region", { name: "Needs your review" });
+    expect(inboxQuery(fetch)).toEqual(["?days=30&repo=acme%2Fapi&drafts=hide"]);
+    expect(screen.getByRole("combobox", { name: "Updated" })).toHaveTextContent("Past 30 days");
+  });
+
+  it("offers a way back when the filters hide everything", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    window.localStorage.setItem("code.reviews.filter", JSON.stringify({ days: 7 }));
+    const fetch = stubFetch([]);
+    show();
+
+    expect(await screen.findByText("Nothing matches these filters.")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Clear filters" }));
+
+    await waitFor(() => expect(inboxQuery(fetch).at(-1)).toBe(""));
   });
 });

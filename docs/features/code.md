@@ -412,9 +412,12 @@ Above them is the inbox from GitHub, across every repository the GitHub
 credential (Settings → GitHub) sees, read in one query when the screen
 opens: **Needs your review** (review requested), **Updated since your
 review** (commits after your last review), **Waiting on author** (none
-since) and **Your pull requests**, with draft and approval state. A PR of
-a project opens its review here; another repository's opens on GitHub. A
-repository that is not a project yet says so. `/code/review/<owner>/<name>/<number>`
+since) and **Your pull requests**, with draft and approval state. Filters
+above it narrow GitHub's searches themselves (`GET /code/reviews/inbox?days=30&repo=owner/name&drafts=hide`,
+or `repo=projects`), so they reach past the first 50 of each, and the
+browser remembers them. A click on a project's PR opens its review here;
+every row also has its own **GitHub** link. A repository that is not a
+project yet says so, and opens only on GitHub. `/code/review/<owner>/<name>/<number>`
 opens one from a link, and a coding thread's **Pull request** tab offers
 **Review** for its own PR. Opening the same PR again reuses its review.
 
