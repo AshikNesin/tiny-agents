@@ -214,6 +214,31 @@ describe("the light editor", () => {
     expect(screen.queryByRole("textbox", { name: "Edit src/a.ts" })).not.toBeInTheDocument();
   });
 
+  it("opens the file in the highlighted code editor where the browser can measure text", async () => {
+    // jsdom has no canvas, which the editor measures text with; browsers do.
+    const canvas = vi
+      .spyOn(HTMLCanvasElement.prototype, "getContext")
+      .mockImplementation(
+        () => ({ font: "", measureText: (t: string) => ({ width: t.length * 7 }) }) as never,
+      );
+    // Its tokenizer posts to itself without a target origin, which jsdom refuses.
+    const post = window.postMessage.bind(window);
+    const message = vi
+      .spyOn(window, "postMessage")
+      .mockImplementation(((m: unknown, origin?: string) =>
+        post(m, origin ?? "*")) as typeof window.postMessage);
+    const user = userEvent.setup();
+    showPanel({});
+
+    await user.click(await screen.findByRole("button", { name: "Edit src/a.ts" }));
+    const editor = screen.getByRole("group", { name: "Edit src/a.ts" });
+    expect(editor.querySelector("diffs-container")).not.toBeNull();
+    expect(screen.queryByRole("textbox", { name: "Edit src/a.ts" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    canvas.mockRestore();
+    message.mockRestore();
+  });
+
   it("cancels without saving", async () => {
     const user = userEvent.setup();
     const fetch = showPanel({});
