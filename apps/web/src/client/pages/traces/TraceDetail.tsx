@@ -98,23 +98,28 @@ function StepRow({ step }: { step: TraceStep }) {
       </li>
     );
   }
-  if (step.type === "tool") {
-    return (
-      <li
-        className="text-muted-foreground flex items-center gap-2 py-1.5 pr-3 pl-7 text-xs"
-        data-testid="trace-tool"
-      >
-        <span className={cn(monoClass, "min-w-0 truncate", step.error && "text-destructive")}>
-          {step.name}
-        </span>
-        {step.error ? <span className="text-destructive">failed</span> : null}
-        <span className="ml-auto shrink-0 tabular-nums">
-          {step.usage ? `${formatCost(step.usage.costUsd)} · ` : ""}
-          {step.durationMs !== undefined ? formatDuration(step.durationMs) : ""}
-        </span>
-      </li>
-    );
-  }
+  return step.type === "tool" ? <ToolRow step={step} /> : <CallRow step={step} />;
+}
+
+function ToolRow({ step }: { step: Extract<TraceStep, { type: "tool" }> }) {
+  return (
+    <li
+      className="text-muted-foreground flex items-center gap-2 py-1.5 pr-3 pl-7 text-xs"
+      data-testid="trace-tool"
+    >
+      <span className={cn(monoClass, "min-w-0 truncate", step.error && "text-destructive")}>
+        {step.name}
+      </span>
+      {step.error ? <span className="text-destructive">failed</span> : null}
+      <span className="ml-auto shrink-0 tabular-nums">
+        {step.usage ? `${formatCost(step.usage.costUsd)} · ` : ""}
+        {step.durationMs !== undefined ? formatDuration(step.durationMs) : ""}
+      </span>
+    </li>
+  );
+}
+
+function CallRow({ step }: { step: Extract<TraceStep, { type: "llm" }> }) {
   const unusual = !NORMAL_STOPS.has(step.stopReason);
   return (
     <li className="space-y-0.5 px-3 py-1.5" data-testid="trace-call">

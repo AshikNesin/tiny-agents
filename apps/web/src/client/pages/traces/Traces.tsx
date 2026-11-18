@@ -162,7 +162,7 @@ const emptyOlder = (filter: TraceListFilter): OlderPages => ({
 export function TracesPage() {
   const [filter, setFilter] = useState<TraceListFilter>("all");
   const { data, loadError, refresh } = useTraceList(filter);
-  const [older, setOlder] = useState<OlderPages>(emptyOlder(filter));
+  const [older, setOlder] = useState<OlderPages>(() => emptyOlder(filter));
   const [loadingMore, setLoadingMore] = useState(false);
   // Older pages belong to the filter they were loaded for; another starts at its first page.
   const more = older.filter === filter ? older : emptyOlder(filter);
