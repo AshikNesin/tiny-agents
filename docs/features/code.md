@@ -428,11 +428,13 @@ diff, and line comments. The assistant is on the right, behind the same
 resizable divider as a thread's panel. Phones show one side at a time
 (**Assistant** / **Files** in the header).
 
-**The assistant** is a thread of the project's default harness and model,
-started in the review's worktree on your first question, in the harness's
-asking permission mode where it has one, so an edit waits for your yes.
-Until then the pane offers a few starter questions and a box, and line
-comments wait under the review (`review:<id>`). The first message is:
+**The assistant** is a thread of the project's default harness, started in
+the review's worktree on your first question, in the harness's asking
+permission mode where it has one, so an edit waits for your yes. Until then
+the pane offers a few starter questions and a box with a **Model** picker
+(the project's default model first; the pick goes with the first question
+as `model`), and line comments wait under the review (`review:<id>`). After
+that the thread's own composer picks the model, as in any thread. The first message is:
 
 - a short card of the PR (`reviewCard` in `shared/code-messages.ts`):
   the repository, number, head and base, what the assistant is for, the
