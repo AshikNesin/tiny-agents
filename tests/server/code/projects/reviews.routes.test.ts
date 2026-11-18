@@ -10,7 +10,8 @@ import { join } from "node:path";
 import { createNamespaceKv } from "@groot/core/kv";
 import { api, createTestApp } from "../../helpers";
 import { authToken, resetAppTables } from "../../fixtures";
-import { codePullRequests, db } from "../../../../apps/web/src/server/db";
+import { eq } from "drizzle-orm";
+import { codePullRequests, codeThreads, db } from "../../../../apps/web/src/server/db";
 import { installAppForTests } from "../../../../apps/web/src/server/app-root";
 import { createCodeHub, setCodeHub } from "../../../../apps/web/src/server/api/code/code.hub";
 import { createWorkspace } from "../../../../apps/web/src/server/api/code/code.workspace";
@@ -300,6 +301,130 @@ describe("PR reviews", () => {
     expect((await call<PullReviewView[]>("GET", "/reviews")).body.data).toEqual([]);
     const files = await call("GET", `/threads/${encodeURIComponent(review.key)}/review/files`);
     expect(files.status).toBe(404);
+  });
+});
+
+describe("reviewing a Code thread's own PR", () => {
+  const REVIEW_DIR = () => join(local.home, "tiny-agents-code/acme--web/reviews/pr-8");
+
+  /**
+   * A Code thread with one commit on its branch, pushed and opened as PR #8
+   * (also under `refs/pull/8/head`, as GitHub keeps every PR). `after` runs
+   * in the thread's worktree once the PR is up.
+   */
+  async function threadPull(after: string[] = []) {
+    const project = await newProject();
+    const res = await call<{ threadId: string }>("POST", "/threads", {
+      projectId: project.id,
+      message: "Retry webhooks",
+    });
+    const threadId = res.body.data!.threadId;
+    const thread = (await db.query.codeThreads.findFirst({ where: eq(codeThreads.id, threadId) }))!;
+    const worktree = thread.worktree!;
+    const branch = thread.branch!;
+    await sh(
+      local,
+      [
+        `cd ${worktree}`,
+        `printf 'export const retry = 3;\\n' > src/retry.ts`,
+        `git add -A && git -c user.name=me -c user.email=me@x commit --quiet -m retry`,
+        `git push --quiet origin HEAD:refs/heads/${branch} HEAD:refs/pull/8/head`,
+        ...after,
+      ].join(" && "),
+    );
+    github.pulls.push({
+      number: 8,
+      author: "ashik",
+      head: branch,
+      base: "main",
+      title: "Retry webhooks",
+      body: "",
+      draft: false,
+      state: "open",
+      mergeable: "mergeable",
+      checks: [],
+      reviews: [],
+      threads: [],
+      fromFork: false,
+      autoMerge: false,
+      inMergeQueue: false,
+      queueRemovals: [],
+    });
+    await db.insert(codePullRequests).values({
+      threadId,
+      projectId: project.id,
+      number: 8,
+      url: "https://github.com/acme/web/pull/8",
+      headRef: branch,
+      baseRef: "main",
+    });
+    const head = await sh(local, `git -C ${bare} rev-parse refs/pull/8/head`);
+    return { threadId, worktree, head };
+  }
+
+  const open = async () =>
+    (await call<PullReviewView>("POST", "/reviews", { pr: "acme/web#8" })).body.data!;
+
+  it("shows the thread's worktree when it is at the PR's head, without a checkout of its own", async () => {
+    const { threadId, worktree, head } = await threadPull([`printf 'wip\\n' > src/wip.ts`]);
+
+    const review = await open();
+
+    expect(review).toMatchObject({ headSha: head, worktreeThreadId: threadId });
+    expect(existsSync(REVIEW_DIR())).toBe(false);
+    expect((await reviewFiles(review.key)).map((f) => f.path)).toEqual([
+      "src/retry.ts",
+      "src/wip.ts",
+    ]);
+    expect(await sh(local, `git -C ${worktree} status --porcelain`)).toBe("?? src/wip.ts");
+  });
+
+  it("never discards, pushes or removes the thread's work from the review", async () => {
+    const { worktree } = await threadPull([`printf 'wip\\n' > src/wip.ts`]);
+    const review = await open();
+
+    const discard = await call("POST", `/reviews/${review.id}/discard`);
+    const push = await call("POST", `/reviews/${review.id}/push`, { message: "From the review" });
+    const archive = await call("POST", `/reviews/${review.id}/archive`);
+
+    expect(discard.status).toBe(409);
+    expect(discard.body.error?.message).toBe(
+      "This review shows the coding thread's worktree, so these changes are that thread's. Discard or push them from the thread.",
+    );
+    expect(push.status).toBe(409);
+    expect(archive.status).toBe(200);
+    expect(await sh(local, `cat ${worktree}/src/wip.ts`)).toBe("wip");
+    expect(await sh(local, `git -C ${bare} rev-parse refs/pull/8/head`)).toBe(
+      await sh(local, `git -C ${worktree} rev-parse HEAD`),
+    );
+  });
+
+  it("checks the PR out on its own when the thread's worktree moved past the PR's head", async () => {
+    const { worktree, head } = await threadPull([
+      `printf 'export const retry = 5;\\n' > src/retry.ts`,
+      `git -c user.name=me -c user.email=me@x commit --quiet -am 'not pushed'`,
+    ]);
+
+    const review = await open();
+
+    expect(review).toMatchObject({ headSha: head, worktreeThreadId: null });
+    expect(await sh(local, `git -C ${REVIEW_DIR()} rev-parse HEAD`)).toBe(head);
+    expect(await sh(local, `git -C ${worktree} log -1 --format=%s`)).toBe("not pushed");
+  });
+
+  it("lets go of the thread's worktree when the thread is archived; opening again checks it out", async () => {
+    const { threadId, head } = await threadPull();
+    const review = await open();
+    const { onThreadArchived } =
+      await import("../../../../apps/web/src/server/api/code/code.pulls");
+
+    await onThreadArchived(threadId, true);
+
+    const files = await call("GET", `/threads/${encodeURIComponent(review.key)}/review/files`);
+    expect(files.status).toBe(404);
+    const again = await open();
+    expect(again).toMatchObject({ id: review.id, worktreeThreadId: null });
+    expect(await sh(local, `git -C ${REVIEW_DIR()} rev-parse HEAD`)).toBe(head);
   });
 });
 

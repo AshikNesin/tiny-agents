@@ -30,6 +30,7 @@ const REVIEW = {
   reviewedSha: null,
   threadId: null,
   codingThreadId: null,
+  worktreeThreadId: null,
   assistant: { instanceId: "claude-code", model: "sonnet" },
   archived: false,
   updatedAt: "2026-11-17T00:00:00.000Z",

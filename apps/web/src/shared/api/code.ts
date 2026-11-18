@@ -243,6 +243,12 @@ export interface PullReviewView {
   /** The Code thread that opened this PR, when one did: its comments can go there instead. */
   codingThreadId: string | null;
   /**
+   * The Code thread whose worktree the review shows (it was at the PR's head
+   * when the review opened), or null when the review has a checkout of its
+   * own. Push and Discard go through that thread then.
+   */
+  worktreeThreadId: string | null;
+  /**
    * Where the assistant starts (the project's default harness, else the
    * first connected) and the project's default model; null with no harness.
    */
