@@ -177,7 +177,9 @@ export function ChangesPanel({
         </Button>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-3">
+      {/* No top padding on the scroller: a sticky file header sticks at its
+          padding edge, which would leave a strip of diff showing above it. */}
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3 [&>:first-child]:mt-3">
         {error && files ? (
           <p className="text-destructive px-1 pb-2 text-xs">{error} Showing the last read.</p>
         ) : null}
