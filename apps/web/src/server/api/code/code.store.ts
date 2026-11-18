@@ -25,6 +25,7 @@ import {
   type CodeHandoff,
   type CodeThreadRow,
 } from "../../db";
+import { branchTitle, isProjectHeaderTitle } from "../../../shared/code-messages";
 import { handoffMachine } from "../../../shared/machines/handoff";
 
 function parseData(raw: string): Record<string, unknown> {
@@ -42,7 +43,8 @@ function toIndexed(row: CodeThreadRow): IndexedThread {
   return {
     instanceId: row.instanceId,
     nativeId: row.nativeId,
-    title: row.title,
+    // A thread started before every project thread got a title shows its branch's words.
+    title: (isProjectHeaderTitle(row.title) && branchTitle(row.branch)) || row.title,
     cwd: row.cwd,
     parentNativeId: row.parentNativeId,
     model: row.model,

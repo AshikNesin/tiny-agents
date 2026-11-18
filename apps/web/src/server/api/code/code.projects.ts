@@ -38,7 +38,7 @@ import {
   type ProjectScripts,
   type Workspace,
 } from "./code.workspace";
-import { PROJECT_RULE, projectHeader } from "../../../shared/code-messages";
+import { PROJECT_RULE, branchTitle, projectHeader } from "../../../shared/code-messages";
 
 const DEFAULT_PROJECT_SETTINGS: ProjectSettings = {
   scripts: {},
@@ -325,7 +325,9 @@ export async function startProjectThread(
     await ws.removeWorktree(project.checkoutPath, path).catch(() => undefined);
     throw error;
   }
-  await applyTitle(instance, created.nativeId, names?.title ?? null);
+  // With no title from the model (or no naming call, on an existing branch), the
+  // branch's words: never the project line the harness took from the message.
+  await applyTitle(instance, created.nativeId, names?.title ?? branchTitle(branch));
   const id = threadIdOf(instance.id, created.nativeId);
   const set = { projectId: project.id, branch, baseSha, worktree: path, cwd: path };
   await db

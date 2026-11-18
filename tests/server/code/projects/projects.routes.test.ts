@@ -18,6 +18,8 @@ import { installAppForTests } from "../../../../apps/web/src/server/app-root";
 import { createCodeHub, setCodeHub } from "../../../../apps/web/src/server/api/code/code.hub";
 import { createWorkspace } from "../../../../apps/web/src/server/api/code/code.workspace";
 import { onTurnEnded } from "../../../../apps/web/src/server/api/code/code.pulls";
+import { threadIndex } from "../../../../apps/web/src/server/api/code/code.store";
+import { threadIdOf } from "@tiny-agents/code/server";
 import type {
   CheckLogView,
   CheckpointView,
@@ -277,7 +279,22 @@ describe("branch names", () => {
       codeBranchNamer: { sideCaller: { complete: async () => undefined } },
     });
     const project = await newProject();
-    expect((await newThread(project.id, task)).branch).toBe("ta/fix-login-flow-users");
+    const thread = await newThread(project.id, task);
+    expect(thread.branch).toBe("ta/fix-login-flow-users");
+    // The title is the branch's words, not the project line at the top of the message.
+    expect(harness.renamed).toEqual([{ nativeId: thread.nativeId, title: "Fix login flow users" }]);
+  });
+
+  it("shows an older thread still titled with its project line by its branch's words", async () => {
+    await db.insert(codeThreads).values({
+      id: threadIdOf("claude-code", "old"),
+      instanceId: "claude-code",
+      nativeId: "old",
+      title: "[Project acme/web · branch ta/audit-github-actions · base main]",
+      branch: "ta/audit-github-actions",
+    });
+    const [row] = await threadIndex.list("claude-code");
+    expect(row?.title).toBe("Audit github actions");
   });
 });
 
