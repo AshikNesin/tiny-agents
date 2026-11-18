@@ -261,6 +261,18 @@ describe("PR reviews", () => {
     expect(harness.sent).toEqual([{ nativeId: "t1", message: "And the tests?" }]);
   });
 
+  it("starts the assistant on the model the owner picks, the project's harness named", async () => {
+    await newProject();
+    await forkPull([`printf 'x\\n' > src/x.ts`]);
+    const review = (await call<PullReviewView>("POST", "/reviews", { pr: "acme/web#7" })).body
+      .data!;
+    expect(review.assistant).toEqual({ instanceId: "fake", model: null });
+
+    await call("POST", `/reviews/${review.id}/ask`, { message: "Summarize it", model: "big-1" });
+
+    expect(harness.created[0]!.model).toBe("big-1");
+  });
+
   it("marks the assistant's thread in the list as the review's", async () => {
     await newProject();
     await forkPull([`printf 'x\\n' > src/x.ts`]);

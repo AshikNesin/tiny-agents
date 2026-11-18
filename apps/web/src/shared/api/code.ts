@@ -242,6 +242,11 @@ export interface PullReviewView {
   threadId: string | null;
   /** The Code thread that opened this PR, when one did: its comments can go there instead. */
   codingThreadId: string | null;
+  /**
+   * Where the assistant starts (the project's default harness, else the
+   * first connected) and the project's default model; null with no harness.
+   */
+  assistant: { instanceId: string; model: string | null } | null;
   archived: boolean;
   updatedAt: string;
 }
@@ -290,6 +295,12 @@ export interface InboxPullView {
 
 /** How a PR review is submitted on GitHub. */
 export type ReviewVerdict = "COMMENT" | "APPROVE" | "REQUEST_CHANGES";
+
+/** `POST /code/reviews/:id/ask`: `model` (the first question only) overrides the project's. */
+export interface AskReviewBody {
+  message: string;
+  model?: string;
+}
 
 /** `POST /code/reviews/:id/submit`. */
 export interface SubmitReviewBody {

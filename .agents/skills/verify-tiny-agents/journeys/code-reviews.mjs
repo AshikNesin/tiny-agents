@@ -48,6 +48,7 @@ await journey(
       reviewedSha: null,
       threadId: null,
       codingThreadId: null,
+      assistant: { instanceId: "shelley", model: null },
       archived: false,
       updatedAt: new Date().toISOString(),
     };
@@ -332,6 +333,9 @@ await journey(
 
     await step("the first question starts the assistant with the comment", async () => {
       const pr = page.getByTestId("code-pull-review");
+      // The model it starts on is picked beside the box.
+      await expect(pr.getByRole("button", { name: "Model" })).toBeVisible();
+      await proof("assistant-model");
       await pr
         .getByRole("textbox", { name: "Ask the assistant" })
         .fill(`echo: looks capped ${stamp}`);

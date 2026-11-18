@@ -16,6 +16,7 @@ import type {
   InboxPullView,
   PullReviewView,
   PullThreadsView,
+  AskReviewBody,
   EditReviewFileBody,
   PushedReview,
   ReviewTerminal,
@@ -117,10 +118,8 @@ export const reviewsApi = {
   open: (pr: string) => apiClient.post<PullReviewView>(`${base}/reviews`, { pr }),
   get: (id: string) => apiClient.get<PullReviewView>(`${base}/reviews/${encodeURIComponent(id)}`),
   /** A question for the assistant: the first starts it, with the PR card and waiting comments. */
-  ask: (id: string, message: string) =>
-    apiClient.post<{ threadId: string }>(`${base}/reviews/${encodeURIComponent(id)}/ask`, {
-      message,
-    }),
+  ask: (id: string, body: AskReviewBody) =>
+    apiClient.post<{ threadId: string }>(`${base}/reviews/${encodeURIComponent(id)}/ask`, body),
   archive: (id: string) => apiClient.post(`${base}/reviews/${encodeURIComponent(id)}/archive`),
   /** Comments waiting for the review on GitHub. */
   comments: (id: string) =>
