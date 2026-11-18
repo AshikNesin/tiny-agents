@@ -796,6 +796,7 @@ describe("one declaration per tool (3.2)", () => {
             {
               "description": "List the files the owner attached in this chat (newest first): id, name, type, size, pages/sheets, and whether its contents are ready to read.",
               "fields": [
+                "deferred",
                 "description",
                 "execute",
                 "name",
@@ -813,6 +814,7 @@ describe("one declaration per tool (3.2)", () => {
             {
               "description": "Read an attached file's extracted contents, a part at a time. PDFs, slides and long text are split into pages (page / pages); spreadsheets by sheet and row range; archives return their file listing. Start with no range to see the outline and the first part.",
               "fields": [
+                "deferred",
                 "description",
                 "execute",
                 "name",
@@ -860,6 +862,7 @@ describe("one declaration per tool (3.2)", () => {
             {
               "description": "Search an attached file for text (case-insensitive) and get the matching lines with their page/sheet and line numbers. Use it to find the parts of a long file worth reading.",
               "fields": [
+                "deferred",
                 "description",
                 "execute",
                 "name",
@@ -959,6 +962,7 @@ describe("one declaration per tool (3.2)", () => {
             {
               "description": "List the files the owner attached in this chat (newest first): id, name, type, size, pages/sheets, and whether its contents are ready to read.",
               "fields": [
+                "deferred",
                 "description",
                 "execute",
                 "name",
@@ -976,6 +980,7 @@ describe("one declaration per tool (3.2)", () => {
             {
               "description": "Read an attached file's extracted contents, a part at a time. PDFs, slides and long text are split into pages (page / pages); spreadsheets by sheet and row range; archives return their file listing. Start with no range to see the outline and the first part.",
               "fields": [
+                "deferred",
                 "description",
                 "execute",
                 "name",
@@ -1023,6 +1028,7 @@ describe("one declaration per tool (3.2)", () => {
             {
               "description": "Search an attached file for text (case-insensitive) and get the matching lines with their page/sheet and line numbers. Use it to find the parts of a long file worth reading.",
               "fields": [
+                "deferred",
                 "description",
                 "execute",
                 "name",
@@ -1064,6 +1070,7 @@ describe("one declaration per tool (3.2)", () => {
             {
               "description": "Copy an attached file's original bytes to the sandbox VM so you can work on it with real tools (pandas, unzip, pdftotext, ffprobe, …) via run_command. Default destination: attachments/<id>/<name> under the sandbox user's home. Returns the path and SHA-256.",
               "fields": [
+                "deferred",
                 "description",
                 "execute",
                 "name",
@@ -1157,6 +1164,7 @@ describe("one declaration per tool (3.2)", () => {
             {
               "description": "Create a new bot for the owner: its name, a one-line description and its instructions (system prompt). Use only when the owner asks for a new bot. Write the instructions in the second person ("You help the owner with …"), with everything the owner told you about its job, paths, tools and rules. The new bot gets every built-in toolkit and runs on your model unless \`model\` names another. The owner reviews and approves every new bot before it is created. Afterwards you can message it with message_bot.",
               "fields": [
+                "deferred",
                 "description",
                 "execute",
                 "name",
@@ -3580,6 +3588,7 @@ describe("one declaration per tool (3.2)", () => {
             {
               "description": "Start a coding task in one of the owner's coding agents (Shelley by default). Returns immediately with the thread id and a link; the result arrives later in this chat as a reply from that agent.",
               "fields": [
+                "deferred",
                 "description",
                 "execute",
                 "name",
@@ -3622,6 +3631,7 @@ describe("one declaration per tool (3.2)", () => {
             {
               "description": "Send a message to a coding thread (one you started, or an existing one by id): steers it if it is working (queue: true waits for its turn to end), or asks a follow-up if it is idle. The outcome arrives here as a reply.",
               "fields": [
+                "deferred",
                 "description",
                 "execute",
                 "name",
@@ -3658,6 +3668,7 @@ describe("one declaration per tool (3.2)", () => {
             {
               "description": "Check a coding thread: working or idle, its last answer and the uncommitted changes in its directory. Only when the owner asks; finishes arrive on their own.",
               "fields": [
+                "deferred",
                 "description",
                 "execute",
                 "name",
@@ -3684,6 +3695,7 @@ describe("one declaration per tool (3.2)", () => {
             {
               "description": "List the coding hand-offs this bot started, newest first.",
               "fields": [
+                "deferred",
                 "description",
                 "execute",
                 "name",
@@ -3701,6 +3713,7 @@ describe("one declaration per tool (3.2)", () => {
             {
               "description": "List the models a coding agent can use, its default first.",
               "fields": [
+                "deferred",
                 "description",
                 "execute",
                 "name",
@@ -3724,6 +3737,7 @@ describe("one declaration per tool (3.2)", () => {
             {
               "description": "Start a coding task in Shelley. Same as code_start with harness shelley.",
               "fields": [
+                "deferred",
                 "description",
                 "execute",
                 "name",
@@ -3761,6 +3775,7 @@ describe("one declaration per tool (3.2)", () => {
             {
               "description": "Message a Shelley conversation. Same as code_send.",
               "fields": [
+                "deferred",
                 "description",
                 "execute",
                 "name",
@@ -7603,6 +7618,7 @@ describe("one declaration per tool (3.2)", () => {
             {
               "description": "Update your own instructions (system prompt). Pass exactly one of \`instructions\` (the complete new text, replacing the current one) or \`append\` (lines added to the end). Use when the owner asks you to change how you work, or when you both agreed on an improvement. The owner reviews and approves every change before it applies.",
               "fields": [
+                "deferred",
                 "description",
                 "execute",
                 "name",
@@ -7854,6 +7870,7 @@ describe("one declaration per tool (3.2)", () => {
             {
               "description": "List the owner's vault items you may use: logins, cards and API keys, by handle. Pass a handle to browser_fill_secret, browser_enter_code or http_request (auth) to use one; the value goes straight into the page or request and you never see it. Never type, ask for or repeat a password, card number, security code or one-time code yourself.",
               "fields": [
+                "deferred",
                 "description",
                 "execute",
                 "name",

@@ -7,7 +7,22 @@ import { Type, type Context as PiContext } from "@earendil-works/pi-ai";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { until } from "../../fixtures/until";
 import type { AgentRuntime } from "../../../../packages/agent/src/runtime";
-import { createBrowserToolkit, createComputerToolkit } from "../../../../packages/agent/src/index";
+import {
+  createAttachmentsToolkit,
+  createBotBuilderCapability,
+  createBotsToolkit,
+  createBrowserToolkit,
+  createCodeToolkit,
+  createComputerToolkit,
+  createMemoryCapability,
+  createRoutinesToolkit,
+  createSandboxToolkit,
+  createSelfImproveCapability,
+  createSkillsCapability,
+  createTasksToolkit,
+  createVaultToolkit,
+  createWebToolkit,
+} from "../../../../packages/agent/src/index";
 import {
   fauxAssistantMessage,
   fauxText,
@@ -156,14 +171,39 @@ describe("deferred toolkits", () => {
     expect(JSON.stringify(requests[0]!.messages)).not.toContain("deferred_tools");
   }, 20_000);
 
-  it("defers the browser and the computer", () => {
-    for (const toolkit of [
-      createBrowserToolkit({ sessions: {} as never }),
-      createComputerToolkit({ sessions: {} as never }),
-    ]) {
+  it("defers the toolkits few conversations use and keeps the everyday ones direct", () => {
+    const stub = {} as never;
+    const deferred = [
+      createBrowserToolkit({ sessions: stub }),
+      createComputerToolkit({ sessions: stub }),
+      createCodeToolkit({ store: stub }),
+      createAttachmentsToolkit(stub),
+      createBotBuilderCapability(stub),
+      createSelfImproveCapability(stub),
+      createVaultToolkit({ broker: stub }),
+    ];
+    for (const toolkit of deferred) {
       const tools = toolkit.extension.tools ?? [];
-      expect(tools.length).toBeGreaterThan(0);
-      expect(tools.every((t) => t.deferred === true)).toBe(true);
+      expect(tools.length, toolkit.id).toBeGreaterThan(0);
+      expect(
+        tools.every((t) => t.deferred === true),
+        toolkit.id,
+      ).toBe(true);
+    }
+    const direct = [
+      createTasksToolkit(stub),
+      createRoutinesToolkit(stub),
+      createWebToolkit({ apiKey: "key" }),
+      createSandboxToolkit({ connection: stub }),
+      createMemoryCapability(stub),
+      createSkillsCapability(stub),
+      createBotsToolkit(stub),
+    ];
+    for (const toolkit of direct) {
+      expect(
+        (toolkit.extension.tools ?? []).some((t) => t.deferred),
+        toolkit.id,
+      ).toBe(false);
     }
   });
 });

@@ -155,6 +155,8 @@ export function createBotBuilderCapability(store: BotCreationStore): Capability 
 
   return defineToolkit({
     id: "bot-builder",
+    // Used in few conversations: loaded with tool_search (issue #360).
+    deferred: true,
     name: "Bot builder",
     description: "Create new bots, with owner approval",
     tools: [createBot],

@@ -33,6 +33,7 @@ import { createInstructionsStore } from "../../../apps/web/src/server/api/bots/s
 import { createRoutineStore } from "../../../apps/web/src/server/api/routines/routines.toolkit-store";
 import { bots, db, promptRevisions, routineRuns, routines } from "../../../apps/web/src/server/db";
 import { installFakeRuntime, resetAppTables, seedBot, until } from "../fixtures";
+import { loaded } from "../fixtures/loaded-tools";
 
 beforeEach(resetAppTables);
 afterEach(resetAppTables);
@@ -78,7 +79,7 @@ async function interruptAndResume(options: {
   try {
     const first = await openTestRuntime({
       storePath,
-      capabilities: [options.capability()],
+      capabilities: [loaded(options.capability())],
       respondWith: () => ({
         ...fauxAssistantMessage([fauxToolCall(options.tool, options.args)]),
         stopReason: "toolUse" as const,
@@ -101,7 +102,7 @@ async function interruptAndResume(options: {
 
     const second = await openTestRuntime({
       storePath,
-      capabilities: [options.capability()],
+      capabilities: [loaded(options.capability())],
       respondWith: (context) => {
         const result = context.messages.findLast((m) => m.role === "toolResult");
         const text =

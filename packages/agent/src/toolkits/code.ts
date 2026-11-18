@@ -377,6 +377,8 @@ export function createCodeToolkit(options: CodeToolkitOptions): Capability {
 
   return defineToolkit({
     id: "code",
+    // Used in few conversations: loaded with tool_search (issue #360).
+    deferred: true,
     name: "Code",
     description: "Hand coding work to the owner's coding agents (Shelley, Claude Code)",
     tools: [start, send, status, list, models, shelleyStart, shelleySend],
