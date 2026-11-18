@@ -331,8 +331,10 @@ re-reads (and so reconciles) every 15 seconds, so a project on `gh` or a
 token, with no webhooks, shows a finished check within seconds. A hidden
 page stops reading and catches up when shown again; in the background the
 server's own poll (below) carries on.
-The actions sit in one row; the switches are plain rows, and the spend
-limit shows only where the harness reports cost.
+The actions sit in one row; the switches (Draft, Auto-fix, Auto-merge) are
+plain rows right under them, above the comments, so a long run of bot comments
+never pushes them out of reach; the spend limit shows only where the harness
+reports cost.
 
 **Auto-fix.** While on, the app watches the PR (every minute while checks
 move, every 5 minutes idle) and starts a pass for a failed check, a trusted

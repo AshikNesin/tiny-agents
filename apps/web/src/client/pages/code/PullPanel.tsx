@@ -3,9 +3,9 @@
  * started in a project. With no open PR it offers Publish (push the branch,
  * open a PR, a draft unless the project says ready) and Link. With one: its number, state, title and branch;
  * the checks (a failing one opens to its log excerpt, with Fix CI); Merge;
- * every comment as All, Humans or Bots; the Draft, Auto-fix and Auto-merge
- * switches (and a spend limit where the harness reports cost); the pass
- * history; the description (markdown, with Edit while it is open); and
+ * the Draft, Auto-fix and Auto-merge switches (and a spend limit where the
+ * harness reports cost); the pass history; every comment as All, Humans or
+ * Bots; the description (markdown, with Edit while it is open); and
  * earlier PRs. Opening the tab reconciles with GitHub, and so does each
  * re-read while it is on screen (every 15 seconds), so a project without
  * the App's webhooks (`gh` or a token) keeps up as fast as one with them.
@@ -474,8 +474,6 @@ function ActivePull({
         )}
       </div>
 
-      <PullComments pr={pr} onAttach={onAttach} />
-
       <section
         className="border-border divide-border divide-y rounded-xl border"
         aria-label="Auto-fix"
@@ -590,6 +588,9 @@ function ActivePull({
           </ul>
         </section>
       )}
+
+      {/* Last: a PR's comments run long (bots), so the switches above stay in reach. */}
+      <PullComments pr={pr} onAttach={onAttach} />
     </>
   );
 }

@@ -436,6 +436,27 @@ describe("the pull request's comments", () => {
     expect(screen.getByRole("button", { name: /Cloudflare Pages/ })).not.toHaveTextContent("0ms");
   });
 
+  it("keeps the Auto-fix and Auto-merge switches above a long comment list", async () => {
+    extra = {
+      comments: Array.from({ length: 8 }, (_, i) => ({
+        id: `c${i}`,
+        databaseId: i,
+        author: user("github-actions", "bot"),
+        body: `Tests passed (${i})`,
+        createdAt: "2026-11-17T09:00:00Z",
+      })),
+    };
+    panel();
+    await wait(0);
+    const comments = screen.getByRole("region", { name: "Comments" });
+    for (const name of ["Auto-fix", "Auto-merge"]) {
+      const toggle = screen.getByRole("switch", { name });
+      expect(toggle.compareDocumentPosition(comments) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+        Node.DOCUMENT_POSITION_FOLLOWING,
+      );
+    }
+  });
+
   it("sorts every comment into All, Humans and Bots", async () => {
     extra = {
       comments: [
