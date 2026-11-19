@@ -153,11 +153,14 @@ export function createModelCatalog(config: ModelConfig, registry: CatalogModels)
           return usable(set) ?? firstChat();
         case "memory_capture":
         case "chat_title": {
-          const bot = usable(options.bot);
+          // Side calls run on pi only: a Claude plan model here would skip the call.
+          const pi = (model: CatalogModel | undefined) =>
+            model?.engine === "pi" ? model : undefined;
           return (
             usable(set) ??
-            (bot?.engine === "pi" ? bot : undefined) ??
-            catalog.forRole("bot_default")
+            pi(usable(options.bot)) ??
+            pi(catalog.forRole("bot_default")) ??
+            firstChat((m) => m.engine === "pi")
           );
         }
         case "vision":
