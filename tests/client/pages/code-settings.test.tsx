@@ -135,6 +135,13 @@ describe("Code settings", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
+  it("starts Add a project with the repository the Reviews screen asked for (#386)", async () => {
+    renderAt("/code/settings/projects?repo=other%2Flib");
+    const add = await screen.findByRole("button", { name: "Add" });
+    await waitFor(() => expect(add).toBeEnabled());
+    expect(screen.getByText("other/lib")).toBeInTheDocument();
+  });
+
   it("saves each project setting on its own page", async () => {
     renderAt("/code/settings/projects/p1");
     const branch = await screen.findByRole("textbox", { name: "Base branch" });

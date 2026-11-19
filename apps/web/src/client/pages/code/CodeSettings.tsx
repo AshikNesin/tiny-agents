@@ -6,7 +6,7 @@
  * a guest sees neither (issue #297 §6, §7.2).
  */
 import { useEffect, useState, type ReactNode } from "react";
-import { Link, Navigate, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
   ChevronDown,
@@ -352,8 +352,11 @@ function ProjectsSettings({
 
 function AddProject({ harnesses, onChange }: { harnesses: HarnessInfo[]; onChange(): void }) {
   const navigate = useNavigate();
+  // `?repo=owner/name`: the Reviews screen's Add project for a PR outside any project.
+  const [params] = useSearchParams();
+  const prefill = params.get("repo") ?? "";
   const [github, setGitHub] = useState<GitHubStatus | null>(null);
-  const [repo, setRepo] = useState("");
+  const [repo, setRepo] = useState(prefill);
   const [instanceId, setInstanceId] = useState(harnesses[0]?.id ?? "");
   const [viaApp, setViaApp] = useState(false);
   const [appRepos, setAppRepos] = useState<Array<{ fullName: string }> | null>(null);
@@ -369,7 +372,7 @@ function AddProject({ harnesses, onChange }: { harnesses: HarnessInfo[]; onChang
       .catch(() => setGitHub(null));
   }, []);
   useEffect(() => {
-    setRepo("");
+    setRepo(prefill);
     if (!viaApp) return;
     projectsApi
       .appRepositories()
@@ -378,7 +381,7 @@ function AddProject({ harnesses, onChange }: { harnesses: HarnessInfo[]; onChang
         toast.error(errorMessage(e, "Could not list the App's repositories."));
         setAppRepos(null);
       });
-  }, [viaApp]);
+  }, [viaApp, prefill]);
   const create = async () => {
     setBusy(true);
     try {

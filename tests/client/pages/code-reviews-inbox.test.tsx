@@ -103,9 +103,11 @@ describe("the review inbox", () => {
       "href",
       "https://github.com/other/lib/pull/5",
     );
-    // Another repository's PR cannot be reviewed here, and says why.
+    // Another repository's PR is reviewed here once it is a project: one step away (#386).
     expect(within(needs).queryByRole("button", { name: /#5/ })).toBeNull();
-    expect(within(needs).getByText("Not a project")).toBeInTheDocument();
+    expect(
+      within(needs).getByRole("link", { name: "Add other/lib as a project to review #5 here" }),
+    ).toHaveAttribute("href", "/code/settings/projects?repo=other%2Flib");
 
     await user.click(within(needs).getByRole("button", { name: /^Review #1/ }));
 

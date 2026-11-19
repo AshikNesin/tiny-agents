@@ -11,7 +11,7 @@
  */
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ArrowLeft, ArrowRight, ExternalLink, GitPullRequest, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, ExternalLink, GitPullRequest, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import {
   Badge,
@@ -92,11 +92,7 @@ function InboxRow({ pull, onOpen }: { pull: InboxPullView; onOpen(pull: InboxPul
           {badge}
         </Badge>
       )}
-      {pull.projectId ? (
-        reviewHint
-      ) : (
-        <span className="text-muted-foreground shrink-0 text-xs">Not a project</span>
-      )}
+      {pull.projectId && reviewHint}
       <span className={cn("text-muted-foreground hidden shrink-0 text-xs sm:inline", monoClass)}>
         {pull.repo} · @{pull.author}
       </span>
@@ -118,14 +114,21 @@ function InboxRow({ pull, onOpen }: { pull: InboxPullView; onOpen(pull: InboxPul
         </button>
       ) : (
         // Reviewing here needs a project (its checkout); GitHub still opens it.
-        <div
-          className={cn(rowClass, "hover:bg-transparent opacity-70")}
-          title={`${pull.repo} is not a project. Add it in Code settings → Projects to review it here.`}
-        >
-          {inner}
-        </div>
+        <div className={cn(rowClass, "hover:bg-transparent opacity-70")}>{inner}</div>
       )}
       <span className={trailClass}>
+        {!pull.projectId && (
+          // Reviewing here needs the repository as a project (its checkout): one step away.
+          <Link
+            to={`/code/settings/projects?repo=${encodeURIComponent(pull.repo)}`}
+            aria-label={`Add ${pull.repo} as a project to review #${pull.number} here`}
+            title={`Add ${pull.repo} as a project to review its PRs here`}
+            className="text-muted-foreground hover:text-foreground hover:bg-muted/60 flex h-7 shrink-0 items-center gap-1 rounded-md px-2 text-xs outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            <Plus className="size-3.5" aria-hidden />
+            <span className="hidden sm:inline">Add project</span>
+          </Link>
+        )}
         <GitHubLink number={pull.number} url={pull.url} />
       </span>
     </>
