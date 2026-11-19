@@ -388,6 +388,11 @@ async function reviewTarget(threadId: string) {
   const reviewId = reviewIdOfKey(threadId);
   if (reviewId) return reviewWorktree(reviewId);
   const found = await projectThread(threadId);
+  if (found && !found.thread.worktree) {
+    throw Boom.notFound(
+      "Its worktree went when the thread was archived. Unarchive it to see the changes.",
+    );
+  }
   if (!found?.thread.worktree) {
     throw Boom.notFound("Review against the base branch is for project threads with a worktree.");
   }

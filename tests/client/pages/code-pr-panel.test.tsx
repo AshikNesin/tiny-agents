@@ -34,8 +34,9 @@ let draft = false;
 const readied: boolean[] = [];
 /** No PR yet: how far the branch is ahead, and what differs from the base (committed or not). */
 let noPull = false;
-let ahead = 1;
+let ahead: number | null = 1;
 let changed: string[] = [];
+let earlier: ThreadPullsView["earlier"] = [];
 
 // The network: the PR tab's one read.
 vi.mock("@groot/shell/lib/api", async (importOriginal) => {
@@ -118,7 +119,7 @@ function view(state: CheckState): ThreadPullsView {
     branch: "ta/fix-1a2b",
     ahead,
     spend: { usd: null, limitUsd: null },
-    earlier: [],
+    earlier,
     active: noPull
       ? null
       : {
@@ -191,6 +192,7 @@ beforeEach(() => {
   noPull = false;
   ahead = 1;
   changed = [];
+  earlier = [];
   visibility = "visible";
   vi.spyOn(document, "visibilityState", "get").mockImplementation(() => visibility);
   vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "setTimeout", "clearTimeout"] });
@@ -258,6 +260,26 @@ describe("Code PR tab", () => {
 });
 
 describe("getting it merged", () => {
+  it("leads with the merged PR once a merge archived the thread, not with Publish (#383)", async () => {
+    noPull = true;
+    ahead = null; // the archive took the worktree
+    earlier = [
+      {
+        number: 12,
+        url: "https://github.com/o/r/pull/12",
+        title: "Fix the login",
+        state: "merged",
+      },
+    ];
+    panel();
+    await wait(0);
+    const merged = screen.getByRole("region", { name: "Merged" });
+    expect(merged).toHaveTextContent("#12 Fix the login");
+    expect(merged).toHaveTextContent("Branch ta/fix-1a2b is in main.");
+    expect(screen.queryByTestId("code-publish")).toBeNull();
+    expect(screen.queryByText("Earlier pull requests")).toBeNull();
+  });
+
   it("switches a draft to ready for review, so Merge opens, and back to a draft", async () => {
     draft = true;
     checkState = "success";
