@@ -62,6 +62,11 @@ interface DeliveryInput {
   peer: NonNullable<ChatMessage["peer"]>;
   /** Durable tool-call id (bot-to-bot sends): exactly-once row create across replays. */
   sourceKey?: string;
+  /**
+   * A send into this existing conversation of the target's own instead of a
+   * fresh one: a Code hand-off's finish, answered where its delivery asked.
+   */
+  conversationId?: string;
 }
 
 type DeliveryOutcome<Reason extends string = never> =
@@ -141,7 +146,8 @@ export function createDeliveries(rt: DeliveryRuntime): Deliveries {
     const pinned = existing
       ? (existing.conversationId ?? target.conversationId)
       : own
-        ? await startBotConversation(input.toBotId, rt, { unattended: "bot-message" })
+        ? (input.conversationId ??
+          (await startBotConversation(input.toBotId, rt, { unattended: "bot-message" })))
         : target.conversationId;
     if (!existing) {
       await db

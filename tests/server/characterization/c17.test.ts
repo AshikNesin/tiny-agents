@@ -9,7 +9,7 @@ import type { ClaudeWorkerLocator } from "@tiny-agents/agent/claude-worker";
 import { startCode } from "../../../apps/web/src/server/api/code/code.boot";
 import { buildHarnesses } from "../../../apps/web/src/server/api/code/code.registry";
 import { codeHub } from "../../../apps/web/src/server/api/code/code.hub";
-import type { BotConversationRuntime } from "../../../apps/web/src/server/api/bots/bots.conversation";
+import type { DeliveryRuntime } from "../../../apps/web/src/server/api/bots/bots.delivery";
 import { api, createTestApp } from "../helpers";
 import { authToken, installFakeRuntime } from "../fixtures";
 
@@ -44,7 +44,7 @@ describe("C17: the Claude plan turned on after boot", () => {
     fake.catalog.claudePlan.mockReturnValue({ enabled: false });
 
     // Boot with the Claude plan off: no harness at all (no SHELLEY_URL in tests).
-    stop = startCode(fake as unknown as BotConversationRuntime);
+    stop = startCode(fake as unknown as DeliveryRuntime);
     expect(
       codeHub()
         ?.instances()
@@ -64,7 +64,7 @@ describe("C17: the Claude plan turned on after boot", () => {
     // Only a fresh build (what a restart does) sees it.
     expect(buildHarnesses().map((instance) => instance.id)).toEqual(["claude-code"]);
     stop();
-    stop = startCode(fake as unknown as BotConversationRuntime);
+    stop = startCode(fake as unknown as DeliveryRuntime);
     expect(await statusIds()).toEqual(["claude-code"]);
   });
 });

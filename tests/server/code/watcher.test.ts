@@ -6,6 +6,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import type { Notification } from "@groot/core/notification/notifier";
 import { db, bots } from "../../../apps/web/src/server/db";
+import type { HandoffFinish } from "../../../apps/web/src/server/api/code/code.bots";
 import { createCodeHub, type CodeHub } from "../../../apps/web/src/server/api/code/code.hub";
 import {
   follow,
@@ -23,7 +24,7 @@ import { fakeHarness, type FakeHarness } from "./fake-harness";
 let harness: FakeHarness;
 let hub: CodeHub;
 let stop: () => void;
-let delivered: Array<{ botId: string; requestId: string; text: string; from: string }>;
+let delivered: HandoffFinish[];
 let pushed: Notification[];
 let botId: string;
 
@@ -46,7 +47,7 @@ beforeEach(async () => {
   pushed = [];
   stop = startCodeWatcher({
     hub,
-    deliver: async (id, submission) => void delivered.push({ botId: id, ...submission }),
+    deliver: async (finish) => void delivered.push(finish),
     notify: (n) => void pushed.push(n),
   });
 });
@@ -59,7 +60,13 @@ afterEach(async () => {
 
 describe("Code watcher", () => {
   it("delivers a hand-off's finish into the bot's chat exactly once, as the harness's reply", async () => {
-    await recordHandoff({ botId, idempotencyKey: "k1", task: "fix login", threadId: "fake:tH" });
+    await recordHandoff({
+      botId,
+      conversationId: "1",
+      idempotencyKey: "k1",
+      task: "fix login",
+      threadId: "fake:tH",
+    });
     harness.outcomes.set("tH", {
       working: true,
       title: "fix-login",
@@ -106,7 +113,13 @@ describe("Code watcher", () => {
   });
 
   it("waits for the next turn when a queued message already started one", async () => {
-    await recordHandoff({ botId, idempotencyKey: "k2", task: "t", threadId: "fake:tQ" });
+    await recordHandoff({
+      botId,
+      conversationId: "1",
+      idempotencyKey: "k2",
+      task: "t",
+      threadId: "fake:tQ",
+    });
     harness.outcomes.set("tQ", {
       working: true,
       title: "q",
@@ -122,7 +135,13 @@ describe("Code watcher", () => {
   });
 
   it("delivers a finish missed while the harness was unreachable when it reconnects", async () => {
-    await recordHandoff({ botId, idempotencyKey: "k3", task: "t", threadId: "fake:tM" });
+    await recordHandoff({
+      botId,
+      conversationId: "1",
+      idempotencyKey: "k3",
+      task: "t",
+      threadId: "fake:tM",
+    });
     hub.start();
     await eventually(() => expect(delivered).toHaveLength(1));
     expect(delivered[0]!.text).toContain("Done.");
@@ -138,7 +157,13 @@ describe("Code watcher", () => {
       endedAt: Date.now() - 60_000,
       cursor: 1,
     });
-    await recordHandoff({ botId, idempotencyKey: "k4", task: "t", threadId: "fake:tOld" });
+    await recordHandoff({
+      botId,
+      conversationId: "1",
+      idempotencyKey: "k4",
+      task: "t",
+      threadId: "fake:tOld",
+    });
     hub.start();
     await settle();
     expect(delivered).toHaveLength(0);
@@ -175,10 +200,16 @@ describe("Code watcher", () => {
     hub = createCodeHub({ instances: [shelley], listDebounceMs: 5 });
     stop = startCodeWatcher({
       hub,
-      deliver: async (id, submission) => void delivered.push({ botId: id, ...submission }),
+      deliver: async (finish) => void delivered.push(finish),
       notify: (n) => void pushed.push(n),
     });
-    await recordHandoff({ botId, idempotencyKey: "k5", task: "t", threadId: "cLegacy" });
+    await recordHandoff({
+      botId,
+      conversationId: "1",
+      idempotencyKey: "k5",
+      task: "t",
+      threadId: "cLegacy",
+    });
     hub.start();
     await eventually(() => expect(delivered).toHaveLength(1));
     expect(delivered[0]!.text).toContain("finished **cLegacy**");

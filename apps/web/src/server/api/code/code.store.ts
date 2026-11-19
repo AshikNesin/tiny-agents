@@ -199,6 +199,8 @@ const hasThread = (row: CodeHandoff | undefined): row is ThreadHandoff =>
 
 export interface HandoffInput {
   botId: string;
+  /** The conversation asking: its finish goes back there. */
+  conversationId: string;
   idempotencyKey: string;
   task: string;
   cwd?: string;
@@ -216,6 +218,7 @@ export async function recordHandoff(input: HandoffInput): Promise<ThreadHandoff>
     .insert(codeHandoffs)
     .values({
       botId: input.botId,
+      conversationId: input.conversationId,
       idempotencyKey: input.idempotencyKey,
       task: input.task,
       cwd: input.cwd ?? null,
@@ -241,6 +244,7 @@ export async function claimHandoff(
     .insert(codeHandoffs)
     .values({
       botId: input.botId,
+      conversationId: input.conversationId,
       idempotencyKey: input.idempotencyKey,
       task: input.task,
       cwd: input.cwd ?? null,
@@ -328,6 +332,19 @@ export async function reopenHandoff(id: string): Promise<void> {
 }
 
 /**
+ * A follow-up from `conversationId`: the hand-off's next finish goes there.
+ * Returns the conversation it replaced, to put back if the send fails.
+ */
+export async function askedFrom(id: string, conversationId: string): Promise<string | null> {
+  const row = await db.query.codeHandoffs.findFirst({
+    where: eq(codeHandoffs.id, id),
+    columns: { conversationId: true },
+  });
+  await db.update(codeHandoffs).set({ conversationId }).where(eq(codeHandoffs.id, id));
+  return row?.conversationId ?? null;
+}
+
+/**
  * Whether a turn that ended at `endedAt` (harness time, ms) is this running
  * hand-off's to report: it ended after the hand-off started or, once a
  * follow-up reopened it, after the reopen.
@@ -363,10 +380,12 @@ export async function finishHandoffOnce(id: string): Promise<boolean> {
   return updated.length > 0;
 }
 
-/** A finish owed to a bot's chat, with what its delivery needs. */
+/** A finish owed to a bot, with what its delivery needs. */
 export interface OwedFinish {
   id: string;
   botId: string;
+  /** Where it goes (`deliverHandoffFinish`); null: the bot's chat. */
+  conversationId: string | null;
   threadId: string | null;
   requestId: string;
   harness: string;
@@ -408,7 +427,13 @@ export function oweFinish(
       .values({ handoffId: handoff.id, ...finish })
       .returning({ id: codeHandoffFinishes.id })
       .get();
-    return { id: row.id, botId: handoff.botId, threadId: handoff.threadId, ...finish };
+    return {
+      id: row.id,
+      botId: handoff.botId,
+      conversationId: handoff.conversationId,
+      threadId: handoff.threadId,
+      ...finish,
+    };
   });
 }
 
@@ -418,6 +443,7 @@ export async function owedFinishes(): Promise<OwedFinish[]> {
     .select({
       id: codeHandoffFinishes.id,
       botId: codeHandoffs.botId,
+      conversationId: codeHandoffs.conversationId,
       threadId: codeHandoffs.threadId,
       requestId: codeHandoffFinishes.requestId,
       harness: codeHandoffFinishes.harness,
@@ -429,7 +455,7 @@ export async function owedFinishes(): Promise<OwedFinish[]> {
     .orderBy(asc(codeHandoffFinishes.createdAt));
 }
 
-/** The submit into the bot's chat returned: the finish is delivered. */
+/** The submit returned: the finish is delivered. */
 export async function markFinishDelivered(id: string): Promise<void> {
   await db
     .update(codeHandoffFinishes)
