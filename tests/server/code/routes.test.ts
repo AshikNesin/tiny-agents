@@ -69,6 +69,7 @@ const row = (id: string, extra: Record<string, unknown> = {}) => ({
   working: false,
   updated_at: "x",
   created_at: "x",
+  tags: '["tiny-agents"]',
   ...extra,
 });
 

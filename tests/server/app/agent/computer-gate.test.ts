@@ -6,6 +6,7 @@
  */
 import type { Context as PiContext, JsonObject } from "@earendil-works/pi-ai";
 import { until } from "../../fixtures/until";
+import { loaded } from "../../fixtures/loaded-tools";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import type { Capability, ToolPermission } from "../../../../packages/agent/src/capabilities";
 import { secretRedactor } from "../../../../packages/agent/src/redact";
@@ -87,7 +88,7 @@ async function openWith(
 ) {
   const runtime = await openTestRuntime({
     storePath: ":memory:",
-    capabilities: [capability],
+    capabilities: [loaded(capability)],
     respondWith,
   });
   runtimes.push(runtime);

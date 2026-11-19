@@ -220,7 +220,7 @@ function fakeChrome() {
         }
         const hop = (i: number): unknown =>
           i < 0 ? null : { url: () => chain[i], redirectedFrom: () => hop(i - 1) };
-        return { status: () => 200, request: () => hop(chain.length - 1) };
+        return { status: () => 200, headers: () => ({}), request: () => hop(chain.length - 1) };
       },
     };
     return page as unknown as Page;

@@ -6,7 +6,7 @@
  * shapes a bot with a permission per tool (D3): `allow` runs it, `ask` waits
  * for the owner's approval, `off` removes it from the model.
  */
-import { defineExtension } from "@earendil-works/pi-durable";
+import { defineExtension, section } from "@earendil-works/pi-durable";
 import { createToolSearchExtension } from "@earendil-works/pi-durable/tool-search";
 import type { Extension } from "@earendil-works/pi-durable";
 
@@ -106,23 +106,63 @@ export function effectivePermission(
 }
 
 /**
- * The `tool_search` capability: installs alongside a connection with deferred
- * tools, letting the model discover them instead of being offered all of them.
+ * The `tool_search` capability (pi's `deferred` exposure): deferred tools, a
+ * large toolkit's or a large connection's, are not sent until the model loads
+ * them with `tool_search`. Its section names each group that has deferred
+ * tools, so the model knows what it can load. The section lists loaded tools
+ * too, so loading changes nothing in it and the prompt cache holds.
+ *
+ * `describe` looks up a group's capability (an extension name is its id).
  */
-export function createToolSearchCapability(): Capability {
+/** The tool search capability's id (and extension name). */
+export const TOOL_SEARCH_CAPABILITY = "tool-search";
+
+export function createToolSearchCapability(
+  describe: (id: string) => CapabilityInfo | undefined = () => undefined,
+): Capability {
+  const extension = createToolSearchExtension();
+  const groups = section("deferred_tools", (input) => {
+    const deferred = new Set(
+      [...input.agent.tools, ...input.agent.deferred]
+        .filter((tool) => tool.deferred === true)
+        .map((tool) => tool.name),
+    );
+    if (deferred.size === 0) return undefined;
+    const lines: string[] = [];
+    for (const group of input.agent.extensions) {
+      const count = (group.tools ?? []).filter((tool) => deferred.has(tool.name)).length;
+      if (count === 0) continue;
+      const info = describe(group.name);
+      const about = !info
+        ? ""
+        : info.kind === "connection"
+          ? `: ${info.name}, a connection`
+          : `: ${info.name}. ${info.description}`;
+      lines.push(`- ${group.name} (${count} tool${count === 1 ? "" : "s"})${about}`);
+    }
+    if (lines.length === 0) return undefined;
+    return [
+      "These tool groups are not loaded yet. Load one with tool_search before you use it: the group's name as the query and its tool count as the limit loads the whole group, and a few words of what you need load only the matching tools. Loaded tools stay loaded.",
+      ...lines,
+    ].join("\n");
+  });
   return {
-    id: "tool-search",
+    id: TOOL_SEARCH_CAPABILITY,
     kind: "toolkit",
     name: "Tool search",
-    description: "Finds tools of large connections on demand",
+    description: "Loads deferred tools on demand",
     auto: true,
-    extension: defineExtension({ ...createToolSearchExtension(), name: "tool-search" }),
+    extension: defineExtension({
+      ...extension,
+      name: TOOL_SEARCH_CAPABILITY,
+      sections: [...(extension.sections ?? []), groups],
+    }),
     tools: [
       {
         name: "tool_search",
         label: "Searched tools",
         askLabel: "search tools",
-        description: "Find tools of large connections",
+        description: "Load deferred tools",
         readOnly: true,
       },
     ],

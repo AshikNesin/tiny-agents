@@ -16,6 +16,8 @@ import type {
   InboxPullView,
   PullReviewView,
   PullThreadsView,
+  AskReviewBody,
+  EditReviewFileBody,
   PushedReview,
   ReviewTerminal,
   SuggestedChanges,
@@ -84,8 +86,9 @@ export const projectsApi = {
     ),
   editPull: (id: string, change: { title?: string; body?: string }) =>
     apiClient.patch<ThreadPullsView>(`${thread(id)}/pr`, change),
-  /** Draft → ready for review. */
-  ready: (id: string) => apiClient.post<ThreadPullsView>(`${thread(id)}/pr/ready`, {}),
+  /** Draft ↔ ready for review. */
+  setDraft: (id: string, draft: boolean) =>
+    apiClient.post<ThreadPullsView>(`${thread(id)}/pr/draft`, { draft }),
   merge: (id: string, method: MergeMethod) =>
     apiClient.post<ThreadPullsView>(`${thread(id)}/pr/merge`, { method }),
 
@@ -94,6 +97,9 @@ export const projectsApi = {
     apiClient.get<ReviewFile[]>(`${thread(id)}/review/files`, since ? { since } : undefined),
   reviewFile: (id: string, path: string, since?: "review" | "mine") =>
     apiClient.get<ReviewFileDiff>(`${thread(id)}/review/file`, since ? { path, since } : { path }),
+  /** The light editor's save: the file's new content, and what it was opened with. */
+  editFile: (id: string, body: EditReviewFileBody) =>
+    apiClient.put(`${thread(id)}/review/file`, body),
   setViewed: (id: string, path: string, hash: string, viewed: boolean) =>
     apiClient.post(`${thread(id)}/review/viewed`, { path, hash, viewed }),
   drafts: (id: string) => apiClient.get<ReviewDraft[]>(`${thread(id)}/review/drafts`),
@@ -107,16 +113,15 @@ export const projectsApi = {
 /** PR reviews (issue #345): any PR of a project's repository, with an assistant scoped to it. */
 export const reviewsApi = {
   list: () => apiClient.get<PullReviewView[]>(`${base}/reviews`),
-  /** The owner's review inbox from GitHub, across every repository. */
-  inbox: () => apiClient.get<InboxPullView[]>(`${base}/reviews/inbox`),
+  /** The owner's review inbox from GitHub, across every repository, narrowed by `filter`. */
+  inbox: (filter: Record<string, string> = {}) =>
+    apiClient.get<InboxPullView[]>(`${base}/reviews/inbox`, filter),
   /** Open (or reopen) a review: `pr` is the PR's URL or `owner/name#123`. */
   open: (pr: string) => apiClient.post<PullReviewView>(`${base}/reviews`, { pr }),
   get: (id: string) => apiClient.get<PullReviewView>(`${base}/reviews/${encodeURIComponent(id)}`),
   /** A question for the assistant: the first starts it, with the PR card and waiting comments. */
-  ask: (id: string, message: string) =>
-    apiClient.post<{ threadId: string }>(`${base}/reviews/${encodeURIComponent(id)}/ask`, {
-      message,
-    }),
+  ask: (id: string, body: AskReviewBody) =>
+    apiClient.post<{ threadId: string }>(`${base}/reviews/${encodeURIComponent(id)}/ask`, body),
   archive: (id: string) => apiClient.post(`${base}/reviews/${encodeURIComponent(id)}/archive`),
   /** Comments waiting for the review on GitHub. */
   comments: (id: string) =>

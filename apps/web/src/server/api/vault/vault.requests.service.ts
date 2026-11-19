@@ -116,14 +116,16 @@ async function save(
   const of = (match: (field: CredentialField) => boolean) =>
     filled.find((f) => match(f.field))?.value;
   const password = of((f) => f.type === "password");
+  // The sign-in's identifier: a username, an email or a mobile number (OTP sign-ins have no password).
   const username = of(
     (f) =>
-      (f.type === "email" || f.type === "text") && ["username", "email"].includes(f.autocomplete),
+      (f.type === "email" || f.type === "text") &&
+      ["username", "email", "tel"].includes(f.autocomplete),
   );
   const number = of((f) => f.type === "card_number");
   const host = new URL(request.origin).host;
-  if (password) {
-    const values = { password, ...(username ? { username } : {}) };
+  if (password || username) {
+    const values = { ...(password ? { password } : {}), ...(username ? { username } : {}) };
     if (request.savedHandle) {
       await updateItem(request.savedHandle, { values }, { via: "credential_request" });
       return request.savedHandle;
@@ -235,16 +237,21 @@ async function fillRequest(
   }));
   let result: { filled: string[] };
   try {
-    result = await getBrowserSessions().fillSecret(target, { origin: request.origin, fields });
+    // Sign-ins split over pages (Amazon's email, then password) are walked through.
+    result = await getBrowserSessions().fillSecret(target, {
+      origin: request.origin,
+      fields,
+      steps: true,
+    });
   } catch (error) {
     if (error instanceof VaultTargetMovedError) {
       throw Boom.conflict("The page moved before the fill. Nothing was filled.");
     }
-    throw Boom.badGateway("Couldn't fill the page. Try the live browser instead.");
+    throw Boom.badGateway("Couldn't fill the page. Try again in a moment.");
   }
   if (result.filled.length === 0) {
     throw Boom.unprocessable(
-      "No matching fields were found on the page. Open the live browser to check it, then try again.",
+      "No matching fields were found on the page. The bot may not be on the sign-in form yet: try again in a moment.",
     );
   }
   // The page is filled: from here the request settles whatever else fails.

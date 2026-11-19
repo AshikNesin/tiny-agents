@@ -150,6 +150,7 @@ export async function captureConversation(
       user: "Extract now.",
       timeoutMs: CAPTURE_TIMEOUT_MS,
       label: "Memory capture",
+      botId: bot.id,
       context: { conversationId },
     });
     // No model, or the call failed (logged): a later settle retries the window.

@@ -26,6 +26,7 @@ import {
   bots,
   botSkills,
   codeHandoffs,
+  llmCalls,
   memories,
   notificationLog,
   promptRevisions,
@@ -126,6 +127,7 @@ export const BOT_RESOURCES = {
     memories.botId,
     promptRevisions.botId,
     botGuests.botId,
+    llmCalls.botId,
   ),
   chat: released({
     capture: { shape: z.string(), read: (bot) => bot.conversationId },

@@ -98,6 +98,8 @@ export function createSelfImproveCapability(store: InstructionsStore): Capabilit
 
   return defineToolkit({
     id: "self-improve",
+    // Used in few conversations: loaded with tool_search (issue #360).
+    deferred: true,
     name: "Self-improve",
     description: "Update this bot's own instructions, with owner approval",
     tools: [update],

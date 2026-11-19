@@ -94,6 +94,10 @@ function fakeTransport() {
         log.push({ method: "text", args: scope });
         return pageText;
       },
+      waitFor: async (wait) => {
+        log.push({ method: "waitFor", args: wait });
+        return wait.text !== "Never";
+      },
       back: async () => {
         log.push({ method: "back" });
         const previous = history.pop();
@@ -256,7 +260,57 @@ describe("browser toolkit", () => {
     await run(tk, "browser_navigate", { url: "https://example.com/a" });
     await run(tk, "browser_navigate", { url: "https://example.com/b" });
     const back = await run(tk, "browser_back", {});
-    expect(back.text).toBe("back to https://example.com/a · Earlier page");
+    expect(back.text.split("\n")[0]).toBe("back to https://example.com/a · Earlier page");
+  });
+
+  it("shows a new page's snapshot after navigating, then only what an action changed", async () => {
+    const { transport, setSnapshot } = fakeTransport();
+    const tk = toolkit({ transport, profilesDir: "/tmp/ta-test-profiles" });
+    setSnapshot('- heading "Sign up"\n- textbox "Email" [ref=e2]\n- button "Join" [ref=e3]');
+
+    const opened = await run(tk, "browser_navigate", { url: "https://example.com/join" });
+    expect(opened.text).toBe(
+      '200 https://example.com/join\nPage:\n- heading "Sign up"\n- textbox "Email" [ref=e2]\n- button "Join" [ref=e3]',
+    );
+
+    // The click shows an error under the form: one new line, under the line it follows.
+    setSnapshot(
+      '- heading "Sign up"\n- textbox "Email" [ref=e2]\n- button "Join" [ref=e3]\n- alert:\n  - text: Email is required',
+    );
+    const clicked = await run(tk, "browser_click", { ref: "e3" });
+    expect(clicked.text).toBe(
+      "clicked e3 — https://example.com/join\nChanged on the page (+2 -0 lines):\n+ - alert:\n+   - text: Email is required",
+    );
+
+    const again = await run(tk, "browser_click", { ref: "e3" });
+    expect(again.text).toBe("clicked e3 — https://example.com/join\nNo change on the page.");
+  });
+
+  it("keeps typed text out of the page change it returns", async () => {
+    const { transport, setSnapshot } = fakeTransport();
+    const tk = toolkit({ transport, profilesDir: "/tmp/ta-test-profiles" });
+    await run(tk, "browser_snapshot", {});
+    setSnapshot('- body [ref=e1]\n  - input [ref=e2]: hunter2\n  - button "Go" [ref=e3]');
+    const typed = await run(tk, "browser_type", { ref: "e2", text: "hunter2" });
+    expect(typed.text).not.toContain("hunter2");
+    expect(typed.text).toContain("+   - input [ref=e2]: [typed text]");
+  });
+
+  it("waits for text, and says when it never came", async () => {
+    const { transport, log } = fakeTransport();
+    const tk = toolkit({ transport, profilesDir: "/tmp/ta-test-profiles" });
+    await run(tk, "browser_snapshot", {});
+    const seen = await run(tk, "browser_wait_for", { text: "Results" });
+    expect(seen.text).toBe('"Results" is on the page\nNo change on the page.');
+    const missing = await run(tk, "browser_wait_for", { text: "Never", seconds: 3 });
+    expect(missing.text.split("\n")[0]).toBe("still not there after 3 s");
+    const gone = await run(tk, "browser_wait_for", { text: "Loading", gone: true });
+    expect(gone.text.split("\n")[0]).toBe('"Loading" is gone');
+    expect(log.filter((e) => e.method === "waitFor").map((e) => e.args)).toEqual([
+      { text: "Results", gone: false, timeoutMs: 10_000 },
+      { text: "Never", gone: false, timeoutMs: 3_000 },
+      { text: "Loading", gone: true, timeoutMs: 10_000 },
+    ]);
   });
 
   it("invalid refs are rejected", async () => {

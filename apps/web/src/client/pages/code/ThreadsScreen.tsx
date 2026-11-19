@@ -7,6 +7,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
+  ArrowLeft,
   ChevronRight,
   CircleAlert,
   CircleCheck,
@@ -192,14 +193,16 @@ export function ThreadsScreen({
           sidebarHidden && "md:pl-12",
         )}
       >
-        <Link to="/code" className="text-muted-foreground hover:text-foreground text-sm md:hidden">
-          Back
-        </Link>
+        <Button asChild variant="ghost" size="icon-sm" className="text-muted-foreground md:hidden">
+          <Link to="/code" aria-label="Back" title="Back">
+            <ArrowLeft />
+          </Link>
+        </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className="hover:bg-muted aria-expanded:bg-muted flex h-8 min-w-0 items-center gap-1 rounded-lg px-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="hover:bg-muted aria-expanded:bg-muted flex h-8 max-w-[45%] shrink-0 items-center gap-1 rounded-lg px-2 outline-none sm:max-w-none focus-visible:ring-3 focus-visible:ring-ring/50"
               aria-label="Project"
             >
               <h1 className="truncate text-sm font-medium">{project?.name ?? "All threads"}</h1>
@@ -215,14 +218,14 @@ export function ThreadsScreen({
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
-        <span className="flex-1" />
-        <Button asChild variant="ghost" size="sm" className="text-muted-foreground">
+        <span className="hidden flex-1 sm:block" />
+        <Button asChild variant="ghost" size="sm" className="text-muted-foreground shrink-0">
           <Link to={projectId ? `/code/new?project=${encodeURIComponent(projectId)}` : "/code/new"}>
             <SquarePen />
             <span className="hidden sm:inline">New thread</span>
           </Link>
         </Button>
-        <InputGroup className="w-40 sm:w-64">
+        <InputGroup className="min-w-0 flex-1 sm:w-64 sm:flex-none">
           <InputGroupAddon>
             <Search />
           </InputGroupAddon>

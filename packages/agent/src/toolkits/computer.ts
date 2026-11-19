@@ -458,6 +458,8 @@ export function createComputerToolkit(options: ComputerToolkitOptions = {}): Cap
     id: "computer",
     name: "Computer",
     description: "A desktop on the sandbox VM the bot sees and drives: click, type, open apps.",
+    // Large and used in few conversations: loaded with tool_search (issue #360).
+    deferred: true,
     tools: [
       tool({
         name: "computer_screenshot",

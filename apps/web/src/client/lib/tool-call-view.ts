@@ -126,6 +126,7 @@ function anchorOf(card: ToolCard | undefined, taskId: number | undefined): strin
   if (card === "approval" || card === "vault-approval") return `approval:${taskId}`;
   if (card === "question") return `question:${taskId}`;
   if (card === "takeover") return `takeover:${taskId}`;
+  if (card === "credentials") return `credentials:${taskId}`;
   return undefined;
 }
 

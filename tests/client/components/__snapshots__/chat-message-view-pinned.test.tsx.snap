@@ -2497,55 +2497,51 @@ exports[`ChatMessageView, pinned > card: credentials > markup 1`] = `
         class="mb-2 space-y-1"
       >
         <div
-          class="group/item flex w-full flex-wrap items-center rounded-lg border text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 [a]:hover:bg-muted gap-2.5 px-3 py-2.5 border-primary/40 bg-primary/5 my-1 max-w-lg"
-          data-size="default"
-          data-slot="item"
-          data-variant="default"
+          data-waiting="credentials:10"
         >
           <div
-            class="flex flex-1 flex-col gap-1 group-data-[size=xs]/item:gap-0 [&+[data-slot=item-content]]:flex-none"
-            data-slot="item-content"
+            class="group/item flex w-full flex-wrap items-center rounded-lg border text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 [a]:hover:bg-muted gap-2.5 px-3 py-2.5 border-primary/40 bg-primary/5 my-1 max-w-lg"
+            data-size="default"
+            data-slot="item"
+            data-testid="credential-card"
+            data-variant="default"
           >
             <div
-              class="line-clamp-1 flex w-fit items-center gap-2 text-sm leading-snug font-medium underline-offset-4"
-              data-slot="item-title"
+              class="flex flex-1 flex-col group-data-[size=xs]/item:gap-0 [&+[data-slot=item-content]]:flex-none gap-3"
+              data-slot="item-content"
             >
-              <svg
-                aria-hidden="true"
-                class="lucide lucide-key-round size-4"
-                fill="none"
-                height="24"
-                stroke="currentColor"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                viewBox="0 0 24 24"
-                width="24"
-                xmlns="http://www.w3.org/2000/svg"
-              />
-              Chief needs you on acme.test
+              <div
+                class="line-clamp-1 flex w-fit items-center gap-2 text-sm leading-snug font-medium underline-offset-4"
+                data-slot="item-title"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-key-round size-4"
+                  fill="none"
+                  height="24"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="24"
+                  xmlns="http://www.w3.org/2000/svg"
+                />
+                Chief needs you on acme.test
+              </div>
+              <p
+                class="line-clamp-2 text-left text-sm leading-normal font-normal text-muted-foreground group-data-[size=xs]/item:text-xs [&>a]:underline [&>a]:underline-offset-4 [&>a:hover]:text-primary"
+                data-slot="item-description"
+              >
+                Sign in to Acme
+              </p>
+              <p
+                class="line-clamp-2 text-left text-sm leading-normal font-normal text-muted-foreground group-data-[size=xs]/item:text-xs [&>a]:underline [&>a]:underline-offset-4 [&>a:hover]:text-primary"
+                data-slot="item-description"
+              >
+                Loading…
+              </p>
             </div>
-            <p
-              class="line-clamp-2 text-left text-sm leading-normal font-normal text-muted-foreground group-data-[size=xs]/item:text-xs [&>a]:underline [&>a]:underline-offset-4 [&>a:hover]:text-primary"
-              data-slot="item-description"
-            >
-              Acme. What you type is filled into the page and never shown to Chief.
-            </p>
-          </div>
-          <div
-            class="flex items-center gap-2"
-            data-slot="item-actions"
-          >
-            <a
-              class="group/button inline-flex shrink-0 items-center justify-center rounded-xl border border-transparent bg-clip-padding font-medium whitespace-nowrap transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:scale-[0.97] motion-reduce:transition-none disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/80 h-6 gap-1 px-2 text-xs in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3"
-              data-discover="true"
-              data-size="xs"
-              data-slot="button"
-              data-variant="default"
-              href="/vault/requests/10"
-            >
-              Open
-            </a>
           </div>
         </div>
       </div>
@@ -2555,11 +2551,11 @@ exports[`ChatMessageView, pinned > card: credentials > markup 1`] = `
 `;
 
 exports[`ChatMessageView, pinned > card: credentials > outline 1`] = `
-"icon lucide-key-round
-"Chief needs you on acme.test"
-"Acme. What you type is filled into the page and never shown to Chief."
-link "Open" [href=/vault/requests/10]
-  "Open""
+"div [testid=credential-card]
+  icon lucide-key-round
+  "Chief needs you on acme.test"
+  "Sign in to Acme"
+  "Loading…""
 `;
 
 exports[`ChatMessageView, pinned > card: question > markup 1`] = `

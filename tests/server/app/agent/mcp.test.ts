@@ -166,6 +166,24 @@ describe("MCP connections", () => {
     expect(mcpToolName("x", "a".repeat(80))).toHaveLength(64);
   });
 
+  it("cuts a server's long tool descriptions to 2,048 characters", () => {
+    const capability = createMcpCapability({
+      slug: "wordy",
+      name: "Wordy",
+      url: "https://wordy.example.test/mcp",
+      tools: [
+        { name: "search", description: "Find things. " + "x".repeat(5_000), inputSchema: {} },
+        { name: "list", description: "List things.", inputSchema: {} },
+      ],
+      call: async () => ({ content: [] }),
+    });
+    const [search, list] = capability.extension.tools ?? [];
+    expect(search?.description).toHaveLength(2_048);
+    expect(search?.description.startsWith("Find things. xxx")).toBe(true);
+    expect(search?.description.endsWith("…")).toBe(true);
+    expect(list?.description).toBe("List things.");
+  });
+
   it("defers the tools of large servers behind tool_search", () => {
     const many = Array.from({ length: MCP_DEFER_THRESHOLD + 1 }, (_, i) => ({
       name: `tool_${i}`,

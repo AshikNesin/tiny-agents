@@ -5,11 +5,13 @@
  * says so instead of drawing a whole-file change or freezing the tab.
  */
 import React from "react";
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { ConfirmProvider } from "@groot/ui/primitives";
 import { ChangesPanel } from "@/pages/code/ChangesPanel";
+import { PullDiffs } from "@/pages/code/PullDiffs";
 import { ReviewPanel } from "@/pages/code/ReviewPanel";
+import type { PullReviewView } from "../../../apps/web/src/shared/api/code";
 import { FileDiff } from "@/pages/code/UnifiedDiff";
 import { clickLine, diffText, line } from "../diff-dom";
 
@@ -94,9 +96,8 @@ describe("Changes panel", () => {
     );
     const { rerender } = render(panel("1"));
     await wait(0);
-    const header = () => screen.getByTitle("src/a.ts");
-    fireEvent.click(header());
-    expect(header()).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(screen.getByRole("button", { name: "Fold src/a.ts" }));
+    expect(screen.getByRole("button", { name: "Unfold src/a.ts" })).toBeInTheDocument();
 
     // The agent writes again: the next list read is held back.
     let release: () => void = () => {};
@@ -105,13 +106,12 @@ describe("Changes panel", () => {
       new Promise((resolve) => (release = () => resolve(files)));
     rerender(panel("2"));
     await wait(1500);
-    expect(screen.getByRole("list", { name: "Changed files" })).toBeInTheDocument();
     expect(screen.getAllByTestId("code-file")).toHaveLength(2);
 
     release();
     await wait(0);
-    expect(header()).toHaveAttribute("aria-expanded", "false");
-    expect(within(header()).getByText("+3")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Unfold src/a.ts" })).toBeInTheDocument();
+    expect(screen.getByText("+3")).toBeInTheDocument();
   });
 });
 
@@ -180,7 +180,7 @@ describe("re-reading while the agent writes non-stop", () => {
 });
 
 describe("Review panel", () => {
-  it("lists the changed files first, opens one to its diff, and goes back to the list", async () => {
+  it("shows every changed file in one column, with the tree a drawer under Files", async () => {
     const thread = "/code/threads/claude-code%3At1";
     routes[`${thread}/checkpoints`] = () => [];
     routes[`${thread}/review/drafts`] = () => [];
@@ -194,6 +194,11 @@ describe("Review panel", () => {
       oldContent: "",
       newContent: "export const login = 1;\n",
     });
+    routes[`${thread}/review/file?README.md`] = () => ({
+      path: "README.md",
+      oldContent: "",
+      newContent: "# Read me\n",
+    });
     render(
       <ConfirmProvider>
         <ReviewPanel threadId="claude-code:t1" baseBranch="main" refreshKey="1" />
@@ -202,22 +207,50 @@ describe("Review panel", () => {
     await wait(0);
     expect(screen.getByText("ta/fix-login")).toBeInTheDocument();
     expect(screen.getByText("2 ahead")).toBeInTheDocument();
-    const list = screen.getByRole("navigation", { name: "Changed files" });
-    const row = within(list).getByRole("button", { name: /login\.ts/ });
-    expect(row).toHaveTextContent("login.ts");
-    expect(row).toHaveTextContent("src/auth");
-    expect(row).toHaveTextContent("M");
-    expect(within(list).getByRole("button", { name: /README\.md/ })).toHaveTextContent("A");
-    // The list alone: no diff until a file is picked.
-    expect(shown()).not.toContain("export const login = 1;");
-
-    act(() => row.click());
+    // Both files in the column at once, folders first, no file to pick.
+    expect(screen.getAllByTestId("code-file").map((b) => b.getAttribute("aria-label"))).toEqual([
+      "Fold src/auth/login.ts",
+      "Fold README.md",
+    ]);
     await wait(0);
     expect(shown()).toContain("export const login = 1;");
-    expect(screen.queryByRole("navigation", { name: "Changed files" })).toBeNull();
+    expect(screen.getByText("0/2 viewed")).toBeInTheDocument();
 
-    act(() => screen.getByRole("button", { name: "All files" }).click());
+    // The tree waits in a drawer.
+    expect(screen.queryByRole("navigation", { name: "Changed files" })).toBeNull();
+    act(() => screen.getByRole("button", { name: "Files" }).click());
     expect(screen.getByRole("navigation", { name: "Changed files" })).toBeInTheDocument();
+    act(() => screen.getAllByRole("button", { name: "Close files" })[0]!.click());
+    expect(screen.queryByRole("navigation", { name: "Changed files" })).toBeNull();
+  });
+
+  it("on the Review page, keeps the tree beside the column and folds a file marked viewed", async () => {
+    const thread = "/code/threads/claude-code%3At1";
+    routes[`${thread}/checkpoints`] = () => [];
+    routes[`${thread}/review/drafts`] = () => [];
+    routes[`${thread}/review/files`] = () => [
+      { ...file("src/a.ts", 1), hash: "h1", viewed: false },
+      { ...file("src/b.ts", 1), hash: "h2", viewed: false },
+    ];
+    for (const name of ["src/a.ts", "src/b.ts"])
+      routes[`${thread}/review/file?${name}`] = () => ({
+        path: name,
+        oldContent: "",
+        newContent: `${name}\n`,
+      });
+    const setViewed = vi.fn(async () => undefined);
+    const { projectsApi } = await import("@/lib/code/projects");
+    vi.spyOn(projectsApi, "setViewed").mockImplementation(setViewed);
+    render(
+      <ConfirmProvider>
+        <ReviewPanel threadId="claude-code:t1" baseBranch="main" refreshKey="1" page />
+      </ConfirmProvider>,
+    );
+    await wait(0);
+    expect(screen.getByRole("navigation", { name: "Changed files" })).toBeInTheDocument();
+    act(() => screen.getByRole("checkbox", { name: "Viewed src/b.ts" }).click());
+    expect(screen.getByRole("button", { name: "Unfold src/b.ts" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Diff stats" })).toHaveTextContent("1 of 2");
   });
 
   it("shows the open file's new content when the agent changes it again", async () => {
@@ -272,21 +305,29 @@ describe("a PR review you reviewed before", () => {
     });
     render(
       <ConfirmProvider>
-        <ReviewPanel
-          threadId="review:rv1"
-          baseBranch="main"
+        <PullDiffs
+          review={
+            {
+              id: "rv1",
+              key: "review:rv1",
+              baseRef: "main",
+              headSha: "head2",
+              reviewedSha: "abc1234def",
+            } as PullReviewView
+          }
           refreshKey="1"
-          page
-          pull={{ headRef: "maria:x", reviewedSha: "abc1234def" }}
+          diffStyle="unified"
+          collapse={null}
+          drawer={{ open: false, onOpenChange: () => undefined }}
         />
       </ConfirmProvider>,
     );
     await wait(0);
     const scope = screen.getByRole("button", { name: "Changes to show" });
     expect(scope).toHaveTextContent("Since your review");
-    expect(screen.getByRole("navigation", { name: "Changed files" })).not.toHaveTextContent(
-      "old.ts",
-    );
+    expect(screen.getByRole("button", { name: "Fold src/new.ts" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Fold src/old.ts" })).not.toBeInTheDocument();
+    await wait(50);
     expect(shown()).toEqual(["old", "after review"]);
   });
 });

@@ -39,6 +39,50 @@ const CHECKOUT = `<!doctype html><form>
   <input name="holder" placeholder="Name on card">
 </form>`;
 
+/** Amazon's sign-in as amazon.in serves it: the email step first, with an
+ * `autocomplete="webauthn"` email field and a hidden password autofill
+ * hint; the password on a page of its own after submitting. */
+const EMAIL_STEP = `<!doctype html><form action="/password" method="get">
+  <input type="text" name="email" id="ap_email_login" autocomplete="webauthn">
+  <input type="password" name="password" id="hint" style="display:none">
+  <input type="submit" value="Continue">
+</form>`;
+
+const PASSWORD_STEP = `<!doctype html><form action="/done" method="get">
+  <input type="password" name="password" id="ap_password" autocomplete="current-password">
+</form>`;
+
+/** A mobile-number sign-in as SPA portals serve it: no `<form>` (a
+ * styled-components tree), a country-code prefix, and the only identifier
+ * field is a `tel` input; the header re-renders, replacing its LOGIN button
+ * every 300ms. */
+const MOBILE_LOGIN = `<!doctype html><body>
+<div id="header"><button id="login">LOGIN/SIGNUP</button></div>
+<section id="login-section">
+  <div>+91</div>
+  <input id="mobile" type="tel" inputmode="numeric" maxlength="10"
+         placeholder="Enter your mobile number" aria-label="Enter your mobile number">
+  <button id="continue">Continue</button>
+</section>
+<script>
+  // The header re-renders: the button is detached and replaced every 300ms.
+  setInterval(() => {
+    const btn = document.createElement("button");
+    btn.textContent = "LOGIN/SIGNUP";
+    document.getElementById("header").replaceChildren(btn);
+  }, 300);
+  document.getElementById("continue").addEventListener("click", () => {
+    if (!document.getElementById("mobile").value) return;
+    setTimeout(() => {
+      const otp = document.createElement("input");
+      otp.id = "otp"; otp.type = "tel"; otp.maxLength = 4; otp.inputMode = "numeric";
+      otp.placeholder = "Enter OTP"; otp.setAttribute("aria-label", "Enter OTP");
+      document.getElementById("login-section").replaceChildren(otp);
+    }, 300);
+  });
+</script>
+</body>`;
+
 const OTP = `<!doctype html><form><input name="otp" inputmode="numeric" placeholder="Verification code"></form>`;
 
 describe.skipIf(!executable)("vault fills in the page", () => {
@@ -46,10 +90,24 @@ describe.skipIf(!executable)("vault fills in the page", () => {
   let server: Server;
   let origin: string;
   let page: Page;
+  const submitted: string[] = [];
 
   beforeAll(async () => {
     server = createServer((req, res) => {
-      const body = req.url === "/checkout" ? CHECKOUT : req.url === "/otp" ? OTP : LOGIN;
+      const path = (req.url ?? "/").split("?")[0];
+      if (path === "/password") submitted.push(req.url ?? "");
+      const body =
+        path === "/checkout"
+          ? CHECKOUT
+          : path === "/otp"
+            ? OTP
+            : path === "/email"
+              ? EMAIL_STEP
+              : path === "/password"
+                ? PASSWORD_STEP
+                : path === "/mobile"
+                  ? MOBILE_LOGIN
+                  : LOGIN;
       res.writeHead(200, { "content-type": "text/html" }).end(body);
     });
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -145,5 +203,54 @@ describe.skipIf(!executable)("vault fills in the page", () => {
       ],
     });
     expect(result.filled).toEqual([]);
+  });
+
+  it("fills a mobile-number sign-in: no <form>, a tel input, a re-rendering header", async () => {
+    await page.goto(`${origin}/mobile`);
+    const result = await fillSecretFields(page, {
+      origin,
+      fields: [{ key: "mobile", autocomplete: "tel", value: new SecretValue("8124227227") }],
+    });
+    expect(result.filled).toEqual(["mobile"]);
+    expect(await page.inputValue("#mobile")).toBe("8124227227");
+  });
+
+  it("fills a mobile-only sign-in asked for as a username, then its OTP screen", async () => {
+    await page.goto(`${origin}/mobile`);
+    const result = await fillSecretFields(page, {
+      origin,
+      // A sign-in asked for as "username" (the default text token) on a page
+      // whose only identifier field is a mobile-number tel input.
+      fields: [{ key: "mobile", autocomplete: "username", value: new SecretValue("8124227227") }],
+      steps: true,
+    });
+    expect(result).toEqual({ filled: ["mobile"] });
+    expect(await page.inputValue("#mobile")).toBe("8124227227");
+    // As the tool tells the model to: submit, then the OTP screen shows.
+    await page.click("#continue");
+    await page.waitForSelector("#otp");
+    // The OTP screen (4-digit tel input) is filled by the one-time-code heuristic.
+    const otp = await fillSecretFields(page, {
+      origin,
+      fields: [{ key: "code", autocomplete: "one-time-code", value: new SecretValue("4587") }],
+    });
+    expect(otp.filled).toEqual(["code"]);
+    expect(await page.inputValue("#otp")).toBe("4587");
+  });
+
+  it("fills a two-step sign-in: the email, submits it, then the password on the next page", async () => {
+    await page.goto(`${origin}/email`);
+    const result = await fillSecretFields(page, {
+      origin,
+      steps: true,
+      fields: [
+        { key: "email", autocomplete: "username", value: new SecretValue("ana@example.com") },
+        { key: "password", autocomplete: "current-password", value: new SecretValue("canary-4") },
+      ],
+    });
+    expect(result).toEqual({ filled: ["email", "password"] });
+    expect(submitted).toEqual(["/password?email=ana%40example.com&password="]);
+    expect(new URL(page.url()).pathname).toBe("/password");
+    expect(await page.inputValue("#ap_password")).toBe("canary-4");
   });
 });

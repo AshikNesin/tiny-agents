@@ -29,13 +29,19 @@ const logs = new Map<number, CheckLogView>();
 /** The PR's description on GitHub, and the edits the tab sent. */
 let body = "";
 const edits: unknown[] = [];
-/** Whether the open PR is a draft, and the ready-for-review calls the tab made. */
+/** Whether the open PR is a draft, and the draft switches the tab asked for. */
 let draft = false;
-const readied: string[] = [];
+const readied: boolean[] = [];
 /** No PR yet: how far the branch is ahead, and what differs from the base (committed or not). */
 let noPull = false;
-let ahead = 1;
+let ahead: number | null = 1;
 let changed: string[] = [];
+let earlier: ThreadPullsView["earlier"] = [];
+/** Auto-fix on the open PR, and what the thread has cost. */
+let autofix = false;
+let spendUsd: number | null = null;
+/** Comment and thread ids from authors Auto-fix does not take instructions from. */
+let ignored: string[] = [];
 
 // The network: the PR tab's one read.
 vi.mock("@groot/shell/lib/api", async (importOriginal) => {
@@ -67,10 +73,10 @@ vi.mock("@groot/shell/lib/api", async (importOriginal) => {
         if (failReads) throw new Error("GitHub is down");
         return view(checkState);
       },
-      post: async (path: string) => {
-        if (path !== "/code/threads/shelley%3At1/pr/ready") throw new Error(`unexpected ${path}`);
-        readied.push(path);
-        draft = false;
+      post: async (path: string, body: { draft: boolean }) => {
+        if (path !== "/code/threads/shelley%3At1/pr/draft") throw new Error(`unexpected ${path}`);
+        readied.push(body.draft);
+        draft = body.draft;
         return view(checkState);
       },
       patch: async (path: string, change: { body?: string }) => {
@@ -95,6 +101,7 @@ const project: NonNullable<ThreadPullsView["project"]> = {
   settings: {
     scripts: {},
     archiveOnMerge: true,
+    draftPulls: true,
     branchPrefix: "ta/",
     protectedPaths: [],
     autofix: {
@@ -116,8 +123,8 @@ function view(state: CheckState): ThreadPullsView {
     project,
     branch: "ta/fix-1a2b",
     ahead,
-    spend: { usd: null, limitUsd: null },
-    earlier: [],
+    spend: { usd: spendUsd, limitUsd: null },
+    earlier,
     active: noPull
       ? null
       : {
@@ -130,11 +137,11 @@ function view(state: CheckState): ThreadPullsView {
           headRef: "ta/fix-1a2b",
           baseRef: "main",
           syncedAt: null,
-          autofix: false,
+          autofix,
           autoMerge: false,
-          loop: { status: "off", reason: null },
+          loop: { status: autofix ? "watching" : "off", reason: null },
           stalled: [],
-          ignored: [],
+          ignored,
           passes: [],
           snapshot: {
             id: "n1",
@@ -190,6 +197,10 @@ beforeEach(() => {
   noPull = false;
   ahead = 1;
   changed = [];
+  earlier = [];
+  autofix = false;
+  spendUsd = null;
+  ignored = [];
   visibility = "visible";
   vi.spyOn(document, "visibilityState", "get").mockImplementation(() => visibility);
   vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "setTimeout", "clearTimeout"] });
@@ -257,17 +268,43 @@ describe("Code PR tab", () => {
 });
 
 describe("getting it merged", () => {
-  it("offers Ready for review on a draft, and Merge once GitHub has it ready", async () => {
+  it("leads with the merged PR once a merge archived the thread, not with Publish (#383)", async () => {
+    noPull = true;
+    ahead = null; // the archive took the worktree
+    earlier = [
+      {
+        number: 12,
+        url: "https://github.com/o/r/pull/12",
+        title: "Fix the login",
+        state: "merged",
+      },
+    ];
+    panel();
+    await wait(0);
+    const merged = screen.getByRole("region", { name: "Merged" });
+    expect(merged).toHaveTextContent("#12 Fix the login");
+    expect(merged).toHaveTextContent("Branch ta/fix-1a2b is in main.");
+    expect(screen.queryByTestId("code-publish")).toBeNull();
+    expect(screen.queryByText("Earlier pull requests")).toBeNull();
+  });
+
+  it("switches a draft to ready for review, so Merge opens, and back to a draft", async () => {
     draft = true;
     checkState = "success";
     panel();
     await wait(0);
+    const toggle = screen.getByRole("switch", { name: "Draft" });
+    expect(toggle).toBeChecked();
     expect(screen.getByRole("button", { name: "Merge" })).toBeDisabled();
-    act(() => screen.getByRole("button", { name: "Ready for review" }).click());
+    act(() => toggle.click());
     await wait(0);
-    expect(readied).toEqual(["/code/threads/shelley%3At1/pr/ready"]);
-    expect(screen.queryByRole("button", { name: "Ready for review" })).toBeNull();
+    expect(screen.getByRole("switch", { name: "Draft" })).not.toBeChecked();
     expect(screen.getByRole("button", { name: "Merge" })).toBeEnabled();
+    act(() => screen.getByRole("switch", { name: "Draft" }).click());
+    await wait(0);
+    expect(readied).toEqual([false, true]);
+    expect(screen.getByRole("switch", { name: "Draft" })).toBeChecked();
+    expect(screen.getByRole("button", { name: "Merge" })).toBeDisabled();
   });
 
   it("says the changes are not committed yet, and asks the agent to commit them", async () => {
@@ -283,6 +320,30 @@ describe("getting it merged", () => {
     expect(screen.getByTestId("code-publish")).toBeDisabled();
     act(() => screen.getByRole("button", { name: "Ask to commit" }).click());
     expect(attached).toEqual(["Commit your changes on this branch."]);
+  });
+});
+
+describe("only what can act shows (#384)", () => {
+  it("a new PR: no Fix, no empty Comments, no Auto-fix status or spend limit while it is off", async () => {
+    checkState = "success";
+    spendUsd = 0.02;
+    panel();
+    await wait(0);
+    expect(screen.getByRole("switch", { name: "Auto-fix" })).not.toBeChecked();
+    expect(screen.queryByRole("button", { name: "Fix" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Comments" })).toBeNull();
+    expect(screen.queryByText("No comments yet.")).toBeNull();
+    expect(screen.queryByText("Off")).toBeNull();
+    expect(screen.queryByLabelText("Spend limit")).toBeNull();
+  });
+
+  it("no PR yet: the branch line leads, without a header repeating the tab's name", async () => {
+    noPull = true;
+    panel();
+    await wait(0);
+    expect(screen.queryByText("Pull request")).toBeNull();
+    expect(screen.getByText(/is 1 commit ahead of main/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Refresh" })).toBeInTheDocument();
   });
 });
 
@@ -429,6 +490,27 @@ describe("the pull request's comments", () => {
     expect(screen.getByRole("button", { name: /Cloudflare Pages/ })).not.toHaveTextContent("0ms");
   });
 
+  it("keeps the Auto-fix and Auto-merge switches above a long comment list", async () => {
+    extra = {
+      comments: Array.from({ length: 8 }, (_, i) => ({
+        id: `c${i}`,
+        databaseId: i,
+        author: user("github-actions", "bot"),
+        body: `Tests passed (${i})`,
+        createdAt: "2026-11-17T09:00:00Z",
+      })),
+    };
+    panel();
+    await wait(0);
+    const comments = screen.getByRole("region", { name: "Comments" });
+    for (const name of ["Auto-fix", "Auto-merge"]) {
+      const toggle = screen.getByRole("switch", { name });
+      expect(toggle.compareDocumentPosition(comments) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+        Node.DOCUMENT_POSITION_FOLLOWING,
+      );
+    }
+  });
+
   it("sorts every comment into All, Humans and Bots", async () => {
     extra = {
       comments: [
@@ -481,6 +563,34 @@ describe("the pull request's comments", () => {
     act(() => screen.getByRole("tab", { name: "Humans 1" }).click());
     expect(comments).toHaveTextContent("Can we keep the old flag?");
     expect(comments).not.toHaveTextContent("Walkthrough of the change");
+  });
+
+  it("marks a teammate's review as skipped by Auto-fix only while Auto-fix is on (#385)", async () => {
+    checkState = "success";
+    ignored = ["rv1"];
+    extra = {
+      reviews: [
+        {
+          id: "rv1",
+          author: user("carol"),
+          state: "CHANGES_REQUESTED",
+          body: "Please split this.",
+          submittedAt: "2026-11-17T09:00:00Z",
+        },
+      ],
+    };
+    const { unmount } = panel();
+    await wait(0);
+    const comments = screen.getByRole("region", { name: "Comments" });
+    expect(comments).toHaveTextContent("Please split this.");
+    expect(comments).not.toHaveTextContent("Ignored");
+    expect(comments).not.toHaveTextContent("Auto-fix skips");
+    unmount();
+
+    autofix = true;
+    panel();
+    await wait(0);
+    expect(screen.getByRole("region", { name: "Comments" })).toHaveTextContent("Auto-fix skips");
   });
 
   it("folds a long comment (a bot's walkthrough) behind Show more", async () => {

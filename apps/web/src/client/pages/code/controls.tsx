@@ -195,6 +195,19 @@ const MODE_HINT: Record<PermissionMode, string> = {
   bypassPermissions: "Never ask (YOLO)",
 };
 
+/**
+ * The mode a new thread's composer starts in: Bypass (YOLO) wherever the
+ * harness offers it to this viewer (owner decision, 18 Nov 2026), else the
+ * harness's own default. The picker still changes it per thread.
+ */
+export function composerPermission(settings: {
+  permissionModes: PermissionMode[];
+  defaultPermissionMode?: PermissionMode;
+}): PermissionMode | null {
+  if (settings.permissionModes.includes("bypassPermissions")) return "bypassPermissions";
+  return settings.defaultPermissionMode ?? null;
+}
+
 /** Permission mode, for harnesses that enforce one (never offered otherwise). */
 export function PermissionPicker({
   modes,

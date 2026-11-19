@@ -1,41 +1,38 @@
 /**
  * The Changes panel (issue #143, ADR 0011): what the agent changed in the thread's
- * working directory — uncommitted changes or a recent commit (searchable),
- * every changed file as a card with its +/− and its diff, stacked in one
- * scroll (generated files folded). A line's gutter offers Comment: the
- * comment waits under its line and above the thread's composer, and goes to
- * the agent with the next message. Diffs come from the thread's harness
- * (capability `workspace.diffs`).
+ * working directory, uncommitted changes or a recent commit (searchable), in
+ * the diff workspace (`DiffWorkspace`): one column of every changed file under
+ * sticky headers, generated files folded, and the file tree in a drawer
+ * (Files), or beside the column on the Review page. A line's gutter offers
+ * Comment: the comment waits under its line and above the thread's composer,
+ * and goes to the agent with the next message. Diffs come from the thread's
+ * harness (capability `workspace.diffs`).
  */
-import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, FileDiff as FileDiffIcon, RefreshCw } from "lucide-react";
-import { Button, EmptyState, monoClass } from "@groot/ui";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ChevronDown, FileDiff as FileDiffIcon, ListTree } from "lucide-react";
+import { Button, EmptyState } from "@groot/ui";
 import { cn } from "@groot/ui/lib/utils";
 import { formatRelativeTime } from "@groot/shell/lib/date.utils";
 import { SearchSelect, type SearchSelectOption } from "../../components/ui/search-select";
-import { Spinner } from "../../components/ui/spinner";
 import { errorMessage } from "../../lib/errors";
-import { codeApi, type GitDiff, type GitFile, type GitFileDiff } from "../../lib/code/api";
-import { fileCommenting, type ThreadCommenting } from "../../lib/code/comments";
+import { codeApi, type GitDiff, type GitFile } from "../../lib/code/api";
+import type { ThreadCommenting } from "../../lib/code/comments";
 import { useSteadyKey } from "../../lib/code/use-live-changes";
-import { FileDiff } from "./UnifiedDiff";
-
-const STATUS_LETTER: Record<GitFile["status"], string> = {
-  added: "A",
-  modified: "M",
-  deleted: "D",
-};
-const STATUS_TONE: Record<GitFile["status"], string> = {
-  added: "text-success",
-  modified: "text-warning",
-  deleted: "text-destructive",
-};
+import {
+  DiffViewButtons,
+  DiffWorkspace,
+  treeOrder,
+  useDiffStyle,
+  useWide,
+  type CollapseAll,
+} from "./DiffWorkspace";
 
 export function ChangesPanel({
   instanceId,
   cwd,
   refreshKey,
   commenting,
+  page = false,
 }: {
   instanceId: string;
   cwd: string;
@@ -43,6 +40,8 @@ export function ChangesPanel({
   refreshKey: unknown;
   /** The thread's line comments: absent, the diff takes none. */
   commenting?: ThreadCommenting;
+  /** At full width on the Review page: the tree beside the column. */
+  page?: boolean;
 }) {
   const [diffs, setDiffs] = useState<GitDiff[] | null>(null);
   const [diffId, setDiffId] = useState<string>("working");
@@ -98,23 +97,6 @@ export function ChangesPanel({
   }, [instanceId, diffs, diffId, cwd]);
 
   const selected = diffs?.find((d) => d.id === diffId);
-  const totals = useMemo(
-    () =>
-      (files ?? []).reduce(
-        (sum, f) => ({
-          additions: sum.additions + f.additions,
-          deletions: sum.deletions + f.deletions,
-        }),
-        { additions: 0, deletions: 0 },
-      ),
-    [files],
-  );
-  // Open the first few real files; generated ones (lockfiles) start folded.
-  const openByDefault = useMemo(() => {
-    const real = (files ?? []).filter((f) => !f.isGenerated);
-    return new Set(real.slice(0, 6).map((f) => f.path));
-  }, [files]);
-
   const diffOptions: SearchSelectOption[] = (diffs ?? []).map((d) => ({
     value: d.id,
     label:
@@ -129,184 +111,109 @@ export function ChangesPanel({
     group: d.id === "working" ? undefined : "Commits",
   }));
 
+  // A file's content is named by its counts: the agent's next write reads it again.
+  const shownFiles = useMemo(
+    () =>
+      diffs?.length === 0
+        ? []
+        : files && treeOrder(files).map((f) => ({ ...f, hash: `${f.additions}:${f.deletions}` })),
+    [diffs, files],
+  );
+  const read = useCallback(
+    (path: string) => codeApi.fileDiff(instanceId, diffId, cwd, path),
+    [instanceId, diffId, cwd],
+  );
+  const [style, setStyle] = useDiffStyle();
+  const wide = useWide();
+  const [collapse, setCollapse] = useState<CollapseAll>(null);
+  const [filesOpen, setFilesOpen] = useState(false);
+  const drawer = useMemo(() => ({ open: filesOpen, onOpenChange: setFilesOpen }), [filesOpen]);
+
+  const picker =
+    diffs && diffs.length > 0 ? (
+      <SearchSelect
+        label="Changes to show"
+        value={diffId}
+        onValueChange={setDiffId}
+        options={diffOptions}
+        searchPlaceholder="Search commits…"
+        contentClassName="w-96"
+        triggerClassName={cn(
+          "text-foreground h-8",
+          page ? "w-full justify-start text-xs" : "max-w-full text-sm",
+        )}
+        data-testid="code-diff-select"
+      >
+        <FileDiffIcon className="text-muted-foreground size-4" />
+        <span className="min-w-0 flex-1 truncate text-left">
+          {diffId === "working"
+            ? "Uncommitted changes"
+            : (selected?.message.split("\n")[0] ?? diffId.slice(0, 7))}
+        </span>
+        <ChevronDown className="opacity-50" />
+      </SearchSelect>
+    ) : (
+      <span className="flex items-center gap-2 px-2 text-sm font-medium">
+        <FileDiffIcon className="text-muted-foreground size-4" />
+        Changes
+      </span>
+    );
+
   return (
     <div className="flex h-full min-h-0 flex-col" data-testid="code-changes">
-      <div className="border-border flex h-11 shrink-0 items-center gap-1 border-b px-2">
-        {diffs && diffs.length > 0 ? (
-          <SearchSelect
-            label="Changes to show"
-            value={diffId}
-            onValueChange={setDiffId}
-            options={diffOptions}
-            searchPlaceholder="Search commits…"
-            contentClassName="w-96"
-            triggerClassName="text-foreground h-8 text-sm"
-            data-testid="code-diff-select"
+      {page && (
+        <div className="border-border flex h-10 shrink-0 items-center gap-1 border-b px-2">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="text-muted-foreground shrink-0 md:hidden"
+            aria-label="Files"
+            aria-expanded={filesOpen}
+            onClick={() => setFilesOpen(!filesOpen)}
           >
-            <FileDiffIcon className="text-muted-foreground size-4" />
-            <span className="max-w-64 truncate">
-              {diffId === "working"
-                ? "Uncommitted changes"
-                : (selected?.message.split("\n")[0] ?? diffId.slice(0, 7))}
-            </span>
-            <ChevronDown className="opacity-50" />
-          </SearchSelect>
-        ) : (
-          <span className="flex items-center gap-2 px-2 text-sm font-medium">
-            <FileDiffIcon className="text-muted-foreground size-4" />
-            Changes
-          </span>
-        )}
-        {files && files.length > 0 && (
-          <span className="text-muted-foreground shrink-0 px-1 text-xs tabular-nums">
-            {files.length} {files.length === 1 ? "file" : "files"}{" "}
-            <span className="text-success">+{totals.additions}</span>{" "}
-            <span className="text-destructive">−{totals.deletions}</span>
-          </span>
-        )}
-        <span className="flex-1" />
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={() => setReload((n) => n + 1)}
-          aria-label="Refresh changes"
-          title="Refresh"
-          className="text-muted-foreground"
-        >
-          <RefreshCw />
-        </Button>
-      </div>
-
-      <div className="min-h-0 flex-1 overflow-y-auto p-3">
-        {error && files ? (
-          <p className="text-destructive px-1 pb-2 text-xs">{error} Showing the last read.</p>
-        ) : null}
-        {error && !files ? (
-          <p className="text-destructive p-1 text-sm">{error}</p>
-        ) : !diffs || (files === null && diffs.length > 0) ? (
-          <div className="flex justify-center p-6">
-            <Spinner />
-          </div>
-        ) : diffs.length === 0 ? (
-          <EmptyState
-            icon={FileDiffIcon}
-            title="Nothing to show"
-            description="Not a git repository, or no commits yet."
-          />
-        ) : files && files.length === 0 ? (
-          <EmptyState
-            icon={FileDiffIcon}
-            title="No changes"
-            description="The working tree is clean. Pick a commit above to review it."
-          />
-        ) : (
-          <ul className="space-y-3" aria-label="Changed files">
-            {(files ?? []).map((file) => (
-              <FileCard
-                key={`${diffId}:${file.path}`}
-                file={file}
-                diffId={diffId}
-                instanceId={instanceId}
-                cwd={cwd}
-                defaultOpen={openByDefault.has(file.path)}
-                reload={`${settledKey}:${reload}`}
-                commenting={commenting}
-              />
-            ))}
-          </ul>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/** One changed file: a sticky header (status, path, +/−) over its diff, read when opened. */
-function FileCard({
-  file,
-  diffId,
-  instanceId,
-  cwd,
-  defaultOpen,
-  reload,
-  commenting,
-}: {
-  file: GitFile;
-  diffId: string;
-  instanceId: string;
-  cwd: string;
-  defaultOpen: boolean;
-  reload: string;
-  commenting?: ThreadCommenting;
-}) {
-  const [open, setOpen] = useState(defaultOpen);
-  const [diff, setDiff] = useState<GitFileDiff | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    let cancelled = false;
-    setError(null);
-    codeApi
-      .fileDiff(instanceId, diffId, cwd, file.path)
-      .then((d) => !cancelled && setDiff(d))
-      .catch(
-        (err: unknown) => !cancelled && setError(errorMessage(err, "Could not read the diff.")),
-      );
-    return () => {
-      cancelled = true;
-    };
-  }, [open, instanceId, diffId, cwd, file.path, file.additions, file.deletions, reload]);
-
-  const slash = file.path.lastIndexOf("/");
-  const dir = slash >= 0 ? file.path.slice(0, slash + 1) : "";
-  const name = file.path.slice(slash + 1);
-
-  return (
-    <li className="ring-foreground/10 overflow-clip rounded-xl ring-1" data-testid="code-file">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        className={cn(
-          "bg-card hover:bg-muted sticky top-0 z-10 flex h-9 w-full min-w-0 items-center gap-2 px-3 text-left text-xs",
-          open && "border-border border-b",
-        )}
-        title={file.path}
-      >
-        <ChevronRight
-          className={cn(
-            "text-muted-foreground size-3.5 shrink-0 transition-transform",
-            open && "rotate-90",
+            <ListTree />
+          </Button>
+          <span className="flex-1" />
+          {wide && (
+            <DiffViewButtons
+              style={style}
+              onStyle={setStyle}
+              collapse={collapse}
+              onCollapse={setCollapse}
+            />
           )}
-        />
-        <span className={cn("w-3 shrink-0 font-medium", STATUS_TONE[file.status])}>
-          {STATUS_LETTER[file.status]}
-        </span>
-        <span className={cn("flex min-w-0 flex-1", monoClass)}>
-          <span className="text-muted-foreground truncate">{dir}</span>
-          <span className="shrink-0">{name}</span>
-        </span>
-        {file.isGenerated && <span className="text-muted-foreground shrink-0">generated</span>}
-        {file.binary && <span className="text-muted-foreground shrink-0">binary</span>}
-        <span className="text-success shrink-0 tabular-nums">+{file.additions}</span>
-        <span className="text-destructive shrink-0 tabular-nums">−{file.deletions}</span>
-      </button>
-      {open &&
-        (error ? (
-          <p className="text-destructive p-3 text-xs">{error}</p>
-        ) : !diff ? (
-          <div className="flex justify-center p-3">
-            <Spinner className="size-4" />
-          </div>
-        ) : (
-          <FileDiff
-            path={diff.path}
-            oldContent={diff.oldContent}
-            newContent={diff.newContent}
-            unshowable={diff.unshowable}
-            {...fileCommenting(commenting, diff)}
-          />
-        ))}
-    </li>
+        </div>
+      )}
+      <DiffWorkspace
+        testId="code-changes-files"
+        layout={page ? "page" : "panel"}
+        files={!diffs ? null : shownFiles}
+        error={error}
+        scopeKey={`${instanceId}\u0000${cwd}\u0000${diffId}`}
+        readKey={`${String(settledKey)}:${reload}`}
+        read={read}
+        diffStyle={page && wide ? style : "unified"}
+        collapse={collapse}
+        drawer={page ? drawer : undefined}
+        commenting={commenting}
+        scope={picker}
+        onRefresh={() => setReload((n) => n + 1)}
+        empty={
+          diffs?.length === 0 ? (
+            <EmptyState
+              icon={FileDiffIcon}
+              title="Nothing to show"
+              description="Not a git repository, or no commits yet."
+            />
+          ) : (
+            <EmptyState
+              icon={FileDiffIcon}
+              title="No changes"
+              description="The working tree is clean. Pick a commit above to review it."
+            />
+          )
+        }
+      />
+    </div>
   );
 }

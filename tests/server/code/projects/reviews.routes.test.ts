@@ -10,7 +10,8 @@ import { join } from "node:path";
 import { createNamespaceKv } from "@groot/core/kv";
 import { api, createTestApp } from "../../helpers";
 import { authToken, resetAppTables } from "../../fixtures";
-import { codePullRequests, db } from "../../../../apps/web/src/server/db";
+import { eq } from "drizzle-orm";
+import { codePullRequests, codeThreads, db } from "../../../../apps/web/src/server/db";
 import { installAppForTests } from "../../../../apps/web/src/server/app-root";
 import { createCodeHub, setCodeHub } from "../../../../apps/web/src/server/api/code/code.hub";
 import { createWorkspace } from "../../../../apps/web/src/server/api/code/code.workspace";
@@ -261,6 +262,18 @@ describe("PR reviews", () => {
     expect(harness.sent).toEqual([{ nativeId: "t1", message: "And the tests?" }]);
   });
 
+  it("starts the assistant on the model the owner picks, the project's harness named", async () => {
+    await newProject();
+    await forkPull([`printf 'x\\n' > src/x.ts`]);
+    const review = (await call<PullReviewView>("POST", "/reviews", { pr: "acme/web#7" })).body
+      .data!;
+    expect(review.assistant).toEqual({ instanceId: "fake", model: null });
+
+    await call("POST", `/reviews/${review.id}/ask`, { message: "Summarize it", model: "big-1" });
+
+    expect(harness.created[0]!.model).toBe("big-1");
+  });
+
   it("marks the assistant's thread in the list as the review's", async () => {
     await newProject();
     await forkPull([`printf 'x\\n' > src/x.ts`]);
@@ -288,6 +301,130 @@ describe("PR reviews", () => {
     expect((await call<PullReviewView[]>("GET", "/reviews")).body.data).toEqual([]);
     const files = await call("GET", `/threads/${encodeURIComponent(review.key)}/review/files`);
     expect(files.status).toBe(404);
+  });
+});
+
+describe("reviewing a Code thread's own PR", () => {
+  const REVIEW_DIR = () => join(local.home, "tiny-agents-code/acme--web/reviews/pr-8");
+
+  /**
+   * A Code thread with one commit on its branch, pushed and opened as PR #8
+   * (also under `refs/pull/8/head`, as GitHub keeps every PR). `after` runs
+   * in the thread's worktree once the PR is up.
+   */
+  async function threadPull(after: string[] = []) {
+    const project = await newProject();
+    const res = await call<{ threadId: string }>("POST", "/threads", {
+      projectId: project.id,
+      message: "Retry webhooks",
+    });
+    const threadId = res.body.data!.threadId;
+    const thread = (await db.query.codeThreads.findFirst({ where: eq(codeThreads.id, threadId) }))!;
+    const worktree = thread.worktree!;
+    const branch = thread.branch!;
+    await sh(
+      local,
+      [
+        `cd ${worktree}`,
+        `printf 'export const retry = 3;\\n' > src/retry.ts`,
+        `git add -A && git -c user.name=me -c user.email=me@x commit --quiet -m retry`,
+        `git push --quiet origin HEAD:refs/heads/${branch} HEAD:refs/pull/8/head`,
+        ...after,
+      ].join(" && "),
+    );
+    github.pulls.push({
+      number: 8,
+      author: "ashik",
+      head: branch,
+      base: "main",
+      title: "Retry webhooks",
+      body: "",
+      draft: false,
+      state: "open",
+      mergeable: "mergeable",
+      checks: [],
+      reviews: [],
+      threads: [],
+      fromFork: false,
+      autoMerge: false,
+      inMergeQueue: false,
+      queueRemovals: [],
+    });
+    await db.insert(codePullRequests).values({
+      threadId,
+      projectId: project.id,
+      number: 8,
+      url: "https://github.com/acme/web/pull/8",
+      headRef: branch,
+      baseRef: "main",
+    });
+    const head = await sh(local, `git -C ${bare} rev-parse refs/pull/8/head`);
+    return { threadId, worktree, head };
+  }
+
+  const open = async () =>
+    (await call<PullReviewView>("POST", "/reviews", { pr: "acme/web#8" })).body.data!;
+
+  it("shows the thread's worktree when it is at the PR's head, without a checkout of its own", async () => {
+    const { threadId, worktree, head } = await threadPull([`printf 'wip\\n' > src/wip.ts`]);
+
+    const review = await open();
+
+    expect(review).toMatchObject({ headSha: head, worktreeThreadId: threadId });
+    expect(existsSync(REVIEW_DIR())).toBe(false);
+    expect((await reviewFiles(review.key)).map((f) => f.path)).toEqual([
+      "src/retry.ts",
+      "src/wip.ts",
+    ]);
+    expect(await sh(local, `git -C ${worktree} status --porcelain`)).toBe("?? src/wip.ts");
+  });
+
+  it("never discards, pushes or removes the thread's work from the review", async () => {
+    const { worktree } = await threadPull([`printf 'wip\\n' > src/wip.ts`]);
+    const review = await open();
+
+    const discard = await call("POST", `/reviews/${review.id}/discard`);
+    const push = await call("POST", `/reviews/${review.id}/push`, { message: "From the review" });
+    const archive = await call("POST", `/reviews/${review.id}/archive`);
+
+    expect(discard.status).toBe(409);
+    expect(discard.body.error?.message).toBe(
+      "This review shows the coding thread's worktree, so these changes are that thread's. Discard or push them from the thread.",
+    );
+    expect(push.status).toBe(409);
+    expect(archive.status).toBe(200);
+    expect(await sh(local, `cat ${worktree}/src/wip.ts`)).toBe("wip");
+    expect(await sh(local, `git -C ${bare} rev-parse refs/pull/8/head`)).toBe(
+      await sh(local, `git -C ${worktree} rev-parse HEAD`),
+    );
+  });
+
+  it("checks the PR out on its own when the thread's worktree moved past the PR's head", async () => {
+    const { worktree, head } = await threadPull([
+      `printf 'export const retry = 5;\\n' > src/retry.ts`,
+      `git -c user.name=me -c user.email=me@x commit --quiet -am 'not pushed'`,
+    ]);
+
+    const review = await open();
+
+    expect(review).toMatchObject({ headSha: head, worktreeThreadId: null });
+    expect(await sh(local, `git -C ${REVIEW_DIR()} rev-parse HEAD`)).toBe(head);
+    expect(await sh(local, `git -C ${worktree} log -1 --format=%s`)).toBe("not pushed");
+  });
+
+  it("lets go of the thread's worktree when the thread is archived; opening again checks it out", async () => {
+    const { threadId, head } = await threadPull();
+    const review = await open();
+    const { onThreadArchived } =
+      await import("../../../../apps/web/src/server/api/code/code.pulls");
+
+    await onThreadArchived(threadId, true);
+
+    const files = await call("GET", `/threads/${encodeURIComponent(review.key)}/review/files`);
+    expect(files.status).toBe(404);
+    const again = await open();
+    expect(again).toMatchObject({ id: review.id, worktreeThreadId: null });
+    expect(await sh(local, `git -C ${REVIEW_DIR()} rev-parse HEAD`)).toBe(head);
   });
 });
 
@@ -596,6 +733,39 @@ describe("the review inbox", () => {
     expect(res.body.data![1]?.lastReviewAt).toBe("2026-11-16T08:00:00Z");
   });
 
+  it("asks GitHub for only what the filter keeps: recent, one repository, no drafts", async () => {
+    const res = await call<InboxPullView[]>(
+      "GET",
+      "/reviews/inbox?days=30&repo=acme/web&drafts=hide",
+    );
+
+    expect(res.status).toBe(200);
+    // FIXED_NOW is 2026-11-06, so 30 days back is 2026-10-07.
+    expect(github.inboxFilter).toEqual({
+      updatedSince: "2026-10-07",
+      repos: [{ owner: "acme", name: "web" }],
+      drafts: false,
+    });
+  });
+
+  it("keeps to the projects' repositories, and lists nothing when there is no project", async () => {
+    github.inbox = [pull(7)];
+    const none = await call<InboxPullView[]>("GET", "/reviews/inbox?repo=projects");
+    expect(none.body.data).toEqual([]);
+
+    await newProject();
+    const res = await call<InboxPullView[]>("GET", "/reviews/inbox?repo=projects");
+
+    expect(github.inboxFilter).toEqual({ repos: [{ owner: "acme", name: "web" }] });
+    expect(res.body.data!.map((p) => p.number)).toEqual([7]);
+  });
+
+  it("refuses a filter it cannot read", async () => {
+    const res = await call("GET", "/reviews/inbox?days=soon");
+
+    expect(res.status).toBe(400);
+  });
+
   it("says when GitHub cannot be read", async () => {
     github.reviewInbox = async () => {
       throw new Error("Bad credentials");
@@ -808,5 +978,72 @@ describe("changing the PR's code", () => {
     expect(res.status).toBe(201);
     expect(res.body.data!.name).toBe("ta-term-2");
     expect(typed).toEqual([`cd '${WORKTREE()}'`]);
+  });
+});
+
+describe("editing a file of the PR in place", () => {
+  const WORKTREE = () => join(local.home, "tiny-agents-code/acme--web/reviews/pr-7");
+
+  async function opened() {
+    await newProject();
+    await forkPull([`printf 'one\\ntwo\\nthree\\n' > src/a.ts`]);
+    const review = (await call<PullReviewView>("POST", "/reviews", { pr: "acme/web#7" })).body
+      .data!;
+    return { review, key: encodeURIComponent(review.key) };
+  }
+
+  it("saves the edit in the review's checkout, where Your changes shows it", async () => {
+    const { review, key } = await opened();
+
+    const res = await call("PUT", `/threads/${encodeURIComponent(review.key)}/review/file`, {
+      path: "src/a.ts",
+      original: "one\ntwo\nthree\n",
+      content: "one\nTWO\nthree\n",
+    });
+
+    expect(res.status).toBe(200);
+    expect(await sh(local, `cat ${WORKTREE()}/src/a.ts`)).toBe("one\nTWO\nthree");
+    const yours = (await call<ReviewFile[]>("GET", `/threads/${key}/review/files?since=mine`)).body
+      .data!;
+    expect(yours.map((f) => [f.path, f.additions, f.deletions])).toEqual([["src/a.ts", 1, 1]]);
+  });
+
+  it("refuses when the file changed after you opened it, keeping that change", async () => {
+    const { review } = await opened();
+    await sh(local, `printf 'one\\nTwo\\nthree\\n' > ${WORKTREE()}/src/a.ts`);
+
+    const res = await call("PUT", `/threads/${encodeURIComponent(review.key)}/review/file`, {
+      path: "src/a.ts",
+      original: "one\ntwo\nthree\n",
+      content: "one\nTWO\nthree\n",
+    });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error?.message).toBe(
+      "src/a.ts changed after you opened it (the agent may have edited it). Open it again to edit.",
+    );
+    expect(await sh(local, `cat ${WORKTREE()}/src/a.ts`)).toBe("one\nTwo\nthree");
+  });
+
+  it("refuses a file that leads outside the checkout, or into git's own files", async () => {
+    const { review } = await opened();
+    const outside = join(local.home, "outside.txt");
+    await sh(local, `printf 'keep\\n' > ${outside} && ln -s ${outside} ${WORKTREE()}/src/link.ts`);
+
+    const results = await Promise.all(
+      ["src/link.ts", ".git"].map((path) =>
+        call("PUT", `/threads/${encodeURIComponent(review.key)}/review/file`, {
+          path,
+          original: "keep\n",
+          content: "x\n",
+        }),
+      ),
+    );
+
+    expect(results.map((r) => [r.status, r.body.error?.message])).toEqual([
+      [400, "Only a file inside the worktree can be edited here."],
+      [400, "Only a file inside the worktree can be edited here."],
+    ]);
+    expect(await sh(local, `cat ${outside}`)).toBe("keep");
   });
 });

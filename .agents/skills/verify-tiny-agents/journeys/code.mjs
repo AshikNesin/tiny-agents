@@ -211,9 +211,11 @@ await journey(
       await page.getByRole("button", { name: "Review panel" }).click();
       const changes = page.getByTestId("code-changes");
       await expect(changes).toBeVisible();
-      const file = changes.getByTestId("code-file").filter({ hasText: "b.txt" });
-      await expect(file).toBeVisible({ timeout: 20_000 });
-      await expect(file).toContainText(`changed-${stamp}`);
+      // One column of diffs: each file under a header with its fold button.
+      await expect(changes.getByRole("button", { name: "Fold b.txt" })).toBeVisible({
+        timeout: 20_000,
+      });
+      await expect(changes.getByText(`changed-${stamp}`)).toBeVisible();
       expect(
         execFileSync("git", ["status", "--porcelain"], { cwd: dir, encoding: "utf8" }),
       ).toContain("b.txt");

@@ -146,6 +146,21 @@ describe("Model catalog", () => {
     expect(set.roleIsSet("vision")).toBe(false);
   });
 
+  it("gives titles a model a side call can run when the default is a Claude plan model (#382)", () => {
+    const { catalog } = catalogOf({ ...base, roles: { bot_default: "plan-sonnet" } });
+    expect(catalog.forRole("bot_default")?.id).toBe("plan-sonnet");
+    // No bot (Code naming): the first pi chat model, not the plan model nothing can call.
+    expect(catalog.forRole("chat_title")?.id).toBe("sonnet");
+    expect(catalog.forRole("memory_capture", { bot: "plan-sonnet" })?.id).toBe("sonnet");
+    // Only Claude plan models: nothing to call.
+    const planOnly = catalogOf({
+      ...base,
+      models: base.models.filter((m) => m.providerId === "plan"),
+      roles: {},
+    }).catalog;
+    expect(planOnly.forRole("chat_title")).toBeUndefined();
+  });
+
   it("skips a role whose model can't run", () => {
     const { catalog } = catalogOf({ ...base, roles: { bot_default: "gpt-old" } });
     expect(catalog.forRole("bot_default")?.id).toBe("sonnet");

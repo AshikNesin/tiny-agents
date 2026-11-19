@@ -165,6 +165,16 @@ export function isUnauthorized(error: unknown): boolean {
 /** Above this many tools, a server's tools are deferred behind `tool_search`. */
 export const MCP_DEFER_THRESHOLD = 30;
 
+/**
+ * The longest tool description the model is sent, as in Claude Code. Some
+ * servers put whole manuals in descriptions, and every request re-sends them.
+ */
+const MCP_DESCRIPTION_MAX = 2_048;
+
+function clipDescription(text: string): string {
+  return text.length <= MCP_DESCRIPTION_MAX ? text : `${text.slice(0, MCP_DESCRIPTION_MAX - 1)}…`;
+}
+
 /** `mcp__<slug>__<tool>`, restricted to provider-safe characters and 64 chars. */
 export function mcpToolName(slug: string, tool: string): string {
   const name = `mcp__${slug}__${tool}`.replace(/[^a-zA-Z0-9_-]/g, "_");
@@ -203,7 +213,7 @@ export function createMcpCapability(options: McpCapabilityOptions): Capability {
   const tools = options.tools.map((tool) =>
     defineTool({
       name: mcpToolName(options.slug, tool.name),
-      description: tool.description ?? tool.title ?? tool.name,
+      description: clipDescription(tool.description ?? tool.title ?? tool.name),
       parameters: Type.Unsafe<Record<string, unknown>>(
         tool.inputSchema && typeof tool.inputSchema === "object"
           ? tool.inputSchema

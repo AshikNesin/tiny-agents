@@ -93,15 +93,30 @@ await journey(
       await page.getByTestId("code-changes-toggle").click();
       await expect(changes.getByTestId("code-file")).toHaveCount(1, { timeout: 20_000 });
       await expect(changes.getByText(`"${stamp}"`, { exact: false })).toBeVisible();
-      await expect(changes.getByRole("button", { name: "Show 26 more lines" })).toBeVisible();
-      await expect(changes.getByRole("button", { name: "Show 27 more lines" })).toBeVisible();
+      // diffs.com folds the unchanged runs around the change's context.
+      await expect(changes.getByText("25 unmodified lines").first()).toBeVisible();
+      await expect(changes.getByText("26 unmodified lines").first()).toBeVisible();
       await expect(changes.getByText("const line10 = 10;")).toHaveCount(0);
     });
     await proof("changes-folded");
 
+    await step("Files opens the changed files as a tree over the column", async () => {
+      await changes.getByRole("button", { name: "Files" }).click();
+      const tree = changes.getByRole("navigation", { name: "Changed files" });
+      await expect(tree.getByRole("treeitem", { name: /app\.ts/ })).toBeVisible();
+      await expect(changes.getByRole("region", { name: "Diff stats" })).toContainText("Files1");
+      await proof("changes-tree");
+      await changes.getByRole("button", { name: "Close files" }).first().click();
+      await expect(tree).toHaveCount(0);
+    });
+
     await step("a line's gutter opens a composer right under the line", async () => {
-      await changes.getByText(`"${stamp}"`, { exact: false }).hover();
-      await changes.getByRole("button", { name: "Comment on line 30" }).click();
+      // The diff draws in a shadow root; Playwright's CSS reaches into it. Click line 30's number.
+      await changes
+        .locator(
+          '[data-gutter] > [data-column-number="30"]:not([data-line-type="change-deletion"])',
+        )
+        .click();
       const box = changes.getByRole("textbox", { name: "Comment on src/app.ts line 30" });
       await expect(box).toBeFocused();
       await box.fill(`Split this call over several lines (${stamp})`);
@@ -149,10 +164,19 @@ await journey(
         "true",
       );
       await expect(review.getByTestId("code-file")).toHaveCount(1);
+      // The tree sits beside the column here.
+      await expect(
+        review
+          .getByRole("navigation", { name: "Changed files" })
+          .getByRole("treeitem", { name: /app\.ts/ }),
+      ).toBeVisible();
       await expect(transcript).toHaveCount(0);
       // Comments work here too, and wait in the tray at the bottom.
-      await review.getByText(`"${stamp}"`, { exact: false }).hover();
-      await review.getByRole("button", { name: "Comment on line 30" }).click();
+      await review
+        .locator(
+          '[data-gutter] > [data-column-number="30"]:not([data-line-type="change-deletion"])',
+        )
+        .click();
       await review
         .getByRole("textbox", { name: "Comment on src/app.ts line 30" })
         .fill(`From the review page (${stamp})`);
@@ -161,6 +185,16 @@ await journey(
         "1 comment goes with your next message",
       );
       await proof("review-page");
+      // On a phone the tree waits in a drawer behind Files.
+      const size = page.viewportSize();
+      await page.setViewportSize({ width: 390, height: 844 });
+      await expect(review.getByRole("navigation", { name: "Changed files" })).toBeHidden();
+      await proof("review-page-phone");
+      await review.getByRole("button", { name: "Files" }).click();
+      await expect(page.getByRole("treeitem", { name: /app\.ts/ }).last()).toBeVisible();
+      await proof("review-page-phone-files");
+      await page.getByRole("button", { name: "Close files" }).first().click();
+      if (size) await page.setViewportSize(size);
       await review.getByRole("link", { name: "Back to the thread" }).click();
       await expect(transcript).toBeVisible();
       await expect(tray).toContainText("1 comment goes with your next message");

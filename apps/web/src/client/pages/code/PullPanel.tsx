@@ -1,18 +1,17 @@
 /**
  * The Pull request tab of the right panel (issue #297 §7.5), for a thread
  * started in a project. With no open PR it offers Publish (push the branch,
- * open a draft PR) and Link. With one: its number, state, title and branch;
+ * open a PR, a draft unless the project says ready) and Link. With one: its number, state, title and branch;
  * the checks (a failing one opens to its log excerpt, with Fix CI); Merge;
- * every comment as All, Humans or Bots; the Auto-fix and Auto-merge
- * switches (and a spend limit where the harness reports cost); the pass
- * history; the description (markdown, with Edit while it is open); and
+ * the Draft, Auto-fix and Auto-merge switches (and a spend limit where the
+ * harness reports cost); the pass history; every comment as All, Humans or
+ * Bots; the description (markdown, with Edit while it is open); and
  * earlier PRs. Opening the tab reconciles with GitHub, and so does each
  * re-read while it is on screen (every 15 seconds), so a project without
  * the App's webhooks (`gh` or a token) keeps up as fast as one with them.
  */
 import { useCallback, useEffect, useState } from "react";
 import {
-  Eye,
   ExternalLink,
   GitMerge,
   GitPullRequest,
@@ -98,7 +97,10 @@ export function PullPanel({
   /** Open this PR in review mode (issue #345). */
   onReview?: (url: string) => Promise<void>;
 }) {
-  const { view, error, setView, reload } = useThreadPulls(threadId, { refreshKey, live: true });
+  const { view, error, setView, reload } = useThreadPulls(threadId, {
+    refreshKey,
+    live: true,
+  });
   const [busy, setBusy] = useState<string | null>(null);
   const [linkNumber, setLinkNumber] = useState("");
 
@@ -119,45 +121,34 @@ export function PullPanel({
 
   const pr = view?.active ?? null;
   const snap = pr?.snapshot ?? null;
+  // The thread's last PR merged and nothing new to publish: that is the news, not Publish.
+  const merged = !pr && view?.earlier[0]?.state === "merged" ? view.earlier[0] : null;
+  const canPublish = !merged || (view?.ahead ?? 0) > 0;
+  const earlier = merged ? (view?.earlier.slice(1) ?? []) : (view?.earlier ?? []);
 
   return (
     <div className="flex h-full min-h-0 flex-col" data-testid="code-pr">
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4 text-sm">
-        <header className="space-y-1">
-          <div className="flex min-h-7 items-center gap-2">
-            {pr?.draft ? (
-              <GitPullRequestDraft className="text-muted-foreground size-4 shrink-0" />
-            ) : (
-              <GitPullRequest className="text-muted-foreground size-4 shrink-0" />
-            )}
-            {pr ? (
-              <>
-                <a
-                  href={pr.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="font-medium tabular-nums hover:underline"
-                >
-                  #{pr.number}
-                </a>
-                <StateBadge pr={pr} />
-              </>
-            ) : (
-              <span className="font-medium">Pull request</span>
-            )}
-            <span className="flex-1" />
-            {pr && onReview && <ReviewButton onOpen={() => onReview(pr.url)} />}
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={reload}
-              aria-label="Refresh"
-              title="Refresh from GitHub"
-              className="text-muted-foreground"
-            >
-              <RefreshCw />
-            </Button>
-            {pr && (
+        {pr && (
+          <header className="space-y-1">
+            <div className="flex min-h-7 items-center gap-2">
+              {pr.draft ? (
+                <GitPullRequestDraft className="text-muted-foreground size-4 shrink-0" />
+              ) : (
+                <GitPullRequest className="text-muted-foreground size-4 shrink-0" />
+              )}
+              <a
+                href={pr.url}
+                target="_blank"
+                rel="noreferrer"
+                className="font-medium tabular-nums hover:underline"
+              >
+                #{pr.number}
+              </a>
+              <StateBadge pr={pr} />
+              <span className="flex-1" />
+              {onReview && <ReviewButton onOpen={() => onReview(pr.url)} />}
+              <RefreshButton onClick={reload} />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -185,24 +176,20 @@ export function PullPanel({
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-            )}
-          </div>
-          {pr && (
-            <>
-              <h2 className="text-base leading-snug font-medium [overflow-wrap:anywhere]">
-                <a href={pr.url} target="_blank" rel="noreferrer" className="hover:underline">
-                  {pr.title}
-                </a>
-              </h2>
-              <p
-                className={cn("text-muted-foreground truncate text-xs", monoClass)}
-                aria-label="Status"
-              >
-                {pr.headRef} → {pr.baseRef}
-              </p>
-            </>
-          )}
-        </header>
+            </div>
+            <h2 className="text-base leading-snug font-medium [overflow-wrap:anywhere]">
+              <a href={pr.url} target="_blank" rel="noreferrer" className="hover:underline">
+                {pr.title}
+              </a>
+            </h2>
+            <p
+              className={cn("text-muted-foreground truncate text-xs", monoClass)}
+              aria-label="Status"
+            >
+              {pr.headRef} → {pr.baseRef}
+            </p>
+          </header>
+        )}
         {error ? (
           <p className="text-destructive">{error}</p>
         ) : !view ? (
@@ -215,13 +202,34 @@ export function PullPanel({
             title="Not in a project"
             description="Start a thread in a project to publish its branch and follow the pull request here."
           />
+        ) : !pr && !canPublish && merged ? (
+          <section className="space-y-1" aria-label="Merged">
+            <div className="flex items-center gap-2">
+              <GitMerge className="text-primary size-4 shrink-0" aria-hidden />
+              <a href={merged.url} target="_blank" rel="noreferrer" className="hover:underline">
+                <span className="tabular-nums">#{merged.number}</span> {merged.title}
+              </a>
+              <span className="bg-primary/10 text-primary rounded-full px-2 py-0.5 text-[11px] font-medium">
+                Merged
+              </span>
+              <span className="flex-1" />
+              <RefreshButton onClick={reload} />
+            </div>
+            <p className="text-muted-foreground text-xs">
+              Branch <span className={monoClass}>{view.branch}</span> is in{" "}
+              {view.project.baseBranch}.
+            </p>
+          </section>
         ) : !pr ? (
           <section className="space-y-4">
-            <p className="text-muted-foreground">
-              Branch <span className={monoClass}>{view.branch}</span>
-              {view.ahead !== null &&
-                ` is ${view.ahead} ${view.ahead === 1 ? "commit" : "commits"} ahead of ${view.project.baseBranch}.`}
-            </p>
+            <div className="flex items-center gap-2">
+              <p className="text-muted-foreground min-w-0 flex-1">
+                Branch <span className={monoClass}>{view.branch}</span>
+                {view.ahead !== null &&
+                  ` is ${view.ahead} ${view.ahead === 1 ? "commit" : "commits"} ahead of ${view.project.baseBranch}.`}
+              </p>
+              <RefreshButton onClick={reload} />
+            </div>
             {view.ahead === 0 && (
               <Uncommitted
                 threadId={threadId}
@@ -235,7 +243,7 @@ export function PullPanel({
               data-testid="code-publish"
             >
               {busy === "publish" ? <Spinner /> : <Upload />}
-              Publish draft PR
+              {view.project?.settings.draftPulls === false ? "Publish PR" : "Publish draft PR"}
             </Button>
             <form
               className="flex items-center gap-2"
@@ -275,7 +283,11 @@ export function PullPanel({
               })
             }
             onMerge={(method) => void act("merge", () => projectsApi.merge(threadId, method))}
-            onReady={() => void act("mark it ready", () => projectsApi.ready(threadId))}
+            onDraft={(draft) =>
+              void act(draft ? "convert it to a draft" : "mark it ready", () =>
+                projectsApi.setDraft(threadId, draft),
+              )
+            }
             onAttachAll={() => {
               const text = commentsText(pr);
               if (text) onAttach(text);
@@ -299,11 +311,11 @@ export function PullPanel({
             onSaved={setView}
           />
         )}
-        {view && view.earlier.length > 0 && (
+        {earlier.length > 0 && (
           <section className="space-y-1">
             <h3 className={metaLabelClass}>Earlier pull requests</h3>
             <ul className="space-y-1">
-              {view.earlier.map((e) => (
+              {earlier.map((e) => (
                 <li key={e.number}>
                   <a href={e.url} target="_blank" rel="noreferrer" className="hover:underline">
                     #{e.number} {e.title}
@@ -391,7 +403,7 @@ function ActivePull({
   onAutofix,
   onFix,
   onMerge,
-  onReady,
+  onDraft,
   onAttachAll,
   onAttach,
   onAutoMerge,
@@ -404,8 +416,8 @@ function ActivePull({
   onAutofix(enabled: boolean): void;
   onFix(): void;
   onMerge(method: MergeMethod): void;
-  /** Draft → ready for review (a draft cannot be merged). */
-  onReady(): void;
+  /** Draft ↔ ready for review (a draft cannot be merged). */
+  onDraft(draft: boolean): void;
   onAttachAll(): void;
   onAttach(text: string): void;
   onAutoMerge(enabled: boolean): void;
@@ -423,22 +435,14 @@ function ActivePull({
       <PullChecks threadId={threadId} pr={pr} busy={busy} onFix={onFix} />
 
       <div className="flex flex-wrap gap-2">
-        {pr.state === "open" && pr.draft && (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={onReady}
-            disabled={busy !== null}
-            title="Mark it ready for review on GitHub, so it can be merged"
-          >
-            {busy === "mark it ready" ? <Spinner /> : <Eye />}
-            Ready for review
-          </Button>
-        )}
         {pr.state === "open" && methods.length > 0 && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button size="sm" disabled={busy !== null || pr.draft}>
+              <Button
+                size="sm"
+                disabled={busy !== null || pr.draft}
+                title={pr.draft ? "A draft cannot be merged; switch Draft off first" : undefined}
+              >
                 {busy === "merge" ? <Spinner /> : <GitMerge />}
                 Merge
               </Button>
@@ -456,7 +460,7 @@ function ActivePull({
             </DropdownMenuContent>
           </DropdownMenu>
         )}
-        {!failing && (
+        {!failing && (open.length > 0 || snap?.mergeable === "conflicting") && (
           <Button
             size="sm"
             variant="outline"
@@ -476,8 +480,6 @@ function ActivePull({
         )}
       </div>
 
-      <PullComments pr={pr} onAttach={onAttach} />
-
       <section
         className="border-border divide-border divide-y rounded-xl border"
         aria-label="Auto-fix"
@@ -488,14 +490,16 @@ function ActivePull({
             title="Fixes failing checks, trusted review comments and conflicts while you are away, in this thread's permission mode."
           >
             <span className="min-w-0 flex-1 font-medium">Auto-fix</span>
-            <span
-              className={cn(
-                "text-xs",
-                pr.loop.status === "needs_input" ? "text-destructive" : "text-muted-foreground",
-              )}
-            >
-              {LOOP_LABEL[pr.loop.status]}
-            </span>
+            {pr.autofix && (
+              <span
+                className={cn(
+                  "text-xs",
+                  pr.loop.status === "needs_input" ? "text-destructive" : "text-muted-foreground",
+                )}
+              >
+                {LOOP_LABEL[pr.loop.status]}
+              </span>
+            )}
             <Switch
               checked={pr.autofix}
               onCheckedChange={onAutofix}
@@ -508,6 +512,22 @@ function ActivePull({
             <p className="text-muted-foreground text-xs">{pr.loop.reason}</p>
           )}
         </div>
+        {pr.state === "open" && (
+          <label
+            className="flex items-center gap-3 px-3 py-2.5"
+            title="A draft is not ready for review, and cannot be merged"
+          >
+            <span className="min-w-0 flex-1">Draft</span>
+            {(busy === "mark it ready" || busy === "convert it to a draft") && <Spinner />}
+            <Switch
+              checked={pr.draft}
+              onCheckedChange={onDraft}
+              disabled={busy !== null}
+              aria-label="Draft"
+              data-testid="code-draft"
+            />
+          </label>
+        )}
         <label className="flex items-center gap-3 px-3 py-2.5">
           <span className="min-w-0 flex-1">Auto-merge when GitHub allows it</span>
           {snap?.autoMerge && <span className="text-muted-foreground text-xs">On at GitHub</span>}
@@ -519,8 +539,8 @@ function ActivePull({
             data-testid="code-automerge"
           />
         </label>
-        {/* A limit only means something where the harness reports what a turn cost. */}
-        {spend.usd !== null && (
+        {/* A limit only means something where the harness reports cost, and it limits Auto-fix. */}
+        {spend.usd !== null && pr.autofix && (
           <form
             className="flex items-center gap-2 px-3 py-2"
             onSubmit={(e) => {
@@ -576,6 +596,9 @@ function ActivePull({
           </ul>
         </section>
       )}
+
+      {/* Last: a PR's comments run long (bots), so the switches above stay in reach. */}
+      <PullComments pr={pr} onAttach={onAttach} />
     </>
   );
 }
@@ -673,6 +696,21 @@ function Description({
         <p className="text-muted-foreground text-sm">No description.</p>
       )}
     </section>
+  );
+}
+
+function RefreshButton({ onClick }: { onClick(): void }) {
+  return (
+    <Button
+      variant="ghost"
+      size="icon-xs"
+      onClick={onClick}
+      aria-label="Refresh"
+      title="Refresh from GitHub"
+      className="text-muted-foreground shrink-0"
+    >
+      <RefreshCw />
+    </Button>
   );
 }
 

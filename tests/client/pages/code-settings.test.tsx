@@ -58,6 +58,7 @@ const project: ProjectView = {
   settings: {
     scripts: {},
     archiveOnMerge: true,
+    draftPulls: true,
     branchPrefix: "ta/",
     protectedPaths: [".github/workflows/**"],
     autofix: {
@@ -134,6 +135,13 @@ describe("Code settings", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
+  it("starts Add a project with the repository the Reviews screen asked for (#386)", async () => {
+    renderAt("/code/settings/projects?repo=other%2Flib");
+    const add = await screen.findByRole("button", { name: "Add" });
+    await waitFor(() => expect(add).toBeEnabled());
+    expect(screen.getByText("other/lib")).toBeInTheDocument();
+  });
+
   it("saves each project setting on its own page", async () => {
     renderAt("/code/settings/projects/p1");
     const branch = await screen.findByRole("textbox", { name: "Base branch" });
@@ -172,6 +180,12 @@ describe("Code settings", () => {
         "/code/projects/p1",
         { settings: { autofix: { triggers: { conflicts: false } } } },
       ]),
+    );
+    const drafts = screen.getByRole("switch", { name: "Open new PRs as drafts" });
+    expect(drafts).toBeChecked();
+    await userEvent.click(drafts);
+    await waitFor(() =>
+      expect(patches.at(-1)).toEqual(["/code/projects/p1", { settings: { draftPulls: false } }]),
     );
   });
 

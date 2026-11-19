@@ -84,6 +84,7 @@ const project = (id: string, name: string): ProjectView => ({
   settings: {
     scripts: {},
     archiveOnMerge: true,
+    draftPulls: true,
     branchPrefix: "ta/",
     protectedPaths: [],
     autofix: {
@@ -118,8 +119,12 @@ describe("Code thread list", () => {
         <ConversationList
           harnesses={[shelley]}
           threads={[
-            row("fixing-ci", { pr: { number: 12, loop: "needs_input" } }),
-            row("merged-one", { pr: { number: 9, loop: "merged" } }),
+            row("fixing-ci", {
+              pr: { number: 12, loop: "needs_input", url: "https://github.com/acme/web/pull/12" },
+            }),
+            row("merged-one", {
+              pr: { number: 9, loop: "merged", url: "https://github.com/acme/web/pull/9" },
+            }),
             row("no-pr"),
           ]}
         />

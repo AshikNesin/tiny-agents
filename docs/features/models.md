@@ -84,13 +84,13 @@ others with the reason.
 Features that call a model on their own read a role (`model_roles`), with a
 documented fallback when it is unset (`ModelCatalog.forRole`):
 
-| Role             | Used by                                                             | Unset                                      |
-| ---------------- | ------------------------------------------------------------------- | ------------------------------------------ |
-| `bot_default`    | New bot; bots without a model                                       | The first available chat model             |
-| `memory_capture` | [Memory](./memory.md) capture                                       | The bot's model on pi, else `bot_default`  |
-| `chat_title`     | [Past chat](./past-chats.md) titles; [Code](./code.md) branch names | The bot's model on pi, else `bot_default`  |
-| `vision`         | [Image transcription](./chat-attachments.md)                        | The first available model that sees images |
-| `classifier`     | [Auto-review](./auto-review.md)                                     | None: auto-review asks the owner           |
+| Role             | Used by                                                             | Unset                                                                 |
+| ---------------- | ------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `bot_default`    | New bot; bots without a model                                       | The first available chat model                                        |
+| `memory_capture` | [Memory](./memory.md) capture                                       | The bot's model, else `bot_default`, else the first model, each on pi |
+| `chat_title`     | [Past chat](./past-chats.md) titles; [Code](./code.md) branch names | The bot's model, else `bot_default`, else the first model, each on pi |
+| `vision`         | [Image transcription](./chat-attachments.md)                        | The first available model that sees images                            |
+| `classifier`     | [Auto-review](./auto-review.md)                                     | None: auto-review asks the owner                                      |
 
 ## Settings → Models
 

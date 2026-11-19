@@ -8,7 +8,7 @@
  */
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FilePen, SquareTerminal, Trash2, Upload } from "lucide-react";
+import { ArrowUpRight, FilePen, SquareTerminal, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Button, Textarea } from "@groot/ui";
 import {
@@ -23,6 +23,7 @@ import { useConfirm } from "@groot/ui/primitives";
 import { Spinner } from "../../components/ui/spinner";
 import { errorMessage } from "../../lib/errors";
 import { reviewsApi } from "../../lib/code/projects";
+import { threadPath } from "../../lib/code/api";
 import { githubCommentsKey, useCommentStore } from "../../lib/code/comments";
 import type { PullReviewView } from "../../../shared/api/code";
 
@@ -101,6 +102,8 @@ function PushDialog({
 
 /**
  * Over the "Your changes" scope: Push to PR, Post as suggestions, Discard.
+ * When the review shows a coding thread's worktree, those changes are that
+ * thread's: Push and Discard give way to a link to it.
  * `onChanged` re-reads the changes (with the new head after a push).
  */
 export function YourChangesActions({
@@ -111,6 +114,7 @@ export function YourChangesActions({
   onChanged(headSha?: string): void;
 }) {
   const confirm = useConfirm();
+  const navigate = useNavigate();
   const load = useCommentStore((s) => s.load);
   const [pushing, setPushing] = useState(false);
   const [busy, setBusy] = useState<"suggest" | "discard" | null>(null);
@@ -151,12 +155,31 @@ export function YourChangesActions({
     }
   };
 
+  const threadId = review.worktreeThreadId;
+
   return (
     <>
-      <Button size="sm" variant="outline" onClick={() => setPushing(true)} disabled={busy !== null}>
-        <Upload />
-        Push to PR
-      </Button>
+      {threadId ? (
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => navigate(threadPath(threadId))}
+          title="This review shows the coding thread's worktree: commit, push or discard there"
+        >
+          <ArrowUpRight />
+          Push from the thread
+        </Button>
+      ) : (
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => setPushing(true)}
+          disabled={busy !== null}
+        >
+          <Upload />
+          Push to PR
+        </Button>
+      )}
       <Button
         size="sm"
         variant="ghost"
@@ -169,17 +192,19 @@ export function YourChangesActions({
         {busy === "suggest" ? <Spinner /> : <FilePen />}
         <span className="hidden sm:inline">Post as suggestions</span>
       </Button>
-      <Button
-        size="icon-sm"
-        variant="ghost"
-        className="text-muted-foreground"
-        onClick={() => void discard()}
-        disabled={busy !== null}
-        aria-label="Discard"
-        title="Discard your changes"
-      >
-        {busy === "discard" ? <Spinner /> : <Trash2 />}
-      </Button>
+      {!threadId && (
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          className="text-muted-foreground"
+          onClick={() => void discard()}
+          disabled={busy !== null}
+          aria-label="Discard"
+          title="Discard your changes"
+        >
+          {busy === "discard" ? <Spinner /> : <Trash2 />}
+        </Button>
+      )}
       <PushDialog
         review={review}
         open={pushing}
@@ -191,7 +216,8 @@ export function YourChangesActions({
 }
 
 /** The header's Open in terminal: a Terminal tab that starts in the review's checkout. */
-export function OpenInTerminal({ review }: { review: PullReviewView }) {
+/** Opens a terminal tab in the PR's checkout on the sandbox. */
+export function useOpenInTerminal(review: PullReviewView) {
   const navigate = useNavigate();
   const [opening, setOpening] = useState(false);
   const open = async () => {
@@ -204,6 +230,11 @@ export function OpenInTerminal({ review }: { review: PullReviewView }) {
       setOpening(false);
     }
   };
+  return { open, opening };
+}
+
+export function OpenInTerminal({ review }: { review: PullReviewView }) {
+  const { open, opening } = useOpenInTerminal(review);
   return (
     <Button
       variant="ghost"

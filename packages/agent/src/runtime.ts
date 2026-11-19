@@ -28,7 +28,12 @@ import {
   type CredentialRequest,
   type CredentialRequestOutcome,
 } from "./credentials";
-import { capabilityInfo, type Capability, type CapabilityInfo } from "./capabilities";
+import {
+  capabilityInfo,
+  createToolSearchCapability,
+  type Capability,
+  type CapabilityInfo,
+} from "./capabilities";
 import { withContextCeiling } from "./context-ceiling";
 import { createContextTrimExtension } from "./context-trim";
 import { acquireStoreLock, type StoreLock } from "./lock";
@@ -76,6 +81,7 @@ import type {
 import { WaitTracker } from "./waiting";
 import type { Reviewer } from "./reviewer";
 import { GrantsDoc } from "./vault";
+import type { ConversationTrace, ConversationUsage } from "./trace";
 
 // The three wait kinds own their not-pending errors; the app imports them from here.
 export { ApprovalNotPendingError, CredentialRequestNotPendingError, QuestionNotPendingError };
@@ -297,7 +303,13 @@ export class AgentRuntime {
       const questions = new WaitTracker();
       // Questions for the owner wait on a document this runtime answers, so
       // the runtime brings their capability; conversations select it by id.
-      const capabilities = [...(options.capabilities ?? []), createQuestionsCapability(questions)];
+      // Tool search is the runtime's too: every bot has deferred toolkits
+      // (browser, computer), and large connections defer theirs.
+      const capabilities = [
+        ...(options.capabilities ?? []),
+        createQuestionsCapability(questions),
+        createToolSearchCapability((id) => runtime?.capabilityInfo(id)),
+      ];
       // Installed first, so conversations that never chose capabilities (they
       // select every installed extension) get the trim too.
       registry.install(createContextTrimExtension());
@@ -451,6 +463,16 @@ export class AgentRuntime {
     return this.#store.usedTokens(ref);
   }
 
+  /** The conversation's token and cost totals (Traces, issue #363). */
+  usage(ref: ConversationRef): Promise<ConversationUsage> {
+    return this.#store.usage(ref);
+  }
+
+  /** The conversation's model and tool calls, turn by turn (Traces, issue #363). */
+  trace(ref: ConversationRef): Promise<ConversationTrace> {
+    return this.#store.trace(ref);
+  }
+
   /** Whether the conversation's YOLO mode is on. */
   async yolo(ref: ConversationRef): Promise<boolean> {
     return (await this.#store.yolo(ref)).on;
@@ -552,6 +574,12 @@ export class AgentRuntime {
 
   listCapabilities(): CapabilityInfo[] {
     return [...this.#capabilities.values()].map(capabilityInfo);
+  }
+
+  /** One installed capability's info, by id. */
+  capabilityInfo(id: string): CapabilityInfo | undefined {
+    const capability = this.#capabilities.get(id);
+    return capability ? capabilityInfo(capability) : undefined;
   }
 
   /**

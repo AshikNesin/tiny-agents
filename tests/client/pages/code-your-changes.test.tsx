@@ -7,11 +7,12 @@
  * suggestions and Discard; Open in terminal opens a tab in the checkout.
  * The network is the boundary: fetch is stubbed.
  */
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { ConfirmProvider } from "@groot/ui/primitives";
+import { PullDiffs } from "@/pages/code/PullDiffs";
 import { ReviewPanel } from "@/pages/code/ReviewPanel";
 import { OpenInTerminal, YourChangesActions } from "@/pages/code/YourChanges";
 import type { PullReviewView } from "../../../apps/web/src/shared/api/code";
@@ -22,6 +23,7 @@ const REVIEW = {
   number: 7,
   author: "maria",
   headRef: "retry-webhooks",
+  baseRef: "main",
   headSha: "a".repeat(40),
   mine: false,
 } as PullReviewView;
@@ -58,7 +60,7 @@ const posts = (fetch: ReturnType<typeof stubFetch>) =>
 
 const thread = "/api/v1/code/threads/review%3Arv1/review";
 
-function showPanel(answers: Record<string, unknown>) {
+function showPanel(answers: Record<string, unknown>, review: PullReviewView = REVIEW) {
   const fetch = stubFetch({
     [`GET ${thread}/files`]: [file("src/a.ts"), file("src/b.ts")],
     [`GET ${thread}/file`]: {
@@ -75,18 +77,26 @@ function showPanel(answers: Record<string, unknown>) {
     ...answers,
   });
   render(
-    <ConfirmProvider>
-      <ReviewPanel
-        threadId="review:rv1"
-        baseBranch="main"
-        refreshKey="1"
-        page
-        pull={{
-          headRef: REVIEW.headRef,
-          yourChanges: (done) => <YourChangesActions review={REVIEW} onChanged={done} />,
-        }}
-      />
-    </ConfirmProvider>,
+    <MemoryRouter initialEntries={["/code/reviews/rv1"]}>
+      <Routes>
+        <Route
+          path="/code/reviews/rv1"
+          element={
+            <ConfirmProvider>
+              <PullDiffs
+                review={review}
+                refreshKey="1"
+                diffStyle="unified"
+                collapse={null}
+                drawer={{ open: false, onOpenChange: () => undefined }}
+                yourChanges={(done) => <YourChangesActions review={review} onChanged={done} />}
+              />
+            </ConfirmProvider>
+          }
+        />
+        <Route path="/code/:id" element={<p>Thread page</p>} />
+      </Routes>
+    </MemoryRouter>,
   );
   return fetch;
 }
@@ -107,11 +117,11 @@ describe("your changes to a PR", () => {
 
     await pickYourChanges(user);
 
-    const list = await screen.findByRole("navigation", {
-      name: "Changed files",
-    });
-    expect(list).toHaveTextContent("a.ts");
-    expect(list).not.toHaveTextContent("b.ts");
+    // Each file's header in the column: only yours.
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: "Fold src/b.ts" })).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole("button", { name: "Fold src/a.ts" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Push to PR" }));
     const dialog = screen.getByRole("dialog", {
       name: "Push to the pull request",
@@ -149,6 +159,26 @@ describe("your changes to a PR", () => {
     ]);
   });
 
+  it("sends Push and Discard to the coding thread whose worktree the review shows", async () => {
+    const user = userEvent.setup();
+    const fetch = showPanel(
+      {
+        [`GET ${thread}/files#mine`]: [file("src/a.ts")],
+        "POST /api/v1/code/reviews/rv1/suggestions": { added: 1, skipped: 0 },
+      },
+      { ...REVIEW, worktreeThreadId: "fake:t9" },
+    );
+    await pickYourChanges(user);
+
+    await user.click(await screen.findByRole("button", { name: "Post as suggestions" }));
+    expect(screen.queryByRole("button", { name: "Push to PR" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Discard" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Push from the thread" }));
+
+    expect(await screen.findByText("Thread page")).toBeInTheDocument();
+    expect(posts(fetch)).toEqual([["/api/v1/code/reviews/rv1/suggestions", null]]);
+  });
+
   it("says how to change code when there is nothing of yours yet", async () => {
     const user = userEvent.setup();
     showPanel({ [`GET ${thread}/files#mine`]: [] });
@@ -184,5 +214,101 @@ describe("your changes to a PR", () => {
 
     expect(await screen.findByText("Terminal ?tab=ta-term-2")).toBeInTheDocument();
     expect(posts(fetch)).toEqual([["/api/v1/code/reviews/rv1/terminal", null]]);
+  });
+});
+
+describe("the light editor", () => {
+  it("edits the open file in place and saves it to the checkout", async () => {
+    const user = userEvent.setup();
+    const fetch = showPanel({});
+
+    await user.click(await screen.findByRole("button", { name: "Edit src/a.ts" }));
+    const editor = screen.getByRole("textbox", { name: "Edit src/a.ts" });
+    expect(editor).toHaveValue("b\n");
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    await user.clear(editor);
+    await user.type(editor, "B{Enter}");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    const save = fetch.mock.calls.find(([, init]) => init?.method === "PUT");
+    expect(new URL(String(save?.[0]), "http://x").pathname).toBe(
+      "/api/v1/code/threads/review%3Arv1/review/file",
+    );
+    expect(JSON.parse(String(save?.[1]?.body))).toEqual({
+      path: "src/a.ts",
+      original: "b\n",
+      content: "B\n",
+    });
+    // Back to the diff once saved.
+    expect(await screen.findByRole("button", { name: "Edit src/a.ts" })).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "Edit src/a.ts" })).not.toBeInTheDocument();
+  });
+
+  it("opens the file in the highlighted code editor where the browser can measure text", async () => {
+    // jsdom has no canvas, which the editor measures text with; browsers do.
+    const canvas = vi
+      .spyOn(HTMLCanvasElement.prototype, "getContext")
+      .mockImplementation(
+        () => ({ font: "", measureText: (t: string) => ({ width: t.length * 7 }) }) as never,
+      );
+    // Its tokenizer posts to itself without a target origin, which jsdom refuses.
+    const post = window.postMessage.bind(window);
+    const message = vi
+      .spyOn(window, "postMessage")
+      .mockImplementation(((m: unknown, origin?: string) =>
+        post(m, origin ?? "*")) as typeof window.postMessage);
+    const user = userEvent.setup();
+    showPanel({});
+
+    await user.click(await screen.findByRole("button", { name: "Edit src/a.ts" }));
+    const editor = screen.getByRole("group", { name: "Edit src/a.ts" });
+    expect(editor.querySelector("diffs-container")).not.toBeNull();
+    expect(screen.queryByRole("textbox", { name: "Edit src/a.ts" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    canvas.mockRestore();
+    message.mockRestore();
+  });
+
+  it("cancels without saving", async () => {
+    const user = userEvent.setup();
+    const fetch = showPanel({});
+
+    await user.click(await screen.findByRole("button", { name: "Edit src/a.ts" }));
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(screen.queryByRole("textbox", { name: "Edit src/a.ts" })).not.toBeInTheDocument();
+    expect(fetch.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(false);
+  });
+});
+
+describe("the light editor in a coding thread", () => {
+  it("saves to the thread's worktree from its Review panel", async () => {
+    const user = userEvent.setup();
+    const at = "/api/v1/code/threads/shelley%3At1/review";
+    const fetch = stubFetch({
+      [`GET ${at}/files`]: [file("README.md")],
+      [`GET ${at}/file`]: { path: "README.md", oldContent: "", newContent: "helo\n" },
+      [`GET ${at}/drafts`]: [],
+      "GET /api/v1/code/threads/shelley%3At1/checkpoints": [],
+    });
+    render(
+      <ConfirmProvider>
+        <ReviewPanel threadId="shelley:t1" baseBranch="main" refreshKey="1" page editable />
+      </ConfirmProvider>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "Edit README.md" }));
+    const editor = screen.getByRole("textbox", { name: "Edit README.md" });
+    await user.clear(editor);
+    await user.type(editor, "hello{Enter}");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    const save = fetch.mock.calls.find(([, init]) => init?.method === "PUT");
+    expect(new URL(String(save?.[0]), "http://x").pathname).toBe(`${at}/file`);
+    expect(JSON.parse(String(save?.[1]?.body))).toEqual({
+      path: "README.md",
+      original: "helo\n",
+      content: "hello\n",
+    });
   });
 });

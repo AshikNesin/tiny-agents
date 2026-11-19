@@ -40,6 +40,7 @@ import {
   normalizeThreadId,
   threadPath,
   type HarnessInfo,
+  type ThreadSummary,
 } from "../../lib/code/api";
 import { reviewPath, reviewsApi, useProjects } from "../../lib/code/projects";
 import { harnessOf, useCodeStore } from "../../store/code";
@@ -140,6 +141,31 @@ function useCodeShortcuts(
   }, [threadId, toggleChanges, toggleSidebar]);
 }
 
+/**
+ * An open thread that is not in the active list (archived, say by a merge):
+ * its row from the archived list, so the page still knows its project and PR.
+ */
+function useArchivedRow(
+  threadId: string | undefined,
+  threads: ThreadSummary[] | null,
+): ThreadSummary | undefined {
+  const [found, setFound] = useState<ThreadSummary | undefined>();
+  const listed = threads === null || threads.some((t) => t.id === threadId);
+  useEffect(() => {
+    setFound(undefined);
+    if (!threadId || listed) return;
+    let cancelled = false;
+    codeApi
+      .list("archived")
+      .then((rows) => !cancelled && setFound(rows.find((r) => r.id === threadId)))
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [threadId, listed]);
+  return found;
+}
+
 function SlugRedirect({ slug }: { slug: string }) {
   const navigate = useNavigate();
   useEffect(() => {
@@ -194,7 +220,11 @@ export function CodePage() {
   const browsing = pathname === "/code/threads";
   // `/code/reviews`: PR reviews (issue #345).
   const reviewing = pathname === "/code/reviews";
-  const rows = useMemo(() => threads ?? [], [threads]);
+  const archivedRow = useArchivedRow(threadId, threads);
+  const rows = useMemo(
+    () => (archivedRow ? [...(threads ?? []), archivedRow] : (threads ?? [])),
+    [threads, archivedRow],
+  );
   // A review's assistant lives on its review, not in the thread list.
   const listed = useMemo(() => threads?.filter((t) => !t.review) ?? null, [threads]);
   const row = rows.find((r) => r.id === threadId);
@@ -311,6 +341,7 @@ export function CodePage() {
           baseBranch={project.baseBranch}
           refreshKey={changesKey}
           page={page}
+          editable
           commenting={commenting}
           onOtherScopes={
             harness?.capabilities.workspace.diffs ? () => setReviewScope("harness") : undefined
@@ -325,6 +356,7 @@ export function CodePage() {
         cwd={cwd}
         refreshKey={changesKey}
         commenting={commenting}
+        page={page}
       />
     );
   };

@@ -11,6 +11,7 @@ import {
   type GitHubClient,
   type JobStep,
   type PullSnapshot,
+  type InboxFilter,
   type InboxPull,
   type Review,
   type ReviewThread,
@@ -47,6 +48,8 @@ export interface FakeGitHub extends GitHubClient {
   comments: Array<{ number: number; body: string }>;
   /** What `reviewInbox` answers (GitHub's searches, deduplicated). */
   inbox: InboxPull[];
+  /** The filter of the last `reviewInbox` call. */
+  inboxFilter: InboxFilter | undefined;
   /** Reviews submitted with `submitReview`, as sent. */
   submitted: Array<{ number: number } & Parameters<GitHubClient["submitReview"]>[2]>;
   merged: Array<{ number: number; method: string }>;
@@ -57,7 +60,7 @@ export interface FakeGitHub extends GitHubClient {
   /** Native auto-merge calls, by PR node id. */
   autoMergeCalls: Array<{
     pullId: string;
-    action: "enable" | "disable" | "ready";
+    action: "enable" | "disable" | "ready" | "draft";
     method?: string;
   }>;
   pull(number: number): FakePull;
@@ -75,6 +78,7 @@ export function fakeGitHub(local: LocalExec, bare: string, login = "ashik"): Fak
     comments: [],
     submitted: [],
     inbox: [],
+    inboxFilter: undefined,
     merged: [],
     logs: new Map(),
     running: new Map(),
@@ -165,7 +169,8 @@ export function fakeGitHub(local: LocalExec, bare: string, login = "ashik"): Fak
       gh.comments.push({ number, body });
       return { databaseId: (nextComment += 1) };
     },
-    async reviewInbox() {
+    async reviewInbox(filter) {
+      gh.inboxFilter = filter;
       return gh.inbox;
     },
     async submitReview(_repo, number, review) {
@@ -185,6 +190,10 @@ export function fakeGitHub(local: LocalExec, bare: string, login = "ashik"): Fak
     async markReady(pullId) {
       gh.autoMergeCalls.push({ pullId, action: "ready" });
       gh.pull(Number(pullId.replace("PR_", ""))).draft = false;
+    },
+    async convertToDraft(pullId) {
+      gh.autoMergeCalls.push({ pullId, action: "draft" });
+      gh.pull(Number(pullId.replace("PR_", ""))).draft = true;
     },
     async updatePull(_repo, number, change) {
       const pr = gh.pull(number);

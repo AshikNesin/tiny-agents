@@ -94,7 +94,12 @@ export function cleanTitle(raw: string): string | null {
  */
 export async function titlePastChat(
   chatId: string,
-  input: { botName: string; botModelId: string | null; messages: ReadonlyArray<TitleMessage> },
+  input: {
+    botId?: string;
+    botName: string;
+    botModelId: string | null;
+    messages: ReadonlyArray<TitleMessage>;
+  },
   deps: ChatTitler | undefined = app().chatTitler,
 ): Promise<void> {
   if (!deps) return;
@@ -110,6 +115,7 @@ export async function titlePastChat(
       user: `Conversation:\n${excerpt}\n\nTitle:`,
       timeoutMs: TITLE_TIMEOUT_MS,
       label: "Chat title",
+      ...(input.botId ? { botId: input.botId } : {}),
       context: { chatId },
     });
     // No title (no model, a failed call): the first message stays.

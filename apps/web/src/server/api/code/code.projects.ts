@@ -15,6 +15,7 @@ import { threadIdOf, type CreateThreadInput, type HarnessInstance } from "@tiny-
 import {
   codeCheckpoints,
   codeProjects,
+  codeReviews,
   codeThreads,
   db,
   type CodeProjectRow,
@@ -37,11 +38,12 @@ import {
   type ProjectScripts,
   type Workspace,
 } from "./code.workspace";
-import { PROJECT_RULE, projectHeader } from "../../../shared/code-messages";
+import { PROJECT_RULE, branchTitle, projectHeader } from "../../../shared/code-messages";
 
 const DEFAULT_PROJECT_SETTINGS: ProjectSettings = {
   scripts: {},
   archiveOnMerge: true,
+  draftPulls: true,
   branchPrefix: DEFAULT_BRANCH_PREFIX,
   protectedPaths: [".github/workflows/**"],
   autofix: {
@@ -69,6 +71,7 @@ export function projectSettings(raw: string): ProjectSettings {
   return {
     scripts: { ...d.scripts, ...value.scripts },
     archiveOnMerge: value.archiveOnMerge ?? d.archiveOnMerge,
+    draftPulls: typeof value.draftPulls === "boolean" ? value.draftPulls : d.draftPulls,
     branchPrefix:
       (typeof value.branchPrefix === "string" ? cleanBranchPrefix(value.branchPrefix) : null) ??
       d.branchPrefix,
@@ -324,7 +327,9 @@ export async function startProjectThread(
     await ws.removeWorktree(project.checkoutPath, path).catch(() => undefined);
     throw error;
   }
-  await applyTitle(instance, created.nativeId, names?.title ?? null);
+  // With no title from the model (or no naming call, on an existing branch), the
+  // branch's words: never the project line the harness took from the message.
+  await applyTitle(instance, created.nativeId, names?.title ?? branchTitle(branch));
   const id = threadIdOf(instance.id, created.nativeId);
   const set = { projectId: project.id, branch, baseSha, worktree: path, cwd: path };
   await db
@@ -382,6 +387,7 @@ export async function onProjectThreadArchived(threadId: string, archived: boolea
     }
     await ws.removeWorktree(project.checkoutPath, path);
     await db.update(codeThreads).set({ worktree: null }).where(eq(codeThreads.id, threadId));
+    await releaseReviews(path);
     return;
   }
   if (thread.worktree && (await ws.exists(thread.worktree))) return;
@@ -398,4 +404,13 @@ export async function onProjectThreadDeleted(threadId: string): Promise<void> {
   if (!found?.thread.worktree) return;
   const ws = await codeGitHub().workspace(found.project);
   await ws.removeWorktree(found.project.checkoutPath, found.thread.worktree);
+  await releaseReviews(found.thread.worktree);
+}
+
+/** Reviews that showed a thread's worktree lose it with the thread: opening the PR again checks it out. */
+async function releaseReviews(worktree: string): Promise<void> {
+  await db
+    .update(codeReviews)
+    .set({ worktree: null, updatedAt: new Date() })
+    .where(eq(codeReviews.worktree, worktree));
 }

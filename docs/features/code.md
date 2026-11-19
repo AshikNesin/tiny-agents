@@ -21,6 +21,12 @@ Why: [ADR 0009](../adr/0009-shelley-is-the-coding-agent.md),
   - Every request sends `X-Exedev-Userid`: exe.dev's `-require-header`
     guard needs it when you reach Shelley directly over Tailscale.
   - "Open in Shelley" links to the same address.
+  - Every conversation tiny-agents starts or forks is tagged `tiny-agents`,
+    and the Code list, archive and search show only those and their
+    subagents. Conversations started in Shelley's own UI stay there. On its
+    first connection the app tags the untagged conversations it already
+    tracks (started, opened or handed off here before tagging), so they keep
+    their place in the list.
 - **Claude Code:** add the Claude plan account in Settings → Models, with a
   sandbox (`SANDBOX_HOST` or `pnpm sandbox:up`), then sign in once
   from Settings → Models → Claude plan. The app sets up the worker on the sandbox
@@ -87,7 +93,9 @@ folder):
   folder browser, checked by the harness) and, where the harness makes
   them, a new worktree; and the harness (remembered) when there are several.
 - The model, reasoning and permission chips sit in the composer. Claude Code
-  needs a working directory and starts in **Accept edits**.
+  needs a working directory. A new thread starts in **Bypass** (YOLO, no
+  permission prompts) wherever the harness offers it; a guest, who has no
+  Bypass, starts in **Accept edits**. The chip changes it per thread.
 - If another thread is working in the same directory, a warning says both
   threads will edit the same files.
 
@@ -157,8 +165,13 @@ the right with tabs: **Source control** and, for a project thread, **Pull
 request #N**. It opens on the tab it was left on; **Close panel** and **Open
 as a page** sit at the end of its tab strip. Outside a project, Source
 control shows the uncommitted changes (new files included), or a recent
-commit, of the thread's directory, each changed file as a card with its
-diff. Every diff in the app (these panels and the transcript's patches) is
+commit, of the thread's directory. Both kinds of Source control, like a PR
+review, lay the changes out as diffshub does: every changed file in one
+scrolling column, each under a sticky header with its fold and +/−, and the
+files as a tree (Files and Comments tabs, search, a filter by status, diff
+stats). In the panel the tree is a drawer behind **Files**; on the Review
+page it sits beside the column, with split or unified view and **Fold all
+files** (a drawer again on phones). Generated files start folded. Every diff in the app (these panels and the transcript's patches) is
 drawn by @pierre/diffs (diffs.com): syntax colors, one gutter numbering the
 lines, unchanged runs folded behind expanders, and long lines wrapped.
 
@@ -236,7 +249,11 @@ at the foot of the Code sidebar (`/code/settings`):
 **Scripts** are read from a checked-in `.tiny-agents/code.json`:
 
 ```json
-{ "setup": "pnpm install", "check": "pnpm test", "archive": "rm -rf node_modules" }
+{
+  "setup": "pnpm install",
+  "check": "pnpm test",
+  "archive": "rm -rf node_modules"
+}
 ```
 
 `setup` runs in a new worktree before the first turn and after unarchive (a
@@ -268,28 +285,26 @@ empty means none, and a prefix git cannot use is refused.
 
 **Review.** In a project thread, Source control (⌘⇧D) shows the branch, its
 base and how many commits it is ahead, then everything since the merge base
-with the base branch, committed or not (new files included), live as above:
-a file list (name, folder, +/−, a status letter A, M or D) with a filter
-(generated files and lockfiles muted and last). In the panel a file opens to
-its diff and **All files** goes back; on the Review page the list sits beside
-the diff. **Viewed** marks that
-come back unmarked when the agent changes the file again, `[` / `]` between
-files (or the file bar over the diff: previous, next, `n of N`, **Viewed**;
-on the Review page **Hide file list** gives the diff the full width), and
+with the base branch, committed or not (new files included), live as above,
+in the same column and tree. **Viewed** in a file's header folds it, and the
+mark comes back unmarked when the agent changes the file again; **Edit**
+opens the light editor; and
 line comments as above. **Uncommitted or a commit** switches to the
 harness's own changes.
 
 **Publish.** The panel's **Pull request** tab (the header's toggle shows
 `#N` and its state once there is one) offers Publish.
 **Publish draft PR** pushes the branch (never forced, hooks off) and opens a
-draft PR with the commits as its body and a short title (one `chat_title`
+draft PR (**Publish PR**, ready for review, when the project's **Open new PRs
+as drafts** is off) with the commits as its body and a short title (one `chat_title`
 call over the thread's title and the commit subjects: imperative, under 60
 characters, no `feat:` prefix; the thread's title when there is no model); with a PR open, Publish pushes new
 commits. **Link pull request** links an existing one, and a PR the agent
 opened for the branch is linked on its own. When nothing is ahead but the
 agent changed files, the tab says they are not committed yet, and **Ask to
-commit** puts that request in the composer. A draft offers **Ready for
-review**, which marks it ready on GitHub so **Merge** can run. After a PR merges, the next
+commit** puts that request in the composer. The **Draft** switch flips
+the open PR between draft and ready for review on GitHub, either way, any time
+(`POST /code/threads/:id/pr/draft`); **Merge** runs once it is off. After a PR merges, the next
 Publish opens a new one; earlier PRs are listed.
 
 **The PR tab.** The PR's number, state (open, draft, queued, merged or
@@ -318,8 +333,10 @@ re-reads (and so reconciles) every 15 seconds, so a project on `gh` or a
 token, with no webhooks, shows a finished check within seconds. A hidden
 page stops reading and catches up when shown again; in the background the
 server's own poll (below) carries on.
-The actions sit in one row; the switches are plain rows, and the spend
-limit shows only where the harness reports cost.
+The actions sit in one row; the switches (Draft, Auto-fix, Auto-merge) are
+plain rows right under them, above the comments, so a long run of bot comments
+never pushes them out of reach; the spend limit shows only where the harness
+reports cost.
 
 **Auto-fix.** While on, the app watches the PR (every minute while checks
 move, every 5 minutes idle) and starts a pass for a failed check, a trusted
@@ -406,33 +423,62 @@ Above them is the inbox from GitHub, across every repository the GitHub
 credential (Settings → GitHub) sees, read in one query when the screen
 opens: **Needs your review** (review requested), **Updated since your
 review** (commits after your last review), **Waiting on author** (none
-since) and **Your pull requests**, with draft and approval state. A PR of
-a project opens its review here; another repository's opens on GitHub. A
-repository that is not a project yet says so. `/code/review/<owner>/<name>/<number>`
-opens one from a link, and a coding thread's **Pull request** tab offers
+since) and **Your pull requests**, with draft and approval state. Filters
+above it narrow GitHub's searches themselves (`GET /code/reviews/inbox?days=30&repo=owner/name&drafts=hide`,
+or `repo=projects`), so they reach past the first 50 of each, and the
+browser remembers them. A click on a project's PR opens its review here;
+every row also has its own **GitHub** link. A repository that is not a
+project yet says so, and opens only on GitHub. A link opens one straight into review:
+`/code/review?pr=<its GitHub link, or owner/name#123>`,
+`/code/review/<owner>/<name>/<number>`, or GitHub's own path after
+`/code/review/` (swap `https://github.com` for the app's address, any tab of
+the PR), and a coding thread's **Pull request** tab offers
 **Review** for its own PR. Opening the same PR again reuses its review.
 
 **What opening does.** The app fetches the PR's head (`refs/pull/N/head`,
-so a PR from a fork works) and its base, and checks the head out in a
-detached worktree of the review's own
+so a PR from a fork works) and its base into the project's clone (never a
+new clone). When a Code thread opened the PR and its worktree is at that
+head (on the PR's branch, nothing unpushed, nothing newer on GitHub), the
+review shows that worktree as it is, uncommitted work included; there,
+**Push to PR** and **Discard** give way to **Push from the thread**, and
+archiving the thread takes the worktree from the review (opening the PR
+again checks it out). Otherwise the app checks the head out in a detached
+worktree of the review's own
 (`~/tiny-agents-code/<owner>--<name>/reviews/pr-N`). The page reads files
 and diffs from git there, against the PR's base. Nothing calls a model.
 **Update** (the header's refresh) moves the review to the PR's latest
-commit, unless its worktree has changes. **Close review** removes the
-worktree and archives the assistant.
+commit, unless its own worktree has changes. **Close review** removes the
+review's own worktree (never a thread's) and archives the assistant.
 
-**The page** (`/code/reviews/<id>`) takes the whole screen. The header
-shows the number, title, repository and author. The PR's changes fill the
-left side, as in Source control: a file list with **Viewed** marks, the
-diff, and line comments. The assistant is on the right, behind the same
-resizable divider as a thread's panel. Phones show one side at a time
-(**Assistant** / **Files** in the header).
+**The page** (`/code/reviews/<id>`) takes the whole screen, laid out like
+[diffshub](https://diffshub.com) (see `CREDITS.md`). The header shows the
+number, title, repository and author, a split or unified view toggle (the
+choice is remembered) and **Fold all files**. On the left, a resizable
+sidebar holds the changed files as a tree (@pierre/trees: status letters,
+a check on viewed files, search, a filter by status) or, on its
+**Comments** tab, the comments waiting to be sent and GitHub's
+conversations, each a jump to its line; under them, the diff stats. Every
+changed file then sits in one scrolling column (@pierre/diffs `CodeView`,
+which draws only what is in view), each under a sticky header with its
+fold, +/−, **Edit** and **Viewed**. A file's two sides are read as it is
+unfolded, four at a time; generated and viewed files start folded, and
+marking a file viewed folds it. Select line numbers, or the + beside a
+line, to comment.
 
-**The assistant** is a thread of the project's default harness and model,
-started in the review's worktree on your first question, in the harness's
-asking permission mode where it has one, so an edit waits for your yes.
-Until then the pane offers a few starter questions and a box, and line
-comments wait under the review (`review:<id>`). The first message is:
+The assistant sits on the far left as a thin rail, folded by default (a
+badge counts the comments waiting for it). **Open assistant** opens it as a
+resizable pane, **Collapse assistant** folds it again, and a comment sent
+with **Ask assistant** opens it. Phones show one side at a time
+(**Assistant** / **Files** in the header), the diffs unified and the file
+tree in a drawer.
+
+**The assistant** is a thread of the project's default harness, started in
+the review's worktree on your first question, in the harness's asking
+permission mode where it has one, so an edit waits for your yes. Until then
+the pane offers a few starter questions and a box with a **Model** picker
+(the project's default model first; the pick goes with the first question
+as `model`), and line comments wait under the review (`review:<id>`). After
+that the thread's own composer picks the model, as in any thread. The first message is:
 
 - a short card of the PR (`reviewCard` in `shared/code-messages.ts`):
   the repository, number, head and base, what the assistant is for, the
@@ -475,8 +521,8 @@ when it opens (in the one GitHub query that reads the PR, no model) and
 shows each under the lines it is on, with its comments, **Reply** and
 **Resolve** (both as the GitHub account Code uses). A resolved one starts
 folded. GitHub places them at the PR's current head: when the review shows
-an older commit, or the code moved on (outdated), a file lists them above
-its diff instead, the first with a hint to **Update**.
+an older commit, or the code moved on (outdated), the **Comments** tab
+lists them under their file instead, the first with a hint to **Update**.
 
 **Since your review.** Opening a review reads which commit your last
 GitHub review of the PR was on (from the same query), and submitting one
@@ -504,6 +550,15 @@ worktree, commits made there included), with three ways on:
 
 **Open in terminal** in the header opens a Terminal tab that starts in the
 review's checkout, for changes by hand; they show under **Your changes** too.
+For a typo or a rename, **Edit** (the pencil over a file's diff) opens the
+file in @pierre/diffs' code editor (diffs.com): syntax colors, line numbers,
+bracket matching and undo while you type, but no completion (a plain text box
+where the browser gives no canvas). **Save** (⌘S) writes it in
+the checkout (`PUT /code/threads/:id/review/file`, the same save a coding
+thread's Review panel uses for its worktree). The save is refused when the
+file changed since it was opened (the agent may have edited it), and for
+anything that is not a regular file inside the checkout (a symlink out, or
+git's own files).
 
 ## Bots hand off coding
 

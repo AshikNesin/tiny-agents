@@ -3,6 +3,7 @@
  * `/api/v1/code`. Owner-only: none of these paths is in `GUEST_ACCESS`, so
  * the guest guard refuses them before they get here.
  */
+import { createHash } from "node:crypto";
 import { Hono } from "hono";
 import { z } from "zod";
 import type { AppEnv } from "@groot/core/types";
@@ -73,7 +74,7 @@ import {
   linkPull,
   manualPass,
   mergePull,
-  readyPull,
+  setPullDraft,
   publish,
   setAutoMerge,
   setAutofix,
@@ -85,6 +86,9 @@ import {
 const router = new Hono<AppEnv>();
 
 /** A repository-relative path from the query: no `..`, not absolute. */
+/** The largest file the review's light editor saves (characters). */
+const MAX_EDIT_BYTES = 1_000_000;
+
 function safePath(raw: string | undefined): string {
   const path = raw ?? "";
   if (
@@ -189,6 +193,7 @@ const updateSchema = z.strictObject({
     .strictObject({
       scripts: scriptsSchema.optional(),
       archiveOnMerge: z.boolean().optional(),
+      draftPulls: z.boolean().optional(),
       branchPrefix: z
         .string()
         .max(40)
@@ -366,9 +371,10 @@ router.post("/code/threads/:id/pr/merge", async (c) => {
   return ok<ThreadPullsView>(c, await threadPulls(id, false));
 });
 
-router.post("/code/threads/:id/pr/ready", async (c) => {
+router.post("/code/threads/:id/pr/draft", async (c) => {
   const id = threadParam(c.req.param("id"));
-  await readyPull(id);
+  const { draft } = await parseBody(c, z.object({ draft: z.boolean() }));
+  await setPullDraft(id, draft);
   return ok<ThreadPullsView>(c, await threadPulls(id, false));
 });
 
@@ -382,6 +388,11 @@ async function reviewTarget(threadId: string) {
   const reviewId = reviewIdOfKey(threadId);
   if (reviewId) return reviewWorktree(reviewId);
   const found = await projectThread(threadId);
+  if (found && !found.thread.worktree) {
+    throw Boom.notFound(
+      "Its worktree went when the thread was archived. Unarchive it to see the changes.",
+    );
+  }
   if (!found?.thread.worktree) {
     throw Boom.notFound("Review against the base branch is for project threads with a worktree.");
   }
@@ -436,6 +447,37 @@ router.get("/code/threads/:id/review/file", async (c) => {
     ? await ws.sinceFile(worktree, since, path).catch(saying)
     : await ws.baseFile(worktree, base, path);
   return ok(c, { path, ...sides });
+});
+
+/**
+ * The light editor's save: one file's whole new content, written in the
+ * thread's (or PR review's) worktree when the file is still as the owner
+ * opened it. An edit by the agent meanwhile is kept, and the owner is told
+ * to open the file again. Only a regular file inside the worktree is written.
+ */
+router.put("/code/threads/:id/review/file", async (c) => {
+  const id = threadParam(c.req.param("id"));
+  const body = await parseBody(
+    c,
+    z.object({
+      path: z.string().min(1).max(1024),
+      original: z.string().max(MAX_EDIT_BYTES),
+      content: z.string().max(MAX_EDIT_BYTES),
+    }),
+  );
+  const path = safePath(body.path);
+  const { worktree, ws } = await reviewTarget(id);
+  const expected = createHash("sha256").update(body.original, "utf8").digest("hex");
+  const outcome = await ws.writeFile(worktree, path, expected, body.content).catch(saying);
+  if (outcome === "outside") {
+    throw Boom.badRequest("Only a file inside the worktree can be edited here.");
+  }
+  if (outcome === "changed") {
+    throw Boom.conflict(
+      `${path} changed after you opened it (the agent may have edited it). Open it again to edit.`,
+    );
+  }
+  return ok(c, { saved: true });
 });
 
 router.post("/code/threads/:id/review/viewed", async (c) => {
@@ -498,18 +540,31 @@ router.post("/code/reviews", async (c) => {
   return ok<PullReviewView>(c, await openReview(pr), 201);
 });
 
-router.get("/code/reviews/inbox", async (c) => ok<InboxPullView[]>(c, await reviewInbox()));
+const inboxQuery = z.object({
+  days: z.coerce.number().int().min(1).max(365).optional(),
+  repo: z.string().trim().min(1).max(200).optional(),
+  drafts: z.enum(["hide"]).optional(),
+});
+
+router.get("/code/reviews/inbox", async (c) => {
+  const query = inboxQuery.safeParse(c.req.query());
+  if (!query.success) throw Boom.badRequest("Cannot read that filter.");
+  return ok<InboxPullView[]>(c, await reviewInbox(query.data));
+});
 
 router.get("/code/reviews/:review", async (c) =>
   ok<PullReviewView>(c, await getReview(c.req.param("review"))),
 );
 
 router.post("/code/reviews/:review/ask", async (c) => {
-  const { message } = await parseBody(
+  const { message, model } = await parseBody(
     c,
-    z.object({ message: z.string().trim().min(1).max(100_000) }),
+    z.object({
+      message: z.string().trim().min(1).max(100_000),
+      model: z.string().trim().min(1).max(200).optional(),
+    }),
   );
-  return ok(c, await askReview(c.req.param("review"), message));
+  return ok(c, await askReview(c.req.param("review"), message, model));
 });
 
 router.get("/code/reviews/:review/comments", async (c) =>

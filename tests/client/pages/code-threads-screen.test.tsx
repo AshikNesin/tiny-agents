@@ -48,8 +48,14 @@ describe("the Code Threads screen", () => {
         <ThreadsScreen
           projects={[project]}
           threads={[
-            row("Add iOS SDK", { projectId: "p1", pr: { number: 11, loop: "merged" } }),
-            row("Fix CI", { projectId: "p1", pr: { number: 12, loop: "needs_input" } }),
+            row("Add iOS SDK", {
+              projectId: "p1",
+              pr: { number: 11, loop: "merged", url: "https://github.com/acme/web/pull/11" },
+            }),
+            row("Fix CI", {
+              projectId: "p1",
+              pr: { number: 12, loop: "needs_input", url: "https://github.com/acme/web/pull/12" },
+            }),
             row("elsewhere"),
           ]}
         />

@@ -29,7 +29,7 @@ import {
   type Viewer,
 } from "../people/access";
 import { codeHub, type CodeHub } from "./code.hub";
-import { follow, markSeen, seenMap } from "./code.store";
+import { follow, markSeen, seenMap, threadDecorations } from "./code.store";
 import {
   getProject,
   onProjectThreadDeleted,
@@ -153,14 +153,17 @@ router.get("/code/events", (c) => {
 
 // --- lists ---------------------------------------------------------------------------
 
+/** Archived and searched rows, decorated like the live list (project, PR, review). */
 async function decorate(rows: ThreadSummary[]): Promise<ThreadSummary[]> {
-  const seen = await seenMap();
+  const [seen, decorations] = await Promise.all([seenMap(), threadDecorations()]);
   return rows.map((row) => {
     const last = seen.get(row.id);
+    const extra = decorations.get(row.id);
     return {
       ...row,
       followed: last !== undefined,
       unread: last !== undefined && !row.working && row.cursor > last,
+      ...(extra ? { projectId: extra.projectId, pr: extra.pr, review: extra.review } : {}),
     };
   });
 }

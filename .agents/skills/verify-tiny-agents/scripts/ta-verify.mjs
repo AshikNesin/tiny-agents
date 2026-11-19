@@ -3,7 +3,7 @@
  * ta-verify: launch, health-check, drive and tear down one isolated
  * tiny-agents instance for verification.
  *
- *   ta-verify up [--port 3100] [--run <id>] [--sandbox] [--empty]
+ *   ta-verify up [--port 3100] [--run <id>] [--sandbox] [--shelley] [--fake-github] [--empty]
  *                                             start a fresh instance (own DBs, faux model)
  *       --sandbox  point it at the local sandbox container (`pnpm sandbox:up`):
  *                  terminal, computer, browser and bot sandbox tools become reachable
@@ -54,7 +54,14 @@ const DEMO = { email: "demo@example.com", password: "demo@example.com" }; // git
 const [command, ...rest] = process.argv.slice(2);
 const flags = {};
 const positional = [];
-const BOOLEAN_FLAGS = new Set(["sandbox", "empty", "shelley", "prod", "fixed-clock"]);
+const BOOLEAN_FLAGS = new Set([
+  "sandbox",
+  "empty",
+  "shelley",
+  "prod",
+  "fixed-clock",
+  "fake-github",
+]);
 /** The instant `--fixed-clock` freezes at: the server tests' FIXED_NOW (tests/test-clock.ts). */
 const FIXED_NOW = "2026-11-06T06:30:00.000Z";
 for (let i = 0; i < rest.length; i++) {
@@ -420,6 +427,7 @@ async function up() {
     sandboxPort: flags.sandbox ? sandboxPort() : undefined,
     empty: !!flags.empty,
     prod: !!flags.prod,
+    fakeGithub: !!flags["fake-github"],
     fixedNow: flags["fixed-clock"] ? FIXED_NOW : undefined,
     jwtKey: flags.prod ? randomBytes(32).toString("hex") : undefined,
     shelleyPort: flags.shelley ? port + 1000 : undefined,
@@ -456,7 +464,9 @@ async function up() {
   }
   const [command, args] = run.prod
     ? [process.execPath, ["dist/server/bundle.js"]]
-    : [tsx, ["apps/web/src/server/entry.node.ts"]];
+    : run.fakeGithub
+      ? [tsx, [".agents/skills/verify-tiny-agents/scripts/fake-github-entry.ts"]]
+      : [tsx, ["apps/web/src/server/entry.node.ts"]];
   const child = spawn(command, args, {
     cwd: REPO,
     env,
@@ -613,6 +623,7 @@ async function drive() {
             run.empty && "empty",
             run.shelleyUrl && "shelley",
             run.prod && "prod",
+            run.fakeGithub && "fake-github",
           ]
             .filter(Boolean)
             .join(","),

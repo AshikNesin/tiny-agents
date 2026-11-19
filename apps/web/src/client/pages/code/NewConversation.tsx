@@ -50,7 +50,14 @@ import {
 } from "../../lib/code/api";
 import type { ProjectView } from "../../../shared/api/code";
 import { Composer } from "./Composer";
-import { DEFAULT, ModelPicker, PermissionPicker, ReasoningPicker, loadModels } from "./controls";
+import {
+  DEFAULT,
+  ModelPicker,
+  PermissionPicker,
+  ReasoningPicker,
+  composerPermission,
+  loadModels,
+} from "./controls";
 
 const HARNESS_KEY = "tiny-agents:code-harness";
 const PROJECT_KEY = "tiny-agents:code-project";
@@ -254,7 +261,7 @@ export function NewConversation({
     linkCwdUsed.current = true;
     setModel(read(key(harness.id, "model"), readLegacy(harness.id, "model") ?? DEFAULT));
     setEffort(read(key(harness.id, "effort"), readLegacy(harness.id, "effort") ?? DEFAULT));
-    setPermission(harness.capabilities.settings.defaultPermissionMode ?? null);
+    setPermission(composerPermission(harness.capabilities.settings));
     setWorktree(false);
     setCwdError(null);
     setModels([]);

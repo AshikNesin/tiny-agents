@@ -24,6 +24,7 @@ import type { Bot as BotRow } from "../../../shared/api/bots";
 import { BotDialog } from "../BotDialog";
 import { AppSidebar } from "./AppSidebar";
 import { APP_NAV, guestNav } from "./nav";
+import { settingsCommandGroup } from "./settings-commands";
 import { useIsGuest, usePeopleStore } from "../../store/people";
 import { BADGED_FAVICON, documentTitle, waitingCount } from "../../lib/attention";
 
@@ -154,6 +155,7 @@ export function AppShell() {
           { label: "Settings", icon: Settings, onSelect: () => navigate("/settings") },
         ],
       },
+      settingsCommandGroup(guest, navigate),
       {
         heading: "Theme",
         items: [

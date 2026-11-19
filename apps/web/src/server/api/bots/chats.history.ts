@@ -146,6 +146,7 @@ async function recordPastChat(
       }));
     if (!chat) return undefined;
     void titlePastChat(chat.id, {
+      botId: ending.botId,
       botName: ending.botName,
       botModelId: ending.botModelId,
       messages: said,

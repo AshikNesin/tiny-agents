@@ -23,6 +23,15 @@ export {
   QuestionNotPendingError,
 } from "./runtime";
 export { finishedReplyOf, finishedReplyTo } from "./replies";
+export type {
+  ConversationTrace,
+  ConversationUsage,
+  TraceEvent,
+  TraceHarness,
+  TraceStep,
+  TraceTurn,
+  TraceUsage,
+} from "./trace";
 export { createToolSearchCapability, type Capability, type ToolPermission } from "./capabilities";
 export { WaitTracker } from "./waiting";
 export { createClassifier } from "./classifier";

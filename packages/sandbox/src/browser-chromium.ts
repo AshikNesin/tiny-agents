@@ -5,7 +5,9 @@
  * browser over a pipe). It has no display, so the owner cannot watch it; the
  * live view needs the VM transport (`browser-remote-cdp.ts`).
  */
+import { execFile } from "node:child_process";
 import { statSync } from "node:fs";
+import { promisify } from "node:util";
 import { chromium } from "playwright-core";
 import type { Locator, Page, Response } from "playwright-core";
 import { fillSecretFields, pageOrigin } from "./browser-fill";
@@ -20,6 +22,10 @@ export interface ChromiumTransportOptions {
   executablePath?: string;
   /** Extra Chromium args (tests may need --no-sandbox on locked-down CI). */
   args?: string[];
+  /** The language the browser reports (`navigator.language`, Accept-Language), e.g. `en-IN`. */
+  locale?: string;
+  /** The IANA time zone of the page's clock, e.g. `Asia/Kolkata`. */
+  timezone?: string;
 }
 
 /** The exe.dev VM ships a dedicated headless-shell build (Chromium 151). */
@@ -50,6 +56,79 @@ const SETTLE_MS = 5_000;
  */
 const NAVIGATION_START_MS = 500;
 
+/**
+ * How long a bot check that solves itself may take to reload into the real
+ * page. Amazon's (AWS WAF) runs a script for a second or few, sets a token
+ * cookie and reloads; returning before that handed the agent an empty 202.
+ */
+const CHALLENGE_MS = 15_000;
+
+/**
+ * Whether a document is a CDN's automatic bot check, which reloads into the
+ * real page once its script has run: AWS WAF (Amazon) and Cloudflare say so
+ * in a header. A CAPTCHA (`x-amzn-waf-action: captcha`) waits for a person,
+ * so it is returned as it is.
+ */
+function isSelfSolvingChallenge(response: Response): boolean {
+  const headers = response.headers();
+  return headers["x-amzn-waf-action"] === "challenge" || headers["cf-mitigated"] === "challenge";
+}
+
+/**
+ * The main-frame response the tab ends on once a self-solving bot check has
+ * reloaded into the real page, or the last one seen when it has not within
+ * `CHALLENGE_MS`. Each reload goes through the navigation guard like any
+ * other main-frame request.
+ */
+async function throughChallenges(page: Page, response: Response | null): Promise<Response | null> {
+  const deadline = Date.now() + CHALLENGE_MS;
+  let current = response;
+  while (current && isSelfSolvingChallenge(current)) {
+    const timeout = deadline - Date.now();
+    if (timeout <= 0) break;
+    const main = page.mainFrame();
+    // The response comes before its document replaces the challenge's, so
+    // wait for that commit too before waiting on the new document.
+    const committed = page
+      .waitForEvent("framenavigated", { predicate: (f) => f === main, timeout })
+      .catch(() => undefined);
+    const next = await page
+      .waitForResponse(
+        (r) => r.request().isNavigationRequest() && r.frame() === main && !isRedirect(r.status()),
+        { timeout },
+      )
+      .catch(() => null);
+    if (!next) break;
+    await committed;
+    await page.waitForLoadState("domcontentloaded", { timeout: SETTLE_MS }).catch(() => undefined);
+    current = next;
+  }
+  return current;
+}
+
+const isRedirect = (status: number) => status >= 300 && status < 400;
+
+/**
+ * The user agent of a person's Chrome of this binary's version. Headless
+ * Chromium says `HeadlessChrome`, which sites read as a bot. Undefined when
+ * the binary does not say its version.
+ */
+async function personUserAgent(executable: string): Promise<string | undefined> {
+  const { stdout } = await promisify(execFile)(executable, ["--version"], { timeout: 5_000 }).catch(
+    () => ({ stdout: "" }),
+  );
+  const major = /(\d+)\.\d+\.\d+\.\d+/.exec(stdout)?.[1];
+  if (!major) return undefined;
+  const platform =
+    process.platform === "darwin"
+      ? "Macintosh; Intel Mac OS X 10_15_7"
+      : process.platform === "win32"
+        ? "Windows NT 10.0; Win64; x64"
+        : "X11; Linux x86_64";
+  // Chrome reports only its major version (user agent reduction).
+  return `Mozilla/5.0 (${platform}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${major}.0.0.0 Safari/537.36`;
+}
+
 function resolveExecutable(explicit?: string): string | undefined {
   if (explicit) return explicit;
   // Prefer pre-provisioned system binaries: no download needed, and
@@ -68,6 +147,7 @@ function resolveExecutable(explicit?: string): string | undefined {
 export function createChromiumTransport(options: ChromiumTransportOptions = {}) {
   return async (profileDir: string, open: OpenBrowserOptions): Promise<BrowserSession> => {
     const executablePath = resolveExecutable(options.executablePath);
+    const userAgent = await personUserAgent(executablePath ?? chromium.executablePath());
     const context = await chromium.launchPersistentContext(profileDir, {
       headless: true,
       // The new headless renderer. Only for Playwright's own browser — an
@@ -75,7 +155,14 @@ export function createChromiumTransport(options: ChromiumTransportOptions = {}) 
       // must not be overridden.
       ...(executablePath ? { executablePath } : { channel: "chromium" as const }),
       viewport: { width: open.viewportWidth, height: open.viewportHeight },
-      ...(options.args?.length ? { args: options.args } : {}),
+      // Bot checks (Amazon's among them) turn away a browser that says it is
+      // automated: `navigator.webdriver`, a HeadlessChrome user agent, or a
+      // UTC clock and en-US on an IP that is somewhere else.
+      ignoreDefaultArgs: ["--enable-automation"],
+      args: ["--disable-blink-features=AutomationControlled", ...(options.args ?? [])],
+      ...(userAgent ? { userAgent } : {}),
+      ...(options.locale ? { locale: options.locale } : {}),
+      ...(options.timezone ? { timezoneId: options.timezone } : {}),
     });
     const page: Page = context.pages()[0] ?? (await context.newPage());
     const browser = context.browser();
@@ -198,6 +285,7 @@ export function pageSession(
       let response: Response | null = null;
       try {
         response = await current.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 });
+        response = await throughChallenges(current, response);
       } catch (error) {
         // The refused hop fails the load; say why rather than the net error.
         if (!guard.refusedSince(frameId, mark)) throw error;
@@ -234,6 +322,7 @@ export function pageSession(
       }),
     snapshot: (scope) => snapshotOf(page, scope),
     text: (scope) => textOf(page, scope),
+    waitFor: (wait) => waitForText(page, wait),
     origin: () => pageOrigin(page),
     fillSecret: (fill) => guarded((current) => fillSecretFields(current, fill)),
     click: (ref) =>
@@ -351,6 +440,30 @@ async function settleAfter<T>(page: Page, action: () => Promise<T>): Promise<T> 
     await settle(page);
   }
   return result;
+}
+
+/**
+ * Wait for text to show (a result, a confirmation) or to go (a spinner,
+ * "Loading…"), checked by Playwright against what is rendered, in any frame
+ * of the page's main document. Without text, a plain pause.
+ */
+async function waitForText(
+  page: Page,
+  wait: { text?: string; gone?: boolean; timeoutMs: number },
+): Promise<boolean> {
+  if (!wait.text) {
+    await new Promise((resolve) => setTimeout(resolve, wait.timeoutMs));
+    return true;
+  }
+  const state = wait.gone ? "hidden" : "visible";
+  return page
+    .getByText(wait.text)
+    .first()
+    .waitFor({ state, timeout: wait.timeoutMs })
+    .then(
+      () => true,
+      () => false,
+    );
 }
 
 /** Wait for `load`, up to `SETTLE_MS`; a page that never settles is used as it is. */

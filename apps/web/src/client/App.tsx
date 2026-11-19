@@ -23,6 +23,7 @@ import { ShellProvider, type ShellConfig } from "@groot/shell/lib/shell-config";
 import { BotMessageSquare, History, Settings as SettingsIcon, ShieldCheck } from "lucide-react";
 import { SkillsPage } from "./pages/skills/Skills";
 import { MemoryPage } from "./pages/memory";
+import { TraceDetailPage, TracesPage } from "./pages/traces";
 import { ConnectionsPage } from "./pages/connections/Connections";
 import { VaultPage } from "./pages/vault/Vault";
 import { TerminalPage } from "./pages/terminal";
@@ -155,7 +156,9 @@ export const appRoutes: RouteObject[] = [
               { path: "/code/threads", element: <CodePage /> },
               { path: "/code/reviews", element: <CodePage /> },
               { path: "/code/reviews/:reviewId", element: <CodePage /> },
+              { path: "/code/review", element: <OpenReviewLink /> },
               { path: "/code/review/:owner/:repo/:number", element: <OpenReviewLink /> },
+              { path: "/code/review/:owner/:repo/pull/:number/*", element: <OpenReviewLink /> },
               { path: "/code/s/:slug", element: <CodePage /> },
               { path: "/code/settings", element: <CodePage /> },
               { path: "/code/settings/:section", element: <CodePage /> },
@@ -168,6 +171,8 @@ export const appRoutes: RouteObject[] = [
               { path: "/skills", element: <SkillsPage /> },
               { path: "/skills/:id", element: <SkillsPage /> },
               { path: "/memory", element: <MemoryPage /> },
+              { path: "/traces", element: <TracesPage /> },
+              { path: "/traces/:id", element: <TraceDetailPage /> },
               { path: "/connections", element: <ConnectionsPage /> },
               { path: "/connections/:id", element: <ConnectionsPage /> },
               { path: "/connections/:id/tools/:tool", element: <ConnectionsPage /> },

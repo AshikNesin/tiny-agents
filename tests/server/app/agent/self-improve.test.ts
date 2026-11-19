@@ -4,6 +4,7 @@
  * approval — even when the tool is set to `allow`.
  */
 import type { Context as PiContext } from "@earendil-works/pi-ai";
+import { loaded } from "../../fixtures/loaded-tools";
 import { until } from "../../fixtures/until";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import type { AgentRuntime } from "../../../../packages/agent/src/runtime";
@@ -69,7 +70,7 @@ describe("self-improve capability", () => {
     const prompts: string[] = [];
     const runtime = await openTestRuntime({
       storePath: ":memory:",
-      capabilities: [createSelfImproveCapability(store)],
+      capabilities: [loaded(createSelfImproveCapability(store))],
       respondWith: (context: PiContext) => {
         prompts.push(JSON.stringify(context));
         return fauxAssistantMessage([fauxText("ok")]);
@@ -91,7 +92,7 @@ describe("self-improve capability", () => {
     const { store, applied } = memoryInstructions();
     const runtime = await openTestRuntime({
       storePath: ":memory:",
-      capabilities: [createSelfImproveCapability(store)],
+      capabilities: [loaded(createSelfImproveCapability(store))],
       respondWith: (context: PiContext) =>
         context.messages.at(-1)?.role === "toolResult"
           ? fauxAssistantMessage([fauxText("done")])
@@ -136,7 +137,7 @@ describe("self-improve capability", () => {
     const results: string[] = [];
     const runtime = await openTestRuntime({
       storePath: ":memory:",
-      capabilities: [createSelfImproveCapability(store)],
+      capabilities: [loaded(createSelfImproveCapability(store))],
       respondWith: (context: PiContext) => {
         const last = context.messages.at(-1);
         if (last?.role === "toolResult") {

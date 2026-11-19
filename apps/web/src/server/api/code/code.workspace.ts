@@ -81,11 +81,15 @@ export interface Workspace {
   /** A worktree on a branch that already exists (locally or on the remote): unarchive, a PR's head. */
   addWorktreeForBranch(checkout: string, path: string, branch: string): Promise<void>;
   /**
-   * A pull request's head (`refs/pull/N/head`, so a PR from a fork works too)
-   * and its base, fetched; then a detached worktree at that head, made or, when
-   * it has no uncommitted changes, moved there. Answers the head sha.
+   * Fetch a pull request's head (`refs/pull/N/head`, so a PR from a fork
+   * works too) and its base into the checkout. Answers the head sha.
    */
-  pullWorktree(checkout: string, path: string, number: number, base: string): Promise<string>;
+  fetchPull(checkout: string, number: number, base: string): Promise<string>;
+  /**
+   * A detached worktree at `head` (fetched by `fetchPull`), made or, when it
+   * has no uncommitted changes, moved there. Answers the worktree's HEAD.
+   */
+  pullWorktree(checkout: string, path: string, head: string): Promise<string>;
   /** A local branch, or one the last fetch saw on the remote, already has this name. */
   branchTaken(checkout: string, branch: string): Promise<boolean>;
   removeWorktree(checkout: string, path: string): Promise<void>;
@@ -124,6 +128,17 @@ export interface Workspace {
    * not run: a review's checkout has none of its tools installed.
    */
   commitAll(path: string, message: string, as: { name: string; email: string }): Promise<void>;
+  /**
+   * Replace a file's content in the worktree, only when it is a regular file
+   * inside it (no symlink out, nothing of git's) whose content still hashes to
+   * `expected` (sha256 hex): `outside` or `changed` otherwise.
+   */
+  writeFile(
+    path: string,
+    file: string,
+    expected: string,
+    content: string,
+  ): Promise<"written" | "outside" | "changed">;
   /** Put the worktree back at commit `sha` exactly: changes, new files and later commits go. */
   discard(path: string, sha: string): Promise<void>;
   /**
@@ -395,7 +410,7 @@ export function createWorkspace(options: WorkspaceOptions): Workspace {
       );
       return (await must(`${git(path)} rev-parse HEAD`, "Could not read HEAD")).trim();
     },
-    async pullWorktree(checkout, path, number, base) {
+    async fetchPull(checkout, number, base) {
       const ref = `refs/remotes/origin/pull/${number}`;
       const fetched = await authed(
         `-C ${q(checkout)} fetch --quiet origin ${q(`+refs/pull/${number}/head:${ref}`)} ${q(`+refs/heads/${base}:refs/remotes/origin/${base}`)}`,
@@ -403,9 +418,9 @@ export function createWorkspace(options: WorkspaceOptions): Workspace {
       if (fetched.exitCode !== 0) {
         throw new WorkspaceError(`Could not fetch pull request #${number}: ${tail(fetched)}`);
       }
-      const head = (
-        await must(`${git(checkout)} rev-parse ${q(ref)}`, "Could not read the head")
-      ).trim();
+      return (await must(`${git(checkout)} rev-parse ${q(ref)}`, "Could not read the head")).trim();
+    },
+    async pullWorktree(checkout, path, head) {
       if (!(await run(`test -e ${q(path)}`, 30_000)).exitCode) {
         const dirty = await must(
           `git --no-optional-locks -C ${q(path)} status --porcelain`,
@@ -555,6 +570,23 @@ export function createWorkspace(options: WorkspaceOptions): Workspace {
         `${git(path)} add -A && ${git(path)} ${identity}-c core.hooksPath=/dev/null commit --quiet --no-verify -m ${q(message)}`,
         "Could not commit",
       );
+    },
+    async writeFile(path, file, expected, content) {
+      const script = [
+        `cd ${q(path)}`,
+        `root=$(pwd -P)`,
+        `real=$(realpath -e -- ${q(file)}) || exit 3`,
+        `case "$real" in "$root"/.git|"$root"/.git/*) exit 3;; "$root"/*) ;; *) exit 3;; esac`,
+        `[ -f "$real" ] || exit 3`,
+        `[ "$(sha256sum < "$real" | cut -d' ' -f1)" = ${q(expected)} ] || exit 4`,
+        `cat > "$real"`,
+      ].join(" && ");
+      const result = await exec(`bash -c ${q(script)}`, { stdin: content, timeoutMs: 30_000 });
+      if (result.exitCode === 3) return "outside";
+      if (result.exitCode === 4) return "changed";
+      if (result.exitCode !== 0)
+        throw new WorkspaceError(`Could not save ${file}: ${tail(result)}`);
+      return "written";
     },
     async discard(path, sha) {
       if (!/^[0-9a-f]{40}$/.test(sha)) throw new WorkspaceError("Not a commit sha");
