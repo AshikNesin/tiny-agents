@@ -129,41 +129,26 @@ export function PullPanel({
   return (
     <div className="flex h-full min-h-0 flex-col" data-testid="code-pr">
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4 text-sm">
-        <header className="space-y-1">
-          <div className="flex min-h-7 items-center gap-2">
-            {pr?.draft ? (
-              <GitPullRequestDraft className="text-muted-foreground size-4 shrink-0" />
-            ) : (
-              <GitPullRequest className="text-muted-foreground size-4 shrink-0" />
-            )}
-            {pr ? (
-              <>
-                <a
-                  href={pr.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="font-medium tabular-nums hover:underline"
-                >
-                  #{pr.number}
-                </a>
-                <StateBadge pr={pr} />
-              </>
-            ) : (
-              <span className="font-medium">Pull request</span>
-            )}
-            <span className="flex-1" />
-            {pr && onReview && <ReviewButton onOpen={() => onReview(pr.url)} />}
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={reload}
-              aria-label="Refresh"
-              title="Refresh from GitHub"
-              className="text-muted-foreground"
-            >
-              <RefreshCw />
-            </Button>
-            {pr && (
+        {pr && (
+          <header className="space-y-1">
+            <div className="flex min-h-7 items-center gap-2">
+              {pr.draft ? (
+                <GitPullRequestDraft className="text-muted-foreground size-4 shrink-0" />
+              ) : (
+                <GitPullRequest className="text-muted-foreground size-4 shrink-0" />
+              )}
+              <a
+                href={pr.url}
+                target="_blank"
+                rel="noreferrer"
+                className="font-medium tabular-nums hover:underline"
+              >
+                #{pr.number}
+              </a>
+              <StateBadge pr={pr} />
+              <span className="flex-1" />
+              {onReview && <ReviewButton onOpen={() => onReview(pr.url)} />}
+              <RefreshButton onClick={reload} />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -191,24 +176,20 @@ export function PullPanel({
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-            )}
-          </div>
-          {pr && (
-            <>
-              <h2 className="text-base leading-snug font-medium [overflow-wrap:anywhere]">
-                <a href={pr.url} target="_blank" rel="noreferrer" className="hover:underline">
-                  {pr.title}
-                </a>
-              </h2>
-              <p
-                className={cn("text-muted-foreground truncate text-xs", monoClass)}
-                aria-label="Status"
-              >
-                {pr.headRef} → {pr.baseRef}
-              </p>
-            </>
-          )}
-        </header>
+            </div>
+            <h2 className="text-base leading-snug font-medium [overflow-wrap:anywhere]">
+              <a href={pr.url} target="_blank" rel="noreferrer" className="hover:underline">
+                {pr.title}
+              </a>
+            </h2>
+            <p
+              className={cn("text-muted-foreground truncate text-xs", monoClass)}
+              aria-label="Status"
+            >
+              {pr.headRef} → {pr.baseRef}
+            </p>
+          </header>
+        )}
         {error ? (
           <p className="text-destructive">{error}</p>
         ) : !view ? (
@@ -223,7 +204,7 @@ export function PullPanel({
           />
         ) : !pr && !canPublish && merged ? (
           <section className="space-y-1" aria-label="Merged">
-            <p className="flex items-center gap-2">
+            <div className="flex items-center gap-2">
               <GitMerge className="text-primary size-4 shrink-0" aria-hidden />
               <a href={merged.url} target="_blank" rel="noreferrer" className="hover:underline">
                 <span className="tabular-nums">#{merged.number}</span> {merged.title}
@@ -231,7 +212,9 @@ export function PullPanel({
               <span className="bg-primary/10 text-primary rounded-full px-2 py-0.5 text-[11px] font-medium">
                 Merged
               </span>
-            </p>
+              <span className="flex-1" />
+              <RefreshButton onClick={reload} />
+            </div>
             <p className="text-muted-foreground text-xs">
               Branch <span className={monoClass}>{view.branch}</span> is in{" "}
               {view.project.baseBranch}.
@@ -239,11 +222,14 @@ export function PullPanel({
           </section>
         ) : !pr ? (
           <section className="space-y-4">
-            <p className="text-muted-foreground">
-              Branch <span className={monoClass}>{view.branch}</span>
-              {view.ahead !== null &&
-                ` is ${view.ahead} ${view.ahead === 1 ? "commit" : "commits"} ahead of ${view.project.baseBranch}.`}
-            </p>
+            <div className="flex items-center gap-2">
+              <p className="text-muted-foreground min-w-0 flex-1">
+                Branch <span className={monoClass}>{view.branch}</span>
+                {view.ahead !== null &&
+                  ` is ${view.ahead} ${view.ahead === 1 ? "commit" : "commits"} ahead of ${view.project.baseBranch}.`}
+              </p>
+              <RefreshButton onClick={reload} />
+            </div>
             {view.ahead === 0 && (
               <Uncommitted
                 threadId={threadId}
@@ -474,7 +460,7 @@ function ActivePull({
             </DropdownMenuContent>
           </DropdownMenu>
         )}
-        {!failing && (
+        {!failing && (open.length > 0 || snap?.mergeable === "conflicting") && (
           <Button
             size="sm"
             variant="outline"
@@ -504,14 +490,16 @@ function ActivePull({
             title="Fixes failing checks, trusted review comments and conflicts while you are away, in this thread's permission mode."
           >
             <span className="min-w-0 flex-1 font-medium">Auto-fix</span>
-            <span
-              className={cn(
-                "text-xs",
-                pr.loop.status === "needs_input" ? "text-destructive" : "text-muted-foreground",
-              )}
-            >
-              {LOOP_LABEL[pr.loop.status]}
-            </span>
+            {pr.autofix && (
+              <span
+                className={cn(
+                  "text-xs",
+                  pr.loop.status === "needs_input" ? "text-destructive" : "text-muted-foreground",
+                )}
+              >
+                {LOOP_LABEL[pr.loop.status]}
+              </span>
+            )}
             <Switch
               checked={pr.autofix}
               onCheckedChange={onAutofix}
@@ -551,8 +539,8 @@ function ActivePull({
             data-testid="code-automerge"
           />
         </label>
-        {/* A limit only means something where the harness reports what a turn cost. */}
-        {spend.usd !== null && (
+        {/* A limit only means something where the harness reports cost, and it limits Auto-fix. */}
+        {spend.usd !== null && pr.autofix && (
           <form
             className="flex items-center gap-2 px-3 py-2"
             onSubmit={(e) => {
@@ -708,6 +696,21 @@ function Description({
         <p className="text-muted-foreground text-sm">No description.</p>
       )}
     </section>
+  );
+}
+
+function RefreshButton({ onClick }: { onClick(): void }) {
+  return (
+    <Button
+      variant="ghost"
+      size="icon-xs"
+      onClick={onClick}
+      aria-label="Refresh"
+      title="Refresh from GitHub"
+      className="text-muted-foreground shrink-0"
+    >
+      <RefreshCw />
+    </Button>
   );
 }
 

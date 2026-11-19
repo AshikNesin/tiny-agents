@@ -4,7 +4,7 @@
  * thread names its file and line; an open one can go to the composer.
  */
 import { useMemo, useState } from "react";
-import { MessageSquare, MessageSquarePlus } from "lucide-react";
+import { MessageSquarePlus } from "lucide-react";
 import { Streamdown } from "streamdown";
 import { Badge, Button, metaLabelClass, monoClass } from "@groot/ui";
 import { cn } from "@groot/ui/lib/utils";
@@ -105,42 +105,37 @@ export function PullComments({
   const [audience, setAudience] = useState<Audience>("all");
   const shown = byAudience(all, audience);
 
+  // Nothing said yet: no empty section on every new PR.
+  if (all.length === 0) return null;
   return (
     <section aria-label="Comments" className="space-y-2">
       <div className="flex items-center gap-2">
         <h3 className={cn(metaLabelClass, "flex-1")}>Comments</h3>
-        {all.length > 0 && (
-          <div
-            role="tablist"
-            aria-label="Who wrote them"
-            className="bg-muted/60 flex items-center gap-0.5 rounded-lg p-0.5"
-          >
-            {TABS.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                role="tab"
-                aria-selected={audience === t.id}
-                onClick={() => setAudience(t.id)}
-                className={cn(
-                  "h-6 rounded-md px-2 text-xs outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-                  audience === t.id
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {t.label} <span className="tabular-nums opacity-70">{counts[t.id]}</span>
-              </button>
-            ))}
-          </div>
-        )}
+        <div
+          role="tablist"
+          aria-label="Who wrote them"
+          className="bg-muted/60 flex items-center gap-0.5 rounded-lg p-0.5"
+        >
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              aria-selected={audience === t.id}
+              onClick={() => setAudience(t.id)}
+              className={cn(
+                "h-6 rounded-md px-2 text-xs outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                audience === t.id
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {t.label} <span className="tabular-nums opacity-70">{counts[t.id]}</span>
+            </button>
+          ))}
+        </div>
       </div>
-      {all.length === 0 ? (
-        <p className="text-muted-foreground flex items-center gap-2 text-sm">
-          <MessageSquare className="size-3.5" />
-          No comments yet.
-        </p>
-      ) : shown.length === 0 ? (
+      {shown.length === 0 ? (
         <p className="text-muted-foreground text-sm">
           {audience === "bot" ? "No comments from bots." : "No comments from people."}
         </p>

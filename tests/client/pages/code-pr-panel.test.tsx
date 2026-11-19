@@ -37,6 +37,9 @@ let noPull = false;
 let ahead: number | null = 1;
 let changed: string[] = [];
 let earlier: ThreadPullsView["earlier"] = [];
+/** Auto-fix on the open PR, and what the thread has cost. */
+let autofix = false;
+let spendUsd: number | null = null;
 
 // The network: the PR tab's one read.
 vi.mock("@groot/shell/lib/api", async (importOriginal) => {
@@ -118,7 +121,7 @@ function view(state: CheckState): ThreadPullsView {
     project,
     branch: "ta/fix-1a2b",
     ahead,
-    spend: { usd: null, limitUsd: null },
+    spend: { usd: spendUsd, limitUsd: null },
     earlier,
     active: noPull
       ? null
@@ -132,9 +135,9 @@ function view(state: CheckState): ThreadPullsView {
           headRef: "ta/fix-1a2b",
           baseRef: "main",
           syncedAt: null,
-          autofix: false,
+          autofix,
           autoMerge: false,
-          loop: { status: "off", reason: null },
+          loop: { status: autofix ? "watching" : "off", reason: null },
           stalled: [],
           ignored: [],
           passes: [],
@@ -193,6 +196,8 @@ beforeEach(() => {
   ahead = 1;
   changed = [];
   earlier = [];
+  autofix = false;
+  spendUsd = null;
   visibility = "visible";
   vi.spyOn(document, "visibilityState", "get").mockImplementation(() => visibility);
   vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "setTimeout", "clearTimeout"] });
@@ -312,6 +317,30 @@ describe("getting it merged", () => {
     expect(screen.getByTestId("code-publish")).toBeDisabled();
     act(() => screen.getByRole("button", { name: "Ask to commit" }).click());
     expect(attached).toEqual(["Commit your changes on this branch."]);
+  });
+});
+
+describe("only what can act shows (#384)", () => {
+  it("a new PR: no Fix, no empty Comments, no Auto-fix status or spend limit while it is off", async () => {
+    checkState = "success";
+    spendUsd = 0.02;
+    panel();
+    await wait(0);
+    expect(screen.getByRole("switch", { name: "Auto-fix" })).not.toBeChecked();
+    expect(screen.queryByRole("button", { name: "Fix" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Comments" })).toBeNull();
+    expect(screen.queryByText("No comments yet.")).toBeNull();
+    expect(screen.queryByText("Off")).toBeNull();
+    expect(screen.queryByLabelText("Spend limit")).toBeNull();
+  });
+
+  it("no PR yet: the branch line leads, without a header repeating the tab's name", async () => {
+    noPull = true;
+    panel();
+    await wait(0);
+    expect(screen.queryByText("Pull request")).toBeNull();
+    expect(screen.getByText(/is 1 commit ahead of main/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Refresh" })).toBeInTheDocument();
   });
 });
 
