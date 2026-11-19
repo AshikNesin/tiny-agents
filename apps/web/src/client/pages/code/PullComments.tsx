@@ -4,7 +4,7 @@
  * thread names its file and line; an open one can go to the composer.
  */
 import { useMemo, useState } from "react";
-import { MessageSquare, MessageSquarePlus } from "lucide-react";
+import { MessageSquarePlus } from "lucide-react";
 import { Streamdown } from "streamdown";
 import { Badge, Button, metaLabelClass, monoClass } from "@groot/ui";
 import { cn } from "@groot/ui/lib/utils";
@@ -105,49 +105,44 @@ export function PullComments({
   const [audience, setAudience] = useState<Audience>("all");
   const shown = byAudience(all, audience);
 
+  // Nothing said yet: no empty section on every new PR.
+  if (all.length === 0) return null;
   return (
     <section aria-label="Comments" className="space-y-2">
       <div className="flex items-center gap-2">
         <h3 className={cn(metaLabelClass, "flex-1")}>Comments</h3>
-        {all.length > 0 && (
-          <div
-            role="tablist"
-            aria-label="Who wrote them"
-            className="bg-muted/60 flex items-center gap-0.5 rounded-lg p-0.5"
-          >
-            {TABS.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                role="tab"
-                aria-selected={audience === t.id}
-                onClick={() => setAudience(t.id)}
-                className={cn(
-                  "h-6 rounded-md px-2 text-xs outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-                  audience === t.id
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {t.label} <span className="tabular-nums opacity-70">{counts[t.id]}</span>
-              </button>
-            ))}
-          </div>
-        )}
+        <div
+          role="tablist"
+          aria-label="Who wrote them"
+          className="bg-muted/60 flex items-center gap-0.5 rounded-lg p-0.5"
+        >
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              aria-selected={audience === t.id}
+              onClick={() => setAudience(t.id)}
+              className={cn(
+                "h-6 rounded-md px-2 text-xs outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                audience === t.id
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {t.label} <span className="tabular-nums opacity-70">{counts[t.id]}</span>
+            </button>
+          ))}
+        </div>
       </div>
-      {all.length === 0 ? (
-        <p className="text-muted-foreground flex items-center gap-2 text-sm">
-          <MessageSquare className="size-3.5" />
-          No comments yet.
-        </p>
-      ) : shown.length === 0 ? (
+      {shown.length === 0 ? (
         <p className="text-muted-foreground text-sm">
           {audience === "bot" ? "No comments from bots." : "No comments from people."}
         </p>
       ) : (
         <ul className="space-y-2">
           {shown.map((c) => (
-            <CommentCard key={c.id} comment={c} onAttach={onAttach} />
+            <CommentCard key={c.id} comment={c} autofix={pr.autofix} onAttach={onAttach} />
           ))}
         </ul>
       )}
@@ -163,11 +158,36 @@ const threadText = (c: PrComment) =>
     ...c.replies.map((r) => `${r.author}: ${r.body}`),
   ].join("\n");
 
+/** The review verdict, and whether Auto-fix passes the comment over. */
+function CommentBadges({ comment: c, autofix }: { comment: PrComment; autofix: boolean }) {
+  return (
+    <>
+      {c.verdict && (
+        <Badge variant={c.verdict === "approved" ? "secondary" : "outline"}>
+          {c.verdict === "approved" ? "Approved" : "Changes requested"}
+        </Badge>
+      )}
+      {c.ignored && autofix && (
+        <Badge
+          variant="outline"
+          className="text-muted-foreground"
+          title="Auto-fix takes instructions only from you and trusted bots. Attach it to ask the agent."
+        >
+          Auto-fix skips
+        </Badge>
+      )}
+    </>
+  );
+}
+
 function CommentCard({
   comment: c,
+  autofix,
   onAttach,
 }: {
   comment: PrComment;
+  /** Auto-fix is on: say which comments it will not act on. */
+  autofix: boolean;
   onAttach(text: string): void;
 }) {
   const settled = c.where && (c.where.resolved || c.where.outdated);
@@ -182,16 +202,7 @@ function CommentCard({
         <div className="min-w-0 flex-1">
           <CommentByline author={c.author} bot={c.bot} at={c.createdAt} />
         </div>
-        {c.verdict && (
-          <Badge variant={c.verdict === "approved" ? "secondary" : "outline"}>
-            {c.verdict === "approved" ? "Approved" : "Changes requested"}
-          </Badge>
-        )}
-        {c.ignored && (
-          <Badge variant="secondary" title="Auto-fix does not take instructions from this author">
-            Ignored
-          </Badge>
-        )}
+        <CommentBadges comment={c} autofix={autofix} />
         {c.where && !settled && (
           <Button
             variant="ghost"
