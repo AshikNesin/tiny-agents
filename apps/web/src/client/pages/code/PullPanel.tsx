@@ -121,6 +121,10 @@ export function PullPanel({
 
   const pr = view?.active ?? null;
   const snap = pr?.snapshot ?? null;
+  // The thread's last PR merged and nothing new to publish: that is the news, not Publish.
+  const merged = !pr && view?.earlier[0]?.state === "merged" ? view.earlier[0] : null;
+  const canPublish = !merged || (view?.ahead ?? 0) > 0;
+  const earlier = merged ? (view?.earlier.slice(1) ?? []) : (view?.earlier ?? []);
 
   return (
     <div className="flex h-full min-h-0 flex-col" data-testid="code-pr">
@@ -217,6 +221,22 @@ export function PullPanel({
             title="Not in a project"
             description="Start a thread in a project to publish its branch and follow the pull request here."
           />
+        ) : !pr && !canPublish && merged ? (
+          <section className="space-y-1" aria-label="Merged">
+            <p className="flex items-center gap-2">
+              <GitMerge className="text-primary size-4 shrink-0" aria-hidden />
+              <a href={merged.url} target="_blank" rel="noreferrer" className="hover:underline">
+                <span className="tabular-nums">#{merged.number}</span> {merged.title}
+              </a>
+              <span className="bg-primary/10 text-primary rounded-full px-2 py-0.5 text-[11px] font-medium">
+                Merged
+              </span>
+            </p>
+            <p className="text-muted-foreground text-xs">
+              Branch <span className={monoClass}>{view.branch}</span> is in{" "}
+              {view.project.baseBranch}.
+            </p>
+          </section>
         ) : !pr ? (
           <section className="space-y-4">
             <p className="text-muted-foreground">
@@ -305,11 +325,11 @@ export function PullPanel({
             onSaved={setView}
           />
         )}
-        {view && view.earlier.length > 0 && (
+        {earlier.length > 0 && (
           <section className="space-y-1">
             <h3 className={metaLabelClass}>Earlier pull requests</h3>
             <ul className="space-y-1">
-              {view.earlier.map((e) => (
+              {earlier.map((e) => (
                 <li key={e.number}>
                   <a href={e.url} target="_blank" rel="noreferrer" className="hover:underline">
                     #{e.number} {e.title}

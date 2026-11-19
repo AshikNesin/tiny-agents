@@ -27,12 +27,19 @@ const pulls = {
   spend: { usd: null, limitUsd: null },
 };
 
+let archivedRows: ThreadSummary[] = [];
+
 vi.mock("@groot/shell/lib/api", async (importOriginal) => {
   const original = await importOriginal<typeof import("@groot/shell/lib/api")>();
   return {
     ...original,
     apiClient: Object.assign(Object.create(original.apiClient) as typeof original.apiClient, {
-      get: async (path: string) => (path.endsWith("/pr") ? pulls : []),
+      get: async (path: string, params?: { view?: string }) =>
+        path.endsWith("/pr")
+          ? pulls
+          : path.endsWith("/threads") && params?.view === "archived"
+            ? archivedRows
+            : [],
       post: async () => ({}),
     }),
   };
@@ -221,5 +228,22 @@ describe("the right panel", () => {
       await screen.findByRole("region", { name: "Review panel" });
       expect(panelWidth()).toBe("");
     });
+  });
+});
+
+describe("an archived project thread (#383)", () => {
+  afterEach(() => {
+    archivedRows = [];
+  });
+
+  it("keeps its Pull request tab once a merge archived it out of the active list", async () => {
+    archivedRows = [thread({ archived: true, projectId: "p1" })];
+    useCodeStore.setState({ harnesses: [shelley], statuses: {}, threads: [] });
+    renderAt("/code/shelley%3Ac1/pr");
+    expect(await screen.findByTestId("code-pr")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /Pull request/ })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
   });
 });

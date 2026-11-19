@@ -299,7 +299,8 @@ export function ConversationView({
     });
 
   const stop = () => void run(`stop ${harness.label}`, () => codeApi.interrupt(id));
-  const archived = Boolean(row?.archived);
+  // The list knows first when a merge archives the thread under the open transcript.
+  const archived = Boolean(row?.archived || listRow?.archived);
   const cwd = row?.cwd ?? null;
   useEffect(() => onCwd?.(cwd), [cwd, onCwd]);
   const title = row?.title ?? id;

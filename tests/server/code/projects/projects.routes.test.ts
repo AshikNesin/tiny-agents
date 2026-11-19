@@ -20,6 +20,7 @@ import { createWorkspace } from "../../../../apps/web/src/server/api/code/code.w
 import { onTurnEnded } from "../../../../apps/web/src/server/api/code/code.pulls";
 import { threadIndex } from "../../../../apps/web/src/server/api/code/code.store";
 import { threadIdOf } from "@tiny-agents/code/server";
+import { NO_CAPABILITIES } from "@tiny-agents/code/contracts";
 import type {
   CheckLogView,
   CheckpointView,
@@ -196,6 +197,40 @@ describe("projects", () => {
     expect(String(created.message).endsWith("Fix the login flow")).toBe(true);
     const list = await call<Array<{ id: string; projectId?: string }>>("GET", "/threads");
     expect(list.body.data?.find((t) => t.id === thread.id)?.projectId).toBe(project.id);
+  });
+
+  it("keeps an archived thread's project in the archived list (#383)", async () => {
+    // A harness that archives, as Shelley does: archived threads list apart.
+    setCodeHub(undefined);
+    harness = fakeHarness("fake", {
+      threads: { ...NO_CAPABILITIES.threads, archive: true },
+      workspace: { ...NO_CAPABILITIES.workspace, requiresCwd: true },
+    });
+    setCodeHub(createCodeHub({ instances: [harness], listDebounceMs: 5 }))!.start();
+    const project = await newProject();
+    const thread = await newThread(project.id);
+    harness.threads = [
+      {
+        id: thread.id,
+        instanceId: "fake",
+        kind: "fake",
+        nativeId: thread.nativeId,
+        title: "Merged work",
+        cwd: thread.worktree,
+        model: null,
+        parentId: null,
+        createdAt: "2026-11-05T00:00:00Z",
+        updatedAt: "2026-11-05T00:00:00Z",
+        working: false,
+        archived: true,
+        cursor: 0,
+      },
+    ];
+    const archived = await call<Array<{ id: string; projectId?: string }>>(
+      "GET",
+      "/threads?view=archived",
+    );
+    expect(archived.body.data?.find((t) => t.id === thread.id)?.projectId).toBe(project.id);
   });
 });
 
