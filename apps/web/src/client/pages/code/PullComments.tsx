@@ -142,7 +142,7 @@ export function PullComments({
       ) : (
         <ul className="space-y-2">
           {shown.map((c) => (
-            <CommentCard key={c.id} comment={c} onAttach={onAttach} />
+            <CommentCard key={c.id} comment={c} autofix={pr.autofix} onAttach={onAttach} />
           ))}
         </ul>
       )}
@@ -160,9 +160,12 @@ const threadText = (c: PrComment) =>
 
 function CommentCard({
   comment: c,
+  autofix,
   onAttach,
 }: {
   comment: PrComment;
+  /** Auto-fix is on: say which comments it will not act on. */
+  autofix: boolean;
   onAttach(text: string): void;
 }) {
   const settled = c.where && (c.where.resolved || c.where.outdated);
@@ -182,9 +185,13 @@ function CommentCard({
             {c.verdict === "approved" ? "Approved" : "Changes requested"}
           </Badge>
         )}
-        {c.ignored && (
-          <Badge variant="secondary" title="Auto-fix does not take instructions from this author">
-            Ignored
+        {c.ignored && autofix && (
+          <Badge
+            variant="outline"
+            className="text-muted-foreground"
+            title="Auto-fix takes instructions only from you and trusted bots. Attach it to ask the agent."
+          >
+            Auto-fix skips
           </Badge>
         )}
         {c.where && !settled && (

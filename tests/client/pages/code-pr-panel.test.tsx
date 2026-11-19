@@ -40,6 +40,8 @@ let earlier: ThreadPullsView["earlier"] = [];
 /** Auto-fix on the open PR, and what the thread has cost. */
 let autofix = false;
 let spendUsd: number | null = null;
+/** Comment and thread ids from authors Auto-fix does not take instructions from. */
+let ignored: string[] = [];
 
 // The network: the PR tab's one read.
 vi.mock("@groot/shell/lib/api", async (importOriginal) => {
@@ -139,7 +141,7 @@ function view(state: CheckState): ThreadPullsView {
           autoMerge: false,
           loop: { status: autofix ? "watching" : "off", reason: null },
           stalled: [],
-          ignored: [],
+          ignored,
           passes: [],
           snapshot: {
             id: "n1",
@@ -198,6 +200,7 @@ beforeEach(() => {
   earlier = [];
   autofix = false;
   spendUsd = null;
+  ignored = [];
   visibility = "visible";
   vi.spyOn(document, "visibilityState", "get").mockImplementation(() => visibility);
   vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "setTimeout", "clearTimeout"] });
@@ -560,6 +563,34 @@ describe("the pull request's comments", () => {
     act(() => screen.getByRole("tab", { name: "Humans 1" }).click());
     expect(comments).toHaveTextContent("Can we keep the old flag?");
     expect(comments).not.toHaveTextContent("Walkthrough of the change");
+  });
+
+  it("marks a teammate's review as skipped by Auto-fix only while Auto-fix is on (#385)", async () => {
+    checkState = "success";
+    ignored = ["rv1"];
+    extra = {
+      reviews: [
+        {
+          id: "rv1",
+          author: user("carol"),
+          state: "CHANGES_REQUESTED",
+          body: "Please split this.",
+          submittedAt: "2026-11-17T09:00:00Z",
+        },
+      ],
+    };
+    const { unmount } = panel();
+    await wait(0);
+    const comments = screen.getByRole("region", { name: "Comments" });
+    expect(comments).toHaveTextContent("Please split this.");
+    expect(comments).not.toHaveTextContent("Ignored");
+    expect(comments).not.toHaveTextContent("Auto-fix skips");
+    unmount();
+
+    autofix = true;
+    panel();
+    await wait(0);
+    expect(screen.getByRole("region", { name: "Comments" })).toHaveTextContent("Auto-fix skips");
   });
 
   it("folds a long comment (a bot's walkthrough) behind Show more", async () => {
