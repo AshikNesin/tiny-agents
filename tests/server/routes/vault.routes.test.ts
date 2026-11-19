@@ -682,10 +682,10 @@ describe("credential request submit", () => {
     ],
   };
 
-  const fakeRuntime = () => ({
+  const fakeRuntime = (request: CredentialRequest = requestDoc) => ({
     credentialRequest: vi.fn(async () => ({
       conversation,
-      request: requestDoc,
+      request,
       expiresAt: Date.now() + 60_000,
     })),
     settleCredentialRequest: vi.fn(async () => {}),
@@ -781,6 +781,39 @@ describe("credential request submit", () => {
         fakeRuntime() as never,
       ),
     ).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  it("saves a mobile-number sign-in's number as a login, never its one-time code", async () => {
+    const runtime = fakeRuntime({
+      origin: "https://hi.nesin.io",
+      title: "Sign in to the portal",
+      purpose: "Check the order",
+      fields: [
+        {
+          key: "mobile",
+          label: "Mobile number",
+          type: "text",
+          required: true,
+          autocomplete: "tel",
+        },
+        { key: "code", label: "OTP", type: "otp", required: false, autocomplete: "one-time-code" },
+      ],
+    });
+    const result = await submitRequest(
+      7,
+      { values: { mobile: "8124227227", code: "4821" }, save: true },
+      runtime as never,
+    );
+    expect(result).toEqual({
+      filled: ["mobile", "code"],
+      savedHandle: "hi-nesin-io",
+      saveFailed: false,
+    });
+    const saved = await db.query.vaultItems.findFirst({
+      where: eq(vaultItems.handle, "hi-nesin-io"),
+    });
+    expect(saved).toMatchObject({ kind: "login", username: "8124227227" });
+    expect(JSON.stringify(saved)).not.toContain("4821");
   });
 
   it("cancels", async () => {

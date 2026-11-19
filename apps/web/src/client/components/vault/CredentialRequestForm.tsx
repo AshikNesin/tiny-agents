@@ -19,6 +19,8 @@ import { Switch } from "../ui/switch";
 import { SecretInput } from "./SecretInput";
 
 const MASKED = new Set(["password", "otp", "card_number", "cvc"]);
+/** Autocomplete tokens of a sign-in's identifier, saved as the login's username. */
+const IDENTIFIERS = new Set(["username", "email", "tel"]);
 
 function hostOf(origin: string): string {
   try {
@@ -50,9 +52,14 @@ export function CredentialRequestForm({
 
   const host = hostOf(request.origin);
   const moved = request.liveOrigin !== null && request.liveOrigin !== request.origin;
-  // OTPs and security codes are never saved; anything with a password or a card number can be.
+  // OTPs and security codes are never saved; a password, a card number or a
+  // sign-in's identifier (username, email, mobile number) can be.
   const canSave = request.fields.some(
-    (field) => field.type === "password" || field.type === "card_number",
+    (field) =>
+      field.type === "password" ||
+      field.type === "card_number" ||
+      ((field.type === "email" || field.type === "text") &&
+        IDENTIFIERS.has(field.autocomplete ?? "")),
   );
   const missing = request.fields.some((field) => field.required && !values[field.key]?.trim());
   const botName = request.bot?.name ?? "A bot";

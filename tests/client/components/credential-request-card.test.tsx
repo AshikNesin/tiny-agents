@@ -111,4 +111,31 @@ describe("credential request in the chat", () => {
       ),
     );
   });
+
+  it("offers to save a mobile-number sign-in to the vault", async () => {
+    api.request.mockResolvedValue({
+      ...REQUEST,
+      fields: [
+        {
+          key: "mobile",
+          label: "Mobile number",
+          type: "text",
+          required: true,
+          autocomplete: "tel",
+        },
+        { key: "code", label: "OTP", type: "otp", required: false, autocomplete: "one-time-code" },
+      ],
+    });
+    render(
+      <AppQueryProvider>
+        <MemoryRouter>
+          <OwnerActionsProvider actions={actions}>
+            <ChatMessageView message={chat()} botName="Chief" />
+          </OwnerActionsProvider>
+        </MemoryRouter>
+      </AppQueryProvider>,
+    );
+    expect(await screen.findByLabelText("Mobile number*")).toBeTruthy();
+    expect(screen.getByRole("switch", { name: "Save to vault" })).toBeTruthy();
+  });
 });
