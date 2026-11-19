@@ -1,76 +1,22 @@
 /**
- * Whether a live-view panel (the Browser, issue #24, or the Computer, issue
- * #108) opens on its own (friction #37). It opens the first time the bot
- * uses it in a conversation, and an explicit close by the owner is final for
- * that conversation: later calls, in this run or the next, only light the
- * header toggle. On mobile the panel covers the chat, so reopening it under
- * someone who closed it to read the transcript hides exactly what they
- * wanted to see.
+ * The chat's live views (the Browser, issue #24, and the Computer, issue
+ * #108): when the bot is using one, and how the owner likes to watch it.
  *
- * Dismissals live in sessionStorage so switching bots or reloading the tab
- * keeps them; a new chat is a new conversation and starts fresh. Storage can
- * be unavailable (private mode, blocked site data), so a module-level set
- * backs it for the life of the page.
+ * Neither opens on its own. A bot reaching for its browser used to pop the
+ * panel open over the chat; now it only lights the header's live-view toggle,
+ * and the owner opens the view when they want it.
+ *
+ * The owner watches either docked (beside the chat on desktop, over it on a
+ * phone) or as picture in picture: a small floating view that keeps the chat
+ * readable. The choice is remembered in localStorage.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import type { ChatMessage } from "./chat-types";
 import { viewOf } from "./tool-call-view";
 
-export const BROWSER_DISMISSED_KEY = "tiny-agents:browser-dismissed";
-const COMPUTER_DISMISSED_KEY = "tiny-agents:computer-dismissed";
-/** Oldest dismissals drop past this; a conversation id is all that's kept. */
-const MAX_REMEMBERED = 50;
+export type LiveLayout = "docked" | "pip";
 
-interface Dismissals {
-  has(conversationId: string): boolean;
-  add(conversationId: string): void;
-  reset(): void;
-}
-
-function dismissals(key: string): Dismissals {
-  const readStored = (): string[] => {
-    try {
-      const parsed: unknown = JSON.parse(sessionStorage.getItem(key) ?? "[]");
-      return Array.isArray(parsed) ? parsed.filter((id) => typeof id === "string") : [];
-    } catch {
-      return [];
-    }
-  };
-  const seen = new Set<string>(readStored());
-  return {
-    has: (conversationId) => seen.has(conversationId) || readStored().includes(conversationId),
-    add(conversationId) {
-      seen.add(conversationId);
-      const ids = [...readStored().filter((id) => id !== conversationId), conversationId];
-      try {
-        sessionStorage.setItem(key, JSON.stringify(ids.slice(-MAX_REMEMBERED)));
-      } catch {
-        // The in-memory set still keeps it closed until the page reloads.
-      }
-    },
-    reset() {
-      seen.clear();
-      try {
-        sessionStorage.removeItem(key);
-      } catch {
-        // nothing stored
-      }
-    },
-  };
-}
-
-const browserDismissals = dismissals(BROWSER_DISMISSED_KEY);
-const computerDismissals = dismissals(COMPUTER_DISMISSED_KEY);
-
-export function isBrowserDismissed(conversationId: string): boolean {
-  return browserDismissals.has(conversationId);
-}
-
-/** Test seam: forget every dismissal. */
-export function resetBrowserDismissals() {
-  browserDismissals.reset();
-  computerDismissals.reset();
-}
+const LIVE_LAYOUT_KEY = "tiny-agents:live-view-layout";
 
 /** The bot is running a browser tool right now. */
 export function browserInUse(messages: ChatMessage[]): boolean {
@@ -94,46 +40,24 @@ export function computerInUse(messages: ChatMessage[]): boolean {
   );
 }
 
-function usePanel(store: Dismissals, conversationId: string, inUse: boolean, onOpen?: () => void) {
-  const [open, setOpen] = useState(false);
-  const onOpenRef = useRef(onOpen);
-  useEffect(() => {
-    onOpenRef.current = onOpen;
-  }, [onOpen]);
+function readLayout(): LiveLayout {
+  try {
+    return window.localStorage.getItem(LIVE_LAYOUT_KEY) === "pip" ? "pip" : "docked";
+  } catch {
+    return "docked";
+  }
+}
 
-  /** Every way the panel opens tells the caller (to bring it to the front). */
-  const reveal = useCallback(() => {
-    setOpen(true);
-    onOpenRef.current?.();
+/** Docked or picture in picture, remembered across chats and reloads. */
+export function useLiveLayout() {
+  const [layout, setLayoutState] = useState<LiveLayout>(readLayout);
+  const setLayout = useCallback((next: LiveLayout) => {
+    setLayoutState(next);
+    try {
+      window.localStorage.setItem(LIVE_LAYOUT_KEY, next);
+    } catch {
+      /* storage unavailable: the choice lasts until the page reloads */
+    }
   }, []);
-
-  useEffect(() => {
-    if (open || !inUse || store.has(conversationId)) return;
-    reveal();
-  }, [open, inUse, conversationId, store, reveal]);
-
-  const close = useCallback(() => {
-    store.add(conversationId);
-    setOpen(false);
-  }, [conversationId, store]);
-
-  const toggle = useCallback(() => {
-    if (open) close();
-    else reveal();
-  }, [open, close, reveal]);
-
-  return { open, close, toggle, show: reveal };
-}
-
-/**
- * The panel's open state for one conversation. `close` and `toggle` are the
- * owner's actions, so both record the dismissal; only the auto-open reads it.
- */
-export function useBrowserPanel(conversationId: string, inUse: boolean, onOpen?: () => void) {
-  return usePanel(browserDismissals, conversationId, inUse, onOpen);
-}
-
-/** The Computer panel's open state, with dismissals of its own. */
-export function useComputerPanel(conversationId: string, inUse: boolean, onOpen?: () => void) {
-  return usePanel(computerDismissals, conversationId, inUse, onOpen);
+  return [layout, setLayout] as const;
 }

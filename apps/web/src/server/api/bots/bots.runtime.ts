@@ -383,9 +383,16 @@ export async function openFauxAgentRuntime(
       text = textOf(message);
       break;
     }
-    // "/browse N" reads the page N times, one tool round each, then answers.
+    // "/browse N" loads the browser's snapshot tool (the browser toolkit is
+    // deferred), then reads the page N times, one tool round each, then answers.
     const browse = /^\/browse(?:\s+(\d+))?/.exec(text);
-    if (browse && toolResults < Math.min(Number(browse[1] ?? 1), 10)) {
+    if (browse && toolResults === 0) {
+      const call = fauxAssistantMessage(
+        fauxToolCall("tool_search", { query: "browser_snapshot", limit: 1 }),
+      );
+      return { ...call, stopReason: "toolUse" as const };
+    }
+    if (browse && toolResults - 1 < Math.min(Number(browse[1] ?? 1), 10)) {
       const call = fauxAssistantMessage(fauxToolCall("browser_snapshot", {}));
       return { ...call, stopReason: "toolUse" as const };
     }

@@ -5,6 +5,7 @@ exports[`BrowserPanel states > before the first status > markup 1`] = `
   <div>
     <div
       class="flex flex-col fixed inset-0 z-40 bg-background xl:static xl:z-auto xl:h-full xl:w-[min(var(--browser-panel-width),calc(100vw-42rem))] xl:shrink-0 xl:bg-transparent xl:p-2 xl:pl-0"
+      data-layout="docked"
       data-testid="browser-panel"
       style="--browser-panel-width: 360px;"
     >
@@ -21,7 +22,7 @@ exports[`BrowserPanel states > before the first status > markup 1`] = `
         data-slot="card"
       >
         <header
-          class="@container flex h-11 shrink-0 items-center gap-2 border-b pr-1.5 pl-2"
+          class="@container flex shrink-0 items-center gap-2 border-b pr-1.5 pl-2 h-11"
         >
           <div
             class="flex min-w-0 flex-1 items-center gap-2"
@@ -127,7 +128,7 @@ exports[`BrowserPanel states > before the first status > markup 1`] = `
           </div>
         </header>
         <div
-          class="relative min-h-0 flex-1 overflow-hidden rounded-b-[inherit]"
+          class="relative min-h-0 overflow-hidden rounded-b-[inherit] flex-1"
           data-testid="browser-viewport"
         >
           <div
@@ -209,6 +210,7 @@ exports[`BrowserPanel states > closed, for a guest > markup 1`] = `
   <div>
     <div
       class="flex flex-col fixed inset-0 z-40 bg-background xl:static xl:z-auto xl:h-full xl:w-[min(var(--browser-panel-width),calc(100vw-42rem))] xl:shrink-0 xl:bg-transparent xl:p-2 xl:pl-0"
+      data-layout="docked"
       data-testid="browser-panel"
       style="--browser-panel-width: 360px;"
     >
@@ -225,7 +227,7 @@ exports[`BrowserPanel states > closed, for a guest > markup 1`] = `
         data-slot="card"
       >
         <header
-          class="@container flex h-11 shrink-0 items-center gap-2 border-b pr-1.5 pl-2"
+          class="@container flex shrink-0 items-center gap-2 border-b pr-1.5 pl-2 h-11"
         >
           <div
             class="flex min-w-0 flex-1 items-center gap-2"
@@ -283,7 +285,7 @@ exports[`BrowserPanel states > closed, for a guest > markup 1`] = `
           </div>
         </header>
         <div
-          class="relative min-h-0 flex-1 overflow-hidden rounded-b-[inherit]"
+          class="relative min-h-0 overflow-hidden rounded-b-[inherit] flex-1"
           data-testid="browser-viewport"
         >
           <div
@@ -346,6 +348,7 @@ exports[`BrowserPanel states > closed, for the owner > markup 1`] = `
   <div>
     <div
       class="flex flex-col fixed inset-0 z-40 bg-background xl:static xl:z-auto xl:h-full xl:w-[min(var(--browser-panel-width),calc(100vw-42rem))] xl:shrink-0 xl:bg-transparent xl:p-2 xl:pl-0"
+      data-layout="docked"
       data-testid="browser-panel"
       style="--browser-panel-width: 360px;"
     >
@@ -362,7 +365,7 @@ exports[`BrowserPanel states > closed, for the owner > markup 1`] = `
         data-slot="card"
       >
         <header
-          class="@container flex h-11 shrink-0 items-center gap-2 border-b pr-1.5 pl-2"
+          class="@container flex shrink-0 items-center gap-2 border-b pr-1.5 pl-2 h-11"
         >
           <div
             class="flex min-w-0 flex-1 items-center gap-2"
@@ -468,7 +471,7 @@ exports[`BrowserPanel states > closed, for the owner > markup 1`] = `
           </div>
         </header>
         <div
-          class="relative min-h-0 flex-1 overflow-hidden rounded-b-[inherit]"
+          class="relative min-h-0 overflow-hidden rounded-b-[inherit] flex-1"
           data-testid="browser-viewport"
         >
           <div
@@ -550,6 +553,7 @@ exports[`BrowserPanel states > connecting > markup 1`] = `
   <div>
     <div
       class="flex flex-col fixed inset-0 z-40 bg-background xl:static xl:z-auto xl:h-full xl:w-[min(var(--browser-panel-width),calc(100vw-42rem))] xl:shrink-0 xl:bg-transparent xl:p-2 xl:pl-0"
+      data-layout="docked"
       data-testid="browser-panel"
       style="--browser-panel-width: 360px;"
     >
@@ -566,7 +570,7 @@ exports[`BrowserPanel states > connecting > markup 1`] = `
         data-slot="card"
       >
         <header
-          class="@container flex h-11 shrink-0 items-center gap-2 border-b pr-1.5 pl-2"
+          class="@container flex shrink-0 items-center gap-2 border-b pr-1.5 pl-2 h-11"
         >
           <div
             class="flex min-w-0 flex-1 items-center gap-2"
@@ -695,7 +699,7 @@ exports[`BrowserPanel states > connecting > markup 1`] = `
           </div>
         </header>
         <div
-          class="relative min-h-0 flex-1 overflow-hidden rounded-b-[inherit]"
+          class="relative min-h-0 overflow-hidden rounded-b-[inherit] flex-1"
           data-testid="browser-viewport"
         >
           <div
@@ -755,6 +759,7 @@ exports[`BrowserPanel states > failed to open, for a guest > markup 1`] = `
   <div>
     <div
       class="flex flex-col fixed inset-0 z-40 bg-background xl:static xl:z-auto xl:h-full xl:w-[min(var(--browser-panel-width),calc(100vw-42rem))] xl:shrink-0 xl:bg-transparent xl:p-2 xl:pl-0"
+      data-layout="docked"
       data-testid="browser-panel"
       style="--browser-panel-width: 360px;"
     >
@@ -771,7 +776,7 @@ exports[`BrowserPanel states > failed to open, for a guest > markup 1`] = `
         data-slot="card"
       >
         <header
-          class="@container flex h-11 shrink-0 items-center gap-2 border-b pr-1.5 pl-2"
+          class="@container flex shrink-0 items-center gap-2 border-b pr-1.5 pl-2 h-11"
         >
           <div
             class="flex min-w-0 flex-1 items-center gap-2"
@@ -829,7 +834,7 @@ exports[`BrowserPanel states > failed to open, for a guest > markup 1`] = `
           </div>
         </header>
         <div
-          class="relative min-h-0 flex-1 overflow-hidden rounded-b-[inherit]"
+          class="relative min-h-0 overflow-hidden rounded-b-[inherit] flex-1"
           data-testid="browser-viewport"
         >
           <div
@@ -898,6 +903,7 @@ exports[`BrowserPanel states > failed to open, for the owner > markup 1`] = `
   <div>
     <div
       class="flex flex-col fixed inset-0 z-40 bg-background xl:static xl:z-auto xl:h-full xl:w-[min(var(--browser-panel-width),calc(100vw-42rem))] xl:shrink-0 xl:bg-transparent xl:p-2 xl:pl-0"
+      data-layout="docked"
       data-testid="browser-panel"
       style="--browser-panel-width: 360px;"
     >
@@ -914,7 +920,7 @@ exports[`BrowserPanel states > failed to open, for the owner > markup 1`] = `
         data-slot="card"
       >
         <header
-          class="@container flex h-11 shrink-0 items-center gap-2 border-b pr-1.5 pl-2"
+          class="@container flex shrink-0 items-center gap-2 border-b pr-1.5 pl-2 h-11"
         >
           <div
             class="flex min-w-0 flex-1 items-center gap-2"
@@ -1020,7 +1026,7 @@ exports[`BrowserPanel states > failed to open, for the owner > markup 1`] = `
           </div>
         </header>
         <div
-          class="relative min-h-0 flex-1 overflow-hidden rounded-b-[inherit]"
+          class="relative min-h-0 overflow-hidden rounded-b-[inherit] flex-1"
           data-testid="browser-viewport"
         >
           <div
@@ -1108,6 +1114,7 @@ exports[`BrowserPanel states > first-run setup > markup 1`] = `
   <div>
     <div
       class="flex flex-col fixed inset-0 z-40 bg-background xl:static xl:z-auto xl:h-full xl:w-[min(var(--browser-panel-width),calc(100vw-42rem))] xl:shrink-0 xl:bg-transparent xl:p-2 xl:pl-0"
+      data-layout="docked"
       data-testid="browser-panel"
       style="--browser-panel-width: 360px;"
     >
@@ -1124,7 +1131,7 @@ exports[`BrowserPanel states > first-run setup > markup 1`] = `
         data-slot="card"
       >
         <header
-          class="@container flex h-11 shrink-0 items-center gap-2 border-b pr-1.5 pl-2"
+          class="@container flex shrink-0 items-center gap-2 border-b pr-1.5 pl-2 h-11"
         >
           <div
             class="flex min-w-0 flex-1 items-center gap-2"
@@ -1230,7 +1237,7 @@ exports[`BrowserPanel states > first-run setup > markup 1`] = `
           </div>
         </header>
         <div
-          class="relative min-h-0 flex-1 overflow-hidden rounded-b-[inherit]"
+          class="relative min-h-0 overflow-hidden rounded-b-[inherit] flex-1"
           data-testid="browser-viewport"
         >
           <div
@@ -1317,6 +1324,7 @@ exports[`BrowserPanel states > headless > markup 1`] = `
   <div>
     <div
       class="flex flex-col fixed inset-0 z-40 bg-background xl:static xl:z-auto xl:h-full xl:w-[min(var(--browser-panel-width),calc(100vw-42rem))] xl:shrink-0 xl:bg-transparent xl:p-2 xl:pl-0"
+      data-layout="docked"
       data-testid="browser-panel"
       style="--browser-panel-width: 360px;"
     >
@@ -1333,7 +1341,7 @@ exports[`BrowserPanel states > headless > markup 1`] = `
         data-slot="card"
       >
         <header
-          class="@container flex h-11 shrink-0 items-center gap-2 border-b pr-1.5 pl-2"
+          class="@container flex shrink-0 items-center gap-2 border-b pr-1.5 pl-2 h-11"
         >
           <div
             class="flex min-w-0 flex-1 items-center gap-2"
@@ -1445,7 +1453,7 @@ exports[`BrowserPanel states > headless > markup 1`] = `
           </div>
         </header>
         <div
-          class="relative min-h-0 flex-1 overflow-hidden rounded-b-[inherit]"
+          class="relative min-h-0 overflow-hidden rounded-b-[inherit] flex-1"
           data-testid="browser-viewport"
         >
           <div
@@ -1532,6 +1540,7 @@ exports[`BrowserPanel states > live, a bot with its own browser > markup 1`] = `
   <div>
     <div
       class="flex flex-col fixed inset-0 z-40 bg-background xl:static xl:z-auto xl:h-full xl:w-[min(var(--browser-panel-width),calc(100vw-42rem))] xl:shrink-0 xl:bg-transparent xl:p-2 xl:pl-0"
+      data-layout="docked"
       data-testid="browser-panel"
       style="--browser-panel-width: 360px;"
     >
@@ -1548,7 +1557,7 @@ exports[`BrowserPanel states > live, a bot with its own browser > markup 1`] = `
         data-slot="card"
       >
         <header
-          class="@container flex h-11 shrink-0 items-center gap-2 border-b pr-1.5 pl-2"
+          class="@container flex shrink-0 items-center gap-2 border-b pr-1.5 pl-2 h-11"
         >
           <div
             class="flex min-w-0 flex-1 items-center gap-2"
@@ -1678,7 +1687,7 @@ exports[`BrowserPanel states > live, a bot with its own browser > markup 1`] = `
           </div>
         </header>
         <div
-          class="relative min-h-0 flex-1 overflow-hidden rounded-b-[inherit]"
+          class="relative min-h-0 overflow-hidden rounded-b-[inherit] flex-1"
           data-testid="browser-viewport"
         >
           <div
@@ -1748,6 +1757,7 @@ exports[`BrowserPanel states > live, for a guest > markup 1`] = `
   <div>
     <div
       class="flex flex-col fixed inset-0 z-40 bg-background xl:static xl:z-auto xl:h-full xl:w-[min(var(--browser-panel-width),calc(100vw-42rem))] xl:shrink-0 xl:bg-transparent xl:p-2 xl:pl-0"
+      data-layout="docked"
       data-testid="browser-panel"
       style="--browser-panel-width: 360px;"
     >
@@ -1764,7 +1774,7 @@ exports[`BrowserPanel states > live, for a guest > markup 1`] = `
         data-slot="card"
       >
         <header
-          class="@container flex h-11 shrink-0 items-center gap-2 border-b pr-1.5 pl-2"
+          class="@container flex shrink-0 items-center gap-2 border-b pr-1.5 pl-2 h-11"
         >
           <div
             class="flex min-w-0 flex-1 items-center gap-2"
@@ -1846,7 +1856,7 @@ exports[`BrowserPanel states > live, for a guest > markup 1`] = `
           </div>
         </header>
         <div
-          class="relative min-h-0 flex-1 overflow-hidden rounded-b-[inherit]"
+          class="relative min-h-0 overflow-hidden rounded-b-[inherit] flex-1"
           data-testid="browser-viewport"
         >
           <div
@@ -1883,6 +1893,7 @@ exports[`BrowserPanel states > live, the bot driving > markup 1`] = `
   <div>
     <div
       class="flex flex-col fixed inset-0 z-40 bg-background xl:static xl:z-auto xl:h-full xl:w-[min(var(--browser-panel-width),calc(100vw-42rem))] xl:shrink-0 xl:bg-transparent xl:p-2 xl:pl-0"
+      data-layout="docked"
       data-testid="browser-panel"
       style="--browser-panel-width: 360px;"
     >
@@ -1899,7 +1910,7 @@ exports[`BrowserPanel states > live, the bot driving > markup 1`] = `
         data-slot="card"
       >
         <header
-          class="@container flex h-11 shrink-0 items-center gap-2 border-b pr-1.5 pl-2"
+          class="@container flex shrink-0 items-center gap-2 border-b pr-1.5 pl-2 h-11"
         >
           <div
             class="flex min-w-0 flex-1 items-center gap-2"
@@ -2029,7 +2040,7 @@ exports[`BrowserPanel states > live, the bot driving > markup 1`] = `
           </div>
         </header>
         <div
-          class="relative min-h-0 flex-1 overflow-hidden rounded-b-[inherit]"
+          class="relative min-h-0 overflow-hidden rounded-b-[inherit] flex-1"
           data-testid="browser-viewport"
         >
           <div
@@ -2099,6 +2110,7 @@ exports[`BrowserPanel states > live, the owner driving > markup 1`] = `
   <div>
     <div
       class="flex flex-col fixed inset-0 z-40 bg-background xl:static xl:z-auto xl:h-full xl:w-[min(var(--browser-panel-width),calc(100vw-42rem))] xl:shrink-0 xl:bg-transparent xl:p-2 xl:pl-0"
+      data-layout="docked"
       data-testid="browser-panel"
       style="--browser-panel-width: 360px;"
     >
@@ -2115,7 +2127,7 @@ exports[`BrowserPanel states > live, the owner driving > markup 1`] = `
         data-slot="card"
       >
         <header
-          class="@container flex h-11 shrink-0 items-center gap-2 border-b pr-1.5 pl-2"
+          class="@container flex shrink-0 items-center gap-2 border-b pr-1.5 pl-2 h-11"
         >
           <div
             class="flex min-w-0 flex-1 items-center gap-2"
@@ -2294,7 +2306,7 @@ exports[`BrowserPanel states > live, the owner driving > markup 1`] = `
           </div>
         </header>
         <div
-          class="relative min-h-0 flex-1 overflow-hidden rounded-b-[inherit]"
+          class="relative min-h-0 overflow-hidden rounded-b-[inherit] flex-1"
           data-testid="browser-viewport"
         >
           <div
@@ -2346,6 +2358,7 @@ exports[`BrowserPanel states > starting > markup 1`] = `
   <div>
     <div
       class="flex flex-col fixed inset-0 z-40 bg-background xl:static xl:z-auto xl:h-full xl:w-[min(var(--browser-panel-width),calc(100vw-42rem))] xl:shrink-0 xl:bg-transparent xl:p-2 xl:pl-0"
+      data-layout="docked"
       data-testid="browser-panel"
       style="--browser-panel-width: 360px;"
     >
@@ -2362,7 +2375,7 @@ exports[`BrowserPanel states > starting > markup 1`] = `
         data-slot="card"
       >
         <header
-          class="@container flex h-11 shrink-0 items-center gap-2 border-b pr-1.5 pl-2"
+          class="@container flex shrink-0 items-center gap-2 border-b pr-1.5 pl-2 h-11"
         >
           <div
             class="flex min-w-0 flex-1 items-center gap-2"
@@ -2468,7 +2481,7 @@ exports[`BrowserPanel states > starting > markup 1`] = `
           </div>
         </header>
         <div
-          class="relative min-h-0 flex-1 overflow-hidden rounded-b-[inherit]"
+          class="relative min-h-0 overflow-hidden rounded-b-[inherit] flex-1"
           data-testid="browser-viewport"
         >
           <div
@@ -2555,6 +2568,7 @@ exports[`BrowserPanel states > with the live view's tabs in place of the title >
   <div>
     <div
       class="flex flex-col fixed inset-0 z-40 bg-background xl:static xl:z-auto xl:h-full xl:w-[min(var(--browser-panel-width),calc(100vw-42rem))] xl:shrink-0 xl:bg-transparent xl:p-2 xl:pl-0"
+      data-layout="docked"
       data-testid="browser-panel"
       style="--browser-panel-width: 360px;"
     >
@@ -2571,7 +2585,7 @@ exports[`BrowserPanel states > with the live view's tabs in place of the title >
         data-slot="card"
       >
         <header
-          class="@container flex h-11 shrink-0 items-center gap-2 border-b pr-1.5 pl-2"
+          class="@container flex shrink-0 items-center gap-2 border-b pr-1.5 pl-2 h-11"
         >
           <div
             class="flex min-w-0 flex-1 items-center gap-2"
@@ -2683,7 +2697,7 @@ exports[`BrowserPanel states > with the live view's tabs in place of the title >
           </div>
         </header>
         <div
-          class="relative min-h-0 flex-1 overflow-hidden rounded-b-[inherit]"
+          class="relative min-h-0 overflow-hidden rounded-b-[inherit] flex-1"
           data-testid="browser-viewport"
         >
           <div
@@ -2766,6 +2780,7 @@ exports[`ComputerPanel states > before the first status > markup 1`] = `
   <div>
     <div
       class="flex flex-col fixed inset-0 z-40 bg-background xl:static xl:z-auto xl:h-full xl:w-[min(var(--computer-panel-width),calc(100vw-42rem))] xl:shrink-0 xl:bg-transparent xl:p-2 xl:pl-0"
+      data-layout="docked"
       data-testid="computer-panel"
       style="--computer-panel-width: 360px;"
     >
@@ -2781,7 +2796,7 @@ exports[`ComputerPanel states > before the first status > markup 1`] = `
         data-slot="card"
       >
         <header
-          class="@container flex h-11 shrink-0 items-center gap-2 border-b pr-1.5 pl-2"
+          class="@container flex shrink-0 items-center gap-2 border-b pr-1.5 pl-2 h-11"
         >
           <div
             class="flex min-w-0 flex-1 items-center gap-2"
@@ -2839,7 +2854,7 @@ exports[`ComputerPanel states > before the first status > markup 1`] = `
           </div>
         </header>
         <div
-          class="relative min-h-0 flex-1 overflow-hidden rounded-b-[inherit]"
+          class="relative min-h-0 overflow-hidden rounded-b-[inherit] flex-1"
           data-testid="computer-viewport"
         />
       </div>
@@ -2867,6 +2882,7 @@ exports[`ComputerPanel states > connecting > markup 1`] = `
   <div>
     <div
       class="flex flex-col fixed inset-0 z-40 bg-background xl:static xl:z-auto xl:h-full xl:w-[min(var(--computer-panel-width),calc(100vw-42rem))] xl:shrink-0 xl:bg-transparent xl:p-2 xl:pl-0"
+      data-layout="docked"
       data-testid="computer-panel"
       style="--computer-panel-width: 360px;"
     >
@@ -2882,7 +2898,7 @@ exports[`ComputerPanel states > connecting > markup 1`] = `
         data-slot="card"
       >
         <header
-          class="@container flex h-11 shrink-0 items-center gap-2 border-b pr-1.5 pl-2"
+          class="@container flex shrink-0 items-center gap-2 border-b pr-1.5 pl-2 h-11"
         >
           <div
             class="flex min-w-0 flex-1 items-center gap-2"
@@ -3011,7 +3027,7 @@ exports[`ComputerPanel states > connecting > markup 1`] = `
           </div>
         </header>
         <div
-          class="relative min-h-0 flex-1 overflow-hidden rounded-b-[inherit]"
+          class="relative min-h-0 overflow-hidden rounded-b-[inherit] flex-1"
           data-testid="computer-viewport"
         >
           <div
@@ -3071,6 +3087,7 @@ exports[`ComputerPanel states > failed to open, for a guest > markup 1`] = `
   <div>
     <div
       class="flex flex-col fixed inset-0 z-40 bg-background xl:static xl:z-auto xl:h-full xl:w-[min(var(--computer-panel-width),calc(100vw-42rem))] xl:shrink-0 xl:bg-transparent xl:p-2 xl:pl-0"
+      data-layout="docked"
       data-testid="computer-panel"
       style="--computer-panel-width: 360px;"
     >
@@ -3086,7 +3103,7 @@ exports[`ComputerPanel states > failed to open, for a guest > markup 1`] = `
         data-slot="card"
       >
         <header
-          class="@container flex h-11 shrink-0 items-center gap-2 border-b pr-1.5 pl-2"
+          class="@container flex shrink-0 items-center gap-2 border-b pr-1.5 pl-2 h-11"
         >
           <div
             class="flex min-w-0 flex-1 items-center gap-2"
@@ -3169,7 +3186,7 @@ exports[`ComputerPanel states > failed to open, for a guest > markup 1`] = `
           </div>
         </header>
         <div
-          class="relative min-h-0 flex-1 overflow-hidden rounded-b-[inherit]"
+          class="relative min-h-0 overflow-hidden rounded-b-[inherit] flex-1"
           data-testid="computer-viewport"
         >
           <div
@@ -3240,6 +3257,7 @@ exports[`ComputerPanel states > failed to open, for the owner > markup 1`] = `
   <div>
     <div
       class="flex flex-col fixed inset-0 z-40 bg-background xl:static xl:z-auto xl:h-full xl:w-[min(var(--computer-panel-width),calc(100vw-42rem))] xl:shrink-0 xl:bg-transparent xl:p-2 xl:pl-0"
+      data-layout="docked"
       data-testid="computer-panel"
       style="--computer-panel-width: 360px;"
     >
@@ -3255,7 +3273,7 @@ exports[`ComputerPanel states > failed to open, for the owner > markup 1`] = `
         data-slot="card"
       >
         <header
-          class="@container flex h-11 shrink-0 items-center gap-2 border-b pr-1.5 pl-2"
+          class="@container flex shrink-0 items-center gap-2 border-b pr-1.5 pl-2 h-11"
         >
           <div
             class="flex min-w-0 flex-1 items-center gap-2"
@@ -3361,7 +3379,7 @@ exports[`ComputerPanel states > failed to open, for the owner > markup 1`] = `
           </div>
         </header>
         <div
-          class="relative min-h-0 flex-1 overflow-hidden rounded-b-[inherit]"
+          class="relative min-h-0 overflow-hidden rounded-b-[inherit] flex-1"
           data-testid="computer-viewport"
         >
           <div
@@ -3449,6 +3467,7 @@ exports[`ComputerPanel states > first-run setup > markup 1`] = `
   <div>
     <div
       class="flex flex-col fixed inset-0 z-40 bg-background xl:static xl:z-auto xl:h-full xl:w-[min(var(--computer-panel-width),calc(100vw-42rem))] xl:shrink-0 xl:bg-transparent xl:p-2 xl:pl-0"
+      data-layout="docked"
       data-testid="computer-panel"
       style="--computer-panel-width: 360px;"
     >
@@ -3464,7 +3483,7 @@ exports[`ComputerPanel states > first-run setup > markup 1`] = `
         data-slot="card"
       >
         <header
-          class="@container flex h-11 shrink-0 items-center gap-2 border-b pr-1.5 pl-2"
+          class="@container flex shrink-0 items-center gap-2 border-b pr-1.5 pl-2 h-11"
         >
           <div
             class="flex min-w-0 flex-1 items-center gap-2"
@@ -3570,7 +3589,7 @@ exports[`ComputerPanel states > first-run setup > markup 1`] = `
           </div>
         </header>
         <div
-          class="relative min-h-0 flex-1 overflow-hidden rounded-b-[inherit]"
+          class="relative min-h-0 overflow-hidden rounded-b-[inherit] flex-1"
           data-testid="computer-viewport"
         >
           <div
@@ -3657,6 +3676,7 @@ exports[`ComputerPanel states > live, a bot with its own desktop > markup 1`] = 
   <div>
     <div
       class="flex flex-col fixed inset-0 z-40 bg-background xl:static xl:z-auto xl:h-full xl:w-[min(var(--computer-panel-width),calc(100vw-42rem))] xl:shrink-0 xl:bg-transparent xl:p-2 xl:pl-0"
+      data-layout="docked"
       data-testid="computer-panel"
       style="--computer-panel-width: 360px;"
     >
@@ -3672,7 +3692,7 @@ exports[`ComputerPanel states > live, a bot with its own desktop > markup 1`] = 
         data-slot="card"
       >
         <header
-          class="@container flex h-11 shrink-0 items-center gap-2 border-b pr-1.5 pl-2"
+          class="@container flex shrink-0 items-center gap-2 border-b pr-1.5 pl-2 h-11"
         >
           <div
             class="flex min-w-0 flex-1 items-center gap-2"
@@ -3802,7 +3822,7 @@ exports[`ComputerPanel states > live, a bot with its own desktop > markup 1`] = 
           </div>
         </header>
         <div
-          class="relative min-h-0 flex-1 overflow-hidden rounded-b-[inherit]"
+          class="relative min-h-0 overflow-hidden rounded-b-[inherit] flex-1"
           data-testid="computer-viewport"
         >
           <div
@@ -3872,6 +3892,7 @@ exports[`ComputerPanel states > live, for a guest > markup 1`] = `
   <div>
     <div
       class="flex flex-col fixed inset-0 z-40 bg-background xl:static xl:z-auto xl:h-full xl:w-[min(var(--computer-panel-width),calc(100vw-42rem))] xl:shrink-0 xl:bg-transparent xl:p-2 xl:pl-0"
+      data-layout="docked"
       data-testid="computer-panel"
       style="--computer-panel-width: 360px;"
     >
@@ -3887,7 +3908,7 @@ exports[`ComputerPanel states > live, for a guest > markup 1`] = `
         data-slot="card"
       >
         <header
-          class="@container flex h-11 shrink-0 items-center gap-2 border-b pr-1.5 pl-2"
+          class="@container flex shrink-0 items-center gap-2 border-b pr-1.5 pl-2 h-11"
         >
           <div
             class="flex min-w-0 flex-1 items-center gap-2"
@@ -4030,7 +4051,7 @@ exports[`ComputerPanel states > live, for a guest > markup 1`] = `
           </span>
         </div>
         <div
-          class="relative min-h-0 flex-1 overflow-hidden rounded-b-[inherit]"
+          class="relative min-h-0 overflow-hidden rounded-b-[inherit] flex-1"
           data-testid="computer-viewport"
         >
           <div
@@ -4080,6 +4101,7 @@ exports[`ComputerPanel states > live, the bot driving > markup 1`] = `
   <div>
     <div
       class="flex flex-col fixed inset-0 z-40 bg-background xl:static xl:z-auto xl:h-full xl:w-[min(var(--computer-panel-width),calc(100vw-42rem))] xl:shrink-0 xl:bg-transparent xl:p-2 xl:pl-0"
+      data-layout="docked"
       data-testid="computer-panel"
       style="--computer-panel-width: 360px;"
     >
@@ -4095,7 +4117,7 @@ exports[`ComputerPanel states > live, the bot driving > markup 1`] = `
         data-slot="card"
       >
         <header
-          class="@container flex h-11 shrink-0 items-center gap-2 border-b pr-1.5 pl-2"
+          class="@container flex shrink-0 items-center gap-2 border-b pr-1.5 pl-2 h-11"
         >
           <div
             class="flex min-w-0 flex-1 items-center gap-2"
@@ -4225,7 +4247,7 @@ exports[`ComputerPanel states > live, the bot driving > markup 1`] = `
           </div>
         </header>
         <div
-          class="relative min-h-0 flex-1 overflow-hidden rounded-b-[inherit]"
+          class="relative min-h-0 overflow-hidden rounded-b-[inherit] flex-1"
           data-testid="computer-viewport"
         >
           <div
@@ -4295,6 +4317,7 @@ exports[`ComputerPanel states > live, the owner driving > markup 1`] = `
   <div>
     <div
       class="flex flex-col fixed inset-0 z-40 bg-background xl:static xl:z-auto xl:h-full xl:w-[min(var(--computer-panel-width),calc(100vw-42rem))] xl:shrink-0 xl:bg-transparent xl:p-2 xl:pl-0"
+      data-layout="docked"
       data-testid="computer-panel"
       style="--computer-panel-width: 360px;"
     >
@@ -4310,7 +4333,7 @@ exports[`ComputerPanel states > live, the owner driving > markup 1`] = `
         data-slot="card"
       >
         <header
-          class="@container flex h-11 shrink-0 items-center gap-2 border-b pr-1.5 pl-2"
+          class="@container flex shrink-0 items-center gap-2 border-b pr-1.5 pl-2 h-11"
         >
           <div
             class="flex min-w-0 flex-1 items-center gap-2"
@@ -4489,7 +4512,7 @@ exports[`ComputerPanel states > live, the owner driving > markup 1`] = `
           </div>
         </header>
         <div
-          class="relative min-h-0 flex-1 overflow-hidden rounded-b-[inherit]"
+          class="relative min-h-0 overflow-hidden rounded-b-[inherit] flex-1"
           data-testid="computer-viewport"
         >
           <div
@@ -4541,6 +4564,7 @@ exports[`ComputerPanel states > live, the owner driving at the bot's request > m
   <div>
     <div
       class="flex flex-col fixed inset-0 z-40 bg-background xl:static xl:z-auto xl:h-full xl:w-[min(var(--computer-panel-width),calc(100vw-42rem))] xl:shrink-0 xl:bg-transparent xl:p-2 xl:pl-0"
+      data-layout="docked"
       data-testid="computer-panel"
       style="--computer-panel-width: 360px;"
     >
@@ -4556,7 +4580,7 @@ exports[`ComputerPanel states > live, the owner driving at the bot's request > m
         data-slot="card"
       >
         <header
-          class="@container flex h-11 shrink-0 items-center gap-2 border-b pr-1.5 pl-2"
+          class="@container flex shrink-0 items-center gap-2 border-b pr-1.5 pl-2 h-11"
         >
           <div
             class="flex min-w-0 flex-1 items-center gap-2"
@@ -4768,7 +4792,7 @@ exports[`ComputerPanel states > live, the owner driving at the bot's request > m
           </span>
         </div>
         <div
-          class="relative min-h-0 flex-1 overflow-hidden rounded-b-[inherit]"
+          class="relative min-h-0 overflow-hidden rounded-b-[inherit] flex-1"
           data-testid="computer-viewport"
         >
           <div
@@ -4825,6 +4849,7 @@ exports[`ComputerPanel states > not set up > markup 1`] = `
   <div>
     <div
       class="flex flex-col fixed inset-0 z-40 bg-background xl:static xl:z-auto xl:h-full xl:w-[min(var(--computer-panel-width),calc(100vw-42rem))] xl:shrink-0 xl:bg-transparent xl:p-2 xl:pl-0"
+      data-layout="docked"
       data-testid="computer-panel"
       style="--computer-panel-width: 360px;"
     >
@@ -4840,7 +4865,7 @@ exports[`ComputerPanel states > not set up > markup 1`] = `
         data-slot="card"
       >
         <header
-          class="@container flex h-11 shrink-0 items-center gap-2 border-b pr-1.5 pl-2"
+          class="@container flex shrink-0 items-center gap-2 border-b pr-1.5 pl-2 h-11"
         >
           <div
             class="flex min-w-0 flex-1 items-center gap-2"
@@ -4898,7 +4923,7 @@ exports[`ComputerPanel states > not set up > markup 1`] = `
           </div>
         </header>
         <div
-          class="relative min-h-0 flex-1 overflow-hidden rounded-b-[inherit]"
+          class="relative min-h-0 overflow-hidden rounded-b-[inherit] flex-1"
           data-testid="computer-viewport"
         >
           <div
@@ -4967,6 +4992,7 @@ exports[`ComputerPanel states > not set up, without a hint > markup 1`] = `
   <div>
     <div
       class="flex flex-col fixed inset-0 z-40 bg-background xl:static xl:z-auto xl:h-full xl:w-[min(var(--computer-panel-width),calc(100vw-42rem))] xl:shrink-0 xl:bg-transparent xl:p-2 xl:pl-0"
+      data-layout="docked"
       data-testid="computer-panel"
       style="--computer-panel-width: 360px;"
     >
@@ -4982,7 +5008,7 @@ exports[`ComputerPanel states > not set up, without a hint > markup 1`] = `
         data-slot="card"
       >
         <header
-          class="@container flex h-11 shrink-0 items-center gap-2 border-b pr-1.5 pl-2"
+          class="@container flex shrink-0 items-center gap-2 border-b pr-1.5 pl-2 h-11"
         >
           <div
             class="flex min-w-0 flex-1 items-center gap-2"
@@ -5040,7 +5066,7 @@ exports[`ComputerPanel states > not set up, without a hint > markup 1`] = `
           </div>
         </header>
         <div
-          class="relative min-h-0 flex-1 overflow-hidden rounded-b-[inherit]"
+          class="relative min-h-0 overflow-hidden rounded-b-[inherit] flex-1"
           data-testid="computer-viewport"
         >
           <div
@@ -5109,6 +5135,7 @@ exports[`ComputerPanel states > off, for a guest > markup 1`] = `
   <div>
     <div
       class="flex flex-col fixed inset-0 z-40 bg-background xl:static xl:z-auto xl:h-full xl:w-[min(var(--computer-panel-width),calc(100vw-42rem))] xl:shrink-0 xl:bg-transparent xl:p-2 xl:pl-0"
+      data-layout="docked"
       data-testid="computer-panel"
       style="--computer-panel-width: 360px;"
     >
@@ -5124,7 +5151,7 @@ exports[`ComputerPanel states > off, for a guest > markup 1`] = `
         data-slot="card"
       >
         <header
-          class="@container flex h-11 shrink-0 items-center gap-2 border-b pr-1.5 pl-2"
+          class="@container flex shrink-0 items-center gap-2 border-b pr-1.5 pl-2 h-11"
         >
           <div
             class="flex min-w-0 flex-1 items-center gap-2"
@@ -5207,7 +5234,7 @@ exports[`ComputerPanel states > off, for a guest > markup 1`] = `
           </div>
         </header>
         <div
-          class="relative min-h-0 flex-1 overflow-hidden rounded-b-[inherit]"
+          class="relative min-h-0 overflow-hidden rounded-b-[inherit] flex-1"
           data-testid="computer-viewport"
         >
           <div
@@ -5272,6 +5299,7 @@ exports[`ComputerPanel states > off, for the owner > markup 1`] = `
   <div>
     <div
       class="flex flex-col fixed inset-0 z-40 bg-background xl:static xl:z-auto xl:h-full xl:w-[min(var(--computer-panel-width),calc(100vw-42rem))] xl:shrink-0 xl:bg-transparent xl:p-2 xl:pl-0"
+      data-layout="docked"
       data-testid="computer-panel"
       style="--computer-panel-width: 360px;"
     >
@@ -5287,7 +5315,7 @@ exports[`ComputerPanel states > off, for the owner > markup 1`] = `
         data-slot="card"
       >
         <header
-          class="@container flex h-11 shrink-0 items-center gap-2 border-b pr-1.5 pl-2"
+          class="@container flex shrink-0 items-center gap-2 border-b pr-1.5 pl-2 h-11"
         >
           <div
             class="flex min-w-0 flex-1 items-center gap-2"
@@ -5393,7 +5421,7 @@ exports[`ComputerPanel states > off, for the owner > markup 1`] = `
           </div>
         </header>
         <div
-          class="relative min-h-0 flex-1 overflow-hidden rounded-b-[inherit]"
+          class="relative min-h-0 overflow-hidden rounded-b-[inherit] flex-1"
           data-testid="computer-viewport"
         >
           <div
@@ -5475,6 +5503,7 @@ exports[`ComputerPanel states > starting > markup 1`] = `
   <div>
     <div
       class="flex flex-col fixed inset-0 z-40 bg-background xl:static xl:z-auto xl:h-full xl:w-[min(var(--computer-panel-width),calc(100vw-42rem))] xl:shrink-0 xl:bg-transparent xl:p-2 xl:pl-0"
+      data-layout="docked"
       data-testid="computer-panel"
       style="--computer-panel-width: 360px;"
     >
@@ -5490,7 +5519,7 @@ exports[`ComputerPanel states > starting > markup 1`] = `
         data-slot="card"
       >
         <header
-          class="@container flex h-11 shrink-0 items-center gap-2 border-b pr-1.5 pl-2"
+          class="@container flex shrink-0 items-center gap-2 border-b pr-1.5 pl-2 h-11"
         >
           <div
             class="flex min-w-0 flex-1 items-center gap-2"
@@ -5596,7 +5625,7 @@ exports[`ComputerPanel states > starting > markup 1`] = `
           </div>
         </header>
         <div
-          class="relative min-h-0 flex-1 overflow-hidden rounded-b-[inherit]"
+          class="relative min-h-0 overflow-hidden rounded-b-[inherit] flex-1"
           data-testid="computer-viewport"
         >
           <div
@@ -5683,6 +5712,7 @@ exports[`ComputerPanel states > with the live view's tabs in place of the title 
   <div>
     <div
       class="flex flex-col fixed inset-0 z-40 bg-background xl:static xl:z-auto xl:h-full xl:w-[min(var(--computer-panel-width),calc(100vw-42rem))] xl:shrink-0 xl:bg-transparent xl:p-2 xl:pl-0"
+      data-layout="docked"
       data-testid="computer-panel"
       style="--computer-panel-width: 360px;"
     >
@@ -5698,7 +5728,7 @@ exports[`ComputerPanel states > with the live view's tabs in place of the title 
         data-slot="card"
       >
         <header
-          class="@container flex h-11 shrink-0 items-center gap-2 border-b pr-1.5 pl-2"
+          class="@container flex shrink-0 items-center gap-2 border-b pr-1.5 pl-2 h-11"
         >
           <div
             class="flex min-w-0 flex-1 items-center gap-2"
@@ -5810,7 +5840,7 @@ exports[`ComputerPanel states > with the live view's tabs in place of the title 
           </div>
         </header>
         <div
-          class="relative min-h-0 flex-1 overflow-hidden rounded-b-[inherit]"
+          class="relative min-h-0 overflow-hidden rounded-b-[inherit] flex-1"
           data-testid="computer-viewport"
         >
           <div

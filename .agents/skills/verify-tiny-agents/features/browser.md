@@ -1,6 +1,6 @@
 # Browser
 
-The bots browse in a real Chrome on the sandbox, and the owner sees it live. `/browser` shows each browser (Shared, plus one per bot with its own profile) with a live view that is view-only until you click it (`Take control`), full screen and Reset in the view's own bar. In a chat, the Browser panel opens by itself the first time the bot uses the browser in that conversation; once the owner closes it, it stays closed for that conversation (later browsing only lights the header toggle). On a phone the panel covers the screen.
+The bots browse in a real Chrome on the sandbox, and the owner sees it live. `/browser` shows each browser (Shared, plus one per bot with its own profile) with a live view that is view-only until you click it (`Take control`), full screen and Reset in the view's own bar. In a chat, the Browser panel never opens by itself: browsing lights the header toggle, which opens it. The panel can shrink to a floating picture in picture (remembered). On a phone the docked panel covers the screen.
 
 ## Sub-features
 
@@ -10,10 +10,10 @@ The bots browse in a real Chrome on the sandbox, and the owner sees it live. `/b
 - `browser-page-control` a click on the stream (`Take control`: `You're driving`, Paste shows, a green frame) / `Hand back`.
 - `browser-page-fullscreen` `Full screen` / `Exit full screen`.
 - `browser-page-reset` `Reset browser` → alertdialog `Reset the Shared browser?` naming the bots it signs out → `Reset`; toast `Browser reset; it starts fresh next time.`
-- `browser-panel-auto` `/browse N` in a chat opens the panel (`browser-panel`) live beside the chat.
+- `browser-panel-closed` `/browse N` in a chat leaves the panel (`browser-panel`) closed and lights `live-view-toggle`, which opens it live beside the chat.
 - `browser-panel-control` a click on the panel's stream takes control (the layer is `Take control`, `browser-takeover`), `Hand back` returns it (`browser-driver`), `Open in the Browser page` link.
-- `browser-panel-close-sticks` after `Close browser panel`, further `/browse` runs, and a reload, leave it closed; `live-view-toggle` reopens it; a New chat starts fresh.
-- `browser-panel-phone` at 390x844 the panel is a full-screen overlay.
+- `browser-pip` `Picture in picture` floats it small (`data-layout=pip`) over the chat; the toggle reopens it that way, also after a reload; `Expand live view` docks it.
+- `browser-panel-phone` at 390x844 the picture in picture floats over the chat; docked, the panel is a full-screen overlay.
 - Not driven: Paste (clipboard permission), the panel's Reset (same route as the page's), the drag-to-resize separator, typing secrets.
 
 ## How to get to it (user POV)
@@ -33,10 +33,10 @@ Preconditions:
 - **Open.** `Open browser` (register a cleanup that resets `shared` if still active). `browser-page-driver` shows (≤120 s cold); a WebSocket to `/api/v1/browser/shared/vnc` receives `RFB ` + >20 KB; the stream's `Take control` layer shows; `GET /api/v1/browser` has `active: true`; Chrome runs in the container (`pgrep`).
 - **Control.** `Take control` (exact, the stream) → `Hand back`, status `You're driving`, Paste enabled, API `driver: "human"`. `Hand back` → status `<bot> is driving`.
 - **Full screen.** `document.fullscreenElement` is `browser-region`; leave via `exitFullscreen()`.
-- **Panel, desktop (1280 wide).** `/chats/<botId>`, send `/browse 2`: `browser-panel` appears, streams over `/api/v1/bots/<id>/browser/vnc`; one `^Echo:` text when done; `browser-driver` = `<bot> is driving`. Click the stream (`Take control`) → `You're driving` (API agrees) → `Hand back`. Close; `/browse 1` → 2 echoes, panel still closed; `live-view-toggle` opens it with `Open in the Browser page`; close it again.
-- **Panel, phone (390x844).** `Start a new chat` → `New chat`; `/browse 1` opens the panel at the full viewport size. Close; `/browse 1`; reload: still closed (2 echoes); `live-view-toggle` opens it.
+- **Panel, desktop (1280 wide).** `/chats/<botId>`, send `/browse 2`: one `^Echo:` and no panel. Click `live-view-toggle`: `browser-panel` streams over `/api/v1/bots/<id>/browser/vnc`; `browser-driver` = `<bot> is driving`. Click the stream (`Take control`) → `You're driving` (API agrees) → `Hand back`. `Picture in picture` → `data-layout=pip`, at most 320 px wide, composer visible; `/browse 1` while it floats. Toggle off and on: still pip. `Expand live view` docks it (`Open in the Browser page`); back to pip.
+- **Panel, phone (390x844).** Close; `/browse 1` leaves it closed; reload; the toggle opens it as pip, Live, narrower than the phone, composer visible. `browser-pip-expand` makes it the full-viewport overlay.
 - **Reset.** `/browser` (1280 wide) → `Reset browser` → dialog names `Every bot on it is signed out (<bot>)` → `Reset`: toast, `Open browser` returns, API `active: false`, no Chrome left on the VM.
-- **Proof.** `ta-verify drive $S/journeys/browser.mjs` → `browser/page-live`, `page-you-drive`, `panel-desktop`, `panel-phone`, `panel-phone-reopened`, `page-reset`.
+- **Proof.** `ta-verify drive $S/journeys/browser.mjs` → `browser/page-live`, `page-you-drive`, `panel-closed-in-use`, `panel-desktop`, `pip-desktop`, `pip-phone`, `panel-phone`, `page-reset`.
 
 ## Gotchas
 

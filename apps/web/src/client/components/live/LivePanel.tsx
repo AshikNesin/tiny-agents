@@ -16,12 +16,19 @@
  * computer's screenshots). While the owner drives, a frame marks the stream
  * as theirs and "Hand back" returns it. When a bot asked for the takeover
  * itself, the panel says what it asked for.
+ *
+ * Picture in picture (`layout: "pip"`) is the same card shrunk to a small
+ * floating view over the chat, dragged by its header to any corner. It only
+ * watches: the remote browser keeps its size (the viewer scales it down), a
+ * click on the stream expands it back to the panel, and the header keeps
+ * just the status, Hand back while the owner drives, Expand and Close.
  */
-import type { CSSProperties, ReactNode } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 import { Card } from "@groot/ui";
 import { cn } from "@groot/ui/lib/utils";
 import type { Bot } from "../../../shared/api/bots";
-import { connectionOf, useLiveView, usePanelWidth } from "../../lib/live-view";
+import type { LiveLayout } from "../../lib/browser-panel";
+import { connectionOf, useLiveView, usePanelWidth, usePipPosition } from "../../lib/live-view";
 import { useIsGuest } from "../../store/people";
 import { VncView, type VncState } from "../browser/VncView";
 import { ConnectingOverlay, DrivingFrame, TakeControlLayer, TakeoverBanner } from "./live-parts";
@@ -29,7 +36,7 @@ import { LivePanelHeader } from "./LivePanelHeader";
 import { LivePanelOffStates } from "./LivePanelOffStates";
 import type { LivePanelSurface, LiveSurface, PageItem, PanelStatus } from "./surface";
 
-/** A guest's viewer never resizes the remote window. */
+/** A guest's viewer, and the picture in picture, never resize the remote window. */
 const keepSize = async () => undefined;
 
 /** What the panel shows for `status`: its mode, whether it is set up, the status chip's parts. */
@@ -68,13 +75,36 @@ export interface LivePanelProps {
   onClose: () => void;
   /** The live view's Browser / Computer switch, in place of the title, when the chat has both. */
   tabs?: ReactNode;
+  /** Docked beside the chat (the default), or a small floating picture in picture. */
+  layout?: LiveLayout;
+  /** Switches between the two; without it the panel offers no picture in picture. */
+  onLayout?: (layout: LiveLayout) => void;
 }
+
+/**
+ * The floating view takes the remote display's shape (16:10 until the first
+ * frame, and kept between 1:2 upright and 16:9 wide), at most 20rem wide and
+ * its stream at most 18rem tall, so an upright display makes it narrower
+ * rather than taller and the chat stays readable.
+ */
+function pipShape(display: { width: number; height: number } | null) {
+  const aspect = display
+    ? Math.min(16 / 9, Math.max(1 / 2, display.width / display.height))
+    : 16 / 10;
+  const width = `min(20rem, calc(100vw - 4rem), ${(18 * aspect).toFixed(2)}rem)`;
+  return { aspect, width };
+}
+
+/** The floating view, over the chat. */
+const PIP_SIZING = "fixed z-40 rounded-xl shadow-xl";
 
 export function LivePanel<S extends PanelStatus, L, I extends PageItem>({
   surface,
   bot,
   onClose,
   tabs,
+  layout = "docked",
+  onLayout,
 }: LivePanelProps & { surface: LiveSurface<S, L, I> }) {
   const { kind, panel } = surface;
   const guest = useIsGuest();
@@ -119,17 +149,36 @@ export function LivePanel<S extends PanelStatus, L, I extends PageItem>({
   // where both fit (xl, and never wider than the viewport leaves after the
   // sidebar and a 26rem chat); narrower screens get the panel over the chat,
   // closable, like phones (#89).
-  const sizing = fullscreen ? "fixed inset-0 z-40 w-full bg-background" : panel.width.docked;
-  const surfaceClass = fullscreen ? "rounded-none ring-0" : "max-xl:rounded-none max-xl:ring-0";
+  const pip = layout === "pip" && !fullscreen;
+  const [display, setDisplay] = useState<{ width: number; height: number } | null>(null);
+  const { offset, startDrag } = usePipPosition(panelRef);
+  const sizing = fullscreen
+    ? "fixed inset-0 z-40 w-full bg-background"
+    : pip
+      ? PIP_SIZING
+      : panel.width.docked;
+  const surfaceClass = fullscreen
+    ? "rounded-none ring-0"
+    : pip
+      ? ""
+      : "max-xl:rounded-none max-xl:ring-0";
+  // A window shrunk since the corner was dragged still shows the whole view.
+  const shape = pipShape(display);
+  const pipStyle: CSSProperties = {
+    width: shape.width,
+    right: `max(8px, min(${offset.right}px, calc(100vw - ${shape.width} - 8px)))`,
+    bottom: `max(8px, min(${offset.bottom}px, calc(100dvh - 21rem)))`,
+  };
 
   return (
     <div
       ref={panelRef}
       className={cn("relative flex flex-col", sizing)}
-      style={{ [panel.width.cssVar]: `${width}px` } as CSSProperties}
+      style={{ [panel.width.cssVar]: `${width}px`, ...(pip ? pipStyle : {}) } as CSSProperties}
       data-testid={`${kind}-panel`}
+      data-layout={pip ? "pip" : "docked"}
     >
-      {!fullscreen && (
+      {!fullscreen && !pip && (
         <div
           role="separator"
           aria-orientation="vertical"
@@ -157,6 +206,9 @@ export function LivePanel<S extends PanelStatus, L, I extends PageItem>({
           configured={configured}
           shared={shared}
           fullscreen={fullscreen}
+          pip={pip}
+          onDrag={startDrag}
+          onLayout={onLayout}
           onDriver={(driver) => void setDriver(driver)}
           onPaste={paste}
           onToggleFullscreen={toggleFullscreen}
@@ -164,7 +216,7 @@ export function LivePanel<S extends PanelStatus, L, I extends PageItem>({
           onClose={onClose}
         />
 
-        {streaming && humanDrives && takeover && panel.takeover && (
+        {streaming && humanDrives && takeover && panel.takeover && !pip && (
           <TakeoverBanner
             testId={`${kind}-takeover-reason`}
             asked={<>{bot.name} asked you:</>}
@@ -175,7 +227,11 @@ export function LivePanel<S extends PanelStatus, L, I extends PageItem>({
 
         {/* The card's bottom corners, so the driving frame follows them. */}
         <div
-          className="relative min-h-0 flex-1 overflow-hidden rounded-b-[inherit]"
+          className={cn(
+            "relative min-h-0 overflow-hidden rounded-b-[inherit]",
+            pip ? "shrink-0" : "flex-1",
+          )}
+          style={pip ? { aspectRatio: shape.aspect } : undefined}
           data-testid={`${kind}-viewport`}
         >
           {streaming && (
@@ -183,16 +239,29 @@ export function LivePanel<S extends PanelStatus, L, I extends PageItem>({
               ref={vncRef}
               botId={bot.id}
               kind={kind}
-              interactive={humanDrives && !guest}
+              interactive={humanDrives && !guest && !pip}
               // A guest watches at the remote window's size; only the owner fits it (S2).
-              resize={surface.fitsWindow && guest ? keepSize : undefined}
+              // The picture in picture only scales it, so the bot's pages keep their layout.
+              resize={surface.fitsWindow && (guest || pip) ? keepSize : undefined}
+              remoteResize={!pip}
+              onDisplaySize={setDisplay}
               onState={setVncState}
             />
           )}
           {streaming && vncState !== "live" && (
             <ConnectingOverlay vncState={vncState} connecting={panel.connecting} />
           )}
-          {live && !humanDrives && !guest && (
+          {pip && live && onLayout && (
+            <button
+              type="button"
+              onClick={() => onLayout("docked")}
+              aria-label="Expand live view"
+              title="Expand"
+              className="absolute inset-0 cursor-pointer outline-none hover:bg-foreground/5 focus-visible:bg-foreground/5"
+              data-testid={`${kind}-pip-expand-stream`}
+            />
+          )}
+          {!pip && live && !humanDrives && !guest && (
             <TakeControlLayer
               testId={`${kind}-takeover`}
               title={panel.takeTitle(bot.name)}

@@ -21,7 +21,6 @@ import { ChatPane } from "@/components/ChatPane";
 import { useBotsStore } from "@/store/bots";
 import { chatSessions } from "@/store/chats";
 import { usePeopleStore } from "@/store/people";
-import { resetBrowserDismissals } from "@/lib/browser-panel";
 import type { Bot } from "../../../apps/web/src/shared/api/bots";
 import type { CatalogModel } from "../../../apps/web/src/shared/api/models";
 import type { ChatMessage, QueuedMessage } from "@/lib/chat-types";
@@ -186,7 +185,6 @@ beforeEach(() => {
   api.reset.mockReset();
   usePeopleStore.setState({ guest: false });
   localStorage.clear();
-  resetBrowserDismissals();
 });
 
 describe("ChatPane, pinned", () => {
@@ -348,14 +346,15 @@ describe("ChatPane, pinned", () => {
     pin("closed again");
   });
 
-  it("the bot using the browser opens its panel", async () => {
+  it("the bot using the browser leaves its panel closed and lights the toggle", async () => {
     seed();
     mount();
     open([using("browser_navigate")]);
     await settle();
-    pin("open");
-    await user.click(screen.getByRole("button", { name: "Close browser stand-in" }));
+    expect(document.querySelector("[data-stand-in=browser-panel]")).toBeNull();
     pin("closed while in use");
+    await user.click(screen.getByTestId("live-view-toggle"));
+    pin("opened from the toggle");
   });
 
   it("the bot using the computer, with a computer", async () => {
@@ -364,16 +363,18 @@ describe("ChatPane, pinned", () => {
     mount();
     open([using("computer_click")]);
     await settle();
-    pin("open");
-    await user.click(screen.getByRole("button", { name: "Close computer stand-in" }));
+    expect(document.querySelector("[data-stand-in=computer-panel]")).toBeNull();
     pin("closed while in use");
+    await user.click(screen.getByTestId("live-view-toggle"));
+    pin("opened from the toggle");
   });
 
-  it("a takeover request opens the computer", async () => {
+  it("a takeover request leaves the computer closed", async () => {
     seed();
     mount();
     open([using("computer_request_takeover", "awaiting_takeover")]);
     await settle();
+    expect(document.querySelector("[data-stand-in=computer-panel]")).toBeNull();
     pin();
   });
 

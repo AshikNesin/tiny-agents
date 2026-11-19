@@ -5,9 +5,17 @@
  * with backoff (fetching a fresh one-time ticket each try) and carries the
  * clipboard both ways. For the browser it fits the remote desktop (and
  * Chrome's window) to its box; the computer's desktop has a fixed size the
- * bot's coordinates depend on, so that viewer only scales it.
+ * bot's coordinates depend on, so that viewer only scales it. A browser
+ * viewer with `remoteResize` off (the picture in picture) only scales too.
  */
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useRef,
+} from "react";
 import { botsApi } from "../../lib/bots-api";
 import { isMac, remapMetaChord, type KeyStroke } from "../../lib/browser-keys";
 import { createRfb, type RfbClient } from "../../lib/novnc";
@@ -40,6 +48,14 @@ interface VncViewProps {
    * bot's browser resize route (the Browser page passes its profile's).
    */
   resize?: (size: { width: number; height: number }) => Promise<unknown>;
+  /**
+   * Browsers only: false stops the viewer from resizing the remote display
+   * to its box, so a small view (the picture in picture) scales the display
+   * down instead of shrinking it under the bot. Default true.
+   */
+  remoteResize?: boolean;
+  /** The remote display's size in pixels, whenever it changes (the picture in picture's shape). */
+  onDisplaySize?: (size: { width: number; height: number }) => void;
   /** False keeps the viewer view-only (the agent is driving). */
   interactive: boolean;
   onState: (state: VncState) => void;
@@ -70,9 +86,19 @@ const PASTE_CHORD = {
 } as const;
 
 export const VncView = forwardRef<VncHandle, VncViewProps>(function VncView(
-  { botId, kind = "browser", ticket, resize, interactive, onState },
+  {
+    botId,
+    kind = "browser",
+    ticket,
+    resize,
+    remoteResize = true,
+    interactive,
+    onState,
+    onDisplaySize,
+  },
   ref,
 ) {
+  const remoteResizeRef = useRef(remoteResize);
   const ticketRef = useRef(ticket);
   useEffect(() => {
     ticketRef.current = ticket;
@@ -90,6 +116,39 @@ export const VncView = forwardRef<VncHandle, VncViewProps>(function VncView(
   useEffect(() => {
     onStateRef.current = onState;
   }, [onState]);
+
+  // Before layout, so noVNC's own resize observer sees the new setting when
+  // the box changes in the same commit (docking or shrinking to the picture
+  // in picture). Turning it back on refits the display to the box at once.
+  useLayoutEffect(() => {
+    remoteResizeRef.current = remoteResize;
+    const rfb = rfbRef.current;
+    if (rfb && kind === "browser" && rfb.resizeSession !== remoteResize)
+      rfb.resizeSession = remoteResize;
+  }, [remoteResize, kind]);
+
+  // noVNC sizes its canvas to the remote display: report each new size.
+  const onDisplaySizeRef = useRef(onDisplaySize);
+  useEffect(() => {
+    onDisplaySizeRef.current = onDisplaySize;
+  }, [onDisplaySize]);
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host || typeof MutationObserver === "undefined") return;
+    const report = () => {
+      const canvas = host.querySelector("canvas");
+      if (canvas && canvas.width > 0 && canvas.height > 0)
+        onDisplaySizeRef.current?.({ width: canvas.width, height: canvas.height });
+    };
+    const observer = new MutationObserver(report);
+    observer.observe(host, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ["width", "height"],
+    });
+    return () => observer.disconnect();
+  }, []);
 
   // Take control = stop being view-only and grab the keyboard.
   useEffect(() => {
@@ -146,6 +205,7 @@ export const VncView = forwardRef<VncHandle, VncViewProps>(function VncView(
                 })
               : await createRfb(host, socketUrl(ticket.path), ticket.scale);
           rfbRef.current = rfb;
+          if (kind === "browser") rfb.resizeSession = remoteResizeRef.current;
           rfb.viewOnly = !interactiveRef.current;
           rfb.addEventListener("connect", () => {
             events.live();

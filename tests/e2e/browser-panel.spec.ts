@@ -2,10 +2,9 @@ import { test, expect, type Page } from "@playwright/test";
 import { login } from "./helpers/login";
 
 /**
- * The Browser panel on a phone (friction #37 follow-up): it opens itself the
- * first time the bot drives its browser in a conversation, and once the owner
- * closes it, further browser calls (this run, the next, after a reload) leave
- * it closed and only light the header toggle. A new chat starts fresh.
+ * The Browser panel on a phone: it never opens on its own. The bot browsing
+ * lights the header toggle, which opens it; picture in picture floats it
+ * small over the chat, and the toggle reopens it that way after a reload.
  * On the faux model, "/browse N" reads the page N times (browser_snapshot).
  */
 
@@ -39,50 +38,39 @@ test.describe("Browser panel on mobile", () => {
   // Each reply streams slowly and drives a real (headless) browser.
   test.setTimeout(240_000);
 
-  test("an explicit close sticks for the conversation", async ({ page }) => {
+  test("browsing never opens it; picture in picture is remembered", async ({ page }) => {
     await login(page);
     const name = `Browser ${Date.now()}`;
     await createBot(page, name);
     await page.setViewportSize(PHONE);
 
     const panel = page.getByTestId("browser-panel");
-    // The header's live view button is the way back in on a phone too.
     const toggle = page.getByTestId("live-view-toggle");
     await expect(toggle).toBeVisible();
 
-    // First browser use in this conversation: the panel opens over the chat.
-    await browse(page, name, 3);
-    await expect(panel).toBeVisible({ timeout: 30_000 });
-    await panel.getByRole("button", { name: "Close browser panel" }).click();
-    await expect(panel).not.toBeVisible();
-
-    // The rest of that run's browser calls leave it closed.
+    // The bot browsing leaves the chat in view.
+    await browse(page, name, 2);
     await settled(page, 1);
     await expect(panel).not.toBeVisible();
 
-    // So does the next run.
-    await browse(page, name, 2);
-    await settled(page, 2);
-    await expect(panel).not.toBeVisible();
-
-    // And a reload of the tab.
-    await page.reload();
-    await settled(page, 2);
-    await browse(page, name, 1);
-    await settled(page, 3);
-    await expect(panel).not.toBeVisible();
-
-    // The owner can still open it from the header.
+    // The owner opens it from the header, and shrinks it.
     await toggle.click();
     await expect(panel).toBeVisible();
+    await panel.getByRole("button", { name: "Picture in picture" }).click();
+    await expect(panel).toHaveAttribute("data-layout", "pip");
+    const box = await panel.boundingBox();
+    expect(box?.width ?? PHONE.width).toBeLessThan(PHONE.width - 50);
+
+    // After a reload, browsing still leaves it closed, and the toggle
+    // brings back the picture in picture.
+    await page.reload();
+    await settled(page, 1);
+    await browse(page, name, 1);
+    await settled(page, 2);
+    await expect(panel).not.toBeVisible();
+    await toggle.click();
+    await expect(panel).toHaveAttribute("data-layout", "pip");
     await panel.getByRole("button", { name: "Close browser panel" }).click();
     await expect(panel).not.toBeVisible();
-
-    // A new chat is a new conversation: the first browser use opens it again.
-    await page.getByRole("button", { name: "Start a new chat" }).click();
-    await page.getByRole("dialog").getByRole("button", { name: "New chat" }).click();
-    await settled(page, 0);
-    await browse(page, name, 1);
-    await expect(panel).toBeVisible({ timeout: 30_000 });
   });
 });

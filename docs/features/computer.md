@@ -131,9 +131,10 @@ owner's (`computer_request_takeover`).
   logged.
 - `ComputerPanel` streams the desktop with `VncView` (kind `computer`: no
   remote resize, `scaleViewport`). A click on the desktop takes control; the
-  header has Hand back, Paste, Full screen, Reset and Close. It opens on its own the first time a
-  `computer_*` call runs or the bot asks for a takeover, and a close by the
-  owner is final for the conversation (the browser panel's rule). The Browser
+  header has Hand back, Paste, Full screen, Reset and Close. It never opens on its own: a
+  `computer_*` call or a takeover request lights the chat header's live-view
+  toggle, and the takeover card's Open computer opens the panel docked. Like
+  the Browser panel it can shrink to a floating picture in picture. The Browser
   and Computer panels share the place beside the chat; the one opened last is
   in front.
 - `POST /bots/:id/computer/driver {driver}` flips the flag. While the owner
