@@ -168,11 +168,25 @@ function ChatPaneBody({ bot, models, canAnswer, onEditBot }: ChatPaneProps) {
         />
       </div>
       {/* Browser live view (issue #24): beside the conversation on desktop,
-          full-screen overlay on mobile. */}
-      {live.showBrowser && <BrowserPanel bot={bot} onClose={live.closeLive} tabs={live.liveTabs} />}
+          full-screen overlay on mobile, or a small floating picture in picture. */}
+      {live.showBrowser && (
+        <BrowserPanel
+          bot={bot}
+          onClose={live.closeLive}
+          tabs={live.liveTabs}
+          layout={live.layout}
+          onLayout={live.setLayout}
+        />
+      )}
       {/* Computer live view (issue #108): same place, one panel at a time. */}
       {live.showComputer && (
-        <ComputerPanel bot={bot} onClose={live.closeLive} tabs={live.liveTabs} />
+        <ComputerPanel
+          bot={bot}
+          onClose={live.closeLive}
+          tabs={live.liveTabs}
+          layout={live.layout}
+          onLayout={live.setLayout}
+        />
       )}
 
       {/* Confirmations */}

@@ -4066,7 +4066,7 @@ p [testid=composer-hint, aria-hidden=true]
   "Type @ to tag another bot""
 `;
 
-exports[`ChatPane, pinned > a takeover request opens the computer > markup 1`] = `
+exports[`ChatPane, pinned > a takeover request leaves the computer closed > markup 1`] = `
 "<body
   style=""
 >
@@ -4149,14 +4149,14 @@ exports[`ChatPane, pinned > a takeover request opens the computer > markup 1`] =
             class="flex shrink-0 items-center gap-0.5"
           >
             <button
-              aria-label="Close live view"
-              aria-pressed="true"
-              class="group/button inline-flex shrink-0 items-center justify-center rounded-xl border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:scale-[0.97] motion-reduce:transition-none disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 size-7 in-data-[slot=button-group]:rounded-lg hover:text-foreground relative bg-accent text-foreground"
+              aria-label="Open live view, Host Bot is using the computer"
+              aria-pressed="false"
+              class="group/button inline-flex shrink-0 items-center justify-center rounded-xl border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:scale-[0.97] motion-reduce:transition-none disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 size-7 in-data-[slot=button-group]:rounded-lg text-muted-foreground hover:text-foreground relative"
               data-size="icon-sm"
               data-slot="button"
               data-testid="live-view-toggle"
               data-variant="ghost"
-              title="Live view"
+              title="Host Bot is using the computer"
             >
               <svg
                 aria-hidden="true"
@@ -4170,6 +4170,11 @@ exports[`ChatPane, pinned > a takeover request opens the computer > markup 1`] =
                 viewBox="0 0 24 24"
                 width="24"
                 xmlns="http://www.w3.org/2000/svg"
+              />
+              <span
+                aria-hidden="true"
+                class="bg-success absolute top-1 right-1 size-1.5 animate-pulse rounded-full"
+                data-testid="live-view-activity"
               />
             </button>
             <button
@@ -4502,79 +4507,12 @@ exports[`ChatPane, pinned > a takeover request opens the computer > markup 1`] =
           </div>
         </div>
       </div>
-      <aside
-        data-stand-in="computer-panel"
-      >
-        <div
-          aria-label="Live view"
-          class="inline-flex shrink-0 items-center rounded-lg bg-muted p-0.5"
-          role="tablist"
-        >
-          <button
-            aria-selected="false"
-            class="relative inline-flex h-6 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 aria-selected:bg-background aria-selected:text-foreground aria-selected:shadow-sm"
-            data-testid="live-view-tab-browser"
-            role="tab"
-            type="button"
-          >
-            <svg
-              aria-hidden="true"
-              class="lucide lucide-globe size-3.5"
-              fill="none"
-              height="24"
-              stroke="currentColor"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              viewBox="0 0 24 24"
-              width="24"
-              xmlns="http://www.w3.org/2000/svg"
-            />
-            <span
-              class="@max-lg:sr-only"
-            >
-              Browser
-            </span>
-          </button>
-          <button
-            aria-selected="true"
-            class="relative inline-flex h-6 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 aria-selected:bg-background aria-selected:text-foreground aria-selected:shadow-sm"
-            data-testid="live-view-tab-computer"
-            role="tab"
-            type="button"
-          >
-            <svg
-              aria-hidden="true"
-              class="lucide lucide-monitor size-3.5"
-              fill="none"
-              height="24"
-              stroke="currentColor"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              viewBox="0 0 24 24"
-              width="24"
-              xmlns="http://www.w3.org/2000/svg"
-            />
-            <span
-              class="@max-lg:sr-only"
-            >
-              Computer
-            </span>
-          </button>
-        </div>
-        <button
-          type="button"
-        >
-          Close computer stand-in
-        </button>
-      </aside>
     </div>
   </div>
 </body>"
 `;
 
-exports[`ChatPane, pinned > a takeover request opens the computer > outline 1`] = `
+exports[`ChatPane, pinned > a takeover request leaves the computer closed > outline 1`] = `
 "banner
   button "Open menu"
     icon lucide-menu
@@ -4583,8 +4521,9 @@ exports[`ChatPane, pinned > a takeover request opens the computer > outline 1`] 
       img [aria-hidden=true]
       "Host Bot"
       icon lucide-chevron-down
-  button "Close live view" [testid=live-view-toggle, title="Live view"]
+  button "Open live view, Host Bot is using the computer" [testid=live-view-toggle, title="Host Bot is using the computer"]
     icon lucide-monitor-play
+    span [testid=live-view-activity, aria-hidden=true]
   button "Start a new chat" [title="New chat (Ctrl+Shift+O)"]
     icon lucide-square-pen lucide-pen-box lucide-edit lucide-pen-square
 region "Messages"
@@ -4617,17 +4556,7 @@ button "Model" [testid=chat-model, title="Model", aria-expanded=false, aria-hasp
 button "Send message" [disabled]
   icon lucide-arrow-up
 p [testid=composer-hint, aria-hidden=true]
-  "Type @ to tag another bot"
-complementary
-  tablist "Live view"
-    tab "Browser" [testid=live-view-tab-browser, aria-selected=false]
-      icon lucide-globe
-      "Browser"
-    tab "Computer" [testid=live-view-tab-computer, aria-selected=true]
-      icon lucide-monitor
-      "Computer"
-  button "Close computer stand-in"
-    "Close computer stand-in""
+  "Type @ to tag another bot""
 `;
 
 exports[`ChatPane, pinned > an empty chat > markup 1`] = `
@@ -8522,7 +8451,7 @@ dialog
 span [aria-hidden=true]"
 `;
 
-exports[`ChatPane, pinned > the bot using the browser opens its panel > closed while in use markup 1`] = `
+exports[`ChatPane, pinned > the bot using the browser leaves its panel closed and lights the toggle > closed while in use markup 1`] = `
 "<body
   style=""
 >
@@ -8922,7 +8851,7 @@ exports[`ChatPane, pinned > the bot using the browser opens its panel > closed w
 </body>"
 `;
 
-exports[`ChatPane, pinned > the bot using the browser opens its panel > closed while in use outline 1`] = `
+exports[`ChatPane, pinned > the bot using the browser leaves its panel closed and lights the toggle > closed while in use outline 1`] = `
 "banner
   button "Open menu"
     icon lucide-menu
@@ -8962,7 +8891,7 @@ p [testid=composer-hint, aria-hidden=true]
   "Type @ to tag another bot""
 `;
 
-exports[`ChatPane, pinned > the bot using the browser opens its panel > open markup 1`] = `
+exports[`ChatPane, pinned > the bot using the browser leaves its panel closed and lights the toggle > opened from the toggle markup 1`] = `
 "<body
   style=""
 >
@@ -9366,7 +9295,7 @@ exports[`ChatPane, pinned > the bot using the browser opens its panel > open mar
 </body>"
 `;
 
-exports[`ChatPane, pinned > the bot using the browser opens its panel > open outline 1`] = `
+exports[`ChatPane, pinned > the bot using the browser leaves its panel closed and lights the toggle > opened from the toggle outline 1`] = `
 "banner
   button "Open menu"
     icon lucide-menu
@@ -9848,7 +9777,7 @@ p [testid=composer-hint, aria-hidden=true]
   "Type @ to tag another bot""
 `;
 
-exports[`ChatPane, pinned > the bot using the computer, with a computer > open markup 1`] = `
+exports[`ChatPane, pinned > the bot using the computer, with a computer > opened from the toggle markup 1`] = `
 "<body
   style=""
 >
@@ -10310,7 +10239,7 @@ exports[`ChatPane, pinned > the bot using the computer, with a computer > open m
 </body>"
 `;
 
-exports[`ChatPane, pinned > the bot using the computer, with a computer > open outline 1`] = `
+exports[`ChatPane, pinned > the bot using the computer, with a computer > opened from the toggle outline 1`] = `
 "banner
   button "Open menu"
     icon lucide-menu

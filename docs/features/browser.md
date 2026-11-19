@@ -163,8 +163,22 @@ screen, the page link, Reset and Close. The header is a container: in a
 narrow panel the tabs keep only their icons and your chip is just its pulsing
 dot, so the panel works from its 360 px minimum up. On a phone the panel is a full-screen
 overlay; on desktop it is an inset card beside the chat.
-The closed, starting, headless and failed states use `EmptyState` and
-`ErrorState`, with a spinner overlay on the viewport while connecting.
+
+The panel never opens on its own: a bot using its browser only lights the
+chat header's live-view toggle (a pulsing dot, and "Surfer is using the
+browser" in its label), and the owner opens the view from there.
+
+- **Picture in picture.** The header's picture-in-picture button shrinks the
+  panel to a small floating view (20rem wide, a 16:10 stream) over the chat,
+  on desktop and on a phone, so the conversation stays readable while the
+  bot browses. Drag its header to move it; the corner is remembered
+  (`localStorage`), and so is the choice, so the toggle reopens it the same
+  way. It only watches: the remote Chrome keeps its size and the viewer
+  scales it down, so the bot's pages keep their layout. A click on the
+  stream, or Expand, brings back the panel; Hand back stays while you
+  drive. The Computer panel has the same mode.
+  The closed, starting, headless and failed states use `EmptyState` and
+  `ErrorState`, with a spinner overlay on the viewport while connecting.
 
 - **Sharp on Retina.** The remote desktop is requested at `BROWSER_SCALE` x the
   panel size and Chrome runs with `--force-device-scale-factor` to match, so

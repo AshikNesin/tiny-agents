@@ -357,6 +357,88 @@ describe("BrowserPanel", () => {
     }
   });
 
+  it("offers picture in picture from the docked panel", async () => {
+    mockApi(vncStatus());
+    const onLayout = vi.fn();
+    render(<BrowserPanel bot={bot} onClose={vi.fn()} onLayout={onLayout} />);
+    await connected();
+
+    fireEvent.click(screen.getByRole("button", { name: "Picture in picture" }));
+    expect(onLayout).toHaveBeenCalledWith("pip");
+  });
+
+  it("in picture in picture, only watches: no take control, no window fit, a click expands", async () => {
+    const api = mockApi(vncStatus());
+    const observer = stubResizeObserver();
+    const onLayout = vi.fn();
+    try {
+      render(<BrowserPanel bot={bot} onClose={vi.fn()} layout="pip" onLayout={onLayout} />);
+      await connected();
+
+      const panel = screen.getByTestId("browser-panel");
+      expect(panel).toHaveAttribute("data-layout", "pip");
+      expect(screen.getByTestId("browser-driver").textContent).toBe("Surfer is driving");
+      // Watching only: the stream is not a take-control button, and the
+      // heavier tools stay in the docked panel.
+      expect(screen.queryByRole("button", { name: "Take control" })).not.toBeInTheDocument();
+      expect(screen.queryByTestId("browser-fullscreen")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("browser-reset")).not.toBeInTheDocument();
+      expect(screen.queryByRole("separator")).not.toBeInTheDocument();
+
+      // The remote Chrome keeps its size; the small view only scales it.
+      observer.notify();
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      expect(api.resize).not.toHaveBeenCalled();
+
+      // A click on the stream expands it back to the panel.
+      fireEvent.click(screen.getByTestId("browser-pip-expand-stream"));
+      expect(onLayout).toHaveBeenLastCalledWith("docked");
+      fireEvent.click(screen.getByTestId("browser-pip-expand"));
+      expect(onLayout).toHaveBeenCalledTimes(2);
+      expect(screen.getByRole("button", { name: "Close browser panel" })).toBeInTheDocument();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("in picture in picture, keeps Hand back while the owner drives", async () => {
+    const api = mockApi(vncStatus({ driver: "human" }));
+    render(<BrowserPanel bot={bot} onClose={vi.fn()} layout="pip" onLayout={vi.fn()} />);
+    await connected();
+    expect(latestRfb().viewOnly).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Hand back" }));
+    await waitFor(() => expect(api.driver).toHaveBeenCalledWith("b1", "agent"));
+  });
+
+  it("drags the picture in picture by its header and remembers where", async () => {
+    mockApi(vncStatus());
+    const { unmount } = render(
+      <BrowserPanel bot={bot} onClose={vi.fn()} layout="pip" onLayout={vi.fn()} />,
+    );
+    await connected();
+    const panel = screen.getByTestId("browser-panel");
+    expect(panel.style.right).toContain("min(16px,");
+    // jsdom's window is 1024x768; the view sits 16px from the right, 112px from the bottom.
+    vi.spyOn(panel, "getBoundingClientRect").mockReturnValue({
+      left: 688,
+      right: 1008,
+      top: 456,
+      bottom: 656,
+      width: 320,
+      height: 200,
+    } as DOMRect);
+    const handle = screen.getByTestId("browser-pip-handle");
+    fireEvent.pointerDown(handle, { clientX: 700, clientY: 470, pointerId: 1 });
+    fireEvent.pointerMove(handle, { clientX: 300, clientY: 170, pointerId: 1 });
+    fireEvent.pointerUp(handle, { pointerId: 1 });
+    expect(panel.style.right).toContain("min(416px,");
+    expect(panel.style.bottom).toContain("min(412px,");
+
+    unmount();
+    render(<BrowserPanel bot={bot} onClose={vi.fn()} layout="pip" onLayout={vi.fn()} />);
+    expect(screen.getByTestId("browser-panel").style.right).toContain("min(416px,");
+  });
+
   it("asks for a window Chrome can draw when the viewer is narrower than that", async () => {
     // Chrome will not be narrower than 500px; a smaller window would show cropped.
     const api = mockApi(vncStatus());

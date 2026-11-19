@@ -12,10 +12,12 @@
  * - opening and resetting the browser or desktop;
  * - full screen with the keyboard lock, keyed by kind (`LOCKED_KEYS`);
  * - the connection label and dot (`connectionOf`);
- * - the docked panel's persisted, clamped width (`usePanelWidth`).
+ * - the docked panel's persisted, clamped width (`usePanelWidth`);
+ * - the picture in picture's persisted, dragged corner (`usePipPosition`).
  *
- * `useFullScreen` also serves the Terminal page, with its CSS fallback. The
- * "opens on its own" rule for the chat panels stays in `browser-panel.ts`.
+ * `useFullScreen` also serves the Terminal page, with its CSS fallback. When
+ * the bot is using a view, and docked versus picture in picture, are in
+ * `browser-panel.ts`.
  */
 import {
   useCallback,
@@ -214,6 +216,99 @@ export function usePanelWidth(storageKey: string, defaultWidth: number) {
   };
 
   return { width, startResize };
+}
+
+// ---------------------------------------------------------------------------
+// Picture in picture
+
+/** Where the floating view sits: its gap to the viewport's right and bottom edges. */
+interface PipOffset {
+  right: number;
+  bottom: number;
+}
+
+const PIP_KEY = "tiny-agents:live-pip-offset";
+/** Clear of the composer, so the newest message and the input stay in reach. */
+const DEFAULT_PIP_OFFSET: PipOffset = { right: 16, bottom: 112 };
+/** The edge it keeps from the viewport. */
+const PIP_MARGIN = 8;
+
+/** Keeps a `width` x `height` view whole inside a `viewport` of the given size. */
+function clampPipOffset(
+  offset: PipOffset,
+  size: { width: number; height: number },
+  viewport: { width: number; height: number },
+): PipOffset {
+  const clamp = (value: number, room: number) =>
+    Math.round(Math.min(Math.max(value, PIP_MARGIN), Math.max(PIP_MARGIN, room - PIP_MARGIN)));
+  return {
+    right: clamp(offset.right, viewport.width - size.width),
+    bottom: clamp(offset.bottom, viewport.height - size.height),
+  };
+}
+
+function readPipOffset(): PipOffset {
+  try {
+    const parsed: unknown = JSON.parse(window.localStorage.getItem(PIP_KEY) ?? "null");
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      typeof (parsed as PipOffset).right === "number" &&
+      typeof (parsed as PipOffset).bottom === "number"
+    )
+      return { right: (parsed as PipOffset).right, bottom: (parsed as PipOffset).bottom };
+  } catch {
+    /* unreadable: the default corner */
+  }
+  return DEFAULT_PIP_OFFSET;
+}
+
+/**
+ * The picture in picture's corner, dragged by its header (mouse or touch)
+ * and remembered. A press on one of the header's buttons is a click, not a
+ * drag. `ref` is the floating box, measured to keep it on screen.
+ */
+export function usePipPosition(ref: RefObject<HTMLElement | null>) {
+  const [offset, setOffset] = useState<PipOffset>(readPipOffset);
+
+  const startDrag = (event: ReactPointerEvent<HTMLElement>) => {
+    if ((event.target as Element).closest("button, a")) return;
+    const box = ref.current?.getBoundingClientRect();
+    if (!box) return;
+    event.preventDefault();
+    const handle = event.currentTarget;
+    handle.setPointerCapture?.(event.pointerId);
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const start = {
+      right: window.innerWidth - box.right,
+      bottom: window.innerHeight - box.bottom,
+    };
+    let latest = start;
+    const move = (e: PointerEvent) => {
+      latest = clampPipOffset(
+        { right: start.right - (e.clientX - startX), bottom: start.bottom - (e.clientY - startY) },
+        box,
+        { width: window.innerWidth, height: window.innerHeight },
+      );
+      setOffset(latest);
+    };
+    const stop = () => {
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", stop);
+      handle.removeEventListener("pointercancel", stop);
+      try {
+        window.localStorage.setItem(PIP_KEY, JSON.stringify(latest));
+      } catch {
+        /* storage unavailable: the corner just won't persist */
+      }
+    };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", stop);
+    handle.addEventListener("pointercancel", stop);
+  };
+
+  return { offset, startDrag };
 }
 
 // ---------------------------------------------------------------------------

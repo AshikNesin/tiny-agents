@@ -1,6 +1,6 @@
 // Feature: browser (features/browser.md). The bots' real Chrome on the local sandbox:
 // the /browser page (open, live view, take/release control, full screen, own-profile
-// tab and deep link, reset) and the chat's Browser panel driven by `/browse N`, on
+// tab and deep link, reset) and the chat's Browser panel (docked and picture in picture), on
 // desktop and on a 390x844 phone. Live views are canvas: proof is the VNC socket
 // (RFB handshake + framebuffer bytes), ARIA state and a read-back of Chrome on the VM.
 import { execFileSync } from "node:child_process";
@@ -150,12 +150,21 @@ await journey(
       await composer.press("Enter");
     };
 
-    await step("chat: /browse 2 opens the Browser panel live beside the chat", async () => {
+    const toggle = page.getByTestId("live-view-toggle");
+    await step("chat: /browse 2 leaves the panel closed and lights the toggle", async () => {
       await page.goto(`/chats/${botId}`, LOADED);
       await expect(composer).toBeVisible({ timeout: 20_000 });
       await expect(panel).toHaveCount(0);
       await browse(2);
-      await expect(panel).toBeVisible({ timeout: 60_000 });
+      await expect(toggle).toHaveAccessibleName(`Open live view, ${name} is using the browser`, {
+        timeout: 60_000,
+      });
+      await expect(panel).toHaveCount(0);
+    });
+    await proof("panel-closed-in-use");
+    await step("chat: the toggle opens the panel live beside the chat", async () => {
+      await toggle.click();
+      await expect(panel).toBeVisible();
       await expect(panel).toContainText("Live", { timeout: 60_000 });
       await streamed(new RegExp(`/bots/${botId}/browser/vnc`));
       await echoes(1);
@@ -169,50 +178,58 @@ await journey(
       await panel.getByRole("button", { name: "Hand back" }).click();
       await expect(panel.getByTestId("browser-driver")).toHaveText(`${name} is driving`);
     });
-    await step("panel: closing sticks, later /browse only lights the toggle", async () => {
-      await panel.getByRole("button", { name: "Close browser panel" }).click();
-      await expect(panel).toHaveCount(0);
+    await step("panel: picture in picture floats a small live view over the chat", async () => {
+      await panel.getByRole("button", { name: "Picture in picture" }).click();
+      await expect(panel).toHaveAttribute("data-layout", "pip");
+      const box = await panel.boundingBox();
+      expect(box.width).toBeLessThanOrEqual(321);
+      await expect(composer).toBeVisible();
       await browse(1);
       await echoes(2);
+      await expect(panel.getByTestId("browser-driver")).toHaveText(`${name} is driving`);
+    });
+    await proof("pip-desktop");
+    await step("pip: the toggle reopens it as picture in picture; Expand docks it", async () => {
+      await toggle.click();
       await expect(panel).toHaveCount(0);
-      await showLiveView(page, "browser");
-      await expect(panel).toBeVisible();
+      await toggle.click();
+      await expect(panel).toHaveAttribute("data-layout", "pip");
+      await panel.getByRole("button", { name: "Expand live view" }).first().click();
+      await expect(panel).toHaveAttribute("data-layout", "docked");
       await expect(panel.getByRole("link", { name: "Open in the Browser page" })).toBeVisible();
-      await panel.getByRole("button", { name: "Close browser panel" }).click();
-      await expect(panel).toHaveCount(0);
+      await panel.getByRole("button", { name: "Picture in picture" }).click();
+      await expect(panel).toHaveAttribute("data-layout", "pip");
     });
 
     // ---- chat Browser panel, phone -----------------------------------------
     await step(
-      "phone: the panel is a full-screen overlay, close sticks across a reload",
+      "phone: browsing leaves the chat readable; the picture in picture floats",
       async () => {
         await page.setViewportSize(PHONE);
-        await page.getByRole("button", { name: "Start a new chat" }).click();
-        await page.getByRole("dialog").getByRole("button", { name: "New chat" }).click();
-        await echoes(0);
+        await page.getByRole("button", { name: "Close browser panel" }).click();
         await expect(panel).toHaveCount(0);
         await browse(1);
-        await expect(panel).toBeVisible({ timeout: 60_000 });
+        await echoes(3);
+        await expect(panel).toHaveCount(0);
+        await page.reload(LOADED);
+        await echoes(3);
+        await showLiveView(page, "browser");
+        await expect(panel).toHaveAttribute("data-layout", "pip");
+        await expect(panel).toContainText("Live", { timeout: 60_000 });
         const box = await panel.boundingBox();
-        expect(box.width).toBeGreaterThanOrEqual(PHONE.width - 1);
-        expect(box.height).toBeGreaterThanOrEqual(PHONE.height - 1);
+        expect(box.width).toBeLessThan(PHONE.width - 50);
+        await expect(composer).toBeVisible();
       },
     );
-    await proof("panel-phone");
-    await step("phone: close, browse again, reload: the panel stays closed", async () => {
-      await panel.getByRole("button", { name: "Close browser panel" }).click();
-      await expect(panel).toHaveCount(0);
-      await echoes(1);
-      await browse(1);
-      await echoes(2);
-      await expect(panel).toHaveCount(0);
-      await page.reload(LOADED);
-      await echoes(2);
-      await expect(panel).toHaveCount(0);
-      await showLiveView(page, "browser");
-      await expect(panel).toBeVisible();
+    await proof("pip-phone");
+    await step("phone: Expand makes it the full-screen overlay", async () => {
+      await panel.getByTestId("browser-pip-expand").click();
+      await expect(panel).toHaveAttribute("data-layout", "docked");
+      const box = await panel.boundingBox();
+      expect(box.width).toBeGreaterThanOrEqual(PHONE.width - 1);
+      expect(box.height).toBeGreaterThanOrEqual(PHONE.height - 1);
     });
-    await proof("panel-phone-reopened");
+    await proof("panel-phone");
 
     // ---- reset ----------------------------------------------------------------
     await step(

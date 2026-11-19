@@ -3,12 +3,17 @@
  * Computer tabs) and one status chip, then the tools as icons, with Hand
  * back while the owner drives. Taking control is a click on the stream
  * itself (`TakeControlLayer`), so it has no button here.
+ *
+ * In picture in picture the header is the drag handle, and keeps only the
+ * status, Hand back while the owner drives, Expand and Close.
  */
-import type { ReactNode } from "react";
+import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import {
   ClipboardPaste,
   Maximize2,
   Minimize2,
+  PanelRightOpen,
+  PictureInPicture2,
   RotateCcw,
   SquareArrowOutUpRight,
   Undo2,
@@ -16,6 +21,8 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button, CardTitle } from "@groot/ui";
+import { cn } from "@groot/ui/lib/utils";
+import type { LiveLayout } from "../../lib/browser-panel";
 import type { Bot } from "../../../shared/api/bots";
 import type { Connection, Driver, LiveViewKind } from "../../lib/live-view";
 import { StatusChip } from "./live-parts";
@@ -41,6 +48,11 @@ type HeaderProps<S extends PanelStatus> = {
   configured: boolean;
   shared: boolean;
   fullscreen: boolean;
+  /** Shown as the small floating view. */
+  pip: boolean;
+  onDrag: (event: ReactPointerEvent<HTMLElement>) => void;
+  /** Docked or picture in picture; without it neither switch shows. */
+  onLayout: ((layout: LiveLayout) => void) | undefined;
   onDriver: (driver: Driver) => void;
   onPaste: () => void;
   onToggleFullscreen: () => void;
@@ -49,10 +61,17 @@ type HeaderProps<S extends PanelStatus> = {
 };
 
 export function LivePanelHeader<S extends PanelStatus>(props: HeaderProps<S>) {
-  const { panel, tabs, detail } = props;
+  const { panel, tabs, detail, pip, onDrag } = props;
   return (
     // The header is a container: in a narrow panel the tabs drop their labels.
-    <header className="@container flex h-11 shrink-0 items-center gap-2 border-b pr-1.5 pl-2">
+    <header
+      className={cn(
+        "@container flex shrink-0 items-center gap-2 border-b pr-1.5 pl-2",
+        pip ? "h-10 cursor-grab touch-none select-none active:cursor-grabbing" : "h-11",
+      )}
+      onPointerDown={pip ? onDrag : undefined}
+      data-testid={pip ? `${props.kind}-pip-handle` : undefined}
+    >
       <div className="flex min-w-0 flex-1 items-center gap-2">
         {tabs ?? <CardTitle className="pl-1 text-sm">{panel.title}</CardTitle>}
         <PanelChip {...props} />
@@ -65,7 +84,7 @@ export function LivePanelHeader<S extends PanelStatus>(props: HeaderProps<S>) {
           </span>
         )}
       </div>
-      <PanelTools {...props} />
+      {pip ? <PipTools {...props} /> : <PanelTools {...props} />}
     </header>
   );
 }
@@ -102,6 +121,7 @@ function PanelTools<S extends PanelStatus>({
   configured,
   shared,
   fullscreen,
+  onLayout,
   onDriver,
   onPaste,
   onToggleFullscreen,
@@ -150,6 +170,19 @@ function PanelTools<S extends PanelStatus>({
           {fullscreen ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
         </Button>
       )}
+      {onLayout && !fullscreen && (
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className={tool}
+          onClick={() => onLayout("pip")}
+          aria-label="Picture in picture"
+          title="Picture in picture"
+          data-testid={`${kind}-pip`}
+        >
+          <PictureInPicture2 className="size-3.5" />
+        </Button>
+      )}
       {configured && (panel.openPage.forGuests || !guest) && (
         <Button variant="ghost" size="icon-sm" className={tool} asChild>
           <Link
@@ -182,6 +215,61 @@ function PanelTools<S extends PanelStatus>({
         onClick={onClose}
         aria-label={panel.closeLabel}
         title="Close panel"
+      >
+        <X className="size-3.5" />
+      </Button>
+    </div>
+  );
+}
+
+/** The floating view's tools: Hand back while the owner drives, Expand, Close. */
+function PipTools<S extends PanelStatus>({
+  kind,
+  panel,
+  bot,
+  guest,
+  takeover,
+  streaming,
+  humanDrives,
+  onLayout,
+  onDriver,
+  onClose,
+}: HeaderProps<S>) {
+  return (
+    <div className="flex shrink-0 items-center gap-0.5">
+      {streaming && humanDrives && !guest && (
+        <Button
+          size="xs"
+          variant="secondary"
+          className="mr-1"
+          onClick={() => onDriver("agent")}
+          title={panel.releaseTitle(bot.name)}
+          data-testid={`${kind}-release`}
+        >
+          <Undo2 />
+          {takeover && panel.takeover ? panel.takeover.done : "Hand back"}
+        </Button>
+      )}
+      {onLayout && (
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className={tool}
+          onClick={() => onLayout("docked")}
+          aria-label="Expand live view"
+          title="Expand"
+          data-testid={`${kind}-pip-expand`}
+        >
+          <PanelRightOpen className="size-3.5" />
+        </Button>
+      )}
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        className={tool}
+        onClick={onClose}
+        aria-label={panel.closeLabel}
+        title="Close"
       >
         <X className="size-3.5" />
       </Button>
