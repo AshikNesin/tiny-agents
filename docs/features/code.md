@@ -575,9 +575,20 @@ another with `harness` (the bot's prompt lists the configured ones).
 | `shelley_start` | allow      | Alias of `code_start` with `harness: shelley` (older prompts)      |
 | `shelley_send`  | allow      | Alias of `code_send` for Shelley ids                               |
 
-The chat shows a hand-off as a card with the live state and **Open in Code**.
-When the turn ends, the outcome arrives in the bot's chat once as "Reply from
-<harness>" (untrusted peer text); nothing polls. A finish missed while a
+The chat shows a hand-off as a card with the live state and **Open in Code**,
+and the thread gets a short title like one the owner starts. When the turn
+ends, the outcome arrives once as "Reply from <harness>" (untrusted peer
+text), in the conversation that last asked; nothing polls:
+
+- from the bot's chat: that chat;
+- from a routine run: that run's conversation, unattended and on its token
+  budget, never the bot's chat;
+- from the bot's answer to another bot: that answer's conversation, and what
+  the bot says there is relayed back to the bot that asked, like its first
+  answer.
+
+A follow-up (`code_send`) moves the hand-off to the conversation that sent
+it. A finish missed while a
 harness was unreachable is delivered when it reconnects. A finish is
 recorded as owed before it is sent, so one cut off by a restart or a failed
 send is sent again (at boot, on reconnect, and every 30 seconds) until it
@@ -663,8 +674,8 @@ Known limits (register row C7):
   - `code_threads`: the index. Followed threads and how far you have read
     them, plus the rows of harnesses without their own list.
   - `code_handoffs`: the hand-offs, `starting → running → finished`
-    compare-and-set.
-  - `code_handoff_finishes`: finishes owed to bots' chats, until delivered.
+    compare-and-set, each with the conversation that last asked.
+  - `code_handoff_finishes`: finishes owed to bots, until delivered.
   - `code_projects`; `code_pull_requests` (a cache of GitHub plus the
     Auto-fix loop); `code_autofix_passes`; `code_pr_comments` (the app's own
     comments); `code_review_viewed` and `code_review_drafts`;

@@ -2,8 +2,9 @@
  * Turn ends, acted on, for every harness (issue #143, ADR 0011):
  *
  * - A **hand-off** (a bot started the thread with `code_start` or
- *   `shelley_start`) gets the finish delivered into the bot's chat, once, as
- *   a reply from the harness. The harness's words are untrusted peer text.
+ *   `shelley_start`) gets the finish delivered, once, as a reply from the
+ *   harness, into the conversation that asked (its chat, a routine run's or
+ *   a bot message's). The harness's words are untrusted peer text.
  *   The finish is recorded as owed with the hand-off's running → finished
  *   move, then submitted (idempotent by request id) and marked delivered; a
  *   finish still owed after a crash or a failed submit is sent again at
@@ -24,6 +25,7 @@ import { sanitizePeerText } from "@tiny-agents/agent";
 import { threadIdOf, type HarnessInstance, type TurnOutcome } from "@tiny-agents/code/server";
 import { relayText } from "../bots/bots.delivery";
 import { codeUpdate } from "../notifications/notifications.events";
+import type { HandoffFinish } from "./code.bots";
 import type { CodeHub } from "./code.hub";
 import {
   endsHandoff,
@@ -41,11 +43,8 @@ const RETRY_MS = 30_000;
 
 export interface WatcherDeps {
   hub: CodeHub;
-  /** Submit a message into a bot's current chat as a reply from `from` (idempotent by requestId). */
-  deliver(
-    botId: string,
-    submission: { requestId: string; text: string; from: string },
-  ): Promise<void>;
+  /** Put a finish in front of the bot that asked (`deliverHandoffFinish`, idempotent by requestId). */
+  deliver(finish: HandoffFinish): Promise<void>;
   notify(notification: Notification): void;
   /** How often finishes still owed are sent again (default 30 s). */
   retryMs?: number;
@@ -84,7 +83,9 @@ export function startCodeWatcher(deps: WatcherDeps): () => void {
       if (sending.has(finish.id)) continue;
       sending.add(finish.id);
       try {
-        await deps.deliver(finish.botId, {
+        await deps.deliver({
+          botId: finish.botId,
+          conversationId: finish.conversationId,
           requestId: finish.requestId,
           text: finish.text,
           from: finish.harness,

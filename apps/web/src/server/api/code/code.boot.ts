@@ -1,14 +1,14 @@
 /**
  * Boot wiring for Code (ADR 0011): build the configured harnesses, open
  * their live connections through one hub, and start the watcher (hand-off
- * finishes into bots' chats, pushes for followed threads). With no harness
+ * finishes back to the bots that asked, pushes for followed threads). With no harness
  * configured the hub is empty and the Code page says how to add one.
  */
 import { logger } from "@groot/core/logger";
 import { notificationService } from "@groot/core/notification/notification.service";
 import { threadIdOf, type HarnessInstance } from "@tiny-agents/code/server";
-import type { BotConversationRuntime } from "../bots/bots.conversation";
-import { submitToBot } from "../bots/bots.conversation";
+import type { DeliveryRuntime } from "../bots/bots.delivery";
+import { deliverHandoffFinish } from "./code.bots";
 import { createCodeHub, setCodeHub } from "./code.hub";
 import { buildHarnesses } from "./code.registry";
 import { copyShelleyTables } from "./code.store";
@@ -16,7 +16,7 @@ import { onTurnEnded, rearmReconcilers } from "./code.pulls";
 import { startCodeWatcher } from "./code.watcher";
 
 export function startCode(
-  runtime: BotConversationRuntime,
+  runtime: DeliveryRuntime,
   options: { extra?: HarnessInstance[] } = {},
 ): () => void {
   const instances = buildHarnesses({ extra: options.extra });
@@ -27,9 +27,7 @@ export function startCode(
     .catch((error: unknown) => logger.warn({ error }, "Code: could not copy the Shelley tables"));
   const stopWatcher = startCodeWatcher({
     hub,
-    deliver: async (botId, { from, ...submission }) => {
-      await submitToBot(botId, { ...submission, peer: { kind: "reply", name: from } }, runtime);
-    },
+    deliver: (finish) => deliverHandoffFinish(runtime, finish),
     notify: (notification) => notificationService.notify(notification),
   });
   // Pull requests (issue #297): a pass's turn ends here; boot re-arms every chain.

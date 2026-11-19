@@ -13,11 +13,17 @@
  */
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
-import { codeHandoffs, db } from "../../../apps/web/src/server/db";
+import {
+  botMessages,
+  codeHandoffs,
+  db,
+  routineRuns,
+  routines,
+} from "../../../apps/web/src/server/db";
+import { startSettledPipeline } from "../../../apps/web/src/server/api/bots/bots.settled";
 import type { AgentRuntime } from "../../../packages/agent/src/index";
 import type { TurnOutcome } from "@tiny-agents/code/contracts";
-import { submitToBot } from "../../../apps/web/src/server/api/bots/bots.conversation";
-import { codeStore } from "../../../apps/web/src/server/api/code/code.bots";
+import { codeStore, deliverHandoffFinish } from "../../../apps/web/src/server/api/code/code.bots";
 import {
   createCodeHub,
   setCodeHub,
@@ -40,6 +46,7 @@ import {
   openAppRuntime,
   resetAppTables,
   seedBot,
+  TEST_MODEL,
   type SeededBot,
 } from "../fixtures";
 import { fakeHarness, type FakeHarness } from "./fake-harness";
@@ -65,10 +72,8 @@ afterEach(async () => {
 
 const settle = (ms = 50) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** What the app does with a finish: a reply from the harness, into the bot's chat. */
-const intoChat: WatcherDeps["deliver"] = async (botId, { from, ...submission }) => {
-  await submitToBot(botId, { ...submission, peer: { kind: "reply", name: from } }, runtime);
-};
+/** What the app does with a finish: a reply from the harness, back where it was asked. */
+const intoChat: WatcherDeps["deliver"] = (finish) => deliverHandoffFinish(runtime, finish);
 
 /** A watcher, as one process runs it; the returned stop is that process dying. */
 function watch(deliver: WatcherDeps["deliver"] = intoChat, retryMs = 60_000): () => void {
@@ -77,9 +82,10 @@ function watch(deliver: WatcherDeps["deliver"] = intoChat, retryMs = 60_000): ()
   return stop;
 }
 
-/** The finishes in the bot's chat. */
-async function finishesIn(bot: SeededBot): Promise<string[]> {
-  const state = await runtime.readChat(Number(bot.conversationId));
+/** The finishes in the bot's chat, or in another of its conversations. */
+async function finishesIn(where: SeededBot | number): Promise<string[]> {
+  const ref = typeof where === "number" ? where : Number(where.conversationId);
+  const state = await runtime.readChat(ref);
   return state.messages
     .filter((message) => message.role === "user" && message.requestId?.startsWith("code-"))
     .map((message) => message.text);
@@ -113,6 +119,7 @@ describe("hand-off finishes (C7a: at least once, never twice)", () => {
   async function handOff(bot: SeededBot, nativeId: string) {
     await recordHandoff({
       botId: bot.id,
+      conversationId: bot.conversationId,
       idempotencyKey: `k-${nativeId}`,
       task: "fix login",
       threadId: `fake:${nativeId}`,
@@ -149,8 +156,8 @@ describe("hand-off finishes (C7a: at least once, never twice)", () => {
   it("does not post twice when the app died after the submit but before marking it delivered", async () => {
     const bot = await seedBot();
     await handOff(bot, "t2");
-    const crash = watch(async (botId, submission) => {
-      await intoChat(botId, submission);
+    const crash = watch(async (finish) => {
+      await intoChat(finish);
       throw new Error("died before marking it delivered");
     });
     harness.outcomes.set("t2", ended("Done.", 4));
@@ -168,9 +175,9 @@ describe("hand-off finishes (C7a: at least once, never twice)", () => {
     const bot = await seedBot();
     await handOff(bot, "t3");
     let failures = 2;
-    watch(async (botId, submission) => {
+    watch(async (finish) => {
       if (failures-- > 0) throw new Error("the chat is unavailable");
-      await intoChat(botId, submission);
+      await intoChat(finish);
     }, 20);
     harness.outcomes.set("t3", ended("Done.", 5));
     harness.endTurn("t3");
@@ -215,7 +222,12 @@ describe("hand-off starts (C7b: one thread per tool call)", () => {
     const bot = await seedBot();
     // The first run claimed the start and the harness made the thread; the
     // app died before recording it.
-    await claimHandoff({ botId: bot.id, idempotencyKey: "start-2", task: "fix the build" });
+    await claimHandoff({
+      botId: bot.id,
+      conversationId: bot.conversationId,
+      idempotencyKey: "start-2",
+      task: "fix the build",
+    });
     await harness.createThread({ message: "fix the build", cwd: "/repo" });
 
     const replay = await codeStore.start(startInput(bot, "start-2"));
@@ -348,6 +360,7 @@ describe("hand-off follow-ups (C7c: sends wait for their reopen)", () => {
     // A hand-off finished before the upgrade: no finish row records its turn.
     const handoff = await recordHandoff({
       botId: bot.id,
+      conversationId: bot.conversationId,
       idempotencyKey: "old-1",
       task: "fix login",
       threadId: "fake:tOld",
@@ -380,5 +393,123 @@ describe("hand-off follow-ups (C7c: sends wait for their reopen)", () => {
     harness.endTurn("tOld");
     await eventually(async () => expect(await finishesIn(bot)).toHaveLength(1));
     expect((await finishesIn(bot))[0]).toContain("Logout fixed too.");
+  });
+});
+
+describe("hand-off finishes go back to the conversation that asked", () => {
+  const conversation = () => runtime.createConversation({ modelId: TEST_MODEL, systemPrompt: "" });
+
+  /** A routine run's own conversation (each run starts a fresh one, issue #63). */
+  async function routineRunConversation(bot: SeededBot): Promise<number> {
+    const ref = await conversation();
+    const [routine] = await db
+      .insert(routines)
+      .values({
+        botId: bot.id,
+        name: "nightly",
+        prompt: "Fix the flaky test.",
+        schedule: { kind: "interval", minutes: 60 },
+      })
+      .returning();
+    await db.insert(routineRuns).values({
+      routineId: routine!.id,
+      scheduledFor: new Date(),
+      status: "succeeded",
+      requestId: "routine-run-1",
+      conversationId: String(ref),
+    });
+    return ref;
+  }
+
+  async function startFrom(ref: number, key: string) {
+    hub.start();
+    // The thread it makes is still working when the start records it.
+    harness.outcomes.set(`t${harness.created.length + 1}`, working);
+    const handoff = ok(
+      await codeStore.start({
+        conversationId: ref,
+        idempotencyKey: key,
+        task: "fix the flaky test",
+        cwd: "/repo",
+        harness: "fake",
+      }),
+    );
+    return handoff.threadId.slice("fake:".length);
+  }
+
+  it("delivers a routine run's hand-off into that run's conversation, not the bot's chat", async () => {
+    const bot = await seedBot();
+    const run = await routineRunConversation(bot);
+    watch();
+    const nativeId = await startFrom(run, "r1");
+    harness.outcomes.set(nativeId, ended("Flaky test fixed.", 1));
+    harness.endTurn(nativeId);
+
+    await eventually(async () => expect(await finishesIn(run)).toHaveLength(1));
+    expect((await finishesIn(run))[0]).toContain("Flaky test fixed.");
+    expect(await finishesIn(bot)).toEqual([]);
+  });
+
+  it("answers a hand-off another bot asked for where it asked, and relays that answer back", async () => {
+    const asker = await seedBot({ name: "Asker" });
+    const coder = await seedBot({ name: "Coder" });
+    // Asker messaged Coder from its chat; Coder answered in a conversation
+    // of its own (PR 337) and handed the work off from there.
+    const own = await conversation();
+    await db.insert(botMessages).values({
+      fromBotId: asker.id,
+      toBotId: coder.id,
+      conversationId: String(own),
+      ownConversation: true,
+      replyToBotId: asker.id,
+      kind: "relay",
+      requestId: "ask-1",
+      text: "Please fix the flaky test.",
+      deliveredAt: new Date(),
+      answeredAt: new Date(),
+    });
+    const stopSettled = startSettledPipeline(runtime);
+    stops.push(stopSettled);
+    watch();
+    const nativeId = await startFrom(own, "d1");
+    harness.outcomes.set(nativeId, ended("Flaky test fixed.", 1));
+    harness.endTurn(nativeId);
+
+    await eventually(async () => expect(await finishesIn(own)).toHaveLength(1));
+    expect(await finishesIn(coder)).toEqual([]);
+    // Coder's answer to the finish reaches Asker, as its first answer did.
+    const relayed = async () =>
+      (await runtime.readChat(Number(asker.conversationId))).messages
+        .filter((m) => m.role === "user")
+        .map((m) => m.text);
+    await eventually(async () =>
+      expect(await relayed()).toEqual([
+        expect.stringMatching(/^\*\*Reply from Coder:\*\* Echo: .*Flaky test fixed\./s),
+      ]),
+    );
+  });
+
+  it("sends a follow-up's finish to the conversation that sent the follow-up", async () => {
+    const bot = await seedBot();
+    const run = await routineRunConversation(bot);
+    watch();
+    const nativeId = await startFrom(run, "r2");
+    harness.outcomes.set(nativeId, ended("Flaky test fixed.", 1));
+    harness.endTurn(nativeId);
+    await eventually(async () => expect(await finishesIn(run)).toHaveLength(1));
+
+    // The owner, in the bot's chat, asks for more on the same thread.
+    await codeStore.send({
+      conversationId: Number(bot.conversationId),
+      idempotencyKey: "r2-follow-up",
+      threadId: `fake:${nativeId}`,
+      message: "also add a regression test",
+    });
+    harness.outcomes.set(nativeId, ended("Regression test added.", 2));
+    harness.endTurn(nativeId);
+
+    await eventually(async () => expect(await finishesIn(bot)).toHaveLength(1));
+    expect((await finishesIn(bot))[0]).toContain("Regression test added.");
+    expect(await finishesIn(run)).toHaveLength(1);
   });
 });

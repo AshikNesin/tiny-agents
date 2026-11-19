@@ -2,9 +2,16 @@
  * The `CodeStore` the bots' code tools run against (packages/agent
  * toolkits/code.ts): start and steer threads in any configured harness and
  * record hand-offs, always scoped to the bot that owns the asking
- * conversation (its chat or one of its routines). Shelley is the default
- * harness for hand-offs (owner decision, issue #157).
+ * conversation (its chat, a routine run's or a bot message's). Shelley is
+ * the default harness for hand-offs (owner decision, issue #157).
+ *
+ * A finish goes back to the conversation that last asked
+ * (`deliverHandoffFinish`), never from an unattended one into the bot's
+ * chat: a routine run's finish lands in that run's conversation, on its
+ * budget, and one asked for by another bot is answered in the conversation
+ * that bot's message started, so the answer is relayed back to it.
  */
+import { eq } from "drizzle-orm";
 import type { CodeHandoffRecord, CodeStore } from "@tiny-agents/agent";
 import { Boom } from "@groot/core/errors";
 import {
@@ -15,10 +22,14 @@ import {
   type HarnessInstance,
   type TurnOutcome,
 } from "@tiny-agents/code/server";
-import type { CodeHandoff } from "../../db";
+import { botMessages, db, type CodeHandoff } from "../../db";
+import { submitToBot } from "../bots/bots.conversation";
+import { createDeliveries, type DeliveryRuntime } from "../bots/bots.delivery";
 import { conversationOwner } from "../bots/bots.owner";
 import { codeHub } from "./code.hub";
+import { titleLater } from "./code.naming";
 import {
+  askedFrom,
   claimHandoff,
   dropHandoffClaim,
   findHandoff,
@@ -126,6 +137,7 @@ async function startOnce(
   }
   const claimed = await claimHandoff({
     botId,
+    conversationId: String(input.conversationId),
     idempotencyKey: input.idempotencyKey,
     task: input.task,
     cwd: input.cwd,
@@ -148,6 +160,8 @@ async function startOnce(
     throw error;
   }
   const row = await startedHandoff(input.idempotencyKey, threadIdOf(instance.id, nativeId));
+  // A short title, as a thread the owner starts gets (a bot's task is long).
+  titleLater(instance, nativeId, input.task);
   await follow(instance.id, nativeId);
   const hub = codeHub();
   void hub?.refresh(instance.id);
@@ -168,6 +182,7 @@ async function sendArmed(
   input: SendInput,
 ): Promise<{ status: "accepted" | "queued" } | { error: "not_found" }> {
   const handoff = await findHandoff(botId, threadId);
+  const conversationId = String(input.conversationId);
   let undo: (() => Promise<unknown>) | undefined;
   let adopted = false;
   if (!handoff) {
@@ -177,6 +192,7 @@ async function sendArmed(
     if (!found) return { error: "not_found" };
     const row = await recordHandoff({
       botId,
+      conversationId,
       idempotencyKey: input.idempotencyKey,
       task: input.message,
       ...(found.outcome.cwd ? { cwd: found.outcome.cwd } : {}),
@@ -185,10 +201,22 @@ async function sendArmed(
     });
     undo = () => forgetHandoff(row.id);
     adopted = true;
-  } else if (handoff.status === "finished") {
-    // The follow-up's turn ends with a finish the bot should hear about too.
-    await reopenHandoff(handoff.id);
-    undo = () => finishHandoffOnce(handoff.id);
+  } else {
+    // The follow-up's finish goes to the conversation that sent it.
+    const before = await askedFrom(handoff.id, conversationId);
+    const restore = async () => {
+      if (before !== null) await askedFrom(handoff.id, before);
+    };
+    if (handoff.status === "finished") {
+      // The follow-up's turn ends with a finish the bot should hear about too.
+      await reopenHandoff(handoff.id);
+      undo = async () => {
+        await finishHandoffOnce(handoff.id);
+        await restore();
+      };
+    } else {
+      undo = restore;
+    }
   }
   let result: { status: "accepted" | "queued" };
   try {
@@ -281,3 +309,61 @@ export const codeStore: CodeStore = {
     return (await listHandoffs(await botOf(conversationId))).map(toRecord);
   },
 };
+
+/** A hand-off's finish, owed to the bot that asked (`OwedFinish`). */
+export interface HandoffFinish {
+  botId: string;
+  /** The conversation that last asked; null (older rows): the bot's chat. */
+  conversationId: string | null;
+  /** Idempotency key of the submit. */
+  requestId: string;
+  /** The framed, sanitized text (`handoffFinishText`). */
+  text: string;
+  /** The harness's label: who the reply is from. */
+  from: string;
+}
+
+/**
+ * Put a finish in front of the bot, in the conversation that asked:
+ * - a routine run's: that run's conversation, unattended, on its budget;
+ * - a bot message's: a Delivery pinned to that conversation, so the bot
+ *   answers there and its answer is relayed to the bot that wrote, as the
+ *   first answer was;
+ * - its chat, a retired chat or an older row: the bot's chat.
+ * Idempotent by request id, like every submit.
+ */
+export async function deliverHandoffFinish(
+  rt: DeliveryRuntime,
+  finish: HandoffFinish,
+): Promise<void> {
+  const peer = { kind: "reply" as const, name: finish.from };
+  const submission = { requestId: finish.requestId, text: finish.text, peer };
+  const conversationId = finish.conversationId;
+  const owner = conversationId ? await conversationOwner(conversationId) : undefined;
+  if (conversationId && owner?.kind === "routine" && owner.bot.id === finish.botId) {
+    await submitToBot(finish.botId, submission, rt, {
+      unattendedConversationId: conversationId,
+      unattended: "routine",
+    });
+    return;
+  }
+  if (conversationId && owner?.kind === "delivery" && owner.bot.id === finish.botId) {
+    const asked = await db.query.botMessages.findFirst({
+      where: eq(botMessages.id, owner.deliveryId),
+      columns: { replyToBotId: true },
+    });
+    await createDeliveries(rt).deliver({
+      requestId: finish.requestId,
+      kind: "send",
+      toBotId: finish.botId,
+      fromBotId: null,
+      replyToBotId: asked?.replyToBotId ?? null,
+      conversationId,
+      text: finish.text,
+      prompt: finish.text,
+      peer,
+    });
+    return;
+  }
+  await submitToBot(finish.botId, submission, rt);
+}

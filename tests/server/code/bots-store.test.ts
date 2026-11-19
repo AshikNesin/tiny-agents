@@ -4,7 +4,7 @@
  * everything is scoped to the bot that owns the asking conversation, a
  * follow-up re-arms the finish delivery, and an existing thread is adopted.
  */
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vite-plus/test";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vite-plus/test";
 import { eq } from "drizzle-orm";
 import { createShelleyHarness } from "@tiny-agents/code/server";
 import { testHost } from "@tiny-agents/code/testing";
@@ -19,7 +19,8 @@ import {
   isFollowed,
 } from "../../../apps/web/src/server/api/code/code.store";
 import { shelleyHandoffs, shelleySeen } from "../../../apps/web/src/server/db";
-import { resetAppTables, TEST_MODEL } from "../fixtures";
+import { installAppForTests } from "../../../apps/web/src/server/app-root";
+import { eventually, resetAppTables, TEST_MODEL } from "../fixtures";
 import { startFakeShelley, type FakeShelley } from "./shelley/fake-shelley";
 import { fakeHarness, type FakeHarness } from "./fake-harness";
 
@@ -259,5 +260,29 @@ describe("code toolkit", () => {
       ["shelley_send", "allow"],
     ]);
     expect(effectivePermission(on.tools[0]!, { code_start: "ask" })).toBe("ask");
+  });
+});
+
+describe("a hand-off thread's title", () => {
+  afterEach(() => installAppForTests({ codeBranchNamer: undefined }));
+
+  it("is a short summary of the task, like a thread the owner starts", async () => {
+    installAppForTests({
+      codeBranchNamer: {
+        sideCaller: { complete: async () => "title: Fix login redirect\nbranch: fix-login" },
+      },
+    });
+    ok(
+      await codeStore.start({
+        conversationId: 101,
+        idempotencyKey: "titled-1",
+        harness: "claude-code",
+        task: "The login page redirects to /404 after a password reset. Find out why and fix it.",
+        cwd: "/repo",
+      }),
+    );
+    await eventually(() =>
+      expect(fake.renamed).toEqual([{ nativeId: "t1", title: "Fix login redirect" }]),
+    );
   });
 });

@@ -1,0 +1,1 @@
+ALTER TABLE `code_handoffs` ADD `conversation_id` text;

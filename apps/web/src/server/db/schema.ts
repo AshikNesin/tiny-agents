@@ -550,8 +550,8 @@ export const codeReviews = sqliteTable(
  * Coding work a bot handed to a harness (`code_start`, or `shelley_start`).
  * A start claims its row (`starting`) before the harness makes the thread,
  * so a replayed start never makes a second one. When that thread's turn
- * ends, the finish is owed to the bot's chat (running → finished,
- * compare-and-set, with its `code_handoff_finishes` row).
+ * ends, the finish is owed to the conversation that asked (running →
+ * finished, compare-and-set, with its `code_handoff_finishes` row).
  */
 export const codeHandoffs = sqliteTable(
   "code_handoffs",
@@ -566,6 +566,13 @@ export const codeHandoffs = sqliteTable(
     /** What the bot asked for (first message), for the card and list. */
     task: text("task").notNull(),
     cwd: text("cwd"),
+    /**
+     * The conversation that last asked (started, adopted or followed up):
+     * the bot's chat, a routine run's or a bot message's. Its finish goes
+     * back there (`deliverHandoffFinish`); null on rows from before it was
+     * kept, which go to the bot's chat.
+     */
+    conversationId: text("conversation_id"),
     /** Durable tool task identity: a replayed start returns this row. */
     idempotencyKey: text("idempotency_key").notNull().unique(),
     /** The hand-off machine (shared/machines/handoff.ts). */
