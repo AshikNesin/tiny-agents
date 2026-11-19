@@ -23,7 +23,7 @@
  * click on the stream expands it back to the panel, and the header keeps
  * just the status, Hand back while the owner drives, Expand and Close.
  */
-import type { CSSProperties, ReactNode } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 import { Card } from "@groot/ui";
 import { cn } from "@groot/ui/lib/utils";
 import type { Bot } from "../../../shared/api/bots";
@@ -81,8 +81,22 @@ export interface LivePanelProps {
   onLayout?: (layout: LiveLayout) => void;
 }
 
-/** The floating view: a fixed width, a 16:10 stream, over the chat. */
-const PIP_SIZING = "fixed z-40 w-[min(20rem,calc(100vw-4rem))] rounded-xl shadow-xl";
+/**
+ * The floating view takes the remote display's shape (16:10 until the first
+ * frame, and kept between 1:2 upright and 16:9 wide), at most 20rem wide and
+ * its stream at most 18rem tall, so an upright display makes it narrower
+ * rather than taller and the chat stays readable.
+ */
+function pipShape(display: { width: number; height: number } | null) {
+  const aspect = display
+    ? Math.min(16 / 9, Math.max(1 / 2, display.width / display.height))
+    : 16 / 10;
+  const width = `min(20rem, calc(100vw - 4rem), ${(18 * aspect).toFixed(2)}rem)`;
+  return { aspect, width };
+}
+
+/** The floating view, over the chat. */
+const PIP_SIZING = "fixed z-40 rounded-xl shadow-xl";
 
 export function LivePanel<S extends PanelStatus, L, I extends PageItem>({
   surface,
@@ -136,6 +150,7 @@ export function LivePanel<S extends PanelStatus, L, I extends PageItem>({
   // sidebar and a 26rem chat); narrower screens get the panel over the chat,
   // closable, like phones (#89).
   const pip = layout === "pip" && !fullscreen;
+  const [display, setDisplay] = useState<{ width: number; height: number } | null>(null);
   const { offset, startDrag } = usePipPosition(panelRef);
   const sizing = fullscreen
     ? "fixed inset-0 z-40 w-full bg-background"
@@ -148,9 +163,11 @@ export function LivePanel<S extends PanelStatus, L, I extends PageItem>({
       ? ""
       : "max-xl:rounded-none max-xl:ring-0";
   // A window shrunk since the corner was dragged still shows the whole view.
+  const shape = pipShape(display);
   const pipStyle: CSSProperties = {
-    right: `min(${offset.right}px, calc(100vw - min(20rem, calc(100vw - 4rem)) - 8px))`,
-    bottom: `min(${offset.bottom}px, calc(100dvh - 15rem))`,
+    width: shape.width,
+    right: `max(8px, min(${offset.right}px, calc(100vw - ${shape.width} - 8px)))`,
+    bottom: `max(8px, min(${offset.bottom}px, calc(100dvh - 21rem)))`,
   };
 
   return (
@@ -212,8 +229,9 @@ export function LivePanel<S extends PanelStatus, L, I extends PageItem>({
         <div
           className={cn(
             "relative min-h-0 overflow-hidden rounded-b-[inherit]",
-            pip ? "aspect-[16/10] shrink-0" : "flex-1",
+            pip ? "shrink-0" : "flex-1",
           )}
+          style={pip ? { aspectRatio: shape.aspect } : undefined}
           data-testid={`${kind}-viewport`}
         >
           {streaming && (
@@ -225,6 +243,8 @@ export function LivePanel<S extends PanelStatus, L, I extends PageItem>({
               // A guest watches at the remote window's size; only the owner fits it (S2).
               // The picture in picture only scales it, so the bot's pages keep their layout.
               resize={surface.fitsWindow && (guest || pip) ? keepSize : undefined}
+              remoteResize={!pip}
+              onDisplaySize={setDisplay}
               onState={setVncState}
             />
           )}

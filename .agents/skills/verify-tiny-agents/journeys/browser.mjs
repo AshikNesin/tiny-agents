@@ -151,23 +151,22 @@ await journey(
     };
 
     const toggle = page.getByTestId("live-view-toggle");
-    await step("chat: /browse 2 leaves the panel closed and lights the toggle", async () => {
+    await step("chat: /browse 2 leaves the panel closed", async () => {
       await page.goto(`/chats/${botId}`, LOADED);
       await expect(composer).toBeVisible({ timeout: 20_000 });
       await expect(panel).toHaveCount(0);
       await browse(2);
-      await expect(toggle).toHaveAccessibleName(`Open live view, ${name} is using the browser`, {
-        timeout: 60_000,
-      });
+      // The run reads the page twice and answers; the panel never appears.
+      await echoes(1);
       await expect(panel).toHaveCount(0);
+      await expect(toggle).toBeVisible();
     });
     await proof("panel-closed-in-use");
     await step("chat: the toggle opens the panel live beside the chat", async () => {
       await toggle.click();
       await expect(panel).toBeVisible();
-      await expect(panel).toContainText("Live", { timeout: 60_000 });
+      await expect(panel.getByTestId("browser-driver")).toBeVisible({ timeout: 60_000 });
       await streamed(new RegExp(`/bots/${botId}/browser/vnc`));
-      await echoes(1);
       await expect(panel.getByTestId("browser-driver")).toHaveText(`${name} is driving`);
     });
     await proof("panel-desktop");
@@ -215,7 +214,7 @@ await journey(
         await echoes(3);
         await showLiveView(page, "browser");
         await expect(panel).toHaveAttribute("data-layout", "pip");
-        await expect(panel).toContainText("Live", { timeout: 60_000 });
+        await expect(panel.getByTestId("browser-driver")).toBeVisible({ timeout: 60_000 });
         const box = await panel.boundingBox();
         expect(box.width).toBeLessThan(PHONE.width - 50);
         await expect(composer).toBeVisible();

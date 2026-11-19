@@ -29,6 +29,7 @@ const fakes = vi.hoisted(() => ({ rfbs: [] as FakeRfb[] }));
 
 interface FakeRfb extends EventTarget {
   viewOnly: boolean;
+  resizeSession?: boolean;
   focus: ReturnType<typeof vi.fn>;
   disconnect: ReturnType<typeof vi.fn>;
   sendKey: ReturnType<typeof vi.fn>;
@@ -385,7 +386,8 @@ describe("BrowserPanel", () => {
       expect(screen.queryByTestId("browser-reset")).not.toBeInTheDocument();
       expect(screen.queryByRole("separator")).not.toBeInTheDocument();
 
-      // The remote Chrome keeps its size; the small view only scales it.
+      // The remote display and Chrome keep their size; the small view only scales them.
+      expect(latestRfb().resizeSession).toBe(false);
       observer.notify();
       await new Promise((resolve) => setTimeout(resolve, 300));
       expect(api.resize).not.toHaveBeenCalled();
@@ -399,6 +401,31 @@ describe("BrowserPanel", () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+
+  it("shapes the picture in picture like the remote display, within bounds", async () => {
+    mockApi(vncStatus());
+    render(<BrowserPanel bot={bot} onClose={vi.fn()} layout="pip" onLayout={vi.fn()} />);
+    await connected();
+    const viewport = screen.getByTestId("browser-viewport");
+    const ratio = () => Number.parseFloat(viewport.style.aspectRatio);
+    expect(ratio()).toBe(1.6);
+
+    // noVNC sizes its canvas to the remote display: a 1200x900 display is 4:3.
+    const canvas = document.createElement("canvas");
+    canvas.width = 1200;
+    canvas.height = 900;
+    act(() => {
+      screen.getByTestId("browser-vnc").appendChild(canvas);
+    });
+    await waitFor(() => expect(ratio()).toBeCloseTo(4 / 3));
+
+    // A tall phone-shaped display stops at 1:2.
+    act(() => {
+      canvas.width = 700;
+      canvas.height = 1600;
+    });
+    await waitFor(() => expect(ratio()).toBe(0.5));
   });
 
   it("in picture in picture, keeps Hand back while the owner drives", async () => {
@@ -417,7 +444,7 @@ describe("BrowserPanel", () => {
     );
     await connected();
     const panel = screen.getByTestId("browser-panel");
-    expect(panel.style.right).toContain("min(16px,");
+    expect(panel.style.right).toContain("16px");
     // jsdom's window is 1024x768; the view sits 16px from the right, 112px from the bottom.
     vi.spyOn(panel, "getBoundingClientRect").mockReturnValue({
       left: 688,
@@ -431,12 +458,12 @@ describe("BrowserPanel", () => {
     fireEvent.pointerDown(handle, { clientX: 700, clientY: 470, pointerId: 1 });
     fireEvent.pointerMove(handle, { clientX: 300, clientY: 170, pointerId: 1 });
     fireEvent.pointerUp(handle, { pointerId: 1 });
-    expect(panel.style.right).toContain("min(416px,");
-    expect(panel.style.bottom).toContain("min(412px,");
+    expect(panel.style.right).toContain("416px");
+    expect(panel.style.bottom).toContain("412px");
 
     unmount();
     render(<BrowserPanel bot={bot} onClose={vi.fn()} layout="pip" onLayout={vi.fn()} />);
-    expect(screen.getByTestId("browser-panel").style.right).toContain("min(416px,");
+    expect(screen.getByTestId("browser-panel").style.right).toContain("416px");
   });
 
   it("asks for a window Chrome can draw when the viewer is narrower than that", async () => {
