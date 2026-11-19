@@ -158,6 +158,28 @@ const threadText = (c: PrComment) =>
     ...c.replies.map((r) => `${r.author}: ${r.body}`),
   ].join("\n");
 
+/** The review verdict, and whether Auto-fix passes the comment over. */
+function CommentBadges({ comment: c, autofix }: { comment: PrComment; autofix: boolean }) {
+  return (
+    <>
+      {c.verdict && (
+        <Badge variant={c.verdict === "approved" ? "secondary" : "outline"}>
+          {c.verdict === "approved" ? "Approved" : "Changes requested"}
+        </Badge>
+      )}
+      {c.ignored && autofix && (
+        <Badge
+          variant="outline"
+          className="text-muted-foreground"
+          title="Auto-fix takes instructions only from you and trusted bots. Attach it to ask the agent."
+        >
+          Auto-fix skips
+        </Badge>
+      )}
+    </>
+  );
+}
+
 function CommentCard({
   comment: c,
   autofix,
@@ -180,20 +202,7 @@ function CommentCard({
         <div className="min-w-0 flex-1">
           <CommentByline author={c.author} bot={c.bot} at={c.createdAt} />
         </div>
-        {c.verdict && (
-          <Badge variant={c.verdict === "approved" ? "secondary" : "outline"}>
-            {c.verdict === "approved" ? "Approved" : "Changes requested"}
-          </Badge>
-        )}
-        {c.ignored && autofix && (
-          <Badge
-            variant="outline"
-            className="text-muted-foreground"
-            title="Auto-fix takes instructions only from you and trusted bots. Attach it to ask the agent."
-          >
-            Auto-fix skips
-          </Badge>
-        )}
+        <CommentBadges comment={c} autofix={autofix} />
         {c.where && !settled && (
           <Button
             variant="ghost"
