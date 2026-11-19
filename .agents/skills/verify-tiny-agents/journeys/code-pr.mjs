@@ -11,13 +11,14 @@
 import { journey, expect } from "../scripts/lib.mjs";
 
 const CONTROL = `http://127.0.0.1:${Number(new URL(process.env.TA_VERIFY_URL).port) + 3}`;
-const control = async (path, body) =>
-  (
-    await fetch(`${CONTROL}${path}`, {
-      method: body === undefined ? "GET" : "POST",
-      body: body === undefined ? undefined : JSON.stringify(body),
-    })
-  ).json();
+const control = async (path, body) => {
+  const res = await fetch(`${CONTROL}${path}`, {
+    method: body === undefined ? "GET" : "POST",
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`fake GitHub control ${path}: ${res.status} ${await res.text()}`);
+  return res.json();
+};
 const LOADED = { waitUntil: "domcontentloaded" };
 const ago = (minutes) => new Date(Date.now() - minutes * 60_000).toISOString();
 const check = (name, state, jobId) => ({
