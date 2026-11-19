@@ -110,12 +110,22 @@ function fillInPage(first: Element | FillArgs, second?: FillArgs): FillResult {
     const box = el.getBoundingClientRect();
     return box.width > 0 && box.height > 0;
   };
+  /** A sign-in field that holds a mobile number: a tel input whose name,
+   * placeholder or label says so ("Enter your mobile number"). */
+  const isMobileNumberField = (el: Element, text: string) =>
+    (el as HTMLInputElement).type === "tel" && /mobile|phone|contact.?number/.test(text);
   const heuristics: Record<string, (el: Element, text: string) => boolean> = {
     "current-password": (el) => (el as HTMLInputElement).type === "password",
     "new-password": (el) => (el as HTMLInputElement).type === "password",
     username: (el, text) =>
-      (el as HTMLInputElement).type === "email" || /user|login|e-?mail|account/.test(text),
+      (el as HTMLInputElement).type === "email" ||
+      isMobileNumberField(el, text) ||
+      /user|login|e-?mail|account/.test(text),
     email: (el, text) => (el as HTMLInputElement).type === "email" || /e-?mail/.test(text),
+    // Mobile-number sign-ins (portals that sign in by phone): a `tel` input
+    // whose label or placeholder names a mobile number. It is that sign-in's
+    // username field, so the username heuristic accepts it too.
+    tel: (el, text) => isMobileNumberField(el, text),
     "one-time-code": (el, text) =>
       /otp|one.?time|2fa|mfa|totp|verification|security.?code|\bcode\b/.test(text) &&
       (el as HTMLInputElement).type !== "password",
