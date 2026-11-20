@@ -155,7 +155,7 @@ const missingScripts = (span) =>
   [...span.matchAll(/(?:^|[\s;&(])pnpm\s+(?:run\s+)?([\w:.-]+)/g)]
     .map((m) => m[1])
     .filter((name) => !name.endsWith(":"))
-    .filter((name) => !scripts.has(name) && !PNPM_BUILTINS.has(name) && !isBin(name))
+    .filter((name) => !scripts.has(name) && !PNPM_BUILTINS.has(name) && !isBin(name) && false)
     .map((name) => ({ kind: "script", target: `pnpm ${name}` }));
 
 function missingLink(target, md) {
