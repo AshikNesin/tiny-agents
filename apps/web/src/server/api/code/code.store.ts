@@ -1,10 +1,3 @@
-/**
- * What tiny-agents keeps about Code threads (ADR 0011): the thread index
- * (`code_threads`) — followed threads and how far the owner has read them,
- * plus the rows of harnesses that keep no list of their own — and bot
- * hand-offs (`code_handoffs`) with the finishes they owe the bots
- * (`code_handoff_finishes`). Every harness keeps its own transcript.
- */
 import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import {
   LEGACY_INSTANCE_ID,
@@ -43,7 +36,6 @@ function toIndexed(row: CodeThreadRow): IndexedThread {
   return {
     instanceId: row.instanceId,
     nativeId: row.nativeId,
-    // A thread started before every project thread got a title shows its branch's words.
     title: (isProjectHeaderTitle(row.title) && branchTitle(row.branch)) || row.title,
     cwd: row.cwd,
     parentNativeId: row.parentNativeId,
@@ -57,7 +49,6 @@ function toIndexed(row: CodeThreadRow): IndexedThread {
   };
 }
 
-/** The index drivers see (`HarnessHost.index`). */
 export const threadIndex: ThreadIndex = {
   async list(instanceId) {
     const rows = await db
@@ -105,9 +96,6 @@ export const threadIndex: ThreadIndex = {
   },
 };
 
-// --- followed threads (unread) -------------------------------------------------
-
-/** Follow a thread (started, opened or handed off here); keeps an existing mark. */
 export async function follow(instanceId: string, nativeId: string): Promise<void> {
   const id = threadIdOf(instanceId, nativeId);
   await db
@@ -116,7 +104,6 @@ export async function follow(instanceId: string, nativeId: string): Promise<void
     .onConflictDoUpdate({ target: codeThreads.id, set: { followed: true } });
 }
 
-/** The owner has read `threadId` up to `cursor` (never moves backwards). */
 export async function markSeen(
   instanceId: string,
   nativeId: string,
@@ -135,7 +122,6 @@ export async function markSeen(
     });
 }
 
-/** Followed threads (by thread id) and how far the owner has read each. */
 export async function seenMap(): Promise<Map<string, number>> {
   const rows = await db
     .select({ id: codeThreads.id, cursor: codeThreads.seenCursor })
@@ -144,11 +130,9 @@ export async function seenMap(): Promise<Map<string, number>> {
   return new Map(rows.map((r) => [r.id, r.cursor]));
 }
 
-/** What the list adds to each thread (issue #297): its project and open pull request. */
 export interface ThreadDecoration {
   projectId: string | null;
   pr: { number: number; loop: string; url: string } | null;
-  /** The PR review this thread is the assistant of (issue #345). */
   review: { id: string; number: number } | null;
 }
 
@@ -192,9 +176,6 @@ export async function isFollowed(threadId: string): Promise<boolean> {
   return Boolean(row?.followed);
 }
 
-// --- hand-offs -------------------------------------------------------------------
-
-/** A hand-off past `starting`: its thread exists. */
 export type ThreadHandoff = CodeHandoff & { threadId: string };
 
 const hasThread = (row: CodeHandoff | undefined): row is ThreadHandoff =>
@@ -202,7 +183,6 @@ const hasThread = (row: CodeHandoff | undefined): row is ThreadHandoff =>
 
 export interface HandoffInput {
   botId: string;
-  /** The conversation asking: its finish goes back there. */
   conversationId: string;
   idempotencyKey: string;
   task: string;
@@ -215,7 +195,6 @@ export async function findHandoffByKey(key: string): Promise<CodeHandoff | undef
   return db.query.codeHandoffs.findFirst({ where: eq(codeHandoffs.idempotencyKey, key) });
 }
 
-/** A hand-off of a thread that already exists (an adopted one): `running` at once. */
 export async function recordHandoff(input: HandoffInput): Promise<ThreadHandoff> {
   await db
     .insert(codeHandoffs)
@@ -235,11 +214,6 @@ export async function recordHandoff(input: HandoffInput): Promise<ThreadHandoff>
   return row;
 }
 
-/**
- * Claim a start for its idempotency key before the harness makes the thread
- * (`starting`, no thread yet): true for the caller that won. A key already
- * claimed, by this start or an earlier run of it, makes no second thread.
- */
 export async function claimHandoff(
   input: Omit<HandoffInput, "threadId" | "title">,
 ): Promise<boolean> {
@@ -259,7 +233,6 @@ export async function claimHandoff(
   return claimed.length > 0;
 }
 
-/** starting → running, with the thread the harness made. */
 export async function startedHandoff(key: string, threadId: string): Promise<ThreadHandoff> {
   await db
     .update(codeHandoffs)
@@ -270,21 +243,18 @@ export async function startedHandoff(key: string, threadId: string): Promise<Thr
   return row;
 }
 
-/** Drop a claim whose thread was never made (the harness refused), so nothing waits on it. */
 export async function dropHandoffClaim(key: string): Promise<void> {
   await db
     .delete(codeHandoffs)
     .where(and(eq(codeHandoffs.idempotencyKey, key), eq(codeHandoffs.status, "starting")));
 }
 
-/** Forget an adopted hand-off whose first send failed (nothing ran for it). */
 export async function forgetHandoff(id: string): Promise<void> {
   await db
     .delete(codeHandoffs)
     .where(and(eq(codeHandoffs.id, id), eq(codeHandoffs.status, "running")));
 }
 
-/** A bot's hand-offs, newest first (optionally to one harness instance). */
 export async function listHandoffs(
   botId: string,
   options: { limit?: number; instanceId?: string } = {},
@@ -316,12 +286,6 @@ export async function findHandoff(
   return hasThread(row) ? row : undefined;
 }
 
-/**
- * Mark a hand-off running again (the bot sent a follow-up), so its next
- * finish is delivered. A hand-off still running is left as it is.
- * `finishedAt` becomes the reopen time, so a reconnect before the new turn
- * starts never owes the turn that ended before it again (`endsHandoff`).
- */
 export async function reopenHandoff(id: string): Promise<void> {
   await db
     .update(codeHandoffs)
@@ -334,10 +298,6 @@ export async function reopenHandoff(id: string): Promise<void> {
     );
 }
 
-/**
- * A follow-up from `conversationId`: the hand-off's next finish goes there.
- * Returns the conversation it replaced, to put back if the send fails.
- */
 export async function askedFrom(id: string, conversationId: string): Promise<string | null> {
   const row = await db.query.codeHandoffs.findFirst({
     where: eq(codeHandoffs.id, id),
@@ -347,18 +307,12 @@ export async function askedFrom(id: string, conversationId: string): Promise<str
   return row?.conversationId ?? null;
 }
 
-/**
- * Whether a turn that ended at `endedAt` (harness time, ms) is this running
- * hand-off's to report: it ended after the hand-off started or, once a
- * follow-up reopened it, after the reopen.
- */
 export function endsHandoff(handoff: CodeHandoff, endedAt: number): boolean {
   return handoff.finishedAt
     ? endedAt > handoff.finishedAt.getTime()
     : endedAt >= handoff.createdAt.getTime();
 }
 
-/** Running hand-offs of these threads (all when omitted). */
 export async function runningHandoffs(threadIds?: string[]): Promise<ThreadHandoff[]> {
   const running = eq(codeHandoffs.status, "running");
   const rows = await db
@@ -368,7 +322,6 @@ export async function runningHandoffs(threadIds?: string[]): Promise<ThreadHando
   return rows.filter(hasThread);
 }
 
-/** running → finished, once, owing nothing: true for the caller that won (a reopen undone). */
 export async function finishHandoffOnce(id: string): Promise<boolean> {
   const updated = await db
     .update(codeHandoffs)
@@ -383,11 +336,9 @@ export async function finishHandoffOnce(id: string): Promise<boolean> {
   return updated.length > 0;
 }
 
-/** A finish owed to a bot, with what its delivery needs. */
 export interface OwedFinish {
   id: string;
   botId: string;
-  /** Where it goes (`deliverHandoffFinish`); null: the bot's chat. */
   conversationId: string | null;
   threadId: string | null;
   requestId: string;
@@ -395,13 +346,6 @@ export interface OwedFinish {
   text: string;
 }
 
-/**
- * The turn ended: running → finished, once, and the finish it owes the bot
- * written in the same transaction, so a crash before the delivery leaves it
- * owed rather than lost. Returns the owed finish for the caller that won.
- * A turn whose finish is already recorded (the same outcome read again, as
- * after a follow-up reopened the hand-off) finishes nothing.
- */
 export function oweFinish(
   handoff: ThreadHandoff,
   finish: { requestId: string; harness: string; text: string },
@@ -440,7 +384,6 @@ export function oweFinish(
   });
 }
 
-/** Finishes not yet delivered, oldest first (boot, reconnects, retries). */
 export async function owedFinishes(): Promise<OwedFinish[]> {
   return db
     .select({
@@ -458,7 +401,6 @@ export async function owedFinishes(): Promise<OwedFinish[]> {
     .orderBy(asc(codeHandoffFinishes.createdAt));
 }
 
-/** The submit returned: the finish is delivered. */
 export async function markFinishDelivered(id: string): Promise<void> {
   await db
     .update(codeHandoffFinishes)
@@ -466,14 +408,6 @@ export async function markFinishDelivered(id: string): Promise<void> {
     .where(eq(codeHandoffFinishes.id, id));
 }
 
-// --- the Shelley-only tables before ADR 0011 -------------------------------------
-
-/**
- * Copy `shelley_seen` and `shelley_handoffs` (issue #143) into the Code
- * tables once, under the `shelley` instance. Idempotent: rows already
- * copied are skipped, so it runs on every boot. The old tables stay until a
- * later release drops them.
- */
 export async function copyShelleyTables(instanceId = "shelley"): Promise<number> {
   const seen = await db.select().from(shelleySeen);
   const handoffs = await db.select().from(shelleyHandoffs);
@@ -504,7 +438,6 @@ export async function copyShelleyTables(instanceId = "shelley"): Promise<number>
         task: row.task,
         cwd: row.cwd,
         idempotencyKey: row.idempotencyKey,
-        // The legacy column is untyped text: anything unknown has finished.
         status: handoffMachine.is(row.status) ? row.status : "finished",
         createdAt: row.createdAt,
         finishedAt: row.finishedAt,

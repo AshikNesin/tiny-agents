@@ -38,21 +38,16 @@ import {
 
 const router = new Hono<AppEnv>();
 
-/** A positive integer task id route parameter. */
 function parseTaskId(value: string | undefined): number {
   const taskId = Number(parseStringParam(value, "taskId"));
   if (!Number.isInteger(taskId) || taskId <= 0) throw Boom.badRequest("Invalid taskId");
   return taskId;
 }
 
-// ── Models ────────────────────────────────────────────────────────────
-
 router.get("/claude-code/status", (c) => {
   return ok<ClaudeCodeStatus>(c, getAgentRuntime().claudePlan.status());
 });
 
-// Is Claude Code installed and signed in where the worker runs? The first
-// call on a sandbox starts installing it; the client polls while it does.
 router.get("/claude-code/account", async (c) => {
   return ok<ClaudeCodeAccount>(c, await getAgentRuntime().claudePlan.account());
 });
@@ -60,7 +55,6 @@ router.get("/claude-code/account", async (c) => {
 router.get("/models", (c) => {
   const catalog = getAgentRuntime().catalog;
   return ok<ModelsResponse>(c, {
-    // Chat models the picker offers, and any disabled one a bot still uses.
     models: catalog.list({ type: "chat" }),
     defaultModelId: catalog.forRole("bot_default")?.id ?? null,
     canAnswer: catalog.canAnswer(),
@@ -68,20 +62,15 @@ router.get("/models", (c) => {
   });
 });
 
-// ── Capabilities ──────────────────────────────────────────────────────
-
 router.get("/capabilities", (c) => {
   return ok<CapabilityList>(c, { capabilities: getAgentRuntime().listCapabilities() });
 });
-
-// ── Chat + activity streams (SSE) ─────────────────────────────────────
 
 router.get("/events", (c) => {
   const viewer = c.get("viewer");
   const follows = (conversation: string) => followsConversation(viewer, conversation);
   return openSse<EventsFeedEvent>(c, (sse) => {
     const runtime = getAgentRuntime();
-    // Snapshot of current busy conversations first, then live changes.
     sse.write({
       type: "activity",
       busy: runtime.busyConversations().map(String).filter(follows),
@@ -99,7 +88,6 @@ router.get("/events", (c) => {
         });
       }),
     );
-    // Guests see model names in the picker too, so they refetch as well.
     sse.onClose(onModelsChanged(() => sse.write({ type: "models.changed" })));
     if (!seesConnections(viewer)) return;
     sse.onClose(
@@ -112,9 +100,7 @@ router.get("/events", (c) => {
 
 router.get("/bots/:id/stream", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
-  // Before the stream opens (unknown bot) this is a normal API error.
   const bot = await botsService.getBot(id);
-  // The stream ends when the bot moves to another chat; the client reconnects onto it.
   const watched = countsAsWatching(c.get("viewer"));
   return openSse<BotStreamEvent>(
     c,
@@ -122,8 +108,6 @@ router.get("/bots/:id/stream", async (c) => {
     { botId: bot.id },
   );
 });
-
-// ── Bots CRUD ─────────────────────────────────────────────────────────
 
 router.post("/bots", async (c) => {
   const payload = await parseBody(c, createBotSchema);
@@ -149,8 +133,6 @@ router.delete("/bots/:id", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
   return ok(c, await botsService.deleteBot(id));
 });
-
-// ── Chat actions ──────────────────────────────────────────────────────
 
 router.get("/bots/:id/messages", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
@@ -183,8 +165,6 @@ router.post("/bots/:id/reset", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
   return ok(c, await chatsService.resetConversation(id));
 });
-
-// ── Past chats (issue #101) ───────────────────────────────────────────
 
 router.get("/bots/:id/chats", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
@@ -239,7 +219,6 @@ router.post("/bots/:id/pin", async (c) => {
   return ok(c, await botsService.setPinned(id, payload.pinned));
 });
 
-// Owner only: guest.guard.ts does not open it to guests.
 router.put("/bots/:id/yolo", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
   const payload = await parseBody(c, yoloSchema);

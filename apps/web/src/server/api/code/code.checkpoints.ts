@@ -1,13 +1,3 @@
-/**
- * Per-turn checkpoints of a project thread (issue #297 phase 6): the
- * worktree at the thread's start and at every turn end, uncommitted and new
- * files included, kept as commits under hidden refs
- * (`refs/tiny-agents/checkpoints/<branch>/<seq>`) in the project's clone.
- * They give Changes a per-turn diff, and **Revert to here** puts the files
- * back as they were, as uncommitted changes on top of the branch: history,
- * and anything already pushed, is never rewritten. A revert first takes a
- * checkpoint of the state it replaces, so it can itself be undone.
- */
 import { desc, eq } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { codeCheckpoints, db, type CodeCheckpoint } from "../../db";
@@ -26,10 +16,6 @@ export async function checkpointsOf(threadId: string): Promise<CodeCheckpoint[]>
     .orderBy(desc(codeCheckpoints.seq));
 }
 
-/**
- * Take a checkpoint of a worktree, unless nothing changed since the last
- * one. Answers the row, or undefined when it was skipped.
- */
 async function takeCheckpoint(
   ws: Workspace,
   thread: { id: string; branch: string; worktree: string },
@@ -54,7 +40,6 @@ async function takeCheckpoint(
   return row;
 }
 
-/** A project thread's turn ended: checkpoint its worktree. */
 export async function checkpointTurn(threadId: string): Promise<CodeCheckpoint | undefined> {
   const found = await projectThread(threadId);
   if (!found?.thread.worktree || !found.thread.branch) return undefined;
@@ -66,7 +51,6 @@ export async function checkpointTurn(threadId: string): Promise<CodeCheckpoint |
   );
 }
 
-/** A checkpoint and the one before it (what that turn changed). */
 export async function checkpointRange(threadId: string, checkpointId: string) {
   const [{ worktree, ws }, all] = await Promise.all([
     threadWorktree(threadId),
@@ -78,7 +62,6 @@ export async function checkpointRange(threadId: string, checkpointId: string) {
   return { from: all[index + 1] ?? to, to, worktree, ws };
 }
 
-/** Put the worktree back as it was at a checkpoint (never while the agent works). */
 export async function revertTo(
   threadId: string,
   checkpointId: string,

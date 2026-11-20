@@ -1,11 +1,3 @@
-/**
- * The agent's views of uploads. An id is valid only for sends into that
- * conversation (issue #17), so a bot cannot reach into another chat's files:
- *
- * - VisionStore: see_image resolves upload ids to prepared image bytes.
- * - AttachmentStore (issue #58): the attachments toolkit lists, reads and
- *   copies files through their stored extraction.
- */
 import { eq, inArray } from "drizzle-orm";
 import { storageService } from "@groot/core/storage";
 import type {
@@ -19,7 +11,6 @@ import { extractionMachine } from "../../../shared/machines/extraction";
 import { ensureExtracting, loadContent } from "./uploads.extraction";
 import { asBuffer, sniffImage } from "./uploads.prepare";
 
-/** Model-ready variant bytes for see_image and inline sends. */
 export async function modelImage(
   id: string,
 ): Promise<
@@ -31,8 +22,6 @@ export async function modelImage(
   const bytes = asBuffer(file.bytes);
   return {
     data: bytes.toString("base64"),
-    // The variant's own bytes decide: local storage types objects by key
-    // extension, and `chat/<id>/model` has none.
     mimeType: sniffImage(bytes) ?? (file.contentType || row.mimeType),
     name: row.name,
     ...(row.width !== null && row.height !== null ? { width: row.width, height: row.height } : {}),

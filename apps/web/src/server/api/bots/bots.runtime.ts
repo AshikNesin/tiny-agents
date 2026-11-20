@@ -1,11 +1,3 @@
-/**
- * The server's AgentRuntime singleton and its lifecycle.
- *
- * `apps/web/src/server/entry.node.ts` opens the runtime at boot (before the HTTP
- * server accepts requests) and closes it in the graceful-shutdown hook. Route
- * modules read the instance through `getAgentRuntime()`; tests substitute a
- * fake through the App root (`installAppForTests`) instead of touching pi-durable.
- */
 import {
   AgentRuntime,
   createAttachmentsToolkit,
@@ -76,11 +68,6 @@ import { app } from "../../app-root";
 type RuntimeOptions = Parameters<typeof AgentRuntime.open>[0];
 type RuntimeEnv = Readonly<Record<string, string | undefined>>;
 
-/**
- * The built-in toolkits whose stores are the app's own: no hosts, keys or
- * processes behind them. The server test runtime installs exactly these
- * (with `botsCapability`); `builtinCapabilities` adds the rest.
- */
 export function appStoreCapabilities(env: AppEnv = appEnv()) {
   return {
     tasks: createTasksToolkit(taskStore),
@@ -91,25 +78,18 @@ export function appStoreCapabilities(env: AppEnv = appEnv()) {
   } satisfies Record<string, Capability>;
 }
 
-/** Whether the owner's Claude plan account is on: Claude Code can take coding work. */
 function claudePlanOn(config: ModelConfig): boolean {
   return config.providers.some((p) => p.kind === "claude-plan" && p.enabled);
 }
 
-/** The built-in toolkits (issue #1 D15) and skills. Read env at boot, like the runtime does. */
 function builtinCapabilities(env: AppEnv, config: ModelConfig): Capability[] {
-  // Every value the vault resolves is scrubbed from logs and error reports too.
   setScrubber((text) => secretRedactor.scrub(text));
   const vault = createVaultBroker(getAgentRuntime);
   const own = appStoreCapabilities(env);
   return [
     own.skills,
     own.memory,
-    // Self-improvement (issue #128): the bot edits its own system prompt;
-    // `askOnly`, so every change waits for the owner in chat.
     createSelfImproveCapability(createInstructionsStore()),
-    // Bot builder (issue #149): create a new bot when the owner asks;
-    // `askOnly`, so every new bot waits for the owner in chat.
     createBotBuilderCapability(createBotCreationStore()),
     own.tasks,
     own.routines,
@@ -117,39 +97,24 @@ function builtinCapabilities(env: AppEnv, config: ModelConfig): Capability[] {
       apiKey: unquote(env.TINYFISH_API_KEY),
       vault,
     }),
-    // Vault (issue #56): handles only; sinks live in the browser and web toolkits.
     createVaultToolkit({ broker: vault }),
     own.today,
     createSandboxToolkit({
-      // The one sandbox connection every SSH user shares.
       connection: sandboxConnection(env),
-      // Vault secrets as env vars for one command, confined to their hosts;
-      // with an allowlist, every command is confined to it (issue #56).
       vault,
       egressAllowlist: unquote(env.SANDBOX_EGRESS_ALLOWLIST),
     }),
-    // Attachments (issue #58): read, search and copy the files the owner
-    // attached. The store resolves ids through the live runtime, scoped to
-    // the asking conversation.
     createAttachmentsToolkit(
       createAttachmentStore({ attachmentIds: (id) => getAgentRuntime().attachmentIds(id) }),
       { sandbox: sandboxConnection(env) },
     ),
-    // Browser (issue #24): one Chrome per profile (shared by default, or the
-    // bot's own), a tab per bot, lazy, idle-closed; on the sandbox VM the
-    // owner also gets a VNC-streamed desktop.
     createBrowserToolkit({
-      // The same manager the routes, the VNC bridge and the credential
-      // request submit act through (browser.sessions.ts).
       sessions: getBrowserSessions(env),
       resolveTarget: browserTargetForConversation,
       allowedPrivateHosts: unquote(env.BROWSER_ALLOWED_PRIVATE_HOSTS) ?? undefined,
       vault,
       ownerWaits: app().ownerWaits,
     }),
-    // Code (issue #143, ADR 0011): hand coding work to the owner's coding
-    // agents (Shelley by default, Claude Code by name); finishes come back
-    // into the chat. No tools without a configured harness.
     createCodeToolkit(
       env.SHELLEY_URL?.trim() || claudePlanOn(config)
         ? { store: codeStore }
@@ -158,9 +123,6 @@ function builtinCapabilities(env: AppEnv, config: ModelConfig): Capability[] {
               "Set SHELLEY_URL, or turn on the Claude plan on the sandbox, to hand coding work to a coding agent.",
           },
     ),
-    // Computer (issue #108): an XFCE desktop per browser profile on the
-    // sandbox VM, seen with scrot and driven with xdotool. Without a VM it
-    // offers no tools and the bot editor shows why.
     createComputerToolkit({
       sessions: getComputerSessions(env) ?? undefined,
       resolveProfile: computerProfileForConversation,
@@ -171,12 +133,10 @@ function builtinCapabilities(env: AppEnv, config: ModelConfig): Capability[] {
   ];
 }
 
-/** Bot-to-bot messaging (issue #12). The store needs the live runtime for submits. */
 export function botsCapability(rt: AgentRuntime): Capability {
   return createBotsToolkit(botMessagingStore(rt));
 }
 
-/** The vision side-call (issue #17): uploads bytes + the `vision` model role. */
 function visionCapability(rt: AgentRuntime): Capability {
   return createVisionToolkit(
     createVisionStore(rt),
@@ -184,7 +144,6 @@ function visionCapability(rt: AgentRuntime): Capability {
   );
 }
 
-/** One messaging store per runtime: a reopened runtime (tests, a restart in-process) gets its own. */
 function botMessagingStore(rt: AgentRuntime): BotMessagingStore {
   const messagingStores = app().botMessagingStores;
   let store = messagingStores.get(rt);
@@ -195,7 +154,6 @@ function botMessagingStore(rt: AgentRuntime): BotMessagingStore {
   return store;
 }
 
-/** The open runtime. Throws when called before boot finished (or in tests without a fake). */
 export function getAgentRuntime(): AgentRuntime {
   const runtime = app().runtime;
   if (!runtime) {
@@ -204,24 +162,16 @@ export function getAgentRuntime(): AgentRuntime {
   return runtime;
 }
 
-/** True once boot finished and `close()` has not run since. */
 export function agentRuntimeReady(): boolean {
   return app().runtimeReady;
 }
 
-/**
- * Auto-review's reviewer (issue #65): the `classifier` model role, resolved
- * per call on the runtime `runtime()` returns. Without one set, every review
- * fails and the owner gets the approval card.
- */
 function autoReviewer(runtime: () => AgentRuntime | undefined): Reviewer {
   const classifier = createClassifier({
     catalog: () => runtime()!.catalog,
     models: { classify: (...args) => tracedClassify(runtime()!, ...args) },
   });
   return createReviewer(classifier, {
-    // Scores and outcome only: never the call's arguments.
-    // A failed review is a card the owner did not need: warn so it is noticed.
     onReview: ({ tool, verdict, durationMs }) =>
       verdict.error
         ? logger.warn({ tool, ...verdict, durationMs }, "Auto-review failed; asking the owner")
@@ -229,7 +179,6 @@ function autoReviewer(runtime: () => AgentRuntime | undefined): Reviewer {
   });
 }
 
-/** One classifier call, with its metadata kept for Traces (`llm_calls`, issue #363). */
 async function tracedClassify(
   runtime: AgentRuntime,
   ...args: Parameters<AgentRuntime["models"]["classify"]>
@@ -259,7 +208,6 @@ async function tracedClassify(
   }
 }
 
-/** Boot: open the runtime (exclusive store lock + Harness resume). */
 export async function openAgentRuntime(
   options: RuntimeOptions & { env: RuntimeEnv },
 ): Promise<AgentRuntime> {
@@ -273,31 +221,19 @@ export async function openAgentRuntime(
     credentials: vaultCredentials,
     approvalTracker: app().ownerWaits,
     reviewer: rest.reviewer ?? autoReviewer(() => opened),
-    // Auto-review in a shared chat reads only the owner's messages (S6).
     ownerUserId: rest.ownerUserId ?? ownerUserId,
     capabilities: [...builtinCapabilities(appVars, modelConfig), ...(rest.capabilities ?? [])],
     claudeWorker: rest.claudeWorker ?? sharedClaudeWorkerLocator(appVars),
   });
   opened = instance;
-  // With the Claude plan on, install and start its worker on the sandbox
-  // now, so the first turn doesn't wait on it.
   instance.claudePlan.prepare();
   return finishOpen(instance);
 }
 
-/**
- * The wiring every boot shares once the runtime is open, whichever models it
- * runs on. The messaging toolkit needs the runtime itself (it submits into
- * target conversations) and the vision side-call binds to the registry the
- * runtime opened with, so both install after open; bots select them by name
- * on their next configure.
- */
 function finishOpen(instance: AgentRuntime): AgentRuntime {
   instance.installCapability(botsCapability(instance));
   instance.installCapability(visionCapability(instance));
-  // Settings → Models changes apply to this runtime from now on.
   bindModelRuntime(instance);
-  // A selected id the runtime lacks is silently ignored at configure: say so.
   const missing = missingToolkits(instance.listCapabilities().map((c) => c.id));
   if (missing.length > 0) {
     logger.warn({ missing }, "Bots select toolkits the runtime has not installed");
@@ -307,7 +243,6 @@ function finishOpen(instance: AgentRuntime): AgentRuntime {
   return instance;
 }
 
-/** Shutdown: close the runtime and release the store lock. */
 export async function closeAgentRuntime(): Promise<void> {
   const root = app();
   root.runtimeReady = false;
@@ -317,7 +252,6 @@ export async function closeAgentRuntime(): Promise<void> {
   await instance?.close();
 }
 
-/** A faux bot's ask_owner call on "/ask": a single-choice, a multiple-choice and an open question. */
 const FAUX_ASK: ToolCall["arguments"] = {
   questions: [
     {
@@ -338,24 +272,6 @@ const FAUX_ASK: ToolCall["arguments"] = {
   ],
 };
 
-/**
- * Faux-provider runtime for dev/E2E boots (TINY_AGENTS_FAUX=1): real durable
- * machinery, scripted replies, no network and no gateway keys.
- *
- * TINY_AGENTS_FAUX_TOKENS_PER_SECOND streams the scripted echoes at that many
- * tokens per second instead of instantly, giving e2e a real busy window to
- * steer or queue into. Unset (or non-numeric) streams instantly.
- *
- * A message starting with "/ask" makes the bot ask the owner sample questions
- * (ask_owner); the answers it gets back are echoed like any text. "/browse N"
- * reads the browser page N times (browser_snapshot), one tool round each.
- * "/improve" proposes appending a line to the bot's own instructions
- * (update_instructions), so e2e can drive the self-improvement approval.
- * "/newbot NAME" asks to create a bot named NAME (create_bot), so e2e can
- * drive the bot-builder approval. "/trace" thinks, says what it will do, lists
- * the owner's tasks (list_tasks), then thinks again and answers, so e2e can
- * see every kind of event on the Traces page.
- */
 export async function openFauxAgentRuntime(
   storePath: string,
   options: Pick<RuntimeOptions, "onFatal" | "onReport"> & { env: RuntimeEnv },
@@ -383,8 +299,6 @@ export async function openFauxAgentRuntime(
       text = textOf(message);
       break;
     }
-    // "/browse N" loads the browser's snapshot tool (the browser toolkit is
-    // deferred), then reads the page N times, one tool round each, then answers.
     const browse = /^\/browse(?:\s+(\d+))?/.exec(text);
     if (browse && toolResults === 0) {
       const call = fauxAssistantMessage(
@@ -415,8 +329,6 @@ export async function openFauxAgentRuntime(
       const ask = fauxAssistantMessage(fauxToolCall("ask_owner", FAUX_ASK));
       return { ...ask, stopReason: "toolUse" as const };
     }
-    // "/code [cwd=PATH] task" hands the task to the default coding agent
-    // (issue #143), one tool round, so e2e can drive a hand-off and its finish.
     const code = /^\/code\s+(?:cwd=(\S+)\s+)?([\s\S]+)/.exec(text);
     if (code && toolResults === 0) {
       const call = fauxAssistantMessage(
@@ -424,10 +336,6 @@ export async function openFauxAgentRuntime(
       );
       return { ...call, stopReason: "toolUse" as const };
     }
-    // "/improve" proposes appending a line to the bot's own instructions,
-    // one tool round, so e2e can drive the self-improvement approval flow.
-    // "/improve long" appends a paragraph, so the approval card's Read more
-    // (the payload folds past 120 chars) can also be driven e2e.
     const improve = /^\/improve(?:\s+(long))?/.exec(text);
     if (improve && toolResults === 0) {
       const append = improve[1]
@@ -466,13 +374,9 @@ export async function openFauxAgentRuntime(
     models: [{ id: TEST_MODEL, name: "Test Model (faux)", reasoning: true }],
     ...(Number.isFinite(tokensPerSecond) && tokensPerSecond > 0 ? { tokensPerSecond } : {}),
   });
-  // The faux provider consumes one queued response per request; keep a deep
-  // queue so long sessions never run dry.
   faux.setResponses(Array.from({ length: 1000 }, () => echo));
   models.setProvider(faux.provider);
 
-  // The faux account and its one model are rows like any other, so the
-  // pickers, bots and Settings → Models work the same way.
   await seedFauxModels();
   const modelConfig = await loadModelConfig();
   const instance = await AgentRuntime.open({

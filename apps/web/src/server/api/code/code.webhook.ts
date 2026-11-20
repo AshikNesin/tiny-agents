@@ -1,15 +1,3 @@
-/**
- * The GitHub App's public routes (issue #297 phase 6): the two redirects of
- * its one-click setup (`callback`, `installed`), and its webhook.
- *
- * The webhook (§7.4): public, so GitHub can
- * reach it, and refused unless signed with the App's webhook secret. A
- * delivery is only a hint to look now: its id is stored (unique, so a
- * redelivery is dropped), the linked PRs it names have their reconcile
- * brought forward, and the reconciler reads a fresh snapshot as always.
- * Nothing in the payload is acted on. The delayed reconcile chain stays the
- * backup for deliveries that never arrive.
- */
 import { Hono } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { z } from "zod";
@@ -26,7 +14,6 @@ import type { AppContext } from "@groot/core/types";
 import { completeInstall, completeManifest, FLOW_COOKIE, webhookSecret } from "./code.github";
 import { armReconcile } from "./code.pulls";
 
-/** How soon a hinted PR is looked at (a burst of deliveries becomes one look). */
 const HINT_DELAY_MS = 5_000;
 
 interface Payload {
@@ -38,7 +25,6 @@ interface Payload {
   sha?: string;
 }
 
-/** The open linked PRs a delivery is about: by number, or by head sha for statuses. */
 async function pullsOf(payload: Payload): Promise<CodePullRow[]> {
   const [owner, name] = (payload.repository?.full_name ?? "").split("/");
   if (!owner || !name) return [];
@@ -70,7 +56,6 @@ const router = new Hono<AppEnv>();
 
 const COOKIE_PATH = "/api/v1/code/github";
 
-/** The browser that started a setup flow carries its binding, for 10 minutes. */
 export function setFlowCookie(c: AppContext, binding: string): void {
   setCookie(c, FLOW_COOKIE, binding, {
     path: COOKIE_PATH,
@@ -83,7 +68,6 @@ export function setFlowCookie(c: AppContext, binding: string): void {
 
 const stateSchema = z.string().min(20).max(100);
 
-/** GitHub's two setup redirects: back to the Code page, which says how it went. */
 for (const kind of ["callback", "installed"] as const) {
   router.get(`/code/github/${kind}`, async (c) => {
     c.header("Cache-Control", "no-store");

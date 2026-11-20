@@ -1,41 +1,13 @@
-/**
- * A view-only filter for what a VNC viewer sends to the desktop (S2): it
- * forwards the handshake and the messages that only ask for pictures, and
- * drops every input message (keys, pointer, clipboard, resize, power). A
- * guest's viewer runs behind it, so a shared bot's browser or desktop, which
- * holds the owner's logins, can be watched but never driven, whatever the
- * client claims.
- *
- * Client-to-server RFB (RFC 6143 plus the extensions noVNC 1.7 sends):
- * - handshake: the 12-byte version, then (3.7 and later) the chosen security
- *   type, which must be None (1), then the 1-byte ClientInit;
- * - 0 SetPixelFormat (20), 2 SetEncodings (4 + 4n), 3 FramebufferUpdateRequest
- *   (10), 150 EnableContinuousUpdates (10), 248 Fence (9 + n): forwarded;
- * - 4 KeyEvent (8), 5 PointerEvent (6, or 7 with the extended marker bit),
- *   6 ClientCutText (8 + n, n negative for extended clipboard), 250 xvp (4),
- *   251 SetDesktopSize (8 + 16n), 255 QEMU extended key event (12): dropped.
- *
- * Anything else cannot be framed, so the filter fails and the bridge closes
- * the viewer rather than guess.
- *
- * The owner's viewer runs behind the same framing with nothing dropped
- * (`createRfbInputWatch`): its input messages are what tell the idle sweep
- * the owner is still driving.
- */
-
 export class RfbViewOnlyError extends Error {}
 
 type Phase = "version" | "security" | "init" | "messages";
 
 export interface RfbViewOnlyFilter {
-  /** Feed bytes from the viewer; returns what may reach the desktop. Throws `RfbViewOnlyError`. */
   push(chunk: Buffer): Buffer;
 }
 
-/** Messages that only ask for pictures; every other type is input. */
 const FORWARD = new Set([0, 2, 3, 150, 248]);
 
-/** The full length of the message at the start of `buf`, or undefined until enough has arrived. */
 function messageLength(buf: Buffer): number | undefined {
   const type = buf[0]!;
   const need = (n: number) => (buf.length >= n ? n : undefined);
@@ -73,7 +45,6 @@ function messageLength(buf: Buffer): number | undefined {
   }
 }
 
-/** Frames the viewer's bytes; `keep` says whether a whole message (by its type) reaches the desktop. */
 function createRfbFramer(keep: (type: number) => boolean): RfbViewOnlyFilter {
   let phase: Phase = "version";
   let pending: Buffer = Buffer.alloc(0);
@@ -90,7 +61,6 @@ function createRfbFramer(keep: (type: number) => boolean): RfbViewOnlyFilter {
           if (!match) throw new RfbViewOnlyError("Not an RFB version");
           out.push(pending.subarray(0, 12));
           pending = pending.subarray(12);
-          // RFB 3.3: the server picks the security type; the client sends none.
           phase = Number(match[1]) === 3 && Number(match[2]) < 7 ? "init" : "security";
           continue;
         }
@@ -115,7 +85,6 @@ function createRfbFramer(keep: (type: number) => boolean): RfbViewOnlyFilter {
         if (keep(pending[0]!)) out.push(pending.subarray(0, length));
         pending = pending.subarray(length);
       }
-      // Keep only what is still unread, copied off the chunks it came from.
       pending = Buffer.from(pending);
       return out.length === 1 ? out[0]! : Buffer.concat(out);
     },
@@ -126,12 +95,6 @@ export function createRfbViewOnlyFilter(): RfbViewOnlyFilter {
   return createRfbFramer((type) => FORWARD.has(type));
 }
 
-/**
- * Reads the owner's viewer alongside the bridge, which forwards every byte
- * untouched, and calls `onInput` for each input message. A message it cannot
- * frame stops the watch, never the viewer: from then on every chunk counts
- * as input.
- */
 export function createRfbInputWatch(onInput: () => void): { push(chunk: Buffer): void } {
   const framer = createRfbFramer((type) => {
     if (!FORWARD.has(type)) onInput();

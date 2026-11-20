@@ -1,11 +1,3 @@
-/**
- * Settings → Models (issue #179), owner-only: guests get 403 from the guest
- * guard. Creating an account, changing its endpoint or key, and deleting it
- * need a fresh step-up token (`X-Vault-Step-Up`): a stolen session that could
- * point an account at its own endpoint would receive every prompt sent to
- * it. Enabling models and assigning roles choose among accounts that already
- * passed step-up, so they don't. No response carries a key.
- */
 import { Hono } from "hono";
 import { Boom } from "@groot/core/errors";
 import type { AppContext, AppEnv } from "@groot/core/types";
@@ -27,7 +19,6 @@ import * as service from "./models.service";
 
 const router = new Hono<AppEnv>();
 
-/** Bodies are small: a key, an endpoint, a list of model ids. */
 const MAX_BODY = 64 * 1024;
 router.use("/models/*", async (c, next) => {
   const length = Number(c.req.header("content-length") ?? 0);

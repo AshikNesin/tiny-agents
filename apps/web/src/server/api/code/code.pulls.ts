@@ -1,19 +1,3 @@
-/**
- * Pull requests linked to Code threads, and the reconciler that keeps them
- * current and runs Auto-fix (issue #297 §7.3 to §7.6, §9).
- *
- * The reconciler never trusts an event: it fetches a fresh snapshot, caches
- * it, and acts on `decide(snapshot, …)`. Polling is a chained delayed job
- * per open PR (`code-pr-reconcile`), each run queueing its successor at the
- * interval `nextLookMs` gives; the chain's current link is stored on the
- * row, so a duplicate run never forks it, and boot re-arms any chain whose
- * link is gone. Opening the PR tab reconciles at once.
- *
- * The app publishes (§7.3): it pushes, opens the draft PR and records the
- * link the moment it exists. A PR someone else opened for the thread's
- * branch (the agent, with `gh`) is linked by branch match when the tab
- * opens or a turn ends.
- */
 import { eq, inArray } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { logger } from "@groot/core/logger";
@@ -80,10 +64,6 @@ async function requireProjectThread(threadId: string) {
   return found;
 }
 
-/**
- * A project thread's open pull request, with what every owner control on it
- * needs: its project, its repository, and the project's GitHub client.
- */
 async function openPullContext(threadId: string) {
   const { project } = await requireProjectThread(threadId);
   const open = await openPullOf(threadId);
@@ -109,11 +89,6 @@ function autofixSettings(raw: string): AutofixSettings {
   };
 }
 
-/**
- * The GitHub login whose comments count as the owner's: the login the
- * client acts as on the `gh` transport. Under the App the client is the
- * App's bot, never the owner (ADR 0024), so nobody is trusted for login.
- */
 async function ownerLoginOf(
   project: { transport: string },
   github: Pick<GitHubClient, "viewer">,
@@ -130,9 +105,6 @@ function notify(pull: CodePullRow, kind: CodePullKind, detail?: string) {
 const githubMessage = (error: unknown) =>
   error instanceof GitHubError || error instanceof Error ? error.message : String(error);
 
-// --- publish and link ---------------------------------------------------------------------
-
-/** The PR body the app writes: the commits, and where it came from. */
 function pullBody(commits: Array<{ sha: string; subject: string }>): string {
   const list = commits
     .slice(0, 30)
@@ -141,12 +113,6 @@ function pullBody(commits: Array<{ sha: string; subject: string }>): string {
   return `${list}\n\nOpened from tiny-agents Code.`;
 }
 
-/**
- * Publish (§7.3): push the branch and open a PR (a draft unless the project
- * says ready for review), or, when the thread
- * already has an open one, push its new commits. A manual publish is not
- * held to the protected-path rule; a pass is.
- */
 export async function publish(
   threadId: string,
   input: { title?: string; body?: string } = {},
@@ -216,7 +182,6 @@ export async function publish(
   return (await getPull(row.id)) ?? row;
 }
 
-/** Link an existing PR to the thread (§7.5). A PR belongs to one thread. */
 export async function linkPull(threadId: string, number: number): Promise<CodePullRow> {
   const { project } = await requireProjectThread(threadId);
   const taken = await findPull(project.id, number);
@@ -247,7 +212,6 @@ export async function linkPull(threadId: string, number: number): Promise<CodePu
   return (await getPull(row.id)) ?? row;
 }
 
-/** Unlink: the row goes, and with it Auto-fix for that PR. */
 export async function unlinkPull(threadId: string): Promise<void> {
   const open = await openPullOf(threadId);
   if (!open) throw Boom.notFound("The thread has no open pull request.");
@@ -255,10 +219,6 @@ export async function unlinkPull(threadId: string): Promise<void> {
   await deletePull(open.id);
 }
 
-/**
- * A project thread with no open PR: link the open PR whose head is its
- * branch, whoever opened it (the agent, with `gh`). Answers the link.
- */
 async function linkByBranch(threadId: string): Promise<CodePullRow | undefined> {
   const found = await projectThread(threadId);
   if (!found?.thread.branch || (await openPullOf(threadId))) return undefined;
@@ -281,8 +241,6 @@ async function linkByBranch(threadId: string): Promise<CodePullRow | undefined> 
   return row;
 }
 
-// --- owner controls -----------------------------------------------------------------------
-
 export async function setAutofix(threadId: string, enabled: boolean): Promise<void> {
   const open = await openPullOf(threadId);
   if (!open) throw Boom.notFound("The thread has no open pull request.");
@@ -304,7 +262,6 @@ export async function setAutofix(threadId: string, enabled: boolean): Promise<vo
   }
 }
 
-/** The owner wrote in the thread: a waiting or paused loop may go on, and the no-owner count resets. */
 export async function noteOwnerInput(threadId: string): Promise<void> {
   const open = await openPullOf(threadId);
   if (!open) return;
@@ -312,7 +269,6 @@ export async function noteOwnerInput(threadId: string): Promise<void> {
     ownerInputAt: new Date(),
     passesWithoutOwner: 0,
   });
-  // needs_input and paused wait for exactly this.
   if (open.loopStatus === "needs_input" || open.loopStatus === "paused") {
     await moveLoop(open.id, "watching", {
       headSha: open.headSha,
@@ -329,7 +285,6 @@ export async function mergePull(threadId: string, method: MergeMethod): Promise<
   await reconcileNow(open.id);
 }
 
-/** Draft ↔ ready for review, either way, any time (a draft cannot be merged). */
 export async function setPullDraft(threadId: string, draft: boolean): Promise<void> {
   const context = await openPullContext(threadId);
   const { open } = context;
@@ -347,7 +302,6 @@ export async function setPullDraft(threadId: string, draft: boolean): Promise<vo
   await reconcileNow(open.id);
 }
 
-/** The owner edits the open pull request's title or description, on GitHub. */
 export async function editPull(
   threadId: string,
   change: { title?: string; body?: string },
@@ -359,7 +313,6 @@ export async function editPull(
   await reconcileNow(open.id);
 }
 
-/** Fix CI (§7.5): one pass the owner asked for, on whatever is open now. */
 export async function manualPass(threadId: string): Promise<{ started: boolean; reason?: string }> {
   const context = await openPullContext(threadId);
   const { project, open } = context;
@@ -387,9 +340,6 @@ export async function manualPass(threadId: string): Promise<{ started: boolean; 
   return pass ? { started: true } : { started: false, reason: "The pass could not start." };
 }
 
-// --- reconcile ----------------------------------------------------------------------------
-
-/** Run one reconcile now (serialized per PR in this process). Answers the next look in ms, or null. */
 async function reconcileNow(pullId: string): Promise<number | null> {
   const hub = codeHub();
   const work = () => reconcile(pullId);
@@ -434,7 +384,6 @@ async function reconcile(pullId: string, now = Date.now()): Promise<number | nul
     notify(pull, "stalled", `${stalled.map((c) => c.name).join(", ")} has been pending for hours.`);
   }
 
-  // A pass whose turn ended while nothing was listening: finish it now (owed finish).
   const running = await runningPass(pull.id);
   if (running?.status === "running") {
     const target = codeHub()?.resolve(pull.threadId);
@@ -472,8 +421,6 @@ async function reconcile(pullId: string, now = Date.now()): Promise<number | nul
       now,
       spend,
     });
-    // A green PR that needs acting on (a new failure, a limit) is watched again first:
-    // the machine moves green only to watching.
     if (pull.loopStatus === "green" && decision.kind !== "none" && decision.kind !== "green") {
       await moveLoop(pull.id, "watching", { headSha: snapshot.headSha });
       pull = (await getPull(pull.id)) ?? pull;
@@ -521,7 +468,6 @@ async function reconcile(pullId: string, now = Date.now()): Promise<number | nul
         notify(pull, "off", decision.reason);
       }
     } else if (decision.kind === "none" && !pull.autofix) {
-      // Once, when the checks of a head finish failed (not on every look).
       const failed = checksJustFailed(cachedSnapshot(before), snapshot);
       if (failed.length) notify(pull, "checks_failed", failed.join(", "));
     }
@@ -532,7 +478,6 @@ async function reconcile(pullId: string, now = Date.now()): Promise<number | nul
   return nextLookMs(snapshot, latest.loopStatus, lastPushAt, now, settings.stallHours);
 }
 
-/** Archive the thread whose PR merged (archive on merge, §7.6). */
 async function archiveThread(threadId: string): Promise<void> {
   const target = codeHub()?.resolve(threadId);
   try {
@@ -546,7 +491,6 @@ async function archiveThread(threadId: string): Promise<void> {
   }
 }
 
-/** A project thread was archived: Auto-fix goes off for its open PR, which stays open (§7.6). */
 export async function onThreadArchived(threadId: string, archived: boolean): Promise<void> {
   if (archived) {
     const open = await openPullOf(threadId);
@@ -559,24 +503,15 @@ export async function onThreadArchived(threadId: string, archived: boolean): Pro
   await onProjectThreadArchived(threadId, archived);
 }
 
-// --- the chain ----------------------------------------------------------------------------
-
-/**
- * Queue the next reconcile of a PR in `delayMs`, as the chain's new link:
- * only from `expected` (the run that is the current link) when given, so a
- * duplicate run never forks the chain. A job that lost is cancelled.
- */
 export async function armReconcile(
   pullId: string,
   delayMs: number,
   expected?: string | null,
 ): Promise<string | undefined> {
   const runAt = new Date(Date.now() + delayMs);
-  // No singleton key: the row's compare-and-set is what keeps one link.
   const jobId = await addJob(RECONCILE_JOB, { pullId }, { runAt, retryLimit: 1 });
   if (await setPendingJob(pullId, jobId, expected)) {
     if (expected === undefined) {
-      // Replaced a link unconditionally: the old one would fork the chain.
       const rows = await db
         .select()
         .from(jobs)
@@ -606,7 +541,6 @@ export function registerCodeJobs(): void {
   });
 }
 
-/** Boot: every open linked PR whose chain has no live link gets one. */
 export async function rearmReconcilers(): Promise<number> {
   let armed = 0;
   for (const pull of await openPulls()) {
@@ -619,7 +553,6 @@ export async function rearmReconcilers(): Promise<number> {
   return armed;
 }
 
-/** What the thread has cost and its limit, read only when a limit is set. */
 async function threadSpend(
   threadId: string,
   limitUsd: number | null,
@@ -627,23 +560,16 @@ async function threadSpend(
   if (limitUsd === null) return { usd: null, limitUsd: null };
   const target = codeHub()?.resolve(threadId);
   const snapshot = await target?.instance.getThread(target.nativeId).catch(() => undefined);
-  // A harness that reports no cost reports 0: unknown, never "spent nothing".
   return {
     usd: snapshot && snapshot.costUsd > 0 ? snapshot.costUsd : null,
     limitUsd,
   };
 }
 
-/** The merge method auto-merge asks for: the repository's first of squash, merge, rebase. */
 function autoMergeMethod(snapshot: PullSnapshot): MergeMethod | undefined {
   return (["squash", "merge", "rebase"] as const).find((m) => snapshot.mergeMethods.includes(m));
 }
 
-/**
- * Auto-merge (phase 6): with the PR's switch on and no pass running, turn
- * on GitHub's native auto-merge (a draft is marked ready first), so branch
- * protection and required reviews are GitHub's to enforce.
- */
 async function applyAutoMerge(
   pull: CodePullRow,
   snapshot: PullSnapshot,
@@ -661,7 +587,6 @@ async function applyAutoMerge(
   }
 }
 
-/** The owner's auto-merge switch for the thread's open PR; off also turns GitHub's off. */
 export async function setAutoMerge(threadId: string, enabled: boolean): Promise<void> {
   const { open, github } = await openPullContext(threadId);
   await updatePull(open.id, { autoMerge: enabled });
@@ -676,16 +601,11 @@ export async function setAutoMerge(threadId: string, enabled: boolean): Promise<
   await reconcileNow(open.id);
 }
 
-/** The thread's spend limit for Auto-fix passes (USD), or null for none. */
 export async function setSpendLimit(threadId: string, limitUsd: number | null): Promise<void> {
   await requireProjectThread(threadId);
   await db.update(codeThreads).set({ spendLimitUsd: limitUsd }).where(eq(codeThreads.id, threadId));
 }
 
-/**
- * A thread's turn ended: checkpoint its worktree, finish its running pass,
- * if it has one, or link a PR the agent opened for its branch.
- */
 export async function onTurnEnded(threadId: string, outcome: TurnOutcome): Promise<void> {
   if (outcome.working) return;
   await checkpointTurn(threadId).catch((error: unknown) =>
@@ -699,8 +619,6 @@ export async function onTurnEnded(threadId: string, outcome: TurnOutcome): Promi
   const pass = await runningPass(open.id);
   if (pass?.status === "running") await finishPass(pass, outcome);
 }
-
-// --- views --------------------------------------------------------------------------------
 
 async function pullView(
   row: CodePullRow,
@@ -750,7 +668,6 @@ async function pullView(
   };
 }
 
-/** A pass's stored items, for the tab (a malformed row shows none rather than failing the view). */
 function passItems(raw: string): Array<{ id: string; title: string }> {
   try {
     const value = JSON.parse(raw) as unknown;
@@ -766,7 +683,6 @@ function passItems(raw: string): Array<{ id: string; title: string }> {
   }
 }
 
-/** The PR tab: reconciles first (unless `fresh` is false), so what it shows is current. */
 export async function threadPulls(threadId: string, fresh = true): Promise<ThreadPullsView> {
   const found = await projectThread(threadId);
   if (!found) {
@@ -789,7 +705,6 @@ export async function threadPulls(threadId: string, fresh = true): Promise<Threa
   const active = rows.find((r) => r.state === "open") ?? null;
   let ahead: number | null = null;
   if (thread.worktree) {
-    // The tab still opens when the sandbox is unreachable; it just cannot count.
     ahead = await codeGitHub()
       .workspace(project)
       .then((ws) => ws.commitsAhead(thread.worktree!, project.baseBranch))

@@ -1,10 +1,3 @@
-/**
- * Runs extraction in a worker thread with a memory cap and a timeout
- * (issue #58 §9.3). The production build emits the worker next to the
- * bundle as `uploads-extract-worker.js` (scripts/build.mjs); dev loads the
- * TypeScript entry through tsx. The worker itself sits behind `spawn`, so
- * the timeout, crash and exit handling is testable without a thread.
- */
 import { Worker } from "node:worker_threads";
 import { extract, type ExtractInput, type ExtractResult } from "./uploads.extract";
 import { appEnv } from "../../env";
@@ -14,7 +7,6 @@ const WORKER_HEAP_MB = 512;
 
 export type ExtractRunner = (input: ExtractInput, mime: string) => Promise<ExtractResult>;
 
-/** What the runner needs from a worker thread (a `Worker`, or a fake in tests). */
 export interface WorkerLike {
   once(event: "message", listener: (result: ExtractResult) => void): unknown;
   once(event: "error", listener: (error: Error & { code?: string }) => void): unknown;
@@ -22,11 +14,6 @@ export interface WorkerLike {
   terminate(): unknown;
 }
 
-/**
- * The built worker next to the bundle, or in dev a bootstrap that registers
- * tsx inside the worker (loader hooks don't carry over into threads) and
- * imports the TypeScript entry.
- */
 function workerSource(): { source: URL | string; eval: boolean } {
   const here = import.meta.url;
   if (!here.endsWith(".ts")) {
@@ -49,10 +36,6 @@ function spawnWorker(input: ExtractInput, mime: string): WorkerLike {
   });
 }
 
-/**
- * A runner over `spawn`: the first of the worker's result, an error, a
- * non-zero exit or the timeout decides, and the worker is terminated.
- */
 export function createWorkerRunner(
   options: {
     spawn?: (input: ExtractInput, mime: string) => WorkerLike;
@@ -94,6 +77,5 @@ export function createWorkerRunner(
 
 const runInWorker: ExtractRunner = createWorkerRunner();
 
-/** The worker everywhere but under Vitest, which cannot load a .ts worker. */
 export const defaultRunner: ExtractRunner = (input, mime) =>
   appEnv().VITEST ? extract(input, mime) : runInWorker(input, mime);

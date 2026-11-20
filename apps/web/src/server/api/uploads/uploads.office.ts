@@ -1,9 +1,3 @@
-/**
- * Office and OpenDocument readers (issue #58): DOCX, XLSX, PPTX, ODT, ODS
- * and ODP are zips of XML parts. Only the parts that carry text are
- * inflated, each under a declared-size cap; nothing is evaluated (formulas
- * keep their cached values, macros and embedded objects are ignored).
- */
 import { unzipSync } from "fflate";
 import type { AttachmentSheet } from "@tiny-agents/agent";
 import { local, xmlEvents } from "./uploads.xml";
@@ -11,7 +5,6 @@ import { local, xmlEvents } from "./uploads.xml";
 export interface OfficeLimits {
   maxSheets: number;
   maxCells: number;
-  /** Largest declared size of one XML part. */
   maxPartBytes: number;
 }
 
@@ -26,7 +19,6 @@ export interface Slide {
   notes: string;
 }
 
-/** Inflate the named parts (others are never decompressed). */
 function readParts(
   bytes: Uint8Array,
   wanted: (name: string) => boolean,
@@ -39,7 +31,6 @@ function readParts(
   return new Map(Object.entries(files).map(([name, data]) => [name, decoder.decode(data)]));
 }
 
-/** Relationship id → part path, resolved against the part's folder. */
 function relationships(xml: string | undefined, base: string): Map<string, string> {
   const map = new Map<string, string>();
   if (!xml) return map;
@@ -79,9 +70,6 @@ function markdownTable(rows: string[][]): string {
   ].join("\n");
 }
 
-// ── DOCX ────────────────────────────────────────────────────────────────
-
-/** word/document.xml → Markdown with headings, lists and tables. */
 export function docxToMarkdown(bytes: Uint8Array, limits: OfficeLimits): DocumentText {
   const parts = readParts(bytes, (name) => name === "word/document.xml", limits.maxPartBytes);
   const xml = parts.get("word/document.xml");
@@ -90,7 +78,6 @@ export function docxToMarkdown(bytes: Uint8Array, limits: OfficeLimits): Documen
   const outline: string[] = [];
   let paragraph: { text: string; style: string; list: boolean } | undefined;
   let inText = false;
-  // Tables nest: a stack of [rows, current row, current cell].
   const tables: { rows: string[][]; row: string[]; cell: string[] }[] = [];
 
   const emit = (line: string) => {
@@ -142,8 +129,6 @@ export function docxToMarkdown(bytes: Uint8Array, limits: OfficeLimits): Documen
   }
   return { markdown: blocks.join("\n\n"), outline };
 }
-
-// ── XLSX ────────────────────────────────────────────────────────────────
 
 const columnIndex = (ref: string) => {
   let index = 0;
@@ -254,7 +239,6 @@ export function xlsxSheets(bytes: Uint8Array, limits: OfficeLimits): AttachmentS
           cells += 1;
         } else if (name === "row" && row) {
           sheet.totalRows = Math.max(sheet.totalRows, rowIndex);
-          // A far-away row would pad millions of empty ones.
           if (rowIndex > limits.maxCells) sheet.truncated = true;
           if (!sheet.truncated && row.length > 0) {
             while (sheet.rows.length < rowIndex - 1) sheet.rows.push([]);
@@ -269,8 +253,6 @@ export function xlsxSheets(bytes: Uint8Array, limits: OfficeLimits): AttachmentS
   }
   return sheets;
 }
-
-// ── PPTX ────────────────────────────────────────────────────────────────
 
 function paragraphs(xml: string): string[] {
   const lines: string[] = [];
@@ -320,14 +302,11 @@ export function pptxSlides(bytes: Uint8Array, limits: OfficeLimits): Slide[] {
     const slideRels = relationships(parts.get(`ppt/slides/_rels/${file}.rels`), "ppt/slides");
     const notesPath = [...slideRels.values()].find((target) => target.includes("notesSlides/"));
     const notesXml = notesPath ? parts.get(notesPath) : undefined;
-    // Notes slides repeat the slide number placeholder; drop bare numbers.
     const notes = notesXml ? paragraphs(notesXml).filter((line) => !/^\d+$/.test(line)) : [];
     slides.push({ title: lines[0] ?? "", text: lines.join("\n"), notes: notes.join("\n") });
   }
   return slides;
 }
-
-// ── OpenDocument ────────────────────────────────────────────────────────
 
 function odfContent(bytes: Uint8Array, limits: OfficeLimits): string {
   const content = readParts(bytes, (name) => name === "content.xml", limits.maxPartBytes).get(
@@ -337,7 +316,6 @@ function odfContent(bytes: Uint8Array, limits: OfficeLimits): string {
   return content;
 }
 
-/** ODT → Markdown (headings, list items, tables). */
 export function odtToMarkdown(bytes: Uint8Array, limits: OfficeLimits): DocumentText {
   const xml = odfContent(bytes, limits);
   const blocks: string[] = [];
@@ -479,7 +457,6 @@ export function odsSheets(bytes: Uint8Array, limits: OfficeLimits): AttachmentSh
   return sheets;
 }
 
-/** ODP pages: their text and speaker notes. */
 export function odpSlides(bytes: Uint8Array, limits: OfficeLimits): Slide[] {
   const xml = odfContent(bytes, limits);
   const slides: Slide[] = [];

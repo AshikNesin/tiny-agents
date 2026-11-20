@@ -1,11 +1,3 @@
-/**
- * Memory capture (issue #22 §5.3): the post-turn background pipeline. Each
- * settled Turn of a bot's own chat arms a per-conversation debounce (quiet
- * window or turn count); when it fires, one extraction side-call reads the
- * owner turns since the watermark and proposes facts, and the memory ledger
- * (memories.ledger.ts), not the model, decides what lands. A malformed
- * extraction is dropped whole. Nothing here runs on the reply path.
- */
 import type { SettledStep } from "./bots.settled";
 import { logger } from "@groot/core/logger";
 import {
@@ -19,7 +11,6 @@ export function buildCapturePrompt(input: {
   botName: string;
   transcript: string;
   currentMemories: string | null;
-  /** Memories the owner deleted, newest first: never re-added, even reworded. */
   removedMemories?: string | null;
   today: string;
 }): string {
@@ -53,11 +44,6 @@ export function buildCapturePrompt(input: {
   ].join("\n");
 }
 
-/**
- * Parse the side-call's text: a JSON array, validated whole. Null means
- * unparseable — distinct from a valid empty extraction, so the caller leaves
- * the watermark alone and the window retries later.
- */
 export function parseExtraction(reply: string | undefined): ExtractedMemory[] | null {
   const text = (reply ?? "").trim();
   const start = text.indexOf("[");
@@ -78,19 +64,10 @@ interface PendingCapture {
 }
 
 export interface MemoryCapture {
-  /** The settled step: each finished Turn arms the conversation's capture window. */
   onSettled: SettledStep;
   stop(): void;
 }
 
-/**
- * Memory capture's debounce (issue #22 phase B). Every settled Turn pushes a
- * per-conversation quiet window back; the window, or the turn limit, runs
- * one capture. One capture runs per conversation at a time: Turns that
- * settle meanwhile keep counting and re-arm the window once it is done, so
- * none is lost. Losing a pending timer to a restart costs latency, never
- * facts: the watermark only advances on committed captures.
- */
 export function createMemoryCapture(deps: {
   captureNow: (conversationId: number) => Promise<void>;
   quietMs?: number;
@@ -100,7 +77,6 @@ export function createMemoryCapture(deps: {
   const turnLimit = deps.turnLimit ?? MEMORY_TURN_LIMIT;
   const pending = new Map<number, PendingCapture>();
   const inflight = new Set<number>();
-  /** Conversations that settled again while their capture ran. */
   const missed = new Set<number>();
 
   const run = (conversationId: number) => {
@@ -115,7 +91,6 @@ export function createMemoryCapture(deps: {
       .finally(() => {
         inflight.delete(conversationId);
         if (missed.delete(conversationId)) {
-          // The Turns that settled meanwhile wait for the quiet window again.
           const turns = pending.get(conversationId)?.turns ?? 1;
           arm(conversationId, turns, { waitAnyway: true });
         }
@@ -142,8 +117,6 @@ export function createMemoryCapture(deps: {
     onSettled: {
       name: "memory capture",
       async run({ conversationId, owner }) {
-        // Only a bot's own chat, with memory on, is a source (the capture
-        // re-checks when it runs: the switch may flip meanwhile).
         const behind = await owner();
         if (behind?.kind !== "chat" || !behind.bot.memoryEnabled) return;
         arm(conversationId, (pending.get(conversationId)?.turns ?? 0) + 1);

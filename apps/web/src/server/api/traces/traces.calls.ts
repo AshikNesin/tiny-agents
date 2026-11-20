@@ -1,16 +1,8 @@
-/**
- * Side-call metadata (Traces, issue #363): one `llm_calls` row per one-shot
- * model call made outside a conversation. Only who, which model, tokens,
- * cost, duration and outcome: never the prompt or the answer. Writing one
- * prunes rows past the retention window, so the table stays small without a
- * job. A failed write is logged and dropped: tracing never fails the call.
- */
 import { desc, lt } from "drizzle-orm";
 import { logger } from "@groot/core/logger";
 import type { Usage } from "@earendil-works/pi-ai";
 import { db, llmCalls, type LlmCall } from "../../db";
 
-/** How long side-call rows are kept. */
 const LLM_CALL_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
 const ERROR_MAX = 200;
@@ -55,7 +47,6 @@ export async function recordLlmCall(call: LlmCallRecord): Promise<void> {
   }
 }
 
-/** Side-calls newest first, `limit` of them created before `before`. */
 export async function listLlmCalls(options: { before?: number; limit: number }) {
   return db.query.llmCalls.findMany({
     where: options.before ? lt(llmCalls.createdAt, new Date(options.before)) : undefined,

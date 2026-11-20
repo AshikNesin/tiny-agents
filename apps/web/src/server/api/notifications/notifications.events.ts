@@ -1,10 +1,3 @@
-/**
- * tiny-agents notification events (issue #57): the switches Settings shows
- * and one typed template per event. Templates are the only place a
- * notification's text is built — tool names and bot/routine names come from
- * the app, every piece of model-authored or error text goes through
- * `scrubText`, and nothing ever includes tool arguments or outputs.
- */
 import type {
   Notification,
   NotificationActions,
@@ -78,7 +71,6 @@ export const NOTIFICATION_EVENTS: NotificationEventDef[] = [
     defaultEnabled: true,
   },
   {
-    // The key predates the harness layer (ADR 0011); kept so saved preferences still apply.
     event: "shelley.update",
     label: "Code updates",
     description:
@@ -124,7 +116,6 @@ const chatPath = (bot: BotRef, focus?: string) =>
 export const waitKey = (kind: "approval" | "question", conversation: number, task: number) =>
   `${kind}:${conversation}:${task}`;
 
-/** Approvals and questions of one chat within the coalescing window: one push. */
 function needsYou(bot: BotRef): Notification["coalesce"] {
   return {
     key: `needs:${bot.conversationId}`,
@@ -143,17 +134,11 @@ function needsYou(bot: BotRef): Notification["coalesce"] {
   };
 }
 
-/** Seconds until `expiresAt`, for a push that should vanish with its request. */
 const ttlUntil = (expiresAt: number | undefined) =>
   expiresAt === undefined
     ? {}
     : { ttlSeconds: Math.max(1, Math.round((expiresAt - Date.now()) / 1000)) };
 
-/**
- * The buttons an approval's push offers on the phone (issue #306): the same
- * answers its chat card gives. A tool card: Approve, Deny, Always allow. A
- * vault card: Approve, Deny, and For this chat when the use is grantable.
- */
 export function approvalActions(
   bot: BotRef,
   task: number,
@@ -190,7 +175,6 @@ export function approvalRequested(
   };
 }
 
-/** A bot asked the owner to take over its computer (issue #108). */
 export function takeoverRequested(bot: BotRef, task: number, reason?: string): Notification {
   return {
     event: "approval.requested",
@@ -241,10 +225,6 @@ export function questionAsked(bot: BotRef, task: number, preview?: string): Noti
   };
 }
 
-/**
- * The reminder replaces its request's push on a phone (same tag) and keeps
- * an approval's buttons, so answering either takes it back.
- */
 export function inputReminder(
   bot: BotRef,
   kind: "approval" | "question",
@@ -321,10 +301,6 @@ export function routineFailed(
   };
 }
 
-/**
- * A routine the app paused after blocked runs in a row (issue #87): the one
- * push for the whole streak, never one per blocked run.
- */
 export function routinePausedBlocked(run: RoutineRunRef, reason: string): Notification {
   return {
     event: "routine.failed",
@@ -374,11 +350,6 @@ export function runLongDone(
   };
 }
 
-/**
- * What a bot sent with `message_owner` (issue #396) in a turn it was not
- * asked for by the owner, while nobody had its chat open. Several messages
- * of one turn send as one push, the newest last.
- */
 export function botMessage(bot: BotRef, replyAt: number, sent: readonly string[]): Notification {
   return {
     event: "bot.message",
@@ -393,7 +364,6 @@ export function botMessage(bot: BotRef, replyAt: number, sent: readonly string[]
   };
 }
 
-/** What a followed Code thread did while nobody watched it (issue #143, ADR 0011). */
 export type CodeUpdateKind = "finished" | "failed" | "message";
 
 export function codeUpdate(
@@ -422,11 +392,6 @@ export function codeUpdate(
 
 export type CodePullKind = "needs_input" | "off" | "stalled" | "green" | "merged" | "checks_failed";
 
-/**
- * A linked pull request's news (issue #297 §9.7): "needs you" kinds go out
- * as `code.autofix`, the rest as the quieter `code.pr`. `detail` is the
- * app's own wording (a limit, a refused push), scrubbed all the same.
- */
 export function codePullUpdate(
   pull: { threadId: string; number: number; title: string },
   kind: CodePullKind,
@@ -456,7 +421,6 @@ export function codePullUpdate(
 
 export type VaultAlertKind = "revealed" | "deleted" | "refused";
 
-/** Security alerts (cannot be switched off): the vault's own events. */
 export function vaultAlert(kind: VaultAlertKind, title: string, message: string): Notification {
   return {
     event: "vault.alert",

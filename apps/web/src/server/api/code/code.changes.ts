@@ -1,18 +1,3 @@
-/**
- * Live refresh for the Changes and Review panels (ADR 0025): while a panel
- * is open on a directory, the server reads that directory's change stamp
- * (HEAD, the status and each changed file's size and time, one cheap git
- * call on the sandbox) every couple of seconds and pushes a new version only
- * when it moved. The panel re-reads on a new version, so it follows the
- * files themselves, not the transcript.
- *
- * - One poll per directory, however many panels watch it.
- * - A read never overlaps the one before (the next is scheduled after it).
- * - Fast while the files move, slower once they have been quiet a while.
- * - It stops when the last panel closes.
- * - A failed read says `unavailable` once (the panel falls back to re-reading
- *   on transcript activity); the next good read sends a new version.
- */
 import { app } from "../../app-root";
 
 export type ChangeEvent =
@@ -26,23 +11,19 @@ interface Poll {
   listeners: Set<Listener>;
   version: number;
   last?: string;
-  /** The last event sent, given to a panel that opens later. */
   current?: ChangeEvent;
   movedAt: number;
   timer?: ReturnType<typeof setTimeout>;
 }
 
 export interface ChangeIntervals {
-  /** Between reads while the files move. Default 1.5 s. */
   activeMs: number;
-  /** Between reads once they have been quiet for `quietAfterMs`. Default 5 s. */
   idleMs: number;
   quietAfterMs: number;
 }
 
 const DEFAULT_INTERVALS: ChangeIntervals = { activeMs: 1_500, idleMs: 5_000, quietAfterMs: 60_000 };
 
-// Intervals are measured on the monotonic clock: tests freeze `Date`.
 const now = () => performance.now();
 
 export class CodeChanges {
@@ -53,10 +34,6 @@ export class CodeChanges {
     this.intervals = { ...DEFAULT_INTERVALS, ...intervals };
   }
 
-  /**
-   * Watch the directory `key` (its stamp is read with `stamp`); the listener
-   * gets the current version at once when there is one. Answers the stop.
-   */
   watch(key: string, stamp: () => Promise<string>, listener: Listener): () => void {
     let poll = this.polls.get(key);
     if (!poll) {
@@ -81,7 +58,6 @@ export class CodeChanges {
     try {
       const stamp = await poll.stamp();
       if (poll.last === undefined || stamp !== poll.last || poll.current?.type !== "changes") {
-        // The first read sets the baseline; a change, or a read after a failure, is a new version.
         if (poll.current) poll.version += 1;
         if (poll.last !== undefined && stamp !== poll.last) poll.movedAt = now();
         poll.last = stamp;
@@ -95,7 +71,6 @@ export class CodeChanges {
         };
       }
     }
-    // Closed while reading: nothing to tell, nothing to schedule.
     if (this.polls.get(key) !== poll) return;
     if (event) {
       poll.current = event;
@@ -109,7 +84,6 @@ export class CodeChanges {
   }
 }
 
-/** The process's change monitor (`app().codeChanges`), made on first use. */
 export function codeChanges(): CodeChanges {
   const root = app();
   return (root.codeChanges ??= new CodeChanges());

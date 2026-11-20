@@ -1,9 +1,3 @@
-/**
- * Boot wiring for Code (ADR 0011): build the configured harnesses, open
- * their live connections through one hub, and start the watcher (hand-off
- * finishes back to the bots that asked, pushes for followed threads). With no harness
- * configured the hub is empty and the Code page says how to add one.
- */
 import { logger } from "@groot/core/logger";
 import { notificationService } from "@groot/core/notification/notification.service";
 import { threadIdOf, type HarnessInstance } from "@tiny-agents/code/server";
@@ -21,7 +15,6 @@ export function startCode(
 ): () => void {
   const instances = buildHarnesses({ extra: options.extra });
   const hub = setCodeHub(createCodeHub({ instances }))!;
-  // Followed conversations and hand-offs from before the harness layer.
   void copyShelleyTables()
     .then((copied) => copied && logger.info(`Code: copied ${copied} Shelley row(s)`))
     .catch((error: unknown) => logger.warn({ error }, "Code: could not copy the Shelley tables"));
@@ -30,7 +23,6 @@ export function startCode(
     deliver: (finish) => deliverHandoffFinish(runtime, finish),
     notify: (notification) => notificationService.notify(notification),
   });
-  // Pull requests (issue #297): a pass's turn ends here; boot re-arms every chain.
   const offPulls = hub.onEvent(({ instance, event }) => {
     if (event.type !== "turn_ended") return;
     const id = threadIdOf(instance.id, event.nativeId);

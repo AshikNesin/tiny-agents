@@ -1,8 +1,3 @@
-/**
- * Registered push devices (issue #306): `push_subscriptions` rows, the
- * Web Push channel's view of them, and the outcome of each send. Status
- * moves are guarded by `pushSubscriptionMachine`.
- */
 import { lookup } from "node:dns/promises";
 import { and, count, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
@@ -17,17 +12,11 @@ import { app } from "../../app-root";
 import { pushSubscriptionMachine } from "../../../shared/machines/push-subscription";
 import type { PushDeviceBody, PushDeviceData } from "../../../shared/api/push";
 
-/** Devices one account may register. */
 const MAX_DEVICES = 10;
-/** Consecutive failed sends that mark a device `failing`. */
 const FAILING_AFTER = 5;
 
 const ERROR_MAX = 200;
 
-/**
- * An endpoint the server may POST to: https, no credentials, and not a local
- * name or private address, also after DNS.
- */
 async function checkEndpoint(endpoint: string): Promise<URL> {
   let url: URL;
   try {
@@ -52,7 +41,6 @@ async function checkEndpoint(endpoint: string): Promise<URL> {
   return url;
 }
 
-/** Recount the devices that can receive (the channel's `configured()`). */
 export async function refreshActiveDevices(): Promise<number> {
   const [row] = await db
     .select({ n: count() })
@@ -62,7 +50,6 @@ export async function refreshActiveDevices(): Promise<number> {
   return app().webPush.activeDevices;
 }
 
-/** Register a device, or refresh it when its endpoint is already known. */
 export async function registerDevice(userId: number, body: PushDeviceBody): Promise<string> {
   await checkEndpoint(body.endpoint);
   const now = new Date();
@@ -86,7 +73,6 @@ export async function registerDevice(userId: number, body: PushDeviceBody): Prom
       .update(pushSubscriptions)
       .set({ ...fields, failureCount: 0, lastError: null })
       .where(eq(pushSubscriptions.id, id));
-    // Registered again: a failing or revoked device receives again.
     await db
       .update(pushSubscriptions)
       .set({ status: "active" })
@@ -144,7 +130,6 @@ export async function listDevices(userId: number): Promise<PushDeviceData[]> {
   }));
 }
 
-/** One of the account's devices with its keys, for a test send; 404 otherwise. */
 export async function deviceTarget(userId: number, id: string): Promise<StoredPushTarget> {
   const row = await db.query.pushSubscriptions.findFirst({
     where: and(eq(pushSubscriptions.id, id), eq(pushSubscriptions.userId, userId)),
@@ -162,7 +147,6 @@ export async function removeDevice(userId: number, id: string): Promise<void> {
   await refreshActiveDevices();
 }
 
-/** Every device is revoked (the VAPID key they registered with is gone). */
 export async function revokeAllDevices(reason: string): Promise<void> {
   await db
     .update(pushSubscriptions)
@@ -171,7 +155,6 @@ export async function revokeAllDevices(reason: string): Promise<void> {
   await refreshActiveDevices();
 }
 
-/** Record what a send to device `id` did. */
 export async function reportOutcome(id: string, outcome: PushOutcome): Promise<void> {
   const guarded = (to: "active" | "failing" | "revoked") =>
     and(
@@ -206,7 +189,6 @@ export async function reportOutcome(id: string, outcome: PushOutcome): Promise<v
     .where(and(guarded("failing"), sql`${pushSubscriptions.failureCount} >= ${FAILING_AFTER}`));
 }
 
-/** The channel's port onto this table. */
 export const pushSubscriptionStore: PushSubscriptionStore = {
   hasActive: () => app().webPush.activeDevices > 0,
   async targets() {
