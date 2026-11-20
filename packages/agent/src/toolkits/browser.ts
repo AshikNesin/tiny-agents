@@ -339,6 +339,8 @@ export function createBrowserToolkit(options: BrowserToolkitOptions = {}): Capab
             assertRefShape(args.ref);
             const s = await actionTurn(Number(api.conversationId));
             const result = await s.session.click(args.ref);
+            // Another tab: its page is new, even at the same URL as the last.
+            if (result.newTab) baselines.delete(await baselineKey(Number(api.conversationId)));
             const page = await pageAfter(Number(api.conversationId), s.session);
             const open = result.newTab ? ((await s.session.tabs?.())?.length ?? 2) : 0;
             const where = result.newTab
@@ -492,6 +494,7 @@ export function createBrowserToolkit(options: BrowserToolkitOptions = {}): Capab
             if (args.select) {
               if (!switchTab) return single;
               const result = await switchTab(args.select - 1);
+              baselines.delete(await baselineKey(Number(api.conversationId)));
               const page = await pageAfter(Number(api.conversationId), s.session);
               const text = landed(`on tab ${args.select}: `, result.url, result.title) + page;
               return { output: [{ type: "text", text }] };
@@ -501,7 +504,9 @@ export function createBrowserToolkit(options: BrowserToolkitOptions = {}): Capab
               (tab, i) =>
                 `${landed(`${i + 1}. `, tab.url, tab.title)}${tab.current ? " (current)" : ""}`,
             );
-            return { output: [{ type: "text", text: list.join("\n") }] };
+            // A header first: a trimmed result keeps its first line, never a lone tab.
+            const head = `${list.length} tab${list.length === 1 ? "" : "s"}:`;
+            return { output: [{ type: "text", text: [head, ...list].join("\n") }] };
           } catch (error) {
             return fail(describe(error));
           }

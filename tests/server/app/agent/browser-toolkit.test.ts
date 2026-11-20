@@ -318,7 +318,7 @@ describe("browser toolkit", () => {
 
     const listed = await run(tk, "browser_tabs", {});
     expect(listed.text).toBe(
-      "1. https://example.com/results · Results\n2. https://example.com/item · Item (current)",
+      "2 tabs:\n1. https://example.com/results · Results\n2. https://example.com/item · Item (current)",
     );
 
     fake.setSnapshot('- link "Open item" [ref=e5]');
@@ -326,6 +326,20 @@ describe("browser toolkit", () => {
     expect(back.text).toBe(
       'on tab 1: https://example.com/results · Results\nPage:\n- link "Open item" [ref=e5]',
     );
+  });
+
+  it("shows the selected tab's page even when it has the same URL as the last tab", async () => {
+    const fake = fakeTransport();
+    const transport: BrowserTransport = async (...args) => ({
+      ...(await fake.transport(...args)),
+      url: () => "https://example.com/feed",
+      switchTab: async () => ({ url: "https://example.com/feed" }),
+    });
+    const tk = toolkit({ transport, profilesDir: "/tmp/ta-test-profiles" });
+    fake.setSnapshot('- heading "Feed"');
+    await run(tk, "browser_snapshot", {});
+    const switched = await run(tk, "browser_tabs", { select: 2 });
+    expect(switched.text).toBe('on tab 2: https://example.com/feed\nPage:\n- heading "Feed"');
   });
 
   it("keeps typed text out of the page change it returns", async () => {

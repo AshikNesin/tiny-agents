@@ -71,7 +71,7 @@ the agent can browse, but there is nothing to stream (the panel says so)
   `browser_tabs` lists the agent's tabs, `select` goes on in one and
   `close` closes one. Every tab an agent holds stays guarded and claimed
   while open, so a background tab cannot load a private address and another
-  agent never takes it; closing the agent's tab, or releasing the
+  agent never takes it; closing the agent's session, or releasing the
   browser's first tab, closes the tabs it opened.
 - `browser_wait_for` waits until text shows or, with `gone`, goes away
   (Playwright's `getByText`, up to 30 s, default 10), or pauses a few

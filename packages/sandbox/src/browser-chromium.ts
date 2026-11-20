@@ -376,13 +376,18 @@ export function pageSession(
       ),
     switchTab: async (index) => {
       await switchTo(tabAt(index));
+      // In front, where the live view (and the owner) sees it.
+      await page.bringToFront().catch(() => undefined);
       await watch(page);
       return { url: page.url(), title: await titleOf(page) };
     },
     closeTabAt: async (index) => {
       const target = tabAt(index);
       if (mine.length === 1) throw new Error("This is your only tab; it can't be closed.");
-      if (target === page) await switchTo(mine[index === mine.length - 1 ? index - 1 : index + 1]!);
+      if (target === page) {
+        await switchTo(mine[index === mine.length - 1 ? index - 1 : index + 1]!);
+        await page.bringToFront().catch(() => undefined);
+      }
       letGo(target);
       await target.close();
     },
