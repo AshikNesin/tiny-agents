@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.1
+
+### Patch Changes
+
+- Removed code comments; no behaviour change (ADR 0028).
+
 ## 0.7.0
 
 ### Minor Changes

@@ -65,12 +65,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/** What the Code list shows: the harnesses, the live list, and the archived view when it is open. */
 data class CodeListState(
     val loading: Boolean = true,
     val error: String? = null,
     val harnesses: List<CodeHarness> = emptyList(),
-    /** Harness id to its connection state, as the stream reports it. */
     val states: Map<String, String> = emptyMap(),
     val threads: List<CodeThreadSummary> = emptyList(),
     val connected: Boolean = false,
@@ -79,7 +77,6 @@ data class CodeListState(
     val harnessFilter: String? = null,
 )
 
-/** The Code list: harness status and every thread, live from `/code/events` while on screen. */
 class CodeListViewModel(private val container: AppContainer) : ViewModel() {
     private val _state = MutableStateFlow(CodeListState())
     val state: StateFlow<CodeListState> = _state.asStateFlow()
@@ -102,7 +99,6 @@ class CodeListViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
-    /** The screen came on: follow the list. */
     fun show() {
         if (stream?.isActive == true) return
         stream = viewModelScope.launch {
@@ -175,7 +171,6 @@ fun CodeListRoute(container: AppContainer, onOpen: (String) -> Unit, onNew: () -
     )
 }
 
-/** Working threads on top, then recent ones, subagents nested under their parent. */
 @Composable
 fun CodeListScreen(
     state: CodeListState,
@@ -316,7 +311,6 @@ private fun LazyListScope.nodes(nodes: List<CodeListNode>, depth: Int, labels: M
     }
 }
 
-/** One thread: its title, the harness and directory, and on the right what it is doing. */
 @Composable
 private fun ThreadRow(node: CodeListNode, depth: Int, harness: String, now: () -> Long, onOpen: (String) -> Unit) {
     val row = node.row
@@ -369,7 +363,6 @@ private fun ThreadRow(node: CodeListNode, depth: Int, harness: String, now: () -
     }
 }
 
-/** The Auto-fix loop, where it is worth a word in the list. */
 internal fun loopNote(loop: String): String = when (loop) {
     "fixing" -> ", fixing"
     "needs_input" -> ", needs you"

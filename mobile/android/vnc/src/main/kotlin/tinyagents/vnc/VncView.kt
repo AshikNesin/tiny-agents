@@ -35,28 +35,6 @@ import androidx.compose.ui.unit.IntOffset
 import kotlinx.coroutines.delay
 import kotlin.math.abs
 
-/**
- * Shows the remote screen of [state], scaled to fit and centred, and turns touches into remote
- * pointer events:
- *
- * - tap: left click; two quick taps on one spot: double click at the first tap's position
- * - long press: right click
- * - one-finger drag: drag with the left button held
- * - two-finger drag: mouse wheel, in the direction touch scrolling moves content
- * - pinch: local zoom, 1x to 4x; while zoomed, a two-finger drag pans the view instead
- *
- * With [interactive] false nothing is sent to the remote side: pinch still zooms, and dragging
- * with one or two fingers pans. [interactive] only covers this view's own touches and keys; set
- * [RfbClient.viewOnly] as well to stop everything else.
- *
- * Hardware keys are forwarded while the view has focus. It is focusable but never takes focus by
- * itself, so that tapping the remote screen does not close a soft keyboard the app opened; pass
- * a `focusRequester` in [modifier] to focus it.
- *
- * [onViewSize] reports the view's size in pixels 150 ms after it last changed, and again when
- * [state] gets a new client. A browser view passes it on to [RfbClient.requestDesktopSize],
- * divided by its remote pixel density; a fixed-size desktop leaves it null.
- */
 @Composable
 public fun VncView(
     state: VncViewState,
@@ -92,7 +70,6 @@ public fun VncView(
                 )
             },
     ) {
-        // Reading the frame counter redraws on every framebuffer change.
         state.frame
         val image = state.image ?: return@Canvas
         val factor = state.scale()
@@ -108,7 +85,6 @@ public fun VncView(
 
 private const val VIEW_SIZE_DEBOUNCE_MILLIS = 150L
 
-/** RFB pointer button bits. */
 private const val BUTTON_LEFT = 1
 private const val BUTTON_RIGHT = 4
 private const val WHEEL_UP = 8
@@ -116,7 +92,6 @@ private const val WHEEL_DOWN = 16
 private const val WHEEL_LEFT = 32
 private const val WHEEL_RIGHT = 64
 
-/** Finger travel per wheel step, in touch slops (a slop is about 8dp). */
 private const val WHEEL_STEP_SLOPS = 2f
 
 private enum class Phase { Tap, LongPress, Drag, Multi, Done }
@@ -141,7 +116,6 @@ private suspend fun PointerInputScope.detectVncGestures(
         val start = down.position
         val startRemote = if (canSend) state.toRemote(start) else null
 
-        // What the first finger does: a long press only exists where it would click.
         var current = start
         var phase = if (startRemote != null) {
             withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
@@ -156,7 +130,6 @@ private suspend fun PointerInputScope.detectVncGestures(
                 val time = down.uptimeMillis
                 val repeats = lastTapTime?.let { time - it <= viewConfiguration.doubleTapTimeoutMillis } == true &&
                     (start - lastTapPosition).getDistance() <= doubleTapRadius
-                // A double tap never lands twice on one pixel; the remote double click has to.
                 val target = if (repeats) lastTapRemote else startRemote
                 state.click(target, BUTTON_LEFT)
                 lastTapTime = time
@@ -178,7 +151,6 @@ private suspend fun PointerInputScope.detectVncGestures(
     }
 }
 
-/** Waits until the finger [id] lifts, moves beyond [slop], or a second finger lands. */
 private suspend fun AwaitPointerEventScope.awaitFirstMove(
     id: PointerId,
     start: Offset,
@@ -195,17 +167,12 @@ private suspend fun AwaitPointerEventScope.awaitFirstMove(
     }
 }
 
-/**
- * A one-finger drag as a left-button drag: pressed where the finger landed, released where it
- * lifts, or where it is when a second finger turns the gesture into a two-finger one.
- */
 private suspend fun AwaitPointerEventScope.remoteDrag(
     state: VncViewState,
     id: PointerId,
     startRemote: IntOffset?,
     current: Offset,
 ): Phase {
-    // A drag that started outside the remote screen sends nothing.
     var last = startRemote ?: return awaitLiftOrSecondFinger(id)
     state.pointer(last, 0)
     state.pointer(last, BUTTON_LEFT)
@@ -221,7 +188,6 @@ private suspend fun AwaitPointerEventScope.remoteDrag(
             state.pointer(last, BUTTON_LEFT)
         }
     } finally {
-        // Also runs when the gesture is cancelled, so the remote button never stays down.
         state.pointer(last, 0)
     }
 }
@@ -234,7 +200,6 @@ private suspend fun AwaitPointerEventScope.awaitLiftOrSecondFinger(id: PointerId
     }
 }
 
-/** View only: one finger pans the zoomed view. */
 private suspend fun AwaitPointerEventScope.localPan(state: VncViewState, id: PointerId): Phase {
     while (true) {
         val event = awaitConsumed()
@@ -245,10 +210,6 @@ private suspend fun AwaitPointerEventScope.localPan(state: VncViewState, id: Poi
     }
 }
 
-/**
- * Two fingers, until they lift. Spreading them zooms. Moving them together scrolls the remote
- * side, or pans the view when it is zoomed in or nothing may be sent.
- */
 private suspend fun AwaitPointerEventScope.twoFingers(state: VncViewState, canSend: Boolean, slop: Float) {
     var mode = MultiMode.Undecided
     var zoomSoFar = 1f
@@ -281,7 +242,6 @@ private suspend fun AwaitPointerEventScope.twoFingers(state: VncViewState, canSe
                     mode = MultiMode.Scroll
                     wheelAt = state.toRemote(centroid - panSoFar)
                     wheelVertical = abs(panSoFar.y) >= abs(panSoFar.x)
-                    // The travel that decided the mode counts, the step it just received does not twice.
                     wheelTravel = (if (wheelVertical) panSoFar.y - pan.y else panSoFar.x - pan.x)
                 }
             }
@@ -297,7 +257,6 @@ private suspend fun AwaitPointerEventScope.twoFingers(state: VncViewState, canSe
                 val at = wheelAt ?: continue
                 wheelTravel += if (wheelVertical) pan.y else pan.x
                 while (abs(wheelTravel) >= wheelStep) {
-                    // Content follows the fingers: moving them down or right scrolls up or left.
                     val forward = wheelTravel > 0
                     val button = if (wheelVertical) {
                         if (forward) WHEEL_UP else WHEEL_DOWN

@@ -55,7 +55,6 @@ fun SettingsRoute(
     )
 }
 
-/** The kit's GrootSettingsScreen with the account on top: who is signed in, where, and the way out. */
 @Composable
 fun SettingsScreen(
     themeMode: ThemeMode,
@@ -109,7 +108,6 @@ fun SettingsScreen(
             }
             SettingsActionRow(title = "Sign out", icon = rememberVectorPainter(AppIcons.LogOut), onClick = onSignOut)
         }
-        // Phone notifications (issue #306) are for owners: the server offers guests none.
         if (!guest && push.state != PushStatus.State.Unsupported) {
             SettingsSection(title = "Notifications") {
                 SettingsInfoRow(
@@ -162,7 +160,6 @@ private fun pushSummary(push: PushStatus): String? = when (push.state) {
     PushStatus.State.Unsupported -> null
 }
 
-/** Android's notification settings for this app: where a refused permission is turned back on. */
 private fun openNotificationSettings(context: Context) {
     val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
         .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)

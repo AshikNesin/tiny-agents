@@ -6,7 +6,6 @@ import androidx.core.net.toUri
 import groot.mobile.BuildConfig
 import groot.mobile.R
 
-/** The maker's site with `?ref=<application id>`, so visits can be traced to the app that sent them. */
 @Composable
 fun makerUrl(): String = withRef(stringResource(R.string.config_maker_url), BuildConfig.APPLICATION_ID)
 

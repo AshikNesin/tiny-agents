@@ -62,7 +62,6 @@ class TerminalViewTest {
 
     private var refresh: () -> Unit = {}
 
-    /** Let a size change lay out, then let the debounce run out. */
     private fun settle() {
         compose.waitForIdle()
         compose.mainClock.advanceTimeBy(500)
@@ -87,7 +86,6 @@ class TerminalViewTest {
         show(colourful())
         assertEquals("one report once the size settled", 1, sizes.size)
         val (cols, rows) = sizes.single()
-        // 400x300 px at 14 px text: about 8.4 px per column and 16-17 px per row.
         assertTrue("cols=$cols", cols in 35..60)
         assertTrue("rows=$rows", rows in 14..22)
 
@@ -133,8 +131,6 @@ class TerminalViewTest {
         font = 28
         settle()
         assertEquals(3, sizes.size)
-        // Hinted advances are whole pixels (8 px at 14 px text, 17 px at 28 px), so "twice the
-        // font" is not exactly half the columns: allow a tenth either way.
         val slack = maxOf(1, first.first / 10)
         assertTrue("twice the font, about the first grid again: $sizes", sizes.last().first in first.first - slack..first.first + slack)
         assertTrue("and about the first rows: $sizes", sizes.last().second in first.second - slack..first.second + slack)
@@ -201,7 +197,6 @@ class TerminalViewTest {
         val scrolled = compose.onNodeWithTag("terminal").captureToImage().asAndroidBitmap()
         assertNotEquals("the drawing moved", pixels(before), pixels(scrolled))
 
-        // New output keeps the same lines in view.
         val held = state.scrollOffset
         emulator.feed("\r\nmore\r\nand more".toByteArray())
         refresh()
@@ -265,7 +260,6 @@ class TerminalViewTest {
         refresh()
         compose.waitForIdle()
         compose.onNodeWithTag("terminal").captureToImage()
-        // Scrollback lines narrower and wider than the screen.
         big.resize(50, 5)
         big.feed((1..30).joinToString("\r\n") { "漢字 $it" }.toByteArray())
         big.resize(20, 5)

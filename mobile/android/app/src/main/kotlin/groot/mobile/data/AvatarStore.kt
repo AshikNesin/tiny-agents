@@ -14,12 +14,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 
-/**
- * Bot avatars: the same DiceBear "gaze" face the web app draws (`BotAvatar.tsx`), seeded by
- * the bot's name, so a bot looks the same on both clients. Fetched as PNG (Android draws no
- * SVG without a library), kept decoded in memory and raw on disk so they survive restarts
- * and show offline once seen.
- */
 class AvatarStore(cacheDir: File?, client: OkHttpClient = OkHttpClient()) {
     private val http: OkHttpClient = client.newBuilder()
         .apply { if (cacheDir != null) cache(Cache(File(cacheDir, "avatars"), DISK_BYTES)) }
@@ -31,7 +25,6 @@ class AvatarStore(cacheDir: File?, client: OkHttpClient = OkHttpClient()) {
 
     fun cached(name: String): Bitmap? = memory.get(key(name))
 
-    /** The bot's face, or null when it cannot be fetched (offline, blocked); callers fall back to the initial. */
     suspend fun load(name: String): Bitmap? {
         val key = key(name)
         memory.get(key)?.let { return it }
@@ -70,10 +63,8 @@ class AvatarStore(cacheDir: File?, client: OkHttpClient = OkHttpClient()) {
         private const val DISK_BYTES = 4L * 1024 * 1024
         private const val SIZE_PX = 144
 
-        /** The web app seeds with the raw name; so does this, or the faces would differ. */
         private fun key(name: String): String = name
 
-        /** The web app's avatar URL, as PNG at one size that stays crisp up to the large avatar. */
         fun avatarUrl(name: String): String =
             "https://api.dicebear.com/10.x/gaze/png".toHttpUrl().newBuilder()
                 .addQueryParameter("seed", key(name))

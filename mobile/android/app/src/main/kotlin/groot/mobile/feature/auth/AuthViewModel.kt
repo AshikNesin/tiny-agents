@@ -12,25 +12,20 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 data class AuthState(
-    /** The server is chosen: the screen asks for the account. */
     val serverUrl: String? = null,
-    /** The server has no account yet: the form creates the first one. */
     val needsSetup: Boolean = false,
     val busy: Boolean = false,
     val error: String? = null,
 )
 
-/** Sign-in in two steps: which server, then who. A fresh server offers to create its first account. */
 class AuthViewModel(private val session: SessionStore, private val api: TinyAgentsApi) : ViewModel() {
     private val _state = MutableStateFlow(AuthState(serverUrl = session.state.value.serverUrl))
     val state: StateFlow<AuthState> = _state.asStateFlow()
 
     init {
-        // A stored server (signed out earlier): ask it whether it still needs its first account.
         if (session.state.value.serverUrl != null) probe()
     }
 
-    /** Check the address answers like a tiny-agents server, then move on to the account. */
     fun connect(input: String) {
         val url = SessionStore.normalizeServerUrl(input)
         if (url == null) {
@@ -38,7 +33,6 @@ class AuthViewModel(private val session: SessionStore, private val api: TinyAgen
             return
         }
         launchBusy {
-            // Requests read the server from the session, so it is set first and dropped again if nothing answers.
             session.setServer(url)
             try {
                 val needsSetup = api.needsSetup()

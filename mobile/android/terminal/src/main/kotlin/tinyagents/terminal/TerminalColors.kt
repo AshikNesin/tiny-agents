@@ -4,13 +4,6 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 
-/**
- * The colours a terminal is drawn with. Only the 16 ANSI colours are given: the rest of the
- * xterm 256-colour palette (the 6x6x6 cube and the grey ramp) is computed.
- *
- * @param ansi exactly 16 colours: black, red, green, yellow, blue, magenta, cyan, white, then
- * their bright variants.
- */
 @Immutable
 public data class TerminalColors(
     val foreground: Color,
@@ -23,13 +16,11 @@ public data class TerminalColors(
         require(ansi.size == ANSI_COUNT) { "ansi needs $ANSI_COUNT colours, got ${ansi.size}" }
     }
 
-    /** Palette colour [index] of the xterm 256-colour palette. */
     public fun indexed(index: Int): Color {
         val i = index.coerceIn(0, PALETTE_SIZE - 1)
         return if (i < ANSI_COUNT) ansi[i] else argbColor(xtermArgb(i))
     }
 
-    /** The whole palette as ARGB ints, for the draw loop. */
     internal fun paletteArgb(): IntArray = IntArray(PALETTE_SIZE) { if (it < ANSI_COUNT) ansi[it].toArgb() else xtermArgb(it) }
 
     public companion object {
@@ -39,11 +30,8 @@ public data class TerminalColors(
         private const val GREY_START = 232
         private const val OPAQUE = 0xFF shl 24
 
-        /** The foreground at about 30%, which reads as a selection on either theme. */
         private const val SELECTION_ALPHA = 0x4D
 
-        // The web terminal's palettes (apps/web/src/client/lib/xterm.ts): xterm's stock colours
-        // are built for a black background and are unreadable on a light one.
         private const val DARK_FOREGROUND = 0xFFEDEDED.toInt()
         private const val DARK_BACKGROUND = 0xFF141414.toInt()
         private val DARK_ANSI = intArrayOf(
@@ -62,16 +50,10 @@ public data class TerminalColors(
             0xFF0969DA.toInt(), 0xFFA475F9.toInt(), 0xFF3192AA.toInt(), 0xFF8C959F.toInt(),
         )
 
-        /** The dark palette of the web terminal. */
         public fun dark(): TerminalColors = fromArgb(DARK_FOREGROUND, DARK_BACKGROUND, DARK_ANSI)
 
-        /** The light palette of the web terminal. */
         public fun light(): TerminalColors = fromArgb(LIGHT_FOREGROUND, LIGHT_BACKGROUND, LIGHT_ANSI)
 
-        /**
-         * Colours from ARGB ints, with the cursor in the foreground colour and the selection a
-         * translucent foreground.
-         */
         public fun fromArgb(foreground: Int, background: Int, ansi: IntArray): TerminalColors {
             require(ansi.size == ANSI_COUNT) { "ansi needs $ANSI_COUNT colours, got ${ansi.size}" }
             val selection = (foreground and OPAQUE.inv()) or (SELECTION_ALPHA shl 24)
@@ -84,7 +66,6 @@ public data class TerminalColors(
             )
         }
 
-        /** Entry `index` (16..255) of the xterm palette: a 6x6x6 colour cube, then 24 greys. */
         internal fun xtermArgb(index: Int): Int {
             if (index >= GREY_START) {
                 val level = 8 + 10 * (index - GREY_START)

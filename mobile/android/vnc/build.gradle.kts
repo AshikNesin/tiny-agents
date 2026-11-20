@@ -1,5 +1,3 @@
-// APP-owned module: the RFB (VNC) client and viewer behind the Browser and Computer live views.
-// No networking and no app code in here: the app hands it bytes and gets bytes back.
 plugins {
     alias(libs.plugins.groot.android.library)
     alias(libs.plugins.groot.compose)
@@ -10,10 +8,6 @@ android {
     namespace = "tinyagents.vnc"
 
     lint {
-        // The Compose libraries pull in androidx.lifecycle:lifecycle-runtime 2.9.4 here (kit and app
-        // resolve newer). That third-party AAR bundles a lint.jar built against a Kotlin PSI API the
-        // current lint no longer has, so lint skips its two checks and warns about the jar. Fixing it
-        // would mean adding a dependency only to bump lifecycle; this module uses no lifecycle APIs.
         disable += "ObsoleteLintCustomCheck"
     }
 }

@@ -2,20 +2,12 @@ package groot.mobile.data.api
 
 import org.json.JSONObject
 
-/*
- * Code (the owner's coding agents): the harness contracts of `packages/code/src/contracts`
- * and the project and pull request types of `apps/web/src/shared/api/code.ts`, as far as the
- * app draws them. Field names follow the server's; a field the app does not read is left out.
- */
-
-/** Claude Code's permission modes; a harness offers only the ones it enforces. */
 object PermissionModes {
     const val DEFAULT = "default"
     const val ACCEPT_EDITS = "acceptEdits"
     const val PLAN = "plan"
     const val BYPASS = "bypassPermissions"
 
-    /** The web client's labels (`pages/code/controls.tsx`). */
     fun label(mode: String): String = when (mode) {
         DEFAULT -> "Ask"
         ACCEPT_EDITS -> "Accept edits"
@@ -33,13 +25,11 @@ object PermissionModes {
     }
 }
 
-/** What a harness really does: a missing capability hides its control. */
 data class CodeCapabilities(
     val interrupt: Boolean = false,
     val steer: Boolean = false,
     val queue: Boolean = false,
     val manageQueue: Boolean = false,
-    /** "retry", "resume", "continue". */
     val recovery: List<String> = emptyList(),
     val archive: Boolean = false,
     val delete: Boolean = false,
@@ -82,7 +72,6 @@ data class CodeCapabilities(
     }
 }
 
-/** One configured harness (`GET /code/status`). [state] is disabled, connecting, connected or reconnecting. */
 data class CodeHarness(
     val id: String,
     val kind: String,
@@ -108,12 +97,9 @@ data class CodeHarness(
     }
 }
 
-/** A thread's open pull request and its Auto-fix loop state, as the list shows it. */
 data class ThreadPr(val number: Int, val loop: String)
 
-/** One conversation with a coding agent, as the list and the header show it. */
 data class CodeThreadSummary(
-    /** `<instanceId>:<nativeId>`. */
     val id: String,
     val instanceId: String,
     val kind: String,
@@ -185,7 +171,6 @@ data class CodeContext(val used: Long, val max: Long?) {
     }
 }
 
-/** A question of a harness's question request: pick one (or several) options. */
 data class CodeQuestion(
     val question: String,
     val header: String?,
@@ -193,7 +178,6 @@ data class CodeQuestion(
     val options: List<Pair<String, String?>>,
 )
 
-/** What a harness asks the owner mid-turn: run a tool, or answer questions. */
 sealed interface ApprovalRequest {
     data class Tool(val tool: String, val name: String, val summary: String, val reason: String?, val input: String) : ApprovalRequest
     data class Questions(val questions: List<CodeQuestion>) : ApprovalRequest
@@ -222,10 +206,8 @@ sealed interface ApprovalRequest {
     }
 }
 
-/** An image or file the harness serves at `/code/harnesses/:instance/asset?ref=`. */
 data class CodeAsset(val ref: String, val name: String, val image: Boolean)
 
-/** One row of the normalized transcript. Rows have stable ids and always arrive whole. */
 sealed interface TranscriptItem {
     val id: String
 
@@ -236,7 +218,6 @@ sealed interface TranscriptItem {
     data class Job(override val id: String, val text: String, val exitCode: Int?) : TranscriptItem
     data class Notice(
         override val id: String,
-        /** error, warning or info. */
         val level: String,
         val text: String,
         val retryable: Boolean,
@@ -247,16 +228,13 @@ sealed interface TranscriptItem {
     data class Request(
         override val id: String,
         val request: ApprovalRequest,
-        /** open, allowed, denied, answered or expired. */
         val status: String,
     ) : TranscriptItem
     data class Tool(
         override val id: String,
-        /** bash, edit, read, search, web, browser, image, todo, subagent, message_user, … */
         val tool: String,
         val name: String,
         val summary: String,
-        /** running, done, error or denied. */
         val status: String,
         val input: String,
         val output: String?,
@@ -271,7 +249,6 @@ sealed interface TranscriptItem {
     ) : TranscriptItem
 
     companion object {
-        /** A row, or null for a kind this app does not know (a newer server). */
         fun from(json: JSONObject): TranscriptItem? {
             val id = json.string("id")
             return when (json.string("kind")) {
@@ -324,7 +301,6 @@ sealed interface TranscriptItem {
     }
 }
 
-/** A tool's input as text to show: a string as it is, anything else as indented JSON. */
 private fun inputText(value: Any?): String = when (value) {
     null, JSONObject.NULL -> ""
     is String -> value
@@ -333,7 +309,6 @@ private fun inputText(value: Any?): String = when (value) {
     else -> value.toString()
 }
 
-/** Everything the conversation view needs, read at once. */
 data class CodeThreadSnapshot(
     val thread: CodeThreadSummary,
     val items: List<TranscriptItem>,
@@ -356,7 +331,6 @@ data class CodeThreadSnapshot(
     }
 }
 
-/** One event of a thread's stream (`GET /code/threads/:id/events`). */
 sealed interface CodeThreadEvent {
     data class Snapshot(val snapshot: CodeThreadSnapshot) : CodeThreadEvent
     data class Thread(val thread: CodeThreadSummary) : CodeThreadEvent
@@ -371,11 +345,9 @@ sealed interface CodeThreadEvent {
     ) : CodeThreadEvent
     data class Error(val message: String) : CodeThreadEvent
 
-    /** The thread moved to another id (a harness re-keyed it). */
     data class Moved(val to: String) : CodeThreadEvent
 
     companion object {
-        /** An event, or null for a ping or a type this app does not know. */
         fun from(json: JSONObject): CodeThreadEvent? = when (json.string("type")) {
             "snapshot" -> json.objOrNull("snapshot")?.let { Snapshot(CodeThreadSnapshot.from(it)) }
             "thread" -> json.objOrNull("thread")?.let { Thread(CodeThreadSummary.from(it)) }
@@ -395,7 +367,6 @@ sealed interface CodeThreadEvent {
     }
 }
 
-/** One event of the Code list stream (`GET /code/events`). */
 sealed interface CodeListEvent {
     data class Status(val states: Map<String, String>) : CodeListEvent
     data class Threads(val threads: List<CodeThreadSummary>) : CodeListEvent
@@ -425,7 +396,6 @@ data class CodeModel(val id: String, val label: String, val isDefault: Boolean, 
     }
 }
 
-/** A Code project: a GitHub repository with a checkout on the sandbox. */
 data class CodeProject(
     val id: String,
     val name: String,
@@ -447,9 +417,6 @@ data class CodeProject(
     }
 }
 
-// ---- Changes ------------------------------------------------------------------------------
-
-/** Something to review: the uncommitted changes (`working`) or one commit. */
 data class GitDiff(val id: String, val message: String, val filesCount: Int, val additions: Int, val deletions: Int) {
     companion object {
         fun from(json: JSONObject) = GitDiff(
@@ -462,17 +429,14 @@ data class GitDiff(val id: String, val message: String, val filesCount: Int, val
     }
 }
 
-/** One changed file. [hash] and [viewed] come only from a project thread's review. */
 data class ChangedFile(
     val path: String,
-    /** added, modified or deleted. */
     val status: String,
     val additions: Int,
     val deletions: Int,
     val generated: Boolean,
     val hash: String? = null,
     val viewed: Boolean = false,
-    /** Git sees binary content: no line counts and no text diff. */
     val binary: Boolean = false,
 ) {
     companion object {
@@ -489,10 +453,6 @@ data class ChangedFile(
     }
 }
 
-/**
- * One file's two sides. [unshowable] (`binary` or `tooLarge`) says the server sent neither side
- * because it cannot be shown as text; both contents are then empty.
- */
 data class FileContents(
     val path: String,
     val oldContent: String,
@@ -509,14 +469,10 @@ data class FileContents(
     }
 }
 
-// ---- Pull requests ------------------------------------------------------------------------
-
-/** One check of a pull request: pending, success, failure or neutral. */
 data class PullCheck(val name: String, val state: String, val url: String?)
 
 data class PullReview(val author: String, val state: String)
 
-/** An unresolved review thread: where it is and its first comment. */
 data class PullThread(val id: String, val path: String, val line: Int?, val author: String, val body: String)
 
 data class AutofixPass(val id: String, val trigger: String, val status: String, val outcome: String?, val detail: String?, val createdAt: Long)
@@ -525,7 +481,6 @@ data class PullView(
     val number: Int,
     val url: String,
     val title: String,
-    /** open, closed or merged. */
     val state: String,
     val draft: Boolean,
     val headRef: String,
@@ -595,13 +550,11 @@ data class PullView(
     }
 }
 
-/** The PR tab of one thread (`GET /code/threads/:id/pr`). */
 data class ThreadPulls(
     val project: CodeProject?,
     val branch: String?,
     val active: PullView?,
     val earlier: List<Pair<Int, String>>,
-    /** Commits on the branch not on the base yet: what Publish would push. */
     val ahead: Int?,
     val spendUsd: Double?,
     val limitUsd: Double?,

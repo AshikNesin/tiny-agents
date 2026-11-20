@@ -12,7 +12,6 @@ import kotlinx.coroutines.flow.map
 
 private val Context.appPreferencesDataStore: DataStore<Preferences> by preferencesDataStore(name = "app_prefs")
 
-/** The reference app's own preferences (app-owned; the kit only stores the theme). */
 class AppPreferences(private val dataStore: DataStore<Preferences>) {
     val showHomeIntro: Flow<Boolean> = dataStore.data
         .map { it[SHOW_HOME_INTRO] ?: true }

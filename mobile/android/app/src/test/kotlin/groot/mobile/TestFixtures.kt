@@ -53,7 +53,6 @@ import okhttp3.Protocol
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 
-/** In-memory DataStore: unit tests never touch the disk. */
 class FakePreferencesDataStore : DataStore<Preferences> {
     private val state = MutableStateFlow(emptyPreferences())
     override val data: Flow<Preferences> = state
@@ -64,7 +63,6 @@ class FakePreferencesDataStore : DataStore<Preferences> {
 
 val fakeBuildInfo = BuildInfo(versionName = "0.1.0", versionCode = 1, commit = "3a4fd6d", isDebug = true)
 
-/** Every test date derives from this instant, never from the clock. */
 const val FIXED_NOW = 1_794_700_000_000L
 
 fun bot(
@@ -278,7 +276,6 @@ val sampleTerminalTabs = listOf(
     TerminalTab("ta-term-2", null, attached = true, createdAt = FIXED_NOW - 60_000),
 )
 
-/** A shell session in colour: a prompt, ls output and a failing command. */
 const val SAMPLE_TERMINAL_OUTPUT =
     "\u001b[1;32mexedev@sandbox\u001b[0m:\u001b[1;34m~/project\u001b[0m$ ls --color\r\n" +
         "\u001b[1;34msrc\u001b[0m  \u001b[1;34mtests\u001b[0m  package.json  \u001b[1;32mrun.sh\u001b[0m  README.md\r\n" +
@@ -328,11 +325,6 @@ val sampleEditorData = BotEditorData(
 
 val sampleEditorBotsState = sampleBotsState.copy(capabilities = sampleCapabilities)
 
-/**
- * An [AvatarStore] whose "network" is the faces bundled under `src/test/resources/avatars`
- * (DiceBear gaze PNGs for the sample bots), so screenshots show real avatars with no network.
- * Any other name answers 404, which draws the initial.
- */
 fun fakeAvatarStore(): AvatarStore = AvatarStore(
     cacheDir = null,
     client = OkHttpClient.Builder().addInterceptor { chain ->
@@ -351,7 +343,6 @@ fun fakeAvatarStore(): AvatarStore = AvatarStore(
 fun routineRun(id: String, name: String, minutesAgo: Long, status: String = "succeeded", output: String? = "Nothing new from your key senders.", error: String? = null) =
     RoutineRunCard(id, "r-$name", name, status, "schedule", 0, FIXED_NOW - minutesAgo * 60_000, output, error)
 
-/** A chat an hourly-ish routine has run in all day: 24 runs back to back, one blocked, one failed. */
 fun sampleRoutineChatView(): ChatView {
     val runs = (0 until 24).map { i ->
         val minutesAgo = 380L - i * 15
@@ -370,7 +361,6 @@ fun sampleRoutineChatView(): ChatView {
     return chatView(sampleSession(messages, busy = false).copy(routineRuns = runs))
 }
 
-/** One chat with every kind of card that waits on the owner: a command, a vault use, a sign-in, the computer. */
 val sampleApprovalMessages = listOf(
     message("a1", MessageRole.User, "Update the server and renew the GitHub token.", minutesAgo = 6),
     message(

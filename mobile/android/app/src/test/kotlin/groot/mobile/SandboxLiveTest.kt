@@ -36,15 +36,6 @@ import tinyagents.vnc.Keysyms
 import java.io.File
 import java.io.FileOutputStream
 
-/**
- * The Terminal, Browser and Computer screens' view models against a real tiny-agents server
- * with a sandbox: a tmux tab attached over the terminal bridge, and a bot's Chrome and
- * desktop streamed over the VNC bridge, resized and driven.
- *
- * Skipped unless `TINY_AGENTS_URL` is set and `TINY_AGENTS_SANDBOX=1` (in the tiny-agents
- * repo: `pnpm sandbox:up`, then `ta-verify.mjs up --sandbox`). Screens are saved as PNGs
- * under app/build/outputs/sandbox-live/ for a human to look at.
- */
 @OptIn(ExperimentalCoroutinesApi::class, kotlinx.coroutines.DelicateCoroutinesApi::class)
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -60,7 +51,6 @@ class SandboxLiveTest {
     @Before
     fun signIn() {
         assumeTrue("TINY_AGENTS_URL and TINY_AGENTS_SANDBOX=1 are not set", url != null && sandbox)
-        // The view models run on Main; give them one real thread, as on a device.
         Dispatchers.setMain(main)
         container = ApplicationProvider.getApplicationContext<GrootMobileApp>().container
         runBlocking {
@@ -91,7 +81,6 @@ class SandboxLiveTest {
     private suspend fun LiveViewModel.await(timeoutMs: Long, until: (LiveState) -> Boolean): LiveState =
         withTimeout(timeoutMs) { state.first(until) }
 
-    /** The terminal's visible screen as text, read on the thread that feeds it. */
     private suspend fun TerminalViewModel.screen(): List<String> = withContext(main) {
         (0 until emulator.rows).map { emulator.line(it).text().trimEnd() }
     }
@@ -106,10 +95,6 @@ class SandboxLiveTest {
         }
     }
 
-    /**
-     * Waits for [done], running the main looper meanwhile: the VNC view state copies frames to its
-     * bitmap there, and under Robolectric that looper is this test's own thread.
-     */
     private suspend fun awaitVnc(timeoutMs: Long, done: () -> Boolean) = withTimeout(timeoutMs) {
         while (true) {
             shadowOf(Looper.getMainLooper()).idle()
@@ -118,7 +103,6 @@ class SandboxLiveTest {
         }
     }
 
-    /** Lets the remote screen draw for [ms], running the main looper as [awaitVnc] does. */
     private suspend fun settle(ms: Long) {
         val end = System.currentTimeMillis() + ms
         while (System.currentTimeMillis() < end) {
@@ -143,7 +127,6 @@ class SandboxLiveTest {
         withContext(main) { terminal.newTab() }
         val tab = terminal.await { it.link == TerminalLink.Live && it.active != null && it.active !in before }.active!!
 
-        // The bridge takes input once its attach is up, which the first prompt shows.
         terminal.awaitScreen { screen -> screen.any { it.endsWith("$") } }
         withContext(main) { terminal.send("echo sum-\$((40+2))-$stamp\r".toByteArray()) }
         val lines = terminal.awaitScreen { screen -> screen.any { it == "sum-42-$stamp" } }
@@ -151,10 +134,8 @@ class SandboxLiveTest {
 
         withContext(main) { terminal.resize(100, 30) }
         withContext(main) { terminal.send("clear; tput cols; tput lines\r".toByteArray()) }
-        // The server's tmux runs without a status line, so the pane gets every row.
         terminal.awaitScreen { screen -> screen.contains("100") && screen.contains("30") }
 
-        // Something is running in the tab: closing it is refused until forced.
         withContext(main) { terminal.send("sleep 300\r".toByteArray()) }
         delay(1_000)
         withContext(main) { terminal.closeTab(tab) }
@@ -171,11 +152,9 @@ class SandboxLiveTest {
         withContext(main) { live.show() }
         live.await(30_000) { it.status != null }
         withContext(main) { live.start() }
-        // The first open on a fresh sandbox installs the stack, which takes minutes.
         val opened = live.await(900_000) { it.status?.active == true && it.link == LiveLink.Live }
         assertEquals("vnc", opened.status?.mode)
 
-        // A phone-sized box: the remote window is the 500 CSS px minimum, same shape, at the remote's density.
         withContext(main) { live.onViewSize(1236, 2000, 3f) }
         val scale = opened.status?.scale ?: 1.0
         val wantWidth = (500 * scale).toInt()
@@ -184,7 +163,6 @@ class SandboxLiveTest {
 
         withContext(main) { live.setDriver(true) }
         live.await(10_000) { it.driving }
-        // Ctrl+L, an address, Enter: the keystrokes reach Chrome, and the server reports the tab's new URL.
         live.vnc.sendChord(Keysyms.Control_L, 'l'.code)
         delay(500)
         live.vnc.sendText("example.com/?phone=$stamp\n")

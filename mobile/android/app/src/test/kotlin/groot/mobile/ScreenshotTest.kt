@@ -80,11 +80,6 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasClickAction
 
-/**
- * Renders the app's screens with sample data to PNGs for review: `pnpm screenshots`
- * (`./gradlew :app:recordRoborazziDebug`) writes them to app/build/outputs/roborazzi.
- * Not a golden-image gate (RFC 0001 Q9); a normal test run only checks they render.
- */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(qualifiers = "w412dp-h915dp-xxhdpi")
@@ -266,7 +261,6 @@ class ScreenshotTest {
 
     private fun capture(name: String, mode: ThemeMode, act: () -> Unit = {}, content: @Composable () -> Unit) {
         val container = ApplicationProvider.getApplicationContext<GrootMobileApp>().container
-        // Loaded up front: the avatar's first frame reads the cache, and the shot is taken on idle.
         val avatars = fakeAvatarStore().also { store -> runBlocking { sampleBots.forEach { store.load(it.name) } } }
         compose.setContent {
             GrootTheme(mode = mode, palette = BrandPalette) {
@@ -380,7 +374,6 @@ class ScreenshotTest {
     }
 }
 
-/** Android types (Uri) need Robolectric: kept out of TestFixtures, which plain JVM tests load. The share sheet with a CSV and a PDF shared to Researcher. */
 private val sampleShareDraft = ShareDraft(
     botId = "b2",
     staged = listOf(

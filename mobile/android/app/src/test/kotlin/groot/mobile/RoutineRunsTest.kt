@@ -6,9 +6,7 @@ import groot.mobile.feature.chat.runsSummary
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-/** The routine-run line, worded as the web client's `RoutineRuns.tsx` words it. */
 class RoutineRunsTest {
-    // FIXED_NOW is 05:16 IST; routine times read in IST, like the server and the web app.
     private val name = "Process emails from key senders"
 
     @Test

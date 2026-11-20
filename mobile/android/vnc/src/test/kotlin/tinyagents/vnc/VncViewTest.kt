@@ -42,7 +42,6 @@ import tinyagents.vnc.FakeRfbServer.Companion.rawRect
 import kotlin.math.abs
 import kotlin.math.floor
 
-/** [VncView] driven by real touch and key input, checked by the bytes the client sends. */
 @OptIn(ExperimentalTestApi::class, ExperimentalComposeUiApi::class)
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -69,7 +68,6 @@ class VncViewTest {
         return server
     }
 
-    /** An 800x600 remote in a 400x300 px view: one view pixel is two remote pixels. */
     private fun show(width: Int = 800, height: Int = 600): FakeRfbServer {
         val server = connect(width, height)
         compose.setContent {
@@ -136,8 +134,6 @@ class VncViewTest {
         servers.forEach { it.client.close() }
     }
 
-    // Touch
-
     @Test
     fun `a tap is a left click at the remote point`() {
         val server = show()
@@ -156,7 +152,6 @@ class VncViewTest {
             }
         }
         assertEquals(click(200, 100, 1) + click(200, 100, 1), messages)
-        // A later tap nearby is its own click.
         val later = sent(server) {
             view.performTouchInput {
                 advanceEventTime(2000)
@@ -221,7 +216,6 @@ class VncViewTest {
         val steps = floor(100 / (2 * slop)).toInt()
         assertTrue("the gesture is long enough for several wheel steps", steps >= 2)
         fun wheel(button: Int) = List(steps) { listOf("pointer 400,300 buttons $button", "pointer 400,300 buttons 0") }.flatten()
-        // Fingers up: content moves up, which is the wheel down. And so on.
         assertEquals(wheel(16), twoFingerDrag(server, Offset(0f, -10f)))
         assertEquals(wheel(8), twoFingerDrag(server, Offset(0f, 10f)))
         assertEquals(wheel(64), twoFingerDrag(server, Offset(-10f, 0f)))
@@ -242,18 +236,15 @@ class VncViewTest {
         val server = show()
         val messages = sent(server) { pinchOut() }
         assertEquals(emptyList<String>(), messages)
-        // The fingers went from 100 to 200 px apart; the first slop of that decides the gesture.
         assertTrue("zoom was ${state.zoom}", state.zoom in 1.5f..2f)
         assertEquals("the centre stays put", IntOffset(400, 300), state.toRemote(Offset(200f, 150f)))
 
-        // Taps now land on the zoomed remote point: (100,50) is 100 and 100 px from the centre.
         val scale = 0.5f * state.zoom
         val clicked = sent(server) { view.performTouchInput { click(Offset(100f, 50f)) } }
         val (x, y) = clicked.first().substringAfter("pointer ").substringBefore(" ").split(",").map { it.toInt() }
         assertTrue("clicked $clicked", abs(x - (400 - 100 / scale)) <= 1f && abs(y - (300 - 100 / scale)) <= 1f)
         assertEquals(3, clicked.size)
 
-        // Pinching far out stops at 4x, pinching in at 1x.
         repeat(4) { pinchOut() }
         assertEquals(4f, state.zoom)
         repeat(6) {
@@ -275,14 +266,12 @@ class VncViewTest {
         assertEquals(emptyList<String>(), messages)
         assertEquals(zoom, state.zoom)
         assertTrue("pan was ${state.pan}", state.pan.x in 20f..40f && state.pan.y == 0f)
-        // One finger still drags remotely while zoomed.
         val drag = sent(server) { view.performTouchInput { swipe(Offset(200f, 150f), Offset(260f, 150f), durationMillis = 100) } }
         assertTrue(drag.size > 3 && drag[1].endsWith("buttons 1") && drag.last().endsWith("buttons 0"))
     }
 
     @Test
     fun `touches outside the remote screen send nothing`() {
-        // A 800x300 remote in the 400x300 view is 400x150, with 75 px bars above and below.
         val server = show(800, 300)
         val messages = sent(server) {
             view.performTouchInput {
@@ -312,7 +301,6 @@ class VncViewTest {
         assertEquals(emptyList<String>(), messages)
         assertTrue("zoom was ${state.zoom}", state.zoom > 1.5f)
 
-        // One finger pans the zoomed view.
         view.performTouchInput { swipe(Offset(200f, 150f), Offset(240f, 170f), durationMillis = 100) }
         compose.waitForIdle()
         assertTrue("pan was ${state.pan}", state.pan.x in 20f..40f && state.pan.y in 5f..20f)
@@ -334,8 +322,6 @@ class VncViewTest {
         assertEquals(1f, state.zoom)
     }
 
-    // Keys
-
     @Test
     fun `hardware keys are sent while the view has focus and is interactive`() {
         val server = show()
@@ -355,8 +341,6 @@ class VncViewTest {
         assertEquals(emptyList<String>(), sent(server) { view.performKeyInput { keyDown(Key.B); keyUp(Key.B) } })
     }
 
-    // View size
-
     @Test
     fun `onViewSize reports the size once it has settled, and again for a new client`() {
         reportSizes = true
@@ -368,7 +352,6 @@ class VncViewTest {
         assertEquals(listOf(IntSize(400, 300)), reportedSizes)
         assertEquals(IntSize(400, 300), state.viewSize)
 
-        // Two quick changes are one report, of the last size.
         viewSize = IntSize(300, 200)
         compose.waitForIdle()
         compose.mainClock.advanceTimeBy(100)
@@ -379,22 +362,17 @@ class VncViewTest {
         compose.mainClock.advanceTimeBy(200)
         assertEquals(listOf(IntSize(400, 300), IntSize(200, 100)), reportedSizes)
 
-        // Nothing changes, nothing is reported.
         compose.mainClock.advanceTimeBy(1000)
         assertEquals(2, reportedSizes.size)
 
-        // A reconnect gets the size again, so the app can ask the new server for it.
         connect()
         compose.waitForIdle()
         compose.mainClock.advanceTimeBy(400)
         assertEquals(listOf(IntSize(400, 300), IntSize(200, 100), IntSize(200, 100)), reportedSizes)
     }
 
-    // Drawing
-
     @Test
     fun `draws the remote screen scaled to fit and centred on the background`() {
-        // A 4x2 remote in the 400x300 view: drawn 400x200 with 50 px bars above and below.
         val server = show(4, 2)
         val colours = intArrayOf(
             opaque(0xFF0000), opaque(0x00FF00), opaque(0x0000FF), opaque(0xFFFFFF),
@@ -406,7 +384,6 @@ class VncViewTest {
         val drawn = view.captureToImage().toPixelMap()
         assertEquals(400, drawn.width)
         assertEquals(300, drawn.height)
-        // The centre of each remote pixel: 100 px wide and tall, starting at y = 50.
         for (row in 0 until 2) {
             for (column in 0 until 4) {
                 val expected = colours[row * 4 + column]
@@ -416,14 +393,12 @@ class VncViewTest {
         assertEquals(background.toArgb(), drawn[200, 20].toArgb())
         assertEquals(background.toArgb(), drawn[200, 280].toArgb())
 
-        // A new frame is drawn without anything else changing.
         server.update(rawRect(0, 0, 1, 1, intArrayOf(opaque(0x123456))))
         server.expectUpdateRequest(incremental = true, 4, 2)
         compose.waitForIdle()
         assertColour("the changed pixel", opaque(0x123456), view.captureToImage().toPixelMap()[50, 100].toArgb())
     }
 
-    /** Scaling filters blend a little of the neighbouring pixels in, so channels may be slightly off. */
     private fun assertColour(what: String, expected: Int, actual: Int) {
         val close = (0..24 step 8).all { shift -> abs(((expected shr shift) and 0xFF) - ((actual shr shift) and 0xFF)) <= 8 }
         assertTrue("$what: expected %08x but was %08x".format(expected, actual), close)

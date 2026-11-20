@@ -35,7 +35,6 @@ import groot.mobile.ui.components.ScreenScaffold
 import groot.mobile.ui.components.Sheet
 import groot.mobile.ui.components.rememberResource
 
-/** People: guests who can chat with the bots shared with them, and nothing else. */
 @Composable
 fun PeopleRoute(container: AppContainer, onBack: () -> Unit) {
     val resource = rememberResource("people") { container.api.guests() }

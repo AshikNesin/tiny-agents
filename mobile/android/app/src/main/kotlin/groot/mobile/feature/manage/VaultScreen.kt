@@ -61,11 +61,6 @@ private fun approvalLabel(approval: String): String = when (approval) {
     else -> "Asks every time"
 }
 
-/**
- * The vault: logins, cards and API keys bots can use without ever seeing them. Here the
- * owner reads what is stored and how it was used, reveals a value after confirming who
- * they are, and can disable or delete an item. New items are added in the web app.
- */
 @Composable
 fun VaultRoute(container: AppContainer, onBack: () -> Unit) {
     val resource = rememberResource("vault") { container.api.vaultItems().filter { it.audience == "bots" } }

@@ -52,7 +52,6 @@ import groot.mobile.ui.components.StatusDot
 import tinyagents.vnc.Keysyms
 import tinyagents.vnc.VncView
 
-/** What the status line says about a live view (the web client's `connectionOf`). */
 internal fun linkLabel(status: LiveStatus?, link: LiveLink): String = when {
     status == null -> "Loading"
     !status.configured -> "Not set up"
@@ -64,7 +63,6 @@ internal fun linkLabel(status: LiveStatus?, link: LiveLink): String = when {
     else -> "Reconnecting"
 }
 
-/** Keys a phone keyboard lacks, and the modifiers that apply to the next key typed. */
 internal val LIVE_KEYS = listOf(
     BarKey(Keysyms.Escape, "esc", description = "Escape"),
     BarKey(Keysyms.Tab, "tab", description = "Tab"),
@@ -83,7 +81,6 @@ internal val LIVE_KEYS = listOf(
     BarKey(Keysyms.PageDown, "pgdn", description = "Page down"),
 )
 
-/** A bot's (or a profile's) browser or desktop, live: watch it, or take control and use it by touch. */
 @Composable
 fun LiveRoute(container: AppContainer, target: LiveTarget, title: String, onBack: () -> Unit) {
     val viewModel: LiveViewModel = viewModel(
@@ -105,7 +102,6 @@ fun LiveRoute(container: AppContainer, target: LiveTarget, title: String, onBack
     val noun = if (target.isBrowser) "browser" else "computer"
     val interactive = state.driving && !state.guest && state.link == LiveLink.Live
 
-    // A key, with whatever sticky modifiers are held; the modifiers let go after it.
     val press: (Int) -> Unit = { keysym ->
         viewModel.vnc.sendChord(*(held.toIntArray() + keysym))
         held = emptySet()
@@ -147,7 +143,6 @@ fun LiveRoute(container: AppContainer, target: LiveTarget, title: String, onBack
                         if (held.isEmpty()) {
                             viewModel.vnc.sendText(text)
                         } else {
-                            // A sticky modifier applies to the first character typed after it.
                             text.codePoints().forEach { press(Keysyms.fromChar(it)) }
                         }
                     },
@@ -249,10 +244,6 @@ fun LiveRoute(container: AppContainer, target: LiveTarget, title: String, onBack
     }
 }
 
-/**
- * The live view's body: loading, not set up, opening, closed or headless, each with what to do
- * about it; [picture] once there is something to stream.
- */
 @Composable
 fun BoxScope.LiveBody(
     status: LiveStatus?,

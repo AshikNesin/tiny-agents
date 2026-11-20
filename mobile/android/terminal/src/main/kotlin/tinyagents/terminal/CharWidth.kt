@@ -1,11 +1,5 @@
 package tinyagents.terminal
 
-/**
- * Column width of a code point, the way glibc `wcwidth` (what tmux measures with) sees it:
- * 0 for combining marks, format characters and Hangul medial/final jamo, 2 for East Asian
- * wide/fullwidth and emoji-presentation characters, 1 for everything else. The two tables are
- * generated from glibc 2.39 (Unicode 15.1) as sorted, inclusive `[first, last]` pairs.
- */
 internal object CharWidth {
     fun of(codePoint: Int): Int {
         if (codePoint < 0x300) return 1

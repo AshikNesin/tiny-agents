@@ -20,10 +20,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import groot.mobile.feature.auth.AuthRoute
 import groot.mobile.navigation.AppNavHost
 
-/**
- * The app under its theme: sign-in until there is a session, then the screens. Notices
- * (a failed send, a refused action) show as a snackbar over whichever screen is up.
- */
 @Composable
 fun TinyAgentsRoot(container: AppContainer) {
     val session by container.session.state.collectAsStateWithLifecycle()
@@ -34,7 +30,6 @@ fun TinyAgentsRoot(container: AppContainer) {
             snackbar.showSnackbar(message)
         }
     }
-    // Text outside a Material surface would otherwise draw in black, whatever the theme.
     CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onBackground) {
     Box(Modifier.fillMaxSize()) {
         if (session.signedIn) AppNavHost(container) else AuthRoute(container)

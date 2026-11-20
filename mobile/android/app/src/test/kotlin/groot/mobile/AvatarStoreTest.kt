@@ -58,7 +58,6 @@ class AvatarStoreTest {
 
     @Test
     fun `the url is the web app's DiceBear gaze avatar, as PNG, seeded by the raw name`() {
-        // Web: https://api.dicebear.com/10.x/gaze/svg?seed=${encodeURIComponent(name)}
         assertEquals(
             "https://api.dicebear.com/10.x/gaze/png?seed=Travel%20Planner&size=144",
             AvatarStore.avatarUrl("Travel Planner"),
@@ -85,7 +84,6 @@ class AvatarStoreTest {
         val store = AvatarStore(cacheDir = null, client = serving(calls) { null })
         assertNull(store.load("Nobody"))
         assertNull(store.cached("Nobody"))
-        // A failure is not cached: the next screen tries again.
         assertNull(store.load("Nobody"))
         assertEquals(2, calls.get())
     }

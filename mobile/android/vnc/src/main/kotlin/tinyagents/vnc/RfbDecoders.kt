@@ -6,12 +6,10 @@ import java.io.InputStream
 import java.util.zip.DataFormatException
 import java.util.zip.Inflater
 
-/** The server broke the protocol, or asked for something this client refuses. */
 internal class RfbProtocolException(message: String) : IOException(message)
 
 internal const val OPAQUE: Int = 0xFF shl 24
 
-/** Buffered big-endian reader over the server's byte stream. End of stream is an [EOFException]. */
 internal class RfbInput(private val source: InputStream) {
     private val buffer = ByteArray(BUFFER_SIZE)
     private var position = 0
@@ -35,7 +33,6 @@ internal class RfbInput(private val source: InputStream) {
 
     fun u32(): Long = s32().toLong() and 0xFFFFFFFFL
 
-    /** One pixel in the client's format (bytes B, G, R, unused) as opaque ARGB. */
     fun pixel(): Int {
         if (limit - position >= 4) {
             val p = position
@@ -56,7 +53,6 @@ internal class RfbInput(private val source: InputStream) {
         var done = 0
         while (done < length) {
             if (position == limit) {
-                // Large reads go straight to the target, small ones through the buffer.
                 if (length - done >= buffer.size) {
                     val n = source.read(target, offset + done, length - done)
                     if (n < 0) throw EOFException()
@@ -89,7 +85,6 @@ internal class RfbInput(private val source: InputStream) {
     }
 }
 
-/** Raw encoding: `width * height` pixels, row by row. */
 internal class RawDecoder {
     private var row = ByteArray(0)
 
@@ -112,18 +107,14 @@ internal class RawDecoder {
     }
 }
 
-/** CopyRect encoding: the rectangle is a copy of another part of the framebuffer. */
 internal fun copyRect(fb: RfbFramebuffer, srcX: Int, srcY: Int, x: Int, y: Int, width: Int, height: Int) {
     val pixels = fb.pixels
-    // Rows are copied in the order that never overwrites a source row not copied yet.
-    // System.arraycopy handles the overlap within a row.
     val rows = if (y <= srcY) 0 until height else (height - 1) downTo 0
     for (line in rows) {
         System.arraycopy(pixels, (srcY + line) * fb.width + srcX, pixels, (y + line) * fb.width + x, width)
     }
 }
 
-/** Hextile encoding: 16x16 tiles, each raw or a background plus coloured sub-rectangles. */
 internal class HextileDecoder {
     private val tile = IntArray(TILE * TILE)
 
@@ -180,10 +171,6 @@ internal class HextileDecoder {
     }
 }
 
-/**
- * ZRLE encoding: one zlib stream for the whole connection, each rectangle a run of 64x64 tiles
- * of 3-byte CPIXELs (B, G, R for this client's pixel format).
- */
 internal class ZrleDecoder {
     private val inflater = Inflater()
     private val compressed = ByteArray(CHUNK)
@@ -290,7 +277,6 @@ internal class ZrleDecoder {
         return palette[index]
     }
 
-    /** A run length: the sum of its bytes plus one, where each 255 means another byte follows. */
     private fun runLength(): Int {
         var length = 1
         while (true) {
@@ -337,10 +323,6 @@ internal class ZrleDecoder {
         inflater.setInput(compressed, 0, n)
     }
 
-    /**
-     * Runs the rest of this rectangle's bytes through the inflater. The tiles can end before the
-     * deflate block that closes the rectangle, and the stream state has to cover every byte.
-     */
     private fun drain() {
         while (true) {
             if (inflater.needsInput()) {
@@ -364,7 +346,6 @@ internal class ZrleDecoder {
     }
 }
 
-/** Copies a decoded `width * height` tile into the framebuffer at ([x], [y]). */
 private fun blit(tile: IntArray, width: Int, height: Int, fb: RfbFramebuffer, x: Int, y: Int) {
     for (row in 0 until height) {
         System.arraycopy(tile, row * width, fb.pixels, (y + row) * fb.width + x, width)
