@@ -47,6 +47,35 @@ const renderedElements = (node) => {
   }
 };
 
+const LOAD_IN_EFFECT_MESSAGE =
+  "R15: load request/response data with useResource from apps/web/src/client/queries/resource.ts (writes: useMutation), not a fetch in useEffect. A hand-rolled load needs its own cancel flag, busy reset and refresh after a change, and agents kept missing one (issue #412). A live stream or socket is not a resource: list the file in R15's except in scripts/lint/boundaries.ts with the reason.";
+
+const EFFECT_HOOKS = new Set(["useEffect", "useLayoutEffect"]);
+
+// useEffect(...) or React.useEffect(...).
+const isEffectCall = (node) => {
+  if (node?.type !== "CallExpression") return false;
+  const callee = node.callee;
+  if (callee.type === "Identifier") return EFFECT_HOOKS.has(callee.name);
+  return (
+    callee.type === "MemberExpression" &&
+    !callee.computed &&
+    callee.property.type === "Identifier" &&
+    EFFECT_HOOKS.has(callee.property.name)
+  );
+};
+
+// fetch(...) or someApi.method(...): the client's request helpers are named *Api.
+const isLoadCall = (node) => {
+  const callee = node.callee;
+  if (callee.type === "Identifier") return callee.name === "fetch";
+  return (
+    callee.type === "MemberExpression" &&
+    callee.object.type === "Identifier" &&
+    callee.object.name.endsWith("Api")
+  );
+};
+
 const CASTS = new Set(["TSAsExpression", "TSTypeAssertion"]);
 
 const unparenthesized = (node) =>
@@ -385,6 +414,79 @@ export default {
           Literal: (node) => typeof node.value === "string" && check(node, node.raw),
           TemplateElement: (node) => check(node, node.value.raw),
           JSXText: (node) => check(node, node.raw ?? node.value),
+        };
+      },
+    },
+    "no-load-in-effect": {
+      create(context) {
+        // Loads outside an effect, by the name of the const holding them, so
+        // `const load = useCallback(() => api.list())` then `useEffect(load)` counts.
+        const held = [];
+        const effectNames = new Set();
+        const isFunction = (n) =>
+          n?.type === "ArrowFunctionExpression" ||
+          n?.type === "FunctionExpression" ||
+          (n?.type === "CallExpression" &&
+            n.callee.type === "Identifier" &&
+            n.callee.name === "useCallback");
+        const holderNames = (node) => {
+          const names = [];
+          for (let p = node.parent; p; p = p.parent) {
+            if (p.type === "FunctionDeclaration" && p.id) names.push(p.id.name);
+            if (
+              p.type === "VariableDeclarator" &&
+              p.id.type === "Identifier" &&
+              isFunction(p.init)
+            ) {
+              names.push(p.id.name);
+            }
+          }
+          return names;
+        };
+        // Names an effect runs: the effect itself (`useEffect(load)`), what it
+        // calls (`load()`), and what it hands on (`setInterval(load)`). A key or
+        // property that only spells the same name does not count.
+        const collectNames = (node) => {
+          if (!node || typeof node.type !== "string") return;
+          if (node.type === "Identifier") effectNames.add(node.name);
+          if (node.type === "CallExpression") {
+            for (const part of [node.callee, ...node.arguments]) {
+              if (part.type === "Identifier") effectNames.add(part.name);
+            }
+          }
+          for (const key of Object.keys(node)) {
+            if (key === "parent") continue;
+            const value = node[key];
+            if (Array.isArray(value)) value.forEach(walkEffect);
+            else if (value && typeof value === "object") walkEffect(value);
+          }
+        };
+        const walkEffect = (node) => {
+          if (!node || typeof node.type !== "string" || node.type === "Identifier") return;
+          collectNames(node);
+        };
+        return {
+          CallExpression(node) {
+            if (isEffectCall(node)) {
+              collectNames(node.arguments[0]);
+              return;
+            }
+            if (!isLoadCall(node)) return;
+            for (let p = node.parent; p; p = p.parent) {
+              if (isEffectCall(p)) {
+                context.report({ node, message: LOAD_IN_EFFECT_MESSAGE });
+                return;
+              }
+            }
+            held.push({ node, names: holderNames(node) });
+          },
+          "Program:exit"() {
+            for (const { node, names } of held) {
+              if (names.some((n) => effectNames.has(n))) {
+                context.report({ node, message: LOAD_IN_EFFECT_MESSAGE });
+              }
+            }
+          },
         };
       },
     },

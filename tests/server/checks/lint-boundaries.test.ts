@@ -532,6 +532,34 @@ const FIXTURES: Record<string, Fixture> = {
       'import { requireSession, startSession } from "@groot/core/session";\nexport const g = [requireSession, startSession];\n',
     rules: [],
   },
+  // The load PR #368 shipped: setState after an await in an effect, with no cancel flag.
+  "apps/web/src/client/r15-effect-fail.tsx": {
+    source:
+      'import { useEffect, useState } from "react";\nimport { codeApi } from "./lib/code/api";\nexport function Diffs({ id }: { id: string }) {\n  const [files, setFiles] = useState<string[]>([]);\n  useEffect(() => {\n    void codeApi.files(id).then(setFiles);\n  }, [id]);\n  return files.length;\n}\n',
+    rules: ["R15"],
+    mentions: "useResource",
+  },
+  "apps/web/src/client/r15-callback-fail.tsx": {
+    source:
+      'import { useCallback, useEffect, useState } from "react";\nexport function List() {\n  const [rows, setRows] = useState<unknown>(null);\n  const load = useCallback(async () => {\n    const res = await fetch("/api/rows");\n    setRows(await res.json());\n  }, []);\n  useEffect(() => {\n    void load();\n  }, [load]);\n  return rows;\n}\n',
+    rules: ["R15"],
+  },
+  "apps/web/src/client/r15-react-namespace-fail.tsx": {
+    source:
+      'import React from "react";\nimport { codeApi } from "./lib/code/api";\nexport function Usage({ id }: { id: string }) {\n  React.useEffect(() => {\n    void codeApi.usage(id);\n  }, [id]);\n  return null;\n}\n',
+    rules: ["R15"],
+  },
+  // A handler that only shares a name with a key or property an effect mentions.
+  "apps/web/src/client/r15-name-only-pass.tsx": {
+    source:
+      'import { useCallback, useEffect, useState } from "react";\nimport { codeApi } from "./lib/code/api";\nexport function Panel({ result }: { result: { load: number } }) {\n  const [, set] = useState({ load: 0 });\n  const load = useCallback(() => codeApi.list(), []);\n  useEffect(() => {\n    set({ load: result.load });\n  }, [result]);\n  return <button onClick={load}>Load</button>;\n}\n',
+    rules: [],
+  },
+  "apps/web/src/client/r15-pass.tsx": {
+    source:
+      'import { useEffect } from "react";\nimport { useResource } from "./queries/resource";\nimport { codeApi } from "./lib/code/api";\nexport function Files({ id }: { id: string }) {\n  const files = useResource(["files", id], () => codeApi.files(id), "Could not read the files.");\n  const save = () => codeApi.save(id);\n  useEffect(() => {\n    document.title = id;\n  }, [id]);\n  return <button onClick={save}>{files.data?.length}</button>;\n}\n',
+    rules: [],
+  },
   "apps/web/src/client/r10-fail.tsx": {
     source:
       'export const a = "Saved \u2014 done";\nexport const b = (n: string) => `Hi ${n} \u2014 welcome`;\nexport const C = () => <p>Off \u2014 paused</p>;\n',
