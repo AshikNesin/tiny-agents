@@ -93,6 +93,7 @@ const KNOWN_ABSENT_PATHS = new Set([
   "sync-report.json",
   "users/validate.json",
   "compose.override.yml",
+  "1password-credentials.json",
   "GLOSSARY-MAP.md",
   "API.md",
   "apps/web/drizzle/0001_add_posts.sql",

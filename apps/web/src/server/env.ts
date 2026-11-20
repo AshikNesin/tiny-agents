@@ -42,6 +42,18 @@ const appEnvSchema = z.object({
   /** pi-durable agent store: a plain path or a `file:` URL. Default: see `agentDbPath()`. */
   AGENT_DB_PATH: z.string().optional(),
   /**
+   * 1Password Connect (ADR 0027). `OP_CONNECT_CREDENTIALS` (the
+   * `1password-credentials.json` file, JSON or base64) runs a bundled Connect
+   * server inside the app; `OP_CONNECT_HOST` uses one running elsewhere
+   * instead. The read token serves bots, the read+write one the Vault page.
+   * The vault id is optional when the tokens see exactly one vault.
+   */
+  OP_CONNECT_CREDENTIALS: z.string().optional(),
+  OP_CONNECT_HOST: z.string().optional(),
+  OP_CONNECT_VAULT_ID: z.string().optional(),
+  OP_CONNECT_TOKEN: z.string().optional(),
+  OP_CONNECT_ADMIN_TOKEN: z.string().optional(),
+  /**
    * Shelley coding agent the Code page drives (e.g. `http://my-vm:9999` over
    * Tailscale). Unset = the Code page says it is not configured.
    */

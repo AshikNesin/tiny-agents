@@ -24,7 +24,7 @@ export type ValueField =
   | "identity_address"
   | "value";
 
-export type VaultBackendName = "local";
+export type VaultBackendName = "onepassword-connect" | "local";
 
 export interface BackendStatus {
   state: "ready" | "unconfigured" | "error";

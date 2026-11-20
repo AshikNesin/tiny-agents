@@ -1,7 +1,9 @@
 # 0017 — Local is the only vault backend; the 1Password Connect adapter is removed
 
 - Status: accepted (amends [0005](0005-secrets-live-outside-the-app.md); amended by
-  [0019](0019-vault-values-table.md): the local backend keeps its values in a table)
+  [0019](0019-vault-values-table.md): the local backend keeps its values in a table;
+  amended by [0027](0027-1password-connect-runs-inside-the-app.md): the 1Password
+  Connect backend is back, with Connect bundled in the app)
 - Date: 2026-11-13
 
 ## Context

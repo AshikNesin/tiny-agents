@@ -28,7 +28,7 @@ import type {
   VaultKind,
   VaultPolicy,
 } from "../../../shared/api/vault";
-import { apiError, KIND_LABEL } from "../../lib/vault-api";
+import { apiError, BACKEND_LABEL, KIND_LABEL } from "../../lib/vault-api";
 import { useVaultMutations, useVaultOverview } from "../../queries/vault";
 import { defaultPolicy, PolicyForm, suggestHandle } from "../../components/vault/PolicyForm";
 import { useStepUp } from "../../components/vault/StepUp";
@@ -41,10 +41,6 @@ const SECTIONS: { kind: VaultKind; title: string }[] = [
 ];
 
 const KIND_ICON = { login: KeyRound, card: CreditCard, identity: User, api_key: ShieldCheck };
-
-const BACKEND_LABEL: Record<VaultBackendView["name"], string> = {
-  local: "Local",
-};
 
 function subtitle(item: VaultItem): string {
   if (item.card)
@@ -61,13 +57,25 @@ function lastUsed(item: VaultItem): string | undefined {
 function BackendCard({ backend }: { backend: VaultBackendView }) {
   const states = [backend.read, backend.write].filter(Boolean);
   const problem = states.find((s) => s!.state !== "ready");
+  // The bundled 1Password Connect server is still coming up (first start pulls it).
+  const starting = problem?.code === "starting";
   return (
     <Card size="sm">
       <CardContent className="space-y-1">
         <div className="flex items-center justify-between gap-2">
           <p className="text-sm font-medium text-foreground">{BACKEND_LABEL[backend.name]}</p>
-          <Badge variant={!backend.configured ? "outline" : problem ? "destructive" : "secondary"}>
-            {!backend.configured ? "Not set up" : problem ? "Error" : "Ready"}
+          <Badge
+            variant={
+              !backend.configured || starting ? "outline" : problem ? "destructive" : "secondary"
+            }
+          >
+            {!backend.configured
+              ? "Not set up"
+              : starting
+                ? "Starting"
+                : problem
+                  ? "Error"
+                  : "Ready"}
           </Badge>
         </div>
         {backend.configured && (
