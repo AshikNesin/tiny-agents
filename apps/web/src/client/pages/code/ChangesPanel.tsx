@@ -9,8 +9,8 @@
  * harness (capability `workspace.diffs`).
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronDown, FileDiff as FileDiffIcon, ListTree } from "lucide-react";
-import { Button, EmptyState } from "@groot/ui";
+import { ChevronDown, FileDiff as FileDiffIcon } from "lucide-react";
+import { EmptyState } from "@groot/ui";
 import { cn } from "@groot/ui/lib/utils";
 import { formatRelativeTime } from "@groot/shell/lib/date.utils";
 import { SearchSelect, type SearchSelectOption } from "../../components/ui/search-select";
@@ -21,10 +21,9 @@ import { useSteadyKey } from "../../lib/code/use-live-changes";
 import {
   DiffViewButtons,
   DiffWorkspace,
+  FilesButton,
   treeOrder,
-  useDiffStyle,
-  useWide,
-  type CollapseAll,
+  useDiffView,
 } from "./DiffWorkspace";
 
 export function ChangesPanel({
@@ -123,11 +122,7 @@ export function ChangesPanel({
     (path: string) => codeApi.fileDiff(instanceId, diffId, cwd, path),
     [instanceId, diffId, cwd],
   );
-  const [style, setStyle] = useDiffStyle();
-  const wide = useWide();
-  const [collapse, setCollapse] = useState<CollapseAll>(null);
-  const [filesOpen, setFilesOpen] = useState(false);
-  const drawer = useMemo(() => ({ open: filesOpen, onOpenChange: setFilesOpen }), [filesOpen]);
+  const view = useDiffView();
 
   const picker =
     diffs && diffs.length > 0 ? (
@@ -163,25 +158,9 @@ export function ChangesPanel({
     <div className="flex h-full min-h-0 flex-col" data-testid="code-changes">
       {page && (
         <div className="border-border flex h-10 shrink-0 items-center gap-1 border-b px-2">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="text-muted-foreground shrink-0 md:hidden"
-            aria-label="Files"
-            aria-expanded={filesOpen}
-            onClick={() => setFilesOpen(!filesOpen)}
-          >
-            <ListTree />
-          </Button>
+          <FilesButton view={view} />
           <span className="flex-1" />
-          {wide && (
-            <DiffViewButtons
-              style={style}
-              onStyle={setStyle}
-              collapse={collapse}
-              onCollapse={setCollapse}
-            />
-          )}
+          {view.wide && <DiffViewButtons view={view} />}
         </div>
       )}
       <DiffWorkspace
@@ -192,9 +171,9 @@ export function ChangesPanel({
         scopeKey={`${instanceId}\u0000${cwd}\u0000${diffId}`}
         readKey={`${String(settledKey)}:${reload}`}
         read={read}
-        diffStyle={page && wide ? style : "unified"}
-        collapse={collapse}
-        drawer={page ? drawer : undefined}
+        diffStyle={page && view.wide ? view.style : "unified"}
+        collapse={view.collapse}
+        drawer={page ? view.drawer : undefined}
         commenting={commenting}
         scope={picker}
         onRefresh={() => setReload((n) => n + 1)}

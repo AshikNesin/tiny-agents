@@ -10,14 +10,8 @@
  * next message. The scope picker also shows what one turn changed (its
  * checkpoint against the one before), with Revert to here.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  ChevronDown,
-  FileDiff as FileDiffIcon,
-  GitBranch,
-  ListTree,
-  RotateCcw,
-} from "lucide-react";
+import { useEffect, useState } from "react";
+import { ChevronDown, FileDiff as FileDiffIcon, GitBranch, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { Button, EmptyState, monoClass } from "@groot/ui";
 import { useConfirm } from "@groot/ui/primitives";
@@ -26,17 +20,10 @@ import { SearchSelect } from "../../components/ui/search-select";
 import { errorMessage } from "../../lib/errors";
 import { projectsApi } from "../../lib/code/projects";
 import { useThreadPulls } from "../../lib/code/use-thread-pulls";
-import type { CheckpointView, ReviewFile } from "../../../shared/api/code";
+import type { CheckpointView } from "../../../shared/api/code";
 import type { ThreadCommenting } from "../../lib/code/comments";
-import { useSteadyKey } from "../../lib/code/use-live-changes";
-import {
-  DiffViewButtons,
-  DiffWorkspace,
-  treeOrder,
-  useDiffStyle,
-  useWide,
-  type CollapseAll,
-} from "./DiffWorkspace";
+import { DiffViewButtons, DiffWorkspace, FilesButton, useDiffView } from "./DiffWorkspace";
+import { useReviewFiles } from "./use-review-files";
 
 export function ReviewPanel({
   threadId,
@@ -60,21 +47,14 @@ export function ReviewPanel({
   /** Uncommitted changes or one commit, from the harness (when it serves diffs). */
   onOtherScopes?: () => void;
 }) {
-  const settledKey = useSteadyKey(refreshKey);
-  const [files, setFiles] = useState<ReviewFile[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [reload, setReload] = useState(0);
   const confirm = useConfirm();
   /** `base` or a checkpoint id. */
   const [scope, setScope] = useState("base");
   const worktreeScope = scope === "base";
+  const { settledKey, reload, refresh, workspace } = useReviewFiles(threadId, scope, refreshKey);
   const [checkpoints, setCheckpoints] = useState<CheckpointView[]>([]);
   const checkpoint = checkpoints.find((c) => c.id === scope);
-  const [style, setStyle] = useDiffStyle();
-  const wide = useWide();
-  const [collapse, setCollapse] = useState<CollapseAll>(null);
-  const [filesOpen, setFilesOpen] = useState(false);
-  const drawer = useMemo(() => ({ open: filesOpen, onOpenChange: setFilesOpen }), [filesOpen]);
+  const view = useDiffView();
 
   // No reconcile with GitHub: only the branch and how far it is ahead, shared with the PR tab.
   const pulls = useThreadPulls(threadId, {
@@ -94,25 +74,6 @@ export function ReviewPanel({
     };
   }, [threadId, settledKey, reload]);
 
-  useEffect(() => {
-    let cancelled = false;
-    setError(null);
-    projectsApi
-      .reviewFiles(threadId, scope)
-      .then((list) => !cancelled && setFiles(treeOrder(list)))
-      .catch(
-        (e: unknown) => !cancelled && setError(errorMessage(e, "Could not read the changes.")),
-      );
-    return () => {
-      cancelled = true;
-    };
-  }, [threadId, settledKey, reload, scope]);
-
-  const read = useCallback(
-    (path: string) => projectsApi.reviewFile(threadId, path, scope),
-    [threadId, scope],
-  );
-
   const revert = async () => {
     if (!checkpoint) return;
     const ok = await confirm({
@@ -126,7 +87,7 @@ export function ReviewPanel({
       await projectsApi.revert(threadId, checkpoint.id);
       toast.success(`Files are back to turn ${checkpoint.seq}.`);
       setScope("base");
-      setReload((n) => n + 1);
+      refresh();
     } catch (e) {
       toast.error(errorMessage(e, "Could not revert."));
     }
@@ -144,18 +105,7 @@ export function ReviewPanel({
     <div className="flex h-full min-h-0 flex-col">
       {topBar && (
         <div className="border-border text-muted-foreground flex h-10 shrink-0 items-center gap-1.5 border-b px-2 text-xs">
-          {page && (
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="text-muted-foreground shrink-0 md:hidden"
-              aria-label="Files"
-              aria-expanded={filesOpen}
-              onClick={() => setFilesOpen(!filesOpen)}
-            >
-              <ListTree />
-            </Button>
-          )}
+          {page && <FilesButton view={view} />}
           {branch?.name && (
             <p className="flex min-w-0 items-center gap-1.5 px-2">
               <GitBranch className="size-3.5 shrink-0" aria-hidden />
@@ -185,48 +135,18 @@ export function ReviewPanel({
               Uncommitted or a commit
             </Button>
           )}
-          {page && wide && (
-            <DiffViewButtons
-              style={style}
-              onStyle={setStyle}
-              collapse={collapse}
-              onCollapse={setCollapse}
-            />
-          )}
+          {page && view.wide && <DiffViewButtons view={view} />}
         </div>
       )}
       <DiffWorkspace
         layout={page ? "page" : "panel"}
-        files={files}
-        error={error}
-        scopeKey={`${threadId}\u0000${scope}`}
-        readKey={String(reload)}
-        read={read}
-        diffStyle={page && wide ? style : "unified"}
-        collapse={collapse}
-        drawer={page ? drawer : undefined}
+        {...workspace}
+        diffStyle={page && view.wide ? view.style : "unified"}
+        collapse={view.collapse}
+        drawer={page ? view.drawer : undefined}
         commenting={commenting}
-        onViewed={
-          worktreeScope
-            ? (file, viewed) => {
-                setFiles(
-                  (list) => list?.map((f) => (f.path === file.path ? { ...f, viewed } : f)) ?? list,
-                );
-                projectsApi
-                  .setViewed(threadId, file.path, file.hash, viewed)
-                  .catch((e: unknown) => {
-                    toast.error(errorMessage(e, "Could not save that."));
-                    setReload((n) => n + 1);
-                  });
-              }
-            : undefined
-        }
+        onViewed={worktreeScope ? workspace.onViewed : undefined}
         canEdit={editable && worktreeScope ? () => true : undefined}
-        onSave={async (path, original, content) => {
-          await projectsApi.editFile(threadId, { path, original, content });
-          setReload((n) => n + 1);
-          toast.success("Saved.");
-        }}
         scope={
           <SearchSelect
             label="Changes to show"
@@ -275,7 +195,6 @@ export function ReviewPanel({
             </Button>
           )
         }
-        onRefresh={() => setReload((n) => n + 1)}
         empty={
           <EmptyState
             icon={FileDiffIcon}

@@ -16,6 +16,17 @@ import { PullDiffs } from "@/pages/code/PullDiffs";
 import { ReviewPanel } from "@/pages/code/ReviewPanel";
 import { OpenInTerminal, YourChangesActions } from "@/pages/code/YourChanges";
 import type { PullReviewView } from "../../../apps/web/src/shared/api/code";
+import type { DiffView } from "@/pages/code/DiffWorkspace";
+
+/** Unified diffs, nothing folded, the file drawer shut. */
+const STILL_VIEW: DiffView = {
+  style: "unified",
+  setStyle: () => undefined,
+  wide: false,
+  collapse: null,
+  setCollapse: () => undefined,
+  drawer: { open: false, onOpenChange: () => undefined },
+};
 
 const REVIEW = {
   id: "rv1",
@@ -86,9 +97,7 @@ function showPanel(answers: Record<string, unknown>, review: PullReviewView = RE
               <PullDiffs
                 review={review}
                 refreshKey="1"
-                diffStyle="unified"
-                collapse={null}
-                drawer={{ open: false, onOpenChange: () => undefined }}
+                view={STILL_VIEW}
                 yourChanges={(done) => <YourChangesActions review={review} onChanged={done} />}
               />
             </ConfirmProvider>

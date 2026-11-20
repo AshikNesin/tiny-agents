@@ -129,7 +129,7 @@ function readStyle(): DiffStyle {
 }
 
 /** Split or unified, remembered on this device for every diff column. */
-export function useDiffStyle(): [DiffStyle, (style: DiffStyle) => void] {
+function useDiffStyle(): [DiffStyle, (style: DiffStyle) => void] {
   const [style, setStyle] = useState<DiffStyle>(readStyle);
   const change = useCallback((next: DiffStyle) => {
     setStyle(next);
@@ -143,7 +143,7 @@ export function useDiffStyle(): [DiffStyle, (style: DiffStyle) => void] {
 }
 
 /** Whether the window is wide enough for side-by-side diffs. */
-export function useWide(): boolean {
+function useWide(): boolean {
   return useSyncExternalStore(
     (change) => {
       if (typeof window.matchMedia !== "function") return () => undefined;
@@ -158,18 +158,38 @@ export function useWide(): boolean {
 /** Fold or unfold every file: a new value each time the button is pressed. */
 export type CollapseAll = { all: boolean; at: number } | null;
 
+/** A diff column's view: split or unified (remembered), Fold all, and the phone file drawer. */
+export function useDiffView() {
+  const [style, setStyle] = useDiffStyle();
+  const wide = useWide();
+  const [collapse, setCollapse] = useState<CollapseAll>(null);
+  const [filesOpen, setFilesOpen] = useState(false);
+  const drawer = useMemo(() => ({ open: filesOpen, onOpenChange: setFilesOpen }), [filesOpen]);
+  return { style, setStyle, wide, collapse, setCollapse, drawer };
+}
+
+export type DiffView = ReturnType<typeof useDiffView>;
+
+/** Phones: slides the file tree over the column. */
+export function FilesButton({ view }: { view: DiffView }) {
+  const { open, onOpenChange } = view.drawer;
+  return (
+    <Button
+      variant="ghost"
+      size="icon-sm"
+      className="text-muted-foreground shrink-0 md:hidden"
+      aria-label="Files"
+      aria-expanded={open}
+      onClick={() => onOpenChange(!open)}
+    >
+      <ListTree />
+    </Button>
+  );
+}
+
 /** Split or unified, and Fold all files: the column's two view buttons. */
-export function DiffViewButtons({
-  style,
-  onStyle,
-  collapse,
-  onCollapse,
-}: {
-  style: DiffStyle;
-  onStyle(style: DiffStyle): void;
-  collapse: CollapseAll;
-  onCollapse(collapse: CollapseAll): void;
-}) {
+export function DiffViewButtons({ view }: { view: DiffView }) {
+  const { style, setStyle: onStyle, collapse, setCollapse: onCollapse } = view;
   const allFolded = collapse?.all ?? false;
   return (
     <>

@@ -19,7 +19,6 @@ import {
   Ellipsis,
   ExternalLink,
   FileDiff,
-  ListTree,
   MessageSquare,
   PanelLeftClose,
   RefreshCw,
@@ -59,7 +58,7 @@ import { DEFAULT, ModelPicker, loadModels } from "./controls";
 import { PendingComments } from "./PendingComments";
 import { AssistantPane } from "./ResizablePane";
 import { PullDiffs } from "./PullDiffs";
-import { DiffViewButtons, useDiffStyle, useWide, type CollapseAll } from "./DiffWorkspace";
+import { DiffViewButtons, FilesButton, useDiffView } from "./DiffWorkspace";
 import { usePullConversations } from "./PullThreads";
 import { SubmitReviewButton } from "./SubmitReview";
 import { OpenInTerminal, useOpenInTerminal, YourChangesActions } from "./YourChanges";
@@ -85,10 +84,8 @@ export function PullReview({
   const [side, setSide] = useState<"files" | "assistant">("files");
   // Wide screens: the assistant folded to a rail (by default) or open beside the files.
   const [assistantOpen, setAssistantOpen] = useState(false);
-  const [filesOpen, setFilesOpen] = useState(false);
-  const [style, changeStyle] = useDiffStyle();
-  const [collapse, setCollapse] = useState<CollapseAll>(null);
-  const wide = useWide();
+  const view = useDiffView();
+  const wide = view.wide;
 
   useEffect(() => {
     let cancelled = false;
@@ -109,7 +106,6 @@ export function PullReview({
   const github = useThreadCommenting(githubCommentsKey(reviewId), () => undefined);
   const conversations = usePullConversations(review, `${review?.headSha}:${reload}`);
   const waiting = useThreadComments(review?.key).length;
-  const drawer = useMemo(() => ({ open: filesOpen, onOpenChange: setFilesOpen }), [filesOpen]);
 
   const update = async () => {
     if (!review) return;
@@ -166,18 +162,7 @@ export function PullReview({
             <ArrowLeft />
           </Link>
         </Button>
-        {side === "files" && (
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="text-muted-foreground shrink-0 md:hidden"
-            aria-label="Files"
-            aria-expanded={filesOpen}
-            onClick={() => setFilesOpen(!filesOpen)}
-          >
-            <ListTree />
-          </Button>
-        )}
+        {side === "files" && <FilesButton view={view} />}
         <span className="text-muted-foreground shrink-0 px-1 text-sm tabular-nums">
           #{review.number}
         </span>
@@ -193,12 +178,7 @@ export function PullReview({
         </span>
         <span className="flex-1" />
         <div className="hidden items-center gap-0.5 lg:flex">
-          <DiffViewButtons
-            style={style}
-            onStyle={changeStyle}
-            collapse={collapse}
-            onCollapse={setCollapse}
-          />
+          <DiffViewButtons view={view} />
           <span className="bg-border mx-1 h-4 w-px" aria-hidden />
         </div>
         {github && <SubmitReviewButton review={review} github={github} />}
@@ -293,12 +273,10 @@ export function PullReview({
           <PullDiffs
             review={review}
             refreshKey={`${review.headSha}:${reload}:${assistantRow?.working}:${assistantRow?.cursor}`}
-            diffStyle={wide ? style : "unified"}
-            collapse={collapse}
+            view={view}
             commenting={commenting}
             github={github}
             conversations={conversations}
-            drawer={drawer}
             onAskedAssistant={() => {
               if (wide) setAssistantOpen(true);
             }}
