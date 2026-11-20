@@ -1,29 +1,17 @@
-/**
- * The GitHub App transport's credentials (issue #297 phase 6, ADR 0022):
- * an app JWT signed with the App's private key, traded for short-lived
- * installation tokens (cached until a minute before they expire), and the
- * webhook signature check. Web APIs only; the RS256 signature itself is
- * the caller's (`sign`), so the key never enters this package.
- */
 import { GitHubError } from "./api";
 import type { RepoRef } from "./client";
 
 export interface AppAuthOptions {
   appId: string;
-  /** RS256 over `data` with the App's private key, base64url. */
   sign(data: string): Promise<string>;
   baseUrl?: string;
   fetch?: typeof fetch;
-  /** Milliseconds since the epoch (tests). */
   now?: () => number;
 }
 
 export interface AppAuth {
-  /** An installation token for `installationId`, minted or cached. */
   installationToken(installationId: number): Promise<string>;
-  /** The installation that reaches `repo`, or a `GitHubError` 404 when the App is not installed there. */
   installationFor(repo: RepoRef): Promise<number>;
-  /** Every repository the App's (unsuspended) installations reach, by full name. */
   repositories(): Promise<Array<{ fullName: string; installationId: number; private: boolean }>>;
 }
 
@@ -42,7 +30,6 @@ export function createAppAuth(options: AppAuthOptions): AppAuth {
   async function jwt(): Promise<string> {
     const seconds = Math.floor(now() / 1000);
     const head = base64url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
-    // Backdated a minute for clock drift; GitHub allows at most ten minutes.
     const body = base64url(
       JSON.stringify({ iat: seconds - 60, exp: seconds + 9 * 60, iss: options.appId }),
     );
@@ -114,7 +101,6 @@ export function createAppAuth(options: AppAuthOptions): AppAuth {
   };
 }
 
-/** Whether `signature` (`X-Hub-Signature-256`) is the HMAC-SHA256 of `body` under `secret`. */
 export async function verifyWebhook(
   secret: string,
   body: string,
@@ -131,29 +117,20 @@ export async function verifyWebhook(
   const mac = new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(body)));
   const expected = `sha256=${[...mac].map((b) => b.toString(16).padStart(2, "0")).join("")}`;
   if (expected.length !== signature.length) return false;
-  // Constant time: every character is compared.
   let diff = 0;
   for (let i = 0; i < expected.length; i += 1)
     diff |= expected.charCodeAt(i) ^ signature.charCodeAt(i);
   return diff === 0;
 }
 
-/** What GitHub hands back for a manifest code: the new App and its credentials. */
 export interface ManifestApp {
   id: number;
   slug: string;
   name: string;
-  /** The App's private key (PEM). */
   pem: string;
-  /** Present when the manifest asked for a webhook. */
   webhookSecret: string | null;
 }
 
-/**
- * Finish GitHub's App Manifest flow: trade the one-time `code` GitHub
- * redirected back with for the App it just created. The code is the only
- * credential, and it works once, within an hour.
- */
 export async function convertManifest(
   code: string,
   options: { baseUrl?: string; fetch?: typeof fetch } = {},

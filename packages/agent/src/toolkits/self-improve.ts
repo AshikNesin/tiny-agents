@@ -1,27 +1,12 @@
-/**
- * Self-improvement: a bot can propose edits to its own
- * system prompt through `update_instructions`. The tool is `askOnly` — the owner
- * approves every change in chat before it lands — and the app's store adapter
- * refuses unattended turns (routine runs, peer deliveries), so a planted
- * prompt can never reach a later request without the owner watching.
- *
- * History: the app records every applied change as a full-snapshot revision
- * row, the database analog of committing a plain instructions file to git.
- * Reverting is restoring a revision's text through another approved change.
- */
 import { Type } from "@earendil-works/pi-ai";
 import { section } from "@earendil-works/pi-durable";
 import type { Capability } from "../capabilities";
 import { defineToolkit, tool } from "../toolkit";
 
-/** Why an instructions change was refused, as the model reads it. */
 type InstructionsRefusal = "disabled" | "unattended" | "shared";
 
-/** What the app provides: read, apply and review the bot's instructions. */
 export interface InstructionsStore {
-  /** The bot's current system prompt behind the conversation. */
   read(conversationId: number): Promise<string>;
-  /** Apply a change; `prompt` is the new text on success. */
   update(
     conversationId: number,
     input: { instructions?: string; append?: string },
@@ -98,7 +83,6 @@ export function createSelfImproveCapability(store: InstructionsStore): Capabilit
 
   return defineToolkit({
     id: "self-improve",
-    // Used in few conversations: loaded with tool_search (issue #360).
     deferred: true,
     name: "Self-improve",
     description: "Update this bot's own instructions, with owner approval",

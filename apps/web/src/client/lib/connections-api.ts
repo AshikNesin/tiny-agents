@@ -1,9 +1,3 @@
-/**
- * Typed client for the connections API (issue #1 M3); the shapes are
- * `shared/api/connections.ts`. Adding, re-pointing (URL, header, secret) and
- * deleting a connection carry the vault's step-up token (S4); the caller runs
- * them through `useStepUp().run`.
- */
 import { apiClient } from "@groot/shell/lib/api";
 import type { Deleted } from "../../shared/api/common";
 import type {

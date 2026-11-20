@@ -1,7 +1,3 @@
-/**
- * The chat's live views: the Browser and Computer panels, which one is in
- * front, the header toggle's state and label, and the tabs between them.
- */
 import { useCallback, useEffect, useState } from "react";
 import { Globe, Monitor, type LucideIcon } from "lucide-react";
 import type { Bot } from "../../../shared/api/bots";
@@ -10,7 +6,6 @@ import { botsApi } from "../../lib/bots-api";
 import { browserInUse, computerInUse, useLiveLayout } from "../../lib/browser-panel";
 import { SHOW_COMPUTER_EVENT } from "../../lib/owner-actions";
 
-/** One live view's open state: the owner opens and closes it, nothing else does. */
 function usePanel(onOpen: () => void) {
   const [open, setOpen] = useState(false);
   const show = useCallback(() => {
@@ -22,17 +17,12 @@ function usePanel(onOpen: () => void) {
 }
 
 export function useLiveViews(bot: Bot, messages: ChatMessage[]) {
-  // Neither view opens on its own: a bot using its browser or computer only
-  // lights the header toggle, and the owner opens the view when they want it.
   const browserActive = browserInUse(messages);
   const computerActive = computerInUse(messages);
-  // One live view at a time: the one opened last is in front.
   const [front, setFront] = useState<"browser" | "computer">("browser");
   const browser = usePanel(useCallback(() => setFront("browser"), []));
   const computer = usePanel(useCallback(() => setFront("computer"), []));
-  // Docked beside the chat, or a small floating picture in picture.
   const [layout, setLayout] = useLiveLayout();
-  // Whether this server has a computer at all; the toggle hides otherwise.
   const [computerConfigured, setComputerConfigured] = useState(false);
   useEffect(() => {
     let cancelled = false;
@@ -48,8 +38,6 @@ export function useLiveViews(bot: Bot, messages: ChatMessage[]) {
   }, [bot.id]);
   const showBrowser = browser.open && (!computer.open || front === "browser");
   const showComputer = computer.open && (!browser.open || front === "computer");
-  // One header button for both live views; with a computer, tabs in the
-  // panel switch between them.
   const hasComputer = computerConfigured || computer.open || computerActive;
   const liveShown = showBrowser || showComputer;
   const liveBusy = (browserActive && !showBrowser) || (computerActive && !showComputer);
@@ -59,7 +47,6 @@ export function useLiveViews(bot: Bot, messages: ChatMessage[]) {
   };
   const toggleLive = () => {
     if (liveShown) closeLive();
-    // Open what the bot is using, else the view last in front.
     else if (hasComputer && !browserActive && (computerActive || front === "computer"))
       computer.show();
     else browser.show();
@@ -80,8 +67,6 @@ export function useLiveViews(bot: Bot, messages: ChatMessage[]) {
       onComputer={computer.show}
     />
   ) : undefined;
-  // "Open computer" on a takeover card in the transcript: the owner is about
-  // to drive, which needs the full panel, not the picture in picture.
   const showComputerPanel = computer.show;
   useEffect(() => {
     const onShow = () => {
@@ -107,15 +92,8 @@ export function useLiveViews(bot: Bot, messages: ChatMessage[]) {
   };
 }
 
-/** What the header's live-view toggle shows and does. */
 export type LiveViews = ReturnType<typeof useLiveViews>;
 
-/**
- * The live view's switch between the bot's browser and its computer, in the
- * open panel's title: a compact segmented control, an icon and a label each
- * (the icon alone in a narrow panel).
- * A dot marks the one the bot is using out of sight.
- */
 function LiveViewTabs({
   front,
   browserBusy,
@@ -145,7 +123,6 @@ function LiveViewTabs({
       data-testid={`live-view-tab-${key}`}
     >
       <Icon className="size-3.5" aria-hidden />
-      {/* A narrow panel (a phone) keeps the icons; the label stays for screen readers. */}
       <span className="@max-lg:sr-only">{label}</span>
       {busy && (
         <>

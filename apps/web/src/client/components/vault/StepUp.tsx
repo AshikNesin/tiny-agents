@@ -1,8 +1,3 @@
-/**
- * Step-up for the Vault UI: before a write, reveal or copy the owner
- * re-enters their password (or uses a passkey). `useStepUp().run(fn)` asks
- * when there is no fresh token and retries `fn` once confirmed.
- */
 import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { KeyRound } from "lucide-react";
@@ -34,8 +29,6 @@ export function StepUpProvider({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
-  // Everyone who asked while the prompt is open: one confirmation (or one
-  // dismissal) answers them all, and none is left waiting forever.
   const pending = useRef<((ok: boolean) => void)[]>([]);
 
   const ask = () =>

@@ -1,7 +1,3 @@
-// The three "How it works" demos tell one story (set the rules, ask, approve),
-// so they play in reading order: each script waits for the one before it to
-// finish its payoff. A replay starts the chain over.
-
 type Gate = { promise: Promise<void>; open: () => void };
 
 function gate(): Gate {
@@ -18,17 +14,14 @@ function get(name: string): Gate {
   return g;
 }
 
-/** Resolves once the named demo has played its payoff. */
 export function after(name: string): Promise<void> {
   return get(name).promise;
 }
 
-/** Marks the named demo's payoff as played, releasing the next one. */
 export function done(name: string): void {
   get(name).open();
 }
 
-/** Forget every finished demo, for a replay. */
 export function reset(): void {
   gates = new Map();
 }

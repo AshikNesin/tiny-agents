@@ -5,24 +5,17 @@ import { useModelDiscovery } from "../../../queries/models";
 import { SearchSelect, type SearchSelectOption } from "../../../components/ui/search-select";
 import { formatTokens } from "./model-labels";
 
-/**
- * Add a model: search what the account's endpoint lists and it doesn't have
- * yet (the same list the Add models dialog offers), or type any id.
- */
 export function AddModel({
   accountId,
   hint,
   onAdd,
 }: {
   accountId: string;
-  /** An example id for the typed-id row ("e.g. custom-zai-coding-plan/glm-5.3"). */
   hint?: string;
   onAdd: (model: { upstreamId: string; name?: string }) => Promise<boolean>;
 }) {
   const [listed, setListed] = useState<DiscoveredModel[] | null>(null);
   const [failed, setFailed] = useState(false);
-  // Asked once per mount (the card remounts it after each check); an answer
-  // after unmount is dropped.
   const listAvailable = useModelDiscovery().available.mutateAsync;
   useEffect(() => {
     let cancelled = false;

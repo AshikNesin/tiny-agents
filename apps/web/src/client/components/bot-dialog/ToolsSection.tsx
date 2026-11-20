@@ -1,7 +1,3 @@
-/**
- * The Tools tab: search, the presets, auto-review and YOLO by default, a
- * group per toolkit, and the connections the bot may use.
- */
 import { Search } from "lucide-react";
 import { Button } from "@groot/ui/button";
 import { Input } from "@groot/ui/input";
@@ -42,7 +38,6 @@ export function ToolsSection({
 }) {
   const { toolPermissions, browserProfile, autoReview, yoloByDefault } = draft;
   const searching = toolQuery.trim().length > 0;
-  // A query naming the toolkit ("notion") matches all of its tools.
   const toolGroups = toolkitsList.map((toolkit) => ({
     toolkit,
     shown: toolkit.tools.filter((tool) => matchesQuery(tool, toolkit.name, toolQuery)),

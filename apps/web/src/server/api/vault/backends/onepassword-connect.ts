@@ -1,14 +1,3 @@
-/**
- * 1Password Connect over REST (issue #56, ADR 0027): a plain `fetch` client.
- *
- * Connect decrypts on infrastructure the owner runs (the bundled server in
- * the app's own container, `bundled-connect.ts`, or one at `OP_CONNECT_HOST`),
- * so 1Password stays zero-knowledge. Every path is pinned to one vault; an
- * item whose `vault.id` differs is refused. The guard (`status()`) lists the
- * vaults the token can see and refuses every use unless that list is exactly
- * the pinned vault, so a token that can see another vault is never used.
- * Without a pinned id the token's one visible vault is the pin.
- */
 import { SecretValue } from "@tiny-agents/agent";
 import { parseTotp, totpCode } from "../vault.totp";
 import {
@@ -29,21 +18,16 @@ import {
 
 export interface ConnectOptions {
   host: string;
-  /** The vault every path is pinned to; unset pins the token's only visible vault. */
   vaultId?: string;
   token: string;
-  /** Read-only tokens get no write methods. */
   writable: boolean;
   fetch?: typeof fetch;
   timeoutMs?: number;
 }
 
-/** The guard re-runs this often while ready (and on every status call from the Vault page). */
 const GUARD_TTL_MS = 6 * 60 * 60_000;
-/** A token whose `exp` claim is this close is named in the status detail. */
 const EXPIRY_WARNING_MS = 14 * 86_400_000;
 
-/** Expiry of a Connect token when it is a JWT with an `exp` claim. */
 function tokenExpiresAt(token: string): Date | undefined {
   const payload = token.split(".")[1];
   if (!payload) return undefined;
@@ -146,7 +130,6 @@ export function createConnectBackend(options: ConnectOptions): VaultBackend {
     return guard.status;
   }
 
-  /** The pinned vault's id, once the guard passed. */
   async function ready(): Promise<string> {
     const current = await status();
     if (current.state === "ready" && guard?.vaultId) return guard.vaultId;
@@ -216,7 +199,6 @@ export function createConnectBackend(options: ConnectOptions): VaultBackend {
       return created.id;
     };
     backend.update = async (externalId, draft) => {
-      // Read-modify-write of the whole item keeps fields the vault doesn't model.
       const { item, vaultId } = await getItem(externalId);
       const next = applyDraft(item, draft);
       next.vault = { id: vaultId };

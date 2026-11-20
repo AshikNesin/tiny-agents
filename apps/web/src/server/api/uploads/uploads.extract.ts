@@ -1,10 +1,3 @@
-/**
- * Extraction (issue #58): turn an upload's bytes into pages, an outline,
- * sheets or an archive listing the attachments toolkit can read and search.
- * Pure and self-contained so it runs inside a worker thread
- * (`uploads.extract.worker.ts`); the caps below bound what a 25 MB file can
- * expand to. Nothing here executes, renders or evaluates file content.
- */
 import { load as loadYaml } from "js-yaml";
 import type { AttachmentContent } from "@tiny-agents/agent";
 import { listGzip, listTar, listTgz, listZip, type ArchiveListing } from "./uploads.archive";
@@ -21,7 +14,6 @@ import { decodeText, type ExtractKind } from "./uploads.text";
 import type { UploadMeta } from "../../../shared/api/uploads";
 
 const EXTRACT_LIMITS = {
-  /** Extracted text per file; the rest is marked truncated. */
   maxChars: 2_000_000,
   maxPdfPages: 500,
   maxSheets: 20,
@@ -30,11 +22,9 @@ const EXTRACT_LIMITS = {
   maxEntries: 10_000,
   maxArchiveBytes: 1024 * 1024 * 1024,
   maxRatio: 100,
-  /** ≈4k tokens per page of plain text. */
   pageChars: 16_000,
 };
 
-/** What the attachment row records about the extraction (no content): the wire `UploadMeta`. */
 type ExtractMeta = UploadMeta;
 
 export type ExtractResult =
@@ -47,7 +37,6 @@ export interface ExtractInput {
   name: string;
 }
 
-/** Split text into pages on line boundaries, labelled by line range. */
 export function paginate(text: string, pageChars = EXTRACT_LIMITS.pageChars) {
   const lines = text.split("\n");
   const pages: { label: string; text: string }[] = [];
@@ -62,7 +51,6 @@ export function paginate(text: string, pageChars = EXTRACT_LIMITS.pageChars) {
     start = end;
   };
   lines.forEach((line, index) => {
-    // A single huge line is cut, so a page never exceeds the budget.
     for (let offset = 0; offset < Math.max(line.length, 1); offset += pageChars) {
       const piece = line.slice(offset, offset + pageChars);
       if (size + piece.length > pageChars && buffer.length > 0) flush(index);
@@ -102,7 +90,6 @@ function textResult(
   };
 }
 
-/** Markdown headings and the first lines of a log: the outline of plain text. */
 function textOutline(text: string, name: string): string[] {
   if (/\.(md|markdown)$/i.test(name)) {
     return text
@@ -114,9 +101,6 @@ function textOutline(text: string, name: string): string[] {
   return [];
 }
 
-// ── CSV ─────────────────────────────────────────────────────────────────
-
-/** RFC 4180 rows (quoted fields, doubled quotes, newlines inside quotes). */
 export function parseDelimited(text: string, delimiter: string, maxCells: number) {
   const rows: string[][] = [];
   let row: string[] = [];
@@ -157,12 +141,9 @@ export function parseDelimited(text: string, delimiter: string, maxCells: number
   return { rows, truncated, totalRows, totalColumns };
 }
 
-// ── HTML ────────────────────────────────────────────────────────────────
-
 const BLOCK =
   /<\/?(?:p|div|br|li|tr|h[1-6]|section|article|header|footer|table|ul|ol|pre|blockquote)\b[^>]*>/gi;
 
-/** HTML as text: scripts, styles and comments dropped; never rendered. */
 export function htmlToText(html: string): { text: string; title?: string } {
   const title = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html)?.[1]?.trim();
   const text = html
@@ -184,8 +165,6 @@ export function htmlToText(html: string): { text: string; title?: string } {
   return { text, ...(title ? { title } : {}) };
 }
 
-// ── PDF ─────────────────────────────────────────────────────────────────
-
 interface OutlineNode {
   title: string;
   items?: OutlineNode[];
@@ -195,7 +174,6 @@ async function extractPdf(bytes: Uint8Array): Promise<ExtractResult> {
   const { getDocumentProxy } = await import("unpdf");
   let pdf: Awaited<ReturnType<typeof getDocumentProxy>>;
   try {
-    // pdf.js may detach the buffer it is given: hand it a copy.
     pdf = await getDocumentProxy(new Uint8Array(bytes), { verbosity: 0 });
   } catch (error) {
     const name = (error as { name?: string }).name ?? "";
@@ -239,9 +217,7 @@ async function extractPdf(bytes: Uint8Array): Promise<ExtractResult> {
         }
       };
       walk((await pdf.getOutline()) as OutlineNode[] | null, 0);
-    } catch {
-      // an outline is a nicety
-    }
+    } catch {}
     let title: string | undefined;
     let author: string | undefined;
     try {
@@ -252,9 +228,7 @@ async function extractPdf(bytes: Uint8Array): Promise<ExtractResult> {
         title = info.Title.trim().slice(0, 300);
       if (typeof info?.Author === "string" && info.Author.trim())
         author = info.Author.trim().slice(0, 200);
-    } catch {
-      // metadata is a nicety
-    }
+    } catch {}
     return {
       status: "ready",
       content: { format: "pdf", pages, ...(outline.length ? { outline } : {}) },
@@ -269,12 +243,9 @@ async function extractPdf(bytes: Uint8Array): Promise<ExtractResult> {
       },
     };
   } finally {
-    // The worker exits after one file anyway; this frees pdf.js caches early.
     await pdf.cleanup().catch(() => undefined);
   }
 }
-
-// ── Assembled formats ───────────────────────────────────────────────────
 
 function slidesResult(slides: Slide[]): ExtractResult {
   let chars = 0;
@@ -303,7 +274,6 @@ function slidesResult(slides: Slide[]): ExtractResult {
 }
 
 function sheetsResult(sheets: NonNullable<AttachmentContent["sheets"]>): ExtractResult {
-  // Pages make the cells searchable as text: 500 rows of TSV per page.
   const pages: { label: string; text: string }[] = [];
   let chars = 0;
   for (const sheet of sheets) {
@@ -369,7 +339,6 @@ const UNSUPPORTED: Record<string, string> = {
   "application/vnd.ms-powerpoint": "Legacy .ppt files can't be read here",
 };
 
-/** Extract one upload. Never throws: failures come back as a status. */
 export async function extract(input: ExtractInput, mime = ""): Promise<ExtractResult> {
   try {
     switch (input.kind) {
@@ -394,7 +363,6 @@ export async function extract(input: ExtractInput, mime = ""): Promise<ExtractRe
         const text = decodeText(input.bytes);
         let valid = true;
         try {
-          // js-yaml's default schema is safe: no custom types, no code.
           loadYaml(text, { json: true });
         } catch {
           valid = false;

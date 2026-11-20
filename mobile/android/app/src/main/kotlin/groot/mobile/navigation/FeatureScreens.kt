@@ -25,7 +25,6 @@ import groot.mobile.feature.manage.TasksRoute
 import groot.mobile.feature.manage.VaultRoute
 import groot.mobile.feature.terminal.TerminalRoute
 
-/** The screens beyond Home and Settings; each feature adds its own destinations here. */
 internal fun NavGraphBuilder.featureScreens(container: AppContainer, navigate: (String) -> Unit, back: () -> Unit) {
     composable(Routes.BOT_NEW) { ScreenContainer { BotEditorRoute(container, botId = null, onBack = back) } }
     composable(Routes.BOT_EDIT) { entry ->
@@ -38,7 +37,6 @@ internal fun NavGraphBuilder.featureScreens(container: AppContainer, navigate: (
     composable(Routes.PAST_CHAT) { entry ->
         val botId = entry.arguments?.getString("botId").orEmpty()
         val chatId = entry.arguments?.getString("chatId").orEmpty()
-        // Continuing moves the bot back onto this chat: return to Home, where it is now the live one.
         ScreenContainer { PastChatRoute(container, botId, chatId, onContinued = { navigate(Routes.HOME) }, onBack = back) }
     }
     composable(Routes.LIVE_BOT) { entry ->
@@ -71,7 +69,6 @@ internal fun NavGraphBuilder.featureScreens(container: AppContainer, navigate: (
     codeScreens(container, navigate, back)
 }
 
-/** Code: the thread list, a new thread, one thread, its changes and its pull request. */
 private fun NavGraphBuilder.codeScreens(container: AppContainer, navigate: (String) -> Unit, back: () -> Unit) {
     composable(Routes.CODE) {
         ScreenContainer { CodeListRoute(container, onOpen = { navigate(Routes.codeThread(it)) }, onNew = { navigate(Routes.CODE_NEW) }, onBack = back) }
@@ -79,7 +76,6 @@ private fun NavGraphBuilder.codeScreens(container: AppContainer, navigate: (Stri
     composable(Routes.CODE_NEW) {
         ScreenContainer {
             NewCodeThreadRoute(container, onStarted = { id ->
-                // The new thread takes the place of the form: back from it returns to the list.
                 back()
                 navigate(Routes.codeThread(id))
             }, onBack = back)

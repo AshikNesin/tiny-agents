@@ -48,7 +48,6 @@ import groot.mobile.ui.components.StatusDot
 import groot.mobile.ui.components.dateTime
 import groot.mobile.ui.components.rememberResource
 
-/** Routines: prompts a bot runs on a schedule. Pause one, run it now, read its runs, or edit it. */
 @Composable
 fun RoutinesRoute(container: AppContainer, onBack: () -> Unit) {
     val resource = rememberResource("routines") { container.api.routines() }
@@ -106,7 +105,6 @@ fun RoutinesRoute(container: AppContainer, onBack: () -> Unit) {
     }
 }
 
-/** The routine list, drawn from [state]; [canCreate] is false while there is no bot to run one. */
 @Composable
 fun RoutinesScreen(
     state: Loadable<List<Routine>>,

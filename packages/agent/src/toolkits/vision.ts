@@ -1,22 +1,10 @@
-/**
- * The `vision` toolkit (issue #17): a side-call port of the dotfiles
- * `vision` CLI. A bot whose model cannot see images calls `see_image`, which
- * sends the image to a vision-capable transcriber model and returns the text.
- * The bot's own model never changes (the VISION side-call pattern).
- *
- * Fail-open is the contract: any upstream failure returns an error result
- * with the reason, never a thrown exception, so the bot keeps its turn and
- * can tell the owner what happened.
- */
 import type { ToolExecutionResult } from "@earendil-works/pi-durable";
 import { Type } from "@earendil-works/pi-ai";
 import type { Capability } from "../capabilities";
 import { defineToolkit, tool } from "../toolkit";
 import type { Transcriber } from "./vision-transcribe";
 
-/** What the app provides: the prepared image bytes for a send's attachment. */
 export interface VisionStore {
-  /** The model-ready image variant (base64 + mime) an upload id refers to. */
   image(
     conversationId: number,
     uploadId: string,
@@ -33,7 +21,6 @@ const fail = (text: string): ToolExecutionResult => ({
   isError: true,
 });
 
-/** The `vision` toolkit: `see_image` (apps/web bots.runtime.ts wires the store). */
 export function createVisionToolkit(store: VisionStore, transcriber: Transcriber): Capability {
   const seeImage = tool({
     name: "see_image",
@@ -60,8 +47,6 @@ export function createVisionToolkit(store: VisionStore, transcriber: Transcriber
         }),
       ),
     }),
-    // Pure side-call: nothing in the app changes, and the upstream answer may
-    // legitimately differ between retries. Never rerun on recovery.
     replay: "unsafe",
     execute: async (args, api) => {
       const conversationId = Number(api.conversationId);
@@ -97,7 +82,6 @@ export function createVisionToolkit(store: VisionStore, transcriber: Transcriber
     id: "vision",
     name: "Vision",
     description: "See attached images through a vision model (for models without native vision)",
-    // On exactly when the bot's model cannot see images itself.
     auto: true,
     tools: [seeImage],
     sections: [

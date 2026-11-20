@@ -1,16 +1,6 @@
-/**
- * Finished replies: which assistant messages answer what. A turn starts at a
- * user message and runs until the next one after its first reply; every
- * assistant message in between belongs to it (a tool-calling turn writes
- * several). Inputs placed together, back to back, share one turn. The Finished
- * reply to a submission is found by the submission's request id, never by
- * timestamps, so a mid-turn "Let me check…" never stands in for the answer
- * and a queued second submission never takes the first one's reply.
- */
 import { REPORT_ROUTINE_BLOCKED } from "./toolkits/routines";
 import type { ChatMessage, ChatState, ChatToolCall, FinishedReply } from "./types";
 
-/** The reason a message's finished `report_routine_blocked` call gave, if it made one (issue #87). */
 function blockedReasonOf(calls: ChatToolCall[] | undefined): string | undefined {
   const call = calls?.findLast(
     (candidate) => candidate.name === REPORT_ROUTINE_BLOCKED && candidate.status === "done",
@@ -19,10 +9,6 @@ function blockedReasonOf(calls: ChatToolCall[] | undefined): string | undefined 
   return typeof reason === "string" && reason.trim() ? reason.trim() : undefined;
 }
 
-/**
- * One finished assistant message as a reply, or undefined when it carries
- * nothing a reader acts on (a bare tool-call round) or is still streaming.
- */
 export function finishedReplyOf(message: ChatMessage): FinishedReply | undefined {
   if (message.role !== "assistant" || message.status === "streaming") return undefined;
   const error = message.status === "error" ? message.error : undefined;
@@ -53,18 +39,6 @@ export function finishedReplyOf(message: ChatMessage): FinishedReply | undefined
   };
 }
 
-/**
- * What a submission's turn came to, read from a conversation's chat state:
- * - `answered`: the turn's reply. Text and error come from its last message
- *   that has text or an error; `refused` collects every tool refused anywhere
- *   in the turn, `sent` every `message_owner` text in order, `blocked` is the newest reason given and `stoppedBy` the
- *   newest run limit the gate refused a call on. A turn that said
- *   nothing at all answers with empty text.
- * - `pending`: not finished yet: the conversation is busy, the submission
- *   still waits in the inbox, or no assistant message follows it yet.
- * - `unknown`: no user message with this request id in the transcript (it
- *   went to another conversation, or predates request ids on entries).
- */
 export type TurnOutcome =
   | { status: "answered"; reply: FinishedReply }
   | { status: "pending" }
@@ -74,7 +48,6 @@ export function finishedReplyTo(
   state: Pick<ChatState, "messages" | "busy" | "queued">,
   requestId: string,
 ): TurnOutcome {
-  // A reply still running is not finished: the next idle reads it whole.
   if (state.busy || state.queued.some((item) => item.requestId === requestId)) {
     return { status: "pending" };
   }
@@ -90,12 +63,9 @@ export function finishedReplyTo(
   let blocked: string | undefined;
   let stoppedBy: FinishedReply["stoppedBy"];
   const sent: string[] = [];
-  // A turn that settled without an answer is over, whatever follows it.
   let closed = messages[start].status === "unanswered";
   for (const message of closed ? [] : messages.slice(start + 1)) {
     if (message.role === "user") {
-      // Inputs placed together (queued follow-ups, a steer with them) sit
-      // back to back and share the reply that follows them (issue #396).
       if (!last) continue;
       closed = true;
       break;

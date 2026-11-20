@@ -1,9 +1,3 @@
-/**
- * A credential request's link (issue #56), `/vault/requests/<task>`, as push
- * notifications write it: the form lives on the asking bot's chat card, so
- * the link opens that chat scrolled to it. A request with no bot keeps the
- * form here.
- */
 import { Navigate, useNavigate } from "react-router-dom";
 import { Lock } from "lucide-react";
 import { Card, CardContent } from "@groot/ui/card";

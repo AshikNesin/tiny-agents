@@ -1,9 +1,3 @@
-/**
- * Settings → People (issue #145): the owner's guests. A guest chats with the
- * bots shared with them (in each bot's settings → Sharing) and uses Code.
- * The owner picks their password and passes it on; the guest can add a
- * passkey afterwards.
- */
 import { useEffect, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { Trash2, UserPlus } from "lucide-react";

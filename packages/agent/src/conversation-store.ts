@@ -1,12 +1,3 @@
-/**
- * The runtime's conversation store (ADR 0014): the pi-durable harness every
- * conversation lives in, whichever engine runs its turns. Each conversation
- * is one durable pi-durable conversation: its agent change (also the
- * stand-in a Claude plan conversation falls back onto), the documents the
- * Tool gate reads (permissions, YOLO), its entries (both engines write
- * theirs there, ADR 0018), and the reply tasks running in it. The engines
- * run turns over it; none of this belongs to one of them.
- */
 import type { Context } from "@earendil-works/chord";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import {
@@ -27,14 +18,11 @@ import type { ConversationRef } from "./types";
 
 const ctx: Context = BACKGROUND_CONTEXT;
 
-/** Entries read per storage page when loading a chat's history. */
 const HISTORY_PAGE = 500;
 
-/** Task kinds that mean "the bot is replying" (background compaction does not). */
 const REPLY_TASK_KINDS = new Set(["pi.generation", "pi.tool"]);
 
 export interface ConversationStoreOptions {
-  /** A conversation's reply tasks started or stopped running. */
   onReplying?: (ref: ConversationRef) => void;
 }
 
@@ -49,7 +37,6 @@ export class ConversationStore {
     this.#onReplying = options.onReplying ?? (() => undefined);
   }
 
-  /** Start following the task graph (who is replying). Before `resume()`. */
   async start(): Promise<void> {
     const graph = await this.harness.watchTaskGraph(ctx);
     this.#graph = graph;
@@ -64,15 +51,10 @@ export class ConversationStore {
     });
   }
 
-  /** Re-run the work a restart interrupted. Last at open: everything it runs against is set up. */
   resume(): void {
     this.harness.resume();
   }
 
-  /**
-   * Conversations with a reply task running in the harness. Only pi runs
-   * turns as tasks; a Claude plan turn is not one.
-   */
   replyingConversations(): ConversationRef[] {
     return [...this.#replying];
   }
@@ -81,7 +63,6 @@ export class ConversationStore {
     return this.#replying.has(ref);
   }
 
-  /** Create the durable conversation with its agent and permissions. */
   async create(compiled: CompiledConversation): Promise<ConversationRef> {
     const conversation = await this.harness.createConversation(
       { ownership: { kind: "ownerless" }, agent: compiled.change },
@@ -97,10 +78,6 @@ export class ConversationStore {
     return ref;
   }
 
-  /**
-   * Store the agent change and the gate's permissions, in one commit.
-   * Applies from the next model request; history is kept.
-   */
   async configure(ref: ConversationRef, compiled: CompiledConversation): Promise<void> {
     await this.conversation(ref);
     await this.harness.commit(async (tx) => {
@@ -111,7 +88,6 @@ export class ConversationStore {
     }, ctx);
   }
 
-  /** Tokens the conversation has used so far (its `pi.usage`, every model and tool). */
   async usedTokens(ref: ConversationRef): Promise<number> {
     await this.conversation(ref);
     return this.harness.commit(
@@ -120,7 +96,6 @@ export class ConversationStore {
     );
   }
 
-  /** The conversation's `pi.usage` totals as trace usage (issue #363). */
   async usage(ref: ConversationRef): Promise<ConversationUsage> {
     await this.conversation(ref);
     return this.harness.commit(
@@ -129,14 +104,12 @@ export class ConversationStore {
     );
   }
 
-  /** The conversation's calls, turn by turn, from its stored entries (issue #363). */
   async trace(ref: ConversationRef): Promise<ConversationTrace> {
     const conversation = await this.conversation(ref);
     const entries = await loadHistory(conversation);
     return traceOf(entries, await this.usage(ref));
   }
 
-  /** The conversation's YOLO document: on, and whose messages it trusts. */
   async yolo(ref: ConversationRef): Promise<{ on: boolean; by?: number }> {
     await this.conversation(ref);
     return this.harness.commit(async (tx) => {
@@ -161,7 +134,6 @@ export class ConversationStore {
     }, ctx);
   }
 
-  /** Upload ids attached to the newest 50 user entries (issue #17). */
   async attachmentIds(ref: ConversationRef): Promise<string[]> {
     const conversation = await this.conversation(ref);
     const page = await conversation.entries({ order: "descending" }, 50, undefined, ctx);
@@ -174,14 +146,12 @@ export class ConversationStore {
     return ids;
   }
 
-  /** The conversation's durable record; throws `ConversationNotFoundError`. */
   async conversation(ref: ConversationRef): Promise<Conversation> {
     const conversation = await this.harness.conversation(ref as ConversationId, ctx);
     if (!conversation) throw new ConversationNotFoundError(ref);
     return conversation;
   }
 
-  /** Stop following the task graph and close the harness (waits for running task code). */
   async close(): Promise<void> {
     await this.#graph?.stop().catch(() => undefined);
     await this.harness.close(ctx);
@@ -196,12 +166,6 @@ function replyingFromGraph(value: TaskGraphWatch["value"]): Set<ConversationRef>
   return replying;
 }
 
-/**
- * Every stored entry of a conversation, ascending — the full transcript, not
- * just what the model still sees after resets/compactions. Paged so a long
- * conversation never loads in one storage read. Both engines read their
- * entries through it.
- */
 export async function loadHistory(conversation: Conversation): Promise<EntryRecord[]> {
   const entries: EntryRecord[] = [];
   let cursor: Cursor | undefined;

@@ -1,21 +1,3 @@
-/**
- * UI component barrel — single import surface for all primitives.
- *
- *   import { Button, Dialog, Input } from "@groot/ui";
- *
- * Design tokens live in packages/shell/src/index.css (Tailwind v4 CSS-first: oklch
- * `@theme inline` variables) and are surfaced via semantic Tailwind classes
- * (bg-primary, text-foreground, border-border, …). Do not use raw palette
- * colors (gray-*, red-*, …) outside index.css.
- *
- * This is the component **kit shipped to child projects**, not groot's own
- * app surface — some primitives (alert, pagination, select, tooltip) may have
- * no importers inside this repo. That is not dead code: they exist so child
- * apps can consume them from `@groot/ui` instead of vendoring. Removal
- * decisions for this package must weigh child-project demand (see
- * docs/guides/sync.md), not just the in-repo import graph.
- */
-
 export * from "./badge";
 export * from "./alert";
 export * from "./breadcrumb";

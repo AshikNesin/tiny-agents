@@ -1,12 +1,3 @@
-/**
- * The Code page's API (ADR 0011): one route set for every harness, under
- * this app's login. A thread route picks its harness instance from the
- * thread id (`<instance>:<native>`); a harness route names the instance.
- * The browser never reaches a harness directly.
- *
- * A route whose harness lacks the capability answers 404
- * `capability_missing`; the UI hides those controls from `capabilities`.
- */
 import { Hono } from "hono";
 import { z } from "zod";
 import type { AppContext, AppEnv } from "@groot/core/types";
@@ -48,7 +39,6 @@ const UPLOAD_MAX_BYTES = 25 * 1024 * 1024;
 
 const router = new Hono<AppEnv>();
 
-/** Harness errors keep their status and text; everything else is the app's. */
 function toHttp(error: unknown): never {
   if (error instanceof HarnessError) {
     throw new HttpError(error.status, error.message, undefined, error.code?.toUpperCase());
@@ -83,7 +73,6 @@ function thread(c: AppContext): { instance: HarnessInstance; nativeId: string; i
   return { ...target, id: threadIdOf(target.instance.id, target.nativeId) };
 }
 
-/** The optional method, or 404 `capability_missing`. */
 function need<K extends keyof HarnessInstance>(
   instance: HarnessInstance,
   method: K,
@@ -101,7 +90,6 @@ function query(c: AppContext, name: string, required = true): string | undefined
   return value || undefined;
 }
 
-/** Never let something a harness serves run as a page of this app. */
 function passthrough(upstream: Response): Response {
   const headers = new Headers();
   for (const name of ["content-type", "content-length", "last-modified", "etag"]) {
@@ -125,8 +113,6 @@ function describe(instance: HarnessInstance, viewer: Viewer) {
   };
 }
 
-// --- status and live list ------------------------------------------------------
-
 router.get("/code/status", (c) => {
   const current = codeHub();
   const viewer = c.get("viewer");
@@ -135,7 +121,6 @@ router.get("/code/status", (c) => {
   });
 });
 
-/** One SSE per open Code page: harness status and the merged thread list. */
 router.get("/code/events", (c) => {
   const h = hub();
   return openSse(c, async (sse) => {
@@ -151,9 +136,6 @@ router.get("/code/events", (c) => {
   });
 });
 
-// --- lists ---------------------------------------------------------------------------
-
-/** Archived and searched rows, decorated like the live list (project, PR, review). */
 async function decorate(rows: ThreadSummary[]): Promise<ThreadSummary[]> {
   const [seen, decorations] = await Promise.all([seenMap(), threadDecorations()]);
   return rows.map((row) => {
@@ -192,7 +174,6 @@ router.get("/code/threads/search", async (c) => {
   return ok(c, await decorate(lists.flat()));
 });
 
-/** `/code/s/:slug` links: the thread whose title is exactly `title`. */
 router.get("/code/threads/by-title/:title", async (c) => {
   const title = decodeURIComponent(c.req.param("title"));
   if (!title || title.length > 200) throw Boom.badRequest("Invalid title");
@@ -207,18 +188,13 @@ router.get("/code/threads/by-title/:title", async (c) => {
   return ok(c, found);
 });
 
-// --- start -----------------------------------------------------------------------------
-
 const message = z.string().trim().min(1).max(100_000);
 const refs = z.array(z.string().max(2048)).max(20).optional();
 const permissionMode = z.enum(["default", "acceptEdits", "plan", "bypassPermissions"]);
 
 const createSchema = z.object({
-  /** Omitted with a project: its default harness. */
   instanceId: z.string().min(1).max(40).optional(),
-  /** Start in a project (issue #297): its own worktree on a new branch. */
   projectId: z.string().min(1).max(64).optional(),
-  /** With a project: check out this existing branch (a PR's head) instead. */
   branch: z.string().trim().min(1).max(250).optional(),
   message,
   cwd: z.string().trim().max(1024).optional(),
@@ -247,21 +223,17 @@ router.post("/code/threads", async (c) => {
   const { nativeId } = project
     ? await run(() => startProjectThread(project, instance, { ...input, branch }))
     : await run(() => instance.createThread(input));
-  // A project thread was titled with its branch name; any other gets its short title now.
   if (!project) titleLater(instance, nativeId, input.message);
   await follow(instance.id, nativeId);
   void hub().refresh(instance.id);
   return ok(c, { threadId: threadIdOf(instance.id, nativeId) }, 201);
 });
 
-// --- one thread --------------------------------------------------------------------------
-
 router.get("/code/threads/:id", async (c) => {
   const { instance, nativeId } = thread(c);
   return ok(c, await run(() => instance.getThread(nativeId)));
 });
 
-/** The thread live: a snapshot, then changed rows, partial text and state. */
 router.get("/code/threads/:id/events", (c) => {
   const { id } = thread(c);
   const h = hub();
@@ -270,26 +242,15 @@ router.get("/code/threads/:id/events", (c) => {
   });
 });
 
-/**
- * Live refresh for the Changes and Review panels (ADR 0025): a new version
- * each time the thread's directory changes. A project thread watches its
- * worktree, whatever its harness; any other thread its directory, through
- * the harness's own stamp or, failing that, its own uncommitted file list,
- * so every harness that serves diffs is live.
- * Where neither can be stamped the stream says `unavailable` and the panel
- * re-reads on transcript activity instead.
- */
 router.get("/code/threads/:id/changes", async (c) => {
   const { instance, id } = thread(c);
   const project = await projectThread(id);
-  // The thread's own directory; only the owner may name another (a guest never chooses one).
   const cwd =
     (await hub().list()).find((row) => row.id === id)?.cwd ??
     (c.get("viewer").kind === "owner" ? query(c, "cwd", false) : undefined);
   let source: { key: string; stamp: () => Promise<string> } | undefined;
   if (project?.thread.worktree) {
     const worktree = project.thread.worktree;
-    // No sandbox or no GitHub set up: unavailable, not an error the client retries.
     const ws = await codeGitHub()
       .workspace(project.project)
       .catch(() => undefined);
@@ -297,8 +258,6 @@ router.get("/code/threads/:id/changes", async (c) => {
   } else if (cwd && typeof instance.changeStamp === "function") {
     source = { key: `${instance.id}:${cwd}`, stamp: () => instance.changeStamp!(cwd) };
   } else if (cwd && typeof instance.diffFiles === "function") {
-    // Any harness that serves diffs: its own uncommitted file list is the
-    // stamp (coarser: an edit that keeps a file's counts waits for the next).
     source = {
       key: `${instance.id}:${cwd}`,
       stamp: async () => JSON.stringify(await instance.diffFiles!(cwd, "working")),
@@ -323,10 +282,8 @@ router.post("/code/threads/:id/seen", async (c) => {
 const sendSchema = z.object({
   message,
   attachments: refs,
-  /** true: hold the message until the running turn ends instead of steering it now. */
   queue: z.boolean().optional(),
   skills: z.array(z.string().max(200)).max(20).optional(),
-  /** The owner's: send the thread's unsent line comments ahead of the message. */
   withReview: z.boolean().optional(),
 });
 
@@ -341,13 +298,11 @@ router.post("/code/threads/:id/messages", async (c) => {
         message: review ? `${review}\n\n---\n\n${body.message}` : body.message,
       }),
     );
-  // Line comments are the owner's (a guest cannot read or write them).
   const result =
     withReview && owner
       ? (await threadReview(threadIdOf(instance.id, nativeId)).send(submit)).result
       : await submit(null);
   await follow(instance.id, nativeId);
-  // The owner's own words: a waiting Auto-fix loop may go on (issue #297 §9.4).
   if (owner) await noteOwnerInput(threadIdOf(instance.id, nativeId));
   return ok(c, result);
 });
@@ -433,7 +388,6 @@ router.post("/code/threads/:id/archive", async (c) => {
   const { archived } = await parseBody(c, z.object({ archived: z.boolean() }));
   const result = await run(() => need(instance, "archive", "archive")(nativeId, archived));
   void hub().refresh(instance.id);
-  // Project threads: the worktree goes on archive and comes back on unarchive (§7.6).
   for (const native of [nativeId, ...result.moved]) {
     await onThreadArchived(threadIdOf(instance.id, native), archived).catch(() => undefined);
   }
@@ -474,10 +428,6 @@ router.post("/code/threads/:id/fork", async (c) => {
   return ok(c, { threadId: threadIdOf(instance.id, forked.nativeId) }, 201);
 });
 
-/**
- * The owner's likely next message once a turn ended (`code.next-prompt.ts`):
- * `after` is the newest row the browser shows, so one turn costs one call.
- */
 router.get("/code/threads/:id/next-prompt", async (c) => {
   const { instance, nativeId, id } = thread(c);
   const after = query(c, "after")!;
@@ -489,8 +439,6 @@ router.get("/code/threads/:id/usage", async (c) => {
   const { instance, nativeId } = thread(c);
   return ok(c, await run(() => need(instance, "usage", "report usage")(nativeId)));
 });
-
-// --- one harness: composer and workspace ---------------------------------------------------
 
 router.get("/code/harnesses/:instance/models", async (c) =>
   ok(c, await run(() => harness(c).models())),
@@ -519,14 +467,12 @@ router.get("/code/harnesses/:instance/find-files", async (c) => {
   );
 });
 
-/** The raw body is capped before it is read, in place of the app's 1 MB API default. */
 const uploadBodyLimit = routeBodyLimit(UPLOAD_MAX_BYTES, {
   onError: () => {
     throw Boom.entityTooLarge("Uploads are limited to 25 MB");
   },
 });
 
-/** Raw upload (screenshots, logs): answers the ref to attach. */
 router.post("/code/uploads/:instance", uploadBodyLimit, async (c) => {
   const instance = harness(c);
   const filename = query(c, "filename")!;
@@ -595,7 +541,6 @@ router.get("/code/harnesses/:instance/diffs/:diff/file", async (c) => {
   if (!diff.success) throw Boom.badRequest("Invalid diff");
   const path = query(c, "path")!;
   if (path.split("/").some((s) => s === "..")) throw Boom.badRequest("Invalid path");
-  // Every harness's diff, held to the same rules as the app's own git reads.
   return ok(
     c,
     guardSides(

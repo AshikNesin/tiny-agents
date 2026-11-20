@@ -1,11 +1,5 @@
 import { sqliteTable, integer, text, blob, index } from "drizzle-orm/sqlite-core";
 
-/**
- * Core tables. Timestamps are stored as integer milliseconds (`timestamp_ms`)
- * so the same schema runs on better-sqlite3, D1 and Durable Object SQLite.
- * App-owned tables live in `apps/web/src/server/db/schema.ts`.
- */
-
 export const timestamps = {
   createdAt: integer("created_at", { mode: "timestamp_ms" })
     .notNull()
@@ -19,7 +13,6 @@ export const timestamps = {
 export const users = sqliteTable("users", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   email: text("email").notNull().unique(),
-  /** PBKDF2 hash, see `utils/password.utils.ts`. */
   password: text("password").notNull(),
   name: text("name"),
   ...timestamps,
@@ -45,12 +38,10 @@ export const passkeys = sqliteTable(
   (table) => [index("passkeys_user_id_idx").on(table.userId)],
 );
 
-/** Generic key-value storage (settings, passkey challenges, caches). */
 export const kv = sqliteTable(
   "kv",
   {
     key: text("key").primaryKey(),
-    /** JSON-encoded value. */
     value: text("value").notNull(),
     expiresAt: integer("expires_at", { mode: "timestamp_ms" }),
   },

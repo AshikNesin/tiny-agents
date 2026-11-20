@@ -1,17 +1,3 @@
-/**
- * A thread's review (the Changes and Review panels, any harness): which
- * files the owner marked viewed, and the line comments kept until they
- * reach its agent. `threadReview(threadId)` is the one way in; routes only
- * parse and delegate.
- *
- * Comments go as one message, each with its file, lines and the quoted
- * lines: on their own (`/review/send`) or ahead of the owner's next message
- * (`/messages` with `withReview`), after a `---` line like the one between
- * comments, so the transcript can show each comment as a card
- * (`parseReviewMessage` on the client) and the message after. `send` marks
- * exactly the comments it sent once the harness took them; one saved
- * meanwhile waits for the next.
- */
 import { Boom } from "@groot/core/errors";
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { codeReviewDrafts, codeReviewViewed, db } from "../../db";
@@ -28,7 +14,6 @@ const draftView = (row: typeof codeReviewDrafts.$inferSelect): ReviewDraft => ({
   createdAt: row.createdAt.toISOString(),
 });
 
-/** The drafts as one message: file, lines and the quoted lines travel with each comment. */
 function reviewMessage(drafts: ReviewDraft[]): string {
   const parts = drafts.map((d) => {
     const lines = d.startLine === d.endLine ? `${d.startLine}` : `${d.startLine}-${d.endLine}`;
@@ -48,29 +33,18 @@ export interface DraftInput {
 }
 
 export interface ThreadReview {
-  /** Each file with whether the owner marked its current content viewed. */
   withViewed<F extends { path: string; hash: string }>(
     files: F[],
   ): Promise<Array<F & { viewed: boolean }>>;
   markViewed(path: string, hash: string, viewed: boolean): Promise<void>;
-  /** Unsent comments, oldest first. */
   drafts(): Promise<ReviewDraft[]>;
-  /** Throws 400 for a range that ends before it starts. */
   addDraft(input: DraftInput): Promise<ReviewDraft>;
   removeDraft(id: string): Promise<void>;
-  /**
-   * Hand the unsent comments, as one message (null when there are none) and
-   * as they are, to `deliver`; once it resolves, exactly those are marked sent.
-   */
   send<R>(
     deliver: (review: string | null, drafts: ReviewDraft[]) => Promise<R>,
   ): Promise<{ result: R; sent: number }>;
 }
 
-/**
- * `target` picks which comments: the agent's (the default), or a PR review's
- * pending GitHub comments (`github`, issue #345), kept apart under the same key.
- */
 export function threadReview(threadId: string, target: "agent" | "github" = "agent"): ThreadReview {
   const unsent = and(
     eq(codeReviewDrafts.threadId, threadId),

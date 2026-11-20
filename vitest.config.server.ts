@@ -3,25 +3,12 @@ import { availableParallelism } from "node:os";
 import path from "node:path";
 
 const rootDir = path.resolve();
-// Most server test files wait on timers and child processes, not the CPU.
 const WORKERS_PER_CORE = 2;
-/**
- * Suites that type-check whole copies of the repo in child processes (tsx,
- * tsc): CPU-bound for a minute or more each. Run alongside the rest on CI's
- * runner they starved it, and unrelated tests hit their 5-second timeout
- * (even a synchronous snapshot test). They run as their own group, after
- * every other server test.
- */
 const REPO_TYPECHECK_SUITES = [
   "tests/server/checks/kit-exports.test.ts",
   "tests/server/checks/typecheck-coverage.test.ts",
 ];
 
-// Never reach real services from tests, whatever the shell exports: with real
-// Pushover keys in the environment, the notification route tests sent actual
-// test pushes (their fetch spy watches calls, it does not stop them). Remove the
-// keys and model settings outright, matching CI, which sets none of them.
-// Test workers inherit this process's environment.
 for (const key of [
   "PUSHOVER_API_TOKEN",
   "PUSHOVER_USER_KEY",
@@ -43,10 +30,6 @@ for (const key of [
 export default defineConfig({
   root: ".",
   test: {
-    // Vitest v4 compatibility: preserve mock call history.
-    // Remove after tests no longer rely on calls from setup or earlier tests.
-    // https://viteplus.dev/guide/vitest-v5#remove-unneeded-compatibility-settings
-    // https://vitest.dev/guide/migration/#clearmocks-is-enabled-by-default
     clearMocks: false,
     environment: "node",
     setupFiles: ["./tests/server/setup.ts"],

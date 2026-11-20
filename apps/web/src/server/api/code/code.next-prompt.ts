@@ -1,20 +1,6 @@
-/**
- * The next prompt the owner is likely to send in a Code thread: one short
- * line the composer offers as its placeholder (Tab fills it in), modeled on
- * t3code's prompt suggestions.
- *
- * Token budget (a hard requirement): one small call on the `chat_title`
- * model role per finished turn, at most, and only when a browser asks for
- * it (an open thread whose turn ended). The context is the turn alone: the
- * thread's title, the owner's last message and the agent's answer, each cut
- * short, never the transcript. Answers are kept by thread and newest row,
- * in flight too, so reopening the thread or a second tab never calls again.
- * A failed turn, a turn still working or no model gives no suggestion.
- */
 import { turnAnswer, type HarnessInstance, type TranscriptItem } from "@tiny-agents/code/server";
 import { app } from "../../app-root";
 
-/** Answers kept (one per thread's newest turn); the oldest goes first. */
 const KEEP = 200;
 const TIMEOUT_MS = 10_000;
 const ASKED_CHARS = 600;
@@ -30,7 +16,6 @@ const SYSTEM = [
   "No quotes, no preamble. If there is no clear next step, reply with NONE.",
 ].join("\n");
 
-/** The model's line, clean, or null when it has none to offer. */
 function cleanNextPrompt(raw: string): string | null {
   const text = raw
     .replace(/<think>[\s\S]*?<\/think>/gi, "")
@@ -45,7 +30,6 @@ function cleanNextPrompt(raw: string): string | null {
   return text.length > MAX_CHARS ? `${text.slice(0, MAX_CHARS - 1)}…` : text;
 }
 
-/** The newest user message and the turn's answer, or null when the turn has nothing to follow. */
 function turnDigest(items: readonly TranscriptItem[]): { asked: string; answer: string } | null {
   const answer = turnAnswer(items);
   if (answer.failed || !answer.text) return null;
@@ -60,7 +44,6 @@ function turnDigest(items: readonly TranscriptItem[]): { asked: string; answer: 
   return { asked, answer: answer.text };
 }
 
-/** The browser's newest row is not the thread's yet (or it works): ask again later, nothing kept. */
 class NotYet extends Error {}
 
 async function generate(
@@ -72,7 +55,6 @@ async function generate(
   if (!namer) return null;
   const snapshot = await instance.getThread(nativeId);
   if (snapshot.thread.working || snapshot.items.at(-1)?.id !== after) throw new NotYet();
-  // A question waiting on the owner is answered in its card, not the composer.
   if (snapshot.items.some((i) => i.kind === "request" && i.status === "open")) return null;
   const digest = turnDigest(snapshot.items);
   if (!digest) return null;
@@ -93,11 +75,6 @@ async function generate(
   return answer === undefined ? null : cleanNextPrompt(answer);
 }
 
-/**
- * The suggestion for a thread whose newest row is `after`: kept from the
- * first ask, so every later one is free. `after` is what the browser shows
- * as the newest row; a new row (a new turn) is a new suggestion.
- */
 export function nextPrompt(
   instance: HarnessInstance,
   nativeId: string,

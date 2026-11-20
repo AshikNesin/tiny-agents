@@ -1,8 +1,3 @@
-/**
- * SkillStore adapter: the agent's `skills` capability reads the skills
- * assigned to the bot behind a conversation from app.db. Dependency direction
- * stays one-way — `@tiny-agents/agent` defines the port, apps/web implements it.
- */
 import { asc, eq } from "drizzle-orm";
 import { botSkills, db, skills } from "../../db";
 import type { SkillStore } from "@tiny-agents/agent";
@@ -53,12 +48,6 @@ export const skillStore: SkillStore = {
     return skill ? files(skill.files).find((file) => file.path === path)?.content : undefined;
   },
 
-  /**
-   * A bot saves a skill of its own: a new one under a free name, or a new
-   * version of one already assigned to it. Names are unique in the library,
-   * and a skill the bot does not have (another bot's, a GitHub import) is
-   * never overwritten from a conversation: the owner assigns it instead.
-   */
   async save(conversationId, input) {
     const { botId, skills: own } = await assigned(conversationId);
     const mine = own.find((skill) => skill.name === input.name);

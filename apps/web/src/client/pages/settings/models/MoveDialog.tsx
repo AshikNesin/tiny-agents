@@ -13,7 +13,6 @@ import { Field } from "@groot/ui/form";
 import { ApiError } from "@groot/shell/lib/api";
 import { ModelPicker, type ModelPickerOption } from "../../../components/ModelPicker";
 
-/** Pick the model that takes over. Mounted only while asking, so it opens empty. */
 export function MoveDialog({
   what,
   users,
@@ -55,7 +54,6 @@ export function MoveDialog({
   );
 }
 
-/** Who a 409 `in_use` names, as a sentence. */
 export function inUseText(error: unknown): string | undefined {
   if (!(error instanceof ApiError) || error.status !== 409) return undefined;
   const details = (error.details ?? {}) as {

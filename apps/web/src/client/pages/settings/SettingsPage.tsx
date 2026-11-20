@@ -1,10 +1,3 @@
-/**
- * The app's settings: the shell's full-page settings screen
- * (`@groot/shell/pages/settings/Settings`) with tiny-agents' own sections —
- * Models (issue #179), Notifications, People, Updates — beside Account, Appearance,
- * Security and Configuration. A guest (issue #145) gets Appearance and
- * Security only. The section list itself is in `sections.ts`, shared with ⌘K.
- */
 import { useMemo, type ReactNode } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { AccountSettings } from "@groot/shell/components/AccountSettings";
@@ -20,7 +13,6 @@ import { useIsGuest } from "../../store/people";
 import { ModelsSettings } from "./models/ModelsSettings";
 import { settingsSectionsFor } from "./sections";
 
-/** Each section's body, by id. */
 const ELEMENTS: Record<string, ReactNode> = {
   account: <AccountSettings />,
   appearance: <ThemeSettings />,
@@ -36,14 +28,8 @@ const ELEMENTS: Record<string, ReactNode> = {
   updates: <UpdatesSettings />,
 };
 
-/**
- * Settings were tabs on `/settings?tab=<id>` before the full-page screen;
- * those links (bookmarks, older docs) land on the section they meant. A
- * section the viewer lacks falls through to `Settings`' first-section redirect.
- */
 const LEGACY_TABS: Record<string, string> = { general: "account", claude: "models" };
 
-/** The viewer's settings, in sidebar order. */
 export function SettingsPage() {
   const { pathname, search } = useLocation();
   const legacyTab = new URLSearchParams(search).get("tab");

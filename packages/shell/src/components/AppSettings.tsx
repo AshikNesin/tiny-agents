@@ -28,10 +28,6 @@ const CodeMirrorEditor = lazy(() =>
   import("./CodeMirrorEditor").then((m) => ({ default: m.CodeMirrorEditor })),
 );
 
-/**
- * Placeholder mirroring the toolbar and master/detail grid while settings
- * load, composed from the shared skeleton primitives.
- */
 function AppSettingsSkeleton() {
   return (
     <div className="space-y-6">
@@ -70,12 +66,10 @@ export function AppSettings() {
   const data = useAppSettingsData();
   const confirm = useConfirm();
 
-  // Editor state: which setting is open, the list filter, the new-setting form.
   const [userSelectedKey, setUserSelectedKey] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [showNewSettingForm, setShowNewSettingForm] = useState(false);
 
-  // Selection: the user's explicit choice, else the first setting once loaded.
   const selectedKey = userSelectedKey ?? data.settings[0]?.key ?? null;
   const selected = selectedKey ? data.get(selectedKey) : null;
   const draft = useSettingDraft(selected);
@@ -116,7 +110,6 @@ export function AppSettings() {
     },
   });
 
-  /** Leaving a dirty draft (another setting, a new one) asks first. */
   const leaveDraft = async (): Promise<boolean> =>
     !draft.isDirty ||
     confirm({
@@ -141,7 +134,6 @@ export function AppSettings() {
 
   return (
     <div className="space-y-6">
-      {/* Toolbar */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <FileJson className="size-4" />
@@ -159,7 +151,6 @@ export function AppSettings() {
         </div>
       </div>
 
-      {/* Add-setting inline form */}
       {showNewSettingForm && (
         <Card>
           <CardHeader className="border-b">
@@ -189,9 +180,7 @@ export function AppSettings() {
         </Card>
       )}
 
-      {/* Master / detail */}
       <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
-        {/* Settings list */}
         <Card className="gap-0 p-0">
           <div className="border-b border-border p-3">
             <div className="relative">
@@ -247,7 +236,6 @@ export function AppSettings() {
           </div>
         </Card>
 
-        {/* Editor */}
         <Card className="gap-0 p-0">
           {selectedKey ? (
             <>

@@ -1,7 +1,3 @@
-/**
- * An assistant turn: its tool calls, its reasoning, and the reply card with
- * any terminal status notice.
- */
 import { useEffect, useRef, useState } from "react";
 import { Streamdown } from "streamdown";
 import { markdownComponents } from "../../lib/markdown";
@@ -20,11 +16,6 @@ import { Message } from "../ui/message";
 import { MessageEnter, MessageMeta, isFresh } from "./message-chrome";
 import { ToolGroupRow, ToolRow } from "./ToolRow";
 
-/**
- * Thinking block: an AI Elements Reasoning step. Open (and shimmering)
- * while the model reasons, folded away once it finishes so the reply is
- * what remains on screen.
- */
 function Reasoning({ text, running }: { text: string; running: boolean }) {
   const [open, setOpen] = useState(running);
   const wasRunning = useRef(running);
@@ -57,8 +48,6 @@ export function assistantView(
   const { botName } = ctx;
   const labels: ToolLabelCatalog = { done: ctx.toolLabels, ask: ctx.toolAskLabels };
   const streaming = message.status === "streaming";
-  // Terminal status notices render inside the reply card, so a failed or
-  // stopped turn with no text still surfaces its notice.
   const hasNotice =
     message.status === "error" || message.status === "stopped" || message.status === "unanswered";
   return (
@@ -86,10 +75,6 @@ export function assistantView(
           </div>
         )}
         {message.reasoning && <Reasoning text={message.reasoning} running={streaming} />}
-        {/* Reply card: renders only when there is something to show — text,
-            or a terminal status notice. A tool-only turn (empty text, not
-            streaming) shows just its trace rows; rendering the card anyway
-            painted an empty box. */}
         {(message.text || (hasNotice && !streaming)) && (
           <MessageEnter
             fresh={isFresh(message)}
@@ -119,8 +104,6 @@ export function assistantView(
             )}
           </MessageEnter>
         )}
-        {/* Nothing visible yet: dots, unless a running tool row or the
-            reasoning block already shows the bot at work. */}
         {streaming && !message.text && !message.reasoning && !message.toolCalls?.some(isActive) && (
           <TypingIndicator />
         )}

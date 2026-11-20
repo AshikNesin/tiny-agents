@@ -1,5 +1,3 @@
-/* The film's own styles: ground, screen, captions, cursor.
-   The product UI inside .appwin is styled by app.desktop.css / app.mobile.css. */
 :root {
   --f-ground: #f6f6f7;
   --f-ink: #1f1f23;
@@ -29,7 +27,6 @@ html[data-fmt="v"] body {
   height: 1920px;
 }
 
-/* ── Scene ─────────────────────────────────────────────────────────── */
 .f-scene {
   position: absolute;
   inset: 0;
@@ -46,7 +43,6 @@ html[data-fmt="v"] body {
   top: 0;
 }
 
-/* ── The screen: a fixed panel the camera moves inside ─────────────── */
 .vp {
   position: absolute;
   overflow: hidden;
@@ -98,7 +94,6 @@ html[data-fmt="v"] .vp {
   position: absolute;
   inset: 0;
 }
-/* The app is a still here: nothing in it should animate by itself. */
 .appwin *,
 .appwin *::before,
 .appwin *::after {
@@ -107,7 +102,6 @@ html[data-fmt="v"] .vp {
   caret-color: transparent;
 }
 
-/* ── Captions ──────────────────────────────────────────────────────── */
 .cap {
   position: absolute;
   left: 0;
@@ -159,7 +153,6 @@ html[data-fmt="v"] .eyebrow {
   font-size: 30px;
 }
 
-/* ── Cursor ────────────────────────────────────────────────────────── */
 .cursor {
   position: absolute;
   left: 0;
@@ -181,7 +174,6 @@ html[data-fmt="v"] .cursor {
   width: 76px;
   height: 76px;
 }
-/* A finger tap for touch surfaces. */
 .tap {
   position: absolute;
   left: 0;
@@ -197,14 +189,10 @@ html[data-fmt="v"] .cursor {
   pointer-events: none;
 }
 
-/* The app defers painting rows that are off screen; the film scrolls them into
-   view itself, so they must always be laid out. */
 .appwin [data-slot="message-scroller-item"] {
   content-visibility: visible;
 }
 
-/* A phone reserves no room for a scrollbar; the desktop Chrome that renders the
-   film does, which would rewrap every line of the phone layout. */
 .appwin.m,
 .appwin.m * {
   scrollbar-width: none;

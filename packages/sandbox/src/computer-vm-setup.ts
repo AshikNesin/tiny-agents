@@ -1,23 +1,3 @@
-/**
- * The computer's stack on the sandbox VM (issue #108), one `VmStack`
- * (`vm-stack.ts`): an XFCE desktop, one per profile, on a private X display
- * that Xtigervnc serves over RFB, beside (not inside) the browser's display.
- * The builders are pure strings so the scripts can be unit-tested without a
- * VM; `computer-x11.ts` runs them over SSH.
- *
- * The rules are every stack's, the browser's (`browser-vm-setup.ts`) too:
- * - the VNC port binds to 127.0.0.1 on the VM and is reached only through an
- *   SSH channel the app opens, so nothing new is reachable from the network;
- * - launches share the browser's VM-wide launch lock, so a browser and a
- *   desktop starting at once never pick the same display or port, and every
- *   process that outlives the script closes the lock's fd (`8>&-`);
- * - installs share the browser's install lock, so the two never run apt at
- *   the same time.
- *
- * Unlike the browser, a desktop survives the app: its display, port and
- * session environment are recorded in the profile directory, and the next
- * launch for the profile reattaches to it instead of starting another.
- */
 import { shQuote } from "./shell";
 import {
   createVmStack,
@@ -36,13 +16,10 @@ import {
   X_WAIT_SECONDS,
 } from "./vm-stack";
 
-/** Bump when the install steps change so existing VMs re-run them. */
 export const COMPUTER_STACK_VERSION = "v1";
 
-/** Where a profile's desktop lives on the VM, relative to the SSH user's home. */
 export const COMPUTER_PROFILES_DIR = ".tiny-agents/computer-profiles";
 
-/** The Debian/Ubuntu packages of the desktop stack. */
 export const COMPUTER_PACKAGES = [
   "tigervnc-standalone-server",
   "tigervnc-common",
@@ -69,7 +46,6 @@ export const COMPUTER_PACKAGES = [
   "fonts-noto-color-emoji",
 ] as const;
 
-/** Binaries the toolkit calls; all must exist for the stack to count as installed. */
 const REQUIRED_COMMANDS = [
   "Xtigervnc",
   "xfce4-session",
@@ -83,10 +59,6 @@ const REQUIRED_COMMANDS = [
 
 const PACKAGE_NAME = /^[a-z0-9][a-z0-9+.-]{0,62}$/;
 
-/**
- * `COMPUTER_EXTRA_PACKAGES` as a list ("libreoffice-calc, gimp"): names that
- * are not Debian package names are reported, never passed to a shell.
- */
 export function parseExtraPackages(raw: string | undefined): {
   packages: string[];
   invalid: string[];
@@ -102,7 +74,6 @@ export function parseExtraPackages(raw: string | undefined): {
   return { packages: [...packages], invalid };
 }
 
-/** Desktop geometry: `COMPUTER_DESKTOP_SIZE` ("1280x800"), bounded to sizes a model reads well. */
 export function parseDesktopSize(raw: string | undefined): {
   width: number;
   height: number;
@@ -121,40 +92,24 @@ export function parseDesktopSize(raw: string | undefined): {
 }
 
 export interface LaunchDesktopOptions {
-  /** The profile's directory on the VM (settings, pids, the session env). */
   profileDir: string;
   width: number;
   height: number;
-  /**
-   * The browser profile's Chrome user-data-dir on the VM (the browser
-   * toolkit's, for the same profile key). Set, the desktop's Chrome opens
-   * that profile, so the browser and the computer share one set of logins.
-   */
   browserProfileDir?: string;
 }
 
 export interface LaunchedDesktop {
   display: number;
   vncPort: number;
-  /** The desktop was already running and was reattached, not started. */
   reused: boolean;
 }
 
-/** Pids of the desktop's process groups (Xtigervnc, vncconfig, the session, dbus). */
 export const DESKTOP_PID_FILE = ".desktop-pids";
-/** `display=<n> vnc=<port> size=<w>x<h>` of the running desktop. */
 const DESKTOP_STATE_FILE = ".desktop";
-/** Shell exports every tool exec sources: DISPLAY, the XDG dirs, the session bus. */
 export const DESKTOP_ENV_FILE = ".desktop-env";
 
 const WM_WAIT_SECONDS = 30;
 
-/**
- * XFCE settings seeded into a fresh profile: one bottom panel (menu, window
- * list, clock), no compositor, one workspace, and no screen saver, lock or
- * power manager. Without a panel config XFCE greets a new session with a
- * first-run dialog that would sit on top of the bot's first screenshot.
- */
 const XFCE_SEED: Record<string, string> = {
   "xfce4-panel.xml": `<?xml version="1.0" encoding="UTF-8"?>
 <channel name="xfce4-panel" version="1.0">
@@ -229,7 +184,6 @@ const XFCE_SEED: Record<string, string> = {
 `,
 };
 
-/** Desktop entries XFCE autostarts that a bot's desktop must not run. */
 const AUTOSTART_OFF = ["xfce4-power-manager", "xscreensaver", "xfce4-screensaver", "light-locker"];
 
 function seedLines(): string[] {
@@ -250,18 +204,8 @@ function seedLines(): string[] {
   return lines;
 }
 
-/** The browser pid file (`browser-vm-setup.ts`) a desktop Chrome reads to take the profile over. */
 const BROWSER_PID_FILE = ".stack-pids";
 
-/**
- * The desktop's Chrome, installed as `$PROFILE/bin/google-chrome-stable`
- * (and `google-chrome`, `chromium` beside it): Chrome on the browser's
- * profile. Chrome locks a profile to one running instance on one display, so
- * the browser toolkit's Chrome on it, if any, is stopped first (the bot's
- * next browser call reopens it there and closes this one the same way).
- * Same `--password-store` as the browser's launch, or Chrome could not read
- * the cookies the other one saved.
- */
 const DESKTOP_CHROME = `#!/bin/sh
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 B="$(cat "$HERE/browser-profile")"
@@ -283,19 +227,12 @@ done
 echo "Chrome is not installed on the VM" >&2
 exit 1`;
 
-/** System Chrome launchers the desktop's menu and `gtk-launch` would otherwise run. */
 const CHROME_DESKTOP_ENTRIES = [
   "google-chrome.desktop",
   "chromium.desktop",
   "chromium-browser.desktop",
 ];
 
-/**
- * Point the desktop's Chrome at the browser profile: the wrapper above, on
- * the session's PATH (the XFCE "Web Browser" helper), and a copy of each
- * installed Chrome menu entry in the desktop's own XDG data dir that runs it.
- * Without a browser profile, remove them so Chrome keeps its own.
- */
 function browserLinkLines(browserProfileDir: string | undefined): string[] {
   const entries = CHROME_DESKTOP_ENTRIES.join(" ");
   if (!browserProfileDir) {
@@ -322,7 +259,6 @@ function browserLinkLines(browserProfileDir: string | undefined): string[] {
   ];
 }
 
-/** Kill every process group recorded for the profile, then the pids themselves. */
 const KILL_RECORDED = [
   `if [ -s "$PROFILE/${DESKTOP_PID_FILE}" ]; then`,
   `  for P in $(cat "$PROFILE/${DESKTOP_PID_FILE}"); do kill -- "-$P" 2>/dev/null || true; kill "$P" 2>/dev/null || true; done`,
@@ -330,14 +266,9 @@ const KILL_RECORDED = [
   `rm -f "$PROFILE/${DESKTOP_PID_FILE}" "$PROFILE/${DESKTOP_STATE_FILE}" "$PROFILE/${DESKTOP_ENV_FILE}"`,
 ];
 
-/** Desktop geometry of a launch. */
 const sizeOf = (options: LaunchDesktopOptions) =>
   `${Math.round(options.width)}x${Math.round(options.height)}`;
 
-/**
- * The desktop stack plus the owner's extra packages. The install waits out a
- * dpkg lock held by unattended upgrades.
- */
 function computerStack(extraPackages: readonly string[]): VmStackSpec<LaunchDesktopOptions> {
   return {
     marker: `computer-stack-${COMPUTER_STACK_VERSION}`,
@@ -356,11 +287,9 @@ function computerStack(extraPackages: readonly string[]): VmStackSpec<LaunchDesk
       ];
     },
     launch: {
-      // Before the reattach check, so a running desktop's menu follows too.
       beforeLock: (options) => browserLinkLines(options.browserProfileDir),
       lockHolders: "browser or desktop",
       clearPrevious: (options) => [
-        // Reattach: the desktop this profile recorded is still up at this size.
         `if [ -s "$PROFILE/${DESKTOP_STATE_FILE}" ] && [ -s "$PROFILE/${DESKTOP_ENV_FILE}" ]; then`,
         `  OLD_DISP="$(sed -n 's/.*display=\\([0-9]*\\).*/\\1/p' "$PROFILE/${DESKTOP_STATE_FILE}")"`,
         `  OLD_VNC="$(sed -n 's/.*vnc=\\([0-9]*\\).*/\\1/p' "$PROFILE/${DESKTOP_STATE_FILE}")"`,
@@ -371,7 +300,6 @@ function computerStack(extraPackages: readonly string[]): VmStackSpec<LaunchDesk
         "    exit 0",
         "  fi",
         "fi",
-        // Whatever was recorded is stale (or at another size): stop it first.
         ...KILL_RECORDED,
       ],
       ports: [
@@ -396,7 +324,6 @@ s.close()')"`,
       geometry: sizeOf,
       desktopName: "tiny-agents-computer",
       pidFile: DESKTOP_PID_FILE,
-      // Unlike the browser, give up here when the display server never came up.
       afterX: [
         'if [ ! -S "/tmp/.X11-unix/X$DISP" ]; then',
         `  echo "The display server did not start on the VM within ${X_WAIT_SECONDS}s" >&2`,
@@ -406,8 +333,6 @@ s.close()')"`,
         "fi",
       ],
       start: () => [
-        // The session bus every app of this desktop shares; its address goes in
-        // the env file tool execs source.
         `BUS="$(DISPLAY=":$DISP" dbus-launch --sh-syntax ${RELEASE_LOCK})"`,
         'eval "$BUS"',
         '[ -n "${DBUS_SESSION_BUS_PID:-}" ] && echo "$DBUS_SESSION_BUS_PID" >> "$PROFILE/' +
@@ -446,7 +371,6 @@ s.close()')"`,
     wipe: KILL_RECORDED,
     steps: {
       check: { timeoutMs: 30_000, label: "check the desktop stack" },
-      // apt update + XFCE + the X11 tools.
       install: { timeoutMs: 15 * 60_000, label: "install the desktop stack" },
       launch: { label: "start the desktop" },
       stop: { timeoutMs: 30_000, label: "stop the desktop" },
@@ -455,10 +379,8 @@ s.close()')"`,
   };
 }
 
-/** Launch, teardown and wipe do not depend on the extra packages. */
 const DESKTOP_STACK = computerStack([]);
 
-/** The desktop stack over `run`, with the owner's extra packages. */
 export function computerVmStack(
   run: VmRun,
   extraPackages: readonly string[] = [],
@@ -466,39 +388,20 @@ export function computerVmStack(
   return createVmStack(computerStack(extraPackages), run);
 }
 
-/** Prints `ready` when the desktop stack (and every extra package) is installed, `missing` otherwise. */
 export function computerStackReadyCommand(extraPackages: readonly string[] = []): string {
   return readyScript(computerStack(extraPackages));
 }
 
-/**
- * Idempotent first-run install of the desktop stack plus the owner's extra
- * packages, serialized with the browser's installer. Prints `ready` (already
- * there) or `installed`.
- */
 export function installComputerStackCommand(extraPackages: readonly string[] = []): string {
   return installScript(computerStack(extraPackages));
 }
 
-/**
- * Upper bound on how long a launch script runs: its waits plus the fixed
- * sleeps and process starts.
- */
 export const DESKTOP_LAUNCH_BUDGET_MS = launchBudgetMs(DESKTOP_STACK);
 
-/**
- * Start (or reattach to) the profile's desktop: Xtigervnc at a fixed
- * geometry, vncconfig for the clipboard, a session bus, and an XFCE session
- * with its settings in the profile. Prints `ok display=<n> vnc=<port>` once a
- * window manager answers, with ` reused=1` for a desktop that was already
- * running at this size. On failure it kills what it started, prints the log
- * tails, and exits non-zero.
- */
 export function launchDesktopCommand(options: LaunchDesktopOptions): string {
   return launchScript(DESKTOP_STACK, options);
 }
 
-/** The display and port a launch report names. */
 export function launchedDesktop(report: Record<string, string>): LaunchedDesktop {
   return {
     display: Number(report.display),
@@ -511,15 +414,10 @@ export function parseDesktopLaunch(output: string): LaunchedDesktop {
   return launchedDesktop(parseReport(output, DESKTOP_STACK.report));
 }
 
-/** Stop the profile's desktop: every process group recorded at launch. */
 export function teardownDesktopCommand(profileDir: string): string {
   return teardownScript(DESKTOP_STACK, profileDir);
 }
 
-/**
- * Delete the profile (the panel's Reset): XFCE settings and app state. Files
- * the bot saved in the home directory are untouched.
- */
 export function wipeDesktopCommand(profileDir: string): string {
   return wipeScript(DESKTOP_STACK, profileDir);
 }

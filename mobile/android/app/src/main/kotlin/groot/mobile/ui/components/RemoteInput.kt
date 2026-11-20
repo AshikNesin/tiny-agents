@@ -41,13 +41,8 @@ import androidx.compose.ui.text.input.TextFieldValue
 import groot.kit.theme.S
 import groot.mobile.ui.brand.Dims
 
-/** One key of a [KeyBar]: a label or an icon, and what it stands for. */
 data class BarKey<T>(val id: T, val label: String? = null, val icon: ImageVector? = null, val description: String = label.orEmpty(), val sticky: Boolean = false)
 
-/**
- * A row of extra keys above the soft keyboard: the keys a phone keyboard lacks (Esc, Tab,
- * arrows) and sticky modifiers (Ctrl, Alt) that apply to the next key typed.
- */
 @Composable
 fun <T> KeyBar(keys: List<BarKey<T>>, held: Set<T>, onKey: (T) -> Unit, modifier: Modifier = Modifier) {
     Row(
@@ -81,12 +76,6 @@ fun <T> KeyBar(keys: List<BarKey<T>>, held: Set<T>, onKey: (T) -> Unit, modifier
     }
 }
 
-/**
- * An invisible text field that turns the soft keyboard into a stream of keystrokes for a
- * remote screen: each character typed is handed to [onText] at once, and deleting past the
- * start is [onBackspace]. It holds one sentinel character so a backspace is always visible to
- * it, and asks for a password-style keyboard so nothing is composed, suggested or corrected.
- */
 @Composable
 fun RemoteKeyboard(active: Boolean, onText: (String) -> Unit, onBackspace: () -> Unit, modifier: Modifier = Modifier) {
     val focus = remember { FocusRequester() }

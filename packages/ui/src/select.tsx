@@ -1,13 +1,5 @@
 "use client";
 
-/**
- * Select with Fluid Functionalism's popup feel
- * (https://www.fluidfunctionalism.com/docs/select): the list grows out of the
- * trigger with a short fade, scale and 4px slide, one highlight glides
- * between rows (FluidHighlight), and the picked row reads in a heavier weight
- * beside its check.
- */
-
 import * as React from "react";
 import { Select as SelectPrimitive } from "radix-ui";
 
@@ -62,9 +54,6 @@ function SelectTrigger({
 function SelectContent({
   className,
   children,
-  // Popper: a dropdown anchored below the trigger, at least as wide as it.
-  // Radix's "item-aligned" opens the list on top of the trigger instead,
-  // covering it and the fields around it; pass it explicitly to opt in.
   position = "popper",
   align = "start",
   ...props
@@ -88,8 +77,6 @@ function SelectContent({
         <SelectPrimitive.Viewport
           data-position={position}
           className={cn(
-            // p-1 like the dropdown menu, so items never touch the edge
-            // (it used to sit on SelectGroup, which most selects don't use).
             "isolate scroll-my-1 p-1 data-[position=popper]:h-(--radix-select-trigger-height) data-[position=popper]:w-full data-[position=popper]:min-w-(--radix-select-trigger-width)",
           )}
         >

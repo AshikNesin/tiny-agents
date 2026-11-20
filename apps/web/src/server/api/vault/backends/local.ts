@@ -1,19 +1,3 @@
-/**
- * The `local` vault backend (issue #56): values sealed with SECRETS_KEY
- * (`crypto/secret-box.ts`, purpose `vault-local`), one `vault_values` row per
- * item (Q4). Where every vault item lives, a connection's own header value
- * included.
- *
- * Each item is bound to its id and to a policy digest (issue #179): both are
- * in the AAD, and the row keeps the digest it is sealed under. Every read
- * opens the item under its **authority** (S11): the digest of the
- * `vault_items` row that links it, or, while no row links it, the digest it
- * was sealed under. Widening an item's hosts or origins in the database
- * without the service, or editing the stored digest, leaves the value
- * unreadable on every path, listing included. Rows are written one statement
- * or one synchronous transaction at a time, so concurrent writes never lose
- * one another (C11).
- */
 import { randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { SecretValue, type VaultKind } from "@tiny-agents/agent";
@@ -39,7 +23,6 @@ import {
   type VaultBackend,
 } from "./types";
 
-/** A card's brand from its number's prefix. */
 export function cardBrand(number: string): string {
   const digits = number.replace(/\D/g, "");
   if (digits.startsWith("4")) return "Visa";
@@ -51,7 +34,6 @@ export function cardBrand(number: string): string {
   return "Card";
 }
 
-/** What a value row seals: the item as the owner typed it. */
 interface StoredItem {
   kind: VaultKind;
   title: string;
@@ -69,7 +51,6 @@ const binding = (id: string, policy: string): SecretBinding => ({
 
 const UNREADABLE = "The stored secret doesn't match its record or policy. Re-enter it.";
 
-/** The policy rows linking `id` (normally none or one). */
 function linksOf(tx: DbTx, id: string): PolicyColumns[] {
   return tx
     .select({
@@ -83,11 +64,6 @@ function linksOf(tx: DbTx, id: string): PolicyColumns[] {
     .all();
 }
 
-/**
- * The digest an item must open under (S11): its linking row's, or the one
- * it was sealed under while no row links it. The stored digest must agree,
- * so editing it alone is as unreadable as editing the row.
- */
 function authority(row: Pick<VaultValue, "policy">, links: PolicyColumns[]): string {
   if (links.length === 0) return row.policy;
   const digests = new Set(links.map(vaultPolicyDigest));
@@ -116,22 +92,15 @@ function rowOf(tx: DbTx, id: string): VaultValue {
   return row;
 }
 
-/** Open item `id` under its authority (synchronous, for a caller's transaction). */
 function readItem(tx: DbTx, id: string): StoredItem {
   requireKey();
   return openRow(rowOf(tx, id), linksOf(tx, id));
 }
 
-/** Item `id`'s values, opened under its authority: for a caller checking what it just wrote. */
 export function localItemValues(tx: DbTx, id: string): Partial<Record<ValueField, string>> {
   return readItem(tx, id).values;
 }
 
-/**
- * Seal `draft` as item `id`'s whole content under `policy`, whatever it held
- * before (it need not open): a value the owner enters again replaces one a
- * lost key made unreadable.
- */
 export function replaceLocalItem(tx: DbTx, id: string, draft: ItemDraft, policy: string): void {
   requireKey();
   const sealed = sealJson(storedItem(draft), binding(id, policy));
@@ -151,7 +120,6 @@ function storedItem(draft: ItemDraft): StoredItem {
   };
 }
 
-/** A new item sealed under `policy` (the digest of the row about to link it). Returns its id. */
 export function insertLocalItem(tx: DbTx, draft: ItemDraft, policy = ""): string {
   requireKey();
   const id = randomUUID();
@@ -161,11 +129,6 @@ export function insertLocalItem(tx: DbTx, draft: ItemDraft, policy = ""): string
   return id;
 }
 
-/**
- * Set the given values (and title/urls) of item `id`, opened under its
- * authority, and seal it again under the same digest. One
- * read-modify-write: call it inside a synchronous transaction.
- */
 function writeLocalItem(tx: DbTx, id: string, draft: Partial<ItemDraft>): void {
   const row = rowOf(tx, id);
   requireKey();
@@ -190,7 +153,6 @@ function writeLocalItem(tx: DbTx, id: string, draft: Partial<ItemDraft>): void {
     .run();
 }
 
-/** Delete item `id`'s value. */
 export function deleteLocalItem(tx: DbTx, id: string): void {
   tx.delete(vaultValues).where(eq(vaultValues.id, id)).run();
 }
@@ -218,7 +180,6 @@ function summarize(externalId: string, item: StoredItem): BackendItemSummary {
   };
 }
 
-/** Every local item, each opened under its authority; one that won't open is named, not fatal. */
 function listItems(): CandidateListing {
   const rows = db
     .select()
@@ -289,10 +250,7 @@ export function createLocalBackend(): VaultBackend {
     },
     async rebind(externalId, writeRow) {
       return db.transaction((tx) => {
-        // Opened under the row as this transaction finds it, sealed under the row as written.
         const row = rowOf(tx, externalId);
-        // An edit that leaves the digest as it is (approval, on/off) needs no
-        // re-seal, so it still lands on an item that won't open.
         let opened: { item: StoredItem } | { error: unknown };
         try {
           requireKey();
@@ -319,12 +277,6 @@ export function createLocalBackend(): VaultBackend {
   };
 }
 
-/**
- * Rewrite every local item still sealed under SECRETS_KEY_PREVIOUS under the
- * current key (`pnpm secrets:rotate`), each in its own transaction. An item
- * that won't open is logged, left alone and named in `skipped`: it still
- * needs SECRETS_KEY_PREVIOUS. Returns how many it rewrote.
- */
 export function resealLocalItems(): { resealed: number; skipped: string[] } {
   const ids = db.select({ id: vaultValues.id }).from(vaultValues).all();
   let resealed = 0;

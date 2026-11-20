@@ -1,13 +1,3 @@
-/**
- * Traces (issue #363): every LLM call, read from what the app already keeps.
- *
- * A session is one durable conversation, found where the app names it: a
- * bot's chat (`bots`), a Past chat (`bot_chats`), a routine run
- * (`routine_runs`) or a bot-to-bot delivery (`bot_messages` with its own
- * conversation). Its totals are the conversation's `pi.usage`; its calls are
- * its stored entries (`AgentRuntime.trace`). Side-calls are `llm_calls`
- * rows. Nothing here writes, and nothing here calls a model.
- */
 import { and, eq, gte, isNotNull, sql } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { db, botMessages, llmCalls, routineRuns } from "../../db";
@@ -30,7 +20,6 @@ type SessionRow = Omit<TraceSession, "usage" | "harness"> & { botModelId: string
 
 const ms = (date: Date | null | undefined) => (date ? date.getTime() : 0);
 
-/** Every session the app names, newest activity first, without its usage. */
 async function sessionRows(filter?: TraceSessionFilter): Promise<SessionRow[]> {
   const rows: SessionRow[] = [];
   const want = (k: TraceSessionKind) =>
@@ -124,7 +113,6 @@ async function sessionRows(filter?: TraceSessionFilter): Promise<SessionRow[]> {
   return rows.sort((a, b) => b.lastAt - a.lastAt);
 }
 
-/** The session with its harness and `pi.usage` totals (null when the store lacks it). */
 async function withUsage(row: SessionRow): Promise<TraceSession> {
   const runtime = getAgentRuntime();
   const { botModelId, ...session } = row;
@@ -187,10 +175,6 @@ export async function listSideCalls(options: { before?: number }): Promise<SideC
   };
 }
 
-/**
- * The last 7 days: the totals of every session active in them (a long chat
- * counts whole) plus the side-calls made in them.
- */
 export async function summary(): Promise<TraceSummary> {
   const since = Date.now() - SUMMARY_DAYS * 24 * 60 * 60 * 1000;
   const active = (await sessionRows()).filter((row) => row.lastAt >= since);

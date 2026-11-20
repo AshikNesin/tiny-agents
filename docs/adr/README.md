@@ -16,7 +16,8 @@ that the code alone cannot show.
 ## Index
 
 0020 is reserved for the native Code harness on pi-durable (issue #297,
-phases 0 and 1), which follows the PR loop.
+phases 0 and 1), which follows the PR loop. 0035 is reserved for the
+tests' comment sweep under ADR 0028.
 
 | #    | Title                                                                                                                | Status                                              |
 | ---- | -------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
@@ -47,6 +48,16 @@ phases 0 and 1), which follows the PR loop.
 | 0026 | [Web Push is the push transport; the server holds no provider credentials](0026-web-push-transport.md)               | accepted                                            |
 | 0027 | [1Password Connect comes back, and runs inside the app's container](0027-1password-connect-runs-inside-the-app.md)   | accepted (amends 0005, 0017)                        |
 | 0028 | [Code carries no comments; decisions live in ADRs](0028-code-carries-no-comments.md)                                 | accepted                                            |
+<<<<<<< HEAD
+=======
+| 0029 | [Decisions recorded from code comments: client components](0029-decisions-from-comments-client-components.md)        | accepted                                            |
+| 0030 | [Decisions recorded from code comments: web client](0030-decisions-from-comments-client.md)                          | accepted                                            |
+| 0031 | [Decisions recorded from code comments: server API](0031-decisions-from-comments-server-api.md)                      | accepted                                            |
+| 0032 | [Decisions recorded from code comments: server and scripts](0032-decisions-from-comments-server-and-scripts.md)      | accepted                                            |
+| 0033 | [Decisions recorded from code comments: agent packages](0033-decisions-from-comments-agent.md)                       | accepted                                            |
+| 0034 | [Decisions recorded from code comments: other packages](0034-decisions-from-comments-packages.md)                    | accepted                                            |
+| 0036 | [Decisions recorded from code comments: Android app](0036-decisions-from-comments-android.md)                        | accepted                                            |
+>>>>>>> sweep-1
 | G4   | [Hono + Drizzle on SQLite, for Node and Cloudflare Workers](0004-hono-drizzle-sqlite-workers.md)                     | accepted (groot)                                    |
 
 `G4` is groot's ADR 0004, synced from the boilerplate; tiny-agents' own 0004

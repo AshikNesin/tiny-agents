@@ -1,7 +1,3 @@
-/**
- * The capture runner: turn an idle conversation into an extraction side-call.
- * Only owner turns are memory sources; assistant replies supply context.
- */
 import { eq } from "drizzle-orm";
 import { logger } from "@groot/core/logger";
 import { stripAttachmentNotes } from "@tiny-agents/agent";
@@ -18,11 +14,6 @@ import { chatOwner } from "./bots.owner";
 import type { SideCaller } from "./side-call";
 
 const CAPTURE_TIMEOUT_MS = 60_000;
-/**
- * An assistant reply is context for the owner's next words, never a source:
- * its opening (usually the question the owner answers) is enough, and replies
- * are most of a window's characters.
- */
 const ASSISTANT_CONTEXT_CHARS = 500;
 
 interface CaptureWindow {
@@ -40,13 +31,6 @@ interface CaptureMessage {
   status?: string;
 }
 
-/**
- * The transcript one capture reads: owner turns (and the replies to them)
- * after the watermark, capped to the newest `MEMORY_CAPTURE_CHAR_CAP`
- * characters of whole lines. `through` is still the window's end, so a long
- * or never-captured history advances past what the cap left out instead of
- * retrying an oversized call forever.
- */
 export function captureWindow(
   messages: ReadonlyArray<CaptureMessage>,
   watermark: Date | null,
@@ -57,12 +41,9 @@ export function captureWindow(
   let latestOwnerAt = since;
   let ownerExchange = false;
   for (const m of messages) {
-    // Routine runs live in conversations of their own (issue #63), never here.
     if (m.role === "user") ownerExchange = !m.peer;
     if (!ownerExchange) continue;
     if (m.createdAt <= since) continue;
-    // Owner turns without attached files' text (issue #58): file content is
-    // never a source of memories.
     const text = (m.role === "user" ? stripAttachmentNotes(m.text) : m.text).trim();
     if (!text) continue;
     if (m.role === "user") {
@@ -95,21 +76,16 @@ export function captureWindow(
 }
 
 export interface CaptureDeps {
-  /** The side-caller; undefined (faux mode) means no capture. */
   sideCaller: SideCaller | undefined;
   readTranscript: (conversationId: number) => Promise<ReadonlyArray<CaptureMessage>>;
 }
 
-/** Run one capture for a conversation. Every failure is logged and swallowed. */
 export async function captureConversation(
   conversationId: number,
   deps: CaptureDeps,
 ): Promise<void> {
   try {
     if (!deps.sideCaller) return;
-    // Only a bot's own chat is captured: a routine's conversation holds the
-    // routine's work, not the owner's facts (issue #63). A shared chat
-    // (issue #145) holds other people's words too: its bot reads as memory off.
     const owner = await chatOwner(conversationId);
     if (!owner?.memoryEnabled) return;
     const bot = await db.query.bots.findFirst({
@@ -128,14 +104,10 @@ export async function captureConversation(
     const window = captureWindow(messages, bot.memoryCapturedThrough, bot.name);
     if (!window.through) return;
     if (window.ownerBytes < MEMORY_TRIVIAL_BYTES) {
-      // Advance the watermark anyway: sub-trivial chatter must not pile up
-      // into a later capture window it no longer relates to.
       await ledger.advanceWatermark(window.through);
       return;
     }
 
-    // The prompt lists what the owner removed, so capture does not bring it
-    // back reworded; the ledger's exact-text dedupe stays the hard rail.
     const context = await ledger.promptContext();
     const reply = await deps.sideCaller.complete({
       role: "memory_capture",
@@ -153,15 +125,12 @@ export async function captureConversation(
       botId: bot.id,
       context: { conversationId },
     });
-    // No model, or the call failed (logged): a later settle retries the window.
     if (reply === undefined) return;
     const extraction = parseExtraction(reply);
     if (extraction === null) {
       logger.warn({ conversationId }, "Memory capture output unparseable; window will retry");
       return;
     }
-    // The prompt named memories by short ref only: a ref maps to its row,
-    // and anything else (a made-up id) supersedes nothing.
     const items = extraction.map((item) => ({
       ...item,
       supersedesIds:
@@ -182,11 +151,6 @@ export async function captureConversation(
   }
 }
 
-/**
- * Memory capture as one settled step: the debounce (memories.capture.ts)
- * running `captureConversation` on this side-caller. What bots.settled.ts
- * wires; undefined without a side-caller (faux mode), so nothing is armed.
- */
 export function memoryCaptureStep(
   sideCaller: SideCaller | undefined,
   readTranscript: CaptureDeps["readTranscript"],

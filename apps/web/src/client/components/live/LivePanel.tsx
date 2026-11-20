@@ -1,28 +1,3 @@
-/**
- * The chat's live-view panel: one bot's browser (issue #24) or desktop
- * (issue #108), live, for the surface it is given (`surface.ts`).
- *
- * On the sandbox VM the browser is a full Chrome, and the computer an XFCE
- * desktop, on a virtual display the panel streams over VNC (`VncView`). The
- * browser's viewer fits Chrome's window to the panel; the desktop has a fixed
- * size the bot's coordinates depend on, so its viewer only scales it. Without
- * a VM the browser is headless (the bot can use it, there is nothing to
- * stream) and the computer is not set up, and the panel says so.
- *
- * The panel is one card: a one-row header (title or tabs, one status chip,
- * icon tools) over the viewport. Takeover is explicit but direct: the viewer
- * is view-only while the bot drives, and a click on the stream takes control,
- * flipping the server's driver flag, which pauses the bot's tools (and the
- * computer's screenshots). While the owner drives, a frame marks the stream
- * as theirs and "Hand back" returns it. When a bot asked for the takeover
- * itself, the panel says what it asked for.
- *
- * Picture in picture (`layout: "pip"`) is the same card shrunk to a small
- * floating view over the chat, dragged by its header to any corner. It only
- * watches: the remote browser keeps its size (the viewer scales it down), a
- * click on the stream expands it back to the panel, and the header keeps
- * just the status, Hand back while the owner drives, Expand and Close.
- */
 import { useState, type CSSProperties, type ReactNode } from "react";
 import { Card } from "@groot/ui";
 import { cn } from "@groot/ui/lib/utils";
@@ -36,10 +11,8 @@ import { LivePanelHeader } from "./LivePanelHeader";
 import { LivePanelOffStates } from "./LivePanelOffStates";
 import type { LivePanelSurface, LiveSurface, PageItem, PanelStatus } from "./surface";
 
-/** A guest's viewer, and the picture in picture, never resize the remote window. */
 const keepSize = async () => undefined;
 
-/** What the panel shows for `status`: its mode, whether it is set up, the status chip's parts. */
 function panelState<S extends PanelStatus>(
   panel: LivePanelSurface<S>,
   status: S | null,
@@ -49,8 +22,6 @@ function panelState<S extends PanelStatus>(
   const mode = status ? panel.mode(status) : null;
   const streaming = mode === "vnc";
   const configured = !panel.setup || (status !== null && panel.setup.configured(status));
-  // Bots share one profile unless set to their own, so a reset can reach
-  // every one of them.
   const shared = status?.profile !== "own";
 
   const connection = connectionOf(status && { configured, starting, mode }, vncState);
@@ -73,20 +44,11 @@ function panelState<S extends PanelStatus>(
 export interface LivePanelProps {
   bot: Bot;
   onClose: () => void;
-  /** The live view's Browser / Computer switch, in place of the title, when the chat has both. */
   tabs?: ReactNode;
-  /** Docked beside the chat (the default), or a small floating picture in picture. */
   layout?: LiveLayout;
-  /** Switches between the two; without it the panel offers no picture in picture. */
   onLayout?: (layout: LiveLayout) => void;
 }
 
-/**
- * The floating view takes the remote display's shape (16:10 until the first
- * frame, and kept between 1:2 upright and 16:9 wide), at most 20rem wide and
- * its stream at most 18rem tall, so an upright display makes it narrower
- * rather than taller and the chat stays readable.
- */
 function pipShape(display: { width: number; height: number } | null) {
   const aspect = display
     ? Math.min(16 / 9, Math.max(1 / 2, display.width / display.height))
@@ -95,7 +57,6 @@ function pipShape(display: { width: number; height: number } | null) {
   return { aspect, width };
 }
 
-/** The floating view, over the chat. */
 const PIP_SIZING = "fixed z-40 rounded-xl shadow-xl";
 
 export function LivePanel<S extends PanelStatus, L, I extends PageItem>({
@@ -108,14 +69,10 @@ export function LivePanel<S extends PanelStatus, L, I extends PageItem>({
 }: LivePanelProps & { surface: LiveSurface<S, L, I> }) {
   const { kind, panel } = surface;
   const guest = useIsGuest();
-  // Desktop only: drag the left edge to size the panel.
   const { width, startResize } = usePanelWidth(panel.width.key, panel.width.initial);
   const view = useLiveView<S, S>({
     kind,
     source: bot.id,
-    // The session may start on the bot's first tool call, or from the panel's
-    // open button; the poll follows either, and a takeover request flips the
-    // driver from the server side.
     load: () => panel.api.status(bot.id),
     select: (status) => status,
     replace: (_, status) => status,
@@ -143,12 +100,6 @@ export function LivePanel<S extends PanelStatus, L, I extends PageItem>({
   const { starting, mode, streaming, live, configured, shared, connection, detail, takeover } =
     panelState(panel, status, vncState);
 
-  // The panel itself is the full-screen element: its box has to be the whole
-  // screen, with nothing around the card, so the viewport (and the remote
-  // window fitted to it) fills the display. Docked beside the chat only
-  // where both fit (xl, and never wider than the viewport leaves after the
-  // sidebar and a 26rem chat); narrower screens get the panel over the chat,
-  // closable, like phones (#89).
   const pip = layout === "pip" && !fullscreen;
   const [display, setDisplay] = useState<{ width: number; height: number } | null>(null);
   const { offset, startDrag } = usePipPosition(panelRef);
@@ -162,7 +113,6 @@ export function LivePanel<S extends PanelStatus, L, I extends PageItem>({
     : pip
       ? ""
       : "max-xl:rounded-none max-xl:ring-0";
-  // A window shrunk since the corner was dragged still shows the whole view.
   const shape = pipShape(display);
   const pipStyle: CSSProperties = {
     width: shape.width,
@@ -225,7 +175,6 @@ export function LivePanel<S extends PanelStatus, L, I extends PageItem>({
           />
         )}
 
-        {/* The card's bottom corners, so the driving frame follows them. */}
         <div
           className={cn(
             "relative min-h-0 overflow-hidden rounded-b-[inherit]",
@@ -240,8 +189,6 @@ export function LivePanel<S extends PanelStatus, L, I extends PageItem>({
               botId={bot.id}
               kind={kind}
               interactive={humanDrives && !guest && !pip}
-              // A guest watches at the remote window's size; only the owner fits it (S2).
-              // The picture in picture only scales it, so the bot's pages keep their layout.
               resize={surface.fitsWindow && (guest || pip) ? keepSize : undefined}
               remoteResize={!pip}
               onDisplaySize={setDisplay}

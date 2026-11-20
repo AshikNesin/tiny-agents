@@ -156,7 +156,6 @@ class TerminalResizeTest {
         assertEquals(0, narrow.attributes(99))
         assertEquals(1, narrow.width(99))
         assertEquals(null, narrow.combining(99))
-        // Pulled back onto the screen it takes the screen's width.
         t.emulator.resize(4, 3)
         assertEquals("abcd", t.row(0))
         t.emulator.checkInvariants()

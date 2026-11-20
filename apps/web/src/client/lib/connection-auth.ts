@@ -1,54 +1,29 @@
-/**
- * Signing in to an MCP connection (OAuth), end to end: the popup opens in
- * the click that asked for it (browsers block one opened after an await),
- * is pointed at the authorization page once the server names it, and the
- * callback page's completion message reaches whoever is waiting for it.
- * The add dialog and the connection page both go through here.
- */
 import { connectionsApi } from "./connections-api";
 
-/** A window opened for the sign-in, before its URL is known. */
 export interface AuthPopup {
   navigate(url: string): void;
   close(): void;
 }
 
 export interface ConnectionAuthPorts {
-  /** Open a blank popup now, synchronously; null when the browser blocked it. */
   openPopup(): AuthPopup | null;
   authorize(connectionId: string): Promise<{ authorizationUrl?: string }>;
-  /** Messages posted to this window (the callback page posts the completion). */
   onMessage(listener: (data: unknown) => void): () => void;
 }
 
 type SignInOutcome =
-  /** The popup shows the authorization page. */
   | { status: "opened" }
-  /** The browser refused the popup: ask the owner to allow pop-ups. */
   | { status: "blocked" }
-  /** The server has no sign-in for this connection (not OAuth, or already signed in). */
   | { status: "no_url" }
-  /** Creating the connection or asking for the URL failed. */
   | { status: "failed"; error: unknown };
 
-/** What the callback page posts back: `tiny-agents:oauth`. */
 interface SignInCompletion {
   id?: string;
   error?: string;
 }
 
 export interface ConnectionAuth {
-  /**
-   * Start a sign-in. Call it synchronously from the click handler: the
-   * popup opens at once, and waits for `connectionId` (which may still be
-   * resolving, when the connection is being created) and the server's
-   * authorization URL. A failure on the way closes the popup again.
-   */
   signIn(connectionId: string | Promise<string>): Promise<SignInOutcome>;
-  /**
-   * Hear a sign-in complete, for `connectionId` or (undefined) for any.
-   * Returns the unsubscribe.
-   */
   onCompleted(
     connectionId: string | undefined,
     handler: (completion: SignInCompletion) => void,
@@ -107,7 +82,6 @@ function openBrowserPopup(): AuthPopup | null {
   };
 }
 
-/** The instance wired to the browser window and the connections API. */
 export const connectionAuth: ConnectionAuth = createConnectionAuth({
   openPopup: openBrowserPopup,
   authorize: (id) => connectionsApi.authorize(id),

@@ -1,25 +1,3 @@
-/**
- * Routine tools: the chat-side bridge to the app's routines feature
- * (issue #18 phase C). The app injects a `RoutineStore` adapter over
- * routines.service when it opens the runtime; the tools run inside
- * pi-durable with `replay: "safe"`, so a call interrupted by a restart
- * re-executes on recovery. Exactly-once is the store's job: `create` takes
- * an idempotency key (the durable tool task identity, same salt as tasks),
- * so a replayed create returns the existing routine instead of a duplicate.
- *
- * The agent package stays free of cron libraries on purpose: schedule
- * validation, the plain-English sentence (cronstrue), and the next fire
- * times in IST are rendered app-side, and the store returns them as
- * pre-rendered strings the tools echo back as confirmation cards. The store
- * also rejects mutations from routine-fired turns (the recursion guard,
- * PRD 5.6): that rejection reaches the model as a plain tool error.
- *
- * `report_routine_blocked` is offered only in a routine's own conversation
- * (`unattendedOnly`, issue #87): a run that cannot do its job says why, and
- * the app records the run as needing attention instead of succeeded. The
- * call's `reason` argument is the record (`FinishedReply.blocked`); the tool
- * itself stores nothing.
- */
 import type { ToolExecutionResult } from "@earendil-works/pi-durable";
 import { Type } from "@earendil-works/pi-ai";
 import { isUnattendedConversation } from "../approvals";
@@ -27,9 +5,7 @@ import type { Capability } from "../capabilities";
 import { defineToolkit, tool } from "../toolkit";
 import { toolIdempotencyKey } from "./tasks";
 
-/** The tool a routine run calls when it cannot do its job (issue #87). */
 export const REPORT_ROUTINE_BLOCKED = "report_routine_blocked";
-/** The longest blocked reason a run may record. */
 const MAX_BLOCKED_REASON = 300;
 
 export type RoutineSchedule =
@@ -37,18 +13,14 @@ export type RoutineSchedule =
   | { kind: "cron"; expr: string }
   | { kind: "interval"; minutes: number };
 
-/** The routine as tools see and return it. Rendering is the store's job. */
 export interface RoutineRecord {
   id: string;
   name: string;
   prompt: string;
   schedule: RoutineSchedule;
   enabled: boolean;
-  /** Plain-English schedule sentence (cronstrue), e.g. "At 09:00, Monday through Friday". */
   sentence: string;
-  /** The next fire times pre-rendered in IST, e.g. "Wed, 21 Oct 2026, 09:00 IST". */
   nextFireTimes: string[];
-  /** ISO instant of the next run; null when paused or terminal. */
   nextRunAt: string | null;
 }
 
@@ -60,18 +32,12 @@ export interface RoutineUpdateInput {
 }
 
 interface RoutineCreateInput {
-  /** Idempotency key (the durable tool task's identity) making replays return the same routine. */
   idempotencyKey: string;
   name: string;
   prompt: string;
   schedule: RoutineSchedule;
 }
 
-/**
- * What the app provides: CRUD over its routines tables (routines.service).
- * Every method sees the calling conversation so the adapter can enforce the
- * recursion guard (reject mutations when this conversation is mid-routine-run).
- */
 export interface RoutineStore {
   create(conversationId: number, input: RoutineCreateInput): Promise<RoutineRecord>;
   list(conversationId: number): Promise<RoutineRecord[]>;
@@ -81,7 +47,6 @@ export interface RoutineStore {
     input: RoutineUpdateInput,
   ): Promise<RoutineRecord | undefined>;
   remove(conversationId: number, id: string): Promise<boolean>;
-  /** Fire one run immediately (a manual occurrence); returns the new run's id. */
   runNow(conversationId: number, id: string): Promise<{ runId: string }>;
 }
 
@@ -89,10 +54,8 @@ const nameSchema = Type.String({ minLength: 1, maxLength: 80 });
 const promptSchema = Type.String({ minLength: 1, maxLength: 20_000 });
 const idSchema = Type.String({ minLength: 1 });
 
-/** What a tool call may pass: a stored schedule, or "in N minutes" resolved at call time. */
 type ScheduleInput = RoutineSchedule | { kind: "in"; minutes: number };
 
-// The schedule guidance lives here, once, rather than in each tool's description.
 const scheduleSchema = Type.Unsafe<ScheduleInput>(
   Type.Union([
     Type.Object({
@@ -123,7 +86,6 @@ const scheduleSchema = Type.Unsafe<ScheduleInput>(
   ]),
 );
 
-/** A relative schedule becomes a one-time instant, so the model never needs the clock. */
 function resolveSchedule(schedule: ScheduleInput, now: () => Date): RoutineSchedule {
   if (schedule.kind !== "in") return schedule;
   return { kind: "once", at: new Date(now().getTime() + schedule.minutes * 60_000).toISOString() };
@@ -137,7 +99,6 @@ const fail = (text: string): ToolExecutionResult => ({
   isError: true,
 });
 
-/** Store rejections (validation, limits, recursion guard) as tool failures with the reason. */
 async function attempt(work: () => Promise<ToolExecutionResult>): Promise<ToolExecutionResult> {
   try {
     return await work();
@@ -147,7 +108,6 @@ async function attempt(work: () => Promise<ToolExecutionResult>): Promise<ToolEx
   }
 }
 
-/** The confirmation card every save path echoes: sentence, next 3 fires, prompt. */
 function confirmationCard(routine: RoutineRecord): string {
   const fires =
     routine.nextFireTimes.length > 0
@@ -169,11 +129,6 @@ function present(routine: RoutineRecord): string {
 
 const notFound = (id: string) => fail(`No routine with id "${id}".`);
 
-/**
- * The `routines` toolkit: schedule this bot from chat (issue #18 phase C).
- * `store` is the app-side adapter (see apps/web routines.toolkit-store.ts).
- * The tools are created per toolkit so they close over the store.
- */
 export function createRoutinesToolkit(
   store: RoutineStore,
   options: { now?: () => Date } = {},
@@ -257,8 +212,6 @@ export function createRoutinesToolkit(
     replay: "safe",
     execute: async (args, api, context) =>
       attempt(async () => {
-        // Same memo pattern as delete_task: a rerun after a crash would find
-        // the row already gone; the memos remember the real outcome.
         const outcome = await api.memo<boolean>("delete_routine:removed", context);
         if (outcome !== undefined) return report(args.id, outcome);
         const resumed = (await api.memo<boolean>("delete_routine:started", context)) === true;
@@ -290,7 +243,6 @@ export function createRoutinesToolkit(
     label: "Reported the routine blocked",
     askLabel: "report this routine run blocked",
     summary: "Flag a routine run that can't do its job",
-    // Writes nothing (it only marks the run), and a routine can't ask for approval.
     policy: { readOnly: true, unattendedOnly: true },
     description:
       "Only in a scheduled routine run: report that this run cannot do its job until the owner " +

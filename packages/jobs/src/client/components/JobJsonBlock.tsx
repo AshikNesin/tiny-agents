@@ -14,7 +14,6 @@ const READONLY_SETUP = {
   highlightActiveLine: false,
 } as const;
 
-/** A read-only, pretty-printed JSON block for a job's data or output. */
 export function JobJsonBlock({ label, value }: { label: string; value: unknown }) {
   return (
     <Card>

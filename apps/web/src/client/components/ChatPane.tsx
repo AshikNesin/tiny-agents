@@ -31,13 +31,6 @@ interface ChatPaneProps {
   onEditBot: () => void;
 }
 
-/**
- * Column 3 (PRD §6.2): header, transcript, composer. Thin shell — the
- * transcript needs `useMessageScroller` *inside* the scroller Provider, so
- * the pane body is a child component. The transcript is the chat session in
- * its live mode (lib/chat-mode.ts); the header, notices, held messages, file
- * drop, live views and confirmations are in `chat-pane/`.
- */
 export function ChatPane(props: ChatPaneProps) {
   return (
     <ChatScrollerProvider mode={LIVE_CHAT}>
@@ -49,30 +42,23 @@ export function ChatPane(props: ChatPaneProps) {
 function ChatPaneBody({ bot, models, canAnswer, onEditBot }: ChatPaneProps) {
   const providers = useBotsStore((s) => s.providers);
   const adoptBot = useBotsStore((s) => s.adoptBot);
-  // The chat, ready to render: the stream, Echoes and held messages,
-  // typing, stream health and the unread divider live behind it.
   const chat = useChat(bot.id);
   const { messages, busy, yolo } = chat;
   const setMobileOpen = useUiStore((s) => s.setMobileOpen);
   const [confirmReset, setConfirmReset] = useState(false);
   const [confirmYolo, setConfirmYolo] = useState(false);
-  // A guest (issue #145) chats; settings, New chat and Chat history stay the owner's.
   const guest = useIsGuest();
   const [menuView, setMenuView] = useHistoryMenu();
   const composerRef = useRef<ChatComposerHandle>(null);
   const scroller = useMessageScroller();
 
-  // Held by the server behind (or steering into) the reply; Echoes are in the timeline.
   const held = chat.outbox.filter((entry) => !isEcho(entry));
-  // YOLO mode (issue #151): the owner's per-chat switch; the stream says its state.
   const setYolo = async (on: boolean) => {
     setConfirmYolo(false);
     await chat.setYolo(on);
   };
-  // A fresh conversation has nothing to start over from.
   const canReset = !guest && (messages.length > 0 || chat.outbox.length > 0);
 
-  // ⇧⌘O / Ctrl+Shift+O asks for a new chat from anywhere in the pane.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey) || !e.shiftKey || e.key.toLowerCase() !== "o") return;
@@ -85,21 +71,17 @@ function ChatPaneBody({ bot, models, canAnswer, onEditBot }: ChatPaneProps) {
 
   const live = useLiveViews(bot, messages);
 
-  // A bot without a model of its own runs on the default model.
   const defaultModel = useBotsStore((s) => s.defaultModel);
   const model = models.find((m) => m.id === (bot.modelId ?? defaultModel));
   const composerEnabled = canAnswer && model !== undefined;
 
   const send = (submission: OwnerSubmission) => {
-    // Keep the just-sent message visible: the reader may be scrolled up in
-    // the history, and sending is an explicit jump-to-now (issue #2a).
     scroller.scrollToEnd({ behavior: "auto" });
     return chat.send(submission);
   };
 
   const { dragging, dropHandlers } = useFileDrop(composerEnabled, composerRef);
 
-  // The composer's model chip: switching it saves the bot, like its settings.
   const changeModel = async (modelId: string) => {
     if (modelId === bot.modelId) return;
     try {
@@ -112,7 +94,6 @@ function ChatPaneBody({ bot, models, canAnswer, onEditBot }: ChatPaneProps) {
   const doReset = async () => {
     setConfirmReset(false);
     try {
-      // The bot is on a fresh conversation: the chat reopens there, empty.
       adoptBot(await botsApi.reset(bot.id));
     } catch (error) {
       toast.error(errorMessage(error, "Failed to start a new chat"));
@@ -137,15 +118,10 @@ function ChatPaneBody({ bot, models, canAnswer, onEditBot }: ChatPaneProps) {
           onNewChat={() => setConfirmReset(true)}
         />
 
-        {/* Warnings */}
         {!canAnswer && (
           <ModelWarning anyEnabled={providers?.some((provider) => provider.enabled)} />
         )}
 
-        {/* Transcript (AI Elements Chat: Message Scroller keeps the newest
-          message pinned unless the reader scrolled up), with the stream's
-          health and the unread divider. The provider mounts at the pane root
-          so the body can drive it (send → scroll to end). */}
         <ChatSessionTranscript bot={bot} chat={chat} mode={LIVE_CHAT} />
 
         {held.length > 0 && (
@@ -167,8 +143,6 @@ function ChatPaneBody({ bot, models, canAnswer, onEditBot }: ChatPaneProps) {
           onEditBot={onEditBot}
         />
       </div>
-      {/* Browser live view (issue #24): beside the conversation on desktop,
-          full-screen overlay on mobile, or a small floating picture in picture. */}
       {live.showBrowser && (
         <BrowserPanel
           bot={bot}
@@ -178,7 +152,6 @@ function ChatPaneBody({ bot, models, canAnswer, onEditBot }: ChatPaneProps) {
           onLayout={live.setLayout}
         />
       )}
-      {/* Computer live view (issue #108): same place, one panel at a time. */}
       {live.showComputer && (
         <ComputerPanel
           bot={bot}
@@ -189,7 +162,6 @@ function ChatPaneBody({ bot, models, canAnswer, onEditBot }: ChatPaneProps) {
         />
       )}
 
-      {/* Confirmations */}
       <YoloConfirmDialog
         botName={bot.name}
         open={confirmYolo}

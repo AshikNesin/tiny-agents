@@ -2,19 +2,11 @@ package groot.mobile.feature.manage
 
 import groot.mobile.data.api.Schedule
 
-/**
- * A routine's schedule as the form holds it: a preset the owner picks, with its few fields.
- * The server runs every schedule in IST (Asia/Kolkata), so times here are IST wall-clock.
- */
 data class ScheduleForm(
     val kind: Kind = Kind.Daily,
-    /** "HH:MM", 24-hour, IST. */
     val time: String = "09:00",
-    /** 0 = Sunday … 6 = Saturday, for [Kind.Weekly]. */
     val weekday: Int = 1,
-    /** For [Kind.Interval]: 15 minutes to 24 hours. */
     val minutes: Int = 60,
-    /** "YYYY-MM-DD", for [Kind.Once]. */
     val date: String = "",
     val cron: String = "0 9 * * *",
 ) {
@@ -27,7 +19,6 @@ data class ScheduleForm(
         Cron("Custom cron"),
     }
 
-    /** The schedule to send, or null with what is wrong in [error]. */
     fun toSchedule(): Schedule? {
         val clock = TIME.find(time.trim())
         val hour = clock?.groupValues?.get(1)?.toIntOrNull()
@@ -68,7 +59,6 @@ data class ScheduleForm(
 
         private fun clock(match: MatchResult) = "%02d:%02d".format(match.groupValues[2].toInt(), match.groupValues[1].toInt())
 
-        /** The form for an existing schedule: a preset when it is one, else the raw cron. */
         fun of(schedule: Schedule): ScheduleForm = when (schedule) {
             is Schedule.Interval -> ScheduleForm(kind = Kind.Interval, minutes = schedule.minutes)
             is Schedule.Once -> ONCE.find(schedule.at)?.let { ScheduleForm(kind = Kind.Once, date = it.groupValues[1], time = it.groupValues[2]) }

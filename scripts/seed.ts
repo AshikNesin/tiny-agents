@@ -1,9 +1,4 @@
 #!/usr/bin/env tsx
-/**
- * Seed the local database with the demo user. Idempotent. The task list
- * starts empty (tasks replace groot's demo todos). A pre-Drizzle database is
- * copied into the new layout first, as the server would on boot.
- */
 import { existsSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { eq } from "drizzle-orm";
@@ -15,13 +10,11 @@ import { installFixedClock } from "../apps/web/src/server/fixed-clock";
 
 export const SEED_USER = {
   email: "demo@example.com",
-  password: "demo@example.com", // gitleaks:allow (documented dev-only demo account)
+  password: "demo@example.com", // gitleaks:allow
   name: "Demo User",
 };
 
-/** Boot against `DATABASE_URL` (migrations applied) and make sure the demo data exists. */
 export async function seed(): Promise<void> {
-  // A frozen verify run seeds at the same instant the server runs at.
   installFixedClock(process.env);
   applyDatabaseDefaults();
   bootstrap({

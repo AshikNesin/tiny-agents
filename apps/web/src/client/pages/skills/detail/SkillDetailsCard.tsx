@@ -3,7 +3,6 @@ import { Input } from "@groot/ui/input";
 import { Label } from "@groot/ui/label";
 import type { Skill } from "../../../../shared/api/skills";
 
-/** The skill's name (read-only: bots reference it) and its description. */
 export function SkillDetailsCard({
   skill,
   form,

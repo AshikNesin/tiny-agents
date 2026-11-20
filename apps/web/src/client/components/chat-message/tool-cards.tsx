@@ -1,7 +1,3 @@
-/**
- * The cards a tool call waiting on the owner draws: an approval, a vault
- * use's approval, a credential request and a takeover request.
- */
 import { useState } from "react";
 import { Hand, KeyRound } from "lucide-react";
 import { Button } from "@groot/ui/button";
@@ -17,10 +13,6 @@ import { useCredentialRequest } from "../../queries/vault";
 import { CredentialRequestForm } from "../vault/CredentialRequestForm";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "../ui/item";
 
-/**
- * The approval card: an AI Elements Confirmation built on Item. `ask` is the
- * imperative phrase completing "<bot> wants to …" (issue #85).
- */
 export function ApprovalCard({
   call,
   labels,
@@ -91,7 +83,6 @@ export function ApprovalCard({
   );
 }
 
-/** A vault use's approval (issue #56): the item and where it goes, never the value. */
 export function VaultApprovalCard({
   call,
   actions,
@@ -142,10 +133,6 @@ export function VaultApprovalCard({
   );
 }
 
-/**
- * A credential request (issue #56), filled right here: what the owner types
- * goes to the server and into the bot's page, never into the chat.
- */
 export function CredentialRequestCard({
   call,
   botName,
@@ -176,11 +163,6 @@ export function CredentialRequestCard({
   );
 }
 
-/**
- * The bot asked the owner to take over its computer (issue #108): Grok's
- * "Action needed" card. The computer is already the owner's; the card
- * brings the live view up and hands it back.
- */
 export function TakeoverCard({
   call,
   actions,

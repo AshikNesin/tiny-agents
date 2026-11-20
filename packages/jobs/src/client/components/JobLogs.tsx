@@ -3,7 +3,6 @@ import { formatLocaleDateTime } from "@groot/shell/lib/utils";
 import type { JobLog } from "@groot/jobs/client/types";
 import { Console } from "console-feed";
 
-/** Streaming log panel rendered with console-feed. */
 export function JobLogs({ logs }: { logs: JobLog[] }) {
   return (
     <Card>
@@ -18,7 +17,6 @@ export function JobLogs({ logs }: { logs: JobLog[] }) {
             <Console
               logs={logs.map((log) => ({
                 id: log.id.toString(),
-                // persisted levels are info | warn | error | fatal; console-feed has no "fatal"
                 method: (log.level === "fatal" ? "error" : log.level) as
                   | "log"
                   | "warn"

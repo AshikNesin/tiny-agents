@@ -45,10 +45,6 @@ const KIND_ICONS: Record<Passkey["kind"], LucideIcon> = {
   device: Smartphone,
 };
 
-/**
- * Placeholder mirroring the "Add a passkey" form and the passkey list while
- * passkeys load, composed from the shared skeleton primitives.
- */
 function PasskeyManagerSkeleton() {
   return (
     <div className="space-y-6">
@@ -126,7 +122,6 @@ export function PasskeyManager() {
 
   return (
     <div className="space-y-6">
-      {/* Add a passkey */}
       <Card>
         <CardHeader className="border-b px-5 pb-4">
           <CardTitle aria-level={2} className="flex items-center gap-2">
@@ -137,7 +132,6 @@ export function PasskeyManager() {
             Use biometrics (Face ID / Touch ID) or a security key for passwordless sign-in.
           </CardDescription>
         </CardHeader>
-        {/* Side by side from sm; on a phone the name gets the full width. */}
         <CardContent className="flex flex-col gap-3 px-5 sm:flex-row sm:items-end">
           <div className="space-y-1.5 sm:flex-1">
             <Label htmlFor="passkey-name" className="text-xs">
@@ -162,7 +156,6 @@ export function PasskeyManager() {
         </CardContent>
       </Card>
 
-      {/* Passkey list */}
       <Card className="gap-0 pb-0">
         <CardHeader className="border-b px-5 pb-4">
           <CardTitle className="flex items-center gap-2">
@@ -249,7 +242,6 @@ export function PasskeyManager() {
         )}
       </Card>
 
-      {/* Edit name */}
       <Dialog open={!!passkeyToEdit} onOpenChange={() => setPasskeyToEdit(null)}>
         <DialogContent>
           <DialogHeader>

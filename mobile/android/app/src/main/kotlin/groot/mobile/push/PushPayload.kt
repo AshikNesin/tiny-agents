@@ -7,29 +7,21 @@ import groot.mobile.data.api.string
 import groot.mobile.data.api.stringOrNull
 import org.json.JSONObject
 
-/**
- * What the server's Web Push channel sends (`packages/core/src/notification/webpush.ts`,
- * `PushPayload`), decrypted by the UnifiedPush connector. Field for field with the server.
- */
 sealed interface PushPayload {
-    /** Show (or replace, by [tag]) a notification. */
     data class Show(
         val tag: String,
         val event: String?,
         val category: String?,
         val title: String,
         val message: String,
-        /** App path, e.g. `/chats/<bot>?focus=approval:12`; opened through the link router. */
         val path: String?,
         val priority: Int,
         val actions: ApprovalActions?,
     ) : PushPayload
 
-    /** Take back the notification shown under [tag]: its request was answered. */
     data class Dismiss(val tag: String) : PushPayload
 
     companion object {
-        /** Null for anything this app version doesn't understand. */
         fun parse(text: String): PushPayload? {
             val json = runCatching { JSONObject(text) }.getOrNull() ?: return null
             if (json.int("v") != 1) return null
@@ -52,7 +44,6 @@ sealed interface PushPayload {
     }
 }
 
-/** An approval the notification can answer (the server's `NotificationActions`). */
 data class ApprovalActions(
     val kind: Kind,
     val botId: String,
@@ -80,17 +71,13 @@ data class ApprovalActions(
     }
 }
 
-/** One answer a notification button gives: the same body the chat card posts. */
 enum class ApprovalAnswer(val label: String) {
     Deny("Deny"),
     Approve("Approve"),
-    /** Tool cards: approve and stop asking for this tool on this bot. */
     AlwaysAllow("Always allow"),
-    /** Vault cards: approve the use for the rest of the chat. */
     ForThisChat("For this chat"),
 }
 
-/** Android's notification channels, one per server category; the owner tunes each in Android settings. */
 enum class PushChannel(val id: String, val title: String, val importanceHigh: Boolean) {
     NeedsYou("needs_you", "Needs you", true),
     Updates("updates", "Updates", false),
@@ -108,7 +95,6 @@ enum class PushChannel(val id: String, val title: String, val importanceHigh: Bo
     }
 }
 
-/** How one notification looks, decided without Android: the channel, its key and its buttons. */
 data class NotificationSpec(
     val channel: PushChannel,
     val tag: String,
@@ -119,7 +105,6 @@ data class NotificationSpec(
     val buttons: List<ApprovalAnswer>,
 )
 
-/** The buttons of a chat card, in its order: Deny, Approve, then the third answer when the card has it. */
 fun buttonsFor(actions: ApprovalActions?): List<ApprovalAnswer> = when (actions?.kind) {
     null -> emptyList()
     ApprovalActions.Kind.Tool -> listOf(ApprovalAnswer.Deny, ApprovalAnswer.Approve, ApprovalAnswer.AlwaysAllow)
@@ -140,7 +125,6 @@ fun PushPayload.Show.spec(): NotificationSpec = NotificationSpec(
     buttons = buttonsFor(actions),
 )
 
-/** What the approval route gets for a button: the body the chat card would post. */
 data class ApprovalDecision(val approved: Boolean, val alwaysAllow: String?, val grant: Boolean)
 
 fun decisionOf(answer: ApprovalAnswer, tool: String): ApprovalDecision = when (answer) {

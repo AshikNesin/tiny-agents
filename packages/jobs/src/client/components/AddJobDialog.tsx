@@ -19,7 +19,6 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Plus } from "lucide-react";
 
-/** Manually trigger a one-off job. Renders its own trigger. */
 export function AddJobDialog() {
   const [open, setOpen] = useState(false);
   return (
@@ -41,7 +40,6 @@ export function AddJobDialog() {
   );
 }
 
-/** Mounted only while the dialog is open, so every opening starts from a blank draft. */
 function AddJobForm({ onDone }: { onDone: () => void }) {
   const [name, setName] = useState("");
   const [data, setData] = useState("{}");

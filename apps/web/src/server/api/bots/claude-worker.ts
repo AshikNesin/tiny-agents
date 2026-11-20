@@ -1,14 +1,3 @@
-/**
- * The Claude plan worker for this server: on the sandbox VM (or the local
- * sandbox container), set up over the same sandbox connection the browser,
- * the computer and the terminal use. The app installs Node, the Agent SDK and
- * Claude Code there on first use, uploads the worker and reaches it through
- * an SSH tunnel; the owner only signs Claude Code in (Settings → Models → Claude plan).
- *
- * The worker ships as one file. The production build emits it next to the
- * bundle as `claude-worker.mjs` (scripts/build.mjs); dev bundles the
- * TypeScript entry with esbuild on first use.
- */
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import {
@@ -19,12 +8,9 @@ import { sandboxConnection } from "./sandbox-host";
 import { appEnv, type AppEnv } from "../../env";
 import { app } from "../../app-root";
 
-/** Packages the worker loads from its own `node_modules` on the sandbox. */
 const WORKER_EXTERNALS = ["@anthropic-ai/claude-agent-sdk", "ws", "zod"];
 
 async function bundleFromSource(): Promise<string> {
-  // A variable specifier keeps esbuild (a dev dependency) out of the
-  // production bundle, which never takes this path.
   const name = "esbuild";
   const esbuild = (await import(name)) as typeof import("esbuild");
   const entry = fileURLToPath(
@@ -43,18 +29,12 @@ async function bundleFromSource(): Promise<string> {
   return result.outputFiles[0]!.text;
 }
 
-/** The worker script uploaded to the sandbox. */
 async function claudeWorkerScript(): Promise<string> {
   const here = import.meta.url;
   if (!here.endsWith(".ts")) return readFile(new URL("./claude-worker.mjs", here), "utf8");
   return bundleFromSource();
 }
 
-/**
- * The process's one worker locator: bot chats (the Claude plan engine) and
- * the Code page's Claude Code harness share the worker on the sandbox and
- * its tunnel (ADR 0012), so it is set up once.
- */
 export function sharedClaudeWorkerLocator(env: AppEnv = appEnv()): ClaudeWorkerLocator | undefined {
   const connection = sandboxConnection(env);
   if (!connection) return undefined;

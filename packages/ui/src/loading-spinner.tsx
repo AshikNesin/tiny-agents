@@ -5,9 +5,6 @@ interface LoadingSpinnerProps {
   size?: "sm" | "md" | "lg";
 }
 
-/**
- * Loading spinner component
- */
 const SIZE_CLASSES = {
   sm: "size-4 border-2",
   md: "size-8 border-2",
@@ -29,11 +26,6 @@ export function LoadingSpinner({ className, size = "md" }: LoadingSpinnerProps) 
   );
 }
 
-/**
- * Centered loading spinner with optional text — the canonical "this surface is
- * loading" block. Use `className` to give it a fixed height when it stands in
- * for content of a known size (e.g. `h-96` inside a card).
- */
 export function LoadingState({
   text = "Loading...",
   size = "lg",

@@ -1,4 +1,3 @@
-/** Guests and sharing (issue #145): who is signed in, and the owner's guest list. */
 import { apiClient } from "@groot/shell/lib/api";
 import type {
   Guest,

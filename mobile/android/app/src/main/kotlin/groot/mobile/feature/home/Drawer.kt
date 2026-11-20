@@ -53,10 +53,8 @@ import groot.mobile.ui.components.SectionLabel
 import groot.mobile.ui.components.StatusDot
 import groot.mobile.ui.components.relativeTime
 
-/** A place the drawer can take the owner besides a chat. */
 data class DrawerDestination(val label: String, val icon: ImageVector, val route: String)
 
-/** Everyday places first, then the set-up-and-forget ones (the web app's sidebar order). */
 val OWNER_DESTINATIONS: List<DrawerDestination> = listOf(
     DrawerDestination("Tasks", AppIcons.Tasks, Routes.TASKS),
     DrawerDestination("Code", AppIcons.Code, Routes.CODE),
@@ -70,10 +68,6 @@ val OWNER_DESTINATIONS: List<DrawerDestination> = listOf(
     DrawerDestination("Vault", AppIcons.Key, Routes.VAULT),
 )
 
-/**
- * The drawer: search, the bots (pinned first, each with what it is doing), the other places,
- * and the account at the bottom.
- */
 @Composable
 fun AppDrawer(
     bots: BotsState,
@@ -84,7 +78,6 @@ fun AppDrawer(
     onNavigate: (String) -> Unit,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
-    /** The clock the "5m ago" times count from; screenshots pass a fixed one. */
     now: () -> Long = System::currentTimeMillis,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
@@ -133,7 +126,6 @@ fun AppDrawer(
             }
             if (!bots.guest && query.isBlank()) {
                 item(key = "workspace-label") { SectionLabel("Workspace", Modifier.padding(start = S.md, top = S.lg)) }
-                // A 3-wide grid of tiles: the ten places in a third of the height a list takes.
                 items(OWNER_DESTINATIONS.chunked(WORKSPACE_COLUMNS), key = { row -> row.first().route }) { row ->
                     Row(Modifier.fillMaxWidth()) {
                         for (destination in row) {
@@ -192,7 +184,6 @@ private fun SearchField(query: String, onQuery: (String) -> Unit, modifier: Modi
     )
 }
 
-/** One bot: its avatar, name and last line, and on the right whatever needs attention most. */
 @Composable
 private fun BotRow(bot: BotListEntry, selected: Boolean, now: () -> Long, onClick: () -> Unit) {
     Row(

@@ -1,8 +1,3 @@
-/**
- * One provider account: its status and summary, its actions, and, open, its
- * models, a Claude plan's settings and Add a model; deleting what is in use
- * asks which model takes over.
- */
 import { useState } from "react";
 import { toast } from "sonner";
 import { ChevronDown, ChevronRight } from "lucide-react";
@@ -25,10 +20,6 @@ import { modelOptions } from "./model-options";
 import { ModelRow } from "./ModelRow";
 import { inUseText, MoveDialog } from "./MoveDialog";
 
-/**
- * A gateway custom provider's model whose provider has no base path: the
- * gateway reaches the upstream's root, and most APIs answer 404 there.
- */
 function basePathWarning(account: Account, upstreamId: string): string | undefined {
   const slug = upstreamId.split("/")[0];
   if (!slug?.startsWith("custom-") || !upstreamId.includes("/")) return undefined;
@@ -41,7 +32,6 @@ function basePathWarning(account: Account, upstreamId: string): string | undefin
     : `${slug} isn't set up: add it in Custom providers, with its base path (Z.AI's coding plan: api/coding/paas/v4).`;
 }
 
-/** The account's one-line summary: kind, where it goes, its key, models, last check. */
 function accountSummary(account: Account, accounts: Account[]): string {
   const via = account.viaProviderId
     ? `through ${accounts.find((a) => a.id === account.viaProviderId)?.name ?? "a gateway"}`
@@ -85,7 +75,6 @@ export function AccountCard({
     accounts.filter((a) => a.id !== account.id && a.kind !== "claude-plan"),
   );
 
-  /** Run a change, then reload; a failure becomes a toast. Resolves whether it worked. */
   const act = async (work: () => Promise<unknown>, failed: string): Promise<boolean> => {
     try {
       await work();
@@ -97,7 +86,6 @@ export function AccountCard({
     }
   };
 
-  /** Delete, or on 409 `in_use` ask which model takes over. */
   const deleteOrMove = async (
     what: string,
     attempt: (moveTo?: string) => Promise<unknown>,
@@ -128,7 +116,6 @@ export function AccountCard({
     }
   };
 
-  /** A model goes only after the owner confirms; on 409 `in_use`, which takes over. */
   const removeModel = async (model: AccountModel) => {
     const ok = await confirm({
       title: `Delete ${model.name}?`,

@@ -1,22 +1,3 @@
-/**
- * Semantics every adapter follows:
- *
- * - Keys are `/`-separated object paths with no leading or trailing `/`.
- *   "Folders" are just common prefixes, like on any object store.
- * - `put` creates or replaces an object and resolves with what `head` returns
- *   for it afterwards.
- * - `get` and `head` resolve to `null` for a missing key.
- * - `delete` removes the given keys and ignores missing ones. It returns no
- *   count: object stores delete blindly, and counting would cost one `head`
- *   per key.
- * - `list` walks keys in ascending lexicographic order (see `ListOptions`).
- * - `copy` replaces `to` with the bytes and content type of `from`; it throws
- *   when `from` does not exist.
- * - `contentType` is the type given to `put`, else the Blob's own type, else
- *   `application/octet-stream`. Adapters without a metadata store (local
- *   files) derive it from the key's extension instead.
- */
-
 export type StorageBody = Uint8Array | ArrayBuffer | Blob | string;
 
 export interface StoredObject {
@@ -30,28 +11,18 @@ export interface PutOptions {
   contentType?: string;
 }
 
-/** Most entries one `list()` page returns, and the default `limit`. */
 export const MAX_LIST_LIMIT = 1000;
 
 export interface ListOptions {
-  /** Only keys that start with this string. */
   prefix?: string;
-  /**
-   * With "/", one folder level: the objects directly under `prefix` plus the
-   * sub-prefixes below it. Omit to list every key under `prefix`.
-   */
   delimiter?: string;
-  /** The `cursor` of the previous page. */
   cursor?: string;
-  /** Upper bound on objects plus prefixes in this page; capped at MAX_LIST_LIMIT. A page may hold fewer. */
   limit?: number;
 }
 
 export interface ListResult {
   objects: StoredObject[];
-  /** Sub-folders (only when `delimiter` was given), each ending with the delimiter. */
   prefixes: string[];
-  /** Present only when more results exist; pass it back to read the next page. */
   cursor?: string;
 }
 
@@ -65,7 +36,6 @@ export interface StorageAdapter {
   copy(from: string, to: string): Promise<void>;
 }
 
-/** Normalise any accepted body into bytes. */
 export async function bodyToBytes(body: StorageBody): Promise<Uint8Array<ArrayBuffer>> {
   if (typeof body === "string") return new Uint8Array(new TextEncoder().encode(body));
   if (body instanceof Blob) return new Uint8Array(await body.arrayBuffer());
@@ -73,18 +43,12 @@ export async function bodyToBytes(body: StorageBody): Promise<Uint8Array<ArrayBu
   return new Uint8Array(body);
 }
 
-/** Content type hint from the body when the caller gave none. */
 export function bodyContentType(body: StorageBody, explicit?: string): string {
   if (explicit) return explicit;
   if (body instanceof Blob && body.type) return body.type;
   return "application/octet-stream";
 }
 
-/**
- * One `list()` page over a full set of keys, for adapters that can enumerate
- * every key themselves (memory, local files). The cursor is the last entry of
- * the page, so the next page starts strictly after it.
- */
 export function listKeys(
   keys: Iterable<string>,
   options: ListOptions = {},

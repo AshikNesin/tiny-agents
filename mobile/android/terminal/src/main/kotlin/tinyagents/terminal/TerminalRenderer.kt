@@ -10,16 +10,6 @@ import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.max
 
-/**
- * Paints an emulator's grid on a native canvas. One instance per font size and palette; it
- * owns the paints and buffers so a frame allocates nothing.
- *
- * Every glyph is placed at its own column, so a fallback font with other metrics (CJK, emoji)
- * never shifts the grid. Runs of plain ASCII in one style go out as a single `drawText`, which
- * is exact because every ASCII advance of the monospace face equals the cell width. Box
- * drawing and block characters are drawn as geometry: font glyphs for them leave gaps between
- * cells, which breaks tmux borders and progress bars.
- */
 internal class TerminalRenderer(textSize: Float, colors: TerminalColors) {
     private val palette: IntArray = colors.paletteArgb()
     private val defaultForeground: Int = colors.foreground.toArgb()
@@ -29,20 +19,16 @@ internal class TerminalRenderer(textSize: Float, colors: TerminalColors) {
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         typeface = Typeface.MONOSPACE
         this.textSize = textSize
-        // Ligatures and contextual forms would merge cells.
         fontFeatureSettings = "'liga' 0, 'clig' 0, 'calt' 0"
     }
     private val boldPaint = Paint(textPaint).apply { typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD) }
     private val fillPaint = Paint().apply {
         style = Paint.Style.FILL
-        // Cell edges snap to pixels: neighbouring rectangles neither overlap nor leave a seam.
         isAntiAlias = false
     }
 
-    /** Width of one cell: the advance of the monospace face. */
     val cellWidth: Float
 
-    /** Height of one cell, a whole number of pixels so rows tile without seams. */
     val cellHeight: Float
 
     private val baseline: Float
@@ -50,7 +36,6 @@ internal class TerminalRenderer(textSize: Float, colors: TerminalColors) {
     private val underlineOffset: Float
     private val strikeOffset: Float
 
-    /** False when the "monospace" face is not: then every character is placed on its own. */
     private val uniformAscii: Boolean
 
     private var run = CharArray(INITIAL_RUN_CAPACITY)
@@ -67,14 +52,12 @@ internal class TerminalRenderer(textSize: Float, colors: TerminalColors) {
         underlineOffset = baseline + max(1f, (cellHeight - baseline) * UNDERLINE_POSITION)
         strikeOffset = baseline - textSize * STRIKE_POSITION
         uniformAscii = abs(textPaint.measureText(NARROW_SAMPLE) - textPaint.measureText(WIDE_SAMPLE)) < ADVANCE_TOLERANCE
-        // A bold face with other advances would break the grid: embolden the regular one instead.
         if (abs(boldPaint.measureText("M") - cellWidth) > ADVANCE_TOLERANCE) {
             boldPaint.typeface = Typeface.MONOSPACE
             boldPaint.isFakeBoldText = true
         }
     }
 
-    /** The columns and rows that fit in a view of this size, never less than 2x2. */
     fun gridFor(width: Int, height: Int): IntSize = IntSize(
         max(MIN_GRID, floor(width / cellWidth).toInt()),
         max(MIN_GRID, floor(height / cellHeight).toInt()),
@@ -84,10 +67,6 @@ internal class TerminalRenderer(textSize: Float, colors: TerminalColors) {
 
     fun rowAt(y: Float, rows: Int): Int = floor(y / cellHeight).toInt().coerceIn(0, rows - 1)
 
-    /**
-     * Draw the screen, scrolled back by [scrollOffset] lines. Called on the thread that feeds
-     * the emulator.
-     */
     fun draw(canvas: Canvas, emulator: TerminalEmulator, scrollOffset: Int, width: Float, height: Float) {
         fillPaint.color = defaultBackground
         canvas.drawRect(0f, 0f, width, height, fillPaint)
@@ -147,7 +126,6 @@ internal class TerminalRenderer(textSize: Float, colors: TerminalColors) {
                 continue
             }
             if (codePoint == TerminalLine.BLANK && style and DECORATION_MASK == 0 && extras?.get(col) == null) {
-                // Nothing to ink. A blank inside a run rides along so the run is not split.
                 if (runLength > 0) {
                     if (style == runStyle && foregroundOf(line, col) == runColor) {
                         run[runLength++] = ' '
@@ -187,13 +165,11 @@ internal class TerminalRenderer(textSize: Float, colors: TerminalColors) {
             drawDecorations(canvas, start, length, top, color, style)
             return
         }
-        // Undecorated trailing blanks are the rest of an empty line.
         var visible = length
         while (visible > 0 && run[visible - 1] == ' ') visible--
         if (visible > 0) canvas.drawText(run, 0, visible, start * cellWidth, top + baseline, paintFor(color, style))
     }
 
-    /** One character that is not plain ASCII: geometry for boxes and blocks, else its glyph. */
     private fun drawCell(canvas: Canvas, col: Int, codePoint: Int, extra: String?, bits: Int, top: Float, color: Int, style: Int) {
         val cells = if (bits and TerminalAttribute.WIDE != 0) 2 else 1
         val left = col * cellWidth
@@ -241,7 +217,6 @@ internal class TerminalRenderer(textSize: Float, colors: TerminalColors) {
                 canvas.drawRect(left, top, left + thickness, top + cellHeight, fillPaint)
             }
             else -> {
-                // A block: the cell inverted, its character redrawn in the background colour.
                 canvas.drawRect(left, top, right, top + cellHeight, fillPaint)
                 val bits = line.attrs[col]
                 val codePoint = line.chars[col]
@@ -273,7 +248,6 @@ internal class TerminalRenderer(textSize: Float, colors: TerminalColors) {
         } else {
             resolve(line.fg[col], defaultForeground)
         }
-        // Dim is the colour at half strength over whatever is behind it.
         return if (bits and TerminalAttribute.DIM != 0) (color and RGB_MASK) or DIM_ALPHA else color
     }
 
@@ -283,11 +257,6 @@ internal class TerminalRenderer(textSize: Float, colors: TerminalColors) {
         else -> OPAQUE or TerminalColor.rgbValue(color)
     }
 
-    /**
-     * Box drawing (U+2500..U+257F) as strokes from the cell centre to its edges, and block
-     * elements (U+2580..U+2595) as filled parts of the cell. False for the few shapes that are
-     * neither (diagonals, quadrants), which fall back to the font.
-     */
     private fun drawGeometry(canvas: Canvas, codePoint: Int, left: Float, top: Float, color: Int): Boolean {
         val right = left + cellWidth
         val bottom = top + cellHeight
@@ -328,7 +297,6 @@ internal class TerminalRenderer(textSize: Float, colors: TerminalColors) {
         return true
     }
 
-    /** Which of the four arms a box-drawing character has; 0 when it is not made of arms. */
     private fun boxArms(codePoint: Int): Int = when (codePoint) {
         in 0x2500..0x2501, 0x2504, 0x2505, 0x2508, 0x2509, 0x254C, 0x254D, 0x2550, 0x257C, 0x257E -> ARM_LEFT or ARM_RIGHT
         in 0x2502..0x2503, 0x2506, 0x2507, 0x250A, 0x250B, 0x254E, 0x254F, 0x2551, 0x257D, 0x257F -> ARM_UP or ARM_DOWN
@@ -352,14 +320,12 @@ internal class TerminalRenderer(textSize: Float, colors: TerminalColors) {
         const val MIN_GRID = 2
         const val INITIAL_RUN_CAPACITY = 256
 
-        /** A base character plus its combining marks. */
         const val SINGLE_CAPACITY = 2 + TerminalLine.MAX_COMBINING_CHARS
         const val ASCII_LIMIT = 0x7F
         const val ADVANCE_TOLERANCE = 0.01f
         const val NARROW_SAMPLE = "iiiiiiiiii"
         const val WIDE_SAMPLE = "MMMMMMMMMM"
 
-        // Used only if the platform reports no metrics at all.
         const val FALLBACK_ASPECT = 0.6f
         const val FALLBACK_LINE_HEIGHT = 1.2f
 
@@ -375,7 +341,6 @@ internal class TerminalRenderer(textSize: Float, colors: TerminalColors) {
         const val DIM_ALPHA = 0x99 shl ALPHA_SHIFT
         const val QUARTER_ALPHA = 0x40
 
-        /** What makes two neighbouring cells different runs (the colour is compared apart). */
         const val RUN_STYLE_MASK =
             TerminalAttribute.BOLD or TerminalAttribute.ITALIC or TerminalAttribute.UNDERLINE or TerminalAttribute.STRIKETHROUGH
         const val DECORATION_MASK = TerminalAttribute.UNDERLINE or TerminalAttribute.STRIKETHROUGH

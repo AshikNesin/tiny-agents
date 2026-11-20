@@ -1,28 +1,12 @@
-/**
- * Coding mode on the worker socket: the Code page's Claude Code sessions.
- *
- * Every message is namespaced `coding.*`, so the bot protocol in
- * `protocol.ts` is untouched. Requests carry a `requestId` and get exactly
- * one `reply` (the socket's envelope, `envelope.ts`, shared with the bot
- * protocol). Session events carry a per-session `seq` and are kept
- * in a replay buffer for `coding.resume`, like bot sessions. Streaming text
- * (`coding.partial`) and the command catalog are not sequenced: they are
- * ephemeral and a reconnect starts from a fresh snapshot anyway.
- */
 import { z } from "zod";
 import type { ResumeResult } from "./envelope";
 import type { Sequenced } from "./session-log";
 
 export const DEFAULT_CODING_LIMITS = {
-  /** Coding processes alive at once (their own budget, separate from bot chats). */
   maxLiveProcesses: 3,
-  /** Coding turns running at once. */
   maxRunningTurns: 2,
-  /** Close an idle coding process after this long; the Claude session id is kept for resume. */
   idleEvictMs: 30 * 60_000,
-  /** Events retained per coding session so a reconnecting client can resume. */
   eventBuffer: 2_000,
-  /** After a stop, end the turn ourselves when Claude Code sends no result within this long. */
   stopGraceMs: 15_000,
   maxUploadBytes: 25 * 1024 * 1024,
   maxAssetBytes: 10 * 1024 * 1024,
@@ -61,14 +45,8 @@ export type CodingPermissionMode = (typeof CODING_PERMISSION_MODES)[number];
 export const CODING_EFFORT_LEVELS = ["low", "medium", "high", "xhigh", "max"] as const;
 export type CodingEffortLevel = (typeof CODING_EFFORT_LEVELS)[number];
 
-/** New coding sessions start here (owner decision). */
 export const DEFAULT_CODING_PERMISSION_MODE: CodingPermissionMode = "acceptEdits";
 
-/**
- * Attachments travel as file paths in the prompt (Claude Code reads them with
- * its own Read tool, images included), under this header. The driver strips
- * the block back out of the transcript and shows the files as attachments.
- */
 export const ATTACHMENTS_HEADER = "Attached files (read them with the Read tool):";
 
 export function promptWithAttachments(
@@ -86,7 +64,6 @@ const absolutePath = z.string().min(1).max(4096);
 
 export const codingSessionConfigSchema = z.strictObject({
   cwd: absolutePath,
-  /** Claude session id to resume when a process starts. */
   resume: z.string().min(1).max(200).optional(),
   model: z.string().min(1).max(200).nullable().optional(),
   effort: z.enum(CODING_EFFORT_LEVELS).nullable().optional(),
@@ -120,7 +97,6 @@ export type CodingSettingsChange = z.infer<typeof codingSettingsChangeSchema>;
 
 const diffId = z.string().regex(/^(working|[0-9a-f]{7,40})$/);
 
-/** The fixed set of workspace operations. Each runs `git` or `fs`, never a shell. */
 export const codingOpSchema = z.discriminatedUnion("op", [
   z.strictObject({
     op: z.literal("git_log"),
@@ -134,7 +110,6 @@ export const codingOpSchema = z.discriminatedUnion("op", [
     diffId,
     path: z.string().min(1).max(4096),
   }),
-  /** A fingerprint of the repository's changes (`changeStamp`), to poll cheaply. */
   z.strictObject({ op: z.literal("git_stamp"), cwd: absolutePath }),
   z.strictObject({
     op: z.literal("find_files"),
@@ -148,7 +123,6 @@ export const codingOpSchema = z.discriminatedUnion("op", [
   z.strictObject({
     op: z.literal("upload"),
     filename: z.string().min(1).max(512),
-    /** base64 */
     data: z.string(),
   }),
   z.strictObject({ op: z.literal("read_asset"), ref: absolutePath }),
@@ -157,18 +131,14 @@ export const codingOpSchema = z.discriminatedUnion("op", [
 export type CodingOp = z.infer<typeof codingOpSchema>;
 
 export const codingClientMessageSchema = z.discriminatedUnion("type", [
-  /** Subscribe this socket to coding events; answers the worker's boot id. */
   z.strictObject({ type: z.literal("coding.hello"), requestId }),
   z.strictObject({
     type: z.literal("coding.send"),
     requestId,
     sessionId: id,
-    /** Opens the session when the worker does not know it (a worker restart). */
     session: codingSessionConfigSchema,
-    /** Client-chosen message uuid: retries are idempotent and history keeps it. */
     uuid: z.uuid(),
     text: z.string().max(200_000),
-    /** steer: inject into the running turn; queue: hold until it ends. Idle: start a turn. */
     mode: z.enum(["steer", "queue"]),
     attachments: z.array(codingAttachmentSchema).max(20).optional(),
   }),
@@ -216,7 +186,6 @@ export const codingClientMessageSchema = z.discriminatedUnion("type", [
     sessionId: id,
     afterSeq: z.number().int().nonnegative(),
   }),
-  /** End the session's process (archive). The Claude session stays resumable. */
   z.strictObject({ type: z.literal("coding.close"), requestId, sessionId: id }),
 ]);
 
@@ -231,9 +200,7 @@ export const codingQueuedSchema = z.strictObject({
 export type CodingQueued = z.infer<typeof codingQueuedSchema>;
 
 export const codingStateSchema = z.strictObject({
-  /** A turn is in flight (sent to Claude Code, no result yet). */
   running: z.boolean(),
-  /** A Claude Code process is alive for this session. */
   live: z.boolean(),
   claudeSessionId: z.string().optional(),
   queued: z.array(codingQueuedSchema),
@@ -251,9 +218,7 @@ export const codingApprovalSchema = z.strictObject({
   toolUseId: z.string().optional(),
   toolName: z.string().min(1),
   input: z.unknown(),
-  /** The SDK's `suggestions` (permission updates), passed through for display. */
   suggestions: z.array(z.unknown()).optional(),
-  /** The SDK's `decisionReason`. */
   reason: z.string().optional(),
   title: z.string().optional(),
   blockedPath: z.string().optional(),
@@ -263,12 +228,6 @@ export const codingApprovalSchema = z.strictObject({
 export type CodingApproval = z.infer<typeof codingApprovalSchema>;
 
 export const codingEventSchema = z.discriminatedUnion("type", [
-  /**
-   * An SDK message (assistant, user, compact boundary, result…), or the
-   * worker's echo of a prompt it sent. Results gain `turn_cost_usd`,
-   * `turn_model_usage`, `after_uuid` and, when it applies, `usage_limit` /
-   * `interrupted`; a turn the process never finished gets a synthetic result.
-   */
   z.strictObject({
     type: z.literal("message"),
     message: z.looseObject({ type: z.string() }),
@@ -314,7 +273,6 @@ export const codingWorkerMessageSchema = z.discriminatedUnion("type", [
   z.strictObject({
     type: z.literal("coding.partial"),
     sessionId: id,
-    /** Start of a new assistant message: drop what was streamed so far. */
     reset: z.boolean().optional(),
     text: z.string().optional(),
     thinking: z.string().optional(),
@@ -343,15 +301,10 @@ export function isCodingMessage(value: unknown): boolean {
   );
 }
 
-/** Buffered coding event as the worker stores and replays it. */
 export type CodingSequencedEvent = Sequenced<CodingEvent>;
 
-// --- reply payloads (not validated on the wire: the client trusts its worker) ---
-
 export interface CodingHelloResult {
-  /** Changes when the worker restarts: every session's seq starts again. */
   bootId: string;
-  /** Sessions the worker holds, so a restarted client can pick up running turns. */
   sessions: Array<{ sessionId: string; running: boolean; live: boolean; lastSeq: number }>;
 }
 
@@ -360,16 +313,13 @@ export interface CodingSendResult {
   queuedId?: string;
 }
 
-/** `coding.resume` answers the envelope's resume result. */
 export type CodingResumeResult = ResumeResult;
 
 export interface CodingSettingsResult {
   settings: CodingState["settings"];
-  /** live: applied to the running process; next_process: applies when it restarts. */
   applied: "live" | "next_process" | "stored";
 }
 
-/** One entry of `getSessionMessages`. */
 export interface CodingHistoryMessage {
   type: string;
   uuid: string;
@@ -386,8 +336,6 @@ export interface CodingHistoryResult {
 export interface CodingForkResult {
   sessionId: string;
 }
-
-// Op results mirror `@tiny-agents/code/contracts` (GitDiff, GitFile, …) by shape.
 
 export interface CodingGitDiff {
   id: string;
@@ -443,6 +391,5 @@ export interface CodingDirectoryListing {
 export interface CodingAsset {
   name: string;
   mimeType: string;
-  /** base64 */
   data: string;
 }

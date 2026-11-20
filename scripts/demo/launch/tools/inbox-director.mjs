@@ -1,6 +1,3 @@
-// Scripts the fake model for the inbox staging instance: each CAST.md owner
-// message gets the CAST.md reply, with real tool calls where the cast has an
-// approval card. Anything else falls through to the app's own fake replies.
 import * as faux from "@earendil-works/pi-ai/providers/faux";
 
 export * from "@earendil-works/pi-ai/providers/faux";
@@ -18,11 +15,8 @@ const textOf = (m) =>
           .map((b) => b.text)
           .join("");
 
-// One scene per CAST.md chat: `match` is the owner's message, `steps` are the
-// model's turns (step 2 runs after step 1's tool call has its result).
 const SCENES = [
   {
-    // Researcher
     match: /^Find beach hostels in Goa under ₹1,500 a night\./,
     steps: [
       () =>
@@ -40,7 +34,6 @@ const SCENES = [
     ],
   },
   {
-    // Chief of Staff: the create_bot approval card, then the reply once it ran.
     match: /^Make me an Expense Tracker bot\. Log receipts I send it\./,
     steps: [
       () =>
@@ -59,16 +52,12 @@ const SCENES = [
     ],
   },
   {
-    // Code Buddy: plain messages in this instance (the hand-off is staged elsewhere).
     match: /^The checkout test is flaky\. Fix it and run the suite\./,
     steps: [
       () => msg(text("Fixed. All 48 tests pass. The change is on branch fix/checkout-flake.")),
     ],
   },
   {
-    // Travel Planner: plain messages plus one real pending approval. The
-    // vault card is staged elsewhere; here the bot asks to create its CAST
-    // routine, which needs no sandbox and never expires.
     match: /^Check Chennai to Goa fares for Friday\./,
     steps: [
       () =>
@@ -89,14 +78,12 @@ const SCENES = [
   },
 ];
 
-/** The CAST reply for this request, or undefined when no scene matches. */
 function director(context) {
   const messages = context.messages;
   const sceneIndex = messages.findLastIndex(
     (m) => m.role === "user" && SCENES.some((s) => s.match.test(textOf(m))),
   );
   if (sceneIndex < 0) return undefined;
-  // A later owner message that is not a scene belongs to the app's fake model.
   const lastUser = messages.findLastIndex((m) => m.role === "user");
   if (lastUser > sceneIndex) return undefined;
   const scene = SCENES.find((s) => s.match.test(textOf(messages[sceneIndex])));
@@ -108,7 +95,6 @@ export function fauxProvider(options = {}) {
   const handle = faux.fauxProvider(options);
   if (options.provider !== "faux") return handle;
   const setResponses = handle.setResponses.bind(handle);
-  // The app queues its own reply function many times over; ours goes first.
   handle.setResponses = (responses) =>
     setResponses(
       responses.map(

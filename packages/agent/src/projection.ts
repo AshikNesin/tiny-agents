@@ -1,13 +1,3 @@
-/**
- * The chat projection: a conversation's durable events folded into the chat
- * state the owner sees, and the minimal events that carry each change to a
- * client. Pure over its inputs: the runtime feeds it a snapshot (every
- * stored entry, the in-flight reply, the current tool round, the queue and
- * the recorded unanswered reasons) and then each batch of pi-durable events;
- * tests feed it recorded sequences. The window (issue #92) lives here too:
- * its start stays put once older messages exist, so new messages extend it,
- * and a re-snapshot re-windows to the newest ones.
- */
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import type {
   AgentEvent,
@@ -20,29 +10,20 @@ import type { LiveTool } from "./tool-call-row";
 import { chatState, diffChat, windowChat, type RawChat } from "./transcript";
 import type { ChatEvent, ChatState, QueuedMessage } from "./types";
 
-/** Everything a projection starts from (or starts over from on a re-snapshot). */
 export interface ProjectionSnapshot {
-  /** Every stored entry of the conversation, any order. */
   entries: readonly EntryRecord[];
-  /** The reply being generated, if any. */
   live?: AssistantMessage;
   busy: boolean;
-  /** Tool calls of the current round. */
   tools: readonly ToolSlot[];
   queued?: readonly QueuedMessage[];
-  /** Failure reasons of inputs that settled without an answer, by user entry id. */
   unanswered?: ReadonlyMap<number, string>;
 }
 
-/** What a batch of events asked of the runtime before the next flush. */
 export interface FoldOutcome {
-  /** A pi-durable snapshot arrived: the caller must `reset` from fresh history. */
   resnapshot: boolean;
-  /** The inbox moved: the caller should `setQueued` from the inbox document. */
   inboxChanged: boolean;
 }
 
-/** Unanswered reasons recorded on the conversation's submissions, by user entry id. */
 export function unansweredOf(records: Iterable<SubmissionRecord>): Map<number, string> {
   const out = new Map<number, string>();
   for (const record of records) {
@@ -53,7 +34,6 @@ export function unansweredOf(records: Iterable<SubmissionRecord>): Map<number, s
   return out;
 }
 
-/** Model-issued calls of the current round (nested calls live in `nestedTools`). */
 function liveTools(slots: readonly ToolSlot[]): Map<string, LiveTool> {
   const tools = new Map<string, LiveTool>();
   for (const slot of slots) {
@@ -75,9 +55,7 @@ export class ChatProjection {
   #queued: readonly QueuedMessage[] = [];
   readonly #unanswered = new Map<number, string>();
   readonly #window: number | undefined;
-  /** The window's first message id, fixed once older messages exist. */
   #from: string | undefined;
-  /** The state last handed out (what the next flush diffs against). */
   #shown: ChatState;
 
   constructor(snapshot: ProjectionSnapshot, options: { window?: number } = {}) {
@@ -86,17 +64,14 @@ export class ChatProjection {
     this.#shown = this.#windowed(true)!;
   }
 
-  /** The state as this projection shows it (windowed when a window was asked for). */
   get state(): ChatState {
     return this.#shown;
   }
 
-  /** The whole transcript, unwindowed. */
   full(): ChatState {
     return chatState(this.#raw());
   }
 
-  /** Start over from a fresh snapshot (a pi-durable re-snapshot). The next flush re-windows. */
   reset(snapshot: ProjectionSnapshot): void {
     this.#entries.clear();
     this.#unanswered.clear();
@@ -108,11 +83,6 @@ export class ChatProjection {
     this.#queued = queued;
   }
 
-  /**
-   * Fold a batch of events. A `snapshot` event is not folded: it means the
-   * stream restarted, and the caller must `reset` from fresh history before
-   * flushing (its other events are still applied, in order).
-   */
   fold(events: readonly AgentEvent[]): FoldOutcome {
     const outcome: FoldOutcome = { resnapshot: false, inboxChanged: false };
     for (const event of events) {
@@ -129,7 +99,6 @@ export class ChatProjection {
     return outcome;
   }
 
-  /** Fold one event. */
   apply(event: AgentEvent): void {
     switch (event.type) {
       case "tool_execution_start":
@@ -197,11 +166,6 @@ export class ChatProjection {
     }
   }
 
-  /**
-   * The events that turn the state last shown into the current one: a
-   * `snapshot` after a reset, or when the window's start vanished (never
-   * expected), else the minimal diff. Empty when nothing changed.
-   */
   flush(options: { resnapshot?: boolean } = {}): ChatEvent[] {
     let resnapshot = options.resnapshot === true;
     const kept = resnapshot ? undefined : this.#windowed(false);
@@ -234,7 +198,6 @@ export class ChatProjection {
     };
   }
 
-  /** `full` as this projection shows it; undefined when the window's start is gone. */
   #windowed(fresh: boolean): ChatState | undefined {
     const full = this.full();
     if (this.#window === undefined) return full;
@@ -246,7 +209,6 @@ export class ChatProjection {
   }
 }
 
-/** One streaming change applied to the in-flight assistant message. */
 function applyChange(message: AssistantMessage, change: MessageChange): AssistantMessage {
   if (change.type === "message") return structuredClone(change.message);
   const content = [...message.content];

@@ -1,12 +1,9 @@
 import type { BotListEntry } from "../../shared/api/bots";
 
-/** Recent bots shown before the sidebar folds the rest behind "Show more". */
 export const RECENT_FOLD_LIMIT = 8;
 
 export interface BotGroups {
-  /** Pinned bots, in the order they were pinned (stable while others reply). */
   pinned: BotListEntry[];
-  /** Everything else, most recently active first. */
   recent: BotListEntry[];
 }
 
@@ -20,10 +17,6 @@ export function groupBots(bots: BotListEntry[]): BotGroups {
   return { pinned, recent };
 }
 
-/**
- * The recent rows to render. When folded, only the first `limit` show, but
- * the open bot is always kept visible so the sidebar never hides where you are.
- */
 export function visibleRecent(
   recent: BotListEntry[],
   expanded: boolean,
@@ -36,7 +29,6 @@ export function visibleRecent(
   return active && !head.includes(active) ? [...head, active] : head;
 }
 
-/** A bot row's activity time: "now", "5m", "3h", "Yesterday", "Mon", "12 Oct". */
 export function relativeTime(iso: string, now = Date.now()): string {
   const at = new Date(iso).getTime();
   if (Number.isNaN(at)) return "";
@@ -53,7 +45,6 @@ export function relativeTime(iso: string, now = Date.now()): string {
   return date.toLocaleDateString(undefined, { day: "numeric", month: "short" });
 }
 
-/** One line of a message for a list row: markdown markers and line breaks flattened. */
 export function previewLine(text: string): string {
   return text
     .replace(/[*_`#>]+/g, "")

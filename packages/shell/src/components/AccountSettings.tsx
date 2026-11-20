@@ -3,7 +3,6 @@ import { DataField, DataFields } from "@groot/ui/display";
 import { Text, monoClass } from "@groot/ui/typography";
 import { useAuthStore } from "@groot/shell/store/auth";
 
-/** The signed-in user's profile, read-only. */
 export function AccountSettings() {
   const user = useAuthStore((state) => state.user);
   if (!user) return null;

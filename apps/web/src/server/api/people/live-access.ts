@@ -1,35 +1,18 @@
-/**
- * Live access: everything a person holds open past the request that let
- * them in. An SSE stream, a desktop viewer's socket and a viewer ticket not
- * yet redeemed were each checked once, when they opened; the guard never
- * sees them again. Each registers here, and taking access away (removing a
- * guest, unsharing a bot, deleting it) closes what it covers at once.
- *
- * Registration re-checks the grant against the database synchronously, so a
- * revocation that lands between a request's guard and its registration (the
- * route awaited something in between) is still seen: it either committed
- * before the check, which then refuses, or runs after the registration and
- * closes it.
- */
 import { and, eq } from "drizzle-orm";
 import { db, botGuests, guests, users } from "../../db";
 import { app } from "../../app-root";
 
-/** What a live connection was opened under: a person, and the bot it shows (none for app-wide feeds). */
 export interface LiveGrant {
   userId: number;
   botId?: string;
-  /** A guest's viewer: it may watch the desktop but its input never reaches it (S2). */
   viewOnly?: boolean;
 }
 
-/** One live connection and the grant it was opened under (`app().liveAccess`). */
 export interface HeldLiveAccess {
   grant: LiveGrant;
   close(): void;
 }
 
-/** Whether the grant still holds: the account exists, and a guest's bot is still shared with them. */
 function granted({ userId, botId }: LiveGrant): boolean {
   const account = db.select({ id: users.id }).from(users).where(eq(users.id, userId)).get();
   if (!account) return false;
@@ -48,11 +31,6 @@ function granted({ userId, botId }: LiveGrant): boolean {
   return share !== undefined;
 }
 
-/**
- * Register a live connection under `grant`; `close` ends it when the grant
- * is revoked, and at once when it no longer holds. Returns the release, to
- * call when it ends on its own.
- */
 export function holdLiveAccess(grant: LiveGrant, close: () => void): () => void {
   if (!granted(grant)) {
     close();
@@ -66,10 +44,6 @@ export function holdLiveAccess(grant: LiveGrant, close: () => void): () => void 
 
 type Revocation = { userId: number; botId?: string } | { botId: string };
 
-/**
- * Close every live connection of this person (given a bot, only those
- * showing it), or, given only a bot, everyone's showing it.
- */
 export function revokeLiveAccess(revoked: Revocation): void {
   const held = app().liveAccess;
   for (const entry of [...held]) {

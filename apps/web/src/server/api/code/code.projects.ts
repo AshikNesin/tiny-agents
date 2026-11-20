@@ -1,11 +1,3 @@
-/**
- * Code projects (issue #297 §6, ADR 0021): a GitHub repository bound to a
- * checkout on the sandbox, with defaults and scripts. A thread started in a
- * project gets its own worktree on a new branch, cut from the freshly
- * fetched base branch, and the harness runs there as it would in any
- * directory, so this works for every harness whose `cwd` is on the sandbox
- * without a driver change. Threads without a project are untouched.
- */
 import { randomBytes } from "node:crypto";
 import { and, desc, eq } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
@@ -58,15 +50,12 @@ const DEFAULT_PROJECT_SETTINGS: ProjectSettings = {
   },
 };
 
-/** A project's stored settings over the defaults; anything malformed falls back. */
 export function projectSettings(raw: string): ProjectSettings {
   let value: Partial<ProjectSettings> = {};
   try {
     const parsed = JSON.parse(raw) as unknown;
     if (parsed && typeof parsed === "object") value = parsed as Partial<ProjectSettings>;
-  } catch {
-    // Defaults.
-  }
+  } catch {}
   const d = DEFAULT_PROJECT_SETTINGS;
   return {
     scripts: { ...d.scripts, ...value.scripts },
@@ -114,7 +103,6 @@ export async function getProject(id: string): Promise<CodeProjectRow> {
   return row;
 }
 
-/** Where a project's checkout and worktrees live on the sandbox. */
 function projectRoot(home: string, repo: RepoRef): string {
   return `${home.replace(/\/$/, "")}/tiny-agents-code/${repo.owner}--${repo.name}`;
 }
@@ -122,10 +110,6 @@ function projectRoot(home: string, repo: RepoRef): string {
 const worktreePath = (project: CodeProjectRow, branch: string) =>
   `${project.checkoutPath.replace(/\/checkout$/, "")}/worktrees/${branch.replaceAll("/", "_")}`;
 
-/**
- * Create a project: check the sandbox has what it needs and the credential
- * reaches the repository, then clone it (or reuse a checkout already there).
- */
 export async function createProject(input: ProjectCreateBody): Promise<CodeProjectRow> {
   const repo = parseRepo(input.repo);
   if (!repo) throw Boom.badRequest("Give a GitHub repository as owner/name or its URL.");
@@ -218,14 +202,12 @@ export async function updateProject(
   return updated!;
 }
 
-/** Remove a project: its threads keep working without one; the checkout stays on the sandbox. */
 export async function deleteProject(id: string): Promise<void> {
   await getProject(id);
   await db.update(codeThreads).set({ projectId: null }).where(eq(codeThreads.projectId, id));
   await db.delete(codeProjects).where(eq(codeProjects.id, id));
 }
 
-/** The project thread behind a thread id, or undefined for a thread without a project. */
 export async function projectThread(
   threadId: string,
 ): Promise<{ thread: CodeThreadRow; project: CodeProjectRow } | undefined> {
@@ -237,7 +219,6 @@ export async function projectThread(
   return project ? { thread, project } : undefined;
 }
 
-/** A project thread with its worktree and workspace, or a 404 that says why it has none. */
 export async function threadWorktree(threadId: string) {
   const found = await projectThread(threadId);
   if (!found) throw Boom.notFound("This thread is not in a project.");
@@ -251,7 +232,6 @@ export async function threadWorktree(threadId: string) {
   return { thread, project, worktree: thread.worktree, branch: thread.branch, ws };
 }
 
-/** The scripts that apply: the project's overrides over the checked-in file. */
 export async function scriptsFor(
   project: CodeProjectRow,
   ws: Workspace,
@@ -261,7 +241,6 @@ export async function scriptsFor(
   return { ...checkedIn, ...projectSettings(project.settings).scripts };
 }
 
-/** What the agent is told once, at the top of a project thread's first message. */
 function projectPreamble(
   project: CodeProjectRow,
   branch: string,
@@ -279,7 +258,6 @@ function projectPreamble(
   return lines.join("\n");
 }
 
-/** `<prefix><slug>`, or `<prefix><slug>-2`, `-3`, … when an earlier thread took the name. */
 async function freeBranch(
   ws: Workspace,
   checkout: string,
@@ -294,23 +272,15 @@ async function freeBranch(
 }
 
 export interface ProjectThreadInput extends CreateThreadInput {
-  /** Check out this existing branch (a PR's head) instead of cutting a new one. */
   branch?: string;
 }
 
-/**
- * Start a thread in a project: a worktree on a new branch from the freshly
- * fetched base (or on an existing branch), `setup` before the first turn
- * (a failure is reported to the agent, and the turn still starts), then
- * the harness's own `createThread` with that worktree as `cwd`.
- */
 export async function startProjectThread(
   project: CodeProjectRow,
   instance: HarnessInstance,
   input: ProjectThreadInput,
 ): Promise<{ nativeId: string; branch: string; worktree: string }> {
   const ws = await codeGitHub().workspace(project);
-  // A new branch and the thread's short title come from one naming call.
   const names = input.branch ? null : await threadNames(input.message);
   const prefix = projectSettings(project.settings).branchPrefix;
   const branch = input.branch ?? (await freeBranch(ws, project.checkoutPath, prefix, names!.slug));
@@ -324,7 +294,6 @@ export async function startProjectThread(
     const result = await ws.runScript(path, scripts.setup);
     if (!result.ok) setupFailure = result.output || "It exited with an error.";
   }
-  // The start checkpoint: the worktree as the agent first sees it (seq 0).
   const startCheckpoint = await ws
     .checkpoint(path, checkpointRef(branch, 0))
     .catch(() => undefined);
@@ -341,8 +310,6 @@ export async function startProjectThread(
     await ws.removeWorktree(project.checkoutPath, path).catch(() => undefined);
     throw error;
   }
-  // With no title from the model (or no naming call, on an existing branch), the
-  // branch's words: never the project line the harness took from the message.
   await applyTitle(instance, created.nativeId, names?.title ?? branchTitle(branch));
   const id = threadIdOf(instance.id, created.nativeId);
   const set = { projectId: project.id, branch, baseSha, worktree: path, cwd: path };
@@ -360,11 +327,6 @@ export async function startProjectThread(
   return { nativeId: created.nativeId, branch, worktree: path };
 }
 
-/**
- * Every commit in the thread's worktree carries `Thread-Id: <thread id>`
- * (issue #297 §6), so `git log` leads back to the conversation. Installed as
- * soon as the harness has named the thread; a failure is logged, not fatal.
- */
 async function installThreadTrailer(
   ws: Workspace,
   project: CodeProjectRow,
@@ -380,11 +342,6 @@ async function installThreadTrailer(
     );
 }
 
-/**
- * A project thread was archived or unarchived (issue #297 §7.6): archive
- * runs the `archive` script and removes the worktree (the branch and the
- * transcript stay); unarchive recreates it from the branch and runs `setup`.
- */
 export async function onProjectThreadArchived(threadId: string, archived: boolean): Promise<void> {
   const found = await projectThread(threadId);
   if (!found?.thread.branch) return;
@@ -412,7 +369,6 @@ export async function onProjectThreadArchived(threadId: string, archived: boolea
   await db.update(codeThreads).set({ worktree: path }).where(eq(codeThreads.id, threadId));
 }
 
-/** A project thread was deleted: its worktree goes; its branch stays. */
 export async function onProjectThreadDeleted(threadId: string): Promise<void> {
   const found = await projectThread(threadId);
   if (!found?.thread.worktree) return;
@@ -421,7 +377,6 @@ export async function onProjectThreadDeleted(threadId: string): Promise<void> {
   await releaseReviews(found.thread.worktree);
 }
 
-/** Reviews that showed a thread's worktree lose it with the thread: opening the PR again checks it out. */
 async function releaseReviews(worktree: string): Promise<void> {
   await db
     .update(codeReviews)

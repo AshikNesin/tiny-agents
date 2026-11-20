@@ -15,7 +15,6 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 import org.junit.runner.RunWith
 
-/** The server's Web Push payloads (issue #306), and the notification each becomes. */
 @RunWith(AndroidJUnit4::class)
 class PushPayloadTest {
     @Test

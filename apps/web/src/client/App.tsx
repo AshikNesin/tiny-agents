@@ -37,10 +37,8 @@ import { isGuestPage } from "../shared/guest-access";
 import { useUiStore } from "./store/ui";
 import { usePeopleStore, useIsGuest } from "./store/people";
 
-/** Brand + login copy + profile-menu nav, in one place (ShellProvider). */
 const SHELL_CONFIG: ShellConfig = {
   brand: { label: "tiny-agents", icon: BrandMark, to: "/chats" },
-  // Phones open the app's sidebar as a drawer from every page's menu button.
   openNav: () => useUiStore.getState().setMobileOpen(true),
   nav: [
     ...APP_NAV,
@@ -48,8 +46,6 @@ const SHELL_CONFIG: ShellConfig = {
       label: "Settings",
       icon: SettingsIcon,
       to: "/settings",
-      // The full-page settings screen brings its own chrome (upstream): no
-      // app sidebar there, and mod+, opens it from anywhere.
       fullPage: true,
       shortcut: "mod+,",
     },
@@ -78,15 +74,9 @@ const SHELL_CONFIG: ShellConfig = {
   },
 };
 
-/**
- * Toasts sit at the top: bottom-right put them over the chat composer's
- * Send/Stop button, swallowing clicks for the few seconds they show.
- */
 const TOASTER = { position: "top-center" } as const;
 
-/** Providers that need the router (nuqs reads and writes the URL). */
 function Root() {
-  // A guest's profile menu lists only what they may open (issue #145).
   const guest = useIsGuest();
   const config = useMemo<ShellConfig>(
     () =>
@@ -118,7 +108,6 @@ function Root() {
   );
 }
 
-/** The server refuses a guest anyway; this keeps the shell from showing a page full of errors. */
 function GuestGate() {
   const guest = usePeopleStore((s) => s.guest);
   const { pathname } = useLocation();
@@ -182,8 +171,6 @@ export const appRoutes: RouteObject[] = [
               { path: "/vault/requests/:taskId", element: <VaultPage /> },
               { path: "/storage", element: <Storage /> },
               { path: "/jobs", element: <Jobs /> },
-              // The jobs kit links to /jobs/:jobId (its documented route, #169); the
-              // older two-segment form keeps working for existing links.
               { path: "/jobs/:jobId", element: <JobDetail /> },
               { path: "/jobs/:queueName/:jobId", element: <JobDetail /> },
               { path: "/settings/*", element: <SettingsPage /> },
@@ -196,8 +183,6 @@ export const appRoutes: RouteObject[] = [
   },
 ];
 
-// A data router, so pages can hold navigation while they have unsaved edits
-// (useBlocker).
 const router = createBrowserRouter(appRoutes);
 
 function App() {

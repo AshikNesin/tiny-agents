@@ -10,21 +10,6 @@ import { ArrowDownIcon } from "lucide-react";
 import { Button } from "@groot/ui/button";
 import { cn } from "@groot/ui/lib/utils";
 
-/**
- * Chat transcript scroller (stick-to-bottom while streaming, anchor-aware
- * scrolling, jump-to-end button). Structure:
- *
- *   <MessageScrollerProvider autoScroll defaultScrollPosition="end">
- *     <MessageScroller>
- *       <MessageScrollerViewport>
- *         <MessageScrollerContent>
- *           <MessageScrollerItem messageId={id} scrollAnchor={isUserTurn}>…</MessageScrollerItem>
- *         </MessageScrollerContent>
- *       </MessageScrollerViewport>
- *       <MessageScrollerButton />
- *     </MessageScroller>
- *   </MessageScrollerProvider>
- */
 function MessageScrollerProvider(
   props: React.ComponentProps<typeof MessageScrollerPrimitive.Provider>,
 ) {

@@ -22,10 +22,6 @@ import groot.mobile.ui.components.Field
 import groot.mobile.ui.components.PrimaryButton
 import groot.mobile.ui.components.Sheet
 
-/**
- * The sign-in sheet for a bot's credential request: the owner types what the page needs,
- * the server fills it into the page, and the bot never sees it.
- */
 @Composable
 fun CredentialSheet(
     call: ToolCall,

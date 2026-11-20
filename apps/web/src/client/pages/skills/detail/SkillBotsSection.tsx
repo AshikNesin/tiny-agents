@@ -3,7 +3,6 @@ import { Section } from "@groot/shell/components/layout/Section";
 import type { BotListEntry } from "../../../../shared/api/bots";
 import type { Skill } from "../../../../shared/api/skills";
 
-/** Which bots load the skill, a checkbox each; a tick saves at once. */
 export function SkillBotsSection({
   skill,
   bots,
@@ -11,7 +10,6 @@ export function SkillBotsSection({
   toggleBot,
 }: {
   skill: Skill;
-  /** Null while the bot list loads. */
   bots: BotListEntry[] | null;
   usedBy: number;
   toggleBot: (botId: string) => Promise<void>;

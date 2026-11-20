@@ -1,11 +1,3 @@
-/**
- * The one outbound path a provider account's discovery and Test take
- * (issue #179): https only (http when the account opted in to a private
- * endpoint), no credentials, query or fragment in the base URL, no
- * redirects, a deadline and a size cap. The address is checked when the
- * socket connects, after DNS, so a name that resolves to a private address
- * is refused unless the account opted in.
- */
 import { lookup as dnsLookup, type LookupAddress } from "node:dns";
 import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
@@ -20,7 +12,6 @@ export class OutboundRefusedError extends Error {
 }
 
 export interface OutboundOptions {
-  /** The account opted in to a private or LAN endpoint (Ollama, LM Studio). */
   allowPrivateNetwork: boolean;
   timeoutMs?: number;
   maxBytes?: number;
@@ -29,10 +20,6 @@ export interface OutboundOptions {
 const DEFAULT_TIMEOUT_MS = 15_000;
 const DEFAULT_MAX_BYTES = 4 * 1024 * 1024;
 
-/**
- * Validate an account's base URL. Returns it canonical (no trailing slash).
- * Throws `OutboundRefusedError` with what to fix.
- */
 export function checkBaseUrl(raw: string, allowPrivateNetwork: boolean): string {
   let url: URL;
   try {
@@ -54,7 +41,6 @@ export function checkBaseUrl(raw: string, allowPrivateNetwork: boolean): string 
   return url.toString().replace(/\/+$/, "");
 }
 
-/** A DNS lookup that refuses private addresses unless allowed. */
 function guardedLookup(allowPrivateNetwork: boolean): LookupFunction {
   return (hostname, options, callback) => {
     dnsLookup(hostname, { ...options, all: true }, (error, addresses) => {
@@ -78,7 +64,6 @@ function guardedLookup(allowPrivateNetwork: boolean): LookupFunction {
   };
 }
 
-/** GET `url` through the guard. Never follows a redirect. */
 export function guardedGet(
   url: string,
   headers: Record<string, string>,
@@ -123,7 +108,6 @@ export function guardedGet(
   });
 }
 
-/** Resolve the endpoint's host now and refuse a private address (before a Test call). */
 export function checkResolvesPublic(url: string, allowPrivateNetwork: boolean): Promise<void> {
   if (allowPrivateNetwork) return Promise.resolve();
   const host = new URL(url).hostname;

@@ -10,10 +10,6 @@ import type {
   ScheduleJobOptions,
 } from "./types";
 
-/**
- * Jobs API client. Thin typed wrappers over the shared `apiClient` — the
- * envelope unwrapping and 401 handling live in one place (@groot/shell/lib/api).
- */
 export const jobsApi = {
   async getJobStats(): Promise<JobStats> {
     return apiClient.get<JobStats>("/jobs/stats");
@@ -22,7 +18,6 @@ export const jobsApi = {
   async getJobs(options?: {
     state?: string;
     name?: string;
-    /** Substring of the job's name or id, case-insensitive. */
     search?: string;
     limit?: number;
     offset?: number;
@@ -87,7 +82,6 @@ export const jobsApi = {
     return apiClient.get<JobSchedule[]>("/jobs/schedule");
   },
 
-  /** Create or replace the schedule for `jobName` (one per name). */
   async scheduleJob(
     jobName: JobName,
     cron: string,
@@ -97,7 +91,6 @@ export const jobsApi = {
     return apiClient.post<JobSchedule>("/jobs/schedule", { jobName, data, cron, options });
   },
 
-  /** Schedules are keyed by job name — one per name — so this removes that name's schedule. */
   async cancelScheduledJob(jobName: string): Promise<void> {
     await apiClient.delete(`/jobs/schedule/${encodeURIComponent(jobName)}`);
   },

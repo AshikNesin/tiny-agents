@@ -26,41 +26,27 @@ import tinyagents.terminal.TerminalEmulator
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
-/** The attach to the open tab. */
 enum class TerminalLink { Idle, Connecting, Live, Reconnecting, Ended }
 
 data class TerminalState(
-    /** "ready", "unconfigured", "unreachable" or "tmux-missing"; null until the first list arrives. */
     val status: String? = null,
     val message: String? = null,
     val installCommand: String? = null,
     val tabs: List<TerminalTab> = emptyList(),
-    /** The open tab's name. */
     val active: String? = null,
     val link: TerminalLink = TerminalLink.Idle,
     val loadError: String? = null,
-    /** Bumped after each batch of output, so the view redraws. */
     val version: Long = 0,
-    /** A tab the server refused to close because something runs in it; closing again forces it. */
     val busyTab: String? = null,
     val busyProcess: String? = null,
 )
 
-/**
- * The Terminal screen: tmux tabs on the sandbox, one attached at a time. The server relays
- * raw pty bytes over a ticketed WebSocket (binary frames) with JSON control frames beside
- * them (resize, pause and resume, ping); the `:terminal` module turns the bytes into a screen.
- *
- * Close codes are the server's contract: 1000 the session ended or this client was detached
- * (stop, offer Reconnect), 4000 idle (reattach), anything else a drop (retry with backoff).
- */
 class TerminalViewModel(private val container: AppContainer) : ViewModel() {
     private val api = container.api
 
     private val _state = MutableStateFlow(TerminalState())
     val state: StateFlow<TerminalState> = _state.asStateFlow()
 
-    /** The open tab's screen. Fed and read on the main thread only. */
     var emulator: TerminalEmulator = TerminalEmulator(DEFAULT_COLS, DEFAULT_ROWS, reply = ::send)
         private set
 
@@ -97,13 +83,11 @@ class TerminalViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
-    /** The screen is visible: attach the open tab. */
     fun show() {
         visible = true
         ensureAttached()
     }
 
-    /** Off screen: detach, so the server's idle timer can free the tab's attach. */
     fun hide() {
         visible = false
         detach()
@@ -134,7 +118,6 @@ class TerminalViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
-    /** Close a tab. The server refuses while something runs in it; the screen then asks before forcing. */
     fun closeTab(name: String, force: Boolean = false) {
         viewModelScope.launch {
             try {
@@ -159,18 +142,15 @@ class TerminalViewModel(private val container: AppContainer) : ViewModel() {
 
     fun dismissBusy() = _state.update { it.copy(busyTab = null, busyProcess = null) }
 
-    /** Reattach after the session ended or this client was detached. */
     fun reconnect() {
         detach()
         ensureAttached()
     }
 
-    /** Keystrokes, as pty bytes. Dropped while the socket is not open. */
     fun send(bytes: ByteArray) {
         if (bytes.isNotEmpty()) socket?.send(bytes.toByteString())
     }
 
-    /** The view's grid changed: resize the screen and tell tmux. */
     fun resize(newCols: Int, newRows: Int) {
         if (newCols == cols && newRows == rows) return
         cols = newCols
@@ -205,7 +185,6 @@ class TerminalViewModel(private val container: AppContainer) : ViewModel() {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: ApiException) {
-                // The tab is gone (404/409): stop for good; anything else is retried.
                 if (e.status == 404 || e.status == 409) NORMAL_CLOSE else DROPPED
             } catch (_: Exception) {
                 DROPPED
@@ -224,12 +203,10 @@ class TerminalViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
-    /** One attach, until the socket closes; returns its close code ([DROPPED] for a failure). */
     private suspend fun streamOnce(path: String, onOpen: () -> Unit): Int {
         val frames = Channel<ByteArray>(Channel.UNLIMITED)
         val queued = AtomicLong(0)
         val closed = CompletableDeferred<Int>()
-        // Written on OkHttp's reader thread, read on main.
         val lastPong = AtomicLong(System.nanoTime())
         val paused = AtomicBoolean(false)
         val webSocket = api.socket(
@@ -241,7 +218,6 @@ class TerminalViewModel(private val container: AppContainer) : ViewModel() {
                 }
 
                 override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
-                    // The renderer is behind: ask the server to stop reading the pty until it catches up.
                     if (queued.addAndGet(bytes.size.toLong()) > HIGH_WATERMARK && paused.compareAndSet(false, true)) {
                         webSocket.send("""{"t":"pause"}""")
                     }
@@ -267,7 +243,6 @@ class TerminalViewModel(private val container: AppContainer) : ViewModel() {
             },
         )
         socket = webSocket
-        // Output is parsed here, on the main thread, where the view also reads the screen.
         val pump = viewModelScope.launch {
             for (first in frames) {
                 var frame: ByteArray? = first
@@ -283,7 +258,6 @@ class TerminalViewModel(private val container: AppContainer) : ViewModel() {
                 _state.update { it.copy(version = emulator.version) }
             }
         }
-        // A ping keeps the server's idle timer off a tab someone is looking at, and its pong shows the socket is alive.
         val heartbeat = viewModelScope.launch {
             while (true) {
                 delay(PING_INTERVAL_MS)

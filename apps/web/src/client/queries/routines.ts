@@ -1,4 +1,3 @@
-/** The Routines page's resource: the routines with the recent runs, and their writes (`lib/routines-api.ts`). */
 import { useMutation } from "@tanstack/react-query";
 import type {
   Routine,
@@ -9,10 +8,8 @@ import type {
 import { routinesApi } from "../lib/routines-api";
 import { RESOURCE_MUTATION, useResource } from "./resource";
 
-/** How many recent runs the page lists. */
 const RECENT_RUNS = 10;
 
-/** The routines and the recent runs, fetched together so they land together. */
 export const useRoutines = () =>
   useResource(
     ["routines", "page"],
@@ -26,10 +23,6 @@ export const useRoutines = () =>
     "Failed to load routines",
   );
 
-/**
- * The routine writes. None refetches: the page does after each, at the point
- * it always did (before a card's toast, once the editor has closed).
- */
 export function useRoutineMutations() {
   const create = useMutation({
     mutationFn: (input: RoutineCreateBody) => routinesApi.create(input),

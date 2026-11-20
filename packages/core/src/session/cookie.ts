@@ -3,7 +3,6 @@ import { env } from "../env";
 import { sessionLifetimeMs } from "./token";
 import type { AppContext } from "../types";
 
-/** The httpOnly cookie that carries the session token for browsers. */
 const SESSION_COOKIE = "token";
 
 export function setSessionCookie(c: AppContext, token: string): void {
@@ -21,7 +20,6 @@ export function clearSessionCookie(c: AppContext): void {
   deleteCookie(c, SESSION_COOKIE, { path: "/" });
 }
 
-/** The token from the session cookie, falling back to `Authorization: Bearer`. */
 export function readSessionToken(c: AppContext): string | undefined {
   const cookie = getCookie(c, SESSION_COOKIE);
   if (cookie) return cookie;

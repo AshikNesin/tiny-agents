@@ -1,16 +1,9 @@
-/**
- * Reading an MCP tool's JSON Schema for the tool page: a parameter table and
- * the playground's form. Only top-level properties become form fields;
- * anything nested (objects, arrays, unions) is entered as JSON.
- */
-
 type Schema = Record<string, unknown>;
 
 type FieldKind = "string" | "number" | "integer" | "boolean" | "enum" | "json";
 
 export interface SchemaField {
   name: string;
-  /** Human-readable type, e.g. `string`, `number[]`, `"a" | "b"`. */
   type: string;
   kind: FieldKind;
   required: boolean;
@@ -19,14 +12,12 @@ export interface SchemaField {
   defaultValue?: unknown;
 }
 
-/** A form value: text for inputs, "true"/"false" for booleans, "" for unset. */
 export type FieldValues = Record<string, string>;
 
 function isSchema(value: unknown): value is Schema {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-/** The non-null branches of a `type: [...]` or `anyOf`/`oneOf` (nullable optionals). */
 function variants(schema: Schema): Schema[] {
   const union = (schema.anyOf ?? schema.oneOf) as unknown;
   if (Array.isArray(union)) {
@@ -70,7 +61,6 @@ function kindOf(schema: Schema): Pick<SchemaField, "kind" | "options"> {
   }
 }
 
-/** Top-level parameters of an object schema, required ones first. */
 export function schemaFields(schema: unknown): SchemaField[] {
   if (!isSchema(schema) || !isSchema(schema.properties)) return [];
   const required = new Set(
@@ -90,14 +80,12 @@ export function schemaFields(schema: unknown): SchemaField[] {
   return [...fields.filter((f) => f.required), ...fields.filter((f) => !f.required)];
 }
 
-/** Whether a schema takes arbitrary keys besides (or instead of) its properties. */
 export function hasOpenShape(schema: unknown): boolean {
   if (!isSchema(schema)) return true;
   const fixed = isSchema(schema.properties) && Object.keys(schema.properties).length > 0;
   return !fixed && schema.additionalProperties !== false;
 }
 
-/** Form values to start from: declared defaults, otherwise empty. */
 export function initialValues(fields: SchemaField[]): FieldValues {
   return valuesFromArgs(
     fields,
@@ -105,7 +93,6 @@ export function initialValues(fields: SchemaField[]): FieldValues {
   );
 }
 
-/** A starting JSON object for the JSON editor: required parameters with placeholders. */
 export function exampleArgs(fields: SchemaField[]): Record<string, unknown> {
   const example: Record<string, unknown> = {};
   for (const field of fields) {
@@ -124,13 +111,11 @@ export type BuildResult =
   | { ok: true; args: Record<string, unknown> }
   | { ok: false; errors: Record<string, string> };
 
-/** Form values to call arguments; empty optional fields are left out. */
 export function buildArgs(fields: SchemaField[], values: FieldValues): BuildResult {
   const args: Record<string, unknown> = {};
   const errors: Record<string, string> = {};
   for (const field of fields) {
     const raw = values[field.name] ?? "";
-    // Whitespace is a valid string; for everything else it means unset.
     if (field.kind === "string" ? raw === "" : raw.trim() === "") {
       if (field.required) errors[field.name] = "Required";
       continue;
@@ -161,7 +146,6 @@ export function buildArgs(fields: SchemaField[], values: FieldValues): BuildResu
   return Object.keys(errors).length > 0 ? { ok: false, errors } : { ok: true, args };
 }
 
-/** Call arguments back to form values (switching from the JSON editor to the form). */
 export function valuesFromArgs(fields: SchemaField[], args: Record<string, unknown>): FieldValues {
   return Object.fromEntries(
     fields.map((field) => {
@@ -173,7 +157,6 @@ export function valuesFromArgs(fields: SchemaField[], args: Record<string, unkno
   );
 }
 
-/** Parse the JSON editor's text into call arguments. */
 export function parseArgsJson(
   text: string,
 ): { ok: true; args: Record<string, unknown> } | { ok: false; error: string } {

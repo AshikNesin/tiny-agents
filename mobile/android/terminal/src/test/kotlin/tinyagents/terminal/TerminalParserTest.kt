@@ -5,10 +5,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** The state machine itself, the terminal's own replies, OSC strings, modes and resets. */
 class TerminalParserTest {
-    // ------------------------------------------------------------ state machine
-
     @Test
     fun `C0 controls inside a CSI sequence execute and the sequence continues`() {
         val t = TestTerminal(20, 3).feed("abc$CSI\rC")
@@ -87,13 +84,10 @@ class TerminalParserTest {
         val t = TestTerminal(40, 3)
         t.feed("a${ESC}P1\$r0m$ESC\\b${ESC}_application \u0007 text$ESC\\c$ESC^privacy$ESC\\d${ESC}Xsos$ESC\\e")
         assertEquals("abcde", t.row(0))
-        // tmux passthrough wraps a doubled-ESC payload.
         t.feed("${ESC}Ptmux;$ESC$ESC]0;x\u0007$ESC\\f")
         assertEquals("abcdef", t.row(0))
         assertEquals("", t.replies())
     }
-
-    // ------------------------------------------------------------ replies
 
     @Test
     fun `device attributes`() {
@@ -134,8 +128,6 @@ class TerminalParserTest {
         assertEquals("", t.replies())
         assertEquals("", t.row(0))
     }
-
-    // ------------------------------------------------------------ OSC
 
     @Test
     fun `OSC 0 and 2 set the title with either terminator`() {
@@ -188,8 +180,6 @@ class TerminalParserTest {
         assertEquals("ab", t.row(0))
     }
 
-    // ------------------------------------------------------------ modes
-
     @Test
     fun `input modes are tracked`() {
         val e = TestTerminal(20, 3)
@@ -237,11 +227,9 @@ class TerminalParserTest {
         assertEquals(MouseTracking.ANY, t.feed("$CSI?1003h").emulator.mouseTracking)
         assertFalse(t.emulator.mouseSgrEncoding)
         assertTrue(t.feed("$CSI?1006h").emulator.mouseSgrEncoding)
-        // What tmux sends on detach.
         t.feed("$CSI?1000l$CSI?1002l$CSI?1003l$CSI?1006l")
         assertEquals(MouseTracking.NONE, t.emulator.mouseTracking)
         assertFalse(t.emulator.mouseSgrEncoding)
-        // What tmux sends with `mouse on`; the other encodings are accepted and ignored.
         t.feed("$CSI?1000h$CSI?1002h$CSI?1006h$CSI?1005l$CSI?1015h")
         assertEquals(MouseTracking.BUTTON, t.emulator.mouseTracking)
         assertTrue(t.emulator.mouseSgrEncoding)
@@ -270,8 +258,6 @@ class TerminalParserTest {
         t.feed("${CSI}3;1H\n")
         assertEquals("the region is the whole screen again", 1, t.emulator.scrollbackSize)
     }
-
-    // ------------------------------------------------------------ resets
 
     @Test
     fun `soft reset restores modes and the pen but keeps the screen`() {
@@ -312,7 +298,6 @@ class TerminalParserTest {
         assertEquals(emptyList<String>(), t.screen())
         assertEquals(0 to 0, t.cursor)
         assertEquals(TestTerminal(10, 3).emulator.dump(), t.emulator.dump())
-        // Tab stops, autowrap, charset and pen are back to their defaults.
         t.feed("\tq0123456789")
         assertEquals(listOf("        q0", "123456789"), t.screen())
         assertEquals(0, t.attrs(0, 8))

@@ -2,7 +2,6 @@ package groot.mobile.navigation
 
 import android.net.Uri
 
-/** Every screen's route, and the builders for the ones that take arguments. */
 object Routes {
     const val HOME = "home"
     const val SETTINGS = "settings"

@@ -12,7 +12,6 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.zip.Deflater
 
-/** Records every listener call as a line of text. */
 internal class RecordingListener : RfbListener {
     val all = CopyOnWriteArrayList<String>()
     private val queue = LinkedBlockingQueue<String>()
@@ -22,7 +21,6 @@ internal class RecordingListener : RfbListener {
         queue += event
     }
 
-    /** The next event, in order; fails after five seconds without one. */
     fun next(): String = queue.poll(5, TimeUnit.SECONDS) ?: error("no listener event within 5s, saw $all")
 
     fun awaitDisconnect(): String? {
@@ -40,7 +38,6 @@ internal class RecordingListener : RfbListener {
     override fun onDisconnected(reason: String?) = add("disconnected $reason")
 }
 
-/** Builds big-endian RFB messages. */
 internal class Msg {
     private val out = ByteArrayOutputStream()
 
@@ -51,20 +48,13 @@ internal class Msg {
     fun text(value: String) = bytes(value.toByteArray(Charsets.ISO_8859_1))
     fun pad(count: Int) = apply { repeat(count) { out.write(0) } }
 
-    /** A pixel in the client's wire format: B, G, R, unused. */
     fun pixel(vararg argb: Int) = apply { argb.forEach { c -> out.write(c); out.write(c shr 8); out.write(c shr 16); out.write(0x5A) } }
 
-    /** A ZRLE CPIXEL: B, G, R. */
     fun cpixel(vararg argb: Int) = apply { argb.forEach { c -> out.write(c); out.write(c shr 8); out.write(c shr 16) } }
 
     fun toByteArray(): ByteArray = out.toByteArray()
 }
 
-/**
- * The server end of an [RfbClient] under test, scripted by the test. Bytes reach the client
- * [chunk] at a time (0 sends each message whole). [factory] lets a test build the client another
- * way, as VncViewState.createClient does.
- */
 internal class FakeRfbServer(
     private val chunk: Int = 0,
     shared: Boolean = true,
@@ -75,10 +65,8 @@ internal class FakeRfbServer(
     private val toClient = ByteQueueInputStream()
     private val fromClientQueue = ByteQueueInputStream()
 
-    /** Every `write` call the client made, in order. */
     val writes = CopyOnWriteArrayList<ByteArray>()
 
-    /** Set when two threads were inside `write`/`flush` at once. */
     val overlappingWrites = AtomicInteger(0)
     var outputClosed = false
         private set
@@ -137,7 +125,6 @@ internal class FakeRfbServer(
 
     fun endOfStream() = toClient.endOfStream()
 
-    /** The next [count] bytes the client sent; fails when they do not arrive within ten seconds. */
     fun read(count: Int): ByteArray {
         val deadline = System.nanoTime() + 10_000_000_000L
         while (fromClientQueue.available() < count) {
@@ -163,7 +150,6 @@ internal class FakeRfbServer(
         )
     }
 
-    /** Runs the whole RFB 3.8 handshake and checks every byte the client sends. */
     fun handshake(width: Int, height: Int, name: String = "test desktop") {
         send(Msg().text("RFB 003.008\n"))
         expect("ProtocolVersion", Msg().text("RFB 003.008\n"))
@@ -173,7 +159,6 @@ internal class FakeRfbServer(
         afterSecurity(width, height, name)
     }
 
-    /** ClientInit, ServerInit, SetPixelFormat, SetEncodings and the first update request. */
     fun afterSecurity(width: Int, height: Int, name: String = "test desktop") {
         expect("ClientInit", Msg().u8(1))
         sendServerInit(width, height, name)
@@ -185,7 +170,6 @@ internal class FakeRfbServer(
 
     fun sendServerInit(width: Int, height: Int, name: String) {
         val nameBytes = name.toByteArray(Charsets.UTF_8)
-        // The server's own format, which the client replaces: 16 bpp big-endian 5-6-5.
         send(
             Msg().u16(width, height)
                 .u8(16, 16, 1, 1).u16(31, 63, 31).u8(11, 5, 0).pad(3)
@@ -193,7 +177,6 @@ internal class FakeRfbServer(
         )
     }
 
-    /** Sends a FramebufferUpdate made of [rects], each built with [rect]. */
     fun update(vararg rects: ByteArray, count: Int = rects.size) {
         val message = Msg().u8(0, 0).u16(count)
         rects.forEach { message.bytes(it) }
@@ -205,7 +188,6 @@ internal class FakeRfbServer(
         return fb.pixels[y * fb.width + x]
     }
 
-    /** The framebuffer region as a `width * height` array. */
     fun region(x: Int, y: Int, width: Int, height: Int): IntArray {
         val fb = client.framebuffer
         return IntArray(width * height) { i -> fb.pixels[(y + i / width) * fb.width + x + i % width] }
@@ -228,7 +210,6 @@ internal class FakeRfbServer(
         fun rawRect(x: Int, y: Int, width: Int, height: Int, pixels: IntArray): ByteArray =
             rect(x, y, width, height, 0, Msg().pixel(*pixels).toByteArray())
 
-        /** An ExtendedDesktopSize rectangle with one screen. */
         fun extendedDesktopSize(
             reason: Int,
             status: Int,
@@ -245,7 +226,6 @@ internal class FakeRfbServer(
 
 internal fun ByteArray.hex(): String = joinToString(" ") { "%02x".format(it) }
 
-/** Opaque pseudo-random pixels, the same for the same [seed]. */
 internal fun noise(count: Int, seed: Int): IntArray {
     val random = java.util.Random(seed.toLong())
     return IntArray(count) { OPAQUE or random.nextInt(0x1000000) }
@@ -253,24 +233,19 @@ internal fun noise(count: Int, seed: Int): IntArray {
 
 internal fun opaque(rgb: Int): Int = OPAQUE or rgb
 
-/** How a [ZrleEncoder] writes one tile. */
 internal sealed interface TileMode {
     data object Raw : TileMode
     data object Solid : TileMode
 
-    /** Packed palette with exactly [size] entries (2..16), padded with unused colours. */
     data class Packed(val size: Int) : TileMode
     data object PlainRle : TileMode
 
-    /** Palette RLE with exactly [size] entries (2..127), padded with unused colours. */
     data class PaletteRle(val size: Int) : TileMode
 }
 
-/** A ZRLE encoder for tests: one zlib stream, the tile type chosen by the test. */
 internal class ZrleEncoder {
     private val deflater = Deflater()
 
-    /** The rectangle payload for [image] (`width * height` pixels): length, then zlib data. */
     fun encode(image: IntArray, width: Int, height: Int, mode: (tile: Int) -> TileMode): ByteArray {
         val raw = Msg()
         var index = 0
@@ -285,7 +260,6 @@ internal class ZrleEncoder {
         return frame(compress(raw.toByteArray()))
     }
 
-    /** Compresses [data] into the connection's stream, ending with a sync flush. */
     fun compress(data: ByteArray): ByteArray {
         deflater.setInput(data)
         val out = ByteArrayOutputStream()
@@ -349,7 +323,6 @@ internal class ZrleEncoder {
     private fun palette(tile: IntArray, size: Int): IntArray {
         val colours = tile.distinct()
         require(colours.size <= size) { "the tile has ${colours.size} colours, more than $size" }
-        // Unused entries get colours no test image contains.
         return IntArray(size) { i -> if (i < colours.size) colours[i] else opaque(0xF0F000 + i) }
     }
 

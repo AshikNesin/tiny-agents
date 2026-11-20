@@ -41,10 +41,8 @@ import groot.mobile.ui.components.SectionLabel
 import groot.mobile.ui.components.Sheet
 import groot.mobile.ui.components.rememberResource
 
-/** Category display order, the order the bot's prompt lists them in. */
 private val CATEGORIES = listOf("preference", "fact", "goal", "habit")
 
-/** What each bot remembers about the owner: read it, fix it, add to it, or remove it. */
 @Composable
 fun MemoryRoute(container: AppContainer, initialBotId: String?, onBack: () -> Unit) {
     val bots by container.bots.state.collectAsStateWithLifecycle()
@@ -66,7 +64,6 @@ fun MemoryRoute(container: AppContainer, initialBotId: String?, onBack: () -> Un
             Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = S.lg, vertical = S.sm), horizontalArrangement = Arrangement.spacedBy(S.sm)) {
                 for (bot in bots.sorted) Chip(bot.name, selected = bot.id == current.id, onClick = { botId = bot.id })
             }
-            // One resource per bot, so switching bots shows that bot's memories at once when cached.
             key(current.id) {
                 val resource = rememberResource("memory:${current.id}") { container.api.memories(current.id) }
                 Box(Modifier.weight(1f)) {

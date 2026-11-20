@@ -1,13 +1,3 @@
-/**
- * Pushover channel (https://pushover.net/api): a small fetch client for the
- * messages, user validation and app limits endpoints. Credentials are read on
- * every call (they are env vars that may be unset), sent only in TLS POST
- * bodies or the limits query, and never appear in results or logs.
- *
- * Status mapping, per "Being friendly to the API": 429 is the monthly quota
- * (no retry until it resets); other 4xx or `status != 1` is bad input or bad
- * credentials (never retried); 5xx, network errors and timeouts are transient.
- */
 import type {
   ChannelQuota,
   NotificationChannel,
@@ -20,9 +10,7 @@ export const PUSHOVER_API = "https://api.pushover.net/1";
 const TIMEOUT_MS = 10_000;
 
 export interface PushoverOptions {
-  /** Application token (Pushover's APP_TOKEN). */
   token: () => string | undefined;
-  /** User or group key. */
   user: () => string | undefined;
   fetch?: typeof fetch;
   timeoutMs?: number;
@@ -46,7 +34,6 @@ function errorText(body: PushoverBody | undefined): string | undefined {
   return text ? text.slice(0, 300) : undefined;
 }
 
-/** Pushover names the bad field (`token: "invalid"`, `user: "invalid"`). */
 function badCredentials(body: PushoverBody | undefined): boolean {
   return body?.token === "invalid" || body?.user === "invalid";
 }
@@ -168,7 +155,6 @@ export function createPushoverChannel(options: PushoverOptions): NotificationCha
           device: message.device,
         });
       } catch (error) {
-        // Network failure or the timeout's AbortError/TimeoutError.
         return { ok: false, retryable: true, reason: "transient", detail: (error as Error).name };
       }
       const body = await readBody(response);

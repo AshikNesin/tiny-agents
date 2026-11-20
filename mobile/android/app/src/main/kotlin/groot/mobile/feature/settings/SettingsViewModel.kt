@@ -24,12 +24,10 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
 
     val guest: Boolean get() = container.bots.state.value.guest
 
-    /** Where this phone stands with the server's notifications. */
     val push: StateFlow<PushStatus> = container.push.status
 
     private val _testNote = MutableStateFlow<String?>(null)
 
-    /** What the last "Send test notification" came to. */
     val testNote: StateFlow<String?> = _testNote.asStateFlow()
 
     fun sendTestNotification() {
@@ -40,7 +38,6 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
-    /** Register this phone again: after a server update, or when it failed. */
     fun retryPush() {
         container.push.retry()
     }
@@ -49,17 +46,14 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch { container.themeModeStore.setThemeMode(mode) }
     }
 
-    /** Sign out here and tell the server; the token is forgotten either way. */
     fun signOut() {
         container.scope.launch {
-            // While the token still works: the server stops pushing to this phone.
             runCatching { container.push.signOut() }
             runCatching { container.api.logout() }
             container.session.signOut()
         }
     }
 
-    /** "Reset all data": signed out, the server forgotten, preferences cleared, theme back to System. */
     fun resetAll() {
         container.scope.launch {
             runCatching { container.push.signOut() }

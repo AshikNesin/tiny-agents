@@ -1,8 +1,3 @@
-/**
- * An assistant turn's tool calls: one row per call (its card, or a trace
- * step that opens to its input and output), and a run of finished calls
- * folded into one line.
- */
 import { useRef } from "react";
 import { Ban, Clock, ExternalLink, ListChecks, Sparkles } from "lucide-react";
 import type { ChatToolCall } from "../../lib/chat-types";
@@ -43,7 +38,6 @@ const STATUS_ICONS = {
   ban: <Ban className="size-3.5" />,
 };
 
-/** One shiki-highlighted JSON block for a tool call's Input or Output. */
 function ToolDetailBlock({
   title,
   value,
@@ -71,12 +65,6 @@ function ToolDetailBlock({
   );
 }
 
-/**
- * One tool call: the card `viewOf` picks for it (an approval card while it
- * waits, issue #1 D3/D4; a bot's questions for the owner; a hand-off), else
- * an AI Elements Tool step: a TraceLine with the call's status, expanding to
- * its arguments and result.
- */
 export function ToolRow({
   call,
   labels,
@@ -86,8 +74,6 @@ export function ToolRow({
   labels: ToolLabelCatalog;
   botName: string;
 }) {
-  // No owner actions: a Past chat (issue #101), where what still waits can
-  // no longer be answered.
   const actions = useOwnerActions();
   const view = viewOf(call, { readOnly: !actions });
   const contentRef = useRef<HTMLDivElement | null>(null);
@@ -120,9 +106,6 @@ export function ToolRow({
       </div>
     ) : null;
 
-  // A card is picked only with what it needs (owner actions, a task id, the
-  // call's details), so the assertions below hold. data-waiting: what a
-  // notification's ?focus= link scrolls to (focus-param.ts).
   switch (view.card) {
     case "vault-approval":
       return (
@@ -164,7 +147,6 @@ export function ToolRow({
           />
         </div>
       );
-    // ask_owner: the questionnaire while it waits, then the questions and answers.
     case "question":
       return (
         <div data-waiting={view.anchor}>
@@ -177,10 +159,8 @@ export function ToolRow({
       );
     case "asked-questions":
       return <AskedQuestions call={call} note={view.note} />;
-    // message_bot row: Grok's centered handoff line that opens the thread.
     case "bot-handoff":
       return <BotHandoff call={call} botName={botName} />;
-    // code_start / shelley_start (issue #143): the coding hand-off, linking to the Code page.
     case "code-handoff":
       return <CodeHandoffCard handoff={call.code!} />;
   }
@@ -211,9 +191,6 @@ export function ToolRow({
       {detail ? (
         <TraceCollapsible
           onOpenChange={(open) => {
-            // Expanding mid-transcript must bring the detail into view
-            // (friction #38): with long histories the opened block can be
-            // hundreds of px off-screen, which reads as "click did nothing".
             if (!open) return;
             requestAnimationFrame(() =>
               contentRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" }),
@@ -232,7 +209,6 @@ export function ToolRow({
   );
 }
 
-/** Finished tool calls folded into one line, as on the Code page; each call inside. */
 export function ToolGroupRow({
   calls,
   labels,

@@ -31,31 +31,23 @@ import { guestGuard } from "./api/people/guest.guard";
 import pushRoutes from "./api/notifications/push.routes";
 import { registerRoutineJobs } from "./api/routines/routines.jobs";
 
-/** Register every feature's job handlers. Call before `startWorkers()` / the first tick. */
 export function registerJobHandlers(): void {
   registerRoutineJobs();
   registerCodeJobs();
 }
 
-/** The HTTP app. Feature routers declare full paths (`/bots/:id`) and mount at the API root. */
 export function createWebApp(options: Omit<CreateAppOptions, "routes"> = {}) {
   return createApp({
     ...options,
     routes(app) {
-      // Public
       app.route("/api/v1/auth", authRoutes);
       app.route("/api/v1/passkey", passkeyRoutes);
-      // OAuth client metadata document: fetched by authorization servers.
       app.route("/api/v1", publicConnectionsRouter);
-      // The GitHub App's webhook: signed by GitHub, not by a session.
       app.route("/api/v1", codeWebhookRoutes);
-      // Android App Links: lets the Android app open this server's notification links.
       app.route("/", appLinksRouter);
 
-      // Protected (JWT cookie or bearer token)
       const api = new Hono<AppEnv>();
       api.use(requireSession);
-      // Guests reach only the bots shared with them and Code (issue #145).
       api.use(guestGuard());
       api.route("/", peopleRoutes);
       api.route("/", botsRoutes);

@@ -1,7 +1,3 @@
-/**
- * A task memo or document field is read back after a restart, possibly by a
- * newer build than the one that stored it, so every read parses it.
- */
 import { copyJson, type Context, type JsonValue } from "@earendil-works/chord";
 import type { ToolExecutionApi } from "@earendil-works/pi-durable";
 import { z } from "zod";
@@ -23,7 +19,6 @@ export function durableMemo<T>(key: string, schema: z.ZodType<T>) {
       const stored = await api.memo(key, context);
       return stored === undefined ? undefined : parseStored(key, stored, schema);
     },
-    /** Keeps `value` unless the call already kept one; returns the kept value. */
     async keep(api: Pick<ToolExecutionApi, "memo">, value: T, context: Context): Promise<T> {
       return parseStored(key, await api.memo(key, toJson(value), context), schema);
     },

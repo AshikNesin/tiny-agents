@@ -18,10 +18,6 @@ import groot.kit.theme.S
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
-/**
- * Runs [action] with a step-up token: at once when a fresh one is held, else after asking
- * for the owner's password. Call [StepUpGate.run] from a click handler.
- */
 class StepUpGate internal constructor(private val request: ((String) -> Unit) -> Unit) {
     fun run(action: (token: String) -> Unit) = request(action)
 }

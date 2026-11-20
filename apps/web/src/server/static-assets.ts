@@ -1,4 +1,3 @@
-/** Requests for build output (never an app route): /assets/* and common static files. */
 export function isAssetRequest(urlPath: string): boolean {
   return (
     urlPath.startsWith("/assets/") ||

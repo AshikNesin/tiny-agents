@@ -1,32 +1,21 @@
-/**
- * Archive listings (issue #58 §9.4): the app server lists archives and never
- * extracts them. Zip entries come from the central directory; tar headers
- * are walked (through gunzip for .tgz, stopping at the caps) while file data
- * is skipped. Unsafe paths and extreme compression ratios are flagged, and a
- * listing past the caps is marked suspicious instead of being expanded.
- */
 import { createGunzip } from "node:zlib";
 import { unzipSync } from "fflate";
 import type { AttachmentEntry } from "@tiny-agents/agent";
 
 export interface ArchiveLimits {
   maxEntries: number;
-  /** Total declared (uncompressed) size. */
   maxTotalBytes: number;
-  /** Per-entry declared/compressed ratio above which an entry is flagged. */
   maxRatio: number;
 }
 
 export interface ArchiveListing {
   entries: AttachmentEntry[];
   truncated: boolean;
-  /** Why the archive as a whole looks hostile (it is still only listed). */
   suspicious?: string;
 }
 
 const NESTED = /\.(zip|tar|tgz|gz|bz2|7z|rar|jar)$/i;
 
-/** Path traversal, absolute paths and control characters. */
 function pathFlag(path: string): string | undefined {
   // oxlint-disable-next-line no-control-regex
   if (/[\u0000-\u001f\u007f]/.test(path)) return "control characters in the name";
@@ -90,7 +79,6 @@ const cstring = (block: Uint8Array, offset: number, length: number) => {
 };
 
 function octal(block: Uint8Array, offset: number, length: number): number {
-  // GNU base-256 for sizes over 8 GB: the high bit is set.
   if (block[offset] & 0x80) {
     let value = 0;
     for (let i = offset + 1; i < offset + length; i++) value = value * 256 + block[i];
@@ -100,7 +88,6 @@ function octal(block: Uint8Array, offset: number, length: number): number {
   return text ? parseInt(text, 8) || 0 : 0;
 }
 
-/** A streaming tar header walker: file data is counted and skipped. */
 class TarLister {
   readonly entries: AttachmentEntry[] = [];
   truncated = false;
@@ -112,7 +99,6 @@ class TarLister {
   #skip = 0;
   #total = 0;
   #zeroBlocks = 0;
-  /** Collecting a GNU long name ('L') or pax header ('x') body. */
   #collect: { kind: "L" | "x"; size: number; chunks: Uint8Array[]; got: number } | undefined;
   #longName: string | undefined;
 
@@ -205,7 +191,6 @@ export function listTar(bytes: Uint8Array, limits: ArchiveLimits): ArchiveListin
   };
 }
 
-/** Gunzip only as far as the listing needs; stop at the caps. */
 export async function listTgz(bytes: Uint8Array, limits: ArchiveLimits): Promise<ArchiveListing> {
   const lister = new TarLister(limits);
   const gunzip = createGunzip();
@@ -234,10 +219,6 @@ export async function listTgz(bytes: Uint8Array, limits: ArchiveLimits): Promise
   };
 }
 
-/**
- * A plain .gz holds one file: its name (when the header has one) and the
- * declared size from the trailer. Nothing is inflated.
- */
 export function listGzip(bytes: Uint8Array, fallbackName: string): ArchiveListing {
   const flags = bytes[3] ?? 0;
   let offset = 10;
@@ -248,7 +229,6 @@ export function listGzip(bytes: Uint8Array, fallbackName: string): ArchiveListin
     if (end > offset) name = new TextDecoder("latin1").decode(bytes.subarray(offset, end));
   }
   const n = bytes.length;
-  // ISIZE is the size modulo 2^32.
   const size =
     n >= 4
       ? (bytes[n - 4] | (bytes[n - 3] << 8) | (bytes[n - 2] << 16) | (bytes[n - 1] << 24)) >>> 0

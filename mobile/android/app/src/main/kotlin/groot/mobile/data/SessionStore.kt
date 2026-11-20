@@ -27,9 +27,7 @@ import javax.crypto.spec.GCMParameterSpec
 
 private val Context.sessionDataStore: DataStore<Preferences> by preferencesDataStore(name = "session")
 
-/** Who is signed in, and to which server. */
 data class Session(
-    /** The server's origin ("https://agents.example.com"); null until one is chosen. */
     val serverUrl: String? = null,
     val token: String? = null,
     val user: SessionUser? = null,
@@ -37,15 +35,12 @@ data class Session(
     val signedIn: Boolean get() = serverUrl != null && token != null
 }
 
-/** Seals the session token at rest. The default uses a key that never leaves the Android Keystore. */
 interface TokenCipher {
     fun seal(plain: String): String
 
-    /** Null when the sealed text cannot be opened (the key is gone): the owner signs in again. */
     fun open(sealed: String): String?
 }
 
-/** AES-GCM under a Keystore key. Falls back to storing as is where the Keystore is missing (unit tests). */
 class KeystoreTokenCipher : TokenCipher {
     private fun key(): SecretKey? = runCatching {
         val store = KeyStore.getInstance(KEYSTORE).apply { load(null) }
@@ -91,10 +86,6 @@ class KeystoreTokenCipher : TokenCipher {
     }
 }
 
-/**
- * The session, kept across launches: the server, the token (sealed at rest) and the user.
- * It is the [ApiSession] every request reads, so signing out stops requests at once.
- */
 class SessionStore(
     private val dataStore: DataStore<Preferences>,
     private val cipher: TokenCipher,
@@ -108,10 +99,8 @@ class SessionStore(
 
     private val _selectedBot = MutableStateFlow<String?>(null)
 
-    /** The bot whose chat is open; remembered, so the app reopens on it. */
     val selectedBot: StateFlow<String?> = _selectedBot.asStateFlow()
 
-    /** Read the stored session once, before the first screen is chosen. */
     suspend fun load() {
         val prefs = dataStore.data.first()
         val token = prefs[TOKEN]?.let(cipher::open)
@@ -142,7 +131,6 @@ class SessionStore(
         }
     }
 
-    /** Forget the token and user; the server stays, so signing back in is one step. */
     suspend fun signOut() {
         _state.update { Session(serverUrl = it.serverUrl) }
         _selectedBot.value = null
@@ -155,7 +143,6 @@ class SessionStore(
         }
     }
 
-    /** Forget everything, the server included. */
     suspend fun forgetServer() {
         _state.value = Session()
         _selectedBot.value = null
@@ -183,10 +170,6 @@ class SessionStore(
         fun create(context: Context, scope: CoroutineScope): SessionStore =
             SessionStore(context.applicationContext.sessionDataStore, KeystoreTokenCipher(), scope)
 
-        /**
-         * A server address as the owner typed it, as an origin: a scheme is added (https, or
-         * http for a bare IP or localhost), and any path is dropped. Null when it is not a URL.
-         */
         fun normalizeServerUrl(input: String): String? {
             val text = input.trim().trimEnd('/')
             if (text.isEmpty() || text.any { it.isWhitespace() }) return null
@@ -202,7 +185,6 @@ class SessionStore(
             return "${uri.scheme.lowercase()}://${host.lowercase()}$port"
         }
 
-        /** A bare IPv4 address, localhost or a `.local` name: plain http unless the owner says otherwise. */
         private val LOCAL_HOST = Regex("^(localhost|\\d{1,3}(\\.\\d{1,3}){3}|[\\w-]+\\.local)(:\\d+)?(/|$)", RegexOption.IGNORE_CASE)
     }
 }

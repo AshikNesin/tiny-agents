@@ -1,8 +1,3 @@
-/**
- * One in-flight tool call. A second request with the same tool_use_id
- * returns the same result and does not invoke the client again.
- * Silence for `timeoutMs` resolves as an error result so the Claude turn can finish.
- */
 import type { ToolResultPayload } from "./protocol";
 
 export interface ToolWaiter {
@@ -20,7 +15,6 @@ export const defaultArmTimer: ArmTimer = (fn, ms) => {
 export class ToolProxy {
   private readonly results = new Map<string, ToolResultPayload>();
   private readonly waiters = new Map<string, ToolWaiter>();
-  /** Ids already announced to the client. A replay must not announce them again. */
   private readonly announced = new Set<string>();
 
   constructor(
@@ -42,7 +36,6 @@ export class ToolProxy {
     return true;
   }
 
-  /** Register interest before the event is published. Idempotent on tool_use_id. */
   wait(toolUseId: string): Promise<ToolResultPayload> {
     const cached = this.results.get(toolUseId);
     if (cached) return Promise.resolve(cached);
@@ -61,10 +54,6 @@ export class ToolProxy {
     });
   }
 
-  /**
-   * Start a waiting call's timer over (the client says it is still waiting
-   * on its owner). False when the call is not waiting.
-   */
   extend(toolUseId: string): boolean {
     const waiter = this.waiters.get(toolUseId);
     if (!waiter) return false;
@@ -82,11 +71,6 @@ export class ToolProxy {
     }, this.timeoutMs);
   }
 
-  /**
-   * Deliver a client result. A duplicate tool_use_id is ignored once the
-   * first result is stored, so a replayed client cannot run the tool twice
-   * on the worker side either.
-   */
   settle(toolUseId: string, result: ToolResultPayload): boolean {
     if (this.results.has(toolUseId)) return false;
     this.results.set(toolUseId, result);

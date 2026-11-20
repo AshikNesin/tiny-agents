@@ -8,17 +8,6 @@ import { FluidHighlight } from "./motion";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./dialog";
 import { SearchIcon, CheckIcon } from "lucide-react";
 
-/**
- * cmdk command menu in Fluid Functionalism's CommandMenu style
- * (https://www.fluidfunctionalism.com/docs/command-menu): a borderless search
- * line over the list, rows that brighten as they become active under one
- * gliding highlight, and an optional footer of keyboard hints.
- *
- * Deprecated: groot's own ⌘K palette is the command menu
- * (`@groot/ui/command-menu`), and nothing in the repo renders this module.
- * Every export is marked `@deprecated` and is removed in the next major.
- */
-
 /** @deprecated Use the command menu (`@groot/ui/command-menu`). Removed in the next major. */
 function Command({ className, ...props }: React.ComponentProps<typeof CommandPrimitive>) {
   return (
@@ -181,12 +170,7 @@ function CommandItem({
   );
 }
 
-/**
- * Keyboard hints under the list, Fluid CommandMenu style. Hidden on touch
- * screens, which have no keys to press.
- *
- * @deprecated Use the command menu (`@groot/ui/command-menu`). Removed in the next major.
- */
+/** @deprecated Use the command menu (`@groot/ui/command-menu`). Removed in the next major. */
 function CommandFooter({
   className,
   hints = [

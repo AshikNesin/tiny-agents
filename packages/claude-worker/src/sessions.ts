@@ -1,8 +1,3 @@
-/**
- * Live Claude sessions. One `query()` per conversation. Caps: 2 live
- * processes, 1 running turn. Idle processes are evicted; processes older
- * than the max age are recycled but keep the Claude session id for `resume`.
- */
 import { randomBytes } from "node:crypto";
 import type {
   ImagePart,
@@ -37,7 +32,6 @@ export interface QueryContext {
     input: unknown;
   }) => Promise<ToolResultPayload>;
   setClaudeSessionId: (id: string) => void;
-  /** SDK options the adapter is about to use. Tests assert lockdown here. Absent: no limit. */
   maxTurns?: number;
 }
 
@@ -49,7 +43,6 @@ export interface SessionOpen {
   system?: string;
   resume?: string;
   tools: readonly ToolSpec[];
-  /** Claude Code `maxTurns`; the worker's default when absent. */
   maxTurns?: MaxTurns;
 }
 
@@ -67,11 +60,9 @@ export class Session {
   model: string;
   system?: string;
   tools: readonly ToolSpec[];
-  /** Claude Code `maxTurns` the next process starts with; the worker's default when absent. */
   maxTurns?: MaxTurns;
   alive = false;
   running = false;
-  /** Every event of this session, numbered, kept for resume and followed by the sockets. */
   readonly log: SessionLog<SessionEvent>;
   private readonly proxy: ToolProxy;
   private turnQueue = new AsyncQueue<QueryTurn>();
@@ -109,12 +100,10 @@ export class Session {
     return this.proxy.settle(toolUseId, result);
   }
 
-  /** The app says the call still waits on the owner: its result timer starts over. */
   holdTool(toolUseId: string): boolean {
     return this.proxy.extend(toolUseId);
   }
 
-  /** Stop the process. The session id and Claude resume id stay. */
   recycle(): void {
     this.generation += 1;
     this.abort.abort();
@@ -136,11 +125,6 @@ export class Session {
     return done;
   }
 
-  /**
-   * Stop the running turn: it ends `aborted` and the Claude process stops
-   * with it (the SDK query is closed), so nothing of it runs or reports
-   * later. The session keeps its Claude session id: the next turn resumes it.
-   */
   abortTurn(): void {
     const turnId = this.pendingTurns[0]?.turnId;
     if (!turnId) return;
@@ -218,8 +202,6 @@ export class Session {
         stopReason: "paused",
         error: usagePauseMessage(event.reason),
       });
-      // The turn is over: its waiter resolves (the running-turn slot frees),
-      // and the process stops, as it does on a stop.
       this.finishTurn(event.turnId);
       this.recycle();
       return;
@@ -232,7 +214,6 @@ export class Session {
     this.publish(event);
   }
 
-  /** A rate-limit payload from the SDK adapter. */
   noteRateLimit(turnId: string, info: RateLimitInfo | undefined): boolean {
     const reason = usagePauseReason(info);
     if (!reason) return false;
@@ -263,8 +244,6 @@ export class Session {
     const queue = this.turnQueue;
     const signal = this.abort.signal;
     while (!signal.aborted) {
-      // One consumer, in order. The next turn is pulled only after this yield
-      // returns, so two turns cannot run and a queued push cannot be stolen.
       // eslint-disable-next-line react-doctor/async-await-in-loop -- sequential turn queue
       const next = await queue.next();
       if (signal.aborted) return;
@@ -274,7 +253,6 @@ export class Session {
   }
 }
 
-/** A queue that does not drop a push that arrives before the consumer waits. */
 class AsyncQueue<T> {
   private readonly items: T[] = [];
   private readonly waiters: ((value: T) => void)[] = [];
@@ -325,8 +303,6 @@ export class SessionBook {
       if (input.resume) existing.claudeSessionId = input.resume;
       if (input.maxTurns !== existing.maxTurns) {
         existing.maxTurns = input.maxTurns;
-        // maxTurns is fixed when the process starts: restart it (Claude resumes
-        // the same conversation) so the new limit applies from this turn.
         if (existing.alive && !existing.running) existing.recycle();
       }
       existing.touch(now);
@@ -337,11 +313,6 @@ export class SessionBook {
     return session;
   }
 
-  /**
-   * Run one turn under the caps. Evicts idle and over-age processes first.
-   * A second concurrent turn is rejected. A third live process is rejected
-   * when nothing idle can be evicted.
-   */
   async runTurn(input: SessionOpen, turn: QueryTurn, now: number): Promise<Session> {
     this.sweep(now);
     if (this.runningTurns >= this.timings.maxRunningTurns) {

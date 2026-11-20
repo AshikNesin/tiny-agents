@@ -1,4 +1,3 @@
-/** "New skill" dialog (issue #1 M2): name, description, body → POST /skills. */
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -22,7 +21,6 @@ const NAME_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
 const EMPTY_FORM = { name: "", description: "", body: "" };
 
-/** Why the name is rejected, or null when it's valid (server's SKILL_NAME). */
 function nameProblem(name: string): string | null {
   if (name.length === 0) return "Name is required.";
   if (name.length > 64) return "Keep it to 64 characters or fewer.";
@@ -43,7 +41,6 @@ export function CreateSkillDialog({
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const { create: createSkill } = useSkillMutations();
-  /** Fields the user has interacted with — errors show only after that. */
   const [touched, setTouched] = useState({ name: false, description: false });
 
   useEffect(() => {
@@ -61,8 +58,6 @@ export function CreateSkillDialog({
   const showDescriptionError = touched.description && descriptionError !== null;
 
   const create = async () => {
-    // A click on a disabled button can't reach here, but a stray Enter in a
-    // text field could: surface the problems instead of silently doing nothing.
     setTouched({ name: true, description: true });
     if (!valid) {
       toast.error("Fill in the required fields to create the skill.");

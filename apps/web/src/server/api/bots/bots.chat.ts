@@ -1,14 +1,3 @@
-/**
- * A bot chat: the owner's actions on the conversation a bot is on now.
- * `openBotChat` looks the bot up once (404 for an unknown one) and resolves
- * its current conversation to a `ConversationRef`; the handle's actions all
- * act on that ref, so no caller repeats the lookup or the conversion.
- *
- * An Owner wait the runtime no longer holds (an approval, a question or a
- * credential request already answered, cancelled or expired), or answers
- * that do not fit their questions, is translated to HTTP in one table,
- * `OWNER_WAIT_ERRORS`, which the vault's credential requests use too.
- */
 import { Boom, type HttpError } from "@groot/core/errors";
 import {
   ApprovalNotPendingError,
@@ -27,7 +16,6 @@ import {
   type BotWithLinks,
 } from "./bots.conversation";
 
-/** Owner-wait errors and the HTTP error each answers as. */
 const OWNER_WAIT_ERRORS: ReadonlyArray<
   readonly [new (...args: never[]) => Error, (error: Error) => HttpError]
 > = [
@@ -40,7 +28,6 @@ const OWNER_WAIT_ERRORS: ReadonlyArray<
   ],
 ];
 
-/** The HTTP error an Owner-wait error answers as; any other error as it is. */
 export function ownerWaitError(error: unknown): unknown {
   for (const [type, toHttp] of OWNER_WAIT_ERRORS) {
     if (error instanceof type) return toHttp(error);
@@ -48,7 +35,6 @@ export function ownerWaitError(error: unknown): unknown {
   return error;
 }
 
-/** Run an action on an Owner wait, its runtime errors translated to HTTP. */
 export async function onOwnerWait<T>(action: () => Promise<T>): Promise<T> {
   try {
     return await action();
@@ -71,16 +57,12 @@ export type BotChatRuntime = Pick<
 >;
 
 export interface BotChat {
-  /** The bot's row with its links, as looked up. */
   readonly row: BotWithLinks;
   readonly bot: Bot;
-  /** The conversation the bot is on now. */
   readonly ref: ConversationRef;
   read(): ReturnType<AgentRuntime["readChat"]>;
-  /** Transcript messages older than `query.before`; 400 for an unknown cursor. */
   page(query: { before: string; limit: number }): ReturnType<AgentRuntime["readChatPage"]>;
   abort(): Promise<void>;
-  /** Withdraw a queued message: 404 when unknown, 409 once it is part of the reply. */
   withdraw(requestId: string): Promise<{ withdrawn: true }>;
   decideApproval(
     taskId: number,
@@ -88,13 +70,10 @@ export interface BotChat {
     options?: { grant?: boolean },
   ): Promise<void>;
   setYolo(on: boolean, ownerId: number): ReturnType<AgentRuntime["setYolo"]>;
-  /** Answer the bot's questions, or dismiss them with `null`. */
   answerQuestions(taskId: number, answers: OwnerAnswer[] | null): Promise<void>;
-  /** Dismiss the questions the bot is waiting on, if any. */
   dismissPendingQuestions(): Promise<void>;
 }
 
-/** The chat a bot is on now. 404 for an unknown bot. */
 export async function openBotChat(id: string, rt: BotChatRuntime): Promise<BotChat> {
   const row = await findBotRow(id);
   const ref = conversationRef(row.conversationId);

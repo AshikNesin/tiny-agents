@@ -1,7 +1,6 @@
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import type { AppContext } from "../types";
 
-/** The JSON envelope every API response uses. The client unwraps `data`. */
 export interface ApiResponse<T = unknown> {
   success: boolean;
   data?: T;

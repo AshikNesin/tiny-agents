@@ -17,21 +17,16 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/** What the drawer and the pickers read: the bot list, the models and the tool catalog. */
 data class BotsState(
     val bots: List<BotListEntry> = emptyList(),
-    /** True until the first list arrived (or failed). */
     val loading: Boolean = true,
     val error: String? = null,
     val models: ModelsResponse = ModelsResponse.Empty,
     val capabilities: List<Capability> = emptyList(),
     val labels: ToolLabels = ToolLabels(),
-    /** The signed-in account is a guest: only the bots shared with them, no management. */
     val guest: Boolean = false,
-    /** Live MCP connection status by id, from the events feed. */
     val connectionStatus: Map<String, String> = emptyMap(),
 ) {
-    /** Pinned first (newest pin first), then by last activity. */
     val sorted: List<BotListEntry>
         get() = bots.sortedWith(
             compareByDescending<BotListEntry> { it.pinnedAt != null }
@@ -45,11 +40,6 @@ data class BotsState(
         models.models.firstOrNull { it.id == (modelId ?: models.defaultModelId) }?.name ?: "Default model"
 }
 
-/**
- * The bot list, kept live by the app-wide events feed: which bots are replying and which
- * wait on the owner arrive as events; previews and unread marks are refetched when a reply
- * settles.
- */
 class BotsStore(
     private val api: TinyAgentsApi,
     private val scope: CoroutineScope,
@@ -61,7 +51,6 @@ class BotsStore(
     private var feed: Job? = null
     private var pendingRefresh: Job? = null
 
-    /** Load everything and follow the feed; call when a session starts. */
     fun start() {
         if (feed != null) return
         feed = scope.launch {
@@ -69,7 +58,6 @@ class BotsStore(
             launch { refresh() }
             api.eventsFeed().collect { signal ->
                 when (signal) {
-                    // Whatever changed while the feed was down is in a fresh list.
                     SseSignal.Open -> refreshSoon(0)
                     is SseSignal.Event -> FeedEvent.from(signal.json)?.let(::onFeed)
                     SseSignal.Drop -> Unit
@@ -78,7 +66,6 @@ class BotsStore(
         }
     }
 
-    /** Stop following and forget everything; call on sign-out. */
     fun stop() {
         feed?.cancel()
         feed = null
@@ -130,7 +117,6 @@ class BotsStore(
                         },
                     )
                 }
-                // A settled reply changes the preview and the unread mark; a new chat changes the conversation.
                 refreshSoon()
             }
             is FeedEvent.Connection -> _state.update { it.copy(connectionStatus = it.connectionStatus + (event.id to event.status)) }
@@ -138,7 +124,6 @@ class BotsStore(
         }
     }
 
-    /** The chat is on screen: clear its unread mark here and on the server. */
     fun markRead(botId: String) {
         _state.update { state -> state.copy(bots = state.bots.map { if (it.id == botId) it.copy(unread = false) else it }) }
         scope.launch { runQuietly { api.markRead(botId) } }
@@ -164,7 +149,6 @@ class BotsStore(
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
-            // Best effort: the next refresh or feed event tries again.
         }
     }
 }

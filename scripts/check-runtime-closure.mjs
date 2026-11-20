@@ -1,32 +1,9 @@
 #!/usr/bin/env node
-/**
- * Asserts every external bare import in the emitted server bundle has a
- * production owner: a package declared in root package.json dependencies, a
- * Node builtin, or an explicit tested exemption below.
- *
- * The emitted edges come from the real build's esbuild metafile
- * (tmp/metafile.json, written by scripts/build.mjs), never from parsing
- * source text for external literals. Run `pnpm build` first.
- *
- * Exit 0 prints the edge count. Exit 1 names every emitted runtime import
- * without an owner, so a dependency that slipped back into devDependencies
- * (or vanished from the root entirely) fails here instead of on the deploy
- * platform.
- */
-
 import { readFileSync } from "node:fs";
 import { builtinModules } from "node:module";
 import path from "node:path";
 
-/**
- * Dynamically imported packages that stay dev-only. Each entry names why the
- * production artifact may never load it, so a static import of one of these
- * still fails the check.
- */
 const DEV_ONLY_DYNAMIC_IMPORTS = {
-  // The vite dev server is dynamically imported only when NODE_ENV is not
-  // production, so the production artifact never loads it. Dev tooling stays
-  // dev-only instead of becoming a runtime dependency.
   "vite-plus": "dev-only dynamic import; the production path never loads it",
 };
 
@@ -48,7 +25,6 @@ function exemptionFor(edge) {
   return null;
 }
 
-/** Classify the emitted external edges of a metafile against an owner set. */
 export function checkRuntimeClosure({ metafile, dependencies }) {
   const edges = Object.values(metafile.outputs).flatMap((output) =>
     (output.imports || []).filter((edge) => edge.external),

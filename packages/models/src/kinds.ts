@@ -1,12 +1,3 @@
-/**
- * Provider kinds (issue #179): one entry per way of reaching models. A kind
- * fixes the wire API, how the key is sent, the default endpoint, the default
- * capabilities and the engine. Adding a kind means adding one entry here.
- *
- * `buildProviders` projects the owner's accounts and model rows onto pi-ai
- * providers: each account becomes one provider whose id is the row id, so
- * renaming an account changes no stored reference.
- */
 import type { Api, ClassifierApi, ClassifierModel, Model } from "@earendil-works/pi-ai";
 import { anthropicMessagesApi } from "@earendil-works/pi-ai/api/anthropic-messages.lazy";
 import { googleGenerativeAIApi } from "@earendil-works/pi-ai/api/google-generative-ai.lazy";
@@ -33,11 +24,8 @@ type ChatApi =
 export interface KindSpec {
   label: string;
   engine: AgentEngineKind;
-  /** The chat wire API; absent for kinds whose models aren't served through pi-ai by us. */
   api?: ChatApi;
-  /** The endpoint a new account starts with. */
   defaultBaseUrl?: string;
-  /** Capabilities a model gets when nothing better is known. */
   defaults: { contextWindow: number; maxOutputTokens: number };
 }
 
@@ -88,10 +76,8 @@ export const PROVIDER_KINDS: Readonly<Record<ProviderKind, KindSpec>> = {
   },
 };
 
-/** Picker note shown beside every Claude plan model. */
 export const CLAUDE_PLAN_NOTE = "uses your Claude plan";
 
-/** Where a classifier model of a gateway account is registered (its own auth). */
 export const classifierProviderId = (accountId: string) => `${accountId}:classifier`;
 
 const API_FACTORIES: Record<ChatApi, () => ReturnType<typeof openAICompletionsApi>> = {
@@ -107,13 +93,6 @@ const ANTHROPIC_CATALOG = new Map(
   (Object.values(ANTHROPIC_MODELS) as Model<Api>[]).map((model) => [model.id, model]),
 );
 
-/**
- * The gateway's catalog, with each Claude model's Anthropic compat flags
- * under its own: the gateway passes Messages requests through, but pi-ai's
- * gateway entries leave out `supportsMidConvoToolChanges` and
- * `supportsMidConvoSystemMessages`, so every tool load would resend the
- * whole tool list and miss the prompt cache (issue #360).
- */
 const GATEWAY_CATALOG = new Map(
   (Object.values(CLOUDFLARE_AI_GATEWAY_MODELS) as Model<Api>[]).map((model) => {
     const anthropic =
@@ -154,19 +133,11 @@ function chatModel(
     contextWindow: row.contextWindow,
     maxTokens: row.maxOutputTokens,
     cost: base?.cost ?? ZERO_COST,
-    // The row's flags on top of pi-ai's, so an owner-set flag never drops one.
     ...(row.compat ? { compat: { ...base?.compat, ...row.compat } } : {}),
     ...thinkingMap(base, row.compat),
   } as Model<Api>;
 }
 
-/**
- * Models that always think adaptively (Claude Sonnet 5.5, Opus 5.5) refuse
- * `thinking: {type: "disabled"}`, which pi-ai sends for a call with no
- * thinking level (a Test, a chat title, a memory capture) unless the model
- * says "off" is unsupported. Saying so leaves the thinking setting out, so
- * the model uses its own default.
- */
 function thinkingMap(base: Model<Api> | undefined, compat: Record<string, unknown> | null) {
   const adaptive =
     compat?.forceAdaptiveThinking === true ||
@@ -186,15 +157,8 @@ function gatewaySettings(account: ProviderAccount): GatewaySettings | undefined 
     : undefined;
 }
 
-/**
- * A provider the owner configured in the gateway itself (BYOK "custom
- * provider", e.g. Z.AI's coding plan): its slug, and the path the gateway
- * appends after it.
- */
 export interface GatewayCustomProvider {
-  /** `custom-<name>`, as the gateway names it. */
   slug: string;
-  /** Appended to the provider's base URL (`api/coding/paas/v4`). */
   basePath?: string;
 }
 
@@ -208,22 +172,14 @@ function gatewayCustomProviders(settings: Record<string, unknown>): GatewayCusto
   });
 }
 
-/** Where a gateway account's custom provider is registered (its own base URL). */
 const customProviderId = (accountId: string, slug: string) => `${accountId}:${slug}`;
 
-/** The custom provider slug a gateway model id names (`custom-x/model` → `custom-x`). */
 function customSlugOf(upstreamId: string): string | undefined {
   const slash = upstreamId.indexOf("/");
   const slug = slash > 0 ? upstreamId.slice(0, slash) : "";
   return slug.startsWith("custom-") ? slug : undefined;
 }
 
-/**
- * The account's custom providers: those in its settings, plus any slug one of
- * its models names that the settings lack (no base path yet), so a model added
- * by id still goes to its provider's URL rather than the unified endpoint,
- * which answers 404 for every custom provider.
- */
 function customProvidersFor(
   settings: Record<string, unknown>,
   rows: readonly Pick<ModelRow, "upstreamId">[],
@@ -238,18 +194,10 @@ function customProvidersFor(
   return [...configured, ...[...extra].map((slug) => ({ slug }))];
 }
 
-/**
- * How a gateway account's model is called. A model of one of its custom
- * providers (`custom-zai-coding-plan/glm-5.3-flash`) goes to that provider's
- * own gateway URL under its bare id: the gateway's unified endpoint can't add
- * the provider's base path. A `custom-…` slug the settings lack routes the
- * same way. Every other model is the account's own.
- */
 export function gatewayModelRoute(
   account: Pick<ProviderAccount, "id">,
   upstreamId: string,
 ): { providerId: string; upstreamId: string } {
-  // Settings only hold `custom-…` slugs (the schema), so the id alone decides.
   const slug = customSlugOf(upstreamId);
   return slug
     ? {
@@ -259,7 +207,6 @@ export function gatewayModelRoute(
     : { providerId: account.id, upstreamId };
 }
 
-/** A custom provider's base URL through the gateway. */
 export function gatewayCustomBaseUrl(
   frontDoor: string,
   settings: GatewaySettings,
@@ -271,7 +218,6 @@ export function gatewayCustomBaseUrl(
     .join("/");
 }
 
-/** The gateway's own host, or the account's front door when it set one. */
 const gatewayFrontDoor = (account: ProviderAccount) => trimSlash(account.baseUrl || GATEWAY_HOST);
 
 function keyAuth(name: string, account: ProviderAccount, credentials: CredentialResolver) {
@@ -319,7 +265,6 @@ function gatewayAuth(
   };
 }
 
-/** The gateway account's pi-ai providers: chat models, and classifiers (their own auth). */
 function gatewayProviders(
   account: ProviderAccount,
   rows: readonly ModelRow[],
@@ -354,8 +299,6 @@ function gatewayProviders(
       },
     }) as Provider,
   ];
-  // Each custom provider: its own pi-ai provider on its own gateway URL,
-  // models under their bare ids, on the gateway's token.
   for (const provider of custom) {
     const baseUrl = gatewayCustomBaseUrl(frontDoor, settings, provider);
     const id = customProviderId(account.id, provider.slug);
@@ -403,8 +346,6 @@ function gatewayProviders(
         auth: {
           apiKey: {
             name: "Cloudflare AI Gateway token",
-            // Workers AI reads Authorization; an authenticated gateway reads
-            // cf-aig-authorization; cf-aig-gateway-id routes the call through it.
             resolve: async ({ signal }: { signal: AbortSignal }) => {
               const key = await credentials.resolve(account.id, signal);
               if (!key) return undefined;
@@ -435,7 +376,6 @@ function gatewayProviders(
   return providers;
 }
 
-/** An OpenAI Chat account routed through a gateway account (BYOK upstream). */
 function gatewayRouteProvider(
   account: ProviderAccount,
   gateway: ProviderAccount,
@@ -470,11 +410,6 @@ function gatewayRouteProvider(
   }) as Provider;
 }
 
-/**
- * The pi-ai providers the accounts project to. Disabled accounts and kinds
- * pi-ai doesn't serve for us (claude-plan; faux, whose provider the host
- * passes in) build nothing.
- */
 export function buildProviders(config: ModelConfig, credentials: CredentialResolver): Provider[] {
   const byId = new Map(config.providers.map((account) => [account.id, account]));
   const providers: Provider[] = [];

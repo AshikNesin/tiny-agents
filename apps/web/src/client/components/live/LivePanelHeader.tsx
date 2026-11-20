@@ -1,12 +1,3 @@
-/**
- * The live-view panel's header, one row: the title (or the Browser /
- * Computer tabs) and one status chip, then the tools as icons, with Hand
- * back while the owner drives. Taking control is a click on the stream
- * itself (`TakeControlLayer`), so it has no button here.
- *
- * In picture in picture the header is the drag handle, and keeps only the
- * status, Hand back while the owner drives, Expand and Close.
- */
 import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import {
   ClipboardPaste,
@@ -28,7 +19,6 @@ import type { Connection, Driver, LiveViewKind } from "../../lib/live-view";
 import { StatusChip } from "./live-parts";
 import type { LivePanelSurface, PanelStatus } from "./surface";
 
-/** The muted icon tools. */
 const tool = "text-muted-foreground hover:text-foreground";
 
 type HeaderProps<S extends PanelStatus> = {
@@ -39,7 +29,6 @@ type HeaderProps<S extends PanelStatus> = {
   status: S | null;
   guest: boolean;
   connection: Connection;
-  /** The stream is up: the chip says who drives instead of the connection. */
   live: boolean;
   detail: { text: string; testId: string } | null;
   takeover: string | null;
@@ -48,10 +37,8 @@ type HeaderProps<S extends PanelStatus> = {
   configured: boolean;
   shared: boolean;
   fullscreen: boolean;
-  /** Shown as the small floating view. */
   pip: boolean;
   onDrag: (event: ReactPointerEvent<HTMLElement>) => void;
-  /** Docked or picture in picture; without it neither switch shows. */
   onLayout: ((layout: LiveLayout) => void) | undefined;
   onDriver: (driver: Driver) => void;
   onPaste: () => void;
@@ -63,7 +50,6 @@ type HeaderProps<S extends PanelStatus> = {
 export function LivePanelHeader<S extends PanelStatus>(props: HeaderProps<S>) {
   const { panel, tabs, detail, pip, onDrag } = props;
   return (
-    // The header is a container: in a narrow panel the tabs drop their labels.
     <header
       className={cn(
         "@container flex shrink-0 items-center gap-2 border-b pr-1.5 pl-2",
@@ -89,7 +75,6 @@ export function LivePanelHeader<S extends PanelStatus>(props: HeaderProps<S>) {
   );
 }
 
-/** Who drives once the stream is live, otherwise the connection. */
 function PanelChip<S extends PanelStatus>({
   kind,
   bot,
@@ -108,7 +93,6 @@ function PanelChip<S extends PanelStatus>({
   );
 }
 
-/** Hand back (while the owner drives), paste and full screen, then the page link, reset and close. */
 function PanelTools<S extends PanelStatus>({
   kind,
   panel,
@@ -222,7 +206,6 @@ function PanelTools<S extends PanelStatus>({
   );
 }
 
-/** The floating view's tools: Hand back while the owner drives, Expand, Close. */
 function PipTools<S extends PanelStatus>({
   kind,
   panel,

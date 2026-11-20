@@ -1,8 +1,3 @@
-/**
- * Agent Skills parsing and GitHub import (issue #1 D5). A skill is a
- * directory with a `SKILL.md` — YAML frontmatter (`name`, `description`) plus
- * a markdown body — and optional bundled files, imported as text only.
- */
 import { SKILL_NAME } from "@tiny-agents/agent";
 import { Boom } from "@groot/core/errors";
 import type { ParsedSkill, SkillFile } from "../../../shared/api/skills";
@@ -12,7 +7,6 @@ export const MAX_FILE_BYTES = 200_000;
 const MAX_TOTAL_BYTES = 1_000_000;
 const SCRIPT = /\.(sh|bash|zsh|py|js|mjs|cjs|ts|rb|pl|ps1|bat|exe)$/i;
 
-/** Read `name` / `description` from simple YAML frontmatter (single-line or folded values). */
 function frontmatter(raw: string): { fields: Record<string, string>; body: string } {
   const match = raw.match(/^\uFEFF?---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
   if (!match) return { fields: {}, body: raw };
@@ -61,11 +55,9 @@ interface GitHubTarget {
   owner: string;
   repo: string;
   ref?: string;
-  /** Directory holding SKILL.md ("" = repo root). */
   dir: string;
 }
 
-/** github.com tree/blob URLs, repo roots and raw.githubusercontent.com SKILL.md links. */
 export function parseGitHubUrl(raw: string): GitHubTarget {
   let url: URL;
   try {
@@ -98,7 +90,6 @@ interface ContentItem {
   download_url: string | null;
 }
 
-/** Fetch a skill folder from GitHub (public repos, unauthenticated API). */
 export async function fetchSkillFromGitHub(
   raw: string,
   doFetch: typeof fetch = fetch,

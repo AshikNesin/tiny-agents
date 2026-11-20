@@ -1,15 +1,3 @@
-/**
- * Claude Code as a Code page harness. Claude Code runs on the sandbox
- * through the worker (`@tiny-agents/claude-worker`, coding mode); this
- * driver talks to it over its own Worker connection (`client.ts`).
- *
- * Claude Code keeps no thread list of its own that we use (sessions started
- * in a terminal are not discovered), so threads live in the app's thread
- * index: a row per thread with its cwd, settings and, in `data`, the Claude
- * session id plus compact turn records (duration, cost, how it ended).
- * Claude Code owns the transcript; it is read back with
- * `getSessionMessages` and merged with what streamed live.
- */
 import { randomBytes, randomUUID } from "node:crypto";
 import {
   CODING_EFFORT_LEVELS,
@@ -70,20 +58,11 @@ import {
 import { usageReportOf, type ModelTotals } from "./usage";
 
 export interface ClaudeCodeHarnessOptions {
-  /** Instance id; default `claude-code`. */
   id?: string;
   host: HarnessHost;
-  /** Where the worker is (the sandbox tunnel); asked again on every reconnect. */
   resolveWorker: () => Promise<{ url: string; token: string }>;
-  /** An extra hint (the Claude login, the sandbox): shown when it is not `connected`. */
   status?: () => InstanceStatus;
-  /** Connection timings (tests). */
   timings?: Partial<ConnectionTimings>;
-  /**
-   * The models the owner's Claude plan offers (Settings → Models → Claude
-   * plan, which Claude Code lists for the subscription). Without any, the
-   * picker shows what Claude Code's running sessions report.
-   */
   models?: () => ModelOption[];
 }
 
@@ -93,7 +72,6 @@ const CAPABILITIES: Capabilities = {
   ...NO_CAPABILITIES,
   turns: {
     interrupt: true,
-    // The SDK folds a `priority: "next"` user message into the running turn.
     steer: true,
     queue: true,
     manageQueue: true,
@@ -129,7 +107,6 @@ const CAPABILITIES: Capabilities = {
   extras: { jobs: false, usageReport: true, commands: true },
 };
 
-/** Claude Code's model aliases; replaced by `supportedModels()` once a session ran. */
 const DEFAULT_COMMANDS: SlashCommand[] = [
   { command: "/compact", hint: "Summarize the conversation to free context" },
   { command: "/init", hint: "Write a CLAUDE.md for this repository" },
@@ -138,7 +115,6 @@ const DEFAULT_COMMANDS: SlashCommand[] = [
 
 const MAX_TURN_RECORDS = 500;
 
-/** A compact `result`, kept in the index so history shows the same turn rows. */
 interface TurnRecord extends ClaudeEntry {
   type: "result";
   uuid: string;
@@ -158,7 +134,6 @@ interface ThreadData {
   turnCount?: number;
   usage?: Record<string, ModelTotals>;
   costUsd?: number;
-  /** When the newest result arrived (ms): the turn outcome's `endedAt`. */
   endedAt?: number;
   contextMax?: number;
 }
@@ -173,15 +148,11 @@ interface Runtime {
   requests: Map<string, ApprovalRecord>;
   notified: Set<string>;
   working: boolean;
-  /** A fresh result arrived: report the turn's end once the worker says it is idle. */
   ending: boolean;
   queued: QueuedMessage[];
-  /** What this thread's watchers are sent (rows, streaming text, state). */
   feed: ThreadFeed;
-  /** Events up to here are a replay (after an app restart): no pushes for them. */
   replayUntil: number;
   chain: Promise<void>;
-  /** Index writes, in order. */
   writes: Promise<void>;
 }
 
@@ -189,7 +160,6 @@ function dataOf(row: IndexedThread): ThreadData {
   return row.data as ThreadData;
 }
 
-/** Turns ended so far: grows by one per turn, which is what "unread" needs. */
 function cursorOf(row: IndexedThread): number {
   const data = dataOf(row);
   return data.turnCount ?? data.turns?.length ?? 0;
@@ -244,7 +214,6 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
       },
       onConnected: (hello, rebooted) => {
         if (rebooted) {
-          // Events may have been lost with the old worker: start over from disk.
           for (const runtime of loaded.values()) {
             void withRuntime(runtime.nativeId, async () => {
               resetLiveState(runtime);
@@ -252,7 +221,6 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
             });
           }
         }
-        // Pick up turns that run in the worker but that this process has not seen.
         for (const session of hello.sessions) {
           if (session.running || session.live) void withRuntime(session.sessionId, () => undefined);
         }
@@ -268,8 +236,6 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
     },
     options.timings,
   );
-
-  // --- runtimes --------------------------------------------------------------
 
   function ensureRuntime(nativeId: string): Promise<Runtime | undefined> {
     let pending = runtimes.get(nativeId);
@@ -313,7 +279,6 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
     return runtime;
   }
 
-  /** Run `fn` on the thread's runtime, one event at a time, in order. */
   function withRuntime(nativeId: string, fn: (runtime: Runtime) => unknown): Promise<void> {
     return ensureRuntime(nativeId).then((runtime) => {
       if (!runtime) return;
@@ -328,11 +293,6 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
     });
   }
 
-  /**
-   * Index writes for one thread run one at a time, each patch computed from
-   * the row as the previous write left it, so a rename racing a turn's end
-   * cannot drop the turn record. A patch function may return undefined: no write.
-   */
   function saveRow(
     runtime: Runtime,
     patch: Partial<IndexedThread> | ((row: IndexedThread) => Partial<IndexedThread> | undefined),
@@ -350,7 +310,6 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
     return saveRow(runtime, (row) => ({ data: { ...row.data, ...patch } }));
   }
 
-  /** The worker lost the session (it restarted): nothing runs, nothing waits. */
   function resetLiveState(runtime: Runtime): void {
     const wasWorking = runtime.working;
     runtime.working = false;
@@ -359,7 +318,6 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
       if (request.status === "open") request.status = "expired";
     }
     emitItems(runtime);
-    // Not working: the feed drops the streaming text with this state.
     emitState(runtime);
     if (wasWorking) events.emit({ type: "threads" });
     reportTurnEnd(runtime);
@@ -367,12 +325,10 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
 
   async function onResume(runtime: Runtime, result: CodingResumeResult): Promise<void> {
     runtime.replayUntil = result.lastSeq;
-    // Unknown: the transcript on disk is still right; only the live state goes.
     if (!result.known) resetLiveState(runtime);
     else if (result.gap) await reload(runtime);
   }
 
-  /** Read history again (events were missed) and send every watcher a fresh snapshot. */
   async function reload(runtime: Runtime): Promise<void> {
     await runtime.loading?.catch(() => undefined);
     runtime.history = undefined;
@@ -406,9 +362,6 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
     await runtime.loading;
   }
 
-  // --- transcript -------------------------------------------------------------
-
-  /** History, then what streamed live, with each turn's record after its last entry. */
   function entriesOf(runtime: Runtime): ClaudeEntry[] {
     const base: ClaudeEntry[] = [];
     const seen = new Set<string>();
@@ -514,7 +467,6 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
   }
 
   function emitItems(runtime: Runtime): void {
-    // Normalizing the transcript is the costly part: only for someone watching.
     if (!runtime.feed.live) return;
     const { items, cursor } = itemsOf(runtime);
     runtime.feed.items(items, cursor);
@@ -530,8 +482,6 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
       costUsd: dataOf(runtime.row).costUsd ?? 0,
     });
   }
-
-  // --- worker events ----------------------------------------------------------
 
   async function applyEvent(runtime: Runtime, seq: number, event: CodingEvent): Promise<void> {
     switch (event.type) {
@@ -549,7 +499,6 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
         }
         emitItems(runtime);
         if (entry.type === "assistant") {
-          // The finished message replaces the streaming text.
           runtime.feed.partial(NO_PARTIAL);
           emitState(runtime);
         }
@@ -582,7 +531,6 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
     if (seq >= runtime.replayUntil) notifyOpenRequests(runtime);
   }
 
-  /** Ask for the owner once per open approval (after a replay: only those still open). */
   function notifyOpenRequests(runtime: Runtime): void {
     for (const request of runtime.requests.values()) {
       if (request.status !== "open" || runtime.notified.has(request.approvalId)) continue;
@@ -611,7 +559,6 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
     }
     const mode = state.settings.permissionMode;
     if (isPermissionMode(mode) && mode !== runtime.row.permissionMode) {
-      // Claude Code changed it itself (ExitPlanMode).
       await saveRow(runtime, { permissionMode: mode });
     }
     emitState(runtime);
@@ -619,10 +566,6 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
     reportTurnEnd(runtime);
   }
 
-  /**
-   * `turn_ended` once per fresh result, when the worker says nothing runs:
-   * a steer the CLI ran as its own turn belongs to the turn it went into.
-   */
   function reportTurnEnd(runtime: Runtime): void {
     if (!runtime.ending || runtime.working) return;
     runtime.ending = false;
@@ -636,7 +579,6 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
     await saveRow(runtime, (row) => {
       const data = dataOf(row);
       const turns = data.turns ?? [];
-      // A replay (resume after a restart) of a turn already recorded.
       if (turns.some((known) => known.uuid === uuid)) return undefined;
       fresh = true;
       const { usage, contextMax } = addUsage(data, record(entry.turn_model_usage));
@@ -687,7 +629,6 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
     };
   }
 
-  /** Add one turn's per-model usage (from the worker's deltas) to the totals. */
   function addUsage(
     data: ThreadData,
     turnUsage: Record<string, unknown> | undefined,
@@ -719,8 +660,6 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
     return { usage, contextMax };
   }
 
-  // --- helpers ----------------------------------------------------------------
-
   function sessionConfig(row: IndexedThread): CodingSessionConfig {
     if (!row.cwd) throw badRequest("This Claude Code thread has no working directory.");
     const data = dataOf(row);
@@ -748,8 +687,6 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
       return { state: "connected", ...(hint?.detail ? { detail: hint.detail } : {}) };
     return { state, ...(client.detail ? { detail: client.detail } : {}) };
   }
-
-  // --- the instance -----------------------------------------------------------
 
   const instance: ClaudeCodeHarness = {
     id: instanceId,
@@ -802,11 +739,9 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
           );
         }
         if (stopped) return;
-        // Run after any event already queued for this thread.
         await runtime.chain;
         if (!stopped && runtime.feed.waiting) runtime.feed.snapshot(snapshotOf(runtime), "waiting");
       })().catch((error: unknown) => {
-        // No such thread: there is no feed to carry the error.
         try {
           listener({
             type: "error",
@@ -903,7 +838,6 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
       });
       const forkId = newNativeId();
       const now = host.now();
-      // The fork remaps message uuids, so turn records do not carry over.
       await host.index.upsert({
         instanceId,
         nativeId: forkId,
@@ -927,7 +861,6 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
       const attachments = (input.attachments ?? []).map((ref) => {
         if (!ref.startsWith("/")) throw badRequest("Unknown attachment.");
         const name = ref.slice(ref.lastIndexOf("/") + 1);
-        // What the model takes as image input (narrower than what the page shows inline).
         return { path: ref, name, image: /\.(png|jpe?g|gif|webp)$/i.test(name) };
       });
       const result = await client.request<CodingSendResult>({
@@ -1007,8 +940,6 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
     async models() {
       const plan = options.models?.() ?? [];
       if (plan.length > 0) return plan;
-      // Claude Code's own list, once a session reported it. Nothing is assumed:
-      // "Default" (Claude Code's choice) is the picker's own entry.
       const models = catalog?.models ?? [];
       return models.map((model) => ({
         id: model.value,

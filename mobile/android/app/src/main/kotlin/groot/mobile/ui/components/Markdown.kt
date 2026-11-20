@@ -37,12 +37,6 @@ import androidx.compose.ui.text.withStyle
 import groot.kit.theme.S
 import groot.mobile.ui.brand.Dims
 
-/*
- * A small Markdown renderer for bot replies: headings, paragraphs, lists, quotes, fenced
- * code, rules, simple tables, and inline bold, italic, strikethrough, code and links.
- * Parsing is a pure function ([parseMarkdown]) so it is tested without Compose.
- */
-
 sealed interface MdBlock {
     data class Heading(val level: Int, val text: String) : MdBlock
     data class Paragraph(val text: String) : MdBlock
@@ -63,7 +57,6 @@ private val FENCE = Regex("^\\s*(```|~~~)(.*)$")
 private fun tableCells(line: String): List<String> =
     line.trim().removePrefix("|").removeSuffix("|").split("|").map { it.trim() }
 
-/** Split Markdown into blocks. An unterminated code fence (a reply still streaming) runs to the end. */
 fun parseMarkdown(source: String): List<MdBlock> {
     val blocks = mutableListOf<MdBlock>()
     val paragraph = StringBuilder()
@@ -140,7 +133,6 @@ fun parseMarkdown(source: String): List<MdBlock> {
                 i++
             }
             else -> {
-                // A continuation line of a list item stays with it; anything else joins the paragraph.
                 val last = blocks.lastOrNull()
                 if (paragraph.isEmpty() && last is MdBlock.ListItem && line.startsWith("  ")) {
                     blocks[blocks.lastIndex] = last.copy(text = last.text + " " + line.trim())
@@ -156,21 +148,19 @@ fun parseMarkdown(source: String): List<MdBlock> {
     return blocks
 }
 
-/** Colors and styles the inline renderer needs, read once from the theme. */
 data class MdStyle(val code: SpanStyle, val link: SpanStyle)
 
 private val INLINE = Regex(
-    "(`+)(.+?)\\1" + // 1,2 code
-        "|\\*\\*(.+?)\\*\\*" + // 3 bold
-        "|__(.+?)__" + // 4 bold
-        "|~~(.+?)~~" + // 5 strike
-        "|(?<![\\w*])\\*(?!\\s)(.+?)(?<!\\s)\\*(?![\\w*])" + // 6 italic
-        "|(?<![\\w_])_(?!\\s)(.+?)(?<!\\s)_(?![\\w_])" + // 7 italic
-        "|\\[([^\\]]+)]\\((https?://[^)\\s]+)\\)" + // 8,9 link
-        "|(https?://[^\\s<>\"')\\]]+)", // 10 bare url
+    "(`+)(.+?)\\1" +
+        "|\\*\\*(.+?)\\*\\*" +
+        "|__(.+?)__" +
+        "|~~(.+?)~~" +
+        "|(?<![\\w*])\\*(?!\\s)(.+?)(?<!\\s)\\*(?![\\w*])" +
+        "|(?<![\\w_])_(?!\\s)(.+?)(?<!\\s)_(?![\\w_])" +
+        "|\\[([^\\]]+)]\\((https?://[^)\\s]+)\\)" +
+        "|(https?://[^\\s<>\"')\\]]+)",
 )
 
-/** Inline Markdown as an AnnotatedString. Nested emphasis is rendered one level deep, recursively. */
 fun inlineMarkdown(text: String, style: MdStyle): AnnotatedString = buildAnnotatedString { appendInline(text, style, 0) }
 
 private fun AnnotatedString.Builder.appendInline(text: String, style: MdStyle, depth: Int) {
@@ -187,7 +177,6 @@ private fun AnnotatedString.Builder.appendInline(text: String, style: MdStyle, d
             g[7].isNotEmpty() -> withStyle(SpanStyle(fontStyle = FontStyle.Italic)) { nested(g[7], style, depth) }
             g[9].isNotEmpty() -> withLink(LinkAnnotation.Url(g[9], TextLinkStyles(style.link))) { nested(g[8], style, depth) }
             g[10].isNotEmpty() -> {
-                // Trailing punctuation belongs to the sentence, not the address.
                 val url = g[10].trimEnd('.', ',', ';', ':', '!', '?')
                 withLink(LinkAnnotation.Url(url, TextLinkStyles(style.link))) { append(url) }
                 append(g[10].substring(url.length))
@@ -213,7 +202,6 @@ fun rememberMdStyle(): MdStyle {
     }
 }
 
-/** Render Markdown. [selectable]: the text can be long-pressed to select and copy. */
 @Composable
 fun Markdown(
     text: String,

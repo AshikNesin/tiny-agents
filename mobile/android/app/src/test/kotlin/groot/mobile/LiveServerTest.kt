@@ -36,14 +36,6 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 
-/**
- * The app's data layer against a real tiny-agents server: sign-in, the bot list, a streamed
- * chat, approvals, questions, uploads, past chats and the management routes.
- *
- * Skipped unless `TINY_AGENTS_URL` points at a disposable instance running the faux model
- * (in the tiny-agents repo: `.agents/skills/verify-tiny-agents/scripts/ta-verify.mjs up`,
- * then `TINY_AGENTS_URL=http://localhost:3100`). It creates and deletes its own rows.
- */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [36])
 class LiveServerTest {
@@ -129,10 +121,8 @@ class LiveServerTest {
         assertEquals(listOf(MessageRole.User, MessageRole.Assistant), done.messages.map { it.role })
         assertEquals("the echo was replaced by the confirmed message, not doubled", 2, chatView(done).timeline.size)
 
-        // The drawer's row follows: a preview, and no longer replying.
         withTimeout(20_000) { bots.state.first { it.bot(botId)?.lastMessagePreview?.contains("Echo") == true && it.bot(botId)?.replying == false } }
 
-        // A reconnect gets a fresh snapshot and does not duplicate the transcript.
         chats.close(botId)
         chats.open(botId, unreadFrom = null)
         assertEquals(2, chats.await(botId) { it.loaded && it.connected }.messages.size)
@@ -186,7 +176,6 @@ class LiveServerTest {
     @Test
     fun `a file goes up with a message and comes back byte for byte`() = runBlocking {
         val botId = newBot()
-        // Short on purpose: the faux model echoes the file back at a few tokens a second.
         val bytes = "tiny agents on android $stamp\n".repeat(2).toByteArray()
         val ref = api.upload("notes-$stamp.txt", "text/plain", bytes.size.toLong()) { bytes.inputStream() }
         assertEquals("file", ref.kind)
@@ -214,7 +203,6 @@ class LiveServerTest {
         chats.await(botId) { it.lastReply()?.status == MessageStatus.Done && !it.busy }
 
         api.resetChat(botId)
-        // The stream ends on the old conversation and reconnects onto the new, empty one.
         chats.await(botId) { it.loaded && it.connected && it.messages.isEmpty() }
 
         val past = api.pastChats(botId).single()
@@ -278,7 +266,6 @@ class LiveServerTest {
         assertEquals(listOf(guest.id), api.updateBot(botId, BotDraft(guestIds = listOf(guest.id))).guestIds)
         assertTrue(api.guests().any { it.id == guest.id && it.botIds.contains(botId) })
 
-        // The guest signs in on their own phone: they see only the shared bot and cannot manage anything.
         val guestSession = Session(url)
         val guestApi = TinyAgentsApi(ApiClient(guestSession))
         guestSession.token = guestApi.login("guest-$stamp@example.com", "guest-pass-1").token
@@ -294,7 +281,6 @@ class LiveServerTest {
         api.vaultItems()
         api.connections()
 
-        // No sandbox on this instance: the surfaces say so instead of failing.
         val browser = api.botLiveStatus(botId, "browser")
         assertFalse(browser.active)
         val computer = api.botLiveStatus(botId, "computer")

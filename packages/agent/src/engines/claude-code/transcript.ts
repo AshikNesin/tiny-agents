@@ -1,19 +1,3 @@
-/**
- * The Claude plan's transcript as durable entries (ADR 0018). A Claude plan
- * conversation keeps its messages in the same pi-durable conversation pi
- * uses, as entries of its own kinds that carry no model context, so pi never
- * reads them and pi's chat never shows them:
- *
- * - `claude.user`: one admitted message, keyed by its request id.
- * - `claude.assistant`: a turn's reply, keyed by its turn id (the request id
- *   of the message it answers). Written when a tool call of the turn
- *   finishes and when the turn ends; the newest one per turn wins.
- * - `claude.withdrawn`: queued messages withdrawn before their turn ran.
- *
- * This module owns their shapes, reads them back (every read parses), and
- * projects them into the chat the owner sees, plus the one-time import of
- * the JSON file the engine kept before.
- */
 import type { EntryRecord } from "@earendil-works/pi-durable";
 import { z } from "zod";
 import { toJson } from "../../durable-json";
@@ -24,7 +8,6 @@ const CLAUDE_USER_ENTRY = "claude.user";
 const CLAUDE_REPLY_ENTRY = "claude.assistant";
 const CLAUDE_WITHDRAWN_ENTRY = "claude.withdrawn";
 
-/** How a reply cut off by an app restart reads: the turn did not survive it (ADR 0014). */
 const APP_RESTARTED =
   "The app restarted and this reply was cut off. Send your message again to continue.";
 
@@ -52,7 +35,6 @@ const userSchema = z.object({
   createdAt: z.number(),
   peer: peerSchema.optional(),
   author: authorSchema.optional(),
-  /** Kept for the record; the chat does not show them on the Claude plan (as before). */
   attachments: z.array(attachmentSchema).optional(),
 });
 
@@ -71,7 +53,6 @@ const TOOL_STATUSES = [
   "aborted",
 ] as const satisfies readonly ChatToolStatus[];
 
-/** A tool-call row as the chat had it; its card fields stay as they were written. */
 const toolCallSchema = z.looseObject({
   id: z.string(),
   name: z.string(),
@@ -82,7 +63,6 @@ const toolCallSchema = z.looseObject({
 const replySchema = z.object({
   turnId: z.string().min(1),
   text: z.string(),
-  /** `streaming`: written mid-turn (a tool call finished); the turn has not ended. */
   status: z.enum(["streaming", "done", "error", "stopped"]),
   error: z.string().optional(),
   model: z.string().optional(),
@@ -97,23 +77,19 @@ export type ClaudeReply = Omit<z.infer<typeof replySchema>, "toolCalls"> & {
   toolCalls?: ChatToolCall[];
 };
 
-/** One `claude.*` entry, read back. */
 export type ClaudeRecord =
   | { kind: "user"; data: ClaudeUser }
   | { kind: "reply"; data: ClaudeReply }
   | { kind: "withdrawn"; requestIds: string[] };
 
-/** The entry draft for an admitted message. */
 export function userEntry(data: ClaudeUser): { kind: string; data: ReturnType<typeof toJson> } {
   return { kind: CLAUDE_USER_ENTRY, data: toJson(data) };
 }
 
-/** The entry draft for a turn's reply. */
 export function replyEntry(data: ClaudeReply): { kind: string; data: ReturnType<typeof toJson> } {
   return { kind: CLAUDE_REPLY_ENTRY, data: toJson(data) };
 }
 
-/** The entry draft for withdrawn queued messages. */
 export function withdrawnEntry(requestIds: string[]): {
   kind: string;
   data: ReturnType<typeof toJson>;
@@ -121,10 +97,6 @@ export function withdrawnEntry(requestIds: string[]): {
   return { kind: CLAUDE_WITHDRAWN_ENTRY, data: toJson({ requestIds }) };
 }
 
-/**
- * A stored entry as a Claude plan record; undefined for any other kind.
- * Throws when a `claude.*` entry does not fit its shape.
- */
 export function claudeRecordOf(
   entry: Pick<EntryRecord, "kind" | "data">,
 ): ClaudeRecord | undefined {
@@ -148,7 +120,6 @@ export function claudeRecordOf(
   return undefined;
 }
 
-/** The request id a stored `claude.user` entry was admitted with. */
 export function admittedRequestId(entry: Pick<EntryRecord, "kind" | "data">): string | undefined {
   if (entry.kind !== CLAUDE_USER_ENTRY) return undefined;
   const parsed = userSchema.safeParse(entry.data);
@@ -165,12 +136,10 @@ function parseEntry<T>(kind: string, value: unknown, schema: z.ZodType<T>): T {
   return parsed.data;
 }
 
-/** A parsed row: the schema checked the fields every row has; the card fields are as stored. */
 function asToolCall(row: z.infer<typeof toolCallSchema>): ChatToolCall {
   return row as ChatToolCall;
 }
 
-/** Statuses a tool call ends in. Any other row was still running or waiting. */
 const FINISHED_TOOL = new Set<ChatToolStatus>([
   "done",
   "error",
@@ -180,11 +149,6 @@ const FINISHED_TOOL = new Set<ChatToolStatus>([
   "aborted",
 ]);
 
-/**
- * A turn's tool rows once the turn is over: a call that had not finished is
- * cut off (`aborted` by a stop, `interrupted` otherwise, as pi shows one),
- * with nothing left of its wait (no card the owner could still answer).
- */
 export function settleToolCalls(
   calls: readonly ChatToolCall[] | undefined,
   cut: "aborted" | "interrupted",
@@ -197,24 +161,11 @@ export function settleToolCalls(
   );
 }
 
-/** What the projection needs of the turn running now and of the messages waiting for one. */
 export interface ClaudeLive {
-  /** The running turn's reply as it stands (its text streams in memory). */
   reply?: ClaudeReply;
-  /** Request ids admitted but waiting for their turn (or being withdrawn): not in the transcript. */
   queued: ReadonlySet<string>;
 }
 
-/**
- * The chat the owner sees, from the conversation's `claude.*` records in
- * entry order and what runs now. Each admitted message is its own turn, in
- * the order it was admitted: its user message, then its reply (the newest
- * entry for the turn, or the running one). A queued or withdrawn message is
- * left out. A message whose turn never ran (the app restarted first) reads
- * as unanswered, and a reply cut off mid-turn by a restart as an error. A
- * running reply shows once it has text, a tool call or an error; a finished
- * one always shows, even empty, so its request has a Finished reply.
- */
 export function claudeMessages(records: readonly ClaudeRecord[], live: ClaudeLive): ChatMessage[] {
   const withdrawn = new Set<string>();
   const replies = new Map<string, ClaudeReply>();
@@ -230,7 +181,6 @@ export function claudeMessages(records: readonly ClaudeRecord[], live: ClaudeLiv
   for (const record of records) {
     if (record.kind === "withdrawn") continue;
     if (record.kind === "reply") {
-      // A reply with no message of its own (a pause the old engine wrote alone).
       const { turnId } = record.data;
       if (asked.has(turnId) || shown.has(`a-${turnId}`)) continue;
       shown.add(`a-${turnId}`);
@@ -274,7 +224,6 @@ function userMessage(data: ClaudeUser): ChatMessage {
 }
 
 function replyMessage(reply: ClaudeReply, live: boolean): ChatMessage {
-  // Written mid-turn and never finished: the app restarted under it.
   const cut = !live && reply.status === "streaming";
   const status = cut ? "error" : reply.status;
   const error = cut ? APP_RESTARTED : reply.error;
@@ -291,9 +240,6 @@ function replyMessage(reply: ClaudeReply, live: boolean): ChatMessage {
   };
 }
 
-// ── The one-time import of `<agent.db>.claude.json` ────────────────────────
-
-/** A message as the old engine wrote it to its JSON file. */
 const legacyMessageSchema = z.looseObject({
   id: z.string(),
   role: z.string(),
@@ -323,11 +269,6 @@ export const legacyFileSchema = z.object({
 
 export type LegacySession = NonNullable<z.infer<typeof legacyFileSchema>["sessions"]>[string];
 
-/**
- * The entries one conversation of the old file becomes, in its order. A
- * retried message the old engine stored twice (register C1) is kept once,
- * with its first reply.
- */
 export function legacyEntries(
   session: LegacySession,
 ): { kind: string; data: ReturnType<typeof toJson> }[] {

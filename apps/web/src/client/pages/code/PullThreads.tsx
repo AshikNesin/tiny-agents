@@ -1,11 +1,3 @@
-/**
- * A PR review's conversations from GitHub (issue #345), under the lines
- * they are on: each with its comments, Reply and Resolve. Read once when the
- * review opens (and after Update, a reply or a resolve), never by a model.
- * GitHub places them at the PR's current head; when the review shows an
- * older one, or the code moved on (outdated), they are listed above the
- * file's diff instead.
- */
 import { useMemo, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronRight, MessagesSquare } from "lucide-react";
 import { toast } from "sonner";
@@ -18,7 +10,6 @@ import type { PullReviewView, PullThreadView, PullThreadsView } from "../../../s
 import { CommentBody, CommentByline } from "./PullComments";
 import type { LineNote } from "./UnifiedDiff";
 
-/** What a file shows of the PR's conversations: under lines, and above the diff. */
 export interface FileConversations {
   notes: LineNote[];
   aside?: ReactNode;
@@ -41,7 +32,6 @@ function ThreadCard({
   onReply(body: string): Promise<void>;
   onResolve(): Promise<void>;
 }) {
-  // Open unless resolved, until the owner folds or unfolds it.
   const [toggled, setToggled] = useState<boolean | null>(null);
   const open = toggled ?? !thread.resolved;
   const [replying, setReplying] = useState(false);
@@ -161,7 +151,6 @@ function ThreadCard({
   );
 }
 
-/** The conversations GitHub cannot place on this review's lines, above the diff. */
 function Elsewhere({
   threads,
   newer,
@@ -192,16 +181,11 @@ function Elsewhere({
   );
 }
 
-/**
- * The review's conversations from GitHub, as each file shows them. `reload`
- * changes after Update; a reply or a resolve reads them again.
- */
 export function usePullConversations(
   review: PullReviewView | null,
   reload: unknown,
 ): ((path: string) => FileConversations) | undefined {
   const id = review?.id;
-  // A failed read shows no conversations.
   const { data, refresh: read } = useResource(
     ["code", "reviews", "threads", id],
     () => reviewsApi.threads(id!).catch((): PullThreadsView | null => null),

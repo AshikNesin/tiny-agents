@@ -2,11 +2,6 @@ package groot.mobile.data.api
 
 import org.json.JSONObject
 
-/*
- * The chat's wire types, as the server's `@tiny-agents/agent` package and
- * `apps/web/src/shared/bot-stream.ts` declare them. Field names match the wire.
- */
-
 enum class MessageRole { User, Assistant, Marker }
 
 enum class MessageStatus { Done, Streaming, Stopped, Error, Unanswered }
@@ -31,17 +26,14 @@ enum class ToolStatus(val wire: String) {
     }
 }
 
-/** An image or file attached to a user message. */
 data class AttachmentRef(
     val uploadId: String,
-    /** "image" or "file". */
     val kind: String,
     val name: String,
     val mimeType: String,
     val size: Long,
     val width: Int? = null,
     val height: Int? = null,
-    /** Files only: extraction state ("none", "pending", "ready", "failed", "unsupported"). */
     val status: String? = null,
 ) {
     val isImage: Boolean get() = kind == "image"
@@ -67,10 +59,8 @@ data class AttachmentRef(
 
 data class ChatAuthor(val id: Int, val name: String)
 
-/** Trusted attribution of a cross-bot delivery. */
 data class ChatPeer(val kind: String, val name: String)
 
-/** A vault use as its approval card shows it: the item and target, never a value. */
 data class VaultUse(
     val handle: String,
     val label: String,
@@ -87,7 +77,6 @@ data class VaultUse(
 
 data class CredentialField(val key: String, val label: String, val type: String, val required: Boolean)
 
-/** A `request_credentials` call as the chat shows it: metadata only. */
 data class CredentialRequest(
     val status: String,
     val origin: String,
@@ -106,7 +95,6 @@ data class CodeThread(val threadId: String, val harness: String, val title: Stri
 
 data class QuestionOption(val label: String, val description: String?)
 
-/** One question a bot asks the owner (`ask_owner`). */
 data class OwnerQuestion(
     val question: String,
     val description: String?,
@@ -114,12 +102,10 @@ data class OwnerQuestion(
     val multiple: Boolean,
 )
 
-/** The owner's answer to one question; both empty means skipped. */
 data class OwnerAnswer(val selected: List<String>, val text: String? = null) {
     fun toJson(): JSONObject = jsonOfNotNull("selected" to selected, "text" to text?.takeIf { it.isNotBlank() })
 }
 
-/** One tool call of an assistant turn, with its live status or result. */
 data class ToolCall(
     val id: String,
     val name: String,
@@ -128,9 +114,7 @@ data class ToolCall(
     val output: String? = null,
     val durationMs: Long? = null,
     val waitedMs: Long? = null,
-    /** Durable tool task id: what approval decisions address. */
     val taskId: Int? = null,
-    /** "approved", "denied", "auto", "yolo" or "refused". */
     val approval: String? = null,
     val expiresAt: Long? = null,
     val vault: VaultUse? = null,
@@ -209,7 +193,6 @@ data class ToolCall(
 }
 
 data class ChatMessage(
-    /** `e<entryId>` for committed entries, `live` for the reply in flight. */
     val id: String,
     val role: MessageRole,
     val text: String,
@@ -222,13 +205,9 @@ data class ChatMessage(
     val status: MessageStatus = MessageStatus.Done,
     val error: String? = null,
     val model: String? = null,
-    /** Milliseconds since epoch. */
     val createdAt: Long = 0L,
-    /** For markers: what happened ("compaction"). */
     val marker: String? = null,
-    /** A turn the owner didn't start (issue #396): the text is the bot's own working. */
     val quiet: Boolean = false,
-    /** What this message's `message_owner` calls sent the owner, in order. */
     val sent: List<String> = emptyList(),
 ) {
     companion object {
@@ -263,10 +242,8 @@ data class ChatMessage(
     }
 }
 
-/** An owner input the server holds while the conversation is busy. */
 data class QueuedMessage(
     val requestId: String,
-    /** "steer" joins the running reply; "followUp" starts the next one. */
     val mode: String,
     val text: String,
     val attachments: List<AttachmentRef> = emptyList(),
@@ -283,7 +260,6 @@ data class QueuedMessage(
     }
 }
 
-/** A chat stream's snapshot: the newest messages, and whether older ones exist. */
 data class ChatState(
     val messages: List<ChatMessage>,
     val busy: Boolean,
@@ -300,19 +276,16 @@ data class ChatState(
     }
 }
 
-/** A page of older messages, oldest first. */
 data class ChatPage(val messages: List<ChatMessage>, val hasMore: Boolean) {
     companion object {
         fun from(json: JSONObject) = ChatPage(json.arr("messages").mapObjects(ChatMessage::from), json.bool("hasMore"))
     }
 }
 
-/** A finished routine run, shown as a quiet line in its bot's chat. */
 data class RoutineRunCard(
     val id: String,
     val routineId: String,
     val routineName: String,
-    /** "succeeded", "blocked", "failed", "missed" or "cancelled". */
     val status: String,
     val trigger: String,
     val scheduledFor: Long,
@@ -335,7 +308,6 @@ data class RoutineRunCard(
     }
 }
 
-/** Every event of one bot's chat stream (`GET /bots/:id/stream`). */
 sealed interface BotStreamEvent {
     data class Snapshot(val state: ChatState) : BotStreamEvent
     data class Upsert(val message: ChatMessage) : BotStreamEvent
@@ -350,7 +322,6 @@ sealed interface BotStreamEvent {
     data class StreamError(val message: String) : BotStreamEvent
 
     companion object {
-        /** Null for an event type this build does not know: ignored, never fatal. */
         fun from(json: JSONObject): BotStreamEvent? = when (json.string("type")) {
             "snapshot" -> Snapshot(ChatState.from(json.objOrNull("state") ?: JSONObject()))
             "upsert" -> json.objOrNull("message")?.let { Upsert(ChatMessage.from(it)) }
@@ -368,9 +339,7 @@ sealed interface BotStreamEvent {
     }
 }
 
-/** Every event of the app-wide feed (`GET /events`). */
 sealed interface FeedEvent {
-    /** On open: every conversation that is replying right now. */
     data class BusySnapshot(val busy: Set<String>) : FeedEvent
 
     data class Activity(val conversation: String, val busy: Boolean, val approvals: Int, val questions: Int) : FeedEvent

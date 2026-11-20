@@ -56,7 +56,6 @@ import groot.mobile.ui.components.MenuRow
 import groot.mobile.ui.components.Sheet
 import kotlinx.coroutines.launch
 
-/** The app's first screen: the open bot's chat, with the drawer a swipe away. */
 @Composable
 fun HomeRoute(container: AppContainer, onNavigate: (String) -> Unit) {
     val viewModel: HomeViewModel = viewModel(factory = viewModelFactory { initializer { HomeViewModel(container) } })
@@ -71,8 +70,6 @@ fun HomeRoute(container: AppContainer, onNavigate: (String) -> Unit) {
     var menu by remember { mutableStateOf(false) }
     var confirmNewChat by remember { mutableStateOf(false) }
     BackHandler(enabled = drawer.isOpen) { scope.launch { drawer.close() } }
-    // The server sends no event when a bot is created, renamed or pinned elsewhere (the web app,
-    // another phone): coming back to the app picks those up.
     LifecycleStartEffect(Unit) {
         viewModel.retry()
         onStopOrDispose {}
@@ -168,10 +165,6 @@ fun HomeRoute(container: AppContainer, onNavigate: (String) -> Unit) {
     }
 }
 
-/**
- * Menu, the open bot (its face and name; tap for its menu), and a new chat. Kept to two
- * icons: everything else about the bot lives in the sheet the name opens.
- */
 @Composable
 internal fun HomeTopBar(bot: BotListEntry?, bots: BotsState, onMenu: () -> Unit, onTitle: () -> Unit, onNewChat: () -> Unit) {
     Row(
@@ -214,10 +207,6 @@ internal fun HomeTopBar(bot: BotListEntry?, bots: BotsState, onMenu: () -> Unit,
     }
 }
 
-/**
- * What the open bot offers besides chatting. Who it is on top, its places as a row of tiles
- * (live views, past chats, memory), then the few switches and settings as rows.
- */
 @Composable
 private fun BotMenuSheet(
     bot: BotListEntry,

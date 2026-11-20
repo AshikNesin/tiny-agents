@@ -1,7 +1,5 @@
-// Class name utility — reuse the single implementation from @groot/ui.
 export { cn } from "@groot/ui/lib/utils";
 
-// Format bytes to human readable format
 export function formatBytes(bytes: number, decimals = 2): string {
   if (bytes === 0) return "0 Bytes";
 
@@ -14,7 +12,6 @@ export function formatBytes(bytes: number, decimals = 2): string {
   return `${Number.parseFloat((bytes / k ** i).toFixed(dm))} ${sizes[i]}`;
 }
 
-// Re-export date utilities from centralized location
 export {
   formatDate,
   formatDisplayDate,

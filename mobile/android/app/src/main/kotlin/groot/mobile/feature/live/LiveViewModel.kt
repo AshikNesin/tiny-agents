@@ -32,9 +32,7 @@ import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.roundToInt
 
-/** Which browser or desktop a live view shows: a bot's, or a profile's from the Browser or Computer page. */
 data class LiveTarget(
-    /** "browser" or "computer". */
     val surface: String,
     val botId: String? = null,
     val profile: String? = null,
@@ -42,35 +40,23 @@ data class LiveTarget(
     val isBrowser: Boolean get() = surface == "browser"
 }
 
-/** The viewer's connection to the remote screen. */
 enum class LiveLink { Idle, Connecting, Live, Reconnecting }
 
 data class LiveState(
-    /** Null until the first poll answers. */
     val status: LiveStatus? = null,
     val link: LiveLink = LiveLink.Idle,
-    /** The first poll failed: nothing to show yet. */
     val loadError: String? = null,
-    /** A guest watches only: no taking control, no starting, no reset. */
     val guest: Boolean = false,
     val apps: List<DesktopApp>? = null,
 ) {
     val driving: Boolean get() = status?.driver == "human"
 }
 
-/** Chrome will not draw a window narrower than this many CSS pixels; a phone gets one this wide, scaled down. */
 private const val MIN_REMOTE_WIDTH = 500.0
 
-/** The remote window for a viewer box, in CSS pixels (the web client's lib/remote-window.ts). */
 internal fun remoteWindowSize(width: Double, height: Double): Pair<Double, Double> =
     if (!(width > 0 && height > 0) || width >= MIN_REMOTE_WIDTH) width to height else MIN_REMOTE_WIDTH to height * (MIN_REMOTE_WIDTH / width)
 
-/**
- * One live view: polls the browser's or desktop's status, keeps a viewer connected while
- * there is a picture to stream, and carries the owner's actions (open, take control, hand
- * back, reset). The server relays raw RFB over a ticketed WebSocket; the `:vnc` module
- * speaks it.
- */
 class LiveViewModel(private val container: AppContainer, val target: LiveTarget) : ViewModel() {
     private val api = container.api
     val vnc = VncViewState()
@@ -82,7 +68,6 @@ class LiveViewModel(private val container: AppContainer, val target: LiveTarget)
     private var socket: WebSocket? = null
     private var pendingResize: Job? = null
 
-    /** The screen is visible: poll, and stream while there is something to stream. */
     fun show() {
         if (watching != null) return
         watching = viewModelScope.launch {
@@ -91,7 +76,6 @@ class LiveViewModel(private val container: AppContainer, val target: LiveTarget)
         }
     }
 
-    /** Off screen: stop polling and drop the viewer (the server caps viewers, and idles a desktop nobody watches). */
     fun hide() {
         watching?.cancel()
         watching = null
@@ -137,7 +121,6 @@ class LiveViewModel(private val container: AppContainer, val target: LiveTarget)
         var retryMs = FIRST_RETRY_MS
         var connectedOnce = false
         while (viewModelScope.isActive) {
-            // Wait until there is a picture: the session is up and not headless.
             state.first { it.status?.viewable == true }
             _state.update { it.copy(link = if (connectedOnce) LiveLink.Reconnecting else LiveLink.Connecting) }
             try {
@@ -150,10 +133,8 @@ class LiveViewModel(private val container: AppContainer, val target: LiveTarget)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: ApiException) {
-                // 404 or 409: it closed, or is headless; the poll says which, and the wait above holds until it is back.
                 if (e.status == 404 || e.status == 409) _state.update { it.copy(status = it.status?.copy(active = false)) }
             } catch (_: Exception) {
-                // Unreachable for now: retry below.
             }
             _state.update { it.copy(link = LiveLink.Reconnecting) }
             delay(retryMs)
@@ -161,7 +142,6 @@ class LiveViewModel(private val container: AppContainer, val target: LiveTarget)
         }
     }
 
-    /** Run one viewer connection until it ends; true when it got as far as a picture. */
     private suspend fun stream(ticket: VncTicket): Boolean {
         val input = ByteQueueInputStream()
         val ended = CompletableDeferred<Unit>()
@@ -179,9 +159,7 @@ class LiveViewModel(private val container: AppContainer, val target: LiveTarget)
             },
         )
         socket = webSocket
-        // Before the client exists: the view reports its size for the new client before the handshake ends.
         scale = ticket.scale
-        // The client writes one whole RFB message per call; each becomes one binary frame. send() only enqueues.
         val output = object : OutputStream() {
             override fun write(b: Int) {
                 webSocket.send(byteArrayOf(b.toByte()).toByteString())
@@ -226,13 +204,8 @@ class LiveViewModel(private val container: AppContainer, val target: LiveTarget)
         socket = null
     }
 
-    /** The remote pixel density the last ticket reported. */
     private var scale = 1.0
 
-    /**
-     * The viewer's box changed (browser only): fit the remote display and the Chrome window in
-     * it to the box. The display is asked over RFB; the window, in CSS pixels, over the API.
-     */
     fun onViewSize(widthPx: Int, heightPx: Int, density: Float) {
         if (!target.isBrowser || widthPx <= 0 || heightPx <= 0 || _state.value.guest) return
         val (width, height) = remoteWindowSize(widthPx / density.toDouble(), heightPx / density.toDouble())
@@ -246,7 +219,6 @@ class LiveViewModel(private val container: AppContainer, val target: LiveTarget)
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
-                // The picture still scales to fit; the next size change tries again.
             }
         }
     }
@@ -256,7 +228,6 @@ class LiveViewModel(private val container: AppContainer, val target: LiveTarget)
         if (target.botId != null) api.botLiveStart(target.botId, target.surface) else api.profileStart(target.surface, target.profile.orEmpty())
     }
 
-    /** Take control (the bots on it pause) or hand it back (which also answers a bot's takeover request). */
     fun setDriver(human: Boolean) = act(if (human) "Could not take control." else "Could not hand it back.") {
         if (target.botId != null) api.botLiveDriver(target.botId, target.surface, human) else api.profileDriver(target.surface, target.profile.orEmpty(), human)
         _state.update { it.copy(status = it.status?.copy(driver = if (human) "human" else "agent", takeover = if (human) it.status.takeover else null)) }
@@ -269,7 +240,6 @@ class LiveViewModel(private val container: AppContainer, val target: LiveTarget)
         container.notices.show(if (target.isBrowser) "The browser was reset" else "The computer was reset")
     }
 
-    /** The desktop profile behind this view, for the apps routes (which are by profile only). */
     private suspend fun desktopProfile(): String =
         target.profile ?: if (api.bot(target.botId.orEmpty()).browserProfile == "own") "bot-${target.botId}" else "shared"
 

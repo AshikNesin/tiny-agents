@@ -1,9 +1,3 @@
-/**
- * Remote MCP connections (issue #1 M3): rows, DTOs, validation and the
- * playground. Everything live (connecting, tools, Reconciling bots, sign-in)
- * is the ConnectionManager's; this module tells it what changed. Secrets
- * are write-only from the API's point of view.
- */
 import { asc, eq, inArray } from "drizzle-orm";
 import { env } from "@groot/core/env";
 import { Boom } from "@groot/core/errors";
@@ -84,7 +78,6 @@ function toDTO(row: Row): ConnectionData {
 
 const withBots = { bots: { columns: { botId: true } } } as const;
 
-/** Production only talks to public servers; dev/test may use local ones. */
 function checkUrl(url: string): void {
   if (env.NODE_ENV !== "production") return;
   try {
@@ -115,7 +108,6 @@ async function uniqueSlug(name: string): Promise<string> {
   }
 }
 
-/** Replace the connection's bot links; the manager Reconciles every bot that gained or lost it. */
 async function setBots(connectionId: string, botIds: string[]): Promise<void> {
   const before = await db
     .select()
@@ -158,10 +150,8 @@ export async function create(data: CreateConnectionDTO): Promise<ConnectionData>
   checkUrl(data.url);
   const manualClient = data.authType === "oauth" && data.clientId;
   if (data.authType === "header" || data.authType === "oauth") requireSecretsKey();
-  // The id is chosen first: each sealed value is bound to its row.
   const connectionId = createId();
   const slug = await uniqueSlug(data.name);
-  // The row and its own header-value vault item (Q4) are written together.
   db.transaction((tx) => {
     tx.insert(connections)
       .values({
@@ -208,15 +198,10 @@ export async function update(id: string, data: UpdateConnectionDTO): Promise<Con
       where: eq(vaultItems.handle, data.secretRef),
     });
     if (!item) throw Boom.badRequest(`No vault item "${data.secretRef}"`);
-    // An app credential (a model account's key) never leaves for an MCP server (S4).
     if (item.audience !== "bots") {
       throw Boom.badRequest(`Vault item "${data.secretRef}" is used by the app, not by bots`);
     }
   }
-  // A new host does not inherit the old one's header secret (S4): unless this
-  // change sends a new value, the connection's own item is deleted, whatever
-  // `secretRef` says (null would fall back to it), and a reference goes too
-  // unless this change names one for the new host.
   const movesHost = data.url !== undefined && new URL(data.url).host !== new URL(current.url).host;
   const dropSecret = movesHost && current.authType === "header" && data.secret === undefined;
   const dropRef = dropSecret && typeof data.secretRef !== "string";
@@ -227,7 +212,6 @@ export async function update(id: string, data: UpdateConnectionDTO): Promise<Con
     ...(data.headerName !== undefined && current.authType === "header"
       ? { headerName: data.headerName }
       : {}),
-    // A new value goes into the connection's own vault item (below).
     ...(writesSecret ? { secretRef: null } : {}),
     ...(data.secretRef !== undefined && data.secret === undefined && current.authType === "header"
       ? { secretRef: data.secretRef }
@@ -238,9 +222,7 @@ export async function update(id: string, data: UpdateConnectionDTO): Promise<Con
   db.transaction((tx) => {
     const row = tx.select().from(connections).where(eq(connections.id, id)).get();
     if (!row) throw Boom.notFound("Connection not found");
-    // The old host's value goes with it: its own item is deleted, not kept (S4).
     if (dropSecret && row.secretItemId) deleteOwnHeaderSecret(tx, row.secretItemId, row.slug);
-    // Drizzle refuses an empty SET (e.g. a PATCH that only changes botIds).
     if (Object.keys(changes).length > 0) {
       tx.update(connections).set(changes).where(eq(connections.id, id)).run();
     }
@@ -257,9 +239,6 @@ export async function update(id: string, data: UpdateConnectionDTO): Promise<Con
 
 export async function remove(id: string): Promise<void> {
   const connection = await get(id);
-  // The row (and its bot links) go first, so a connect attempt racing the
-  // delete finds nothing to connect and the Reconcile sees the links gone.
-  // Its own header-value vault item goes with it.
   const ownItem = db.transaction((tx) => {
     const row = tx.select().from(connections).where(eq(connections.id, id)).get();
     tx.delete(connections).where(eq(connections.id, id)).run();
@@ -305,7 +284,6 @@ export async function getTool(id: string, serverName: string): Promise<Connectio
   };
 }
 
-/** Turn a tool on or off for every bot using the connection. */
 export async function updateTool(
   id: string,
   serverName: string,
@@ -324,10 +302,6 @@ export async function updateTool(
   return getTool(id, serverName);
 }
 
-/**
- * Playground: call a tool on the live connection as the owner. Works for
- * tools turned off for bots, so the owner can try one before turning it on.
- */
 export async function callTool(
   id: string,
   serverName: string,
@@ -343,7 +317,6 @@ export async function callTool(
   }
 }
 
-/** Start the OAuth sign-in: the consent URL to open, or none when already authorized. */
 export async function authorize(id: string): Promise<ConnectionAuthorization> {
   const connection = await get(id);
   if (connection.authType !== "oauth") throw Boom.badRequest("This connection doesn't use sign-in");
@@ -358,7 +331,6 @@ export async function authorize(id: string): Promise<ConnectionAuthorization> {
   }
 }
 
-/** Connect once with the given settings and list the server's tools, without saving. */
 export async function test(data: TestConnectionDTO): Promise<ConnectionTestResult> {
   checkUrl(data.url);
   try {

@@ -1,10 +1,3 @@
-/**
- * The Code page's workspace operations on the sandbox: a fixed set, each
- * run with `execFile("git", …)` or `fs` (never a shell). Paths are checked
- * before use: directories must be absolute and exist, file paths inside a
- * diff must be relative and stay inside the repo, assets must sit under
- * the uploads root.
- */
 import { execFile } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { mkdir, readdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
@@ -37,9 +30,7 @@ import type {
 
 export interface CodingOpsContext {
   limits: Pick<CodingLimits, "maxUploadBytes" | "maxAssetBytes">;
-  /** Default `~/.tiny-agents/uploads`. */
   uploadsDir?: string;
-  /** Default the worker user's home. */
   home?: string;
 }
 
@@ -74,8 +65,6 @@ export async function runCodingOp(op: CodingOp, ctx: CodingOpsContext): Promise<
   }
 }
 
-// --- paths -------------------------------------------------------------------
-
 function checkAbsolute(value: string): string {
   if (value.includes("\0") || !path.isAbsolute(value)) {
     throw new CodingError("bad_path", "The path must be absolute.");
@@ -90,7 +79,6 @@ async function directory(value: string): Promise<string> {
   return dir;
 }
 
-/** A path inside a repo: relative, normalized, never above the root. */
 export function repoRelative(value: string): string {
   if (value.includes("\0") || path.isAbsolute(value) || value.startsWith("-")) {
     throw new CodingError("bad_path", "The file path must be relative to the repository.");
@@ -101,8 +89,6 @@ export function repoRelative(value: string): string {
   }
   return normal;
 }
-
-// --- git ---------------------------------------------------------------------
 
 function git(cwd: string, args: string[], maxBuffer = 32 * 1024 * 1024): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -137,7 +123,6 @@ async function repoRoot(dir: string): Promise<string> {
   }
 }
 
-/** The shared git reads (`@tiny-agents/git`) on a local repository: `execFile`, never a shell. */
 function localPort(root: string): GitReadPort {
   const inside = (rel: string) => path.join(root, repoRelative(rel));
   return {
@@ -159,7 +144,6 @@ function localPort(root: string): GitReadPort {
   };
 }
 
-/** `git` with its exit code, for the shared reads (they decide what a failure means). */
 function runGit(cwd: string, args: string[]): Promise<GitRunResult> {
   return new Promise((resolve) => {
     execFile(
@@ -183,7 +167,6 @@ function runGit(cwd: string, args: string[]): Promise<GitRunResult> {
   });
 }
 
-/** A shared read's failure as the protocol's `git` error. */
 async function reading<T>(work: () => Promise<T>): Promise<T> {
   try {
     return await work();
@@ -203,7 +186,6 @@ async function workingFiles(root: string): Promise<CodingGitFile[]> {
   );
 }
 
-/** A commit's first parent, or the empty tree for a root commit. */
 async function parentOf(root: string, sha: string): Promise<string | null> {
   return git(root, ["rev-parse", "--verify", "-q", `${sha}^`]).then(
     (out) => out.trim(),
@@ -292,8 +274,6 @@ async function gitFile(root: string, diffId: string, file: string): Promise<Codi
   return { path: rel, ...(await reading(() => fileSides(port, rel, before, after))) };
 }
 
-// --- files -------------------------------------------------------------------
-
 async function findFiles(
   dir: string,
   query: string,
@@ -316,7 +296,6 @@ async function findFiles(
       needle,
       "--",
       ".",
-      // `git grep` exits 1 when nothing matches.
     ]).catch(() => "");
     const matches: CodingFileMatch[] = [];
     for (const line of output.split("\n")) {
@@ -348,7 +327,6 @@ async function findFiles(
   return scored.slice(0, limit).map((entry) => ({ path: entry.file }));
 }
 
-/** Basename hits beat path hits beat in-order letters. 0 = no match. */
 function matchScore(file: string, query: string): number {
   const base = file.slice(file.lastIndexOf("/") + 1);
   if (base === query) return 100;
@@ -401,8 +379,6 @@ async function validateCwd(value: string): Promise<{ valid: boolean; error?: str
   if (!info.isDirectory()) return { valid: false, error: `${value} is not a directory.` };
   return { valid: true };
 }
-
-// --- uploads -----------------------------------------------------------------
 
 export function safeFilename(name: string): string {
   const base = path.basename(name.replaceAll("\\", "/"));

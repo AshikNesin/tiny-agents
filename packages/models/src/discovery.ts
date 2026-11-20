@@ -1,17 +1,3 @@
-/**
- * Model discovery and capabilities (issue #179): what an account's endpoint
- * lists, and what each model can do.
- *
- * - Discovery asks the endpoint (`GET /models` and its kind's variants)
- *   through the `get` the app hands in: the app's guarded fetch, so this
- *   module never opens a connection itself. The gateway's catalog lists
- *   without a request; the Claude plan asks Claude Code on the sandbox
- *   (`listClaudePlan`, which the app hands in), since only Claude Code
- *   holds that login.
- * - Capabilities come from pi-ai's built-in per-provider catalogs, matched by
- *   the endpoint's host and then by upstream id; else the kind's defaults.
- *   Owner overrides win over both (the app applies them).
- */
 import type { Api, ClassifierApi, ClassifierModel, Model } from "@earendil-works/pi-ai";
 import { ANTHROPIC_MODELS } from "@earendil-works/pi-ai/providers/anthropic.models";
 import { CLOUDFLARE_AI_GATEWAY_MODELS } from "@earendil-works/pi-ai/providers/cloudflare-ai-gateway.models";
@@ -30,7 +16,6 @@ import type { ClaudeCodeModel } from "@tiny-agents/claude-worker";
 import type { ProviderKind } from "./types";
 import { PROVIDER_KINDS } from "./kinds";
 
-/** A model an endpoint lists, with its resolved capabilities. */
 export interface DiscoveredModel {
   upstreamId: string;
   name: string;
@@ -40,13 +25,10 @@ export interface DiscoveredModel {
   imageInput: boolean;
   reasoning: boolean;
   compat: Record<string, unknown> | null;
-  /** Capabilities came from a catalog (false: the kind's defaults, "unknown capabilities"). */
   known: boolean;
-  /** Other ids the endpoint lists this model under (a Claude Code alias such as `opus`). */
   aliases?: string[];
 }
 
-/** One HTTP GET, as the app's guarded fetch answers it. */
 export type DiscoveryGet = (
   url: string,
   headers: Record<string, string>,
@@ -56,20 +38,11 @@ export interface DiscoverInput {
   kind: ProviderKind;
   baseUrl: string | null;
   apiKey?: string;
-  /**
-   * Headers that authenticate the listing instead of the kind's own (a
-   * gateway route lists through its gateway, on the gateway's token).
-   */
   headers?: Record<string, string>;
   get: DiscoveryGet;
-  /**
-   * The Claude plan's list, asked of Claude Code on the sandbox. Absent:
-   * there is nowhere to ask, and discovery fails `unreachable`.
-   */
   listClaudePlan?: () => Promise<ClaudeCodeModel[]>;
 }
 
-/** Why discovery failed, for the account's status. */
 export class DiscoveryError extends Error {
   constructor(
     readonly code: "key_rejected" | "unreachable" | "invalid",
@@ -83,10 +56,8 @@ export class DiscoveryError extends Error {
 const MAX_PAGES = 50;
 const MAX_MODELS = 5_000;
 
-/** Claude Code's `[1m]` suffix: the 1M-token context variant of a model. */
 const ONE_M = /\[1m\]$/i;
 
-/** A Claude plan model, named and sized from pi-ai's Anthropic catalog when it knows the id. */
 function claudePlanModel(upstreamId: string, fallbackName: string): DiscoveredModel {
   const longContext = ONE_M.test(upstreamId);
   const entry = resolveCapabilities("anthropic", null, upstreamId.replace(ONE_M, ""));
@@ -102,7 +73,6 @@ function claudePlanModel(upstreamId: string, fallbackName: string): DiscoveredMo
         ? entry.contextWindow
         : defaults.contextWindow,
     maxOutputTokens: entry.known ? entry.maxOutputTokens : defaults.maxOutputTokens,
-    // Claude Code takes images and thinks with every model it offers.
     imageInput: true,
     reasoning: true,
     compat: null,
@@ -110,12 +80,6 @@ function claudePlanModel(upstreamId: string, fallbackName: string): DiscoveredMo
   };
 }
 
-/**
- * The Claude plan's models from Claude Code's own list (what the worker's
- * `models` request answers): each model under the id its alias resolves to
- * today, named from pi-ai's catalog when it knows the id, else as Claude Code
- * names it. `default` is left out: it is one of the others.
- */
 export function claudePlanModels(listed: readonly ClaudeCodeModel[]): DiscoveredModel[] {
   const out = new Map<string, DiscoveredModel>();
   for (const model of listed) {
@@ -135,7 +99,6 @@ export function claudePlanModels(listed: readonly ClaudeCodeModel[]): Discovered
 
 const values = <T>(catalog: unknown) => Object.values(catalog as Record<string, T>);
 
-/** pi-ai's catalogs, by the host whose models they describe. */
 const CATALOGS_BY_HOST: readonly [string, Model<Api>[]][] = [
   ["api.anthropic.com", values(ANTHROPIC_MODELS)],
   ["api.openai.com", values(OPENAI_MODELS)],
@@ -163,14 +126,10 @@ const hostOf = (url: string | null) => {
   }
 };
 
-/** The catalog entry describing `upstreamId` at this endpoint, if any. */
 function catalogEntry(kind: ProviderKind, baseUrl: string | null, upstreamId: string) {
   const anywhere = (id: string) =>
     CATALOGS_BY_HOST.flatMap(([, models]) => models).find((m) => m.id === id);
   if (kind === "cloudflare-ai-gateway") {
-    // A gateway id is `<provider>/<model>` (`custom-zai-coding-plan/glm-5.3-flash`
-    // for a custom provider): unknown to the gateway's catalog, the model part
-    // may still be known.
     return GATEWAY_CHAT.find((m) => m.id === upstreamId) ?? anywhere(upstreamId.split("/").at(-1)!);
   }
   const host = hostOf(baseUrl ?? PROVIDER_KINDS[kind].defaultBaseUrl ?? null);
@@ -179,10 +138,6 @@ function catalogEntry(kind: ProviderKind, baseUrl: string | null, upstreamId: st
   return own?.find((m) => m.id === bare) ?? anywhere(bare);
 }
 
-/**
- * A model's capabilities at this endpoint: pi-ai's catalog entry (by host,
- * then by id anywhere), else the kind's defaults (`known: false`).
- */
 export function resolveCapabilities(
   kind: ProviderKind,
   baseUrl: string | null,
@@ -213,9 +168,7 @@ function parseJson(body: string, what: string): Record<string, unknown> {
     if (value && typeof value === "object" && !Array.isArray(value)) {
       return value as Record<string, unknown>;
     }
-  } catch {
-    // fall through
-  }
+  } catch {}
   throw new DiscoveryError("invalid", `${what} did not answer with a model list.`);
 }
 
@@ -299,11 +252,6 @@ async function listGemini(input: DiscoverInput, base: string) {
   return out;
 }
 
-/**
- * A gateway catalog model, named so it can't be mistaken for one of the
- * owner's own providers: Workers AI models run on Cloudflare's plan, not on
- * a key the owner stored in the gateway.
- */
 function gatewayModel(baseUrl: string | null, model: Model<Api>): DiscoveredModel {
   const resolved = resolveCapabilities("cloudflare-ai-gateway", baseUrl, model.id);
   return model.id.startsWith("workers-ai/")
@@ -311,10 +259,6 @@ function gatewayModel(baseUrl: string | null, model: Model<Api>): DiscoveredMode
     : resolved;
 }
 
-/**
- * The models an account's endpoint offers, capabilities resolved. Throws a
- * `DiscoveryError` the account's status can show.
- */
 export async function discoverModels(input: DiscoverInput): Promise<DiscoveredModel[]> {
   const { kind } = input;
   if (kind === "claude-plan") {
@@ -373,17 +317,13 @@ export async function discoverModels(input: DiscoverInput): Promise<DiscoveredMo
     .map((m) => resolveCapabilities(kind, base, m.id, m.name));
 }
 
-/** Endpoints the Add Models dialog offers, by template. */
 export interface ProviderTemplate {
   id: string;
   label: string;
   kind: ProviderKind;
   baseUrl: string | null;
-  /** Lists hundreds of models: discovered models start unchecked. */
   aggregator?: boolean;
-  /** No key needed (a local server). */
   keyless?: boolean;
-  /** A private or LAN endpoint the owner opts in to. */
   privateNetwork?: boolean;
 }
 

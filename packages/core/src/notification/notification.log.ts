@@ -1,7 +1,3 @@
-/**
- * The notification log (`NotificationLog`): one metadata row per accepted
- * notification — event, title, path, status — never the message body.
- */
 import { and, desc, eq, gte, inArray, lt } from "drizzle-orm";
 import { db } from "@groot/core/database";
 import { notificationLog } from "./notification.schema";
@@ -39,14 +35,11 @@ export type LogUpdate = Partial<
 export interface NotificationLogStore {
   create(row: NewLogRow): Promise<string>;
   update(ids: readonly string[], update: LogUpdate): Promise<void>;
-  /** A queued or sent row with this key created at or after `since` (on `channel`, when given). */
   hasRecent(dedupeKey: string, since: Date, channel?: string): Promise<boolean>;
   list(limit: number): Promise<NotificationLogRow[]>;
-  /** Delete rows created before `before`; returns how many. */
   prune(before: Date): Promise<number>;
 }
 
-/** The log on the app database (core's query builder: no relational queries, no transactions). */
 export function createDbLogStore(): NotificationLogStore {
   return {
     async create(row) {
@@ -58,7 +51,6 @@ export function createDbLogStore(): NotificationLogStore {
     },
     async update(ids, update) {
       if (ids.length === 0) return;
-      // Drizzle skips undefined fields and refuses an empty SET; nothing to change is a no-op.
       if (Object.values(update).every((value) => value === undefined)) return;
       await db
         .update(notificationLog)
@@ -97,7 +89,6 @@ export function createDbLogStore(): NotificationLogStore {
   };
 }
 
-/** An in-memory store (tests, or a database that is not migrated yet). */
 export function createMemoryLogStore(): NotificationLogStore & { rows: NotificationLogRow[] } {
   const rows: NotificationLogRow[] = [];
   let next = 0;

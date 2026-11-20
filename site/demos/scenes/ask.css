@@ -1,4 +1,3 @@
-/* A chat panel: a 24px gutter at the sides and bottom, off the top */
 .ta-ask .ta-ask__panel {
   top: -40px;
   left: 24px;
@@ -9,8 +8,6 @@
   padding: 0 12px 12px;
 }
 
-/* Pinned to its bottom, as a conversation is: the earlier turn goes up and
-   out of the panel as the new one grows */
 .ta-ask .ta-ask__thread {
   display: flex;
   flex-direction: column;
@@ -26,8 +23,6 @@
   padding-bottom: 14px;
 }
 
-/* The space above each new turn lives inside its Collapse, so a turn that
-   hasn't arrived yet takes no room (a flex gap would leave a band for it) */
 .ta-ask .ta-ask__turn {
   padding-top: 8px;
 }
@@ -41,7 +36,6 @@
   justify-content: flex-end;
 }
 
-/* The person's message: the app's black bubble, tail corner bottom-right */
 .ta-ask .ta-ask__q .ss-text {
   max-width: 84%;
   padding: 7px 12px;
@@ -76,20 +70,16 @@
   color: #44444c;
 }
 
-/* A tool call: the app's quiet row, working then done */
 .ta-ask .ta-ask__tool {
   display: inline-flex;
   align-items: center;
   justify-content: space-between;
-  /* An even width (the longer label's, rounded up), so the glyphs in it
-     sit on whole pixels while the row drops in */
   width: 190px;
   gap: 7px;
   padding: 5px 10px;
   border-radius: 9px;
   box-shadow: inset 0 0 0 1px var(--ss-line);
   font-size: 11.5px;
-  /* A whole, even line box, so the 14px glyphs centre on whole pixels */
   line-height: 16px;
   color: var(--ss-text);
 }
@@ -115,14 +105,11 @@
   color: var(--ss-text-strong);
 }
 
-/* The facts in the answer are set bold, as the app's markdown would */
 .ta-ask .ta-ask__answer .ss-stream__w[data-mark] {
   background: none;
   font-weight: 600;
 }
 
-/* The composer: the app's white field with a round send button, inset
-   6px all round, so the field's radius is the button's plus that inset */
 .ta-ask .ta-ask__composer .ss-field__box {
   padding-right: 6px;
   border-radius: 17px;

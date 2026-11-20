@@ -4,10 +4,6 @@ import groot.mobile.data.SessionStore
 import groot.mobile.data.api.ApiException
 import groot.mobile.data.api.TinyAgentsApi
 
-/**
- * Answers an approval from its notification, through the same route the chat card uses. The
- * notification goes away on success; one that was already answered elsewhere says so briefly.
- */
 class ApprovalAnswerer(
     private val api: TinyAgentsApi,
     private val notifier: PushNotifier,

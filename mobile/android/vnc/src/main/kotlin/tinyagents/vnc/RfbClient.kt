@@ -6,53 +6,24 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.util.concurrent.atomic.AtomicBoolean
 
-/**
- * What an [RfbClient] reports. Every method is called on the thread that runs [RfbClient.run],
- * never concurrently.
- */
 public interface RfbListener {
-    /** The handshake finished: the framebuffer exists (black) and input can be sent. */
     public fun onConnected(width: Int, height: Int, name: String)
 
-    /** The pixels of this rectangle of [RfbClient.framebuffer] changed. */
     public fun onFramebufferUpdate(x: Int, y: Int, width: Int, height: Int)
 
-    /** The remote desktop changed size: [RfbClient.framebuffer] is a new, black instance. */
     public fun onResize(width: Int, height: Int)
 
     public fun onBell() {}
 
     public fun onServerClipboard(text: String) {}
 
-    /**
-     * The connection is over; called exactly once, last. [reason] is null when the stream simply
-     * ended or [RfbClient.close] was called, and says what went wrong otherwise.
-     */
     public fun onDisconnected(reason: String?)
 }
 
-/**
- * The remote screen: [width] x [height] pixels, row by row, each `0xFFRRGGBB` (what Android calls
- * ARGB_8888). The client's thread writes [pixels] while others may read them; a reader can see a
- * half-applied update, which the next [RfbListener.onFramebufferUpdate] covers.
- */
 public class RfbFramebuffer(public val width: Int, public val height: Int) {
     public val pixels: IntArray = IntArray(width * height).also { it.fill(OPAQUE) }
 }
 
-/**
- * An RFB 3.8 (VNC) client over a pair of blocking streams, for servers with security type None.
- *
- * Call [run] on a thread of its own: it performs the handshake and then reads server messages
- * until the stream ends. The send methods can be called from any thread; each client message is
- * written to [output] with a single `write` followed by `flush`, on the calling thread.
- *
- * Only standard messages are ever sent: SetPixelFormat (0), SetEncodings (2),
- * FramebufferUpdateRequest (3), KeyEvent (4), PointerEvent (5), ClientCutText (6) and
- * SetDesktopSize (251).
- *
- * The internal constructor lets tests advertise other [encodings] than the default list.
- */
 public class RfbClient internal constructor(
     input: InputStream,
     private val output: OutputStream,
@@ -76,15 +47,10 @@ public class RfbClient internal constructor(
     private val hextile = HextileDecoder()
     private val zrle = ZrleDecoder()
 
-    /** The remote screen. Empty (0 x 0) until connected, replaced by a new instance on resize. */
     @Volatile
     public var framebuffer: RfbFramebuffer = RfbFramebuffer(0, 0)
         private set
 
-    /**
-     * When true, [sendPointer], [sendKey] and [sendClipboard] send nothing.
-     * [requestDesktopSize] still works.
-     */
     @Volatile
     public var viewOnly: Boolean = false
 
@@ -94,20 +60,14 @@ public class RfbClient internal constructor(
 
     @Volatile private var writeFailure: String? = null
 
-    // Guarded by writeLock.
     private var resizable = false
     private var screenId = 0
     private var screenFlags = 0
     private var pendingWidth = 0
     private var pendingHeight = 0
 
-    /** Test hook: every rectangle header read, before it is decoded. */
     internal var rectObserver: ((encoding: Int, x: Int, y: Int, width: Int, height: Int) -> Unit)? = null
 
-    /**
-     * Runs the connection on the calling thread until the stream ends, the protocol fails or
-     * [close] is called, then calls [RfbListener.onDisconnected]. Can be called once.
-     */
     public fun run() {
         check(started.compareAndSet(false, true)) { "RfbClient.run() can only be called once" }
         var reason: String? = null
@@ -126,21 +86,15 @@ public class RfbClient internal constructor(
         } finally {
             val closedByCaller = closed
             shutdown()
-            // Freed here, on the only thread that uses it; close() must not pull it from under a decode.
             zrle.end()
             listener.onDisconnected(if (closedByCaller) null else writeFailure ?: reason)
         }
     }
 
-    /** Ends the connection: closes both streams, which makes [run] return. Safe from any thread. */
     public fun close() {
         shutdown()
     }
 
-    /**
-     * Moves the remote pointer to ([x], [y]) in framebuffer pixels with [buttonMask] held: bit 0
-     * left, 1 middle, 2 right, 3 and 4 wheel up and down, 5 and 6 wheel left and right.
-     */
     public fun sendPointer(x: Int, y: Int, buttonMask: Int) {
         if (viewOnly || !ready) return
         val fb = framebuffer
@@ -154,7 +108,6 @@ public class RfbClient internal constructor(
         )
     }
 
-    /** Presses ([down]) or releases the key with this X11 [keysym], see [Keysyms]. */
     public fun sendKey(keysym: Int, down: Boolean) {
         if (viewOnly || !ready) return
         val message = ByteArray(8)
@@ -164,10 +117,6 @@ public class RfbClient internal constructor(
         send(message)
     }
 
-    /**
-     * Sets the remote clipboard. The wire format is Latin-1: other characters become `?`, and
-     * text beyond 1 MB is cut.
-     */
     public fun sendClipboard(text: String) {
         if (viewOnly || !ready) return
         val length = minOf(text.length, MAX_STRING)
@@ -181,17 +130,6 @@ public class RfbClient internal constructor(
         send(message)
     }
 
-    /**
-     * Asks the server to change the remote desktop to [width] x [height] pixels (the
-     * SetDesktopSize message of the ExtendedDesktopSize extension). Works when [viewOnly].
-     *
-     * Returns true when the request was sent. Returns false when it was not: the server has not
-     * announced the extension yet (it does so in its first update), in which case the latest
-     * request is kept and sent as soon as it does, or the size is not a valid desktop size.
-     * A server without the extension never resizes.
-     *
-     * The answer comes as [RfbListener.onResize]; a server that refuses stays as it is.
-     */
     public fun requestDesktopSize(width: Int, height: Int): Boolean {
         if (width !in 1..MAX_DIMENSION || height !in 1..MAX_DIMENSION) return false
         synchronized(writeLock) {
@@ -205,8 +143,6 @@ public class RfbClient internal constructor(
             return true
         }
     }
-
-    // Handshake
 
     private fun handshake() {
         val version = negotiateVersion()
@@ -230,7 +166,6 @@ public class RfbClient internal constructor(
         listener.onConnected(width, height, name)
     }
 
-    /** Returns the minor version both sides speak: 8, 7 or 3. */
     private fun negotiateVersion(): Int {
         val greeting = String(input.bytes(VERSION_SIZE), Charsets.ISO_8859_1)
         val match = VERSION.matchEntire(greeting)
@@ -249,7 +184,6 @@ public class RfbClient internal constructor(
 
     private fun negotiateSecurity(version: Int) {
         if (version == 3) {
-            // RFB 3.3: the server picks the type, and None has no result message.
             when (val type = input.s32()) {
                 SECURITY_INVALID -> throw RfbProtocolException("Server refused the connection: ${readString("reason")}")
                 SECURITY_NONE -> return
@@ -263,7 +197,6 @@ public class RfbClient internal constructor(
         val types = input.bytes(count).map { it.toInt() and 0xFF }
         if (SECURITY_NONE !in types) throw RfbProtocolException(unsupportedSecurity(types))
         send(byteArrayOf(SECURITY_NONE.toByte()))
-        // RFB 3.7 sends no SecurityResult after None.
         if (version >= 8 && input.s32() != 0) {
             throw RfbProtocolException("Server refused the connection: ${readString("reason")}")
         }
@@ -271,8 +204,6 @@ public class RfbClient internal constructor(
 
     private fun unsupportedSecurity(types: List<Int>): String =
         "Server requires authentication (security types ${types.joinToString()}); only None is supported"
-
-    // Server messages
 
     private fun readServerMessage() {
         when (val type = input.u8()) {
@@ -283,7 +214,6 @@ public class RfbClient internal constructor(
             }
             SERVER_BELL -> listener.onBell()
             SERVER_CUT_TEXT -> readServerCutText()
-            // Not asked for, but harmless to skip: EndOfContinuousUpdates, ServerFence, xvp.
             SERVER_END_OF_CONTINUOUS_UPDATES -> Unit
             SERVER_FENCE -> {
                 input.skip(7)
@@ -298,7 +228,6 @@ public class RfbClient internal constructor(
         input.skip(3)
         val length = input.s32()
         when {
-            // A negative length is the extended clipboard form, which this client never enabled.
             length < 0 -> input.skip(-length.toLong())
             length > MAX_STRING -> input.skip(length.toLong())
             else -> listener.onServerClipboard(String(input.bytes(length), Charsets.ISO_8859_1))
@@ -310,7 +239,6 @@ public class RfbClient internal constructor(
         val count = input.u16()
         var resized = false
         var index = 0
-        // With LastRect the count can be 0xFFFF, meaning "until the LastRect rectangle".
         while (index < count) {
             val x = input.u16()
             val y = input.u16()
@@ -353,11 +281,6 @@ public class RfbClient internal constructor(
         if (width > 0 && height > 0) listener.onFramebufferUpdate(x, y, width, height)
     }
 
-    /**
-     * An ExtendedDesktopSize rectangle: [reason] is who changed the size (0 server, 1 this
-     * client, 2 another client), [status] is non-zero when a change was refused. Returns true
-     * when the framebuffer changed size.
-     */
     private fun readExtendedDesktopSize(reason: Int, status: Int, width: Int, height: Int): Boolean {
         val screens = input.u8()
         input.skip(3)
@@ -382,12 +305,10 @@ public class RfbClient internal constructor(
                 if (pendingWidth > 0) sendDesktopSize(pendingWidth, pendingHeight)
             }
         }
-        // The server refused this client's own request: nothing changed.
         if (reason == 1 && status != 0) return false
         return resize(width, height)
     }
 
-    /** Returns true when the size differs from the current one and the framebuffer was replaced. */
     private fun resize(width: Int, height: Int): Boolean {
         val current = framebuffer
         if (current.width == width && current.height == height) return false
@@ -413,8 +334,6 @@ public class RfbClient internal constructor(
         return String(input.bytes(length.toInt()), Charsets.UTF_8)
     }
 
-    // Client messages
-
     private fun requestUpdate(incremental: Boolean) {
         val fb = framebuffer
         val message = ByteArray(10)
@@ -425,7 +344,6 @@ public class RfbClient internal constructor(
         send(message)
     }
 
-    /** Caller holds [writeLock]. One screen covering the whole desktop, like noVNC sends. */
     private fun sendDesktopSize(width: Int, height: Int) {
         pendingWidth = 0
         pendingHeight = 0
@@ -448,7 +366,6 @@ public class RfbClient internal constructor(
                 output.write(message)
                 output.flush()
             } catch (e: IOException) {
-                // Reported by run(), which sees the stream end once the input is closed.
                 if (writeFailure == null) writeFailure = "Could not send: ${e.message ?: e.javaClass.simpleName}"
                 closeQuietly(source)
             }
@@ -504,13 +421,11 @@ public class RfbClient internal constructor(
         const val ENCODING_LAST_RECT = -224
         const val ENCODING_EXTENDED_DESKTOP_SIZE = -308
 
-        /** In preference order. No Cursor pseudo-encoding: the server draws the pointer itself. */
         val ENCODINGS = intArrayOf(
             ENCODING_ZRLE, ENCODING_HEXTILE, ENCODING_COPY_RECT, ENCODING_RAW,
             ENCODING_DESKTOP_SIZE, ENCODING_EXTENDED_DESKTOP_SIZE, ENCODING_LAST_RECT,
         )
 
-        /** 32 bits per pixel, depth 24, little-endian true colour: bytes B, G, R, unused. */
         val SET_PIXEL_FORMAT = byteArrayOf(
             MSG_SET_PIXEL_FORMAT, 0, 0, 0,
             32, 24, 0, 1,
