@@ -76,7 +76,8 @@ document). In it:
   approval for `send_email`; set it to Allow for this bot to use it in
   routines." **Allow** tools run as usual.
 - Tools that always ask (`askOnly`: `save_skill`, `create_bot`,
-  `update_instructions`) and chat-only ones (`chatOnly`: `ask_owner`) are not
+  `update_instructions`, `computer_close_window`, `computer_clipboard_get`)
+  and chat-only ones (`chatOnly`: `ask_owner`) are not
   offered at all (`hiddenWhere` in `packages/agent/src/capabilities.ts`), so
   the run does not pay for their schemas on every request.
 - Auto-review never runs.

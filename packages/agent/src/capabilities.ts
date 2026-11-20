@@ -141,10 +141,17 @@ export function effectivePermission(
  */
 function toolNames(names: string[]): string {
   const prefix = /^mcp__.+?__/.exec(names[0] ?? "")?.[0];
-  if (!prefix || !names.every((name) => name.startsWith(prefix)))
-    return `Tools: ${names.join(", ")}`;
-  return `Tools (each named ${prefix}<name>): ${names.map((name) => name.slice(prefix.length)).join(", ")}`;
+  const shared = prefix !== undefined && names.every((name) => name.startsWith(prefix));
+  const shown = names
+    .slice(0, LISTED_TOOLS_MAX)
+    .map((name) => (shared ? name.slice(prefix.length) : name));
+  const more =
+    names.length > LISTED_TOOLS_MAX ? `, and ${names.length - LISTED_TOOLS_MAX} more` : "";
+  return `${shared ? `Tools (each named ${prefix}<name>)` : "Tools"}: ${shown.join(", ")}${more}`;
 }
+
+/** The most tool names a deferred connection lists; tool_search finds the rest. */
+const LISTED_TOOLS_MAX = 40;
 
 /** The tool search capability's id (and extension name). */
 export const TOOL_SEARCH_CAPABILITY = "tool-search";

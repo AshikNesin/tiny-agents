@@ -187,6 +187,40 @@ describe("deferred toolkits", () => {
     );
   }, 20_000);
 
+  it("lists at most 40 of a deferred connection's tool names, and counts the rest", async () => {
+    const requests: PiContext[] = [];
+    const many = createMcpCapability({
+      slug: "many",
+      name: "Many",
+      url: "https://many.example.test/mcp",
+      tools: Array.from({ length: 45 }, (_, i) => ({
+        name: `tool_${i}`,
+        description: "x".repeat(200),
+        inputSchema: { type: "object" },
+      })),
+      call: async () => ({ content: [] }),
+    });
+    const runtime: AgentRuntime = await openTestRuntime({
+      storePath: ":memory:",
+      capabilities: [many],
+      respondWith: (context: PiContext) => {
+        requests.push(structuredClone(context));
+        return fauxAssistantMessage([fauxText("done")]);
+      },
+    });
+    cleanup.push(() => runtime.close());
+    const ref = await runtime.createConversation({
+      modelId: TEST_MODEL,
+      systemPrompt: "",
+      capabilities: { enabled: ["mcp:many", "tool-search"], permissions: {} },
+    });
+    await runtime.submit(ref, { requestId: "r1", text: "hi" });
+    await until(() => requests.length >= 1, "reply");
+    const prompt = JSON.stringify(requests[0]!.messages);
+    expect(prompt).toContain("tool_38, tool_39, and 5 more");
+    expect(prompt).not.toContain("tool_40");
+  }, 20_000);
+
   it("offers no tool_search where nothing is deferred", async () => {
     const requests: PiContext[] = [];
     const runtime: AgentRuntime = await openTestRuntime({

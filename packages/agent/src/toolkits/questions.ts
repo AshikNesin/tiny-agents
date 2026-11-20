@@ -24,7 +24,9 @@ import { messageOwnerTool } from "./message-owner";
 import type { ChatToolCall, OwnerAnswer, OwnerQuestion } from "../types";
 import {
   pendingToolTask,
+  refuseUnattended,
   sealedAsNotPending,
+  unattendedOnce,
   waitForOwner,
   type HostTx,
   type WaitTracker,
@@ -238,6 +240,11 @@ function formatAnswers(questions: readonly OwnerQuestion[], answers: readonly Ow
 const DISMISSED =
   "The owner dismissed these questions without answering (a message from them may follow). Don't ask them again: go by their message, or continue on your best judgment and say which assumptions you made.";
 
+// Unattended conversations are not offered ask_owner; this covers a call made
+// before that, replayed after a restart.
+const UNATTENDED =
+  "Nobody can answer questions here: this is a scheduled routine run, not a chat with the owner. Continue on your best judgment, say which assumptions you made, and put any open question in your reply.";
+
 export function createQuestionsCapability(tracker: WaitTracker): Capability {
   const askOwner = tool({
     name: ASK_OWNER,
@@ -254,6 +261,10 @@ export function createQuestionsCapability(tracker: WaitTracker): Capability {
     // Re-running only re-attaches to the call's document (waitForOwner).
     replay: "safe",
     execute: async (args, api, context): Promise<ToolExecutionResult> => {
+      // Decided once per call, so a replay never starts waiting after all.
+      if (await unattendedOnce(api, context, "questions:unattended")) {
+        return refuseUnattended(UNATTENDED);
+      }
       const asked = normalizeQuestions(args.questions);
       const doc = await waitForOwner(
         api,

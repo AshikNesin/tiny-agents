@@ -13,7 +13,7 @@
  *   that use it (their permissions are per tool). Bots linked or unlinked by
  *   the owner are Reconciled here too, each bot once per change, however
  *   many steps of the change asked for it.
- * - A large connection's tools are deferred (`MCP_DEFER_CHARS`, by schema size); the
+ * - A large connection's tools are deferred (`MCP_DEFER_CHARS`: the size of their names, descriptions and schemas); the
  *   runtime's own `tool_search` loads them.
  * - A server that needs (re)authorization marks the connection
  *   "needs_auth" and withdraws its tools until the owner signs in (D11).
