@@ -30,6 +30,10 @@ export const gates = [
   { name: "Design tokens", run: "pnpm check:tokens" },
   { name: "pnpm policy", run: "pnpm check:pnpm-policy" },
   { name: "Old modules", run: "pnpm check:old-modules" },
+  {
+    name: "Comment ratchet",
+    run: "pnpm check:comments --base origin/${GITHUB_BASE_REF:-main}",
+  },
   { name: "Migrations are up to date with the schema", run: migrationsMatchSchema },
   {
     name: "Applied migrations unchanged",

@@ -573,7 +573,7 @@ const FIXTURES: Record<string, Fixture> = {
   "apps/web/src/client/r10-pass.tsx": {
     source:
       '// A comment may hold one \u2014 like this.\nexport const a = "Saved. Done";\nexport const quoted = "Window \\u2014 title";\n',
-    rules: [],
+    rules: ["R16"],
   },
   "apps/web/src/server/r10-elsewhere-pass.ts": {
     source: 'export const toModel = "clicked \u2014 now on the page";\n',
@@ -707,6 +707,16 @@ const FIXTURES: Record<string, Fixture> = {
   },
   "apps/web/src/shared/api/r13-shared-pass.ts": {
     source: "export interface Task {\n  id: string;\n}\nexport type { Task as Todo };\n",
+    rules: [],
+  },
+  "apps/web/src/server/r16-fail.ts": {
+    source: "// Adds one.\nexport const inc = (n: number) => n + 1; /* trailing */\n",
+    rules: ["R16", "R16"],
+    mentions: "ADR 0028",
+  },
+  "apps/web/src/server/r16-directives-pass.ts": {
+    source:
+      '// @ts-expect-error untyped\nimport legacy from "legacy";\n// oxlint-disable-next-line no-unused-vars\nconst unused = 1;\nexport const value = /* @__PURE__ */ legacy();\n',
     rules: [],
   },
   "apps/web/src/client/r12-elsewhere-pass.ts": {

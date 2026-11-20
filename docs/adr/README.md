@@ -46,6 +46,7 @@ phases 0 and 1), which follows the PR loop.
 | 0025 | [Steady diffs: one git reader, plumbing reads, pushed change versions](0025-steady-code-diffs.md)                    | accepted (amends 0021, 0024)                        |
 | 0026 | [Web Push is the push transport; the server holds no provider credentials](0026-web-push-transport.md)               | accepted                                            |
 | 0027 | [1Password Connect comes back, and runs inside the app's container](0027-1password-connect-runs-inside-the-app.md)   | accepted (amends 0005, 0017)                        |
+| 0028 | [Code carries no comments; decisions live in ADRs](0028-code-carries-no-comments.md)                                 | accepted                                            |
 | G4   | [Hono + Drizzle on SQLite, for Node and Cloudflare Workers](0004-hono-drizzle-sqlite-workers.md)                     | accepted (groot)                                    |
 
 `G4` is groot's ADR 0004, synced from the boilerplate; tiny-agents' own 0004
