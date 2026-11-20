@@ -52,6 +52,8 @@ export interface CodeHub {
    */
   serial<T>(key: string, work: () => Promise<T>): Promise<T>;
   onChange(listener: (change: HubChange) => void): () => void;
+  /** What the list adds to a thread changed (its PR opened, moved or closed): send the list again. */
+  listChanged(): void;
   onEvent(listener: (event: HubEvent) => void): () => void;
   /**
    * A bot's hand-off now runs on this thread (a start recorded its thread):
@@ -210,6 +212,9 @@ export function createCodeHub(options: HubOptions): CodeHub {
     onChange(listener) {
       changeListeners.add(listener);
       return () => changeListeners.delete(listener);
+    },
+    listChanged() {
+      emit(changeListeners, "list");
     },
     onEvent(listener) {
       eventListeners.add(listener);

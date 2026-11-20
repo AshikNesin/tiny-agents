@@ -18,6 +18,10 @@ import {
 import { autofixMachine, type AutofixStatus } from "../../../shared/machines/autofix";
 import { autofixPassMachine, type AutofixPassStatus } from "../../../shared/machines/autofix-pass";
 import type { PassRecord } from "./code.autofix";
+import { codeHub } from "./code.hub";
+
+/** The thread list shows each thread's open PR and its loop: open Code pages read it again. */
+const listChanged = () => codeHub()?.listChanged();
 
 export async function getPull(id: string): Promise<CodePullRow | undefined> {
   return db.query.codePullRequests.findFirst({ where: eq(codePullRequests.id, id) });
@@ -77,15 +81,21 @@ export async function insertPull(input: LinkInput): Promise<CodePullRow> {
       ownerInputAt: new Date(),
     })
     .returning();
+  listChanged();
   return row!;
 }
 
 export async function deletePull(id: string): Promise<void> {
   await db.delete(codePullRequests).where(eq(codePullRequests.id, id));
+  listChanged();
 }
 
 /** Store a fresh snapshot (GitHub is the source of truth; this is its cache). */
 export async function cacheSnapshot(id: string, snapshot: PullSnapshot): Promise<CodePullRow> {
+  const [before] = await db
+    .select({ state: codePullRequests.state })
+    .from(codePullRequests)
+    .where(eq(codePullRequests.id, id));
   const [row] = await db
     .update(codePullRequests)
     .set({
@@ -101,6 +111,7 @@ export async function cacheSnapshot(id: string, snapshot: PullSnapshot): Promise
     })
     .where(eq(codePullRequests.id, id))
     .returning();
+  if (before?.state !== snapshot.state) listChanged();
   return row!;
 }
 
@@ -140,6 +151,7 @@ export async function moveLoop(
     })
     .where(and(eq(codePullRequests.id, id), inArray(codePullRequests.loopStatus, sources)))
     .returning({ id: codePullRequests.id });
+  if (moved.length > 0) listChanged();
   return moved.length > 0;
 }
 

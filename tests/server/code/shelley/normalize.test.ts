@@ -118,6 +118,28 @@ describe("buildTranscript on real Shelley payloads", () => {
     });
     expect(lastWriteAt([error({})])).toBe(Date.parse("2026-11-03T17:00:00Z"));
   });
+
+  it("shows a branch move by its branch, not the worktree's full path", () => {
+    const gitinfo = (text: string): ShelleyMessage => ({
+      message_id: "g",
+      sequence_id: 7,
+      type: "gitinfo",
+      created_at: "2026-11-03T17:00:00Z",
+      llm_data: JSON.stringify({ Content: [{ Type: 2, Text: text }] }),
+    });
+    const moved = gitinfo(
+      '/tmp/ta-ws-GUAMeJ/tiny-agents-code/acme--web/worktrees/ta_echo-start (ta/echo-start) now at c803166 "Add b"',
+    );
+    expect(buildTranscript([moved], "shelley")[0]).toMatchObject({
+      kind: "notice",
+      level: "info",
+      text: 'ta/echo-start now at c803166 "Add b"',
+    });
+    // Anything else Shelley says about git stays as it is.
+    expect(buildTranscript([gitinfo("not a git repository")], "shelley")[0]).toMatchObject({
+      text: "not a git repository",
+    });
+  });
 });
 
 describe("Shelley wire helpers", () => {

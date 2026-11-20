@@ -63,6 +63,15 @@ function parse<T>(raw: string | null | undefined): T | undefined {
   }
 }
 
+/**
+ * Shelley's `<worktree path> (<branch>) now at <sha> "<subject>"` → `<branch> now
+ * at …`: the path is long and the thread already says where it works.
+ */
+function shortGitInfo(text: string): string {
+  const match = /^.+? \(([^()\s]+)\) (now at .*)$/s.exec(text);
+  return match ? `${match[1]} ${match[2]}` : text;
+}
+
 function textOf(blocks: Block[] | undefined): string {
   return (blocks ?? [])
     .filter((b) => b.Type === TEXT && b.Text)
@@ -307,7 +316,7 @@ export function buildTranscript(
           kind: "notice",
           id: message.message_id,
           level: "info",
-          text: firstLine(text, 300),
+          text: firstLine(message.type === "gitinfo" ? shortGitInfo(text) : text, 300),
         });
         break;
       }

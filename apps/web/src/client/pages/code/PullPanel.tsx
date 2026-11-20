@@ -429,6 +429,16 @@ function ActivePull({
   const failing = (snap?.checks ?? []).some((c) => c.state === "failure");
   const open = (snap?.threads ?? []).filter((t) => !t.resolved);
   const methods = snap?.mergeMethods ?? [];
+  // GitHub may still allow it (a check that is not required), but merging red is rarely meant.
+  const conflicting = snap?.mergeable === "conflicting";
+  const mergeBlocked =
+    failing && conflicting
+      ? "Merge opens once checks pass and the conflict is resolved."
+      : failing
+        ? "Merge opens once checks pass."
+        : conflicting
+          ? "Merge opens once the conflict is resolved."
+          : null;
 
   return (
     <>
@@ -440,7 +450,7 @@ function ActivePull({
             <DropdownMenuTrigger asChild>
               <Button
                 size="sm"
-                disabled={busy !== null || pr.draft}
+                disabled={busy !== null || pr.draft || mergeBlocked !== null}
                 title={pr.draft ? "A draft cannot be merged; switch Draft off first" : undefined}
               >
                 {busy === "merge" ? <Spinner /> : <GitMerge />}
@@ -459,6 +469,9 @@ function ActivePull({
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
+        )}
+        {pr.state === "open" && !pr.draft && mergeBlocked && (
+          <span className="text-muted-foreground self-center text-xs">{mergeBlocked}</span>
         )}
         {!failing && (open.length > 0 || snap?.mergeable === "conflicting") && (
           <Button

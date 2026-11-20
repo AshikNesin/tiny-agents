@@ -307,6 +307,33 @@ describe("getting it merged", () => {
     expect(screen.getByRole("button", { name: "Merge" })).toBeDisabled();
   });
 
+  it("keeps Merge shut while a check fails or the branch conflicts, and says why", async () => {
+    checkState = "failure";
+    panel();
+    await wait(0);
+    expect(screen.getByRole("button", { name: "Merge" })).toBeDisabled();
+    expect(screen.getByText("Merge opens once checks pass.")).toBeInTheDocument();
+
+    extra = { mergeable: "conflicting" };
+    act(() => screen.getByRole("button", { name: "Refresh" }).click());
+    await wait(0);
+    expect(
+      screen.getByText("Merge opens once checks pass and the conflict is resolved."),
+    ).toBeInTheDocument();
+
+    checkState = "success";
+    act(() => screen.getByRole("button", { name: "Refresh" }).click());
+    await wait(0);
+    expect(screen.getByRole("button", { name: "Merge" })).toBeDisabled();
+    expect(screen.getByText("Merge opens once the conflict is resolved.")).toBeInTheDocument();
+
+    extra = {};
+    act(() => screen.getByRole("button", { name: "Refresh" }).click());
+    await wait(0);
+    expect(screen.getByRole("button", { name: "Merge" })).toBeEnabled();
+    expect(screen.queryByText(/Merge opens once/)).toBeNull();
+  });
+
   it("says the changes are not committed yet, and asks the agent to commit them", async () => {
     noPull = true;
     ahead = 0;

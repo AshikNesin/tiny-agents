@@ -75,7 +75,10 @@ await journey(
         `bash: printf 'export const b = 2;\\n' > src/b.ts && git add src/b.ts && git -c user.email=v@example.com -c user.name=v commit -qm 'Add b ${stamp}'`,
       );
       await composer.press("Enter");
-      await expect(page.getByText(/now at [0-9a-f]{7}/)).toBeVisible({ timeout: 30_000 });
+      // The branch, not the worktree's full path (#404).
+      await expect(page.getByText(/^ta\/[a-z0-9-]+ now at [0-9a-f]{7}/)).toBeVisible({
+        timeout: 30_000,
+      });
       await page.goto(threadPath("/pr"), LOADED);
       await expect(prTab.getByText(/is 1 commit ahead of main/)).toBeVisible({ timeout: 20_000 });
       // No header repeating the tab's name before a PR exists (#384).
@@ -90,6 +93,10 @@ await journey(
       number = pulls.at(-1).number;
       expect(pulls.at(-1).draft).toBe(true);
       await expect(prTab.getByRole("button", { name: "Merge" })).toBeDisabled();
+      // The header shows the PR at once, not a second "Review" (#405).
+      await expect(page.getByTestId("code-changes-toggle")).toContainText(`#${number}`, {
+        timeout: 20_000,
+      });
       // #384: no Fix, no empty Comments, no spend limit with Auto-fix off.
       await expect(prTab.getByRole("button", { name: "Fix", exact: true })).toHaveCount(0);
       await expect(prTab.getByRole("region", { name: "Comments" })).toHaveCount(0);
@@ -113,6 +120,9 @@ await journey(
     await step("Draft off, Auto-merge on: GitHub has both", async () => {
       await page.getByTestId("code-draft").click();
       await expect(page.getByTestId("code-draft")).not.toBeChecked({ timeout: 20_000 });
+      // A failing check keeps Merge shut, and says so (#406).
+      await expect(prTab.getByRole("button", { name: "Merge" })).toBeDisabled();
+      await expect(prTab.getByText("Merge opens once checks pass.")).toBeVisible();
       await page.getByTestId("code-automerge").click();
       await expect(prTab.getByText("On at GitHub")).toBeVisible({ timeout: 20_000 });
       const pull = (await control("/state")).pulls.find((p) => p.number === number);
