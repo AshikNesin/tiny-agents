@@ -286,6 +286,48 @@ describe("browser toolkit", () => {
     expect(again.text).toBe("clicked e3 — https://example.com/join\nNo change on the page.");
   });
 
+  it("follows a click into the tab it opened, lists the tabs and switches back", async () => {
+    const fake = fakeTransport();
+    const tabs = [
+      { url: "https://example.com/results", title: "Results" },
+      { url: "https://example.com/item", title: "Item" },
+    ];
+    let at = 0;
+    const transport: BrowserTransport = async (...args) => ({
+      ...(await fake.transport(...args)),
+      url: () => tabs[at]!.url,
+      click: async () => {
+        at = 1;
+        return { url: tabs[1]!.url, newTab: true };
+      },
+      tabs: async () => tabs.map((tab, i) => ({ ...tab, current: i === at })),
+      switchTab: async (index) => {
+        at = index;
+        return tabs[index]!;
+      },
+    });
+    const tk = toolkit({ transport, profilesDir: "/tmp/ta-test-profiles" });
+    fake.setSnapshot('- link "Open item" [ref=e5]');
+    await run(tk, "browser_snapshot", {});
+
+    fake.setSnapshot('- heading "The item"');
+    const clicked = await run(tk, "browser_click", { ref: "e5" });
+    expect(clicked.text).toBe(
+      'clicked e5 — opened a new tab (2 open, browser_tabs switches): https://example.com/item\nPage:\n- heading "The item"',
+    );
+
+    const listed = await run(tk, "browser_tabs", {});
+    expect(listed.text).toBe(
+      "1. https://example.com/results · Results\n2. https://example.com/item · Item (current)",
+    );
+
+    fake.setSnapshot('- link "Open item" [ref=e5]');
+    const back = await run(tk, "browser_tabs", { select: 1 });
+    expect(back.text).toBe(
+      'on tab 1: https://example.com/results · Results\nPage:\n- link "Open item" [ref=e5]',
+    );
+  });
+
   it("keeps typed text out of the page change it returns", async () => {
     const { transport, setSnapshot } = fakeTransport();
     const tk = toolkit({ transport, profilesDir: "/tmp/ta-test-profiles" });

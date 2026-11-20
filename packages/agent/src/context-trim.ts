@@ -46,6 +46,7 @@ const PAGE_READ_TOOLS = new Set([
   "browser_type",
   "browser_press_key",
   "browser_wait_for",
+  "browser_tabs",
 ]);
 /** Tools whose whole result is the page, with no line about an action to keep. */
 const SNAPSHOT_TOOLS = new Set(["browser_snapshot", "browser_read_text"]);

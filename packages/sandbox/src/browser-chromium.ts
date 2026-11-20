@@ -210,21 +210,38 @@ export function pageSession(
   // and close tabs, so this follows them (see `follow`).
   let page = initialPage;
   let closing = false;
-  claimed.add(page);
+  /**
+   * The agent's tabs, oldest first: the one it started in, the ones its
+   * clicks opened, and the ones it was handed. All are held and guarded
+   * while open, so another agent never takes one and none loads a private
+   * address in the background.
+   */
+  const mine: Page[] = [];
   /** Guard the tab before the agent acts on it (once while held). */
   const watch = (target: Page) => guard?.watch(target, exempt);
-  void watch(page)?.catch(() => undefined);
+  /** Hold a tab as the agent's. Never waits on it: `guarded` does, before acting. */
+  const hold = (target: Page) => {
+    if (mine.includes(target)) return;
+    mine.push(target);
+    claimed.add(target);
+    follow(target);
+    void watch(target)?.catch(() => undefined);
+  };
+  /** Let go of a tab that stays open (`release`) or has closed. */
+  const letGo = (target: Page) => {
+    const at = mine.indexOf(target);
+    if (at >= 0) mine.splice(at, 1);
+    claimed.delete(target);
+    guard?.unwatch(target);
+  };
 
   // Never waits on the tab: a hand-back must not hang on a busy page. The
-  // next action waits for the guard instead (`guarded`).
+  // next action waits for the guard instead (`guarded`). The tab it leaves
+  // stays the agent's, one `browser_tabs` can switch back to.
   const switchTo = async (next: Page) => {
     if (next === page) return;
-    claimed.delete(page);
-    guard?.unwatch(page); // no agent holds it any more
-    claimed.add(next);
+    hold(next);
     page = next;
-    follow(next);
-    void watch(next)?.catch(() => undefined);
   };
   /** Run an action on the current tab once it is guarded. */
   const guarded = async <T>(action: (current: Page) => Promise<T>): Promise<T> => {
@@ -232,23 +249,31 @@ export function pageSession(
     await watch(current);
     return action(current);
   };
+  /** The agent's open tab at `index` (0-based, oldest first). */
+  const tabAt = (index: number) => {
+    const target = mine[index];
+    if (!target || target.isClosed?.()) {
+      throw new Error(`There is no tab ${index + 1}; you have ${mine.length}.`);
+    }
+    return target;
+  };
 
-  // When the current tab closes, move to the most recent tab no other agent
-  // holds; with none left the agent gets a fresh blank one, so it never
-  // holds a dead page.
-  const follow = (target: Page) => {
+  // When the agent's current tab closes, move to its newest other tab, else
+  // the most recent tab no other agent holds; with none left the agent gets
+  // a fresh blank one, so it never holds a dead page.
+  function follow(target: Page) {
     target.once("close", () => {
+      letGo(target);
       if (closing || page !== target) return;
-      claimed.delete(target);
       const remaining = target
         .context()
         .pages()
         .filter((p) => !claimed.has(p));
-      const next = remaining[remaining.length - 1];
+      const next = mine[mine.length - 1] ?? remaining[remaining.length - 1];
       void (next ? switchTo(next) : target.context().newPage().then(switchTo)).catch(() => {});
     });
-  };
-  follow(page);
+  }
+  hold(page);
 
   const session: BrowserSession = {
     vnc: teardown.vnc,
@@ -327,9 +352,40 @@ export function pageSession(
     fillSecret: (fill) => guarded((current) => fillSecretFields(current, fill)),
     click: (ref) =>
       guarded(async (current) => {
+        // A link with target=_blank or a window.open: the agent goes on in
+        // the tab it opened, which the guard already watches (its opener's).
+        const popup = current
+          .waitForEvent("popup", { timeout: NAVIGATION_START_MS })
+          .catch(() => null);
         await settleAfter(current, () => clickRef(current, ref));
-        return { url: current.url() }; // where the click led, once it settled
+        const opened = await popup;
+        if (!opened) return { url: current.url() }; // where the click led, once it settled
+        await opened
+          .waitForLoadState("domcontentloaded", { timeout: SETTLE_MS })
+          .catch(() => undefined);
+        await settle(opened);
+        await switchTo(opened);
+        return { url: opened.url(), newTab: true };
       }),
+    tabs: () =>
+      Promise.all(
+        mine.map(async (tab) => {
+          const title = await titleOf(tab);
+          return { url: tab.url(), ...(title ? { title } : {}), current: tab === page };
+        }),
+      ),
+    switchTab: async (index) => {
+      await switchTo(tabAt(index));
+      await watch(page);
+      return { url: page.url(), title: await titleOf(page) };
+    },
+    closeTabAt: async (index) => {
+      const target = tabAt(index);
+      if (mine.length === 1) throw new Error("This is your only tab; it can't be closed.");
+      if (target === page) await switchTo(mine[index === mine.length - 1 ? index - 1 : index + 1]!);
+      letGo(target);
+      await target.close();
+    },
     type: (ref, text) => guarded((current) => typeRef(current, ref, text)),
     press: (key) =>
       guarded((current) =>
@@ -346,12 +402,18 @@ export function pageSession(
       data: (await page.screenshot({ type: "jpeg", quality: 60, scale: "css" })).toString("base64"),
     }),
     release: () => {
+      // The first tab stays open, unguarded; the tabs the agent opened go.
+      for (const tab of mine.filter((t) => t !== page)) {
+        letGo(tab);
+        void tab.close().catch(() => {});
+      }
       guard?.unwatch(page);
     },
     close: async () => {
       closing = true;
-      claimed.delete(page);
-      guard?.unwatch(page);
+      const others = mine.filter((tab) => tab !== page);
+      for (const tab of [...mine]) letGo(tab);
+      await Promise.all(others.map((tab) => tab.close().catch(() => {})));
       await teardown.close(page);
     },
   };

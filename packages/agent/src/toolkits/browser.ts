@@ -171,7 +171,7 @@ export function createBrowserToolkit(options: BrowserToolkitOptions = {}): Capab
     id: "browser",
     name: "Browser",
     description:
-      "A real browser the bot drives: navigate, read, click, type, scroll, wait, go back.",
+      "A real browser the bot drives: navigate, read, click, type, scroll, wait, go back, tabs.",
     // Large and used in few conversations: loaded with tool_search (issue #360).
     deferred: true,
     tools: [
@@ -330,7 +330,8 @@ export function createBrowserToolkit(options: BrowserToolkitOptions = {}): Capab
         summary: "Click an element by ref.",
         description:
           "Click an element by its ref from the last snapshot. The element is scrolled into view first. " +
-          "Returns what changed on the page, or the new page's first part if the click opened one.",
+          "Returns what changed on the page, or the new page's first part if the click opened one " +
+          "(in a new tab too: you go on in that tab).",
         parameters: Type.Object({ ref: Type.String({ minLength: 2, maxLength: 32 }) }),
         replay: "unsafe",
         execute: async (args, api) => {
@@ -339,9 +340,11 @@ export function createBrowserToolkit(options: BrowserToolkitOptions = {}): Capab
             const s = await actionTurn(Number(api.conversationId));
             const result = await s.session.click(args.ref);
             const page = await pageAfter(Number(api.conversationId), s.session);
-            return {
-              output: [{ type: "text", text: `clicked ${args.ref} — ${result.url}${page}` }],
-            };
+            const open = result.newTab ? ((await s.session.tabs?.())?.length ?? 2) : 0;
+            const where = result.newTab
+              ? `opened a new tab (${open} open, browser_tabs switches): ${result.url}`
+              : result.url;
+            return { output: [{ type: "text", text: `clicked ${args.ref} — ${where}${page}` }] };
           } catch (error) {
             return fail(describe(error));
           }
@@ -459,6 +462,46 @@ export function createBrowserToolkit(options: BrowserToolkitOptions = {}): Capab
                 : `still ${args.gone ? "there" : "not there"} after ${seconds} s`;
             const page = await pageAfter(Number(api.conversationId), s.session);
             return { output: [{ type: "text", text: said + page }] };
+          } catch (error) {
+            return fail(describe(error));
+          }
+        },
+      }),
+      tool({
+        name: "browser_tabs",
+        label: "Switched tabs",
+        askLabel: "switch browser tabs",
+        summary: "List, switch or close the bot's tabs.",
+        description:
+          "List your tabs (the one you started in and the ones your clicks opened). " +
+          "Pass select to go on in tab N, or close to close tab N.",
+        parameters: Type.Object({
+          select: Type.Optional(Type.Integer({ minimum: 1, maximum: 50 })),
+          close: Type.Optional(Type.Integer({ minimum: 1, maximum: 50 })),
+        }),
+        replay: "unsafe",
+        execute: async (args, api) => {
+          try {
+            const s = await actionTurn(Number(api.conversationId));
+            const { tabs, switchTab, closeTabAt } = s.session;
+            const single = fail("This browser has only one tab.");
+            if (args.close) {
+              if (!closeTabAt) return single;
+              await closeTabAt(args.close - 1);
+            }
+            if (args.select) {
+              if (!switchTab) return single;
+              const result = await switchTab(args.select - 1);
+              const page = await pageAfter(Number(api.conversationId), s.session);
+              const text = landed(`on tab ${args.select}: `, result.url, result.title) + page;
+              return { output: [{ type: "text", text }] };
+            }
+            if (!tabs) return single;
+            const list = (await tabs()).map(
+              (tab, i) =>
+                `${landed(`${i + 1}. `, tab.url, tab.title)}${tab.current ? " (current)" : ""}`,
+            );
+            return { output: [{ type: "text", text: list.join("\n") }] };
           } catch (error) {
             return fail(describe(error));
           }
