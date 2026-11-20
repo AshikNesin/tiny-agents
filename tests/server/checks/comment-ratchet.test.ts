@@ -38,7 +38,7 @@ describe("comment ratchet", () => {
 
   it("counts Kotlin and CSS comments, skipping strings and directives", async () => {
     const kotlin =
-      '// one\nval url = "https://example.com" /* two */\n@Suppress("x") /* outer /* nested */ still */\n// ktlint-disable\nval raw = """// not a comment"""\n';
+      '// one\nval url = "https://example.com" /* two */\n@Suppress("x") /* outer /* nested */ still */\n// ktlint-disable\nval raw = """// not a comment"""\nval host = "Sign in to ${url.substringAfter("://")}"\n';
     expect(await countComments("Main.kt", kotlin)).toBe(3);
     expect(
       await countComments(
@@ -53,6 +53,7 @@ describe("comment ratchet", () => {
     expect(inScope("mobile/android/app/src/main/java/Main.kt")).toBe(true);
     expect(inScope(".agents/skills/stageshow/kit/parts.ts")).toBe(false);
     expect(inScope("site/demos/kit/motion/a.css")).toBe(false);
+    expect(inScope("mobile/android/kit/src/main/java/Kit.kt")).toBe(false);
     expect(inScope("apps/web/drizzle/meta/x.ts")).toBe(false);
     expect(inScope("README.md")).toBe(false);
   });

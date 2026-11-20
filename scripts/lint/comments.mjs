@@ -17,6 +17,11 @@ export const OUT_OF_SCOPE = [
   "mobile/.groot/**",
   "site/demos/kit/**",
   "site/assets/**",
+  "apps/web/src/client/components/fluid/**",
+  "mobile/android/kit/**",
+  "mobile/android/build-logic/**",
+  "mobile/android/build.gradle.kts",
+  "mobile/scripts/**",
   "scripts/demo/launch/assets/**",
   "scripts/demo/launch/snap/**",
 ];
@@ -31,43 +36,63 @@ export const inScope = (file) =>
 
 export const isGenerated = (source) => /@generated|DO NOT EDIT/.test(source.slice(0, 400));
 
-function scanCStyle(source, { lineComments, nestedBlocks, rawStrings }) {
+function scanCStyle(source, options) {
   const found = [];
-  let i = 0;
+  scanCode(source, options, 0, false, found);
+  return found;
+}
+
+function skipString(source, options, i, quote, found) {
+  const raw = quote === '"""';
+  i += quote.length;
+  while (i < source.length && !source.startsWith(quote, i)) {
+    if (!raw && source[i] === "\n") return i;
+    if (!raw && source[i] === "\\") i += 2;
+    else if (options.templates && source.startsWith("${", i)) {
+      i = scanCode(source, options, i + 2, true, found);
+    } else i++;
+  }
+  return i + quote.length;
+}
+
+function scanCode(source, options, i, untilBrace, found) {
+  let depth = 0;
   while (i < source.length) {
     const ch = source[i];
     const next = source[i + 1];
-    if (rawStrings && source.startsWith('"""', i)) {
-      const end = source.indexOf('"""', i + 3);
-      i = end < 0 ? source.length : end + 3;
+    if (options.rawStrings && source.startsWith('"""', i)) {
+      i = skipString(source, options, i, '"""', found);
     } else if (ch === '"' || ch === "'") {
-      i++;
-      while (i < source.length && source[i] !== ch && source[i] !== "\n") {
-        i += source[i] === "\\" ? 2 : 1;
-      }
-      i++;
-    } else if (lineComments && ch === "/" && next === "/") {
+      i = skipString(source, options, i, ch, found);
+    } else if (options.lineComments && ch === "/" && next === "/") {
       const end = source.indexOf("\n", i);
       const stop = end < 0 ? source.length : end;
       found.push(source.slice(i + 2, stop));
       i = stop;
     } else if (ch === "/" && next === "*") {
-      let depth = 1;
+      let nesting = 1;
       let j = i + 2;
-      while (j < source.length && depth > 0) {
-        if (nestedBlocks && source.startsWith("/*", j)) {
-          depth++;
+      while (j < source.length && nesting > 0) {
+        if (options.nestedBlocks && source.startsWith("/*", j)) {
+          nesting++;
           j += 2;
         } else if (source.startsWith("*/", j)) {
-          depth--;
+          nesting--;
           j += 2;
         } else j++;
       }
       found.push(source.slice(i + 2, j - 2));
       i = j;
+    } else if (untilBrace && ch === "{") {
+      depth++;
+      i++;
+    } else if (untilBrace && ch === "}") {
+      if (depth === 0) return i + 1;
+      depth--;
+      i++;
     } else i++;
   }
-  return found;
+  return i;
 }
 
 let parseSync;
@@ -83,7 +108,12 @@ async function commentValues(file, source = readFileSync(file, "utf8")) {
     return scanCStyle(source, { lineComments: false, nestedBlocks: false, rawStrings: false });
   }
   if (/\.kts?$/.test(file)) {
-    return scanCStyle(source, { lineComments: true, nestedBlocks: true, rawStrings: true });
+    return scanCStyle(source, {
+      lineComments: true,
+      nestedBlocks: true,
+      rawStrings: true,
+      templates: true,
+    });
   }
   return scriptComments(file, source);
 }
