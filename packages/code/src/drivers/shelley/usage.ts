@@ -1,15 +1,3 @@
-/**
- * The context popup's usage report for a Shelley conversation, a port of
- * Shelley's own usage table (its ui/src/utils/tokenCostGraph.ts): per-call
- * usage records become per-model, per-band token and cost rows, indirect
- * usage (compaction, slug generation, …) becomes per-purpose rows, and
- * subagent usage joins as its own column.
- *
- * Costs are estimated as tokens × models.dev rate / 1e6 (Shelley's
- * `/model-costs`); where a model has no pricing the rows fall back to the
- * provider-reported cost_usd and a note says so. All-zero usage records
- * (error placeholders) are skipped, matching Shelley's graph.
- */
 import type { UsageBand, UsageReport, UsageRow } from "../../contracts";
 import type { ModelCost, ShelleyMessage, SubagentModelUsage } from "./wire";
 
@@ -41,7 +29,6 @@ type TokenKey =
   | "cache_read_input_tokens"
   | "output_tokens";
 
-/** Display order: cache read first (it dominates agent conversation volume). */
 const TOKEN_BANDS: Array<{
   key: TokenKey;
   costKey: PriceKey;
@@ -84,7 +71,6 @@ function hasTokens(u: Partial<UsageEntry> | null): u is UsageEntry {
   );
 }
 
-/** Direct per-call usage of a conversation's agent messages, in order. */
 export function usageEntries(messages: Iterable<ShelleyMessage>): UsageEntry[] {
   const out: UsageEntry[] = [];
   for (const m of messages) {
@@ -95,7 +81,6 @@ export function usageEntries(messages: Iterable<ShelleyMessage>): UsageEntry[] {
   return out;
 }
 
-/** Raw other-usage entries from every message that carries one. */
 export function otherUsageEntries(messages: Iterable<ShelleyMessage>): OtherUsageEntry[] {
   const out: OtherUsageEntry[] = [];
   for (const m of messages) {
@@ -105,7 +90,6 @@ export function otherUsageEntries(messages: Iterable<ShelleyMessage>): OtherUsag
   return out;
 }
 
-/** The distinct (model, url) pairs to price, first-seen order. */
 export function distinctModels(
   entries: Iterable<UsageEntry>,
   others: Iterable<OtherUsageEntry> = [],
@@ -117,7 +101,6 @@ export function distinctModels(
   return [...seen].map(([model, url]) => ({ model, url }));
 }
 
-/** Aggregate entries into per-model band rows. A band served at two rates reports null ("mixed"). */
 export function perModelUsage(
   entries: UsageEntry[],
   costs: Record<string, ModelCost | null | undefined>,
@@ -163,7 +146,6 @@ export function perModelUsage(
         else if (prev !== null && prev !== rate) rates[i] = null;
       }
     });
-    // Unpriced models fall back to what the provider reported.
     if (!cost) row.costUsd += e.cost_usd || 0;
   }
   for (const [name, rates] of seenRate) {
@@ -176,7 +158,6 @@ export function perModelUsage(
   return [...byModel.values()];
 }
 
-/** Aggregate other-usage entries by purpose (compaction, slug, …). */
 export function otherUsageBreakdown(
   entries: OtherUsageEntry[],
   costs: Record<string, ModelCost | null | undefined>,
@@ -213,7 +194,6 @@ export function otherUsageBreakdown(
   }));
 }
 
-/** The subagent column: token sums per model, cost from Shelley's own aggregate. */
 export function subagentModelUsage(perModel: SubagentModelUsage[] | undefined): UsageRow[] {
   return (perModel ?? []).map((m) => ({
     label: m.model,
@@ -221,8 +201,6 @@ export function subagentModelUsage(perModel: SubagentModelUsage[] | undefined): 
       label: band.label,
       color: band.color,
       tokens: m[band.key],
-      // One aggregate rate is not recoverable from an estimated total; the
-      // model row carries the cost, band rows carry token counts only.
       unitPrice: null,
       costUsd: 0,
       priced: true,

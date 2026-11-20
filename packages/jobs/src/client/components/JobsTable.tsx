@@ -24,7 +24,6 @@ import { ChevronRight, FileText, MoreVertical, Play, RefreshCw, Trash2 } from "l
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
-/** One grid for the header and every row: job · status · menu on mobile, 12 columns from md. */
 const ROW_GRID = "grid-cols-[minmax(0,1fr)_auto_auto] md:grid-cols-12";
 
 type Props = {
@@ -33,19 +32,11 @@ type Props = {
   total: number;
   error?: string | null;
   onErrorRetry?: () => void;
-  /** The state the list is filtered to ("all" for none): titles the section and picks what Purge removes. */
   state: string;
-  /** Zero-based page index. */
   page: number;
   onPage: (page: number) => void;
 };
 
-/**
- * The jobs list: one accessible table (rows named "Job <name> (<short id>)"),
- * row selection by job id with a bulk re-run, purge-by-state, and pagination.
- * Selection only counts rows on the current page; mount it with a key per
- * filter set to clear it when the filters change.
- */
 export function JobsTable({
   jobs,
   loading,
@@ -228,7 +219,6 @@ function JobRow({
       className={cn("group relative", listRowGridClass, ROW_GRID)}
     >
       <div role="cell" className="flex min-w-0 items-center gap-3 md:col-span-5">
-        {/* Full-row navigation link; the checkbox and the menu sit above it (z-10). */}
         <Link
           to={`/jobs/${job.id}`}
           className="absolute inset-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"

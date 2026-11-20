@@ -80,15 +80,8 @@ export async function verifyPasskeyAuthentication(
   });
 }
 
-// The wire definition lives in passkey.schema; re-exported here so existing
-// imports from webauthn.utils keep working.
 export type { PasskeyKind };
 
-/**
- * How to present a stored passkey. Roaming transports mean a hardware key;
- * otherwise a `multiDevice` credential syncs through the platform's password
- * manager and a `singleDevice` one stays on the authenticator that made it.
- */
 export function describePasskey(passkey: Pick<Passkey, "deviceType" | "transports">): {
   kind: PasskeyKind;
   label: string;

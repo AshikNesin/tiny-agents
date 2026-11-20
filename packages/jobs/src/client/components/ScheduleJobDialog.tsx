@@ -21,16 +21,10 @@ import { useState, type ReactNode } from "react";
 import { Calendar as CalendarIcon } from "lucide-react";
 
 type Props = {
-  /** Edit this schedule; omit to create a new one. */
   schedule?: JobSchedule;
-  /** Defaults to the "Schedule" header button. */
   trigger?: ReactNode;
 };
 
-/**
- * Create or edit a recurring cron schedule. Schedules are keyed by job name,
- * so editing keeps the name and saves through the same upsert as creating.
- */
 export function ScheduleJobDialog({ schedule, trigger }: Props) {
   const [open, setOpen] = useState(false);
   return (
@@ -58,7 +52,6 @@ export function ScheduleJobDialog({ schedule, trigger }: Props) {
   );
 }
 
-/** Mounted only while the dialog is open, so every opening starts from the saved values. */
 function ScheduleJobForm({ schedule, onDone }: { schedule?: JobSchedule; onDone: () => void }) {
   const [name, setName] = useState(schedule?.name ?? "");
   const [cron, setCron] = useState(schedule?.cron ?? "");

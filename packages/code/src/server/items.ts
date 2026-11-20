@@ -1,10 +1,3 @@
-/**
- * Small helpers every driver's normalizer and live feed share. What goes
- * out to watchers, and when, is `feed.ts`; what a turn came to is
- * `outcome.ts`.
- */
-
-/** Listener sets that never let one failing listener stop the others. */
 export class Emitter<T> {
   private readonly listeners = new Set<(value: T) => void>();
 
@@ -30,7 +23,6 @@ export class Emitter<T> {
   }
 }
 
-/** The one-line gist of a value: first line, trimmed to `max`. */
 export function firstLine(value: string, max = 140): string {
   const line = value.split("\n")[0]?.trim() ?? "";
   return line.length > max ? `${line.slice(0, max - 1)}…` : line;
@@ -42,13 +34,11 @@ export function record(value: unknown): Record<string, unknown> | undefined {
     : undefined;
 }
 
-/** Trim to a chat-sized excerpt. */
 export function excerpt(text: string, max = 1500): string {
   const clean = text.trim();
   return clean.length > max ? `${clean.slice(0, max - 1)}…` : clean;
 }
 
-/** The first of `keys` whose value in `args` is a non-empty string. */
 export function pick(args: Record<string, unknown>, ...keys: string[]): string | undefined {
   for (const key of keys) {
     const value = args[key];
@@ -57,7 +47,6 @@ export function pick(args: Record<string, unknown>, ...keys: string[]): string |
   return undefined;
 }
 
-/** File names the Code page shows inline as images. */
 const IMAGE_FILE = /\.(png|jpe?g|gif|webp|avif|svg)$/i;
 
 export function isImageFile(path: string): boolean {

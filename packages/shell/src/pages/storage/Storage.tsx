@@ -15,10 +15,6 @@ import { useStorageBrowser } from "./hooks/useStorageBrowser";
 import type { StorageFile } from "./hooks/useStorage";
 
 interface StorageProps {
-  /**
-   * Override the default "open in new tab" view behavior with an in-app
-   * viewer. Receives the file being viewed.
-   */
   onView?: (file: StorageFile) => void;
 }
 
@@ -60,11 +56,9 @@ export function Storage({ onView }: StorageProps = {}) {
       title="Storage"
       description="Browse and manage your files and folders"
       actions={headerActions}
-      // At the root the trail would be a lone home button to this very folder.
       breadcrumb={crumbs.length > 0 ? breadcrumb : undefined}
       maxWidth="7xl"
     >
-      {/* Action buttons */}
       <div className="flex flex-wrap gap-2">
         <input
           ref={uploadInputRef}
@@ -107,16 +101,13 @@ export function Storage({ onView }: StorageProps = {}) {
         )}
       </div>
 
-      {/* File list */}
       {isLoading ? (
         <>
-          {/* Mobile card placeholders */}
           <div className="space-y-3 md:hidden">
             {["w-40", "w-32", "w-48"].map((w) => (
               <SkeletonCard key={w} titleWidth={w} lines={2} />
             ))}
           </div>
-          {/* Desktop table placeholder */}
           <div className="hidden overflow-hidden rounded-2xl bg-card ring-1 ring-foreground/10 md:block">
             <SkeletonTable columns={5} rows={6} />
           </div>
@@ -129,7 +120,6 @@ export function Storage({ onView }: StorageProps = {}) {
         />
       ) : (
         <>
-          {/* Mobile Card View */}
           <ul className="space-y-3 md:hidden" aria-label="Files">
             {files.map((file) => (
               <li key={file.key}>
@@ -144,7 +134,6 @@ export function Storage({ onView }: StorageProps = {}) {
             ))}
           </ul>
 
-          {/* Desktop Table View */}
           <div className="hidden overflow-hidden rounded-2xl bg-card ring-1 ring-foreground/10 md:block">
             <Table>
               <TableHeader className="bg-muted/50">

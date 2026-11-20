@@ -2,13 +2,6 @@ import { Card } from "@groot/ui/card";
 import { Skeleton, SkeletonCard, SkeletonTable } from "@groot/ui/loading-skeleton";
 import { cn } from "@groot/ui/lib/utils";
 
-/**
- * Loading placeholders for the jobs UI, composed from the shared skeleton
- * primitives in `@groot/ui`. Centralised here so every loading surface (list,
- * detail, stats, scheduled) is assembled in one place.
- */
-
-/** A small label + value pair, matching the {@link JobOverview} field layout. */
 function FieldSkeleton() {
   return (
     <div className="space-y-2">
@@ -18,7 +11,6 @@ function FieldSkeleton() {
   );
 }
 
-/** Skeleton for the {@link JobsStats} clickable stat row. */
 export function JobsStatsSkeleton({ count = 6 }: { count?: number }) {
   return (
     <Card size="sm" className="flex flex-row flex-wrap items-stretch gap-0 p-0">
@@ -38,12 +30,10 @@ export function JobsStatsSkeleton({ count = 6 }: { count?: number }) {
   );
 }
 
-/** Skeleton for the {@link JobsTable} header + rows while the list loads. */
 export function JobsTableSkeleton({ rows = 10 }: { rows?: number }) {
   return <SkeletonTable columns={5} rows={rows} />;
 }
 
-/** Skeleton for the {@link ScheduledJobsPanel} while scheduled jobs load. */
 export function ScheduledJobsSkeleton({ rows = 2 }: { rows?: number }) {
   return (
     <div className="space-y-3">
@@ -58,7 +48,6 @@ export function ScheduledJobsSkeleton({ rows = 2 }: { rows?: number }) {
   );
 }
 
-/** Skeleton for the {@link JobDetail} page while a job loads. */
 export function JobDetailSkeleton() {
   return (
     <>

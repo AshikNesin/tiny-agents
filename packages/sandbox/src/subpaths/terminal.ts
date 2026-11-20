@@ -1,7 +1,3 @@
-/**
- * `@tiny-agents/sandbox/terminal`: tmux-backed terminal tabs on the sandbox
- * VM, over the sandbox connection.
- */
 export {
   createTerminalService,
   SessionBusyError,

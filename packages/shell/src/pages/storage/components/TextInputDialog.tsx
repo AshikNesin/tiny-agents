@@ -21,21 +21,14 @@ type Props = {
   description: ReactNode;
   label: string;
   placeholder?: string;
-  /** Seed value (e.g. current name when renaming). */
   initialValue?: string;
   submitLabel: string;
-  /** Verb shown while the mutation is pending, e.g. "Creating…". */
   pendingLabel: string;
   pending: boolean;
   onSubmit: (value: string) => void;
-  /** Optional hint rendered under the field (e.g. the current file name). */
   hint?: ReactNode;
 };
 
-/**
- * Modal with a single required text input — the shape behind "create folder"
- * and "rename" in the storage page. Owns its own field state.
- */
 export function TextInputDialog({
   open,
   onOpenChange,

@@ -1,25 +1,3 @@
-/**
- * Claude Code messages → transcript rows. One function for both sources:
- * live SDK messages (`SDKMessage`, relayed by the worker) and history
- * (`getSessionMessages` entries), which share `type`, `uuid`,
- * `parent_tool_use_id` and an Anthropic API `message`.
- *
- * Wire facts (Agent SDK 0.3.x `sdk.d.ts`, `sdk-tools.d.ts`):
- * - Assistant `message.content` holds `text`, `thinking`, `tool_use` blocks;
- *   tool results come back in `user` messages as `tool_result` blocks, and
- *   live ones also carry the tool's structured output in `tool_use_result`
- *   (`structuredPatch` for Edit/Write).
- * - Subagent traffic has `parent_tool_use_id` set; it is not shown here.
- * - A turn ends with a `result` (live only). The worker adds `turn_cost_usd`,
- *   `after_uuid`, `usage_limit` and `interrupted`; the driver keeps a compact
- *   copy in the thread index so history shows the same `turn` rows.
- * - API errors are assistant messages with `error` (live) and/or the model
- *   `<synthetic>` (transcript).
- *
- * Ids are stable across both sources: `<uuid>:<block index>` for text,
- * thinking and user rows, the `tool_use_id` for tools, the approval id for
- * requests, the result's uuid for turns.
- */
 import { ATTACHMENTS_HEADER } from "@tiny-agents/claude-worker";
 import type {
   ApprovalRequest,
@@ -30,7 +8,6 @@ import type {
 } from "../../contracts";
 import { excerpt, firstLine, isImageFile, pick as pickFrom, record } from "../../server/items";
 
-/** A live SDK message or a history entry. */
 export interface ClaudeEntry {
   type: string;
   subtype?: string;
@@ -40,7 +17,6 @@ export interface ClaudeEntry {
   [key: string]: unknown;
 }
 
-/** An approval the worker relayed, with where it stands. */
 export interface ApprovalRecord {
   approvalId: string;
   toolUseId?: string;
@@ -166,7 +142,6 @@ function unified(path: string, body: string, created = false): string {
   return `--- ${created ? "/dev/null" : label("a")}\n+++ ${label("b")}\n${body}`;
 }
 
-/** A unified diff from the tool's input (works for history too). */
 export function diffFromInput(name: string, input: unknown): ToolItem["diff"] {
   const args = record(input);
   if (!args) return undefined;
@@ -194,7 +169,6 @@ export function diffFromInput(name: string, input: unknown): ToolItem["diff"] {
   return undefined;
 }
 
-/** A unified diff from Edit/Write output (`structuredPatch`), when the SDK sent it. */
 export function diffFromPatch(result: unknown, fallbackPath?: string): ToolItem["diff"] {
   const output = record(result);
   const patch = output?.structuredPatch;
@@ -229,7 +203,6 @@ function cap(text: string): string {
   return text.length > MAX_OUTPUT ? `${text.slice(0, MAX_OUTPUT - 1)}…` : text;
 }
 
-/** Split the worker's attachment block back off a prompt. */
 export function splitAttachments(text: string): { text: string; attachments: AssetRef[] } {
   const at = text.lastIndexOf(ATTACHMENTS_HEADER);
   if (at < 0) return { text, attachments: [] };
@@ -243,7 +216,6 @@ export function splitAttachments(text: string): { text: string; attachments: Ass
   return { text: text.slice(0, at).trimEnd(), attachments };
 }
 
-/** `Claude AI usage limit reached|1700000000` and friends. */
 export function usageLimitOf(text: string, error?: unknown): { resetsAt?: string } | undefined {
   const limitError = error === "rate_limit" || error === "billing_error";
   const limitText =

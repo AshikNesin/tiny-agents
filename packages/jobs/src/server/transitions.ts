@@ -8,70 +8,29 @@ import { createJobLogger, deleteJobLogs, flushJobLogs } from "./logger";
 import { jobs, type Job, type NewJob } from "./schema";
 import type { SendJobOptions } from "./types";
 
-/**
- * Job transitions: every write that creates a job row or moves one between
- * states. `enqueue` is the only place that inserts into `jobs`; `apply` runs
- * one event (an operator action from `../lifecycle`, or a tick outcome) as a
- * single compare-and-set `UPDATE … RETURNING`, so a racing writer is never
- * overwritten and no transaction is needed (D1 has none).
- *
- * The module also owns the one retry policy (a handler failure and an
- * active-timeout both back off, log and report the same way), the
- * not-found and wrong-state errors, and the inline-tick nudge: every event
- * that lands a job in `created` with `runAt <= now` calls `onDue(job)`. The
- * runner (`tick.ts`) supplies `onDue`; use the queue functions or
- * `jobRunner.transitions` rather than building your own.
- */
-
-/** What `enqueue` inserts: a name, its payload and the `addJob()` options. */
 export interface EnqueueSpec extends SendJobOptions {
   name: string;
   data: unknown;
 }
 
-/** An operator action, exactly the ones `../lifecycle` defines. */
 export interface JobOperatorEvent {
   type: JobAction;
 }
 
-/**
- * What the tick reports about a claimed (`active`) job. `fail` and `timeout`
- * share the retry policy; `timeout` is a job left `active` past
- * `config.jobs.activeTimeoutSeconds` (its process crashed or hung).
- */
 export type JobTickEvent =
   | { type: "succeed"; output?: unknown }
   | { type: "fail"; error: unknown; durationMs?: number }
   | { type: "timeout" };
 
 export interface JobTransitions {
-  /**
-   * Insert a `created` job and return its row. With a `singletonKey` that a
-   * `created` or `active` job of the same name already holds, return that
-   * job instead.
-   */
   enqueue(spec: EnqueueSpec): Promise<Job>;
-  /**
-   * Apply an operator action and return the row it produced: the updated
-   * job, the deleted row (`delete`) or the new copy (`rerun`). Throws `404`
-   * (`JOB_NOT_FOUND`) for an unknown id and `400` (`JOB_ACTION_NOT_ALLOWED`)
-   * when the job's state does not allow the action.
-   */
   apply(target: string | Job, event: JobOperatorEvent): Promise<Job>;
-  /**
-   * Record a tick outcome for a job this tick claimed. Returns the updated
-   * row, or null when the job moved on meanwhile (cancelled, deleted, or
-   * recovered by another process); the job's logs go with a deleted job.
-   */
   apply(job: Job, event: JobTickEvent): Promise<Job | null>;
-  /** Move up to `limit` due `created` jobs named in `names` to `active`, highest priority first. */
   claim(names: readonly string[], limit: number, now?: Date): Promise<Job[]>;
 }
 
-/** Retries back off from `retryDelay` seconds, doubling per attempt, to at most this. */
 export const MAX_RETRY_DELAY_MS = 24 * 60 * 60 * 1000;
 
-/** The message stored on a job that timed out while `active`. */
 export const JOB_TIMEOUT_ERROR = "Timed out while active";
 
 export function assertJobName(name: string): void {
@@ -92,12 +51,6 @@ export function jobActionNotAllowed(action: JobAction, state: JobState) {
   );
 }
 
-/**
- * Delete the jobs `where` matches, with their logs, and return the deleted
- * rows. Every job delete (an operator's, a purge, housekeeping) goes through
- * here, so no path leaves orphaned log rows. An active job's handler may
- * still log after this; the tick drops those rows when it finishes.
- */
 export async function deleteJobsWhere(where: SQL | undefined): Promise<Job[]> {
   const deleted = await db.delete(jobs).where(where).returning();
   await deleteJobLogs(deleted.map((job) => job.id));
@@ -109,22 +62,10 @@ export async function getJobById(jobId: string): Promise<Job | null> {
   return job ?? null;
 }
 
-/**
- * The fields every move back to `created` writes. A `created` job has not
- * started this attempt and has not finished, so `startedAt` and `completedAt`
- * are always null there, whichever event (retry, resume, a backed-off
- * failure) put it back on the queue.
- */
 function toCreated(runAt: Date): Partial<NewJob> {
   return { state: "created", runAt, startedAt: null, completedAt: null };
 }
 
-/**
- * The retry policy, for a handler failure and a timeout alike: while
- * `retryCount < retryLimit` the job goes back to `created` with `runAt = now
- * + retryDelay × 2^retryCount` seconds (capped at `MAX_RETRY_DELAY_MS`) and
- * `retryCount + 1`; after that it is `failed`.
- */
 export function afterFailedAttempt(
   job: Pick<Job, "retryCount" | "retryLimit" | "retryDelay">,
   error: string,
@@ -141,7 +82,6 @@ export function afterFailedAttempt(
   return { state: "failed", completedAt: now, error };
 }
 
-/** What each lifecycle action that updates the row in place writes. */
 const OPERATOR_UPDATES: Record<"retry" | "resume" | "cancel", (now: Date) => Partial<NewJob>> = {
   retry: (now) => ({ ...toCreated(now), error: null }),
   resume: (now) => toCreated(now),
@@ -161,7 +101,6 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-/** The attempt the tick claimed: still `active`, and not re-claimed since. */
 function sameAttempt(job: Job) {
   return and(
     eq(jobs.id, job.id),
@@ -174,7 +113,6 @@ function isTickEvent(event: JobOperatorEvent | JobTickEvent): event is JobTickEv
   return event.type === "succeed" || event.type === "fail" || event.type === "timeout";
 }
 
-/** Build the transitions; `onDue` runs for every job an event lands in `created` and due. */
 export function createJobTransitions(onDue: (job: Job) => void): JobTransitions {
   function landed(job: Job): Job {
     if (job.state === "created" && job.runAt.getTime() <= Date.now()) onDue(job);
@@ -218,10 +156,6 @@ export function createJobTransitions(onDue: (job: Job) => void): JobTransitions 
     return landed(job!);
   }
 
-  /**
-   * One compare-and-set UPDATE from the states `action` is allowed from. When
-   * no row changes, a follow-up read tells "not found" from "wrong state".
-   */
   async function update(
     action: "retry" | "resume" | "cancel",
     jobId: string,
@@ -262,11 +196,6 @@ export function createJobTransitions(onDue: (job: Job) => void): JobTransitions 
     }
   }
 
-  /**
-   * Write a tick outcome while the claimed attempt is still current. A job
-   * deleted mid-run has no row left to own the logs its handler wrote after
-   * the delete, so they go too.
-   */
   async function finish(job: Job, set: Partial<NewJob>): Promise<Job | null> {
     const [updated] = await db.update(jobs).set(set).where(sameAttempt(job)).returning();
     if (updated) return updated;
@@ -274,11 +203,6 @@ export function createJobTransitions(onDue: (job: Job) => void): JobTransitions 
     return null;
   }
 
-  /**
-   * The one failure path. The error line is persisted before the state
-   * changes, so a dashboard that sees the new state also sees why; the error
-   * is reported only by the writer that won the compare-and-set.
-   */
   async function failAttempt(
     job: Job,
     error: unknown,
@@ -340,7 +264,6 @@ export function createJobTransitions(onDue: (job: Job) => void): JobTransitions 
       .where(and(eq(jobs.state, "created"), inArray(jobs.id, due)))
       .returning();
 
-    // RETURNING does not preserve the subquery's ORDER BY; run high priority first.
     return claimed.sort(
       (a, b) =>
         b.priority - a.priority ||

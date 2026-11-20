@@ -9,13 +9,6 @@ import { inArray } from "drizzle-orm";
 import { db } from "@groot/core/database";
 import { jobLogs } from "./schema";
 
-/**
- * A job logger writes to the normal log stream and persists `info` and above
- * to `job_logs` so the dashboard can show a per-job trail. The persistence is
- * a record sink on a core child logger, so argument handling, level filtering
- * and scrubbing behave exactly like every other logger. Writes are tracked so
- * the tick can `flushJobLogs()` before it marks the job done.
- */
 export interface CreateJobLoggerOptions {
   jobId: string;
   jobName: string;
@@ -29,7 +22,6 @@ function persistSink(jobId: string, jobName: string): (record: LogRecord) => voi
   return (record) => {
     if (!PERSISTED_LEVELS.has(record.level)) return;
     const { level, msg, time, jobId: _jobId, jobName: _jobName, ...rest } = record;
-    // Rows carry the caller's data, not the logger's base fields (service, env).
     const base = getLoggerSettings().base;
     const data: LogData = {};
     for (const [key, value] of Object.entries(rest)) {
@@ -60,10 +52,8 @@ export function createJobLogger(options: CreateJobLoggerOptions): Logger {
   );
 }
 
-// D1 binds at most 100 parameters per statement.
 const DELETE_CHUNK_SIZE = 90;
 
-/** Delete the `job_logs` rows of the given jobs (indexed on `job_id`). */
 export async function deleteJobLogs(jobIds: readonly string[]): Promise<void> {
   for (let start = 0; start < jobIds.length; start += DELETE_CHUNK_SIZE) {
     const chunk = jobIds.slice(start, start + DELETE_CHUNK_SIZE);
@@ -71,7 +61,6 @@ export async function deleteJobLogs(jobIds: readonly string[]): Promise<void> {
   }
 }
 
-/** Wait for every in-flight `job_logs` write. */
 export async function flushJobLogs(): Promise<void> {
   await Promise.allSettled(pending);
 }

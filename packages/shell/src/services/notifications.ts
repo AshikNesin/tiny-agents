@@ -12,7 +12,6 @@ export interface NotificationEventDef {
 }
 
 export interface NotificationSettings {
-  /** The one channel that delivers ("webpush", "pushover"), or "off". */
   deliverTo: string;
   events: Record<string, boolean>;
   quietHours: {

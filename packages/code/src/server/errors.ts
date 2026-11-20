@@ -1,9 +1,3 @@
-/**
- * Errors drivers throw. `status` follows HTTP: a harness's own 4xx answer
- * keeps its status and text; unreachable harnesses and their 5xx become 502;
- * a capability the harness lacks is 404 `capability_missing`; a harness that
- * is not configured or not ready is 503.
- */
 export class HarnessError extends Error {
   constructor(
     readonly status: number,

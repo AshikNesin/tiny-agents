@@ -1,8 +1,3 @@
-/**
- * Notification settings API (mounted at /notifications behind JWT auth):
- * channel status, the owner's preferences, a test send, re-validation and
- * the recent log (metadata only).
- */
 import { Hono } from "hono";
 import { z } from "zod";
 import type { AppContext, AppEnv } from "@groot/core/types";
@@ -17,10 +12,6 @@ const logQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
 });
 
-/**
- * The raw JSON body, validated by the service itself (its 400 names the
- * settings). No body reads as `undefined`, like Express's `req.body`.
- */
 async function jsonBody(c: AppContext): Promise<unknown> {
   const raw = await c.req.text();
   if (raw.trim() === "") return undefined;

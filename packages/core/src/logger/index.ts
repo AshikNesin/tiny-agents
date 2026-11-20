@@ -1,16 +1,3 @@
-/**
- * A small structured logger with a pino-shaped API: `logger.info(data, msg)`,
- * `logger.child(bindings)`, level filtering. JSON lines in production (what
- * Workers Logs and most log shippers expect), a readable single line in dev.
- *
- * Two seams let apps and packages plug in without forking:
- * - a child logger can carry a **record sink** (`child(bindings, { sink })`),
- *   which receives every emitted record on top of the global output — the
- *   jobs package persists its trail that way;
- * - a process-wide **scrubber** (`setScrubber`) runs every field and message
- *   through the app's secret redaction before anything is written.
- */
-
 import { getRequestContext, runWithRequestContext, waitUntil } from "../context";
 export { getRequestContext, runWithRequestContext, waitUntil };
 export type { RequestContext } from "../context";
@@ -34,11 +21,6 @@ export interface LogFn {
   (data: LogData | Error, message?: string): void;
 }
 
-/**
- * Receives every record a logger (and its children) emit, after scrubbing.
- * Sinks are a persistence path, not console output: they fire regardless of
- * the global level, so a `silent` console still leaves a trail.
- */
 export type RecordSink = (record: LogRecord) => void;
 
 export interface LoggerOptions {
@@ -53,17 +35,13 @@ export interface Logger {
   warn: LogFn;
   error: LogFn;
   fatal: LogFn;
-  /** Children inherit the sink unless `options` replaces it. */
   child(bindings: LogData, options?: LoggerOptions): Logger;
 }
 
 export interface LoggerSettings {
   level: LogLevel;
-  /** Human-readable output instead of JSON lines. */
   pretty: boolean;
-  /** Fields added to every record (service name, env, ...). */
   base: LogData;
-  /** Where lines go. Defaults to the console, mapped by level. */
   write: (level: LogLevel, line: string, record: LogRecord) => void;
 }
 
@@ -187,21 +165,12 @@ export function createLogger(bindings: LogData = {}, options: LoggerOptions = {}
   };
 }
 
-/** The root logger. Child loggers inherit the settings applied via `configureLogger`. */
 export const logger: Logger = createLogger();
-
-/**
- * A process-wide scrub hook for logs and error reports. The app registers a
- * function that replaces secret values it knows about (a vault redactor);
- * the logger runs every message and field through it. Without a registered
- * scrubber everything passes through unchanged.
- */
 
 type Scrubber = (text: string) => string;
 
 let scrubber: Scrubber | undefined;
 
-/** Field names whose string values are always replaced, whoever logs them. */
 const SECRET_KEYS = new Set([
   "password",
   "secret",
@@ -221,7 +190,6 @@ export function scrubText(text: string): string {
   return scrubber ? scrubber(text) : text;
 }
 
-/** A copy of `value` with secret-named fields masked and every string scrubbed. */
 export function scrubValue<T>(value: T, depth = 0): T {
   if (typeof value === "string") return scrubText(value) as T;
   if (depth > 8 || !value || typeof value !== "object") return value;
@@ -238,12 +206,6 @@ export function scrubValue<T>(value: T, depth = 0): T {
   }
   return out as T;
 }
-
-/**
- * Record a step on the current request's trail. Breadcrumbs are attached to
- * error logs so a failure shows what led up to it. Outside a request context
- * they are dropped.
- */
 
 export interface Breadcrumb {
   timestamp: string;
@@ -277,7 +239,6 @@ export interface LogPerformanceOptions {
   data?: Record<string, unknown>;
 }
 
-/** Timing record (`type: "performance"`); escalates to warn past 5s. */
 export function logPerformance(options: LogPerformanceOptions): void {
   const { operation, duration, data = {} } = options;
   const level = duration > 5000 ? "warn" : duration > 1000 ? "info" : "debug";

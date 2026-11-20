@@ -1,5 +1,3 @@
-/** Base64url helpers on Web APIs only, so they run on Node and Workers alike. */
-
 export type Bytes = Uint8Array<ArrayBuffer>;
 
 export function toBase64Url(bytes: Uint8Array): string {
@@ -25,7 +23,6 @@ export function utf8Decode(bytes: Uint8Array): string {
   return new TextDecoder().decode(bytes);
 }
 
-/** Constant-time comparison of two byte arrays. */
 export function timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean {
   if (a.length !== b.length) return false;
   let diff = 0;

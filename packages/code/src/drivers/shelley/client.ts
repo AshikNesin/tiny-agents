@@ -1,13 +1,6 @@
-/**
- * HTTP to Shelley's official `/api` (https://github.com/boldsoftware/shelley),
- * from the server only. Shelley ships no auth of its own, so the browser
- * never reaches it; tiny-agents' login is the boundary and Shelley stays on
- * the tailnet (ADR 0009).
- */
 import { badGateway, HarnessError } from "../../server/errors";
 
 interface ShelleyConfig {
-  /** Base URL the server dials (`http://my-vm:9999`), no trailing slash. */
   url: string;
 }
 
@@ -18,13 +11,6 @@ export interface ShelleyDeps {
   fetch?: FetchLike;
 }
 
-/**
- * Sent on every request. Shelley's `-require-header` guard checks only that
- * the header is non-empty; exe.dev runs Shelley with `-require-header
- * X-Exedev-Userid` (its proxy normally adds it), and reached directly over
- * Tailscale it answers 403 without it. `X-Shelley-Request` is the header
- * Shelley's own clients send.
- */
 export const SHELLEY_HEADERS: Readonly<Record<string, string>> = {
   "X-Shelley-Request": "1",
   "X-Exedev-Userid": "exedev",
@@ -39,20 +25,13 @@ const REQUEST_TIMEOUT_MS = 20_000;
 
 export interface ShelleyRequest {
   method?: string;
-  /** JSON-encoded unless it is already a body (Blob / stream / string). */
   json?: unknown;
   body?: BodyInit;
   headers?: Record<string, string>;
   signal?: AbortSignal;
-  /** Overrides the default timeout; ignored when `signal` is given. */
   timeoutMs?: number;
 }
 
-/**
- * One request to Shelley's `/api<path>`. Shelley's 4xx answers keep their
- * status and text (an archived conversation, a bad model); network failures
- * and its 5xx become 502s that say what went wrong.
- */
 export async function shelleyFetch(
   path: string,
   init: ShelleyRequest,
@@ -72,7 +51,6 @@ export async function shelleyFetch(
       headers,
       body,
       signal: init.signal ?? AbortSignal.timeout(init.timeoutMs ?? REQUEST_TIMEOUT_MS),
-      // Streaming request bodies (uploads) need half-duplex in Node's fetch.
       ...(body instanceof ReadableStream ? { duplex: "half" } : {}),
     } as RequestInit);
   } catch (error) {
@@ -105,10 +83,6 @@ export async function shelleyJson<T = unknown>(
   }
 }
 
-/**
- * Re-emit each `data:` frame of an SSE body as one parsed event, until the
- * body ends (or the read fails, e.g. the fetch was aborted).
- */
 export async function readSseFrames(
   body: ReadableStream<Uint8Array>,
   onFrame: (event: unknown) => void,
@@ -133,9 +107,7 @@ export async function readSseFrames(
       if (!data) continue;
       try {
         onFrame(JSON.parse(data));
-      } catch {
-        // A malformed frame is skipped, not fatal.
-      }
+      } catch {}
     }
   }
 }
@@ -148,7 +120,6 @@ export function qs(params: Record<string, string | undefined>): string {
   return text ? `?${text}` : "";
 }
 
-/** A repo-relative path, encoded per segment for Shelley's `file-diff/<id>/<path>`. */
 export function encodePath(path: string): string {
   if (path.split("/").some((segment) => segment === ".." || segment === ".")) {
     throw new HarnessError(400, "Invalid path");

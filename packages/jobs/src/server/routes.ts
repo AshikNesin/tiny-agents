@@ -13,7 +13,6 @@ import {
   scheduleJobSchema,
 } from "./validation";
 
-/** Admin API behind JWT: `/api/v1/jobs`. */
 export const jobRoutes = new Hono<AppEnv>();
 
 jobRoutes.post("/", async (c) => {
@@ -27,7 +26,6 @@ jobRoutes.post("/bulk-rerun", async (c) => {
   return ok(c, await queue.rerunJobs(jobIds));
 });
 
-// Schedules
 jobRoutes.get("/schedule", async (c) => ok(c, await queries.getScheduledJobs()));
 
 jobRoutes.post("/schedule", async (c) => {
@@ -41,7 +39,6 @@ jobRoutes.delete("/schedule/:jobName", async (c) => {
   return ok(c, { success: true });
 });
 
-// Dashboard
 jobRoutes.get("/stats", async (c) => ok(c, await queries.getQueueStats()));
 
 jobRoutes.get("/available", async (c) => ok(c, { jobs: await queries.getAvailableQueues() }));
@@ -53,7 +50,6 @@ jobRoutes.delete("/state/:state", async (c) => {
 
 jobRoutes.get("/", async (c) => ok(c, await queries.getJobs(parseQuery(c, getJobsSchema))));
 
-// Single job (`:jobId` is the uuid primary key)
 const jobIdParam = (c: { req: { param(name: string): string | undefined } }) =>
   parseStringParam(c.req.param("jobId"), "jobId");
 

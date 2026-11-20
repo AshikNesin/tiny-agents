@@ -6,13 +6,6 @@ interface PageContainerProps {
   maxWidth?: "full" | "7xl" | "6xl" | "5xl" | "4xl";
 }
 
-/**
- * Page content max-width wrapper.
- *
- * The app shell (`Layout`) owns horizontal padding + background; this wrapper
- * owns only the max-width. Default is `5xl` (matches the prior rendered
- * reality). Use `7xl` for wide data pages (e.g. Jobs, Storage).
- */
 const MAX_WIDTH_CLASSES = {
   full: "max-w-full",
   "7xl": "max-w-7xl",

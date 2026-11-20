@@ -1,7 +1,3 @@
-/**
- * File transfer over one SFTP channel: a capped read and an atomic write
- * (temp name, then rename), with SFTP status codes as one readable line.
- */
 import { randomBytes } from "node:crypto";
 import type { SFTPWrapper } from "ssh2";
 
@@ -46,8 +42,6 @@ export async function writeAtomic(
   path: string,
   content: string | Uint8Array,
 ): Promise<void> {
-  // temp name then rename: a crash mid-write never leaves a half file.
-  // Random suffix: pid+ms collide for concurrent writes.
   const tmp = `${path}.ta-tmp-${process.pid}-${randomBytes(6).toString("hex")}`;
   try {
     await new Promise<void>((resolve, reject) =>
@@ -66,7 +60,6 @@ export async function writeAtomic(
   }
 }
 
-/** ssh2 SFTP status codes → one readable line. */
 function sftpError(error: unknown, path: string): Error {
   const code =
     error && typeof error === "object" && "code" in error ? Number(error.code) : undefined;

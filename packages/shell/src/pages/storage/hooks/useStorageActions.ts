@@ -4,10 +4,8 @@ import { downloadFile, viewFile, type StorageFile } from "./useStorage";
 import { useStorageBrowser } from "./useStorageBrowser";
 
 /**
- * Download a file via a programmatic blob URL; toasts the outcome, never rejects.
- *
- * @deprecated Use `actions.download(file)` from `useStorageBrowser()`, or
- * `downloadFile(filePath, name)` from `./useStorage` (it rejects instead of toasting).
+ * @deprecated Use `actions.download(file)` from `useStorageBrowser()`, or `downloadFile(filePath,
+ * name)` from `./useStorage` (it rejects instead of toasting).
  */
 export async function handleDownload(filePath: string, name: string): Promise<void> {
   try {
@@ -19,10 +17,8 @@ export async function handleDownload(filePath: string, name: string): Promise<vo
 }
 
 /**
- * Open a file in a new tab; toasts a failure, never rejects.
- *
- * @deprecated Use `actions.view(file)` from `useStorageBrowser()`, or
- * `viewFile(filePath)` from `./useStorage` (it rejects instead of toasting).
+ * @deprecated Use `actions.view(file)` from `useStorageBrowser()`, or `viewFile(filePath)` from
+ * `./useStorage` (it rejects instead of toasting).
  */
 export async function handleView(filePath: string): Promise<void> {
   try {
@@ -32,7 +28,6 @@ export async function handleView(filePath: string): Promise<void> {
   }
 }
 
-/** A stand-in for a listing entry the caller named by key and name only. */
 function fileFor(files: StorageFile[], key: string, name: string): StorageFile {
   return (
     files.find((file) => file.key === key) ?? {
@@ -46,13 +41,8 @@ function fileFor(files: StorageFile[], key: string, name: string): StorageFile {
 }
 
 /**
- * The old flat surface of the Storage page, kept on top of `useStorageBrowser`.
- * It gains the browser's fixes: the selection only counts files of the open
- * folder, and a single-file delete confirms and leaves the selection.
- * `createFolder` and `renameFile` now carry only `isPending`.
- *
- * @deprecated Use `useStorageBrowser()`, which returns
- * `{ files, path, crumbs, selection, dialog, actions, fileActions, pending }`.
+ * @deprecated Use `useStorageBrowser()`, which returns `{ files, path, crumbs, selection, dialog,
+ * actions, fileActions, pending }`.
  */
 export function useStorageActions() {
   const browser = useStorageBrowser();

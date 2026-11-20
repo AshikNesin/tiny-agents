@@ -20,7 +20,6 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   }
 
   if (status === "signedOut") {
-    // Remember where the visitor was headed so login can send them back.
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 

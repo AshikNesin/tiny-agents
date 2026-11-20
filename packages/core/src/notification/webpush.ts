@@ -1,21 +1,3 @@
-/**
- * The Web Push channel (issue #306): one encrypted POST per registered
- * device to the endpoint its push service gave it (FCM for phones with
- * Google Play services, ntfy or another UnifiedPush server otherwise, a
- * browser's push service later). The server holds no provider credentials:
- * only its own VAPID key, which the app stores.
- *
- * The payload is JSON the Android app renders itself, so it carries the
- * event, a tag (to replace or dismiss it), the app path and, for approvals,
- * the buttons. Push services see ciphertext, its size, urgency and TTL.
- *
- * | Push service answer       | Outcome                                      |
- * | ------------------------- | -------------------------------------------- |
- * | 2xx                       | delivered                                    |
- * | 404, 410                  | the subscription is gone: revoked, no retry  |
- * | 429, 5xx, network, timeout| failed: retried by the delivery queue        |
- * | any other answer          | rejected: no retry                           |
- */
 import { utf8Encode } from "../utils/encoding.utils";
 import type {
   NotificationChannel,
@@ -33,41 +15,31 @@ import {
 
 export const WEB_PUSH_CHANNEL = "webpush";
 
-/** A registered device as the channel sees it. */
 export interface StoredPushTarget extends PushTarget {
   id: string;
 }
 
 export type PushOutcome =
   | { kind: "sent" }
-  /** 404 or 410: the push service forgot the subscription. */
   | { kind: "gone"; detail: string }
-  /** Worth trying again later (429, 5xx, network). */
   | { kind: "failed"; detail: string }
-  /** The push service refused this message (413, other 4xx). */
   | { kind: "rejected"; detail: string };
 
-/** Where the app keeps its devices: the channel reads them and reports what happened. */
 export interface PushSubscriptionStore {
-  /** Whether any device can receive (kept in memory: `configured()` is synchronous). */
   hasActive(): boolean;
-  /** Devices to send to: every one not revoked. */
   targets(): Promise<StoredPushTarget[]>;
   report(id: string, outcome: PushOutcome): Promise<void>;
 }
 
 export interface WebPushChannelOptions {
   store: PushSubscriptionStore;
-  /** The server's VAPID keys; undefined when they can't be read. */
   keys: () => Promise<VapidKeys | undefined>;
-  /** The VAPID `sub` claim: an https origin or a mailto: address. */
   subject: () => string;
   fetch?: typeof fetch;
   now?: () => number;
   timeoutMs?: number;
 }
 
-/** What the app receives, before encryption. */
 export type PushPayload =
   | {
       v: 1;
@@ -94,7 +66,6 @@ const URGENCY: Record<NotificationPriority, string> = {
 const DEFAULT_TTL_SECONDS = 24 * 60 * 60;
 const DISMISS_TTL_SECONDS = 24 * 60 * 60;
 
-/** The JSON the app gets for a rendered notification. */
 export function showPayload(message: OutgoingMessage): PushPayload {
   return {
     v: 1,
@@ -117,7 +88,6 @@ export interface PushRequest {
   ttlSeconds: number;
 }
 
-/** POST one encrypted message to one device. */
 export async function pushTo(
   target: PushTarget,
   request: PushRequest,

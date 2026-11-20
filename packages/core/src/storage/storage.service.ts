@@ -3,15 +3,8 @@ import { Boom } from "../errors";
 import type { StorageBody } from "./adapter";
 import type { FileInfo, UploadFilesResult } from "./storage.schema";
 
-// Declared in the schema module (zod-only) so the client can import the wire
-// types without dragging the service's server graph along.
 export type { FileInfo, UploadFilesResult };
 
-/**
- * One folder level under `folder` (`""` for the root, otherwise ending in
- * `/`): sub-folders first, then files, each sorted by name. Folders are the
- * adapter's common prefixes.
- */
 export async function listFiles({ folder }: { folder: string }): Promise<FileInfo[]> {
   const directories: FileInfo[] = [];
   const files: FileInfo[] = [];
@@ -58,7 +51,6 @@ export async function uploadFile(params: {
   return { filePath: object.key };
 }
 
-/** Upload several files; one failure does not stop the others. */
 export async function uploadFiles(params: {
   files: Array<{ filePath: string; fileData: StorageBody; contentType?: string }>;
 }): Promise<UploadFilesResult> {
@@ -91,12 +83,10 @@ export async function downloadFile(params: { filePath: string }): Promise<{
   };
 }
 
-/** Delete the given files; missing ones are ignored. */
 export async function deleteFiles(params: { filePaths: string[] }): Promise<void> {
   await storage.delete(params.filePaths);
 }
 
-/** Folder paths end with `/` (`folderPathSchema` normalises them at the edge). */
 export async function createFolder({
   folderPath,
 }: {
@@ -106,10 +96,6 @@ export async function createFolder({
   return { folderPath };
 }
 
-/**
- * Delete every object under the folder prefix (ending with `/`). `deletedCount`
- * is how many were listed and removed.
- */
 export async function deleteFolder({
   folderPath,
 }: {
@@ -143,8 +129,6 @@ export async function renameFile(params: {
   oldPath: string;
   newPath: string;
 }): Promise<{ newPath: string }> {
-  // Renaming onto itself: copying succeeds, then deleting the "old" path would
-  // remove the only copy. Keep the 404 contract for a missing source.
   if (params.oldPath === params.newPath) {
     if (!(await storage.head(params.oldPath))) {
       throw Boom.notFound(`Source file not found: ${params.oldPath}`);

@@ -8,13 +8,6 @@ import { jobRunner } from "./tick";
 import { assertJobName } from "./transitions";
 import type { BulkRerunResult, ScheduleJobOptions, SendJobOptions } from "./types";
 
-/**
- * The queue API. Every job write is a transition (`transitions.ts`) on
- * `jobRunner`, so these functions share its retry policy, its not-found and
- * wrong-state errors, and its inline-tick nudge.
- */
-
-/** Queue a job. Returns its id (the existing one for a pending `singletonKey`). */
 export async function addJob<T = unknown>(
   name: string,
   data: T,
@@ -35,10 +28,6 @@ function assertCron(cron: string, timezone?: string): void {
   }
 }
 
-/**
- * Create or replace the recurring schedule for `name`. Replacing keeps
- * `lastRunAt`, so editing a schedule does not re-fire a run it already made.
- */
 export async function scheduleJob(
   name: string,
   data: unknown,
@@ -67,7 +56,6 @@ export async function deleteJob(jobId: string): Promise<void> {
   await jobRunner.transitions.apply(jobId, { type: "delete" });
 }
 
-/** Put a failed or cancelled job back on the queue. */
 export async function retryJob(jobId: string): Promise<void> {
   await jobRunner.transitions.apply(jobId, { type: "retry" });
 }
@@ -80,7 +68,6 @@ export async function resumeJob(jobId: string): Promise<void> {
   await jobRunner.transitions.apply(jobId, { type: "resume" });
 }
 
-/** Queue a fresh copy of a finished job. Returns the new job's id. */
 export async function rerunJob(jobId: string): Promise<string> {
   return (await jobRunner.transitions.apply(jobId, { type: "rerun" })).id;
 }

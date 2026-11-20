@@ -1,9 +1,3 @@
-/**
- * `@tiny-agents/sandbox/browser`: live browser sessions and the transports
- * that open them (local Chromium, or Chrome on the sandbox over CDP), with
- * the URL and ref guards and the secret-fill types their sinks use. The
- * browser toolkit the bots call stays in `@tiny-agents/agent`.
- */
 export {
   closeAllBrowserSessions,
   conversationBrowserTarget,

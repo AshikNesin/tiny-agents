@@ -3,23 +3,12 @@ import { cn } from "./lib/utils";
 
 interface SkeletonProps extends React.HTMLAttributes<HTMLDivElement> {}
 
-/**
- * Skeleton loader component — the atom every placeholder is built from.
- * Reach for the composites below ({@link SkeletonCard}, {@link SkeletonList},
- * {@link SkeletonTable}) before composing one-off layouts with this.
- */
 export function Skeleton({ className, ...props }: SkeletonProps) {
   return <div className={cn("animate-pulse rounded-md bg-muted", className)} {...props} />;
 }
 
-/** Varied bar widths so repeated rows/cells read as distinct records, not a stripe. */
 const BAR_WIDTHS = ["w-48", "w-40", "w-56", "w-32", "w-44", "w-36", "w-52"];
 
-/**
- * A Card whose header and body are placeholder bars. Pass `children` to
- * replace the body lines when the card's content shape is known (form rows, a
- * tall editor block, a field grid, …).
- */
 export function SkeletonCard({
   titleWidth = "w-24",
   description = false,
@@ -28,7 +17,6 @@ export function SkeletonCard({
   children,
 }: {
   titleWidth?: string;
-  /** Also render a second, smaller bar under the title. */
   description?: boolean;
   lines?: number;
   className?: string;
@@ -56,11 +44,6 @@ export function SkeletonCard({
   );
 }
 
-/**
- * Repeated list-row placeholders (optional leading block, text bar, secondary
- * bar, trailing pill). Render inside the list's real surface (Card, bordered
- * div) so the layout holds while data loads.
- */
 export function SkeletonList({
   rows = 5,
   leading = "square",
@@ -69,10 +52,8 @@ export function SkeletonList({
   className,
 }: {
   rows?: number;
-  /** "square" ≈ checkbox/icon, "circle" ≈ avatar, "none" for plain text rows. */
   leading?: "square" | "circle" | "none";
   secondaryLine?: boolean;
-  /** A pill-shaped block at the row's end (badge/action stand-in). */
   trailing?: boolean;
   className?: string;
 }) {
@@ -95,12 +76,6 @@ export function SkeletonList({
   );
 }
 
-/**
- * Header band + divided body rows with one bar per column. Column proportions
- * are approximate on purpose: a placeholder only needs to hold the layout,
- * not mirror exact grid spans. Wrap it in the table's real surface (Card or
- * bordered div).
- */
 export function SkeletonTable({
   columns = 4,
   rows = 5,
@@ -109,7 +84,6 @@ export function SkeletonTable({
 }: {
   columns?: number;
   rows?: number;
-  /** Render the header band (default true). */
   header?: boolean;
   className?: string;
 }) {

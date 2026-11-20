@@ -6,58 +6,30 @@ import type { AppContext, AppEnv, AuthUser } from "../types";
 import { clearSessionCookie, readSessionToken, setSessionCookie } from "./cookie";
 import { decodeSessionToken, issueSession } from "./token";
 
-/**
- * The server session, start to end. A sign-in path (password, first-run setup,
- * passkey) proves who the user is and calls `startSession` once; protected
- * routes run `requireSession`; logout calls `endSession`. The token is a JWT
- * carried in the httpOnly `token` cookie for browsers and returned in the body
- * for clients that send `Authorization: Bearer`.
- */
-
-/**
- * The guard's 401, coded `SESSION_INVALID`: the client signs the owner out on
- * it. Module-private so nothing else can throw it; a wrong password or an
- * unknown passkey is a plain `Boom.unauthorized`.
- */
 function sessionInvalid(message: string): HttpError {
   return Boom.unauthorized(message, undefined, ErrorCode.SESSION_INVALID.code);
 }
 
-/**
- * True for the guard's own 401: the normal signed-out state (every signed-out
- * page load asks `/auth/me`), which the error handler logs at debug.
- */
 export function isSessionInvalid(error: HttpError): boolean {
   return error.code === ErrorCode.SESSION_INVALID.code;
 }
 
-/**
- * Sign `account` in: mint its token, set the session cookie, and return the
- * response body every sign-in route sends, `{ token, user }`. `account` may be
- * any user record; `user` is always exactly the `SessionUser` fields.
- */
 export async function startSession(c: AppContext, account: SessionUser): Promise<SignInResponse> {
   const body = await issueSession(account);
   setSessionCookie(c, body.token);
   return body;
 }
 
-/** Sign out: clear the session cookie. A bearer token stays valid until it expires. */
 export function endSession(c: AppContext): void {
   clearSessionCookie(c);
 }
 
-/** The claims of a valid session token; throws the `SESSION_INVALID` 401 otherwise. */
 export async function verifySessionToken(token: string): Promise<AuthUser> {
   const claims = await decodeSessionToken(token);
   if (!claims) throw sessionInvalid("Invalid or expired token");
   return claims;
 }
 
-/**
- * The session guard: requires a valid token (cookie, else bearer) for an
- * account that still exists, and sets `c.get("user")`.
- */
 export const requireSession = createMiddleware<AppEnv>(async (c, next) => {
   const token = readSessionToken(c);
   if (!token) throw sessionInvalid("No token provided");
