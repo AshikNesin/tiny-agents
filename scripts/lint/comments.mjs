@@ -18,6 +18,7 @@ export const OUT_OF_SCOPE = [
   "site/demos/kit/**",
   "site/assets/**",
   "apps/web/src/client/components/fluid/**",
+  "packages/ui/src/command-menu.tsx",
   "mobile/android/kit/**",
   "mobile/android/build-logic/**",
   "mobile/android/build.gradle.kts",
@@ -27,7 +28,7 @@ export const OUT_OF_SCOPE = [
 ];
 
 const KEPT =
-  /^[\s*!]*(?:eslint-|oxlint-|@ts-|biome-ignore|prettier-ignore|istanbul |c8 |v8 |@vite-ignore|webpack[A-Z]|[#@]__PURE__|[#@]__NO_SIDE_EFFECTS__|<reference |@jsx|@license|@preserve|SPDX-|Copyright |@vitest-environment|react-doctor-disable|@suppress|noinspection|ktlint-disable|detekt:|language=|@formatter:|@tailwind |stylelint-|gitleaks:allow|Adapted from |Ported from )/i;
+  /^[\s*!]*(?:eslint-|oxlint-|@ts-|biome-ignore|prettier-ignore|istanbul |c8 |v8 |@vite-ignore|webpack[A-Z]|[#@]__PURE__|[#@]__NO_SIDE_EFFECTS__|<reference |@jsx|@license|@preserve|SPDX-|Copyright |@vitest-environment|react-doctor-disable|@suppress|noinspection|ktlint-disable|detekt:|language=|@formatter:|@tailwind |stylelint-|gitleaks:allow|Adapted from |Ported from |@deprecated)/i;
 
 export const isKeptComment = (value) => KEPT.test(value);
 
