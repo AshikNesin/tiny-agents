@@ -3,21 +3,9 @@ import { Bar, Check, Collapse, Field, Stage, States, Stream, Text, type Act } fr
 import { after, done } from "../chain";
 import "./ask.css";
 
-// Step 2, "Tell it what you need": a chat with the Travel Planner. The
-// request is typed and sent; what it remembers about you arrives as chips;
-// a browser tool row turns from working to done; the answer streams in.
-// No cursor: this is what the system does.
-//
-// Real strings: the request, "Remembered" and its two chips, the tool row,
-// the answer. The earlier turn is bars and goes up out of the panel.
-//
-// Framing: a chat panel inset a 24px gutter at the sides and bottom, running
-// off the top, as a conversation scrolls; the composer stays whole.
-
 const Q = "Book a Friday evening flight to Bangalore";
 const A = "Best fit: 18:40, 55 min, ₹3,412, window seat.";
 const WORDS = A.split(" ").length;
-// The facts: "18:40, 55 min, ₹3,412"
 const STRONG = new Set([2, 3, 4, 5]);
 
 type S = {
@@ -72,8 +60,6 @@ export default function StepAsk() {
       {(s) => (
         <div className="ta-card ta-ask__panel">
           <div className="ta-ask__thread">
-            {/* Earlier turns as placeholder: they fill the panel at the
-                start and go up out of it as the new turn grows */}
             {(
               [
                 [140, "70%", "44%"],
@@ -109,7 +95,6 @@ export default function StepAsk() {
                     absoluteStrokeWidth
                     aria-hidden
                   />
-                  {/* One footprint for both labels, so the row never resizes */}
                   <States
                     className="ta-ask__tool-label"
                     align="start"

@@ -1,10 +1,9 @@
-// Demo-only: fills the fresh demo database through the real API.
 const BASE = "http://localhost:3000/api/v1";
 
 const login = await fetch(`${BASE}/auth/login`, {
   method: "POST",
   headers: { "content-type": "application/json" },
-  body: JSON.stringify({ email: "demo@example.com", password: "demo@example.com" }), // gitleaks:allow seeded demo login
+  body: JSON.stringify({ email: "demo@example.com", password: "demo@example.com" }), // gitleaks:allow
 }).then((r) => r.json());
 const auth = { authorization: `Bearer ${login.data.token}`, "content-type": "application/json" };
 
@@ -79,7 +78,6 @@ for (const bot of BOTS) {
   bots[key] = await api("POST", "/bots", payload);
 }
 await api("POST", `/bots/${bots.chief.id}/pin`, { pinned: true });
-// The demo's bots act without approval prompts.
 await api("PATCH", `/bots/${bots.chief.id}`, {
   toolPermissions: { create_task: "allow", create_routine: "allow" },
 });
@@ -93,7 +91,6 @@ await api("PATCH", `/bots/${bots.research.id}`, {
 await api("PATCH", `/bots/${bots.code.id}`, { toolPermissions: { run_command: "allow" } });
 await api("POST", `/bots/${bots.research.id}/pin`, { pinned: true });
 
-// A little history, so the sidebar shows previews and unread replies.
 await api("POST", `/bots/${bots.fitness.id}/messages`, {
   requestId: crypto.randomUUID(),
   text: "Give me a 20-minute workout I can do at home",

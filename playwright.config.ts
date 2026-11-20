@@ -1,11 +1,6 @@
 import { existsSync } from "node:fs";
 import { chromium, defineConfig, devices } from "@playwright/test";
 
-/**
- * The Chromium to launch: `PLAYWRIGHT_CHROMIUM_PATH` when set, else
- * Playwright's own build, else the one containers pre-install for another
- * Playwright version (the same fallback as the verify skill's `lib.mjs`).
- */
 function chromiumPath(): string | undefined {
   const explicit = process.env.PLAYWRIGHT_CHROMIUM_PATH;
   if (explicit) return explicit;
@@ -17,16 +12,15 @@ function chromiumPath(): string | undefined {
 export default defineConfig({
   testDir: "./tests/e2e",
   globalSetup: "./tests/e2e/global-setup.ts",
-  fullyParallel: false, // Run sequentially to avoid browser conflicts
+  fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: 1, // Single worker to avoid parallel browser issues
+  workers: 1,
   reporter: "html",
   use: {
     baseURL: "http://localhost:3000",
     trace: "on-first-retry",
     screenshot: "only-on-failure",
-    // Use headed mode for local development (works better on macOS)
     headless: !!process.env.CI,
     launchOptions: { executablePath: chromiumPath() },
   },
@@ -37,17 +31,6 @@ export default defineConfig({
     },
   ],
   webServer: {
-    // Start the dev server directly via tsx (bypassing the `pnpm dev` portless
-    // wrapper, which conflicts with Playwright's port-availability check).
-    // E2e runs on its own throwaway SQLite file — wiped each run, then
-    // migrations + seed run first so the demo user exists — so it never
-    // depends on (or disturbs) the developer's `data/dev.db`. Set
-    // DATABASE_URL to run against a different engine instead.
-    // TINY_AGENTS_FAUX=1 swaps the Cloudflare gateway for a scripted echo
-    // model: no network, no keys — e2e exercises the durable pipeline
-    // itself. The token speed keeps every reply busy for a real window so
-    // steering/queueing tests can send mid-reply. Every test signs in from
-    // 127.0.0.1, so AUTH_RATE_LIMIT_MAX lifts the 20-per-15-minutes limit.
     command:
       "rm -f data/e2e.db data/e2e.db-shm data/e2e.db-wal && " +
       "DATABASE_URL=file:./data/e2e.db pnpm exec tsx scripts/seed.ts && " +

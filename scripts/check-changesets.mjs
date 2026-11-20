@@ -1,34 +1,4 @@
 #!/usr/bin/env node
-// Changeset completeness gate.
-//
-// Groot ships a published kit (packages, apps/web/drizzle, .groot) to child
-// repositories. A branch that edits a managed surface without recording a
-// changeset produces unversioned drift for every consumer, and the only
-// remedy is a later backfill commit. This gate makes that a build failure
-// instead of a convention.
-//
-// Rules:
-//   1. A branch that changes files under packages/[pkg]/src, apps/web/drizzle,
-//      or .groot needs a changeset naming each affected package, or a
-//      reviewed no-release reason file under .no-release/. Only changesets
-//      and reasons the branch itself adds count; an edit or rename does not.
-//   2. apps/web/drizzle and .groot belong to the root package, named by the
-//      root package.json, so a changeset naming it covers them.
-//   3. Every package a changeset the branch adds or edits names must exist in the
-//      workspace, because one unknown name fails changeset status and the
-//      Release workflow.
-//   4. The release bot's own commits are exempt, because versioning PRs are
-//      the output of this gate, not its input.
-//   5. In a child project, packages/** and .groot/** are synced from groot
-//      and versioned there; only the child's own managed paths need coverage.
-//
-// A no-release reason file records why a change ships without a version bump
-// (docs-only, internal refactor, test-only). It covers the whole branch, not
-// one package: the review that accepted the reason is the record.
-//
-// Usage: pnpm check:changesets [--base <ref>] [--root <dir>]
-// The base defaults to the merge-base with origin/main.
-
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
@@ -40,10 +10,6 @@ import { mergeBase } from "./lib/merge-base.mjs";
 const RELEASE_BOTS = ["github-actions[bot]", "renovate[bot]"];
 const BOT_EMAIL_SUFFIX = "@users.noreply.github.com";
 
-// Path prefixes whose changes must be covered by a changeset. A kit
-// package's package.json carries its exports map, entrypoints, and published
-// file list, which is the surface a child repo consumes first, so a
-// manifest edit needs coverage even when no source file changed.
 const MANAGED_PREFIXES = [
   "packages/*/src",
   "packages/*/vendor",
@@ -59,10 +25,6 @@ export function matchesManagedPrefix(file) {
   });
 }
 
-// In a child project, packages/** and .groot/** arrive by `pnpm groot:sync`
-// and are versioned by groot's own changesets, so the child's gate covers only
-// what it owns (apps/web/drizzle). A child is a repo whose
-// .groot/boilerplate-sync.json names a boilerplate other than itself.
 export function isChildProject(rootDir) {
   const config = path.join(rootDir, ".groot", "boilerplate-sync.json");
   if (!existsSync(config)) return false;
@@ -72,14 +34,6 @@ export function isChildProject(rootDir) {
 
 const syncedFromBoilerplate = (file) => file.startsWith("packages/") || file.startsWith(".groot/");
 
-// True when the package.json changed between two blobs in a way a consumer
-// can observe: a different value under any top-level key except name,
-// version, and private. Version is excepted because the release bot owns it
-// and its commits are already exempt by author, so a bot bump never reaches
-// this test. Every other key counts — exports, main, types, files,
-// dependencies, peerDependencies, or a field invented later — so a new
-// publishing-relevant key cannot slip through an allowlist. An allowlist
-// would also invert the gate's meaning: unlisted would mean safe.
 export function pkgJsonChangeIsReleaseRelevant(beforeJson, afterJson) {
   let before;
   let after;
@@ -87,8 +41,6 @@ export function pkgJsonChangeIsReleaseRelevant(beforeJson, afterJson) {
     before = JSON.parse(beforeJson);
     after = JSON.parse(afterJson);
   } catch {
-    // An unparseable manifest is a broken publish surface; surface it here
-    // rather than at release time.
     return true;
   }
   const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
@@ -99,19 +51,15 @@ export function pkgJsonChangeIsReleaseRelevant(beforeJson, afterJson) {
   return false;
 }
 
-// True for packages/[pkg]/package.json, the kit's published manifest.
 function isKitPackageJson(file) {
   return /^packages\/[^/]+\/package\.json$/.test(file);
 }
 
-// The package.json content at HEAD, used when an entry carries no blobs.
 function readPkgJsonAt(rootDir, file) {
   const absolute = path.join(rootDir, file);
   return existsSync(absolute) ? readFileSync(absolute, "utf8") : "";
 }
 
-// Map a packages/[pkg]/src (or vendor) path to its npm package name from package.json.
-// Files under apps/web/drizzle or .groot map to the root package.
 function packageNameFor(file, rootDir) {
   if (file.startsWith("apps/web/drizzle") || file.startsWith(".groot/")) {
     return readPackageName(rootDir);
@@ -127,8 +75,6 @@ function readPackageName(dir) {
   return JSON.parse(readFileSync(pkgJson, "utf8")).name ?? null;
 }
 
-// Every workspace package name, the root first: the root package.json plus
-// each package.json that a pnpm-workspace.yaml `packages:` entry covers.
 export function readWorkspacePackages(rootDir) {
   const workspaceFile = path.join(rootDir, "pnpm-workspace.yaml");
   const globs = existsSync(workspaceFile)
@@ -151,9 +97,6 @@ export function readWorkspacePackages(rootDir) {
   return [...(rootName ? [rootName] : []), ...new Set(others.sort())];
 }
 
-// Every [name, type] pair in a changeset's frontmatter. The delimiter regex is
-// @changesets/parse's own, and the frontmatter is read as YAML, so CRLF, blank
-// lines, comments and spacing parse the way the Release workflow parses them.
 export function parseChangesetFrontmatter(body) {
   const match = /\s*---([^]*?)\r?\n\s*---(\s*(?:\n|$)[^]*)/.exec(body);
   if (!match) return [];
@@ -167,15 +110,12 @@ export function parseChangesetFrontmatter(body) {
   return Object.entries(data);
 }
 
-// Package names a changeset releases with a version bump, so `none` and prose
-// that merely looks like YAML (the changesets README) do not count as coverage.
 export function parseChangesetReleases(body) {
   return parseChangesetFrontmatter(body)
     .filter(([, type]) => ["major", "minor", "patch"].includes(type))
     .map(([name]) => name);
 }
 
-// True when a commit author is the release bot.
 export function isReleaseBotCommit(commit) {
   const { name, email } = commit;
   if (RELEASE_BOTS.includes(name)) return true;
@@ -186,11 +126,6 @@ export function isReleaseBotCommit(commit) {
   );
 }
 
-// The checkable state of one branch, pure over its inputs so the unit test
-// can drive fixture diffs without spawning git for the package mapping.
-// changedEntries pairs each changed path with its package.json pre-image
-// and post-image so manifest edits are filtered by field; changedFiles
-// alone treats every packages/[pkg]/package.json edit as release-relevant.
 export function collect(state) {
   const rootDir = state.rootDir ?? process.cwd();
   const entries = state.changedEntries ?? state.changedFiles.map((f) => ({ file: f }));
@@ -252,8 +187,6 @@ function markdownIn(root, files, dir) {
     .map((f) => ({ name: path.basename(f), body: readFileSync(path.join(root, f), "utf8") }));
 }
 
-// Changesets the branch adds or edits. Only an added one counts as coverage,
-// but an edit that names an unknown package still breaks the Release workflow.
 function listChangesetFiles(root, changedFiles, addedFiles) {
   const added = new Set(addedFiles);
   return markdownIn(root, changedFiles, ".changeset")
@@ -262,16 +195,11 @@ function listChangesetFiles(root, changedFiles, addedFiles) {
 }
 
 function findNoReleaseReason(root, addedFiles) {
-  // Lives outside .changeset/: @changesets/read's legacy v1 reader treats any
-  // directory there as an old-format changeset (needs changes.md + changes.json)
-  // and fails the Release workflow with ENOENT.
   const reason = markdownIn(root, addedFiles, ".no-release").find((f) => f.body.trim());
   if (!reason) return null;
   return `${reason.name}: ${reason.body.trim().split("\n")[0]}`;
 }
 
-// True when every commit in base..HEAD that touches a managed file is the
-// release bot's own. One human commit touching the surface voids the skip.
 function botOnlySurfaces(root, base, managedFiles) {
   const managed = new Set(managedFiles);
   const commits = git(["rev-list", `${base}..HEAD`], root)
@@ -287,8 +215,6 @@ function botOnlySurfaces(root, base, managedFiles) {
   });
 }
 
-// The verdict for one branch state, pure over collect()'s output. The
-// release-bot exemption is layered on by run(), because it needs git.
 export function evaluate(state) {
   if (state.unknownReleases.length > 0) {
     const packages = state.workspacePackages.join(", ");
@@ -336,10 +262,6 @@ export function evaluate(state) {
   };
 }
 
-// The file content at one revision, or "" when it does not exist there.
-// Reading the real blobs from git is exact where reconstructing them from a
-// diff is not: a diff carries only the lines around each hunk, so a partial
-// reconstruction of a JSON manifest cannot be parsed.
 function showBlob(root, revision, file) {
   try {
     return git(["show", `${revision}:${file}`], root);
@@ -357,7 +279,6 @@ export function run({ base, root }) {
       .map((l) => l.trim())
       .filter(Boolean);
   const changedFiles = diffNames();
-  // Rename detection keeps a renamed reason or changeset out of the added set.
   const addedFiles = diffNames("--diff-filter=A", "--find-renames");
   const changedEntries = changedFiles.map((file) => {
     if (!isKitPackageJson(file)) return { file };

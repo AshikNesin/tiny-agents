@@ -1,10 +1,3 @@
-// Montage staging only: `--import` preload for the montage instance
-// (stage-montage.mjs starts the server with it). Two stand-ins at boundaries
-// the server does not own:
-//   1. the model: pi-ai's faux provider resolves to montage-director.mjs;
-//   2. the web: the web toolkit's TinyFish search and fetch calls are answered
-//      here, so no key and no network are needed.
-// Product code is untouched.
 import { register } from "node:module";
 
 const DIRECTOR = new URL("./montage-director.mjs", import.meta.url).href;
@@ -17,7 +10,6 @@ export async function resolve(specifier, context, next) {
 }`;
 register(`data:text/javascript,${encodeURIComponent(hooks)}`);
 
-/** Sample search results (hosts are example.com: nothing here is a real listing). */
 const RESULTS = [
   {
     title: "Goa beach hostels under ₹1,500",
@@ -47,7 +39,6 @@ const PAGE = [
 const json = (body) =>
   new Response(JSON.stringify(body), { headers: { "content-type": "application/json" } });
 
-/** A search or a page read takes a moment, as it would over the network. */
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const realFetch = globalThis.fetch;

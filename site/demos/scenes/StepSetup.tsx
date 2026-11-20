@@ -3,16 +3,6 @@ import { Face } from "../Face";
 import { done } from "../chain";
 import "./setup.css";
 
-// Step 1, "Make it yours": the Travel Planner's tool permissions. The cursor
-// sets Payments from Allow to Ask; the thumb slides and the row's note rolls
-// from "Runs on its own" to "Asks you first". One gesture, then it holds.
-//
-// Real strings: the agent's name and status, the three tools, the segment
-// labels and the Payments note. Everything else is bars.
-//
-// Framing: pinned, bottom bleed. The card is inset a 24px gutter top and
-// sides and runs off the bottom just past its last row.
-
 const SEG = ["Allow", "Ask", "Off"];
 
 type S = { payments: number };
@@ -26,7 +16,6 @@ async function script(a: Act<S>) {
   await a.click({ at: "payments-ask", x: 0.7, y: 0.66 });
   a.put({ payments: 1 });
   await a.wait(500);
-  // Off the control, so the new label and note read clear
   await a.move({ x: 250, y: 236 });
   await a.wait(1400);
   done("setup");

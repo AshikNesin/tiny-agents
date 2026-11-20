@@ -1,31 +1,9 @@
 #!/usr/bin/env tsx
-/**
- * Kit export guard.
- *
- * Each package in PACKAGES declares every public entrypoint explicitly. A
- * wildcard export ("./*") accepts any file that lands in src, so the public
- * surface would drift silently. This guard keeps three sets in agreement:
- * the explicit keys in each package's exports map, the source files under
- * src, and the subpaths the compiled consumer fixture
- * (tests/kit-consumers/consumer.tsx) imports.
- *
- * - A source file no entry targets is a module outside the public map, or an
- *   entry someone forgot to add. Both are drift.
- * - An entry whose target file does not exist is a broken subpath.
- * - A subpath the fixture never imports is unexercised. The fixture is the
- *   gate for the removal policy in AGENTS.md, so an unexercised subpath
- *   fails rather than shipping untested surface.
- * - A named export of a public subpath on the merge base that is gone now is
- *   a removal, which AGENTS.md allows only in a major, after a deprecation.
- */
-
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-// TypeScript 7 (the native compiler) ships no classic JS API; the TS 6 package
-// keeps it for AST scripts like this one.
 import ts from "@typescript/typescript6";
 import { mergeBase } from "./lib/merge-base.mjs";
 
@@ -39,7 +17,6 @@ const { values: args } = parseArgs({
 interface PackageRule {
   name: string;
   manifest: string;
-  /** Entry key for a fixture import specifier, or null when out of scope. */
   keyForSpecifier: (specifier: string) => string | null;
 }
 
@@ -244,12 +221,6 @@ function entryTargets(read: Reader, manifest: string): Map<string, string> {
   );
 }
 
-/**
- * One approved removal: export `name` of `subpath` (such as
- * "@groot/ui/breadcrumb"). `until` is the package version ("2.0.0") or the
- * date ("2027-01-31") from which the entry fails, so it is deleted once the
- * removal has shipped.
- */
 type ApprovedRemoval = { subpath: string; name: string; reason: string; until?: string };
 
 const VERSION = /^\d+\.\d+\.\d+$/;

@@ -1,13 +1,8 @@
-/**
- * The Vault API's wire types (`server/api/vault`, issue #56); naming in
- * `./common.ts`. Metadata and policy only: a value crosses only in a reveal.
- */
 import type { CredentialField, VaultApproval, VaultKind } from "@tiny-agents/agent";
 import type { Jsonified } from "../json";
 
 export type { VaultApproval, VaultKind };
 
-/** Value fields an item can carry, across kinds. */
 export type ValueField =
   | "username"
   | "password"
@@ -39,7 +34,6 @@ interface BackendCapabilities {
   reveal: boolean;
 }
 
-/** One backend in the overview; an unconfigured one has only its read status. */
 export interface VaultBackendView {
   name: VaultBackendName;
   configured: boolean;
@@ -60,13 +54,11 @@ interface VaultInject {
   format: string;
 }
 
-/** An item as the Vault UI shows it (`vault.admin.service.ts` `itemView`). */
 export interface VaultItemData {
   id: string;
   handle: string;
   kind: VaultKind;
   backend: VaultBackendName;
-  /** `app`: a secret the server uses itself (a model provider's key); never a bot's. */
   audience: "bots" | "app";
   label: string;
   username: string | null;
@@ -92,7 +84,6 @@ export interface VaultItemData {
 
 export type VaultItem = Jsonified<VaultItemData>;
 
-/** A backend item no vault item links yet. */
 export interface UnlinkedItem {
   backend: VaultBackendName;
   externalId: string;
@@ -103,7 +94,6 @@ export interface UnlinkedItem {
   card: VaultCardMeta | null;
 }
 
-/** `GET /vault`. */
 export interface VaultOverviewData {
   backends: VaultBackendView[];
   primaryBackend: VaultBackendName;
@@ -114,7 +104,6 @@ export interface VaultOverviewData {
 
 export type VaultOverview = Jsonified<VaultOverviewData>;
 
-/** One audit row, as stored (`vault_audit_events`): never a value. */
 export interface VaultAuditEventData {
   id: string;
   at: Date;
@@ -130,7 +119,6 @@ export interface VaultAuditEventData {
   unattended: boolean;
 }
 
-/** `GET /vault/items/:handle`. */
 export interface VaultItemDetailData {
   item: VaultItemData;
   title: string;
@@ -144,10 +132,6 @@ export interface VaultItemDetailData {
 
 export type VaultItemDetail = Jsonified<VaultItemDetailData>;
 
-/**
- * Who and what may use an item: never a value. The client always sends the
- * whole policy; the server defaults what is left out.
- */
 export interface VaultPolicy {
   handle: string;
   label?: string;
@@ -155,34 +139,28 @@ export interface VaultPolicy {
   hosts: string[];
   inject?: VaultInject | null;
   tools: string[];
-  /** null: every bot. */
   bots: string[] | null;
   approval: VaultApproval;
   allowUnattended: boolean;
   whenToUse?: string | null;
   disabled: boolean;
-  /** api_key: which value field holds the key. */
   field?: ValueField | null;
 }
 
-/** `POST /vault/items` (step-up). */
 export interface VaultItemCreateBody {
   kind: VaultKind;
   title: string;
-  /** Websites; their origins become the item's allowed origins unless policy names others. */
   urls?: string[];
   values: Partial<Record<ValueField, string>>;
   policy: VaultPolicy;
 }
 
-/** `POST /vault/links` (step-up). */
 export interface VaultLinkBody {
   backend: VaultBackendName;
   externalId: string;
   policy: VaultPolicy;
 }
 
-/** `PUT /vault/items/:handle` (step-up): "" clears a value. */
 export interface VaultItemUpdateBody {
   title?: string;
   urls?: string[];
@@ -190,33 +168,27 @@ export interface VaultItemUpdateBody {
   policy?: Partial<VaultPolicy>;
 }
 
-/** `POST /vault/items/:handle/reveal` (step-up). */
 export interface VaultRevealBody {
   field: ValueField;
   purpose?: "reveal" | "copy";
 }
 
-/** `POST /vault/items/:handle/reveal`: one value, for the owner's browser. */
 export interface VaultRevealed {
   field: ValueField;
   value: string;
 }
 
-/** `POST /vault/step-up`: the owner's password, or a passkey assertion. */
 export type StepUpBody = { password: string } | { passkey: Record<string, unknown> };
 
-/** `POST /vault/step-up`: a token for `X-Vault-Step-Up`, valid until `expiresAt` (ms). */
 export interface StepUpToken {
   token: string;
   expiresAt: number;
 }
 
-/** `GET /vault/requests/:taskId`: a bot's credential request, metadata only. */
 export interface CredentialRequestView {
   taskId: number;
   bot: { id: string; name: string } | null;
   origin: string;
-  /** Another site's frame on that page that holds the fields (#302), named on the card. */
   frameOrigin: string | null;
   title: string;
   purpose: string;
@@ -226,21 +198,17 @@ export interface CredentialRequestView {
   liveOrigin: string | null;
 }
 
-/** `POST /vault/requests/:taskId/submit`. */
 export interface CredentialSubmitBody {
   values: Record<string, string>;
   save?: boolean;
 }
 
-/** `POST /vault/requests/:taskId/submit`: the keys filled, and the item saved to, if any. */
 export interface CredentialSubmitted {
   filled: string[];
   savedHandle: string | null;
-  /** The fill worked but saving to the vault did not. */
   saveFailed: boolean;
 }
 
-/** `POST /vault/requests/:taskId/cancel`. */
 export interface CredentialCancelled {
   cancelled: true;
 }

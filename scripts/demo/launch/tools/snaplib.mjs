@@ -1,18 +1,3 @@
-// Snapshots of the real tiny-agents UI for the film.
-//
-// The film shows the product's own markup and styles, not a redraw. This
-// library drives a running app (the verify-tiny-agents instance) and writes:
-//   assets/app.<mode>.css   the app's stylesheet, flattened for one viewport
-//   assets/fonts/*          the fonts that stylesheet names
-//   assets/avatars/*        bot avatars
-//   snap/<mode>/<name>.html the <body> markup of one app state
-//   snap/<mode>/<name>.png  what the live app looked like, for comparison
-//
-// "Flattened" means every viewport-dependent rule is resolved at capture time:
-// width media queries are kept or dropped for the app window's size, and
-// vh/vw units become --app-h/--app-w. The markup can then sit inside a
-// 1280x720 (or 390x844) box on a 1920x1080 film frame and lay out as it did
-// in the app.
 import { createRequire } from "node:module";
 import { mkdirSync, writeFileSync, existsSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { createHash } from "node:crypto";
@@ -26,7 +11,6 @@ export const ROOT = path.resolve(import.meta.dirname, "..");
 export const BASE = process.env.TA_URL ?? "http://localhost:3100";
 export const SIZES = { desktop: { width: 1280, height: 720 }, mobile: { width: 390, height: 844 } };
 
-/** A signed-in page in the light theme. `mode` is "desktop" or "mobile". */
 export async function open(
   mode = "desktop",
   { email = "demo@example.com", password = email } = {},
@@ -51,7 +35,6 @@ export async function open(
   return { browser, ctx, page, mode };
 }
 
-/** Calls /api/v1 with the page's session and returns the envelope's data. */
 export async function api(page, method, url, body) {
   const res = await page.request.fetch(`/api/v1${url}`, { method, data: body });
   const json = await res.json().catch(() => ({}));
@@ -60,11 +43,6 @@ export async function api(page, method, url, body) {
   return json.data ?? json;
 }
 
-/**
- * Adds the page's live stylesheets to assets/app.<mode>.css. Call it on every
- * distinct page you snapshot: lazily loaded pages bring their own styles. Each
- * stylesheet is kept once (assets/.css/<mode>/), so calls only ever add.
- */
 export async function dumpCss(page, mode) {
   const sheets = await page.evaluate(() => {
     const flat = (rules) => {
@@ -103,7 +81,6 @@ export async function dumpCss(page, mode) {
   mkdirSync(path.join(ROOT, "assets/fonts"), { recursive: true });
   for (let css of sheets) {
     if (!css.trim()) continue;
-    // Only the Latin faces: the film's text is Latin, and the rest is megabytes.
     css = css.replace(/@font-face\s*{[^}]*}/g, (face) =>
       /cyrillic|greek|vietnamese|symbols|math/i.test(face) ? "" : face,
     );
@@ -119,8 +96,6 @@ export async function dumpCss(page, mode) {
       }
       css = css.replaceAll(`url("${url}")`, `url("fonts/${name}")`);
     }
-    // Viewport units follow the app window, not the film frame. Only in values:
-    // class names such as h-[85vh] must keep matching the markup.
     css = unitsToAppWindow(css);
     const hash = createHash("sha1").update(css).digest("hex").slice(0, 12);
     const have = readdirSync(parts);
@@ -130,10 +105,6 @@ export async function dumpCss(page, mode) {
   return writeAppCss(mode);
 }
 
-/**
- * Joins the saved stylesheets of one mode into assets/app.<mode>.css, the file
- * verify() mounts. It is derived (and not committed): the parts are the record.
- */
 export function writeAppCss(mode) {
   const parts = path.join(ROOT, "assets/.css", mode);
   const all = readdirSync(parts)
@@ -148,7 +119,6 @@ export function writeAppCss(mode) {
 }
 
 const UNIT = /(-?\d*\.?\d+)[dsl]?v([hw])\b/g;
-/** Rewrites vh/vw in declaration values to shares of --app-h/--app-w. */
 export function unitsToAppWindow(css) {
   const root = postcss.parse(css);
   root.walkDecls((d) => {
@@ -160,11 +130,6 @@ export function unitsToAppWindow(css) {
   return root.toString();
 }
 
-/**
- * Undoes an earlier bug that also rewrote the units inside selectors. The
- * unit's flavour (vh, dvh, svh, lvh) was lost, so the selector is restored
- * once for each: only the one the markup uses will ever match.
- */
 export function repairSelectors(css) {
   const BAD = /calc\(var\(--app-([hw])\) \* ([\d.e-]+)\)/;
   if (!BAD.test(css)) return css;
@@ -189,10 +154,6 @@ const slug = (s) =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
 
-/**
- * Saves the current app state as snap/<mode>/<name>.html and .png.
- * Form values, scroll offsets and canvases are baked into the markup.
- */
 export async function snap({ page, mode }, name) {
   const dir = path.join(ROOT, "snap", mode);
   mkdirSync(dir, { recursive: true });
@@ -233,7 +194,6 @@ export async function snap({ page, mode }, name) {
     };
   });
 
-  // Avatars and other remote images become local files.
   let out = html;
   const remote = [...new Set([...out.matchAll(/src="(https?:\/\/[^"]+)"/g)].map((m) => m[1]))];
   for (const url of remote) {
@@ -255,11 +215,6 @@ export async function snap({ page, mode }, name) {
   return file;
 }
 
-/**
- * Mounts a snapshot inside an app-window-sized box on a 1920x1080 page, the
- * way the film does, and compares it with the live screenshot. Returns the
- * share of pixels that differ.
- */
 export async function verify(mode, name) {
   const { width, height } = SIZES[mode];
   const dir = path.join(ROOT, "snap", mode);

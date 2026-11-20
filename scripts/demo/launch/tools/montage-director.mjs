@@ -1,7 +1,3 @@
-// Montage staging only: stands in for pi-ai's faux provider in the montage
-// instance (see montage-faux.mjs), so the scripted model answers with the
-// CAST lines and real tool calls. The model row stays `test-model`, the one
-// the server seeds, so bots created through the API run on it unchanged.
 import * as faux from "@earendil-works/pi-ai/providers/faux";
 
 export * from "@earendil-works/pi-ai/providers/faux";
@@ -20,10 +16,8 @@ const textOf = (m) =>
           .map((b) => b.text)
           .join("");
 
-/** Each scene: the owner message that starts it, then one model reply per round. */
 const SCENES = [
   {
-    // CAST → Chats → Researcher.
     match: /beach hostels in goa/i,
     steps: [
       () => toolUse(msg(call("web_search", { query: "Goa beach hostels under ₹1,500 a night" }))),
@@ -45,7 +39,6 @@ const SCENES = [
     ],
   },
   {
-    // CAST → Montage screens → Memory (the three trip memories, saved from chat).
     match: /window seats/i,
     steps: [
       () =>
@@ -63,7 +56,6 @@ const SCENES = [
     ],
   },
   {
-    // CAST → Montage screens → Memory (the repo memory).
     match: /code\/shop/i,
     steps: [
       () =>
@@ -88,7 +80,6 @@ export function fauxProvider(options = {}) {
   const registration = faux.fauxProvider(options);
   if (options.provider !== "faux") return registration;
   const setResponses = registration.setResponses.bind(registration);
-  // The server queues its own echo replies; queue the director instead.
   registration.setResponses = () => setResponses(Array.from({ length: 5000 }, () => director));
   return registration;
 }

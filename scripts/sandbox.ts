@@ -1,25 +1,4 @@
 #!/usr/bin/env tsx
-/**
- * The local sandbox (docs/guides/local-sandbox.md): a Docker container that
- * stands in for the Tailscale sandbox VM, for machines that can't join the
- * tailnet.
- *
- *   pnpm sandbox:up      create the SSH key if needed, build and start the
- *                        container, wait for SSH and print the .env lines
- *   pnpm sandbox:down    stop it (files, profiles and the host key stay)
- *   pnpm sandbox:logs    follow sshd's log
- *   pnpm sandbox:shell   a shell as exedev inside the container
- *   pnpm sandbox:reset   stop it and delete the bots' home volume
- *
- * The key pair lives in data/sandbox/ (gitignored); the container trusts its
- * public half and the app signs in with the private half
- * (SANDBOX_SSH_KEY_FILE). Set SANDBOX_LOCAL_PORT to publish on another
- * loopback port than 2222.
- *
- * docker/sandbox/compose.override.yml (gitignored; copy
- * compose.override.example.yml) is merged in when present, for mounting
- * files or folders from this machine into the container.
- */
 import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -28,7 +7,6 @@ import ssh2 from "ssh2";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const compose = path.join(root, "docker/sandbox/compose.yml");
-// `-f` turns off compose's own pickup of compose.override.yml, so pass it too.
 const override = path.join(root, "docker/sandbox/compose.override.yml");
 const composeFiles = ["-f", compose, ...(existsSync(override) ? ["-f", override] : [])];
 const keyDir = path.join(root, "data/sandbox");
@@ -49,7 +27,6 @@ function docker(args: string[], { quiet = false } = {}): number {
   return result.status ?? 1;
 }
 
-/** An ed25519 key pair in OpenSSH format, created once. */
 function ensureKey(): void {
   if (existsSync(keyFile) && existsSync(`${keyFile}.pub`)) return;
   mkdirSync(keyDir, { recursive: true });
@@ -60,7 +37,6 @@ function ensureKey(): void {
   console.log(`Created the sandbox SSH key: ${path.relative(root, keyFile)}`);
 }
 
-/** Dial the container the way the app will and run one probe command. */
 function probe(): Promise<string> {
   return new Promise((resolve, reject) => {
     const client = new ssh2.Client();
@@ -146,7 +122,6 @@ const commands: Record<string, () => number | Promise<number>> = {
   reset: () => {
     const status = docker(["down"]);
     if (status !== 0) return status;
-    // Only the bots' home; the host-key volume stays so the app's pin holds.
     return spawnSync("docker", ["volume", "rm", "tiny-agents-sandbox_home"], { stdio: "inherit" })
       .status!;
   },

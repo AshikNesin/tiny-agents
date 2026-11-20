@@ -1,17 +1,3 @@
-/**
- * The Code registry of the `code` staging instance: the app's own registry
- * (`code.registry.ts`) plus Claude Code, through the registry's own `extra`
- * seam. hooks.mjs hands this module to `code.boot.ts` in place of the real
- * one; no product file changes.
- *
- * Claude Code here is the real driver (`createClaudeCodeHarness`) talking to
- * the real worker (`createClaudeWorkerServer`, coding mode) in this process
- * on a loopback port, the way `tests/server/code/claude-code/driver.test.ts`
- * runs it. The only stand-in is the Agent SDK: the tests' `FakeSdk` with a
- * brain that plays the CAST thread (../CAST.md, "The Code thread") one step
- * at a time. A step runs when the staging script writes its number to
- * `$STAGE_CODE_DIR/gate`, so each state can be snapshotted mid-turn.
- */
 import { randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -45,22 +31,18 @@ export * from "../../../../../apps/web/src/server/api/code/code.registry.ts";
 const DIR = process.env.STAGE_CODE_DIR!;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** Wait until the staging script has allowed thread step `step` (CAST numbering). */
 async function gate(step: number): Promise<void> {
   for (;;) {
     let allowed = 0;
     try {
       allowed = Number(readFileSync(path.join(DIR, "gate"), "utf8").trim()) || 0;
-    } catch {
-      // No gate file yet: nothing is allowed.
-    }
+    } catch {}
     if (allowed >= step) return;
     // eslint-disable-next-line no-await-in-loop -- a poll
     await sleep(100);
   }
 }
 
-// ../CAST.md, "The Code thread", word for word.
 const FAIL_OUTPUT = [
   "Exit code 1",
   " FAIL  tests/checkout.test.ts > checkout > shows the cart total",
@@ -81,7 +63,6 @@ const PASS_OUTPUT = [" Test Files  9 passed (9)", "      Tests  48 passed (48)"]
 const ANSWER =
   "Fixed the flaky checkout test. The cart total was read before the price fetch resolved, so the test now awaits it. All 48 tests pass.";
 
-/** The SDK's first message of a process (`sdk.d.ts` 0.3.x, as fake-sdk.ts shapes it). */
 function init(query: FakeQuery): CodingSdkMessage {
   return {
     type: "system",
@@ -102,7 +83,6 @@ function init(query: FakeQuery): CodingSdkMessage {
   };
 }
 
-/** One tool call: the `tool_use`, a beat while it runs, then its result. */
 async function run(
   query: FakeQuery,
   id: string,
@@ -116,7 +96,6 @@ async function run(
   query.emit(toolResult(query, id, output, { isError }));
 }
 
-/** Claude Code playing the CAST thread: one turn, held at each step's gate. */
 const brain: Brain = async (query) => {
   query.emit(init(query));
   let cost = 0;
@@ -165,7 +144,6 @@ function claudeCode(): HarnessInstance {
   const startWorker = () =>
     createClaudeWorkerServer({
       token,
-      // The bot engine is not used here: only coding mode.
       query: async () => undefined as never,
       authStatus: async () => ({
         loggedIn: true,
