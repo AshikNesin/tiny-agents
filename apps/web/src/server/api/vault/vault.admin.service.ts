@@ -7,7 +7,7 @@ import { KIND_DEFAULT_TOOLS } from "../../../shared/vault-kinds";
 import { connections, db, vaultAuditEvents, vaultItems } from "../../db";
 import { app } from "../../app-root";
 import { connectConfig, primaryBackend, readBackends } from "./backends";
-import { createLocalBackend } from "./backends/local";
+import { createLocalBackend, deleteLocalItem, readLocalDraft } from "./backends/local";
 import { createConnectBackend } from "./backends/onepassword-connect";
 import {
   BackendError,
@@ -23,6 +23,7 @@ import type { CreateItemDTO, PolicyDTO, UpdateItemDTO } from "./vault.schema";
 import type { Deleted } from "../../../shared/api/common";
 import type {
   VaultBackendView,
+  VaultMoveResult,
   VaultItemData,
   VaultItemDetailData,
   VaultOverviewData,
@@ -223,6 +224,9 @@ export async function overview(options: { refresh?: boolean } = {}): Promise<Vau
     items: rows.map(itemView),
     unlinked,
     kindDefaults: KIND_DEFAULT_TOOLS,
+    movableToOnePassword: writeBackends().get("onepassword-connect")?.create
+      ? (await movableLocalRows()).length
+      : 0,
   };
 }
 
@@ -577,6 +581,64 @@ async function updateItemRow(
       .join("; "),
   });
   return itemView(updated);
+}
+
+async function movableLocalRows(): Promise<VaultItemRow[]> {
+  const owned = new Set(
+    (await db.select({ id: connections.secretItemId }).from(connections))
+      .map((row) => row.id)
+      .filter((id): id is string => id !== null),
+  );
+  const rows = await db
+    .select()
+    .from(vaultItems)
+    .where(and(eq(vaultItems.backend, "local"), eq(vaultItems.audience, "bots")))
+    .orderBy(asc(vaultItems.label));
+  return rows.filter((row) => !owned.has(row.id));
+}
+
+export async function moveLocalItemsToOnePassword(): Promise<VaultMoveResult> {
+  const target = writeBackends().get("onepassword-connect");
+  if (!target?.create) {
+    throw Boom.badRequest("Set OP_CONNECT_ADMIN_TOKEN so the vault can write to 1Password");
+  }
+  const result: VaultMoveResult = { moved: [], failed: [] };
+  for (const row of await movableLocalRows()) {
+    try {
+      const draft = readLocalDraft(row.externalId);
+      const externalId = await target.create(draft);
+      db.transaction((tx) => {
+        const moved = tx
+          .update(vaultItems)
+          .set({ backend: "onepassword-connect", externalId, updatedAt: new Date() })
+          .where(
+            and(
+              eq(vaultItems.id, row.id),
+              eq(vaultItems.backend, "local"),
+              eq(vaultItems.externalId, row.externalId),
+            ),
+          )
+          .run();
+        if (moved.changes !== 1) throw new Error("The item changed while it was being moved.");
+        deleteLocalItem(tx, row.externalId);
+      });
+      result.moved.push(row.handle);
+      await audit({
+        item: row,
+        handle: row.handle,
+        tool: "vault_ui",
+        target: "onepassword-connect",
+        outcome: "updated",
+        reason: "moved from local to 1Password",
+      });
+    } catch (error) {
+      const reason = (error as Error).message;
+      result.failed.push({ handle: row.handle, reason });
+      logger.warn({ handle: row.handle, error: reason }, "Vault item not moved to 1Password");
+    }
+  }
+  candidatesCache = undefined;
+  return result;
 }
 
 export async function deleteItem(handle: string, options: { purge: boolean }): Promise<Deleted> {

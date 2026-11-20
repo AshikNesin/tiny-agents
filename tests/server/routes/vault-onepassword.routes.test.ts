@@ -11,7 +11,10 @@ import {
 } from "../../../apps/web/src/server/db";
 import { installAppForTests } from "../../../apps/web/src/server/app-root";
 import { setReadBackendsForTests } from "../../../apps/web/src/server/api/vault/backends";
-import { setWriteBackendsForTests } from "../../../apps/web/src/server/api/vault/vault.admin.service";
+import {
+  createAppCredential,
+  setWriteBackendsForTests,
+} from "../../../apps/web/src/server/api/vault/vault.admin.service";
 import { clearStatusCache, runItemUse } from "../../../apps/web/src/server/api/vault/vault.service";
 import { clearStepUpsForTests } from "../../../apps/web/src/server/api/vault/vault.stepup";
 import { secretRedactor } from "../../../packages/agent/src/redact";
@@ -187,6 +190,64 @@ describe("1Password Connect at OP_CONNECT_HOST", () => {
     expect(await db.select().from(vaultValues)).toEqual([]);
   });
 
+  it("saves a new item while Connect's copy hasn't caught up, and bots can use it", async () => {
+    connect.syncLag.gets = 2;
+    const created = await vault("/items", {
+      method: "POST",
+      stepUp: await stepUp(),
+      json: {
+        kind: "login",
+        title: "Umami",
+        urls: ["https://hi.example.com"],
+        values: { username: "ana", password: "canary-lagging" },
+        policy: { handle: "umami" },
+      },
+    });
+    expect(created.status).toBe(201);
+    expect(created.body.data).toMatchObject({
+      handle: "umami",
+      backend: "onepassword-connect",
+      username: "ana",
+    });
+
+    const row = await db.query.vaultItems.findFirst({ where: eq(vaultItems.handle, "umami") });
+    connect.unsynced.set(row!.externalId, 2);
+    const filled = await runItemUse(
+      {
+        handle: "umami",
+        tool: "browser_fill_secret",
+        targetKind: "origin",
+        target: "https://hi.example.com",
+        conversation: 1,
+        granted: false,
+        approved: true,
+      },
+      { unattended: false },
+      ["password"],
+      async (values) => values.password!.reveal(),
+    );
+    expect(filled).toBe("canary-lagging");
+  });
+
+  it("says which step Connect refused, in Connect's words", async () => {
+    connect.refuseCreate = { status: 404, message: "vault not found in local cache" };
+    const response = await vault("/items", {
+      method: "POST",
+      stepUp: await stepUp(),
+      json: {
+        kind: "login",
+        title: "Nowhere",
+        urls: [],
+        values: { username: "a", password: "b" },
+        policy: { handle: "nowhere" },
+      },
+    });
+    expect(response.status).toBe(502);
+    expect(JSON.stringify(response.body)).toContain(
+      "1Password Connect couldn't save the item: vault not found in local cache (404).",
+    );
+  });
+
   it("keeps new items local with only the read token", async () => {
     delete process.env.OP_CONNECT_ADMIN_TOKEN;
     rebuildBackends();
@@ -196,6 +257,94 @@ describe("1Password Connect at OP_CONNECT_HOST", () => {
       name: "onepassword-connect",
       capabilities: { create: false, update: false, delete: false, reveal: true },
     });
+  });
+});
+
+describe("moving local items to 1Password", () => {
+  it("moves the bots' local items with their values, and leaves the app's own keys local", async () => {
+    rebuildBackends();
+    const grant = await stepUp();
+    for (const [handle, password] of [
+      ["github", "canary-gh"],
+      ["umami", "canary-umami"],
+    ]) {
+      const created = await vault("/items", {
+        method: "POST",
+        stepUp: grant,
+        json: {
+          kind: "login",
+          title: handle,
+          urls: [`https://${handle}.example.com`],
+          values: { username: "ana", password, totp: "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ" },
+          policy: { handle },
+        },
+      });
+      expect(created.body.data.backend).toBe("local");
+    }
+    await createAppCredential({
+      handle: "openai",
+      label: "OpenAI",
+      value: "canary-app-key",
+      hosts: ["api.openai.com"],
+      inject: { as: "header", name: "Authorization", format: "Bearer {value}" },
+    });
+
+    process.env.OP_CONNECT_HOST = connect.url;
+    process.env.OP_CONNECT_TOKEN = "read-token";
+    process.env.OP_CONNECT_ADMIN_TOKEN = "admin-token";
+    rebuildBackends();
+    expect((await vault("")).body.data.movableToOnePassword).toBe(2);
+
+    const moved = await vault("/move-to-1password", { method: "POST", stepUp: grant, json: {} });
+    expect(moved.status).toBe(200);
+    expect(moved.body.data).toEqual({ moved: ["github", "umami"], failed: [] });
+
+    const rows = await db.select().from(vaultItems);
+    expect(Object.fromEntries(rows.map((r) => [r.handle, r.backend]))).toEqual({
+      github: "onepassword-connect",
+      umami: "onepassword-connect",
+      openai: "local",
+    });
+    expect(await db.select().from(vaultValues)).toHaveLength(1);
+    const umami = connect.items.get(rows.find((r) => r.handle === "umami")!.externalId)!;
+    expect(umami).toMatchObject({
+      title: "umami",
+      category: "LOGIN",
+      vault: { id: "vault-agents" },
+    });
+    expect(umami.fields?.find((f) => f.purpose === "PASSWORD")?.value).toBe("canary-umami");
+    expect(umami.fields?.find((f) => f.type === "OTP")?.value).toBe(
+      "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+    );
+
+    const filled = await runItemUse(
+      {
+        handle: "umami",
+        tool: "browser_fill_secret",
+        targetKind: "origin",
+        target: "https://umami.example.com",
+        conversation: 1,
+        granted: false,
+        approved: true,
+      },
+      { unattended: false },
+      ["password"],
+      async (values) => values.password!.reveal(),
+    );
+    expect(filled).toBe("canary-umami");
+    expect((await vault("")).body.data.movableToOnePassword).toBe(0);
+  });
+
+  it("needs the read+write token", async () => {
+    process.env.OP_CONNECT_HOST = connect.url;
+    process.env.OP_CONNECT_TOKEN = "read-token";
+    rebuildBackends();
+    const response = await vault("/move-to-1password", {
+      method: "POST",
+      stepUp: await stepUp(),
+      json: {},
+    });
+    expect(response.status).toBe(400);
   });
 });
 

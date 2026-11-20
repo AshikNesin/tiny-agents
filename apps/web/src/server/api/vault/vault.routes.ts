@@ -80,6 +80,10 @@ router.post("/vault/links", requireStepUp, async (c) => {
   return ok(c, await admin.linkItem(body), 201);
 });
 
+router.post("/vault/move-to-1password", requireStepUp, async (c) => {
+  return ok(c, await admin.moveLocalItemsToOnePassword());
+});
+
 router.put("/vault/items/:handle", requireStepUp, async (c) => {
   const handle = handleParam(c);
   return ok(c, await admin.updateItem(handle, await parseBody(c, updateItemSchema)));

@@ -153,6 +153,11 @@ function writeLocalItem(tx: DbTx, id: string, draft: Partial<ItemDraft>): void {
     .run();
 }
 
+export function readLocalDraft(externalId: string): ItemDraft {
+  const item = readItem(db, externalId);
+  return { kind: item.kind, title: item.title, urls: item.urls, values: item.values };
+}
+
 export function deleteLocalItem(tx: DbTx, id: string): void {
   tx.delete(vaultValues).where(eq(vaultValues.id, id)).run();
 }
