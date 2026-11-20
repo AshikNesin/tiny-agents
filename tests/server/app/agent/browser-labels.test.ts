@@ -43,4 +43,19 @@ describe.skipIf(!chromiumPath)("labeled screenshots in real Chromium", () => {
     expect(await session.snapshot()).toBe(before);
     expect((await session.screenshot()).data).toBe(plain.data);
   }, 30_000);
+  it("labels the controls in view on a page scrolled past many others", async () => {
+    const browser = await chromium.launch({ executablePath: chromiumPath, args: ["--no-sandbox"] });
+    cleanups.push(() => browser.close());
+    const page = await browser.newPage({ viewport: { width: 400, height: 300 } });
+    const many = Array.from({ length: 200 }, (_, i) => `<button>Item ${i}</button><br>`).join("");
+    await page.setContent(`${many}<button>Last</button>`);
+    await page.getByText("Last").scrollIntoViewIfNeeded();
+    const session = pageSession(
+      page,
+      { viewportWidth: 400, viewportHeight: 300 },
+      { close: async () => {} },
+    );
+    const labeled = await session.screenshot({ labels: true });
+    expect(labeled.labeled).toBeGreaterThan(5);
+  }, 30_000);
 });
