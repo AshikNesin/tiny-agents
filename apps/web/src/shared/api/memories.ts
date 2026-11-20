@@ -17,7 +17,6 @@ export interface MemoryRecord {
   category: MemoryCategory;
   status: MemoryStatus;
   source: MemorySource;
-  confidence: number | null;
   until: string | null;
   supersededById: string | null;
   supersededAt: string | null;

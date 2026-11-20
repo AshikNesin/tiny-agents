@@ -50,7 +50,7 @@ export function createMemoryStore(
     async remember(conversationId, input) {
       const bot = await writable(conversationId);
       if (typeof bot === "string") return { status: bot };
-      const item = extractedMemorySchema.parse({ ...input, confidence: 1 });
+      const item = extractedMemorySchema.parse(input);
       // No watermark: background capture still reads this turn.
       const result = await memoryLedger(bot.id).add([item], {
         source: "capture",

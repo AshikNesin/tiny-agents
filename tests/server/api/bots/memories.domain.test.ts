@@ -143,7 +143,7 @@ describe("isExpired", () => {
 describe("extractionResultSchema", () => {
   it("accepts date-only until values from the model", () => {
     const parsed = extractionResultSchema.parse([
-      { text: "Is in Goa until Friday", category: "fact", confidence: 0.8, until: "2026-10-23" },
+      { text: "Is in Goa until Friday", category: "fact", until: "2026-10-23" },
     ]);
     expect(parsed[0].until).toBe("2026-10-23");
   });
@@ -154,8 +154,8 @@ describe("extractionResultSchema", () => {
 
   it("drops an array with one invalid item wholesale via safeParse", () => {
     const bad = [
-      { text: "Valid fact", category: "fact", confidence: 0.9 },
-      { text: "", category: "fact", confidence: 0.9 },
+      { text: "Valid fact", category: "fact" },
+      { text: "", category: "fact" },
     ];
     expect(extractionResultSchema.safeParse(bad).success).toBe(false);
   });
@@ -165,7 +165,6 @@ describe("extractionResultSchema", () => {
       {
         text: "Prefers TypeScript",
         category: "preference",
-        confidence: 0.8,
         until: null,
         supersedesIds: ["m1"],
       },

@@ -15,7 +15,6 @@ async function newLedger() {
 const fact = (text: string, extra: Record<string, unknown> = {}) => ({
   text,
   category: "fact" as const,
-  confidence: 0.9,
   ...extra,
 });
 
@@ -81,7 +80,6 @@ describe("memoryLedger.add: dedupe", () => {
       category: "preference",
       status: "active",
       source: "manual",
-      confidence: null,
     });
     expect(added.rows[0]!.createdAt.getTime()).toBeGreaterThanOrEqual(rows[0]!.createdAt.getTime());
     // An active match is returned as it is.

@@ -934,7 +934,7 @@ export const memories = sqliteTable(
     status: text("status").$type<MemoryStatus>().notNull().default("active"),
     /** capture | manual (source line on the Memory page). */
     source: text("source").notNull().default("capture"),
-    /** Extraction confidence 0..1; null for manual entries. */
+    /** Unused since #334 D: capture no longer asks for it; old rows keep theirs. */
     confidence: real("confidence"),
     /** Optional expiry; null = no expiry. Expired rows stay rows, leave the prompt. */
     until: ms("until"),
