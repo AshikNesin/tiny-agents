@@ -10,7 +10,6 @@ import { z } from "zod";
 import {
   connectMcp,
   createMcpCapability,
-  MCP_DEFER_THRESHOLD,
   mcpToolName,
   type McpConnection,
   type McpToolInfo,
@@ -184,26 +183,31 @@ describe("MCP connections", () => {
     expect(list?.description).toBe("List things.");
   });
 
-  it("defers the tools of large servers behind tool_search", () => {
-    const many = Array.from({ length: MCP_DEFER_THRESHOLD + 1 }, (_, i) => ({
+  it("defers a server's tools by the size of their schemas, not their count", () => {
+    const capability = (slug: string, tools: McpToolInfo[]) =>
+      createMcpCapability({
+        slug,
+        name: slug,
+        url: `https://${slug}.example.test/mcp`,
+        tools,
+        call: async () => ({ content: [] }),
+      });
+    // Three tools with large schemas (~9k characters) are deferred.
+    const heavy = Array.from({ length: 3 }, (_, i) => ({
+      name: `heavy_${i}`,
+      inputSchema: {
+        type: "object",
+        properties: { q: { type: "string", description: "x".repeat(3_000) } },
+      },
+    }));
+    const big = capability("big", heavy);
+    expect(big.extension.tools?.every((tool) => tool.deferred === true)).toBe(true);
+    // Forty small tools stay direct.
+    const light = Array.from({ length: 40 }, (_, i) => ({
       name: `tool_${i}`,
       inputSchema: { type: "object" },
     }));
-    const capability = createMcpCapability({
-      slug: "big",
-      name: "Big",
-      url: "https://big.example.test/mcp",
-      tools: many,
-      call: async () => ({ content: [] }),
-    });
-    expect(capability.extension.tools?.every((tool) => tool.deferred === true)).toBe(true);
-    const small = createMcpCapability({
-      slug: "small",
-      name: "Small",
-      url: "https://small.example.test/mcp",
-      tools: many.slice(0, 5),
-      call: async () => ({ content: [] }),
-    });
+    const small = capability("small", light);
     expect(small.extension.tools?.every((tool) => tool.deferred === undefined)).toBe(true);
   });
 });

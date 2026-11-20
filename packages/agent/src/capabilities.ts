@@ -109,11 +109,23 @@ export function effectivePermission(
  * The `tool_search` capability (pi's `deferred` exposure): deferred tools, a
  * large toolkit's or a large connection's, are not sent until the model loads
  * them with `tool_search`. Its section names each group that has deferred
- * tools, so the model knows what it can load. The section lists loaded tools
+ * tools, and a connection's tool names, so the model knows what it can load. The section lists loaded tools
  * too, so loading changes nothing in it and the prompt cache holds.
  *
  * `describe` looks up a group's capability (an extension name is its id).
  */
+/**
+ * A connection's tool names, so the model knows what it can search for
+ * (Claude Code lists deferred MCP tools the same way). Their shared
+ * `mcp__<slug>__` prefix is written once.
+ */
+function toolNames(names: string[]): string {
+  const prefix = /^mcp__.+?__/.exec(names[0] ?? "")?.[0];
+  if (!prefix || !names.every((name) => name.startsWith(prefix)))
+    return `Tools: ${names.join(", ")}`;
+  return `Tools (each named ${prefix}<name>): ${names.map((name) => name.slice(prefix.length)).join(", ")}`;
+}
+
 /** The tool search capability's id (and extension name). */
 export const TOOL_SEARCH_CAPABILITY = "tool-search";
 
@@ -130,13 +142,16 @@ export function createToolSearchCapability(
     if (deferred.size === 0) return undefined;
     const lines: string[] = [];
     for (const group of input.agent.extensions) {
-      const count = (group.tools ?? []).filter((tool) => deferred.has(tool.name)).length;
+      const names = (group.tools ?? [])
+        .map((tool) => tool.name)
+        .filter((name) => deferred.has(name));
+      const count = names.length;
       if (count === 0) continue;
       const info = describe(group.name);
       const about = !info
         ? ""
         : info.kind === "connection"
-          ? `: ${info.name}, a connection`
+          ? `: ${info.name}, a connection. ${toolNames(names)}`
           : `: ${info.name}. ${info.description}`;
       lines.push(`- ${group.name} (${count} tool${count === 1 ? "" : "s"})${about}`);
     }

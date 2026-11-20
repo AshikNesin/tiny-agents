@@ -30,6 +30,7 @@ import {
   openTestRuntime,
   TEST_MODEL,
 } from "../../../../packages/agent/src/testing";
+import { createMcpCapability } from "../../../../packages/agent/src/mcp";
 import { defineToolkit, tool } from "../../../../packages/agent/src/toolkit";
 
 const ok = (text: string) => async () => ({ output: [{ type: "text" as const, text }] });
@@ -143,6 +144,45 @@ describe("deferred toolkits", () => {
 
     const results = requests[2]!.messages.filter((m) => m.role === "toolResult");
     expect(JSON.stringify(results.at(-1))).toContain("a pen");
+  }, 20_000);
+
+  it("lists a deferred connection's tool names in the prompt, so the model knows what to search for", async () => {
+    const requests: PiContext[] = [];
+    // Two tools with large schemas: deferred by size, not count.
+    const schema = {
+      type: "object",
+      properties: { q: { type: "string", description: "x".repeat(5_000) } },
+    };
+    const issues = createMcpCapability({
+      slug: "issues",
+      name: "Issues",
+      url: "https://issues.example.test/mcp",
+      tools: [
+        { name: "search_issues", description: "Search issues.", inputSchema: schema },
+        { name: "create_issue", description: "Create an issue.", inputSchema: schema },
+      ],
+      call: async () => ({ content: [] }),
+    });
+    const runtime: AgentRuntime = await openTestRuntime({
+      storePath: ":memory:",
+      capabilities: [issues, notesToolkit()],
+      respondWith: (context: PiContext) => {
+        requests.push(structuredClone(context));
+        return fauxAssistantMessage([fauxText("done")]);
+      },
+    });
+    cleanup.push(() => runtime.close());
+    const ref = await runtime.createConversation({
+      modelId: TEST_MODEL,
+      systemPrompt: "",
+      capabilities: { enabled: ["mcp:issues", "notes", "tool-search"], permissions: {} },
+    });
+    await runtime.submit(ref, { requestId: "r1", text: "hi" });
+    await until(() => requests.length >= 1, "reply");
+    expect(offered(requests[0]!)).toEqual(["note_add", "tool_search"]);
+    expect(JSON.stringify(requests[0]!.messages)).toContain(
+      "- mcp:issues (2 tools): Issues, a connection. Tools (each named mcp__issues__<name>): search_issues, create_issue",
+    );
   }, 20_000);
 
   it("offers no tool_search where nothing is deferred", async () => {
