@@ -22,6 +22,12 @@ export type AppDatabase = BetterSQLite3Database<typeof schema>;
 export interface CreateAppDbOptions {
   /** Apply pending Drizzle migrations from this folder on open. */
   migrationsFolder?: string;
+  /**
+   * Open an in-memory copy of this serialized database (`sqlite.serialize()`)
+   * instead of `url`. The server test setup migrates one database per worker
+   * and gives each test file a copy.
+   */
+  image?: Buffer;
 }
 
 /** The better-sqlite3 connection behind each instance `createAppDb` made. */
@@ -40,9 +46,9 @@ export function sqliteConnection(instance: AppDatabase): Database.Database {
 
 export function createAppDb(url: string, options: CreateAppDbOptions = {}): AppDatabase {
   const file = resolveSqlitePath(url);
-  if (file !== ":memory:") mkdirSync(dirname(file), { recursive: true });
+  if (!options.image && file !== ":memory:") mkdirSync(dirname(file), { recursive: true });
 
-  const sqlite = new Database(file);
+  const sqlite = new Database(options.image ?? file);
   sqlite.pragma("journal_mode = WAL");
   sqlite.pragma("foreign_keys = ON");
   sqlite.pragma("busy_timeout = 5000");

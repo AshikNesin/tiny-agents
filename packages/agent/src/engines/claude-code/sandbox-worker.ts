@@ -236,10 +236,13 @@ export function createSandboxClaudeWorker(options: SandboxWorkerOptions): Claude
       if (installing) return { state: "installing" };
       if (!ensured) this.prepare();
       // Ask the CLI while setup runs; a not-yet-installed CLI prints nothing.
+      let wait: ReturnType<typeof setTimeout> | undefined;
       try {
-        await Promise.race([ensured, new Promise((resolve) => setTimeout(resolve, 1500))]);
+        await Promise.race([ensured, new Promise((resolve) => (wait = setTimeout(resolve, 1500)))]);
       } catch {
         return { state: "error", detail: lastError ?? "Claude Code could not be set up." };
+      } finally {
+        clearTimeout(wait);
       }
       if (installing) return { state: "installing" };
       let output: string;

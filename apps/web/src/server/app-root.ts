@@ -102,25 +102,30 @@ export interface App {
   };
 }
 
-const current: App = {
-  runtime: undefined,
-  runtimeReady: false,
-  sandboxConnections: new Map(),
-  ownerWaits: new WaitTracker(),
-  botMessagingStores: new WeakMap(),
-  turnBudgets: new WeakMap(),
-  botViewers: new Map(),
-  botChatListeners: new Map(),
-  openSseStreams: new Set(),
-  backgroundBotReleases: new Set(),
-  liveAccess: new Set(),
-  vaultStepUps: new Map(),
-  submittingRequests: new Set(),
-  modelListeners: new Set(),
-  updateStatus: null,
-  updatesUnlisten: () => {},
-  webPush: { activeDevices: 0 },
-};
+/** An App with no services: what the process starts with, and what each server test file starts with. */
+function emptyApp(): App {
+  return {
+    runtime: undefined,
+    runtimeReady: false,
+    sandboxConnections: new Map(),
+    ownerWaits: new WaitTracker(),
+    botMessagingStores: new WeakMap(),
+    turnBudgets: new WeakMap(),
+    botViewers: new Map(),
+    botChatListeners: new Map(),
+    openSseStreams: new Set(),
+    backgroundBotReleases: new Set(),
+    liveAccess: new Set(),
+    vaultStepUps: new Map(),
+    submittingRequests: new Set(),
+    modelListeners: new Set(),
+    updateStatus: null,
+    updatesUnlisten: () => {},
+    webPush: { activeDevices: 0 },
+  };
+}
+
+const current: App = emptyApp();
 
 /** The app's services, as boot (or a test) set them. */
 export function app(): App {
@@ -130,4 +135,15 @@ export function app(): App {
 /** Test seam: install services (a fake runtime, say) without booting. */
 export function installAppForTests(services: Partial<App>): void {
   Object.assign(current, services);
+}
+
+/**
+ * Test seam: put every service back to `emptyApp()`, so the next test file
+ * starts from nothing. The server test setup calls it after each file; it
+ * drops references and closes nothing, so a file closes what it opened first
+ * (the setup checks that it did).
+ */
+export function resetAppForTests(): void {
+  for (const key of Object.keys(current) as (keyof App)[]) delete current[key];
+  Object.assign(current, emptyApp());
 }

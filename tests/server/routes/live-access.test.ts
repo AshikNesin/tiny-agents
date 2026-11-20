@@ -97,10 +97,11 @@ const ENDS_WITHIN_MS = 1_000;
 
 async function endsSoon(ended: Promise<unknown>, what: string) {
   const late = Symbol("late");
+  let timer: ReturnType<typeof setTimeout> | undefined;
   const result = await Promise.race([
     ended,
-    new Promise((resolve) => setTimeout(() => resolve(late), ENDS_WITHIN_MS)),
-  ]);
+    new Promise((resolve) => (timer = setTimeout(() => resolve(late), ENDS_WITHIN_MS))),
+  ]).finally(() => clearTimeout(timer));
   expect(result, `${what} ended within ${ENDS_WITHIN_MS} ms`).not.toBe(late);
 }
 

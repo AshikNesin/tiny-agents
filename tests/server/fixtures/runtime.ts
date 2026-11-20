@@ -33,17 +33,17 @@ import {
 } from "../../../apps/web/src/server/api/bots/bots.runtime";
 import { appEnv } from "../../../apps/web/src/server/env";
 import { installAppForTests } from "../../../apps/web/src/server/app-root";
+import { currentRuntimeSlot, setCurrentRuntimeSlot } from "./runtime-slot";
 
 export { TEST_MODEL } from "../../../packages/agent/src/testing";
 
 // ── The real runtime ────────────────────────────────────────────────────
 
 type Current = { kind: "real"; runtime: AgentRuntime } | { kind: "fake"; fake: FakeRuntime };
-let current: Current | undefined;
 
 /** The app runtime a test opened or installed, if any (fixtures consult it). */
 export function currentAppRuntime(): Current | undefined {
-  return current;
+  return currentRuntimeSlot() as Current | undefined;
 }
 
 /**
@@ -65,14 +65,14 @@ export async function openAppRuntime(
     runtime.installCapability(capability);
   }
   useTestRuntime(runtime);
-  current = { kind: "real", runtime };
+  setCurrentRuntimeSlot({ kind: "real", runtime });
   return runtime;
 }
 
 /** Close the runtime `openAppRuntime` opened (afterEach / afterAll). */
 export async function closeAppRuntime(): Promise<void> {
-  const open = current;
-  current = undefined;
+  const open = currentAppRuntime();
+  setCurrentRuntimeSlot(undefined);
   if (open?.kind === "real") await open.runtime.close();
 }
 
@@ -405,7 +405,7 @@ export function spyOnRuntime(runtime: AgentRuntime): SpiedRuntime {
 /** Make a fake the app's runtime (`getAgentRuntime()`), typed as the runtime it stands in for. */
 export function installFakeRuntime(fake: FakeRuntime = createFakeRuntime()): FakeRuntime {
   useTestRuntime(fake as unknown as AgentRuntime);
-  current = { kind: "fake", fake };
+  setCurrentRuntimeSlot({ kind: "fake", fake });
   return fake;
 }
 

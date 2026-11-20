@@ -1,4 +1,5 @@
 import { defineConfig } from "vite-plus";
+import { readFileSync, readdirSync } from "node:fs";
 import { availableParallelism } from "node:os";
 import path from "node:path";
 
@@ -16,6 +17,19 @@ const REPO_TYPECHECK_SUITES = [
   "tests/server/checks/kit-exports.test.ts",
   "tests/server/checks/typecheck-coverage.test.ts",
 ];
+
+/**
+ * Files that replace a module (`vi.mock`, `vi.doMock`) run isolated: the
+ * `server` project shares one module graph per worker, and a mock cannot
+ * replace a module an earlier file already loaded. Found by reading the
+ * files, so a new one lands in the right project without a list to update.
+ */
+const MODULE_MOCK = /\bvi\.(mock|doMock|unmock|doUnmock|resetModules)\(/;
+const MODULE_MOCK_SUITES = readdirSync("tests/server", { recursive: true, encoding: "utf8" })
+  .filter((file) => file.endsWith(".test.ts"))
+  .map((file) => path.posix.join("tests/server", file.split(path.sep).join("/")))
+  .filter((file) => !REPO_TYPECHECK_SUITES.includes(file))
+  .filter((file) => MODULE_MOCK.test(readFileSync(file, "utf8")));
 
 // Never reach real services from tests, whatever the shell exports: with real
 // Pushover keys in the environment, the notification route tests sent actual
@@ -57,10 +71,37 @@ export default defineConfig({
         test: {
           name: "server",
           include: ["tests/server/**/*.test.ts"],
-          exclude: REPO_TYPECHECK_SUITES,
+          exclude: [...REPO_TYPECHECK_SUITES, ...MODULE_MOCK_SUITES],
+          // Load the app once per worker, not once per file: the setup gives
+          // each file a fresh database and App root, and fails a file that
+          // leaves anything else behind (tests/server/fixtures/file-isolation.ts).
+          isolate: false,
           sequence: { groupOrder: 0 },
         },
       },
+      {
+        extends: true,
+        test: {
+          name: "server:isolated",
+          include: MODULE_MOCK_SUITES,
+          sequence: { groupOrder: 0 },
+        },
+      },
+      // Files that each leave one thing behind, so tests/server/checks/
+      // file-isolation.test.ts can watch the setup fail them. Only that test
+      // turns them on.
+      ...(process.env.ISOLATION_PROBES === "1"
+        ? [
+            {
+              extends: true,
+              test: {
+                name: "server:isolation-probes",
+                include: ["tests/server/checks/isolation-probes/*.probe.ts"],
+                isolate: false,
+              },
+            },
+          ]
+        : []),
       {
         extends: true,
         test: {

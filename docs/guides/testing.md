@@ -24,17 +24,60 @@ pnpm test:e2e       # Playwright (starts the dev server itself)
 
 ## Server test setup
 
-`tests/server/setup.ts` runs once per test file and calls the same
+`tests/server/setup.ts` runs before every test file and calls the same
 `bootstrap()` as the entry, with:
 
 - `NODE_ENV=test`, `DATABASE_URL=":memory:"`, `LOG_LEVEL=silent`
-- `createAppDb(":memory:")`: a fresh database per file with every migration applied
+- a fresh in-memory database per file: a copy of one database per worker
+  that every migration and the faux model rows went into once
+  (`tests/server/fixtures/test-db.ts`)
 - `memoryStorage()` for uploads
 - `jobs.enabled = false` (a `NODE_ENV=test` default), so nothing runs in the
   background; tests call `runTick()` when they want jobs processed
 
-Files are isolated from each other for free. Within a file, clear what you
-need in `beforeEach` (e.g. `await db.delete(tasks)`, `jobRunner.reset()`).
+Within a file, clear what you need in `beforeEach` (e.g.
+`await db.delete(tasks)`, `jobRunner.reset()`).
+
+## Isolation between files
+
+The `server` project runs with `isolate: false`: each worker loads the app's
+modules once and runs file after file in them, instead of loading them again
+for every file. That cut the suite from about 190 s to 45 s. What one file
+leaves in a module is there for the next file in its worker, so after every
+file `tests/server/fixtures/file-isolation.ts`:
+
+1. Undoes vitest's own changes: `vi.useRealTimers()`, `vi.unstubAllEnvs()`,
+   `vi.unstubAllGlobals()`, `vi.restoreAllMocks()`.
+2. Stops what the App root holds, as the entry's shutdown does: agent
+   runtimes (the App root's and `openAppRuntime`'s), MCP connections, browser
+   and desktop sessions, sandbox SSH connections, the Code hub.
+3. Resets the App root (`resetAppForTests()`) and closes the file's database.
+   The next file gets a new one.
+4. Fails the file if it left behind anything the reset cannot undo:
+   - `process.env` changed without `vi.stubEnv`
+   - a global added without `vi.stubGlobal`
+   - a server, socket, child process, pipe or watcher it opened and did not close
+   - a timer it set that is still due
+
+The rules that follow:
+
+- Set env vars with `vi.stubEnv` and globals with `vi.stubGlobal`, never by
+  assignment.
+- Close every server, socket and child process the file opens, in the test or
+  in `afterAll`, and await the close.
+- Clear a timer you race against (`Promise.race([work, timeout])`): put the
+  `clearTimeout` in a `finally`. An unref'd timer does not count, so
+  `AbortSignal.timeout()` after a finished fetch is fine. A loop that must
+  stop belongs in a service the reset stops.
+- Keep fixture caches per database, not per process
+  (`tests/server/fixtures/auth.ts` keys its tokens by the database).
+- A file that calls `vi.mock` or `vi.doMock` runs in the `server:isolated`
+  project, which loads modules per file. `vitest.config.server.ts` finds those
+  files by reading them, so there is no list to keep. A mock cannot replace a
+  module an earlier file in a shared worker already loaded.
+
+`tests/server/checks/file-isolation.test.ts` runs a probe file for each kind
+of leak through the real setup and checks that each one fails.
 
 ## Helpers (`tests/server/helpers.ts`)
 
