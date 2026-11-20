@@ -322,24 +322,6 @@ router.get("/code/threads/:id/checkpoints", async (c) => {
   return ok<CheckpointView[]>(c, (await checkpointsOf(id)).map(checkpointView));
 });
 
-/** What one turn changed: its checkpoint against the one before it. */
-router.get("/code/threads/:id/checkpoints/:cp/files", async (c) => {
-  const id = threadParam(c.req.param("id"));
-  const { from, to, worktree, ws } = await checkpointRange(id, c.req.param("cp"));
-  const files = from.id === to.id ? [] : await ws.rangeFiles(worktree, from.sha, to.sha);
-  return ok<ReviewFile[]>(
-    c,
-    files.map((f) => ({ ...f, viewed: false })),
-  );
-});
-
-router.get("/code/threads/:id/checkpoints/:cp/file", async (c) => {
-  const id = threadParam(c.req.param("id"));
-  const path = safePath(c.req.query("path"));
-  const { from, to, worktree, ws } = await checkpointRange(id, c.req.param("cp"));
-  return ok(c, { path, ...(await ws.rangeFile(worktree, from.sha, to.sha, path)) });
-});
-
 router.post("/code/threads/:id/checkpoints/:cp/revert", async (c) => {
   const id = threadParam(c.req.param("id"));
   const before = await revertTo(id, c.req.param("cp"));
@@ -381,12 +363,31 @@ router.post("/code/threads/:id/pr/draft", async (c) => {
 // --- review: base-branch diff, viewed marks, batched comments -----------------------------
 
 /**
- * What a Review panel reads: a project thread's worktree against the
- * project's base, or a PR review's (`review:<id>`) against the PR's base.
+ * What a Review panel reads, by `?scope=`. A project thread's worktree, or a
+ * PR review's (`review:<id>`): `base` (the default), since the merge base
+ * with the base branch. A PR review also has `review`, since the commit of
+ * the owner's last review, and `mine`, what the owner and the assistant
+ * changed on top of the PR's head. Any other scope is a project thread's
+ * checkpoint: what that turn changed, against the checkpoint before it.
  */
-async function reviewTarget(threadId: string) {
+async function reviewRange(threadId: string, scope = "base") {
   const reviewId = reviewIdOfKey(threadId);
-  if (reviewId) return reviewWorktree(reviewId);
+  if (reviewId) {
+    const review = await reviewWorktree(reviewId);
+    const at = { ws: review.ws, worktree: review.worktree, viewable: true };
+    if (scope === "base") return { ...at, from: `merge-base:${review.base}` };
+    if (scope === "mine") return { ...at, from: review.headSha };
+    if (scope !== "review") throw Boom.badRequest("A pull request review has no such scope.");
+    if (!review.reviewedSha) throw Boom.badRequest("You have not reviewed this pull request yet.");
+    return { ...at, from: review.reviewedSha };
+  }
+  if (scope === "review" || scope === "mine") {
+    throw Boom.badRequest("Only a pull request review has this view.");
+  }
+  if (scope !== "base") {
+    const { from, to, worktree, ws } = await checkpointRange(threadId, scope);
+    return { ws, worktree, from: from.sha, to: to.sha, viewable: false };
+  }
   const found = await projectThread(threadId);
   if (found && !found.thread.worktree) {
     throw Boom.notFound(
@@ -397,9 +398,10 @@ async function reviewTarget(threadId: string) {
     throw Boom.notFound("Review against the base branch is for project threads with a worktree.");
   }
   return {
-    worktree: found.thread.worktree,
-    base: found.project.baseBranch,
     ws: await codeGitHub().workspace(found.project),
+    worktree: found.thread.worktree,
+    from: `merge-base:${found.project.baseBranch}`,
+    viewable: true,
   };
 }
 
@@ -409,44 +411,26 @@ function saying(error: unknown): never {
   throw error;
 }
 
-/**
- * A PR review's other scopes, instead of since its base: `?since=review`,
- * since the commit of the owner's last review; `?since=mine`, what the owner
- * and the assistant changed on top of the PR's head.
- */
-async function sinceReview(threadId: string, since: string | undefined) {
-  if (since !== "review" && since !== "mine") return undefined;
-  const reviewId = reviewIdOfKey(threadId);
-  const review = reviewId ? await reviewWorktree(reviewId) : undefined;
-  if (!review) throw Boom.badRequest("Only a pull request review has this view.");
-  if (since === "mine") return review.headSha;
-  if (!review.reviewedSha) throw Boom.badRequest("You have not reviewed this pull request yet.");
-  return review.reviewedSha;
-}
-
 router.get("/code/threads/:id/review/files", async (c) => {
   const id = threadParam(c.req.param("id"));
-  const [{ base, worktree, ws }, since] = await Promise.all([
-    reviewTarget(id),
-    sinceReview(id, c.req.query("since")),
-  ]);
-  const files = since
-    ? await ws.sinceFiles(worktree, since).catch(saying)
-    : await ws.baseFiles(worktree, base);
-  return ok<ReviewFile[]>(c, await threadReview(id).withViewed(files));
+  const { ws, worktree, from, to, viewable } = await reviewRange(id, c.req.query("scope"));
+  const files = to === from ? [] : await ws.files(worktree, from, to).catch(saying);
+  return ok<ReviewFile[]>(
+    c,
+    viewable
+      ? await threadReview(id).withViewed(files)
+      : files.map((f) => ({ ...f, viewed: false })),
+  );
 });
 
 router.get("/code/threads/:id/review/file", async (c) => {
   const id = threadParam(c.req.param("id"));
   const path = safePath(c.req.query("path"));
-  const [{ base, worktree, ws }, since] = await Promise.all([
-    reviewTarget(id),
-    sinceReview(id, c.req.query("since")),
-  ]);
-  const sides = since
-    ? await ws.sinceFile(worktree, since, path).catch(saying)
-    : await ws.baseFile(worktree, base, path);
-  return ok(c, { path, ...sides });
+  const { ws, worktree, from, to } = await reviewRange(id, c.req.query("scope"));
+  return ok(c, {
+    path,
+    ...(await ws.file(worktree, path, from, to).catch(saying)),
+  });
 });
 
 /**
@@ -466,7 +450,7 @@ router.put("/code/threads/:id/review/file", async (c) => {
     }),
   );
   const path = safePath(body.path);
-  const { worktree, ws } = await reviewTarget(id);
+  const { worktree, ws } = await reviewRange(id);
   const expected = createHash("sha256").update(body.original, "utf8").digest("hex");
   const outcome = await ws.writeFile(worktree, path, expected, body.content).catch(saying);
   if (outcome === "outside") {

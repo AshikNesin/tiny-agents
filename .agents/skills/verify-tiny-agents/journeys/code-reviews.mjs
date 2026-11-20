@@ -174,7 +174,7 @@ await journey(
         route.fulfill(ok(files)),
       );
       // Your changes on top of the PR's head: one line of retry.ts.
-      await context.route(`**/api/v1/code/threads/${key}/review/files?since=mine`, (route) =>
+      await context.route(`**/api/v1/code/threads/${key}/review/files?scope=mine`, (route) =>
         route.fulfill(ok([{ ...files[0], additions: 1, deletions: 1, hash: "mine1" }])),
       );
       await context.route(`**/api/v1/code/threads/${key}/review/file`, (route) => {
@@ -189,7 +189,7 @@ await journey(
       await context.route(`**/api/v1/code/threads/${key}/review/file?*`, (route) => {
         const query = new URL(route.request().url()).searchParams;
         const file = query.get("path");
-        if (query.get("since") === "mine") {
+        if (query.get("scope") === "mine") {
           const mine = NEW.map((l) => l.replace("30_000", "20_000"));
           return route.fulfill(
             ok({

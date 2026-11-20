@@ -798,10 +798,10 @@ describe("changes since your review", () => {
       .data!;
     expect(review.reviewedSha).toBe(reviewed);
     const key = encodeURIComponent(review.key);
-    const files = (await call<ReviewFile[]>("GET", `/threads/${key}/review/files?since=review`))
+    const files = (await call<ReviewFile[]>("GET", `/threads/${key}/review/files?scope=review`))
       .body.data!;
     const diff = (
-      await call<ReviewFileDiff>("GET", `/threads/${key}/review/file?path=src/one.ts&since=review`)
+      await call<ReviewFileDiff>("GET", `/threads/${key}/review/file?path=src/one.ts&scope=review`)
     ).body.data!;
 
     expect(files.map((f) => [f.path, f.status])).toEqual([
@@ -822,7 +822,7 @@ describe("changes since your review", () => {
     expect(review.reviewedSha).toBeNull();
     const before = await call(
       "GET",
-      `/threads/${encodeURIComponent(review.key)}/review/files?since=review`,
+      `/threads/${encodeURIComponent(review.key)}/review/files?scope=review`,
     );
     expect([before.status, before.body.error?.message]).toEqual([
       400,
@@ -856,7 +856,7 @@ describe("changing the PR's code", () => {
   }
 
   const yours = async (key: string) =>
-    (await call<ReviewFile[]>("GET", `/threads/${key}/review/files?since=mine`)).body.data!;
+    (await call<ReviewFile[]>("GET", `/threads/${key}/review/files?scope=mine`)).body.data!;
 
   it("shows only your changes on top of the PR's head", async () => {
     const { key } = await reviewWith([`printf 'one\\nTWO\\nthree\\n' > src/a.ts`]);
@@ -865,7 +865,7 @@ describe("changing the PR's code", () => {
       ["src/a.ts", "modified", 1, 1],
     ]);
     const diff = (
-      await call<ReviewFileDiff>("GET", `/threads/${key}/review/file?path=src/a.ts&since=mine`)
+      await call<ReviewFileDiff>("GET", `/threads/${key}/review/file?path=src/a.ts&scope=mine`)
     ).body.data!;
     expect(diff).toMatchObject({
       oldContent: "one\ntwo\nthree\n",
@@ -1003,7 +1003,7 @@ describe("editing a file of the PR in place", () => {
 
     expect(res.status).toBe(200);
     expect(await sh(local, `cat ${WORKTREE()}/src/a.ts`)).toBe("one\nTWO\nthree");
-    const yours = (await call<ReviewFile[]>("GET", `/threads/${key}/review/files?since=mine`)).body
+    const yours = (await call<ReviewFile[]>("GET", `/threads/${key}/review/files?scope=mine`)).body
       .data!;
     expect(yours.map((f) => [f.path, f.additions, f.deletions])).toEqual([["src/a.ts", 1, 1]]);
   });
