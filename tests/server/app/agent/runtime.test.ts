@@ -288,7 +288,10 @@ describe("AgentRuntime", () => {
         await until(() => chat.state().queued.length === 2, "both follow-ups to queue");
 
         await until(
-          async () => finishedReplyTo(await runtime.readChat(ref), "batch-3").status === "answered",
+          async () =>
+            finishedReplyTo(await runtime.readChat(ref), "batch-3").status === "answered" &&
+            chat.state().messages.at(-1)?.text === "Reply to third, padded for a slow stream" &&
+            chat.state().messages.at(-1)?.status === "done",
           "the batch's reply",
         );
         const texts = chat.state().messages.map((message) => `${message.role}:${message.text}`);
@@ -549,7 +552,8 @@ describe("AgentRuntime", () => {
       for (let i = 0; i < 4; i++) {
         await runtime.submit(ref, { requestId: `window-${i}`, text: `message ${i}` });
         await until(
-          async () => (await runtime.lastMessage(ref))?.text === `Echo: message ${i}`,
+          async () =>
+            !runtime.isBusy(ref) && (await runtime.lastMessage(ref))?.text === `Echo: message ${i}`,
           "the message to be answered",
         );
       }

@@ -5,6 +5,7 @@
  */
 import { describe, expect, it } from "vite-plus/test";
 import { openTestRuntime } from "../../../../packages/agent/src/testing";
+import { until } from "../../fixtures/until";
 import type { ChatEvent, ChatState } from "@tiny-agents/agent";
 
 /** Wait until the transcript carries `count` assistant replies, then return the messages. */
@@ -97,12 +98,15 @@ describe("peer metadata on chat.user entries", () => {
     try {
       const ref = await rt.createConversation({ modelId: "test-model", systemPrompt: "" });
       await rt.submit(ref, { requestId: "owner-1", text: "start" });
+      await until(() => rt.isBusy(ref), "the first run to start");
       await rt.submit(ref, { requestId: "owner-2", text: "and also this" });
       await rt.submit(ref, {
         requestId: "finish-1",
         text: "**Reply from Claude Code:** PR is up",
         peer: { kind: "reply", name: "Claude Code" },
       });
+      // Still busy once both are admitted: both wait behind the first run.
+      expect(rt.isBusy(ref)).toBe(true);
       const messages = await afterReplies(rt, ref, 2);
       const users = messages.filter((m) => m.role === "user").map((m) => m.requestId);
       expect(users).toEqual(["owner-1", "owner-2", "finish-1"]);
