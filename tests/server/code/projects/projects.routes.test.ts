@@ -15,7 +15,11 @@ import { api, createTestApp } from "../../helpers";
 import { authToken, resetAppTables } from "../../fixtures";
 import { codeAutofixPasses, codeThreads, db, jobs } from "../../../../apps/web/src/server/db";
 import { installAppForTests } from "../../../../apps/web/src/server/app-root";
-import { createCodeHub, setCodeHub } from "../../../../apps/web/src/server/api/code/code.hub";
+import {
+  codeHub,
+  createCodeHub,
+  setCodeHub,
+} from "../../../../apps/web/src/server/api/code/code.hub";
 import { createWorkspace } from "../../../../apps/web/src/server/api/code/code.workspace";
 import { onTurnEnded } from "../../../../apps/web/src/server/api/code/code.pulls";
 import { threadIndex } from "../../../../apps/web/src/server/api/code/code.store";
@@ -392,6 +396,29 @@ describe("publish and the PR tab", () => {
     await commit(thread.worktree, "src/follow-up.ts");
     const second = await call<ThreadPullsView>("POST", `/threads/${enc}/publish`, {});
     expect(second.body.data?.active?.number).toBe(2);
+  });
+
+  it("tells open Code pages when a thread's PR opens or merges, so the header shows it", async () => {
+    const project = await newProject();
+    const thread = await newThread(project.id);
+    const enc = encodeURIComponent(thread.id);
+    await commit(thread.worktree, "src/login.ts");
+    const hub = codeHub()!;
+    // Let the thread's own list read settle first.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const changes: string[] = [];
+    const off = hub.onChange((change) => changes.push(change));
+
+    await call("POST", `/threads/${enc}/publish`, {});
+    expect(changes).toContain("list");
+    const row = (await hub.list()).find((r) => r.id === thread.id);
+    expect(row?.pr).toMatchObject({ number: 1, url: "https://github.com/acme/web/pull/1" });
+
+    changes.length = 0;
+    github.pull(1).state = "merged";
+    await pr(thread.id);
+    expect(changes).toContain("list");
+    off();
   });
 
   it("titles the pull request from its commits, short and clean", async () => {
