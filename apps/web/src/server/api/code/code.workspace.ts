@@ -93,18 +93,14 @@ export interface Workspace {
   /** Uncommitted changes, as `git status --porcelain` lines. */
   uncommitted(path: string): Promise<string[]>;
   /**
-   * Files changed since the merge base with `origin/<base>` (working tree and
-   * new files included), with content hashes.
+   * Files changed from `from` to commit `to`, or to the working tree (new
+   * files included) when `to` is absent, each with its blob id. `from` is a
+   * commit sha, fetched first when the worktree lacks it (an earlier head of
+   * a PR), or `merge-base:<base>`: where HEAD left `origin/<base>`.
    */
-  baseFiles(path: string, base: string): Promise<Array<GitFile & { hash: string }>>;
-  /** One file's merge-base and working-tree content (or why it cannot be shown). */
-  baseFile(path: string, base: string, file: string): Promise<FileContents>;
-  /**
-   * Files changed since commit `sha` (an earlier head of a PR: the one its
-   * reviewer last read), fetched first when the worktree lacks it.
-   */
-  sinceFiles(path: string, sha: string): Promise<Array<GitFile & { hash: string }>>;
-  sinceFile(path: string, sha: string, file: string): Promise<FileContents>;
+  files(path: string, from: string, to?: string): Promise<Array<GitFile & { hash: string }>>;
+  /** One file's two sides over the same range as `files` (or why it cannot be shown). */
+  file(path: string, file: string, from: string, to?: string): Promise<FileContents>;
   /** A fingerprint of the worktree's changes: it moves when the Review panel would change. */
   changeStamp(path: string): Promise<string>;
   /** Commits on HEAD that are not on `origin/<base>`, newest first. */
@@ -128,8 +124,9 @@ export interface Workspace {
   discard(path: string, sha: string): Promise<void>;
   /**
    * One file's hunks from commit `from` to `to` (the working tree when null),
-   * with `context` lines around each. `from` may be `merge-base:<base>:<sha>`:
-   * the merge base of `sha` with `origin/<base>`, as a PR's own diff starts.
+   * with `context` lines around each. `from` is as for `files`, or
+   * `merge-base:<base>:<sha>`: the merge base of `sha` with `origin/<base>`,
+   * as a PR's own diff starts.
    */
   hunks(
     path: string,
@@ -153,9 +150,6 @@ export interface Workspace {
    * the worktree, its index or its branch changes. Answers the commit.
    */
   checkpoint(path: string, ref: string): Promise<string>;
-  /** Files that differ between two commits (checkpoints), with blob ids. */
-  rangeFiles(path: string, from: string, to: string): Promise<Array<GitFile & { hash: string }>>;
-  rangeFile(path: string, from: string, to: string, file: string): Promise<FileContents>;
   /**
    * Put the worktree's files back as they were at a checkpoint, as
    * uncommitted changes: HEAD and the branch's history are untouched, so
@@ -364,6 +358,37 @@ export function createWorkspace(options: WorkspaceOptions): Workspace {
     }
   }
 
+  /** Files that differ between two commits, with each live one's blob id in `to`. */
+  async function treeHashed(
+    path: string,
+    from: string,
+    to: string,
+  ): Promise<Array<GitFile & { hash: string }>> {
+    const files = await changedFiles(reads(path), from, to);
+    const live = files.filter((f) => f.status !== "deleted");
+    const ids = live.length
+      ? await must(
+          `${git(path)} ls-tree -z ${q(to)} -- ${live.map((f) => q(f.path)).join(" ")}`,
+          "Could not read the tree",
+        )
+      : "";
+    // `<mode> blob <id>\t<path>` records.
+    const hashOf = new Map(
+      ids
+        .split("\0")
+        .filter(Boolean)
+        .map((record) => {
+          const tab = record.indexOf("\t");
+          return [record.slice(tab + 1), record.slice(0, tab).split(" ")[2] ?? ""] as const;
+        }),
+    );
+    return files.map((f) => ({
+      ...f,
+      isGenerated: isGenerated(f.path),
+      hash: f.status === "deleted" ? "deleted" : (hashOf.get(f.path) ?? ""),
+    }));
+  }
+
   return {
     async tools() {
       const result = await run(
@@ -464,21 +489,15 @@ export function createWorkspace(options: WorkspaceOptions): Workspace {
       );
       return out.split("\n").filter(Boolean);
     },
-    async baseFiles(path, base) {
-      const mb = await mergeBase(path, base);
-      return hashed(path, () => changedFiles(reads(path), mb));
+    async files(path, from, to) {
+      const start = await resolveFrom(path, from);
+      return to
+        ? treeHashed(path, start, to)
+        : hashed(path, () => changedFiles(reads(path), start));
     },
-    async baseFile(path, base, file) {
-      const mb = await mergeBase(path, base);
-      return fileSides(reads(path), file, { rev: mb }, { worktree: true });
-    },
-    async sinceFiles(path, sha) {
-      await haveCommit(path, sha);
-      return hashed(path, () => changedFiles(reads(path), sha));
-    },
-    async sinceFile(path, sha, file) {
-      await haveCommit(path, sha);
-      return fileSides(reads(path), file, { rev: sha }, { worktree: true });
+    async file(path, file, from, to) {
+      const start = await resolveFrom(path, from);
+      return fileSides(reads(path), file, { rev: start }, to ? { rev: to } : { worktree: true });
     },
     async changeStamp(path) {
       return changeStamp(reads(path));
@@ -564,16 +583,7 @@ export function createWorkspace(options: WorkspaceOptions): Workspace {
       );
     },
     async hunks(path, file, from, to, context = 0) {
-      const base = /^merge-base:(.+):([0-9a-f]{40})$/.exec(from);
-      const start = base
-        ? (
-            await must(
-              `${git(path)} merge-base ${q(base[2]!)} ${q(`origin/${base[1]}`)}`,
-              "Could not find the merge base",
-            )
-          ).trim()
-        : from;
-      return fileHunks(reads(path), file, start, to, context);
+      return fileHunks(reads(path), file, await resolveFrom(path, from), to, context);
     },
     async installTrailer(path, hooksDir, trailer) {
       // Per-worktree config, as `git sparse-checkout` sets it up.
@@ -633,34 +643,6 @@ export function createWorkspace(options: WorkspaceOptions): Workspace {
       ].join(" && ");
       return (await must(`bash -c ${q(script)}`, "Could not make a checkpoint")).trim();
     },
-    async rangeFiles(path, from, to) {
-      const files = await changedFiles(reads(path), from, to);
-      const live = files.filter((f) => f.status !== "deleted");
-      const ids = live.length
-        ? await must(
-            `${git(path)} ls-tree -z ${q(to)} -- ${live.map((f) => q(f.path)).join(" ")}`,
-            "Could not read the tree",
-          )
-        : "";
-      // `<mode> blob <id>\t<path>` records.
-      const hashOf = new Map(
-        ids
-          .split("\0")
-          .filter(Boolean)
-          .map((record) => {
-            const tab = record.indexOf("\t");
-            return [record.slice(tab + 1), record.slice(0, tab).split(" ")[2] ?? ""] as const;
-          }),
-      );
-      return files.map((f) => ({
-        ...f,
-        isGenerated: isGenerated(f.path),
-        hash: f.status === "deleted" ? "deleted" : (hashOf.get(f.path) ?? ""),
-      }));
-    },
-    async rangeFile(path, from, to, file) {
-      return fileSides(reads(path), file, { rev: from }, { rev: to });
-    },
     async restore(path, sha) {
       await must(
         `${git(path)} add -A && ${git(path)} read-tree -u --reset ${q(`${sha}^{tree}`)} && ${git(path)} reset -q`,
@@ -697,10 +679,16 @@ export function createWorkspace(options: WorkspaceOptions): Workspace {
     }
   }
 
-  async function mergeBase(path: string, base: string): Promise<string> {
+  /** A range's start: a sha (fetched when missing), or a `merge-base:` form resolved to one. */
+  async function resolveFrom(path: string, from: string): Promise<string> {
+    const base = /^merge-base:([^:]+)(?::([0-9a-f]{40}))?$/.exec(from);
+    if (!base) {
+      await haveCommit(path, from);
+      return from;
+    }
     return (
       await must(
-        `${git(path)} merge-base HEAD ${q(`origin/${base}`)}`,
+        `${git(path)} merge-base ${q(base[2] ?? "HEAD")} ${q(`origin/${base[1]}`)}`,
         "Could not find the merge base",
       )
     ).trim();

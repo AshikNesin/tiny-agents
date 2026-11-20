@@ -36,12 +36,12 @@ const file = (path: string) => ({
   viewed: false,
 });
 
-/** Answers by method, path and `since`; records every call. */
+/** Answers by method, path and `scope`; records every call. */
 function stubFetch(answers: Record<string, unknown>) {
   const fetch = vi.fn(async (url: string, init?: RequestInit) => {
     const at = new URL(String(url), "http://x");
-    const since = at.searchParams.get("since");
-    const key = `${init?.method ?? "GET"} ${at.pathname}${since ? `#${since}` : ""}`;
+    const scope = at.searchParams.get("scope");
+    const key = `${init?.method ?? "GET"} ${at.pathname}${scope ? `#${scope}` : ""}`;
     const data = key in answers ? answers[key] : {};
     return new Response(JSON.stringify({ success: true, data }), {
       headers: { "content-type": "application/json" },

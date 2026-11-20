@@ -25,7 +25,11 @@ let checkout: string;
 beforeEach(async () => {
   local = localExec();
   bare = await bareRepo(local);
-  ws = createWorkspace({ exec: local.exec, credential: { kind: "gh" }, remoteUrl: () => bare });
+  ws = createWorkspace({
+    exec: local.exec,
+    credential: { kind: "gh" },
+    remoteUrl: () => bare,
+  });
   checkout = join(local.home, "projects", "web", "checkout");
   await ws.clone(repo, checkout);
 });
@@ -71,7 +75,7 @@ describe("diffs against the base branch", () => {
       `cd ${a} && printf 'export const b = 2;\\n' > src/b.ts && git add -A && git commit --quiet -m b && printf 'hello\\nworld\\n' > README.md && git rm --quiet src/a.ts`,
     );
 
-    const files = await ws.baseFiles(a, "main");
+    const files = await ws.files(a, "merge-base:main");
     expect(files.map((f) => [f.path, f.status, f.additions, f.deletions])).toEqual([
       ["README.md", "modified", 1, 0],
       ["src/a.ts", "deleted", 0, 1],
@@ -79,7 +83,7 @@ describe("diffs against the base branch", () => {
     ]);
     expect(files.find((f) => f.path === "src/a.ts")?.hash).toBe("deleted");
     expect(files.find((f) => f.path === "README.md")?.hash).toMatch(/^[0-9a-f]{40}$/);
-    expect(await ws.baseFile(a, "main", "README.md")).toEqual({
+    expect(await ws.file(a, "README.md", "merge-base:main")).toEqual({
       oldContent: "hello\n",
       newContent: "hello\nworld\n",
     });
@@ -91,12 +95,12 @@ describe("diffs against the base branch", () => {
     await ws.addWorktree(checkout, a, "ta/a-1", "main");
     await sh(local, `cd ${a} && mkdir -p src/new && printf 'one\\ntwo\\n' > src/new/c.ts`);
 
-    const files = await ws.baseFiles(a, "main");
+    const files = await ws.files(a, "merge-base:main");
     expect(files.map((f) => [f.path, f.status, f.additions, f.deletions])).toEqual([
       ["src/new/c.ts", "added", 2, 0],
     ]);
     expect(files[0]?.hash).toMatch(/^[0-9a-f]{40}$/);
-    expect(await ws.baseFile(a, "main", "src/new/c.ts")).toEqual({
+    expect(await ws.file(a, "src/new/c.ts", "merge-base:main")).toEqual({
       oldContent: "",
       newContent: "one\ntwo\n",
     });
@@ -107,7 +111,7 @@ describe("diffs against the base branch", () => {
     await ws.addWorktree(checkout, a, "ta/a-1", "main");
     await sh(local, `cd ${a} && git mv README.md DOCS.md && git commit --quiet -m mv`);
 
-    const files = await ws.baseFiles(a, "main");
+    const files = await ws.files(a, "merge-base:main");
     expect(files.map((f) => [f.path, f.status, f.additions, f.deletions])).toEqual([
       ["DOCS.md", "added", 1, 0],
       ["README.md", "deleted", 0, 1],
@@ -122,12 +126,12 @@ describe("diffs against the base branch", () => {
       `cd ${a} && printf 'x\\n' > "café notes.md" && git add -A && git commit --quiet -m cafe && printf 'y\\n' >> "café notes.md"`,
     );
 
-    const files = await ws.baseFiles(a, "main");
+    const files = await ws.files(a, "merge-base:main");
     expect(files.map((f) => [f.path, f.status, f.additions])).toEqual([
       ["café notes.md", "added", 2],
     ]);
     expect(files[0]?.hash).toMatch(/^[0-9a-f]{40}$/);
-    expect(await ws.baseFile(a, "main", "café notes.md")).toEqual({
+    expect(await ws.file(a, "café notes.md", "merge-base:main")).toEqual({
       oldContent: "",
       newContent: "x\ny\n",
     });
@@ -141,12 +145,12 @@ describe("diffs against the base branch", () => {
       `cd ${a} && printf 'PNG\\000\\001\\002' > logo.png && head -c 3000000 /dev/zero | tr '\\0' 'a' > big.txt`,
     );
 
-    expect(await ws.baseFile(a, "main", "logo.png")).toEqual({
+    expect(await ws.file(a, "logo.png", "merge-base:main")).toEqual({
       oldContent: "",
       newContent: "",
       unshowable: "binary",
     });
-    expect(await ws.baseFile(a, "main", "big.txt")).toEqual({
+    expect(await ws.file(a, "big.txt", "merge-base:main")).toEqual({
       oldContent: "",
       newContent: "",
       unshowable: "tooLarge",
@@ -192,7 +196,7 @@ describe("diffs against the base branch", () => {
     const index = await sh(local, `git -C ${a} rev-parse --git-path index`);
     const before = await sh(local, `cd ${a} && stat -c %Y.%Z ${index} && sha1sum ${index}`);
 
-    await ws.baseFiles(a, "main");
+    await ws.files(a, "merge-base:main");
     await ws.uncommitted(a);
 
     expect(await sh(local, `cd ${a} && stat -c %Y.%Z ${index} && sha1sum ${index}`)).toBe(before);
@@ -381,11 +385,11 @@ describe("checkpoints", () => {
     expect(await ws.uncommitted(a)).toEqual([" M README.md", "?? new.txt"]);
     const head = await ws.headSha(a);
 
-    expect((await ws.rangeFiles(a, start, one)).map((f) => [f.path, f.status])).toEqual([
+    expect((await ws.files(a, start, one)).map((f) => [f.path, f.status])).toEqual([
       ["README.md", "modified"],
       ["new.txt", "added"],
     ]);
-    expect(await ws.rangeFile(a, start, one, "README.md")).toEqual({
+    expect(await ws.file(a, "README.md", start, one)).toEqual({
       oldContent: "hello\n",
       newContent: "hello\nturn one\n",
     });

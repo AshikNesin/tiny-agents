@@ -199,7 +199,9 @@ describe("PR reviews", () => {
   });
 
   it("refuses a PR whose repository is not a project, saying how to add it", async () => {
-    const res = await call("POST", "/reviews", { pr: "https://github.com/other/repo/pull/3" });
+    const res = await call("POST", "/reviews", {
+      pr: "https://github.com/other/repo/pull/3",
+    });
 
     expect(res.status).toBe(404);
     expect(res.body.error?.message).toBe(
@@ -219,7 +221,13 @@ describe("PR reviews", () => {
     const draft = await call<ReviewDraft>(
       "POST",
       `/threads/${encodeURIComponent(review.key)}/review/drafts`,
-      { path: "src/a.ts", startLine: 1, endLine: 1, quote: "export const a = 2;", body: "Why 2?" },
+      {
+        path: "src/a.ts",
+        startLine: 1,
+        endLine: 1,
+        quote: "export const a = 2;",
+        body: "Why 2?",
+      },
     );
     expect(draft.status).toBe(201);
 
@@ -256,7 +264,9 @@ describe("PR reviews", () => {
     expect(waiting).toEqual([]);
 
     // A later question goes to the same assistant, without the card.
-    await call("POST", `/reviews/${review.id}/ask`, { message: "And the tests?" });
+    await call("POST", `/reviews/${review.id}/ask`, {
+      message: "And the tests?",
+    });
     expect(harness.created).toHaveLength(1);
     expect(harness.sent).toEqual([{ nativeId: "t1", message: "And the tests?" }]);
   });
@@ -266,11 +276,16 @@ describe("PR reviews", () => {
     await forkPull([`printf 'x\\n' > src/x.ts`]);
     const review = (await call<PullReviewView>("POST", "/reviews", { pr: "acme/web#7" })).body
       .data!;
-    await call("POST", `/reviews/${review.id}/ask`, { message: "Summarize it" });
+    await call("POST", `/reviews/${review.id}/ask`, {
+      message: "Summarize it",
+    });
 
     const threads = (await call<ThreadSummary[]>("GET", "/threads")).body.data!;
 
-    expect(threads.find((t) => t.id === "fake:t1")?.review).toEqual({ id: review.id, number: 7 });
+    expect(threads.find((t) => t.id === "fake:t1")?.review).toEqual({
+      id: review.id,
+      number: 7,
+    });
   });
 
   it("archiving a review removes its worktree and takes it off the list", async () => {
@@ -368,7 +383,13 @@ describe("submitting a PR review", () => {
     await call("POST", `/reviews/${review.id}/submit`, { event: "COMMENT" });
 
     expect(github.submitted[0]?.comments).toEqual([
-      { path: "src/r.ts", side: "RIGHT", startLine: 1, line: 3, body: "Simplify" },
+      {
+        path: "src/r.ts",
+        side: "RIGHT",
+        startLine: 1,
+        line: 3,
+        body: "Simplify",
+      },
     ]);
   });
 
@@ -384,7 +405,9 @@ describe("submitting a PR review", () => {
       body: "Note to self",
     });
 
-    const approve = await call("POST", `/reviews/${review.id}/submit`, { event: "APPROVE" });
+    const approve = await call("POST", `/reviews/${review.id}/submit`, {
+      event: "APPROVE",
+    });
 
     expect(approve.status).toBe(400);
     expect(approve.body.error?.message).toBe(
@@ -392,7 +415,9 @@ describe("submitting a PR review", () => {
     );
     expect(github.submitted).toEqual([]);
     // The comment still waits, and goes as a comment.
-    const comment = await call("POST", `/reviews/${review.id}/submit`, { event: "COMMENT" });
+    const comment = await call("POST", `/reviews/${review.id}/submit`, {
+      event: "COMMENT",
+    });
     expect(comment.status).toBe(200);
     expect(github.submitted.map((r) => [r.event, r.comments.length])).toEqual([["COMMENT", 1]]);
   });
@@ -402,7 +427,9 @@ describe("submitting a PR review", () => {
     await forkPull([`printf 'x\\n' > src/x.ts`]);
     const review = await open();
 
-    const empty = await call("POST", `/reviews/${review.id}/submit`, { event: "COMMENT" });
+    const empty = await call("POST", `/reviews/${review.id}/submit`, {
+      event: "COMMENT",
+    });
     const bare = await call("POST", `/reviews/${review.id}/submit`, {
       event: "REQUEST_CHANGES",
       body: "  ",
@@ -544,7 +571,9 @@ describe("the PR's conversations on GitHub", () => {
     const review = (await call<PullReviewView>("POST", "/reviews", { pr: "acme/web#7" })).body
       .data!;
 
-    const res = await call("POST", `/reviews/${review.id}/threads/T_1/reply`, { body: " " });
+    const res = await call("POST", `/reviews/${review.id}/threads/T_1/reply`, {
+      body: " ",
+    });
 
     expect(res.status).toBe(400);
     expect(github.replies).toEqual([]);
@@ -578,8 +607,15 @@ describe("the review inbox", () => {
         reason: "reviewed",
         lastReview: { at: "2026-11-16T08:00:00Z", commit: "older" },
       }),
-      pull(9, { reason: "reviewed", lastReview: { at: "2026-11-16T08:00:00Z", commit: "head9" } }),
-      pull(4, { reason: "authored", repo: { owner: "other", name: "lib" }, author: "ashik" }),
+      pull(9, {
+        reason: "reviewed",
+        lastReview: { at: "2026-11-16T08:00:00Z", commit: "head9" },
+      }),
+      pull(4, {
+        reason: "authored",
+        repo: { owner: "other", name: "lib" },
+        author: "ashik",
+      }),
     ];
 
     const res = await call<InboxPullView[]>("GET", "/reviews/inbox");
@@ -628,10 +664,10 @@ describe("changes since your review", () => {
       .data!;
     expect(review.reviewedSha).toBe(reviewed);
     const key = encodeURIComponent(review.key);
-    const files = (await call<ReviewFile[]>("GET", `/threads/${key}/review/files?since=review`))
+    const files = (await call<ReviewFile[]>("GET", `/threads/${key}/review/files?scope=review`))
       .body.data!;
     const diff = (
-      await call<ReviewFileDiff>("GET", `/threads/${key}/review/file?path=src/one.ts&since=review`)
+      await call<ReviewFileDiff>("GET", `/threads/${key}/review/file?path=src/one.ts&scope=review`)
     ).body.data!;
 
     expect(files.map((f) => [f.path, f.status])).toEqual([
@@ -652,7 +688,7 @@ describe("changes since your review", () => {
     expect(review.reviewedSha).toBeNull();
     const before = await call(
       "GET",
-      `/threads/${encodeURIComponent(review.key)}/review/files?since=review`,
+      `/threads/${encodeURIComponent(review.key)}/review/files?scope=review`,
     );
     expect([before.status, before.body.error?.message]).toEqual([
       400,
@@ -686,7 +722,7 @@ describe("changing the PR's code", () => {
   }
 
   const yours = async (key: string) =>
-    (await call<ReviewFile[]>("GET", `/threads/${key}/review/files?since=mine`)).body.data!;
+    (await call<ReviewFile[]>("GET", `/threads/${key}/review/files?scope=mine`)).body.data!;
 
   it("shows only your changes on top of the PR's head", async () => {
     const { key } = await reviewWith([`printf 'one\\nTWO\\nthree\\n' > src/a.ts`]);
@@ -695,7 +731,7 @@ describe("changing the PR's code", () => {
       ["src/a.ts", "modified", 1, 1],
     ]);
     const diff = (
-      await call<ReviewFileDiff>("GET", `/threads/${key}/review/file?path=src/a.ts&since=mine`)
+      await call<ReviewFileDiff>("GET", `/threads/${key}/review/file?path=src/a.ts&scope=mine`)
     ).body.data!;
     expect(diff).toMatchObject({
       oldContent: "one\ntwo\nthree\n",

@@ -120,7 +120,10 @@ export function ReviewPanel({
   const [current, setCurrent] = useState<string | null>(null);
   // The open file's diff, with the file and content (hash) it was read for: a
   // re-read after the agent changed the file swaps it in place.
-  const [shown, setShown] = useState<{ key: string; diff: ReviewFileDiff } | null>(null);
+  const [shown, setShown] = useState<{
+    key: string;
+    diff: ReviewFileDiff;
+  } | null>(null);
   const [reload, setReload] = useState(0);
   // In the side panel: the list, or one file's diff.
   const [listing, setListing] = useState(!page);
@@ -143,8 +146,6 @@ export function ReviewPanel({
   const scope = picked ?? (pull?.reviewedSha ? "review" : "base");
   // Viewed marks are per file content, so they hold in either whole-PR scope.
   const viewable = scope === "base" || scope === "review";
-  const worktreeScope = viewable || scope === "mine";
-  const since = scope === "review" || scope === "mine" ? scope : undefined;
   const [checkpoints, setCheckpoints] = useState<CheckpointView[]>([]);
   const checkpoint = checkpoints.find((c) => c.id === scope);
 
@@ -175,10 +176,8 @@ export function ReviewPanel({
   useEffect(() => {
     let cancelled = false;
     setError(null);
-    const list = worktreeScope
-      ? projectsApi.reviewFiles(threadId, since)
-      : projectsApi.checkpointFiles(threadId, scope);
-    list
+    projectsApi
+      .reviewFiles(threadId, scope)
       .then((list) => {
         if (cancelled) return;
         const ordered = reviewOrder(list);
@@ -193,7 +192,7 @@ export function ReviewPanel({
     return () => {
       cancelled = true;
     };
-  }, [threadId, settledKey, reload, scope, worktreeScope, since]);
+  }, [threadId, settledKey, reload, scope]);
 
   const currentFile = files?.find((f) => f.path === current);
   const currentHash = currentFile?.hash;
@@ -204,16 +203,14 @@ export function ReviewPanel({
   useEffect(() => {
     if (!current || !reading) return;
     let cancelled = false;
-    (worktreeScope
-      ? projectsApi.reviewFile(threadId, current, since)
-      : projectsApi.checkpointFile(threadId, scope, current)
-    )
+    projectsApi
+      .reviewFile(threadId, current, scope)
       .then((d) => !cancelled && setShown({ key: `${scope}:${current}`, diff: d }))
       .catch((e: unknown) => !cancelled && setError(errorMessage(e, "Could not read the diff.")));
     return () => {
       cancelled = true;
     };
-  }, [threadId, current, currentHash, reload, scope, reading, worktreeScope, since]);
+  }, [threadId, current, currentHash, reload, scope, reading]);
 
   const listedFiles = useMemo(
     () =>

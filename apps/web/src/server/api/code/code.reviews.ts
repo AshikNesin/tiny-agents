@@ -190,7 +190,10 @@ export async function openReview(input: string): Promise<PullReviewView> {
   const [row] = await db
     .insert(codeReviews)
     .values({ projectId: project.id, number: pr.number, ...values })
-    .onConflictDoUpdate({ target: [codeReviews.projectId, codeReviews.number], set: values })
+    .onConflictDoUpdate({
+      target: [codeReviews.projectId, codeReviews.number],
+      set: values,
+    })
     .returning();
   return reviewView(row!, project);
 }
@@ -207,7 +210,9 @@ export async function listReviews(): Promise<PullReviewView[]> {
 }
 
 async function findReview(id: string): Promise<{ row: CodeReviewRow; project: CodeProjectRow }> {
-  const row = await db.query.codeReviews.findFirst({ where: eq(codeReviews.id, id) });
+  const row = await db.query.codeReviews.findFirst({
+    where: eq(codeReviews.id, id),
+  });
   if (!row) throw Boom.notFound("No such review");
   const project = await db.query.codeProjects.findFirst({
     where: eq(codeProjects.id, row.projectId),
@@ -273,7 +278,7 @@ async function startAssistant(
     hub.instances()[0];
   if (!instance) throw Boom.notFound("No coding agent is connected.");
   const ws = await codeGitHub().workspace(project);
-  const files = await ws.baseFiles(worktree, row.baseRef);
+  const files = await ws.files(worktree, `merge-base:${row.baseRef}`);
   const card = reviewCard({
     repo: repoSlug(repoOf(project)),
     number: row.number,
@@ -599,14 +604,14 @@ function suggestion(lines: string[]): string {
  */
 export async function suggestReviewChanges(id: string): Promise<SuggestedChanges> {
   const { row, worktree, ws } = await openWorktree(id);
-  const files = await ws.sinceFiles(worktree, row.headSha).catch(saying);
+  const files = await ws.files(worktree, row.headSha).catch(saying);
   const read = await Promise.all(
     files.map(async (file) => {
       if (file.status !== "modified" || file.binary) return { drafts: [], skipped: 1 };
       const [mine, pull, sides] = await Promise.all([
         ws.hunks(worktree, file.path, row.headSha, null),
         ws.hunks(worktree, file.path, `merge-base:${row.baseRef}:${row.headSha}`, row.headSha, 3),
-        ws.sinceFile(worktree, row.headSha, file.path),
+        ws.file(worktree, file.path, row.headSha),
       ]);
       return suggestionsFor(file.path, mine, pull, sides.oldContent.split("\n"));
     }),

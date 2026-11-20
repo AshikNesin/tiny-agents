@@ -22,7 +22,11 @@ const shown = () => {
 };
 
 vi.mock("sonner", () => ({
-  toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), message: vi.fn() }),
+  toast: Object.assign(vi.fn(), {
+    success: vi.fn(),
+    error: vi.fn(),
+    message: vi.fn(),
+  }),
 }));
 
 /** The network: each GET path answers from this table (a function may hold the answer back). */
@@ -36,7 +40,7 @@ vi.mock("@groot/shell/lib/api", async (importOriginal) => {
       get: async (path: string, query?: Record<string, string>) => {
         const key =
           (query?.path ? `${path}?${query.path}` : path) +
-          (query?.since ? `#since=${query.since}` : "");
+          (query?.scope ? `#scope=${query.scope}` : "");
         const route = routes[key];
         if (!route) throw new Error(`unexpected ${key}`);
         return route();
@@ -253,10 +257,10 @@ describe("a PR review you reviewed before", () => {
   it("opens on the changes since your review", async () => {
     const thread = "/code/threads/review%3Arv1";
     routes[`${thread}/review/drafts`] = () => [];
-    routes[`${thread}/review/files#since=review`] = () => [
+    routes[`${thread}/review/files#scope=review`] = () => [
       { ...file("src/new.ts", 3), hash: "h1", viewed: false },
     ];
-    routes[`${thread}/review/file?src/new.ts#since=review`] = () => ({
+    routes[`${thread}/review/file?src/new.ts#scope=review`] = () => ({
       path: "src/new.ts",
       oldContent: "old\n",
       newContent: "after review\n",

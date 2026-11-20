@@ -10,7 +10,7 @@
  */
 import { desc, eq } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
-import { codeCheckpoints, db, type CodeCheckpoint, type CodeProjectRow } from "../../db";
+import { codeCheckpoints, db, type CodeCheckpoint } from "../../db";
 import { codeGitHub } from "./code.github";
 import { codeHub } from "./code.hub";
 import { projectThread } from "./code.projects";
@@ -42,7 +42,7 @@ async function takeCheckpoint(
   if (
     last &&
     reason === "turn" &&
-    (await ws.rangeFiles(thread.worktree, last.sha, sha)).length === 0
+    (await ws.changedPaths(thread.worktree, last.sha, sha)).length === 0
   ) {
     return undefined;
   }
@@ -61,7 +61,11 @@ export async function checkpointTurn(threadId: string): Promise<CodeCheckpoint |
   const ws = await codeGitHub().workspace(found.project);
   return takeCheckpoint(
     ws,
-    { id: threadId, branch: found.thread.branch, worktree: found.thread.worktree },
+    {
+      id: threadId,
+      branch: found.thread.branch,
+      worktree: found.thread.worktree,
+    },
     "turn",
   );
 }
@@ -73,7 +77,6 @@ export async function checkpointRange(
 ): Promise<{
   from: CodeCheckpoint;
   to: CodeCheckpoint;
-  project: CodeProjectRow;
   worktree: string;
   ws: Workspace;
 }> {
@@ -87,7 +90,6 @@ export async function checkpointRange(
   return {
     from,
     to,
-    project: found.project,
     worktree: found.thread.worktree,
     ws: await codeGitHub().workspace(found.project),
   };
@@ -108,7 +110,11 @@ export async function revertTo(
   const checkpoint = (await checkpointsOf(threadId)).find((c) => c.id === checkpointId);
   if (!checkpoint) throw Boom.notFound("No such checkpoint");
   const ws = await codeGitHub().workspace(found.project);
-  const thread = { id: threadId, branch: found.thread.branch, worktree: found.thread.worktree };
+  const thread = {
+    id: threadId,
+    branch: found.thread.branch,
+    worktree: found.thread.worktree,
+  };
   const before = await takeCheckpoint(ws, thread, "before_revert");
   await ws.restore(thread.worktree, checkpoint.sha);
   return before;
