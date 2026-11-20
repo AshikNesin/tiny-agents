@@ -5,6 +5,12 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: ["main", "next"]
+  # The merge queue: every PR is tested in full, as the commit main will get,
+  # before it lands. The CI job is the required check there.
+  merge_group:
+    types: [checks_requested]
+  # A full run of any branch on demand.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -42,7 +48,7 @@ jobs:
       - name: Secret scan (gitleaks)
         # The pre-commit hook skips gitleaks where it isn't installed.
         env:
-          BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
+          BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event_name == 'merge_group' && github.event.merge_group.base_sha || github.event.before }}
         run: bash scripts/secret-scan.sh gitleaks "$BASE"
       - run: node scripts/ci-budget.mjs run secrets
 
@@ -180,10 +186,17 @@ jobs:
         shard: [1, 2]
     steps:
       - run: echo "CI_STARTED_AT=$(date +%s)" >> "$GITHUB_ENV"
+      # History for the merge base the selection diffs against.
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          filter: blob:none
       - uses: ./.github/actions/setup
       - run: node scripts/ci-budget.mjs setup
-      - run: pnpm test --project server --project server:isolated --shard=${{ matrix.shard }}/2
+      # Pull requests run the tests the diff can reach; everything else runs all.
+      - id: select
+        run: echo "args=$(node scripts/test-selection.mjs)" >> "$GITHUB_OUTPUT"
+      - run: pnpm test --project server --project server:isolated --shard=${{ matrix.shard }}/2 ${{ steps.select.outputs.args }}
       - run: node scripts/ci-budget.mjs run server
 
   client:
@@ -196,10 +209,17 @@ jobs:
         shard: [1, 2, 3]
     steps:
       - run: echo "CI_STARTED_AT=$(date +%s)" >> "$GITHUB_ENV"
+      # History for the merge base the selection diffs against.
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          filter: blob:none
       - uses: ./.github/actions/setup
       - run: node scripts/ci-budget.mjs setup
-      - run: pnpm test:client --shard=${{ matrix.shard }}/3
+      # Pull requests run the tests the diff can reach; everything else runs all.
+      - id: select
+        run: echo "args=$(node scripts/test-selection.mjs)" >> "$GITHUB_OUTPUT"
+      - run: pnpm test:client --shard=${{ matrix.shard }}/3 ${{ steps.select.outputs.args }}
       - run: node scripts/ci-budget.mjs run client
 
   # The two suites that typecheck whole copies of the repo, one per shard.
@@ -220,7 +240,10 @@ jobs:
           filter: blob:none
       - uses: ./.github/actions/setup
       - run: node scripts/ci-budget.mjs setup
-      - run: pnpm test --project server:repo-typecheck --shard=${{ matrix.shard }}/2
+      # Pull requests run the tests the diff can reach; everything else runs all.
+      - id: select
+        run: echo "args=$(node scripts/test-selection.mjs)" >> "$GITHUB_OUTPUT"
+      - run: pnpm test --project server:repo-typecheck --shard=${{ matrix.shard }}/2 ${{ steps.select.outputs.args }}
       - run: node scripts/ci-budget.mjs run repo-typecheck
 
   # The one required check: green only when every job above passed. A job

@@ -55,7 +55,8 @@ if (typeof window !== "undefined") {
 // <html> and <body> attributes as the file found them. Overlays write to them
 // (Radix sets and then empties body's style), and a pinned snapshot of the body
 // would otherwise record what an earlier test left behind.
-const rootAttributes = (el: Element) => new Map([...el.attributes].map((a) => [a.name, a.value]));
+const rootAttributes = (el: Element) =>
+  new Map(Array.from(el.attributes, (a) => [a.name, a.value]));
 const initialAttributes =
   typeof document === "undefined"
     ? []
@@ -68,7 +69,10 @@ afterEach(() => {
   // next Toaster that mounts, so a test would see the previous test's toasts.
   toast.dismiss();
   for (const [el, attributes] of initialAttributes) {
-    for (const { name } of [...el.attributes]) if (!attributes.has(name)) el.removeAttribute(name);
+    // A copy: removing from the live NamedNodeMap while walking it skips entries.
+    for (const { name } of Array.from(el.attributes)) {
+      if (!attributes.has(name)) el.removeAttribute(name);
+    }
     for (const [name, value] of attributes) el.setAttribute(name, value);
   }
 });

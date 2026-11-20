@@ -131,7 +131,7 @@ function runGate(gate) {
 
 /** Run `list` with at most `limit` at once, in order of start; resolves results in list order. */
 async function pool(list, limit, run) {
-  const results = new Array(list.length);
+  const results = Array.from({ length: list.length });
   let next = 0;
   const worker = async () => {
     while (next < list.length) {

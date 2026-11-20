@@ -50,6 +50,14 @@ describe("the Tests workflow", () => {
     expect(found).toContain(`${FILE} job "ci" does not need "server", so CI can pass without it.`);
   });
 
+  it("fails when the merge queue no longer runs it", () => {
+    const workflow = real();
+    delete workflow.on!.merge_group;
+    expect(problems(workflow)).toContain(
+      `${FILE} does not run on merge_group. The merge queue's full run is what keeps PR test selection honest.`,
+    );
+  });
+
   it("fails a static check run outside the gates", () => {
     const workflow = real();
     workflow.jobs.build!.steps!.splice(1, 0, { name: "Extra", run: "pnpm exec tsc --noEmit" });

@@ -11,7 +11,10 @@
  *  - a step that runs `--shard=${{ matrix.shard }}/N` sits in a job whose
  *    matrix lists shards 1 to N, so no shard (and none of its files) is
  *    dropped;
- *  - the `ci` job needs every other job.
+ *  - the `ci` job needs every other job;
+ *  - the workflow runs on `merge_group`, where the test jobs run everything
+ *    (scripts/test-selection.mjs selects only on pull requests), so the full
+ *    suite runs before anything reaches main.
  */
 
 export interface WorkflowStep {
@@ -26,6 +29,7 @@ export interface WorkflowJob {
 }
 
 export interface Workflow {
+  on?: Record<string, unknown>;
   jobs: Record<string, WorkflowJob>;
 }
 
@@ -147,6 +151,13 @@ export function workflowProblems({
         );
       }
     }
+  }
+
+  // The merge queue runs the full suite.
+  if (!workflow.on || !("merge_group" in workflow.on)) {
+    problems.push(
+      `${file} does not run on merge_group. The merge queue's full run is what keeps PR test selection honest.`,
+    );
   }
 
   // The required check waits for everything.

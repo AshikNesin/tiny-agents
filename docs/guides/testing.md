@@ -325,6 +325,24 @@ against `origin/<base>` without downloading every old file.
 | Repo typecheck suites (1/2, 2/2)               | the two suites that typecheck copies of the repo, one each                                                                                                                                                                                                                              |
 | CI                                             | passes only when every job above passed: the one required check                                                                                                                                                                                                                         |
 
+### Selection and the merge queue
+
+On a pull request the test jobs run only the test files the diff can reach:
+`scripts/test-selection.mjs` adds `--changed=<merge base>`, and Vitest keeps
+the changed test files and every test that imports a changed file, however
+indirectly. A change to something the import graph cannot see runs everything
+on the PR too: the test setups and clock, `tests/server/fixtures/`, a Vitest or
+Vite config, `apps/web/drizzle/`, any `schema.ts`, a `package.json`, the
+lockfile, a tsconfig, and the CI workflow and setup action.
+
+Selection only narrows PR feedback. Every other event runs every test: the
+merge queue (`merge_group`), where the `CI` job is the required check, pushes to
+`main` and `next`, and a manual run (Actions → Tests → Run workflow). So the
+full suite runs on the exact commit a branch lands as, before it lands. What
+selection cannot see, the queue catches: a script a test runs as a subprocess
+(`tests/server/checks/*` spawn `scripts/check-*.mjs`), a worker entry started
+from a string, a file read at runtime.
+
 A shard holds the files `tests/sequencer.ts` gives it: longest first, each
 onto the shard with the least recorded time (`tests/durations.json`), so the
 shards finish together. Vitest's own `--shard` splits by count. Refresh the
