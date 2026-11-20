@@ -54,7 +54,47 @@ function lastUsed(item: VaultItem): string | undefined {
   return `used ${formatRelativeTime(item.lastUsedAt)}${item.lastUsedBy ? ` by ${item.lastUsedBy}` : ""}`;
 }
 
-function BackendCard({ backend }: { backend: VaultBackendView }) {
+function MoveLocalItems({ count, onMoved }: { count: number; onMoved: () => void }) {
+  const { run } = useStepUp();
+  const { moveToOnePassword } = useVaultMutations();
+  const move = async () => {
+    try {
+      const result = await run(() => moveToOnePassword.mutateAsync());
+      if (!result) return;
+      if (result.failed.length === 0) {
+        toast.success(
+          `Moved ${result.moved.length} item${result.moved.length === 1 ? "" : "s"} to 1Password`,
+        );
+      } else {
+        toast.error(
+          `Moved ${result.moved.length}; ${result.failed.length} stayed local: ${result.failed
+            .map((f) => `${f.handle} (${f.reason})`)
+            .join(", ")}`,
+        );
+      }
+      onMoved();
+    } catch (error) {
+      toast.error(apiError(error, "Couldn't move the items"));
+    }
+  };
+  return (
+    <Button size="sm" variant="outline" disabled={moveToOnePassword.isPending} onClick={move}>
+      {moveToOnePassword.isPending
+        ? "Moving…"
+        : `Move ${count} local item${count === 1 ? "" : "s"} here`}
+    </Button>
+  );
+}
+
+function BackendCard({
+  backend,
+  movable = 0,
+  onMoved,
+}: {
+  backend: VaultBackendView;
+  movable?: number;
+  onMoved?: () => void;
+}) {
   const states = [backend.read, backend.write].filter(Boolean);
   const problem = states.find((s) => s!.state !== "ready");
   const starting = problem?.code === "starting";
@@ -79,6 +119,11 @@ function BackendCard({ backend }: { backend: VaultBackendView }) {
         </div>
         {backend.configured && (
           <p className="text-xs text-muted-foreground">{problem?.detail ?? backend.read.detail}</p>
+        )}
+        {movable > 0 && !problem && onMoved && (
+          <div className="pt-2">
+            <MoveLocalItems count={movable} onMoved={onMoved} />
+          </div>
         )}
       </CardContent>
     </Card>
@@ -283,7 +328,13 @@ export function VaultList() {
           <Section title="Backends">
             <div className="grid gap-3 sm:grid-cols-2">
               {overview.backends.map((backend) => (
-                <BackendCard key={backend.name} backend={backend} />
+                <BackendCard
+                  key={backend.name}
+                  backend={backend}
+                  {...(backend.name === "onepassword-connect"
+                    ? { movable: overview.movableToOnePassword, onMoved: () => void reload(true) }
+                    : {})}
+                />
               ))}
             </div>
           </Section>

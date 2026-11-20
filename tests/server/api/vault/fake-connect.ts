@@ -11,6 +11,9 @@ export interface FakeConnect {
   tokens: Map<string, { vaults: string[]; write: boolean }>;
   vaults: { id: string; name: string }[];
   requests: { method: string; path: string; token: string }[];
+  syncLag: { gets: number };
+  unsynced: Map<string, number>;
+  refuseCreate?: { status: 400 | 404 | 500; message: string };
   close(): Promise<void>;
 }
 
@@ -23,6 +26,8 @@ export async function startFakeConnect(): Promise<FakeConnect> {
       { id: "vault-other", name: "Family" },
     ],
     requests: [] as { method: string; path: string; token: string }[],
+    syncLag: { gets: 0 },
+    unsynced: new Map<string, number>(),
   };
   const app = new Hono();
   app.use(async (c, next) => {
@@ -52,14 +57,23 @@ export async function startFakeConnect(): Promise<FakeConnect> {
   );
   app.get("/v1/vaults/:vault/items/:id", (c) => {
     const item = state.items.get(c.req.param("id"));
-    if (!item || item.vault.id !== c.req.param("vault")) {
+    const lag = state.unsynced.get(c.req.param("id")) ?? 0;
+    if (lag > 0) state.unsynced.set(c.req.param("id"), lag - 1);
+    if (!item || item.vault.id !== c.req.param("vault") || lag > 0) {
       return c.json({ status: 404, message: "Not found" }, 404);
     }
     return c.json(item);
   });
   app.post("/v1/vaults/:vault/items", async (c) => {
+    if (fake.refuseCreate) {
+      return c.json(
+        { status: fake.refuseCreate.status, message: fake.refuseCreate.message },
+        fake.refuseCreate.status,
+      );
+    }
     const item = { ...(await c.req.json<ConnectItem>()), id: randomUUID() };
     state.items.set(item.id, item);
+    if (state.syncLag.gets > 0) state.unsynced.set(item.id, state.syncLag.gets);
     return c.json(item);
   });
   app.put("/v1/vaults/:vault/items/:id", async (c) => {
@@ -74,9 +88,10 @@ export async function startFakeConnect(): Promise<FakeConnect> {
   });
   const server: Server = createServer(getRequestListener(app.fetch));
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  return {
+  const fake: FakeConnect = {
     url: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
     ...state,
     close: () => new Promise((resolve) => server.close(() => resolve())),
   };
+  return fake;
 }

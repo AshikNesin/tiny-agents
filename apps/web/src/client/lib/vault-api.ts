@@ -17,6 +17,7 @@ import type {
   VaultItemUpdateBody,
   VaultKind,
   VaultLinkBody,
+  VaultMoveResult,
   VaultOverview,
   VaultRevealBody,
   VaultRevealed,
@@ -91,6 +92,7 @@ export const vaultApi = {
   forgetStepUp: () => setStepUp(undefined),
   create: (input: VaultItemCreateBody) => stepped<VaultItem>("post", "/vault/items", input),
   link: (input: VaultLinkBody) => stepped<VaultItem>("post", "/vault/links", input),
+  moveToOnePassword: () => stepped<VaultMoveResult>("post", "/vault/move-to-1password", {}),
   update: (handle: string, input: VaultItemUpdateBody) =>
     stepped<VaultItem>("put", `/vault/items/${encodeURIComponent(handle)}`, input),
   remove: (handle: string, purge: boolean) =>

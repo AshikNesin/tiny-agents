@@ -58,11 +58,15 @@ export function useVaultMutations() {
       vaultApi.remove(vars.handle, vars.purge),
     ...RESOURCE_MUTATION,
   });
+  const moveToOnePassword = useMutation({
+    mutationFn: () => vaultApi.moveToOnePassword(),
+    ...RESOURCE_MUTATION,
+  });
   const cancelRequest = useMutation({
     mutationFn: (taskId: number) => vaultApi.cancelRequest(taskId),
     ...RESOURCE_MUTATION,
   });
-  return { create, update, submitRequest, link, remove, cancelRequest };
+  return { create, update, submitRequest, link, remove, cancelRequest, moveToOnePassword };
 }
 
 export const useVaultReveal = () =>

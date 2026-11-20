@@ -35,7 +35,8 @@
           "card": ["browser_fill_secret"],
           "identity": [],
           "api_key": ["http_request", "mcp"]
-        }
+        },
+        "movableToOnePassword": 0
       }
     }
   },
@@ -181,7 +182,8 @@
           "card": ["browser_fill_secret"],
           "identity": [],
           "api_key": ["http_request", "mcp"]
-        }
+        },
+        "movableToOnePassword": 0
       }
     }
   },
@@ -578,7 +580,8 @@
           "card": ["browser_fill_secret"],
           "identity": [],
           "api_key": ["http_request", "mcp"]
-        }
+        },
+        "movableToOnePassword": 0
       }
     }
   }

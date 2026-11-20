@@ -10,6 +10,7 @@ import {
 } from "./onepassword-mapping";
 import {
   BackendError,
+  type BackendItemSummary,
   type BackendStatus,
   type ItemDraft,
   type ValueField,
@@ -27,6 +28,8 @@ export interface ConnectOptions {
 
 const GUARD_TTL_MS = 6 * 60 * 60_000;
 const EXPIRY_WARNING_MS = 14 * 86_400_000;
+const SYNC_RETRY_DELAYS_MS = [250, 750, 1500];
+const CREATED_GRACE_MS = 10 * 60_000;
 
 function tokenExpiresAt(token: string): Date | undefined {
   const payload = token.split(".")[1];
@@ -56,7 +59,16 @@ export function createConnectBackend(options: ConnectOptions): VaultBackend {
   const doFetch = options.fetch ?? fetch;
   let guard: { at: number; status: BackendStatus; vaultId?: string } | undefined;
 
-  async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
+  async function connectMessage(response: Response): Promise<string> {
+    try {
+      const body = (await response.json()) as { message?: unknown };
+      return typeof body.message === "string" && body.message ? body.message : response.statusText;
+    } catch {
+      return response.statusText;
+    }
+  }
+
+  async function call<T>(method: string, path: string, body?: unknown, step?: string): Promise<T> {
     let response: Response;
     try {
       response = await doFetch(`${base}${path}`, {
@@ -77,10 +89,23 @@ export function createConnectBackend(options: ConnectOptions): VaultBackend {
         "1Password Connect refused the token (expired, revoked or without access).",
       );
     }
-    if (response.status === 404)
+    if (step) {
+      if (!response.ok) {
+        const message = await connectMessage(response);
+        throw new BackendError(
+          "failed",
+          `1Password Connect couldn't ${step}: ${message} (${response.status}).`,
+        );
+      }
+    } else if (response.status === 404) {
       throw new BackendError("not_found", "Item not found in 1Password.");
+    }
     if (!response.ok) {
-      throw new BackendError("failed", `1Password Connect answered ${response.status}.`);
+      const message = await connectMessage(response);
+      throw new BackendError(
+        "failed",
+        `1Password Connect answered ${response.status}: ${message}.`,
+      );
     }
     if (response.status === 204) return undefined as T;
     return (await response.json()) as T;
@@ -144,13 +169,26 @@ export function createConnectBackend(options: ConnectOptions): VaultBackend {
       externalId === undefined ? "" : `/${encodeURIComponent(externalId)}`
     }`;
 
+  const created = new Map<string, { at: number; summary: BackendItemSummary }>();
+
   async function getItem(externalId: string): Promise<{ item: ConnectItem; vaultId: string }> {
     const vaultId = await ready();
-    const item = await call<ConnectItem>("GET", itemPath(vaultId, externalId));
-    if (item.vault?.id !== vaultId) {
-      throw new BackendError("not_found", "Item not found in the pinned vault.");
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const item = await call<ConnectItem>("GET", itemPath(vaultId, externalId));
+        if (item.vault?.id !== vaultId) {
+          throw new BackendError("not_found", "Item not found in the pinned vault.");
+        }
+        return { item, vaultId };
+      } catch (error) {
+        const notYet =
+          error instanceof BackendError &&
+          error.code === "not_found" &&
+          attempt < SYNC_RETRY_DELAYS_MS.length;
+        if (!notYet) throw error;
+        await new Promise((resolve) => setTimeout(resolve, SYNC_RETRY_DELAYS_MS[attempt]));
+      }
     }
-    return { item, vaultId };
   }
 
   const backend: VaultBackend = {
@@ -171,7 +209,14 @@ export function createConnectBackend(options: ConnectOptions): VaultBackend {
       };
     },
     async describe(externalId) {
-      return summarize((await getItem(externalId)).item);
+      try {
+        return summarize((await getItem(externalId)).item);
+      } catch (error) {
+        const fresh = created.get(externalId);
+        const notFound = error instanceof BackendError && error.code === "not_found";
+        if (notFound && fresh && Date.now() - fresh.at < CREATED_GRACE_MS) return fresh.summary;
+        throw error;
+      }
     },
     async resolve(externalId: string, field: ValueField): Promise<SecretValue> {
       const { item } = await getItem(externalId);
@@ -190,19 +235,21 @@ export function createConnectBackend(options: ConnectOptions): VaultBackend {
   if (options.writable) {
     backend.create = async (draft: ItemDraft) => {
       const vaultId = await ready();
-      const created = await call<ConnectItem>(
+      const item = await call<ConnectItem>(
         "POST",
         itemPath(vaultId),
         toConnectItem(draft, vaultId),
+        "save the item",
       );
-      if (!created.id) throw new BackendError("failed", "1Password did not return the new item.");
-      return created.id;
+      if (!item.id) throw new BackendError("failed", "1Password did not return the new item.");
+      created.set(item.id, { at: Date.now(), summary: summarize(item) });
+      return item.id;
     };
     backend.update = async (externalId, draft) => {
       const { item, vaultId } = await getItem(externalId);
       const next = applyDraft(item, draft);
       next.vault = { id: vaultId };
-      await call("PUT", itemPath(vaultId, externalId), next);
+      await call("PUT", itemPath(vaultId, externalId), next, "save the change");
     };
     backend.remove = async (externalId) => {
       const { vaultId } = await getItem(externalId);

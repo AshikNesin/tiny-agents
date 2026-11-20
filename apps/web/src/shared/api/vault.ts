@@ -100,9 +100,15 @@ export interface VaultOverviewData {
   items: VaultItemData[];
   unlinked: UnlinkedItem[];
   kindDefaults: Record<VaultKind, string[]>;
+  movableToOnePassword: number;
 }
 
 export type VaultOverview = Jsonified<VaultOverviewData>;
+
+export interface VaultMoveResult {
+  moved: string[];
+  failed: { handle: string; reason: string }[];
+}
 
 export interface VaultAuditEventData {
   id: string;
