@@ -6,6 +6,26 @@
   "$schema": "https://react.doctor/schema/config.json",
   "ignore": {
     "overrides": [
+      // Turned off everywhere (issue #412). Across PRs 300 to 411 agents
+      // fixed 1 of the 37 findings these rules raised and replied to the
+      // rest, and the rules re-flagged lines already explained, which buried
+      // the stale-state warnings that were real bugs.
+      // - Complexity and component size: no defect traced to size; a split
+      //   is a refactor of its own, not a review fix.
+      // - Await in a loop and sequential awaits: the server loops here are
+      //   sequential on purpose (ordered relays, one settle per row, bounded
+      //   boot sweeps).
+      // - Set/Map lookups: the arrays are short lists (tags, tabs, names).
+      {
+        "files": ["**"],
+        "rules": [
+          "react-doctor/no-high-complexity-react-function",
+          "react-doctor/no-giant-component",
+          "react-doctor/async-await-in-loop",
+          "react-doctor/server-sequential-independent-await",
+          "react-doctor/js-set-map-lookups",
+        ],
+      },
       // packages/ui/vendor/fluid is vendored upstream code (see its README):
       // it is re-fetched, not edited, so its findings are upstream's.
       {
