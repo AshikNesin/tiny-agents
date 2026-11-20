@@ -51,6 +51,22 @@ export class OriginMismatchError extends VaultTargetMovedError {
   }
 }
 
+/**
+ * The page is on the origin the fill is bound to, but the field is in a frame
+ * from another site (a sign-in widget such as id.tinypass.com on
+ * thehindu.com); `actual` is the frame's origin. Nothing is filled there.
+ */
+export class FrameOriginError extends VaultTargetMovedError {
+  constructor(actual: string) {
+    super(
+      actual,
+      `The field is in a frame from ${actual}, not on the page's own origin.`,
+      `field is in a frame from ${actual}`,
+    );
+    this.name = "FrameOriginError";
+  }
+}
+
 const ACTION_TIMEOUT_MS = 15_000;
 
 /** How long the next step of a sign-in may take to show its fields. */
@@ -282,7 +298,18 @@ async function fillPass(
         if (result === "filled" || result === "origin") break;
       }
     }
-    if (result === "origin") throw new OriginMismatchError(await pageOrigin(page));
+    if (result === "origin") {
+      const top = await pageOrigin(page);
+      if (field.ref && top === fill.origin) {
+        // The page stayed put: the ref names a field in another site's frame.
+        const frame = await page
+          .getByRef(field.ref)
+          .evaluate(() => location.origin, undefined, { timeout: ACTION_TIMEOUT_MS })
+          .catch(() => undefined);
+        if (frame && frame !== top) throw new FrameOriginError(frame);
+      }
+      throw new OriginMismatchError(top);
+    }
     if (result === "filled") filled.push(field.key);
   }
   return filled;

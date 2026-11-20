@@ -45,7 +45,11 @@ import {
   type BrowserSessions,
 } from "../../../packages/agent/src/toolkits/browser";
 import { setBrowserSessionsForTests } from "../../../apps/web/src/server/api/bots/browser.sessions";
-import { OriginMismatchError, type SecretFill } from "../../../packages/sandbox/src/browser-fill";
+import {
+  FrameOriginError,
+  OriginMismatchError,
+  type SecretFill,
+} from "../../../packages/sandbox/src/browser-fill";
 import { WindowMismatchError } from "../../../packages/sandbox/src/computer-sessions";
 import { secretRedactor } from "../../../packages/agent/src/redact";
 import type { CredentialRequest } from "../../../packages/agent/src/credentials";
@@ -642,6 +646,8 @@ describe("credential request submit", () => {
   let origin = "https://hi.nesin.io";
   /** The page navigates here as the fill starts (a redirect racing the submit). */
   let movesTo: string | undefined;
+  /** The sign-in field sits in this site's frame (The Hindu's id.tinypass.com). */
+  let framedBy: string | undefined;
 
   const session: BrowserSession = {
     url: () => `${origin}/login`,
@@ -649,6 +655,7 @@ describe("credential request submit", () => {
     fillSecret: async (fill: SecretFill) => {
       if (movesTo) origin = movesTo;
       if (fill.origin !== origin) throw new OriginMismatchError(origin);
+      if (framedBy) throw new FrameOriginError(framedBy);
       fills.push({
         origin: fill.origin,
         ...(fill.steps !== undefined ? { steps: fill.steps } : {}),
@@ -696,6 +703,7 @@ describe("credential request submit", () => {
     fills.length = 0;
     origin = "https://hi.nesin.io";
     movesTo = undefined;
+    framedBy = undefined;
     sessions = createBrowserSessions({ transport: async () => session });
     setBrowserSessionsForTests(sessions);
     await sessions.start(target);
@@ -770,6 +778,23 @@ describe("credential request submit", () => {
       message: "The page moved before the fill. Nothing was filled.",
     });
     expect(fills).toEqual([]);
+    expect(runtime.settleCredentialRequest).not.toHaveBeenCalled();
+  });
+
+  it("says the field is in another site's frame, not that the page moved (#302)", async () => {
+    framedBy = "https://id.tinypass.com";
+    const runtime = fakeRuntime();
+    await expect(
+      submitRequest(
+        7,
+        { values: { email: "a@b.c", password: CANARY }, save: false },
+        runtime as never,
+      ),
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      message:
+        "The sign-in field is in a frame from https://id.tinypass.com, not on https://hi.nesin.io. Nothing was filled.",
+    });
     expect(runtime.settleCredentialRequest).not.toHaveBeenCalled();
   });
 
