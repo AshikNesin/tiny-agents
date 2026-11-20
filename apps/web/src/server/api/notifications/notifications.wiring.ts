@@ -36,6 +36,7 @@ import {
   routineFailed,
   routinePausedBlocked,
   routineSucceeded,
+  botMessage,
   takeoverRequested,
   runFailed,
   runLongDone,
@@ -145,11 +146,18 @@ export function startNotifications(
 }
 
 /**
- * The settled step: a failed or long reply reaches the owner's phone. The
- * reply is the Turn's last finished message; one from before this run (the
- * conversation settled without a new Turn) is not news. Only a bot's own
- * chat pushes here: a routine's conversation pushes through its routine
- * events, and a Past chat's is nobody's.
+ * The settled step: what a run sent the owner, a failed reply or a long one
+ * reaches the owner's phone.
+ * - `message_owner` texts sent in the run (issue #396) push from a bot's
+ *   chat while nobody has it open, and always from a conversation answering
+ *   another bot, which nobody can open.
+ * - A failed or long reply pushes from a bot's chat while nobody watches.
+ *   The reply is the Turn's last finished message; one from before this run
+ *   (the conversation settled without a new Turn) is not news. A quiet turn's
+ *   reply (a hand-off's finish, another bot's reply) is the bot's own
+ *   working: it pushes only when it failed.
+ * A routine's conversation pushes through its routine events, and a Past
+ * chat's is nobody's.
  */
 export function runNotificationsStep(notifier: Notifier = notificationService): SettledStep {
   return {
@@ -158,9 +166,18 @@ export function runNotificationsStep(notifier: Notifier = notificationService): 
       // A run that was already going at boot has no start: nothing to measure against.
       if (startedAt === undefined) return;
       const behind = await owner();
-      if (behind?.kind !== "chat" || isBotWatched(behind.bot.id)) return;
+      if (behind?.kind !== "chat" && behind?.kind !== "delivery") return;
+      if (behind.kind === "chat" && isBotWatched(behind.bot.id)) return;
       const bot: BotRef = { id: behind.bot.id, name: behind.bot.name, conversationId };
       const state = await chat();
+      const fresh = state.messages.filter(
+        (message) => message.role === "assistant" && message.createdAt >= startedAt,
+      );
+      const sent = fresh.flatMap((message) => message.sent ?? []);
+      if (sent.length > 0) {
+        notifier.notify(botMessage(bot, fresh.at(-1)?.createdAt ?? startedAt, sent));
+      }
+      if (behind.kind !== "chat") return;
       const last = state.messages.findLast((message) => message.role === "assistant");
       const reply = last ? finishedReplyOf(last) : undefined;
       if (!reply || reply.createdAt < startedAt) return;
@@ -168,6 +185,7 @@ export function runNotificationsStep(notifier: Notifier = notificationService): 
         notifier.notify(runFailed(bot, reply.createdAt, reply.error));
         return;
       }
+      if (sent.length > 0 || last?.quiet) return;
       const { longRunMinutes } = await notifier.getSettings();
       const minutes = Math.floor((Date.now() - startedAt) / 60_000);
       if (minutes >= longRunMinutes) {
@@ -187,11 +205,12 @@ export function notifyRoutineRun(
     if (outcome.pausedReason) notifier.notify(routinePausedBlocked(run, outcome.pausedReason));
     return;
   }
-  notifier.notify(
-    outcome.status === "succeeded"
-      ? routineSucceeded(run, outcome.output)
-      : routineFailed(run, outcome.status, outcome.error),
-  );
+  if (outcome.status === "succeeded") {
+    // A run speaks only through message_owner (issue #396): nothing sent, no push.
+    if (outcome.sent?.length) notifier.notify(routineSucceeded(run, outcome.sent.join("\n\n")));
+    return;
+  }
+  notifier.notify(routineFailed(run, outcome.status, outcome.error));
 }
 
 /**
@@ -200,7 +219,7 @@ export function notifyRoutineRun(
  * the run that paused the routine.
  */
 export type RoutineOutcome =
-  | { status: "succeeded"; output?: string | null }
+  | { status: "succeeded"; output?: string | null; sent?: string[] }
   | { status: "blocked"; error: string; pausedReason?: string | null }
   | { status: RoutineFailure; error?: string | null };
 

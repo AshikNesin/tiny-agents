@@ -165,6 +165,8 @@ const ROUTINE_RUN_GUIDANCE =
   "here, only the short results the prompt quotes. Keep the run lean: fetch only what the task " +
   "needs, prefer small, specific tool results, and stop once you have the answer; a run has a " +
   "token budget and is cut off when it spends it. " +
+  "Your reply is recorded as the run's result, but nobody is told it: to tell the owner " +
+  "something, call message_owner, and send nothing when there is nothing new. " +
   "If a run cannot do its job until the owner fixes something " +
   "(a missing vault login, an account you cannot reach, an approval routines cannot get), " +
   "call report_routine_blocked with what they need to do, then reply in a sentence. If there " +

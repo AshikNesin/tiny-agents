@@ -42,9 +42,17 @@ export const NOTIFICATION_EVENTS: NotificationEventDef[] = [
     defaultEnabled: true,
   },
   {
+    event: "bot.message",
+    label: "Bot messages",
+    description: "A bot messaged you while you were away, after work you didn't start yourself.",
+    category: "notify",
+    defaultEnabled: true,
+  },
+  {
     event: "routine.succeeded",
-    label: "Routine finished",
-    description: "A quiet push with a preview of the routine's reply.",
+    label: "Routine messages",
+    description:
+      "A quiet push with what a routine run messaged you. Runs with nothing to say send none.",
     category: "notify",
     defaultEnabled: true,
   },
@@ -362,6 +370,25 @@ export function runLongDone(
     urlTitle: "Open chat",
     priority: -1,
     dedupeKey: `long-done:${bot.conversationId}:${replyAt}`,
+    botId: bot.id,
+  };
+}
+
+/**
+ * What a bot sent with `message_owner` (issue #396) in a turn it was not
+ * asked for by the owner, while nobody had its chat open. Several messages
+ * of one turn send as one push, the newest last.
+ */
+export function botMessage(bot: BotRef, replyAt: number, sent: readonly string[]): Notification {
+  return {
+    event: "bot.message",
+    category: "notify",
+    title: `💬 ${bot.name}`,
+    message: scrubText(sent.join("\n\n")) ?? `${bot.name} sent you a message.`,
+    path: chatPath(bot),
+    urlTitle: "Open chat",
+    priority: 0,
+    dedupeKey: `bot-message:${bot.conversationId}:${replyAt}`,
     botId: bot.id,
   };
 }

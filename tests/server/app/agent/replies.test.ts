@@ -92,6 +92,24 @@ describe("finishedReplyTo", () => {
     });
   });
 
+  it("collects what the turn sent the owner, in order (#396)", () => {
+    const messages = [
+      user("r1", 1),
+      assistant("", 2, { sent: ["CI is green."] }),
+      assistant("Told the owner about CI and the review.", 3, { sent: ["Bob approved."] }),
+      user("r2", 4),
+      assistant("unrelated", 5),
+    ];
+    expect(finishedReplyTo(idle(messages), "r1")).toEqual({
+      status: "answered",
+      reply: {
+        text: "Told the owner about CI and the review.",
+        createdAt: 3,
+        sent: ["CI is green.", "Bob approved."],
+      },
+    });
+  });
+
   it("carries a model error as the answer", () => {
     const messages = [user("r", 1), assistant("", 2, { status: "error", error: "Provider down" })];
     expect(finishedReplyTo(idle(messages), "r")).toEqual({

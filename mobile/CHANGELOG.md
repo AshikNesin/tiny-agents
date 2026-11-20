@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.0
+
+### Minor Changes
+
+- Quiet bots: after a Code hand-off's result or another bot's reply lands in a chat, you see only what the bot
+  chose to send you. Its own words fold away with its thinking, the same as on the web.
+
 ## 0.6.2
 
 ### Patch Changes

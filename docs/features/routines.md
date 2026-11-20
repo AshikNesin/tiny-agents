@@ -85,6 +85,15 @@ document). In it:
   guard); `list_routines` stays open. The owner's chat is never a routine's
   conversation, so the owner can manage routines while a run is working.
 
+## A run speaks only through `message_owner`
+
+Nobody reads a run's reply as a message (issue #396, after the Grok bot's
+"send user" tool). The reply is the run's result, stored on its row and quoted
+to later runs, but the owner is told only what the run sends with
+`message_owner`. A run that sends nothing pushes nothing, so a routine that
+"tells me when something changed" stays silent until it does. The run
+guidance says so; the sent texts reach the watcher as `FinishedReply.sent`.
+
 ## Results show as quiet lines in the chat
 
 The routine runs step of the settled pipeline (`routineRunsStep`,
@@ -114,5 +123,6 @@ it.
   (`lib/chat-timeline.ts`).
 - A run whose submit failed pauses the routine. Its line says so; no notice
   is written into the chat.
-- Pushes are unchanged (`routine.succeeded`, `routine.failed`, see
+- Pushes: `routine.succeeded` carries what the run sent, and only when it
+  sent something; `routine.failed` is unchanged (see
   [notifications](./notifications.md)).

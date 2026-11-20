@@ -6366,13 +6366,39 @@ describe("one declaration per tool (3.2)", () => {
               },
               "replay": "safe",
             },
+            {
+              "description": "Send the owner a message. When the owner didn't start this turn (a routine run, a hand-off result, another bot's reply), only this reaches them; your plain reply stays private. Send only what is worth their attention, and nothing when there is nothing new.",
+              "fields": [
+                "description",
+                "execute",
+                "name",
+                "parameters",
+                "replay",
+              ],
+              "gated": false,
+              "name": "message_owner",
+              "parameters": {
+                "properties": {
+                  "text": {
+                    "maxLength": 2000,
+                    "minLength": 1,
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "text",
+                ],
+                "type": "object",
+              },
+              "replay": "safe",
+            },
           ],
           "wraps": 0,
         },
         "extensionKeys": "name,tools",
         "gates": {},
         "info": {
-          "description": "Asks you clarifying questions mid-reply",
+          "description": "Asks you clarifying questions mid-reply, and messages you",
           "id": "questions",
           "kind": "toolkit",
           "name": "Questions",
@@ -6384,10 +6410,18 @@ describe("one declaration per tool (3.2)", () => {
               "name": "ask_owner",
               "readOnly": true,
             },
+            {
+              "askLabel": "message you",
+              "description": "Send you a message when you didn't start the turn",
+              "label": "Messaged you",
+              "name": "message_owner",
+              "readOnly": true,
+            },
           ],
         },
         "keyOrder": [
           "id,kind,name,description,tools",
+          "name,label,askLabel,description,readOnly",
           "name,label,askLabel,description,readOnly",
         ],
       }

@@ -144,7 +144,8 @@
               "text": "Echo: **Reply from Helper:** Echo: **Message from Host (bot):** what is 2+2?",
               "status": "done",
               "model": "test-model",
-              "createdAt": 1793946600000
+              "createdAt": 1793946600000,
+              "quiet": true
             }
           ],
           "busy": false,
@@ -261,7 +262,8 @@
               "text": "Echo: **Reply from Helper:** Echo: **Message from Host (bot):** what is 2+2?",
               "status": "done",
               "model": "test-model",
-              "createdAt": 1793946600000
+              "createdAt": 1793946600000,
+              "quiet": true
             },
             {
               "id": "<e6>",
@@ -297,7 +299,8 @@
               "text": "Echo: **Reply from Helper:** Echo: [From the owner, in Host's chat] @Helper say hi",
               "status": "done",
               "model": "test-model",
-              "createdAt": 1793946600000
+              "createdAt": 1793946600000,
+              "quiet": true
             }
           ],
           "busy": false,

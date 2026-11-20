@@ -463,7 +463,7 @@ export function createRoutineRunResolver(rt: RoutineRunsRuntime): RoutineRunReso
     }
     await settleRun(ref.runId, "succeeded", { output, ...spent });
     await clearBlockedStreak(routineId);
-    announceRun(ref, { status: "succeeded", output });
+    announceRun(ref, { status: "succeeded", output, ...(reply.sent ? { sent: reply.sent } : {}) });
   }
 
   async function markInterrupted(ref: RoutineRunRef): Promise<void> {

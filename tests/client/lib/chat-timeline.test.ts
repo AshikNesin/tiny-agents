@@ -81,6 +81,22 @@ describe("chatTimeline", () => {
     ]);
   });
 
+  it("shows only what a quiet turn sent, its own words folded into its thinking (#396)", () => {
+    const quiet: ChatMessage = {
+      ...message("q", 1),
+      text: "The hand-off finished; the owner should hear the PR is up.",
+      quiet: true,
+      sent: ["PR #12 is up for review."],
+    };
+    const silent: ChatMessage = { ...message("s", 2), text: "Nothing worth sending.", quiet: true };
+    const items = chatTimeline([quiet, silent], []);
+    const shown = items.map((item) => (item.kind === "message" ? item.message : undefined));
+    expect(shown.map((m) => [m?.text, m?.reasoning])).toEqual([
+      ["PR #12 is up for review.", "The hand-off finished; the owner should hear the PR is up."],
+      ["", "Nothing worth sending."],
+    ]);
+  });
+
   it("folds a run of tool-only rounds into the reply that follows", () => {
     const round = (id: string, at: number): ChatMessage => ({
       ...message(id, at),
