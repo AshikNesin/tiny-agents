@@ -19,7 +19,7 @@ import {
   type CredentialField,
   type CredentialRequest,
 } from "@tiny-agents/agent";
-import type { SecretFillField } from "@tiny-agents/sandbox/browser";
+import { FrameOriginError, type SecretFillField } from "@tiny-agents/sandbox/browser";
 import { logger } from "@groot/core/logger";
 import { db, vaultItems } from "../../db";
 import { getBrowserSessions } from "../bots/browser.sessions";
@@ -244,6 +244,11 @@ async function fillRequest(
       steps: true,
     });
   } catch (error) {
+    if (error instanceof FrameOriginError) {
+      throw Boom.conflict(
+        `The sign-in field is in a frame from ${error.actual}, not on ${request.origin}. Nothing was filled.`,
+      );
+    }
     if (error instanceof VaultTargetMovedError) {
       throw Boom.conflict("The page moved before the fill. Nothing was filled.");
     }

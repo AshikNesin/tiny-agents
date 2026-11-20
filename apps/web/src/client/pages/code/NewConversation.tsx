@@ -357,8 +357,6 @@ export function NewConversation({
     }
     save(HARNESS_KEY, harness.id);
     if (cwd.trim()) save(key(harness.id, "cwd"), cwd.trim());
-    save(key(harness.id, "model"), model);
-    save(key(harness.id, "effort"), effort);
     const { threadId } = await codeApi.create({
       instanceId: harness.id,
       message,
@@ -369,6 +367,16 @@ export function NewConversation({
       ...(attachments.length ? { attachments } : {}),
     });
     navigate(threadPath(threadId));
+  };
+
+  // A pick is remembered at once, so leaving the page and coming back keeps it (#319).
+  const pickModel = (value: string) => {
+    setModel(value);
+    save(key(harness.id, "model"), value);
+  };
+  const pickEffort = (value: string) => {
+    setEffort(value);
+    save(key(harness.id, "effort"), value);
   };
 
   const selectedModel = models.find((m) => m.id === model) ?? models.find((m) => m.isDefault);
@@ -544,12 +552,12 @@ export function NewConversation({
             submitLabel="Start"
             controls={
               <>
-                <ModelPicker models={models} value={model} onChange={setModel} withDefault />
+                <ModelPicker models={models} value={model} onChange={pickModel} withDefault />
                 {selectedModel?.supportsReasoning !== false && (
                   <ReasoningPicker
                     levels={caps.settings.effortLevels}
                     value={effort}
-                    onChange={setEffort}
+                    onChange={pickEffort}
                   />
                 )}
                 {permission && (

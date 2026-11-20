@@ -28,4 +28,4 @@ export {
   parseExemptHosts,
 } from "../browser-guard";
 export { filterSnapshot, pageWindow, snapshotDiff } from "../browser-snapshot";
-export type { SecretFill, SecretFillField } from "../browser-fill";
+export { FrameOriginError, type SecretFill, type SecretFillField } from "../browser-fill";

@@ -10,6 +10,7 @@ import { chromium, type Browser, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
 import {
   fillSecretFields,
+  FrameOriginError,
   OriginMismatchError,
   pageOrigin,
 } from "../../../../packages/sandbox/src/browser-fill";
@@ -89,6 +90,9 @@ describe.skipIf(!executable)("vault fills in the page", () => {
   let browser: Browser;
   let server: Server;
   let origin: string;
+  /** The same server by another name: a different origin that frames `origin`'s login. */
+  let framer: string;
+  const framedLogin = () => `<!doctype html><iframe src="${origin}/login"></iframe>`;
   let page: Page;
   const submitted: string[] = [];
 
@@ -107,11 +111,14 @@ describe.skipIf(!executable)("vault fills in the page", () => {
                 ? PASSWORD_STEP
                 : path === "/mobile"
                   ? MOBILE_LOGIN
-                  : LOGIN;
+                  : path === "/framed"
+                    ? framedLogin()
+                    : LOGIN;
       res.writeHead(200, { "content-type": "text/html" }).end(body);
     });
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
     origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    framer = `http://localhost:${(server.address() as AddressInfo).port}`;
     browser = await chromium.launch({ executablePath: executable, args: ["--no-sandbox"] });
     page = await browser.newPage();
     // Launching Chromium shares the CI machine with the suite's tsc-heavy
@@ -160,6 +167,26 @@ describe.skipIf(!executable)("vault fills in the page", () => {
     expect(error).toBeInstanceOf(VaultTargetMovedError);
     expect(error).toMatchObject({ actual: origin, reason: "page origin changed before the fill" });
     expect(await page.inputValue("#p")).toBe("");
+  });
+
+  it("names the frame when the field sits in another site's frame (#302)", async () => {
+    // The Hindu's sign-in: the page is on the asked origin, the email field
+    // in an id.tinypass.com frame. Here localhost frames a 127.0.0.1 page.
+    await page.goto(`${framer}/framed`);
+    const frame = page.frames().find((f) => f !== page.mainFrame());
+    await frame?.waitForSelector("#u");
+    const snapshot = await page.locator("body").ariaSnapshot({ mode: "ai" });
+    const ref = /textbox "Email" \[ref=(f\d+e\d+)\]/.exec(snapshot)?.[1];
+    expect(ref).toBeDefined();
+    const error = await fillSecretFields(page, {
+      origin: framer,
+      fields: [
+        { key: "email", autocomplete: "username", value: new SecretValue("a@b.c"), ref: ref! },
+      ],
+    }).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(FrameOriginError);
+    expect(error).toMatchObject({ actual: origin });
+    expect(await frame!.inputValue("#u")).toBe("");
   });
 
   it("fills a card by autocomplete tokens and labels", async () => {
