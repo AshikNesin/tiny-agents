@@ -1,9 +1,3 @@
-/**
- * Settings → Updates (docs/guides/local-updates.md): for a server run by
- * `pnpm local`, the running commit, what the tracked ref has on top of it,
- * and "Update & restart". The build runs beside the running server; the page
- * reloads once the new one answers. Any other server says how to turn this on.
- */
 import { Download, RefreshCw } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@groot/ui/alert";
 import { Button } from "@groot/ui/button";
@@ -25,7 +19,6 @@ const PHASE_BADGE: Record<UpdatePhase, { variant: string; label: string }> = {
   failed: { variant: "error", label: "Failed" },
 };
 
-/** The supervisor lists at most this many commits. */
 const MAX_COMMITS = 50;
 
 export function UpdatesSettings() {
@@ -76,7 +69,6 @@ interface StatusCardProps {
   status: UpdateStatus;
   available: boolean;
   busy: boolean;
-  /** "Update & restart" was pressed and the page waits for the new release. */
   restarting: boolean;
   onApply: () => void;
   onCheck: () => void;

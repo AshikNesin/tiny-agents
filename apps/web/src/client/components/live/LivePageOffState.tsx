@@ -1,7 +1,6 @@
 import { Button, EmptyState, ErrorState, LoadingSpinner } from "@groot/ui";
 import type { PageItem, PageOffCopy } from "./surface";
 
-/** What the view area shows for one that is not live. */
 export function OffState({
   off,
   kind,

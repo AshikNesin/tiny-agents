@@ -1,7 +1,3 @@
-/**
- * The ⌘K "Settings" group: one entry per settings section the viewer has,
- * plus "Check for updates", so settings are reachable without the menus.
- */
 import { RefreshCw } from "lucide-react";
 import type { CommandGroupEntry } from "@groot/shell/components/CommandPalette";
 import { updatesApi } from "../../lib/updates-api";
@@ -31,8 +27,6 @@ export function settingsCommandGroup(
               icon: RefreshCw,
               keywords: ["update", "upgrade", "version", "release"],
               onSelect: () => {
-                // Ask first so Updates opens on "Checking". A server not run by
-                // `pnpm local` refuses, and that page says how to turn it on.
                 void updatesApi
                   .check()
                   .catch(() => undefined)

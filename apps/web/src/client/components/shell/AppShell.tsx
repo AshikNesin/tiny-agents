@@ -28,12 +28,6 @@ import { settingsCommandGroup } from "./settings-commands";
 import { useIsGuest, usePeopleStore } from "../../store/people";
 import { BADGED_FAVICON, documentTitle, waitingCount } from "../../lib/attention";
 
-/**
- * Frame for every authenticated page: the sidebar on the left and the routed
- * page on the right. It also owns what the sidebar and the chat header share:
- * the bot list + activity feed, the model catalog, the ⌘K palette groups, and
- * the one create/edit bot dialog.
- */
 export function AppShell() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
@@ -52,7 +46,6 @@ export function AppShell() {
   const logout = useAuthStore((s) => s.logout);
   const { theme, setTheme } = useTheme();
 
-  // Code (issue #143, ADR 0011): one app-wide list stream (sidebar badge, ⌘K, Code page).
   const connectCode = useCodeStore((s) => s.connect);
   const disconnectCode = useCodeStore((s) => s.disconnect);
   const codeThreads = useCodeStore((s) => s.threads);
@@ -72,7 +65,6 @@ export function AppShell() {
     return () => disconnectActivity();
   }, [loadPeople, loadBots, loadModels, connectActivity, disconnectActivity]);
 
-  // The tab says what needs you and where you are, even in the background (#90).
   useEffect(() => {
     document.title = documentTitle(pathname, bots);
   }, [pathname, bots]);
@@ -85,7 +77,6 @@ export function AppShell() {
     return () => void (icon.href = "/favicon.svg");
   }, [waiting]);
 
-  // The drawer must not stay open across a navigation (e.g. browser back).
   useEffect(() => setMobileOpen(false), [pathname, setMobileOpen]);
 
   const commandGroups = useMemo<CommandGroupEntry[]>(() => {
@@ -103,7 +94,6 @@ export function AppShell() {
               })),
             },
           ];
-    // Top-level Code threads, newest first (subagents open from their parent).
     const codeGroup: CommandGroupEntry[] =
       codeThreads && codeThreads.length > 0
         ? [
@@ -195,9 +185,7 @@ export function AppShell() {
   }, [bots, navigate, openCreateBot, theme, setTheme, logout, codeThreads, codeConfigured, guest]);
 
   const onSaved = (bot: BotRow) => {
-    // The saved row is the full bot: the open chat and the next edit read it.
     useBotsStore.getState().adoptBot(bot);
-    // Creating a bot drops you straight into its chat (messenger model).
     if (!editingBot) navigate(`/chats/${bot.id}`);
   };
 
@@ -208,17 +196,12 @@ export function AppShell() {
     }
   };
 
-  // Chats and Code (issue #143) are full-height workspaces with their own scroll.
   const inChats =
     pathname === "/chats" ||
     pathname.startsWith("/chats/") ||
     pathname === "/code" ||
     pathname.startsWith("/code/");
-  // The full-page settings screen (upstream) brings its own chrome: no app
-  // sidebar, no Layout main padding — only the ⌘K palette stays.
   const inSettings = pathname === "/settings" || pathname.startsWith("/settings/");
-  // Code's workspace owns the whole column too: its thread list takes the
-  // sidebar's place (issue #143, ADR 0011), and it gets its own slim top bar.
   const inCode = pathname === "/code" || pathname.startsWith("/code/");
   const fullPage = inSettings || inCode;
 
@@ -226,13 +209,9 @@ export function AppShell() {
     <div className="bg-background flex h-dvh overflow-hidden">
       {!fullPage && <AppSidebar />}
       <div className="h-dvh min-w-0 flex-1 overflow-y-auto">
-        {/* `header` disables the shell's own sidebar and mobile bar; Layout
-            stays only for the ⌘K palette and the routed Outlet. */}
         <Layout
           header={<span />}
           commandGroups={commandGroups}
-          // AppShell builds its own Navigation (guest- and Code-aware), Theme and
-          // Account groups: the shell's built-ins would list them twice (#166).
           commandBuiltIns={false}
           padded={!inChats && !inSettings}
           className="bg-background"

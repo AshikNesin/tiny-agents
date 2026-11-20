@@ -1,4 +1,3 @@
-/** What the pane asks before it acts: turning YOLO on, and starting a new chat. */
 import { Button } from "@groot/ui/button";
 import {
   Dialog,

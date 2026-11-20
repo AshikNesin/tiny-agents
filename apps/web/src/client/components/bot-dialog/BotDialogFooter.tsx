@@ -2,10 +2,6 @@ import { Button } from "@groot/ui/button";
 import { DialogFooter } from "@groot/ui/dialog";
 import type { Bot } from "../../../shared/api/bots";
 
-/**
- * Cancel and Save (with Delete on an edit), or, while a delete is being
- * confirmed, the inline confirmation in the footer's place: no stacked dialog.
- */
 export function BotDialogFooter({
   bot,
   confirmingDelete,
@@ -30,7 +26,6 @@ export function BotDialogFooter({
   onSave: () => void;
 }) {
   return confirmingDelete && bot ? (
-    // Inline confirmation in place of the footer: no stacked dialog.
     <DialogFooter className="items-center sm:justify-between">
       <p className="text-destructive text-sm">Delete {bot.name}? This cannot be undone.</p>
       <div className="flex flex-col-reverse gap-2 sm:flex-row">

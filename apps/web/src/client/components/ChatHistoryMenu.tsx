@@ -15,11 +15,6 @@ import { botsApi } from "../lib/bots-api";
 import { messageCountLabel, pastChatRange, pastChatTitle } from "../lib/past-chats";
 import { previewLine } from "../lib/bot-groups";
 
-/**
- * The bot's past chats, the most recently ended first; null until loaded.
- * Refetched when the bot changes chats and whenever `refresh` changes (an
- * open menu): the title side-call may have renamed the chat that just ended.
- */
 export function usePastChats(botId: string, conversationId: string, refresh: unknown) {
   const [chats, setChats] = useState<PastChat[] | null>(null);
   useEffect(() => {
@@ -35,7 +30,6 @@ export function usePastChats(botId: string, conversationId: string, refresh: unk
   return chats;
 }
 
-/** One menu row per past chat: title, range, size and last line. Lives in a `DropdownMenuContent`. */
 export function PastChatItems({
   botId,
   chats,
@@ -69,17 +63,10 @@ export function PastChatItems({
 
 interface ChatHistoryMenuProps {
   botId: string;
-  /** The bot's current conversation: a change (continue) refetches the list. */
   conversationId: string;
-  /** The past chat on screen: marked in the list, with a way back to the current one. */
   activeChatId: string;
 }
 
-/**
- * A past chat's header history button (issue #101): the bot's other past
- * chats and the way back to the current one. The live chat lists its past
- * chats in the bot menu instead (`BotMenu`).
- */
 export function ChatHistoryMenu({ botId, conversationId, activeChatId }: ChatHistoryMenuProps) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);

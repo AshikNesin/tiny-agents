@@ -1,7 +1,3 @@
-/**
- * Who and what may use a vault item: its handle, where it fills or is sent,
- * which bots and tools may use it, and when you're asked. Never a value.
- */
 import { useState } from "react";
 import { Checkbox } from "@groot/ui/checkbox";
 import { Field } from "@groot/ui/form";
@@ -24,7 +20,6 @@ const lines = (value: string) =>
     .map((line) => line.trim())
     .filter(Boolean);
 
-/** A handle from a title: "GitHub (work)" → "github-work". */
 export function suggestHandle(title: string): string {
   return title
     .toLowerCase()
@@ -62,7 +57,6 @@ export function PolicyForm({
   defaultTools: string[];
   idPrefix?: string;
 }) {
-  // The bot list the shell already keeps live.
   const bots = useBotsStore((s) => s.bots);
   const [originsText, setOriginsText] = useState(value.origins.join("\n"));
   const [hostsText, setHostsText] = useState(value.hosts.join("\n"));

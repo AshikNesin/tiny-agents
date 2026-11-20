@@ -1,4 +1,3 @@
-/** The desktop page's menus, in its view's bar while the owner drives: Apps and Keys (the computer's). */
 import { useState } from "react";
 import { toast } from "sonner";
 import { AppWindow, Keyboard } from "lucide-react";
@@ -16,10 +15,8 @@ import type { DesktopShortcut } from "../../lib/desktop-keys";
 import { errorMessage } from "../../lib/errors";
 import type { AppsApi } from "./surface";
 
-/** The bar's muted icon tools. */
 const menuTool = "text-muted-foreground hover:text-foreground";
 
-/** The Apps menu: the desktop's applications, loaded when it opens. */
 export function AppsMenu({
   apps: api,
   profile,
@@ -91,7 +88,6 @@ export function AppsMenu({
   );
 }
 
-/** The Keys menu: desktop shortcuts the local browser would otherwise keep. */
 export function KeysMenu({
   shortcuts,
   onSend,

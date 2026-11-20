@@ -1,9 +1,3 @@
-/**
- * The two live-view surfaces (`surface.ts`): the bots' browsers (issues #24,
- * #160) and their desktops (issue #108), each as the chat's panel and as its
- * page. Every field is a difference the two had when they were separate
- * components (docs/rewrite/README.md §4.5).
- */
 import { Globe, Monitor } from "lucide-react";
 import { monoClass } from "@groot/ui";
 import type {
@@ -42,7 +36,6 @@ export const browserSurface: LiveSurface<BrowserStatus, PageBrowserList, PageBro
       reset: (id) => botsApi.browserResetProfile(id),
     },
     startFailed: "Failed to open the browser",
-    // A reset of the shared profile signs every bot on it out: say so first.
     resetCopy: (status) =>
       status?.profile !== "own"
         ? {
@@ -68,7 +61,6 @@ export const browserSurface: LiveSurface<BrowserStatus, PageBrowserList, PageBro
     headlessDetail: (status) => (status.url ? { text: status.url, testId: "browser-url" } : null),
     takeTitle: (bot) => `Click and type in the browser yourself. ${bot} waits.`,
     releaseTitle: (bot) => `Hand the browser back to ${bot}`,
-    // The Browser page (issue #160) is the owner's; it opens on this browser.
     openPage: {
       to: (status, bot) =>
         `/browser?profile=${encodeURIComponent(status?.profile !== "own" ? "shared" : `bot-${bot.id}`)}`,

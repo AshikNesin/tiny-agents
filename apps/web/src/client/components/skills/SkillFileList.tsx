@@ -1,7 +1,3 @@
-/**
- * Read-only bundled-file list (path + size) shared by the skill editor and the
- * import review step.
- */
 import { Card } from "@groot/ui/card";
 import { Text } from "@groot/ui/typography";
 import type { SkillFile } from "../../../shared/api/skills";

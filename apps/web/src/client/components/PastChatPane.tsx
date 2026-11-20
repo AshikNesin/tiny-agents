@@ -28,13 +28,6 @@ interface PastChatPaneProps {
   chatId: string;
 }
 
-/**
- * A past chat (issue #101), read-only: the chat session in its past-chat
- * mode (lib/chat-mode.ts), so the transcript as it was, opening on its
- * newest messages with older ones loading on scroll, and the routine
- * results that landed while it was the bot's chat. The composer's place
- * holds "Continue this chat", which moves the bot back onto it.
- */
 export function PastChatPane(props: PastChatPaneProps) {
   return (
     <ChatScrollerProvider mode={PAST_CHAT}>
@@ -50,7 +43,6 @@ function PastChatPaneBody({ bot, chatId }: PastChatPaneProps) {
   const adoptBot = useBotsStore((s) => s.adoptBot);
   const [busy, setBusy] = useState(false);
 
-  // The session, read once: one that can't be read (the reason toasted) goes back to the live chat.
   const leave = useCallback(
     () => navigate(`/chats/${bot.id}`, { replace: true }),
     [navigate, bot.id],
@@ -64,7 +56,6 @@ function PastChatPaneBody({ bot, chatId }: PastChatPaneProps) {
   const continueChat = async () => {
     setBusy(true);
     try {
-      // The bot is on another conversation now: the live chat reopens on it.
       adoptBot(await botsApi.continuePastChat(bot.id, chatId));
       navigate(`/chats/${bot.id}`, { replace: true });
       toast.success("Chat continued. The one you left is in Chat history.");
@@ -93,7 +84,6 @@ function PastChatPaneBody({ bot, chatId }: PastChatPaneProps) {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {/* One line, as on the Code page: back, then the path bot / chat. */}
       <header className="border-border flex h-13 shrink-0 items-center gap-1 border-b px-2 sm:px-3">
         <Button
           variant="ghost"
@@ -162,10 +152,8 @@ function PastChatPaneBody({ bot, chatId }: PastChatPaneProps) {
         </div>
       </header>
 
-      {/* No owner actions: what still waits in a past chat can no longer be answered. */}
       <ChatSessionTranscript bot={bot} chat={session} mode={PAST_CHAT} />
 
-      {/* The composer's place: this chat has ended, and how to pick it up again. */}
       <footer className="mx-auto w-full max-w-3xl shrink-0 px-2.5 pb-4 sm:px-5">
         <div
           className="bg-muted/60 flex flex-col gap-3 rounded-3xl border px-4 py-3 sm:flex-row sm:items-center"

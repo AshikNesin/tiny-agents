@@ -1,13 +1,3 @@
-/**
- * A streamed desktop: a noVNC canvas wired to the server's VNC WebSocket.
- *
- * The viewer stays view-only until the owner takes control. It reconnects
- * with backoff (fetching a fresh one-time ticket each try) and carries the
- * clipboard both ways. For the browser it fits the remote desktop (and
- * Chrome's window) to its box; the computer's desktop has a fixed size the
- * bot's coordinates depend on, so that viewer only scales it. A browser
- * viewer with `remoteResize` off (the picture in picture) only scales too.
- */
 import {
   forwardRef,
   useCallback,
@@ -26,47 +16,25 @@ import type { VncTicket } from "../../../shared/api/live";
 export type VncState = "connecting" | "live" | "reconnecting";
 
 export interface VncHandle {
-  /** Send the local clipboard to the remote browser and press Ctrl+V. */
   paste(): Promise<void>;
-  /** Press a chord the local browser would otherwise keep (Alt+Tab, Alt+F4). */
   sendKeys(strokes: KeyStroke[]): void;
   focus(): void;
 }
 
 interface VncViewProps {
-  /**
-   * Whose desktop: with `ticket` given, only the key that keeps one
-   * connection per desktop (e.g. a computer profile on the Computer page).
-   */
   botId: string;
-  /** Where tickets come from; default the bot's browser or computer ticket route. */
   ticket?: () => Promise<VncTicket>;
-  /** Which desktop to stream; default the bot's browser. */
   kind?: "browser" | "computer";
-  /**
-   * How a browser viewer fits the remote window to its box; default the
-   * bot's browser resize route (the Browser page passes its profile's).
-   */
   resize?: (size: { width: number; height: number }) => Promise<unknown>;
-  /**
-   * Browsers only: false stops the viewer from resizing the remote display
-   * to its box, so a small view (the picture in picture) scales the display
-   * down instead of shrinking it under the bot. Default true.
-   */
   remoteResize?: boolean;
-  /** The remote display's size in pixels, whenever it changes (the picture in picture's shape). */
   onDisplaySize?: (size: { width: number; height: number }) => void;
-  /** False keeps the viewer view-only (the agent is driving). */
   interactive: boolean;
   onState: (state: VncState) => void;
 }
 
-/** Short: entering full screen should not leave the old window size on screen for long. */
 const RESIZE_DEBOUNCE_MS = 150;
-/** A failed fit is retried this many times, this far apart. */
 const FIT_RETRIES = 2;
 const FIT_RETRY_MS = 1000;
-/** Pause between setting the remote clipboard and pressing Ctrl+V. */
 const PASTE_SETTLE_MS = 80;
 
 function socketUrl(path: string): string {
@@ -117,9 +85,6 @@ export const VncView = forwardRef<VncHandle, VncViewProps>(function VncView(
     onStateRef.current = onState;
   }, [onState]);
 
-  // Before layout, so noVNC's own resize observer sees the new setting when
-  // the box changes in the same commit (docking or shrinking to the picture
-  // in picture). Turning it back on refits the display to the box at once.
   useLayoutEffect(() => {
     remoteResizeRef.current = remoteResize;
     const rfb = rfbRef.current;
@@ -127,7 +92,6 @@ export const VncView = forwardRef<VncHandle, VncViewProps>(function VncView(
       rfb.resizeSession = remoteResize;
   }, [remoteResize, kind]);
 
-  // noVNC sizes its canvas to the remote display: report each new size.
   const onDisplaySizeRef = useRef(onDisplaySize);
   useEffect(() => {
     onDisplaySizeRef.current = onDisplaySize;
@@ -150,7 +114,6 @@ export const VncView = forwardRef<VncHandle, VncViewProps>(function VncView(
     return () => observer.disconnect();
   }, []);
 
-  // Take control = stop being view-only and grab the keyboard.
   useEffect(() => {
     interactiveRef.current = interactive;
     const rfb = rfbRef.current;
@@ -182,15 +145,11 @@ export const VncView = forwardRef<VncHandle, VncViewProps>(function VncView(
     [paste],
   );
 
-  // Connection lifecycle: ticket -> noVNC -> reconnect with backoff. The
-  // reconnecting socket owns the attempts; this transport only knows noVNC.
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
     const socket = reconnectingSocket<{ path: string; scale: number }, RfbClient>(
       {
-        // No ticket (session gone) retries too: the panel's status poll
-        // removes this view when the session is truly gone.
         ticket: () =>
           ticketRef.current
             ? ticketRef.current()
@@ -218,9 +177,7 @@ export const VncView = forwardRef<VncHandle, VncViewProps>(function VncView(
           });
           rfb.addEventListener("clipboard", (event) => {
             const text = (event as CustomEvent<{ text: string }>).detail.text;
-            void navigator.clipboard?.writeText(text).catch(() => {
-              /* the browser may refuse without a user gesture; Paste still works */
-            });
+            void navigator.clipboard?.writeText(text).catch(() => {});
           });
           return rfb;
         },
@@ -230,22 +187,14 @@ export const VncView = forwardRef<VncHandle, VncViewProps>(function VncView(
         },
       },
       (state) => {
-        // "closed" only follows this effect's own cleanup.
         if (state !== "closed") onStateRef.current(state);
       },
     );
     return () => socket.close();
   }, [botId, kind]);
 
-  // Fit the remote Chrome window to the viewer. noVNC resizes the display
-  // itself; the window inside it needs the same size (in CSS pixels), which
-  // for a viewer narrower than Chrome can be is a wider one that the canvas
-  // scales down. Chrome accepts a window larger than the display, so the two
-  // can land in either order. One request at a time keeps the last size the
-  // winner.
   useEffect(() => {
     const host = hostRef.current;
-    // The computer's desktop never changes size: noVNC just scales it.
     if (!host || kind !== "browser" || typeof ResizeObserver === "undefined") return;
     let disposed = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -255,7 +204,7 @@ export const VncView = forwardRef<VncHandle, VncViewProps>(function VncView(
     const fit = (attempt = 0) => {
       if (disposed) return;
       if (inFlight) {
-        stale = true; // the box changed mid-request: fit again afterwards
+        stale = true;
         return;
       }
       inFlight = true;
@@ -277,8 +226,6 @@ export const VncView = forwardRef<VncHandle, VncViewProps>(function VncView(
             stale = false;
             timer = setTimeout(() => fit(), RESIZE_DEBOUNCE_MS);
           } else if (!ok && attempt < FIT_RETRIES) {
-            // Toggling full screen has no later resize to repair a failed
-            // fit, and the window would stay at its old size.
             timer = setTimeout(() => fit(attempt + 1), FIT_RETRY_MS);
           }
         });
@@ -297,8 +244,6 @@ export const VncView = forwardRef<VncHandle, VncViewProps>(function VncView(
     };
   }, [botId, kind]);
 
-  // Cmd shortcuts on a Mac become Ctrl shortcuts on the remote Linux Chrome.
-  // Captured before noVNC sees them: noVNC would send Meta as Super.
   useEffect(() => {
     const host = hostRef.current;
     if (!host || !isMac()) return;
@@ -310,9 +255,7 @@ export const VncView = forwardRef<VncHandle, VncViewProps>(function VncView(
       event.stopPropagation();
       if (event.type !== "keydown" || event.key === "Meta") return;
       if (event.key.toLowerCase() === "v" && !event.shiftKey) {
-        void paste().catch(() => {
-          /* clipboard permission denied */
-        });
+        void paste().catch(() => {});
         return;
       }
       const strokes = remapMetaChord(event);

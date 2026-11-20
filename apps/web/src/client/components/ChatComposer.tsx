@@ -59,30 +59,22 @@ import { SearchSelect, type SearchSelectOption } from "./ui/search-select";
 const ACCEPTED_FILES =
   "image/png,image/jpeg,image/webp,image/gif,.pdf,.txt,.md,.json,.csv,.yaml,.yml,.xml,.html,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.odp,.zip,.tar,.gz,.tgz,.bz2,.7z,.rar,.mp3,.wav,.ogg,.m4a,.mp4,.webm,.mov,.tsv,.log,.ts,.tsx,.js,.jsx,.mjs,.cjs,.py,.go,.rs,.java,.kt,.rb,.php,.sh,.sql,.toml,.ini,.cfg,.diff,.patch,.css,.c,.h,.cpp,.swift";
 
-/** The hint shown instead of sending when a typed @name fits several bots. */
 function ambiguousMentionHint(names: string[]): string {
   const quoted = names.map((name) => `"${name}"`).join(", ");
   return `More than one bot is named ${quoted}. Type @ and pick the one you mean from the list.`;
 }
 
 export interface ChatComposerHandle {
-  /** Stage files from outside the composer (drag and drop on the pane). */
   stageFiles: (files: FileList | File[]) => void;
 }
 
 interface ChatComposerProps {
   bot: Bot;
   model: CatalogModel | undefined;
-  /** The catalog, for the model chip. */
   models?: CatalogModel[];
-  /** Switch the bot's model from the chip; leave out to show it read-only (a guest). */
   onModelChange?: (modelId: string) => Promise<void> | void;
   canAnswer: boolean;
   busy: boolean;
-  /**
-   * Send one owner message (store/chats.ts). "restored": it was refused
-   * and its Echo withdrawn, so the composer puts the draft back.
-   */
   onSend: (submission: OwnerSubmission) => Promise<OwnerSendOutcome>;
   onStop: () => Promise<void>;
   onEditBot: () => void;
@@ -93,10 +85,6 @@ function formatContext(tokens: number): string {
   return `${Math.round(tokens / 1000)}k`;
 }
 
-/**
- * The model chip in the composer's toolbar, as on the Code page: a
- * searchable picker that saves the bot's model.
- */
 function ModelChip({
   models,
   value,
@@ -156,19 +144,10 @@ function ModelChip({
   );
 }
 
-/**
- * The composer, styled after the Code page's: one Fluid InputMessage frame
- * holding the textarea and a toolbar — "+" (files, mention a bot), the
- * model chip, Queue while a reply runs, and one round button that is Stop
- * while the bot replies with nothing typed, and Send (steer) otherwise.
- */
 export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function ChatComposer(
   { bot, model, models = [], onModelChange, canAnswer, busy, onSend, onStop, onEditBot },
   ref,
 ) {
-  // The text, the mentions picked from the autocomplete (kept in step with
-  // the text: they send to the bot picked, not whichever bot the name
-  // matches, issue #80) and the staged attachments (lib/composer-draft.ts).
   const [draft, setDraft] = useState<ComposerDraft<AttachmentRef>>(() =>
     emptyDraft(readStoredDraft(chatDraftKey(bot.id))),
   );
@@ -179,9 +158,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
   const [stopRequested, setStopRequested] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  /** Where the caret goes once the text that was just set is rendered. */
   const pendingCaret = useRef<number | null>(null);
-  /** Set by "+ → Mention a bot" so the closing menu leaves focus in the composer. */
   const mentionFromMenu = useRef(false);
   const mentionRef = useRef<MentionAutocompleteHandle>(null);
   const coarsePointer = useMemo(prefersCoarsePointer, []);
@@ -189,8 +166,6 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
 
   const roster = useBotsStore((s) => s.bots);
   const mentionCandidates = useMemo(() => mentionableBots(roster, bot.id), [roster, bot.id]);
-  // The @ tip lives under the composer (not in the placeholder, where a long
-  // bot name wrapped it onto two lines) until the owner has used a mention.
   const [mentionTipSeen, setMentionTipSeen] = useState(readMentionTipSeen);
   const mentionTip = !mentionTipSeen && mentionCandidates.length > 0;
   useEffect(() => {
@@ -198,28 +173,17 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
     setMentionTipSeen(true);
     markMentionTipSeen();
   }, [text, mentionTipSeen]);
-  // The overlay follows the caret inside the mention token, so it needs
-  // the caret on every keystroke; `mentionClosed` covers Escape.
   const mention = activeMentionToken(text, caret);
   const mentionOpen = mention !== null && !mentionClosed;
 
   const modelKnown = model !== undefined;
   const enabled = canAnswer && modelKnown;
   const canSend = enabled && draftCanSend(draft);
-  // Busy no longer blocks sending (steering, issue #9): the server queues
-  // the message. Whenever there is nothing sendable (nothing typed, or an
-  // attachment still uploading) the same button stops the reply, so the
-  // composer never shows two competing round buttons and Stop is never
-  // hidden behind a disabled Send.
   const showStop = busy && !canSend;
-  // The stop spinner lasts until the server confirms the run ended: a
-  // request left over from an earlier run means nothing once busy drops.
   const stopping = stopRequested && busy;
 
   useEffect(() => writeStoredDraft(chatDraftKey(bot.id), text), [bot.id, text]);
 
-  // Object URLs pin their files in memory; release whatever is still staged
-  // when the composer goes away (switching bots with an image attached).
   const stagedRef = useRef(staged);
   useEffect(() => {
     stagedRef.current = staged;
@@ -233,8 +197,6 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
     [],
   );
 
-  // Land in the composer when a chat opens, on a physical keyboard only:
-  // on touch, focusing would pop the on-screen keyboard over the chat.
   useEffect(() => {
     if (!coarsePointer && enabled) textareaRef.current?.focus({ preventScroll: true });
   }, [coarsePointer, enabled]);
@@ -262,7 +224,6 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
     if (!canSend) return;
     const sent = outgoing(draft);
     const mentions = resolveMentions(sent.body, mentionCandidates, bot.id, sent.picked);
-    // A typed name several bots share would reach an arbitrary one of them.
     if (mentions.ambiguous.length > 0) {
       setMentionHint(ambiguousMentionHint(mentions.ambiguous));
       return;
@@ -270,8 +231,6 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
     setDraft(emptyDraft());
     setMentionClosed(false);
     for (const item of staged) if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
-    // An offline send stays an Echo and goes again by itself once the
-    // browser is back (store/chats.ts); only a refusal comes back here.
     const outcome = await onSend({
       body: sent.body,
       attachments: sent.attachments,
@@ -279,8 +238,6 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
       whenBusy,
     }).catch((): OwnerSendOutcome => "restored");
     if (outcome === "restored") {
-      // The send was refused (and toasted); hand the message back for another
-      // try, ahead of anything typed or attached while the send was in flight.
       setDraft((current) =>
         restoreRefused(current, sent, (attachment) => ({
           name: attachment.name,
@@ -307,13 +264,10 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
     const next = draftInsertMention(draft, mention, caret, chosen);
     setDraft(next.draft);
     setMentionHint(null);
-    // Restore the caret after the trailing space once React re-renders the
-    // textarea (it would otherwise land at the very end of the text).
     setCaret(next.caret);
     pendingCaret.current = next.caret;
   };
 
-  /** "+" → Mention a bot: type an `@` at the caret, which opens the picker. */
   const startMention = () => {
     const el = textareaRef.current;
     const next = draftStartMention(draft, el?.selectionStart ?? text.length);
@@ -325,9 +279,6 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
     requestAnimationFrame(() => el?.focus({ preventScroll: true }));
   };
 
-  // Place the caret in the same commit that renders the inserted mention: a
-  // frame later it would race the owner's next keystrokes and jump back
-  // mid-word.
   useLayoutEffect(() => {
     const target = pendingCaret.current;
     if (target === null || !textareaRef.current) return;
@@ -336,16 +287,11 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
     textareaRef.current.selectionEnd = target;
   }, [text]);
 
-  // Pressing a round button must not steal focus from the textarea: on
-  // desktop the caret stays put for the next message, on touch the
-  // on-screen keyboard does not collapse and reopen on every send.
   const keepFocus = (e: MouseEvent) => e.preventDefault();
 
   return (
     <div
       data-slot="chat-composer"
-      // A physical keyboard gets a taller bottom gutter that holds the
-      // keyboard hint line, so the composer never moves when it appears.
       className={`px-3 pt-2 md:px-4 ${
         coarsePointer
           ? "pb-[max(0.75rem,env(safe-area-inset-bottom))]"
@@ -393,9 +339,6 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
           aria-label="Attach files"
           data-testid="file-input"
         />
-        {/* Fluid InputMessage frame: a hairline ring (not a border) that gains
-            contrast on hover and focus, over a soft drop shadow; clicking the
-            frame's padding focuses the field. */}
         <div
           data-slot="composer-frame"
           className={cn(
@@ -433,18 +376,11 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
             }}
             onKeyDown={(e) => {
               if (mentionRef.current?.handleKeyDown(e)) return;
-              // Escape stops a running reply from the keyboard.
               if (e.key === "Escape" && busy) {
                 e.preventDefault();
                 void stop();
                 return;
               }
-              // Enter sends only on a physical keyboard (fine pointer).
-              // On touch (pointer: coarse) Enter inserts a newline and the
-              // send button is the only way to send (issue #1). While a
-              // reply runs, Enter steers it and Alt+Enter queues a
-              // follow-up for afterwards (issue #9). IME composition
-              // (CJK input) uses Enter to commit a candidate, not to send.
               if (
                 e.key === "Enter" &&
                 !e.shiftKey &&
@@ -480,9 +416,6 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
                 side="top"
                 className="w-64"
                 onCloseAutoFocus={(event) => {
-                  // The menu returns focus to "+" when it closes, after startMention
-                  // focused the composer; the composer's blur then closed the
-                  // mention list (#167). Keep focus in the composer instead.
                   if (!mentionFromMenu.current) return;
                   mentionFromMenu.current = false;
                   event.preventDefault();
@@ -510,7 +443,6 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
               {models.length > 0 && (
                 <ModelChip
                   models={models}
-                  // `bot.modelId` is null on the default model (README §4.5, W1).
                   value={model?.id ?? (bot.modelId as string)}
                   onChange={onModelChange}
                 />
@@ -532,8 +464,6 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
               </Button>
             )}
             <div className="shrink-0">
-              {/* One button that changes job: send/steer, or stop while a
-                  reply runs; the icon pops between the two (Fluid InputMessage). */}
               <Button
                 size="icon"
                 onMouseDown={keepFocus}
@@ -585,8 +515,6 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
             </div>
           </div>
         </div>
-        {/* Keyboard hints while a reply runs: one quiet line under the
-            pill, fading in and out inside the reserved gutter. */}
         {!coarsePointer && (
           <p
             aria-hidden={!busy && !mentionTip}

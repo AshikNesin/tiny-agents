@@ -42,7 +42,6 @@ function transportLabel(transport: string): string {
   return transport === "sse" ? "SSE" : "Streamable HTTP";
 }
 
-// new URL() alone would accept mailto:; MCP endpoints are http(s) only.
 function isValidConnectionUrl(value: string): boolean {
   try {
     const { protocol } = new URL(value);
@@ -64,7 +63,6 @@ export function AddConnectionDialog({
   const [form, setForm] = useState(EMPTY_FORM);
   const [touched, setTouched] = useState({ name: false, url: false, secret: false });
   const [testResult, setTestResult] = useState<ConnectionTestResult | null>(null);
-  /** Why the last test failed; cleared by the next edit or a passing test. */
   const [testError, setTestError] = useState<string | null>(null);
   const [testing, setTesting] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -115,8 +113,6 @@ export function AddConnectionDialog({
         }),
       );
     } catch (error) {
-      // Inline in the dialog (issue #123): the failure and its reason must
-      // stay visible next to the button, not only in a fading toast.
       setTestResult(null);
       setTestError(errorMessage(error, "Test failed"));
     } finally {
@@ -125,8 +121,6 @@ export function AddConnectionDialog({
   };
 
   const { run } = useStepUp();
-  // Runs in the click itself: an OAuth sign-in opens its popup before the
-  // first await, then waits for the connection to exist.
   const save = () => {
     if (!canSave) return;
     setSaving(true);

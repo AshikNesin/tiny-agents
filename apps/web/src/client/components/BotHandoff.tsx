@@ -7,7 +7,6 @@ import { formatDuration } from "../lib/tool-call-text";
 import { viewOf, type ToolPhase } from "../lib/tool-call-view";
 import { BotAvatar } from "./BotAvatar";
 
-/** How a hand-off that did not go through ended, where it says more than "Failed". */
 const ENDED: Partial<Record<ChatToolCall["status"], string>> = {
   denied: "Blocked message to",
   aborted: "Stopped messaging",
@@ -20,7 +19,6 @@ function handoffLabel(phase: ToolPhase, status: ChatToolCall["status"]): string 
   return ENDED[status] ?? "Failed to message";
 }
 
-/** A sender label (avatar + name) above a bordered bubble, as in Grok's thread view. */
 function ThreadMessage({ name, text }: { name: string; text: string }) {
   return (
     <div className="flex flex-col gap-1.5">
@@ -35,19 +33,12 @@ function ThreadMessage({ name, text }: { name: string; text: string }) {
   );
 }
 
-/**
- * The outbound `message_bot` call as Grok's centered handoff line: a quiet
- * pill (avatar, "Messaged {bot}", a snippet) that opens the full message in a
- * view-only thread dialog. The bot's reply arrives later in the transcript as
- * a relayed peer card, so the dialog only shows what was sent.
- */
 export function BotHandoff({ call, botName }: { call: ChatToolCall; botName: string }) {
   const [open, setOpen] = useState(false);
   const to = typeof call.args?.to === "string" ? call.args.to : "";
   const text = typeof call.args?.text === "string" ? call.args.text : "";
   const snippet = text.replace(/\s+/g, " ").trim().slice(0, 60);
   const { phase } = viewOf(call);
-  // An expired hand-off (nobody approved it in time) was never sent: muted, not red.
   const failed = phase === "failed" && call.status !== "expired";
   const running = phase === "pending" || phase === "running";
 
