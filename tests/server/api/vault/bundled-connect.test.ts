@@ -193,7 +193,7 @@ describe("running the bundled server", () => {
       [
         "#!/bin/sh",
         `echo started >> "$HOME/${name}.runs"`,
-        `env > "$HOME/${name}.env"`,
+        `env > "$HOME/${name}.env.part" && mv "$HOME/${name}.env.part" "$HOME/${name}.env"`,
         failFirst
           ? `[ -f "$HOME/${name}.failed" ] || { touch "$HOME/${name}.failed"; exit 3; }`
           : "",
