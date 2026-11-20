@@ -4,7 +4,7 @@
  * the guest guard refuses them before they get here.
  */
 import { createHash } from "node:crypto";
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { z } from "zod";
 import type { AppEnv } from "@groot/core/types";
 import { env } from "@groot/core/env";
@@ -461,10 +461,21 @@ router.post("/code/threads/:id/review/viewed", async (c) => {
   return ok(c, { viewed: body.viewed });
 });
 
-router.get("/code/threads/:id/review/drafts", async (c) => {
+/**
+ * Whose waiting line comments: the agent's, or with `?target=github` a PR
+ * review's (`review:<id>`) pending comments for GitHub.
+ */
+async function draftsOf(c: Context<AppEnv>) {
   const id = threadParam(c.req.param("id"));
-  return ok<ReviewDraft[]>(c, await threadReview(id).drafts());
-});
+  if (c.req.query("target") !== "github") return threadReview(id);
+  const reviewId = reviewIdOfKey(id);
+  if (!reviewId) throw Boom.badRequest("Only a pull request review has GitHub comments.");
+  return reviewComments(reviewId);
+}
+
+router.get("/code/threads/:id/review/drafts", async (c) =>
+  ok<ReviewDraft[]>(c, await (await draftsOf(c)).drafts()),
+);
 
 const draftSchema = z.object({
   path: z.string().min(1).max(1024),
@@ -476,14 +487,12 @@ const draftSchema = z.object({
 });
 
 router.post("/code/threads/:id/review/drafts", async (c) => {
-  const id = threadParam(c.req.param("id"));
-  const body = await parseBody(c, draftSchema);
-  return ok<ReviewDraft>(c, await threadReview(id).addDraft(body), 201);
+  const [body, drafts] = await Promise.all([parseBody(c, draftSchema), draftsOf(c)]);
+  return ok<ReviewDraft>(c, await drafts.addDraft(body), 201);
 });
 
 router.delete("/code/threads/:id/review/drafts/:draft", async (c) => {
-  const id = threadParam(c.req.param("id"));
-  await threadReview(id).removeDraft(c.req.param("draft"));
+  await (await draftsOf(c)).removeDraft(c.req.param("draft"));
   return ok(c, { deleted: true });
 });
 
@@ -532,24 +541,6 @@ router.post("/code/reviews/:review/ask", async (c) => {
     }),
   );
   return ok(c, await askReview(c.req.param("review"), message, model));
-});
-
-router.get("/code/reviews/:review/comments", async (c) =>
-  ok<ReviewDraft[]>(c, await (await reviewComments(c.req.param("review"))).drafts()),
-);
-
-router.post("/code/reviews/:review/comments", async (c) => {
-  const [body, comments] = await Promise.all([
-    parseBody(c, draftSchema),
-    reviewComments(c.req.param("review")),
-  ]);
-  return ok<ReviewDraft>(c, await comments.addDraft(body), 201);
-});
-
-router.delete("/code/reviews/:review/comments/:comment", async (c) => {
-  const comments = await reviewComments(c.req.param("review"));
-  await comments.removeDraft(c.req.param("comment"));
-  return ok(c, { deleted: true });
 });
 
 router.post("/code/reviews/:review/comments/to-thread", async (c) =>

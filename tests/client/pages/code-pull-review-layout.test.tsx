@@ -71,7 +71,7 @@ function stubFetch() {
     }
     if (path === "/api/v1/code/reviews/rv1/threads")
       return answer({ headSha: REVIEW.headSha, threads: [] });
-    if (path === "/api/v1/code/reviews/rv1/comments" && init?.method === "POST") {
+    if (path === `${thread}/drafts` && at.search === "?target=github" && init?.method === "POST") {
       const body = JSON.parse(String(init.body)) as Record<string, unknown>;
       return answer({ id: "g1", createdAt: REVIEW.updatedAt, ...body });
     }
@@ -145,7 +145,8 @@ describe("a PR review's layout", () => {
     await user.click(screen.getByRole("button", { name: "Comment" }));
 
     const post = fetch.mock.calls.find(
-      ([url, init]) => String(url).endsWith("/reviews/rv1/comments") && init?.method === "POST",
+      ([url, init]) =>
+        String(url).endsWith("/review/drafts?target=github") && init?.method === "POST",
     );
     expect(JSON.parse(String(post?.[1]?.body))).toMatchObject({
       path: "src/b.ts",

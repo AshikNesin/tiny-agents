@@ -437,7 +437,7 @@ describe("reviewing a Code thread's own PR", () => {
 describe("submitting a PR review", () => {
   const open = async () =>
     (await call<PullReviewView>("POST", "/reviews", { pr: "acme/web#7" })).body.data!;
-  const comments = (id: string) => `/reviews/${id}/comments`;
+  const comments = (id: string) => `/threads/review%3A${id}/review/drafts?target=github`;
 
   it("posts the pending comments with the verdict at the head the owner read, apart from the assistant's", async () => {
     await newProject();
@@ -491,6 +491,9 @@ describe("submitting a PR review", () => {
       },
     ]);
     expect((await call<ReviewDraft[]>("GET", comments(review.id))).body.data).toEqual([]);
+    // Only a review has comments for GitHub.
+    const notReview = await call("GET", "/threads/fake%3At1/review/drafts?target=github");
+    expect(notReview.status).toBe(400);
     const forAgent = (
       await call<ReviewDraft[]>("GET", `/threads/${encodeURIComponent(review.key)}/review/drafts`)
     ).body.data!;
@@ -940,7 +943,9 @@ describe("changing the PR's code", () => {
     );
 
     expect(res.body.data).toEqual({ added: 2, skipped: 1 });
-    const pending = (await call<ReviewDraft[]>("GET", `/reviews/${review.id}/comments`)).body.data!;
+    const pending = (
+      await call<ReviewDraft[]>("GET", `/threads/review%3A${review.id}/review/drafts?target=github`)
+    ).body.data!;
     expect(pending.map((d) => [d.path, d.side, d.startLine, d.endLine, d.body])).toEqual([
       ["src/a.ts", "new", 2, 2, "```suggestion\nTWO\n```"],
       // An added line is suggested with the line it follows.
