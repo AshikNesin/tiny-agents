@@ -16,8 +16,8 @@ that the code alone cannot show.
 ## Index
 
 0020 is reserved for the native Code harness on pi-durable (issue #297,
-phases 0 and 1), which follows the PR loop. 0034 and 0035 are reserved for the
-remaining comment sweeps under ADR 0028 (other packages, tests).
+phases 0 and 1), which follows the PR loop. 0035 is reserved for the
+tests' comment sweep under ADR 0028.
 
 | #    | Title                                                                                                                | Status                                              |
 | ---- | -------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
@@ -53,6 +53,7 @@ remaining comment sweeps under ADR 0028 (other packages, tests).
 | 0031 | [Decisions recorded from code comments: server API](0031-decisions-from-comments-server-api.md)                      | accepted                                            |
 | 0032 | [Decisions recorded from code comments: server and scripts](0032-decisions-from-comments-server-and-scripts.md)      | accepted                                            |
 | 0033 | [Decisions recorded from code comments: agent packages](0033-decisions-from-comments-agent.md)                       | accepted                                            |
+| 0034 | [Decisions recorded from code comments: other packages](0034-decisions-from-comments-packages.md)                    | accepted                                            |
 | 0036 | [Decisions recorded from code comments: Android app](0036-decisions-from-comments-android.md)                        | accepted                                            |
 | G4   | [Hono + Drizzle on SQLite, for Node and Cloudflare Workers](0004-hono-drizzle-sqlite-workers.md)                     | accepted (groot)                                    |
 
