@@ -1,9 +1,3 @@
-/**
- * Attached files' live state and a read-only preview (issue #58). The
- * preview shows extracted text only — monospace text, a plain table for
- * sheets, a path list for archives — and never renders HTML, PDF or Office
- * content. The original stays a download.
- */
 import { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight, Download } from "lucide-react";
 import { Button } from "@groot/ui/button";
@@ -24,7 +18,6 @@ import { botsApi } from "../lib/bots-api";
 const POLL_MS = 2_000;
 const MAX_POLLS = 90;
 
-/** Poll an upload while it extracts; settles on ready, failed or unsupported. */
 export function useUploadStatus(attachment: AttachmentRef): UploadStatus | undefined {
   const [status, setStatus] = useState<UploadStatus | undefined>(undefined);
   const id = attachment.uploadId;
@@ -43,9 +36,7 @@ export function useUploadStatus(attachment: AttachmentRef): UploadStatus | undef
         if (cancelled) return;
         setStatus(next);
         if (next.status !== "pending") window.clearInterval(timer);
-      } catch {
-        // keep polling until the cap; the chip falls back to the size
-      }
+      } catch {}
     };
     const timer = window.setInterval(() => void poll(), POLL_MS);
     void poll();
@@ -57,7 +48,6 @@ export function useUploadStatus(attachment: AttachmentRef): UploadStatus | undef
   return status;
 }
 
-/** One short line for a chip: "extracting…", "40 pages", "failed: …". */
 export function statusLabel(status: UploadStatus | undefined): string | undefined {
   if (!status) return undefined;
   if (status.status === "pending" || status.status === "none") return "extracting…";
@@ -73,7 +63,6 @@ export function statusLabel(status: UploadStatus | undefined): string | undefine
   return "ready";
 }
 
-/** Rows and cells with ids: a sheet's page is replaced whole, never reordered. */
 function sheetCells(sheet: number, rows: string[][]) {
   return rows.map((row, r) => ({
     id: `${sheet}:${r}`,

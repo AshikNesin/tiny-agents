@@ -1,11 +1,5 @@
 import { createLucideIcon } from "lucide-react";
 
-/**
- * The app mark (public/favicon.svg without its tile) as a Lucide icon, so it
- * can be `brand.icon` and sit anywhere a Lucide glyph does. Filled with
- * currentColor; the eyes and the notch around the always-on dot are cut out,
- * so it reads on any surface.
- */
 export const BrandMark = createLucideIcon("tiny-agents", [
   [
     "path",

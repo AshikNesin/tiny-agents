@@ -1,8 +1,3 @@
-/**
- * A bot handed coding work to a coding agent (issue #143, ADR 0011): the
- * `code_start` (or older `shelley_start`) call as a card with the thread's
- * live state, opening it on the Code page.
- */
 import { Link } from "react-router-dom";
 import { ArrowUpRight, CircleCheck, Code2 } from "lucide-react";
 import { Button, monoClass } from "@groot/ui";

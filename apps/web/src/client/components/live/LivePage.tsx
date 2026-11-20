@@ -1,22 +1,3 @@
-/**
- * The live-view page: the bots' browsers (issue #160) or desktops on the
- * sandbox VM, in the app, for the surface it is given (`surface.ts`). One
- * tab per browser or desktop: the shared one (the default, where a site
- * signed into once is signed in for every bot on it), and one per bot with a
- * profile of its own.
- *
- * The view is the chat panel's (`VncView`), fit to the page (the browser's
- * window) or scaled to it (the desktop's fixed size), view-only until the
- * owner clicks it to take control. One bar over it holds the tabs, a status
- * chip and the tools, so full screen (the view and its bar) keeps them all.
- * Taking control is the same driver flag the panel flips, so the bots on that browser or desktop wait (and take no
- * screenshots) until it is handed back, and a bot's takeover request is
- * answered by the hand-back here too. The browser's owner works in a tab of
- * their own (`owner` on the server), so opening the page never lands in a
- * bot's tab. While driving a desktop, the owner can open apps and send the
- * shortcuts the local browser would keep for itself (Alt+Tab, Alt+F4,
- * Ctrl+W).
- */
 import { useCallback, useMemo } from "react";
 import { MonitorOff } from "lucide-react";
 import { Button, EmptyState, ErrorState, LoadingState } from "@groot/ui";
@@ -48,8 +29,6 @@ export function LivePage<S extends PanelStatus, L, I extends PageItem>({
   const { ticket: fetchTicket, resize: fitWindow } = page.api;
   const { selected, select } = useSelectedProfile(page.selectedKey, page.deepLink);
 
-  // They open, close and change hands from other tabs and from bots. An
-  // unknown profile (a deleted bot, a stale link) falls back to Shared.
   const view = useLiveView<L, I>({
     kind,
     source: kind,
@@ -98,7 +77,6 @@ export function LivePage<S extends PanelStatus, L, I extends PageItem>({
     vncRef.current?.focus();
   };
 
-  // Stable per tab, so the viewer reconnects only on a switch.
   const ticket = useCallback(() => fetchTicket(profile ?? "shared"), [fetchTicket, profile]);
   const resize = useMemo(
     () => fitWindow && ((size: ResizeBody) => fitWindow(profile ?? "shared", size)),
@@ -142,8 +120,6 @@ export function LivePage<S extends PanelStatus, L, I extends PageItem>({
         )}
         data-testid={`${kind}-region`}
       >
-        {/* One bar: the tabs, the selected one's status, its tools. A container:
-            a narrow one (a phone) puts the tabs on a row of their own. */}
         <div className="@container flex min-h-11 shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-b px-1.5 py-1">
           <LivePageTabs kind={kind} page={page} items={items} profile={profile} onSelect={select} />
           {active && item && (
@@ -184,7 +160,6 @@ export function LivePage<S extends PanelStatus, L, I extends PageItem>({
 
         <div
           className={cn(
-            // The region's bottom corners, so the driving frame follows them.
             "relative w-full flex-1 overflow-hidden rounded-b-[inherit]",
             fullscreen ? "min-h-0" : "h-[60vh] min-h-[320px] md:h-auto md:min-h-0",
           )}

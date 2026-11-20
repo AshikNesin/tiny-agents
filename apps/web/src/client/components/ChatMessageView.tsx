@@ -11,19 +11,10 @@ export { PeerIncomingCard } from "./chat-message/PeerCard";
 export interface ChatMessageViewProps {
   message: ChatMessage;
   botName: string;
-  /** Tool name → past-tense label for transcript rows ("Opened a page"). */
   toolLabels?: ToolLabels;
-  /** Tool name → imperative label for approval cards ("open a page"). */
   toolAskLabels?: ToolLabels;
 }
 
-/**
- * One transcript row. User messages are right-aligned dark pills; assistant
- * replies are left-aligned light cards with markdown (PRD §6.2). Tool calls are Trace steps above the
- * reply; a call waiting for approval renders its Confirmation card, acting
- * through the `OwnerActions` in scope (none in a Past chat: no actions).
- * Compaction entries become a divider marker.
- */
 export function ChatMessageView({
   message,
   botName,
@@ -42,9 +33,6 @@ export function ChatMessageView({
 
   if (message.role === "user") {
     const failed = message.status === "unanswered";
-    // Trusted attribution only (entry metadata set by the delivery pipeline):
-    // a typed text that merely looks like an envelope renders as a plain
-    // bubble, so no one can forge a peer card (cubic: spoofing).
     const peer = message.peer;
     if (peer) {
       return (

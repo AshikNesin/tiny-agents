@@ -2,11 +2,6 @@ import { Paperclip, X } from "lucide-react";
 import { Button } from "@groot/ui/button";
 import type { OutboxEntry } from "../../lib/chat-session";
 
-/**
- * Messages the server holds behind (or steering into) the running reply
- * (issue #9), as compact rows over the composer like the Code page's queue;
- * placement turns them into real bubbles.
- */
 export function QueuedMessages({
   held,
   onWithdraw,
@@ -30,12 +25,6 @@ export function QueuedMessages({
   );
 }
 
-/**
- * A message the server holds while the bot is replying (issue #9): a steer
- * joins the running reply after its current tool round, a follow-up is
- * answered by the next run. One compact row over the composer (the Code
- * page's queue) with its state and a cancel (x) that withdraws it.
- */
 function QueuedMessageView({ item, onCancel }: { item: OutboxEntry; onCancel: () => void }) {
   const files = item.attachments?.length ?? 0;
   const steering = item.state === "steering";

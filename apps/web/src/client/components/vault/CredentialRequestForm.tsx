@@ -1,9 +1,3 @@
-/**
- * The credential request form (issue #56): a bot asked the owner to sign in,
- * enter a code or pay on a page. What the owner types goes to the server,
- * straight into the bot's page on `request.origin`, and never to the bot.
- * Drawn inline in the bot's chat and on the request's own page.
- */
 import { useState } from "react";
 import { toast } from "sonner";
 import { ShieldAlert } from "lucide-react";
@@ -19,7 +13,6 @@ import { Switch } from "../ui/switch";
 import { SecretInput } from "./SecretInput";
 
 const MASKED = new Set(["password", "otp", "card_number", "cvc"]);
-/** Autocomplete tokens of a sign-in's identifier, saved as the login's username. */
 const IDENTIFIERS = new Set(["username", "email", "tel"]);
 
 function hostOf(origin: string): string {
@@ -42,7 +35,6 @@ export function CredentialRequestForm({
 }: {
   taskId: number;
   request: CredentialRequestView;
-  /** After a fill or a cancel. */
   onSettled?: () => void;
 }) {
   const mutations = useVaultMutations();
@@ -51,13 +43,10 @@ export function CredentialRequestForm({
   const [busy, setBusy] = useState(false);
 
   const host = hostOf(request.origin);
-  // A sign-in widget from another site (The Hindu's id.tinypass.com, #302).
   const where = request.frameOrigin
     ? `${host}, in its sign-in frame from ${hostOf(request.frameOrigin)}`
     : host;
   const moved = request.liveOrigin !== null && request.liveOrigin !== request.origin;
-  // OTPs and security codes are never saved; a password, a card number or a
-  // sign-in's identifier (username, email, mobile number) can be.
   const canSave = request.fields.some(
     (field) =>
       field.type === "password" ||

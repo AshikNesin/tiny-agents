@@ -5,17 +5,11 @@ import { BotAvatar } from "../BotAvatar";
 import { BotMenu, type BotMenuView } from "../BotMenu";
 import type { LiveViews } from "./live-views";
 
-/** ⌘⇧O on Apple keyboards, Ctrl+Shift+O elsewhere (ChatGPT's new-chat chord). */
 const NEW_CHAT_SHORTCUT =
   typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform)
     ? "⇧⌘O"
     : "Ctrl+Shift+O";
 
-/**
- * Header: one line — the bot's name (its menu: settings, Chat history,
- * YOLO), then two quiet icons: the live view and New chat. The model is the
- * composer's chip, not repeated here.
- */
 export function ChatPaneHeader({
   bot,
   guest,
@@ -53,7 +47,6 @@ export function ChatPaneHeader({
       >
         <Menu />
       </Button>
-      {/* The page's heading is the bot's name; for the owner it opens the bot menu. */}
       <h1 className="flex min-w-0 items-center text-sm">
         {guest ? (
           <span

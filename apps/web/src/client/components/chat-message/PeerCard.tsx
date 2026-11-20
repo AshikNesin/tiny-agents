@@ -6,7 +6,6 @@ import { TypingIndicator, USER_PILL } from "../ui/transcript-parts";
 import { Message } from "../ui/message";
 import { CopyButton } from "./message-chrome";
 
-/** One peer-traffic user message as a Grok-style attributed card. */
 export function PeerCard({
   peer,
   text,
@@ -21,8 +20,6 @@ export function PeerCard({
   streaming: boolean;
 }) {
   if (peer.kind === "mention") {
-    // The owner tagged this bot from {host}'s chat: the owner's own words
-    // in a labeled muted bubble.
     return (
       <Message align="end" className="group">
         <div className="flex max-w-[92%] md:max-w-[80%] min-w-0 flex-col items-end gap-1">
@@ -41,7 +38,6 @@ export function PeerCard({
     );
   }
   if (peer.kind === "message") {
-    // A bot messaged this bot via message_bot: attributed incoming card.
     return (
       <PeerIncomingCard
         name={peer.name}
@@ -52,8 +48,6 @@ export function PeerCard({
       />
     );
   }
-  // A relayed reply into the asker's chat: attributed incoming card with a
-  // relayed marker.
   return (
     <PeerIncomingCard
       name={peer.name}
@@ -66,12 +60,6 @@ export function PeerCard({
   );
 }
 
-/**
- * Incoming card for bot-to-bot traffic: peer avatar + name header (the
- * Grok handoff pattern) with the payload below; full-width like assistant
- * replies, never painted as the owner's bubble. `relayed` marks a reply
- * that the relay delivered back into the asker's chat.
- */
 export function PeerIncomingCard({
   name,
   text,

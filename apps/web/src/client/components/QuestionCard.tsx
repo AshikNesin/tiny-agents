@@ -21,7 +21,6 @@ import {
   TraceTitle,
 } from "./ui/trace";
 
-/** Mirrors the agent package's MAX_ANSWER_TEXT (the server rejects longer answers). */
 const MAX_ANSWER_TEXT = 2_000;
 
 const questionId = (index: number) => `q${index}`;
@@ -31,12 +30,6 @@ function countText(questions: readonly OwnerQuestion[]): string {
   return questions.length === 1 ? "a question" : `${questions.length} questions`;
 }
 
-/**
- * The owner's questions in the Fluid AskUserQuestions shape: options become
- * rows (checkboxes when the question takes several) with an Other row for an
- * answer in the owner's own words; a question without options is one open
- * text field. The last question's submit button sends the answers.
- */
 function toAskUserQuestions(questions: readonly OwnerQuestion[]): AskUserQuestion[] {
   return questions.map((question, index) => {
     const last = index === questions.length - 1;
@@ -65,11 +58,6 @@ function toAskUserQuestions(questions: readonly OwnerQuestion[]): AskUserQuestio
   });
 }
 
-/**
- * One answer per question from the questionnaire's answers: the picked
- * options' labels, and the Other / open field's text. Skipped (or never
- * reached) questions answer with nothing.
- */
 export function toOwnerAnswers(
   answers: Record<string, AskUserAnswer>,
   questions: readonly OwnerQuestion[],
@@ -86,13 +74,6 @@ export function toOwnerAnswers(
   });
 }
 
-/**
- * A bot's questions for the owner (ask_owner), as a Fluid Functionalism
- * AskUserQuestions card: one question per step, a single-choice question
- * answers on a click (or its number key), a multiple-choice one with Next,
- * and Skip for a question they'd rather not answer. The bot's reply waits on
- * the answers; Dismiss, or writing in the chat, lets it go on without them.
- */
 export function QuestionCard({
   call,
   actions,
@@ -103,7 +84,6 @@ export function QuestionCard({
   botName: string;
 }) {
   const { questions } = call;
-  // Stay disabled after answering: the stream replaces this card with the answered row.
   const { busy, run } = useOwnerDecision("Failed to send your answers", { settle: false });
   const items = useMemo(() => toAskUserQuestions(questions), [questions]);
 
@@ -157,11 +137,6 @@ function answerText(answer: OwnerAnswer | undefined): string {
   return parts.length > 0 ? parts.join(", ") : "Skipped";
 }
 
-/**
- * A finished ask_owner call: one trace step ("Asked you 2 questions") that
- * expands to each question and the owner's answer; `note` says how it ended
- * when not with answers.
- */
 export function AskedQuestions({ call, note }: { call: ChatToolCall; note?: string }) {
   const questions = call.questions ?? [];
   return (

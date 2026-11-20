@@ -20,7 +20,6 @@ export interface AppNavItem {
   to: string;
 }
 
-/** Everyday destinations besides Chats: always visible in the sidebar. */
 export const PRIMARY_NAV: AppNavItem[] = [
   { label: "Tasks", icon: ListTodo, to: "/tasks" },
   { label: "Code", icon: Code2, to: "/code" },
@@ -29,7 +28,6 @@ export const PRIMARY_NAV: AppNavItem[] = [
   { label: "Browser", icon: Globe, to: "/browser" },
 ];
 
-/** Set-up-and-forget pages: in the sidebar's account menu, not its nav. */
 export const SECONDARY_NAV: AppNavItem[] = [
   { label: "Routines", icon: CalendarClock, to: "/routines" },
   { label: "Skills", icon: Sparkles, to: "/skills" },
@@ -39,7 +37,6 @@ export const SECONDARY_NAV: AppNavItem[] = [
   { label: "Vault", icon: KeyRound, to: "/vault" },
 ];
 
-/** Every destination besides Chats: the ⌘K palette and the mobile profile menu. */
 export const APP_NAV: AppNavItem[] = [...PRIMARY_NAV, ...SECONDARY_NAV];
 
 export function guestNav(items: readonly AppNavItem[]): AppNavItem[] {

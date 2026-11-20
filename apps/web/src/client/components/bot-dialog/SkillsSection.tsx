@@ -2,7 +2,6 @@ import type { SkillSummary } from "../../../shared/api/skills";
 import { toggleId, type BotDraft } from "../../lib/bot-draft";
 import { Switch } from "../ui/switch";
 
-/** The Skills tab: skills from the library the bot may load. */
 export function SkillsSection({
   skills,
   draft,

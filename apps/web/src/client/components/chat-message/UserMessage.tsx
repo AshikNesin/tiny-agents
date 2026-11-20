@@ -5,10 +5,6 @@ import { Message } from "../ui/message";
 import { useAuthStore } from "@groot/shell/store/auth";
 import { MessageEnter, MessageMeta, isFresh } from "./message-chrome";
 
-/**
- * A person's message. Yours sits on the right; in a shared chat (issue #145)
- * someone else's sits on the left under their name, like a group chat.
- */
 export function UserMessage({
   message,
   text,
@@ -23,9 +19,6 @@ export function UserMessage({
   const align = other ? "start" : "end";
   return (
     <Message align={align} className="group" data-author={message.author?.name}>
-      {/* content-visibility on the scroller item breaks percentage
-          max-widths, so the pill is capped by the flex parent chain
-          instead of a nested wrapper. */}
       <MessageEnter
         fresh={isFresh(message)}
         align={align}
