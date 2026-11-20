@@ -31,6 +31,8 @@ import {
   TEST_MODEL,
 } from "../../../../packages/agent/src/testing";
 import { createMcpCapability } from "../../../../packages/agent/src/mcp";
+import { createQuestionsCapability } from "../../../../packages/agent/src/toolkits/questions";
+import { WaitTracker } from "../../../../packages/agent/src/waiting";
 import { defineToolkit, tool } from "../../../../packages/agent/src/toolkit";
 
 const ok = (text: string) => async () => ({ output: [{ type: "text" as const, text }] });
@@ -245,5 +247,30 @@ describe("deferred toolkits", () => {
         toolkit.id,
       ).toBe(false);
     }
+  });
+
+  it("keeps the tools every request carries under 10,500 characters", () => {
+    // Issue #360: what a request re-sends, measured as the provider gets it.
+    const stub = {} as never;
+    const direct = [
+      createTasksToolkit(stub),
+      createRoutinesToolkit(stub),
+      createWebToolkit({ apiKey: "key" }),
+      createSandboxToolkit({ connection: stub }),
+      createMemoryCapability(stub),
+      createSkillsCapability(stub),
+      createBotsToolkit(stub),
+      createQuestionsCapability(new WaitTracker()),
+    ];
+    const size = direct
+      .flatMap((toolkit) => toolkit.extension.tools ?? [])
+      .reduce(
+        (sum, t) =>
+          sum +
+          JSON.stringify({ name: t.name, description: t.description, input_schema: t.parameters })
+            .length,
+        0,
+      );
+    expect(size).toBeLessThan(10_500);
   });
 });

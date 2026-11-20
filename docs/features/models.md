@@ -67,7 +67,10 @@ the account `locked`, and its models show "re-enter key".
 A model is a row in `models` under an account: the upstream id, a display
 name, a type (`chat` or `classifier`), its capabilities (context window, max
 output, image input, reasoning), whether the picker offers it, and pi-ai
-compat flags. A model the upstream stopped listing keeps its row
+compat flags. A row's flags go on top of pi-ai's catalog flags, never in
+place of them, and a gateway Claude model carries Anthropic's own (native
+tool changes keep the prompt cache when a bot loads deferred tools). A model
+the upstream stopped listing keeps its row
 (`missingSince`), so bots that use it still point at something.
 
 A bot points at a model row (`bots.model_ref`), not at a string. The database

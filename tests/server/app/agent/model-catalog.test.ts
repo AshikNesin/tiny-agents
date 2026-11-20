@@ -329,6 +329,21 @@ describe("Cloudflare AI Gateway accounts (issue #216)", () => {
     expect(sonnet.thinkingLevelMap).toMatchObject({ off: null });
   });
 
+  it("gives a gateway Claude model Anthropic's native tool changes, whatever flags its row sets", () => {
+    // Issue #360: without them every tool_search load resends all tools and
+    // misses the cache, and a row's own flag must not drop them.
+    const { catalog } = catalogOf({
+      ...config,
+      models: config.models.map((model) =>
+        model.id === "sonnet" ? { ...model, compat: { supportsStrictMode: false } } : model,
+      ),
+    });
+    expect(catalog.piModel("sonnet")?.compat).toMatchObject({
+      supportsStrictMode: false,
+      supportsMidConvoToolChanges: true,
+    });
+  });
+
   it("takes a custom model's capabilities from what pi-ai knows of its name", () => {
     expect(
       resolveCapabilities("cloudflare-ai-gateway", null, "custom-zai-coding-plan/glm-5.3-flash"),

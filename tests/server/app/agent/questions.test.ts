@@ -25,7 +25,6 @@ import {
   openTestRuntime,
   TEST_MODEL,
 } from "../../../../packages/agent/src/testing";
-import { finishedReplyTo } from "../../../../packages/agent/src/replies";
 import { InvalidAnswersError } from "../../../../packages/agent/src/toolkits/questions";
 import type {
   ActivityChange,
@@ -240,27 +239,27 @@ describe("ask_owner", () => {
     expect(call?.answers).toBeUndefined();
   }, 15_000);
 
-  it("never waits in an unattended conversation (a routine run, issue #63)", async () => {
-    const runtime = await open();
+  it("is not offered in an unattended conversation, where nobody can answer (issue #360)", async () => {
+    const offered: string[][] = [];
+    const runtime = await open((context: PiContext) => {
+      // pi-durable declares tools in system messages.
+      const names = context.messages.flatMap((message) =>
+        message.role === "system"
+          ? ((message as { toolsAdded?: { name: string }[] }).toolsAdded ?? []).map((t) => t.name)
+          : [],
+      );
+      offered.push(names);
+      return fauxAssistantMessage([fauxText("done")]);
+    });
     const ref = await runtime.createConversation({
       modelId: TEST_MODEL,
       systemPrompt: "",
       capabilities: { enabled: ["questions"], permissions: {}, unattended: true },
     });
-    const events: ChatEvent[] = [];
-    await runtime.watchChat(ref, (batch) => {
-      events.push(...batch);
-    });
     await runtime.submit(ref, { requestId: "r1", text: "set up the project" });
-    expect(await until(() => finalText(events), "reply")).toMatch(/Nobody can answer questions/);
-    expect(runtime.pendingQuestions(ref)).toBe(0);
-    expect(toolCall(events)).toMatchObject({ status: "error", approval: "refused" });
-    // A Routine run reads the refusal off the Finished reply (issue #87).
-    await until(() => !runtime.isBusy(ref), "idle");
-    expect(finishedReplyTo(await runtime.readChat(ref), "r1")).toMatchObject({
-      status: "answered",
-      reply: { refused: ["ask_owner"] },
-    });
+    await until(() => offered.length > 0, "request");
+    expect(offered[0]).toContain("message_owner");
+    expect(offered[0]).not.toContain("ask_owner");
   }, 15_000);
 
   it("rejects answers that do not fit the questions and keeps waiting", async () => {

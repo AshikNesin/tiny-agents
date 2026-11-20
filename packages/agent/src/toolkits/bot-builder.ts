@@ -101,11 +101,10 @@ export function createBotBuilderCapability(store: BotCreationStore): Capability 
     summary: "Create a new bot",
     policy: { askOnly: true },
     description:
-      "Create a new bot for the owner: its name, a one-line description and its instructions (system prompt). " +
-      'Use only when the owner asks for a new bot. Write the instructions in the second person ("You help the owner with …"), ' +
-      "with everything the owner told you about its job, paths, tools and rules. " +
-      "The new bot gets every built-in toolkit and runs on your model unless `model` names another. " +
-      "The owner reviews and approves every new bot before it is created. Afterwards you can message it with message_bot.",
+      "Create a new bot, only when the owner asks for one. Write its instructions in the second person " +
+      '("You help the owner with …") with everything the owner told you about its job, paths, tools and rules. ' +
+      "It gets every built-in toolkit and your model unless `model` names another. " +
+      "The owner approves it first; then you can message it with message_bot.",
     parameters: Type.Object({
       name: Type.String({
         minLength: 1,

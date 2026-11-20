@@ -289,7 +289,8 @@
                 "label": "Asked you questions",
                 "askLabel": "ask you questions",
                 "description": "Ask you clarifying questions and wait for your answers",
-                "readOnly": true
+                "readOnly": true,
+                "chatOnly": true
               },
               {
                 "name": "message_owner",

@@ -100,22 +100,20 @@ const scheduleSchema = Type.Unsafe<ScheduleInput>(
       minutes: Type.Integer({
         minimum: 1,
         maximum: 10_080,
-        description: "One time, this many minutes from now (reminders: in 30 minutes)",
+        description: "Once, this many minutes from now",
       }),
     }),
     Type.Object({
       kind: Type.Literal("once"),
       at: Type.String({
         format: "date-time",
-        description:
-          "One time, ISO datetime with an explicit offset, e.g. 2026-11-01T09:00:00+05:30",
+        description: "Once, ISO datetime with offset, e.g. 2026-11-01T09:00:00+05:30",
       }),
     }),
     Type.Object({
       kind: Type.Literal("cron"),
       expr: Type.String({
-        description:
-          'Recurring, 5-field cron in IST (minute hour day-of-month month day-of-week), e.g. "0 9 * * 1-5" for weekdays at 09:00',
+        description: '5-field cron in IST, e.g. "0 9 * * 1-5" (weekdays 09:00)',
       }),
     }),
     Type.Object({
@@ -187,9 +185,8 @@ export function createRoutinesToolkit(
     askLabel: "create a routine",
     summary: "Create a routine",
     description:
-      "Create a routine: this bot runs the prompt on a schedule and replies in this chat. " +
-      "Use it for reminders and recurring work (in 30 minutes, every weekday at 9am). " +
-      "Show the owner the returned card so they can confirm the schedule.",
+      "Create a routine: this bot runs the prompt on a schedule (reminders, recurring work) and replies here. " +
+      "Show the owner the returned card to confirm the schedule.",
     parameters: Type.Object({
       name: nameSchema,
       prompt: promptSchema,
@@ -230,7 +227,7 @@ export function createRoutinesToolkit(
     askLabel: "update a routine",
     summary: "Update a routine",
     description:
-      "Update a routine by id; omit the fields that stay. enabled false pauses it, true resumes it.",
+      "Update a routine by id; omit fields that stay. enabled false pauses, true resumes.",
     parameters: Type.Object({
       id: idSchema,
       name: Type.Optional(nameSchema),
