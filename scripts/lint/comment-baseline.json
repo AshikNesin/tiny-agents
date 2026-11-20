@@ -171,7 +171,7 @@
   "apps/web/src/client/pages/code/Composer.tsx": 23,
   "apps/web/src/client/pages/code/ConversationList.tsx": 28,
   "apps/web/src/client/pages/code/ConversationView.tsx": 15,
-  "apps/web/src/client/pages/code/DiffWorkspace.tsx": 50,
+  "apps/web/src/client/pages/code/DiffWorkspace.tsx": 49,
   "apps/web/src/client/pages/code/LightEditor.tsx": 5,
   "apps/web/src/client/pages/code/NewConversation.tsx": 16,
   "apps/web/src/client/pages/code/PendingComments.tsx": 4,
