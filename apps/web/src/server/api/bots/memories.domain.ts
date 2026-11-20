@@ -63,7 +63,6 @@ export const extractedMemorySchema = z.object({
   text: memoryTextSchema,
   category: memoryCategorySchema,
   until: untilSchema,
-  confidence: z.number().min(0).max(1),
   supersedesIds: z.array(z.string()).max(10).nullable().optional(),
 });
 

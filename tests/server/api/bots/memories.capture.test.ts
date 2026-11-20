@@ -65,6 +65,8 @@ describe("buildCapturePrompt", () => {
     expect(prompt).toContain("third person");
     expect(prompt).toContain("Today is 2026-10-21");
     expect(prompt).toContain("even if reworded");
+    // Issue #334 D: nothing reads confidence, so the prompt stops asking.
+    expect(prompt).not.toContain("confidence");
   });
 
   it("lists what the owner removed as never-re-add, and nothing when there is none", () => {
@@ -88,16 +90,14 @@ describe("buildCapturePrompt", () => {
 
 describe("parseExtraction", () => {
   it("parses a JSON array out of the reply text", () => {
-    const parsed = parseExtraction(
-      'Here: [{"text":"Likes tea","category":"preference","confidence":0.9}]',
-    );
+    const parsed = parseExtraction('Here: [{"text":"Likes tea","category":"preference"}]');
     expect(parsed).toHaveLength(1);
     expect(parsed?.[0]?.text).toBe("Likes tea");
   });
 
   it("returns null for malformed output so the watermark stays put", () => {
     expect(parseExtraction("not json")).toBeNull();
-    expect(parseExtraction('[{"text":"x","category":"vibe","confidence":0.5}]')).toBeNull();
+    expect(parseExtraction('[{"text":"x","category":"vibe"}]')).toBeNull();
   });
 
   it("returns null for a model that says nothing", () => {
@@ -196,7 +196,7 @@ describe("captureConversation", () => {
   it("asks the side-caller on the bot's model and lands what it extracts", async () => {
     const { botId, conversationId } = await seedBot();
     const caller = sideCaller(
-      '[{"text":"The owner prefers TypeScript, never JavaScript.","category":"preference","confidence":0.9}]',
+      '[{"text":"The owner prefers TypeScript, never JavaScript.","category":"preference"}]',
     );
     const messages = [
       {
@@ -245,7 +245,7 @@ describe("captureConversation", () => {
       ])
       .returning();
     const caller = sideCaller(
-      '[{"text":"The owner lives in Berlin.","category":"fact","confidence":0.9,"supersedesIds":["m1"]}]',
+      '[{"text":"The owner lives in Berlin.","category":"fact","supersedesIds":["m1"]}]',
     );
     await captureConversation(conversationId, {
       sideCaller: caller,
@@ -275,7 +275,7 @@ describe("captureConversation", () => {
       .values({ botId, text: "The owner lives in Pune.", category: "fact" })
       .returning();
     const caller = sideCaller(
-      `[{"text":"The owner lives in Berlin.","category":"fact","confidence":0.9,"supersedesIds":["${old!.id}"]}]`,
+      `[{"text":"The owner lives in Berlin.","category":"fact","supersedesIds":["${old!.id}"]}]`,
     );
     await captureConversation(conversationId, {
       sideCaller: caller,
@@ -289,9 +289,7 @@ describe("captureConversation", () => {
   it("marks what it captured as learned in that conversation", async () => {
     const { conversationId } = await seedBot();
     await captureConversation(conversationId, {
-      sideCaller: sideCaller(
-        '[{"text":"The owner prefers TypeScript.","category":"preference","confidence":0.9}]',
-      ),
+      sideCaller: sideCaller('[{"text":"The owner prefers TypeScript.","category":"preference"}]'),
       readTranscript: ownerSays("I prefer TypeScript for everything."),
     });
     expect(await memoryStore.list(conversationId)).toMatchObject([
@@ -421,12 +419,10 @@ describe("captureConversation", () => {
           {
             text: "The owner likes tea.",
             category: "preference",
-            confidence: 0.9,
           },
           {
             text: "The owner lives in Chennai.",
             category: "fact",
-            confidence: 0.9,
           },
         ].filter((m) => !(m.text.includes("tea") && system.includes("Owner prefers tea"))),
       ),

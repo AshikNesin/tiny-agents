@@ -44,7 +44,6 @@ function memory(partial: Partial<MemoryRecord> & { id: string; botId: string }):
     category: "preference",
     status: "active",
     source: "capture",
-    confidence: 0.9,
     until: null,
     supersededById: null,
     supersededAt: null,
@@ -133,7 +132,7 @@ describe("Memory page", () => {
 
   it("renders manual rows with their source line", async () => {
     loadPage({
-      b1: [memory({ id: "m1", botId: "b1", source: "manual", confidence: null })],
+      b1: [memory({ id: "m1", botId: "b1", source: "manual" })],
     });
     mount();
 

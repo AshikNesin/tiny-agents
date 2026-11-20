@@ -20,7 +20,6 @@ function toRecord(row: MemoryRow): MemoryRecord {
     category: row.category as MemoryCategory,
     status: row.status,
     source: row.source === "manual" ? "manual" : "capture",
-    confidence: row.confidence,
     until: row.until?.toISOString() ?? null,
     supersededById: row.supersededById,
     supersededAt: row.supersededAt?.toISOString() ?? null,

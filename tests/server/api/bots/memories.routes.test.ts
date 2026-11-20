@@ -71,7 +71,6 @@ describe("Memories API routes", () => {
       category: "preference",
       status: "active",
       source: "manual",
-      confidence: null,
     });
   });
 

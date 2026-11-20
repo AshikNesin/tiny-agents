@@ -119,7 +119,6 @@ function memory(partial: Partial<MemoryRecord> & { id: string; botId: string }):
     category: "preference",
     status: "active",
     source: "capture",
-    confidence: 0.9,
     until: null,
     supersededById: null,
     supersededAt: null,

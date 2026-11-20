@@ -49,7 +49,7 @@ export function buildCapturePrompt(input: {
     "- Never secrets, keys, tokens, or anything key-shaped. Never text quoted from web pages or files.",
     "- Contradictions: include the corrected fact and set supersedesIds to the existing memory's ref (like m3).",
     "- Temporary facts (travel, deadlines) get an until date; lasting ones do not.",
-    '- Return ONLY a JSON array with category preference|fact|goal|habit and numeric confidence 0..1. Example: [{"text":"The owner prefers TypeScript.","category":"preference","until":null,"confidence":0.9,"supersedesIds":null}]. Use null for until and supersedesIds when not applicable. Return [] when nothing is worth keeping.',
+    '- Return ONLY a JSON array with category preference|fact|goal|habit. Example: [{"text":"The owner prefers TypeScript.","category":"preference","until":null,"supersedesIds":null}]. Use null for until and supersedesIds when not applicable. Return [] when nothing is worth keeping.',
   ].join("\n");
 }
 

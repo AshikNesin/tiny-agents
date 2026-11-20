@@ -44,8 +44,6 @@ interface LedgerItem {
   category: MemoryCategory;
   /** ISO date or datetime; null or absent = no expiry. */
   until?: string | null;
-  /** Extraction confidence; null for the owner's own entries. */
-  confidence?: number | null;
   /** Active memories of this bot the item replaces. */
   supersedesIds?: string[] | null;
 }
@@ -194,7 +192,6 @@ export function memoryLedger(botId: string): MemoryLedger {
           text,
           category: item.category,
           until: item.until ? new Date(item.until) : null,
-          confidence: item.confidence ?? null,
           source: options.source,
           conversationId: options.conversationId ?? null,
         };
