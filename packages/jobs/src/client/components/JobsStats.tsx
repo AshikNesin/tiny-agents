@@ -15,11 +15,9 @@ type StatItem = {
 };
 
 type Props = {
-  /** The jobs list filter (`useJobsFilter()`): a tile selects its state. */
   filter: Pick<JobsFilter, "state" | "setState">;
 };
 
-/** Compact, clickable stat row that filters the jobs list by state. */
 export function JobsStats({ filter }: Props) {
   const { data: stats } = useJobStats();
   if (!stats) {

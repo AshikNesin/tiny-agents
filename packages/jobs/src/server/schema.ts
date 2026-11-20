@@ -1,11 +1,6 @@
 import { sqliteTable, integer, text, index } from "drizzle-orm/sqlite-core";
 import type { JobState } from "../lifecycle";
 
-/**
- * Job tables. The queue is the database: `jobs` rows move through
- * created → active → completed | failed | cancelled, claimed by `runTick()`.
- */
-
 export const jobs = sqliteTable(
   "jobs",
   {
@@ -16,20 +11,15 @@ export const jobs = sqliteTable(
     priority: integer("priority").notNull().default(0),
     retryLimit: integer("retry_limit").notNull().default(0),
     retryCount: integer("retry_count").notNull().default(0),
-    /** Base delay between retries, in seconds (doubles per attempt). */
     retryDelay: integer("retry_delay").notNull().default(0),
-    /** Earliest time the job may run. */
     runAt: integer("run_at", { mode: "timestamp_ms" }).notNull(),
     startedAt: integer("started_at", { mode: "timestamp_ms" }),
     completedAt: integer("completed_at", { mode: "timestamp_ms" }),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
       .notNull()
       .$defaultFn(() => new Date()),
-    /** Handler return value, when JSON-serialisable. */
     output: text("output", { mode: "json" }).$type<unknown>(),
-    /** Last error message. */
     error: text("error"),
-    /** Prevents duplicate pending jobs with the same name + key. */
     singletonKey: text("singleton_key"),
   },
   (table) => [
@@ -45,7 +35,6 @@ export const jobSchedules = sqliteTable("job_schedules", {
   cron: text("cron").notNull(),
   data: text("data", { mode: "json" }).$type<unknown>(),
   timezone: text("timezone"),
-  /** Last time the tick enqueued a job for this schedule. */
   lastRunAt: integer("last_run_at", { mode: "timestamp_ms" }),
   createdAt: integer("created_at", { mode: "timestamp_ms" })
     .notNull()

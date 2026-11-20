@@ -22,7 +22,6 @@ export const errorHandler: ErrorHandler<AppEnv> = (error, c) => {
     error: {
       name: error.name,
       message: error.message,
-      // A 4xx is the client's mistake, thrown on purpose: its stack only says where.
       ...(operational ? {} : { stack: error.stack }),
       isOperational: operational,
     },
@@ -31,11 +30,7 @@ export const errorHandler: ErrorHandler<AppEnv> = (error, c) => {
     breadcrumbs: getBreadcrumbs(),
   };
 
-  // One line per failure: the request logger adds the `→ status` line. The
-  // record already carries the request, the timing and the breadcrumbs.
   if (http && operational) {
-    // The session guard's 401 is the normal signed-out state: every signed-out
-    // page load asks `/auth/me`. The request logger's `→ 401` line still shows it.
     const level = isSessionInvalid(http) ? "debug" : "warn";
     log[level](errorContext, `Operational error: ${error.message}`);
   } else {

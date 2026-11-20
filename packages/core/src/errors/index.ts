@@ -1,11 +1,5 @@
 import { HTTPException } from "hono/http-exception";
 
-/**
- * HTTP errors end to end: the `HttpError` class, the `Boom` factories,
- * normalisation of anything thrown (SQLite constraints, Hono exceptions) and
- * the error-reporting seam the runtime entries point at Sentry.
- */
-
 const STATUS_PHRASES: Record<number, string> = {
   400: "Bad Request",
   401: "Unauthorized",
@@ -49,32 +43,13 @@ export interface HttpErrorOutput {
   data?: unknown;
 }
 
-/**
- * Unified HTTP error class inspired by @hapi/boom.
- *
- * Use the `Boom` factory namespace to create instances:
- *
- * ```ts
- * throw Boom.notFound("User not found");
- * throw Boom.conflict("Email already taken", { email });
- * throw Boom.badRequest("Invalid input", validationErrors, "VALIDATION_ERROR");
- * ```
- */
 export class HttpError extends Error {
-  /** HTTP status code (e.g. 404, 500) */
   readonly statusCode: number;
 
-  /** Machine-readable error code (e.g. "NOT_FOUND", "VALIDATION_ERROR") */
   readonly code: string;
 
-  /**
-   * Whether this error is an expected, operational error (true)
-   * or an unexpected programmer/system error (false).
-   * 5xx errors default to false; 4xx default to true.
-   */
   readonly isOperational: boolean;
 
-  /** Arbitrary structured data attached to the error (like Boom's `data`). */
   readonly data?: unknown;
 
   constructor(statusCode: number, message?: string, data?: unknown, code?: string, cause?: Error) {
@@ -86,12 +61,10 @@ export class HttpError extends Error {
     this.isOperational = statusCode < 500;
     this.data = data;
 
-    // Fix prototype chain for instanceof checks
     Object.setPrototypeOf(this, new.target.prototype);
     Error.captureStackTrace(this, this.constructor);
   }
 
-  /** Pre-formatted response payload, ready to send as JSON. */
   get output(): HttpErrorOutput {
     const base: HttpErrorOutput = {
       statusCode: this.statusCode,
@@ -108,28 +81,14 @@ export class HttpError extends Error {
   }
 }
 
-/**
- * Derives a SCREAMING_SNAKE_CASE code from an HTTP status code.
- * e.g. 404 → "NOT_FOUND", 429 → "TOO_MANY_REQUESTS"
- */
 function statusCodeToCode(statusCode: number): string {
   const phrase = STATUS_PHRASES[statusCode];
   if (!phrase) return `HTTP_${statusCode}`;
   return phrase.toUpperCase().replaceAll(/[^A-Z0-9]+/g, "_");
 }
 
-/**
- * Error codes that carry meaning beyond the HTTP status. Domain modules add
- * their own as plain strings (`Boom.notFound("Job not found", null,
- * "JOB_NOT_FOUND")`); only codes shared across core live here.
- */
 export const ErrorCode = {
   VALIDATION_ERROR: { code: "VALIDATION_ERROR", status: 400 },
-  /**
-   * The session guard's 401 (`sessionInvalid`). The client signs out on this
-   * code, never on a bare 401. `as const` keeps the literal type that
-   * `@groot/shell/lib/api` checks its copy against.
-   */
   SESSION_INVALID: { code: "SESSION_INVALID" as const, status: 401 },
   NOT_FOUND: { code: "NOT_FOUND", status: 404 },
   RATE_LIMIT_EXCEEDED: { code: "RATE_LIMIT_EXCEEDED", status: 429 },
@@ -144,57 +103,33 @@ function createFactory(statusCode: number) {
     new HttpError(statusCode, message, data, code);
 }
 
-/**
- * Boom-style error factory namespace. Every method returns an `HttpError`
- * instance — just throw it.
- */
 export const Boom = {
-  /** 400 Bad Request */
   badRequest: createFactory(400),
 
-  /** 401 Unauthorized */
   unauthorized: createFactory(401),
 
-  /** 403 Forbidden */
   forbidden: createFactory(403),
 
-  /** 404 Not Found */
   notFound: createFactory(404),
 
-  /** 409 Conflict */
   conflict: createFactory(409),
 
-  /** 413 Payload Too Large */
   entityTooLarge: createFactory(413),
 
-  /** 415 Unsupported Media Type */
   unsupportedMediaType: createFactory(415),
 
-  /** 422 Unprocessable Entity */
   unprocessable: createFactory(422),
 
-  /** 429 Too Many Requests */
   tooManyRequests: createFactory(429),
 
-  /** 502 Bad Gateway */
   badGateway: createFactory(502),
 
-  /** 503 Service Unavailable */
   unavailable: createFactory(503),
 
-  /**
-   * Type guard: returns `true` if the value is an `HttpError` instance.
-   */
   isHttpError(err: unknown): err is HttpError {
     return err instanceof HttpError;
   },
 
-  /**
-   * Wraps any error into an `HttpError`.
-   *
-   * If the error is already an `HttpError`, returns it as-is.
-   * Otherwise creates a 500 Internal Server Error with the original as `cause`.
-   */
   boomify(err: unknown, options?: { statusCode?: number; message?: string }): HttpError {
     if (err instanceof HttpError) return err;
 
@@ -207,11 +142,6 @@ export const Boom = {
   },
 } as const;
 
-/**
- * Map SQLite constraint failures (better-sqlite3 on Node, D1 on Workers) to
- * HTTP errors. Both drivers surface the SQLite message text, e.g.
- * `UNIQUE constraint failed: users.email`, so one regex set covers both.
- */
 function fromSqliteConstraint(error: unknown): HttpError | null {
   const message = error instanceof Error ? error.message : String(error);
 
@@ -230,11 +160,6 @@ function fromSqliteConstraint(error: unknown): HttpError | null {
   return null;
 }
 
-/**
- * Normalise anything thrown into an `HttpError`: `HttpError` passes through,
- * SQLite constraint failures map to 409/400, Hono's own `HTTPException`
- * keeps its status. Returns `null` for everything else (a 500).
- */
 export function toHttpError(error: unknown): HttpError | null {
   if (error instanceof HttpError) return error;
   const constraint = fromSqliteConstraint(error);
@@ -245,11 +170,6 @@ export function toHttpError(error: unknown): HttpError | null {
   return null;
 }
 
-/**
- * Error reporting seam. Core code calls `reportError`; the runtime entry
- * (Node or Workers) plugs in Sentry or anything else via `setErrorReporter`.
- * Without a reporter it is a no-op, which is the right default for tests.
- */
 export type ErrorReporter = (error: unknown, context?: Record<string, unknown>) => void;
 
 let reporter: ErrorReporter = () => undefined;
@@ -261,7 +181,5 @@ export function setErrorReporter(next: ErrorReporter): void {
 export function reportError(error: unknown, context?: Record<string, unknown>): void {
   try {
     reporter(error, context);
-  } catch {
-    // Reporting must never take the request down with it.
-  }
+  } catch {}
 }

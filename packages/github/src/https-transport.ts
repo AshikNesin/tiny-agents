@@ -1,15 +1,7 @@
-/**
- * The HTTPS transport: API calls straight from the app server with a token
- * the vault releases (ADR 0022, open question 2 of issue #297). With it, no
- * GitHub credential is on the sandbox for API calls; only `git push` still
- * runs there, with the token handed to that one command.
- */
 import { GitHubError, graphQlData, type GitHubApi, type GraphQlBody } from "./api";
 
 export interface HttpsTransportOptions {
-  /** The token, read for each request (the vault caches it). */
   token(): Promise<string>;
-  /** Default `https://api.github.com`. */
   baseUrl?: string;
   fetch?: typeof fetch;
 }
@@ -35,9 +27,7 @@ export function createHttpsTransport(options: HttpsTransportOptions): GitHubApi 
       try {
         const json = (await response.json()) as { message?: string };
         if (json.message) message = json.message;
-      } catch {
-        // No JSON body.
-      }
+      } catch {}
       throw new GitHubError(message, response.status);
     }
     return response;

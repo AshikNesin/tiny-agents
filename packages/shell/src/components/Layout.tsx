@@ -40,33 +40,14 @@ import {
 const SIDEBAR_COLLAPSED_KEY = "groot.sidebar.collapsed";
 
 export interface LayoutProps {
-  /**
-   * Custom header / nav. When set, the shell's sidebar, its offset and the
-   * mobile top bar are not rendered, so the header owns the top of the page;
-   * the ⌘K palette and the routed `<Outlet/>` stay.
-   */
   header?: ReactNode;
-  /** Extra ⌘K groups, listed after the `ShellConfig.nav` destinations and before Theme and Account. */
   commandGroups?: CommandGroupEntry[];
-  /** Also list the palette's built-in Navigation, Theme and Account groups (default true). */
   commandBuiltIns?: boolean;
-  /**
-   * Whether `<main>` gets the shell's default horizontal + vertical padding.
-   * Defaults to `true`. Set `false` when pages own their own padding (e.g. via
-   * `PageContainer`).
-   */
   padded?: boolean;
-  /** Extra className merged onto `<main>` (e.g. `flex flex-col` for full-height pages). */
   mainClassName?: string;
-  /** Extra className merged onto the outermost wrapper div. */
   className?: string;
 }
 
-/**
- * App shell: a dub.sh-style collapsible sidebar on the left, routed `<Outlet/>`
- * on the right. The sidebar collapses (desktop) into an icon rail with a
- * 300ms width animation; on mobile it slides in as an overlay drawer.
- */
 export function Layout({
   header,
   commandGroups,
@@ -83,16 +64,9 @@ export function Layout({
   const setPaletteOpen = useCommandPaletteStore((state) => state.setOpen);
   const openingPalette = useRef(false);
 
-  // When a custom header is supplied the default sidebar (and its offset /
-  // mobile bar) is disabled so the header owns the full top of the page.
-  // Uses a nullish check so both `undefined` (omitted) and `null` (explicitly
-  // cleared) render the default sidebar — matching the `{header ?? ...}` JSX.
   const useDefaultSidebar = header == null;
 
-  // Mobile drawer state.
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  // Desktop collapse state, persisted across reloads.
-  // Lazy initializer reads localStorage synchronously to prevent hydration flash.
   const [collapsed, setCollapsed] = useState(() => {
     return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "true";
   });
@@ -136,16 +110,12 @@ export function Layout({
           />
         </button>
       </DropdownMenuTrigger>
-      {/* Opens upward, so the last group sits next to the trigger and Log out
-          is the row farthest from it. */}
       <DropdownMenuContent
         align="start"
         side="top"
         sideOffset={8}
         className="w-64"
         onCloseAutoFocus={(event) => {
-          // The palette takes focus; handing it back to the trigger would
-          // pull it out of the dialog.
           if (openingPalette.current) {
             openingPalette.current = false;
             event.preventDefault();
@@ -181,7 +151,6 @@ export function Layout({
   );
   return (
     <div className={cn("min-h-dvh bg-background text-foreground", className)}>
-      {/* Single shared command palette dialog — mounted once. */}
       <CommandPaletteDialog groups={commandGroups} builtIns={commandBuiltIns} />
       {nav.map((item) =>
         item.shortcut ? <NavShortcut key={item.to} shortcut={item.shortcut} to={item.to} /> : null,
@@ -202,15 +171,12 @@ export function Layout({
             />
           ))}
 
-      {/* Main column: sidebar offset on desktop (animated with the sidebar),
-          full-width on mobile. Only applies when the default sidebar renders. */}
       <div
         className={cn(
           "transition-[padding] duration-300 ease-in-out",
           showSidebar && (collapsed ? "lg:pl-16" : "lg:pl-56"),
         )}
       >
-        {/* Top bar — mobile (sidebar toggle + brand + search icon). */}
         {showSidebar && (
           <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-border bg-background px-4 lg:hidden">
             <Button
@@ -236,9 +202,6 @@ export function Layout({
 
         <main
           className={cn(
-            // dvh, not vh: on mobile the URL bar eats into 100vh and the
-            // min-height would overflow the visible area (100dvh tracks it).
-            // The 3.5rem offset only exists where the mobile top bar renders.
             "w-full",
             showSidebar && "min-h-[calc(100dvh-3.5rem)]",
             padded && !fullPage && "px-4 pb-10 pt-6 sm:px-6 lg:px-8",
@@ -252,10 +215,8 @@ export function Layout({
   );
 }
 
-/** Account-menu row: Amp-like spacing between the icon and the label. */
 const MENU_ROW = "gap-2.5";
 
-/** Plain muted key glyphs ("⌘ ,"), not key caps, at a menu row's trailing edge. */
 function ShortcutHint({ shortcut }: { shortcut: string }) {
   const mac = useIsMac();
   return (
@@ -265,11 +226,6 @@ function ShortcutHint({ shortcut }: { shortcut: string }) {
   );
 }
 
-/**
- * Binds a `NavDestination.shortcut` to navigating there: a global hotkey, so
- * it does not fire while a dialog (the ⌘K palette included) is open, and a
- * combo without a modifier does not fire in a text field.
- */
 function NavShortcut({ shortcut, to }: { shortcut: string; to: string }) {
   const navigate = useNavigate();
   useHotkey(shortcut, () => navigate(to));
@@ -277,10 +233,8 @@ function NavShortcut({ shortcut, to }: { shortcut: string; to: string }) {
 }
 
 /**
- * A Theme submenu for a `DropdownMenu`.
- *
- * @deprecated Nothing renders it: Theme lives in Settings › Appearance and
- * the ⌘K Theme group. Removed in the next major.
+ * @deprecated Nothing renders it: Theme lives in Settings › Appearance and the ⌘K Theme group.
+ * Removed in the next major.
  */
 export function ThemeMenu() {
   const { theme, setTheme } = useTheme();

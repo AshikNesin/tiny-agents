@@ -10,13 +10,10 @@ type Props = {
   file: StorageFile;
   selected: boolean;
   onToggle: (key: string) => void;
-  /** Open a folder. */
   onNavigate: (key: string) => void;
-  /** The row's actions, from `useStorageBrowser().fileActions(file)`. */
   actions: FileAction[];
 };
 
-/** Desktop table row for a single file/folder: one cell of buttons for `actions`. */
 export function DesktopFileRow({ file, selected, onToggle, onNavigate, actions }: Props) {
   return (
     <TableRow data-state={selected ? "selected" : undefined}>
@@ -57,14 +54,11 @@ export function DesktopFileRow({ file, selected, onToggle, onNavigate, actions }
         </button>
       </TableCell>
       <TableCell>{file.isDirectory ? "-" : formatBytes(file.size)}</TableCell>
-      {/* Folders show "-" like Size: the service derives them from key
-          prefixes, which carry no mtime, so lastModified is an epoch sentinel. */}
       <TableCell>{file.isDirectory ? "-" : formatDate(file.lastModified)}</TableCell>
       <TableCell className="text-right">
         <div className="flex justify-end gap-2">
           {actions.map(({ id, label, ariaLabel, icon: Icon, destructive, run }) => (
             <Button key={id} variant="ghost" size="sm" onClick={run} aria-label={ariaLabel}>
-              {/* "View" reads better as a word; the rest are icons. */}
               {id === "view" ? (
                 label
               ) : (

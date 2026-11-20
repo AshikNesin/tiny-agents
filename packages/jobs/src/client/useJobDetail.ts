@@ -6,12 +6,6 @@ import { useQuery } from "@tanstack/react-query";
 
 const POLL_INTERVAL_MS = 2000;
 
-/**
- * The job-detail page's data: the job and its logs, fetched together on load
- * and polled while the job can still change state. Polling stops once the job
- * is completed, failed or cancelled; an action that moves it back (retry,
- * resume) invalidates the query and polling resumes.
- */
 export function useJobDetail() {
   const { jobId } = useParams<{ jobId: string }>();
 
@@ -20,7 +14,6 @@ export function useJobDetail() {
     queryFn: async () => {
       if (!jobId) throw new Error("Missing job id");
       const job = await jobsApi.getJob(jobId);
-      // Logs after the job: a job seen as finished has flushed all its logs.
       const logs = await jobsApi.getJobLogs(jobId);
       return { job, logs };
     },

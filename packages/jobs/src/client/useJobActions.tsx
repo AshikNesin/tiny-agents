@@ -15,13 +15,6 @@ const STATE_CHANGES = {
   cancel: { call: jobsApi.cancelJob, success: "Job has been cancelled" },
 } satisfies Partial<Record<JobAction, unknown>>;
 
-/**
- * Runs job actions with the dashboard's standard behaviour, through the
- * shell's `useAction`: destructive and bulk actions ask for confirmation,
- * every action toasts its outcome (failures worded by `describeError`), a
- * second click while one runs is ignored, and the list, the stats and the
- * affected detail query refetch afterwards.
- */
 export function useJobActions({ onDeleted }: { onDeleted?: () => void } = {}) {
   const queryClient = useQueryClient();
   const lists = [jobsKeys.list, jobsKeys.stats];
@@ -108,20 +101,17 @@ export function useJobActions({ onDeleted }: { onDeleted?: () => void } = {}) {
     invalidate: lists,
   });
 
-  /** Apply one lifecycle action to one job. */
   const run = async (action: JobAction, job: JobRef): Promise<void> => {
     if (action === "rerun") await rerun.run(job);
     else if (action === "delete") await remove.run(job);
     else await changeState.run({ action, job });
   };
 
-  /** Re-run several jobs after confirmation. Resolves true when the request went through. */
   const rerunMany = async (jobIds: string[]): Promise<boolean> => {
     if (jobIds.length === 0) return false;
     return (await bulkRerun.run(jobIds)).ok;
   };
 
-  /** Delete every job in `state` after confirmation. */
   const purge = async (state: string): Promise<void> => {
     await purgeState.run(state);
   };
@@ -130,7 +120,6 @@ export function useJobActions({ onDeleted }: { onDeleted?: () => void } = {}) {
     run,
     rerunMany,
     purge,
-    /** True while any of these actions is running. */
     isPending:
       rerun.isPending ||
       remove.isPending ||

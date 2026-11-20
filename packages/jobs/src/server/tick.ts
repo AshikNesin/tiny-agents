@@ -10,39 +10,19 @@ import { createJobLogger, flushJobLogs } from "./logger";
 import { createJobTransitions, deleteJobsWhere, type JobTransitions } from "./transitions";
 import type { JobHandler, TickOptions, TickResult } from "./types";
 
-/**
- * The job runner. One pass over the queue (a tick): enqueue due schedules,
- * recover crashed jobs, claim a batch, run it, clean up. Called by the Node
- * poller every few seconds, by the Workers cron trigger every minute, and
- * inline whenever a transition lands a job in `created` and due.
- */
-
 const HOUSEKEEPING_INTERVAL_MS = 10 * 60 * 1000;
-/** How long to wait before asking again after another process held the slot. */
 const HOUSEKEEPING_RECHECK_MS = 60 * 1000;
 const HOUSEKEEPING_KEY = "jobs:housekeeping:lastRunAt";
 
-/**
- * When this process next asks for the housekeeping slot. Per process, next to
- * the kv claim that reads it; `JobRunner.reset()` clears it.
- */
 let nextHousekeepingCheck = 0;
 
-/** The inline tick: run what is due now, skip schedules and housekeeping. */
 const INLINE_TICK: TickOptions = { schedules: false, housekeeping: false };
 
 function emptyResult(): TickResult {
   return { scheduled: 0, claimed: 0, completed: 0, retried: 0, failed: 0 };
 }
 
-/**
- * Owns all runner state: the handler registry, the in-flight tick and its
- * re-run request, the Node poll timer, and the job transitions wired to nudge
- * this runner. `jobRunner` is the process-wide instance every queue function
- * and the Workers cron use; tests call `jobRunner.reset()` for fresh state.
- */
 export class JobRunner {
-  /** Every job write goes through these; a due `created` job nudges an inline tick. */
   readonly transitions: JobTransitions = createJobTransitions((job) => this.#nudge(job));
 
   readonly #handlers = new Map<string, JobHandler>();
@@ -50,7 +30,6 @@ export class JobRunner {
   #rerunRequested = false;
   #timer: ReturnType<typeof setInterval> | null = null;
 
-  /** Register (or replace) the handler for `name`. */
   register<T, R = unknown>(name: string, handler: JobHandler<T, R>): void {
     this.#handlers.set(name, handler as JobHandler);
     logger.debug({ jobName: name }, "Job handler registered");
@@ -64,11 +43,6 @@ export class JobRunner {
     return [...this.#handlers.keys()];
   }
 
-  /**
-   * Run one tick. While a tick is running, return it and ask for one more
-   * pass after it, so a job that became due mid-tick does not wait for the
-   * next poll.
-   */
   runTick(options: TickOptions = {}): Promise<TickResult> {
     if (this.#inFlight) {
       this.#rerunRequested = true;
@@ -90,16 +64,10 @@ export class JobRunner {
     return this.#inFlight;
   }
 
-  /** Resolves when no tick is running, including a re-run a tick asked for. */
   async idle(): Promise<void> {
     while (this.#inFlight) await this.#inFlight;
   }
 
-  /**
-   * Start polling the queue (Node). Handlers must be registered first; with
-   * none registered this logs an error and returns, which is only right for a
-   * process that enqueues but never runs jobs.
-   */
   async start(): Promise<void> {
     if (this.#timer) {
       logger.warn("Job workers already running");
@@ -114,14 +82,12 @@ export class JobRunner {
 
     const intervalMs = config.jobs.pollIntervalSeconds * 1000;
     this.#timer = setInterval(() => void this.runTick(), intervalMs);
-    // Do not keep the process alive for the poller alone.
     if (typeof this.#timer === "object" && "unref" in this.#timer) this.#timer.unref();
 
     await this.runTick();
     logger.info({ workerCount: this.#handlers.size, intervalMs }, "Job workers started");
   }
 
-  /** Stop polling and wait for the in-flight tick; a re-run it asked for is dropped. */
   async stop(): Promise<void> {
     if (this.#timer) clearInterval(this.#timer);
     this.#timer = null;
@@ -129,11 +95,6 @@ export class JobRunner {
     await this.idle();
   }
 
-  /**
-   * Fresh state, for tests: stop polling, forget every handler, the pending
-   * re-run and the housekeeping schedule. A tick already running finishes;
-   * `await idle()` first to wait for it.
-   */
   reset(): void {
     if (this.#timer) clearInterval(this.#timer);
     this.#timer = null;
@@ -142,11 +103,6 @@ export class JobRunner {
     nextHousekeepingCheck = 0;
   }
 
-  /**
-   * A transition landed `job` in `created`, due now. Tick inline when the
-   * queue runs inline and a handler can take it: on Workers through the
-   * request's `waitUntil` (covering any re-run), on Node as a detached tick.
-   */
   #nudge(job: Job): void {
     if (!config.jobs.enabled || !config.jobs.runInline || !this.#handlers.has(job.name)) return;
     waitUntil(this.runTick(INLINE_TICK).then(() => this.idle()));
@@ -189,7 +145,6 @@ export class JobRunner {
       );
       if (!next || next.getTime() > now.getTime()) continue;
 
-      // Compare-and-set so two concurrent ticks never enqueue the same fire.
       const claimed = await db
         .update(jobSchedules)
         .set({ lastRunAt: now })
@@ -211,17 +166,12 @@ export class JobRunner {
     return enqueued;
   }
 
-  /**
-   * Jobs stuck in `active` past the timeout (a crashed process) time out:
-   * the same retry policy, log line and report as a handler failure.
-   */
   async #recoverStuckJobs(now: Date): Promise<void> {
     const cutoff = new Date(now.getTime() - config.jobs.activeTimeoutSeconds * 1000);
     const stuck = await db
       .select()
       .from(jobs)
       .where(and(eq(jobs.state, "active"), lt(jobs.startedAt, cutoff)));
-    // Each timeout is its own compare-and-set, so they can run together.
     await Promise.all(stuck.map((job) => this.transitions.apply(job, { type: "timeout" })));
   }
 
@@ -266,26 +216,16 @@ export class JobRunner {
   }
 }
 
-/** The process-wide runner: `addJob()`, the poller and the Workers cron all use it. */
 export const jobRunner = new JobRunner();
 
-/** Run one tick on `jobRunner`. */
 export function runTick(options: TickOptions = {}): Promise<TickResult> {
   return jobRunner.runTick(options);
 }
 
-/** Resolves when `jobRunner` has no tick running. */
 export function tickInFlight(): Promise<void> {
   return jobRunner.idle();
 }
 
-/**
- * True when this tick owns the housekeeping slot. The last run time lives in a
- * kv row, claimed with one compare-and-set upsert, because a Workers isolate
- * starts with empty module state and an in-memory timer alone would let every
- * fresh isolate sweep again. The in-memory check spares the Node poller a
- * query on every tick.
- */
 async function claimHousekeeping(now: Date): Promise<boolean> {
   const nowMs = now.getTime();
   if (nowMs < nextHousekeepingCheck) return false;
@@ -295,15 +235,10 @@ async function claimHousekeeping(now: Date): Promise<boolean> {
   return owned;
 }
 
-/** Next fire time of a cron expression after `from`, or null when it never fires. */
 export function nextCronRun(cron: string, from: Date, timezone?: string | null): Date | null {
   return new Cron(cron, { timezone: timezone ?? undefined }).nextRun(from);
 }
 
-/**
- * Delete old finished jobs with their logs, and expired kv entries. Every
- * statement uses an index, so the cost follows what is deleted, not table size.
- */
 export async function housekeeping(now: Date = new Date()): Promise<void> {
   const cutoff = new Date(now.getTime() - config.jobs.keepCompletedDays * 24 * 60 * 60 * 1000);
   await deleteJobsWhere(

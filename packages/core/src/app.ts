@@ -10,67 +10,29 @@ import type { AppEnv } from "./types";
 import type { ClientAddressResolver } from "./utils/client-ip";
 
 export interface CreateAppOptions {
-  /** Mount feature routers: `app.route("/api/v1/todos", todoRoutes)`. */
   routes?: (app: Hono<AppEnv>) => void;
-  /**
-   * Readiness probe for `/health` and `/ready`. Return a reason string while
-   * the app is not ready and `undefined` once it is.
-   */
   readiness?: () => string | undefined;
-  /**
-   * Max body size for API routes. A route that takes bigger bodies declares
-   * its own limit with `routeBodyLimit()` from
-   * `@groot/core/middlewares/body-limit.middleware`, and this one skips it.
-   */
   bodyLimitBytes?: number;
   /**
-   * Paths the body limit skips. Exact paths, or a prefix ending in `*`.
-   *
-   * @deprecated Declare the limit on the route with `routeBodyLimit()`, which
-   * holds wherever the router is mounted; a path here breaks when it moves.
+   * @deprecated Declare the limit on the route with `routeBodyLimit()`, which holds wherever the
+   * router is mounted; a path here breaks when it moves.
    */
   uploadPaths?: string[];
-  /**
-   * Who sent a request, for rate limits and request logs (`clientIp(c)`).
-   * The Node entry passes the socket peer behind trusted proxies
-   * (`peerClientAddress`), Workers `cloudflareClientAddress`; both are in
-   * `@groot/core/utils/client-ip`. Default: the @hono/node-server socket when
-   * the request has one, else `cf-connecting-ip`.
-   */
   clientAddress?: ClientAddressResolver;
-  /**
-   * Where rate-limit counters live: `memoryRateLimitStore()` or
-   * `cloudflareRateLimitStore(bindings)`. Default: a Workers Rate Limiting
-   * binding on `c.env` when the limiter names one that exists, else memory.
-   * Either way each app gets counters of its own.
-   */
   rateLimitStore?: RateLimitStore;
-  /**
-   * Public endpoints any website may call without credentials (embeddable
-   * widgets, tracking pixels): they answer `Access-Control-Allow-Origin: *`
-   * and skip the app's credentialed CORS allow-list. Exact paths, or a prefix
-   * ending in `*` (`"/api/public/*"`).
-   */
   openCorsPaths?: string[];
 }
 
-/** True when `path` is one of `paths` (exact, or `prefix*`). */
 function matchesPath(paths: readonly string[], path: string): boolean {
   return paths.some((p) => (p.endsWith("*") ? path.startsWith(p.slice(0, -1)) : path === p));
 }
 
 let shuttingDown = false;
 
-/** Flip `/health` to 503 so load balancers drain traffic before exit. */
 export function markShuttingDown(): void {
   shuttingDown = true;
 }
 
-/**
- * The shared Hono app: request context + logging, CORS, body limits, health
- * probes, your routes, then the JSON error envelope. Both the Node and Workers
- * entries call this; only the way it is served differs.
- */
 export function createApp(options: CreateAppOptions = {}): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
   const rateLimitMemory = memoryRateLimitStore();
@@ -83,7 +45,6 @@ export function createApp(options: CreateAppOptions = {}): Hono<AppEnv> {
     credentials: true,
   });
 
-  // The runtime's pieces first: the request logger already reads clientIp(c).
   app.use((c, next) => {
     if (options.clientAddress) c.set("clientAddress", options.clientAddress);
     c.set(
@@ -94,7 +55,6 @@ export function createApp(options: CreateAppOptions = {}): Hono<AppEnv> {
   });
   app.use(requestLoggerMiddleware);
   app.use((c, next) => (matchesPath(openPaths, c.req.path) ? openCors(c, next) : appCors(c, next)));
-  // Routes that take bigger bodies (storage uploads) declare their own limit.
   const skipPaths = options.uploadPaths ?? [];
   app.use(
     "/api/*",

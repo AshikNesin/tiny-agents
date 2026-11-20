@@ -5,25 +5,10 @@ interface SectionProps {
   className?: string;
   title?: string;
   description?: string;
-  /** Rendered inline after the title (e.g. a row count or filter chip). */
   meta?: ReactNode;
-  /** Rendered at the trailing edge of the title row (e.g. bulk actions). */
   actions?: ReactNode;
 }
 
-/**
- * Content section with optional title, description, and inline meta/actions.
- *
- * The canonical in-page section heading — use this instead of hand-rolling a
- * `<span className="text-sm font-medium">` plus a count span.
- *
- * @example
- * ```tsx
- * <Section title="Recent Activity" meta="12 of 40" actions={<Button>Purge</Button>}>
- *   <TransactionList />
- * </Section>
- * ```
- */
 export function Section({ children, className, title, description, meta, actions }: SectionProps) {
   const hasHeader = Boolean(title || description || meta || actions);
 

@@ -107,11 +107,6 @@ function crumbLinks(children: BreadcrumbLinks, prefix = ""): React.ReactElement[
     );
 }
 
-/**
- * A breadcrumb trail. Each child is one ancestor crumb, a link or button
- * element (`<Link to="/jobs">Jobs</Link>`), and `page` is the current page.
- * It places the list items and separators.
- */
 function Breadcrumbs({ children, page }: { children?: BreadcrumbLinks; page?: React.ReactNode }) {
   const items = crumbLinks(children);
   if (page != null && typeof page !== "boolean") {

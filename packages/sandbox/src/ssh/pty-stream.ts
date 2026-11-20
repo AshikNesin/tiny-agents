@@ -1,23 +1,11 @@
-/**
- * A pty channel as a plain duplex (issue #28): reads and writes pass through
- * untouched, `setWindow` drives the channel's window-change request, and
- * destroying the stream closes only its channel (the connection is shared).
- */
 import { Duplex } from "node:stream";
 import type { ClientChannel } from "ssh2";
 
-/**
- * A live pty: a duplex of raw bytes. `setWindow` follows a client resize
- * through to the pty; `done` settles when the remote side ends (the program
- * exited or detached this client) carrying its exit code, so a bridge can
- * tell a failed attach (nonzero, no bytes) from a detach.
- */
 export interface PtyStream extends Duplex {
   setWindow(rows: number, cols: number): void;
   done: Promise<{ exitCode: number | null }>;
 }
 
-/** The pty a command asks for. */
 export interface PtySize {
   term: string;
   cols: number;
@@ -32,9 +20,6 @@ export class ChannelPtyStream extends Duplex implements PtyStream {
     private readonly channel: ClientChannel,
     private readonly release: () => void,
   ) {
-    // Not half-open: when the remote side ends (tmux exited, a missing
-    // session, the tmux client was detached), the stream must close, or the
-    // bridge never learns the tab is gone.
     super({ allowHalfOpen: false });
     let resolveDone!: (value: { exitCode: number | null }) => void;
     this.done = new Promise((resolve) => {
@@ -81,9 +66,7 @@ export class ChannelPtyStream extends Duplex implements PtyStream {
     this.ended = true;
     try {
       this.channel.close();
-    } catch {
-      // The channel can already be gone (its connection closed).
-    }
+    } catch {}
     this.release();
     callback(error);
   }

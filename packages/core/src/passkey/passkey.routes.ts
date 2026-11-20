@@ -14,7 +14,6 @@ import type { AppEnv } from "../types";
 
 const router = new Hono<AppEnv>();
 
-// Registration (signed in)
 router.post("/register/options", requireSession, async (c) => {
   const { userId } = requireUser(c);
   return ok(c, await passkeyService.generateRegistrationOptions({ userId }));
@@ -33,7 +32,6 @@ router.post("/register/verify", requireSession, async (c) => {
   );
 });
 
-// Login (public)
 router.post("/login/options", authRateLimiter, async (c) => {
   const body = await parseBody(c, generateAuthenticationOptionsSchema);
   return ok(c, await passkeyService.generateAuthenticationOptions({ email: body.email }));
@@ -45,7 +43,6 @@ router.post("/login/verify", authRateLimiter, async (c) => {
   return ok(c, await startSession(c, user));
 });
 
-// Management (signed in)
 router.get("/list", requireSession, async (c) => {
   const { userId } = requireUser(c);
   return ok(c, await passkeyService.listPasskeys({ userId }));

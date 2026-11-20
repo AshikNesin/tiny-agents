@@ -1,8 +1,3 @@
-/**
- * Shared job-page constants + types. Kept out of the component files so those
- * files only export components (react-doctor/only-export-components).
- */
-
 import type { JobAction, JobState } from "./types";
 import { Play, RefreshCw, Trash2, X, type LucideIcon } from "lucide-react";
 
@@ -24,12 +19,10 @@ const PRIMARY_TABS: StateTab[] = ["all", "active", "failed", "completed"];
 export const primaryOptions = STATE_TABS.filter((t) => PRIMARY_TABS.includes(t.value));
 export const secondaryOptions = STATE_TABS.filter((t) => !PRIMARY_TABS.includes(t.value));
 
-/** Human-readable, capitalized label for a job state (e.g. "Active", "Failed"). */
 export function stateLabel(state: string): string {
   return STATE_TABS.find((t) => t.value === state)?.label ?? state;
 }
 
-/** Label, icon and tone for each lifecycle action button / menu item. */
 export const JOB_ACTION_UI: Record<
   JobAction,
   { label: string; icon: LucideIcon; destructive?: boolean }
@@ -42,12 +35,9 @@ export const JOB_ACTION_UI: Record<
 };
 
 /**
- * Patch shape for the URL-synced query params (matches the nuqs setter).
- *
- * @deprecated The jobs list filter is `useJobsFilter()`
- * (`@groot/jobs/client/useJobsFilter`): change it through its intent setters
- * (`setState`, `setQueue`, `setSearch`, `setPreset`, `goToPage`, `clear`),
- * which also reset the page. Removed in the next major.
+ * @deprecated The jobs list filter is `useJobsFilter()` (`@groot/jobs/client/useJobsFilter`):
+ * change it through its intent setters (`setState`, `setQueue`, `setSearch`, `setPreset`,
+ * `goToPage`, `clear`), which also reset the page. Removed in the next major.
  */
 export type JobsQueryPatch = Partial<{
   state: string;

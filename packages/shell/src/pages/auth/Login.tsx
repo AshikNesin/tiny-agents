@@ -13,10 +13,8 @@ import { LayoutDashboard, ShieldCheck, Zap, ArrowRight, KeyRound } from "lucide-
 
 const isDev = import.meta.env.DEV;
 
-const DEMO_CREDENTIALS = { email: "demo@example.com", password: "demo@example.com" }; // gitleaks:allow (dev-only demo account)
+const DEMO_CREDENTIALS = { email: "demo@example.com", password: "demo@example.com" }; // gitleaks:allow
 
-// Mirrors the server's loginSchema (packages/core/src/auth/auth.schema.ts),
-// duplicated so the client bundle never imports the server package.
 const loginSchema = z.object({
   email: z.email("Invalid email address"),
   password: z.string().min(6, "Password must be at least 6 characters"),
@@ -39,11 +37,6 @@ const FEATURES = [
   { icon: LayoutDashboard, title: "Production UI", desc: "A polished sidebar shell you can ship." },
 ] satisfies LoginFeature[];
 
-/**
- * Where to go after signing in: the protected page that sent the visitor here
- * (ProtectedRoute puts it in router state), else home. Router state only ever
- * holds an in-app location, never an outside URL.
- */
 export function returnPath(state: unknown): string {
   const from = (state as { from?: { pathname?: unknown; search?: unknown; hash?: unknown } })?.from;
   if (!from || typeof from.pathname !== "string" || !from.pathname.startsWith("/")) return "/";
@@ -66,7 +59,6 @@ export function Login() {
     config.login?.description ??
     "Everything you need to launch a full-stack SaaS (auth, storage, background jobs, and a polished UI) without the busywork.";
   const features = config.login?.features ?? FEATURES;
-  // A fresh install has nobody to sign in as: send them to first-run setup.
   const needsSetup = useSetupStatus();
 
   const onSubmit = async (values: LoginValues) => {
@@ -91,8 +83,6 @@ export function Login() {
     }
   };
 
-  // Wait for the answer rather than flash the form at someone setup is about
-  // to redirect. A failed check reads as `false`, so this never blocks sign-in.
   if (needsSetup === undefined) {
     return (
       <div className="flex min-h-dvh items-center justify-center bg-muted/40">
@@ -104,7 +94,6 @@ export function Login() {
 
   return (
     <div className="flex min-h-dvh bg-background">
-      {/* Left: form. */}
       <div className="flex w-full flex-col justify-center px-6 py-12 sm:px-12 lg:w-1/2 lg:px-16">
         <div className="mx-auto w-full max-w-sm">
           <div className="mb-8 flex items-center gap-2">
@@ -161,7 +150,6 @@ export function Login() {
         </div>
       </div>
 
-      {/* Right: brand panel. */}
       <div className="bg-primary dark:bg-card relative hidden overflow-hidden lg:flex lg:w-1/2 lg:flex-col lg:justify-center lg:px-16">
         <div
           className="absolute inset-0 opacity-[0.07]"

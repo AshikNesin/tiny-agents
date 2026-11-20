@@ -1,17 +1,3 @@
-/**
- * The computer's production transport (issue #108): a desktop on the
- * sandbox VM, seen with `scrot` and driven with `xdotool`, `wmctrl` and
- * `xclip`, exactly Anthropic's reference stack. Every tool call is one exec
- * on the app's sandbox connection, sourcing the desktop's env file so it
- * reaches the right display and session bus; the live view is a forward on
- * the same connection.
- *
- * Text the bot types, clipboard text and vault values travel on the exec's
- * stdin, never on its command line: `ps` on the VM shows argv.
- *
- * The command builders are pure and exported for tests; the transport is the
- * only part that reaches the sandbox.
- */
 import { SandboxTimeoutError } from "./ssh/connection";
 import type { SandboxConnection } from "./ssh/sandbox-connection";
 import { bashScript, exitSentinel, exitWith, failureDetail, shQuote } from "./shell";
@@ -34,14 +20,10 @@ import {
   launchedDesktop,
 } from "./computer-vm-setup";
 
-/** Exit code of a tool exec whose desktop is gone (no env file, no X server). */
 export const DESKTOP_GONE_EXIT = 97;
-/** Exit code of `typeSecret` when another window is in front. */
 export const WINDOW_MISMATCH_EXIT = 96;
-/** Exit code of `openApp` for an unknown desktop entry. */
 const NO_SUCH_APP_EXIT = 95;
 
-/** What a tool exec's exit code can say besides success and failure. */
 const DESKTOP_EXITS = {
   desktopGone: DESKTOP_GONE_EXIT,
   windowMismatch: WINDOW_MISMATCH_EXIT,
@@ -51,16 +33,11 @@ const DESKTOP_EXITS = {
 const BUTTONS: Record<MouseButton, number> = { left: 1, middle: 2, right: 3 };
 const SCROLL_BUTTONS: Record<ScrollDirection, number> = { up: 4, down: 5, left: 6, right: 7 };
 
-/** The profile's directory on the VM. */
 export function desktopProfileDir(profile: string): string {
   if (!/^[\w-]{1,64}$/.test(profile)) throw new Error(`Invalid computer profile "${profile}".`);
   return `${COMPUTER_PROFILES_DIR}/${profile}`;
 }
 
-/**
- * Run `body` against the profile's desktop: source its env, check the X
- * server answers, then the body. A missing desktop exits `DESKTOP_GONE_EXIT`.
- */
 export function desktopCommand(profileDir: string, body: string): string {
   const script = [
     `PROFILE=${shQuote(profileDir)}`,
@@ -77,7 +54,6 @@ const int = (value: number, name: string) => {
   return String(value);
 };
 
-/** JPEG of the desktop (or a region) on stdout, mouse pointer included. */
 export function screenshotBody(region?: {
   x: number;
   y: number;
@@ -139,7 +115,6 @@ export function scrollBody(
   return `xdotool mousemove ${int(x, "x")} ${int(y, "y")} sleep 0.05 click --repeat ${int(amount, "amount")} --delay 30 ${SCROLL_BUTTONS[direction]}`;
 }
 
-/** Types stdin; the text never appears in the command. */
 export function typeBody(): string {
   return "xdotool type --clearmodifiers --delay 12 --file -";
 }
@@ -172,7 +147,6 @@ function closeWindowBody(id: string): string {
   return `wmctrl -i -c ${checkWindowId(id)}`;
 }
 
-/** `<id>\t<name>` per visible application entry, user entries first. */
 function listAppsBody(): string {
   return [
     'for D in "${XDG_DATA_HOME:-$HOME/.local/share}/applications" "$HOME/.local/share/applications" /usr/local/share/applications /usr/share/applications; do',
@@ -215,15 +189,10 @@ function clipboardGetBody(): string {
   return "xclip -selection clipboard -o 2>/dev/null || true";
 }
 
-/** Sets the clipboard from stdin; xclip stays behind as the selection owner. */
 function clipboardSetBody(): string {
   return "xclip -selection clipboard -i >/dev/null 2>&1";
 }
 
-/**
- * Check the active window against the binding, then type stdin into it, in
- * one exec so nothing else can come to the front in between.
- */
 export function typeSecretBody(binding: WindowBinding): string {
   return [
     `WANT_CLASS=${shQuote(binding.windowClass.toLowerCase())}`,
@@ -243,16 +212,13 @@ export function typeSecretBody(binding: WindowBinding): string {
   ].join("\n");
 }
 
-/** `wmctrl -l -x` plus the active id (decimal, from xdotool) → windows. */
 export function parseWindows(output: string): ComputerWindow[] {
   const [list, active = ""] = output.split("--active");
   const activeId = Number.parseInt(active.trim(), 10);
   const windows: ComputerWindow[] = [];
   for (const line of list.split("\n")) {
-    // 0x02200003  0 mousepad.Mousepad  host Untitled 1 - Mousepad
     const match = /^(0x[0-9a-f]+)\s+(-?\d+)\s+(\S+)\s+\S+\s?(.*)$/i.exec(line.trim());
     if (!match) continue;
-    // Sticky windows (desktop -1) are the panel and the desktop background.
     if (match[2] === "-1") continue;
     windows.push({
       id: match[1].toLowerCase(),
@@ -284,15 +250,8 @@ export function parseCursor(output: string): { x: number; y: number } {
 }
 
 export interface X11ComputerTransportOptions {
-  /** The app's connection to the sandbox VM. */
   connection: SandboxConnection;
-  /** `COMPUTER_EXTRA_PACKAGES`, already validated. */
   extraPackages?: string[];
-  /**
-   * The browser toolkit's profiles root on the VM. Set, each desktop's Chrome
-   * opens the browser profile of the same key (`<root>/<profile>`), so a site
-   * signed into in either one is signed in in both.
-   */
   browserProfilesDir?: string;
 }
 
@@ -311,7 +270,6 @@ export function createX11ComputerTransport(
   const extra = options.extraPackages ?? [];
   const { connection } = options;
 
-  /** One command; stdin (if any) is written and closed. */
   const run = async (
     command: string,
     { stdin, timeoutMs = TOOL_TIMEOUT_MS }: { stdin?: string; timeoutMs?: number } = {},
@@ -321,8 +279,6 @@ export function createX11ComputerTransport(
         stdin,
         timeoutMs,
         maxBytes: MAX_OUTPUT_BYTES,
-        // A command that leaves a child behind (xclip, a launched app) may
-        // never close its channel: settle shortly after it exits.
         settleOnExit: true,
       });
       return { stdout: result.stdout, stderr: result.stderr.slice(0, 4000), code: result.exitCode };
@@ -371,10 +327,6 @@ export function createX11ComputerTransport(
         for (const listener of listeners.splice(0)) listener();
       };
 
-      /**
-       * One tool exec against this desktop. A window mismatch or a missing
-       * app comes back as its `exit`, for the one tool that expects it.
-       */
       const tool = async (
         body: string,
         what: string,

@@ -16,14 +16,9 @@ export function getContentType(fileName: string): string {
   if (!extension) {
     return "application/octet-stream";
   }
-  // own keys only: "constructor" or "__proto__" must not resolve to Object.prototype members
   return Object.hasOwn(map, extension) ? map[extension] : "application/octet-stream";
 }
 
-/**
- * Sanitize a filename for safe use in Content-Disposition headers.
- * Strips characters that break the header and applies RFC 5987 encoding for non-ASCII.
- */
 export function sanitizeFileName(fileName: string): string {
   const sanitized = fileName.replace(/[\r\n"]/g, "");
   const isAscii = /^[\x20-\x7E]*$/.test(sanitized);

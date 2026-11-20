@@ -1,11 +1,5 @@
 import type { StorageAdapter } from "./adapter";
 
-/**
- * The active storage adapter, injected by `bootstrap({ storage })`: local
- * filesystem on Node, R2 on Workers, memory in tests. Import `storage` and
- * call it like the adapter; the proxy resolves lazily so modules can import
- * it before bootstrap has run.
- */
 let adapter: StorageAdapter | null = null;
 
 export function setStorageAdapter(next: StorageAdapter): void {

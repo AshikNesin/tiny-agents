@@ -4,25 +4,13 @@ import { tableColumnHeaderClass } from "./table";
 import { cn } from "./lib/utils";
 import { statClass } from "./typography";
 
-/**
- * Metric tile: meta label (optional icon) + numeric value.
- *
- * The one sanctioned treatment for a standalone stat — compose inside a
- * `Card` (see JobsStats), or standalone. `labelClass`/`valueClass` accept
- * overrides (e.g. semantic tones) without re-opening the scale: label stays
- * `metaLabelClass`-derived, value stays `statClass`-derived.
- */
 interface StatTileProps {
   label: ReactNode;
   value: ReactNode;
-  /** Icon shown inline before the label (optically `size-3.5`). */
   icon?: ReactNode;
   className?: string;
-  /** Additional classes on the value element — for semantic tones only (`text-info`, …). */
   valueClassName?: string;
-  /** Render as a button instead of a div (for clickable/filterable stats). */
   onClick?: () => void;
-  /** Visual active state (for clickable tiles acting as filters). */
   active?: boolean;
 }
 

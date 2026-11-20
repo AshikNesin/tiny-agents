@@ -1,10 +1,3 @@
-/**
- * Usage from Claude Code's own `modelUsage` (reported per model on every
- * `result`, summed per turn by the worker). Claude Code reports one cost per
- * model; it is split across token bands by Anthropic's fixed price ratios
- * (output 5×, cache writes 1.25×, cache reads 0.1× the input price), so the
- * bands add up to the reported total.
- */
 import type { UsageBand, UsageReport, UsageRow } from "../../contracts";
 
 export interface ModelTotals {

@@ -3,17 +3,6 @@ import { Tooltip as TooltipPrimitive } from "radix-ui";
 import { motion, useReducedMotion } from "motion/react";
 import { cn } from "./lib/utils";
 
-/**
- * Tooltip with Fluid Functionalism's look and motion
- * (https://www.fluidfunctionalism.com/docs/tooltip): an inverted chip that
- * fades in while sliding 4px off its side, and fades out (staying mounted
- * through the exit) instead of vanishing.
- */
-
-/**
- * Minimal tooltip provider. Mount once near the app root; required for any
- * `Tooltip` below it to function.
- */
 function TooltipProvider({
   delayDuration = 200,
   skipDelayDuration = 300,
@@ -32,16 +21,6 @@ const SLIDE = { top: { y: 4 }, bottom: { y: -4 }, left: { x: 4 }, right: { x: -4
 const ENTER = { type: "spring", duration: 0.08, bounce: 0 } as const;
 const EXIT = { duration: 0.06 } as const;
 
-/**
- * Convenience wrapper: `Provider` + `Root` + `Trigger` + `Content` in one
- * component for the common single-anchor case. For multi-trigger or controlled
- * usage, compose the primitives directly.
- *
- * @example
- * <Tooltip content="Save">
- *   <Button>Save</Button>
- * </Tooltip>
- */
 function Tooltip({
   children,
   content,

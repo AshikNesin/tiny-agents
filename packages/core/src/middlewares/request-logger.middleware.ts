@@ -4,15 +4,10 @@ import { logger } from "../logger";
 import { clientIp } from "../utils/controller.utils";
 import type { AppEnv } from "../types";
 
-/**
- * Opens the per-request context (request id, breadcrumbs, `waitUntil`), attaches
- * a child logger to the Hono context and logs one line per request.
- */
 export const requestLoggerMiddleware = createMiddleware<AppEnv>(async (c, next) => {
   const requestId = c.req.header("x-request-id") ?? crypto.randomUUID();
   const startTime = Date.now();
 
-  // Workers expose the execution context; Node throws when it is absent.
   let waitUntil: ((promise: Promise<unknown>) => void) | undefined;
   try {
     const executionCtx = c.executionCtx;

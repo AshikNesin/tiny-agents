@@ -1,10 +1,3 @@
-/**
- * The Shelley harness (ADR 0009, ADR 0011): Shelley owns every conversation
- * and its transcript; this driver reads them live from Shelley's official
- * HTTP/SSE API and normalizes them at the boundary. Shelley admin
- * (profiles, models, MCP, integrations) and terminals stay in Shelley's own
- * UI ("Open in Shelley").
- */
 import {
   NO_CAPABILITIES,
   threadIdOf,
@@ -79,7 +72,6 @@ const SLASH_COMMANDS = [
 ];
 
 export interface ShelleyHarnessOptions {
-  /** Instance id; default `shelley`. */
   id?: string;
   url: string;
   host: HarnessHost;
@@ -89,7 +81,6 @@ export interface ShelleyHarnessOptions {
 
 export interface ShelleyHarness extends HarnessInstance {
   readonly stream: ShelleyStream;
-  /** Shelley's base URL ("Open in Shelley"). */
   readonly url: string;
 }
 
@@ -111,7 +102,6 @@ const CAPABILITIES: Capabilities = {
     changeCwd: true,
     subagents: true,
     search: true,
-    // Only conversations tagged `tiny-agents` are listed (see `ours`).
     discover: false,
   },
   settings: {
@@ -132,7 +122,6 @@ const CAPABILITIES: Capabilities = {
   extras: { jobs: true, usageReport: true, commands: true },
 };
 
-/** Every subagent below `id` in `rows` (children, grandchildren, …). */
 export function descendantIds(rows: ShelleyRow[], id: string): string[] {
   const children = new Map<string, string[]>();
   for (const row of rows) {
@@ -147,7 +136,7 @@ export function descendantIds(rows: ShelleyRow[], id: string): string[] {
   const queue = [id];
   while (queue.length > 0) {
     for (const child of children.get(queue.shift()!) ?? []) {
-      if (seen.has(child)) continue; // a cycle in bad data must not loop
+      if (seen.has(child)) continue;
       seen.add(child);
       found.push(child);
       queue.push(child);
@@ -156,11 +145,6 @@ export function descendantIds(rows: ShelleyRow[], id: string): string[] {
   return found;
 }
 
-/**
- * The rows tiny-agents shows: those tagged `tiny-agents`, and subagents under
- * one (Shelley does not copy tags onto subagents). `context` holds rows that
- * may be ancestors without being in `rows` (a search's hits).
- */
 function ours(rows: ShelleyRow[], context: ShelleyRow[] = []): ShelleyRow[] {
   const byId = new Map<string, ShelleyRow>();
   for (const row of [...context, ...rows]) byId.set(row.conversation_id, row);
@@ -188,7 +172,6 @@ function ours(rows: ShelleyRow[], context: ShelleyRow[] = []): ShelleyRow[] {
   return rows.filter(tagged);
 }
 
-/** `[path]` tokens Shelley reads as attachments. */
 function withAttachments(message: string, refs: string[] | undefined): string {
   const paths = (refs ?? [])
     .filter((ref) => ref.startsWith("file:/"))
@@ -219,11 +202,9 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
     host.logger.warn("A Shelley harness listener failed", { error: String(error) }),
   );
 
-  // Instance events are wired once, for the life of the instance.
   stream.onList(() => events.emit({ type: "threads" }));
   stream.onStatus((status) => events.emit({ type: "status", status }));
   stream.onConnected(() => events.emit({ type: "connected" }));
-  // The outcome is read after the end: a queued message may have started the next turn.
   stream.onTurnEnd(({ conversationId: nativeId }) => {
     outcomeOf(nativeId).then(
       (outcome) => events.emit({ type: "turn_ended", nativeId, outcome }),
@@ -251,7 +232,6 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
     }
   });
 
-  /** Replace a conversation's tags with `existing` plus ours (Shelley has no add); a failure is logged. */
   async function tag(nativeId: string, existing: string[] = []): Promise<void> {
     const tags = [...new Set([...existing, TINY_AGENTS_TAG])];
     try {
@@ -261,11 +241,6 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
     }
   }
 
-  /**
-   * Conversations tiny-agents started or opened before it tagged them: the
-   * ones in its thread index that have no tag yet get one, once per process,
-   * so they stay in the list. Subagents follow their parent.
-   */
   let adopted = false;
   async function adopt(): Promise<void> {
     if (adopted) return;
@@ -324,7 +299,6 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
     repoRoot: row.git_repo_root ?? null,
     gitCommit: row.git_commit ?? null,
     gitSubject: row.git_subject ?? null,
-    // Shelley's UI addresses conversations by slug.
     ...(row.slug ? { externalUrl: `${url}/c/${encodeURIComponent(row.slug)}` } : {}),
   });
 
@@ -361,11 +335,9 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
     contextMax?: number;
   }
 
-  /** The conversation's row: the list's, updated by a fresher detail read. */
   function rowOf(nativeId: string, detail: ShelleyDetail): ShelleyRow {
     const listed = stream.list()?.find((r) => r.conversation_id === nativeId);
     const row = { ...listed, ...detail.conversation } as ShelleyRow;
-    // The detail read is fresher than the list snapshot's `working`.
     if (typeof detail.conversation?.agent_working === "boolean") {
       row.working = detail.conversation.agent_working;
     }
@@ -412,7 +384,6 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
       running ? jobsOf(nativeId) : Promise.resolve([]),
       children.length ? subagentCost(nativeId) : Promise.resolve(0),
     ]);
-    // Read after the awaits: a live watch's map may have grown meanwhile.
     const list = [...messages];
     return {
       thread: summary({
@@ -464,7 +435,6 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
     },
 
     watchThread(nativeId, listener) {
-      // One feed per watch: each watch reads the conversation itself.
       const feed = new ThreadFeed((error) =>
         host.logger.warn("A Shelley thread watcher failed", { error: String(error) }),
       );
@@ -501,7 +471,6 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
         if (frame.messages?.length) {
           merge(frame.messages);
           pushItems();
-          // A finished message replaces the streaming text.
           if (frame.messages.some((m) => m.type === "agent")) feed.partial(NO_PARTIAL);
         }
         if (frame.conversation) {
@@ -545,7 +514,6 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
         feed.state({ costUsd: totalCost(messages.values()) + sub });
       }
 
-      /** Read the conversation and start the watcher over from a snapshot. */
       async function reload() {
         try {
           const next = await load(nativeId);
@@ -563,7 +531,6 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
         }
       }
 
-      // Re-read after every reconnect: frames sent while the stream was down are gone.
       const offConnected = stream.onConnected(() => void reload());
       void reload();
       return () => {
@@ -592,12 +559,6 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
       return { nativeId: created.conversation_id };
     },
 
-    /**
-     * Shelley archives one conversation at a time; the Code page archives a
-     * conversation with its subagents, so a finished task leaves the list
-     * whole. Subagents are found in the list they are leaving and moved
-     * best-effort after the parent.
-     */
     async archive(nativeId, archived) {
       const action = archived ? "archive" : "unarchive";
       let cascade: string[] = [];
@@ -608,7 +569,6 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
         cascade = [];
       }
       await json(`${conv(nativeId)}/${action}`, { method: "POST" });
-      // One subagent that will not move must not undo the parent's archive.
       const settled = await Promise.allSettled(
         cascade.map((child) => json(`${conv(child)}/${action}`, { method: "POST" })),
       );
@@ -640,7 +600,6 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
         json: { message_id: at },
       });
       if (!forked.conversation_id) throw badGateway("Shelley did not return the fork's id");
-      // Shelley copies the source's tags; a subagent's fork has none of its own.
       const source = stream.list()?.find((r) => r.conversation_id === nativeId);
       await tag(forked.conversation_id, tagsOf(source));
       void stream.refreshList();
@@ -650,8 +609,6 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
     externalUrl: (thread) => thread.externalUrl,
 
     async send(nativeId, input: SendInput) {
-      // While a turn runs Shelley injects the message into it (steering);
-      // `queue` holds it for when the turn ends.
       const result = await json<{ status?: string }>(`${conv(nativeId)}/chat`, {
         method: "POST",
         json: {
@@ -751,8 +708,6 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
           include_dirs: content ? undefined : "true",
         })}`,
       );
-      // Shelley answers relative to the directory it searched (a typed
-      // `src/` narrows it); the contract answers relative to `dir`.
       const searched = (result.search_dir ?? dir).replace(/\/$/, "");
       const base = dir.replace(/\/$/, "");
       const prefix =
