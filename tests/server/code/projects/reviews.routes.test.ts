@@ -494,6 +494,11 @@ describe("submitting a PR review", () => {
     // Only a review has comments for GitHub.
     const notReview = await call("GET", "/threads/fake%3At1/review/drafts?target=github");
     expect(notReview.status).toBe(400);
+    const typo = await call(
+      "GET",
+      `/threads/${encodeURIComponent(review.key)}/review/drafts?target=gitub`,
+    );
+    expect(typo.status).toBe(400);
     const forAgent = (
       await call<ReviewDraft[]>("GET", `/threads/${encodeURIComponent(review.key)}/review/drafts`)
     ).body.data!;

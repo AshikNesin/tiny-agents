@@ -467,7 +467,9 @@ router.post("/code/threads/:id/review/viewed", async (c) => {
  */
 async function draftsOf(c: Context<AppEnv>) {
   const id = threadParam(c.req.param("id"));
-  if (c.req.query("target") !== "github") return threadReview(id);
+  const target = c.req.query("target");
+  if (target === undefined) return threadReview(id);
+  if (target !== "github") throw Boom.badRequest("Unknown comment target.");
   const reviewId = reviewIdOfKey(id);
   if (!reviewId) throw Boom.badRequest("Only a pull request review has GitHub comments.");
   return reviewComments(reviewId);
