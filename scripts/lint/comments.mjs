@@ -99,7 +99,9 @@ let parseSync;
 
 async function scriptComments(file, source) {
   parseSync ??= (await import("oxc-parser")).parseSync;
-  return parseSync(file, source).comments.map((c) => c.value);
+  return parseSync(file, source)
+    .comments.filter((c) => !(c.start === 0 && source.startsWith("#!")))
+    .map((c) => c.value);
 }
 
 async function commentValues(file, source = readFileSync(file, "utf8")) {

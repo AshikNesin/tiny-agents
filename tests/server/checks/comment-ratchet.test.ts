@@ -48,6 +48,10 @@ describe("comment ratchet", () => {
     ).toBe(1);
   });
 
+  it("does not count a hashbang", async () => {
+    expect(await countComments("run.mjs", "#!/usr/bin/env node\nexport const a = 1;\n")).toBe(0);
+  });
+
   it("leaves vendored and generated paths out of scope", () => {
     expect(inScope("apps/web/src/server/app.ts")).toBe(true);
     expect(inScope("mobile/android/app/src/main/java/Main.kt")).toBe(true);
