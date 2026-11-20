@@ -81,7 +81,7 @@ when the owner did not start the turn:
 
 | Turn                                              | The bot's plain reply                        | What `message_owner` does                                |
 | ------------------------------------------------- | -------------------------------------------- | -------------------------------------------------------- |
-| The owner's own message                           | The answer, as always                        | Shows as text too (rarely needed)                        |
+| The owner's own message                           | The answer, as always                        | Only in the tool call trace; no push                     |
 | A hand-off's finish or another bot's reply (chat) | Folded into the message's thinking (`quiet`) | Is the message's text; `bot.message` push when unwatched |
 | A routine run                                     | The run's result, never pushed               | The `routine.succeeded` push                             |
 | An answer to another bot (its own conversation)   | Relayed to that bot                          | `bot.message` push                                       |

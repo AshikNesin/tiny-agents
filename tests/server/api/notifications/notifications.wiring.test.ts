@@ -477,6 +477,19 @@ describe("messages a bot sends (#396)", () => {
     }
   });
 
+  it("leave an owner's own turn to its reply, even when it called message_owner", async () => {
+    const runtime = fakeRuntime();
+    const notifier = fakeNotifier();
+    wiring = startNotifications(runtime, notifier);
+    runtime.activity(true);
+    runtime.setReplies([
+      { text: "Here's the plan.", sent: ["Here's the plan."], createdAt: Date.now() + 1 },
+    ]);
+    runtime.activity(false);
+    await settle();
+    expect(notifier.sent).toHaveLength(0);
+  });
+
   it("keep a quiet turn that sent nothing silent, even a long one", async () => {
     const runtime = fakeRuntime();
     const notifier = fakeNotifier({ longRunMinutes: 5 });
@@ -543,6 +556,19 @@ describe("routine notifications", () => {
       ttlSeconds: 86_400,
       dedupeKey: "routine:run-1:succeeded",
     });
+  });
+
+  it("push what a run sent even when it then failed", () => {
+    const notifier = fakeNotifier();
+    notifyRoutineRun(
+      run,
+      { status: "failed", error: "model error", sent: ["Found 2 new invoices."] },
+      notifier,
+    );
+    expect(notifier.sent.map((n) => [n.event, n.message])).toEqual([
+      ["routine.succeeded", "Ops bot: Found 2 new invoices."],
+      ["routine.failed", expect.any(String)],
+    ]);
   });
 
   it("render failures, misses and pauses with the reason", () => {

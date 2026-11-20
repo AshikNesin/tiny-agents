@@ -96,8 +96,8 @@ export function chatTimeline(
   };
   let next = 0;
   messages.forEach((original, index) => {
+    if (isHiddenReply(original)) return;
     const message = presentQuiet(original);
-    if (isHiddenReply(message)) return;
     while (next < cards.length && cards[next].at < message.createdAt) addRun(cards[next++]);
     const last = items.at(-1);
     if (

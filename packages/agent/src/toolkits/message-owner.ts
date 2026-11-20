@@ -44,5 +44,8 @@ export const messageOwnerTool = tool({
     text: Type.String({ minLength: 1, maxLength: MAX_MESSAGE }),
   }),
   replay: "safe",
-  execute: async () => ({ output: [{ type: "text", text: "Sent." }] }),
+  execute: async (args) =>
+    args.text.trim()
+      ? { output: [{ type: "text", text: "Sent." }] }
+      : { output: [{ type: "text", text: "Not sent: the message is empty." }], isError: true },
 });

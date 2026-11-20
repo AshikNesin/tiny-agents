@@ -173,7 +173,10 @@ export function runNotificationsStep(notifier: Notifier = notificationService): 
       const fresh = state.messages.filter(
         (message) => message.role === "assistant" && message.createdAt >= startedAt,
       );
-      const sent = fresh.flatMap((message) => message.sent ?? []);
+      // In a chat, only a quiet turn's sends are messages; an owner's turn shows its reply.
+      const sent = fresh.flatMap((message) =>
+        message.quiet || behind.kind === "delivery" ? (message.sent ?? []) : [],
+      );
       if (sent.length > 0) {
         notifier.notify(botMessage(bot, fresh.at(-1)?.createdAt ?? startedAt, sent));
       }
@@ -201,15 +204,15 @@ export function notifyRoutineRun(
   outcome: RoutineOutcome,
   notifier: Pick<Notifier, "notify"> = notificationService,
 ): void {
+  // What a run sent with message_owner (issue #396) reaches the owner whatever
+  // the run came to; a succeeded run that sent nothing pushes nothing.
+  const sent = "sent" in outcome ? outcome.sent : undefined;
+  if (sent?.length) notifier.notify(routineSucceeded(run, sent.join("\n\n")));
   if (outcome.status === "blocked") {
     if (outcome.pausedReason) notifier.notify(routinePausedBlocked(run, outcome.pausedReason));
     return;
   }
-  if (outcome.status === "succeeded") {
-    // A run speaks only through message_owner (issue #396): nothing sent, no push.
-    if (outcome.sent?.length) notifier.notify(routineSucceeded(run, outcome.sent.join("\n\n")));
-    return;
-  }
+  if (outcome.status === "succeeded") return;
   notifier.notify(routineFailed(run, outcome.status, outcome.error));
 }
 
@@ -220,8 +223,8 @@ export function notifyRoutineRun(
  */
 export type RoutineOutcome =
   | { status: "succeeded"; output?: string | null; sent?: string[] }
-  | { status: "blocked"; error: string; pausedReason?: string | null }
-  | { status: RoutineFailure; error?: string | null };
+  | { status: "blocked"; error: string; pausedReason?: string | null; sent?: string[] }
+  | { status: RoutineFailure; error?: string | null; sent?: string[] };
 
 /** A vault security alert (reveal, delete, refused fill). Cannot be switched off. */
 export function notifyVaultAlert(

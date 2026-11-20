@@ -90,7 +90,8 @@ document). In it:
 Nobody reads a run's reply as a message (issue #396, after the Grok bot's
 "send user" tool). The reply is the run's result, stored on its row and quoted
 to later runs, but the owner is told only what the run sends with
-`message_owner`. A run that sends nothing pushes nothing, so a routine that
+`message_owner`. A succeeded run that sends nothing sends no success push
+(failed, missed and paused runs still push `routine.failed`), so a routine that
 "tells me when something changed" stays silent until it does. The run
 guidance says so; the sent texts reach the watcher as `FinishedReply.sent`.
 

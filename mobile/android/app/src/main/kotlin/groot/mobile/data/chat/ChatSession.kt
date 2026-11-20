@@ -297,8 +297,8 @@ fun chatTimeline(messages: List<ChatMessage>, runs: List<RoutineRunCard>, zoneOf
     }
     var next = 0
     messages.forEachIndexed { index, original ->
+        if (isHiddenReply(original)) return@forEachIndexed
         val message = presentQuiet(original)
-        if (isHiddenReply(message)) return@forEachIndexed
         while (next < cards.size && cards[next].finishedAt < message.createdAt) addRun(cards[next++])
         val last = items.lastOrNull()
         if (last is TimelineItem.Message &&

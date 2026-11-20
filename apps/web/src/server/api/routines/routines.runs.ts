@@ -433,6 +433,7 @@ export function createRoutineRunResolver(rt: RoutineRunsRuntime): RoutineRunReso
     const routineId = run.routineId;
     const tokens = await runTokens(conversationId, run.ownConversation);
     const spent = tokens !== undefined ? { tokens } : {};
+    const sentOf = reply.sent ? { sent: reply.sent } : {};
     if (reply.error !== undefined) {
       const error = preview(
         tokens !== undefined && tokens >= ROUTINE_RUN_TOKEN_BUDGET
@@ -442,7 +443,7 @@ export function createRoutineRunResolver(rt: RoutineRunsRuntime): RoutineRunReso
       );
       await settleRun(ref.runId, "failed", { error, ...spent });
       await clearBlockedStreak(routineId);
-      announceRun(ref, { status: "failed", error });
+      announceRun(ref, { status: "failed", error, ...sentOf });
       return;
     }
     const output = preview(reply.text, OUTPUT_PREVIEW_CHARS);
@@ -458,12 +459,12 @@ export function createRoutineRunResolver(rt: RoutineRunsRuntime): RoutineRunReso
       const error = preview(reasons.join(" "), ERROR_PREVIEW_CHARS);
       await settleRun(ref.runId, "blocked", { error, output: output || null, ...spent });
       const pausedReason = await recordBlocked(routineId, error);
-      announceRun(ref, { status: "blocked", error, pausedReason });
+      announceRun(ref, { status: "blocked", error, pausedReason, ...sentOf });
       return;
     }
     await settleRun(ref.runId, "succeeded", { output, ...spent });
     await clearBlockedStreak(routineId);
-    announceRun(ref, { status: "succeeded", output, ...(reply.sent ? { sent: reply.sent } : {}) });
+    announceRun(ref, { status: "succeeded", output, ...sentOf });
   }
 
   async function markInterrupted(ref: RoutineRunRef): Promise<void> {

@@ -89,7 +89,8 @@ describe("chatTimeline", () => {
       sent: ["PR #12 is up for review."],
     };
     const silent: ChatMessage = { ...message("s", 2), text: "Nothing worth sending.", quiet: true };
-    const items = chatTimeline([quiet, silent], []);
+    const skipped: ChatMessage = { ...message("k", 3), text: "[skip]", quiet: true };
+    const items = chatTimeline([quiet, silent, skipped], []);
     const shown = items.map((item) => (item.kind === "message" ? item.message : undefined));
     expect(shown.map((m) => [m?.text, m?.reasoning])).toEqual([
       ["PR #12 is up for review.", "The hand-off finished; the owner should hear the PR is up."],
