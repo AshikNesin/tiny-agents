@@ -15,6 +15,7 @@ import { TOOL_SEARCH_TOOL_NAME } from "@earendil-works/pi-durable/tool-search";
 import type { ToolSpec } from "@tiny-agents/claude-worker";
 import {
   effectivePermission,
+  hiddenWhere,
   type Capability,
   type CapabilitySelection,
   type ToolPermission,
@@ -46,7 +47,7 @@ export function claudeToolSurface(
         : "ask";
       permissions[info.name] = permission;
       if (permission === "off") continue;
-      if (info.unattendedOnly && !selection?.unattended) continue;
+      if (hiddenWhere(info, selection)) continue;
       // A tool its toolkit does not offer (not configured) has no registration:
       // it is listed for the owner's settings, never offered to the model.
       const registration = declared.find((tool) => tool.name === info.name);

@@ -15,6 +15,7 @@ import type { ToolExecutionApi } from "@earendil-works/pi-durable";
 import { TOOL_SEARCH_TOOL_NAME } from "@earendil-works/pi-durable/tool-search";
 import {
   effectivePermission,
+  hiddenWhere,
   TOOL_SEARCH_CAPABILITY,
   type Capability,
   type CapabilitySelection,
@@ -101,7 +102,7 @@ export function compilePolicy(
     if (extension) extensions.push(extension);
     for (const tool of capability.tools) {
       const permission = effectivePermission(tool, selection.permissions);
-      const hiddenHere = tool.unattendedOnly === true && !selection.unattended;
+      const hiddenHere = hiddenWhere(tool, selection);
       if (hiddenHere || permission === "off") {
         const registration = extension?.tools?.find((candidate) => candidate.name === tool.name);
         if (registration) remove.push(registration);

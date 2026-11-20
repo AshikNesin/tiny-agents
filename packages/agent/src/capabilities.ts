@@ -41,6 +41,12 @@ export interface ToolInfo {
    */
   unattendedOnly?: boolean;
   /**
+   * Offered only in chats, never where nobody watches (`ask_owner`: nobody
+   * can answer). `askOnly` tools are chat-only too, since nobody can approve
+   * them there; removing them saves their schemas on every unattended request.
+   */
+  chatOnly?: boolean;
+  /**
    * The tool can put a vault item's value somewhere (a sink, issue #56).
    * The pi gate tells a vault use per call from the sink's gate plan; the
    * Claude-plan engine has no plans, so YOLO mode keeps every call of a
@@ -94,6 +100,20 @@ export interface CapabilitySelection {
 export function defaultPermission(tool: ToolInfo): ToolPermission {
   if (tool.askOnly) return "ask";
   return tool.readOnly || tool.allowByDefault ? "allow" : "ask";
+}
+
+/**
+ * Whether a tool is left out of the model's tools for where the conversation
+ * runs: unattended-only tools in chats, chat-only and ask-only ones (which
+ * could never run there) in unattended conversations.
+ */
+export function hiddenWhere(
+  tool: ToolInfo,
+  selection: { unattended?: boolean } | undefined,
+): boolean {
+  return selection?.unattended === true
+    ? tool.chatOnly === true || tool.askOnly === true
+    : tool.unattendedOnly === true;
 }
 
 /** The permission a tool runs with for a selection (`askOnly` tools never resolve to `allow`). */

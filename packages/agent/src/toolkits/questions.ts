@@ -250,7 +250,8 @@ export function createQuestionsCapability(tracker: WaitTracker): Capability {
     label: "Asked you questions",
     askLabel: "ask you questions",
     summary: "Ask you clarifying questions and wait for your answers",
-    policy: { readOnly: true },
+    // Nobody can answer in a routine run or a bot message's conversation.
+    policy: { readOnly: true, chatOnly: true },
     description:
       "Ask the owner 1-4 clarifying questions and wait for their answers. Use it when a request is ambiguous and a wrong guess would waste real work, or when a decision is the owner's to make (preferences, trade-offs, details you cannot look up). Don't ask what your other tools can find out or what you can sensibly assume, and don't ask permission to run a tool (tools that need approval ask for it themselves). Your reply pauses until the owner answers.",
     parameters: Type.Object({

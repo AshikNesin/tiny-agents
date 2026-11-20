@@ -22,9 +22,16 @@ interface ToolPolicy {
   allowByDefault?: boolean;
   askOnly?: boolean;
   unattendedOnly?: boolean;
+  chatOnly?: boolean;
 }
 
-const POLICY_KEYS = ["readOnly", "allowByDefault", "askOnly", "unattendedOnly"] as const;
+const POLICY_KEYS = [
+  "readOnly",
+  "allowByDefault",
+  "askOnly",
+  "unattendedOnly",
+  "chatOnly",
+] as const;
 
 interface ToolDeclaration<TParameters extends TSchema> {
   name: string;

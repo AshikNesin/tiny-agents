@@ -74,11 +74,13 @@ document). In it:
   The tool call gets `{ approval: "refused" }`, the model is told it did not
   run, and the watcher fails the run with the reason, for example "Needs
   approval for `send_email`; set it to Allow for this bot to use it in
-  routines." Tools that always ask (`save_skill`) say routines can't use them.
-  **Allow** tools run as usual.
+  routines." **Allow** tools run as usual.
+- Tools that always ask (`askOnly`: `save_skill`, `create_bot`,
+  `update_instructions`) and chat-only ones (`chatOnly`: `ask_owner`) are not
+  offered at all (`hiddenWhere` in `packages/agent/src/capabilities.ts`), so
+  the run does not pay for their schemas on every request.
 - Auto-review never runs.
-- `ask_owner` returns at once and tells the model to carry on, and
-  `request_credentials` opens no sheet.
+- `request_credentials` opens no sheet.
 - Vault uses, `remember` and `forget` are refused as unattended
   (`isUnattended` in `bots/bots.owner.ts`).
 - The routines toolkit refuses to create or manage routines (the recursion

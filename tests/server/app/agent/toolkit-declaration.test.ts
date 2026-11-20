@@ -6405,6 +6405,7 @@ describe("one declaration per tool (3.2)", () => {
           "tools": [
             {
               "askLabel": "ask you questions",
+              "chatOnly": true,
               "description": "Ask you clarifying questions and wait for your answers",
               "label": "Asked you questions",
               "name": "ask_owner",
@@ -6421,7 +6422,7 @@ describe("one declaration per tool (3.2)", () => {
         },
         "keyOrder": [
           "id,kind,name,description,tools",
-          "name,label,askLabel,description,readOnly",
+          "name,label,askLabel,description,readOnly,chatOnly",
           "name,label,askLabel,description,readOnly",
         ],
       }
