@@ -6,18 +6,15 @@
  * assistant keeps it for the assistant; GitHub's conversations sit under their
  * lines.
  */
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { ChevronDown, FileDiff as FileDiffIcon } from "lucide-react";
-import { toast } from "sonner";
 import { EmptyState } from "@groot/ui";
 import { SearchSelect } from "../../components/ui/search-select";
-import { errorMessage } from "../../lib/errors";
-import { projectsApi } from "../../lib/code/projects";
 import type { ThreadCommenting } from "../../lib/code/comments";
-import { useSteadyKey } from "../../lib/code/use-live-changes";
-import type { PullReviewView, ReviewFile } from "../../../shared/api/code";
+import type { PullReviewView } from "../../../shared/api/code";
 import type { FileConversations } from "./PullThreads";
-import { DiffWorkspace, treeOrder, type CollapseAll, type DiffStyle } from "./DiffWorkspace";
+import { DiffWorkspace, type DiffView } from "./DiffWorkspace";
+import { useReviewFiles } from "./use-review-files";
 
 /** `base` (the whole PR), `review` (since the owner's last review) or `mine` (Your changes). */
 type Scope = "base" | "review" | "mine";
@@ -25,19 +22,17 @@ type Scope = "base" | "review" | "mine";
 export function PullDiffs({
   review,
   refreshKey,
-  diffStyle,
-  collapse,
+  view,
   commenting,
   github,
   conversations,
   yourChanges,
-  drawer,
   onAskedAssistant,
 }: {
   review: PullReviewView;
   refreshKey: unknown;
-  diffStyle: DiffStyle;
-  collapse: CollapseAll;
+  /** Split or unified, Fold all, and on phones the file tree sliding over the diff. */
+  view: DiffView;
   /** Line comments for the assistant. */
   commenting?: ThreadCommenting;
   /** Line comments for the PR's review on GitHub. */
@@ -46,75 +41,35 @@ export function PullDiffs({
   conversations?: (path: string) => FileConversations;
   /** Push to PR, Post as suggestions and Discard, over Your changes; `done` reads them again. */
   yourChanges?: (done: () => void) => ReactNode;
-  /** Phones: the file tree slides over the diff. */
-  drawer: { open: boolean; onOpenChange(open: boolean): void };
   /** A comment went to the assistant: the page shows it. */
   onAskedAssistant?: () => void;
 }) {
   const threadId = review.key;
-  const settledKey = useSteadyKey(refreshKey);
   const reviewedSha = review.reviewedSha !== review.headSha ? review.reviewedSha : null;
   const [picked, setScope] = useState<Scope | null>(null);
   const scope: Scope = picked ?? (reviewedSha ? "review" : "base");
-  const [reload, setReload] = useState(0);
-  const [files, setFiles] = useState<ReviewFile[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    setError(null);
-    projectsApi
-      .reviewFiles(threadId, scope)
-      .then((list) => !cancelled && setFiles(treeOrder(list)))
-      .catch(
-        (e: unknown) => !cancelled && setError(errorMessage(e, "Could not read the changes.")),
-      );
-    return () => {
-      cancelled = true;
-    };
-  }, [threadId, settledKey, reload, scope]);
-
-  const read = useCallback(
-    (path: string) => projectsApi.reviewFile(threadId, path, scope),
-    [threadId, scope],
+  const { refresh, workspace } = useReviewFiles(
+    threadId,
+    scope,
+    refreshKey,
+    "Saved. It shows under Your changes.",
   );
-  const refresh = () => setReload((n) => n + 1);
+  const files = workspace.files;
 
   return (
     <DiffWorkspace
       layout="page"
-      files={files}
-      error={error}
-      scopeKey={`${threadId}\u0000${scope}`}
-      readKey={String(reload)}
-      read={read}
-      diffStyle={diffStyle}
-      collapse={collapse}
-      drawer={drawer}
+      {...workspace}
+      diffStyle={view.wide ? view.style : "unified"}
+      collapse={view.collapse}
+      drawer={view.drawer}
       commenting={commenting}
       github={github}
       conversations={conversations}
       onAskedAssistant={onAskedAssistant}
       // Viewed marks are per file content, so they hold in either whole-PR scope.
-      onViewed={
-        scope === "mine"
-          ? undefined
-          : (file, viewed) => {
-              setFiles(
-                (list) => list?.map((f) => (f.path === file.path ? { ...f, viewed } : f)) ?? list,
-              );
-              projectsApi.setViewed(threadId, file.path, file.hash, viewed).catch((e: unknown) => {
-                toast.error(errorMessage(e, "Could not save that."));
-                refresh();
-              });
-            }
-      }
+      onViewed={scope === "mine" ? undefined : workspace.onViewed}
       canEdit={() => scope !== "review"}
-      onSave={async (path, original, content) => {
-        await projectsApi.editFile(threadId, { path, original, content });
-        refresh();
-        toast.success("Saved. It shows under Your changes.");
-      }}
       scope={
         <ScopePicker
           scope={scope}
@@ -125,7 +80,6 @@ export function PullDiffs({
         />
       }
       actions={scope === "mine" && files && files.length > 0 ? yourChanges?.(refresh) : null}
-      onRefresh={refresh}
       empty={
         scope === "mine" ? (
           <EmptyState

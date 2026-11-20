@@ -14,6 +14,17 @@ import { ReviewPanel } from "@/pages/code/ReviewPanel";
 import type { PullReviewView } from "../../../apps/web/src/shared/api/code";
 import { FileDiff } from "@/pages/code/UnifiedDiff";
 import { clickLine, diffText, line } from "../diff-dom";
+import type { DiffView } from "@/pages/code/DiffWorkspace";
+
+/** Unified diffs, nothing folded, the file drawer shut. */
+const STILL_VIEW: DiffView = {
+  style: "unified",
+  setStyle: () => undefined,
+  wide: false,
+  collapse: null,
+  setCollapse: () => undefined,
+  drawer: { open: false, onOpenChange: () => undefined },
+};
 
 /** The drawn diff's shadow root (the renderer draws it there). */
 const drawn = () => document.querySelector("diffs-container")?.shadowRoot ?? null;
@@ -316,9 +327,7 @@ describe("a PR review you reviewed before", () => {
             } as PullReviewView
           }
           refreshKey="1"
-          diffStyle="unified"
-          collapse={null}
-          drawer={{ open: false, onOpenChange: () => undefined }}
+          view={STILL_VIEW}
         />
       </ConfirmProvider>,
     );
