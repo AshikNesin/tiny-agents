@@ -1,9 +1,3 @@
-/**
- * Shelley messages → transcript rows, on payloads captured from a real
- * Shelley (6c48a83, predictable model): tool results arrive in `user`
- * messages, subagent reports and background-job notices are told apart by
- * `user_data`, and display data carries diffs and subagent links.
- */
 import { describe, expect, it } from "vite-plus/test";
 import type { ToolItem } from "@tiny-agents/code/contracts";
 import {
@@ -37,12 +31,10 @@ describe("buildTranscript on real Shelley payloads", () => {
     expect(bash.output).toContain("hello from bash");
     expect(bash.durationMs).toBeGreaterThanOrEqual(0);
 
-    // A failing patch is an error row with Shelley's message.
     const patch = calls.find((c) => c.name === "patch")!;
     expect(patch).toMatchObject({ tool: "edit", status: "error", summary: "/tmp/example.txt" });
     expect(patch.output).toContain("does not exist");
 
-    // The screenshot is an asset the app serves through the driver.
     const screenshot = calls.find((c) => c.summary === "screenshot")!;
     expect(screenshot.images[0]).toMatchObject({
       image: true,
@@ -135,7 +127,6 @@ describe("buildTranscript on real Shelley payloads", () => {
       level: "info",
       text: 'ta/echo-start now at c803166 "Add b"',
     });
-    // Anything else Shelley says about git stays as it is.
     expect(buildTranscript([gitinfo("not a git repository")], "shelley")[0]).toMatchObject({
       text: "not a git repository",
     });

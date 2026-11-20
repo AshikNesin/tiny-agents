@@ -1,8 +1,3 @@
-/**
- * Taking access away takes it away live: removing a guest, unsharing a bot
- * from them, or deleting the bot ends the streams, desktop viewers and
- * unredeemed tickets they already hold, not only their next request.
- */
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { Duplex } from "node:stream";
@@ -67,7 +62,6 @@ async function createBot(name: string, guestIds: number[]) {
   return created.body.data.id as string;
 }
 
-/** An SSE response the guest holds open; `ended` settles when the server ends it. */
 async function openStream(path: string, token: string) {
   const response = await app.request(path, { headers: { authorization: `Bearer ${token}` } });
   expect(response.status, path).toBe(200);
@@ -121,7 +115,6 @@ function session(openStream: () => Promise<Duplex>): BrowserSession {
   };
 }
 
-/** A live browser for `bot` whose RFB side greets every viewer. */
 async function liveBrowser(bot: string) {
   const target = { profile: "shared", tab: bot };
   sessions = createBrowserSessions({
@@ -167,7 +160,6 @@ describe("revoking a guest's access", () => {
     await closeAppRuntime();
   });
 
-  /** A desktop viewer the guest holds open on `bot`; `closed` settles when the server drops it. */
   async function openViewer(userId: number, bot: string, target: { profile: string; tab: string }) {
     const ticket = issueVncTicket({ userId, botId: bot, target });
     const ws = new WebSocket(
@@ -320,7 +312,6 @@ describe("revoking a guest's access", () => {
     holdLiveAccess({ userId: guest.id }, removedClosed);
     expect(removedClosed).toHaveBeenCalledOnce();
 
-    // A stream whose request passed the guard before the removal ends empty.
     const late = new Hono<AppEnv>().get("/late", (c) => {
       c.set("user", { userId: guest.id, email: "gone@example.com" } as never);
       return openSse(c, (sse) => sse.write({ type: "ping" }));

@@ -1,14 +1,3 @@
-/**
- * Characterization of behavior-register row S14: `resolveAttachments` accepts
- * any existing upload id; ownership is enforced only by the route guard.
- * Preserve: this pins today's behavior, quirk included; change it only with a
- * signed-off register row.
- *
- * `resolveAttachments` (uploads.attach.ts) checks only that each id exists. It
- * takes no viewer and no bot, so an upload another user made, first sent in
- * another bot's chat, resolves like any other. `POST /bots/:id/messages`
- * guards with `canReachUpload` before calling it; the service layer does not.
- */
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { db, uploads } from "../../../apps/web/src/server/db";
 import { resolveAttachments } from "../../../apps/web/src/server/api/uploads/uploads.attach";

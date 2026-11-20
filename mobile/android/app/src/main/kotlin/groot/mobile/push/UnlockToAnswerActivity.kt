@@ -6,10 +6,6 @@ import android.os.Bundle
 import groot.mobile.GrootMobileApp
 import kotlinx.coroutines.launch
 
-/**
- * A notification button on Android 10 and 11, which can't ask for the unlock themselves: a
- * see-through activity that asks Android to unlock the phone, answers, and closes.
- */
 class UnlockToAnswerActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

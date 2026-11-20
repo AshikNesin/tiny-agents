@@ -8,7 +8,6 @@ import groot.mobile.data.api.BotListEntry
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
-/** Which bot's chat is open. The choice is remembered across launches. */
 class HomeViewModel(private val container: AppContainer) : ViewModel() {
     val bots: StateFlow<BotsState> = container.bots.state
 
@@ -23,7 +22,6 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     companion object {
-        /** The open bot: the chosen one while it exists, else the first in the list. */
         fun current(bots: BotsState, selected: String?): BotListEntry? = bots.bot(selected) ?: bots.sorted.firstOrNull()
     }
 }

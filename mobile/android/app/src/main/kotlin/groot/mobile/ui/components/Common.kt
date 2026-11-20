@@ -67,10 +67,7 @@ import groot.mobile.data.AvatarStore
 import groot.mobile.ui.brand.AppIcons
 import groot.mobile.ui.brand.Dims
 
-/** The app's wiring, for the routes that build ViewModels. */
 val LocalContainer = staticCompositionLocalOf<AppContainer> { error("No AppContainer provided") }
-
-// ---- Icons and buttons ------------------------------------------------------------------
 
 @Composable
 fun AppIcon(
@@ -83,7 +80,6 @@ fun AppIcon(
     Icon(imageVector = icon, contentDescription = contentDescription, tint = tint, modifier = modifier.size(size))
 }
 
-/** A round icon button with a full touch target. */
 @Composable
 fun IconBtn(
     icon: ImageVector,
@@ -108,7 +104,6 @@ fun IconBtn(
     }
 }
 
-/** The one filled action of a screen: white on black in dark mode, black on white in light. */
 @Composable
 fun PrimaryButton(
     text: String,
@@ -130,7 +125,6 @@ fun PrimaryButton(
     )
 }
 
-/** A quieter action beside the primary one. */
 @Composable
 fun SecondaryButton(
     text: String,
@@ -183,7 +177,6 @@ private fun PillButton(
     }
 }
 
-/** A small rounded choice: a filter, a suggestion, a toggle among a few. */
 @Composable
 fun Chip(
     text: String,
@@ -211,9 +204,6 @@ fun Chip(
     }
 }
 
-// ---- Surfaces ---------------------------------------------------------------------------
-
-/** A card a step off the page: settings groups, approval cards, list items. */
 @Composable
 fun AppCard(
     modifier: Modifier = Modifier,
@@ -247,18 +237,11 @@ fun StatusDot(color: Color, modifier: Modifier = Modifier) {
     Box(modifier.size(Dims.dot).clip(CircleShape).background(color))
 }
 
-/**
- * Where bot faces come from. Null (screenshots, previews) draws the initial only; the
- * activity provides the app's [AvatarStore].
- */
 val LocalAvatars = staticCompositionLocalOf<AvatarStore?> { null }
 
-/** A bot's avatar: its face from the web app's avatar service, over its initial until (or unless) the face arrives. */
 @Composable
 fun BotAvatar(name: String, modifier: Modifier = Modifier, size: Dp = Dims.avatar) {
     val avatars = LocalAvatars.current
-    // Keyed, not just restarted: the same slot showing another bot (the top bar after a switch)
-    // must start from that bot's face, never keep the previous one.
     val face = key(avatars, name) {
         produceState(initialValue = avatars?.cached(name)) {
             if (value == null && avatars != null) value = avatars.load(name)
@@ -279,7 +262,6 @@ fun BotAvatar(name: String, modifier: Modifier = Modifier, size: Dp = Dims.avata
     }
 }
 
-/** A person's avatar (and a bot's until its face loads): the initial on a quiet disc. */
 @Composable
 fun Avatar(name: String, modifier: Modifier = Modifier, size: Dp = Dims.avatar) {
     val initial = name.trim().firstOrNull()?.uppercase() ?: "?"
@@ -296,9 +278,6 @@ fun Avatar(name: String, modifier: Modifier = Modifier, size: Dp = Dims.avatar) 
     }
 }
 
-// ---- Screen frame -----------------------------------------------------------------------
-
-/** A screen under a plain top bar: back, a title, a few actions. The content pads itself. */
 @Composable
 fun ScreenScaffold(
     title: String,
@@ -342,7 +321,6 @@ fun ScreenScaffold(
     }
 }
 
-/** A scrolling column for forms and detail pages, padded for the gesture bar. */
 @Composable
 fun ScreenColumn(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     Column(
@@ -364,7 +342,6 @@ fun LoadingBox(modifier: Modifier = Modifier) {
     }
 }
 
-/** Nothing here yet, or something went wrong: an icon, a line or two, and a way forward. */
 @Composable
 fun EmptyState(
     title: String,
@@ -391,9 +368,6 @@ fun EmptyState(
     }
 }
 
-// ---- Fields -----------------------------------------------------------------------------
-
-/** A filled, rounded text field with its label above. */
 @Composable
 fun Field(
     value: String,
@@ -463,9 +437,6 @@ fun Field(
     }
 }
 
-// ---- Sheets and dialogs -----------------------------------------------------------------
-
-/** A bottom sheet with a title; the content scrolls and pads itself for the gesture bar. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun Sheet(
@@ -497,7 +468,6 @@ fun Sheet(
     }
 }
 
-/** A launcher tile: an icon on a soft square over a short label. Grids of these replace long menus. */
 @Composable
 fun ActionTile(icon: ImageVector, label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Column(
@@ -518,7 +488,6 @@ fun ActionTile(icon: ImageVector, label: String, onClick: () -> Unit, modifier: 
     }
 }
 
-/** One tappable row of a sheet or menu. */
 @Composable
 fun MenuRow(
     icon: ImageVector,

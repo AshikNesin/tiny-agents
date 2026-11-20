@@ -1,12 +1,3 @@
-/**
- * Every browser and computer route, pinned before they became one
- * profile-addressed router plus per-bot aliases (rewrite step 4.3, D9): the
- * mounted method and path, each error's status and text, which check wins
- * when two fail, the status shapes, which routes touch the idle clock, and
- * the tickets each viewer route mints. Recorded on the four hand-written
- * routers; the drift catalogue in docs/rewrite/README.md (§4.4 `live`) names
- * the option that keeps each difference.
- */
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { authToken, fakeCatalog, fakeModel, useTestRuntime } from "../fixtures";
@@ -59,13 +50,11 @@ const post = (path: string, json?: unknown, as = token) =>
   call(path, { method: "POST", json, token: as });
 const del = (path: string) => call(path, { method: "DELETE" });
 
-/** The error envelope every refusal answers with. */
 const refused = (code: string, message: string) => ({
   success: false,
   error: expect.objectContaining({ code, message }),
 });
 
-/** Equal, keys in the same order: the JSON a client reads, byte for byte. */
 function exact(actual: unknown, expected: unknown) {
   expect(actual).toEqual(expected);
   expect(JSON.stringify(actual)).toBe(JSON.stringify(expected));
@@ -74,7 +63,6 @@ function exact(actual: unknown, expected: unknown) {
 const UNKNOWN_BOT = "00000000-0000-4000-8000-000000000000";
 const now = () => Date.now();
 
-/** A browser with a VNC display (unless `vnc: false`) and a tab per `openTab`. */
 function fakeBrowser(options: { vnc?: boolean; resize?: () => Promise<void> } = {}) {
   const opened: string[] = [];
   const page = (url: string): BrowserSession => ({
@@ -519,9 +507,6 @@ describe("computer, by bot", () => {
 
   it("races the body against the bot lookup for the driver", async () => {
     const bot = `/api/v1/bots/${UNKNOWN_BOT}/computer/driver`;
-    // Both checks run at once (Promise.all, as the old routers did), so a doubly
-    // bad request gets whichever refusal settles first: the runtime decides (the
-    // lookup on Node 22, the body read on Node 24). Pin each refusal on its own.
     expect((await post(bot, { driver: "human" })).status).toBe(404);
     expect((await post(`/api/v1/bots/${id}/computer/driver`, { driver: "nobody" })).status).toBe(
       400,
@@ -615,9 +600,6 @@ describe("browser, by profile", () => {
   });
 
   it("races the profile against the body", async () => {
-    // Both checks run at once (Promise.all, as the old routers did), so a doubly
-    // bad request gets whichever refusal settles first: the runtime decides (the
-    // lookup on Node 22, the body read on Node 24). Pin each refusal on its own.
     for (const profile of ["anything", "bot-nope"]) {
       const base = `/api/v1/browser/${profile}`;
       const size = { width: 800, height: 600 };
@@ -810,9 +792,6 @@ describe("computer, by profile", () => {
   });
 
   it("races the profile against the body", async () => {
-    // Both checks run at once (Promise.all, as the old routers did), so a doubly
-    // bad request gets whichever refusal settles first: the runtime decides (the
-    // lookup on Node 22, the body read on Node 24). Pin each refusal on its own.
     for (const profile of ["anything", "bot-nope"]) {
       const base = `/api/v1/computer/${profile}`;
       expect((await post(`${base}/driver`, { driver: "human" })).status, profile).toBe(404);
@@ -901,7 +880,6 @@ describe("computer, by profile", () => {
 });
 
 describe("who stamps a takeover", () => {
-  /** A manager clock that reads 5: what the manager writes, as opposed to the route's `Date.now()`. */
   const clock = {
     now: () => 5,
     setTimeout: (fn: () => void, ms: number) => setTimeout(fn, ms),

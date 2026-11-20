@@ -14,8 +14,6 @@ const createMock = vi.fn();
 
 vi.mock("@/lib/bots-api", () => ({
   botsApi: {
-    // Real wire shape: the route returns { capabilities } and the client
-    // unwraps it — mock the unwrapped result here.
     capabilities: vi.fn().mockResolvedValue([]),
     create: (...args: unknown[]) => createMock(...args),
     remove: (...args: unknown[]) => removeMock(...args),
@@ -96,14 +94,12 @@ describe("BotDialog", () => {
       />,
     );
     const user = userEvent.setup();
-    // The Profile tab (phones) and the footer (wider screens) each offer it.
     const offers = screen.getAllByRole("button", { name: "Delete bot" });
     expect(offers).toHaveLength(2);
     await user.click(offers[1]);
     expect(screen.getByText("Delete Ada? This cannot be undone.")).toBeTruthy();
     expect(removeMock).not.toHaveBeenCalled();
 
-    // The confirmation's button replaces the footer, after the Profile tab's.
     await user.click(screen.getAllByRole("button", { name: "Delete bot" }).at(-1)!);
     await waitFor(() => expect(onDeleted).toHaveBeenCalledWith(bot));
     expect(removeMock).toHaveBeenCalledWith("b1");
@@ -116,10 +112,8 @@ describe("BotDialog", () => {
     );
     const user = userEvent.setup();
     await user.type(screen.getByLabelText("Name"), "Ada");
-    // Nothing to save on yet: no model is known.
     expect(screen.getByRole("button", { name: /create bot/i })).toBeDisabled();
 
-    // The catalog loads (a dialog opened right after start-up).
     rerender(
       <BotDialog
         open
@@ -206,7 +200,6 @@ describe("BotDialog", () => {
     expect(name.getAttribute("aria-invalid")).toBe("true");
     expect(onOpenChange).not.toHaveBeenCalledWith(false);
 
-    // Editing the name clears the error.
     await user.type(name, "2");
     expect(screen.queryByText(message)).toBeNull();
   });

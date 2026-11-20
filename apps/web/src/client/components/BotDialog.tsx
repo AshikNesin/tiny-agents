@@ -34,18 +34,11 @@ interface BotDialogProps {
   onOpenChange: (open: boolean) => void;
   models: CatalogModel[];
   defaultModelId?: string;
-  /** Existing bot to edit; omitted = create. */
   bot?: Bot | null;
   onSaved: (bot: Bot) => void;
-  /** Edit mode only: the bot was deleted from the dialog. */
   onDeleted?: (bot: Bot) => void;
 }
 
-/**
- * Create/edit bot dialog. Create stays single-page (PRD §6.3); edit adds
- * Tools and Skills tabs for the bot's capabilities (issue #1). The form
- * lives here; each tab's section is in `bot-dialog/`.
- */
 export function BotDialog({
   open,
   onOpenChange,
@@ -63,7 +56,6 @@ export function BotDialog({
     next: (current: Record<string, ToolPermission>) => Record<string, ToolPermission>,
   ) => setDraft((current) => ({ ...current, toolPermissions: next(current.toolPermissions) }));
 
-  /** The server's refusal of the name (another bot has it, issue #80). */
   const [nameError, setNameError] = useState<string | null>(null);
   const [tab, setTab] = useState("profile");
   const [saving, setSaving] = useState(false);
@@ -71,11 +63,8 @@ export function BotDialog({
   const [deleting, setDeleting] = useState(false);
 
   const [toolQuery, setToolQuery] = useState("");
-  /** Toolkits the user opened or closed; the rest follow their size. */
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
-  // The form starts over when the dialog opens, and only then: a model
-  // catalog that arrives while it is open must not wipe the owner's edits.
   const wasOpen = useRef(false);
   useEffect(() => {
     if (open && !wasOpen.current) {
@@ -88,7 +77,6 @@ export function BotDialog({
     wasOpen.current = open;
   }, [open, bot, fallbackModel]);
 
-  // A new bot opened before the catalog loaded takes the default once it is known.
   useEffect(() => {
     if (!open || fallbackModel === undefined) return;
     setDraft((current) => (current.modelId ? current : { ...current, modelId: fallbackModel }));
@@ -108,11 +96,9 @@ export function BotDialog({
       const saved = bot ? await botsApi.update(bot.id, payload) : await botsApi.create(payload);
       onSaved(saved);
       onOpenChange(false);
-      // A new bot opens its chat, which says it all; an edit stays put.
       if (bot) toast.success("Bot updated");
     } catch (error) {
       const message = errorMessage(error, "Failed to save bot");
-      // A taken name shows under the Name field (on the Profile tab).
       if (error instanceof ApiError && error.status === 409) {
         setNameError(message);
         setTab("profile");
@@ -159,12 +145,10 @@ export function BotDialog({
     <Dialog
       open={open}
       onOpenChange={(next) => {
-        // A dismissed dialog reopens on its form, never on the confirmation.
         if (!next) setConfirmingDelete(false);
         onOpenChange(next);
       }}
     >
-      {/* Editing has a fixed height, so switching tabs never moves the tab bar. */}
       <DialogContent className={bot ? "h-[min(85dvh,760px)] sm:max-w-xl" : "sm:max-w-xl"}>
         <DialogHeader>
           <DialogTitle>{bot ? `Edit ${bot.name}` : "New bot"}</DialogTitle>

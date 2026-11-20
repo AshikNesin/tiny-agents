@@ -19,26 +19,16 @@ export interface MentionableBot {
 
 interface MentionAutocompleteProps {
   bots: MentionableBot[];
-  /** Text typed after the `@`. */
   query: string;
   onSelect: (bot: MentionableBot) => void;
   onClose: () => void;
-  /** Offered to the composer so keys stay in its focused textarea. */
   ref?: Ref<MentionAutocompleteHandle>;
 }
 
-/** Keys the overlay consumes while open (ArrowUp/Down, Enter, Tab, Escape). */
 export interface MentionAutocompleteHandle {
-  /** Runs on the composer's keydown; true when the key was consumed. */
   handleKeyDown(event: KeyboardEvent): boolean;
 }
 
-/**
- * Popover above the composer listing bots matching the active mention query
- * (issue #12). The parent owns the trigger; this owns the selection and the
- * keys while open, so the textarea stays focused and the composer only needs
- * to offer it each keydown first.
- */
 export function MentionAutocomplete({
   bots,
   query,
@@ -49,14 +39,11 @@ export function MentionAutocomplete({
   const [selected, setSelected] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
 
-  // Prefix match, case-insensitive, stable roster order.
   const matches = useMemo(() => {
     const q = query.toLowerCase();
     return bots.filter((bot) => bot.name.toLowerCase().startsWith(q));
   }, [bots, query]);
 
-  // Fresh query: back to the first row. Shrinking roster: keep the
-  // selection inside the list.
   useEffect(() => {
     setSelected(0);
   }, [query]);
@@ -64,7 +51,6 @@ export function MentionAutocomplete({
     setSelected((i) => Math.min(i, Math.max(0, matches.length - 1)));
   }, [matches.length]);
 
-  // Keep the highlighted row visible while arrowing through a long list.
   useLayoutEffect(() => {
     listRef.current
       ?.querySelector<HTMLElement>("[data-selected=true]")

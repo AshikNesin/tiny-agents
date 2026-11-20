@@ -44,7 +44,6 @@ const REQUEST: CredentialRequestView = {
   liveOrigin: "https://www.amazon.in",
 };
 
-// The network boundary: the request's route and its submit route.
 const api = vi.hoisted(() => ({
   request: vi.fn(),
   submitRequest: vi.fn(),

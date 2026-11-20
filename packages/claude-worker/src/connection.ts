@@ -1,24 +1,3 @@
-/**
- * The app's side of one socket to the Claude worker on the sandbox: the
- * Worker connection. Both protocols ride on it, the Claude plan bot engine's
- * (`turn`, `tool_use`, `tool_result`) and the Claude Code harness's
- * (`coding.*`), each as a thin layer that never sees a socket.
- *
- * It owns, once for both:
- * - the heartbeat: ping every 20s, close after 60s with nothing received;
- * - reconnecting with backoff, asking `resolveTarget` again on every attempt
- *   (the tunnel's local port can change, and resolving restarts a worker
- *   that is gone);
- * - the handshake: the worker's `welcome` and, when the protocol has one, its
- *   hello request; `welcome.bootId` tells a worker restart from a dropped
- *   socket;
- * - a resume cursor per session: events arrive once and in order, a missing
- *   one is replayed, and a restart starts every session's numbering again;
- * - requests and their replies, sent again on the next socket while
- *   unanswered (the worker makes the ones that matter idempotent);
- * - a queue for plain messages sent while disconnected;
- * - the wording of failures: a refused token, an HTTP status, silence.
- */
 import { WebSocket } from "ws";
 import {
   replyFrameSchema,
@@ -28,13 +7,11 @@ import {
 } from "./envelope";
 import { DEFAULT_TIMINGS, reconnectDelayMs } from "./protocol";
 
-/** Where the worker is right now. */
 export interface WorkerTarget {
   url: string;
   token: string;
 }
 
-/** The part of a `ws` client socket the connection uses (tests pass a fake). */
 export interface WebSocketLike {
   readyState: number;
   send(data: string): void;
@@ -51,7 +28,6 @@ export interface ConnectionTimings {
   silenceCloseMs: number;
   reconnectMinMs: number;
   reconnectMaxMs: number;
-  /** A request (and the handshake) fails after this long without a reply. */
   requestTimeoutMs: number;
 }
 
@@ -65,26 +41,15 @@ export const DEFAULT_CONNECTION_TIMINGS: ConnectionTimings = {
 
 export interface WorkerClock {
   now(): number;
-  /** Run `fn` once after `ms`; the returned function cancels it. */
   schedule(fn: () => void, ms: number): () => void;
 }
 
-/** How a protocol's session events are numbered and replayed. */
 export interface SessionStreams {
-  /** Frame type of the protocol's session events (they carry `sessionId` and `seq`). */
   event: string;
-  /** Request type that replays one session after `afterSeq` (answers a `ResumeResult`). */
   resume: string;
-  /**
-   * Where a session's cursor starts when it is first tracked: `start`
-   * replays every event the worker still holds; `now` skips them and follows
-   * from the worker's latest event (replaying an old bot turn would run its
-   * tools again).
-   */
   join: "start" | "now";
 }
 
-/** A frame the connection does not handle itself, as parsed JSON. */
 export interface WorkerFrame {
   type: string;
   [key: string]: unknown;
@@ -92,41 +57,26 @@ export interface WorkerFrame {
 
 export interface WorkerConnectionOptions {
   sessions: SessionStreams;
-  /** A request sent first on every socket; connected once it is answered. */
   hello?: { type: string };
-  /** Every other frame. Session events come once each, in order. */
   onMessage(frame: WorkerFrame): void;
-  /**
-   * After every handshake, before tracked sessions resume and anything waiting
-   * is sent. `rebooted`: the worker restarted, its sessions and their events
-   * are gone. `hello` is the hello request's result.
-   */
   onConnected?(rebooted: boolean, hello: unknown): void;
   onState?(state: WorkerConnectionState, detail: string | undefined): void;
-  /** A tracked session's resume answer (after a restart, `known` is false). */
   onResume?(sessionId: string, result: ResumeResult): void;
-  /** A resume the worker refused or did not answer. */
   onError?(message: string): void;
   timings?: Partial<ConnectionTimings>;
-  /** Default: the `ws` client with the bearer token. */
   socket?(target: WorkerTarget): WebSocketLike;
   clock?: WorkerClock;
 }
 
 export interface WorkerConnection {
   readonly state: WorkerConnectionState;
-  /** Why the last attempt failed, while not connected. */
   readonly detail: string | undefined;
-  /** Send now, or queue until connected. True when it went out on an open socket. */
   send(message: object): boolean;
-  /** A message that gets one `reply`; resolves with its result. */
   request<T = unknown>(body: { type: string }, options?: { timeoutMs?: number }): Promise<T>;
-  /** Follow a session's events from now on, resumed on every reconnect. */
   track(sessionId: string): void;
   close(): void;
 }
 
-/** The worker answered a request with `ok: false`. */
 export class WorkerRequestError extends Error {
   constructor(
     readonly code: string,
@@ -145,7 +95,6 @@ export function connectWorker(
 }
 
 const OPEN = 1;
-/** A resume after this asks for nothing: its answer says where the live edge is. */
 const LIVE_EDGE = Number.MAX_SAFE_INTEGER;
 
 const realClock: WorkerClock = {
@@ -172,12 +121,10 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-/** A reply, an error (timeout), or undefined: the socket it belonged to is gone. */
 type Settle = (reply: ReplyFrame | Error | undefined) => void;
 
 interface Pending {
   data: string;
-  /** Requests go again on the next socket; a hello or a resume belongs to its socket. */
   resend: boolean;
   sentOn: WebSocketLike | undefined;
   settle: Settle;
@@ -185,7 +132,6 @@ interface Pending {
 }
 
 interface Cursor {
-  /** The last seq delivered; undefined while joining at the live edge. */
   seq: number | undefined;
   resuming: boolean;
 }
@@ -198,7 +144,6 @@ class Connection implements WorkerConnection {
   private attempt = 0;
   private lastRx = 0;
   private bootId: string | undefined;
-  /** Why the current attempt failed (first reason wins). */
   private failure: string | undefined;
   private stateNow: WorkerConnectionState = "connecting";
   private detailNow: string | undefined;
@@ -291,8 +236,6 @@ class Connection implements WorkerConnection {
     this.queue.length = 0;
     this.setState("closed", undefined);
   }
-
-  // --- the socket ---------------------------------------------------------------
 
   private async open(): Promise<void> {
     if (this.closed) return;
@@ -391,8 +334,6 @@ class Connection implements WorkerConnection {
     this.options.onState?.(state, detail);
   }
 
-  // --- the handshake --------------------------------------------------------------
-
   private welcomed(socket: WebSocketLike, bootId: string | undefined): void {
     const hello = this.options.hello;
     if (!hello) {
@@ -424,13 +365,10 @@ class Connection implements WorkerConnection {
     this.connectedOnce = true;
     const rebooted = this.bootId !== undefined && bootId !== undefined && bootId !== this.bootId;
     if (bootId) this.bootId = bootId;
-    // The new worker numbers every session from 1 again.
     if (rebooted) for (const cursor of this.cursors.values()) cursor.seq = 0;
     this.setState("connected", undefined);
     this.options.onConnected?.(rebooted, hello);
     if (this.socket !== socket || !this.ready) return;
-    // Resumes first, so a session's cursor is set before anything that
-    // waited (a new turn) makes it new events.
     for (const sessionId of this.cursors.keys()) this.resume(sessionId);
     for (const pending of this.pending.values()) {
       if (!pending.resend || pending.sentOn === socket) continue;
@@ -439,8 +377,6 @@ class Connection implements WorkerConnection {
     }
     for (const data of this.queue.splice(0)) socket.send(data);
   }
-
-  // --- frames ---------------------------------------------------------------------
 
   private onFrame(socket: WebSocketLike, raw: string): void {
     let value: unknown;
@@ -491,19 +427,15 @@ class Connection implements WorkerConnection {
   private onEvent(sessionId: string, seq: number, frame: WorkerFrame): void {
     let cursor = this.cursors.get(sessionId);
     if (!cursor) {
-      // A session nobody tracked yet (another thread, a turn from before an
-      // app restart): follow it too.
       cursor = this.cursor();
       this.cursors.set(sessionId, cursor);
     }
     if (cursor.seq === undefined) {
-      // Joining: the resume's answer sets the cursor, and this event is older.
       if (cursor.resuming) return;
       cursor.seq = seq - 1;
     }
     if (seq <= cursor.seq) return;
     if (seq !== cursor.seq + 1) {
-      // Missed events: replay from what was delivered.
       this.resume(sessionId);
       return;
     }
@@ -515,8 +447,6 @@ class Connection implements WorkerConnection {
     const cursor = this.cursors.get(sessionId);
     if (!cursor || cursor.resuming || !this.ready) return;
     cursor.resuming = true;
-    // The answer comes before the replayed events, in the same burst of
-    // frames, so the cursor is set here, synchronously, before they are read.
     const body = {
       type: this.options.sessions.resume,
       sessionId,
@@ -544,7 +474,6 @@ class Connection implements WorkerConnection {
     });
   }
 
-  /** Register a request and send it when there is a socket to send it on. */
   private issue(
     body: { type: string },
     how: { resend: boolean; settle: Settle; timeoutMs?: number; socket?: WebSocketLike },

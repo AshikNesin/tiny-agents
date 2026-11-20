@@ -516,7 +516,6 @@ const FIXTURES: Record<string, Fixture> = {
       'import Boom from "@hapi/boom";\nimport { ErrorCode } from "../errors";\nconst sessionInvalid = (m: string) => Boom.unauthorized(m, undefined, ErrorCode.SESSION_INVALID.code);\nexport const guard = () => {\n  throw sessionInvalid("No token provided");\n};\n',
     rules: [],
   },
-  // The guard's old homes are no longer exempt.
   "packages/core/src/middlewares/jwt-auth.middleware.ts": {
     source:
       'import Boom from "@hapi/boom";\nexport const refuse = () => {\n  throw Boom.unauthorized("No token", undefined, "SESSION_INVALID");\n};\n',
@@ -532,7 +531,6 @@ const FIXTURES: Record<string, Fixture> = {
       'import { requireSession, startSession } from "@groot/core/session";\nexport const g = [requireSession, startSession];\n',
     rules: [],
   },
-  // The load PR #368 shipped: setState after an await in an effect, with no cancel flag.
   "apps/web/src/client/r15-effect-fail.tsx": {
     source:
       'import { useEffect, useState } from "react";\nimport { codeApi } from "./lib/code/api";\nexport function Diffs({ id }: { id: string }) {\n  const [files, setFiles] = useState<string[]>([]);\n  useEffect(() => {\n    void codeApi.files(id).then(setFiles);\n  }, [id]);\n  return files.length;\n}\n',
@@ -549,7 +547,6 @@ const FIXTURES: Record<string, Fixture> = {
       'import React from "react";\nimport { codeApi } from "./lib/code/api";\nexport function Usage({ id }: { id: string }) {\n  React.useEffect(() => {\n    void codeApi.usage(id);\n  }, [id]);\n  return null;\n}\n',
     rules: ["R15"],
   },
-  // A handler that only shares a name with a key or property an effect mentions.
   "apps/web/src/client/r15-name-only-pass.tsx": {
     source:
       'import { useCallback, useEffect, useState } from "react";\nimport { codeApi } from "./lib/code/api";\nexport function Panel({ result }: { result: { load: number } }) {\n  const [, set] = useState({ load: 0 });\n  const load = useCallback(() => codeApi.list(), []);\n  useEffect(() => {\n    set({ load: result.load });\n  }, [result]);\n  return <button onClick={load}>Load</button>;\n}\n',
@@ -670,7 +667,6 @@ const FIXTURES: Record<string, Fixture> = {
       "const LIMIT = 3;\nconst LIST = [1, 2];\nconst seen = [...new Set(LIST)];\nexport const counter = () => {\n  let n = 0;\n  const hits = new Map<number, number>();\n  return () => hits.set((n += LIMIT), seen.length);\n};\nfor (let i = 0; i < 1; i++) void i;\n",
     rules: [],
   },
-  // Allowlisted by file and name: the file's other state still fails.
   "apps/web/src/server/crypto/secret-box.ts": {
     source:
       "const derived = new Map<string, string>();\nlet other = 0;\nexport const keys = () => [derived, other++];\n",

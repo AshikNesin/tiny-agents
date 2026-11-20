@@ -223,10 +223,8 @@ fun CodeThreadRoute(
     }
 }
 
-/** The sheets the thread screen opens. */
 enum class CodeSheet { Model, Effort, Permissions, More, Rename, Delete }
 
-/** The thread as it is drawn: the live transcript over the queue, the setting chips and the composer. */
 @Composable
 fun CodeThreadScreen(
     state: CodeThreadState,
@@ -302,7 +300,6 @@ private fun Transcript(state: CodeThreadState, actions: CodeRowActions, modifier
     val shown = remember(state.items) { groupTools(state.items).asReversed() }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
-    // Newest at the bottom: a reversed list stays pinned to the end as rows arrive.
     LaunchedEffect(state.items.size) { if (listState.firstVisibleItemIndex <= 1) scope.launch { listState.animateScrollToItem(0) } }
     LazyColumn(
         modifier.fillMaxWidth(),
@@ -326,7 +323,6 @@ private fun Transcript(state: CodeThreadState, actions: CodeRowActions, modifier
     }
 }
 
-/** A message waiting for the running turn to end: send it now (steer) or cancel it. */
 @Composable
 private fun QueuedRow(queued: CodeQueuedMessage, manage: Boolean, onQueued: (String, String) -> Unit) {
     Row(
@@ -351,7 +347,6 @@ private fun QueuedRow(queued: CodeQueuedMessage, manage: Boolean, onQueued: (Str
     }
 }
 
-/** The settings a turn runs with, each a chip that opens its picker; and how full the context is. */
 @Composable
 private fun SettingChips(state: CodeThreadState, caps: CodeCapabilities, models: List<CodeModel>, onSheet: (CodeSheet) -> Unit) {
     val settings = state.settings
@@ -396,11 +391,6 @@ internal fun effortLabel(level: String): String = when (level) {
     else -> level
 }
 
-/**
- * The composer: the draft and one round button. Idle, it sends. While the agent works, Send
- * steers the running turn (or queues where the harness cannot steer), the queue button holds
- * the message for when the turn ends, and with nothing typed the button is Stop.
- */
 @Composable
 fun CodeComposer(
     draft: String,

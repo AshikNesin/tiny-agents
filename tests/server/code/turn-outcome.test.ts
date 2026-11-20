@@ -1,8 +1,3 @@
-/**
- * The turn-outcome rule (`turnOutcome`, `@tiny-agents/code/server`): what a
- * thread's newest turn came to, for every harness, read off its rows. The
- * drivers' side of it is `turn-outcome-conformance.ts`.
- */
 import { describe, expect, it } from "vite-plus/test";
 import {
   parseThreadId,
@@ -70,7 +65,6 @@ describe("turnAnswer", () => {
     expect(
       turnAnswer([user("go"), said("Trying."), notice("error", "rate limited"), turn()]),
     ).toEqual({ text: "rate limited", failed: true });
-    // Shelley ends a turn with an error message and no turn row.
     expect(turnAnswer([user("go"), notice("error", "boom")])).toEqual({
       text: "boom",
       failed: true,

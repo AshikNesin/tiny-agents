@@ -1,9 +1,3 @@
-/**
- * The Claude plan's model list comes from Claude Code on the sandbox: the
- * worker's `models` request, the SDK lister behind it, and how discovery
- * names what Claude Code lists. An injected SDK and a localhost socket;
- * nothing here calls Anthropic.
- */
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { listClaudeCodeModels } from "../../../../packages/agent/src/engines/claude-code/models";
 import {
@@ -28,7 +22,6 @@ afterEach(async () => {
   await Promise.all(servers.splice(0).map((server) => server.close()));
 });
 
-/** What Claude Code's `initializationResult().models` looks like. */
 const LISTED: ClaudeCodeModel[] = [
   { value: "default", displayName: "Default (recommended)", resolvedModel: "claude-opus-5-5" },
   { value: "opus", displayName: "Opus", resolvedModel: "claude-opus-5-5" },

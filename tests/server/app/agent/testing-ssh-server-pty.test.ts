@@ -1,8 +1,3 @@
-/**
- * The pty side of the in-process SSH server (issue #28): the real ssh2
- * client attaches an interactive terminal over exec, end to end on the
- * wire — the channel shape the terminal feature drives tmux through.
- */
 import { afterAll, beforeAll, describe, expect, it, vi } from "vite-plus/test";
 import {
   fakePty,
@@ -96,16 +91,10 @@ describe("in-process SSH server pty channels (integration, real ssh2 client)", (
       pty: { term: "xterm-256color", cols: 100, rows: 30 },
     });
     const f = fake!;
-    // ssh2's channel order is rows, cols; the fake records the wire request
     channel.setWindow(40, 120, 480, 640);
     await vi.waitFor(() => expect(f.resizes).toEqual([{ cols: 120, rows: 40 }]));
     expect(f.cols).toBe(120);
     expect(f.rows).toBe(40);
-    // SSH's window-change is a client→server request only: ssh2 1.17 has no
-    // server-side setWindow and ClientChannel has no resize event, so there
-    // is nothing to observe on the client side. Verified here is the
-    // direction the terminal feature drives (xterm resize → tmux); the
-    // fake's own setWindow only updates the geometry it reports.
     f.setWindow(200, 50);
     expect(f.cols).toBe(200);
     expect(f.rows).toBe(50);
@@ -116,8 +105,6 @@ describe("in-process SSH server pty channels (integration, real ssh2 client)", (
     const channel = await exec(client, "tmux attach-session -d -t ta-term-3", {
       pty: { term: "xterm-256color", cols: 80, rows: 24 },
     });
-    // a terminal consumes the stream; without a data listener ssh2 never
-    // flows the readable side and holds the close event back
     channel.on("data", () => {});
     const closed = new Promise<void>((resolve) => channel.once("close", () => resolve()));
     fake!.end();

@@ -1,9 +1,3 @@
-/**
- * Browser routes (issue #24): status, start, VNC ticket, resize, driver and
- * profile reset — against the app's Hono stack with a live fake session
- * injected into the toolkit's session map (the same seam the production
- * toolkit uses).
- */
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { fakeCatalog, fakeModel, useTestRuntime } from "../fixtures";
 import { api, createTestApp } from "../helpers";
@@ -21,11 +15,6 @@ import {
 import type { OpenBrowserOptions } from "../../../packages/sandbox/src/browser-sessions";
 import { setBrowserSessionsForTests } from "../../../apps/web/src/server/api/bots/browser.sessions";
 
-/**
- * The manager the routes act through. One per test; `install` swaps the
- * transport its next open uses (the way a test used to swap the toolkit's),
- * so browsers already live stay live across an install.
- */
 let sessions: BrowserSessions | undefined;
 let currentTransport: BrowserTransport = async () => fakeSession().session;
 let wipedDirs: string[] = [];
@@ -50,7 +39,6 @@ function install(options: Pick<BrowserSessionsOptions, "transport" | "profilesDi
   return sessions ?? freshManager();
 }
 const getLiveBrowserSession = (target: BrowserTarget) => sessions?.get(target);
-/** Nothing live, nothing opening: the routes see no browser. */
 async function resetBrowserSessionsForTests() {
   await sessions?.closeAll();
 }
@@ -64,7 +52,6 @@ const token = await authToken("browser-test@example.com");
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- response data varies per route
 type Data = any;
 
-/** A JSON request through the app, authenticated unless `anonymous`. */
 function call(
   app: ReturnType<typeof createTestApp>,
   path: string,
@@ -108,7 +95,6 @@ function fakeSession(options: { vnc?: boolean; resizeError?: string } = {}) {
   return {
     session,
     resizes,
-    /** The browser dies under the app (a dropped link, Chrome exiting). */
     die: () => disconnects.forEach((listener) => listener()),
     get driver() {
       return driver;
@@ -141,11 +127,9 @@ describe("browser routes", () => {
   const get = (path: string) => call(app, path);
   const post = (path: string, json?: unknown) => call(app, path, { method: "POST", json });
   let botId: string;
-  /** New bots use the shared browser profile, in a tab of their own. */
   let target: { profile: string; tab: string };
   let fake: ReturnType<typeof fakeSession>;
 
-  // Installs the fake as the live session for this bot (headless or VNC).
   async function openFake(options: { vnc?: boolean; resizeError?: string } = {}) {
     await sessions?.closeAll();
     fake = fakeSession(options);
@@ -245,7 +229,7 @@ describe("browser routes", () => {
     const ticket = url.searchParams.get("ticket")!;
     expect(ticket.length).toBeGreaterThan(20);
 
-    expect(redeemVncTicket(ticket, "some-other-bot")).toBeUndefined(); // wrong bot burns it
+    expect(redeemVncTicket(ticket, "some-other-bot")).toBeUndefined();
     expect(redeemVncTicket(ticket, botId)).toBeUndefined();
 
     const again = await post(`/api/v1/bots/${botId}/browser/vnc-ticket`);
@@ -253,7 +237,7 @@ describe("browser routes", () => {
     const second = new URL(again.body.data.path, "http://internal").searchParams.get("ticket")!;
     expect(second).not.toBe(ticket);
     expect(redeemVncTicket(second, botId)).toMatchObject({ botId, target });
-    expect(redeemVncTicket(second, botId)).toBeUndefined(); // single use
+    expect(redeemVncTicket(second, botId)).toBeUndefined();
   });
 
   it("refuses a VNC ticket without a VNC browser or a session", async () => {
@@ -305,7 +289,6 @@ describe("browser routes", () => {
     const status = await get(`/api/v1/bots/${botId}/browser`);
     expect(status.status).toBe(200);
     expect(status.body.data).toMatchObject({ active: false, mode: null, driver: null });
-    // Nothing is left to resize or drive: the panel offers to open a new one.
     const gone = await post(`/api/v1/bots/${botId}/browser/resize`, { width: 900, height: 700 });
     expect(gone.status).toBe(404);
     expect(fake.resizes).toEqual([]);
@@ -394,7 +377,6 @@ describe("browser routes", () => {
     expect((await post(`/api/v1/bots/${botId}/browser/start`)).status).toBe(200);
     await vi.waitFor(() => expect(getLiveBrowserSession(own)?.session).toBe(ownFake.session));
 
-    // Resetting it wipes only its own profile; the shared browser stays up.
     const reset = await call(app, `/api/v1/bots/${botId}/browser/profile`, { method: "DELETE" });
     expect(reset.status).toBe(200);
     expect(wipedDirs).toEqual([`/tmp/ta-route-profiles/bot-${botId}`]);

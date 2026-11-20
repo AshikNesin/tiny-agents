@@ -1,8 +1,3 @@
-/**
- * Vault fills in a real Chromium (issue #56): the login/payment classifier,
- * the origin assertion, and that nothing of the value comes back. Skipped
- * where no Chromium binary is available (set CHROMIUM_PATH to point at one).
- */
 import { existsSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -41,9 +36,6 @@ const CHECKOUT = `<!doctype html><form>
   <input name="holder" placeholder="Name on card">
 </form>`;
 
-/** Amazon's sign-in as amazon.in serves it: the email step first, with an
- * `autocomplete="webauthn"` email field and a hidden password autofill
- * hint; the password on a page of its own after submitting. */
 const EMAIL_STEP = `<!doctype html><form action="/password" method="get">
   <input type="text" name="email" id="ap_email_login" autocomplete="webauthn">
   <input type="password" name="password" id="hint" style="display:none">
@@ -54,10 +46,6 @@ const PASSWORD_STEP = `<!doctype html><form action="/done" method="get">
   <input type="password" name="password" id="ap_password" autocomplete="current-password">
 </form>`;
 
-/** A mobile-number sign-in as SPA portals serve it: no `<form>` (a
- * styled-components tree), a country-code prefix, and the only identifier
- * field is a `tel` input; the header re-renders, replacing its LOGIN button
- * every 300ms. */
 const MOBILE_LOGIN = `<!doctype html><body>
 <div id="header"><button id="login">LOGIN/SIGNUP</button></div>
 <section id="login-section">
@@ -91,7 +79,6 @@ describe.skipIf(!executable)("vault fills in the page", () => {
   let browser: Browser;
   let server: Server;
   let origin: string;
-  /** The same server by another name: a different origin that frames `origin`'s login. */
   let framer: string;
   const framedLogin = () => `<!doctype html><iframe src="${origin}/login"></iframe>`;
   let page: Page;
@@ -122,8 +109,6 @@ describe.skipIf(!executable)("vault fills in the page", () => {
     framer = `http://localhost:${(server.address() as AddressInfo).port}`;
     browser = await chromium.launch({ executablePath: executable, args: ["--no-sandbox"] });
     page = await browser.newPage();
-    // Launching Chromium shares the CI machine with the suite's tsc-heavy
-    // checks (kit-exports, typecheck-coverage), and once missed 30 s there.
   }, 120_000);
 
   afterAll(async () => {
@@ -163,7 +148,6 @@ describe.skipIf(!executable)("vault fills in the page", () => {
         { key: "password", autocomplete: "current-password", value: new SecretValue("canary-2") },
       ],
     }).catch((caught: unknown) => caught);
-    // The vault's one "target moved" error: what the app audits as refused_origin.
     expect(error).toBeInstanceOf(OriginMismatchError);
     expect(error).toBeInstanceOf(VaultTargetMovedError);
     expect(error).toMatchObject({ actual: origin, reason: "page origin changed before the fill" });
@@ -171,8 +155,6 @@ describe.skipIf(!executable)("vault fills in the page", () => {
   });
 
   it("names the frame when the field sits in another site's frame (#302)", async () => {
-    // The Hindu's sign-in: the page is on the asked origin, the email field
-    // in an id.tinypass.com frame. Here localhost frames a 127.0.0.1 page.
     await page.goto(`${framer}/framed`);
     const frame = page.frames().find((f) => f !== page.mainFrame());
     await frame?.waitForSelector("#u");
@@ -188,7 +170,6 @@ describe.skipIf(!executable)("vault fills in the page", () => {
     expect(error).toBeInstanceOf(FrameOriginError);
     expect(error).toMatchObject({ actual: origin });
     expect(await frame!.inputValue("#u")).toBe("");
-    // What a credential request records, so the card can name the frame.
     expect(await refOrigin(page, ref!)).toBe(origin);
   });
 
@@ -208,7 +189,6 @@ describe.skipIf(!executable)("vault fills in the page", () => {
         { key: "card_holder", autocomplete: "cc-name", value: new SecretValue("Ana Lima") },
       ],
     });
-    // The split month field doesn't exist on a combined-expiry form.
     expect(result.filled).toEqual(["card_number", "card_expiry", "card_cvc", "card_holder"]);
     expect(await page.inputValue("[name=exp]")).toBe("12/30");
     expect(await page.inputValue("[name=cvc]")).toBe("123");
@@ -249,17 +229,13 @@ describe.skipIf(!executable)("vault fills in the page", () => {
     await page.goto(`${origin}/mobile`);
     const result = await fillSecretFields(page, {
       origin,
-      // A sign-in asked for as "username" (the default text token) on a page
-      // whose only identifier field is a mobile-number tel input.
       fields: [{ key: "mobile", autocomplete: "username", value: new SecretValue("8124227227") }],
       steps: true,
     });
     expect(result).toEqual({ filled: ["mobile"] });
     expect(await page.inputValue("#mobile")).toBe("8124227227");
-    // As the tool tells the model to: submit, then the OTP screen shows.
     await page.click("#continue");
     await page.waitForSelector("#otp");
-    // The OTP screen (4-digit tel input) is filled by the one-time-code heuristic.
     const otp = await fillSecretFields(page, {
       origin,
       fields: [{ key: "code", autocomplete: "one-time-code", value: new SecretValue("4587") }],

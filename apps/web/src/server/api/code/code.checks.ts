@@ -1,8 +1,3 @@
-/**
- * A check's log excerpt for the PR tab: the open pull request's Actions job
- * log, cut to the lines around the first failure (or its last lines), with
- * GitHub's timestamps, color codes and group markers taken out.
- */
 import { Boom } from "@groot/core/errors";
 import { GitHubError } from "@tiny-agents/github";
 import type { CheckLogView } from "../../../shared/api/code";
@@ -10,7 +5,6 @@ import { codeGitHub } from "./code.github";
 import { projectThread, repoOf } from "./code.projects";
 import { cachedSnapshot, openPullOf } from "./code.pulls.store";
 
-/** How much of the log's end to read: enough to reach the failure. */
 const LOG_CHARS = 64_000;
 const BEFORE = 8;
 const MAX_LINES = 30;
@@ -18,7 +12,6 @@ const MAX_LINES = 30;
 const TIMESTAMP = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z ?/;
 // eslint-disable-next-line no-control-regex
 const ANSI = /\u001b\[[0-9;]*[A-Za-z]/g;
-/** Case matters: `FAIL` is a test runner's verdict, `failed` usually a tally. */
 const ERROR_LINE =
   /##\[error\]|::error|\bFAIL(?:ED)?\b|\b[A-Z]\w*Error\b|\berror(?:\[\w+\])?:|\bERR!|panic:|✗|✖/;
 const MESSAGE_LINE = /\b[A-Z]\w*Error\b|\berror(?:\[\w+\])?:|##\[error\]|panic:/;
@@ -35,7 +28,6 @@ function clean(raw: string): string[] {
   return lines;
 }
 
-/** The excerpt of a raw Actions log: what a reader needs before opening the full one. */
 function logExcerpt(raw: string): Omit<CheckLogView, "name" | "url" | "running"> {
   const all = clean(raw);
   const errors = all.flatMap((line, i) => (ERROR_LINE.test(line) ? [i] : []));
@@ -50,7 +42,6 @@ function logExcerpt(raw: string): Omit<CheckLogView, "name" | "url" | "running">
     end = Math.min(all.length, start + MAX_LINES);
   }
   const picked = all.slice(start, end).map((line, i) => ({ line, at: start + i }));
-  // The step's own verdict at the very end is worth keeping when it was cut.
   const last = all.length - 1;
   const isError = new Set(errors);
   if (end <= last && isError.has(last)) {
@@ -65,12 +56,6 @@ function logExcerpt(raw: string): Omit<CheckLogView, "name" | "url" | "running">
   return { lines, highlight, summary: summary || null };
 }
 
-/**
- * The log of one of the open pull request's checks; any other job is not
- * found. GitHub serves a job's log only once the job completes (it answers
- * 404 before that), so a check the snapshot still shows as pending is asked
- * for its steps first, and its log only if it has finished since.
- */
 export async function checkLog(threadId: string, jobId: number): Promise<CheckLogView> {
   const found = await projectThread(threadId);
   if (!found) throw Boom.badRequest("This thread is not in a project.");

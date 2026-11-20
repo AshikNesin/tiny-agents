@@ -21,7 +21,6 @@ async function tempRoot(): Promise<string> {
 interface AdapterCase {
   name: string;
   create: () => Promise<StorageAdapter>;
-  /** False when the adapter derives the content type from the key's extension. */
   storesContentType: boolean;
 }
 

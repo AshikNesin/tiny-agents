@@ -1,9 +1,3 @@
-/**
- * The tool-call row both engines show: one table per side of the
- * projection, a finished call's result and a running call's live slot.
- * Every status and every card kind reads the same off the details,
- * whichever engine ran the call.
- */
 import { describe, expect, it } from "vite-plus/test";
 import {
   finishedToolRow,

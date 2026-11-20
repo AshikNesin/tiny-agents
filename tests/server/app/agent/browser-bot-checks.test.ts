@@ -1,8 +1,3 @@
-/**
- * Sites behind a bot check (Amazon's AWS WAF, Cloudflare) in real Chromium:
- * a check that solves itself is waited through, and the local headless
- * browser does not announce itself as automated, so the check passes.
- */
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { createServer, type IncomingHttpHeaders, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -17,7 +12,6 @@ import {
 import type { BrowserSession } from "../../../../packages/sandbox/src/browser-sessions";
 import { navigationGuard } from "../../../../packages/sandbox/src/navigation-guard";
 
-/** A Chromium this machine has, if any (CI may have none). */
 const chromiumPath = [
   chromium.executablePath(),
   "/usr/bin/chromium",
@@ -32,7 +26,6 @@ afterEach(async () => {
   for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
 });
 
-/** A site on localhost; `requests` holds each page request's headers. */
 async function serve(
   handler: (
     path: string,
@@ -51,7 +44,6 @@ async function serve(
   return { requests, base: `http://localhost:${(server.address() as AddressInfo).port}` };
 }
 
-/** The page's text, as `browser_read_text` reads it. */
 function readText(session: BrowserSession): Promise<string> {
   if (!session.text) throw new Error("This session cannot read text.");
   return session.text();
@@ -59,8 +51,6 @@ function readText(session: BrowserSession): Promise<string> {
 
 describe.skipIf(!chromiumPath)("bot checks in real Chromium", () => {
   it("waits through a challenge that solves itself and returns the real page", async () => {
-    // What amazon.in sends a browser it has not seen: an empty 202 whose
-    // script sets a token cookie a moment later and reloads into the shop.
     const site = await serve((_path, headers) =>
       headers.cookie?.includes("aws-waf-token=ok")
         ? html("<title>Shop</title><h1>Today's deals</h1>")
@@ -107,7 +97,6 @@ describe.skipIf(!chromiumPath)("bot checks in real Chromium", () => {
     cleanups.push(() => session.close());
 
     await session.navigate(`${site.base}/`);
-    // Chrome names Kolkata by its older ICU name.
     expect(await readText(session)).toMatch(
       /^webdriver=false lang=en-IN tz=Asia\/(Kolkata|Calcutta)$/,
     );

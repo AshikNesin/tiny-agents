@@ -1,9 +1,3 @@
-/**
- * The BotCreationStore adapter over app.db (issue #149): an owner's turn
- * creates a bot through the same `createBot` as the New bot dialog; routine
- * runs, peer deliveries and shared chats are refused, and so are a taken
- * name and an unknown model.
- */
 import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { eq } from "drizzle-orm";
@@ -12,7 +6,6 @@ import { createBotCreationStore } from "../../../../apps/web/src/server/api/bots
 import { botGuests, bots, db, routines } from "../../../../apps/web/src/server/db";
 import { createFakeRuntime, fakeModel, resetAppTables, seedBot } from "../../fixtures";
 
-/** Who sent the conversation's latest user message (what `isUnattended` reads). */
 let latest: { text: string; peer?: unknown } = { text: "Make me a bot for my project." };
 const fake = createFakeRuntime();
 fake.readChat.mockImplementation(
@@ -54,7 +47,6 @@ describe("createBotCreationStore", () => {
       systemPrompt: "You help the owner with the Limitless Visuals app.",
       modelId: "m1",
     });
-    // Its own durable conversation, like a bot made in the dialog.
     expect(fake.createConversation).toHaveBeenCalled();
     expect(row?.conversationId).toBeTruthy();
   });

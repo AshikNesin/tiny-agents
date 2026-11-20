@@ -1,8 +1,3 @@
-/**
- * tiny-agents users created before groot 3.0 have bcrypt password hashes. They
- * must still be able to sign in, and that sign-in replaces the hash with a
- * PBKDF2 one (packages/core/src/utils/password.utils.ts, auth.service.ts).
- */
 import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vite-plus/test";
@@ -39,7 +34,6 @@ describe("legacy bcrypt passwords", () => {
     expect(upgraded.startsWith("pbkdf2-sha256$")).toBe(true);
     expect(needsRehash(upgraded)).toBe(false);
 
-    // The new hash keeps working; bcrypt is no longer involved.
     await expect(authService.login({ email, password })).resolves.toBeDefined();
     expect(await storedHash()).toBe(upgraded);
   });

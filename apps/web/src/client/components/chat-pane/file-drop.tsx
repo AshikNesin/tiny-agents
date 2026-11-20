@@ -2,11 +2,6 @@ import { useRef, useState, type DragEvent, type RefObject } from "react";
 import { Paperclip } from "lucide-react";
 import type { ChatComposerHandle } from "../ChatComposer";
 
-/**
- * Drop files anywhere on the conversation to attach them. dragenter and
- * dragleave fire for every child crossed, so a depth counter tells when
- * the pointer really left the pane.
- */
 export function useFileDrop(enabled: boolean, composerRef: RefObject<ChatComposerHandle | null>) {
   const [dragging, setDragging] = useState(false);
   const dragDepth = useRef(0);

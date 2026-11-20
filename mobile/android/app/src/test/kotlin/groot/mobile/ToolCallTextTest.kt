@@ -22,7 +22,6 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** How tool calls are worded and which card draws them (the web client's tool-call-view and tool-call-text). */
 class ToolCallTextTest {
     @Test
     fun `labels come from the catalog, else from the tool's name`() {

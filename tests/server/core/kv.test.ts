@@ -105,7 +105,6 @@ describe("kv", () => {
     expect(await kv.claim("slot", 10 * MINUTE)).toBe(true);
     expect(await kv.get("slot")).toBe(start + 10 * MINUTE);
 
-    // A shorter interval is measured from the same last claim.
     at(11);
     expect(await kv.claim("slot", 2 * MINUTE)).toBe(false);
     at(12);

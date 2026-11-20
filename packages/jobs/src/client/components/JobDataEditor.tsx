@@ -6,7 +6,6 @@ const CodeMirrorEditor = lazy(() =>
   })),
 );
 
-/** JSON payload editor shared by the add-job and schedule dialogs. */
 export function JobDataEditor({
   value,
   onChange,

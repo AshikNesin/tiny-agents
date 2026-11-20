@@ -1,13 +1,8 @@
-/**
- * The verify runs' frozen clock (fixed-clock.ts): only in faux mode, with a
- * real instant, and `new Date(x)` still parses `x`.
- */
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { installFixedClock } from "../../../apps/web/src/server/fixed-clock";
 
 let RealDate = globalThis.Date;
 beforeEach(() => {
-  // The test setup installs its own frozen Date per test: restore that one.
   RealDate = globalThis.Date;
 });
 afterEach(() => {

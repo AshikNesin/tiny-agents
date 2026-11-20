@@ -54,10 +54,8 @@ import groot.mobile.ui.components.Markdown
 import groot.mobile.ui.components.PrimaryButton
 import groot.mobile.ui.components.SecondaryButton
 
-/** What a transcript row can ask of the screen. */
 class CodeRowActions(
     val readOnly: Boolean,
-    /** The id of the error notice that offers recovery (nothing came after it). */
     val recoverableId: String?,
     val recovery: List<String>,
     val onAllow: (requestId: String, allow: Boolean) -> Unit,
@@ -66,7 +64,6 @@ class CodeRowActions(
     val onOpenThread: (String) -> Unit,
 )
 
-/** One row of the transcript, or a folded run of tool calls. */
 @Composable
 fun CodeRow(item: CodeDisplayItem, actions: CodeRowActions, modifier: Modifier = Modifier) {
     Box(modifier.fillMaxWidth().padding(vertical = S.xs)) {
@@ -108,7 +105,6 @@ private fun Labelled(label: String, content: @Composable () -> Unit) {
     }
 }
 
-/** Thinking: one muted line, open for the whole text. Live thinking shows its last lines. */
 @Composable
 fun Thinking(text: String, live: Boolean) {
     var open by rememberSaveable { mutableStateOf(false) }
@@ -127,7 +123,6 @@ fun Thinking(text: String, live: Boolean) {
     }
 }
 
-/** An error, warning or note from the harness; the last error offers Retry, Resume or Continue. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun NoticeRow(notice: TranscriptItem.Notice, actions: CodeRowActions) {
@@ -161,7 +156,6 @@ private fun NoticeRow(notice: TranscriptItem.Notice, actions: CodeRowActions) {
     }
 }
 
-/** A run of finished tool calls as one line: "Ran 3 commands, edited 2 files"; open, each call. */
 @Composable
 private fun ToolGroup(group: CodeDisplayItem.Group, actions: CodeRowActions) {
     var open by rememberSaveable(group.key) { mutableStateOf(false) }
@@ -188,7 +182,6 @@ private fun ToolGroup(group: CodeDisplayItem.Group, actions: CodeRowActions) {
     }
 }
 
-/** One tool call: its gist on a line; open, its command, output, exit code or diff. */
 @Composable
 private fun ToolRow(tool: TranscriptItem.Tool, actions: CodeRowActions) {
     var open by rememberSaveable(tool.id) { mutableStateOf(false) }
@@ -270,7 +263,6 @@ private fun diffStat(diff: String): String {
     return "+${lines.count { it.kind == DiffLine.Kind.Added }} −${lines.count { it.kind == DiffLine.Kind.Removed }}"
 }
 
-/** Claude Code's TodoWrite as a checklist. */
 @Composable
 private fun TodoList(input: String) {
     val todos = remember(input) {
@@ -299,7 +291,6 @@ private fun TodoList(input: String) {
     }
 }
 
-/** Monospace text in a quiet box that scrolls sideways. */
 @Composable
 fun CodeBlock(text: String, modifier: Modifier = Modifier, maxLines: Int = Int.MAX_VALUE) {
     SelectionContainer {
@@ -320,7 +311,6 @@ fun CodeBlock(text: String, modifier: Modifier = Modifier, maxLines: Int = Int.M
     }
 }
 
-/** Diff lines: removed in red, added in green, gaps as muted dividers. Scrolls sideways. */
 @Composable
 fun DiffView(lines: List<DiffLine>, modifier: Modifier = Modifier, maxLines: Int = Int.MAX_VALUE, onLongPress: ((DiffLine) -> Unit)? = null) {
     val added = Accents.success.copy(alpha = DIFF_TINT)
@@ -369,7 +359,6 @@ private fun DiffRow(line: DiffLine, background: Color, onLongPress: ((DiffLine) 
     }
 }
 
-/** An approval (Allow / Deny) or the harness's questions; once answered, one line says how. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun RequestCard(row: TranscriptItem.Request, actions: CodeRowActions) {

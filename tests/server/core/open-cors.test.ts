@@ -56,7 +56,6 @@ describe("createApp openCorsPaths", () => {
       const allowed = await app.fetch(preflight("/api/v1/private", "https://app.example.com"));
       expect(allowed.headers.get("access-control-allow-origin")).toBe("https://app.example.com");
       expect(allowed.headers.get("access-control-allow-credentials")).toBe("true");
-      // a prefix only matches with the trailing *
       const track = await app.fetch(preflight("/api/trackx", "https://customer.example"));
       expect(track.headers.get("access-control-allow-origin")).toBeNull();
     } finally {

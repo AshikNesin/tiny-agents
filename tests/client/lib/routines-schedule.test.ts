@@ -1,9 +1,3 @@
-/**
- * Client-side schedule math (issue #18 phase B): the formatter must render
- * IST wall-clock across the UTC day boundary exactly like the server, the
- * editor's once-input must produce an offset-bearing ISO the API accepts,
- * and previews must use the same next-occurrence semantics as the engine.
- */
 import { describe, expect, it } from "vite-plus/test";
 import {
   describeSchedule,
@@ -51,7 +45,6 @@ describe("once inputs (IST wall time)", () => {
 
 describe("nextOccurrence and previews", () => {
   it("steps cron in IST across the UTC day boundary", () => {
-    // 15:30 IST Tue 20 Oct; next 09:00 IST slot is Wed, i.e. 03:30 UTC.
     const next = nextOccurrence(
       { kind: "cron", expr: "0 9 * * *" },
       new Date("2026-10-20T10:00:00Z"),
@@ -87,9 +80,9 @@ describe("isValidCron", () => {
     expect(isValidCron("0 9 * * 1-5")).toBe(true);
     expect(isValidCron("*/15 * * * *")).toBe(true);
     expect(isValidCron("0 9 * * *")).toBe(true);
-    expect(isValidCron("* * * * * *")).toBe(false); // 6 fields
-    expect(isValidCron("0 9 * *")).toBe(false); // 4 fields
-    expect(isValidCron("99 9 * * *")).toBe(false); // bad minute
+    expect(isValidCron("* * * * * *")).toBe(false);
+    expect(isValidCron("0 9 * *")).toBe(false);
+    expect(isValidCron("99 9 * * *")).toBe(false);
     expect(isValidCron("")).toBe(false);
   });
 });

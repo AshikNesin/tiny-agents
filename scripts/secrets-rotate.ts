@@ -1,12 +1,4 @@
 #!/usr/bin/env tsx
-/**
- * Re-seal every secret the app stores (local vault items and connection
- * OAuth state) under the current SECRETS_KEY. Run after moving the old key to
- * SECRETS_KEY_PREVIOUS and setting a new SECRETS_KEY; once it reports done,
- * SECRETS_KEY_PREVIOUS can be removed. Secrets an older version left in the
- * KV store or on a connection are moved into the vault first, as a start
- * would. See docs/features/vault.md.
- */
 import { existsSync } from "node:fs";
 import { bootstrap } from "@groot/core/bootstrap";
 import { applyDatabaseDefaults, openNodeAppDatabase } from "../apps/web/src/server/db/open";
@@ -30,7 +22,6 @@ const vault = resealLocalItems();
 const connections = await resealConnectionSecrets();
 const done = `Re-sealed ${vault.resealed} local vault item(s) and ${connections} connection secret(s).`;
 if (vault.skipped.length > 0) {
-  // Those still open only under the old key: removing it would lose them.
   console.error(
     `✗ ${done} ${vault.skipped.length} vault item(s) couldn't be read and were left as they ` +
       `were (${vault.skipped.join(", ")}); keep SECRETS_KEY_PREVIOUS until they are ` +

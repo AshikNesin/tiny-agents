@@ -1,15 +1,6 @@
 import { describe, it, expect } from "vite-plus/test";
 import { categorizeFile, TEST_AREA_OWNERSHIP } from "../../../.groot/lib/patterns";
 
-/**
- * Classification of kit-owned test paths.
- *
- * These cases pin the defect the audit recorded: the three recorded suite
- * paths fell through to drift while their source syncs, so a kit bug fix
- * could sync without its regression test (evidence/sync-classification.log).
- * Classification is now derived from TEST_AREA_OWNERSHIP, not directory-name
- * pattern lists.
- */
 describe("categorizeFile — kit-owned test suites classify as sync", () => {
   it.each([
     "tests/server/jobs/queue.test.ts",
@@ -19,8 +10,6 @@ describe("categorizeFile — kit-owned test suites classify as sync", () => {
     expect(categorizeFile(path, []).action).toBe("sync");
   });
 
-  // The parity suite reads child-owned schema files on purpose while guarding
-  // synced engine parity; ownership is declared, not inferred from imports.
   it("schema-parity suite syncs despite reading child-owned schemas", () => {
     expect(categorizeFile("tests/server/core/kv.test.ts", []).action).toBe("sync");
   });
@@ -42,8 +31,6 @@ describe("categorizeFile — kit-owned test suites classify as sync", () => {
 
 describe("categorizeFile — child-owned paths stay out", () => {
   it("app source code stays skip-app", () => {
-    // The plan wording says drift; the classifier's actual child-owned enum is
-    // skip-app, which keeps app files out of sync AND out of drift noise.
     expect(categorizeFile("apps/web/src/server/api/todo.ts", []).action).toBe("skip-app");
   });
 

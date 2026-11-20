@@ -1,12 +1,3 @@
-/**
- * The `bots` toolkit (issue #12): bot-to-bot messaging over the app's
- * `BotMessage` ledger. The app injects a `BotMessagingStore` when it opens
- * the runtime; `message_bot` runs inside pi-durable with `replay: "safe"`,
- * so a call interrupted by a restart re-executes on recovery. Exactly-once
- * is the store's job: the tool derives its `sourceKey` and `requestId`
- * deterministically from the durable tool task (same key as `tasks`), so a
- * replay recomputes both and the store's unique columns dedupe the row.
- */
 import { section, type ToolExecutionResult } from "@earendil-works/pi-durable";
 import { Type } from "@earendil-works/pi-ai";
 import type { Capability } from "../capabilities";
@@ -14,9 +5,7 @@ import { defineToolkit, tool } from "../toolkit";
 import { toolIdempotencyKey } from "./tasks";
 import { CUSTODY_RULE, sanitizePeerText } from "./peer-text";
 
-/** What the app provides: delivery and the roster over its own database. */
 export interface BotMessagingStore {
-  /** Deliver a message into to's conversation. Idempotent on requestId. */
   deliver(input: {
     conversationId: number;
     toName: string;
@@ -26,15 +15,8 @@ export interface BotMessagingStore {
   }): Promise<{
     delivered: boolean;
     reason?: "unknown_bot" | "self" | "loop" | "budget";
-    /** True when the target is mid-reply; the message runs after it settles. */
     queued?: boolean;
   }>;
-  /**
-   * Bot names the model can message (roster section). Only stable fields: a
-   * section whose text changes is sent to the model again, so a live "busy"
-   * flag would append a fresh roster to the transcript every time a bot
-   * starts or stops a reply. `message_bot` says when a message is queued.
-   */
   roster(conversationId: number): Promise<{ name: string; description: string }[]>;
 }
 
@@ -54,7 +36,6 @@ const noDeliver = (to: string, reason: string): ToolExecutionResult =>
           : "Do not repeat the call unchanged."),
   );
 
-/** The `bots` toolkit: message other bots (`apps/web` bots.runtime.ts). */
 export function createBotsToolkit(store: BotMessagingStore): Capability {
   const messageBot = tool({
     name: "message_bot",

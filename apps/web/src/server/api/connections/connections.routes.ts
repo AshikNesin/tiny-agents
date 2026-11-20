@@ -16,30 +16,17 @@ import {
   updateToolSchema,
 } from "./connections.schema";
 
-/**
- * Public routes: reachable without a session. The OAuth metadata document is
- * fetched by authorization servers (no credentials possible), and the OAuth
- * redirect target is a cross-site browser navigation — the session cookie
- * (SameSite=Strict in production) is not attached and a navigation carries no
- * Authorization header. The callback is authorized by the `state` parameter,
- * which matches only a pending sign-in started by the connection's owner.
- */
 export const publicConnectionsRouter = new Hono<AppEnv>();
 
 publicConnectionsRouter.get("/connections/oauth/client-metadata.json", (c) =>
   c.json({ ...clientMetadata(), client_id: clientMetadataUrl() }),
 );
 
-/** A query parameter given exactly once (a repeated one is ignored, as before). */
 function singleQuery(c: AppContext, name: string): string | undefined {
   const values = c.req.queries(name);
   return values?.length === 1 ? values[0] : undefined;
 }
 
-/**
- * OAuth redirect target. In the sign-in popup it reports back to the opener
- * and closes; opened as a full page (mobile) it returns to the connection.
- */
 publicConnectionsRouter.get("/connections/oauth/callback", async (c) => {
   const code = singleQuery(c, "code");
   const state = singleQuery(c, "state");
@@ -75,9 +62,6 @@ router.post("/connections/test", async (c) => {
   return ok(c, await connectionsService.test(await parseBody(c, testConnectionSchema)));
 });
 
-// Where a connection points and the secret it sends need a fresh step-up
-// (S4), as a model account's do: a stolen session must not re-point a stored
-// header secret at its own host.
 router.post("/connections", requireStepUp, async (c) => {
   const payload = await parseBody(c, createConnectionSchema);
   return ok(c, await connectionsService.create(payload), 201);

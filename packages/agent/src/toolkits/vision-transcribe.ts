@@ -1,18 +1,6 @@
-/**
- * Image transcription side-call: sends an image to a vision-capable model
- * and returns the text. Port of the dotfiles `vision` CLI
- * (`~/dotfiles/bin/vision`): same system prompt, same default question,
- * one retry on 429/5xx, fail by throwing (the tool converts to fail-open).
- *
- * The model is the `vision` model role (issue #179): the one set in
- * Settings → Models, else the first available model that sees images. A
- * direct vision endpoint is just another provider account. None available
- * throws "no vision model is configured".
- */
 import type { Api, AssistantMessage, Context, Model, UserMessage } from "@earendil-works/pi-ai";
 import type { ModelCatalog } from "@tiny-agents/models";
 
-/** Transcription prompts, reused verbatim from the dotfiles CLI. */
 const VISION_SYSTEM =
   "You are a vision transcription service for an agent that cannot see images. " +
   "Answer the question about the image with high fidelity. Always transcribe text verbatim. " +
@@ -33,16 +21,13 @@ interface TranscribeImage {
 }
 
 export interface Transcriber {
-  /** Transcribe one image. `question` defaults to the full-transcription prompt. */
   transcribe(
     image: TranscribeImage,
     options?: { question?: string; timeoutMs?: number },
   ): Promise<string>;
-  /** The vision model the transcriber uses right now (row id), if any. */
   modelId(): string | undefined;
 }
 
-/** The minimum the transcriber needs: the runtime's catalog and registry. */
 export interface TranscriberSource {
   catalog(): Pick<ModelCatalog, "forRole" | "piModel">;
   models: {
@@ -70,9 +55,6 @@ export function createTranscriber(source: TranscriberSource): Transcriber {
           "no vision model is configured (set the vision model in Settings → Models)",
         );
       }
-      // The side-call exists to send an image; if the registry declared the
-      // model text-only, pi-ai's transform would strip the image block
-      // before the wire. Declare it on the call's copy so the image survives.
       const model: Model<Api> = (resolved.input ?? []).includes("image")
         ? resolved
         : { ...resolved, input: [...(resolved.input ?? ["text"]), "image"] };
@@ -99,7 +81,6 @@ export function createTranscriber(source: TranscriberSource): Transcriber {
           `vision model ${role.name}`,
         );
         const text = textOf(message);
-        // Empty answers can be a transient upstream quirk: retry once.
         if (!text) throw new UpstreamError(`empty answer from ${role.name}`, true);
         return text;
       });
@@ -107,7 +88,6 @@ export function createTranscriber(source: TranscriberSource): Transcriber {
   };
 }
 
-/** A thrown error that knows whether a retry can help. */
 class UpstreamError extends Error {
   constructor(
     message: string,

@@ -1,7 +1,3 @@
-/**
- * The Claude plan transcript's projection (ADR 0018): `claude.*` records
- * in entry order, plus the running turn and the queue, become the chat.
- */
 import { describe, expect, it } from "vite-plus/test";
 import {
   claudeMessages,

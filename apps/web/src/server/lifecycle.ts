@@ -1,19 +1,5 @@
-/**
- * The server's lifecycle: a flat list of parts, each saying how it starts
- * and how it stops. Starting runs the parts in order; stopping runs their
- * stops in reverse, so whatever a part needed is still there while it
- * stops. A failing start stops what already started and rethrows. A failing
- * stop is logged and the next stop still runs, and the whole stop has a
- * deadline, so a hung part can never keep the process alive. The first
- * signal stops; a second signal exits at once.
- *
- * A part names the parts it `needs`: they must be registered before it, so
- * they start first and stop after it. Registering a part before something it
- * needs throws, so the boot order is checked, not only commented.
- */
 export interface LifecyclePart {
   name: string;
-  /** Parts that must start before this one and stop after it (registered earlier). */
   needs?: readonly string[];
   start?(): Promise<unknown> | unknown;
   stop?(): Promise<unknown> | unknown;
@@ -26,24 +12,14 @@ interface LifecycleLogger {
 
 export interface LifecycleOptions {
   log: LifecycleLogger;
-  /** How long every stop together may take before the process is ended anyway. */
   stopDeadlineMs?: number;
-  /** Ends the process (tests pass a fake). */
   exit?: (code: number) => void;
 }
 
 export interface Lifecycle {
-  /** Register a part; parts start in registration order. */
   add(part: LifecyclePart): void;
-  /** Start every part in order. A failing start stops the started ones (in reverse) and rethrows. */
   start(): Promise<void>;
-  /**
-   * Stop every started part in reverse, each isolated. Resolves `true` when
-   * all stopped in time, `false` when the deadline passed or a stop failed.
-   * Calling it again returns the same outcome.
-   */
   stop(reason: string): Promise<boolean>;
-  /** Stop on the first of `signals` and exit; exit at once on a second one. Returns the unhook. */
   handleSignals(signals: readonly NodeJS.Signals[]): () => void;
 }
 
@@ -56,7 +32,6 @@ export function createLifecycle(options: LifecycleOptions): Lifecycle {
   const parts: LifecyclePart[] = [];
   const started: LifecyclePart[] = [];
   let stopping: Promise<boolean> | undefined;
-  /** The part whose stop is running now (named when the deadline passes). */
   let current: LifecyclePart | undefined;
 
   async function stopStarted(): Promise<boolean> {

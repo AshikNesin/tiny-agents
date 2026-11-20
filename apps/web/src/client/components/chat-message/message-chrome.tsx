@@ -1,7 +1,3 @@
-/**
- * What every bubble and reply card shares: when it was sent, copy, and the
- * entrance a message that just arrived makes.
- */
 import { useState, type ReactNode } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { cn } from "@groot/ui/lib/utils";
@@ -9,7 +5,6 @@ import { Check, Copy } from "lucide-react";
 import { toast } from "sonner";
 import type { ChatMessage } from "../../lib/chat-types";
 
-/** "14:05" today, "Mon 14:05" this week, "12 Oct, 14:05" before; the full date in the tooltip. */
 function messageTime(at: number, now = Date.now()): { short: string; full: string } {
   const date = new Date(at);
   const time = date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
@@ -23,10 +18,6 @@ function messageTime(at: number, now = Date.now()): { short: string; full: strin
   return { short: `${day}, ${time}`, full };
 }
 
-/**
- * Round hover actions beside a bubble: when it was sent, and copy. Always
- * visible on touch, where there is no hover.
- */
 export function CopyButton({ text, at }: { text: string; at?: number }) {
   const stamp = at ? messageTime(at) : undefined;
   return (
@@ -45,11 +36,6 @@ export function CopyButton({ text, at }: { text: string; at?: number }) {
   );
 }
 
-/**
- * Fluid ChatMessage's meta row under a message: when it was sent, and copy.
- * It keeps its height so revealing it never shifts the transcript; hidden
- * until the message is hovered or focused, and always shown on touch.
- */
 export function MessageMeta({
   text,
   at,
@@ -82,11 +68,6 @@ export function MessageMeta({
   );
 }
 
-/**
- * Fluid ChatMessage's entrance: a message that just arrived rises 8px and
- * scales up from its bubble corner. History already on screen when the
- * transcript renders (or remounts while scrolling) stays still.
- */
 export function MessageEnter({
   fresh,
   align,
@@ -113,7 +94,6 @@ export function MessageEnter({
   );
 }
 
-/** Arrived within the last few seconds (or is being streamed now). */
 export function isFresh(message: ChatMessage): boolean {
   if (message.status === "streaming") return true;
   return Boolean(message.createdAt) && Date.now() - message.createdAt < 5_000;

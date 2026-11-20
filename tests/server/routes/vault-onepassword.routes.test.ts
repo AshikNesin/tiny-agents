@@ -1,10 +1,3 @@
-/**
- * The Vault with 1Password Connect configured (ADR 0027), through the routes
- * and the service, against a fake Connect server: the owner sees the
- * 1Password card, links an item made in 1Password, new items go to
- * 1Password, and a bot's use resolves with the read-only token. With the
- * bundled server still starting, the card says what it is doing.
- */
 import { eq } from "drizzle-orm";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vite-plus/test";
 import { generateToken } from "@groot/core/utils/jwt.utils";
@@ -50,7 +43,6 @@ beforeAll(async () => {
   token = await generateToken({ userId: user!.id, email: user!.email });
 });
 
-/** Backends are built from env on first use: drop the built ones so the next request reads it. */
 function rebuildBackends(): void {
   setReadBackendsForTests(undefined);
   setWriteBackendsForTests(undefined);

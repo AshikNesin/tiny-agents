@@ -1,10 +1,3 @@
-/**
- * Routines REST API over the real SQLite test DB: CRUD, pause cancels the
- * queued job, run-now submits a manual occurrence, resume recomputes, and
- * validation errors are 400s. The agent runtime is a fake (bots.routes
- * pattern); the queue is the real `jobs` table (no worker runs in tests), so
- * assertions see exactly which queue jobs live or die.
- */
 import { eq, sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { bots, db, jobs, routineRuns, routines } from "../../../apps/web/src/server/db";
@@ -25,7 +18,6 @@ const token = await authToken("routines-test@example.com");
 
 type Routine = Record<string, unknown> & { id: string; botId: string };
 
-/** Routine-fire jobs on the queue table, oldest first. */
 async function fireJobs() {
   return db
     .select()
@@ -34,7 +26,6 @@ async function fireJobs() {
     .orderBy(sql`rowid`);
 }
 
-/** Jobs still waiting to fire. */
 async function queuedJobs() {
   return (await fireJobs()).filter((job) => job.state === "created");
 }
@@ -49,7 +40,6 @@ async function routineRow(id: string) {
 
 const seedBot = async () => (await seedBotRow({ name: "Helper" })).id;
 
-/** The bot behind a routine, and the conversation the routine ran in. */
 async function botConversation(botId: string): Promise<number> {
   return Number((await db.query.bots.findFirst({ where: eq(bots.id, botId) }))!.conversationId);
 }
@@ -112,7 +102,6 @@ describe("Routines API routes", () => {
     expect(queued).toHaveLength(1);
     expect(queued[0]).toMatchObject({ name: ROUTINE_FIRE_JOB, state: "created" });
     expect(queued[0]!.data).toMatchObject({ routineId: routine.id, trigger: "schedule" });
-    // Delayed until the slot (the worker would not claim it yet).
     expect(queued[0]!.runAt.getTime()).toBeGreaterThan(Date.now());
     const row = await routineRow(routine.id);
     expect(row?.pendingJobId).toBe(queued[0]!.id);
@@ -171,7 +160,6 @@ describe("Routines API routes", () => {
     });
     expect(renamed.status).toBe(200);
     expect(renamed.body.data!.name).toBe("renamed");
-    // Name-only edits keep the pending job.
     expect((await queuedJobs()).map((job) => job.id)).toEqual([firstJobId]);
 
     const rescheduled = await api<Routine>(app, `/api/v1/routines/${routine.id}`, {
@@ -203,7 +191,6 @@ describe("Routines API routes", () => {
     });
     expect(edited.status).toBe(200);
     expect(edited.body.data!.enabled).toBe(false);
-    // Paused stays paused despite the new schedule.
     expect(await fireJobs()).toHaveLength(jobsBefore);
     expect(await queuedJobs()).toHaveLength(0);
   });
@@ -266,7 +253,6 @@ describe("Routines API routes", () => {
     expect(run).toMatchObject({ status: "awaiting", trigger: "manual" });
     expect(run?.requestId).toMatch(/^routine:[a-z0-9]+:\d{4}-\d{2}-\d{2}T/);
 
-    // Into the routine's own conversation, never the bot's chat.
     const submits = runtime.submit.mock.calls;
     expect(submits).toHaveLength(1);
     expect(submits[0]![0]).toBe(await routineConversation(routine.id));
@@ -274,8 +260,6 @@ describe("Routines API routes", () => {
     expect(submits[0]![1].requestId).toBe(run?.requestId);
     expect(submits[0]![1].text).toContain('**Routine "weekday-digest"');
     expect(submits[0]![1].text).toContain("Summarize HN, only new things.");
-    // The scheduled occurrence is still pending, so a manual run leaves the
-    // chain armed (only the scheduled fire archives a once routine).
     const row = await routineRow(routine.id);
     expect(row?.enabled).toBe(true);
     expect(row?.pendingJobId).toBeTypeOf("string");
@@ -300,7 +284,6 @@ describe("Routines API routes", () => {
     expect(moved.status).toBe(200);
     expect((await routineRow(id))?.conversationId).toBeNull();
     expect(runtime.abort).toHaveBeenCalledWith(conversation);
-    // The run awaiting in the old conversation never gets its reply now.
     expect(
       await db.query.routineRuns.findFirst({ where: eq(routineRuns.routineId, id) }),
     ).toMatchObject({ status: "cancelled" });
@@ -339,7 +322,6 @@ describe("Routines API routes", () => {
     expect(
       (await api(app, `/api/v1/routines/${routine.id}/run`, { method: "POST", token })).status,
     ).toBe(200);
-    // Manual runs do not requeue the chain.
     expect((await fireJobs()).map((job) => job.id)).toEqual([firstJobId]);
     const row = await routineRow(routine.id);
     expect(row?.enabled).toBe(true);

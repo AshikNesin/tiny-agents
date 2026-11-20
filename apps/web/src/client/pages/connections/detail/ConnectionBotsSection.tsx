@@ -8,14 +8,12 @@ import type { BotListEntry } from "../../../../shared/api/bots";
 import type { Connection } from "../../../../shared/api/connections";
 import { BotAvatar } from "../../../components/BotAvatar";
 
-/** Which bots get the connection's tools, a checkbox each. */
 export function ConnectionBotsSection({
   connection,
   bots,
   onToggleBot,
 }: {
   connection: Connection;
-  /** Null before the shell's first bot list. */
   bots: BotListEntry[] | null;
   onToggleBot: (botId: string, enable: boolean) => void;
 }) {

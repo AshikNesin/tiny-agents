@@ -1,10 +1,5 @@
-/**
- * Small, real files for the extraction tests (issue #58), built in memory:
- * a text PDF, OOXML and ODF documents, tar headers. Nothing is checked in.
- */
 import { strToU8, zipSync, type Zippable } from "fflate";
 
-/** A valid PDF with one text line per page (Helvetica, correct xref). */
 export function pdf(pages: string[], info?: { title?: string }): Uint8Array {
   const objects: string[] = [];
   const kids = pages.map((_, i) => `${4 + i * 2} 0 R`).join(" ");
@@ -97,7 +92,6 @@ export const odp = () =>
     `<office:presentation><draw:page draw:name="p1"><draw:frame><draw:text-box><text:p>Welcome</text:p></draw:text-box></draw:frame><presentation:notes><draw:frame><draw:text-box><text:p>Smile</text:p></draw:text-box></draw:frame></presentation:notes></draw:page></office:presentation>`,
   );
 
-/** A tar archive of the given files (ustar headers, GNU long names). */
 export function tar(files: { name: string; data: string }[]): Uint8Array {
   const blocks: Uint8Array[] = [];
   const header = (name: string, size: number, type: string) => {

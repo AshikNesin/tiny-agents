@@ -8,13 +8,11 @@ function jobDuration(start: string | null, end: string | null): string {
   return formatDuration(start, end);
 }
 
-/** Relative time with the full locale timestamp as the hover title. */
 function Timestamp({ value, empty = "-" }: { value: string | null; empty?: string }) {
   if (!value) return <span title="N/A">{empty}</span>;
   return <span title={formatLocaleDateTime(value)}>{formatRelativeTime(value)}</span>;
 }
 
-/** Read-only metadata grid for a job (priority, retries, timestamps…). */
 export function JobOverview({ job }: { job: Job }) {
   return (
     <Card>

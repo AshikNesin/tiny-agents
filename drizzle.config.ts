@@ -1,13 +1,6 @@
 import { defineConfig } from "drizzle-kit";
 import { defaultDatabaseUrl } from "@groot/core/env";
 
-/**
- * drizzle-kit config. One SQLite schema; migrations are plain SQL files that
- * the Node entry applies at boot.
- *
- *   pnpm db:generate   # after editing a schema file
- *   pnpm db:studio     # browse the local database
- */
 const url = (process.env.DATABASE_URL || defaultDatabaseUrl(process.env.NODE_ENV)).replace(
   /^file:/,
   "",

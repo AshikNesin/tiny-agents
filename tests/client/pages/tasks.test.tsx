@@ -1,8 +1,3 @@
-/**
- * Tasks page: quick-add files a task under the tab it was typed in, due
- * dates read as days ("Today", "Tomorrow") rather than end-of-day clock
- * times, and completing a task offers an undo.
- */
 import React from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";

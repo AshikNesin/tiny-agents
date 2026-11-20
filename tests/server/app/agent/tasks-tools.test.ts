@@ -1,9 +1,3 @@
-/**
- * Task tools: real pi-durable chat turns with a faux model that emits tool
- * calls. Verifies the tools reach the injected TaskStore, the tool result
- * flows back to the model, a create interrupted by a restart replays without
- * duplicating the task, and creates are never keyed on provider call ids.
- */
 import type { JsonObject } from "@earendil-works/pi-ai";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -134,7 +128,6 @@ describe("task tools (durable chat turns)", () => {
     ]);
 
     expect(store.calls).toContain("create:Ship the tasks feature");
-    // The follow-up reply (after the tool result) made it into the transcript.
     expect(
       state.messages.some((m) => m.role === "assistant" && m.text.includes("Task created")),
     ).toBe(true);
@@ -160,8 +153,6 @@ describe("task tools (durable chat turns)", () => {
   });
 
   it("does not key creates on the provider's tool call id (reused or empty ids)", async () => {
-    // OpenAI-compatible upstreams may reuse short ids ("call_0") or send none;
-    // two different creates with the same callId must stay two tasks.
     const store = memoryStore();
     await settled(store, [
       fauxAssistantMessage([fauxToolCall("create_task", { title: "First" }, { id: "call_0" })]),
@@ -185,7 +176,6 @@ describe("task tools (durable chat turns)", () => {
       name: "create_task",
       args: { title: "Exactly once" },
     });
-    // The replay-safe tool ran again on resume, and the store deduped it.
     expect(store.calls.filter((call) => call === "create:Exactly once")).toHaveLength(2);
     expect(await store.list()).toHaveLength(1);
     expect(reply).toMatch(/^Created task \[t1\] Exactly once/);
@@ -204,11 +194,6 @@ describe("task tools (durable chat turns)", () => {
   }, 30_000);
 });
 
-/**
- * Run one tool call whose store method performs its effect and then "dies"
- * (the runtime closes before the result commits), reopen the same agent
- * store, and return the tool result text the resumed run fed the model.
- */
 async function interruptAndResume(
   store: MemoryStore,
   method: "create" | "remove",
@@ -252,16 +237,11 @@ async function interruptAndResume(
     const ref = await first.createConversation({ modelId: TEST_MODEL, systemPrompt: "" });
     await first.submit(ref, { requestId: "r1", text: "do it" });
     await until(() => effects > 0, `${call.name} to run`);
-    // Close while the tool is mid-call: its result is never committed.
-    // Release only once close has reached the harness. A release that lands
-    // first commits the failure, and the always-calling model then loops and
-    // close never returns. 50 ms was not enough with test files in parallel.
     const closing = first.close();
     await new Promise((r) => setTimeout(r, 1_000));
     release();
     await closing;
 
-    // The resumed run's model echoes the tool result it was given.
     const second = await openTestRuntime({
       storePath,
       extensions: [createTasksExtension(flaky)],

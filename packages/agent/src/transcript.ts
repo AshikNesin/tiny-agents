@@ -15,18 +15,12 @@ import type { GateUserMessage } from "./policy";
 import { finishedToolRow, liveToolRow, type LiveTool } from "./tool-call-row";
 import { sentTextsOf } from "./toolkits/message-owner";
 
-/** Raw pieces of a conversation the chat view is derived from. */
 export interface RawChat {
-  /** Every stored entry (full history, not just the model's active context), ascending by id. */
   entries: readonly EntryRecord[];
-  /** The reply currently being generated, if any. */
   live?: AssistantMessage;
   busy: boolean;
-  /** Failure reasons for inputs that settled without an answer, by user entry id. */
   unanswered: ReadonlyMap<number, string>;
-  /** Tool calls of the current round, by provider call id. */
   tools?: ReadonlyMap<string, LiveTool>;
-  /** Owner inputs queued behind (or steering into) the running reply. */
   queued?: readonly QueuedMessage[];
 }
 
@@ -35,7 +29,6 @@ interface ToolResult {
   diagnostics: { code?: string; message?: string }[];
 }
 
-/** How a message that settled without an answer reads, when no reason was recorded. */
 export const NO_REPLY = "No reply was produced for this message.";
 
 const UNANSWERED_REASONS: Record<string, string> = {
@@ -44,7 +37,6 @@ const UNANSWERED_REASONS: Record<string, string> = {
   model_error: "The model returned an error.",
 };
 
-/** The text blocks of a message's content, joined. */
 function textOf(content: unknown): string {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return "";
@@ -54,14 +46,8 @@ function textOf(content: unknown): string {
     .join("");
 }
 
-/** Entry kind a chat send is placed as (pi-durable InputEntry; not "pi."-prefixed). */
 export const CHAT_USER_ENTRY = "chat.user";
 
-/**
- * The user messages among a conversation's entries, in the entries' order,
- * as the Tool gate reads them (who sent each, and what it said). The text
- * is what the model read: a shared chat's sender prefix stays on.
- */
 export function userMessagesOf(entries: readonly EntryRecord[]): GateUserMessage[] {
   return entries
     .filter((entry) => entry.kind === "pi.user" || entry.kind === CHAT_USER_ENTRY)
@@ -74,10 +60,6 @@ export function userMessagesOf(entries: readonly EntryRecord[]): GateUserMessage
     );
 }
 
-/**
- * A chat's user messages, newest first, as the Tool gate reads them, for a
- * transcript whose messages keep the text the model read (the Claude plan's).
- */
 export function gateUserMessages(messages: readonly ChatMessage[]): GateUserMessage[] {
   return messages
     .filter((message) => message.role === "user")
@@ -85,7 +67,6 @@ export function gateUserMessages(messages: readonly ChatMessage[]): GateUserMess
     .map(gateUserMessage);
 }
 
-/** One user message as the Tool gate reads it. */
 function gateUserMessage(message: Pick<ChatMessage, "text" | "peer" | "author">): GateUserMessage {
   return {
     text: message.text,
@@ -94,10 +75,6 @@ function gateUserMessage(message: Pick<ChatMessage, "text" | "peer" | "author">)
   };
 }
 
-/**
- * The newest user or assistant message with something to show (the Bot
- * list preview): a reply that ended in an error reads as `⚠ <error>`.
- */
 export function lastMessageOf(messages: readonly ChatMessage[]): LastMessage | undefined {
   for (let i = messages.length - 1; i >= 0; i--) {
     const message = messages[i];
@@ -114,7 +91,6 @@ export function lastMessageOf(messages: readonly ChatMessage[]): LastMessage | u
   return undefined;
 }
 
-/** Trusted peer attribution stored in a `chat.user` entry's data. */
 function peerOf(entry: EntryRecord): ChatMessage["peer"] | undefined {
   if (entry.kind !== CHAT_USER_ENTRY) return undefined;
   const data = record(entry.data);
@@ -133,16 +109,10 @@ function peerOf(entry: EntryRecord): ChatMessage["peer"] | undefined {
   return undefined;
 }
 
-/**
- * What a bot reads for a message sent in a shared chat: the sender's name,
- * then their words. The transcript strips the name again (`authorOfData`
- * holds it), so the bubble shows only the words.
- */
 export function authoredText(name: string, text: string): string {
   return `${name}: ${text}`;
 }
 
-/** The trusted sender stored in a user entry's data (shared chats only). */
 function authorOfData(data: Record<string, unknown> | undefined): ChatAuthor | undefined {
   const author = record(data?.author);
   if (!author) return undefined;
@@ -151,34 +121,22 @@ function authorOfData(data: Record<string, unknown> | undefined): ChatAuthor | u
     : undefined;
 }
 
-/** The trusted sender of a `chat.user` entry (shared chats only). */
 function authorOf(entry: EntryRecord): ChatAuthor | undefined {
   return entry.kind === CHAT_USER_ENTRY ? authorOfData(record(entry.data)) : undefined;
 }
 
-/** A shared-chat message's text without the sender prefix `authoredText` added. */
 function withoutAuthor(text: string, author: ChatAuthor | undefined): string {
   if (!author) return text;
   const prefix = authoredText(author.name, "");
   return text.startsWith(prefix) ? text.slice(prefix.length) : text;
 }
 
-/**
- * Whether a user message starts a quiet turn (issue #396): a hand-off's
- * finish or another bot's reply (`reply`), or a bot's message (`message`).
- * An owner's @mention is the owner's own turn.
- */
 function isQuietPeer(peer: ChatMessage["peer"] | undefined): boolean {
   return peer?.kind === "reply" || peer?.kind === "message";
 }
 
-/**
- * The reply a bot gives in a shared chat when the message was not for it
- * (people talking to each other). Clients hide it; the Bot list ignores it.
- */
 export const SKIP_REPLY = "[skip]";
 
-/** Whether an assistant message is a shared chat's silent `[skip]`. */
 export function isSkipReply(message: Pick<ChatMessage, "role" | "text" | "toolCalls">): boolean {
   return (
     message.role === "assistant" &&
@@ -187,20 +145,17 @@ export function isSkipReply(message: Pick<ChatMessage, "role" | "text" | "toolCa
   );
 }
 
-/** The submit request id stored in a `chat.user` entry's data. */
 function requestIdOf(entry: EntryRecord): string | undefined {
   if (entry.kind !== CHAT_USER_ENTRY) return undefined;
   const requestId = record(entry.data)?.requestId;
   return typeof requestId === "string" && requestId ? requestId : undefined;
 }
 
-/** Attachment refs stored in a `chat.user` entry's data (validated at upload). */
 export function attachmentsOf(entry: EntryRecord): AttachmentRef[] | undefined {
   if (entry.kind !== CHAT_USER_ENTRY) return undefined;
   return attachmentsOfData(record(entry.data));
 }
 
-/** Attachment refs of any entry data object: an inbox item's entry is plain JSON. */
 function attachmentsOfData(data: Record<string, unknown> | undefined): AttachmentRef[] | undefined {
   const list = Array.isArray(data?.attachments) ? data.attachments : [];
   const refs = list.filter(
@@ -215,12 +170,6 @@ function attachmentsOfData(data: Record<string, unknown> | undefined): Attachmen
   return refs.length > 0 ? refs : undefined;
 }
 
-/**
- * Owner messages of a conversation's inbox (pi-durable's queued submissions).
- * Steers and follow-ups whose entry carries no peer attribution render as
- * queued bubbles; write submissions (compaction summaries) and cross-bot
- * deliveries (peer entries) do not.
- */
 export function queuedOf(
   items: readonly InboxItem[],
   records: ReadonlyMap<string, SubmissionRecord>,
@@ -249,7 +198,6 @@ function record(value: unknown): Record<string, unknown> | undefined {
     : undefined;
 }
 
-/** A tool call merged with its stored result, else with its live slot. */
 function toolCallView(
   call: ToolCall,
   result: ToolResult | undefined,
@@ -276,16 +224,13 @@ function toolCallView(
     };
   }
   if (slot) return { ...base, ...liveToolRow(slot) };
-  // No result and no live slot: still queued in a busy run, or cut off for good.
   return { ...base, status: settled ? "interrupted" : "pending" };
 }
 
-/** How an assistant message that ended in a model error reads to the owner. */
 function modelErrorText(message: Pick<AssistantMessage, "errorMessage">): string {
   return message.errorMessage || "The model returned an error.";
 }
 
-/** Tool results stored after each assistant entry, by provider call id (in order, for duplicate ids). */
 function toolResultsByAssistant(entries: readonly EntryRecord[]): Map<number, ToolResult[]> {
   const out = new Map<number, ToolResult[]>();
   let assistant: number | undefined;
@@ -363,16 +308,6 @@ function assistantToChat(
   };
 }
 
-/**
- * Derive the chat transcript shown to the user from raw durable state.
- *
- * - User and assistant entries become messages; system/tool/reset entries are hidden.
- * - A reply cut off by a restart is stored as an `aborted` assistant entry and then
- *   regenerated; the cut-off copy is hidden so the user never sees a duplicate.
- * - A compaction entry becomes an "earlier messages summarized" marker placed before
- *   the first entry it kept (everything above it was summarized for the model).
- * - An input that settled without an answer is flagged `unanswered`.
- */
 export function deriveChat(raw: RawChat): ChatMessage[] {
   const entries = [...raw.entries].sort((a, b) => Number(a.id) - Number(b.id));
   const visibleKinds = new Set(["pi.user", CHAT_USER_ENTRY, "pi.assistant", "pi.compaction"]);
@@ -402,8 +337,6 @@ export function deriveChat(raw: RawChat): ChatMessage[] {
       markersBeforeHead.set(head, list);
     }
   }
-  // A turn another bot or a hand-off started is quiet until the owner writes.
-  // Inputs placed together share one turn: it is quiet only when none is the owner's.
   let quiet = false;
   let afterUser = false;
   for (let i = 0; i < visible.length; i++) {
@@ -451,7 +384,6 @@ export function deriveChat(raw: RawChat): ChatMessage[] {
       continue;
     }
 
-    // pi.assistant
     afterUser = false;
     const assistant = message as AssistantMessage;
     if (assistant.stopReason === "aborted") {
@@ -461,17 +393,12 @@ export function deriveChat(raw: RawChat): ChatMessage[] {
     }
     const reply = assistantToChat(`e${entry.id}`, assistant, false, {
       results: results.get(id),
-      // Live slots belong to the current round: the newest assistant entry.
       live: entry === lastAssistant ? raw.tools : undefined,
       settled: settled || entry !== lastAssistant,
     });
     out.push(quiet ? { ...reply, quiet: true } : reply);
   }
 
-  // Flag inputs that never got an answer. Inputs that landed in the same turn
-  // (a queued message plus a steer) sit back to back and share one reply, so
-  // a run of user messages counts as answered when an assistant reply follows
-  // it; only a settlement the runtime recorded flags one inside the run.
   for (let i = 0; i < out.length; i++) {
     const message = out[i];
     if (message.role !== "user") continue;
@@ -503,17 +430,8 @@ export function chatState(raw: RawChat): ChatState {
   };
 }
 
-/** Messages a chat stream's snapshot carries: the newest ones (issue #92). */
 export const CHAT_WINDOW = 60;
 
-/**
- * A full chat state cut down to its newest `size` messages, or to every
- * message from id `from` on (a stream keeps its window's start fixed, so
- * new messages extend it instead of pushing older ones out). Slice a state
- * derived from the full raw history: the `unanswered` flags and tool
- * statuses then stay right at the window's edge. Undefined when `from` is
- * gone from the transcript.
- */
 export function windowChat(state: ChatState, size: number, from?: string): ChatState | undefined {
   let start = Math.max(0, state.messages.length - size);
   if (from !== undefined) {
@@ -529,10 +447,6 @@ export function windowChat(state: ChatState, size: number, from?: string): ChatS
   };
 }
 
-/**
- * Up to `limit` messages just before message id `before`, for loading
- * history above a window. Undefined when `before` is not in the transcript.
- */
 export function pageBefore(
   messages: readonly ChatMessage[],
   before: string,
@@ -550,10 +464,6 @@ function sameExceptText(a: ChatMessage, b: ChatMessage): boolean {
   return JSON.stringify(restA) === JSON.stringify(restB);
 }
 
-/**
- * Minimal event list turning `prev` into `next`. Falls back to a snapshot when the
- * order of surviving messages changed (never expected in practice).
- */
 export function diffChat(prev: ChatState, next: ChatState): ChatEvent[] {
   const events: ChatEvent[] = [];
   const nextIds = new Set(next.messages.map((m) => m.id));
@@ -564,7 +474,6 @@ export function diffChat(prev: ChatState, next: ChatState): ChatEvent[] {
   if (survivors.join(",") !== nextOrderOfSurvivors.join(",")) {
     return [{ type: "snapshot", state: next }];
   }
-  // New messages must only be appended after every survivor.
   const lastSurvivorIndex = Math.max(
     -1,
     ...next.messages.map((m, i) => (prevById.has(m.id) ? i : -1)),

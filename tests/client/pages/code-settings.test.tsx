@@ -1,9 +1,3 @@
-/**
- * Code settings (`/code/settings`): projects are a settings page of their
- * own, one page per project with every rule the server takes, instead of a
- * single dialog; GitHub has its own page; and a project's New thread lands
- * on the new-thread screen with that project picked.
- */
 import React from "react";
 import { render as renderBare, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -17,18 +11,15 @@ import type { HarnessInfo } from "@/lib/code/api";
 import type { GitHubStatus, ProjectView } from "../../../apps/web/src/shared/api/code";
 import { AppQueryProvider } from "../query-provider";
 
-/** Each render gets its own React Query cache, as the app gives the page one. */
 const render = (ui: Parameters<typeof renderBare>[0]) =>
   renderBare(ui, { wrapper: AppQueryProvider });
 
-/** PATCHes the page sent, as `[path, body]`. */
 const patches: Array<[string, unknown]> = [];
 
 vi.mock("sonner", () => ({
   toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), message: vi.fn() }),
 }));
 
-// The network: the server's answers for the reads the page makes.
 vi.mock("@groot/shell/lib/api", async (importOriginal) => {
   const original = await importOriginal<typeof import("@groot/shell/lib/api")>();
   const reads: Record<string, () => unknown> = {
@@ -144,7 +135,6 @@ describe("Code settings", () => {
     renderAt("/code/settings/projects?repo=other%2Flib");
     const add = await screen.findByRole("button", { name: "Add" });
     await waitFor(() => expect(add).toBeEnabled());
-    // The picked repository can land a render after the button enables.
     expect(await screen.findByText("other/lib")).toBeInTheDocument();
   });
 
@@ -171,7 +161,6 @@ describe("Code settings", () => {
       ]),
     );
 
-    // Rules the dialog never offered: the setup script and each Auto-fix trigger.
     await userEvent.type(screen.getByRole("textbox", { name: "Setup script" }), "pnpm install");
     await userEvent.tab();
     await waitFor(() =>
@@ -207,7 +196,6 @@ describe("Code settings", () => {
     renderAt("/code/new?project=p1");
     const picker = await screen.findByRole("button", { name: "Project" });
     await waitFor(() => expect(picker).toHaveTextContent("tiny-agents"));
-    // A project thread gets its own worktree: no directory to pick.
     expect(screen.queryByRole("button", { name: "Working directory" })).toBeNull();
   });
 });

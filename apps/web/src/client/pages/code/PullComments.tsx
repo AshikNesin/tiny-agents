@@ -1,8 +1,3 @@
-/**
- * The PR tab's comments: everything said on the pull request (conversation,
- * reviews, line threads), newest first, as All, Humans or Bots. A line
- * thread names its file and line; an open one can go to the composer.
- */
 import { useMemo, useState } from "react";
 import { MessageSquarePlus } from "lucide-react";
 import { Streamdown } from "streamdown";
@@ -25,7 +20,6 @@ const TABS: Array<{ id: Audience; label: string }> = [
   { id: "bot", label: "Bots" },
 ];
 
-/** HTML comments (bots' hidden state, a template's hints) are hidden on GitHub too. */
 const HTML_COMMENT = /<!--[\s\S]*?-->/g;
 
 function Avatar({ login, bot }: { login: string; bot: boolean }) {
@@ -42,10 +36,8 @@ function Avatar({ login, bot }: { login: string; bot: boolean }) {
   );
 }
 
-/** Past this, a comment (a bot's walkthrough) starts folded. */
 const LONG = 700;
 
-/** A GitHub comment's markdown, long ones folded. */
 export function CommentBody({ text }: { text: string }) {
   const shown = text.replace(HTML_COMMENT, "").trim();
   const long = shown.length > LONG;
@@ -92,20 +84,12 @@ export function CommentByline({ author, bot, at }: { author: string; bot: boolea
   );
 }
 
-export function PullComments({
-  pr,
-  onAttach,
-}: {
-  pr: PullView;
-  /** Put one thread's comments in the composer. */
-  onAttach(text: string): void;
-}) {
+export function PullComments({ pr, onAttach }: { pr: PullView; onAttach(text: string): void }) {
   const all = useMemo(() => prComments(pr), [pr]);
   const counts = audienceCounts(all);
   const [audience, setAudience] = useState<Audience>("all");
   const shown = byAudience(all, audience);
 
-  // Nothing said yet: no empty section on every new PR.
   if (all.length === 0) return null;
   return (
     <section aria-label="Comments" className="space-y-2">
@@ -150,7 +134,6 @@ export function PullComments({
   );
 }
 
-/** One thread as a composer message: where it is, then who said what. */
 const threadText = (c: PrComment) =>
   [
     `\`${c.where!.path}${c.where!.line ? `:${c.where!.line}` : ""}\``,
@@ -158,7 +141,6 @@ const threadText = (c: PrComment) =>
     ...c.replies.map((r) => `${r.author}: ${r.body}`),
   ].join("\n");
 
-/** The review verdict, and whether Auto-fix passes the comment over. */
 function CommentBadges({ comment: c, autofix }: { comment: PrComment; autofix: boolean }) {
   return (
     <>
@@ -186,7 +168,6 @@ function CommentCard({
   onAttach,
 }: {
   comment: PrComment;
-  /** Auto-fix is on: say which comments it will not act on. */
   autofix: boolean;
   onAttach(text: string): void;
 }) {

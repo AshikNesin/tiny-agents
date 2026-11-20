@@ -1,9 +1,3 @@
-/**
- * Pause a turn when Claude Code reports the request was rejected for credits
- * or moved onto usage-credit overage. `isUsingOverage` is undocumented; it
- * is honored only when present.
- */
-
 export interface RateLimitInfo {
   status?: string;
   errorCode?: string;
@@ -17,10 +11,6 @@ export function asRateLimitInfo(value: unknown): RateLimitInfo | undefined {
   return value as RateLimitInfo;
 }
 
-/**
- * Why this turn must stop, or undefined when the event is an ordinary
- * rate-limit notice that does not move the request onto credits.
- */
 export function usagePauseReason(info: RateLimitInfo | undefined): string | undefined {
   if (!info) return undefined;
   if (info.status === "rejected") return "rate limit status rejected";

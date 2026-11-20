@@ -1,4 +1,3 @@
-/** Skills API (issue #1 M2): the shared library, bot assignment and imports. */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { skillStore } from "../../../apps/web/src/server/api/skills/skills.store";
 import { parseGitHubUrl } from "../../../apps/web/src/server/api/skills/skills.parse";
@@ -64,7 +63,6 @@ describe("Skills API", () => {
     expect(created.status).toBe(201);
     expect(created.body.data).toMatchObject({ name: "weekly-report", botIds: [bot.id] });
 
-    // The agent's adapter sees it through the bot's conversation.
     expect(await skillStore.list(900)).toEqual([
       { name: "weekly-report", description: "Write the weekly report from my notes" },
     ]);
@@ -190,13 +188,11 @@ describe("Skills API", () => {
     });
     expect(imported.status).toBe(201);
 
-    // The other bot has no "deploy": its save is refused, and the body stays.
     await expect(
       skillStore.save(911, { name: "deploy", description: "Deploy", body: "rm -rf /" }),
     ).rejects.toThrow(/already exists and is not assigned to you/);
     expect((await skillStore.get(910, "deploy"))?.body).toBe("careful");
 
-    // The assigned bot saves a new version of its own.
     expect(
       await skillStore.save(910, { name: "deploy", description: "Deploy", body: "v2" }),
     ).toEqual({ created: false });

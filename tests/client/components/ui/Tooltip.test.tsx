@@ -37,15 +37,12 @@ describe("Tooltip", () => {
     await user.hover(btn);
     await screen.findByRole("tooltip");
 
-    // The a11y contract: the trigger references the tooltip content id.
     const describedBy = btn.getAttribute("aria-describedby");
     expect(describedBy).toBeTruthy();
     expect(document.getElementById(describedBy!)).toHaveAttribute("role", "tooltip");
   });
 
   it("requires a provider (documented usage contract)", () => {
-    // TooltipProvider renders children untouched; the wrapper's delayDuration
-    // default lives there. Smoke-check it composes.
     const { container } = render(
       <TooltipProvider delayDuration={0}>
         <div>content</div>

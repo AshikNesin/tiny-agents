@@ -1,8 +1,3 @@
-/**
- * Schedule math tests: IST boundaries (the 00:00-05:30 window lands on the
- * previous UTC day), the three schedule kinds, grace clamping, and validation
- * rejections. Pure functions: every input is an explicit date, no Date.now().
- */
 import { describe, expect, it } from "vite-plus/test";
 import {
   TZ_IST,
@@ -18,33 +13,31 @@ import {
   withinGrace,
 } from "../../../../apps/web/src/server/api/routines/routines.schedule";
 
-// 2026-10-20 is a Tuesday. 10:00 UTC = 15:30 IST.
 const FROM = new Date("2026-10-20T10:00:00.000Z");
 
 describe("nextOccurrence (cron, IST)", () => {
   it("fires 00:30 IST on the previous UTC day (19:00 UTC)", () => {
     const schedule = parseSchedule({ kind: "cron", expr: "30 0 * * *" });
     const next = nextOccurrence(schedule, FROM);
-    // 00:30 IST Wed 21 Oct = 19:00 UTC Tue 20 Oct.
     expect(next.toISOString()).toBe("2026-10-20T19:00:00.000Z");
   });
 
   it("computes weekday 09:00 IST from an afternoon-IST moment", () => {
     const schedule = parseSchedule({ kind: "cron", expr: "0 9 * * 1-5" });
-    const next = nextOccurrence(schedule, FROM); // 15:30 IST Tue
-    expect(next.toISOString()).toBe("2026-10-21T03:30:00.000Z"); // 09:00 IST Wed
+    const next = nextOccurrence(schedule, FROM);
+    expect(next.toISOString()).toBe("2026-10-21T03:30:00.000Z");
   });
 
   it("treats an exact-slot `from` as already fired and returns the following slot", () => {
     const schedule = parseSchedule({ kind: "cron", expr: "0 9 * * 1-5" });
-    const at = new Date("2026-10-21T03:30:00.000Z"); // 09:00 IST Wed exactly
+    const at = new Date("2026-10-21T03:30:00.000Z");
     expect(nextOccurrence(schedule, at).toISOString()).toBe("2026-10-22T03:30:00.000Z");
   });
 
   it("crosses the month boundary in IST", () => {
-    const schedule = parseSchedule({ kind: "cron", expr: "0 20 1 * *" }); // 20:00 on the 1st
-    const from = new Date("2026-11-01T14:30:00.000Z"); // 20:00 IST Nov 1 exactly
-    expect(nextOccurrence(schedule, from).toISOString()).toBe("2026-12-01T14:30:00.000Z"); // Dec 1 20:00 IST
+    const schedule = parseSchedule({ kind: "cron", expr: "0 20 1 * *" });
+    const from = new Date("2026-11-01T14:30:00.000Z");
+    expect(nextOccurrence(schedule, from).toISOString()).toBe("2026-12-01T14:30:00.000Z");
   });
 });
 
@@ -61,8 +54,8 @@ describe("nextOccurrence (once, interval)", () => {
 
   it("chains without drift by advancing from the fired occurrence", () => {
     const schedule = parseSchedule({ kind: "interval", minutes: 90 });
-    const first = nextOccurrence(schedule, FROM); // 11:30Z
-    const second = nextOccurrence(schedule, first); // 13:00Z
+    const first = nextOccurrence(schedule, FROM);
+    const second = nextOccurrence(schedule, first);
     expect(second.toISOString()).toBe("2026-10-20T13:00:00.000Z");
   });
 });
@@ -85,7 +78,7 @@ describe("grace", () => {
   });
 
   it("accepts an occurrence within grace and rejects one past it", () => {
-    const schedule = parseSchedule({ kind: "cron", expr: "0 9 * * 1-5" }); // 1440-minute period, 120-minute grace
+    const schedule = parseSchedule({ kind: "cron", expr: "0 9 * * 1-5" });
     const slot = new Date("2026-10-21T03:30:00.000Z");
     expect(withinGrace(schedule, slot, new Date(slot.getTime() + 119 * 60_000))).toBe(true);
     expect(withinGrace(schedule, slot, new Date(slot.getTime() + 121 * 60_000))).toBe(false);

@@ -1,9 +1,3 @@
-/**
- * Characterization of behavior-register row U11: browser screenshots are
- * allowed while the owner drives; computer screenshots are refused.
- * Preserve: this pins today's behavior, quirk included; change it only with
- * a signed-off register row.
- */
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { ToolExecutionApi, ToolExecutionResult } from "@earendil-works/pi-durable";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -45,7 +39,6 @@ async function run(capability: Capability, name: string, args: Record<string, un
   return { ...result, text, images };
 }
 
-/** A browser that answers every call; it records the screenshots it takes. */
 function fakeBrowser() {
   const shots: number[] = [];
   const transport: BrowserTransport = async () =>
@@ -79,7 +72,6 @@ afterEach(async () => {
 
 describe("U11: screenshots while the owner drives", () => {
   it("the browser takes one; the computer refuses", async () => {
-    // Browser: the owner takes the wheel of the conversation's browser.
     const browser = fakeBrowser();
     browsers = createBrowserSessions({
       transport: browser.transport,
@@ -101,7 +93,6 @@ describe("U11: screenshots while the owner drives", () => {
     expect(browserShot.images).toHaveLength(1);
     expect(browser.shots).toEqual([1]);
 
-    // Computer: the owner takes the wheel of the shared desktop.
     const fake = fakeComputer();
     computers = createComputerSessions({ transport: fake.transport });
     const computerTools = createComputerToolkit({ sessions: computers, settleMs: 0 });

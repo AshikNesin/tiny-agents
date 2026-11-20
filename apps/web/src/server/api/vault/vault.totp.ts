@@ -1,7 +1,3 @@
-/**
- * RFC 6238 one-time codes from an item's seed: an `otpauth://totp/…` URI or
- * a bare base32 secret (what password managers store in an OTP field).
- */
 import { createHmac } from "node:crypto";
 
 export interface TotpSpec {
@@ -31,7 +27,6 @@ function base32Decode(input: string): Buffer {
   return Buffer.from(out);
 }
 
-/** The seed's parameters, or `undefined` when it isn't a TOTP seed. */
 export function parseTotp(seed: string): TotpSpec | undefined {
   const raw = seed.trim();
   if (!raw) return undefined;
@@ -56,7 +51,6 @@ export function parseTotp(seed: string): TotpSpec | undefined {
   }
 }
 
-/** The code for `at` (epoch ms). */
 export function totpCode(spec: TotpSpec, at = Date.now()): string {
   const counter = Math.floor(at / 1000 / spec.period);
   const message = Buffer.alloc(8);

@@ -1,15 +1,3 @@
-/**
- * The driver's single live connection to Shelley. One `GET /api/stream2`
- * (Shelley's unified stream: every active conversation's messages, working
- * state, tool output and text deltas, plus conversation-list patches) feeds
- * everything: per-conversation watchers, the conversation list (a cached
- * `/api/conversations/snapshot`, re-read when Shelley says it changed),
- * turn ends and `message_user` calls.
- *
- * The list is re-read rather than patched: Shelley publishes RFC 6902
- * patches several times a second while a turn runs; a debounced snapshot
- * read is simpler than applying them and cheap on a single-user server.
- */
 import type { HarnessLogger, InstanceStatus } from "../../contracts";
 import { readSseFrames, shelleyFetch, shelleyJson, type ShelleyDeps } from "./client";
 import { isWorking, type ShelleyFrame, type ShelleyRow } from "./wire";
@@ -21,11 +9,9 @@ interface TurnEnd {
 export interface StreamOptions {
   deps: ShelleyDeps;
   logger: HarnessLogger;
-  /** Snapshot refetch debounce after a list patch. */
   listDebounceMs?: number;
   minBackoffMs?: number;
   maxBackoffMs?: number;
-  /** No frame (Shelley heartbeats every 30 s) for this long: reconnect. */
   idleTimeoutMs?: number;
 }
 
@@ -33,15 +19,12 @@ export interface ShelleyStream {
   start(): void;
   stop(): void;
   status(): InstanceStatus;
-  /** The cached unarchived conversations (subagents included); undefined until first read. */
   list(): ShelleyRow[] | undefined;
   refreshList(): Promise<void>;
-  /** Frames for one conversation, or every frame (`null`). */
   subscribe(conversationId: string | null, listener: (frame: ShelleyFrame) => void): () => void;
   onList(listener: () => void): () => void;
   onStatus(listener: (status: InstanceStatus) => void): () => void;
   onTurnEnd(listener: (end: TurnEnd) => void): () => void;
-  /** Every (re)connect, after which missed transitions must be reconciled. */
   onConnected(listener: () => void): () => void;
 }
 
@@ -62,7 +45,6 @@ export function createShelleyStream(options: StreamOptions): ShelleyStream {
   let refreshing: Promise<void> | undefined;
   let refreshAgain = false;
 
-  /** Last known working state per conversation, to see true → false. */
   const working = new Map<string, boolean>();
   const byConversation = new Map<string, Set<(frame: ShelleyFrame) => void>>();
   const everyFrame = new Set<(frame: ShelleyFrame) => void>();
@@ -95,15 +77,11 @@ export function createShelleyStream(options: StreamOptions): ShelleyStream {
     );
     rows = Array.isArray(snapshot.conversations) ? snapshot.conversations : [];
     for (const row of rows) {
-      // Seed only conversations the stream has not told us about yet: a
-      // snapshot read can trail the stream, and overwriting a fresher
-      // `working` would hide the true → false a frame is about to report.
       if (!working.has(row.conversation_id)) working.set(row.conversation_id, isWorking(row));
     }
     emit(listListeners, undefined);
   }
 
-  /** One snapshot read at a time; a request during a read runs one more after it. */
   function refreshList(): Promise<void> {
     if (refreshing) {
       refreshAgain = true;

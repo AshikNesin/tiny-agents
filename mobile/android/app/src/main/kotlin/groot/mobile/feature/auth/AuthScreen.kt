@@ -49,7 +49,6 @@ fun AuthRoute(container: AppContainer) {
     AuthScreen(state = state, onConnect = viewModel::connect, onSubmit = viewModel::submit, onChangeServer = viewModel::changeServer)
 }
 
-/** Which server, then who: the two steps before the first chat. */
 @Composable
 fun AuthScreen(
     state: AuthState,

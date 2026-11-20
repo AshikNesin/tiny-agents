@@ -6,14 +6,6 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { cn } from "./lib/utils";
 import { spring } from "./motion";
 
-/**
- * Tabs with Fluid Functionalism's motion
- * (https://www.fluidfunctionalism.com/docs/tabs): the selected pill (or, in
- * the `line` variant, the underline) springs from tab to tab instead of
- * jumping, and a fainter pill follows the pointer across the list. Radix owns
- * roles, roving focus and activation; the indicators are measured overlays.
- */
-
 function Tabs({
   className,
   orientation = "horizontal",
@@ -72,7 +64,6 @@ const sameRect = (a: Rect | null, b: Rect | null) =>
     a.width === b.width &&
     a.height === b.height);
 
-/** Tracks the active trigger's box inside the list, through resizes and tab changes. */
 function useActiveRect(listRef: React.RefObject<HTMLDivElement | null>) {
   const [rect, setRect] = React.useState<Rect | null>(null);
   React.useLayoutEffect(() => {
@@ -192,7 +183,6 @@ function TabsTrigger({ className, ...props }: React.ComponentProps<typeof TabsPr
       data-slot="tabs-trigger"
       className={cn(
         "relative inline-flex h-[calc(100%-1px)] flex-1 items-center justify-center gap-1.5 rounded-lg border border-transparent px-1.5 py-0.5 text-sm font-medium whitespace-nowrap text-foreground/60 group-data-vertical/tabs:w-full group-data-vertical/tabs:justify-start hover:text-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 has-data-[icon=inline-end]:pr-1 has-data-[icon=inline-start]:pl-1 dark:text-muted-foreground dark:hover:text-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
-        // The selected look is the list's sliding indicator, not the trigger's own background.
         "data-[state=active]:text-foreground dark:data-[state=active]:text-foreground",
         className,
       )}

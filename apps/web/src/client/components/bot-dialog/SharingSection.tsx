@@ -2,7 +2,6 @@ import type { Guest } from "../../../shared/api/people";
 import type { BotDraft } from "../../lib/bot-draft";
 import { Switch } from "../ui/switch";
 
-/** Sharing (issue #145): guests picked here are in the bot's chat with you. */
 export function SharingSection({
   guests,
   draft,

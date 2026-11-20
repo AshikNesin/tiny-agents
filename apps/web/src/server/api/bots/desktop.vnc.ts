@@ -1,18 +1,3 @@
-/**
- * The VNC bridge every live desktop shares (the bot browser in
- * `browser.vnc.ts`, the bot computer in `computer.vnc.ts`): a WebSocket that
- * pipes the owner's noVNC viewer to an RFB server on the sandbox VM, through
- * an SSH channel. The server relays bytes untouched and never logs them
- * (they include everything the owner types during a takeover).
- *
- * The viewer first calls an authenticated ticket route and presents the
- * ticket here; tickets and the Origin check are shared with the terminal
- * bridge (../ws/upgrade.ts). Each kind caps its viewers per bot, pings, and
- * stops reading the VM while a slow viewer has 4 MB queued. An open viewer is
- * held as its ticket's live access (../people/live-access.ts): removing the
- * guest, or unsharing the bot, closes it with 1008. A view-only ticket (a
- * guest's) relays only the viewer's picture requests, never its input (S2).
- */
 import type { IncomingMessage, Server } from "node:http";
 import type { Duplex } from "node:stream";
 import { WebSocketServer, type WebSocket } from "ws";
@@ -23,39 +8,23 @@ import { isOriginAllowed, onUpgrade, rejectUpgrade, type TicketStore } from "../
 
 const MAX_VIEWERS_PER_BOT = 4;
 const PING_INTERVAL_MS = 30_000;
-/** Stop reading the VM stream while this much is queued for a slow viewer. */
 const MAX_BUFFERED_BYTES = 4 * 1024 * 1024;
 
-/** What a redeemed ticket resolves to: a stream to open, and activity to record. */
 export interface VncTarget {
   openStream(): Promise<Duplex>;
-  /** Called on every ping: an open viewer keeps its desktop from idling out. */
   touch(): void;
-  /** Called on each key or pointer message from a viewer that may drive: the owner is still at it. */
   ownerInput(): void;
 }
 
 export interface VncBridgeOptions<T extends LiveGrant> {
-  /**
-   * The upgrade path; its first capture group is the scope the ticket must
-   * be bound to (a bot id, or a desktop profile on the Computer page).
-   */
   path: RegExp;
-  /** The scope a ticket was issued for; also what the viewer cap counts by. */
   scope(ticket: T): string;
   tickets: TicketStore<T>;
-  /** The live desktop a ticket names, or undefined when it is gone. */
   resolve(ticket: T): VncTarget | undefined;
-  /** For logs and the close reason: "browser", "computer". */
   kind: string;
   isOriginAllowed?: (req: IncomingMessage) => boolean;
 }
 
-/**
- * Handle `upgrade` requests for one path on the app's HTTP server and leave
- * every other upgrade to its own listener. Returns a function that closes
- * every open viewer (graceful shutdown).
- */
 export function attachVncBridge<T extends LiveGrant>(
   httpServer: Server,
   options: VncBridgeOptions<T>,
@@ -98,7 +67,6 @@ export function attachVncBridge<T extends LiveGrant>(
   };
 }
 
-/** How long a revoked viewer gets to answer the close before the socket is cut. */
 const REVOKE_CLOSE_GRACE_MS = 1_000;
 
 function revoke(ws: WebSocket): void {
@@ -123,8 +91,6 @@ async function bridge(
     ws.close(1011, `Could not reach the ${kind} display`);
     return;
   }
-  // The viewer left (or was revoked) while the stream opened: its close
-  // event has already fired, so nothing below would ever end this bridge.
   if (ws.readyState !== ws.OPEN) {
     stream.destroy();
     return;
@@ -153,7 +119,6 @@ async function bridge(
       if (ws.bufferedAmount >= MAX_BUFFERED_BYTES) stream.pause();
     });
     ws.on("message", (data) => {
-      // A closing viewer (revoked, say) no longer reaches the desktop.
       if (ws.readyState !== ws.OPEN) return;
       const raw = Array.isArray(data)
         ? Buffer.concat(data)

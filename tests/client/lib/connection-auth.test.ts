@@ -1,9 +1,3 @@
-/**
- * Signing in to an MCP connection: the popup opens before anything is
- * awaited (browsers block one opened later), is pointed at the
- * authorization URL once known, closes again on failure, and the callback
- * page's completion message reaches the right listener.
- */
 import { describe, expect, it, vi } from "vite-plus/test";
 import { createConnectionAuth, type AuthPopup } from "@/lib/connection-auth";
 
@@ -57,7 +51,6 @@ describe("connection auth", () => {
     const fake = fakePorts();
     const auth = createConnectionAuth(fake.ports);
     const outcome = auth.signIn("c1");
-    // Opened synchronously, before the server was even asked.
     expect(fake.popups).toHaveLength(1);
     expect(fake.authorize).toHaveBeenCalledWith("c1");
     fake.answer("https://idp.example/authorize?x=1");

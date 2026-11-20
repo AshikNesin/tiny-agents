@@ -58,7 +58,6 @@ import groot.mobile.ui.components.rememberResource
 
 private val PRIORITIES = listOf("low", "medium", "high", "urgent")
 
-/** The owner's tasks: the ones bots add and the ones typed here. Tick one off, or open it to edit. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun TasksRoute(container: AppContainer, onBack: () -> Unit) {
@@ -114,7 +113,6 @@ fun TasksRoute(container: AppContainer, onBack: () -> Unit) {
     }
 }
 
-/** The task list and the add field, drawn from [state]. */
 @Composable
 fun TasksScreen(
     state: Loadable<List<OwnerTask>>,

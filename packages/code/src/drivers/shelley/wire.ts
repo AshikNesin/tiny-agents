@@ -1,9 +1,3 @@
-/**
- * Shelley's wire format (its API.md and ui/src/types.ts), the fields this
- * driver reads; everything else passes through untouched.
- */
-
-/** A conversation row as Shelley's snapshot serves it. */
 export interface ShelleyRow {
   conversation_id: string;
   slug: string | null;
@@ -25,7 +19,6 @@ export interface ShelleyRow {
   git_repo_root?: string;
   git_commit?: string;
   git_subject?: string;
-  /** A JSON array of strings, as a string (Shelley's `tags` column). */
   tags?: string | string[];
   [field: string]: unknown;
 }
@@ -38,8 +31,6 @@ export interface ShelleyMessage {
   llm_data?: string | null;
   user_data?: string | null;
   usage_data?: string | null;
-  /** Indirect LLM usage (compaction, slug generation, …): a JSON array of
-   *  usage_data-shaped records with the purpose that incurred them. */
   other_usage_data?: string | null;
   display_data?: string | null;
   created_at: string;
@@ -48,7 +39,6 @@ export interface ShelleyMessage {
   generation?: number;
 }
 
-/** One `stream2` frame. */
 export interface ShelleyFrame {
   conversation_id?: string;
   messages?: ShelleyMessage[];
@@ -109,7 +99,6 @@ export interface SubagentUsage {
   per_model?: SubagentModelUsage[];
 }
 
-/** models.dev pricing for one model, USD per million tokens. */
 export interface ModelCost {
   input: number;
   output: number;
@@ -121,10 +110,8 @@ export function isWorking(row: Pick<ShelleyRow, "working" | "agent_working"> | u
   return Boolean(row?.working ?? row?.agent_working);
 }
 
-/** The tag every conversation tiny-agents starts carries; the Code page lists only these. */
 export const TINY_AGENTS_TAG = "tiny-agents";
 
-/** A row's tags: Shelley serves them as a JSON string; anything unreadable is none. */
 export function tagsOf(row: Pick<ShelleyRow, "tags"> | undefined): string[] {
   let tags: unknown = row?.tags;
   if (typeof tags === "string") {

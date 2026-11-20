@@ -18,41 +18,28 @@ import {
   type CommandMenuTab,
 } from "@groot/ui/command-menu";
 
-/** A single selectable entry inside a command-palette group. */
 export interface CommandItemEntry {
   label: string;
   icon?: LucideIcon;
   onSelect: () => void;
   variant?: "default" | "destructive";
-  /** Stable React key. Defaults to `label`; set when labels may duplicate. */
   id?: string;
-  /** What the footer names Enter while the row is highlighted, e.g.
-   *  "Go to Settings". Defaults to the label. */
   action?: string;
-  /** Muted text after the label. Also matched by the search. */
   description?: string;
-  /** Keys shown at the row's trailing edge, e.g. `"mod+shift+n"`. Display
-   *  only: bind the combo yourself with `useHotkey` (`@groot/ui/hotkeys`). */
   shortcut?: string;
-  /** Extra search terms besides the label and description. */
   keywords?: string[];
-  /** List the entry under "Suggestions" while nothing is typed. */
   suggested?: boolean;
 }
 
-/** A labeled group of commands in the palette. */
 export interface CommandGroupEntry {
   heading: string;
   items: CommandItemEntry[];
-  /** Stable React key. Defaults to `heading`; set when headings may duplicate. */
   id?: string;
 }
 
 const ALL_TAB = "all";
-// Stable default so the item memos below hold when no groups are passed.
 const NO_GROUPS: CommandGroupEntry[] = [];
 
-/** Icon button that opens the shared command palette dialog. */
 export function CommandPaletteTrigger() {
   const setOpen = useCommandPaletteStore((state) => state.setOpen);
   return (
@@ -67,19 +54,11 @@ export function CommandPaletteTrigger() {
   );
 }
 
-/**
- * The command palette dialog: render once at the app root. It lists the
- * `ShellConfig.nav` destinations, then the app's own `groups`, then the
- * built-in Theme and Account (log out) commands. ⌘K / Ctrl+K toggles it. An
- * app that builds its own Navigation, Theme and Account groups passes
- * `builtIns={false}` so they are not listed twice.
- */
 export function CommandPaletteDialog({
   groups = NO_GROUPS,
   builtIns = true,
 }: {
   groups?: CommandGroupEntry[];
-  /** List the shell's Navigation, Theme and Account groups (default true). */
   builtIns?: boolean;
 }) {
   const open = useCommandPaletteStore((state) => state.open);
@@ -90,7 +69,6 @@ export function CommandPaletteDialog({
   const signOut = useSignOut();
   const [tab, setTab] = React.useState(ALL_TAB);
 
-  // Every time the palette opens it starts on "All".
   React.useEffect(() => {
     if (open) setTab(ALL_TAB);
   }, [open]);
@@ -145,8 +123,6 @@ export function CommandPaletteDialog({
 
   const { items, groupOf, destructive, suggestions, tabs } = React.useMemo(() => {
     const items: CommandMenuItemData[] = [];
-    // Item value → its group's tab value. Tabs filter by group id, so two
-    // groups that share a heading stay two tabs.
     const groupOf = new Map<string, string>();
     const destructive = new Set<string>();
     const suggestions: string[] = [];

@@ -1,8 +1,3 @@
-// Renders the site's Open Graph image, site/media/og.png (1200x630), from the
-// same saved app states as the film: the bot list from snap/desktop/side-researcher
-// and the vault approval card from snap/desktop/travel-waiting.
-//
-//   node scripts/demo/launch/tools/og.mjs
 import { createRequire } from "node:module";
 import { readFileSync, writeFileSync, rmSync, existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
@@ -62,7 +57,6 @@ await tab.goto(`file://${file}`);
 await tab.evaluate(() => document.fonts.ready);
 await tab.evaluate(() => {
   for (const el of document.querySelectorAll("[data-st]")) el.scrollTop = +el.dataset.st;
-  /** Frames `target` inside `shot`: placed at (left, top), `width` wide, with `pad` app px around it. */
   const frame = (shot, target, { left, top, width, pad }) => {
     const cam = shot.querySelector(".cam");
     const r = target.getBoundingClientRect();
@@ -89,7 +83,6 @@ await tab.evaluate(() => {
   const card = [...cardShot.querySelectorAll('[data-slot="item"]')].find((e) =>
     e.textContent.includes("wants to fill"),
   );
-  // Only the card: the chat's pinned header would otherwise draw across it.
   for (const el of cardShot.querySelectorAll(".appwin *")) el.style.visibility = "hidden";
   for (const el of [card, ...card.querySelectorAll("*")]) el.style.visibility = "visible";
   frame(cardShot, card, { left: 612, top: 446, width: 480, pad: 0 });
@@ -101,7 +94,6 @@ await tab.waitForTimeout(200);
 await tab.screenshot({ path: OUT });
 await browser.close();
 rmSync(file);
-// Shared at 1200x630, the size every platform asks for.
 execFileSync("ffmpeg", [
   "-v",
   "error",

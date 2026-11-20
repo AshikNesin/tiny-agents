@@ -23,16 +23,6 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import javax.imageio.ImageIO
 
-/**
- * [RfbClient] against a real Xtigervnc over TCP. Skipped unless `VNC_TEST_PORT` names the RFB
- * port of a server started like the product starts it:
- *
- *     Xtigervnc :77 -geometry 800x600 -depth 24 -rfbport 5977 -localhost -SecurityTypes None -AlwaysShared
- *
- * `VNC_TEST_DISPLAY` (":77") is the same server's X display, which the tests draw on with
- * xsetroot and xterm and read back with xdotool and xev (packages x11-xserver-utils, xterm,
- * xdotool, x11-utils). Screenshots and a log of what was seen go to `build/vnc-it/`.
- */
 class RealServerTest {
     @get:Rule
     val timeout: Timeout = Timeout(120, TimeUnit.SECONDS)
@@ -43,7 +33,6 @@ class RealServerTest {
     private val sessions = mutableListOf<Session>()
     private val processes = mutableListOf<Process>()
 
-    /** One client connection to the real server. */
     private inner class Session(
         encodings: IntArray? = null,
         wrap: (InputStream) -> InputStream = { it },
@@ -92,7 +81,6 @@ class RealServerTest {
 
         fun pixel(x: Int, y: Int): Int = client.framebuffer.let { it.pixels[y * it.width + x] }
 
-        /** Waits until pixels arrived and the server has been quiet for a moment. */
         fun settle() {
             await("a framebuffer update") { updates.get() > 0 }
             await("the server to go quiet") { System.nanoTime() - lastRect.get() > 500_000_000L }
@@ -145,7 +133,6 @@ class RealServerTest {
         return builder.start().also { processes += it }
     }
 
-    /** Runs an X client to completion and returns its output. */
     private fun x(vararg command: String): String {
         val process = start(*command)
         val output = process.inputStream.bufferedReader().readText()
@@ -177,7 +164,6 @@ class RealServerTest {
 
     private fun mouseLocation(): String = x("xdotool", "getmouselocation").substringBefore(" screen")
 
-    /** An xterm at (100,100), dark with green text, that waits for one line and saves it. */
     private fun startXterm(lineFile: File): Process {
         lineFile.delete()
         val script = "IFS= read -r line; printf '%s' \"\$line\" > '${lineFile.absolutePath}'; sleep 600"
@@ -205,7 +191,6 @@ class RealServerTest {
         val zrle = Session()
         resetScreen(zrle)
         assertTrue(zrle.events.first().startsWith("connected 800x600"))
-        // The xterm's dark background shows up inside the window, the root colour around it.
         await("the xterm to appear") { zrle.pixel(110, 110) == opaque(0x101010) }
         zrle.settle()
         assertEquals(opaque(0x336699), zrle.pixel(10, 10))
@@ -221,8 +206,6 @@ class RealServerTest {
         assertTrue("the server announced ExtendedDesktopSize", zrle.encodingsSeen.containsKey(-308))
         dump(zrle.client.framebuffer, "screen-zrle.png")
 
-        // The same static screen through the other decoders, and through a stream that hands
-        // out a few bytes at a time, must be identical pixel for pixel.
         val raw = Session(encodings = intArrayOf(0))
         raw.settle()
         log("Raw only, server used: ${raw.seen()}")
@@ -259,7 +242,6 @@ class RealServerTest {
         session.settle()
         val window = x("xdotool", "search", "--maxdepth", "1", "--class", "xterm").lines().last()
 
-        // Typing and moving the window makes the server send small rectangles and CopyRect.
         session.client.sendPointer(300, 150, 0)
         session.type("incremental updates 0123456789")
         for ((wx, wy) in listOf(140 to 130, 200 to 260, 90 to 60, 260 to 200)) {
@@ -294,7 +276,6 @@ class RealServerTest {
         session.settle()
         val greenBefore = session.client.framebuffer.pixels.count { it and 0x00FF00 > 0x8000 && it and 0xFF00FF == 0 }
 
-        // Without a window manager the window under the pointer has the keyboard focus.
         session.client.sendPointer(300, 150, 0)
         val text = "Hello, VNC_42! (café €) ~|{}"
         session.type(text)
@@ -320,7 +301,6 @@ class RealServerTest {
         session.client.sendPointer(799, 599, 0)
         await("the pointer to move") { mouseLocation() == "x:799 y:599" }
 
-        // xev on the root window prints every button press it gets.
         val xev = start("stdbuf", "-oL", "xev", "-root", "-event", "button")
         val presses = CopyOnWriteArrayList<String>()
         Thread {
@@ -377,7 +357,6 @@ class RealServerTest {
         assertTrue(before !== after)
         assertEquals("1024 700", x("xdotool", "getdisplaygeometry"))
         assertEquals("view only: the pointer did not move", "x:400 y:300", mouseLocation())
-        // The whole new framebuffer is sent again.
         await("the new area to be painted") { session.pixel(1020, 695) == opaque(0x336699) && session.pixel(5, 5) == opaque(0x336699) }
         session.settle()
         dump(session.client.framebuffer, "screen-1024x700.png")
@@ -397,8 +376,6 @@ class RealServerTest {
         val session = Session()
         resetScreen(session)
         val fresh = Session()
-        // Nothing has been read yet, so this is queued or sent depending on timing; either way
-        // the desktop must end up resized.
         fresh.client.requestDesktopSize(900, 650)
         await("the resize") { fresh.events.contains("resize 900x650") }
         assertEquals("900 650", x("xdotool", "getdisplaygeometry"))

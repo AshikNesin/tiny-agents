@@ -40,10 +40,8 @@ describe("jobs API", () => {
         .status,
     ).toBe(400);
     expect((await api(app, "/api/v1/jobs?state=bogus", { token })).status).toBe(400);
-    // Query coercion: strings become numbers, out-of-range values are rejected
     expect((await api(app, "/api/v1/jobs?limit=10&offset=5", { token })).status).toBe(200);
     expect((await api(app, "/api/v1/jobs?limit=0", { token })).status).toBe(400);
-    // Option coercion: "2" becomes retryLimit 2 on the stored job
     const coerced = await api<{ jobId: string }>(app, "/api/v1/jobs", {
       method: "POST",
       json: { jobName: "report", options: { retryLimit: "2" } },
@@ -56,7 +54,6 @@ describe("jobs API", () => {
       { token },
     );
     expect(coercedJob.body.data?.retryLimit).toBe(2);
-    // Keep the database empty for the tests that follow.
     await api(app, `/api/v1/jobs/${coerced.body.data!.jobId}`, { method: "DELETE", token });
     expect(
       (

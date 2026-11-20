@@ -1,9 +1,3 @@
-/**
- * Terminal REST routes (issue #28) against the Hono app with a fake
- * TerminalService injected through the instance seam. The wire contract is
- * frozen (tmp/terminal-plan.md): DTO shapes, 201 create, 409 with
- * error.details.process on a busy tab, ticket path shape.
- */
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import {
   resetTerminalTicketsForTests,
@@ -29,7 +23,6 @@ interface Envelope {
   error?: { code: string; message: string; details?: unknown };
 }
 
-/** A request as the old supertest calls read: status plus the JSON envelope. */
 async function call(
   app: TestApp,
   method: string,
@@ -52,7 +45,6 @@ const row = (n: number, over: Partial<TerminalSessionRow> = {}): TerminalSession
   ...over,
 });
 
-/** A fake service recording calls; errors thrown by call index. */
 function fakeService(overrides: Partial<TerminalService> = {}) {
   const calls: string[] = [];
   let sessions: TerminalSessionRow[] = [row(1)];
@@ -151,7 +143,7 @@ describe("terminal routes", () => {
     const clamped = await call(app, "POST", "/api/v1/terminal/sessions", {
       json: { cols: 9999, rows: 1 },
     });
-    expect(clamped.status).toBe(400); // zod rejects out-of-bounds, client must clamp
+    expect(clamped.status).toBe(400);
   });
 
   it("opens a Claude sign-in tab from a preset, never from free text", async () => {
@@ -234,8 +226,6 @@ describe("terminal routes", () => {
     });
     expect(redeemTerminalTicket(ticket, "ta-term-1" as never)).toBeUndefined();
 
-    // Unlisted names still mint (issue #84): the attach reports a missing
-    // tab itself, and the pre-check cost a full SSH handshake.
     const unknown = await call(app, "POST", "/api/v1/terminal/sessions/ta-term-9/ticket");
     expect(unknown.status).toBe(200);
     expect(fake.calls.filter((call) => call.startsWith("has"))).toEqual([]);

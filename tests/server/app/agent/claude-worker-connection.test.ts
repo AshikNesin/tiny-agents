@@ -1,10 +1,3 @@
-/**
- * The Worker connection (`@tiny-agents/claude-worker/client`), the one
- * socket policy under both the bot engine and the Claude Code harness:
- * heartbeat, reconnect with re-resolve, handshake and reboot detection,
- * resume per session, requests, the send queue and failure wording. A fake
- * worker behind `WebSocketLike` sockets and a manual clock; no network.
- */
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import {
   WorkerRequestError,
@@ -25,7 +18,6 @@ afterEach(() => {
   for (const connection of connections.splice(0)) connection.close();
 });
 
-/** Timers that run only when the test moves time. */
 function manualClock(): WorkerClock & { advance(ms: number): void; pending(): number } {
   let now = 0;
   let timers: { at: number; fn: () => void }[] = [];
@@ -60,11 +52,6 @@ interface FakeSocket extends WebSocketLike {
   emit(event: string, ...args: unknown[]): void;
 }
 
-/**
- * A worker as the socket sees it: a welcome with its boot id, ping/pong,
- * buffered session events with resume, a hello, and requests it answers
- * when told to.
- */
 function fakeWorker(options: { greet?: boolean } = {}) {
   let boot = 1;
   let refuse: number | undefined;
@@ -155,7 +142,6 @@ function fakeWorker(options: { greet?: boolean } = {}) {
     sockets,
     requests,
     socketFor,
-    /** The newest socket. */
     get socket(): FakeSocket {
       const socket = sockets.at(-1);
       if (!socket) throw new Error("no socket yet");
@@ -171,7 +157,6 @@ function fakeWorker(options: { greet?: boolean } = {}) {
       for (const socket of live()) socket.emit("message", data);
       return seq;
     },
-    /** Send one frame as it is, to every open socket. */
     raw(frame: Record<string, unknown>) {
       for (const socket of live()) socket.emit("message", JSON.stringify(frame));
     },
@@ -179,11 +164,9 @@ function fakeWorker(options: { greet?: boolean } = {}) {
       const socket = request.socket as FakeSocket;
       emitFrame(socket, { type: "reply", requestId: request.requestId, ...reply });
     },
-    /** Drop every socket (a tunnel blip): the worker keeps its sessions. */
     drop() {
       for (const socket of live()) socket.close();
     },
-    /** The worker process restarts: new boot id, every session gone. */
     restart() {
       boot += 1;
       sessions.clear();
@@ -192,7 +175,6 @@ function fakeWorker(options: { greet?: boolean } = {}) {
     refuseWith(status: number | undefined) {
       refuse = status;
     },
-    /** Stop answering pings (a hung tunnel). */
     mute() {
       answering = false;
     },
@@ -202,7 +184,6 @@ function fakeWorker(options: { greet?: boolean } = {}) {
 const BOT: SessionStreams = { event: "event", resume: "resume", join: "now" };
 const CODING: SessionStreams = { event: "event", resume: "resume", join: "start" };
 
-/** Let queued microtasks (the fake's handshake, async resolves) run. */
 const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
 
 function open(
@@ -246,7 +227,6 @@ function open(
     resumes,
     payloads,
     resolves: () => resolves,
-    /** Move time and let what it started finish. */
     async after(ms: number) {
       clock.advance(ms);
       await settle();
@@ -325,11 +305,9 @@ describe("worker connection: the socket", () => {
     await after(4_000);
     expect(calls).toBe(4);
     expect(connection.state).toBe("connected");
-    // The tunnel's port moved: the new socket went to the new address.
     expect(worker.socket.target.url).toBe("ws://127.0.0.1:4004");
     expect(states.map(([state]) => state)).toContain("reconnecting");
 
-    // A good connection resets the backoff.
     worker.drop();
     await settle();
     await after(1_000);
@@ -408,10 +386,8 @@ describe("worker connection: handshake and reboot", () => {
     await settle();
     await after(1_000);
     expect(connects).toEqual([false, false, true]);
-    // Resumed from 0: the new worker does not know the session.
     expect(worker.socket.sent.find((frame) => frame.type === "resume")?.afterSeq).toBe(0);
     expect(resumes.at(-1)).toEqual(["s1", { known: false, gap: false, firstSeq: 1, lastSeq: 0 }]);
-    // Its numbering starts at 1 again, and those events are new.
     worker.publish("s1", "c");
     expect(payloads("s1")).toEqual(["a", "b", "c"]);
   });
@@ -425,14 +401,13 @@ describe("worker connection: resume", () => {
     await settle();
     worker.publish("s1", "a");
     worker.drop();
-    worker.publish("s1", "b"); // while nobody listens
+    worker.publish("s1", "b");
     worker.publish("s1", "c");
     await settle();
     await after(1_000);
     expect(worker.socket.sent.find((frame) => frame.type === "resume")?.afterSeq).toBe(1);
     worker.publish("s1", "d");
     expect(payloads("s1")).toEqual(["a", "b", "c", "d"]);
-    // A duplicate is dropped.
     worker.raw({ type: "event", sessionId: "s1", seq: 2, payload: "b" });
     expect(payloads("s1")).toEqual(["a", "b", "c", "d"]);
   });
@@ -444,7 +419,6 @@ describe("worker connection: resume", () => {
     await settle();
     worker.publish("s1", "a");
     worker.publish("s1", "b");
-    // seq 4 arrives without 3: drop it, ask again from 2.
     const before = worker.socket.sent.filter((frame) => frame.type === "resume").length;
     worker.raw({ type: "event", sessionId: "s1", seq: 4, payload: "late" });
     const resumes = worker.socket.sent.filter((frame) => frame.type === "resume");
@@ -463,7 +437,6 @@ describe("worker connection: resume", () => {
     connection.track("s1");
     expect(payloads("s1")).toEqual(["old-1", "old-2"]);
 
-    // An untracked session seen mid-stream: replayed from its start, in order.
     worker.publish("s2", "x-2");
     expect(payloads("s2")).toEqual(["x-1", "x-2"]);
   });
@@ -485,7 +458,6 @@ describe("worker connection: resume", () => {
     await after(1_000);
     expect(payloads("s1")).toEqual(["new-1", "new-2"]);
 
-    // An untracked session joins at the event that arrives, never before it.
     worker.publish("s2", "y-1");
     worker.drop();
     worker.publish("s2", "y-2");

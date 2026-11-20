@@ -5,7 +5,6 @@ import java.io.ByteArrayOutputStream
 internal const val ESC = "\u001b"
 internal const val CSI = "\u001b["
 
-/** An emulator plus what it answered, with string-based helpers for the tests. */
 internal class TestTerminal(cols: Int = 80, rows: Int = 24, scrollback: Int = 2000) {
     private val replies = ByteArrayOutputStream()
     val emulator = TerminalEmulator(cols, rows, scrollback) { replies.write(it) }
@@ -22,7 +21,6 @@ internal class TestTerminal(cols: Int = 80, rows: Int = 24, scrollback: Int = 20
 
     fun row(index: Int): String = emulator.line(index).text()
 
-    /** The visible rows, trailing blank rows dropped. */
     fun screen(): List<String> {
         val lines = (0 until emulator.rows).map(::row)
         return lines.dropLastWhile { it.isEmpty() }
@@ -30,7 +28,6 @@ internal class TestTerminal(cols: Int = 80, rows: Int = 24, scrollback: Int = 20
 
     fun scrollback(): List<String> = (-emulator.scrollbackSize..-1).map(::row)
 
-    /** Everything answered since the last call. */
     fun replies(): String {
         val text = replies.toString(Charsets.ISO_8859_1.name())
         replies.reset()
@@ -46,7 +43,6 @@ internal class TestTerminal(cols: Int = 80, rows: Int = 24, scrollback: Int = 20
     fun attrs(row: Int, col: Int): Int = emulator.line(row).attributes(col)
 }
 
-/** Every observable bit of state, for "these two emulators are identical" assertions. */
 internal fun TerminalEmulator.dump(): String {
     val out = StringBuilder()
     out.append("size=${cols}x$rows cursor=$cursorRow,$cursorCol visible=$cursorVisible style=$cursorStyle\n")
@@ -73,7 +69,6 @@ internal fun TerminalEmulator.dump(): String {
     return out.toString()
 }
 
-/** Structural invariants that must hold whatever was fed. */
 internal fun TerminalEmulator.checkInvariants() {
     check(cursorRow in 0 until rows) { "cursor row $cursorRow outside $rows" }
     check(cursorCol in 0 until cols) { "cursor col $cursorCol outside $cols" }

@@ -11,28 +11,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-/**
- * Red text on the red tint must still reach 4.5:1: plain --destructive measured
- * 4.0 (light) and 4.2 (dark) at 12px. Mixing in the foreground darkens it on
- * light surfaces and lightens it on dark ones, from tokens alone.
- */
 const DESTRUCTIVE_TEXT = "text-[color-mix(in_oklch,var(--destructive)_65%,var(--foreground))]";
 
-/**
- * Canonical status badge — the single source of truth for rendering a job /
- * health status. Colors come exclusively from design tokens.
- *
- * If you need to show a status, use this instead of hand-rolling color maps.
- * Built on {@link Badge} so status pills share their shape and typography with
- * every other badge in the app.
- */
-
-/**
- * Every job state from `@groot/jobs/lifecycle` (created, active, completed,
- * failed, cancelled) is a variant below, but the union is spelled out here
- * rather than imported: `@groot/jobs` depends on `@groot/ui`, so importing
- * `JobState` would invert the dependency direction.
- */
 export type StatusVariant =
   | "active"
   | "created"
@@ -48,11 +28,8 @@ export type StatusVariant =
   | "expired";
 
 interface StatusConfig {
-  /** small colored dot */
   dot: string;
-  /** label text color */
   text: string;
-  /** pill background */
   bg: string;
   label: string;
   icon?: LucideIcon;

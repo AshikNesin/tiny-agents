@@ -28,7 +28,6 @@ export async function getQueueStats(): Promise<JobStats> {
   return stats;
 }
 
-/** Job names seen in the queue plus every registered handler. */
 export async function getAvailableQueues(): Promise<string[]> {
   const rows = await db.selectDistinct({ name: jobs.name }).from(jobs);
   return [...new Set([...rows.map((r) => r.name), ...getRegisteredHandlers()])].sort();
@@ -41,8 +40,6 @@ export async function getJobs(options: GetJobsOptions = {}): Promise<JobQueryRes
   if (name) filters.push(eq(jobs.name, name));
   const query = search?.trim();
   if (query) {
-    // Substring of the name or the id, case-insensitive (SQLite LIKE), with
-    // the LIKE wildcards in the query matched literally.
     const pattern = `%${query.replace(/[\\%_]/g, "\\$&")}%`;
     filters.push(
       or(

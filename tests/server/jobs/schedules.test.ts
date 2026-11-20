@@ -50,7 +50,6 @@ describe("schedules", () => {
   it("enqueues a due schedule exactly once per fire", async () => {
     registerJobHandler("every-minute", () => "ran");
     await scheduleJob("every-minute", { from: "cron" }, "* * * * *");
-    // Pretend the schedule was created two minutes ago so a fire is due.
     const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
     await db
       .update(jobSchedules)
@@ -83,7 +82,6 @@ describe("schedules", () => {
   });
 
   it("reads ? as no constraint on that field, not as every day", () => {
-    // 2026-01-01 is a Thursday; the next Monday is the 5th.
     const from = new Date("2026-01-01T00:00:30Z");
     expect(nextCronRun("0 0 ? * MON", from, "UTC")?.toISOString()).toBe("2026-01-05T00:00:00.000Z");
   });

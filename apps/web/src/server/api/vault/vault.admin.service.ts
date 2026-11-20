@@ -1,8 +1,3 @@
-/**
- * The owner's Vault UI (issue #56 D16): list, create, link, edit, reveal and
- * delete items, round-tripping to the backend. Never wired into a toolkit. Values pass through in the request scope only: nothing here stores
- * one, and every reveal is registered with the redactor and audited.
- */
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { logger } from "@groot/core/logger";
@@ -48,11 +43,6 @@ import { vaultPolicyDigest } from "./vault.policy";
 
 let adminBackends: Map<BackendName, VaultBackend> | undefined;
 
-/**
- * Write-path backends: the local store, and 1Password Connect with the
- * read+write token (`OP_CONNECT_ADMIN_TOKEN`), the only place that token is
- * loaded. Without it the 1Password items are read-only here.
- */
 function writeBackends(): Map<BackendName, VaultBackend> {
   if (adminBackends) return adminBackends;
   const map = new Map<BackendName, VaultBackend>([["local", createLocalBackend()]]);
@@ -72,13 +62,11 @@ function writeBackends(): Map<BackendName, VaultBackend> {
   return map;
 }
 
-/** Test seam. */
 export function setWriteBackendsForTests(map: Map<BackendName, VaultBackend> | undefined): void {
   adminBackends = map;
   candidatesCache = undefined;
 }
 
-/** Items were added or removed outside this module (a connection's own item): list afresh. */
 export function vaultItemsChanged(): void {
   candidatesCache = undefined;
 }
@@ -94,23 +82,12 @@ function backendFailure(error: unknown): never {
     if (error.code === "not_found") throw Boom.notFound(error.message);
     if (error.code === "missing_field") throw Boom.badRequest(error.message);
     if (error.code === "invalid") throw Boom.badRequest(error.message);
-    // The backend's code goes in the envelope's `code` (machine-readable),
-    // never in `details`: the client's error renderer treats the first
-    // string in `details` as a human message, so `{ code }` there surfaced
-    // the bare word "unconfigured" instead of error.message (issue #124).
     throw Boom.badGateway(error.message, undefined, error.code);
   }
   throw error;
 }
 
-// ── Listing ─────────────────────────────────────────────────────────────
-
 const CANDIDATES_TTL_MS = 5 * 60_000;
-/**
- * How a backend item that won't open (wrong key, policy edited in the
- * database) is listed, linked or not. The overview shows it under "Not
- * linked yet" only while no row links it; a linked one shows why on its page.
- */
 const UNREADABLE_TITLE = "Unreadable item";
 let candidatesCache:
   | { at: number; items: (BackendItemSummary & { backend: BackendName })[] }
@@ -127,7 +104,6 @@ async function candidates(force = false) {
       return { items: [], unreadable: [] };
     });
     items.push(...listed.items.map((item) => ({ ...item, backend: name })));
-    // One item that won't open is shown as unreadable; the rest still list (C11).
     if (listed.unreadable.length > 0) {
       logger.warn(
         { backend: name, unreadable: listed.unreadable },
@@ -159,13 +135,11 @@ function parseList(raw: string | null): string[] {
   }
 }
 
-/** An item as the Vault UI shows it: metadata and policy, never a value. */
 function itemView(row: VaultItemRow): VaultItemData {
   const meta = toMeta(row);
   return {
     id: row.id,
     handle: row.handle,
-    // Text columns only the schema's enums and this module write.
     kind: row.kind as VaultKind,
     backend: row.backend as BackendName,
     audience: row.audience as VaultItemData["audience"],
@@ -192,7 +166,6 @@ function itemView(row: VaultItemRow): VaultItemData {
   };
 }
 
-/** While the bundled Connect server isn't answering, say what it is doing instead of "unreachable". */
 function withBundledState(name: BackendName, status: BackendStatus): BackendStatus {
   const bundled = name === "onepassword-connect" ? app().bundledConnect?.state() : undefined;
   if (!bundled || status.state === "ready" || status.code !== "unreachable") return status;
@@ -207,7 +180,6 @@ async function backendsView(): Promise<VaultBackendView[]> {
   const views: VaultBackendView[] = [];
   for (const name of ["onepassword-connect", "local"] as BackendName[]) {
     const read = readBackends().get(name);
-    // 1Password shows only once it is set up: the Vault page stays one card otherwise.
     if (!read) continue;
     const write = writeBackends().get(name);
     const readStatus = withBundledState(name, await backendStatus(name));
@@ -254,7 +226,6 @@ export async function overview(options: { refresh?: boolean } = {}): Promise<Vau
   };
 }
 
-/** Pull metadata (username, card display, TOTP, stale links) for linked items. */
 async function syncMetadata(): Promise<void> {
   const rows = await db.select().from(vaultItems);
   for (const row of rows) {
@@ -335,8 +306,6 @@ async function findOrThrow(handle: string): Promise<VaultItemRow> {
   return row;
 }
 
-// ── Writes ──────────────────────────────────────────────────────────────
-
 function originsFrom(urls: string[]): string[] {
   return [...new Set(urls.map(normalizeOrigin).filter((o): o is string => o !== undefined))];
 }
@@ -353,7 +322,6 @@ function policyData(policy: Partial<PolicyDTO>, kind: VaultKind) {
     ...(policy.bots !== undefined
       ? { botsJson: policy.bots === null ? null : JSON.stringify(policy.bots) }
       : {}),
-    // Cards are every_use whatever was asked.
     ...(policy.approval !== undefined
       ? { approval: kind === "card" ? "every_use" : policy.approval }
       : {}),
@@ -371,7 +339,6 @@ async function assertHandleFree(handle: string, except?: string): Promise<void> 
   if (existing && existing.id !== except) throw Boom.conflict(`Handle "${handle}" is taken`);
 }
 
-/** Never save a one-time code or a CVC from a credential request; the UI may save a CVC. */
 export async function createItem(
   input: CreateItemDTO,
   actor: { via: "vault_ui" | "credential_request" } = { via: "vault_ui" },
@@ -420,12 +387,6 @@ export async function createItem(
   return itemView(row);
 }
 
-/**
- * A secret the server itself uses (audience `app`, issue #179): a model
- * provider's key, or Code's GitHub token (`tools: ["github"]`, issue #297).
- * Never listed to bots; usable only by its sink for the given hosts. Goes to the local backend unless `backend` says
- * otherwise, so chatting never depends on an external manager being up.
- */
 export async function createAppCredential(input: {
   handle: string;
   label: string;
@@ -433,7 +394,6 @@ export async function createAppCredential(input: {
   hosts: string[];
   inject: { as: "header"; name: string; format: string };
   backend?: BackendName;
-  /** The sinks that may use it (default `model`). */
   tools?: string[];
 }): Promise<VaultItemRow> {
   await assertHandleFree(input.handle);
@@ -507,10 +467,6 @@ export async function linkItem(input: {
     ...policyData({ ...input.policy, origins }, summary.kind),
     ...metadataOf(summary),
   };
-  // A backend that seals values itself binds the item to its row's policy,
-  // in the transaction that inserts the row. One row per value: a second
-  // would open it under a policy the first never agreed to, so the check is
-  // in that transaction too (C11).
   const insertRow = (tx: DbTx) => {
     const linked = tx
       .select({ handle: vaultItems.handle })
@@ -554,12 +510,6 @@ export async function updateItem(
   return updateItemRow(row, input, actor);
 }
 
-/**
- * Apply an edit to a vault item: the backend's values, then the policy,
- * re-sealing a self-sealed value when the policy digest changes. Also the
- * write path for `app` items, whose owners (the models service) call it
- * directly.
- */
 async function updateItemRow(
   row: VaultItemRow,
   input: UpdateItemDTO & { audience?: "bots" | "app" },
@@ -595,19 +545,13 @@ async function updateItemRow(
     ...metadata,
   };
   const writeRow = (tx: DbTx): VaultItemRow => {
-    // Drizzle refuses an empty SET: with nothing to change, the row as it stands now.
     const changed =
       Object.keys(data).length === 0
         ? tx.select().from(vaultItems).where(eq(vaultItems.id, row.id)).get()
         : tx.update(vaultItems).set(data).where(eq(vaultItems.id, row.id)).returning().get();
-    // Deleted meanwhile (Prisma's P2025 → 404); a re-seal with it rolls back.
     if (!changed) throw Boom.notFound("Record not found");
     return changed;
   };
-  // A policy edit re-seals a self-sealed value in the transaction that writes
-  // the row: opened under the row as that transaction finds it (a concurrent
-  // edit included) and sealed under the row as written, never under a digest
-  // worked out from the row read before (C11).
   const rebind = touchesPolicy
     ? writeBackends().get(row.backend as BackendName)?.rebind
     : undefined;
@@ -642,7 +586,6 @@ export async function deleteItem(handle: string, options: { purge: boolean }): P
       "This item is used by the app; remove it where it is used (Settings → Models).",
     );
   }
-  // A connection's own header value goes with the connection, or with a new value there.
   const owner = await db.query.connections.findFirst({
     where: eq(connections.secretItemId, row.id),
     columns: { name: true },
@@ -655,7 +598,6 @@ export async function deleteItem(handle: string, options: { purge: boolean }): P
   return deleteItemRow(row, options);
 }
 
-/** Delete a vault item (and, with `purge`, its value in the backend). */
 export async function deleteItemRow(
   row: VaultItemRow,
   options: { purge: boolean },
@@ -688,10 +630,6 @@ export async function deleteItemRow(
   return { deleted: true };
 }
 
-/**
- * Drop a deleted bot from every item's bot list. A list it leaves empty
- * stays `[]` (no bot may use the item), never null (every bot may).
- */
 export async function forgetBotInVault(botId: string): Promise<void> {
   await db
     .update(vaultItems)
@@ -703,7 +641,6 @@ export async function forgetBotInVault(botId: string): Promise<void> {
     );
 }
 
-/** One value for the owner's browser. Registered with the redactor and audited. */
 export async function reveal(
   handle: string,
   field: ValueField,

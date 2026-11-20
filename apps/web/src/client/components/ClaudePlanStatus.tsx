@@ -7,7 +7,6 @@ import { claudeCodeApi } from "../lib/bots-api";
 import { terminalApi } from "../lib/terminal-api";
 import { errorMessage } from "../lib/errors";
 
-/** While Claude Code installs on the sandbox, check again this often. */
 const INSTALL_POLL_MS = 3000;
 
 function accountLine(account: ClaudeCodeAccount | undefined): string {
@@ -39,7 +38,6 @@ function fallbackLine(status: ClaudeCodeStatus): string {
   return `${host}When the engine is off or Claude Code can't answer, turns ${then}.`;
 }
 
-/** The engine's switch and worker mode, read once. */
 function useClaudeStatus() {
   const [status, setStatus] = useState<ClaudeCodeStatus | undefined>();
   const [error, setError] = useState<string | undefined>();
@@ -62,7 +60,6 @@ function useClaudeStatus() {
   return { status, error };
 }
 
-/** The login state, re-read while Claude Code is still installing. */
 function useClaudeAccount() {
   const [account, setAccount] = useState<ClaudeCodeAccount | undefined>();
 
@@ -87,7 +84,6 @@ function useClaudeAccount() {
   return { account, check };
 }
 
-/** Opens a terminal tab that runs `claude auth login`, then shows it. */
 function useClaudeSignIn() {
   const navigate = useNavigate();
   const [opening, setOpening] = useState(false);
@@ -138,16 +134,6 @@ function AccountActions({
   );
 }
 
-/**
- * The Claude plan engine's state, inside the Claude plan account's card in
- * Settings → Models. The app sets Claude Code up on the sandbox by itself;
- * the one step left to the owner is the login, which runs in Claude Code's
- * own prompt in a terminal tab. There is no field for a Claude credential:
- * Claude Code keeps the login on the sandbox.
- *
- * `onCheckModels`: "Check again" also lists Claude Code's models while it is
- * signed in, so a new model shows up without another click.
- */
 export function ClaudePlanStatus({ onCheckModels }: { onCheckModels?: () => void } = {}) {
   const { status, error } = useClaudeStatus();
   const { account, check } = useClaudeAccount();
@@ -168,10 +154,6 @@ export function ClaudePlanStatus({ onCheckModels }: { onCheckModels?: () => void
       <p>
         <Text>{error ?? engineLine(status)}</Text>
       </p>
-      {/* With the engine off there is no worker, so the account check reports
-          "unconfigured" even when a sandbox is set up: saying "No sandbox is
-          configured" then is wrong (#171). The line only means something with
-          the engine on. */}
       {status?.enabled === false ? null : (
         <p>
           <Text data-testid="claude-plan-account">{accountLine(account)}</Text>

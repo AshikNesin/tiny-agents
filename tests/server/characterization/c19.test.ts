@@ -1,16 +1,3 @@
-/**
- * Characterization of behavior-register row C19: unbounded in-memory maps
- * (worker session books and logs, `ToolProxy.results`, client cursors,
- * Claude Code runtimes, Shelley `working`). Nothing ever removes an entry.
- * Preserve: this pins today's behavior, quirk included; change it only with
- * a signed-off register row.
- *
- * Each case pins what the public API shows: an entry still answers after
- * the thing it tracked has ended. Claude Code runtimes
- * (`packages/code/src/drivers/claude-code/driver.ts`, `runtimes`/`loaded`)
- * are dropped only when a thread's create fails, and nothing outside the
- * driver can see them, so they are not pinned here.
- */
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import {
   CodingBook,
@@ -46,7 +33,6 @@ describe("C19: the Claude worker's books", () => {
     };
     const book = new SessionBook(factory, { ...DEFAULT_TIMINGS, idleEvictMs: 1_000 });
     const ids = ["s1", "s2", "s3"];
-    // Each turn comes after the last process went idle, so it is evicted first.
     for (const [index, id] of ids.entries()) {
       const session = await book.runTurn(
         { sessionId: id, model: "claude-sonnet-4-6", tools: [] },
@@ -56,16 +42,13 @@ describe("C19: the Claude worker's books", () => {
       expect(session.settleTool(`toolu_${id}`, { content: "done" })).toBe(true);
     }
 
-    // The last process is evicted too, an hour later.
     book.sweep(60 * 60_000);
     expect(book.liveProcesses()).toBe(0);
 
     for (const id of ids) {
       const session = book.get(id);
       expect(session?.alive).toBe(false);
-      // The log still holds the session's events.
       expect(session?.log.replay(0).length).toBeGreaterThan(0);
-      // ToolProxy.results still holds the settled result: a second settle is refused.
       expect(book.settle(id, `toolu_${id}`, { content: "again" })).toBe(false);
     }
   });
@@ -151,7 +134,6 @@ describe("C19: the worker connection's cursors", () => {
     await settle();
     connection.track("s1");
     connection.track("s2");
-    // A session nobody tracked sends an event: it gets a cursor too.
     (sockets[0] as unknown as { emitFrame(frame: object): void }).emitFrame({
       type: "event",
       sessionId: "s3",
@@ -159,7 +141,6 @@ describe("C19: the worker connection's cursors", () => {
     });
     expect(resumed(0)).toEqual(["s1", "s2"]);
 
-    // Three tunnel blips later, every session is resumed on every new socket.
     for (let blip = 1; blip <= 3; blip++) {
       sockets.at(-1)!.drop();
       now += 60_000;
@@ -204,13 +185,11 @@ describe("C19: Shelley's `working` map", () => {
     await expect.poll(() => lists).toEqual([1]);
 
     push!({ conversation_id: "c1", conversation_state: { working: true } });
-    // Shelley drops the conversation (deleted); the list is read again without it.
     rows = [];
     push!({ conversation_list_patch: [{ op: "remove", path: "/0" }] });
     await expect.poll(() => lists).toEqual([1, 0]);
     expect(stream.list()).toEqual([]);
 
-    // Its remembered `working: true` outlived it.
     push!({ conversation_id: "c1", conversation_state: { working: false } });
     await expect.poll(() => ends).toEqual(["c1"]);
   });

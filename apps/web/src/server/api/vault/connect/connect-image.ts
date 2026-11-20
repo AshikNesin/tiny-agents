@@ -1,16 +1,3 @@
-/**
- * The 1Password Connect binaries the bundled server runs (ADR 0027): pulled
- * once from 1Password's own images, pinned by manifest digest, onto the data
- * volume. No Docker daemon is involved: this speaks the registry's HTTP API,
- * checks every manifest and layer against its sha256, and takes the one
- * executable out of the image's layers.
- *
- * The images come from `ghcr.io/1password` (published by 1Password's GitHub
- * organisation from https://github.com/1Password/connect, the same builds as
- * Docker Hub's `1password/*`), which has no anonymous pull quota to run into.
- * To move to a newer Connect, update `CONNECT_VERSION` and the four digests
- * from the version's image index.
- */
 import { createHash } from "node:crypto";
 import { chmod, mkdir, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -21,7 +8,6 @@ export const CONNECT_VERSION = "1.8.4";
 export type ConnectBinary = "connect-api" | "connect-sync";
 type Arch = "amd64" | "arm64";
 
-/** Per-architecture image manifests of `CONNECT_VERSION`. */
 const PINNED: Record<ConnectBinary, Record<Arch, string>> = {
   "connect-api": {
     amd64: "sha256:fbb1b35c38a63559becbed640550d3a844f03c7474ca74bbec727bb12107ff3a",
@@ -34,9 +20,7 @@ const PINNED: Record<ConnectBinary, Record<Arch, string>> = {
 };
 
 export interface ImageSource {
-  /** Registry base URL. */
   registry: string;
-  /** Repository namespace (`1password`). */
   namespace: string;
   version: string;
   manifests: Record<ConnectBinary, Partial<Record<Arch, string>>>;
@@ -49,7 +33,6 @@ const DEFAULT_SOURCE: ImageSource = {
   manifests: PINNED,
 };
 
-/** This host's architecture in image terms, or undefined when Connect ships none for it. */
 function imageArch(arch: string = process.arch): Arch | undefined {
   if (arch === "x64") return "amd64";
   if (arch === "arm64") return "arm64";
@@ -62,7 +45,6 @@ interface Manifest {
   layers?: { digest: string; mediaType?: string }[];
 }
 
-/** One registry pull session: an anonymous bearer token fetched on the first 401. */
 function registryClient(source: ImageSource, repo: string, doFetch: typeof fetch) {
   let token: string | undefined;
 
@@ -105,7 +87,6 @@ function registryClient(source: ImageSource, repo: string, doFetch: typeof fetch
   };
 }
 
-/** The bytes of the regular file in `tar` whose path ends in `/<suffix>`, if any. */
 function findInTar(tar: Uint8Array, suffix: string): Uint8Array | undefined {
   const text = (start: number, length: number) => {
     const slice = tar.subarray(start, start + length);
@@ -142,10 +123,6 @@ async function exists(file: string): Promise<boolean> {
   );
 }
 
-/**
- * The path of `binary` for this host, pulling it first when the data volume
- * doesn't have this version yet. Throws with a reason the Vault page shows.
- */
 export async function ensureConnectBinary(
   binary: ConnectBinary,
   options: { dir: string; arch?: Arch; source?: ImageSource; fetch?: typeof fetch },
@@ -169,7 +146,6 @@ export async function ensureConnectBinary(
     throw new Error(`The ${binary} image manifest doesn't match its pinned digest.`);
   }
   const manifest = JSON.parse(Buffer.from(manifestBytes).toString("utf8")) as Manifest;
-  // The binary is copied in last, so it is in the top layer; search down from there.
   for (const layer of (manifest.layers ?? []).toReversed()) {
     const blob = await get(`blobs/${layer.digest}`);
     if (sha256(blob) !== layer.digest) {
@@ -188,7 +164,6 @@ export async function ensureConnectBinary(
   throw new Error(`The ${binary} image has no ${binary} executable.`);
 }
 
-/** Drop binaries of other Connect versions from the data volume (an upgrade's leftovers). */
 export async function pruneOtherVersions(dir: string, version = CONNECT_VERSION): Promise<void> {
   const root = path.join(dir, "bin");
   const entries = await readdir(root).catch(() => [] as string[]);

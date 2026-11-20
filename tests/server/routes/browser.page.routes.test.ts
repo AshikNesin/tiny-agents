@@ -1,10 +1,3 @@
-/**
- * The Browser page's routes (issue #160): browsers by profile (the shared
- * one and one per own-profile bot), start on the owner's own tab, viewer
- * tickets, resize, driving without moving any bot's tab, reset, and
- * refusing profiles no bot has, against the app's Hono stack with a fake
- * browser transport.
- */
 import { eq } from "drizzle-orm";
 import { fakeCatalog, fakeModel, useTestRuntime } from "../fixtures";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -47,7 +40,6 @@ interface FakeTab {
   adopted: number;
 }
 
-/** A browser with a tab per `openTab`, a VNC display and a log of what happened. */
 function fakeBrowser(options: { vnc?: boolean } = {}) {
   const resizes: { width: number; height: number }[] = [];
   const opened: string[] = [];
@@ -245,7 +237,6 @@ describe("browser page routes", () => {
 
     await call("/api/v1/browser/shared/driver", { method: "POST", json: { driver: "agent" } });
     expect(sessions.get(botTarget)?.driver).toBe("agent");
-    // The owner's tab adopted the tab in front; the bot's tab stayed put.
     const botTab = sessions.peek(botTarget)!.session as unknown as { fake: FakeTab };
     const ownerTab = sessions.peek({ profile: "shared", tab: "owner" })!.session as unknown as {
       fake: FakeTab;

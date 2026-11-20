@@ -1,14 +1,8 @@
-/**
- * The owner's notification preferences: one `notifications` app setting
- * (the APP_SETTING KV), zod-validated with defaults so a missing or partly
- * written value still reads as a complete object.
- */
 import { z } from "zod";
 import { createNamespaceKv } from "@groot/core/kv";
 
 export const NOTIFICATION_SETTINGS_KEY = "notifications";
 
-/** Where notifications go: one channel, or none. */
 export const DELIVERY_CHOICES = ["auto", "webpush", "pushover", "off"] as const;
 export type DeliveryChoice = (typeof DELIVERY_CHOICES)[number];
 
@@ -24,7 +18,6 @@ function validTimeZone(zone: string): boolean {
 }
 
 export const notificationSettingsSchema = z.object({
-  /** Per-event switches; events without an entry use their default. */
   events: z.record(z.string(), z.boolean()).prefault({}),
   quietHours: z
     .object({
@@ -32,26 +25,16 @@ export const notificationSettingsSchema = z.object({
       start: clock.default("22:00"),
       end: clock.default("07:00"),
       timezone: z.string().refine(validTimeZone, "Unknown time zone").default("Asia/Kolkata"),
-      /** Needs-input notifications keep their priority during quiet hours. */
       urgentBypass: z.boolean().default(false),
     })
     .prefault({}),
-  /**
-   * The one channel that delivers, by id ("webpush" is the phone app), or
-   * "off". "auto" (nothing chosen yet) is the phone app once a phone is
-   * registered, else Pushover. Never two at once.
-   */
   deliverTo: z.enum(DELIVERY_CHOICES).default("auto"),
-  /** Deliver to this Pushover device only (empty: all devices). */
   device: z
     .string()
     .regex(/^[A-Za-z0-9_-]{0,25}$/, "Up to 25 letters, digits, _ or -")
     .default(""),
-  /** Runs at least this long notify when they end while nobody watches. */
   longRunMinutes: z.number().int().min(1).max(240).default(5),
-  /** Needs-input notifications for one chat within this window send as one. */
   coalesceSeconds: z.number().int().min(0).max(300).default(30),
-  /** One reminder when an approval or question is still waiting (0: never). */
   reminderMinutes: z.number().int().min(0).max(1440).default(15),
   throttle: z
     .object({
@@ -68,7 +51,6 @@ export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = notificationS
   {},
 );
 
-/** The stored value parsed with defaults; an unreadable value reads as the defaults. */
 export function parseNotificationSettings(value: unknown): NotificationSettings {
   const parsed = notificationSettingsSchema.safeParse(value ?? {});
   return parsed.success ? parsed.data : DEFAULT_NOTIFICATION_SETTINGS;
@@ -79,7 +61,6 @@ export interface NotificationSettingsStore {
   save(settings: NotificationSettings): Promise<NotificationSettings>;
 }
 
-/** Stored like every app setting (`{ key, value, metadata }` under APP_SETTING). */
 export function createKvSettingsStore(): NotificationSettingsStore {
   const kv = createNamespaceKv("APP_SETTING");
   return {
@@ -101,7 +82,6 @@ export function createKvSettingsStore(): NotificationSettingsStore {
   };
 }
 
-/** Minutes since midnight in `timeZone`. */
 export function minutesInZone(at: Date, timeZone: string): number {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone,
@@ -119,11 +99,6 @@ const toMinutes = (clockText: string) => {
   return h * 60 + m;
 };
 
-/**
- * Milliseconds until quiet hours end, or 0 when `at` is outside them. A
- * window whose end is before its start runs over midnight; equal start and
- * end means no quiet hours.
- */
 export function quietRemainingMs(at: Date, quiet: NotificationSettings["quietHours"]): number {
   if (!quiet.enabled) return 0;
   const start = toMinutes(quiet.start);

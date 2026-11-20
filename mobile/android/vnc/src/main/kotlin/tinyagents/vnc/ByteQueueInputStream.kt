@@ -5,13 +5,6 @@ import java.io.InterruptedIOException
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
-/**
- * A blocking [InputStream] fed from another thread, so a callback transport (WebSocket binary
- * frames) can drive the blocking [RfbClient].
- *
- * [offer] never blocks and the queue is unbounded: the RFB server only sends an update after the
- * client asked for one, so the backlog stays about one update deep.
- */
 public class ByteQueueInputStream : InputStream() {
     private val lock = ReentrantLock()
     private val changed = lock.newCondition()
@@ -21,10 +14,6 @@ public class ByteQueueInputStream : InputStream() {
     private var ended = false
     private var closed = false
 
-    /**
-     * Appends [bytes] to the stream. The array is kept, not copied, so the caller must not change
-     * it afterwards. Ignored once the stream ended or was closed.
-     */
     public fun offer(bytes: ByteArray) {
         if (bytes.isEmpty()) return
         lock.withLock {
@@ -35,7 +24,6 @@ public class ByteQueueInputStream : InputStream() {
         }
     }
 
-    /** Marks the end of the stream: readers drain what is queued, then see EOF. */
     public fun endOfStream() {
         lock.withLock {
             ended = true
@@ -83,7 +71,6 @@ public class ByteQueueInputStream : InputStream() {
         if (closed) 0 else minOf(buffered, Int.MAX_VALUE.toLong()).toInt()
     }
 
-    /** Drops what is queued and unblocks readers with EOF. */
     override fun close() {
         lock.withLock {
             closed = true

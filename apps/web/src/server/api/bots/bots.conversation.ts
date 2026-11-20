@@ -1,16 +1,3 @@
-/**
- * A bot's durable conversations, kept in step with its row.
- *
- * The `Bot` row (app.db) is the source of truth for persona, model, tool
- * permissions and links; each durable conversation (agent.db) runs with the
- * config of its last configure. A bot has its chat and one conversation per
- * routine (issue #63), which runs unattended: nobody is there to approve. Every path that puts a message in front of a
- * bot (owner sends, mentions, relayed replies, bot-to-bot messages, routine
- * fires) must reconcile first, or drift (a model that gained vision, a
- * toolkit edited in the row, a connection added) silently strands old
- * selections. This module is the one place that does it: callers name the
- * bot and what to deliver, never the config.
- */
 import { eq } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import {
@@ -30,43 +17,28 @@ import { sentInBot } from "../uploads/uploads.service";
 import { ownerUserId, participantNames } from "../people/people.service";
 import { botModelId, botToolkits, connectionCapabilityId, modelSeesImages } from "./bot-toolkits";
 
-/** The `bots` row as the database returns it (table defined in apps/web/src/server/db/schema.ts). */
 export interface BotRow {
   id: string;
   name: string;
   description: string;
   systemPrompt: string;
-  /** Null: the bot runs on the `bot_default` model role. */
   modelId: string | null;
   conversationId: string;
-  /** When the current chat conversation started; routine cards older than it stay out. */
   chatStartedAt: Date;
   lastReadAt: Date | null;
   lastActivityAt: Date;
   lastMessagePreview: string | null;
-  /** JSON object: tool name → permission. */
   toolPermissions: string;
-  /** Memory capture + injection switch (issue #22). */
   memoryEnabled: boolean;
-  /** Auto-review switch (issue #65). */
   autoReview: boolean;
-  /** Every new chat starts with YOLO mode on (issue #151). */
   yoloByDefault: boolean;
-  /** Transcript watermark: owner turns captured through this instant. */
   memoryCapturedThrough: Date | null;
-  /** Set while the bot is pinned to the top of the sidebar. */
   pinnedAt: Date | null;
-  /** "shared" (the default browser profile) or "own". */
   browserProfile: BrowserProfile;
   createdAt: Date;
   updatedAt: Date;
 }
 
-/**
- * The bot as the API returns it: capability columns parsed, skills and
- * connections by id. The wire type (`shared/api/bots.ts`), which must stay
- * the row plus those fields.
- */
 export type Bot = BotData & Omit<BotRow, "toolPermissions">;
 
 type ConnectionLink = {
@@ -74,12 +46,6 @@ type ConnectionLink = {
   connection: { slug: string; toolsCache: string; disabledTools: string };
 };
 
-/**
- * A durable conversation as the runtime addresses it. Rows store it as text
- * (`bots.conversationId`, `routines.conversationId`, `bot_chats`); this is
- * the one place that turns a stored id into a ref, and `startBotConversation`
- * the one that stores a new ref.
- */
 export function conversationRef(stored: string): ConversationRef {
   return Number(stored);
 }
@@ -122,41 +88,25 @@ export function toBot(row: BotWithLinks): Bot {
   };
 }
 
-/** A bot's row with its links, or 404. */
 export async function findBotRow(id: string): Promise<BotWithLinks> {
   const bot = await db.query.bots.findFirst({ where: eq(bots.id, id), with: withLinks });
   if (!bot) throw Boom.notFound("Bot not found");
   return bot;
 }
 
-/** What the conversation module needs from the runtime. */
 export type BotConversationRuntime = Pick<
   AgentRuntime,
   "createConversation" | "configure" | "submit" | "catalog" | "setYolo"
 >;
 
-/** A bot that does not exist yet: the fields its first conversation is created from. */
 export interface BotDraft {
   modelId: string | null;
   systemPrompt: string;
   toolPermissions: Record<string, ToolPermission>;
   autoReview?: boolean;
-  /** The new chat starts with YOLO mode on. */
   yoloByDefault?: boolean;
 }
 
-/**
- * Added to a routine run's persona (issue #87): nobody watches a routine
- * run, so a run that cannot do its job must say so through the tool that
- * records it, or it reads as succeeded. It also says the run starts fresh
- * and has a budget, so the model works lean.
- */
-/**
- * Tokens one routine run may use (every model request and tool spend of its
- * conversation, cache reads included). Each run starts a fresh conversation,
- * so this bounds what one run costs: past it, tool calls are refused so the
- * model answers with what it has, and at 1.5x the run is stopped.
- */
 export const ROUTINE_RUN_TOKEN_BUDGET = 500_000;
 
 const ROUTINE_RUN_GUIDANCE =
@@ -179,21 +129,12 @@ const BOT_MESSAGE_GUIDANCE =
   "with what it needs. Keep it lean: fetch only what the answer needs, and stop once you have " +
   "it; this conversation has a token budget and is cut off when it spends it.";
 
-/**
- * What an unattended conversation runs: a routine run (issue #63) or the
- * answer to one message from another bot. `false`: the bot's chat.
- */
 type Unattended = false | "routine" | "bot-message";
 
 function unattendedGuidance(unattended: Exclude<Unattended, false>): string {
   return unattended === "routine" ? ROUTINE_RUN_GUIDANCE : BOT_MESSAGE_GUIDANCE;
 }
 
-/**
- * Added to a shared bot's chat (issue #145): several people write in it, each
- * message prefixed with its sender's name, and the bot stays quiet when they
- * are only talking to each other.
- */
 export function sharedChatGuidance(names: string[]): string {
   const people =
     names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : names.join("");
@@ -205,17 +146,10 @@ export function sharedChatGuidance(names: string[]): string {
   );
 }
 
-/**
- * What the bot's durable conversation runs with: persona, model and
- * capabilities (which ones is `botToolkits`'s decision, bot-toolkits.ts).
- * `unattended` (a routine run's or a bot message's conversation): calls that
- * would ask are refused, and the run has a token budget.
- */
 function agentConfig(
   bot: BotDraft & { connections?: ConnectionLink[] },
   rt: Pick<AgentRuntime, "catalog">,
   unattended: Unattended = false,
-  /** Everyone in a shared chat (issue #145); empty when it is not shared. */
   participants: string[] = [],
 ): BotAgentConfig {
   return {
@@ -237,7 +171,6 @@ function agentConfig(
   };
 }
 
-/** Config from a bot row; a shared bot's chat (not its routines) also names its people. */
 async function rowConfig(
   row: BotWithLinks,
   rt: Pick<AgentRuntime, "catalog">,
@@ -248,14 +181,6 @@ async function rowConfig(
   return agentConfig({ ...toBot(row), connections: row.connections }, rt, unattended, participants);
 }
 
-/**
- * Open a fresh durable conversation for a new bot (from its draft) or an
- * existing one (by id, from its row). Returns the id to store on the row.
- * `unattended`: a routine run's (issue #63) or a bot message's conversation
- * rather than a chat.
- * A chat of a bot with `yoloByDefault` starts with YOLO mode on, trusting
- * the owner's messages; a routine's conversation never does.
- */
 export async function startBotConversation(
   bot: string | BotDraft,
   rt: BotConversationRuntime,
@@ -272,7 +197,6 @@ export async function startBotConversation(
   return String(ref);
 }
 
-/** Re-apply a bot's stored configuration to its conversation (after row or link changes). */
 export async function reconcileBotConversation(
   id: string,
   rt: Pick<BotConversationRuntime, "configure" | "catalog">,
@@ -282,38 +206,20 @@ export async function reconcileBotConversation(
   return toBot(row);
 }
 
-/** One message for a bot's conversation. */
 export interface BotSubmission {
-  /** Idempotency key: retrying the same id never submits twice. */
   requestId: string;
   text: string;
-  /** Upload ids (issue #17); unknown ids reject before anything durable happens. */
   attachments?: string[];
-  /** Trusted attribution for a cross-bot delivery (rendered as a card). */
   peer?: ChatMessage["peer"];
-  /** Who sent it, in a shared chat; `text` is already prefixed with their name. */
   author?: ChatMessage["author"];
-  /** Placement while a reply runs: "steer" joins it, "followUp" (default) waits. */
   whenBusy?: "steer" | "followUp";
 }
 
-/**
- * Where a submission goes: the bot's chat (the default) or a conversation
- * of its own that runs unattended: a routine run's (issue #63) or one
- * started for a message from another bot.
- */
 export interface SubmitTarget {
   unattendedConversationId: string;
-  /** What runs there; it picks the conversation's guidance. */
   unattended: Exclude<Unattended, false>;
 }
 
-/**
- * Deliver a message to a bot: resolve its attachments for the bot's model,
- * reconcile the target conversation with the row, then submit. Throws 404
- * for an unknown bot and rejects bad attachments before anything durable
- * happens. Returns the bot and the attachment refs stored on the entry.
- */
 export async function submitToBot(
   id: string,
   submission: BotSubmission,

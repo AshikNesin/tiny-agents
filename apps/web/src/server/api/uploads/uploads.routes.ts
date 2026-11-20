@@ -1,10 +1,3 @@
-/**
- * Upload routes (issue #17): POST /uploads (multipart), GET /uploads/:id/content,
- * DELETE /uploads/:id. All JWT-protected (same-origin cookie also authorizes
- * <img src> loads in the transcript). Issue #58 adds GET /uploads/:id (the
- * live extraction state) and GET /uploads/:id/text (extracted text as JSON
- * for the read-only preview; never HTML).
- */
 import { Hono } from "hono";
 import { Boom } from "@groot/core/errors";
 import { routeBodyLimit } from "@groot/core/middlewares/body-limit.middleware";
@@ -28,32 +21,18 @@ function parseUploadId(c: AppContext): string {
   return id;
 }
 
-/** Largest attachment accepted (the composer checks the same limit first). */
 const MAX_UPLOAD_MB = 25;
 const MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024;
-/** Room for the multipart framing (boundaries, part headers) around the file. */
 const MULTIPART_OVERHEAD_BYTES = 64 * 1024;
 
-/**
- * Limit errors are the client's doing: answer 413/400 with words instead of
- * letting them reach the generic handler as a 500 system error.
- */
 const tooLarge = () => Boom.entityTooLarge(`Files can be up to ${MAX_UPLOAD_MB} MB.`);
 
-/**
- * The whole request is capped before it is read; the file itself after
- * parsing. The route owns this limit in place of the app's 1 MB API default.
- */
 const uploadBodyLimit = routeBodyLimit(MAX_UPLOAD_BYTES + MULTIPART_OVERHEAD_BYTES, {
   onError: () => {
     throw tooLarge();
   },
 });
 
-/**
- * The one file in the "file" field of a multipart body, or undefined when
- * there is none (a body that is not multipart carries no file).
- */
 async function singleFile(c: AppContext): Promise<File | undefined> {
   if (!/^multipart\/form-data/i.test(c.req.header("content-type") ?? "")) return undefined;
   let form: FormData;
@@ -94,7 +73,6 @@ const textQuerySchema = z.object({
   sheet: z.coerce.number().int().min(1).optional(),
 });
 
-/** One page (or sheet, up to 200 rows) of extracted text, for the preview drawer. */
 router.get("/uploads/:id/text", async (c) => {
   const id = parseUploadId(c);
   const { page, sheet } = parseQuery(c, textQuerySchema);
@@ -141,11 +119,8 @@ router.get("/uploads/:id/text", async (c) => {
 router.get("/uploads/:id/content", async (c) => {
   const id = parseUploadId(c);
   const { bytes, ref } = await uploadsService.originalBytes(id);
-  // Inline only for sniffed image bytes: a stored HTML file can never
-  // render in-app. immutable-cacheable (uploads never change).
   const sniffed = sniffImage(bytes);
   return c.body(bytes, 200, {
-    // Never let a browser second-guess the declared type (issue #58 §9.5).
     "X-Content-Type-Options": "nosniff",
     "Content-Type": sniffed ?? "application/octet-stream",
     "Cache-Control": "private, max-age=31536000, immutable",

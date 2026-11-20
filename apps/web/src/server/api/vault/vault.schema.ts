@@ -45,7 +45,6 @@ const host = z
   .toLowerCase()
   .regex(/^[a-z0-9.-]+(:\d+)?$/, "A hostname, optionally with a port");
 
-/** Who and what may use an item: never a value. */
 const policySchema = z.object({
   handle,
   label: z.string().trim().min(1).max(120).optional(),
@@ -65,13 +64,11 @@ const policySchema = z.object({
     .optional()
     .nullable(),
   tools: z.array(z.string().min(1).max(64)).max(20).default([]),
-  /** null: every bot. */
   bots: z.array(z.string().min(1).max(64)).max(100).nullable().default(null),
   approval: z.enum(["every_use", "per_conversation", "allowed"]).default("per_conversation"),
   allowUnattended: z.boolean().default(false),
   whenToUse: z.string().trim().max(300).optional().nullable(),
   disabled: z.boolean().default(false),
-  /** api_key: which value field holds the key. */
   field: z.enum(VALUE_FIELDS).optional().nullable(),
 });
 
@@ -80,7 +77,6 @@ const values = z.partialRecord(z.enum(VALUE_FIELDS), z.string().max(10_000));
 export const createItemSchema = z.object({
   kind: z.enum(KINDS),
   title: z.string().trim().min(1).max(120),
-  /** Websites; their origins become the item's allowed origins unless policy names others. */
   urls: z.array(z.string().trim().url().max(2000)).max(20).default([]),
   values,
   policy: policySchema,
@@ -95,7 +91,6 @@ export const linkItemSchema = z.object({
 export const updateItemSchema = z.object({
   title: z.string().trim().min(1).max(120).optional(),
   urls: z.array(z.string().trim().url().max(2000)).max(20).optional(),
-  /** Set these values; "" clears a field (local backend). */
   values: values.optional(),
   policy: policySchema.partial({ handle: true }).optional(),
 });
@@ -111,7 +106,6 @@ export const revealSchema = z.object({
 });
 
 export const deleteQuerySchema = z.object({
-  /** Also delete its value in the backend; otherwise only unlink. */
   purge: z
     .enum(["true", "false"])
     .default("false")
@@ -123,7 +117,6 @@ export const stepUpSchema = z.union([
   z.object({ passkey: z.record(z.string(), z.unknown()) }),
 ]);
 
-/** The owner's submit of a credential request: values only for the request's keys. */
 export const submitCredentialsSchema = z.object({
   values: z.record(z.string().max(32), z.string().max(2000)),
   save: z.boolean().default(false),

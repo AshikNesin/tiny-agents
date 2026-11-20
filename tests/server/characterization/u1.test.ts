@@ -1,9 +1,3 @@
-/**
- * Characterization of behavior-register row U1: routines are always in IST,
- * while the `today` toolkit uses env `TZ`.
- * Preserve: this pins today's behavior, quirk included; change it only with
- * a signed-off register row.
- */
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import type { Capability } from "../../../packages/agent/src/capabilities";
@@ -21,14 +15,12 @@ const render = (today: Capability) =>
 
 describe("U1: an owner whose server runs with TZ=America/Los_Angeles", () => {
   it("dates the prompt in Los Angeles, but schedules and shows routines in IST", async () => {
-    // 2026-11-06T06:30Z: still the 5th in Los Angeles, already noon on the 6th in India.
     expect(FIXED_NOW).toBe("2026-11-06T06:30:00.000Z");
     const capabilities = appStoreCapabilities(appEnv({ TZ: "America/Los_Angeles" }));
     expect(await render(capabilities.today)).toBe(
       "Today is Thursday, 5 November 2026 (America/Los_Angeles).",
     );
 
-    // "Every day at 09:00" means 09:00 in India, whatever TZ says.
     const bot = await seedBot({ name: "Morning" });
     const routine = await routinesService.create({
       botId: bot.id,

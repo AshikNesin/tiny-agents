@@ -6,16 +6,10 @@ import { pinClockWhileLoadingAndBeforeEachTest } from "../test-clock";
 
 pinClockWhileLoadingAndBeforeEachTest();
 
-// Extend Vitest's expect with jest-dom matchers
 expect.extend(matchers);
 
-// Motion animations (dialogs, tooltips, tabs, …) finish at once under test, so
-// assertions never catch a surface mid-fade or still mounted for its exit.
 MotionGlobalConfig.skipAnimations = true;
 
-// jsdom lacks the Pointer Capture, scroll-into-view and ResizeObserver APIs
-// Radix primitives (Select, Dropdown, Tooltip, …), cmdk and the command menu rely on. Minimal stubs — enough for the
-// interaction paths exercised by component tests; not a faithful polyfill.
 if (typeof window !== "undefined") {
   if (!Element.prototype.hasPointerCapture) {
     Element.prototype.hasPointerCapture = () => false;
@@ -51,7 +45,6 @@ if (typeof window !== "undefined") {
   }
 }
 
-// Cleanup after each test
 afterEach(() => {
   cleanup();
 });

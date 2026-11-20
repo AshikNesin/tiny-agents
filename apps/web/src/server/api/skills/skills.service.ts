@@ -1,8 +1,3 @@
-/**
- * The shared skill library (issue #1 D5/D6): CRUD, bot assignment and
- * import previews (paste or GitHub). Assignment needs no agent reconfigure —
- * the `skills` capability reads a bot's skills from app.db on every request.
- */
 import { asc, eq, inArray } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { fetchSkillFromGitHub, parseSkillMarkdown } from "./skills.parse";
@@ -18,9 +13,7 @@ function toDTO(row: SkillRow): SkillData {
   let files: SkillFile[] = [];
   try {
     files = JSON.parse(row.files) as SkillFile[];
-  } catch {
-    // corrupt rows read as fileless
-  }
+  } catch {}
   return {
     id: row.id,
     name: row.name,
@@ -90,7 +83,6 @@ export async function update(id: string, data: UpdateSkillDTO): Promise<SkillDat
     ...(data.description !== undefined ? { description: data.description } : {}),
     ...(data.body !== undefined ? { body: data.body } : {}),
   };
-  // A botIds-only update writes no skill columns (and leaves updatedAt alone).
   if (Object.keys(changes).length > 0) {
     await db.update(skills).set(changes).where(eq(skills.id, id));
   }
@@ -103,7 +95,6 @@ export async function remove(id: string): Promise<void> {
   await db.delete(skills).where(eq(skills.id, id));
 }
 
-/** Parse a pasted SKILL.md or fetch a GitHub skill folder, without saving. */
 export async function preview(input: PreviewSkillDTO): Promise<SkillPreview> {
   const parsed =
     input.source === "paste"

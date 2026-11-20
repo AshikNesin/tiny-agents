@@ -1,10 +1,3 @@
-/**
- * Terminal service (issue #28), integration: the real ssh2 client against
- * the in-process fake SSH server. Asserts the exact tmux command lines the
- * VM sees (the strings are the frozen contract with tmux 3.4) and byte flow
- * through fake ptys. Sharing the pooled connection (issue #84) is the sandbox
- * connection's, tested in `sandbox-connection.test.ts`.
- */
 import { afterAll, beforeAll, describe, expect, it, vi } from "vite-plus/test";
 import { createMemoryHostKeyStore } from "../../../../packages/sandbox/src/ssh/connection";
 import {
@@ -38,11 +31,6 @@ const name = (n: number) => `ta-term-${n}` as SessionName;
 
 type ExecReply = { stdout?: string; stderr?: string; exitCode?: number };
 
-/**
- * A fake VM running tmux in memory: session numbers → createdAt, plus a
- * busy map holding each session's foreground process. Unknown commands are
- * answered with an error so a contract drift is loud, not silent.
- */
 function fakeTmuxVm() {
   const created = new Map<string, number>();
   const busy: Record<string, string> = {};
@@ -70,7 +58,6 @@ function fakeTmuxVm() {
         command,
       );
     if (fg) {
-      // tmux 3.4 quirk: a missing target exits 0 with empty output.
       if (!created.has(fg[1]!)) return { stdout: "", exitCode: 0 };
       return { stdout: `${busy[fg[1]!] ?? "bash"}\n`, exitCode: 0 };
     }
@@ -252,7 +239,6 @@ describe("terminal service (integration: real ssh2 client + fake SSH server)", (
     const closed = new Promise((resolve) => stream.once("close", resolve));
     fake.end();
     expect(await stream.done).toEqual({ exitCode: 0 });
-    // The bridge listens for close: a remote end must emit it.
     await closed;
     vm.clear();
   });

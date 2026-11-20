@@ -42,7 +42,6 @@ import groot.mobile.ui.components.ScreenScaffold
 import groot.mobile.ui.components.dateTime
 import groot.mobile.ui.components.rememberResource
 
-/** The chats a bot ran on before each "New chat": read one, continue it, or delete it. */
 @Composable
 fun PastChatsRoute(container: AppContainer, botId: String, onOpen: (chatId: String) -> Unit, onBack: () -> Unit) {
     val resource = rememberResource("past-chats:$botId") { container.api.pastChats(botId) }
@@ -88,7 +87,6 @@ fun PastChatsRoute(container: AppContainer, botId: String, onOpen: (chatId: Stri
     }
 }
 
-/** One past chat, read-only: nothing in it can be answered, but the bot can go back to it. */
 @Composable
 fun PastChatRoute(container: AppContainer, botId: String, chatId: String, onContinued: () -> Unit, onBack: () -> Unit) {
     val key = ChatStore.pastChatKey(botId, chatId)

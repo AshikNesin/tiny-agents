@@ -21,14 +21,12 @@ const SCHEDULE_TABS: { value: ScheduleKind; label: string }[] = [
   { value: "cron", label: "Cron" },
 ];
 
-/** Time options 00:00 to 23:45 in 15-minute steps (144 options render fine). */
 const TIME_OPTIONS: string[] = Array.from(
   { length: 24 * 4 },
   (_, i) =>
     `${String(Math.floor(i / 4)).padStart(2, "0")}:${String((i % 4) * 15).padStart(2, "0")}`,
 );
 
-/** The editor's Schedule: a tab per kind, then that kind's fields. */
 export function ScheduleFields({
   form,
   set,

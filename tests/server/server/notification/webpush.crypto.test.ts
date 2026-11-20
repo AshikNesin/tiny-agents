@@ -1,8 +1,3 @@
-/**
- * Web Push crypto (RFC 8291 / RFC 8292) against the RFC's own example and an
- * independent receiver built on node:crypto: what the phone does to read a
- * push, and what a push service does to check the VAPID token.
- */
 import { createECDH, createPublicKey, createVerify, hkdfSync, createDecipheriv } from "node:crypto";
 import { describe, expect, it } from "vite-plus/test";
 import {
@@ -13,7 +8,6 @@ import {
 } from "@groot/core/notification/webpush.crypto";
 import { fromBase64Url, toBase64Url } from "@groot/core/utils/encoding.utils";
 
-/** RFC 8291 Appendix A. */
 const RFC = {
   plaintext: "When I grow up, I want to be a watermelon",
   asPrivate: "yfWPiYE-n46HLnH0KqZOF1fJJU3MYrct3AELtAQ-oRw",
@@ -37,7 +31,6 @@ const jwkOf = (privateKey: string, publicKey: string): JsonWebKey => {
   };
 };
 
-/** A receiver on node:crypto: a fresh key pair and a decrypt for one aes128gcm record. */
 function receiver() {
   const ecdh = createECDH("prime256v1");
   ecdh.generateKeys();

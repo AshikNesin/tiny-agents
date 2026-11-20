@@ -264,10 +264,8 @@ describe("Memories API routes", () => {
     expect(on.status).toBe(200);
     const row = await findBot(botId);
     expect(row?.memoryEnabled).toBe(true);
-    // What was said while memory was off is behind the watermark now.
     expect(row!.memoryCapturedThrough!.getTime()).toBeGreaterThanOrEqual(before);
 
-    // Re-sending "on" while already on leaves the watermark alone.
     const stamped = row!.memoryCapturedThrough!.getTime();
     const onAgain = await api(app, `/api/v1/bots/${botId}`, {
       method: "PATCH",

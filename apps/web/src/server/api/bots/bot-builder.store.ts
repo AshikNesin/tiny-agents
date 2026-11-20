@@ -1,15 +1,3 @@
-/**
- * BotCreationStore adapter (issue #149): the agent's `bot-builder`
- * capability creates bots through here, with the same `createBot` the
- * owner's "New bot" dialog uses, so names stay unique and the new bot's
- * conversation is set up the same way. Dependency direction stays one-way —
- * `@tiny-agents/agent` defines the port, apps/web implements it.
- *
- * Creates happen only in the owner's own turns in a chat that is not shared
- * with guests: a routine run, another bot's message or a guest's approval
- * is refused even after the card was approved (`create_bot` is `askOnly`,
- * so there is no "always allow" in the first place).
- */
 import { botModelId } from "./bot-toolkits";
 import { HttpError } from "@groot/core/errors";
 import type { BotCreationStore } from "@tiny-agents/agent";
@@ -27,7 +15,6 @@ export function createBotCreationStore(
       if (turn.status !== "owner") return { status: turn.status };
       const { owner } = turn;
 
-      // The New bot dialog's own validation, so the tool and the dialog can't drift.
       const parsed = createBotSchema.safeParse({
         name: input.name,
         description: input.description,
@@ -53,7 +40,6 @@ export function createBotCreationStore(
           bot: { id: bot.id, name: bot.name, modelId: bot.modelId ?? "", url: `/chats/${bot.id}` },
         };
       } catch (error) {
-        // createBot's 409: another bot already has the name.
         if (error instanceof HttpError && error.statusCode === 409) return { status: "name_taken" };
         throw error;
       }

@@ -8,11 +8,6 @@ import type { AppEnv } from "@groot/core/types";
 import * as authService from "@groot/core/auth/auth.service";
 import { createTestApp, setAppConfig } from "../helpers";
 
-/**
- * The tests stand in for the Node entry's socket with a header: the app is
- * given `peerClientAddress` (the resolver the Node entry uses) reading the
- * peer from `x-test-peer` instead of from the socket.
- */
 const fromTestPeer = peerClientAddress((c) => c.req.header("x-test-peer"));
 
 function buildApp(options: Omit<CreateAppOptions, "routes"> = { clientAddress: fromTestPeer }) {
@@ -201,8 +196,6 @@ describe("rateLimit middleware", () => {
 describe("sign-in rate limit", () => {
   it("limits a client that rotates addresses inside one IPv6 /64", async () => {
     const app = createTestApp({ clientAddress: fromTestPeer });
-    // A user exists, so every attempt is a wrong password: a child whose first
-    // sign-in creates the owner (on an empty users table) answers 401 here too.
     await authService.createUser({
       email: "owner@example.com",
       password: "correct horse battery staple",

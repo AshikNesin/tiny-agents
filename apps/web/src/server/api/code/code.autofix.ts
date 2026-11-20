@@ -1,34 +1,10 @@
-/**
- * Auto-fix's decision (issue #297 §9): a pure function from a fresh PR
- * snapshot, the loop's state, its pass history and the settings to the one
- * thing to do now. Every reconcile, however it was triggered, runs
- * `snapshot → decide → act`, so a lost or repeated event cannot corrupt
- * state and both transports behave the same.
- *
- * Rules that live here, and only here:
- *
- * - Triggers (§9.2): a failed check on the head sha; a trusted
- *   `CHANGES_REQUESTED` or non-empty `COMMENTED` review; an unresolved
- *   thread whose latest comment is trusted; a merge conflict (3 attempts).
- *   An approval, a pending check and a stalled check never start a pass.
- * - Trust (§9.5): the owner's GitHub login, `OWNER`/`MEMBER`/`COLLABORATOR`,
- *   and allowlisted review bots. The app's own comments never count (its
- *   recorded ids, or the hidden marker). PRs from forks are never fixed.
- * - Quiet period: a pass waits until the newest item is 60 s old, so a burst
- *   of comments is one pass.
- * - Limits (§9.4): 6 passes an hour pauses; 10 in a row without the owner
- *   switches Auto-fix off; a pass past 20 minutes is timed out.
- * - Mergeability GitHub has not computed (`unknown`) decides nothing.
- */
 import { createHash } from "node:crypto";
 import type { Author, PullSnapshot } from "@tiny-agents/github";
 import type { AutofixStatus } from "../../../shared/machines/autofix";
 
 export interface AutofixSettings {
   triggers: { checks: boolean; reviews: boolean; conflicts: boolean; mergeQueue: boolean };
-  /** One last pass when the PR goes green, to review the whole change (phase 6). */
   finalCheck: boolean;
-  /** Review bots whose comments are instructions (matched by login). */
   trustedBots: string[];
   hourlyLimit: number;
   noOwnerLimit: number;
@@ -50,20 +26,15 @@ export const DEFAULT_AUTOFIX: AutofixSettings = {
   stallHours: 6,
 };
 
-/** The hidden marker on every comment the app posts (forging it only makes a comment ignored). */
 export const APP_MARKER = "<!-- tiny-agents:autofix";
 
 type ItemKind = "check" | "review" | "thread" | "conflict" | "queue" | "final";
 
-/** One thing a pass is asked to handle. */
 export interface AutofixItem {
-  /** Stable for one state of the thing: a new failure, review or reply is a new id. */
   id: string;
   kind: ItemKind;
-  /** When it appeared (ms), for the quiet period; 0 when GitHub gives no time. */
   at: number;
   title: string;
-  /** What the agent reads (untrusted). */
   text: string;
   path?: string;
   line?: number | null;
@@ -87,19 +58,15 @@ export interface DecideInput {
     enabled: boolean;
     status: AutofixStatus;
     changedAt: number | null;
-    /** The PR's head sha when the loop last changed state (a later push by someone else resumes a pause). */
     headAtChange: string | null;
     passesWithoutOwner: number;
     ownerInputAt: number | null;
   };
-  /** This PR's passes, any order. */
   passes: PassRecord[];
   appCommentIds: ReadonlySet<number>;
-  /** The GitHub login the app acts as (the owner, on the `gh` transport). */
   ownerLogin: string | null;
   settings: AutofixSettings;
   now: number;
-  /** What the thread has cost and its limit, where the harness reports cost. */
   spend?: { usd: number | null; limitUsd: number | null };
 }
 
@@ -146,14 +113,12 @@ const dollars = (usd: number) => "$" + usd.toFixed(2);
 
 const time = (iso: string | null | undefined) => (iso ? Date.parse(iso) || 0 : 0);
 
-/** Pending checks that have run longer than the stall limit. */
 export function stalledChecks(snapshot: PullSnapshot, now: number, stallHours: number) {
   return snapshot.checks.filter(
     (c) => c.state === "pending" && c.startedAt && now - time(c.startedAt) > stallHours * HOUR_MS,
   );
 }
 
-/** Every item the PR has now that a pass may act on, before history is applied. */
 export function actionableItems(
   input: Pick<DecideInput, "snapshot" | "appCommentIds" | "ownerLogin" | "settings">,
 ): AutofixItem[] {
@@ -231,11 +196,6 @@ export function actionableItems(
   return items;
 }
 
-/**
- * What the PR tab labels Ignored: the reviews and open comment threads a
- * pass would act on but for their author (the same rules as
- * `actionableItems`, so the label never drifts from what Auto-fix does).
- */
 export function ignoredItems(
   input: Pick<DecideInput, "snapshot" | "appCommentIds" | "ownerLogin" | "settings">,
 ): string[] {
@@ -260,11 +220,6 @@ export function ignoredItems(
   return ignored;
 }
 
-/**
- * The failed checks to tell the owner about, once per head: when the
- * checks of a head just finished (none pending now, and before there was
- * no snapshot, another head, or a pending check) and some failed.
- */
 export function checksJustFailed(prev: PullSnapshot | null, next: PullSnapshot): string[] {
   if (next.checks.some((c) => c.state === "pending")) return [];
   const justFinished =
@@ -273,7 +228,6 @@ export function checksJustFailed(prev: PullSnapshot | null, next: PullSnapshot):
   return next.checks.filter((c) => c.state === "failure").map((c) => c.name);
 }
 
-/** The claim key of a pass: one per head sha and set of items. */
 export function stateHash(headSha: string, itemIds: string[]): string {
   return createHash("sha256")
     .update(`${headSha}\n${[...itemIds].sort().join("\n")}`)
@@ -319,7 +273,6 @@ export function decide(input: DecideInput): Decision {
     return humanPush || humanWrote ? { kind: "resume" } : { kind: "none", reason: "Paused." };
   }
 
-  // watching, green (and fixing, whose pass has finished): act on fresh items.
   let items = fresh;
   const conflictPasses = passes.filter((p) => p.trigger === "conflict").length;
   if (conflictPasses >= settings.conflictAttempts && items.some((i) => i.kind === "conflict")) {
@@ -396,11 +349,6 @@ export function decide(input: DecideInput): Decision {
   return { kind: "green" };
 }
 
-/**
- * Checks green (a stalled check does not block it) and nothing open: no
- * failed check, no trusted unresolved thread, no outstanding change request,
- * and GitHub says it merges cleanly.
- */
 function isGreen(input: DecideInput, items: AutofixItem[]): boolean {
   const { snapshot, now, settings } = input;
   if (snapshot.mergeable !== "mergeable") return false;
@@ -411,7 +359,6 @@ function isGreen(input: DecideInput, items: AutofixItem[]): boolean {
   return checksDone && items.length === 0;
 }
 
-/** When the reconciler looks at a PR next (§7.4), or null when the chain ends. */
 export function nextLookMs(
   snapshot: Pick<PullSnapshot, "state" | "checks">,
   loopStatus: AutofixStatus,

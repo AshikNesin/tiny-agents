@@ -1,16 +1,3 @@
-/**
- * Phone notification devices (issue #306), under `/api/v1/notifications`
- * behind the session. Owner only: `guest.guard.ts` does not open them to
- * guests.
- *
- * | Route                          | Purpose                                  |
- * | ------------------------------ | ---------------------------------------- |
- * | `GET /vapid-key`               | The key a device registers with          |
- * | `POST /devices`                | Register or refresh a device by endpoint |
- * | `GET /devices`                 | The account's devices (no keys)          |
- * | `DELETE /devices/:id`          | Remove one                               |
- * | `POST /devices/:id/test`       | Send a test to one device now            |
- */
 import { Hono, type Context } from "hono";
 import { z } from "zod";
 import type { AppEnv } from "@groot/core/types";
@@ -49,7 +36,6 @@ const base64urlBytes = (length: number, first?: number) =>
 const deviceSchema = z.object({
   endpoint: z.string().min(1).max(2048),
   keys: z.object({
-    /** An uncompressed P-256 point. */
     p256dh: base64urlBytes(65, 4),
     auth: base64urlBytes(16),
   }),

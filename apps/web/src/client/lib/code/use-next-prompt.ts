@@ -1,17 +1,9 @@
-/**
- * The composer's suggested next message (server: `code.next-prompt.ts`).
- * Asked for once per finished turn: when the thread stops working and its
- * newest row is an answer, after a short pause so the turn's last rows have
- * landed. The server keeps each turn's answer, so a remount or a second tab
- * is free. Esc dismisses it for that turn, across remounts.
- */
 import { useSyncExternalStore } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { TranscriptItem } from "@tiny-agents/code/contracts";
 import { RESOURCE_QUERY, wait } from "../../queries/resource";
 import { codeApi } from "./api";
 
-/** Lets a turn's closing rows (cost, `turn`) arrive before asking. */
 const SETTLE_MS = 600;
 
 let dismissed: ReadonlySet<string> = new Set();
@@ -22,7 +14,6 @@ const subscribe = (listener: () => void) => {
 };
 const readDismissed = () => dismissed;
 
-/** The newest row, when it ends a turn with an answer worth following. */
 function answeredRow(items: readonly TranscriptItem[]): string | null {
   const last = items.at(-1);
   return last && (last.kind === "turn" || last.kind === "assistant") ? last.id : null;

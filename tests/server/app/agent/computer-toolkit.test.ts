@@ -1,9 +1,3 @@
-/**
- * The computer toolkit (issue #108) against a fake desktop: the port
- * contract, the driver flag (reads refused and actions waiting while the
- * owner drives), the takeover request, relaunching a dead desktop, the
- * never-echo-typed-text rule and the key rules.
- */
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { ToolExecutionApi, ToolExecutionResult } from "@earendil-works/pi-durable";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
@@ -108,11 +102,9 @@ describe("computer toolkit", () => {
     }
     expect(info.computer_close_window.askOnly).toBe(true);
     expect(info.computer_clipboard_get.askOnly).toBe(true);
-    // Every tool the model sees has catalog metadata, and vice versa.
     expect(toolkit.extension.tools!.map((t) => t.name).sort()).toEqual(
       toolkit.tools.map((t) => t.name).sort(),
     );
-    // Effects interrupt instead of re-running after a crash.
     for (const tool of toolkit.extension.tools!) {
       if (!info[tool.name].readOnly && !info[tool.name].askOnly) {
         expect(tool.replay, tool.name).toBe("unsafe");
@@ -271,7 +263,6 @@ describe("computer toolkit", () => {
     expect(sessions.get("shared")?.driver).toBe("human");
     expect(sessions.get("shared")?.takeover?.reason).toBe("Sign in to the mail app");
     expect(ownerWaits.count(4242)).toBe(1);
-    // While it waits, the bot sees nothing.
     expect((await run(toolkit, "computer_screenshot")).isError).toBe(true);
 
     await sessions.setDriver("shared", "agent");
@@ -310,7 +301,6 @@ describe("computer toolkit", () => {
     expect(click.isError).toBe(true);
     expect(click.text).toMatch(/desktop stopped/);
     expect(fake.log.filter((e) => e.method === "click")).toHaveLength(1);
-    // The next call starts a fresh desktop.
     await run(toolkit, "computer_screenshot");
     expect(fake.opened).toEqual(["shared", "shared", "shared"]);
   });

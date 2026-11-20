@@ -1,7 +1,3 @@
-/**
- * ⌘K lists every settings section the viewer has, and "Check for updates"
- * asks the server to check before it opens Settings → Updates.
- */
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { settingsCommandGroup } from "@/components/shell/settings-commands";
 import { updatesApi } from "@/lib/updates-api";

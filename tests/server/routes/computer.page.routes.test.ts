@@ -1,9 +1,3 @@
-/**
- * The Computer page's routes: desktops by profile (the shared one and one
- * per own-profile bot), start, viewer tickets, driving, opening apps (only
- * while the owner drives) and reset, against the app's Hono stack with a
- * fake desktop manager.
- */
 import { eq } from "drizzle-orm";
 import { fakeCatalog, fakeModel, useTestRuntime } from "../fixtures";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";

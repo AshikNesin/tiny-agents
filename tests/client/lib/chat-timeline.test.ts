@@ -1,8 +1,3 @@
-/**
- * Routine run cards (issue #63) merge into the chat timeline by when the run
- * finished; messages keep their order and their index, and runs that finish
- * back to back fold into one quiet line.
- */
 import { describe, expect, it } from "vite-plus/test";
 import { chatTimeline } from "../../../apps/web/src/client/lib/chat-timeline";
 import type { ChatMessage, RoutineRunCard } from "../../../apps/web/src/client/lib/chat-types";

@@ -8,17 +8,8 @@ import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.roundToLong
 
-/*
- * What a tool call says, in pure functions (the web client's lib/tool-call-text.ts): its
- * label, the phrase on its approval card, the argument beside it, the vault and credential
- * cards' sentences, its duration, and how a run of finished calls folds into one step.
- */
-
-/** The capability catalog's labels for every tool. */
 data class ToolLabels(
-    /** Past tense, for transcript rows ("Opened a page"). */
     val done: Map<String, String> = emptyMap(),
-    /** Imperative, completing "<bot> wants to …" ("open a page"). */
     val ask: Map<String, String> = emptyMap(),
 ) {
     companion object {
@@ -34,7 +25,6 @@ data class ToolLabels(
 
 private val MCP_NAME = Regex("^mcp__([a-z0-9-]+)__(.+)$")
 
-/** A tool's label: the catalog's, else a connection tool's prettified name, else the name with spaces. */
 fun toolLabel(labels: ToolLabels, name: String): String {
     labels.done[name]?.let { return it }
     MCP_NAME.find(name)?.let { match ->
@@ -45,13 +35,11 @@ fun toolLabel(labels: ToolLabels, name: String): String {
     return name.replace('_', ' ')
 }
 
-/** What a call asks to do, completing "<bot> wants to …". */
 fun toolAskLabel(labels: ToolLabels, name: String): String = labels.ask[name] ?: "use ${toolLabel(labels, name)}"
 
 private const val SUMMARY_LENGTH = 60
 private val TELLING_ARGS = listOf("title", "query", "url", "name", "id", "to", "text")
 
-/** Short argument phrase for a tool row: the first non-blank telling argument, at most 60 characters. */
 fun argSummary(call: ToolCall): String {
     for (key in TELLING_ARGS) {
         val value = call.args[key]
@@ -61,17 +49,14 @@ fun argSummary(call: ToolCall): String {
     return if (first is String) first.take(SUMMARY_LENGTH) else ""
 }
 
-/** A trace row's title: `Opened a page “https://…”`, or `Using skill pdf` for `load_skill`. */
 fun stepTitle(call: ToolCall, labels: ToolLabels): String {
     val summary = argSummary(call)
     if (call.name == "load_skill") return "Using skill $summary"
     return toolLabel(labels, call.name) + if (summary.isNotEmpty()) " “$summary”" else ""
 }
 
-/** Beyond this the approval card folds the payload behind "Read more". */
 private const val PAYLOAD_FOLD = 120
 
-/** The payload behind an approval: `instructions`/`append` for a self-improve change, else the summary. */
 fun approvalPayload(call: ToolCall): String {
     for (key in listOf("instructions", "append")) {
         val value = call.args[key]
@@ -83,11 +68,8 @@ fun approvalPayload(call: ToolCall): String {
 data class ApprovalFact(val label: String, val value: String)
 
 data class ApprovalText(
-    /** `<bot> wants to <ask>: “<summary>”`. */
     val title: String,
-    /** Labelled lines the owner must read before approving; only create_bot has them. */
     val facts: List<ApprovalFact>,
-    /** The full payload, when it is long enough to fold behind "Read more". */
     val foldedPayload: String?,
 )
 
@@ -101,7 +83,6 @@ private fun newBotFacts(args: Map<String, Any?>): List<ApprovalFact> {
     }
 }
 
-/** What an approval card says: "<bot> wants to <ask>", never the done-label. */
 fun approvalText(call: ToolCall, botName: String, labels: ToolLabels): ApprovalText {
     val ask = toolAskLabel(labels, call.name)
     val summary = argSummary(call)
@@ -113,7 +94,6 @@ fun approvalText(call: ToolCall, botName: String, labels: ToolLabels): ApprovalT
     )
 }
 
-/** " Expires in 3 minutes." for a call that expires, rounded up. */
 fun expiryText(expiresAt: Long?, now: Long): String {
     if (expiresAt == null) return ""
     val minutes = max(0, ceil((expiresAt - now) / 60_000.0).toInt())
@@ -122,7 +102,6 @@ fun expiryText(expiresAt: Long?, now: Long): String {
 
 data class VaultApprovalText(val title: String, val command: String?, val description: String)
 
-/** A vault use's approval card: the item and where it goes, never the value. */
 fun vaultApprovalText(call: ToolCall, botName: String, now: Long): VaultApprovalText {
     val vault = requireNotNull(call.vault)
     val what = if (vault.cardBrand != null) "${vault.cardBrand} ••${vault.cardLast4.orEmpty()}" else vault.label
@@ -158,7 +137,6 @@ fun vaultApprovalText(call: ToolCall, botName: String, now: Long): VaultApproval
     )
 }
 
-/** A credential request's card: where the owner signs in. */
 fun credentialRequestText(call: ToolCall, botName: String, now: Long): Pair<String, String> {
     val credentials = requireNotNull(call.credentials)
     val host = runCatching { URI(credentials.origin).host }.getOrNull() ?: credentials.origin
@@ -166,7 +144,6 @@ fun credentialRequestText(call: ToolCall, botName: String, now: Long): Pair<Stri
         "${credentials.title}. What you type is filled into the page and never shown to $botName.${expiryText(call.expiresAt, now)}"
 }
 
-/** The note beside a trace line, with how the call was let through ("auto-approved (YOLO)"). */
 fun approvalNote(note: String?, approval: String?): String? {
     if (note == null && approval != "approved" && approval != "auto" && approval != "yolo") return null
     val lead = note.orEmpty()
@@ -179,11 +156,9 @@ fun approvalNote(note: String?, approval: String?): String? {
     }.ifEmpty { null }
 }
 
-/** A step's duration: "340ms", "1.2s". */
 fun formatDuration(ms: Long): String =
     if (ms < 1000) "${max(1, ms)}ms" else String.format(Locale.ROOT, "%.1fs", ms / 1000.0)
 
-/** A human wait: "40s", "1m 40s", "2h 5m". */
 fun formatWait(ms: Long): String {
     val seconds = (ms / 1000.0).roundToLong()
     if (seconds < 60) return "${max(1, seconds)}s"
@@ -192,20 +167,17 @@ fun formatWait(ms: Long): String {
     return if (minutes % 60 != 0L) "${minutes / 60}h ${minutes % 60}m" else "${minutes / 60}h"
 }
 
-/** How long a finished call took, and how long it waited on the owner. */
 fun durationText(call: ToolCall): String? {
     val duration = call.durationMs ?: return null
     val waited = call.waitedMs?.takeIf { it > 0 }?.let { " · waited ${formatWait(it)} for you" }.orEmpty()
     return formatDuration(duration) + waited
 }
 
-/** One transcript step: a call on its own row, or a run of finished calls folded into one. */
 sealed interface ToolStep {
     data class Single(val call: ToolCall, val index: Int) : ToolStep
     data class Group(val calls: List<ToolCall>, val index: Int) : ToolStep
 }
 
-/** Runs of two or more foldable calls become one group; the rest stay rows. */
 fun toolSteps(calls: List<ToolCall>, readOnly: Boolean = false): List<ToolStep> {
     val steps = mutableListOf<ToolStep>()
     var run = mutableListOf<ToolCall>()
@@ -231,7 +203,6 @@ fun toolSteps(calls: List<ToolCall>, readOnly: Boolean = false): List<ToolStep> 
     return steps
 }
 
-/** "Read the page ×3, searched the web": what a run of calls did, by label. */
 fun describeCalls(calls: List<ToolCall>, labels: ToolLabels): String {
     val counts = LinkedHashMap<String, Int>()
     for (call in calls) {
@@ -246,7 +217,6 @@ fun describeCalls(calls: List<ToolCall>, labels: ToolLabels): String {
 
 data class GroupText(val title: String, val failed: String?, val duration: String?)
 
-/** A folded run's line: what it did, how many calls failed, its total time. */
 fun groupText(calls: List<ToolCall>, labels: ToolLabels): GroupText {
     val failed = calls.count { viewOf(it).phase == ToolPhase.Failed }
     val duration = calls.sumOf { it.durationMs ?: 0L }

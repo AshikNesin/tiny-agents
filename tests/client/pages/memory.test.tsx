@@ -1,9 +1,3 @@
-/**
- * Memory page behavior (issue #22 phase C): per-bot sections group rows
- * under category headers with counts, search filters by text across bots,
- * the add dialog posts to the right bot, and superseded rows render
- * struck through with their source line.
- */
 import React from "react";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -110,9 +104,7 @@ describe("Memory page", () => {
     expect(within(section).getByText("Preferences")).toBeTruthy();
     expect(within(section).getByText("Goals")).toBeTruthy();
     expect(within(section).queryByText("Habits")).toBeNull();
-    // 2 memories counts only active rows (superseded is not active).
     expect(within(section).getByText("2 memories")).toBeTruthy();
-    // Source lines: all three rows are capture-sourced (superseded keeps its provenance).
     expect(within(section).getAllByText(/From chat · /).length).toBe(3);
     expect(within(section).getByText("superseded")).toBeTruthy();
   });
@@ -122,7 +114,6 @@ describe("Memory page", () => {
     mount();
     const journal = await screen.findByLabelText("Journal Bot memories");
     const empty = screen.getByLabelText("Bots without memories");
-    // Journal Bot (with a memory) comes before the empty list holding Helper Bot.
     expect(journal.compareDocumentPosition(empty) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(within(empty).getByText("Helper Bot")).toBeInTheDocument();
     expect(screen.queryByLabelText("Helper Bot memories")).toBeNull();
@@ -161,7 +152,6 @@ describe("Memory page", () => {
     mount();
     const user = userEvent.setup({ pointerEventsCheck: 0 });
 
-    // A bot with no memories yet sits in the compact list at the end (#95).
     const empty = await screen.findByLabelText("Bots without memories");
     await user.click(within(empty).getByRole("button", { name: "Add memory for Helper Bot" }));
 
@@ -274,7 +264,6 @@ describe("Memory page", () => {
     await user.click(toggle);
 
     await waitFor(() => expect(updateMock).toHaveBeenCalledWith("b1", { memoryEnabled: false }));
-    // The off note renders under the header.
     expect(await screen.findByText(/no longer learns from chats/i)).toBeTruthy();
   });
 

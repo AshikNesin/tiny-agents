@@ -1,7 +1,3 @@
-/**
- * Traces API (issue #363): sessions with their usage, one session's calls,
- * side-calls, and the 7-day summary, read from what the app already keeps.
- */
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { eq } from "drizzle-orm";
 import { finishedReplyTo } from "../../../../packages/agent/src/replies";

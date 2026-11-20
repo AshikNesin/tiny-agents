@@ -33,11 +33,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 
-/*
- * One minimal transition for every screen: only the screen being opened or closed moves.
- * It slides in from the end over a still background, and slides back out on back.
- * No fades, no parallax, nothing moving behind it; a soft edge shadow (ScreenContainer) marks the sheet.
- */
 private const val TRANSITION_MS = 250
 private val easing = FastOutSlowInEasing
 
@@ -72,9 +67,6 @@ fun AppNavHost(
         exitTransition = { exit() },
         popEnterTransition = { popEnter() },
         popExitTransition = { popExit() },
-        // Gesture back (predictive back, on by default when targeting Android 16) has its own
-        // transitions in Navigation 2.10 and defaults to shrinking the screen into a card.
-        // Use the same slide so swiping back looks like pressing back, following the finger.
         predictivePopEnterTransition = { popEnter() },
         predictivePopExitTransition = { popExit() },
     ) {
@@ -96,10 +88,6 @@ fun AppNavHost(
     }
 }
 
-/**
- * Gives each screen an opaque background and a soft shadow, so a sliding screen reads as a
- * sheet over the one behind. At rest the shadow sits outside the screen and isn't visible.
- */
 @Composable
 internal fun ScreenContainer(content: @Composable () -> Unit) {
     Box(
@@ -112,10 +100,6 @@ internal fun ScreenContainer(content: @Composable () -> Unit) {
     }
 }
 
-/**
- * Act on a link the app was opened with: a chat (scrolled to its waiting card), a sign-in
- * request's chat, or a screen. A chat opens on Home, over whatever was on screen.
- */
 private suspend fun openLink(container: AppContainer, link: AppLink, home: () -> Unit, navigate: (String) -> Unit) {
     fun openChat(botId: String, taskId: Int?) {
         container.session.selectBot(botId)
@@ -125,7 +109,6 @@ private suspend fun openLink(container: AppContainer, link: AppLink, home: () ->
     when (link) {
         is AppLink.Chat -> openChat(link.botId, link.focusTaskId)
         is AppLink.CredentialRequest -> {
-            // The request names its bot, not the bot's id: find it in the list once that is loaded.
             val request = runCatching { container.api.credentialRequest(link.taskId) }.getOrNull()
             val bots = withTimeoutOrNull(LINK_WAIT_MS) { container.bots.state.first { !it.loading } }
             val bot = bots?.bots?.firstOrNull { it.name == request?.botName }

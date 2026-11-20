@@ -1,20 +1,6 @@
-/**
- * The chat's timeline: transcript messages with the bot's routine run cards
- * (issue #63) merged in by time. Cards are not transcript entries, so they
- * slot in between messages by when the run finished; messages keep their
- * order and their index (the read/unread split counts messages only). The
- * live chat adds its Echoes after everything else (lib/chat-session.ts).
- *
- * Runs that finish back to back (no message between them, same day) fold
- * into one item, so a routine firing every few minutes stays one quiet line.
- */
 import { SKIP_REPLY, isSkipReply, type ChatMessage, type RoutineRunCard } from "./chat-types";
 import type { OutboxEntry } from "./chat-session";
 
-/**
- * A shared chat's silent reply (issue #145): the bot judged the message was
- * not for it. Hidden, also while it streams in (`[sk…`).
- */
 function isHiddenReply(message: ChatMessage): boolean {
   if (isSkipReply(message)) return true;
   const text = message.text.trim();
@@ -33,23 +19,13 @@ export type TimelineItem =
       message: ChatMessage;
       index: number;
       at: number;
-      /** Ids of the messages folded into this row (see `isToolRound`), the first one's leading. */
       ids?: string[];
     }
-  /** Back-to-back routine runs, oldest first; `at` is the newest one's finish. */
   | { kind: "routine-runs"; runs: RoutineRunCard[]; at: number }
-  /** An owner send not yet confirmed (GLOSSARY: Echo); `at` is when it was sent. */
   | { kind: "echo"; echo: OutboxEntry; at: number };
 
 const sameDay = (a: number, b: number) => new Date(a).toDateString() === new Date(b).toDateString();
 
-/**
- * A finished assistant round that only called tools (no text, no
- * reasoning): the agent loop stores one per tool round, so a bot that reads
- * three pages leaves three of them before its answer. The timeline folds a
- * run of them into the assistant message that follows, as the Code page
- * does, so the turn reads as one row: its tool steps, then the reply.
- */
 function isToolRound(message: ChatMessage): boolean {
   return (
     message.role === "assistant" &&
@@ -61,11 +37,6 @@ function isToolRound(message: ChatMessage): boolean {
   );
 }
 
-/**
- * A quiet turn's message (issue #396: a hand-off's finish or another bot's
- * reply started it) as the owner sees it: what it sent with `message_owner`
- * is its text, and its own words fold away with its thinking.
- */
 function presentQuiet(message: ChatMessage): ChatMessage {
   if (!message.quiet) return message;
   const reasoning = [message.reasoning, message.text].filter(Boolean).join("\n\n");
@@ -107,7 +78,6 @@ export function chatTimeline(
       !message.peer &&
       sameDay(last.at, message.createdAt)
     ) {
-      // Keep the first round's id: the row's key stays put as rounds land.
       last.message = {
         ...message,
         id: last.message.id,

@@ -4,12 +4,6 @@ import { ChevronRightIcon } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./collapsible";
 import { cn } from "@groot/ui/lib/utils";
 
-/**
- * Trace — the step primitive that agent UIs (tool calls, reasoning, chain of
- * thought) are built on. A `Trace` stacks steps; each step is a `TraceLine`
- * (icon + title + description), optionally wrapped in a `TraceCollapsible`
- * whose content reveals the step's detail.
- */
 function Trace({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
@@ -25,10 +19,6 @@ function Trace({ className, ...props }: React.ComponentProps<"div">) {
 
 type TraceStatus = "running" | "error" | "pending";
 
-/**
- * One step row. `status`: `running` shimmers the title, `error` tints the row
- * destructive, `pending` dims it; omit for a completed/idle step.
- */
 function TraceLine({
   className,
   status,
@@ -85,10 +75,6 @@ function TraceDescription({ className, ...props }: React.ComponentProps<"span">)
 
 type CollapsibleProps = React.ComponentProps<typeof Collapsible>;
 
-/**
- * A collapsible step. Uncontrolled (`defaultOpen`) or controlled — a
- * controlled `open` requires `onOpenChange`.
- */
 function TraceCollapsible({
   className,
   ...props

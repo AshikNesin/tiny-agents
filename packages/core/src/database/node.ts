@@ -4,12 +4,6 @@ import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 
-/**
- * Node-only SQLite driver. Never import this from code that must also run on
- * Workers; the Workers entry binds D1 instead.
- */
-
-/** Resolve `file:./data/dev.db`, a bare path, or `:memory:` to a filesystem path. */
 export function resolveSqlitePath(url: string): string {
   if (url === ":memory:" || url === "file::memory:") return ":memory:";
   const stripped = url.replace(/^file:/, "");
@@ -17,7 +11,6 @@ export function resolveSqlitePath(url: string): string {
 }
 
 export interface CreateSqliteDbOptions {
-  /** Apply pending Drizzle migrations from this folder on open. */
   migrationsFolder?: string;
 }
 

@@ -1,11 +1,3 @@
-/**
- * The Code page's protocol (`coding.*`) on its own Worker connection
- * (`@tiny-agents/claude-worker/client`), separate from the bot engine's.
- * `coding.hello` is the handshake: it subscribes the socket to coding events
- * and lists the sessions the worker holds. Requests are typed here;
- * heartbeats, reconnects (asking `resolveWorker` again), resume, reboot
- * detection and re-sending unanswered requests are the connection's.
- */
 import {
   parseCodingWorkerMessage,
   type CodingCatalog,
@@ -31,14 +23,12 @@ export interface CodingClientHandlers {
     partial: { reset?: boolean; text?: string; thinking?: string },
   ): void;
   onCatalog(catalog: CodingCatalog): void;
-  /** After every (re)connect. `rebooted`: the worker restarted, its sessions are gone. */
   onConnected(hello: CodingHelloResult, rebooted: boolean): void;
   onResume(sessionId: string, result: CodingResumeResult): void;
   onState(state: ClientState, detail?: string): void;
   onError?(message: string): void;
 }
 
-/** A coding request without its id (the connection adds one). */
 type RequestBody = CodingClientMessage extends infer M
   ? M extends { requestId: string }
     ? Omit<M, "requestId">
@@ -47,7 +37,6 @@ type RequestBody = CodingClientMessage extends infer M
 
 export class CodingWorkerClient {
   private connection: WorkerConnection | undefined;
-  /** Sessions followed so far; a restart of the client follows them again. */
   private readonly tracked = new Set<string>();
 
   constructor(
@@ -93,7 +82,6 @@ export class CodingWorkerClient {
     this.handlers.onState("idle");
   }
 
-  /** Follow a session: replay what the worker buffered since the last applied event. */
   track(sessionId: string): void {
     this.tracked.add(sessionId);
     this.connection?.track(sessionId);
@@ -108,7 +96,6 @@ export class CodingWorkerClient {
 
   private onMessage(frame: WorkerFrame): void {
     if (frame.type === "error") {
-      // A bot-protocol error frame (a message the worker could not read).
       if (typeof frame.message === "string") this.handlers.onError?.(frame.message);
       return;
     }

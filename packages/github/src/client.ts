@@ -1,13 +1,3 @@
-/**
- * The one GitHub client Code uses (issue #297 §7.1): projects, the PR tab
- * and Auto-fix see only this interface, never the transport under it.
- *
- * A PR snapshot is one GraphQL query: state, mergeability, reviews, review
- * threads, conversation comments and the head commit's checks, each comment
- * with its author's association and type, so the trust rules cost no extra
- * call. Mergeability GitHub has not computed yet is `unknown`, never
- * `conflicting` or `mergeable`.
- */
 import { GitHubError, type GitHubApi } from "./api";
 
 export interface RepoRef {
@@ -16,7 +6,6 @@ export interface RepoRef {
 }
 
 export type AuthorType = "user" | "bot";
-/** GitHub's `authorAssociation`, as it sends it (OWNER, MEMBER, COLLABORATOR, CONTRIBUTOR, NONE, …). */
 export type Association = string;
 
 export interface Author {
@@ -30,11 +19,9 @@ export type CheckState = "pending" | "success" | "failure" | "neutral";
 export interface Check {
   name: string;
   state: CheckState;
-  /** When it started (or was created, for a status), ISO. */
   startedAt: string | null;
   completedAt: string | null;
   url: string | null;
-  /** The Actions job id, when the check is an Actions job (for its log). */
   jobId: number | null;
 }
 
@@ -44,7 +31,6 @@ export interface Review {
   state: "APPROVED" | "CHANGES_REQUESTED" | "COMMENTED" | "DISMISSED" | "PENDING";
   body: string;
   submittedAt: string;
-  /** The commit it was submitted on. */
   commit?: string | null;
 }
 
@@ -59,11 +45,8 @@ export interface ReviewComment {
 export interface ReviewThread {
   id: string;
   path: string;
-  /** Its last line at the PR's head (null once the code moved on: outdated). */
   line: number | null;
-  /** Its first line, for a comment on a range. */
   startLine?: number | null;
-  /** LEFT: old-file lines (removed code); RIGHT: new-file lines. */
   side?: "LEFT" | "RIGHT";
   resolved: boolean;
   outdated: boolean;
@@ -81,7 +64,6 @@ export interface IssueComment {
 export type MergeMethod = "merge" | "squash" | "rebase";
 
 export interface PullSnapshot {
-  /** GraphQL node id. */
   id: string;
   number: number;
   url: string;
@@ -92,19 +74,13 @@ export interface PullSnapshot {
   headRef: string;
   headSha: string;
   baseRef: string;
-  /** The head branch lives in another repository. */
   fromFork: boolean;
-  /** The repository the head branch lives in (null when it was deleted). */
   headRepo: RepoRef | null;
-  /** A fork's author lets maintainers push to the head branch. */
   maintainerCanModify: boolean;
   mergeable: "mergeable" | "conflicting" | "unknown";
   mergeMethods: MergeMethod[];
-  /** GitHub's native auto-merge is enabled. */
   autoMerge: boolean;
-  /** Waiting in the repository's merge queue. */
   inMergeQueue: boolean;
-  /** The latest times the merge queue removed it, newest last. */
   queueRemovals: Array<{ id: string; at: string; reason: string }>;
   author: string | null;
   checks: Check[];
@@ -118,14 +94,12 @@ export interface PullRef {
   url: string;
 }
 
-/** One step of an Actions job, as GitHub reports it while the job runs. */
 export interface JobStep {
   number: number;
   name: string;
   state: "queued" | "running" | "success" | "failure" | "skipped";
 }
 
-/** Where an Actions job is: GitHub serves its log only once it is `completed`. */
 interface JobProgress {
   completed: boolean;
   steps: JobStep[];
@@ -144,7 +118,6 @@ function stepState(step: NonNullable<RawJob["steps"]>[number]): JobStep["state"]
   return "failure";
 }
 
-/** One line comment of a submitted review: `line` is its last line, `startLine` its first. */
 export interface ReviewCommentInput {
   path: string;
   side: "LEFT" | "RIGHT";
@@ -155,9 +128,7 @@ export interface ReviewCommentInput {
 
 export type ReviewEvent = "COMMENT" | "APPROVE" | "REQUEST_CHANGES";
 
-/** An open PR in the viewer's review inbox, and why it is there. */
 export interface InboxPull {
-  /** `requested`: asks for the viewer's review; `reviewed`: the viewer reviewed it; `authored`: theirs. */
   reason: "requested" | "reviewed" | "authored";
   repo: RepoRef;
   number: number;
@@ -167,9 +138,7 @@ export interface InboxPull {
   draft: boolean;
   updatedAt: string;
   headSha: string;
-  /** GitHub's verdict from the reviews so far. */
   decision: "approved" | "changes_requested" | "review_required" | null;
-  /** The viewer's last review: when, and on which commit. */
   lastReview: { at: string; commit: string | null } | null;
 }
 
@@ -180,7 +149,6 @@ const INBOX_PULL = `fragment InboxPull on PullRequest {
   reviews(author: $login, last: 1) { nodes { submittedAt commit { oid } } }
 }`;
 
-/** The three searches, most recently updated first, in one query. */
 const INBOX_QUERY = `query ReviewInbox($login: String!, $requested: String!, $reviewed: String!, $authored: String!) {
   requested: search(query: $requested, type: ISSUE, first: 50) { nodes { ...InboxPull } }
   reviewed: search(query: $reviewed, type: ISSUE, first: 50) { nodes { ...InboxPull } }
@@ -188,13 +156,9 @@ const INBOX_QUERY = `query ReviewInbox($login: String!, $requested: String!, $re
 }
 ${INBOX_PULL}`;
 
-/** What the review inbox keeps; each is left out to keep everything. */
 export interface InboxFilter {
-  /** `YYYY-MM-DD`: only PRs updated on or after it. */
   updatedSince?: string;
-  /** Only these repositories' PRs. */
   repos?: RepoRef[];
-  /** `false` leaves drafts out. */
   drafts?: boolean;
 }
 
@@ -204,13 +168,8 @@ const INBOX_SEARCHES = {
   authored: "author:@me",
 } as const;
 
-/** GitHub refuses a search query longer than this. */
 const SEARCH_MAX = 256;
 
-/**
- * Each inbox search with the filter's qualifiers. The repositories go in only
- * while the query fits GitHub's limit; past it, the caller keeps to them.
- */
 function inboxSearches(filter: InboxFilter): Record<keyof typeof INBOX_SEARCHES, string> {
   const narrow = [
     filter.updatedSince ? `updated:>=${filter.updatedSince}` : "",
@@ -250,52 +209,37 @@ interface RawInboxPull {
 
 export interface GitHubClient {
   readonly transport: GitHubApi["kind"];
-  /** Who the credential acts as. */
   viewer(): Promise<{ login: string }>;
   repository(repo: RepoRef): Promise<{ defaultBranch: string; private: boolean }>;
-  /** The open PR whose head is `branch` in `repo`, if any (a link by branch match). */
   openPullForBranch(repo: RepoRef, branch: string): Promise<PullRef | undefined>;
   createPull(
     repo: RepoRef,
     input: { head: string; base: string; title: string; body: string; draft: boolean },
   ): Promise<PullRef>;
   snapshot(repo: RepoRef, number: number): Promise<PullSnapshot>;
-  /** An Actions job's status and steps (its log is not served until it completes). */
   job(repo: RepoRef, jobId: number): Promise<JobProgress>;
-  /** The end of one Actions job's log, at most `maxChars`. */
   jobLogTail(repo: RepoRef, jobId: number, maxChars: number): Promise<string>;
   replyToThread(threadId: string, body: string): Promise<{ databaseId: number | null }>;
   resolveThread(threadId: string): Promise<void>;
   comment(repo: RepoRef, number: number, body: string): Promise<{ databaseId: number }>;
-  /**
-   * The viewer's review inbox across every repository the credential sees:
-   * open PRs asking for their review, ones they reviewed, and their own. A
-   * PR in more than one is listed once, by the first reason.
-   */
   reviewInbox(filter?: InboxFilter): Promise<InboxPull[]>;
-  /** Submit a review with its line comments in one go, pinned to `commitId`. */
   submitReview(
     repo: RepoRef,
     number: number,
     review: { commitId: string; event: ReviewEvent; body: string; comments: ReviewCommentInput[] },
   ): Promise<{ url: string }>;
   merge(repo: RepoRef, number: number, method: MergeMethod): Promise<void>;
-  /** Change a pull request's title or description. */
   updatePull(
     repo: RepoRef,
     number: number,
     change: { title?: string; body?: string },
   ): Promise<void>;
-  /** GitHub's native auto-merge, by the PR's node id (branch protection still applies). */
   enableAutoMerge(pullId: string, method: MergeMethod): Promise<void>;
   disableAutoMerge(pullId: string): Promise<void>;
-  /** Draft → ready for review. */
   markReady(pullId: string): Promise<void>;
-  /** Ready for review → draft. */
   convertToDraft(pullId: string): Promise<void>;
 }
 
-/** `owner/name`, `https://github.com/owner/name(.git)` or `git@github.com:owner/name.git`. */
 export function parseRepo(input: string): RepoRef | undefined {
   const trimmed = input
     .trim()
@@ -310,8 +254,6 @@ export function parseRepo(input: string): RepoRef | undefined {
 }
 
 export const repoSlug = (repo: RepoRef) => `${repo.owner}/${repo.name}`;
-
-// --- the snapshot query -------------------------------------------------------------
 
 const AUTHOR = `author { login __typename }`;
 
@@ -436,7 +378,6 @@ interface RawSnapshot {
 function author(raw: RawAuthor | null, association: string): Author {
   return {
     login: raw?.login ?? "ghost",
-    // A GitHub App's author is a `Bot`; a deleted account is null.
     type: raw?.__typename === "Bot" ? "bot" : "user",
     association,
   };
@@ -444,7 +385,6 @@ function author(raw: RawAuthor | null, association: string): Author {
 
 const FAILED_CONCLUSIONS = new Set(["FAILURE", "TIMED_OUT", "ACTION_REQUIRED", "STARTUP_FAILURE"]);
 
-/** One check run or commit status, as Code reads it. */
 export function checkOf(raw: RawContext): Check {
   if (raw.__typename === "StatusContext") {
     const state =
@@ -469,8 +409,7 @@ export function checkOf(raw: RawContext): Check {
         ? "success"
         : FAILED_CONCLUSIONS.has(raw.conclusion ?? "")
           ? "failure"
-          : // NEUTRAL, SKIPPED, STALE, CANCELLED (a newer push cancels the run).
-            "neutral";
+          : "neutral";
   const jobId =
     raw.databaseId && raw.detailsUrl && /\/actions\/runs\/\d+\/job\//.test(raw.detailsUrl)
       ? raw.databaseId
@@ -485,11 +424,6 @@ export function checkOf(raw: RawContext): Check {
   };
 }
 
-/**
- * One check per name: its latest run. A workflow that runs on every PR event
- * (an edited description, a label) adds a run to the same commit each time,
- * and GitHub's own checks list shows only the newest. First-seen order stays.
- */
 function latestRuns(checks: Check[]): Check[] {
   const latest = new Map<string, Check>();
   for (const check of checks) {
@@ -500,7 +434,6 @@ function latestRuns(checks: Check[]): Check[] {
   return order.map((name) => latest.get(name)!);
 }
 
-/** Started later, or (a run not started yet) queued after. */
 function newer(a: Check, b: Check): boolean {
   if (a.startedAt && b.startedAt && a.startedAt !== b.startedAt) return a.startedAt > b.startedAt;
   if (!a.startedAt !== !b.startedAt) return !a.startedAt;
@@ -517,7 +450,6 @@ function comment(raw: RawComment): ReviewComment {
   };
 }
 
-/** The snapshot query's answer, as a `PullSnapshot` (exported for tests on recorded output). */
 export function toSnapshot(raw: RawSnapshot): PullSnapshot {
   const repo = raw.repository;
   const pr = repo?.pullRequest;

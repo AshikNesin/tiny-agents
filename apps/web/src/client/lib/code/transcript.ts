@@ -1,20 +1,12 @@
-/**
- * Transcript presentation shared by every harness: runs of finished tool
- * calls fold into one "Ran 3 commands, edited 2 files" line, so a long turn
- * reads as its messages. Rows are the harness contract's `TranscriptItem`s.
- */
 import type { ToolItem, ToolKind, TranscriptItem } from "./api";
 
-/** A run of finished tool calls shown as one line. */
 export interface ToolGroup {
   kind: "tool-group";
   id: string;
   tools: ToolItem[];
-  /** The tools with the thinking between them, in order. */
   items: Array<ToolItem | Extract<TranscriptItem, { kind: "thinking" }>>;
 }
 
-/** A finished turn's work (thinking, progress notes, tools) folded behind one "Worked for" row. */
 export interface WorkFold {
   kind: "work";
   id: string;
@@ -25,7 +17,6 @@ export interface WorkFold {
 
 export type DisplayItem = TranscriptItem | ToolGroup | WorkFold;
 
-/** Tools that stand on their own: cards, messages, and steps whose screenshots matter. */
 function standsAlone(item: ToolItem): boolean {
   return (
     item.status === "running" ||
@@ -37,16 +28,10 @@ function standsAlone(item: ToolItem): boolean {
   );
 }
 
-/**
- * Folds runs of two or more finished tool calls (and the thinking between
- * them) into one collapsible group; running tools, subagents, plans and
- * screenshots stay in view.
- */
 export function groupTools(items: TranscriptItem[]): Array<TranscriptItem | ToolGroup> {
   const out: Array<TranscriptItem | ToolGroup> = [];
   let run: ToolGroup["items"] = [];
   const flush = () => {
-    // Thinking after the last tool belongs to what follows, not the group.
     let end = run.length;
     while (end > 0 && run[end - 1]!.kind === "thinking") end--;
     const body = run.slice(0, end);
@@ -73,7 +58,6 @@ export function groupTools(items: TranscriptItem[]): Array<TranscriptItem | Tool
   return out;
 }
 
-/** Rows that are the agent working rather than answering. */
 const isWork = (item: TranscriptItem) =>
   item.kind === "tool" ||
   item.kind === "thinking" ||
@@ -81,11 +65,6 @@ const isWork = (item: TranscriptItem) =>
   item.kind === "report" ||
   item.kind === "request";
 
-/**
- * Folds each finished turn into its first message, one "Worked for 3m 34s"
- * row, and the answer (the text after its last piece of work), the way Amp
- * and Hoplite read. A turn still running stays fully in view.
- */
 export function foldTurns(items: TranscriptItem[]): DisplayItem[] {
   const out: DisplayItem[] = [];
   let start = 0;
@@ -121,7 +100,6 @@ export function foldTurns(items: TranscriptItem[]): DisplayItem[] {
   return out;
 }
 
-/** "Ran 3 commands, edited 2 files" for a group's summary line. */
 export function describeTools(tools: ToolItem[]): string {
   const count = (kind: ToolKind) => tools.filter((t) => t.tool === kind).length;
   const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
@@ -142,7 +120,6 @@ export function describeTools(tools: ToolItem[]): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-/** The id of the last error notice when nothing followed it (it offers recovery). */
 export function lastErrorId(items: TranscriptItem[]): string | null {
   for (let i = items.length - 1; i >= 0; i--) {
     const item = items[i]!;

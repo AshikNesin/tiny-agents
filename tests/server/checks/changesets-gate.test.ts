@@ -4,16 +4,6 @@ import path from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
 import { describe, expect, it } from "vite-plus/test";
 
-/**
- * Changeset completeness gate (scripts/check-changesets.mjs).
- *
- * The gate turns release completeness from a convention into a check: a
- * branch that edits a managed surface (packages, apps/web/drizzle, .groot)
- * without a changeset or a recorded no-release reason fails the build. The
- * pure core runs here against fixture package trees, one with a changeset
- * and one without, asserting the pass and fail verdicts the CLI reports.
- */
-
 const repoRoot = process.cwd();
 const SCRIPT = path.join("scripts", "check-changesets.mjs");
 
@@ -116,7 +106,6 @@ const MERGED_BEFORE_BRANCH = {
 
 const MIGRATION = { "apps/web/drizzle/meta/_journal.json": "{}\n" };
 
-// branchFiles maps a path to its new content, or to null to delete it.
 function branchFromMain(branchFiles: Record<string, string | null>): {
   dir: string;
   base: string;
@@ -344,7 +333,6 @@ describe("changesets gate", () => {
     expect(gate.parseChangesetReleases('---\n"groot": patch\n"@groot/core": major\n---\n')).toEqual(
       ["groot", "@groot/core"],
     );
-    // Prose that mimics frontmatter must not count as coverage.
     expect(gate.parseChangesetReleases("# Changesets\n\nHello and welcome!")).toEqual([]);
     expect(gate.parseChangesetReleases('---\n"groot": patch (draft)\n---\n')).toEqual([]);
     expect(
@@ -376,8 +364,6 @@ describe("changesets gate", () => {
       ["packages/core/package.json"],
       [],
     );
-    // The CLI path reconstructs both blobs from the diff; simulate the same
-    // release-relevant entry through collect with explicit blobs.
     const dir = fixtureTree({ "packages/core/package.json": after });
     try {
       const withBlobs = gate.collect({

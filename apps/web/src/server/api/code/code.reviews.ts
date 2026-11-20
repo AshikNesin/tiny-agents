@@ -1,30 +1,3 @@
-/**
- * PR reviews (issue #345): review any pull request of a project's
- * repository, the owner's own or someone else's, with an assistant scoped
- * to it.
- *
- * Opening a review fetches the PR's head (`refs/pull/N/head`, so a PR from
- * a fork works) into the project's clone, never a new clone. When a Code
- * thread opened the PR and its worktree is at that head, the review shows
- * that worktree, its uncommitted work included; otherwise it checks the head
- * out in a detached worktree of its own. The file list and diffs come from
- * git there, against the PR's base. None of
- * that calls a model. The assistant is a thread of the project's default
- * harness, started in that worktree on the owner's first question, whose
- * first message carries a compact card of the PR (`reviewCard`: title,
- * author, branches, the description cut short, the file list with +/−),
- * never the diff: the assistant reads what it needs with its own tools.
- *
- * Until the assistant exists, viewed marks and line comments are kept under
- * the review's key (`review:<id>`), and those comments go with the first
- * question.
- *
- * Review comments for GitHub wait under the same key, apart from the
- * assistant's (`threadReview(key, "github")`), until the owner submits the
- * review: one REST call posts them all with the verdict, pinned to the head
- * the owner read. On their own PR GitHub allows only a comment, and if a
- * Code thread opened that PR the comments can go to it instead.
- */
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { logger } from "@groot/core/logger";
@@ -77,17 +50,11 @@ type CodeReviewRow = typeof codeReviews.$inferSelect;
 
 const KEY_PREFIX = "review:";
 
-/** Where a review's viewed marks and early comments are kept: `review:<id>`. */
 const reviewKey = (id: string) => `${KEY_PREFIX}${id}`;
 
-/** The review id behind a key from `reviewKey`, or undefined for a thread id. */
 export const reviewIdOfKey = (key: string) =>
   key.startsWith(KEY_PREFIX) ? key.slice(KEY_PREFIX.length) : undefined;
 
-/**
- * A pull request named the ways people paste one: its GitHub URL (any tab
- * of it), `owner/name#12` or `owner/name/pull/12`.
- */
 function parsePullRef(input: string): { repo: RepoRef; number: number } | undefined {
   const match =
     /^(?:https?:\/\/github\.com\/)?([A-Za-z0-9-]{1,39})\/([A-Za-z0-9._-]{1,100})(?:#|\/pulls?\/)(\d{1,9})(?:[/?#].*)?$/.exec(
@@ -101,7 +68,6 @@ function parsePullRef(input: string): { repo: RepoRef; number: number } | undefi
 const reviewPath = (project: CodeProjectRow, number: number) =>
   `${project.checkoutPath.replace(/\/checkout$/, "")}/reviews/pr-${number}`;
 
-/** The commit of `login`'s latest review of the PR that names one. */
 function lastReviewed(pr: PullSnapshot, login: string): string | null {
   const mine = pr.reviews
     .filter((r) => r.commit && r.author.login.toLowerCase() === login.toLowerCase())
@@ -109,7 +75,6 @@ function lastReviewed(pr: PullSnapshot, login: string): string | null {
   return mine.at(-1)?.commit ?? null;
 }
 
-/** The Code thread that opened PR `number` of the project, if one did. */
 async function codingThreadOf(projectId: string, number: number): Promise<string | null> {
   const pull = await db.query.codePullRequests.findFirst({
     where: and(eq(codePullRequests.projectId, projectId), eq(codePullRequests.number, number)),
@@ -118,7 +83,6 @@ async function codingThreadOf(projectId: string, number: number): Promise<string
   return pull?.threadId ?? null;
 }
 
-/** The harness a review's assistant starts on: the project's default, else the first. */
 function assistantInstance(project: CodeProjectRow) {
   const hub = codeHub();
   if (!hub) return undefined;
@@ -128,12 +92,6 @@ function assistantInstance(project: CodeProjectRow) {
   );
 }
 
-/**
- * The worktree of the Code thread that opened the PR, when the review can
- * show it as it is: on the PR's branch, at the PR's head (nothing unpushed,
- * nothing newer on GitHub). What the thread has not committed shows too, and
- * stays the thread's.
- */
 async function threadWorktreeAt(
   project: CodeProjectRow,
   pr: PullSnapshot,
@@ -150,7 +108,6 @@ async function threadWorktreeAt(
   return at === head ? thread.worktree : undefined;
 }
 
-/** The Code thread whose worktree the review shows, or null when it has its own. */
 async function worktreeThreadOf(row: CodeReviewRow, project: CodeProjectRow) {
   if (!row.worktree || row.worktree === reviewPath(project, row.number)) return null;
   const thread = await db.query.codeThreads.findFirst({
@@ -199,14 +156,6 @@ async function projectFor(repo: RepoRef): Promise<CodeProjectRow> {
   return project;
 }
 
-/**
- * Open a review of a pull request (idempotent): read it from GitHub, fetch
- * its head, show it in the coding thread's worktree when that is at the head
- * (`threadWorktreeAt`) or else check it out in the review's own, and keep
- * what the page shows. An open review of the same PR is brought to the PR's
- * current head (unless its own worktree has changes, which it keeps showing)
- * and reused; an archived one is opened again.
- */
 export async function openReview(input: string): Promise<PullReviewView> {
   const ref = parsePullRef(input);
   if (!ref) throw Boom.badRequest("Give a pull request as its GitHub URL or owner/name#123.");
@@ -234,7 +183,6 @@ export async function openReview(input: string): Promise<PullReviewView> {
     }),
   ]);
   const hadOwn = existing?.worktree === own && (await ws.exists(own));
-  // Changes made in the review's own checkout stay in view there.
   const ownDirty = hadOwn && (await ws.uncommitted(own)).length > 0;
   let path = own;
   let headSha: string;
@@ -267,7 +215,6 @@ export async function openReview(input: string): Promise<PullReviewView> {
   return reviewView(row!, project);
 }
 
-/** Open reviews, most recently opened first. */
 export async function listReviews(): Promise<PullReviewView[]> {
   const rows = await db
     .select({ review: codeReviews, project: codeProjects })
@@ -293,24 +240,17 @@ export async function getReview(id: string): Promise<PullReviewView> {
   return reviewView(row, project);
 }
 
-/** The review's worktree; archiving a review removes it (404). */
 function worktreeOf(row: CodeReviewRow): string {
   if (!row.worktree) throw Boom.notFound("This review is archived. Open the PR again.");
   return row.worktree;
 }
 
-/** A review with its worktree: what its diffs read and its changes are made in. */
 export async function reviewWorktree(id: string) {
   const { row, project } = await findReview(id);
   const worktree = worktreeOf(row);
   return { row, project, worktree, ws: await codeGitHub().workspace(project) };
 }
 
-/**
- * The owner's question to the review's assistant. The first one starts the
- * assistant in the review's worktree, with the PR card and any line comments
- * ahead of the question; a later one goes to that thread like any message.
- */
 export async function askReview(
   id: string,
   question: string,
@@ -358,7 +298,6 @@ async function startAssistant(
     files,
   });
   const caps = instance.capabilities();
-  // Edits wait for the owner's yes: the assistant reads, it does not change the PR.
   const permissionMode = caps.settings.permissionModes.includes("default")
     ? ("default" as const)
     : undefined;
@@ -380,7 +319,6 @@ async function startAssistant(
   return threadId;
 }
 
-/** The PR's description, read when the assistant starts (it is not kept). */
 async function pullBody(project: CodeProjectRow, number: number): Promise<string> {
   try {
     const github = await codeGitHub().client(project);
@@ -391,14 +329,8 @@ async function pullBody(project: CodeProjectRow, number: number): Promise<string
   }
 }
 
-/**
- * Close a review: its own worktree goes (and with it anything changed there),
- * and its assistant is archived where the harness archives. Opening the PR
- * again starts from its current head.
- */
 export async function archiveReview(id: string): Promise<void> {
   const { row, project } = await findReview(id);
-  // A coding thread's worktree stays: it is that thread's.
   if (row.worktree === reviewPath(project, row.number)) {
     const ws = await codeGitHub().workspace(project);
     await ws.removeWorktree(project.checkoutPath, row.worktree);
@@ -415,15 +347,11 @@ export async function archiveReview(id: string): Promise<void> {
     .where(eq(codeReviews.id, id));
 }
 
-// --- review comments for GitHub, and submitting the review ----------------------------------
-
-/** The review's pending GitHub comments (404 for no such review). */
 export async function reviewComments(id: string) {
   await findReview(id);
   return threadReview(reviewKey(id), "github");
 }
 
-/** GitHub's side and lines for a saved comment: the old side is LEFT, a range ends at `line`. */
 function toGitHubComment(d: ReviewDraft): ReviewCommentInput {
   return {
     path: d.path,
@@ -434,10 +362,6 @@ function toGitHubComment(d: ReviewDraft): ReviewCommentInput {
   };
 }
 
-/**
- * Submit the review on GitHub with every pending comment, at the head the
- * worktree shows (so each comment lands on the lines the owner read).
- */
 export async function submitReview(
   id: string,
   input: { event: ReviewVerdict; body?: string },
@@ -473,7 +397,6 @@ export async function submitReview(
   return { url: result.url, comments: sent };
 }
 
-/** Hand the pending comments to the Code thread that opened the PR, as one message. */
 export async function sendCommentsToThread(
   id: string,
 ): Promise<{ threadId: string; sent: number }> {
@@ -488,13 +411,6 @@ export async function sendCommentsToThread(
   return { threadId, sent };
 }
 
-// --- the PR's conversations on GitHub --------------------------------------------------------
-
-/**
- * The PR's line conversations, read from GitHub when the page asks (one
- * query, no model). Lines are at the PR's current head, which the page
- * compares with the head its worktree shows.
- */
 export async function reviewThreads(id: string): Promise<PullThreadsView> {
   const { row, project } = await findReview(id);
   const github = await codeGitHub().client(project);
@@ -520,7 +436,6 @@ export async function reviewThreads(id: string): Promise<PullThreadsView> {
   };
 }
 
-/** Reply on one of the PR's conversations, as the GitHub account Code uses. */
 export async function replyToReviewThread(id: string, threadId: string, body: string) {
   const { project } = await findReview(id);
   const github = await codeGitHub().client(project);
@@ -533,16 +448,6 @@ export async function resolveReviewThread(id: string, threadId: string) {
   await github.resolveThread(threadId);
 }
 
-// --- the review inbox ----------------------------------------------------------------------------
-
-/**
- * The owner's review inbox from GitHub, across every repository their
- * credential sees (one query, no model): what asks for their review, what
- * changed since they reviewed, what waits on its author, and their own.
- * Each says whether its repository is a project, and its open review here.
- * `query` narrows GitHub's searches themselves, so a filter reaches past the
- * first page of each.
- */
 export async function reviewInbox(query: InboxQuery = {}): Promise<InboxPullView[]> {
   const projects = await db.select().from(codeProjects);
   const filter: InboxFilter = {};
@@ -599,12 +504,6 @@ export async function reviewInbox(query: InboxQuery = {}): Promise<InboxPullView
   });
 }
 
-// --- changing the PR's code -------------------------------------------------------------------
-
-/**
- * A review whose worktree is its own to commit, push or reset: a coding
- * thread's worktree holds that thread's work, so those go through the thread.
- */
 async function ownWorktree(id: string) {
   const found = await reviewWorktree(id);
   if (found.worktree !== reviewPath(found.project, found.row.number)) {
@@ -615,12 +514,6 @@ async function ownWorktree(id: string) {
   return found;
 }
 
-/**
- * Commit what the owner and the assistant changed in the review's worktree
- * and push it to the PR's branch, never forced: GitHub rejects the push when
- * the branch moved on. A fork's branch takes it only when its author allows
- * edits from maintainers.
- */
 export async function pushReview(id: string, message: string): Promise<PushedReview> {
   const { row, project, worktree, ws } = await ownWorktree(id);
   const github = await codeGitHub().client(project);
@@ -659,26 +552,17 @@ export async function pushReview(id: string, message: string): Promise<PushedRev
   return { sha, branch: pr.headRef };
 }
 
-/** Put the review's worktree back at the PR's head. */
 export async function discardReviewChanges(id: string): Promise<void> {
   const { row, worktree, ws } = await ownWorktree(id);
   await ws.discard(worktree, row.headSha).catch(saying);
 }
 
-/** A suggestion block of `lines`, fenced longer than any fence inside them. */
 function suggestion(lines: string[]): string {
   const longest = Math.max(2, ...lines.map((l) => /^`{3,}/.exec(l)?.[0].length ?? 0));
   const fence = "`".repeat(longest + 1);
   return `${fence}suggestion\n${lines.map((l) => `${l}\n`).join("")}${fence}`;
 }
 
-/**
- * The owner's changes as pending suggestion comments, one per hunk, on the
- * PR head's lines each replaces (an added line is suggested with the line it
- * follows), for when they cannot push. GitHub takes a comment only on lines
- * of the PR's own diff, so a hunk outside it, or in a file the owner added
- * or deleted, is skipped and counted.
- */
 export async function suggestReviewChanges(id: string): Promise<SuggestedChanges> {
   const { row, worktree, ws } = await reviewWorktree(id);
   const files = await ws.files(worktree, row.headSha).catch(saying);
@@ -695,7 +579,6 @@ export async function suggestReviewChanges(id: string): Promise<SuggestedChanges
   );
   const drafts = read.flatMap((r) => r.drafts);
   const comments = threadReview(reviewKey(id), "github");
-  // One at a time, so they list in the order of the diff.
   await drafts.reduce<Promise<unknown>>(
     (previous, draft) => previous.then(() => comments.addDraft(draft)),
     Promise.resolve(),
@@ -704,7 +587,6 @@ export async function suggestReviewChanges(id: string): Promise<SuggestedChanges
   return { added: drafts.length, skipped };
 }
 
-/** One file's hunks as suggestions on the PR head's lines, those GitHub can take. */
 function suggestionsFor(path: string, mine: Hunk[], pull: Hunk[], headLines: string[]) {
   const drafts: DraftInput[] = [];
   let skipped = 0;
@@ -737,7 +619,6 @@ function suggestionsFor(path: string, mine: Hunk[], pull: Hunk[], headLines: str
   return { drafts, skipped };
 }
 
-/** A Terminal tab that starts in the review's worktree. */
 export async function reviewTerminal(id: string): Promise<ReviewTerminal> {
   const { worktree } = await reviewWorktree(id);
   try {

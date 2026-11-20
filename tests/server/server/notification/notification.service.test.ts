@@ -1,9 +1,3 @@
-/**
- * The notification pipeline with a fake channel, an in-memory log and fake
- * timers: per-event switches, dedupe (also across a restart), coalescing and
- * cancel-on-resolve, throttling with one summary, quiet hours, retries and
- * the channel states that stop sending.
- */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { createMemoryLogStore } from "@groot/core/notification/notification.log";
 import {
@@ -141,7 +135,7 @@ const flush = () => vi.advanceTimersByTimeAsync(0);
 describe("NotificationService", () => {
   beforeEach(() => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-10-29T06:00:00Z")); // 11:30 IST
+    vi.setSystemTime(new Date("2026-10-29T06:00:00Z"));
   });
   afterEach(() => {
     vi.useRealTimers();
@@ -235,7 +229,6 @@ describe("NotificationService", () => {
     await flush();
     expect(channel.send).toHaveBeenCalledTimes(1);
 
-    // A new process over the same log (pi-durable re-runs the waiting call).
     const restarted = build({ log });
     restarted.service.notify(approval(1));
     await flush();
@@ -271,7 +264,7 @@ describe("NotificationService", () => {
     expect(log.rows.find((row) => row.dedupeKey === "approval:7:1")?.status).toBe("cancelled");
 
     service.notify(approval(5, { coalesce }));
-    service.cancel("approval:7:5"); // before it was even accepted
+    service.cancel("approval:7:5");
     await vi.advanceTimersByTimeAsync(30_000);
     expect(channel.send).toHaveBeenCalledTimes(1);
     expect(log.rows.find((row) => row.dedupeKey === "approval:7:5")?.status).toBe("cancelled");
@@ -382,11 +375,10 @@ describe("NotificationService", () => {
     service.notify(update(2));
     service.notify(approval(1));
     await flush();
-    // Needs-input still arrives, quietly.
     expect(channel.sent).toEqual([
       expect.objectContaining({ title: "Ops needs approval", priority: -1 }),
     ]);
-    await vi.advanceTimersByTimeAsync(30 * 60_000); // 12:00 IST
+    await vi.advanceTimersByTimeAsync(30 * 60_000);
     expect(channel.sent).toHaveLength(2);
     expect(channel.sent[1]).toMatchObject({
       title: "2 updates during quiet hours",
@@ -437,7 +429,7 @@ describe("NotificationService", () => {
     expect(channel.sent).toHaveLength(1);
     service.cancel("approval:7:1");
     service.cancel("approval:7:1");
-    service.cancel("approval:7:9"); // never sent
+    service.cancel("approval:7:9");
     await flush();
     expect(channel.dismissed).toEqual(["approval:7:1"]);
   });
@@ -460,7 +452,6 @@ describe("NotificationService", () => {
       return { ok: true, providerId: "req" };
     });
     const { service, log } = build({ channel });
-    // Two in flight fill the queue's slots; the third waits.
     service.notify(approval(1));
     service.notify(approval(2));
     service.notify(approval(3));
@@ -541,7 +532,7 @@ describe("NotificationHub", () => {
 
   it("switches every channel at once when the choice is saved", async () => {
     const { hub, pushover, webpush } = hubOf({ deliverTo: "pushover" });
-    await webpush.service.getSettings(); // cache the old value
+    await webpush.service.getSettings();
     await hub.saveSettings({ deliverTo: "webpush" });
     hub.notify(approval(1));
     await flush();

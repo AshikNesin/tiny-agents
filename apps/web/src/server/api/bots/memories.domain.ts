@@ -1,17 +1,9 @@
-/**
- * Memory domain (issue #22), pure and DB-free: the typed lifecycle, budget
- * constants, deterministic rendering, and the capture contract that every
- * surface (section, capture, API, UI) reuses. Rows, not files: the domain
- * object is a fact with a lifecycle, and the typed row makes invalid states
- * unrepresentable at every boundary instead of parseable out of markdown.
- */
 import { MEMORY_CATEGORY_ORDER } from "@tiny-agents/agent";
 import { z } from "zod";
 import type { MemoryCategory, MemoryRecord, MemorySource } from "../../../shared/api/memories";
 
 export type { MemoryCategory, MemoryRecord, MemorySource };
 
-/** The injected block's render lives with the prompt section that injects it. */
 export { MEMORY_RENDER_CHAR_CAP, renderMemoryBlock } from "@tiny-agents/agent";
 
 const MEMORY_CATEGORIES = [
@@ -21,19 +13,13 @@ const MEMORY_CATEGORIES = [
   "habit",
 ] as const satisfies readonly MemoryCategory[];
 
-/** Category display order in every rendered surface (prompt and page). */
 export const CATEGORY_ORDER: readonly MemoryCategory[] = MEMORY_CATEGORY_ORDER;
 
-/** Active budget: about 60 memories of ~80 chars fit the render cap whole (#334). */
 export const MEMORY_MAX_ACTIVE = 60;
 const MEMORY_TEXT_MAX = 300;
-/** Capture window cap: the newest transcript characters one extraction reads. */
 export const MEMORY_CAPTURE_CHAR_CAP = 24_000;
-/** Deleted memories the capture prompt lists as never-re-add. */
 export const MEMORY_REMOVED_IN_PROMPT = 30;
-/** Capture skip threshold: fewer owner bytes than this since the watermark. */
 export const MEMORY_TRIVIAL_BYTES = 24;
-/** Capture debounce: quiet window / turn count (OpenMausBot's proven pair). */
 export const MEMORY_QUIET_MS = 2 * 60_000;
 export const MEMORY_TURN_LIMIT = 6;
 
@@ -45,11 +31,6 @@ export function isExpired(memory: Pick<MemoryRecord, "until">, now: Date = new D
   return memory.until !== null && new Date(memory.until).getTime() <= now.getTime();
 }
 
-/**
- * The extraction contract (issue #22 §5.3). The model proposes; code decides.
- * Invalid arrays are dropped whole, never partially applied.
- */
-/** Accepts full ISO datetimes and date-only values (models send "2026-10-30"). */
 const untilSchema = z
   .string()
   .regex(

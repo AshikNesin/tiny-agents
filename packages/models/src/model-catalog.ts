@@ -1,9 +1,3 @@
-/**
- * The Model catalog (issue #179): a projection of the owner's provider
- * accounts and model rows. A bot names a model by its row id, so there is no
- * id grammar to parse: the catalog answers what a row is, whether it can run
- * now, how to route it, and which model a role resolves to.
- */
 import type { Api, ClassifierApi, ClassifierModel, Model } from "@earendil-works/pi-ai";
 import type { Models } from "@earendil-works/pi-ai/models";
 import type { ModelConfig, ModelRow, ProviderAccount } from "./config";
@@ -16,36 +10,20 @@ import type {
   ProviderSummary,
 } from "./types";
 
-/** What the catalog reads from the pi-ai registry. */
 export type CatalogModels = Pick<Models, "getModel" | "getModelOfType">;
 
 export interface ModelCatalog {
-  /** Models, picker order (accounts by name, then models by name). */
   list(filter?: { type?: CatalogModel["type"]; enabledOnly?: boolean }): CatalogModel[];
   get(id: string): CatalogModel | undefined;
-  /** How to call the model, when it can run now. */
   route(id: string): ModelRoute | undefined;
-  /** The registry chat model behind a pi model, when it can run now. */
   piModel(id: string): Model<Api> | undefined;
-  /** The registry classifier model behind a classifier row, when it can run now. */
   classifierModel(id: string): ClassifierModel<ClassifierApi> | undefined;
-  /**
-   * The model a role resolves to, with its documented fallback:
-   * - `bot_default`: the role, else the first available chat model;
-   * - `memory_capture`, `chat_title`: the role, else the bot's model when it
-   *   runs on pi, else `bot_default`;
-   * - `vision`: the role, else the first available model that sees images;
-   * - `classifier`: the role only.
-   */
   forRole(role: ModelRole, options?: { bot?: string }): CatalogModel | undefined;
-  /** Whether a role is set explicitly (false: its value is the fallback). */
   roleIsSet(role: ModelRole): boolean;
   providers(): ProviderSummary[];
-  /** The Claude plan account's state, when there is one. */
   claudePlan():
     | { enabled: boolean; fallbackModelId?: string; maxTurns?: number | "unlimited" }
     | undefined;
-  /** Some chat model can run now. */
   canAnswer(): boolean;
 }
 
@@ -109,7 +87,6 @@ export function createModelCatalog(config: ModelConfig, registry: CatalogModels)
       };
     }
     const account = accounts.get(model.providerId);
-    // A gateway's custom-provider model is served by that provider's own entry.
     const target =
       account?.kind === "cloudflare-ai-gateway"
         ? gatewayModelRoute(account, model.upstreamId)
@@ -153,7 +130,6 @@ export function createModelCatalog(config: ModelConfig, registry: CatalogModels)
           return usable(set) ?? firstChat();
         case "memory_capture":
         case "chat_title": {
-          // Side calls run on pi only: a Claude plan model here would skip the call.
           const pi = (model: CatalogModel | undefined) =>
             model?.engine === "pi" ? model : undefined;
           return (

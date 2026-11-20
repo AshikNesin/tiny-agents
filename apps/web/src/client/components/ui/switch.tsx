@@ -6,22 +6,11 @@ import { animate, motion, useMotionValue, useReducedMotion } from "motion/react"
 
 import { cn } from "@groot/ui/lib/utils";
 
-/**
- * Toggle switch with Fluid Functionalism's thumb
- * (https://www.fluidfunctionalism.com/docs/switch): it springs between the
- * ends, stretches into a pill on hover, squashes on press, and follows a drag
- * (released past the midpoint, it toggles). Radix still owns the checkbox
- * semantics, keyboard toggling and form wiring, so the API is unchanged.
- */
-
-// Track/thumb geometry per size. Each track is its thumb plus 4px, so a
-// resting thumb sits 2px from every edge.
 const METRICS = {
   default: { trackWidth: 34, trackHeight: 20, thumb: 16, hoverExtend: 2, pressExtend: 4 },
   sm: { trackWidth: 28, trackHeight: 16, thumb: 12, hoverExtend: 2, pressExtend: 3 },
 } as const;
 const OFFSET = 2;
-/** Pointer travel (px) before a press becomes a drag; under it a tap still toggles. */
 const DRAG_DEAD_ZONE = 2;
 const SPRING = { type: "spring", duration: 0.16, bounce: 0 } as const;
 
@@ -58,13 +47,11 @@ function Switch({
 
   const width = pressed ? m.thumb + m.pressExtend : hovered ? m.thumb + m.hoverExtend : m.thumb;
   const height = pressed ? m.thumb - m.pressExtend : m.thumb;
-  // Checked, the extra width grows leftward so the outer edge stays pinned.
   const restX = checked ? OFFSET + travel - (width - m.thumb) : OFFSET;
 
   const x = useMotionValue(restX);
   const mounted = React.useRef(false);
   const drag = React.useRef<{ startX: number; originX: number; active: boolean } | null>(null);
-  // Outlives the pointerup by one click so the click that ends a drag is swallowed.
   const swallowClick = React.useRef(false);
 
   React.useEffect(() => {
@@ -141,7 +128,6 @@ function Switch({
       }}
       onClick={(e) => {
         onClick?.(e);
-        // The click that ends a drag: the drag already decided.
         if (swallowClick.current) {
           swallowClick.current = false;
           e.preventDefault();

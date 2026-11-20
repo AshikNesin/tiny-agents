@@ -1,10 +1,3 @@
-/**
- * Guests and shared bots (issue #145). The owner adds a guest (a plain
- * account plus a `guests` row) and shares bots with them: a shared bot's chat
- * is one conversation everybody in it sees live. What a guest may reach is
- * the access module's (`access.ts`, `guest.guard.ts`); an account with no
- * `guests` row is the owner, so nothing changes until someone is added.
- */
 import { and, asc, eq, inArray, notInArray } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import * as authService from "@groot/core/auth/auth.service";
@@ -15,7 +8,6 @@ import { isGuestAccount } from "./access";
 import { revokeLiveAccess } from "./live-access";
 import type { GuestData, GuestRemoved } from "../../../shared/api/people";
 
-/** The name a person goes by in a shared chat: their name, else their email's local part. */
 function displayName(user: { name: string | null; email: string }): string {
   return user.name?.trim() || user.email.split("@")[0] || user.email;
 }
@@ -48,12 +40,6 @@ export async function listGuests(): Promise<GuestData[]> {
   }));
 }
 
-/**
- * Add a guest: a new account the owner hands its password to. 409 for a
- * taken email. The account and its `guests` row are written in one
- * transaction (S8): an account without the row would be the owner, so a
- * failure between the two must leave neither.
- */
 export async function addGuest(data: CreateUserDTO): Promise<GuestData> {
   const taken = () => Boom.conflict("User with this email already exists");
   if (await authService.findUserByEmail(data.email)) throw taken();
@@ -79,10 +65,6 @@ export async function addGuest(data: CreateUserDTO): Promise<GuestData> {
   };
 }
 
-/**
- * Remove a guest's account (their shares and passkeys go with it), and end
- * what they hold open. Owners are never removed here.
- */
 export async function removeGuest(userId: number): Promise<GuestRemoved> {
   if (!(await isGuestAccount(userId))) throw Boom.notFound("Guest not found");
   await db.delete(users).where(eq(users.id, userId));
@@ -90,11 +72,6 @@ export async function removeGuest(userId: number): Promise<GuestRemoved> {
   return { removed: true };
 }
 
-/**
- * Share a bot with exactly these guests. Unknown ids and owners are refused
- * (400), so a typo never shares with the wrong person. Kept guests keep their
- * read marker; a dropped guest's open views of the bot end.
- */
 export async function setBotGuests(botId: string, userIds: number[]): Promise<void> {
   const wanted = [...new Set(userIds)];
   if (wanted.length > 0) {
@@ -125,7 +102,6 @@ export async function setBotGuests(botId: string, userIds: number[]): Promise<vo
   for (const { userId } of dropped) revokeLiveAccess({ userId, botId });
 }
 
-/** A guest's read marker on a shared bot. */
 export async function markGuestRead(botId: string, userId: number): Promise<void> {
   await db
     .update(botGuests)
@@ -133,7 +109,6 @@ export async function markGuestRead(botId: string, userId: number): Promise<void
     .where(and(eq(botGuests.botId, botId), eq(botGuests.userId, userId)));
 }
 
-/** Read markers of a guest's shared bots, by bot id. */
 export async function guestReadMarkers(userId: number): Promise<Map<string, Date | null>> {
   const rows = await db
     .select({ botId: botGuests.botId, lastReadAt: botGuests.lastReadAt })
@@ -142,16 +117,11 @@ export async function guestReadMarkers(userId: number): Promise<Map<string, Date
   return new Map(rows.map((row) => [row.botId, row.lastReadAt]));
 }
 
-/** The sender of a message in a shared chat. */
 export async function authorOf(userId: number): Promise<{ id: number; name: string }> {
   const user = await authService.findUserById(userId);
   return { id: userId, name: user ? displayName(user) : `User ${userId}` };
 }
 
-/**
- * Names of everyone in a shared bot's chat, the owner first; empty when the
- * bot is not shared. The owner is the first account without a `guests` row.
- */
 export async function participantNames(botId: string): Promise<string[]> {
   const shared = await db.query.botGuests.findMany({
     where: eq(botGuests.botId, botId),
@@ -163,7 +133,6 @@ export async function participantNames(botId: string): Promise<string[]> {
   return [...(owner ? [displayName(owner)] : []), ...shared.map((row) => displayName(row.user))];
 }
 
-/** The owner's account: the first one without a `guests` row. */
 async function ownerRow() {
   const guestIds = db.select({ userId: guests.userId }).from(guests);
   const [owner] = await db
@@ -175,7 +144,6 @@ async function ownerRow() {
   return owner;
 }
 
-/** The owner's user id, or undefined before anyone signed up. */
 export async function ownerUserId(): Promise<number | undefined> {
   return (await ownerRow())?.id;
 }

@@ -37,7 +37,6 @@ function EditScheduleButton({
   );
 }
 
-/** Scheduled (cron) jobs: desktop grid + mobile cards, with edit/cancel actions. */
 export function ScheduledJobsPanel() {
   const { data: scheduledJobs = [], isLoading } = useScheduledJobs();
   const cancel = useAction((jobName: string) => jobsApi.cancelScheduledJob(jobName), {
@@ -104,7 +103,6 @@ export function ScheduledJobsPanel() {
             ))}
           </div>
         </div>
-        {/* Mobile scheduled cards */}
         <div className="md:hidden divide-y divide-border/40">
           {scheduledJobs.map((job) => (
             <div key={job.name} className="px-4 py-3 space-y-2">

@@ -1,4 +1,3 @@
-/** Standard API response envelope (mirrors the server's `api-response.utils`). */
 export interface ApiResponse<T = unknown> {
   success: boolean;
   data?: T;
@@ -16,16 +15,11 @@ export interface ApiResponse<T = unknown> {
   };
 }
 
-/** Thrown for non-2xx responses and for envelopes without data. */
 export class ApiError extends Error {
   readonly status: number;
   readonly code: string;
   readonly details?: unknown;
   readonly url: string;
-  /**
-   * True when `message` came from the server's error envelope; false when it
-   * is the client's fallback (the HTTP status line), which says little.
-   */
   readonly fromServer: boolean;
 
   constructor(init: {
@@ -46,11 +40,6 @@ export class ApiError extends Error {
   }
 }
 
-/**
- * The request never reached the server: `fetch` itself rejected (offline, DNS,
- * CORS, a dropped connection). Extends `TypeError`, which is what `fetch`
- * throws, so `instanceof TypeError` checks keep working.
- */
 export class NetworkError extends TypeError {
   readonly url: string;
 
@@ -61,16 +50,11 @@ export class NetworkError extends TypeError {
   }
 }
 
-/**
- * A 401 from the session guard (`SESSION_INVALID`), with when its request was
- * sent (a `performance.now()` timestamp).
- */
 export interface UnauthorizedEvent {
   path: string;
   sentAt: number;
 }
 
-/** `ErrorCode.SESSION_INVALID` in `@groot/core/errors`, the session guard's 401 code. */
 const SESSION_INVALID = "SESSION_INVALID";
 
 type Params = Record<string, unknown>;
@@ -88,22 +72,13 @@ function buildUrl(path: string, params?: Params): string {
   return query ? `${url}?${query}` : url;
 }
 
-/**
- * API client: the single surface for backend calls, on plain `fetch`. Unwraps
- * the `{ success, data }` envelope and throws an `ApiError` on failure so
- * callers get typed values directly. The session cookie travels with every
- * request.
- */
-/** Per-request extras every verb accepts. */
 export interface ExtraOptions {
-  /** Headers added to the request (a step-up token, an idempotency key). */
   headers?: Record<string, string>;
 }
 
 export interface RequestOptions extends ExtraOptions {
   params?: Params;
   body?: unknown;
-  /** The endpoint may answer with no data; return `undefined` instead of throwing. */
   emptyOk?: boolean;
 }
 
@@ -120,11 +95,6 @@ async function readEnvelope<T>(response: Response): Promise<ApiResponse<T> | und
 class ApiClient {
   private readonly unauthorizedHandlers = new Set<(event: UnauthorizedEvent) => void>();
 
-  /**
-   * Run `handler` when the session guard rejects a request (a 401 coded
-   * `SESSION_INVALID`). Any other 401, such as a wrong password, only throws.
-   * Returns an unsubscribe function.
-   */
   onUnauthorized(handler: (event: UnauthorizedEvent) => void): () => void {
     this.unauthorizedHandlers.add(handler);
     return () => {
@@ -140,7 +110,7 @@ class ApiClient {
     const headers = new Headers({ accept: "application/json", ...options.headers });
     let body: BodyInit | undefined;
     if (options.body instanceof FormData) {
-      body = options.body; // the browser sets multipart/form-data with the boundary
+      body = options.body;
     } else if (options.body !== undefined) {
       headers.set("content-type", "application/json");
       body = JSON.stringify(options.body);
@@ -156,7 +126,6 @@ class ApiClient {
         credentials: "include",
       });
     } catch (error) {
-      // `fetch` rejects with a TypeError only when the request could not be made.
       if (error instanceof TypeError) throw new NetworkError(path, { cause: error });
       throw error;
     }
@@ -198,12 +167,6 @@ class ApiClient {
     return this.unwrap<T>(await this.envelope<T>(await this.send(method, path, options)), path);
   }
 
-  /**
-   * Any verb with the full set of options: query params, a JSON (or
-   * FormData) body, extra headers such as a step-up token, and `emptyOk`
-   * for an endpoint that may answer with no data (as DELETE does), in which
-   * case the result is whatever data came back or `undefined`.
-   */
   async request<T>(method: string, path: string, options: RequestOptions = {}): Promise<T> {
     const verb = method.toUpperCase();
     if (!options.emptyOk) return this.call<T>(verb, path, options);
@@ -227,21 +190,14 @@ class ApiClient {
     return this.call<T>("PATCH", url, { ...options, body: data });
   }
 
-  /**
-   * DELETE. Unlike the other verbs, DELETE may legitimately return no body
-   * (204 No Content), so this does not throw on missing data — it returns
-   * whatever data is present (typed by the caller) or `undefined`.
-   */
   async delete<T = unknown>(url: string, data?: unknown, options?: ExtraOptions): Promise<T> {
     return this.request<T>("DELETE", url, { ...options, body: data, emptyOk: true });
   }
 
-  /** Upload `FormData` — the browser sets the multipart Content-Type + boundary. */
   async postForm<T>(url: string, formData: FormData): Promise<T> {
     return this.call<T>("POST", url, { body: formData });
   }
 
-  /** Download a binary file as a `Blob` (no envelope unwrapping). */
   async getBlob(url: string, params?: Params): Promise<Blob> {
     const response = await this.send("GET", url, { params });
     return response.blob();

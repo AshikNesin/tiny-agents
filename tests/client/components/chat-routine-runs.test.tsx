@@ -74,7 +74,6 @@ const BOT = {
   updatedAt: new Date().toISOString(),
 } as Bot;
 
-/** 03:MM UTC is 08:MM+30 IST (UTC+5:30): minute 30 → 09:00. */
 const at = (minute: number) => Date.parse(`2026-10-20T03:${minute}:00.000Z`);
 
 const run = (id: string, minute: number, extra: Partial<RoutineRunCard> = {}): RoutineRunCard => ({
@@ -138,7 +137,6 @@ describe("ChatPane — routine runs", () => {
     const toggle = within(line).getByRole("button");
     expect(toggle).toHaveTextContent(/^Process emails·ran 3×1 failed·last 09:00$/);
     expect(toggle).toHaveAttribute("aria-expanded", "false");
-    // Quiet until opened: no output in the chat.
     expect(within(line).queryByText("Output a")).toBeNull();
 
     const before = screen.getByText("before the runs");
@@ -148,7 +146,6 @@ describe("ChatPane — routine runs", () => {
 
     await userEvent.setup().click(toggle);
     const details = within(line).getAllByTestId("routine-run");
-    // Newest first, markdown flattened, error shown.
     expect(details.map((detail) => detail.dataset.status)).toEqual([
       "succeeded",
       "failed",

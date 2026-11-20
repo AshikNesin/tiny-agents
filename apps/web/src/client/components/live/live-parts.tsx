@@ -1,11 +1,9 @@
-/** What the panel and the page draw alike over and around the viewer. */
 import type { ReactNode } from "react";
 import { Hand, LoaderCircle, MousePointerClick } from "lucide-react";
 import { cn } from "@groot/ui/lib/utils";
 import type { Connection } from "../../lib/live-view";
 import type { VncState } from "../browser/VncView";
 
-/** What a bot asked the owner to do on its desktop, while the owner drives. */
 export function TakeoverBanner({
   testId,
   asked,
@@ -31,7 +29,6 @@ export function TakeoverBanner({
   );
 }
 
-/** Over the viewer until it is live: connecting, or reconnecting. */
 export function ConnectingOverlay({
   vncState,
   connecting,
@@ -47,11 +44,6 @@ export function ConnectingOverlay({
   );
 }
 
-/**
- * Over a view-only stream: the whole stream is the Take control button. A
- * pointer over it says so; a touch screen, which has no hover, always shows
- * the hint.
- */
 export function TakeControlLayer({
   testId,
   title,
@@ -78,11 +70,6 @@ export function TakeControlLayer({
   );
 }
 
-/**
- * Around the stream while the owner drives it: theirs until they hand it back.
- * It takes the viewport's corners (which take the card's), so a rounded card
- * does not clip the ring at its corners.
- */
 export function DrivingFrame({ testId }: { testId: string }) {
   return (
     <div
@@ -93,12 +80,6 @@ export function DrivingFrame({ testId }: { testId: string }) {
   );
 }
 
-/**
- * One chip for the state that matters: who drives once the stream is live
- * (pulsing while it is the owner), otherwise the connection. The bar it sits
- * in is a container: when it is narrow the owner's chip is the pulsing dot
- * alone, since the frame and Hand back already say the stream is theirs.
- */
 export function StatusChip({
   connection,
   live,
@@ -109,9 +90,7 @@ export function StatusChip({
 }: {
   connection: Connection;
   live: boolean;
-  /** The owner drives. */
   yours: boolean;
-  /** Who drives, in words. */
   driver: string;
   testId?: string;
   driverTestId: string;

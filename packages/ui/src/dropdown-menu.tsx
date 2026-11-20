@@ -1,12 +1,5 @@
 "use client";
 
-/**
- * Dropdown menu with Fluid Functionalism's popup feel
- * (https://www.fluidfunctionalism.com/docs/dropdown): the panel grows out of
- * its trigger with a short fade, scale and 4px slide, and one highlight glides
- * between rows (FluidHighlight) instead of each row lighting up on its own.
- */
-
 import * as React from "react";
 import { DropdownMenu as DropdownMenuPrimitive } from "radix-ui";
 

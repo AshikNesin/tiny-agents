@@ -1,8 +1,3 @@
-/**
- * Transcript presentation (issue #143, ADR 0011): finished tool runs fold
- * into one line, and a thread's live events (snapshot, then rows by id,
- * partial text, state) fold into what the page renders.
- */
 import { describe, expect, it } from "vite-plus/test";
 import type { ThreadSnapshot, ToolItem, TranscriptItem } from "@/lib/code/api";
 import { describeTools, foldTurns, groupTools, lastErrorId } from "@/lib/code/transcript";
@@ -100,7 +95,6 @@ describe("foldTurns", () => {
     if (work.kind !== "work") return;
     expect(work.durationMs).toBe(214_000);
     expect(work.costUsd).toBe(0.4);
-    // Inside the fold the tool runs still group the way they always have.
     expect(work.items.map((i) => i.id)).toEqual(["th1", "progress", "group:t1", "th2"]);
   });
 

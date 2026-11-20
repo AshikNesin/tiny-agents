@@ -52,7 +52,6 @@ describe("ChatMessageView reply card", () => {
       />,
     );
     expect(document.querySelector('[data-slot="reply-card"]')).not.toBeInTheDocument();
-    // The trace row is still visible.
     expect(screen.getByText("list routines")).toBeInTheDocument();
   });
 

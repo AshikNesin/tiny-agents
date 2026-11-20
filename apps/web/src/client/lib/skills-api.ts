@@ -1,4 +1,3 @@
-/** Typed client for the skills API (issue #1 M2); the shapes are `shared/api/skills.ts`. */
 import { apiClient } from "@groot/shell/lib/api";
 import type { Deleted } from "../../shared/api/common";
 import type {

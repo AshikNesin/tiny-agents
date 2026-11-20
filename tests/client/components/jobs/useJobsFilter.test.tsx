@@ -10,7 +10,6 @@ function renderFilter(searchParams = "") {
   const hook = renderHook(() => useJobsFilter(), {
     wrapper: withNuqsTestingAdapter({ searchParams, onUrlUpdate, hasMemory: true }),
   });
-  // nuqs writes the URL after the state update, so wait for it.
   const urlBecomes = (queryString: string) =>
     waitFor(() => expect(onUrlUpdate.mock.lastCall?.[0].queryString).toBe(queryString));
   return { ...hook, urlBecomes };
@@ -120,8 +119,6 @@ describe("useJobsFilter", () => {
     });
   });
 
-  // Expected starts are built from FIXED_NOW in local time, independently of
-  // the date helpers the hook uses.
   const now = new Date(FIXED_NOW);
   it.each([
     ["today", new Date(now.getFullYear(), now.getMonth(), now.getDate())],
@@ -139,7 +136,6 @@ describe("useJobsFilter", () => {
     const { result, urlBecomes } = renderFilter();
     act(() => result.current.setPreset("today"));
     await urlBecomes("?datePreset=today");
-    // Opened a day later, the same link means that day.
     const nextDay = new Date(Date.parse(FIXED_NOW) + 86_400_000);
     expect(result.current.listParams(nextDay).startDate).toBe(
       localDay(nextDay.toISOString(), [0, 0, 0, 0]).toISOString(),

@@ -22,7 +22,6 @@ import java.io.OutputStream
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-/** [RfbClient] against a scripted server: handshake, messages, input, resize and bad input. */
 class RfbClientTest {
     @get:Rule
     val timeout: Timeout = Timeout(30, TimeUnit.SECONDS)
@@ -38,14 +37,9 @@ class RfbClientTest {
         servers.forEach { it.client.close() }
     }
 
-    // Handshake
-
     @Test
     fun `handshake speaks RFB 3_8 with security None and sets its own pixel format and encodings`() {
         val s = server()
-        // handshake() asserts every byte: version, security type 1, shared ClientInit,
-        // SetPixelFormat (32 bpp, depth 24, little-endian, shifts 16/8/0), SetEncodings in
-        // preference order, and a full non-incremental update request.
         s.handshake(640, 480, "bot: browser")
         assertEquals(640, s.client.framebuffer.width)
         assertEquals(480, s.client.framebuffer.height)
@@ -167,8 +161,6 @@ class RfbClientTest {
         assertEquals("Connection closed during the handshake", s.listener.awaitDisconnect())
     }
 
-    // Lifecycle
-
     @Test
     fun `end of stream after the handshake is a clean disconnect, reported once`() {
         val s = connected(64, 64)
@@ -234,7 +226,6 @@ class RfbClientTest {
 
     @Test
     fun `works over plain java streams too`() {
-        // A whole session from a byte array: handshake, one raw pixel, end of stream.
         val session = Msg().text("RFB 003.008\n").u8(1, 1).s32(0)
             .u16(2, 1).pad(16).s32(1).text("x")
             .u8(0, 0).u16(1).bytes(rawRect(1, 0, 1, 1, intArrayOf(opaque(0x123456))))
@@ -247,8 +238,6 @@ class RfbClientTest {
         assertArrayEquals(intArrayOf(OPAQUE, opaque(0x123456)), client.framebuffer.pixels)
     }
 
-    // Pixel encodings
-
     @Test
     fun `raw rectangles land at their position as opaque ARGB`() {
         val s = connected(8, 6)
@@ -259,7 +248,6 @@ class RfbClientTest {
         assertArrayEquals(pixels, s.region(2, 3, 3, 2))
         assertEquals("outside the rectangle stays black", OPAQUE, s.pixel(1, 3))
         assertEquals(OPAQUE, s.pixel(5, 4))
-        // Wire bytes B, G, R, X map to 0xFFRRGGBB whatever the unused byte holds.
         s.update(rect(0, 0, 1, 1, 0, Msg().u8(0x11, 0x22, 0x33, 0x00).toByteArray()))
         s.expectUpdateRequest(incremental = true, 8, 6)
         assertEquals(0xFF332211.toInt(), s.pixel(0, 0))
@@ -296,7 +284,6 @@ class RfbClientTest {
             val before = noise(12 * 12, seed = 5)
             s.update(rawRect(0, 0, 12, 12, before))
             s.expectUpdateRequest(incremental = true, 12, 12)
-            // Copy the 6x6 block at (3,3) to (3+dx, 3+dy): source and target overlap.
             s.update(rect(3 + dx, 3 + dy, 6, 6, 1, Msg().u16(3, 3).toByteArray()))
             s.expectUpdateRequest(incremental = true, 12, 12)
             val expected = before.copyOf()
@@ -314,18 +301,17 @@ class RfbClientTest {
         val c = opaque(0x00FF00)
         val d = opaque(0xFF00FF)
         val rawTile = noise(16 * 16, seed = 6)
-        // A 36x18 rectangle at (2,1): tiles of 16x16, 16x16, 4x16, then a row of 16x2, 16x2, 4x2.
         val payload = Msg()
-            .u8(1).pixel(*rawTile) // raw
-            .u8(2).pixel(a) // background only
-            .u8(0) // nothing: background carried over
-            .u8(2 or 4 or 8).pixel(b).pixel(c) // background, foreground, 2 foreground sub-rectangles
-            .u8(2).u8(0x00, 0x00) // 1x1 at (0,0)
-            .u8(0xF1, 0x00) // 1x1 at (15,1)
-            .u8(8).u8(1).u8(0x30, 0x41) // foreground carried over: 5x2 at (3,0)
-            .u8(8 or 16).u8(2) // coloured sub-rectangles on the carried background
-            .pixel(d).u8(0x00, 0x11) // 2x2 at (0,0)
-            .pixel(a).u8(0x21, 0x10) // 2x1 at (2,1)
+            .u8(1).pixel(*rawTile)
+            .u8(2).pixel(a)
+            .u8(0)
+            .u8(2 or 4 or 8).pixel(b).pixel(c)
+            .u8(2).u8(0x00, 0x00)
+            .u8(0xF1, 0x00)
+            .u8(8).u8(1).u8(0x30, 0x41)
+            .u8(8 or 16).u8(2)
+            .pixel(d).u8(0x00, 0x11)
+            .pixel(a).u8(0x21, 0x10)
             .toByteArray()
         s.update(rect(2, 1, 36, 18, 5, payload))
         s.expectUpdateRequest(incremental = true, 40, 20)
@@ -357,16 +343,12 @@ class RfbClientTest {
         s.update(rect(0, 0, 16, 16, 5, Msg().u8(2 or 4).pixel(a).pixel(a).toByteArray()))
         s.expectUpdateRequest(incremental = true, 16, 16)
         assertEquals(a, s.pixel(7, 7))
-        // No colours given: both default to black, they are not carried from the last rectangle.
         s.update(rect(0, 0, 16, 16, 5, Msg().u8(8).u8(1).u8(0x00, 0x00).toByteArray()))
         s.expectUpdateRequest(incremental = true, 16, 16)
         assertEquals(OPAQUE, s.pixel(7, 7))
         assertEquals(OPAQUE, s.pixel(0, 0))
     }
 
-    // ZRLE
-
-    /** 100x70: tiles of 64x64, 36x64, 64x6 and 36x6. */
     private val zrleWidth = 100
     private val zrleHeight = 70
 
@@ -380,17 +362,14 @@ class RfbClientTest {
         assertTrue("outside the rectangle stays black", s.region(0, 0, zrleWidth + 7, 5).all { it == OPAQUE })
     }
 
-    /** An image of [colours] colours where runs are short and every tile has every colour. */
     private fun paletteImage(colours: Int): IntArray {
         val palette = IntArray(colours) { opaque(0x010203 * (it + 1) + 0x400000) }
         return IntArray(zrleWidth * zrleHeight) { i -> palette[(i % zrleWidth * 7 + i / zrleWidth * 3) % colours] }
     }
 
-    /** An image of long and short runs: 1, 255, 256, 257 and 300 pixels, then whole tiles. */
     private fun runImage(colours: Int): IntArray {
         val palette = IntArray(colours) { opaque(0x030201 * (it + 1) + 0x000080) }
         val image = IntArray(zrleWidth * zrleHeight)
-        // Runs are laid out in tile order within the first 64x64 tile, so they stay runs there.
         val runs = intArrayOf(1, 255, 256, 257, 300, 1, 2, 1, 1, 3022)
         var colour = 0
         var index = 0
@@ -401,7 +380,6 @@ class RfbClientTest {
             }
             colour++
         }
-        // The other tiles: one solid (a single run of the whole tile), two striped.
         for (y in 0 until zrleHeight) {
             for (x in 0 until zrleWidth) {
                 if (x >= 64 && y < 64) image[y * zrleWidth + x] = palette[1 % colours]
@@ -440,7 +418,6 @@ class RfbClientTest {
     @Test
     fun `zrle plain rle with runs shorter and longer than 255`() {
         zrleRoundTrip(runImage(5), { TileMode.PlainRle })
-        // Runs of one pixel everywhere.
         zrleRoundTrip(noise(zrleWidth * zrleHeight, seed = 8), { TileMode.PlainRle })
     }
 
@@ -481,8 +458,6 @@ class RfbClientTest {
         val first = encoder.encode(image, 64, 64) { TileMode.Raw }
         val second = encoder.encode(image, 64, 64) { TileMode.Raw }
         val third = encoder.encode(image, 64, 64) { TileMode.Raw }
-        // Noise does not compress, but a repeat of it is a back-reference into the stream's
-        // history: the later rectangles only decode with the inflater state of the earlier ones.
         assertTrue("first ${first.size} bytes, second ${second.size}", second.size < first.size / 4)
 
         s.update(rect(0, 0, 64, 64, 16, first), rect(64, 0, 64, 64, 16, second))
@@ -503,7 +478,6 @@ class RfbClientTest {
         val encoder = ZrleEncoder()
         val image = noise(64 * 64, seed = 11)
         val raw = Msg().u8(0).cpixel(*image).toByteArray()
-        // Three sync-flushed pieces, then an empty flush after the last tile byte.
         val compressed = encoder.compress(raw.copyOfRange(0, 100)) +
             encoder.compress(raw.copyOfRange(100, 5000)) +
             encoder.compress(raw.copyOfRange(5000, raw.size)) +
@@ -511,7 +485,6 @@ class RfbClientTest {
         s.update(rect(0, 0, 64, 64, 16, ZrleEncoder.frame(compressed)))
         s.expectUpdateRequest(incremental = true, 64, 64)
         assertArrayEquals(image, s.client.framebuffer.pixels)
-        // The stream is still in step for the next rectangle.
         val next = noise(64 * 64, seed = 12)
         s.update(rect(0, 0, 64, 64, 16, encoder.encode(next, 64, 64) { TileMode.Raw }))
         s.expectUpdateRequest(incremental = true, 64, 64)
@@ -520,8 +493,6 @@ class RfbClientTest {
 
     @Test
     fun `zrle reads a rectangle to its end when the tail holds no pixel data`() {
-        // Empty deflate blocks after the last tile: valid, and they belong to this rectangle.
-        // With enough of them the tail is read from the wire after the tiles are complete.
         val emptyBlock = byteArrayOf(0, 0, 0, 0xFF.toByte(), 0xFF.toByte())
         for (blocks in listOf(1, 900, 1700, 4200, 7000)) {
             val s = connected(64, 64)
@@ -543,9 +514,6 @@ class RfbClientTest {
 
     @Test
     fun `zrle stays in step when a rectangle's tiles end exactly on an inflate buffer boundary`() {
-        // 66x64: a 64x64 plain RLE tile of 4078 runs (1 + 4 * 4078 bytes) and a 2x64 packed
-        // tile (1 + 6 + 64 bytes) inflate to exactly 16384 bytes, the decoder's buffer size,
-        // so the last tile byte is also the last byte of a full buffer.
         val a = opaque(0x112233)
         val b = opaque(0x445566)
         val image = IntArray(66 * 64)
@@ -578,8 +546,6 @@ class RfbClientTest {
             assertArrayEquals(next, s.client.framebuffer.pixels)
         }
     }
-
-    // Chunked delivery
 
     @Test
     fun `a whole session delivered one byte at a time`() {
@@ -617,18 +583,13 @@ class RfbClientTest {
         zrleRoundTrip(noise(zrleWidth * zrleHeight, seed = 15), { TileMode.Raw }, chunk = 4099)
     }
 
-    // Other server messages
-
     @Test
     fun `bell, clipboard and skipped messages keep the stream in step`() {
         val s = connected(4, 4)
         s.send(Msg().u8(2))
         s.send(Msg().u8(3).pad(3).s32(6).text("café !"))
-        // SetColourMapEntries: 2 colours of 6 bytes.
         s.send(Msg().u8(1, 0).u16(0, 2).pad(12))
-        // Extended clipboard: a negative length whose absolute value is the payload size.
         s.send(Msg().u8(3).pad(3).s32(-8).pad(8))
-        // ServerFence, EndOfContinuousUpdates and xvp, which TigerVNC knows but was not asked for.
         s.send(Msg().u8(248).pad(3).s32(1).u8(4).pad(4))
         s.send(Msg().u8(150))
         s.send(Msg().u8(250, 0, 1, 0))
@@ -661,13 +622,10 @@ class RfbClientTest {
         )
         s.expectUpdateRequest(incremental = true, 4, 4)
         assertEquals(opaque(0x222222), s.pixel(1, 0))
-        // The next message is read as a message, not as a rectangle.
         s.send(Msg().u8(2))
         assertTrue(s.listener.all.contains("update 1,0 1x1"))
         while (s.listener.next() != "bell") {}
     }
-
-    // Resize
 
     @Test
     fun `ExtendedDesktopSize resizes, reallocates and asks for a full update`() {
@@ -676,7 +634,6 @@ class RfbClientTest {
         s.update(rawRect(0, 0, 1, 1, intArrayOf(opaque(0x778899))))
         s.expectUpdateRequest(incremental = true, 800, 600)
 
-        // The announcement: same size, so nothing changes.
         s.update(extendedDesktopSize(reason = 0, status = 0, 800, 600))
         s.expectUpdateRequest(incremental = true, 800, 600)
         assertSame(before, s.client.framebuffer)
@@ -718,7 +675,6 @@ class RfbClientTest {
             Msg().u8(251, 0).u16(1024, 700).u8(1, 0)
                 .s32(0x0A0B0C0D).u16(0, 0, 1024, 700).s32(0x01020304),
         )
-        // The server confirms: reason 1 (this client), status 0.
         s.update(extendedDesktopSize(reason = 1, status = 0, 1024, 700, screenId = 0x0A0B0C0D, flags = 0x01020304))
         s.expectUpdateRequest(incremental = false, 1024, 700)
         assertEquals("resize 1024x700", s.listener.next())
@@ -736,7 +692,6 @@ class RfbClientTest {
         s.expect("SetDesktopSize", Msg().u8(251, 0).u16(1024, 700).u8(1, 0).s32(7).u16(0, 0, 1024, 700).s32(0))
         s.expectUpdateRequest(incremental = true, 800, 600)
 
-        // Sent once: the next announcement does not repeat it.
         s.update(extendedDesktopSize(reason = 0, status = 0, 800, 600, screenId = 7, flags = 0))
         s.expectUpdateRequest(incremental = true, 800, 600)
     }
@@ -745,7 +700,6 @@ class RfbClientTest {
     fun `a refused resize of ours changes nothing`() {
         val s = connected(800, 600)
         val before = s.client.framebuffer
-        // Reason 1 (this client), status 1 (prohibited); the size in the rectangle is ignored.
         s.update(extendedDesktopSize(reason = 1, status = 1, 1024, 700))
         s.expectUpdateRequest(incremental = true, 800, 600)
         assertSame(before, s.client.framebuffer)
@@ -776,8 +730,6 @@ class RfbClientTest {
         assertTrue(s.client.requestDesktopSize(640, 480))
         s.expect("SetDesktopSize", Msg().u8(251, 0).u16(640, 480).u8(1, 0).s32(41).u16(0, 0, 640, 480).s32(9))
     }
-
-    // Input
 
     @Test
     fun `pointer, key and clipboard messages on the wire`() {
@@ -810,7 +762,6 @@ class RfbClientTest {
         s.client.sendPointer(1, 1, 1)
         s.client.sendKey(Keysyms.Tab, true)
         s.client.sendClipboard("x")
-        // handshake() checks the exact bytes, so any stray input message would fail it.
         s.handshake(100, 100)
         assertEquals(6, s.writes.size)
     }
@@ -848,7 +799,6 @@ class RfbClientTest {
         s.client.sendKey(65, true)
         s.client.sendClipboard("x")
         s.client.requestDesktopSize(640, 480)
-        // After the version, security type and ClientInit, every write starts with its type.
         val types = s.writes.drop(3).map { it[0].toInt() and 0xFF }
         assertEquals(listOf(0, 2, 3, 3, 5, 4, 6, 251), types)
     }
@@ -868,7 +818,6 @@ class RfbClientTest {
                 }
             }.apply { start() }
         }
-        // Drain what the client writes so the queue reader below sees whole messages.
         go.countDown()
         repeat(100) { s.update(rawRect(it % 64, 0, 1, 1, intArrayOf(opaque(it)))) }
         senders.forEach { it.join(10_000) }
@@ -884,8 +833,6 @@ class RfbClientTest {
         assertEquals(threads * perThread, messages.count { it[0].toInt() == 4 })
         assertEquals(101, messages.count { it[0].toInt() == 3 })
     }
-
-    // Invalid input
 
     private fun assertFails(expectedReason: String, width: Int = 64, height: Int = 64, script: (FakeRfbServer) -> Unit) {
         val s = connected(width, height)
@@ -962,11 +909,9 @@ class RfbClientTest {
 
     @Test
     fun `invalid hextile fails`() {
-        // A sub-rectangle 4 wide at x=14 in a 16 wide tile.
         assertFails("Hextile sub-rectangle outside its tile") {
             it.update(rect(0, 0, 16, 16, 5, Msg().u8(2 or 4 or 8).pixel(OPAQUE, OPAQUE).u8(1).u8(0xE0, 0x30).toByteArray()))
         }
-        // In a 4x2 tile even a 16x16 sub-rectangle at 0,0 is too large.
         assertFails("Hextile sub-rectangle outside its tile") {
             it.update(rect(0, 0, 4, 2, 5, Msg().u8(8).u8(1).u8(0x00, 0xFF).toByteArray()))
         }
@@ -983,16 +928,12 @@ class RfbClientTest {
         zrleFailure("ZRLE: invalid tile type 17", tile = Msg().u8(17).pad(64))
         zrleFailure("ZRLE: invalid tile type 127", tile = Msg().u8(127).pad(64))
         zrleFailure("ZRLE: invalid tile type 129", tile = Msg().u8(129).pad(64))
-        // A palette of 3 has indices 0..2; 2 bits can say 3.
         zrleFailure("ZRLE palette index out of range", tile = Msg().u8(3).cpixel(1, 2, 3).u8(0xFF).pad(2000))
         zrleFailure("ZRLE palette index out of range", tile = Msg().u8(130).cpixel(1, 2).u8(5).pad(100))
-        // A run of 4097 in a 4096 pixel tile.
         zrleFailure("ZRLE run overflows its tile", tile = Msg().u8(128).cpixel(1).u8(*IntArray(16) { 255 }).u8(16))
         zrleFailure("ZRLE run overflows its tile", tile = Msg().u8(130).cpixel(1, 2).u8(0x80).u8(*IntArray(17) { 255 }).u8(0))
         zrleFailure("ZRLE run overflows its tile", width = 2, height = 2, tile = Msg().u8(128).cpixel(1).u8(4))
-        // Run lengths that never end.
         zrleFailure("ZRLE run overflows its tile", tile = Msg().u8(128).cpixel(1).u8(*IntArray(5000) { 255 }))
-        // Fewer tile bytes than the rectangle needs.
         zrleFailure("ZRLE rectangle is shorter than its tiles", tile = Msg().u8(0).cpixel(1, 2, 3))
         assertFails("ZRLE rectangle is shorter than its tiles") { it.update(rect(0, 0, 4, 4, 16, ZrleEncoder.frame(ByteArray(0)))) }
     }
@@ -1006,7 +947,6 @@ class RfbClientTest {
 
     @Test
     fun `a finished zlib stream fails`() {
-        // A complete zlib stream (with its end marker), then a second rectangle.
         val deflater = java.util.zip.Deflater()
         deflater.setInput(Msg().u8(1).cpixel(opaque(0x334455)).toByteArray())
         deflater.finish()

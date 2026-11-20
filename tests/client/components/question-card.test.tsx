@@ -13,7 +13,6 @@ import { toOwnerAnswers } from "@/components/QuestionCard";
 import type { ChatMessage, ChatToolCall, OwnerQuestion } from "@/lib/chat-types";
 import { OwnerActionsProvider, type OwnerActions } from "@/lib/owner-actions";
 
-// A recording fake: the card acts only through the owner actions in scope.
 const answerQuestions = vi.fn();
 const actions: OwnerActions = {
   decideApproval: vi.fn(),
@@ -71,10 +70,8 @@ describe("QuestionCard", () => {
     view({});
     expect(screen.getByText("Chief has 3 questions for you")).toBeInTheDocument();
     expect(screen.getByText("Question 1 of 3")).toBeInTheDocument();
-    // No typing dots while the bot waits on the owner.
     expect(screen.queryByTestId("typing-indicator")).not.toBeInTheDocument();
 
-    // A single-choice question answers on the click.
     await user.click(screen.getByRole("radio", { name: /Postgres/ }));
     expect(await screen.findByText("Question 2 of 3")).toBeInTheDocument();
     expect(screen.getByText("Pick any")).toBeInTheDocument();
@@ -123,7 +120,6 @@ describe("QuestionCard", () => {
     expect(await screen.findByRole("button", { name: /Next/ })).toBeDisabled();
     await user.click(screen.getByRole("checkbox", { name: /Auth/ }));
     await user.click(screen.getByRole("button", { name: /Next/ }));
-    // Skipping the last question sends the answers.
     await user.click(await screen.findByRole("button", { name: /Skip/ }));
     await waitFor(() =>
       expect(answerQuestions).toHaveBeenCalledWith(42, [

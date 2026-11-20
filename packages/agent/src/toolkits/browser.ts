@@ -1,22 +1,3 @@
-/**
- * The `browser` toolkit (issue #24): a real Chromium the bot drives, the
- * owner watches live, and the owner can take over mid-run.
- *
- * Three ideas carry the design (research: `tmp/browser-use-patterns.md`):
- * - Perception is AX-tree-first with stable refs (playwright-mcp's model),
- *   compacted and read in windows so a long page costs what it must and no
- *   more; `browser_read_text` reads prose, and vision is the
- *   `browser_screenshot` fallback.
- * - The owner watches and drives the same Chrome over VNC (see `BrowserVnc`);
- *   takeover is a driver flag that suspends tool dispatch, not a focus lock.
- * - Secrets never enter model context: the owner types them into the real
- *   page during takeover; no tool result ever echoes typed input values.
- *
- * Which browsers are live, and the rules of opening, sharing, takeover and
- * closing them, belong to the session manager (`browser-sessions.ts`); the
- * app creates one and hands it to this toolkit and to its routes. The vault
- * sinks and the credential request sheet live in `browser-vault.ts`.
- */
 import { Type } from "@earendil-works/pi-ai";
 import type { ToolExecutionResult } from "@earendil-works/pi-durable";
 import type { Capability } from "../capabilities";
@@ -54,42 +35,18 @@ export {
 } from "@tiny-agents/sandbox/browser";
 
 export interface BrowserToolkitOptions extends BrowserSessionsOptions {
-  /**
-   * The session manager to act through. The app passes the one its routes
-   * use; left out, the toolkit creates its own from these options.
-   */
   sessions?: BrowserSessions;
-  /**
-   * Which profile and tab a conversation's tool calls use. Default
-   * `conversationBrowserTarget`: a browser of its own per conversation.
-   */
   resolveTarget?: (conversationId: number) => BrowserTarget | Promise<BrowserTarget>;
-  /** The vault broker: enables `browser_fill_secret` and `browser_enter_code` (issue #56). */
   vault?: VaultBroker;
-  /**
-   * Counts credential requests waiting on the owner (the runtime's approval
-   * tracker). Without it `request_credentials` is not offered.
-   */
   ownerWaits?: WaitTracker;
 }
 
-/**
- * Most characters one page read returns (about 5k tokens). A longer page
- * comes in windows the model asks for with `offset`, or narrowed with `ref`
- * or `query`; before, it was cut here and the rest was out of reach.
- */
 const READ_LIMIT = 20_000;
 
-/** "200 https://… · Title": what a page the tab landed on says about itself. */
 const landed = (head: string, url: string, title?: string) =>
   `${head}${url}${title ? ` · ${title}` : ""}`;
 
-/**
- * How much of a page an action that lands on a new one shows (about 1.5k
- * tokens): enough to act on most pages without a separate snapshot.
- */
 const NEW_PAGE_LIMIT = 6_000;
-/** Past this, a same-page change is named but not shown: a snapshot reads it better. */
 const CHANGE_LIMIT = 4_000;
 
 const ref = (description: string) =>
@@ -107,32 +64,18 @@ export function createBrowserToolkit(options: BrowserToolkitOptions = {}): Capab
   const sessions = options.sessions ?? createBrowserSessions(options);
   const targetOf = async (conversationId: number): Promise<BrowserTarget> =>
     (options.resolveTarget ?? conversationBrowserTarget)(conversationId);
-  /** Read tools: the agent's tab, in front unless the owner drives. */
   const readTurn = async (conversationId: number) =>
     sessions.readTurn(await targetOf(conversationId));
-  /** Action tools: wait out a takeover, then the agent's tab, in front. */
   const actionTurn = async (conversationId: number) =>
     sessions.actionTurn(await targetOf(conversationId));
   const describe = describeBrowserError;
 
-  /**
-   * Each tab's last whole-page snapshot: what an action's change is shown
-   * against. Set by every whole-page read and by every action's own read.
-   */
   const baselines = new Map<string, { url: string; tree: string }>();
   const baselineKey = async (conversationId: number) => {
     const target = await targetOf(conversationId);
     return `${target.profile}\u0000${target.tab}`;
   };
 
-  /**
-   * What the page looks like after an action, so the model needs no
-   * separate snapshot for most steps: on a new page its first part, on the
-   * same page only the lines that changed (Playwright MCP returns the whole
-   * snapshot after every action; agent-browser's `diff snapshot` returns
-   * this). `hide` is text the action typed, kept out of the result. Never
-   * fails the action: a page that cannot be read just says nothing more.
-   */
   async function pageAfter(conversationId: number, session: BrowserSession, hide?: string) {
     let tree: string;
     try {
@@ -172,7 +115,6 @@ export function createBrowserToolkit(options: BrowserToolkitOptions = {}): Capab
     name: "Browser",
     description:
       "A real browser the bot drives: navigate, read, click, type, scroll, wait, go back, tabs.",
-    // Large and used in few conversations: loaded with tool_search (issue #360).
     deferred: true,
     tools: [
       tool({
@@ -197,8 +139,6 @@ export function createBrowserToolkit(options: BrowserToolkitOptions = {}): Capab
             return fail((error as Error).message);
           }
           try {
-            // Navigation is an action: it must respect takeover like every
-            // other effect (navigating away mid-secret breaks the contract).
             const s = await actionTurn(Number(api.conversationId));
             const result = await s.session.navigate(url.href);
             const head = `${result.status ?? "no status"} `;
@@ -339,7 +279,6 @@ export function createBrowserToolkit(options: BrowserToolkitOptions = {}): Capab
             assertRefShape(args.ref);
             const s = await actionTurn(Number(api.conversationId));
             const result = await s.session.click(args.ref);
-            // Another tab: its page is new, even at the same URL as the last.
             if (result.newTab) baselines.delete(await baselineKey(Number(api.conversationId)));
             const page = await pageAfter(Number(api.conversationId), s.session);
             const open = result.newTab ? ((await s.session.tabs?.())?.length ?? 2) : 0;
@@ -372,7 +311,6 @@ export function createBrowserToolkit(options: BrowserToolkitOptions = {}): Capab
             assertRefShape(args.ref);
             const s = await actionTurn(Number(api.conversationId));
             const result = await s.session.type(args.ref, args.text);
-            // The typed text is never echoed back, not even inside the page's change.
             const page = await pageAfter(Number(api.conversationId), s.session, args.text);
             return {
               output: [{ type: "text", text: `typed into ${args.ref} — ${result.url}${page}` }],
@@ -504,7 +442,6 @@ export function createBrowserToolkit(options: BrowserToolkitOptions = {}): Capab
               (tab, i) =>
                 `${landed(`${i + 1}. `, tab.url, tab.title)}${tab.current ? " (current)" : ""}`,
             );
-            // A header first: a trimmed result keeps its first line, never a lone tab.
             const head = `${list.length} tab${list.length === 1 ? "" : "s"}:`;
             return { output: [{ type: "text", text: [head, ...list].join("\n") }] };
           } catch (error) {

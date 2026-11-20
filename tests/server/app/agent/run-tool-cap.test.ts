@@ -1,8 +1,3 @@
-/**
- * The run tool-call cap: one reply may make at most 150 tool calls through
- * all its tool rounds. Past that the gate refuses calls so the model wraps
- * up, and a run that keeps calling anyway is stopped.
- */
 import { describe, expect, it } from "vite-plus/test";
 import type { Context as PiContext } from "@earendil-works/pi-ai";
 import { Type } from "@earendil-works/pi-ai";
@@ -91,7 +86,6 @@ describe("run tool-call cap", () => {
         reply: { text: "Stopped: too many steps." },
       });
 
-      // The next reply starts its own count.
       await runtime.submit(ref, { requestId: "again", text: "once more" });
       await until(
         async () => finishedReplyTo(await runtime.readChat(ref), "again").status === "answered",

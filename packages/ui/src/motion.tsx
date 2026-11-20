@@ -3,18 +3,6 @@ import { AnimatePresence, motion, useReducedMotion, type Transition } from "moti
 
 import { cn } from "./lib/utils";
 
-/**
- * Shared motion for @groot/ui, adapted from Fluid Functionalism
- * (https://www.fluidfunctionalism.com/docs/motion): the spring tiers, the
- * deferred-unmount presence modal surfaces animate out with, and the fluid
- * hover highlight menus, selects and the command menu share.
- */
-
-/**
- * Spring tiers: critically damped `moderate` for short travel, a slightly
- * bouncy `slow` for panels. Exits run faster than entrances so a closing
- * surface clears before the next one lands.
- */
 export const spring = {
   moderate: {
     type: "spring",
@@ -32,17 +20,8 @@ export const spring = {
 
 type Tier = (typeof spring)[keyof typeof spring];
 
-/** Safety buffer past a tier's exit before the portal is force-unmounted. */
 const exitFallbackMs = (tier: Tier) => Math.round(tier.exit.duration * 1000) + 100;
 
-/**
- * Keeps a modal surface mounted through its exit animation. `mounted` turns
- * true in the render that opens it (so the portal and `open` land in one
- * commit) and false once the exit completes — on `onExitComplete`, or after a
- * timer, because rAF-driven animations stall in throttled background tabs and
- * would otherwise leave an invisible overlay (and the scroll lock) in place.
- * Under reduced motion the transition is instant.
- */
 export function useModalPresence(open: boolean, tier: Tier = spring.slow) {
   const reduceMotion = useReducedMotion() ?? false;
   const [mounted, setMounted] = React.useState(open);
@@ -71,20 +50,11 @@ export function useModalPresence(open: boolean, tier: Tier = spring.slow) {
 
 type HighlightRect = { top: number; left: number; width: number; height: number };
 
-/**
- * Fluid Functionalism's fluid hover for Radix menus and selects
- * (https://www.fluidfunctionalism.com/docs/dropdown): one highlight that
- * springs from row to row instead of each row lighting up on its own. It
- * follows the row Radix marks `data-highlighted` (pointer and keyboard
- * alike), so item behaviour is untouched. Render it as the first child of
- * the element that holds the rows; that element must be `relative isolate`.
- */
 export function FluidHighlight({
   className,
   selector = "[data-highlighted]",
 }: {
   className?: string;
-  /** The active row: Radix marks `data-highlighted`, cmdk `data-selected="true"`. */
   selector?: string;
 }) {
   const ref = React.useRef<HTMLSpanElement>(null);
@@ -95,13 +65,11 @@ export function FluidHighlight({
     const container = ref.current?.parentElement;
     if (!container) return;
     const measure = () => {
-      // Only rows of this container: a submenu's rows live in their own portal.
       const row = container.querySelector<HTMLElement>(`:scope ${selector}`);
       if (!row || row.offsetHeight === 0) {
         setRect(null);
         return;
       }
-      // offsetParent-relative geometry: scrolling moves rows and highlight together.
       let top = 0;
       let left = 0;
       let el: HTMLElement | null = row;

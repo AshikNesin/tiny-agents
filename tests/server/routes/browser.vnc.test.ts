@@ -1,8 +1,3 @@
-/**
- * VNC bridge (issue #24): one-time tickets and the WebSocket that pipes a
- * viewer to the VM's RFB stream. The VM side is a fake duplex handed out by
- * the live session's `vnc.openStream`, so no SSH or Chrome is involved.
- */
 import { createServer, request, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { Duplex } from "node:stream";
@@ -21,10 +16,8 @@ import {
 import { setBrowserSessionsForTests } from "../../../apps/web/src/server/api/bots/browser.sessions";
 import { authToken } from "../fixtures";
 
-// Tickets are held as live access, which needs their accounts to exist.
 await authToken("ticket-owner-1@example.com", 1);
 
-/** The manager the bridge reads through; a fresh one per live fake. */
 let sessions: BrowserSessions | undefined;
 async function resetBrowserSessionsForTests() {
   await sessions?.closeAll();
@@ -91,7 +84,6 @@ const ticketPath = (ticket: string, bot = BOT) =>
 
 const mint = (bot = BOT) => issueVncTicket({ userId: 1, botId: bot, target: TARGET });
 
-/** A raw upgrade request: reports the HTTP status of a rejection, or 101. */
 function rawUpgrade(port: number, path: string, headers: Record<string, string> = {}) {
   return new Promise<{ status: number }>((resolve, reject) => {
     const req = request({
@@ -247,7 +239,6 @@ describe("VNC WebSocket bridge", () => {
     const expected = Buffer.concat([Buffer.from("RFB 003.008\n"), Buffer.from([1, 1]), update]);
     await vi.waitFor(() => expect(vm.received()).toBe(expected.toString()));
 
-    // Something it cannot frame closes the viewer instead of reaching the desktop.
     const closed = new Promise<number>((resolve) =>
       ws.addEventListener("close", (e) => resolve(e.code), { once: true }),
     );
@@ -291,7 +282,6 @@ describe("VNC WebSocket bridge", () => {
 
     const ticket = mint();
     expect((await rawUpgrade(port, ticketPath(ticket, "other-bot"))).status).toBe(401);
-    // The wrong-bot attempt already spent it.
     expect((await rawUpgrade(port, ticketPath(ticket))).status).toBe(401);
   });
 
@@ -355,7 +345,6 @@ describe("VNC WebSocket bridge", () => {
       await vi.waitFor(() => expect(opening).toBeDefined());
       ws.close();
       await closed(ws);
-      // The server side of the socket closes too, still inside openStream.
       await vi.waitFor(async () =>
         expect(await new Promise((r) => server.getConnections((_e, n) => r(n)))).toBe(0),
       );

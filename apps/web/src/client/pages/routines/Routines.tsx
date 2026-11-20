@@ -1,12 +1,3 @@
-/**
- * Routines page (issue #18 phase B, PRD 5.8): upcoming runs, active
- * schedules, recent executions, and the editor dialog with a live
- * next-3-runs preview. All times render in IST; there is no timezone picker.
- * A run that could not do its job shows as "Needs attention" in amber, and
- * a routine the app paused after blocked runs says why (issue #87). The
- * page holds the list and its actions; the card, the run lists and the
- * editor are beside it.
- */
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -25,7 +16,6 @@ import { RoutineCard } from "./RoutineCard";
 import { RoutineEditor } from "./RoutineEditor";
 import { RecentRuns, UpcomingRuns } from "./RoutineRunLists";
 
-/** How often the page checks back while a run is still awaiting its result. */
 const AWAITING_POLL_MS = 4_000;
 
 export function Routines() {
@@ -39,8 +29,6 @@ export function Routines() {
   const confirm = useConfirm();
   const navigate = useNavigate();
 
-  // A run in flight settles in the bot's chat, not here: check back until it
-  // has, so Recent runs doesn't say "awaiting" until the next reload.
   const awaiting = runs?.some((run) => run.status === "awaiting") ?? false;
   useEffect(() => {
     if (!awaiting) return;
@@ -57,7 +45,6 @@ export function Routines() {
     [routines],
   );
 
-  /** Run an action with a busy marker; true when it completed. */
   const act = async (id: string, action: () => Promise<unknown>, pending: string) => {
     setBusyId(id + pending);
     try {
@@ -85,7 +72,6 @@ export function Routines() {
     }
   };
 
-  // A run posts into the bot's chat, so point there.
   const runNow = (routine: Routine) =>
     act(routine.id, () => mutations.runNow.mutateAsync(routine.id), "run").then((ok) => {
       if (!ok) return;
@@ -127,8 +113,6 @@ export function Routines() {
       ) : routines === null ? (
         <SkeletonList rows={4} leading="circle" secondaryLine />
       ) : routines.length === 0 ? (
-        // One calm empty state: Upcoming and Recent runs have nothing to
-        // say until a routine exists. The header holds the action.
         <EmptyState
           icon={Repeat}
           title="No routines yet"
@@ -173,7 +157,6 @@ export function Routines() {
             </div>
           </Section>
 
-          {/* With one routine its card already says when it runs next. */}
           {routines.length > 1 && upcoming.length > 0 && <UpcomingRuns upcoming={upcoming} />}
 
           {runs !== null && runs.length > 0 && <RecentRuns runs={runs} />}

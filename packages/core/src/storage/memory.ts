@@ -16,7 +16,6 @@ interface Entry {
   lastModified: Date;
 }
 
-/** In-memory storage for tests and quick experiments. */
 export function memoryStorage(): StorageAdapter {
   const objects = new Map<string, Entry>();
   const toObject = (key: string, entry: Entry): StoredObject => ({
@@ -41,7 +40,6 @@ export function memoryStorage(): StorageAdapter {
 
     async get(key: string) {
       const entry = objects.get(key);
-      // A copy, so a caller mutating the bytes cannot change the stored object.
       return entry ? { object: toObject(key, entry), bytes: entry.bytes.slice() } : null;
     },
 

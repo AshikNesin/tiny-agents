@@ -12,44 +12,28 @@ import {
   type StorageFile,
 } from "./useStorage";
 
-/** One breadcrumb: a folder name and the path that opens it (ends with `/`). */
 export interface StorageCrumb {
   name: string;
   path: string;
 }
 
-/** The dialog the browser has open, if any. */
 export type StorageDialog = { kind: "createFolder" } | { kind: "rename"; file: StorageFile };
 
-/**
- * One thing a row can do to its file or folder. Both row adapters
- * (`DesktopFileRow`, `MobileFileCard`) render this list, so they offer the
- * same actions in the same order; the destructive one is last.
- */
 export interface FileAction {
   id: "view" | "download" | "rename" | "delete";
-  /** The visible text, where the row shows text. */
   label: string;
-  /** The accessible name; it starts with `label`, so it names the visible text. */
   ariaLabel: string;
   icon: LucideIcon;
   destructive?: boolean;
   run: () => void;
 }
 
-/**
- * The file selection. It only ever counts files of the folder on screen: a
- * key from another folder, or one that left the listing (deleted, renamed),
- * is not in `keys`, so a bulk delete can never reach a file you cannot see.
- */
 export interface StorageSelection {
-  /** Selected file keys, in listing order. */
   keys: string[];
   has: (key: string) => boolean;
   toggle: (key: string) => void;
   selectAll: () => void;
   clear: () => void;
-  /** How many files (not folders) the listing holds. */
   fileCount: number;
 }
 
@@ -69,22 +53,18 @@ export interface StorageBrowserActions {
 }
 
 export interface StorageBrowser {
-  /** The open folder's listing, folders first. */
   files: StorageFile[];
   isLoading: boolean;
-  /** The open folder: `""` for the root, else a path ending with `/`. */
   path: string;
   crumbs: StorageCrumb[];
   selection: StorageSelection;
   dialog: StorageDialog | null;
   actions: StorageBrowserActions;
-  /** The actions a row offers for `file`. */
   fileActions: (file: StorageFile) => FileAction[];
   pending: { upload: boolean; createFolder: boolean; rename: boolean; remove: boolean };
 }
 
 export interface StorageBrowserOptions {
-  /** View a file in-app instead of opening it in a new tab. */
   onView?: (file: StorageFile) => void;
 }
 
@@ -95,36 +75,25 @@ function crumbsOf(path: string): StorageCrumb[] {
   return parts.map((name, index) => ({ name, path: `${parts.slice(0, index + 1).join("/")}/` }));
 }
 
-/** The folder a key lives in: `""` or a path ending with `/`. */
 function folderOf(key: string): string {
   return key.slice(0, key.lastIndexOf("/") + 1);
 }
 
 const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? "" : "s"}`;
 
-/**
- * The storage file browser: the open folder (`?path=`), its listing, the
- * selection, the open dialog, and every operation. Each operation runs
- * through `useAction`, so it owns its confirmation, toasts and invalidation.
- * Needs `GrootUIProvider`, a `QueryClientProvider` and a nuqs adapter.
- */
 export function useStorageBrowser({ onView }: StorageBrowserOptions = {}): StorageBrowser {
   const [path, setPath] = useQueryState("path", parseAsString.withDefault(""));
   const listing = useStorageFiles(path);
   const files = useMemo(() => listing.data ?? [], [listing.data]);
   const crumbs = useMemo(() => crumbsOf(path), [path]);
   const [dialog, setDialog] = useState<StorageDialog | null>(null);
-  // What was picked, and in which folder.
   const [picked, setPicked] = useState<{ folder: string; keys: ReadonlySet<string> }>({
     folder: path,
     keys: new Set(),
   });
 
-  // Leaving the folder forgets its picks (React's "adjust state while
-  // rendering" pattern), so coming back does not revive them.
   if (picked.folder !== path) setPicked({ folder: path, keys: new Set() });
 
-  // Derived, never stored: only files of the listing on screen count.
   const fileKeys = files.flatMap((file) => (file.isDirectory ? [] : [file.key]));
   const keys = picked.folder === path ? fileKeys.filter((key) => picked.keys.has(key)) : [];
   const pick = (next: Iterable<string>) => setPicked({ folder: path, keys: new Set(next) });
@@ -209,7 +178,6 @@ export function useStorageBrowser({ onView }: StorageBrowserOptions = {}): Stora
     },
   );
 
-  // One action for every file delete, so a single and a bulk delete never overlap.
   const removeFiles = useAction((targets: string[]) => storageApi.deleteFiles(targets), {
     confirm: (targets) => ({
       title:

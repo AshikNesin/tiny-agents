@@ -15,11 +15,6 @@ import {
   type Fixture,
 } from "./fixture";
 
-/**
- * groot:upstream is sync with the sides swapped: the child's changes since
- * its last sync are three-way merged onto groot HEAD, so groot's own newer
- * changes survive and overlapping edits surface as conflicts.
- */
 describe("groot upstream engine (integration)", () => {
   let fx: Fixture;
 
@@ -114,7 +109,6 @@ describe("groot upstream engine (integration)", () => {
       const plan = await planUpstream(fx.child, fx.bp);
       expect(plan.items.map((i) => i.outcome.kind)).toEqual(["ready"]);
 
-      // groot moves after the plan was listed
       await write(fx.bp, CORE_FILE, coreContent("8", "2"));
       await commitAll(fx.bp, "groot edit on the same line");
 
@@ -136,7 +130,6 @@ describe("groot upstream engine (integration)", () => {
       await write(fx.child, CORE_FILE, coreContent("100", "999"));
       await commitAll(fx.child, "local fix");
 
-      // groot's history is rewritten: same tree, unrelated commit.
       await git(fx.bp, "checkout", "-q", "--orphan", "rewritten");
       await git(fx.bp, "commit", "-q", "-m", "rewritten history");
       const rewritten = join(fx.root, "rewritten");

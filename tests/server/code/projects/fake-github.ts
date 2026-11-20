@@ -1,10 +1,3 @@
-/**
- * An in-memory GitHub for Code's app-layer tests (the network is the
- * boundary): pull requests the tests open, check and review, plus every
- * write the app makes (replies, resolves, comments, merges), recorded. A
- * PR's head sha is read from the real bare repository the workspace pushes
- * to, so a push the app makes is what the next snapshot sees.
- */
 import {
   GitHubError,
   type Check,
@@ -21,7 +14,6 @@ import { sh } from "./local-exec";
 
 interface FakePull {
   number: number;
-  /** Who opened it (the credential's login when unset). */
   author?: string;
   head: string;
   base: string;
@@ -34,7 +26,6 @@ interface FakePull {
   reviews: Review[];
   threads: ReviewThread[];
   fromFork: boolean;
-  /** A fork's author lets maintainers push (fork PRs only). */
   maintainerCanModify?: boolean;
   autoMerge: boolean;
   inMergeQueue: boolean;
@@ -46,18 +37,12 @@ export interface FakeGitHub extends GitHubClient {
   replies: Array<{ threadId: string; body: string }>;
   resolved: string[];
   comments: Array<{ number: number; body: string }>;
-  /** What `reviewInbox` answers (GitHub's searches, deduplicated). */
   inbox: InboxPull[];
-  /** The filter of the last `reviewInbox` call. */
   inboxFilter: InboxFilter | undefined;
-  /** Reviews submitted with `submitReview`, as sent. */
   submitted: Array<{ number: number } & Parameters<GitHubClient["submitReview"]>[2]>;
   merged: Array<{ number: number; method: string }>;
-  /** Each Actions job's raw log, by job id (a default when unset). */
   logs: Map<number, string>;
-  /** Jobs still running, by id; GitHub serves no log for these (404). */
   running: Map<number, JobStep[]>;
-  /** Native auto-merge calls, by PR node id. */
   autoMergeCalls: Array<{
     pullId: string;
     action: "enable" | "disable" | "ready" | "draft";
@@ -128,7 +113,6 @@ export function fakeGitHub(local: LocalExec, bare: string, login = "ashik"): Fak
         state: pr.state,
         draft: pr.draft,
         headRef: pr.head,
-        // A fork's head lives only under refs/pull/N/head, as on GitHub.
         headSha: pr.fromFork
           ? await sh(local, `git -C ${bare} rev-parse refs/pull/${number}/head`)
           : await headOf(pr.head),

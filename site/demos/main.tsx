@@ -6,17 +6,12 @@ import StepSetup from "./scenes/StepSetup";
 import StepAsk from "./scenes/StepAsk";
 import StepApprove from "./scenes/StepApprove";
 
-// Mounts each demo into its slot on the page: <div data-demo="setup">. The
-// slot's static fallback (the picture it held before) is replaced, so the
-// page still reads with scripts off.
-
 const DEMOS: Record<string, ComponentType> = {
   setup: StepSetup,
   ask: StepAsk,
   approve: StepApprove,
 };
 
-// Replay: one counter every demo keys on, so the chain restarts as one story
 let run = 0;
 const listeners = new Set<() => void>();
 const subscribe = (fn: () => void) => (listeners.add(fn), () => listeners.delete(fn));

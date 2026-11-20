@@ -1,8 +1,3 @@
-/**
- * "New skill" dialog validation (issue #122): an incomplete form must say
- * what's missing — inline errors under the fields, not a silently disabled
- * Create button.
- */
 import React from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";

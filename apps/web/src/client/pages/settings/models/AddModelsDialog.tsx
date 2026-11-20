@@ -1,9 +1,3 @@
-/**
- * The Add Models dialog (issue #179). "Connect a provider" checks which
- * models an endpoint lists and adds the ones the owner picks; "Add a single
- * model" adds one model by id, with its capabilities set by hand. Saving asks
- * for step-up: the account's key goes straight into the vault.
- */
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@groot/ui/button";
@@ -76,7 +70,6 @@ function fromTemplate(template: ProviderTemplate | undefined): Draft {
   };
 }
 
-/** The connection a draft describes, as the API takes it. */
 function connectionOf(draft: Draft): ModelEndpoint {
   return {
     kind: draft.kind,
@@ -307,7 +300,6 @@ const EMPTY_SINGLE: SingleModel = {
   reasoning: false,
 };
 
-/** Capability overrides the owner typed for a single model. */
 function overridesOf(single: SingleModel) {
   return {
     ...(single.maxOutputTokens ? { maxOutputTokens: Number(single.maxOutputTokens) } : {}),
@@ -396,7 +388,6 @@ function SingleModelFields({
   );
 }
 
-/** The dialog's buttons: what the current tab and step can do next. */
 function Actions({
   tab,
   checked,
@@ -449,7 +440,6 @@ interface FormProps {
   onDone: () => void;
 }
 
-/** One pass through the dialog: mounted on open, so each open starts fresh. */
 function AddModelsForm({ templates, template, onDone }: FormProps) {
   const { run } = useStepUp();
   const { create } = useModelMutations();
@@ -476,7 +466,6 @@ function AddModelsForm({ templates, template, onDone }: FormProps) {
     (t) => t.aggregator && t.kind === draft.kind && (t.baseUrl ?? "") === draft.baseUrl,
   );
 
-  /** Run `work` with the buttons off; a failure becomes a toast. */
   const busyWith = async (work: () => Promise<void>, failed: string) => {
     setBusy(true);
     try {
@@ -492,7 +481,6 @@ function AddModelsForm({ templates, template, onDone }: FormProps) {
     busyWith(async () => {
       const { models } = await discover.mutateAsync(connectionOf(draft));
       setFound(models);
-      // Aggregators list hundreds: start with none.
       setChosen(new Set(aggregator ? [] : models.map((m) => m.upstreamId)));
       if (models.length === 0) {
         toast.info(
@@ -591,7 +579,6 @@ function AddModelsForm({ templates, template, onDone }: FormProps) {
         <Actions
           tab={tab}
           checked={found !== null}
-          // A Claude plan connects before sign-in; its models come on the next check.
           canConnect={chosen.size > 0 || draft.kind === "claude-plan"}
           canAdd={single.upstreamId.trim() !== ""}
           canTest={single.upstreamId.trim() !== "" && draft.kind !== "claude-plan"}
@@ -619,7 +606,6 @@ export function AddModelsDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl">
-        {/* Mounted per open (and per template), so every open starts from a clean form. */}
         {open && (
           <AddModelsForm
             key={rest.template?.id ?? "blank"}

@@ -103,13 +103,11 @@ describe("BotsSection", () => {
       bot("e", { approvals: 1, questions: 2 }),
     ]);
     expect(screen.getByLabelText("2 awaiting approval")).toBeInTheDocument();
-    // Waiting on the owner outranks replying; both kinds add up in one badge.
     expect(screen.getByLabelText("1 question for you")).toHaveTextContent("1");
     expect(screen.getByLabelText("1 awaiting approval, 2 questions for you")).toHaveTextContent(
       "3",
     );
     expect(screen.getByRole("status", { name: "Replying" })).toBeInTheDocument();
-    // An inline span ignores size-2 and renders 0x0 (issue #71): the dot must be a block box.
     expect(screen.getByLabelText("Unread")).toHaveClass("block", "size-2");
   });
 

@@ -1,8 +1,3 @@
-/**
- * Staged uploads (lib/staged-uploads.ts), shared by the bot chat's and the
- * Code page's composers: the cap, the size check before uploading, naming
- * pasted files, failures, and deleting an upload nothing will send.
- */
 import { describe, expect, it, vi } from "vite-plus/test";
 import {
   MAX_ATTACHMENTS,
@@ -20,7 +15,6 @@ function file(name: string, size = 3, type = "text/plain"): File {
   return made;
 }
 
-/** A composer stand-in: a list, a recorded upload API and recorded notices. */
 function composer(
   upload: (file: File) => Promise<string> = async (f) => `ref:${f.name}`,
   options: { deletes?: boolean; staged?: StagedUpload<string>[] } = {},
@@ -137,7 +131,7 @@ describe("stageUploads", () => {
     const c = composer(() => pending.promise);
     const settled = stageUploads([file("a.txt")], c.staging);
     unstageUpload(c.list()[0]!, c.staging);
-    expect(c.deleted).toEqual([]); // nothing to delete yet
+    expect(c.deleted).toEqual([]);
     pending.resolve("ref-late");
     await settled;
     expect(c.list()).toEqual([]);
@@ -148,7 +142,7 @@ describe("stageUploads", () => {
     const pending = deferred();
     const c = composer(() => pending.promise, { deletes: false });
     const settled = stageUploads([file("a.txt")], c.staging);
-    c.staging.update(() => []); // the draft moved on (a send, another thread)
+    c.staging.update(() => []);
     pending.resolve("ref-late");
     await settled;
     expect(c.list()).toEqual([]);

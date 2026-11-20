@@ -1,9 +1,3 @@
-/**
- * A fake Shelley for server tests (issue #143), speaking the wire format a
- * real Shelley (6c48a83) speaks: `/api/stream2` SSE frames, the snapshot,
- * conversations, chat (inject vs queue), git diffs and raw uploads. Tests
- * push stream frames and read what the app sent.
- */
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { until } from "../../fixtures/until";
@@ -19,15 +13,11 @@ export interface FakeShelley {
   url: string;
   seen: Seen[];
   rows: Array<Record<string, unknown>>;
-  /** `/conversations/archived`'s rows; one tagged `tiny-agents` by default. */
   archived: Array<Record<string, unknown>>;
   conversations: Map<string, { messages: unknown[]; conversation: Record<string, unknown> }>;
-  /** Send a stream2 frame to every open stream. */
   push(frame: unknown): void;
-  /** End every open stream (the hub must reconnect). */
   dropStreams(): void;
   openStreams(): number;
-  /** Wait until `n` streams are open. */
   waitForStreams(n: number, timeoutMs?: number): Promise<void>;
   close(): Promise<void>;
 }
@@ -104,7 +94,6 @@ export async function startFakeShelley(): Promise<FakeShelley> {
         if (!action) return known ? json(res, 200, known) : json(res, 404, { error: "not found" });
         if (action === "subagents") return json(res, 200, []);
         if (action === "fork") {
-          // Shelley copies the source's tags onto the fork.
           created += 1;
           const forkId = `cFork${created}`;
           const source = rows.find((r) => r.conversation_id === id);
@@ -112,7 +101,6 @@ export async function startFakeShelley(): Promise<FakeShelley> {
           return json(res, 201, { conversation_id: forkId });
         }
         if (action === "tags") {
-          // Shelley stores the list as a JSON string and replaces it whole.
           const tags = JSON.stringify((JSON.parse(body.toString()) as { tags: string[] }).tags);
           for (const r of [...rows, ...archived]) if (r.conversation_id === id) r.tags = tags;
           if (known) known.conversation.tags = tags;

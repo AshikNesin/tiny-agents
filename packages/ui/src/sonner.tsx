@@ -8,11 +8,6 @@ import {
   Loader2Icon,
 } from "lucide-react";
 
-/**
- * The shell themes the app with a `dark` class on <html>; sonner needs the
- * theme passed in, or its rich colors stay light on a dark page. Read the
- * class directly (this package cannot import the shell's theme hook).
- */
 function subscribeToRootClass(onChange: () => void) {
   const observer = new MutationObserver(onChange);
   observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });

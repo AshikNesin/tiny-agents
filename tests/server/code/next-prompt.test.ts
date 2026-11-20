@@ -1,7 +1,3 @@
-/**
- * Next-prompt suggestions in a Code thread: one small call per finished
- * turn, on the turn's own words only, kept for every later ask.
- */
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import type { TranscriptItem } from "@tiny-agents/code/contracts";
 import { api, createTestApp } from "../helpers";
@@ -67,7 +63,6 @@ describe("Code next prompt", () => {
     expect(asked[0]!.role).toBe("chat_title");
     expect(asked[0]!.user).toContain("Add a retry to the upload step");
     expect(asked[0]!.user).toContain("Want me to run the tests?");
-    // Only the last turn travels, never the earlier chat.
     expect(asked[0]!.user.length).toBeLessThan(2_000);
 
     expect((await ask("t1")).body.data).toEqual({ text: "Yes, run the tests." });
@@ -77,7 +72,6 @@ describe("Code next prompt", () => {
   it("asks again only when a new turn ended", async () => {
     fake.items.set("c1", turn);
     await ask("t1");
-    // The browser is ahead of the harness: nothing is kept for it.
     expect((await ask("t2")).body.data).toEqual({ text: null });
     fake.items.set("c1", [
       ...turn,

@@ -9,7 +9,6 @@ import {
 } from "@groot/ui/dialog";
 import type { Skill } from "../../../../shared/api/skills";
 
-/** Deleting the skill, saying which bots lose it. */
 export function DeleteSkillDialog({
   skill,
   usedBy,

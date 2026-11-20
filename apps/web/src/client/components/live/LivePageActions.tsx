@@ -1,17 +1,9 @@
-/**
- * The tools in the page view's bar, for the selected browser or desktop:
- * while the owner drives, Hand back, then the Apps and Keys menus (the
- * computer's) and paste; while it streams, full screen; then reset. They sit
- * in the view's own bar, so full screen keeps them on screen. Taking control
- * is a click on the stream (`TakeControlLayer`), so it has no button here.
- */
 import { ClipboardPaste, Maximize2, Minimize2, RotateCcw, Undo2 } from "lucide-react";
 import { Button } from "@groot/ui";
 import type { Driver, LiveViewKind } from "../../lib/live-view";
 import { AppsMenu, KeysMenu } from "./LivePageMenus";
 import type { LivePageSurface, PageItem } from "./surface";
 
-/** The muted icon tools. */
 const tool = "text-muted-foreground hover:text-foreground";
 
 export function LivePageActions<L, I extends PageItem>({

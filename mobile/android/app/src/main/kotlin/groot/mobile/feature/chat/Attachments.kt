@@ -41,7 +41,6 @@ import groot.mobile.ui.components.IconBtn
 import groot.mobile.ui.components.LocalContainer
 import groot.mobile.ui.components.fileSize
 
-/** An uploaded image, loaded with the session's token; null until it arrives. */
 @Composable
 fun rememberUploadImage(uploadId: String): Bitmap? {
     val images = LocalContainer.current.images
@@ -51,7 +50,6 @@ fun rememberUploadImage(uploadId: String): Bitmap? {
     return bitmap
 }
 
-/** The attachments of a message: images as thumbnails, files as chips. Tapping one opens or saves it. */
 @Composable
 fun MessageAttachments(
     attachments: List<AttachmentRef>,
@@ -113,7 +111,6 @@ fun FileChip(name: String, detail: String, onClick: (() -> Unit)?, modifier: Mod
     }
 }
 
-/** A file staged in the composer: its name, an upload spinner or error, and a remove button. */
 @Composable
 fun StagedChip(upload: StagedUpload, onRemove: () -> Unit) {
     Row(
@@ -144,7 +141,6 @@ fun StagedChip(upload: StagedUpload, onRemove: () -> Unit) {
     }
 }
 
-/** An image full screen, with a way to save it. */
 @Composable
 fun ImageViewer(ref: AttachmentRef, onSave: () -> Unit, onDismiss: () -> Unit) {
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {

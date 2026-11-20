@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { jobsApi } from "./api";
 
-/** React Query keys for the dashboard; every key starts with "jobs". */
 export const jobsKeys = {
   all: ["jobs"] as const,
   list: ["jobs", "list"] as const,
@@ -11,9 +10,6 @@ export const jobsKeys = {
   detail: (jobId: string) => ["jobs", "detail", jobId] as const,
 };
 
-// Operational view: always refetch on revisit/focus rather than serving the
-// 5-minute-fresh data (overrides `SHELL_QUERY_DEFAULTS.queries.staleTime`
-// from `@groot/shell/lib/query-client`).
 export const JOBS_STALE_TIME = 0;
 
 export function useJobStats() {
@@ -24,7 +20,6 @@ export function useJobStats() {
   });
 }
 
-/** Job names seen in the queue plus every registered handler. */
 export function useAvailableJobs(): string[] {
   const query = useQuery({
     queryKey: jobsKeys.available,

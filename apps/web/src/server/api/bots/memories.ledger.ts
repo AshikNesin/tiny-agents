@@ -1,30 +1,3 @@
-/**
- * The memory ledger (GLOSSARY: Memory ledger): one bot's memories and the
- * rules every write follows, whichever way a memory arrives (capture, the
- * `remember` tool, the Memory page):
- *
- * - Dedupe: an item whose text (trimmed, case-insensitive) matches one of
- *   the bot's rows, in any status, is never a second row. A tombstone (a
- *   memory the owner deleted) is never re-added by capture or chat; only the
- *   owner adding it on the Memory page brings a non-active row back.
- * - Supersede: an item may replace active memories of the same bot, never
- *   another bot's, nor a tombstone.
- * - Expiry: an active row past its `until` becomes `expired`; it never
- *   counts toward the budget and never reaches a prompt.
- * - Budget: at most MEMORY_MAX_ACTIVE active rows; overflow archives the
- *   oldest first, never the new fact. A row the owner just restored is kept.
- * - Edit: the owner's change to a row's text, category or expiry. An edit
- *   whose text matches another row of the bot lands on that row (it becomes
- *   active with the edit) and the edited row, when active, is superseded by
- *   it, so an edit never makes a second copy either.
- * - The capture watermark: advanced with the rows a capture adds, in the
- *   same transaction, so a failed write retries the window.
- *
- * Every status move is an edge of the memory machine
- * (`shared/machines/memory.ts`); the guarded writes read their "from"
- * states off it. Writes are one synchronous better-sqlite3 transaction
- * each: all or nothing.
- */
 import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lte, or } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { bots, db, memories, type AppDatabase } from "../../db";
@@ -38,89 +11,52 @@ import { memoryMachine, type MemoryStatus } from "../../../shared/machines/memor
 
 export type MemoryRow = typeof memories.$inferSelect;
 
-/** One memory to add: a capture's extraction item, a chat `remember`, a page add. */
 interface LedgerItem {
   text: string;
   category: MemoryCategory;
-  /** ISO date or datetime; null or absent = no expiry. */
   until?: string | null;
-  /** Active memories of this bot the item replaces. */
   supersedesIds?: string[] | null;
 }
 
 interface AddOptions {
-  /**
-   * `capture` (the capture side-call and the chat `remember` tool) or
-   * `manual` (the owner on the Memory page, who may bring back a row).
-   */
   source: MemorySource;
-  /** A capture's window end: the watermark advances in the same transaction. */
   watermark?: Date;
-  /** The conversation the items were learned in (capture or `remember`). */
   conversationId?: string;
 }
 
 interface AddResult {
   created: number;
-  /** Non-active rows the owner added again (manual adds only). */
   revived: number;
   superseded: number;
-  /** Items that matched a row and changed nothing. */
   skipped: number;
-  /** For each item, in order, the row it landed on (new, revived or the existing match). */
   rows: MemoryRow[];
 }
 
-/**
- * What the capture prompt lists: current memories under short refs (`m1`,
- * `m2`, … in prompt order, as mem0 does), and what the owner removed. A
- * 36-character row id costs tokens on every line and invites a misspelled
- * supersede; `refs` maps each ref back to its row.
- */
 interface PromptContext {
   current: string | null;
   removed: string | null;
   refs: Record<string, string>;
 }
 
-/** The owner's change to one memory; absent fields stay as they are. */
 interface LedgerEdit {
   text?: string;
   category?: MemoryCategory;
-  /** ISO date or datetime; null clears the expiry. */
   until?: string | null;
 }
 
 export interface MemoryLedger {
   add(items: readonly LedgerItem[], options: AddOptions): Promise<AddResult>;
-  /**
-   * Edit a row of this bot. Returns the row the edit landed on (another row
-   * when the new text matches it), or undefined when the row is not this bot's.
-   */
   edit(id: string, change: LedgerEdit): Promise<MemoryRow | undefined>;
-  /** Tombstone rows of this bot (the owner removed them). Returns how many changed. */
   tombstone(ids: readonly string[]): Promise<number>;
-  /**
-   * Bring a superseded, archived or expired row back to active, kept even
-   * when the budget is full. A tombstone stays one. Undefined when the row
-   * is not this bot's.
-   */
   restore(id: string): Promise<MemoryRow | undefined>;
-  /** Active rows that have not expired, oldest first: what a prompt may carry. */
   active(now?: Date): Promise<MemoryRow[]>;
-  /** The page's view: expire what is due, then the rows in these statuses, oldest first. */
   history(statuses: readonly MemoryStatus[], now?: Date): Promise<MemoryRow[]>;
   promptContext(now?: Date): Promise<PromptContext>;
-  /** Move the capture watermark (a window with nothing worth a call). Throws for a missing bot. */
   advanceWatermark(at: Date): Promise<void>;
 }
 
 type Tx = Pick<AppDatabase, "select" | "insert" | "update">;
 
-/**
- * The dedupe key: case, runs of whitespace and end punctuation never make a
- * second memory ("The owner prefers pnpm." is "the owner  prefers pnpm").
- */
 const key = (text: string) =>
   text
     .trim()
@@ -147,7 +83,6 @@ export function memoryLedger(botId: string): MemoryLedger {
       .run();
   }
 
-  /** Archive the oldest active rows past the budget; `keep` is never archived. */
   function enforceBudget(tx: Tx, keep?: string): void {
     const active = tx
       .select({ id: memories.id })
@@ -202,9 +137,7 @@ export function memoryLedger(botId: string): MemoryLedger {
           continue;
         }
         const row = match
-          ? // The owner adds a memory again: its old row (even a tombstone)
-            // comes back as a new memory, never as a second row.
-            tx
+          ? tx
               .update(memories)
               .set({
                 ...fields,
@@ -259,7 +192,6 @@ export function memoryLedger(botId: string): MemoryLedger {
       if (change.text !== undefined) fields.text = change.text.trim();
       if (change.category !== undefined) fields.category = change.category;
       if (change.until !== undefined) fields.until = change.until ? new Date(change.until) : null;
-      // Nothing to write: the row as it is, updatedAt untouched.
       if (Object.keys(fields).length === 0) return row;
       const match =
         fields.text !== undefined && key(fields.text) !== key(row.text)
@@ -316,14 +248,11 @@ export function memoryLedger(botId: string): MemoryLedger {
         .where(and(ofBot, eq(memories.id, id)))
         .get();
       if (!row) return undefined;
-      // Restore brings history back; a tombstone comes back only by the
-      // owner adding its text again (`add`, source manual).
       if (row.status === "deleted") return row;
       tx.update(memories)
         .set({ status: "active", supersededById: null, supersededAt: null })
         .where(eq(memories.id, id))
         .run();
-      // A restore past its expiry is expired again: the owner clears `until` to keep it.
       expire(tx, new Date());
       enforceBudget(tx, id);
       return tx.select().from(memories).where(eq(memories.id, id)).get();

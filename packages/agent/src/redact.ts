@@ -1,27 +1,13 @@
-/**
- * The secret redactor (issue #56 D12): every value the vault resolves in this
- * process is registered here before it reaches a sink, with its common
- * encodings, and scrubbed from tool results, transcripts, logs and error
- * reports. A backstop, not the main control: no code path hands a value to
- * anything but a sink in the first place.
- */
 import type { SecretValue } from "./vault";
 
-/** What a registered value is replaced with. */
 const REDACTED = "[vault]";
 
-/** A value is kept this long after its last use. */
 const TTL_MS = 24 * 60 * 60_000;
 
-/**
- * Values shorter than this are not scrubbed: a 3-digit CVC would turn every
- * "123" in a page into noise. Such values never leave a sink anyway.
- */
 const MIN_LENGTH = 4;
 
 interface Entry {
   forms: string[];
-  /** Card-like digit runs, matched with or without separators. */
   digits?: RegExp;
   expiresAt: number;
 }
@@ -46,7 +32,6 @@ function digitPattern(value: string): RegExp | undefined {
 export class SecretRedactor {
   readonly #entries = new Map<string, Entry>();
 
-  /** Register a value (and its encodings) for scrubbing. */
   register(value: string | SecretValue): void {
     const raw = typeof value === "string" ? value : value.reveal();
     if (raw.length < MIN_LENGTH) return;
@@ -64,13 +49,11 @@ export class SecretRedactor {
     return this.#entries.size;
   }
 
-  /** `text` with every registered value replaced. */
   scrub(text: string): string {
     if (this.#entries.size === 0 || !text) return text;
     this.#prune();
     let out = text;
     for (const entry of this.#entries.values()) {
-      // Longest forms first so a base64 form never leaves a raw tail behind.
       for (const form of entry.forms) {
         if (out.includes(form)) out = out.split(form).join(REDACTED);
       }
@@ -79,7 +62,6 @@ export class SecretRedactor {
     return out;
   }
 
-  /** A deep copy of `value` with every string scrubbed. */
   scrubJson<T>(value: T): T {
     if (this.#entries.size === 0) return value;
     const walk = (node: unknown): unknown => {
@@ -93,7 +75,6 @@ export class SecretRedactor {
     return walk(value) as T;
   }
 
-  /** Test seam: forget every value. */
   clear(): void {
     this.#entries.clear();
   }
@@ -106,5 +87,4 @@ export class SecretRedactor {
   }
 }
 
-/** The process-wide redactor: the vault registers into it, every output path scrubs through it. */
 export const secretRedactor = new SecretRedactor();

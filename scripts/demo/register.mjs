@@ -1,5 +1,3 @@
-// Demo-only preload (scripts/demo/start.sh): routes pi-ai's faux provider through
-// the scripted director and answers the web toolkit's search calls offline.
 import { register } from "node:module";
 import { searchResults } from "./web-stub.mjs";
 

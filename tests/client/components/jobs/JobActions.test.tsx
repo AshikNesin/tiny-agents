@@ -41,7 +41,6 @@ function renderActions() {
   );
 }
 
-/** Answer the retry call with `respond`. */
 function stubRetry(respond: () => Promise<Response>) {
   const fetch = vi.fn((_url: string) => respond());
   vi.stubGlobal("fetch", fetch);

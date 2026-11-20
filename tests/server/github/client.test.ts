@@ -1,9 +1,3 @@
-/**
- * @tiny-agents/github (issue #297 §7.1): one client over two transports. The
- * `gh` transport gets a fake exec answering `gh api` output (the subprocess
- * is the boundary); the HTTPS transport gets a fake fetch. The same contract
- * runs on both.
- */
 import { describe, expect, it } from "vite-plus/test";
 import {
   createGhTransport,
@@ -17,7 +11,6 @@ import {
 
 const repo = { owner: "acme", name: "web" };
 
-/** A GraphQL answer for the snapshot query, as GitHub sends it. */
 const SNAPSHOT = {
   repository: {
     mergeCommitAllowed: false,
@@ -133,7 +126,6 @@ const SNAPSHOT = {
   },
 };
 
-/** A fake `gh` on the sandbox: answers each `gh api` call from a table, records what it got. */
 function fakeGh(
   answer: (args: string, stdin?: string) => { stdout: string; stderr?: string; exitCode?: number },
 ) {
@@ -146,7 +138,6 @@ function fakeGh(
   return { exec, calls };
 }
 
-/** A fake api.github.com: answers by method and path. */
 function fakeFetch(answer: (method: string, path: string, body?: unknown) => Response) {
   const calls: Array<{ method: string; path: string; auth: string | null; body?: unknown }> = [];
   const impl = (async (url: string | URL, init?: RequestInit) => {
@@ -162,7 +153,6 @@ function fakeFetch(answer: (method: string, path: string, body?: unknown) => Res
 const json = (value: unknown, status = 200) =>
   new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
 
-/** The same answers through either transport. */
 const TRANSPORTS: Array<[string, () => GitHubApi]> = [
   [
     "gh",
@@ -209,7 +199,6 @@ describe.each(TRANSPORTS)("the client over %s", (_, transport) => {
     const snapshot = await createGitHubClient(transport()).snapshot(repo, 7);
     expect(snapshot.state).toBe("open");
     expect(snapshot.headSha).toBe("bbb");
-    // GitHub has not computed mergeability yet: no decision either way.
     expect(snapshot.mergeable).toBe("unknown");
     expect(snapshot.mergeMethods).toEqual(["squash", "rebase"]);
     expect(snapshot.checks.map((c) => [c.name, c.state, c.jobId])).toEqual([
@@ -225,7 +214,6 @@ describe.each(TRANSPORTS)("the client over %s", (_, transport) => {
       association: "COLLABORATOR",
     });
     expect(snapshot.threads[0]?.comments[0]?.author.type).toBe("bot");
-    // Where the conversation sits: removed lines 1-3.
     expect(snapshot.threads[0]).toMatchObject({ side: "LEFT", startLine: 1, line: 3 });
   });
 
@@ -254,7 +242,6 @@ describe("a check that ran more than once", () => {
     const raw = structuredClone(SNAPSHOT);
     const nodes = raw.repository.pullRequest.commits.nodes[0]!.commit.statusCheckRollup.contexts
       .nodes as Array<Record<string, unknown>>;
-    // The PR's description was edited twice: each edit ran "test" again.
     nodes.push(
       {
         __typename: "CheckRun",
@@ -390,7 +377,6 @@ describe("the review inbox", () => {
     expect(variables.authored).toBe(
       "is:open is:pr archived:false author:@me updated:>=2026-10-07 draft:false repo:acme/web sort:updated-desc",
     );
-    // GitHub ignored the repository; the inbox still keeps to it.
     expect(inbox.map((p) => p.number)).toEqual([1]);
   });
 });
@@ -542,7 +528,6 @@ describe("the GitHub App", () => {
 
   it("accepts a webhook only with the right signature", async () => {
     const { verifyWebhook } = await import("../../../packages/github/src/index");
-    // GitHub's documented example: secret "It's a Secret to Everybody", body "Hello, World!".
     const good = "sha256=757107ea0eb2509fc211221cce984b8a37570b6d7586c22c46f4379c8b043e17";
     expect(await verifyWebhook("It's a Secret to Everybody", "Hello, World!", good)).toBe(true);
     expect(await verifyWebhook("It's a Secret to Everybody", "Hello, World?", good)).toBe(false);
@@ -576,7 +561,6 @@ describe("convertManifest", () => {
       pem: "PEM",
       webhookSecret: "s3",
     });
-    // The code is the only credential: no token is sent.
     expect(fake.calls[0]?.auth).toBeNull();
     await expect(convertManifest("used", { fetch: fake.impl })).rejects.toThrow("Not Found");
   });

@@ -1,22 +1,8 @@
-/**
- * Bot builder (issue #149): a bot can create a new bot through `create_bot`
- * when the owner asks it to ("make a bot for my Limitless project"). The
- * tool is `askOnly`, like `update_instructions`: the owner approves every
- * new bot in chat, with its name, description, model and full instructions
- * on the approval card, and the app's store adapter refuses unattended turns
- * (routine runs, peer deliveries) and chats shared with guests (managing
- * bots is the owner's), so nobody but the owner can spawn bots.
- *
- * Replay is `unsafe`: a create interrupted by a restart is not re-run on
- * recovery (it would either duplicate the bot or fail on its now-taken
- * name); the model sees the interruption and can check the roster.
- */
 import { Type } from "@earendil-works/pi-ai";
 import type { ToolExecutionResult } from "@earendil-works/pi-durable";
 import type { Capability } from "../capabilities";
 import { defineToolkit, tool } from "../toolkit";
 
-/** Why a new bot was not created, as the model reads it. */
 export type BotCreationRefusal =
   | "disabled"
   | "unattended"
@@ -25,17 +11,13 @@ export type BotCreationRefusal =
   | "unknown_model"
   | "invalid";
 
-/** What `create_bot` asks the app for. */
 export interface NewBotInput {
   name: string;
   description?: string;
-  /** The new bot's system prompt. */
   instructions: string;
-  /** A model id; the creating bot's model when omitted. */
   model?: string;
 }
 
-/** What the app provides: create a bot on behalf of the bot behind a conversation. */
 export interface BotCreationStore {
   create(
     conversationId: number,
@@ -47,9 +29,7 @@ export interface BotCreationStore {
       }
     | {
         status: BotCreationRefusal;
-        /** `unknown_model`: the model ids that are available. */
         models?: string[];
-        /** `invalid`: what is wrong with the input, as the New bot dialog says it. */
         reason?: string;
       }
   >;
@@ -154,7 +134,6 @@ export function createBotBuilderCapability(store: BotCreationStore): Capability 
 
   return defineToolkit({
     id: "bot-builder",
-    // Used in few conversations: loaded with tool_search (issue #360).
     deferred: true,
     name: "Bot builder",
     description: "Create new bots, with owner approval",

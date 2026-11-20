@@ -1,8 +1,3 @@
-/**
- * The 1Password Connect backend (issue #56) against a fake Connect server:
- * the vault-scoping guard, pinned paths, value resolution and the write path.
- * ADR 0027 brought it back; a missing vault id pins the token's one vault.
- */
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { createConnectBackend } from "../../../../apps/web/src/server/api/vault/backends/onepassword-connect";
 import { startFakeConnect, type FakeConnect } from "./fake-connect";
@@ -55,7 +50,6 @@ describe("1Password Connect backend", () => {
     await expect(wide.resolve("gh", "password")).rejects.toMatchObject({
       code: "token_overscoped",
     });
-    // The guard stops it before any item is read.
     expect(connect.requests.some((r) => r.path.includes("/items"))).toBe(false);
   });
 
@@ -125,7 +119,6 @@ describe("1Password Connect backend", () => {
   });
 
   it("names a token that expires within two weeks", async () => {
-    // A JWT whose exp is 3 days after the frozen clock (FIXED_NOW).
     const exp = Math.floor(Date.parse(FIXED_NOW) / 1000) + 3 * 86_400 + 60;
     const jwt = `x.${Buffer.from(JSON.stringify({ exp })).toString("base64url")}.y`;
     connect.tokens.set(jwt, { vaults: ["vault-agents"], write: false });

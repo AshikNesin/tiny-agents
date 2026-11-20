@@ -41,7 +41,6 @@ export function Jobs() {
       <JobsFilters filter={j.filter} />
 
       <JobsTable
-        // Remounting per filter and page clears the row selection.
         key={j.filter.filterKey}
         jobs={j.jobs}
         loading={j.loading}

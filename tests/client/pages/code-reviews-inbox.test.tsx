@@ -106,7 +106,6 @@ describe("the review inbox", () => {
       "href",
       "https://github.com/other/lib/pull/5",
     );
-    // Another repository's PR is reviewed here once it is a project: one step away (#386).
     expect(within(needs).queryByRole("button", { name: /#5/ })).toBeNull();
     expect(
       within(needs).getByRole("link", { name: "Add other/lib as a project to review #5 here" }),

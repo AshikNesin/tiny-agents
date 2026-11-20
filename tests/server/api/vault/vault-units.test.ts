@@ -1,8 +1,3 @@
-/**
- * Vault building blocks (issue #56): RFC 6238 codes, the redactor, values
- * that can't be serialized by accident, the one "target moved" error and
- * the 1Password field mapping.
- */
 import { inspect } from "node:util";
 import { describe, expect, it } from "vite-plus/test";
 import { SecretRedactor } from "../../../../packages/agent/src/redact";
@@ -21,7 +16,6 @@ import {
 import { parseTotp, totpCode } from "../../../../apps/web/src/server/api/vault/vault.totp";
 
 describe("TOTP", () => {
-  // RFC 6238 appendix B: the SHA1 seed "12345678901234567890", 8 digits.
   const seed = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ";
   const spec = { ...parseTotp(seed)!, digits: 8 };
 

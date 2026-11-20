@@ -1,9 +1,3 @@
-/**
- * The page resources (rewrite step 5.2) keep what the hand-rolled pages did:
- * a failure shows at once and stays while a retry runs, a revisit loads
- * again rather than showing a cached list, focus never refetches, and the
- * newest refresh's answer is the one shown.
- */
 import React from "react";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vite-plus/test";

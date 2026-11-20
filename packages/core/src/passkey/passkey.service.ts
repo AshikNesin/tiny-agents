@@ -24,8 +24,6 @@ import {
   verifyPasskeyRegistration,
 } from "./webauthn.utils";
 
-// The wire type lives in passkey.schema; re-exported here so existing imports
-// from passkey.service keep working.
 export type { PasskeySummary };
 
 const CHALLENGE_TTL_MS = 5 * 60 * 1000;
@@ -51,23 +49,12 @@ async function countPasskeys(userId: number): Promise<number> {
   return total;
 }
 
-/**
- * What a challenge was issued for. A challenge is issued, then consumed once
- * by the matching verification or left to expire; one issued for sign-in
- * never verifies a registration, and a registration challenge only verifies
- * for the user it was issued to.
- */
 type ChallengeIssue = { purpose: "authenticate" } | { purpose: "register"; userId: number };
 
 async function storeChallenge(challenge: string, issue: ChallengeIssue): Promise<void> {
   await challengeKv.set(challenge, issue, CHALLENGE_TTL_MS);
 }
 
-/**
- * Challenges are single use: `take` deletes a live one and returns it in one
- * statement, so of two concurrent verifications of one challenge only one
- * passes. A challenge issued for something else is consumed and refused.
- */
 async function consumeChallenge(challenge: string, expected: ChallengeIssue): Promise<boolean> {
   const issue = await challengeKv.take<ChallengeIssue>(challenge);
   if (!issue || typeof issue !== "object") return false;
@@ -130,7 +117,6 @@ export async function verifyRegistration({
 
   const verification = await verifyPasskeyRegistration(response, challenge).catch(
     (error: unknown) => {
-      // Malformed attestation data is a client error, not a server fault.
       throw Boom.badRequest(`Passkey registration verification failed: ${errorMessage(error)}`);
     },
   );
@@ -185,11 +171,6 @@ export async function generateAuthenticationOptions({
   return options;
 }
 
-/**
- * Verify a passkey assertion against a challenge this server issued: the
- * account on success, a plain 400/401 otherwise (never `SESSION_INVALID`).
- * The route signs it in with `startSession`.
- */
 export async function authenticatePasskey({
   response,
 }: {
@@ -229,8 +210,8 @@ export async function authenticatePasskey({
 }
 
 /**
- * @deprecated Use `authenticatePasskey`, then `startSession` from
- * `@groot/core/session`, which also sets the cookie.
+ * @deprecated Use `authenticatePasskey`, then `startSession` from `@groot/core/session`, which also
+ * sets the cookie.
  */
 export async function verifyAuthentication(input: {
   response: AuthenticationResponseJSON;
@@ -261,8 +242,6 @@ export async function deletePasskey({
   userId: number;
 }): Promise<void> {
   await findOwnedPasskey(userId, passkeyId);
-  // One compare-and-set DELETE: the row goes only while another passkey of the
-  // same user still exists, so two concurrent deletes can never remove the last.
   const others = db
     .select({ id: passkeys.id })
     .from(passkeys)

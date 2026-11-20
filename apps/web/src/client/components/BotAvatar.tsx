@@ -5,10 +5,6 @@ interface BotAvatarProps {
   className?: string;
 }
 
-/**
- * DiceBear "gaze" avatar, deterministic per bot name. The URL is the single
- * source of identity: no stored color or emoji.
- */
 function avatarUrl(name: string): string {
   return `https://api.dicebear.com/10.x/gaze/svg?seed=${encodeURIComponent(name)}`;
 }

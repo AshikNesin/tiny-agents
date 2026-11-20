@@ -1,20 +1,3 @@
-/**
- * At-rest encryption for every secret the app stores itself (issue #179,
- * ADR 0005): the local vault backend's items and a connection's header
- * secret and OAuth state.
- *
- * - One key per purpose, derived from SECRETS_KEY with HKDF-SHA256, so a
- *   ciphertext of one subsystem never opens in another.
- * - AES-256-GCM with a random 96-bit IV per write.
- * - The binding (purpose, record, field and an optional policy digest) is
- *   the AAD: a ciphertext copied to another row or field, or one whose
- *   policy was changed behind the service's back, does not decrypt.
- * - Stored as `v2:<kid>:<iv>:<tag>:<ciphertext>` (base64url), where `kid`
- *   fingerprints the derived key. SECRETS_KEY_PREVIOUS opens values written
- *   under the old key until `pnpm secrets:rotate` rewrites them.
- *
- * Node only (`node:crypto`); `packages/core` stays runtime-neutral.
- */
 import {
   createCipheriv,
   createHash,
@@ -27,18 +10,13 @@ import { appEnv } from "../env";
 
 export type SecretPurpose = "vault-local" | "connection" | "push";
 
-/** What a ciphertext is bound to. Every field is part of the AAD. */
 export interface SecretBinding {
   purpose: SecretPurpose;
-  /** The row (or KV key) the value belongs to. */
   record: string;
-  /** The column or field within it. */
   field: string;
-  /** A digest of the policy the value may be used under (hosts, injection, audience). */
   policy?: string;
 }
 
-/** Why a stored secret can't be read; callers show the message to the owner. */
 export class SecretLockedError extends Error {
   constructor(
     readonly reason: "no_key" | "key_mismatch" | "unreadable",
@@ -99,7 +77,6 @@ function aad(binding: SecretBinding): Buffer {
   );
 }
 
-/** Encrypt `plain` under the current key, bound to `binding`. */
 export function seal(plain: string, binding: SecretBinding): string {
   const { key, kid } = currentKey(binding.purpose);
   const iv = randomBytes(12);
@@ -119,7 +96,6 @@ function parse(stored: string) {
   return { kid, iv, tag, data };
 }
 
-/** Decrypt a value `seal` wrote for the same binding. */
 export function open(stored: string, binding: SecretBinding): string {
   const parts = parse(stored);
   const { current, previous } = keys(binding.purpose);
@@ -149,7 +125,6 @@ export function open(stored: string, binding: SecretBinding): string {
   }
 }
 
-/** True when `stored` was written under a key other than the current one. */
 export function needsReseal(stored: string, purpose: SecretPurpose): boolean {
   return parse(stored).kid !== currentKey(purpose).kid;
 }
@@ -166,10 +141,6 @@ export function openJson<T>(
   return JSON.parse(open(stored, binding)) as T;
 }
 
-/**
- * A stable digest of the policy a value may be used under. Keys are sorted
- * and `undefined` entries dropped, so the digest depends only on the content.
- */
 export function policyDigest(policy: Record<string, unknown>): string {
   return createHash("sha256").update(canonical(policy)).digest("base64url");
 }

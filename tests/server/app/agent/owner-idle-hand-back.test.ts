@@ -1,8 +1,3 @@
-/**
- * Issue 233: when the owner takes over a live browser or computer and then
- * gives no input for two minutes, the idle sweep hands it back to the bot.
- * A bot's takeover request nobody has answered yet stays with the owner.
- */
 import { describe, expect, it } from "vite-plus/test";
 import {
   createBrowserSessions,
@@ -15,7 +10,6 @@ import { fakeComputer } from "./computer-fakes";
 
 const MINUTE = 60_000;
 
-/** A clock moved by hand; `sweep` runs the idle sweep (the only interval). */
 function manualClock() {
   let now = 0;
   const intervals: (() => void)[] = [];
@@ -56,7 +50,6 @@ describe("owner idle hand-back", () => {
     expect(computers.get("shared")?.driver).toBe("human");
     time.at(3.6 * MINUTE);
     expect(computers.get("shared")?.driver).toBe("agent");
-    // Handed back, not closed: the bot carries on with the same desktop.
     expect(computers.profiles()).toEqual(["shared"]);
     await computers.closeAll();
   });

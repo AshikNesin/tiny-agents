@@ -1,10 +1,3 @@
-/**
- * Characterization of behavior-register row U2: `isUnread` is
- * `lastActivityAt > lastReadAt` with a preview, so the owner's own send marks
- * the bot unread until `/read`.
- * Preserve: this pins today's behavior, quirk included; change it only with
- * a signed-off register row.
- */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import type { BotListEntry } from "../../../apps/web/src/shared/bot-list";
 import { api, createTestApp } from "../helpers";
@@ -24,7 +17,6 @@ afterEach(resetAppTables);
 
 describe("U2: the owner's own send", () => {
   it("marks the bot unread, with no reply, until the owner posts /read", async () => {
-    // No reply ever comes: nothing but the owner's send moves the row.
     const fake = installFakeRuntime();
     const readAt = new Date(Date.now());
     const bot = await seedBot({

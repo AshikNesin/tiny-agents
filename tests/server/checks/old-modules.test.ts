@@ -4,12 +4,6 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { LIST, oldModuleProblems, type OldModules } from "../../../scripts/check-old-modules";
 
-/**
- * Old-modules gate (scripts/check-old-modules.ts), the rewrite's step 6.1:
- * the real retired-paths list passes on this repo, and each kind of entry
- * fails on a small fixture repo that brings its old module back.
- */
-
 const roots: string[] = [];
 afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });

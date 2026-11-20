@@ -1,8 +1,3 @@
-/**
- * The thread's line comments that have not reached its agent yet, above the
- * composer: how many, and (opened) each with its file and lines. They go with
- * the next message the owner sends; Send now posts them on their own.
- */
 import { useState } from "react";
 import { ChevronDown, MessageSquare, Send, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -20,11 +15,8 @@ export function PendingComments({
   sendNow: canSendNow = true,
 }: {
   threadId: string;
-  /** False for a guest, who has no saved comments. */
   enabled?: boolean;
-  /** Open the diff the comments are on. */
   onShow?(): void;
-  /** Offer Send now (not before there is an agent to send them to). */
   sendNow?: boolean;
 }) {
   const comments = useThreadComments(threadId, enabled);

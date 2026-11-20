@@ -7,22 +7,13 @@ import type { StorageAdapter } from "./storage/adapter";
 import { setErrorReporter, type ErrorReporter } from "./errors";
 
 export interface BootstrapOptions {
-  /** `process.env` on Node, the bindings object on Workers. */
   env: EnvSource;
-  /** App overrides from `defineConfig()`. */
   config?: ConfigOverrides;
-  /** The database handle, or a factory that receives the validated env. */
   db: Database | ((env: Env) => Database);
   storage?: StorageAdapter | ((env: Env) => StorageAdapter);
-  /** Where unexpected errors go (Sentry, ...). */
   reportError?: ErrorReporter;
 }
 
-/**
- * Wire the runtime-specific pieces into core, in dependency order: env →
- * config → logger → database → storage → error reporting. Call once per
- * process (Node) or once per isolate (Workers) before serving requests.
- */
 export function bootstrap(options: BootstrapOptions): void {
   const env = loadEnv(options.env);
   setConfig(options.config);

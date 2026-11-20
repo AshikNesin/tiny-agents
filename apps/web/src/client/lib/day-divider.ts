@@ -1,7 +1,3 @@
-/**
- * Day-divider label for the transcript (Grok-style "Today 9:41 AM" bands
- * between message groups from different days).
- */
 export function formatDayDivider(epochMs: number): string {
   const date = new Date(epochMs);
   const now = new Date();

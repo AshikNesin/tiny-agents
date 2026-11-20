@@ -1,6 +1,5 @@
 package tinyagents.vnc
 
-/** X11 keysyms, the key identifiers an RFB KeyEvent carries. */
 public object Keysyms {
     public const val BackSpace: Int = 0xff08
     public const val Tab: Int = 0xff09
@@ -39,16 +38,10 @@ public object Keysyms {
     public const val Super_R: Int = 0xffec
     public const val Space: Int = 0x20
 
-    /** "No keysym": what [fromChar] returns for a character that has none. */
     public const val None: Int = 0
 
     private const val UNICODE_BASE = 0x01000000
 
-    /**
-     * The keysym that types the Unicode [codePoint]. Printable Latin-1 maps to itself, other
-     * Unicode to `0x01000000 + codePoint`, and newline, tab, backspace, escape and delete to their
-     * function keys. Returns [None] for other control characters and invalid code points.
-     */
     public fun fromChar(codePoint: Int): Int = when (codePoint) {
         '\n'.code, '\r'.code -> Return
         '\t'.code -> Tab
@@ -60,38 +53,60 @@ public object Keysyms {
         else -> None
     }
 
-    /**
-     * The keysym for a non-printing `android.view.KeyEvent` key code (navigation, editing,
-     * function and modifier keys), or null when the key types a character (map that with
-     * [fromChar]) or has no X11 equivalent. Key codes are the raw Android constants, so this
-     * object stays free of Android imports.
-     */
     public fun fromAndroidKeyCode(keyCode: Int): Int? = when (keyCode) {
-        19 -> Up // KEYCODE_DPAD_UP
-        20 -> Down // KEYCODE_DPAD_DOWN
-        21 -> Left // KEYCODE_DPAD_LEFT
-        22 -> Right // KEYCODE_DPAD_RIGHT
-        57 -> Alt_L // KEYCODE_ALT_LEFT
-        58 -> Alt_R // KEYCODE_ALT_RIGHT
-        59 -> Shift_L // KEYCODE_SHIFT_LEFT
-        60 -> Shift_R // KEYCODE_SHIFT_RIGHT
-        61 -> Tab // KEYCODE_TAB
-        62 -> Space // KEYCODE_SPACE
-        66, 160 -> Return // KEYCODE_ENTER, KEYCODE_NUMPAD_ENTER
-        67 -> BackSpace // KEYCODE_DEL
-        92 -> PageUp // KEYCODE_PAGE_UP
-        93 -> PageDown // KEYCODE_PAGE_DOWN
-        111 -> Escape // KEYCODE_ESCAPE
-        112 -> Delete // KEYCODE_FORWARD_DEL
-        113 -> Control_L // KEYCODE_CTRL_LEFT
-        114 -> Control_R // KEYCODE_CTRL_RIGHT
-        115 -> Caps_Lock // KEYCODE_CAPS_LOCK
-        117 -> Super_L // KEYCODE_META_LEFT
-        118 -> Super_R // KEYCODE_META_RIGHT
-        122 -> Home // KEYCODE_MOVE_HOME
-        123 -> End // KEYCODE_MOVE_END
-        124 -> Insert // KEYCODE_INSERT
-        in 131..142 -> F1 + (keyCode - 131) // KEYCODE_F1..KEYCODE_F12
+        KEYCODE_DPAD_UP -> Up
+        KEYCODE_DPAD_DOWN -> Down
+        KEYCODE_DPAD_LEFT -> Left
+        KEYCODE_DPAD_RIGHT -> Right
+        KEYCODE_ALT_LEFT -> Alt_L
+        KEYCODE_ALT_RIGHT -> Alt_R
+        KEYCODE_SHIFT_LEFT -> Shift_L
+        KEYCODE_SHIFT_RIGHT -> Shift_R
+        KEYCODE_TAB -> Tab
+        KEYCODE_SPACE -> Space
+        KEYCODE_ENTER, KEYCODE_NUMPAD_ENTER -> Return
+        KEYCODE_DEL -> BackSpace
+        KEYCODE_PAGE_UP -> PageUp
+        KEYCODE_PAGE_DOWN -> PageDown
+        KEYCODE_ESCAPE -> Escape
+        KEYCODE_FORWARD_DEL -> Delete
+        KEYCODE_CTRL_LEFT -> Control_L
+        KEYCODE_CTRL_RIGHT -> Control_R
+        KEYCODE_CAPS_LOCK -> Caps_Lock
+        KEYCODE_META_LEFT -> Super_L
+        KEYCODE_META_RIGHT -> Super_R
+        KEYCODE_MOVE_HOME -> Home
+        KEYCODE_MOVE_END -> End
+        KEYCODE_INSERT -> Insert
+        in KEYCODE_F1..KEYCODE_F12 -> F1 + (keyCode - KEYCODE_F1)
         else -> null
     }
+
+    private const val KEYCODE_DPAD_UP = 19
+    private const val KEYCODE_DPAD_DOWN = 20
+    private const val KEYCODE_DPAD_LEFT = 21
+    private const val KEYCODE_DPAD_RIGHT = 22
+    private const val KEYCODE_ALT_LEFT = 57
+    private const val KEYCODE_ALT_RIGHT = 58
+    private const val KEYCODE_SHIFT_LEFT = 59
+    private const val KEYCODE_SHIFT_RIGHT = 60
+    private const val KEYCODE_TAB = 61
+    private const val KEYCODE_SPACE = 62
+    private const val KEYCODE_ENTER = 66
+    private const val KEYCODE_NUMPAD_ENTER = 160
+    private const val KEYCODE_DEL = 67
+    private const val KEYCODE_PAGE_UP = 92
+    private const val KEYCODE_PAGE_DOWN = 93
+    private const val KEYCODE_ESCAPE = 111
+    private const val KEYCODE_FORWARD_DEL = 112
+    private const val KEYCODE_CTRL_LEFT = 113
+    private const val KEYCODE_CTRL_RIGHT = 114
+    private const val KEYCODE_CAPS_LOCK = 115
+    private const val KEYCODE_META_LEFT = 117
+    private const val KEYCODE_META_RIGHT = 118
+    private const val KEYCODE_MOVE_HOME = 122
+    private const val KEYCODE_MOVE_END = 123
+    private const val KEYCODE_INSERT = 124
+    private const val KEYCODE_F1 = 131
+    private const val KEYCODE_F12 = 142
 }

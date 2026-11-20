@@ -1,10 +1,3 @@
-/**
- * The terminal service port (issue #28): tabs on the sandbox VM are tmux
- * sessions, and this service owns their lifecycle. Pure orchestration over
- * the tmux command builders (`tmux.ts`) — all I/O goes through the app's
- * `SandboxConnection` (execs and pty attaches share its pooled connection,
- * issue #84), which tests substitute.
- */
 import type { PtyStream } from "../ssh/pty-stream";
 import type { SandboxConnection } from "../ssh/sandbox-connection";
 import {
@@ -24,7 +17,6 @@ import {
   type SessionName,
 } from "./tmux";
 
-/** One tmux invocation's outcome, stdout and stderr kept apart for parsing. */
 interface TerminalExecResult {
   stdout: string;
   stderr: string;
@@ -33,7 +25,6 @@ interface TerminalExecResult {
 
 export type { PtyStream } from "../ssh/pty-stream";
 
-/** What the service needs of the sandbox connection. */
 export type TerminalConnection = Pick<SandboxConnection, "exec" | "pty">;
 
 export type TerminalStatus =
@@ -42,7 +33,6 @@ export type TerminalStatus =
   | { kind: "unreachable"; message: string }
   | { kind: "tmux-missing"; installCommand: string };
 
-/** The install line the tmux-missing state offers (Ubuntu on the sandbox VM). */
 const TMUX_INSTALL_COMMAND = "sudo apt-get install -y tmux";
 
 export class TerminalUnreachableError extends Error {}
@@ -68,10 +58,8 @@ export class SessionBusyError extends Error {
   }
 }
 
-/** One tab, as the service reports it. createdAt is epoch seconds from tmux. */
 export interface TerminalSessionRow {
   name: SessionName;
-  /** The pane's foreground process, when tmux reported one. */
   foreground: string | null;
   attached: boolean;
   createdAt: number;
@@ -84,9 +72,7 @@ interface TerminalServiceListResult {
 
 export interface TerminalService {
   status(): Promise<TerminalStatus>;
-  /** One exec answers both the status and the tab list (the poll path). */
   list(): Promise<TerminalServiceListResult>;
-  /** `typeLine` is typed into the new tab's shell (e.g. a sign-in command). */
   create(cols: number, rows: number, options?: { typeLine?: string }): Promise<TerminalSessionRow>;
   kill(name: SessionName, options?: { force?: boolean }): Promise<void>;
   has(name: SessionName): Promise<boolean>;
@@ -94,11 +80,9 @@ export interface TerminalService {
 }
 
 export interface TerminalServiceOptions {
-  /** The app's sandbox connection; unset = no sandbox configured. */
   connection?: TerminalConnection;
 }
 
-/** The connection already words "Cannot reach the sandbox"; keep its message. */
 const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 export function createTerminalService(
@@ -129,8 +113,6 @@ export function createTerminalService(
     try {
       result = await exec(listCommand());
     } catch (error) {
-      // The poll path reports reachability as status, not as a throw: the
-      // tab strip still renders an empty list beside an error chip.
       return {
         status: { kind: "unreachable", message: messageOf(error) },
         sessions: [],
@@ -192,8 +174,6 @@ export function createTerminalService(
           throw new TerminalUnreachableError(typed.stderr.trim() || "tmux send-keys failed");
         }
       }
-      // Re-list rather than fabricate: tmux owns createdAt, and the pane's
-      // foreground may already be visible.
       const row = (await requireReady()).find((s) => s.name === name);
       return (
         row ?? { name, foreground: null, attached: false, createdAt: Math.floor(Date.now() / 1000) }
@@ -202,7 +182,6 @@ export function createTerminalService(
     async kill(name, killOptions) {
       if (!killOptions?.force) {
         const foreground = singleLine(await exec(foregroundCommand(name)));
-        // tmux 3.4 exits 0 with empty output for a missing target.
         if (!foreground) throw new SessionNotFoundError(name);
         const loginShell = singleLine(await exec(loginShellCommand()));
         if (isBusy(foreground, loginShell || null)) throw new SessionBusyError(name, foreground);

@@ -50,16 +50,10 @@ import groot.mobile.ui.components.StatusDot
 import groot.mobile.ui.components.rememberResource
 import groot.mobile.ui.components.relativeTime
 
-/**
- * A project thread's pull request: publish the branch as a draft PR (or push new commits), see
- * its checks, reviews and unresolved comments, run one fix pass, switch Auto-fix and
- * auto-merge, and merge. Opening it reconciles with GitHub.
- */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun CodePullRoute(container: AppContainer, threadId: String, onBack: () -> Unit) {
     val api = container.code
-    // The latest view an action answered with; a reload replaces it.
     var latest by remember { mutableStateOf<ThreadPulls?>(null) }
     val resource = rememberResource("code-pr:$threadId") { api.pulls(threadId).also { latest = null } }
     val context = LocalContext.current
@@ -295,7 +289,6 @@ private fun Toggle(title: String, summary: String, checked: Boolean, onChange: (
     }
 }
 
-/** Where the Auto-fix loop stands, in words. */
 internal fun loopText(pr: PullView): String {
     if (!pr.autofix) return "Off. Fix failed checks and trusted review comments on its own."
     val status = when (pr.loopStatus) {

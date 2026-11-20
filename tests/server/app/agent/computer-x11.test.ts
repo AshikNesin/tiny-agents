@@ -1,8 +1,3 @@
-/**
- * The computer's command builders and parsers (issue #108): what xdotool,
- * wmctrl and the desktop entries print, and what never reaches a command
- * line; and the X11 transport over an in-memory sandbox connection.
- */
 import { PassThrough } from "node:stream";
 import { describe, expect, it } from "vite-plus/test";
 import { SandboxTimeoutError } from "../../../../packages/sandbox/src/ssh/connection";
@@ -122,14 +117,13 @@ describe("computer x11 commands", () => {
 describe("the x11 transport over the sandbox connection", () => {
   const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]);
 
-  /** A sandbox whose stack needs installing once, then answers every desktop tool. */
   function sandbox(tool: (command: string) => FakeExecReply = () => ({ stdout: JPEG })) {
     return fakeSandboxConnection({
       exec: (command) => {
         if (command.includes("The desktop is not running")) return tool(command);
         if (command === computerStackReadyCommand([])) return { stdout: "missing\n" };
         if (command === installComputerStackCommand([])) return {};
-        return { stdout: "ok display=91 vnc=40123\n" }; // the launch
+        return { stdout: "ok display=91 vnc=40123\n" };
       },
       forward: async () => new PassThrough(),
     });
@@ -147,7 +141,6 @@ describe("the x11 transport over the sandbox connection", () => {
     expect(await desktop.screenshot()).toEqual(JPEG);
     await desktop.vnc!.openStream();
     expect(connection.forwards).toEqual([40123]);
-    // Every exec settles on exit: launched apps and xclip keep their channel open.
     expect(connection.execs.every((e) => e.options.settleOnExit)).toBe(true);
   });
 

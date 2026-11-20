@@ -1,10 +1,3 @@
-/**
- * The PR tab re-reads its pull request while it is on screen. Each read is a
- * fresh reconcile with GitHub, so a project on `gh` or a token (no
- * webhooks) shows a finished check within seconds instead of waiting for
- * the server's 1 to 5 minute poll. A hidden tab stops reading, and a failed
- * background read keeps what is shown.
- */
 import React from "react";
 import { act, fireEvent, render as renderBare, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -13,12 +6,8 @@ import type { CheckLogView, ThreadPullsView } from "../../../apps/web/src/shared
 import { notifyManager } from "@tanstack/react-query";
 import { AppQueryProvider } from "../query-provider";
 
-// React Query hands answers to the page on a zero timeout, which fake timers
-// push a millisecond on when it is set mid-tick; as microtasks, a tick of 0
-// lands an answer as a plain promise does.
 notifyManager.setScheduler(queueMicrotask);
 
-/** Each render gets its own React Query cache, as the app gives the page one. */
 const render = (ui: Parameters<typeof renderBare>[0]) =>
   renderBare(ui, { wrapper: AppQueryProvider });
 
@@ -29,32 +18,23 @@ vi.mock("sonner", () => ({
   toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), message: vi.fn() }),
 }));
 
-/** What GitHub says the check is, read by each GET of the PR tab. */
 let checkState: CheckState = "pending";
 let failReads = false;
 let reads = 0;
-/** Snapshot fields a test sets over the defaults: checks, comments, reviews, threads. */
 let extra: Partial<Snapshot> = {};
-/** The log excerpt GitHub's job log cuts to, by job id. */
 const logs = new Map<number, CheckLogView>();
-/** The PR's description on GitHub, and the edits the tab sent. */
 let body = "";
 const edits: unknown[] = [];
-/** Whether the open PR is a draft, and the draft switches the tab asked for. */
 let draft = false;
 const readied: boolean[] = [];
-/** No PR yet: how far the branch is ahead, and what differs from the base (committed or not). */
 let noPull = false;
 let ahead: number | null = 1;
 let changed: string[] = [];
 let earlier: ThreadPullsView["earlier"] = [];
-/** Auto-fix on the open PR, and what the thread has cost. */
 let autofix = false;
 let spendUsd: number | null = null;
-/** Comment and thread ids from authors Auto-fix does not take instructions from. */
 let ignored: string[] = [];
 
-// The network: the PR tab's one read.
 vi.mock("@groot/shell/lib/api", async (importOriginal) => {
   const original = await importOriginal<typeof import("@groot/shell/lib/api")>();
   return {
@@ -281,7 +261,7 @@ describe("Code PR tab", () => {
 describe("getting it merged", () => {
   it("leads with the merged PR once a merge archived the thread, not with Publish (#383)", async () => {
     noPull = true;
-    ahead = null; // the archive took the worktree
+    ahead = null;
     earlier = [
       {
         number: 12,

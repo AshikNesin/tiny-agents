@@ -1,8 +1,3 @@
-/**
- * A bot's toolkits (bot-toolkits.ts): the selection every bot's conversation
- * runs with, a connection's tools, and the check that
- * every id a bot can select is one the runtime installs.
- */
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -28,9 +23,8 @@ import {
 } from "../../../../apps/web/src/server/api/bots/bots.runtime";
 import { fakeCatalog } from "../../fixtures/runtime";
 
-const catalog = fakeCatalog(); // "known-model" is text-only, "vision-model" sees images
+const catalog = fakeCatalog();
 
-/** A linked connection with `count` cached tools, `off` of them turned off. */
 function connection(slug: string, count: number, off = 0) {
   const names = Array.from({ length: count }, (_, i) => `t${i}`);
   return {
@@ -51,7 +45,6 @@ describe("botToolkits", () => {
       ...BOT_TOOLKITS,
       TOOL_SEARCH_TOOLKIT,
     ]);
-    // A model the catalog does not know is treated as text-only.
     expect(botToolkits({ modelId: "gone-model" }, catalog)).toContain(VISION_TOOLKIT);
   });
 
@@ -102,7 +95,6 @@ describe("selected ids match installed ones", () => {
   it("every built-in a bot selects is installed by the server's runtime", async () => {
     const dir = await mkdtemp(join(tmpdir(), "bot-toolkits-"));
     dirs.push(dir);
-    // The production boot: builtinCapabilities, the runtime's own, bots and vision.
     const runtime = await openAgentRuntime({
       storePath: join(dir, "agent.db"),
       env: process.env,

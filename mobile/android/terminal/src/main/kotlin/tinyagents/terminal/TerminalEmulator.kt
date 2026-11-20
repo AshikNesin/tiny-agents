@@ -2,39 +2,18 @@ package tinyagents.terminal
 
 import java.util.Base64
 
-/** Which xterm mouse protocol the application asked for. */
 public enum class MouseTracking {
-    /** No mouse reporting: touches belong to the view. */
     NONE,
 
-    /** `?9`: button presses only. */
     X10,
 
-    /** `?1000`: presses, releases and the wheel. */
     NORMAL,
 
-    /** `?1002`: as [NORMAL], plus motion while a button is down. */
     BUTTON,
 
-    /** `?1003`: as [NORMAL], plus all motion. */
     ANY,
 }
 
-/**
- * An xterm-compatible terminal: feed it the bytes a pty produces and read the screen back.
- *
- * It renders what tmux, a shell and full-screen programs emit for `TERM=xterm-256color`: the
- * VT100/VT220 controls, xterm's private modes (alternate screen, mouse, bracketed paste), SGR
- * colours in every form, UTF-8 with wide and combining characters, and scroll regions. The
- * parser is the VT500 state machine, so a sequence may be split anywhere across [feed] calls
- * and malformed input is skipped, never thrown on.
- *
- * Not thread-safe: call [feed], [resize] and the readers from one thread (or hold one lock).
- *
- * @param scrollbackLines how many lines scrolled off the main screen are kept.
- * @param reply receives the bytes the terminal itself answers with (device attributes, cursor
- * position reports); write them to the pty.
- */
 public class TerminalEmulator(
     cols: Int,
     rows: Int,
@@ -47,80 +26,61 @@ public class TerminalEmulator(
     public var rows: Int = rows.coerceAtLeast(1)
         private set
 
-    /** Cursor row on the visible screen, `0 until rows`. */
     public var cursorRow: Int = 0
         private set
 
-    /** Cursor column, `0 until cols`. With a wrap pending it stays on the last column. */
     public var cursorCol: Int = 0
         private set
 
-    /** DECTCEM (`?25`). */
     public var cursorVisible: Boolean = true
         private set
 
-    /** DECSCUSR: 0/1 blinking block, 2 block, 3/4 underline, 5/6 bar. */
     public var cursorStyle: Int = 0
         private set
 
-    /** The window title set with OSC 0 or OSC 2. */
     public var title: String = ""
         private set
 
-    /** DECCKM (`?1`): arrows are sent as `ESC O x`. */
     public var applicationCursorKeys: Boolean = false
         private set
 
-    /** DECKPAM (`ESC =`). */
     public var applicationKeypad: Boolean = false
         private set
 
-    /** `?2004`: wrap pastes in `ESC [200~` / `ESC [201~`. */
     public var bracketedPaste: Boolean = false
         private set
 
-    /** The mouse protocol the application enabled, if any. */
     public var mouseTracking: MouseTracking = MouseTracking.NONE
         private set
 
-    /** `?1006`: mouse reports use the SGR encoding (`ESC [ < b ; x ; y M`). */
     public var mouseSgrEncoding: Boolean = false
         private set
 
-    /** `?1004`: the application wants `ESC [ I` / `ESC [ O` when the view gains or loses focus. */
     public var focusEvents: Boolean = false
         private set
 
-    /** True while the alternate screen (`?47`, `?1047`, `?1049`) is shown. */
     public var alternateScreen: Boolean = false
         private set
 
-    /** Bumped by every [feed] and [resize]: a cheap "something may have changed" signal. */
     public var version: Long = 0
         private set
 
-    /** Called for BEL. */
     public var onBell: (() -> Unit)? = null
 
-    /** Called with the text of an OSC 52 clipboard write (tmux sends one for a mouse selection). */
     public var onClipboardCopy: ((String) -> Unit)? = null
 
-    /** Lines above the screen that [line] reaches with a negative index; 0 on the alternate screen. */
     public val scrollbackSize: Int
         get() = if (alternateScreen) 0 else historySize
 
-    // Screens. `screen` is whichever of the two is shown.
     private var mainScreen: Array<TerminalLine> = newScreen(this.cols, this.rows)
     private var altScreen: Array<TerminalLine> = newScreen(this.cols, this.rows)
     private var screen: Array<TerminalLine> = mainScreen
 
-    // Scrollback ring: `history[(historyStart + i) % capacity]`, oldest first.
     private val historyCapacity: Int = scrollbackLines.coerceAtLeast(0)
     private val history: Array<TerminalLine?> = arrayOfNulls(historyCapacity)
     private var historyStart: Int = 0
     private var historySize: Int = 0
 
-    // Cursor and pen.
     private var pendingWrap: Boolean = false
     private var penFg: Int = TerminalColor.DEFAULT
     private var penBg: Int = TerminalColor.DEFAULT
@@ -132,7 +92,6 @@ public class TerminalEmulator(
     private val savedMain = SavedCursor()
     private val savedAlt = SavedCursor()
 
-    // Modes.
     private var originMode: Boolean = false
     private var autoWrap: Boolean = true
     private var insertMode: Boolean = false
@@ -141,7 +100,6 @@ public class TerminalEmulator(
     private var scrollBottom: Int = this.rows - 1
     private var tabStops: BooleanArray = defaultTabStops(this.cols)
 
-    // Decoder and parser.
     private var utf8Needed: Int = 0
     private var utf8CodePoint: Int = 0
     private var utf8Lower: Int = 0x80
@@ -155,10 +113,6 @@ public class TerminalEmulator(
     private var intermediateCount: Int = 0
     private val oscBuffer = StringBuilder()
 
-    /**
-     * A row of cells: `0 until rows` is the visible screen, negative indexes walk back through
-     * the scrollback (`-1` is the line just above the screen, `-scrollbackSize` the oldest).
-     */
     public fun line(index: Int): TerminalLine {
         if (index >= 0) {
             if (index >= rows) throw IndexOutOfBoundsException("line $index of $rows")
@@ -169,10 +123,6 @@ public class TerminalEmulator(
         return history[(historyStart + historySize - back) % historyCapacity]!!
     }
 
-    /**
-     * Consume pty output. The bytes may stop anywhere, in the middle of a UTF-8 character or of
-     * an escape sequence: the rest is picked up by the next call.
-     */
     public fun feed(bytes: ByteArray, offset: Int = 0, length: Int = bytes.size) {
         require(offset >= 0 && length >= 0 && offset <= bytes.size - length) {
             "range $offset+$length outside ${bytes.size} bytes"
@@ -202,7 +152,6 @@ public class TerminalEmulator(
                 utf8Upper = 0xBF
                 if (--utf8Needed == 0) process(utf8CodePoint)
             } else {
-                // A truncated sequence: one replacement, then look at this byte afresh.
                 utf8Needed = 0
                 process(REPLACEMENT)
             }
@@ -210,12 +159,6 @@ public class TerminalEmulator(
         version++
     }
 
-    /**
-     * Change the grid. Content is kept where it is (no reflow: the program redraws on SIGWINCH);
-     * rows that no longer fit leave from the bottom while blank and otherwise from the top, into
-     * the scrollback for the main screen. Both screens are resized, the cursor is clamped and the
-     * scroll region is reset.
-     */
     public fun resize(cols: Int, rows: Int) {
         val newCols = cols.coerceAtLeast(1)
         val newRows = rows.coerceAtLeast(1)
@@ -235,8 +178,6 @@ public class TerminalEmulator(
         tabStops = defaultTabStops(newCols)
         System.arraycopy(oldStops, 0, tabStops, 0, minOf(oldStops.size, newCols))
 
-        // A wrap that was pending at the old margin has room now: the cursor moves past the
-        // last character instead of sitting on it.
         if (pendingWrap && newCols > this.cols) cursorCol++
         this.cols = newCols
         this.rows = newRows
@@ -286,16 +227,12 @@ public class TerminalEmulator(
         return grown to cursor + pulled
     }
 
-    // ---------------------------------------------------------------- UTF-8
-
     private fun startUtf8(bits: Int, needed: Int, lower: Int, upper: Int) {
         utf8CodePoint = bits
         utf8Needed = needed
         utf8Lower = lower
         utf8Upper = upper
     }
-
-    // ---------------------------------------------------------------- parser
 
     private fun process(cp: Int) {
         if (state == GROUND) {
@@ -313,7 +250,6 @@ public class TerminalEmulator(
                     dispatchOsc()
                 }
                 cp == ESC -> {
-                    // ST is `ESC \`; the backslash is then a no-op escape.
                     dispatchOsc()
                     enterEscape()
                 }
@@ -436,7 +372,6 @@ public class TerminalEmulator(
     }
 
     private fun nextParam(sub: Boolean) {
-        // Past the limit the count keeps growing so the extra digits land nowhere.
         if (paramCount >= MAX_PARAMS) {
             paramCount = MAX_PARAMS + 1
             return
@@ -446,7 +381,6 @@ public class TerminalEmulator(
         paramCount++
     }
 
-    /** C1 controls, which arrive as decoded code points U+0080..U+009F. */
     private fun c1(cp: Int) {
         lastPrinted = -1
         when (cp) {
@@ -462,12 +396,10 @@ public class TerminalEmulator(
     }
 
     private fun execute(cp: Int) {
-        // REP repeats a character only when nothing came between it and the REP.
         if (cp != ESC) lastPrinted = -1
         when (cp) {
             BEL -> onBell?.invoke()
             0x08 -> {
-                // With a wrap pending the cursor is still on the last column: BS leaves it.
                 pendingWrap = false
                 if (cursorCol > 0) cursorCol--
             }
@@ -593,20 +525,15 @@ public class TerminalEmulator(
         }
     }
 
-    /** REP: print the character before the sequence again; more than a screenful changes nothing more. */
     private fun repeatCharacter(codePoint: Int, times: Int) {
         if (codePoint < 0) return
         repeat(minOf(times, cols * rows)) { print(codePoint) }
     }
 
-    /** A parameter, or `default` when it was omitted. */
     private fun param(index: Int, default: Int): Int =
         if (index < paramCount && params[index] >= 0) params[index] else default
 
-    /** A count parameter: omitted and 0 both mean 1. */
     private fun count(index: Int): Int = param(index, 1).coerceAtLeast(1)
-
-    // ---------------------------------------------------------------- OSC
 
     private fun dispatchOsc() {
         val text = oscBuffer
@@ -624,7 +551,6 @@ public class TerminalEmulator(
         }
     }
 
-    /** OSC 52 `<selection>;<base64>`. A `?` asks to read the clipboard, which is never answered. */
     private fun copyToClipboard(argument: String) {
         val listener = onClipboardCopy ?: return
         val payload = argument.substringAfter(';', "")
@@ -636,8 +562,6 @@ public class TerminalEmulator(
         }
         listener(String(decoded, Charsets.UTF_8))
     }
-
-    // ---------------------------------------------------------------- printing
 
     private fun print(codePoint: Int) {
         var cp = codePoint
@@ -655,8 +579,6 @@ public class TerminalEmulator(
             if (autoWrap) wrapLine()
         }
         if (width == 2 && cursorCol == cols - 1) {
-            // A wide character never straddles the margin: it wraps whole and the last cell
-            // keeps what it had (as in xterm and tmux).
             if (!autoWrap || cols < 2) return
             wrapLine()
         }
@@ -677,7 +599,6 @@ public class TerminalEmulator(
         }
     }
 
-    /** A zero-width code point joins the character before the cursor. */
     private fun combine(cp: Int) {
         var col = if (pendingWrap) cursorCol else cursorCol - 1
         if (col < 0) return
@@ -696,15 +617,12 @@ public class TerminalEmulator(
         }
     }
 
-    // ---------------------------------------------------------------- cursor
-
     private fun moveTo(row: Int, col: Int) {
         cursorRow = row.coerceIn(0, rows - 1)
         cursorCol = col.coerceIn(0, cols - 1)
         pendingWrap = false
     }
 
-    /** CUP/VPA: with origin mode the row counts from, and stays inside, the scroll region. */
     private fun moveToAddressed(row: Int, col: Int, keepColumn: Boolean = false) {
         val target = if (originMode) (row + scrollTop).coerceIn(scrollTop, scrollBottom) else row
         moveTo(target, if (keepColumn) cursorCol else col)
@@ -744,7 +662,6 @@ public class TerminalEmulator(
     }
 
     private fun tab(times: Int) {
-        // With a wrap pending the cursor is logically past the margin: a tab stays put.
         if (pendingWrap) return
         repeat(times) {
             var col = cursorCol + 1
@@ -799,8 +716,6 @@ public class TerminalEmulator(
         answer("\u001b[${if (private) "?" else ""}$row;${cursorCol + 1}R")
     }
 
-    // ---------------------------------------------------------------- erasing and scrolling
-
     private fun eraseDisplay(mode: Int) {
         when (mode) {
             0 -> {
@@ -844,7 +759,6 @@ public class TerminalEmulator(
         pendingWrap = false
     }
 
-    /** Scroll a region up; a full-screen region of the main screen scrolls into the scrollback. */
     private fun scrollUp(top: Int, bottom: Int, n: Int) {
         scrollLinesUp(top, bottom, n, toHistory = !alternateScreen && top == 0 && bottom == rows - 1)
     }
@@ -871,7 +785,6 @@ public class TerminalEmulator(
         }
     }
 
-    /** Append to the scrollback; returns a line the screen can reuse (the evicted one, or new). */
     private fun pushHistory(line: TerminalLine): TerminalLine {
         if (historyCapacity == 0) return TerminalLine(cols)
         if (historySize < historyCapacity) {
@@ -885,7 +798,6 @@ public class TerminalEmulator(
         return evicted
     }
 
-    /** The scrollback line `back` places from the newest, made as wide as the screen will be. */
     private fun popHistory(back: Int): TerminalLine {
         val slot = (historyStart + historySize - 1 - back) % historyCapacity
         val line = history[slot]!!
@@ -918,8 +830,6 @@ public class TerminalEmulator(
         moveTo(0, 0)
     }
 
-    // ---------------------------------------------------------------- modes
-
     private fun setAnsiMode(mode: Int, on: Boolean) {
         when (mode) {
             4 -> insertMode = on
@@ -951,14 +861,12 @@ public class TerminalEmulator(
                 showAlternate(on, clear = false)
             }
             1048 -> if (on) saveCursor() else restoreCursor()
-            // Already on the alternate screen, a second 1049h changes nothing (as in xterm.js).
             1049 -> if (on) {
                 if (!alternateScreen) {
                     saveCursor()
                     showAlternate(true, clear = true)
                 }
             } else {
-                // xterm restores the cursor whether or not the alternate screen was up.
                 showAlternate(false, clear = false)
                 restoreCursor()
             }
@@ -983,7 +891,6 @@ public class TerminalEmulator(
         if (on && clear) for (line in altScreen) line.clearAll(penBg)
     }
 
-    /** DECRQM for the private modes this terminal keeps. */
     private fun reportMode() {
         if (privateMarker != '?'.code) return
         val mode = param(0, 0)
@@ -1050,8 +957,6 @@ public class TerminalEmulator(
         cursorCol = 0
     }
 
-    // ---------------------------------------------------------------- SGR
-
     private fun selectGraphicRendition() {
         var i = 0
         while (i < paramCount) {
@@ -1067,7 +972,6 @@ public class TerminalEmulator(
                 1 -> penAttrs = penAttrs or TerminalAttribute.BOLD
                 2 -> penAttrs = penAttrs or TerminalAttribute.DIM
                 3 -> penAttrs = penAttrs or TerminalAttribute.ITALIC
-                // `4:0` is "no underline"; every other style (double, curly, ...) is drawn plain.
                 4 -> penAttrs = if (subCount > 0 && params[i + 1] == 0) {
                     penAttrs and TerminalAttribute.UNDERLINE.inv()
                 } else {
@@ -1091,7 +995,6 @@ public class TerminalEmulator(
                 49 -> penBg = TerminalColor.DEFAULT
                 in 90..97 -> penFg = TerminalColor.indexed(code - 90 + 8)
                 in 100..107 -> penBg = TerminalColor.indexed(code - 100 + 8)
-                // 58 is the underline colour: parsed so its arguments are not read as SGR codes.
                 38, 48, 58 -> {
                     val color: Int
                     if (subCount > 0) {
@@ -1110,7 +1013,6 @@ public class TerminalEmulator(
         }
     }
 
-    /** `38:5:n`, `38:2::r:g:b` (with the colour-space slot) or `38:2:r:g:b` (without it). */
     private fun colonColor(first: Int, subCount: Int): Int = when (params[first]) {
         5 -> if (subCount >= 2) TerminalColor.indexed(params[first + 1].coerceIn(0, 255)) else NO_COLOR
         2 -> when {
@@ -1121,7 +1023,6 @@ public class TerminalEmulator(
         else -> NO_COLOR
     }
 
-    /** How many parameters `38;5;n` / `38;2;r;g;b` take, starting at the 38. */
     private fun semicolonColorLength(at: Int): Int = when (param(at + 1, -1)) {
         5 -> 3
         2 -> 5
@@ -1178,7 +1079,6 @@ public class TerminalEmulator(
         const val CSI_IGNORE = 6
         const val OSC_STRING = 7
 
-        /** DCS, SOS, PM and APC: consumed up to their terminator. */
         const val IGNORED_STRING = 8
 
         const val BEL = 0x07
@@ -1193,7 +1093,6 @@ public class TerminalEmulator(
         const val MAX_OSC_CHARS = 8192
         const val NO_COLOR = -1
 
-        /** DEC special graphics, for `_` (0x5F) through `~` (0x7E). */
         const val LINE_DRAWING =
             " ◆▒␉␌␍␊°±␤␋┘┐┌└┼" +
                 "⎺⎻─⎼⎽├┤┴┬│≤≥π≠£·"

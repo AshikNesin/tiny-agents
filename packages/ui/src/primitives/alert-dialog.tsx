@@ -7,8 +7,6 @@ import { motion } from "motion/react";
 import { cn } from "../lib/utils";
 import { useModalPresence } from "../motion";
 
-// Same backdrop, panel and motion as dialog.tsx, kept local like the rest of
-// this port's styling.
 const overlayClass = "fixed inset-0 isolate z-50 bg-black/40 dark:bg-black/70";
 const panelClass =
   "fixed top-1/2 left-1/2 z-50 flex max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-[400px] flex-col gap-5 rounded-3xl bg-popover p-6 text-sm text-popover-foreground shadow-2xl shadow-black/10 ring-1 ring-foreground/10 outline-none";
@@ -21,17 +19,6 @@ const panelAnimate = (open: boolean) => ({
 });
 import { Button, type ButtonProps } from "../button";
 
-/**
- * Radix AlertDialog-based confirm primitive — a faithful port of the shadcn
- * `alert-dialog` component, restyled to match this package's `dialog.tsx`
- * (rounded-3xl, ring, viewport-capped, plain footer, and the same spring
- * enter/exit motion). Lives under `@groot/ui/primitives` so
- * callers know it is a composed/Radix-backed primitive rather than a bespoke
- * widget. The declarative {@link AlertDialog} parts are the building blocks
- * for the imperative {@link ConfirmProvider} (see ./confirm).
- */
-
-/** Whether the enclosing AlertDialog is open: the content keeps itself mounted through the exit. */
 const AlertDialogOpenContext = React.createContext(false);
 
 function AlertDialog({
@@ -167,10 +154,6 @@ function AlertDialogDescription({
   );
 }
 
-// AlertDialogAction/Cancel are buttons with an AlertDialog role + auto-close.
-// shadcn renders them via buttonVariants + Radix's Close/Action slot. We render
-// the real Button (variant + size kept in sync with the rest of the app) inside
-// Radix's slot, so they accept the full ButtonProps surface (variant, size…).
 type AlertDialogActionProps = React.ComponentProps<typeof AlertDialogPrimitive.Action> &
   ButtonProps;
 

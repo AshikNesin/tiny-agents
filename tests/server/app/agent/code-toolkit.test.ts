@@ -1,15 +1,8 @@
-/**
- * The `code_*` tools (issue #143, ADR 0011) as the model calls them: start
- * returns at once with a card for the chat, a replayed send never sends
- * twice, a harness's words reach the model sanitized, and the `shelley_*`
- * aliases keep working against Shelley.
- */
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { ToolExecutionApi, ToolExecutionResult } from "@earendil-works/pi-durable";
 import { describe, expect, it } from "vite-plus/test";
 import { createCodeToolkit, type CodeStore } from "../../../../packages/agent/src/toolkits/code";
 
-/** The slice of pi-durable's tool API these tools use. */
 function fakeApi(memos = new Map<string, unknown>()): ToolExecutionApi {
   return {
     conversationId: 7,

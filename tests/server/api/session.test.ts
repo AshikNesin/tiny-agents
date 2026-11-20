@@ -5,21 +5,15 @@ import * as passkeyService from "@groot/core/passkey/passkey.service";
 import { api, createTestApp, type JsonResponse } from "../helpers";
 import { createSoftPasskey } from "../fixtures/passkey";
 
-// Each test file gets a fresh database, so first-run setup is still open here.
 const app = createTestApp();
 const owner = { email: "owner@example.com", password: "long-enough-pw", name: "Owner" };
 
-/** The cookie a sign-in sets, minus its token value. */
 function cookieAttributes(response: JsonResponse): string {
   const cookie = response.headers.get("set-cookie");
   expect(cookie).toMatch(/^token=[^;]+;/);
   return cookie!.replace(/^token=[^;]+;/, "token=<jwt>;");
 }
 
-/**
- * Every sign-in path answers alike: `{ token, user }` with `user` exactly the
- * `SessionUser` fields, the same cookie, and a token that opens a session.
- */
 async function expectSignedIn(
   response: JsonResponse<SignInResponse>,
   user: SessionUser,

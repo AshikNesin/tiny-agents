@@ -1,15 +1,9 @@
-/**
- * Settings were tabs on `/settings?tab=<id>` before the full-page screen
- * (issue #241): those links land on the section they meant, and `?tab=` off
- * the bare path is left alone.
- */
 import React from "react";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { SettingsPage } from "@/pages/settings/SettingsPage";
 
-// The screen itself (and its sections' data loading) is not under test here.
 vi.mock("@groot/shell/pages/settings/Settings", () => ({
   Settings: function SettingsStub() {
     const location = useLocation();

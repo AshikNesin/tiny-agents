@@ -1,9 +1,3 @@
-/**
- * The browser's vault tools (issue #56) on real pi-durable turns with a fake
- * page: `browser_fill_secret` binds to the page's origin and reports only
- * the keys filled, and `request_credentials` waits for the owner's sheet,
- * holds no value, and resumes with the outcome.
- */
 import type { Context as PiContext, JsonObject } from "@earendil-works/pi-ai";
 import { until } from "../../fixtures/until";
 import { loaded } from "../../fixtures/loaded-tools";
@@ -43,9 +37,7 @@ const CANARY = "canary-gh-Lr8x";
 function fakePage(start: string) {
   const state = {
     origin: start,
-    /** The page navigates here as the fill starts (a redirect racing the call). */
     movesTo: undefined as string | undefined,
-    /** Refs inside another site's frame, and that frame's origin (The Hindu's id.tinypass.com). */
     framed: {} as Record<string, string>,
     fills: [] as { origin: string; values: Record<string, string> }[],
   };
@@ -63,7 +55,6 @@ function fakePage(start: string) {
       return { filled: fill.fields.map((f) => f.key) };
     },
     navigate: async (url) => ({ url, status: 200 }),
-    // The page echoes what was typed, as some do.
     snapshot: async () => `textbox "Password": ${state.fills.at(-1)?.values.password ?? ""}`,
     click: async () => ({ url: state.origin }),
     type: async () => ({ url: state.origin }),
@@ -124,7 +115,6 @@ function loginBroker(): VaultBroker & { uses: VaultUse[] } {
   };
 }
 
-/** Faux model: runs `steps` in order, one tool call per turn, then reports every result. */
 function script(steps: [string, JsonObject][]) {
   return (context: PiContext) => {
     const done = context.messages.filter((m) => m.role === "toolResult").length;
@@ -183,8 +173,6 @@ async function open(
 ) {
   const tracker = new WaitTracker();
   const broker = loginBroker();
-  // The page is already open in the bot's browser: planning a fill never
-  // launches one, so the test opens it the way an earlier navigate would.
   const sessions = createBrowserSessions({ transport: async () => page.session });
   const browser = createBrowserToolkit({ sessions, vault: broker, ownerWaits: tracker });
   const runtime = await openTestRuntime({
@@ -228,7 +216,6 @@ describe("browser_fill_secret", () => {
       tool: "browser_fill_secret",
     });
     expect(text).toContain('"filled":["password"]');
-    // The snapshot echoed the password; the gate scrubbed it.
     expect(text).toContain("[vault]");
     expect(JSON.stringify(reduce(events))).not.toContain(CANARY);
   }, 20_000);

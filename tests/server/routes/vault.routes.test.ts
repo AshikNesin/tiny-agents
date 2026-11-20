@@ -1,9 +1,3 @@
-/**
- * The Vault routes and service end to end (issue #56) on the local backend:
- * step-up before writes and reveals, CRUD, policy decisions, the audit trail,
- * credential request submits, and the canary invariant — no value in the
- * database, in list/detail responses, or in the audit.
- */
 import bcrypt from "bcryptjs";
 import { asc, eq, ne, sql } from "drizzle-orm";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -59,7 +53,6 @@ import { api, createTestApp, type TestApp } from "../helpers";
 const CANARY = "canary-pw-7Hq2Zx";
 const PASSWORD = "owner-password-123";
 
-/** The local backend's sealed rows, as stored. */
 async function dumpValues(): Promise<string> {
   return JSON.stringify(await db.select().from(vaultValues));
 }
@@ -97,7 +90,6 @@ afterEach(() => {
 // oxlint-disable-next-line typescript/no-explicit-any -- response data varies per route
 type Data = any;
 
-/** An authenticated vault request; `stepUp` sends the step-up header. */
 function vault(path: string, init: { method?: string; json?: unknown; stepUp?: string } = {}) {
   return api<Data>(app, `/api/v1/vault${path}`, {
     method: init.method ?? "GET",
@@ -127,7 +119,6 @@ async function createGithub(stepUpToken: string) {
   });
 }
 
-/** Everything a value could leak into: rows, audit, the list and detail responses. */
 async function assertNoCanary(): Promise<void> {
   const rows = JSON.stringify(await db.select().from(vaultItems));
   const events = JSON.stringify(await db.select().from(vaultAuditEvents));
@@ -135,7 +126,6 @@ async function assertNoCanary(): Promise<void> {
   expect(rows).not.toContain(CANARY);
   expect(events).not.toContain(CANARY);
   expect(overview).not.toContain(CANARY);
-  // The local backend keeps it encrypted, never in the clear.
   expect(await dumpValues()).not.toContain(CANARY);
 }
 
@@ -223,7 +213,6 @@ describe("vault routes", () => {
       json: { field: "password" },
     });
     expect(noStepUp.status).toBe(403);
-    // Errors are no-store too.
     expect(noStepUp.headers.get("cache-control")).toBe("no-store");
     const revealed = await vault("/items/github/reveal", {
       method: "POST",
@@ -336,8 +325,6 @@ describe("vault policy", () => {
   );
 
   it("resolves a connection's secret through the same policy, without a bot scope", async () => {
-    // An api_key allows mcp by default; scoping it to a bot does not shut
-    // the connection out, since the owner linked the item to the connection.
     const response = await vault("/items", {
       method: "POST",
       stepUp: await stepUp(),
@@ -359,7 +346,6 @@ describe("vault policy", () => {
     await expect(resolveConnectionSecret("nope", "github")).rejects.toThrow(
       'Vault item "nope": No vault item `nope`. Call vault_list.',
     );
-    // The same audit as a bot's use, with no bot, conversation or approval behind it.
     const audited = await db
       .select()
       .from(vaultAuditEvents)
@@ -420,7 +406,6 @@ describe("vault policy", () => {
   });
 });
 
-/** A full policy, as the route's schema would default it. */
 const policyOf = (policy: { handle: string; hosts?: string[]; tools?: string[] }) => ({
   origins: [],
   hosts: [],
@@ -459,7 +444,6 @@ describe("app credentials (audience app)", () => {
     ).map((e) => e.outcome);
     expect(outcomes).toEqual(["refused_origin"]);
     const [row] = await db.select().from(vaultItems);
-    // The Vault page says "used … by Anthropic", not the account's id.
     expect(row?.lastUsedBy).toBe("Anthropic");
     await assertNoCanary();
   });
@@ -593,7 +577,6 @@ describe("sandbox command policy", () => {
     });
     await createKey("gh-default", { hosts: ["api.github.com"] });
     await createKey("gh-nohosts", { tools: ["run_command"] });
-    // Even an "allowed" item, already granted for the chat, asks for a command.
     expect(await planUse(use("gh"), { unattended: false })).toMatchObject({
       approve: true,
       grantable: false,
@@ -650,9 +633,7 @@ describe("credential request submit", () => {
     fields: { key: string; value: string }[];
   }[] = [];
   let origin = "https://hi.nesin.io";
-  /** The page navigates here as the fill starts (a redirect racing the submit). */
   let movesTo: string | undefined;
-  /** The sign-in field sits in this site's frame (The Hindu's id.tinypass.com). */
   let framedBy: string | undefined;
 
   const session: BrowserSession = {
@@ -736,7 +717,6 @@ describe("credential request submit", () => {
     expect(fills).toEqual([
       {
         origin: "https://hi.nesin.io",
-        // An email page, then a password page (Amazon's sign-in): the fill moves through both.
         steps: true,
         fields: [
           { key: "email", value: "ana@example.com" },

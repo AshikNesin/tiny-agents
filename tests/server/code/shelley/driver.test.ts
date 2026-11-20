@@ -1,8 +1,3 @@
-/**
- * The Shelley harness against a fake Shelley speaking the real wire format:
- * one stream2 connection feeds the list, per-thread watchers, turn ends and
- * `message_user` calls; every call goes through Shelley's official API.
- */
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import type { InstanceEvent, ThreadEvent } from "@tiny-agents/code/contracts";
 import { createShelleyHarness, type ShelleyHarness } from "@tiny-agents/code/server";
@@ -197,7 +192,6 @@ describe("Shelley harness", () => {
     expect(added.items).toEqual([expect.objectContaining({ id: "tool1", status: "running" })]);
     expect(added.cursor).toBe(3);
 
-    // Live output updates the same row.
     shelley.push({
       conversation_id: "cA",
       tool_progress: { tool_use_id: "tool1", tool_name: "bash", output: "PASS 1" },
@@ -225,7 +219,6 @@ describe("Shelley harness", () => {
     harness.watchThread("cA", watcher.listener);
     await watcher.next((e) => e.type === "snapshot");
 
-    // A message lands while the stream is down.
     shelley.conversations.get("cA")!.messages.push(agent(2, [{ Type: 2, Text: "missed?" }]));
     shelley.dropStreams();
     const caught = (await watcher.next((e) => e.type === "snapshot", 4000)) as Extract<
@@ -385,14 +378,12 @@ describeTurnOutcomeRule("Shelley", async (turn: TurnCase) => {
   const messages = {
     answered: [user(1, "go"), agent(2, said("Done: 3 files."), endOfTurn)],
     failed: [user(1, "go"), error(2, "boom")],
-    // Stopped after the steer: Shelley ends the turn with nothing more to say.
     steered: [
       user(1, "task"),
       agent(2, said("Halfway.")),
       user(3, "also docs"),
       agent(4, [], endOfTurn),
     ],
-    // The second turn was cancelled before Shelley wrote anything.
     unanswered: [user(1, "one"), agent(2, said("First done."), endOfTurn), user(3, "two")],
   }[turn];
   shelley.conversations.set("cT", { messages, conversation: row("cT") });

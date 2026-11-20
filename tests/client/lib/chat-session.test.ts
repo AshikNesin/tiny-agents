@@ -1,9 +1,3 @@
-/**
- * The chat session (lib/chat-session.ts), pure: one owner message's life
- * from its Echo to the transcript (GLOSSARY: Echo, Outbox), the stream's
- * snapshots and diffs, stream health, the unread divider and the typing
- * dots, as reducer steps and the view they render to.
- */
 import { describe, expect, it } from "vite-plus/test";
 import {
   chatView,
@@ -105,7 +99,6 @@ describe("chat session: Echoes (GLOSSARY: Echo)", () => {
       requestId: "x",
     });
     expect(outbox(waiting)).toEqual(["x:offline"]);
-    // Still drawn in the transcript, as it was before going offline.
     expect(chatView(waiting).timeline.map((item) => item.kind)).toEqual(["echo"]);
     expect(outbox(then(waiting, { type: "echo-retry", requestId: "x" }))).toEqual(["x:sending"]);
     expect(outbox(then(waiting, { type: "echo-refused", requestId: "x" }))).toEqual([]);
@@ -116,7 +109,6 @@ describe("chat session: Echoes (GLOSSARY: Echo)", () => {
     const session = play(
       snapshot([earlier]),
       echo("req-new", "ok", { createdAt: 60_000 }),
-      // A reconnect still holding only the earlier "ok" keeps the new Echo.
       snapshot([earlier]),
     );
     expect(outbox(session)).toEqual(["req-new:sending"]);
@@ -179,7 +171,6 @@ describe("chat session: held messages (issue #9)", () => {
       items: [{ requestId: "req-1", mode: "steer", text: "wait up" }],
     });
     expect(outbox(session)).toEqual(["req-1:steering"]);
-    // Held items are rows over the composer, not transcript bubbles.
     expect(chatView(session).timeline).toEqual([]);
     const later = then(session, {
       type: "queued",
@@ -195,7 +186,6 @@ describe("chat session: held messages (issue #9)", () => {
     const held: QueuedMessage = { requestId: "req-9", mode: "followUp", text: "then this" };
     const session = play(
       snapshot(messages, { busy: true, queued: [held] }),
-      // The Echo of the same send is superseded by the held item a reconnect re-snapshots.
       echo("req-9", "then this", { createdAt: 3 }),
       snapshot(messages, { busy: true, queued: [held] }),
     );
@@ -231,7 +221,6 @@ describe("chat session: stream", () => {
     expect(chatView(live).health).toBe("live");
     expect(chatView(then(live, { type: "error", message: "SSE 502" })).health).toBe("reconnecting");
     expect(chatView(then(live, { type: "stream-drop" })).health).toBe("reconnecting");
-    // Leaving keeps the transcript, stale until the next visit's snapshot.
     const left = then(live, { type: "upsert", message: user("e1", "hi") }, { type: "closed" });
     expect(chatView(left).health).toBe("loading");
     expect(left.messages).toHaveLength(1);
@@ -243,7 +232,6 @@ describe("chat session: stream", () => {
       { type: "routine-runs", runs: [card("a")] },
       { type: "yolo", on: true },
       snapshot([]),
-      // Listed and followed at connect: the same run can arrive again.
       { type: "routine-run", run: card("a") },
       { type: "routine-run", run: card("b") },
     );
@@ -296,7 +284,6 @@ describe("chat view: unread divider and typing (issues #3, #2)", () => {
   it("puts the divider above the first reply newer than the read marker", () => {
     const view = chatView(visit(1_500, snapshot(transcript)));
     expect(view.unreadDividerId).toBe("a1");
-    // Read messages anchor the scroller: everything before the marker.
     expect([0, 1, 2].map(view.isRead)).toEqual([true, false, false]);
     expect(chatView(visit(4_000, snapshot(transcript))).unreadDividerId).toBeNull();
   });
@@ -307,7 +294,6 @@ describe("chat view: unread divider and typing (issues #3, #2)", () => {
       open,
       { type: "upsert", message: user("u2", "new", { createdAt: 5_000 }) },
       { type: "upsert", message: reply("a2", "live", { createdAt: 6_000 }) },
-      // Not even after a reconnect's snapshot: the divider is the visit's.
       snapshot([user("u1", "old"), user("u2", "new"), reply("a2", "live", { createdAt: 6_000 })]),
     );
     expect(chatView(live).unreadDividerId).toBeNull();
@@ -316,19 +302,16 @@ describe("chat view: unread divider and typing (issues #3, #2)", () => {
   it("shows typing dots while the bot works with nothing on screen to show it", () => {
     const asked = snapshot([user("u1", "hi")], { busy: true });
     expect(chatView(play(asked)).typing).toBe(true);
-    // The first token, a running tool row or a waiting card says so on its own.
     const streaming = reply("a1", "Hel", { status: "streaming" });
     expect(chatView(play(asked, { type: "upsert", message: streaming })).typing).toBe(false);
     const tool = reply("a1", "", {
       toolCalls: [{ id: "t", name: "web_search", args: {}, status: "running" }],
     });
     expect(chatView(play(asked, { type: "upsert", message: tool })).typing).toBe(false);
-    // Between tool rounds there is nothing on screen: the dots come back.
     const round = reply("a1", "", {
       toolCalls: [{ id: "t", name: "web_search", args: {}, status: "done" }],
     });
     expect(chatView(play(asked, { type: "upsert", message: round })).typing).toBe(true);
-    // An Echo already shows the chat is moving; an idle bot is not typing.
     expect(chatView(play(asked, echo("r", "more"))).typing).toBe(false);
     expect(chatView(play(snapshot([user("u1", "hi")]))).typing).toBe(false);
   });

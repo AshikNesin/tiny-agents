@@ -1,15 +1,3 @@
-/**
- * Characterization of behavior-register row C14: a notification reminder
- * race can push for a wait that was already answered.
- * Preserve: this pins today's behavior, quirk included; change it only with a
- * signed-off register row.
- *
- * `startNotifications` (notifications.wiring.ts) handles an `added` wait in
- * an async `onAdded` (bot lookup, push, settings read, then the reminder
- * timer), while `removed` is handled at once: it cancels the push key and
- * clears a timer only if one is already set. A wait answered while `onAdded`
- * is still awaiting gets its push after the cancel, and its reminder later.
- */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { DEFAULT_NOTIFICATION_SETTINGS } from "@groot/core/notification/notification.settings";
 import type { Notification } from "@groot/core/notification/notifier";
@@ -59,7 +47,6 @@ describe("C14: an answered wait can still push and remind", () => {
     const runtime = createFakeRuntime();
     wiring = startNotifications(runtime, notifier);
 
-    // The owner answers in the same tick the wait starts.
     runtime.emitWait({
       kind: "approval",
       change: "added",
@@ -70,10 +57,8 @@ describe("C14: an answered wait can still push and remind", () => {
     runtime.emitWait({ kind: "approval", change: "removed", conversation: CONVERSATION, task: 7 });
 
     await until(() => sent.length === 1, "the approval push");
-    // The cancel ran first; the push for the answered wait came after it.
     expect(log).toEqual([`cancel:approval:${CONVERSATION}:7`, "notify:approval.requested"]);
 
-    // And the reminder timer was armed after the removal, so it fires too.
     await until(() => vi.getTimerCount() > 0, "the reminder timer");
     vi.advanceTimersByTime(REMINDER_MINUTES * 60_000);
     await until(() => sent.length === 2, "the reminder");

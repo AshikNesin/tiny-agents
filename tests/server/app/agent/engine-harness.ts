@@ -1,11 +1,3 @@
-/**
- * Both bot engines on one script, for suites that must hold on either: pi
- * on the faux model, the Claude plan engine on a fake worker socket (no
- * sandbox, no Claude Code, no network). The script calls the tool a message
- * names ("send_email ana@x.dev") and reports its result as
- * `RESULT:<text>`; `silent` gets a reply with nothing in it; any other
- * message is echoed as `Echo: <text>`.
- */
 import { Type, type Context as PiContext, type JsonObject } from "@earendil-works/pi-ai";
 import { until } from "../../fixtures/until";
 import { defineExtension, defineTool } from "@earendil-works/pi-durable";
@@ -34,13 +26,8 @@ import type {
 export type EngineKind = "pi" | "claude-code";
 export const ENGINES: EngineKind[] = ["pi", "claude-code"];
 
-/** The Claude plan model row (a `claude-plan` account's model). */
 const CLAUDE_MODEL = "claude-sonnet";
 
-/**
- * The faux account plus a Claude plan account holding `CLAUDE_MODEL`. The
- * plan is on, and falls back to `TEST_MODEL` on pi when `fallback` is set.
- */
 export function engineModelConfig(
   plan: { enabled?: boolean; fallback?: boolean } = {},
 ): ModelConfig {
@@ -74,21 +61,12 @@ export function engineModelConfig(
   );
 }
 
-/** The value the redaction tests register: it must never leave the gate. */
 export const VAULT_VALUE = "correct-horse-battery-staple";
 
-/** What the fake worker locator hands the engine to connect with. */
 const WORKER_KEY = "fake";
 
 const text = (value: string) => ({ output: [{ type: "text" as const, text: value }] });
 
-/**
- * A mail toolkit with one tool per gate case: `send_email` asks by
- * default, `read_inbox` is read-only (and returns injected text),
- * `save_rule` is ask-only, `pay_invoice` is a vault sink whose plan always
- * asks with the vault card, `forward_all` is refused by its plan, and
- * `read_token` returns a value the vault registered.
- */
 export function mailCapability(sent: string[]): Capability {
   const sendEmail = defineTool({
     name: "send_email",
@@ -115,7 +93,6 @@ export function mailCapability(sent: string[]): Capability {
       return text("Saved");
     },
   });
-  // A registration's gate plan is its `gate` field (what `tool()` sets).
   const payInvoice = {
     ...defineTool({
       name: "pay_invoice",
@@ -184,7 +161,6 @@ export function mailCapability(sent: string[]): Capability {
   };
 }
 
-/** The tool a message names and its arguments, or undefined for plain chat. */
 function toolRequest(said: string): { tool: string; args: JsonObject } | undefined {
   const match = /(\w+_\w+)(?: (\S+))?/.exec(said);
   if (!match) return undefined;
@@ -208,16 +184,13 @@ function contentText(content: unknown): string {
     .join("");
 }
 
-/** The message the script answers with an empty reply: no text, no tool call, no error. */
 export const SILENT = "silent";
 
-/** The script on pi's faux model. */
 function piScript(context: PiContext) {
   const last = context.messages.at(-1);
   if (last?.role === "toolResult") {
     return fauxAssistantMessage([fauxText(`RESULT:${contentText(last.content)}`)]);
   }
-  // The newest user message with text (a reconfigure adds context of its own).
   const said =
     context.messages
       .filter((message) => message.role === "user")
@@ -239,22 +212,15 @@ interface FakeSocket extends WebSocketLike {
 interface FakeClaudeWorker {
   locator: ClaudeWorkerLocator;
   connect: (url: string, token: string) => WebSocketLike;
-  /** Every turn the engine sent, as the worker received it. */
   turns: { sessionId: string; text: string; tools: string[]; resume?: string }[];
-  /** Every tool result the engine sent back (what Claude would read). */
   results: { toolUseId: string; content: string; isError?: boolean }[];
-  /** Calls the engine said still wait on the owner (`tool_waiting`), by tool_use_id. */
   waiting: string[];
-  /** Turns the worker ended (published `turn_end`), by turn id. */
   ended: string[];
-  /** Hold the next turns until `release()`: the conversation stays busy. */
   hold(): void;
   release(): void;
-  /** The worker process restarts: its sessions and running turns are gone, the socket drops. */
   restart(): void;
 }
 
-/** The Claude worker on the same script, behind a fake socket. */
 function fakeClaudeWorker(): FakeClaudeWorker {
   const turns: FakeClaudeWorker["turns"] = [];
   const results: FakeClaudeWorker["results"] = [];
@@ -289,12 +255,10 @@ function fakeClaudeWorker(): FakeClaudeWorker {
       ...(message.resume ? { resume: message.resume } : {}),
     });
     if (held) await new Promise<void>((resolve) => held?.push(resolve));
-    // A restart while the turn was held: it is gone with the old worker.
     if (boot !== started) return;
     publish(sessionId, { type: "session", claudeSessionId: `claude-${sessionId}` });
     const request = toolRequest(message.text);
     if (message.text === SILENT) {
-      // Claude ends the turn without saying anything.
     } else if (!request) {
       publish(sessionId, { type: "text", turnId, text: `Echo: ${message.text}` });
     } else {
@@ -404,13 +368,10 @@ export interface EngineUnderTest {
   kind: EngineKind;
   runtime: AgentRuntime;
   worker: FakeClaudeWorker;
-  /** The model id that selects this engine. */
   modelId: string;
-  /** Send a message: both engines admit it durably and return before the reply. */
   send(ref: ConversationRef, input: Parameters<AgentRuntime["submit"]>[1]): Promise<void>;
 }
 
-/** Open a runtime whose conversations run on `kind`, on the shared script. */
 export async function openEngine(
   kind: EngineKind,
   options: Partial<AgentRuntimeOptions> & { storePath?: string } = {},
@@ -433,9 +394,6 @@ export async function openEngine(
   };
 }
 
-// ── Reading a chat ──────────────────────────────────────────────────────
-
-/** The state a stream's events add up to. */
 function reduceChat(events: readonly ChatEvent[]): ChatState | undefined {
   let state: ChatState | undefined;
   for (const event of events) {
@@ -461,7 +419,6 @@ export interface WatchedChat {
   events: ChatEvent[];
   state(): ChatState | undefined;
   toolCall(name: string): ChatToolCall | undefined;
-  /** What the script reported after each tool call, once the chat is idle. */
   results(): string[];
   stop(): Promise<void>;
 }
@@ -490,7 +447,6 @@ export async function watch(runtime: AgentRuntime, ref: ConversationRef): Promis
   };
 }
 
-/** The tool call once it shows its approval card. */
 export function awaitingApproval(chat: WatchedChat, name: string): Promise<ChatToolCall> {
   return until(() => {
     const call = chat.toolCall(name);

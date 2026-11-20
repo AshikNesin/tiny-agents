@@ -13,17 +13,10 @@ import androidx.core.app.NotificationManagerCompat
 import groot.mobile.MainActivity
 import groot.mobile.R
 
-/**
- * Shows the server's pushes as Android notifications: one channel per category, keyed by the
- * push's tag so a newer push (a reminder) replaces it and an answer takes it back. A tap opens
- * the app on the push's path through the same link router as the server's web links, so it
- * works for any server. Approvals get the chat card's buttons, which need the phone unlocked.
- */
 class PushNotifier(context: Context) {
     private val appContext = context.applicationContext
     private val manager = NotificationManagerCompat.from(appContext)
 
-    /** Create the channels once (idempotent); Android keeps the owner's choices for each. */
     fun createChannels() {
         val system = appContext.getSystemService(NotificationManager::class.java) ?: return
         for (channel in PushChannel.entries) {
@@ -34,8 +27,7 @@ class PushNotifier(context: Context) {
 
     fun enabled(): Boolean = manager.areNotificationsEnabled()
 
-    /** Show or replace the notification [spec] describes, for the server at [serverUrl]. */
-    @SuppressLint("MissingPermission") // checked: areNotificationsEnabled covers POST_NOTIFICATIONS
+    @SuppressLint("MissingPermission")
     fun show(spec: NotificationSpec, serverUrl: String?) {
         if (!manager.areNotificationsEnabled()) return
         createChannels()
@@ -56,12 +48,10 @@ class PushNotifier(context: Context) {
         manager.notify(spec.tag, NOTIFICATION_ID, builder.build())
     }
 
-    /** Take back the notification shown under [tag]. */
     fun dismiss(tag: String) {
         manager.cancel(tag, NOTIFICATION_ID)
     }
 
-    /** Replace the notification under [tag] with a short note that leaves by itself. */
     @SuppressLint("MissingPermission")
     fun note(tag: String, title: String, text: String?, serverUrl: String?, path: String?) {
         if (!manager.areNotificationsEnabled()) return
@@ -91,11 +81,6 @@ class PushNotifier(context: Context) {
         return PendingIntent.getActivity(appContext, tag.hashCode(), intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
     }
 
-    /**
-     * A button. Android 12+ runs it only once the phone is unlocked
-     * (`setAuthenticationRequired`); below that, it opens a see-through activity that asks for
-     * the unlock first.
-     */
     private fun answerAction(tag: String, actions: ApprovalActions, answer: ApprovalAnswer): NotificationCompat.Action {
         val extras = AnswerRequest(tag, actions.botId, actions.taskId, actions.tool, answer)
         val requestCode = (tag + answer.name).hashCode()
@@ -118,7 +103,6 @@ class PushNotifier(context: Context) {
     }
 }
 
-/** What a notification button asks for, carried in its intent's extras. */
 data class AnswerRequest(
     val tag: String,
     val botId: String,

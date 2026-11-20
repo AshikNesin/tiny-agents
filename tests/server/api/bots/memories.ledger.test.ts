@@ -82,7 +82,6 @@ describe("memoryLedger.add: dedupe", () => {
       source: "manual",
     });
     expect(added.rows[0]!.createdAt.getTime()).toBeGreaterThanOrEqual(rows[0]!.createdAt.getTime());
-    // An active match is returned as it is.
     const twice = await ledger.add([{ text: "Prefers pnpm", category: "fact" }], {
       source: "manual",
     });
@@ -270,7 +269,6 @@ describe("memoryLedger.promptContext", () => {
     );
     await ledger.tombstone([rows[2]!.id]);
     const context = await ledger.promptContext();
-    // Short refs, not 36-character row ids: fewer tokens, nothing to misspell.
     expect(context.current).toBe("- m1 — Prefers pnpm\n- m2 — Is in Goa (until 2999-01-01)");
     expect(context.refs).toEqual({ m1: rows[0]!.id, m2: rows[1]!.id });
     expect(context.removed).toBe("- Likes tea");

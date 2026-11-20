@@ -19,7 +19,6 @@ import { errorMessage } from "../../../lib/errors";
 import type { Account } from "../../../../shared/api/models";
 import { useModelMutations } from "../../../queries/models";
 
-/** Edit an account's endpoint and key. Mounted per account, so it starts from what is saved. */
 export function EditConnectionDialog({
   account,
   onClose,

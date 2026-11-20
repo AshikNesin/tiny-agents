@@ -1,5 +1,3 @@
-// Module resolve hook: the app's import of pi-ai's fake provider gets
-// travel-director.mjs, which wraps the real one.
 const FAUX = "@earendil-works/pi-ai/providers/faux";
 const DIRECTOR = new URL("./travel-director.mjs", import.meta.url).href;
 

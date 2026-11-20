@@ -1,9 +1,3 @@
-/**
- * `pnpm local`'s supervisor (scripts/lib/local-supervisor.ts): it builds a
- * new commit while the old server serves, swaps it in, keeps the old one
- * when the build fails, rolls back when the new one never comes up, and
- * restarts a crashed server.
- */
 import { describe, expect, it } from "vite-plus/test";
 import {
   Supervisor,
@@ -28,7 +22,6 @@ interface FakeServer extends ServerHandle {
   sent: unknown[];
   stopped: boolean;
   crash(): void;
-  /** A message from the server to the supervisor. */
   deliver(message: unknown): void;
 }
 
@@ -36,7 +29,6 @@ function harness(
   options: {
     brokenBuild?: string;
     brokenStart?: string;
-    /** Launches (by index) that exit before they are ready. */
     failedLaunches?: number[];
     auto?: boolean;
   } = {},
@@ -131,7 +123,6 @@ describe("local supervisor", () => {
       sandboxChanged: false,
       error: null,
     });
-    // The new server hears the final status.
     expect(live()[0].sent.at(-1)).toMatchObject({
       type: "update-status",
       status: { phase: "idle", current: { sha: NEW } },
@@ -161,8 +152,6 @@ describe("local supervisor", () => {
 
     expect(servers.map((server) => server.sha)).toEqual([OLD, NEW, OLD]);
     expect(live().map((server) => server.sha)).toEqual([OLD]);
-    // The broken release's exit is the rollback's, not a crash to restart:
-    // a second server would fight the first for the port and the agent store.
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(servers).toHaveLength(3);
     expect(saved).toEqual([OLD]);
@@ -190,7 +179,6 @@ describe("local supervisor", () => {
   });
 
   it("keeps restarting a crashed server until it comes up", async () => {
-    // Launch 1, the first restart, exits before it is ready; launch 2 works.
     const { supervisor, servers, live } = harness({ failedLaunches: [1] });
     await supervisor.start(OLD);
     servers[0].crash();

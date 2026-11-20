@@ -1,19 +1,3 @@
-/**
- * Git on the sandbox for Code projects (issue #297 §6): clone, a worktree
- * per thread, diffs against the base branch, sync to the remote head and the
- * app's push. Every command goes through one exec port (the Sandbox
- * connection in the app, a local shell in tests), so this module never
- * knows how it reaches the machine.
- *
- * The push rules (§7.3) live here:
- *
- * - never forced: a plain push, which git itself rejects if the remote moved;
- * - hooks off (`core.hooksPath=/dev/null`) and an explicit remote URL, so a
- *   `pre-push` hook the agent wrote never runs with the credential;
- * - the credential is handed to the one command: the vault token arrives on
- *   stdin and lives only in that command's environment, never on its command
- *   line or on disk; without a token, `gh auth git-credential` answers.
- */
 import { Boom } from "@groot/core/errors";
 import { shQuote } from "@tiny-agents/sandbox";
 import type { ExecPort, ExecResult, RepoRef } from "@tiny-agents/github";
@@ -31,20 +15,17 @@ import {
 
 const q = shQuote;
 
-/** How git authenticates to GitHub for clone, fetch and push. */
 type GitCredential = { kind: "gh" } | { kind: "token"; token: () => Promise<string> };
 
 export interface WorkspaceOptions {
   exec: ExecPort;
   credential: GitCredential;
-  /** The remote a repository is fetched from and pushed to (tests use a local bare repo). */
   remoteUrl?: (repo: RepoRef) => string;
 }
 
 export class WorkspaceError extends Error {
   constructor(
     message: string,
-    /** rejected (the remote moved), diverged, missing, failed. */
     readonly code: "rejected" | "diverged" | "missing" | "failed" = "failed",
   ) {
     super(message);
@@ -52,7 +33,6 @@ export class WorkspaceError extends Error {
   }
 }
 
-/** A workspace failure the owner can act on, said as it is (409): `.catch(saying)`. */
 export function saying(error: unknown): never {
   if (error instanceof WorkspaceError) throw Boom.conflict(error.message);
   throw error;
@@ -64,7 +44,6 @@ export interface ProjectScripts {
   archive?: string;
 }
 
-/** The checked-in scripts file (issue #297 §6). */
 const SCRIPTS_FILE = ".tiny-agents/code.json";
 
 const GIT_TIMEOUT_MS = 5 * 60_000;
@@ -72,84 +51,37 @@ const SCRIPT_TIMEOUT_MS = 15 * 60_000;
 
 const githubUrl = (repo: RepoRef) => `https://github.com/${repo.owner}/${repo.name}.git`;
 
-/** The end of a failed command's output. */
 const tail = (result: ExecResult, chars = 2000) =>
   (result.stderr.trim() || result.stdout.trim()).slice(-chars);
 
 export interface Workspace {
-  /** Which tools the sandbox has (a project needs both). */
   tools(): Promise<{ git: boolean; gh: boolean }>;
-  /** The sandbox user's home, where project checkouts live. */
   home(): Promise<string>;
   exists(path: string): Promise<boolean>;
   clone(repo: RepoRef, path: string): Promise<void>;
-  /** Fetch the base branch and cut `branch` from it into a new worktree; answers the base sha. */
   addWorktree(checkout: string, path: string, branch: string, base: string): Promise<string>;
-  /** A worktree on a branch that already exists (locally or on the remote): unarchive, a PR's head. */
   addWorktreeForBranch(checkout: string, path: string, branch: string): Promise<void>;
-  /**
-   * Fetch a pull request's head (`refs/pull/N/head`, so a PR from a fork
-   * works too) and its base into the checkout. Answers the head sha.
-   */
   fetchPull(checkout: string, number: number, base: string): Promise<string>;
-  /**
-   * A detached worktree at `head` (fetched by `fetchPull`), made or, when it
-   * has no uncommitted changes, moved there. Answers the worktree's HEAD.
-   */
   pullWorktree(checkout: string, path: string, head: string): Promise<string>;
-  /** A local branch, or one the last fetch saw on the remote, already has this name. */
   branchTaken(checkout: string, branch: string): Promise<boolean>;
   removeWorktree(checkout: string, path: string): Promise<void>;
   headSha(path: string): Promise<string>;
-  /** Uncommitted changes, as `git status --porcelain` lines. */
   uncommitted(path: string): Promise<string[]>;
-  /**
-   * Files changed from `from` to commit `to`, or to the working tree (new
-   * files included) when `to` is absent, each with its blob id. `from` is a
-   * commit sha, fetched first when the worktree lacks it (an earlier head of
-   * a PR), or `merge-base:<base>`: where HEAD left `origin/<base>`.
-   */
   files(path: string, from: string, to?: string): Promise<Array<GitFile & { hash: string }>>;
-  /** One file's two sides over the same range as `files` (or why it cannot be shown). */
   file(path: string, file: string, from: string, to?: string): Promise<FileContents>;
-  /** A fingerprint of the worktree's changes: it moves when the Review panel would change. */
   changeStamp(path: string): Promise<string>;
-  /** Commits on HEAD that are not on `origin/<base>`, newest first. */
   commitsAhead(path: string, base: string): Promise<Array<{ sha: string; subject: string }>>;
-  /** Paths changed between two commits. */
   changedPaths(path: string, from: string, to: string): Promise<string[]>;
-  /**
-   * Bring the worktree up to the remote branch: fast-forward when the remote
-   * is ahead, nothing when it is behind or absent. Throws `diverged` when both moved.
-   */
   syncToRemote(path: string, repo: RepoRef, branch: string): Promise<void>;
-  /** Push HEAD to `branch` on the repository, never forced; answers the pushed sha. */
   push(path: string, repo: RepoRef, branch: string): Promise<string>;
-  /**
-   * Commit every change in the worktree (new files included) with `message`,
-   * as the configured git identity or else `as`. The repository's hooks do
-   * not run: a review's checkout has none of its tools installed.
-   */
   commitAll(path: string, message: string, as: { name: string; email: string }): Promise<void>;
-  /**
-   * Replace a file's content in the worktree, only when it is a regular file
-   * inside it (no symlink out, nothing of git's) whose content still hashes to
-   * `expected` (sha256 hex): `outside` or `changed` otherwise.
-   */
   writeFile(
     path: string,
     file: string,
     expected: string,
     content: string,
   ): Promise<"written" | "outside" | "changed">;
-  /** Put the worktree back at commit `sha` exactly: changes, new files and later commits go. */
   discard(path: string, sha: string): Promise<void>;
-  /**
-   * One file's hunks from commit `from` to `to` (the working tree when null),
-   * with `context` lines around each. `from` is as for `files`, or
-   * `merge-base:<base>:<sha>`: the merge base of `sha` with `origin/<base>`,
-   * as a PR's own diff starts.
-   */
   hunks(
     path: string,
     file: string,
@@ -157,33 +89,15 @@ export interface Workspace {
     to: string | null,
     context?: number,
   ): Promise<Hunk[]>;
-  /** The checked-in scripts, if the file exists and parses. */
   readScripts(path: string): Promise<ProjectScripts>;
   runScript(path: string, script: string): Promise<{ ok: boolean; output: string }>;
-  /**
-   * Every commit made in the worktree gets `trailer` (`Thread-Id: <id>`):
-   * a per-worktree hooks directory whose `commit-msg` adds it, and whose
-   * every hook then runs the repository's own hook of that name.
-   */
   installTrailer(path: string, hooksDir: string, trailer: string): Promise<void>;
-  /**
-   * A checkpoint: the worktree as it is now, uncommitted changes and new
-   * files included, as a commit on top of HEAD kept under `ref`. Nothing in
-   * the worktree, its index or its branch changes. Answers the commit.
-   */
   checkpoint(path: string, ref: string): Promise<string>;
-  /**
-   * Put the worktree's files back as they were at a checkpoint, as
-   * uncommitted changes: HEAD and the branch's history are untouched, so
-   * nothing pushed is ever rewritten.
-   */
   restore(path: string, sha: string): Promise<void>;
 }
 
-/** A file's two sides, or why they are not sent (`unshowable`). */
 type FileContents = Omit<GitFileDiff, "path">;
 
-/** Every hook git runs, so a per-worktree hooks directory can hand each to the repository's own. */
 const HOOK_NAMES = [
   "applypatch-msg",
   "pre-applypatch",
@@ -203,24 +117,20 @@ const HOOK_NAMES = [
   "fsmonitor-watchman",
 ];
 
-/** The identity checkpoint commits are made under (the sandbox may have none configured). */
 const CHECKPOINT_ID =
   "GIT_AUTHOR_NAME=tiny-agents GIT_AUTHOR_EMAIL=checkpoints@tiny-agents.invalid " +
   "GIT_COMMITTER_NAME=tiny-agents GIT_COMMITTER_EMAIL=checkpoints@tiny-agents.invalid";
 
-/** Where a thread's checkpoint `seq` is kept in the project's clone (hidden from branches and tags). */
 export function checkpointRef(branch: string, seq: number): string {
   return `refs/tiny-agents/checkpoints/${branch.replaceAll("/", "_")}/${seq}`;
 }
 
-/** Words a task's wording carries that say nothing about the change. */
 const FILLER: readonly string[] = (
   "a an the to for of in on at by with and or but so that this these those it its is are be " +
   "can could would will should you your please pls i we us me my our lets let want need like " +
   "help hey hi ok okay just also some there here when then now currently"
 ).split(" ");
 
-/** Up to `maxWords` words joined by hyphens, stopping at a word before `maxLength`. */
 function joinSlug(words: readonly string[], maxWords: number, maxLength: number): string {
   let slug = "";
   for (const word of words.slice(0, maxWords)) {
@@ -237,22 +147,12 @@ const wordsOf = (text: string) =>
     .replace(/['’]/g, "")
     .match(/[a-z0-9]+/g) ?? [];
 
-/**
- * A branch slug from a task's own words when no model names it: the first
- * few words that are not filler ("Can you please fix the login flow…" is
- * `fix-login-flow`), short enough to read at a glance.
- */
 export function branchSlug(task: string): string {
   const words = wordsOf(task.slice(0, 300));
   const kept = words.filter((word) => !FILLER.includes(word));
   return joinSlug(kept.length ? kept : words, 4, 28) || "thread";
 }
 
-/**
- * A model's branch name as a slug: its first line, without a label, quotes,
- * a `ta/` prefix or a conventional `type/` slash; `null` when nothing usable
- * is left.
- */
 export function cleanBranchSlug(raw: string): string | null {
   const line = raw
     .replace(/<think>[\s\S]*?<\/think>/gi, "")
@@ -265,17 +165,10 @@ export function cleanBranchSlug(raw: string): string | null {
   return slug.length >= 3 ? slug : null;
 }
 
-/** Where a new project's branches live, until its settings say otherwise. */
 export const DEFAULT_BRANCH_PREFIX = "ta/";
 
-/** A branch under the project's prefix: `ta/fix-login`. */
 export const branchName = (prefix: string, slug: string) => `${prefix}${slug}`;
 
-/**
- * A branch prefix as typed, ready to put before a slug: trimmed, with a `/`
- * added after a bare word (`ashik` → `ashik/`), or empty for none. `null`
- * when git could not name a branch with it.
- */
 export function cleanBranchPrefix(raw: string): string | null {
   const text = raw.trim();
   if (!text) return "";
@@ -284,7 +177,6 @@ export function cleanBranchPrefix(raw: string): string | null {
   return /[/_-]$/.test(text) ? text : `${text}/`;
 }
 
-/** A glob over repository paths (`**` any depth, `*` one segment), as protected paths use. */
 export function matchesGlob(path: string, glob: string): boolean {
   const pattern = glob
     .split("**")
@@ -312,11 +204,6 @@ export function createWorkspace(options: WorkspaceOptions): Workspace {
     return result.stdout;
   }
 
-  /**
-   * Run a git command that talks to GitHub with the credential in that
-   * command alone. Credential helpers configured elsewhere are cleared first
-   * (`credential.helper=`), so only this one answers.
-   */
   async function authed(git: string): Promise<ExecResult> {
     if (options.credential.kind === "gh") {
       return exec(
@@ -334,7 +221,6 @@ export function createWorkspace(options: WorkspaceOptions): Workspace {
 
   const git = (path: string) => `git -C ${q(path)}`;
 
-  /** The shared git reads (`@tiny-agents/git`) on this worktree, over the exec port. */
   function reads(root: string): GitReadPort {
     const at = (rel: string) => q(`${root}/${rel}`);
     return {
@@ -348,7 +234,6 @@ export function createWorkspace(options: WorkspaceOptions): Workspace {
         return result.exitCode === 0 ? result.stdout : null;
       },
       async stats(rels) {
-        // `%y` carries nanoseconds on every GNU stat; a missing path prints `-`.
         const result = await exec(
           `cd ${q(root)} && while IFS= read -r -d '' f; do stat -c '%s %y' -- "$f" 2>/dev/null || echo -; done`,
           { stdin: `${rels.join("\0")}\0`, timeoutMs: 30_000 },
@@ -358,7 +243,6 @@ export function createWorkspace(options: WorkspaceOptions): Workspace {
     };
   }
 
-  /** Listed files with each live one's blob id; a file gone mid-read lists again once. */
   async function hashed(
     root: string,
     list: () => Promise<ChangedFile[]>,
@@ -380,7 +264,6 @@ export function createWorkspace(options: WorkspaceOptions): Workspace {
     }
   }
 
-  /** Files that differ between two commits, with each live one's blob id in `to`. */
   async function treeHashed(
     path: string,
     from: string,
@@ -394,7 +277,6 @@ export function createWorkspace(options: WorkspaceOptions): Workspace {
           "Could not read the tree",
         )
       : "";
-    // `<mode> blob <id>\t<path>` records.
     const hashOf = new Map(
       ids
         .split("\0")
@@ -458,7 +340,6 @@ export function createWorkspace(options: WorkspaceOptions): Workspace {
           `git --no-optional-locks -C ${q(path)} status --porcelain`,
           "Could not read the status",
         );
-        // Changes made during the review stay where they are, on the head they were made on.
         if (!dirty.trim()) {
           await must(
             `${git(path)} checkout --quiet --detach ${q(head)}`,
@@ -548,7 +429,6 @@ export function createWorkspace(options: WorkspaceOptions): Workspace {
       const fetched = await authed(
         `-C ${q(path)} fetch --quiet ${q(remote(repo))} ${q(`refs/heads/${branch}`)}`,
       );
-      // No such branch on the remote yet: nothing to sync.
       if (fetched.exitCode !== 0) {
         if (/couldn't find remote ref/i.test(fetched.stderr)) return;
         throw new WorkspaceError(`Could not fetch ${branch}: ${tail(fetched)}`);
@@ -625,7 +505,6 @@ export function createWorkspace(options: WorkspaceOptions): Workspace {
       return fileHunks(reads(path), file, await resolveFrom(path, from), to, context);
     },
     async installTrailer(path, hooksDir, trailer) {
-      // Per-worktree config, as `git sparse-checkout` sets it up.
       await must(
         `${git(path)} config core.repositoryformatversion 1 && ${git(path)} config extensions.worktreeConfig true`,
         "Could not enable per-worktree config",
@@ -635,7 +514,6 @@ export function createWorkspace(options: WorkspaceOptions): Workspace {
         own.exitCode === 0 && own.stdout.trim()
           ? own.stdout.trim()
           : `${(await must(`${git(path)} rev-parse --path-format=absolute --git-common-dir`, "Could not find the repository")).trim()}/hooks`;
-      // A relative hooks path (husky's `.husky/_`) is relative to the worktree's top.
       const resolve = [
         `orig=${q(original)}`,
         `case "$orig" in /*) ;; *) orig="$(git rev-parse --show-toplevel)/$orig" ;; esac`,
@@ -704,7 +582,6 @@ export function createWorkspace(options: WorkspaceOptions): Workspace {
     },
   };
 
-  /** Fetch commit `sha` unless the worktree has it (GitHub serves a reachable commit by sha). */
   async function haveCommit(path: string, sha: string): Promise<void> {
     if (!/^[0-9a-f]{40}$/.test(sha)) throw new WorkspaceError("Not a commit sha");
     if ((await run(`${git(path)} cat-file -e ${q(`${sha}^{commit}`)}`, 30_000)).exitCode === 0) {
@@ -718,7 +595,6 @@ export function createWorkspace(options: WorkspaceOptions): Workspace {
     }
   }
 
-  /** A range's start: a sha (fetched when missing), or a `merge-base:` form resolved to one. */
   async function resolveFrom(path: string, from: string): Promise<string> {
     const base = /^merge-base:([^:]+)(?::([0-9a-f]{40}))?$/.exec(from);
     if (!base) {
@@ -734,7 +610,6 @@ export function createWorkspace(options: WorkspaceOptions): Workspace {
   }
 }
 
-/** The scripts file's `setup`, `check` and `archive`; anything else is ignored. */
 function parseScripts(raw: string): ProjectScripts {
   try {
     const value = JSON.parse(raw) as Record<string, unknown>;

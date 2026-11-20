@@ -1,7 +1,6 @@
 const IPV4 = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
 const PREFIX_LENGTH = /^(0|[1-9]\d{0,2})$/;
 
-/** `::ffff:0:0/96`, where IPv4 addresses sit in IPv6. */
 const IPV4_MAPPED_PREFIX = 0xffffn;
 
 interface Range {
@@ -39,7 +38,6 @@ export function clientAddress(
   return rightmostUntrustedHop(hops, ranges) ?? address;
 }
 
-/** An IPv6 host usually holds a whole /64 and can pick any address in it. */
 export function rateLimitKey(address: string): string {
   const ip = parseAsIpv6(address);
   if (ip === undefined) return address;
@@ -50,11 +48,6 @@ export function rateLimitKey(address: string): string {
   return `${hextets.join(":")}::/64`;
 }
 
-/**
- * Each proxy appends the address it saw, so only hops right of the first
- * untrusted one were written by trusted proxies; everything left of it is the
- * client's own text. With every hop trusted, the leftmost is the client.
- */
 function rightmostUntrustedHop(hops: readonly string[], ranges: readonly Range[]) {
   return hops.findLast((hop) => !isTrusted(hop, ranges)) ?? hops[0];
 }
@@ -79,11 +72,6 @@ function trustedRanges(entries: readonly string[]): readonly Range[] {
   return ranges;
 }
 
-/**
- * A prefix applies to the notation it is written in, so `::ffff:10.0.0.0/8`
- * is `::/8`, not `10.0.0.0/8`. Rejecting set host bits catches that slip and
- * any other entry that would trust more than it names.
- */
 function parseRange(entry: string): Range | string {
   const [address = "", prefix, extra] = entry.split("/");
   const network = extra === undefined ? parseAsIpv6(address) : undefined;
@@ -115,7 +103,6 @@ function parseAsIpv6(address: string): bigint | undefined {
   } catch {
     return undefined;
   }
-  // The URL parser serializes IPv6 as hex groups with at most one `::`.
   const [head = "", tail] = hostname.slice(1, -1).split("::");
   const groups = (part: string | undefined) => (part ? part.split(":") : []);
   const zeros =
@@ -128,7 +115,6 @@ function parseAsIpv6(address: string): bigint | undefined {
   );
 }
 
-/** Node reports an IPv4 peer on a dual-stack socket as `::ffff:a.b.c.d`. */
 function unmapIpv4(address: string): string {
   const unmapped = address.replace(/^::ffff:/i, "");
   return IPV4.test(unmapped) ? unmapped : address;

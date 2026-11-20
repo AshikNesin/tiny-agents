@@ -71,7 +71,6 @@ describe("Layout nav shortcuts", () => {
     expect(pathname()).toBe("/todos");
     expect(useCommandPaletteStore.getState().open).toBe(true);
 
-    // ⌘K again closes the palette; the shortcut works once it is gone.
     await user.keyboard("{Control>}k{/Control}");
     expect(useCommandPaletteStore.getState().open).toBe(false);
     await user.keyboard("{Control>},{/Control}");

@@ -1,8 +1,3 @@
-/**
- * Shell builders for the VM browser stack (issue #24). The install and launch
- * scripts touch apt and X, so they are only syntax-checked (`bash -n`); the
- * helpers that are safe to run for real (readiness, teardown, wipe) are.
- */
 import { execSync, spawn } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -18,7 +13,6 @@ import {
   wipeProfileCommand,
 } from "../../../../packages/sandbox/src/browser-vm-setup";
 
-/** Every builder wraps its script in `bash -c '...'`; `-n` parses without running. */
 function assertValidShell(command: string) {
   expect(command.startsWith("bash -c ")).toBe(true);
   execSync(command.replace(/^bash -c /, "bash -n -c "), { stdio: "pipe" });
@@ -68,7 +62,6 @@ describe("browser VM setup commands", () => {
     expect(script).toContain(
       "https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb",
     );
-    // Idempotent: the marker short-circuits before any apt call.
     expect(script.indexOf("echo ready")).toBeLessThan(script.indexOf("apt-get update"));
   });
 
@@ -94,10 +87,8 @@ describe("browser VM setup commands", () => {
       height: 800,
       scale: 2,
     });
-    // The lock is fd 8, held until the script exits. A browser that inherits it
-    // holds the lock for as long as it runs, and every later launch waits on it.
     const background = script.split("\n").filter((line) => line.endsWith(" &"));
-    expect(background).toHaveLength(3); // Xtigervnc, vncconfig, Chrome
+    expect(background).toHaveLength(3);
     for (const line of background) expect(line).toContain("8>&-");
   });
 
@@ -120,7 +111,7 @@ describe("browser VM setup commands", () => {
     expect(at(2)).toContain("--window-size=1280,800");
     expect(at(1)).toContain("-geometry 1280x800");
     expect(at(1)).toContain("--force-device-scale-factor=1");
-    expect(at(3)).toContain("--force-device-scale-factor=1"); // only 1 or 2
+    expect(at(3)).toContain("--force-device-scale-factor=1");
   });
 
   it("keeps hostile profile paths inert", () => {

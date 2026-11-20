@@ -12,7 +12,6 @@ import type { Bot } from "../../shared/api/bots";
 import { BotAvatar } from "./BotAvatar";
 import { PastChatItems, usePastChats } from "./ChatHistoryMenu";
 
-/** Which page of the menu is showing; null while it is closed. */
 export type BotMenuView = "main" | "history" | null;
 
 interface BotMenuProps {
@@ -21,22 +20,13 @@ interface BotMenuProps {
   onViewChange: (view: BotMenuView) => void;
   onEditBot: () => void;
   yolo: boolean;
-  /** Turning YOLO on is the caller's to confirm. */
   onYoloChange: (on: boolean) => void;
 }
 
-/**
- * The chat header's bot name, and the bot's menu behind it: settings, the
- * past chats (a second page of the same menu, so it opens in place on a
- * phone) and the chat's YOLO switch. The header keeps only the live view and
- * New chat as icons beside it.
- */
 export function BotMenu({ bot, view, onViewChange, onEditBot, yolo, onYoloChange }: BotMenuProps) {
   const chats = usePastChats(bot.id, bot.conversationId, view);
   const contentRef = useRef<HTMLDivElement>(null);
 
-  // Switching pages unmounts the focused row: hand focus to the new first row
-  // so the arrow keys keep working.
   useEffect(() => {
     if (!view) return;
     const frame = requestAnimationFrame(() =>

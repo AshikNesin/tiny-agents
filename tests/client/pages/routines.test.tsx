@@ -1,8 +1,3 @@
-/**
- * Routines page behavior (issue #18 phase B): renders server state in IST,
- * the editor posts the compiled schedule (once carries the IST offset, cron
- * presets compile to 5-field cron), and card actions hit the right routes.
- */
 import React from "react";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -52,7 +47,6 @@ const routine: Routine = {
   schedule: { kind: "cron", expr: "0 9 * * 1-5" },
   scheduleDescription: "At 09:00, Monday through Friday",
   enabled: true,
-  // 2026-10-21T03:30:00Z = 09:00 IST Wed; crosses the UTC day boundary.
   nextRunAt: "2026-10-21T03:30:00.000Z",
   done: false,
   blockedStreak: 0,
@@ -115,9 +109,6 @@ async function fillBasics(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText("Prompt"), "say the thing");
 }
 
-// These tests type whole forms through user-event, which takes 1-2 s each
-// locally and several times that on a busy CI runner. A 15 s ceiling keeps
-// the default 5 s from failing them on slow runs while still catching a hang.
 describe("Routines page", { timeout: 15_000 }, () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -127,12 +118,9 @@ describe("Routines page", { timeout: 15_000 }, () => {
     loadPage([routine, { ...routine, id: "r2", name: "evening-digest" }]);
     mount();
 
-    // Upcoming + card next-run + run row all render the same IST instant.
     expect(await screen.findAllByText("Wed, 21 Oct 2026, 09:00 IST")).not.toHaveLength(0);
     expect(screen.getAllByText("morning-digest").length).toBeGreaterThan(0);
-    // Two cards plus their two Upcoming rows.
     expect(screen.getAllByText("Helper Bot · At 09:00, Monday through Friday").length).toBe(4);
-    // Card + run row both show the routine's state.
     expect(screen.getByText(/took 1m 4s/)).toBeTruthy();
     expect(screen.getByText("succeeded")).toBeTruthy();
     expect(screen.getByText("manual")).toBeTruthy();
@@ -156,7 +144,6 @@ describe("Routines page", { timeout: 15_000 }, () => {
     await user.clear(minutes);
     await user.type(minutes, "15");
 
-    // Live preview before saving (acceptance criterion).
     expect(await screen.findByText("Every 15 minutes")).toBeTruthy();
     expect(screen.getAllByText(/IST$/).length).toBeGreaterThanOrEqual(3);
 
@@ -184,7 +171,6 @@ describe("Routines page", { timeout: 15_000 }, () => {
     await user.click(await screen.findByRole("option", { name: "18:30" }));
 
     expect(await screen.findByText("At 18:30")).toBeTruthy();
-    // Three preview times render before saving (sentence + 3 times).
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).getAllByText(/\d{2}:\d{2} IST/).length).toBe(3);
 
@@ -194,8 +180,6 @@ describe("Routines page", { timeout: 15_000 }, () => {
   });
 
   it("sends a once schedule with the +05:30 IST offset", async () => {
-    // A one-time routine must be in the future, so date it next year rather
-    // than on a fixed day that eventually passes.
     const year = new Date().getUTCFullYear() + 1;
     loadPage();
     const user = userEvent.setup({ pointerEventsCheck: 0 });
@@ -228,7 +212,6 @@ describe("Routines page", { timeout: 15_000 }, () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     mount();
 
-    // The same refresh `act` performs returns the paused routine.
     listMock.mockImplementation(async () =>
       updateMock.mock.calls.at(-1)?.[1]?.enabled === false
         ? [{ ...routine, enabled: false, nextRunAt: null }]

@@ -57,7 +57,6 @@ describe("browser keys", () => {
   });
 
   it("uses the physical key when Option changes the glyph", () => {
-    // Option+C types "ç" on a Mac; the shortcut is still C.
     const strokes = remapMetaChord({ key: "ç", code: "KeyC", shiftKey: false, altKey: true })!;
     expect(strokes.some((s) => s.keysym === 0x63)).toBe(true);
   });

@@ -1,10 +1,3 @@
-/**
- * The settled pipeline on the real faux-backed runtime, started the way boot
- * starts it (entry.node.ts): a lifecycle whose "agent runtime" part opens
- * the runtime and whose "settled conversations" part starts
- * `startSettledPipeline` on it. bots-settled.test.ts keeps `settle`'s
- * ordering and isolation cases.
- */
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import type { AgentRuntime } from "@tiny-agents/agent";
@@ -17,7 +10,6 @@ import { closeAppRuntime, openAppRuntime, resetAppTables, seedBot, until } from 
 
 const quiet = { info: () => undefined, warn: () => undefined };
 
-/** Run notifications go nowhere here (notifications.wiring.test.ts covers them). */
 const silentNotifier = {
   notify: () => undefined,
   cancel: () => undefined,
@@ -25,7 +17,6 @@ const silentNotifier = {
   defineEvents: () => undefined,
 } as unknown as Notifier;
 
-/** Boot's composition, against a faux runtime slow enough that a target is still replying after a submit. */
 function boot(): { lifecycle: Lifecycle; runtime: () => AgentRuntime } {
   const lifecycle = createLifecycle({ log: quiet, exit: () => undefined });
   let runtime!: AgentRuntime;
@@ -93,7 +84,6 @@ describe("the settled pipeline, started as boot starts it", () => {
         status: "delivered",
         queued: false,
       });
-      // The fast path saw the target busy: only its settling can answer.
       expect(rt.isBusy(guestRef)).toBe(true);
 
       await until(async () => (await ledgerRow("slow"))?.answeredAt != null, "the answer");
@@ -103,10 +93,8 @@ describe("the settled pipeline, started as boot starts it", () => {
         kind: "relay",
         conversationId: String(guestRef),
       });
-      // The same settling folded the guest's reply into the bot list.
       const guestRow = await db.query.bots.findFirst({ where: eq(bots.id, guest.id) });
       expect(guestRow?.lastMessagePreview).toBe(`Echo: ${text}`);
-      // Answering again is a no-op: one answer per Delivery.
       expect(await createDeliveries(rt).answer(guestRef)).toBe(0);
     },
   );
@@ -124,7 +112,6 @@ describe("the settled pipeline's boot sweeps", () => {
     const host = await seedBot({ name: "Host" });
     const guest = await seedBot({ name: "Guest" });
     const guestRef = Number(guest.conversationId);
-    // As before a restart: the target replied, the Delivery stayed unanswered.
     await rt.submit(guestRef, { requestId: "left-over", text: "hi" });
     await until(async () => (await rt.readChat(guestRef)).messages.length >= 2, "the reply");
     await until(() => !rt.isBusy(guestRef), "the guest to settle");

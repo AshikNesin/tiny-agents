@@ -13,16 +13,6 @@ import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Test
 
-/**
- * The emulator against the real thing. tmux is the screen producer in production, so each test
- * starts a tmux server on a private socket, attaches a real client inside a pty, runs real
- * programs in the session and feeds the client's raw bytes to the emulator. tmux's own idea of
- * the pane (`capture-pane`) is then the oracle: text line by line, the cursor, and per cell
- * colours and attributes (`capture-pane -e`, replayed through a second emulator).
- *
- * Needs tmux and python3 (the pty), and the programs it drives; skipped unless
- * `TERMINAL_TMUX_TEST=1`. Recordings and a per-check report land in `build/tmux-differential`.
- */
 class TmuxDifferentialTest {
     private var harness: Harness? = null
 
@@ -37,8 +27,6 @@ class TmuxDifferentialTest {
     fun tearDown() {
         harness?.close()
     }
-
-    // ------------------------------------------------------------ scenarios
 
     @Test
     fun `shell output with colours`() = scenario("shell-colours") {
@@ -77,7 +65,6 @@ class TmuxDifferentialTest {
         check("carriage-return progress bar")
         run("printf 'tabs\\tevery\\teight\\tcolumns\\t|\\n\\tindented\\n'")
         check("tabs")
-        // What apt's Dpkg::Progress-Fancy does: a scroll region above a pinned status row.
         file(
             "apt.sh",
             """
@@ -98,8 +85,6 @@ class TmuxDifferentialTest {
         check("apt progress bar, while pinned")
         settle()
         check("apt progress bar, finished")
-        // What an Ink TUI (Claude Code) does on every frame: synchronized output, hide the
-        // cursor, walk up erasing the previous frame, repaint in 24-bit colour.
         file(
             "ink.sh",
             """
@@ -123,7 +108,6 @@ class TmuxDifferentialTest {
 
     @Test
     fun `unicode wide and combining characters`() = scenario("unicode") {
-        // Non-ASCII goes through files: process arguments depend on the JVM's locale.
         show("CJK", "日本語のテキスト 中文字符 한국어 ＦＵＬＬ\n")
         show("emoji", "emoji: 😀 🚀 🎉 👍 done\n")
         show("combining marks", "cafe\u0301 na\u0308ive o\u0302\u0301 x\n")
@@ -133,8 +117,6 @@ class TmuxDifferentialTest {
         show("latin and symbols", "äöü ÄÖÜ ß € ñ ç ø å æ œ λ π Ω ∑ ∞ ≠ ≤ ≥\n")
         show("mixed widths with colours", "\u001b[31m赤\u001b[42m緑の背景\u001b[0m plain \u001b[1;38;5;208m橙😀\u001b[0m e\u0301\u001b[4m下線\u001b[0m\n")
         run("clear")
-        // tmux keeps the program's ACS cells as the letters it was sent and draws them for the
-        // client, so here the oracle is the styled capture replayed with line drawing in G1.
         run("printf '\\033(0lqqqqwqqqqk\\nx    x    x\\ntqqqqnqqqqu\\nmqqqqvqqqqj\\n`afgjklmnopqrstuvwxyz{|}~\\033(B\\n'")
         check("DEC line drawing from a program", lineDrawing = true)
         assertTrue(screenText().contains("┌────┬────┐"))
@@ -176,7 +158,6 @@ class TmuxDifferentialTest {
         keys(":help", "Enter")
         check("vim :help")
         saveRecording("recorded-tmux-vim.bin")
-        // A client that attaches now gets one full redraw of the busy screen.
         val late = attach()
         check("vim seen by a late-attaching client", late)
         late.close()
@@ -261,7 +242,6 @@ class TmuxDifferentialTest {
 
     @Test
     fun `split panes and DEC line drawing borders`() {
-        // A UTF-8 client gets box characters; a plain one gets the ACS charset (ESC ( 0).
         for (utf8 in listOf(true, false)) {
             scenario(if (utf8) "panes-utf8" else "panes-acs", utf8 = utf8) {
                 run("seq 1 40")
@@ -326,7 +306,6 @@ class TmuxDifferentialTest {
         run("printf '\\033[4:3mcurly\\033[0m \\033[4:3;58:2::255:0:0mred curly\\033[0m \\033[9mstrike\\033[0m \\033[53moverline\\033[0m\\n'")
         check("underline styles and colours")
 
-        // Keys typed through the client, as the app sends them.
         type(TerminalInput.text("echo typed by the emulator") + TerminalInput.key(TerminalKey.ENTER))
         check("typed text")
         type(TerminalInput.key(TerminalKey.UP, applicationCursor = emulator.applicationCursorKeys))
@@ -348,7 +327,6 @@ class TmuxDifferentialTest {
         check("after running the paste")
         assertTrue(screenText().lines().any { it == "pasted two" })
 
-        // The wheel scrolls tmux's history: that is the scrollback in production.
         run("clear; seq 1 500")
         check("before wheel")
         repeat(3) { type(TerminalInput.mouseWheel(up = true, col = 10, row = 10, sgr = emulator.mouseSgrEncoding)) }
@@ -364,7 +342,6 @@ class TmuxDifferentialTest {
         assertEquals("wheel down leaves copy mode at the bottom", "0", format("#{pane_in_mode}"))
         check("after wheel down")
 
-        // A click is a press and a release; tmux takes it without leaving junk on the line.
         type(TerminalInput.mouseButton(0, pressed = true, col = 5, row = 5, sgr = true))
         type(TerminalInput.mouseButton(0, pressed = false, col = 5, row = 5, sgr = true))
         type(TerminalInput.focus(gained = false) + TerminalInput.focus(gained = true))
@@ -381,12 +358,6 @@ class TmuxDifferentialTest {
         check("after quitting vim")
     }
 
-    /**
-     * tmux as a second terminal emulator: the same raw escape sequences are parsed by a tmux
-     * pane (`cat file`) and by the emulator directly, with no client in between. This reaches
-     * what tmux never sends to its own client: IL/DL, ICH/DCH, REP, origin mode, tab stops,
-     * insert mode, save/restore cursor, the alternate screen.
-     */
     @Test
     fun `raw escape sequences read by tmux and by the emulator`() = scenario("raw-sequences") {
         val random = java.util.Random(20261115)
@@ -395,8 +366,6 @@ class TmuxDifferentialTest {
             compareRaw("round $round", stream, operations)
         }
     }
-
-    // ------------------------------------------------------------ harness
 
     private fun scenario(
         name: String,
@@ -419,7 +388,6 @@ class TmuxDifferentialTest {
         assumeTrue("$name is not installed", onPath(name))
     }
 
-    /** One tmux server, one session, and the client the emulator watches. */
     private class Harness(val name: String, val production: Boolean, val utf8: Boolean) {
         private val socket = "emu-test-$name-${System.nanoTime().toString(36)}"
         private val home: File = Files.createTempDirectory("emu-tmux-$name").toFile()
@@ -487,21 +455,18 @@ class TmuxDifferentialTest {
             File(home, name).writeText(content)
         }
 
-        /** Print UTF-8 `content` in the pane and compare. */
         fun show(label: String, content: String) {
             file("show.txt", content)
             run("cat show.txt")
             check(label)
         }
 
-        /** Type a command line into the active pane and wait for the output to stop. */
         fun run(command: String) {
             tmux("send-keys", "-t", SESSION, "-l", "--", command)
             tmux("send-keys", "-t", SESSION, "Enter")
             settle()
         }
 
-        /** tmux key names (`Enter`, `C-f`, `Escape`); anything longer than a name is typed literally. */
         fun keys(vararg keys: String) {
             for (key in keys) {
                 if (key in KEY_NAMES || KEY_PATTERN.matches(key)) {
@@ -514,7 +479,6 @@ class TmuxDifferentialTest {
             settle()
         }
 
-        /** Bytes through the client's pty, the way the app's keyboard sends them. */
         fun type(bytes: ByteArray) {
             client.write(bytes)
             settle()
@@ -541,10 +505,6 @@ class TmuxDifferentialTest {
             results += Result(label, matched, total, 0, 0, true, emptyList())
         }
 
-        /**
-         * Compare every pane with tmux's view of it. The screen has to be compared while nothing
-         * is changing, so a mismatch is retried after another quiet period before it counts.
-         */
         fun check(label: String, target: Client = client, lineDrawing: Boolean = false) {
             var result = compare(label, target, lineDrawing)
             var attempts = 1
@@ -600,7 +560,6 @@ class TmuxDifferentialTest {
                     } else {
                         mismatches += "pane $id row $row\n      tmux: ${visible(want)}\n  emulator: ${visible(got)}"
                     }
-                    // Styles, for as far as tmux printed the line (it trims trailing blanks).
                     val reference = styled.line(row)
                     val line = emulator.line(screenRow)
                     var last = width
@@ -619,7 +578,6 @@ class TmuxDifferentialTest {
                 if (pane[5] == "1" && pane[8] == "1") {
                     val wantRow = top + pane[7].toInt()
                     val wantCol = left + pane[6].toInt()
-                    // tmux leaves the terminal's cursor on the last column when the pane's is past it.
                     val colOk = emulator.cursorCol == wantCol || (wantCol == left + width && emulator.cursorCol == wantCol - 1)
                     if (emulator.cursorRow != wantRow || !colOk) {
                         cursorOk = false
@@ -632,7 +590,6 @@ class TmuxDifferentialTest {
                 }
             }
 
-            // Whatever no pane covers is a border (line drawing) or the status line.
             val statusRows = if (production) 0 else 1
             for (row in 0 until emulator.rows - statusRows) {
                 for (col in 0 until emulator.cols) {
@@ -655,12 +612,10 @@ class TmuxDifferentialTest {
             return Result(label, rowsMatched, rowsTotal, cellsMatched, cellsTotal, cursorOk, mismatches)
         }
 
-        /** Let a fresh tmux pane and a fresh emulator read `stream`, then compare the two. */
         fun compareRaw(label: String, stream: ByteArray, operations: List<Int>) {
             val index = results.size
             File(home, "raw-$index.bin").writeBytes(stream)
             val done = File(home, "raw-$index.done")
-            // -opost: the pane gets the bytes as they are, LF stays LF.
             val id = tmux(
                 "new-window", "-d", "-P", "-F", "#{pane_id}", "-t", "$SESSION:", "-c", home.path,
                 "stty -opost; cat raw-$index.bin; touch raw-$index.done; exec sleep 9999",
@@ -738,23 +693,17 @@ class TmuxDifferentialTest {
             try {
                 tmux("kill-server")
             } catch (_: IllegalStateException) {
-                // Already gone.
             }
             home.deleteRecursively()
         }
     }
 
-    /**
-     * Random but well-formed terminal output: text, cursor motion, erasing, insert/delete,
-     * scroll regions, SGR and modes, in the forms a program would write them.
-     */
     private object RawSequences {
         private val words = listOf(
             "the", "quick", "brown", "fox", "jumps", "over", "lazy", "dog", "0123456789", "~/src", "$", "#", "--help",
             "lorem ipsum dolor sit amet", "x", "ab", "END", "漢字", "日本語", "😀", "e\u0301", "ñ", "─│┌┐", "★",
         )
 
-        /** The stream, and the byte offset each operation starts at (for shrinking a failure). */
         fun generate(random: java.util.Random, operations: Int): Pair<ByteArray, List<Int>> {
             top = 1
             bottom = 29
@@ -824,7 +773,6 @@ class TmuxDifferentialTest {
             return "$CSI${codes.joinToString(";")}m"
         }
 
-        // The scroll region the stream has set up, so IL and DL can be aimed inside it.
         private var top = 1
         private var bottom = 29
 
@@ -834,7 +782,6 @@ class TmuxDifferentialTest {
             20, 21 -> "\r\n"
             22 -> "\r"
             23 -> "\n"
-            // Not from column 1: tmux backs up onto a wrapped line, xterm only with mode 45.
             24 -> "${CSI}C\b"
             25 -> "\t"
             in 26..29 -> "$CSI${random.row()};${random.col()}H"
@@ -845,8 +792,6 @@ class TmuxDifferentialTest {
             34 -> "$CSI${random.col()}G"
             35 -> "$CSI${random.row()}d"
             36 -> "$CSI${random.count()}${"EF"[random.nextInt(2)]}"
-            // Erasing: tmux keeps a wide character whose second half is erased, xterm blanks
-            // it, so partial erases start on an ASCII cell of a rebuilt line.
             37 -> if (random.nextBoolean()) "\r${CSI}J" else "${CSI}2J"
             38 -> {
                 val prefix = 1 + random.nextInt(12)
@@ -863,16 +808,10 @@ class TmuxDifferentialTest {
                 val line = "\r${CSI}2K${ascii(random, 30)}${text(random).take(24)}"
                 "$line$CSI${1 + random.nextInt(12)}G$CSI${listOf("", "0", "1", "5", "12")[random.nextInt(5)]}${"XP"[random.nextInt(2)]}"
             }
-            // tmux's ICH leaves cells behind when the tail is pushed past the margin, and keeps
-            // a wide character whose second half the cursor is on, so the line is rebuilt short
-            // and the cursor put after an ASCII prefix.
             41 -> {
                 val prefix = random.nextInt(12)
                 "\r${CSI}2K${ascii(random, prefix)}${text(random).take(24)}$CSI${prefix + 1}G$CSI${listOf("", "0", "1", "7", "40")[random.nextInt(5)]}@"
             }
-            // IL and DL: xterm ignores them outside the scroll region (tmux does not), and
-            // terminals disagree on whether the cursor returns to column 1 (tmux assumes
-            // nothing), so they set their own region, run inside it and are followed by CR.
             43, 44 -> {
                 top = 1 + random.nextInt(20)
                 bottom = top + 1 + random.nextInt(29 - top)
@@ -881,7 +820,6 @@ class TmuxDifferentialTest {
             }
             45 -> "$CSI${1 + random.nextInt(6)}S"
             46 -> "$CSI${1 + random.nextInt(6)}T"
-            // With origin mode on, xterm homes to the top margin after DECSTBM and tmux to row 1.
             47 -> {
                 top = 1 + random.nextInt(20)
                 bottom = top + 1 + random.nextInt(29 - top)
@@ -895,26 +833,16 @@ class TmuxDifferentialTest {
             49 -> "${ESC}M"
             50 -> "${ESC}D"
             51 -> "${ESC}E"
-            // xterm saves the pending wrap with the cursor, tmux does not: move first.
             52 -> "${CSI}C${ESC}7"
             53 -> "${ESC}8"
             54 -> "$CSI?6${"hl"[random.nextInt(2)]}"
             55 -> "$CSI?7${"hl"[random.nextInt(2)]}"
-            // Insert mode, on a short line: tmux mishandles inserts that push text off the margin.
             56 -> {
                 val prefix = random.nextInt(12)
                 "\r${CSI}2K${ascii(random, prefix)}${text(random).take(24)}$CSI${prefix + 1}G${CSI}4h${ascii(random, 1 + random.nextInt(12))}${CSI}4l"
             }
             57 -> listOf("${ESC}H", "${CSI}g", "${CSI}3g", "$CSI${random.count()}Z", "\t\t")[random.nextInt(5)]
-            // REP right after an ASCII character (the only case tmux repeats) and short of the
-            // margin (xterm wraps the repeats, tmux stops there).
             58 -> "$CSI${random.row()};${1 + random.nextInt(30)}H${ascii(random, 1)}$CSI${listOf("", "1", "5", "20", "30")[random.nextInt(5)]}b"
-            // xterm keeps one saved cursor per screen and 1049 shares it; tmux keeps DECSC's
-            // apart. Saving right after the switch puts both in the same state. And 1049l on
-            // the main screen homes the cursor in xterm but not in tmux, so leaving goes
-            // through the alternate screen whichever screen is up.
-            // Also: xterm clears the alternate screen in the current background and restores
-            // origin mode with the cursor; tmux does neither.
             59 -> if (random.nextBoolean()) "${CSI}49m$CSI?1049h${CSI}C${ESC}7$CSI?6l" else "${CSI}49m$CSI?1049h$CSI?1049l${CSI}C${ESC}7$CSI?6l"
             60 -> "${CSI}C${CSI}s"
             61 -> "${CSI}u"
@@ -928,7 +856,6 @@ class TmuxDifferentialTest {
             else -> if (random.nextInt(8) == 0) {
                 top = 1
                 bottom = 29
-                // RIS leaves the alternate screen in xterm, not in tmux: leave it first.
                 "${CSI}49m$CSI?1049h$CSI?1049l${CSI}C${ESC}7${ESC}c"
             } else {
                 "${CSI}H"
@@ -946,7 +873,6 @@ class TmuxDifferentialTest {
         val mismatches: List<String>,
     )
 
-    /** `tmux attach` in a pty, and the emulator fed with exactly what that pty produced. */
     private class Client(private val process: Process, cols: Int, rows: Int) {
         val recording = ByteArrayOutputStream()
         val emulator = TerminalEmulator(cols, rows) { write(it) }
@@ -979,7 +905,6 @@ class TmuxDifferentialTest {
             return any
         }
 
-        /** Feed what arrives until the stream has been quiet for a while. */
         fun settle(quietMillis: Long = 350, timeoutMillis: Long = 30_000) {
             val start = System.nanoTime()
             var lastActivity = start
@@ -1006,7 +931,6 @@ class TmuxDifferentialTest {
                 process.outputStream.write((line + "\n").toByteArray())
                 process.outputStream.flush()
             } catch (_: java.io.IOException) {
-                // The client has exited; the next comparison will say so.
             }
         }
 
@@ -1014,7 +938,6 @@ class TmuxDifferentialTest {
             try {
                 process.outputStream.close()
             } catch (_: java.io.IOException) {
-                // Already closed.
             }
             if (!process.waitFor(3, TimeUnit.SECONDS)) process.destroyForcibly()
             reader.join(2000)
@@ -1027,11 +950,8 @@ class TmuxDifferentialTest {
         const val SESSION = "emu"
         val OUTPUT = File("build/tmux-differential")
 
-        /** Deterministic, but otherwise tmux's defaults (status line on, no mouse). */
         val TEST_SETTINGS = listOf(
-            // Not screen-256color: for a "screen" default-terminal tmux shows italics as reverse.
             listOf("set", "-g", "default-terminal", "tmux-256color"),
-            // Without RGB tmux squashes 24-bit colours to the 256 palette before the client sees them.
             listOf("set", "-s", "terminal-features[90]", "xterm*:RGB"),
             listOf("set", "-s", "escape-time", "10"),
             listOf("set", "-g", "status-interval", "0"),
@@ -1040,7 +960,6 @@ class TmuxDifferentialTest {
             listOf("set", "-g", "automatic-rename", "off"),
         )
 
-        /** packages/sandbox/src/terminal/tmux.ts TERMINAL_SETTINGS, the settings production attaches with. */
         val PRODUCTION_SETTINGS = listOf(
             listOf("set", "-g", "status", "off"),
             listOf("set", "-g", "mouse", "on"),
@@ -1061,12 +980,6 @@ class TmuxDifferentialTest {
         fun onPath(program: String): Boolean =
             (System.getenv("PATH") ?: "").split(File.pathSeparator).any { File(it, program).canExecute() }
 
-        /**
-         * `capture-pane -e` through a second emulator, as the reference for colours and
-         * attributes. tmux marks ACS cells with SO/SI without designating G1, so G1 is line
-         * drawing from the start; and tmux 3.4 writes overline (SGR 53) as `5:3`, which would
-         * read as blink.
-         */
         fun replayStyledCapture(capture: String, width: Int, height: Int): TerminalEmulator {
             val reference = TerminalEmulator(width, height) {}
             val text = capture.removeSuffix("\n").replace("\n", "\r\n").replace(Regex("(?<=[\\[;])5:3(?=[;m])"), "53")
@@ -1074,7 +987,6 @@ class TmuxDifferentialTest {
             return reference
         }
 
-        /** The cells `[left, left + width)` of a line as text, trailing blanks trimmed. */
         fun cellsText(line: TerminalLine, left: Int, width: Int): String {
             val out = StringBuilder()
             for (col in left until left + width) {
@@ -1088,7 +1000,6 @@ class TmuxDifferentialTest {
         fun styleOf(line: TerminalLine, col: Int): String {
             val attributes = line.attributes(col) and TerminalAttribute.STYLE_MASK
             val blank = line.codePoint(col) == ' '.code
-            // A blank cell has no ink: only what paints its box can be compared.
             val foreground = if (blank && attributes and (TerminalAttribute.INVERSE or TerminalAttribute.UNDERLINE or TerminalAttribute.STRIKETHROUGH) == 0) {
                 0
             } else {
@@ -1100,10 +1011,6 @@ class TmuxDifferentialTest {
 
         fun visible(text: String): String = "\"" + text.replace("\u001b", "\\e") + "\""
 
-        /**
-         * Runs a command in a pty of a fixed size and copies the pty's output to stdout.
-         * Commands on stdin: `W <hex>` writes bytes to the pty, `R <rows> <cols>` resizes it.
-         */
         val PTY_CLIENT = """
             import fcntl, os, pty, select, signal, struct, sys, termios
 

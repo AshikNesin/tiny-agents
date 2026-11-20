@@ -1,10 +1,3 @@
-/**
- * The request bodies in `apps/web/src/shared/api/` are what the client sends;
- * each must be one the route's zod schema accepts (README §4.5). The server's
- * schemas stay the validators: these checks fail the typecheck when a body
- * type and its schema drift apart. Response types need no check here: the
- * handlers return them, annotated, so drift there is a type error in place.
- */
 import type { z } from "zod";
 import { describe, expectTypeOf, it } from "vite-plus/test";
 import type { createUserSchema } from "@groot/core/auth/auth.schema";

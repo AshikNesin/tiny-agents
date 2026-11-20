@@ -8,19 +8,13 @@ export interface AuthUser {
   email: string;
 }
 
-/**
- * Hono environment shared by every router in the app. `Bindings` is the
- * Workers `env` object (empty on Node); `Variables` are set per request.
- */
 export type AppEnv = {
   Bindings: Record<string, unknown>;
   Variables: {
     user?: AuthUser;
     logger: Logger;
     requestId: string;
-    /** Set by `createApp()` when the runtime supplies one; `clientIp(c)` reads it. */
     clientAddress?: ClientAddressResolver;
-    /** Set by `createApp()`: this app's rate-limit counters. */
     rateLimitStore?: RateLimitStore;
   };
 };

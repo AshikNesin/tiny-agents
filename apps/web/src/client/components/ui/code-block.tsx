@@ -5,19 +5,6 @@ import { cva, type VariantProps } from "class-variance-authority";
 
 import { cn } from "@groot/ui/lib/utils";
 
-/**
- * Code block: header (title + actions), scrollable content, optional footer.
- * Pair with `useHighlightedCode` from `@groot/ui/hooks/use-highlighted-code`
- * to render shiki-highlighted lines (streaming-safe):
- *
- *   const lines = useHighlightedCode(code, "ts");
- *   <CodeBlock>
- *     <CodeBlockActions><CodeBlockCopyButton value={code} /></CodeBlockActions>
- *     <CodeBlockContent lineNumbers>
- *       {lines.map((line, i) => <CodeBlockLine key={i}>{line}</CodeBlockLine>)}
- *     </CodeBlockContent>
- *   </CodeBlock>
- */
 const codeBlockVariants = /* @__PURE__ */ cva(
   "group/code-block relative flex w-full min-w-0 flex-col overflow-hidden rounded-lg text-sm has-[>[data-slot=code-block-content]:focus-visible]:ring-3 has-[>[data-slot=code-block-content]:focus-visible]:ring-ring/50 data-[size=sm]:text-xs",
   {
@@ -75,11 +62,6 @@ function CodeBlockTitle({ className, ...props }: React.ComponentProps<"div">) {
   );
 }
 
-/**
- * The scrollable `<pre><code>`. `wrap` soft-wraps long lines, `lineNumbers`
- * adds a gutter (counting from `startLine`). A plain string child is split
- * into `CodeBlockLine`s automatically when `lineNumbers` is on.
- */
 function CodeBlockContent({
   className,
   children,
@@ -115,7 +97,6 @@ function CodeBlockContent({
           ? children
               .replace(/\n$/, "")
               .split("\n")
-              // Lines are positional; index keys are stable for a given string.
               .map((line, index) => <CodeBlockLine key={index}>{line}</CodeBlockLine>)
           : children}
       </code>
@@ -140,14 +121,12 @@ const codeBlockLineVariants = /* @__PURE__ */ cva(
   },
 );
 
-/** One line. `variant`: `added` / `removed` (diff gutter marks) or `highlighted`. */
 function CodeBlockLine({
   className,
   variant = "default",
   children,
   ...props
 }: React.ComponentProps<"span"> & VariantProps<typeof codeBlockLineVariants>) {
-  // An empty line holds a newline so copying a selection keeps blank lines.
   const empty =
     children === undefined ||
     children === null ||

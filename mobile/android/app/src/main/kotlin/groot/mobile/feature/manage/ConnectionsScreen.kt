@@ -63,7 +63,6 @@ private fun statusLabel(status: String): String = when (status) {
     else -> "Error"
 }
 
-/** Connections: MCP servers whose tools the bots can use. Add one, switch its tools, give it to bots. */
 @Composable
 fun ConnectionsRoute(container: AppContainer, onBack: () -> Unit) {
     val resource = rememberResource("connections") { container.api.connections() }
@@ -84,7 +83,6 @@ fun ConnectionsRoute(container: AppContainer, onBack: () -> Unit) {
             } else {
                 LazyColumn(contentPadding = PaddingValues(S.lg), verticalArrangement = Arrangement.spacedBy(S.sm), modifier = Modifier.fillMaxSize()) {
                     items(connections, key = { it.id }) { connection ->
-                        // The events feed knows a status change before the next reload does.
                         val status = bots.connectionStatus[connection.id] ?: connection.status
                         AppCard(onClick = { openId = connection.id }) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(S.sm)) {

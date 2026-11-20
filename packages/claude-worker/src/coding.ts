@@ -1,23 +1,3 @@
-/**
- * Coding sessions: one Claude Code `query()` per Code page thread, with
- * streaming input, Claude Code's own tools, and approvals relayed to the
- * client. Their own budget (`CodingBook`), separate from the bot
- * `SessionBook`, so a long coding run never blocks a bot.
- *
- * Turn semantics, as the Agent SDK documents them (sdk.d.ts 0.3.x):
- *
- * - **Steer**: a user message pushed into the live input with
- *   `priority: "next"` is folded into the running turn between tool calls.
- *   If it lands as the turn ends, Claude Code runs it as its own turn
- *   (`result.queued_turn_count` > 0), and the session stays running.
- * - **Queue**: the worker holds the message and sends it after the turn's
- *   `result`, so it can be listed, sent now or cancelled.
- * - **Stop**: `query.interrupt()`. A stop that arrives before the turn has
- *   started pulls the prompt back when Claude Code has not read it yet;
- *   otherwise the interrupt is sent and sent again on the turn's first
- *   output (an older CLI drops an interrupt that lands before the turn arms).
- *   No result within `stopGraceMs` closes the process.
- */
 import { randomBytes, randomUUID } from "node:crypto";
 import { assertSessionMayStart, type ClaudeAuthStatus } from "./auth";
 import {
@@ -80,7 +60,6 @@ interface InputItem {
   taken: boolean;
 }
 
-/** Streaming input whose items can be pulled back until Claude Code reads them. */
 class InputQueue {
   private readonly items: InputItem[] = [];
   private waiter: ((item: InputItem | undefined) => void) | undefined;
@@ -94,7 +73,6 @@ class InputQueue {
     else this.items.push(item);
   }
 
-  /** True when the item was still waiting and is now gone. */
   remove(item: InputItem): boolean {
     const index = this.items.indexOf(item);
     if (index < 0) return false;
@@ -121,7 +99,6 @@ class InputQueue {
 
   async *iterate(): AsyncGenerator<CodingSdkUserMessage> {
     while (!this.closed) {
-      // One consumer (the SDK), in order.
       // eslint-disable-next-line react-doctor/async-await-in-loop -- sequential input stream
       const item = await this.next();
       if (!item) return;
@@ -134,10 +111,8 @@ class InputQueue {
 interface TurnState {
   startedAt: number;
   firstInput?: InputItem;
-  /** Claude Code produced output for this turn. */
   activity: boolean;
   stopRequested: boolean;
-  /** An interrupt went out before the turn produced output. */
   stopBeforeActivity: boolean;
   usageLimit?: { reason: string; resetsAt?: string };
   cancelStopTimer?: () => void;
@@ -156,7 +131,6 @@ interface UsageTotals {
 
 const MAX_SENT_UUIDS = 200;
 
-/** Streaming text of the message Claude Code is writing (not sequenced). */
 export interface CodingPartial {
   reset?: boolean;
   text?: string;
@@ -171,7 +145,6 @@ export class CodingSession {
   live = false;
   starting = false;
   lastUsed: number;
-  /** Every event of this session, numbered, kept for resume and followed by the sockets. */
   readonly log: SessionLog<CodingEvent>;
 
   private query: CodingQuery | undefined;
@@ -207,10 +180,6 @@ export class CodingSession {
     return this.running || this.approvals.size > 0 || this.queue.length > 0;
   }
 
-  /**
-   * Take a fresh config from the client. A live process keeps its own: its
-   * settings change through `settings()`, and it knows its Claude session id.
-   */
   configure(config: CodingSessionConfig): void {
     if (this.live || this.starting) return;
     this.config = { ...this.config, ...config };
@@ -234,8 +203,6 @@ export class CodingSession {
       },
     };
   }
-
-  // --- requests ----------------------------------------------------------------
 
   async send(input: {
     uuid: string;
@@ -282,7 +249,6 @@ export class CodingSession {
         "expired",
       );
     }
-    // Stop before the turn started: Claude Code has not read the prompt yet.
     if (turn.firstInput && !turn.firstInput.taken && this.input?.remove(turn.firstInput)) {
       this.endTurnSynthetic({ interrupted: true });
       return { stopped: true };
@@ -354,7 +320,6 @@ export class CodingSession {
       const mode = change.permissionMode ?? DEFAULT_CODING_PERMISSION_MODE;
       if (query) {
         if (mode === "bypassPermissions" && !this.bypassAllowed) {
-          // The SDK needs allowDangerouslySkipPermissions at start for this mode.
           this.restartWhenIdle = true;
           applied = "next_process";
         } else {
@@ -393,14 +358,11 @@ export class CodingSession {
     }
   }
 
-  /** Close the process (archive, eviction). The Claude session stays resumable. */
   close(): void {
     this.queue.length = 0;
     if (this.live || this.starting) this.closeProcess();
     else this.emitState();
   }
-
-  // --- process ----------------------------------------------------------------
 
   private async startTurn(held: HeldMessage): Promise<void> {
     this.book.checkTurnSlot(this);
@@ -508,9 +470,7 @@ export class CodingSession {
     this.expireApprovals();
     try {
       query?.close();
-    } catch {
-      // already gone
-    }
+    } catch {}
     if (this.running) {
       this.endTurnSynthetic(error ? { error } : { interrupted: true });
     } else {
@@ -533,8 +493,6 @@ export class CodingSession {
       ...(priority ? { priority } : {}),
     };
     const item: InputItem = { message, taken: false };
-    // The SDK does not echo prompts back; the echo carries the same uuid the
-    // transcript will keep, so history and live rows share their id.
     this.lastEntryUuid = held.uuid;
     this.publish({
       type: "message",
@@ -595,7 +553,6 @@ export class CodingSession {
       this.partial({ reset: true });
       this.publish({ type: "message", message });
     }
-    // Hooks, task progress, tool progress and the rest are not transcript rows.
   }
 
   private onSystem(message: CodingSdkMessage): void {
@@ -643,7 +600,6 @@ export class CodingSession {
 
   private noteActivity(): void {
     if (!this.running) {
-      // A steer that raced past the end of a turn runs as its own turn.
       this.running = true;
       this.turn = {
         startedAt: this.deps.now(),
@@ -719,7 +675,6 @@ export class CodingSession {
     }
   }
 
-  /** End the running turn without Claude Code's result (it never came). */
   private endTurnSynthetic(outcome: { error?: string; interrupted?: boolean }): void {
     const turn = this.turn;
     turn?.cancelStopTimer?.();
@@ -778,7 +733,6 @@ export class CodingSession {
         if (typeof raw !== "number") continue;
         now[key] = raw;
         const before = base[key] ?? 0;
-        // Window sizes are not counters.
         diff[key] =
           key === "contextWindow" || key === "maxOutputTokens" || raw < before ? raw : raw - before;
       }
@@ -788,8 +742,6 @@ export class CodingSession {
     this.usageBase = next;
     return delta;
   }
-
-  // --- approvals --------------------------------------------------------------
 
   private canUseTool(
     generation: number,
@@ -861,8 +813,6 @@ export class CodingSession {
     }
   }
 
-  // --- events -----------------------------------------------------------------
-
   private emitState(): void {
     this.publish({ type: "state", state: this.state() });
   }
@@ -901,7 +851,6 @@ export class CodingBook {
     return [...this.sessions.values()];
   }
 
-  /** Find or create a session; a known session takes the fresh config. */
   ensure(id: string, config: CodingSessionConfig): CodingSession {
     const existing = this.sessions.get(id);
     if (existing) {
@@ -938,7 +887,6 @@ export class CodingBook {
     }
   }
 
-  /** Make room for one more process: evict the longest-idle one, or refuse. */
   reserveProcess(session: CodingSession): void {
     if (session.live || session.starting) return;
     if (this.liveProcesses() < this.deps.limits.maxLiveProcesses) return;
@@ -998,11 +946,6 @@ export class CodingBook {
   }
 }
 
-/**
- * AskUserQuestion answers go back as `updatedInput.answers`, keyed by the
- * question text (sdk-tools.d.ts: "User answers collected by the permission
- * component"). The client may key by question text, header or index.
- */
 export function questionAnswers(
   input: Record<string, unknown>,
   answers: Record<string, string>,

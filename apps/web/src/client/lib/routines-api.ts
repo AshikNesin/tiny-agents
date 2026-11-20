@@ -1,8 +1,3 @@
-/**
- * Typed client for the routines API (issue #18, PRD 5.7). The shapes are the
- * server's own (`shared/api/routines.ts`); `apiClient` unwraps the
- * { success, data } envelope.
- */
 import { apiClient } from "@groot/shell/lib/api";
 import type { Deleted } from "../../shared/api/common";
 import type {

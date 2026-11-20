@@ -19,7 +19,6 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 import org.junit.runner.RunWith
 
-/** The server's notification links (`notifications.events.ts`) mapped onto app screens. */
 @RunWith(AndroidJUnit4::class)
 class AppLinksTest {
     private val server = "https://agents.example.com"
@@ -50,7 +49,6 @@ class AppLinksTest {
     @Test
     fun `a Code push opens the thread it is about`() {
         assertEquals(AppLink.Screen("code/thread/claude-code%3Aabc-123"), parseAppLink("$server/code/claude-code%3Aabc-123", server))
-        // Links from before the harness layer name a bare Shelley id.
         assertEquals(AppLink.Screen("code/thread/cXYZ"), parseAppLink("$server/code/cXYZ", server))
         assertEquals(AppLink.Screen("code"), parseAppLink("$server/code", server))
     }
@@ -61,7 +59,6 @@ class AppLinksTest {
         assertNull(parseAppLink("$server/code/a/b/c", server))
         assertNull(parseAppLink("$server/vault/requests/not-a-number", server))
         assertNull(parseAppLink("javascript:alert(1)", server))
-        // Signed out, the manifest's host is the only filter.
         assertEquals(AppLink.Chat("c0abc", 1), parseAppLink("$server/chats/c0abc?focus=approval:1", null))
     }
 
@@ -75,7 +72,6 @@ class AppLinksTest {
 
     @Test
     fun `the focused card's row counts from the newest, after the typing dots`() {
-        // The four waiting cards fold into one row (consecutive tool-only rounds); two newer messages follow it.
         val view = sampleChatView(
             sampleApprovalMessages +
                 message("a6", MessageRole.User, "Approve the update, I will sign in later.", minutesAgo = 1) +
@@ -85,7 +81,6 @@ class AppLinksTest {
         assertEquals(2, transcriptIndexOfTask(view, 61))
         assertEquals(2, transcriptIndexOfTask(view, 64))
         assertNull(transcriptIndexOfTask(view, 999))
-        // The typing dots are row 0 while the bot works.
         assertEquals(3, transcriptIndexOfTask(view.copy(typing = true), 64))
     }
 
@@ -114,7 +109,6 @@ class AppLinksTest {
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://tiny-agents.ashiknesin.com/chats/c0abc?focus=question:7"))
             .setClass(ApplicationProvider.getApplicationContext(), MainActivity::class.java)
         Robolectric.buildActivity(MainActivity::class.java, intent).create().use {
-            // Signed out in tests: the link waits for sign-in.
             assertEquals(AppLink.Chat("c0abc", 7), container.links.pending.value)
         }
         container.links.take()

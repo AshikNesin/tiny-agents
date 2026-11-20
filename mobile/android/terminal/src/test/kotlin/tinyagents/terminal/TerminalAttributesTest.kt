@@ -6,7 +6,6 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** SGR in every form, wide and combining characters, UTF-8 decoding, tabs and charsets. */
 class TerminalAttributesTest {
     private fun styled(sgr: String): TestTerminal = TestTerminal(20, 3).feed("$CSI${sgr}mX")
 
@@ -15,8 +14,6 @@ class TerminalAttributesTest {
     private fun bgOf(sgr: String): Int = styled(sgr).bg(0, 0)
 
     private fun attrsOf(sgr: String): Int = styled(sgr).attrs(0, 0)
-
-    // ------------------------------------------------------------ SGR
 
     @Test
     fun `attribute flags turn on`() {
@@ -157,8 +154,6 @@ class TerminalAttributesTest {
         assertEquals(200, TerminalColor.index(TerminalColor.indexed(200)))
     }
 
-    // ------------------------------------------------------------ wide and combining characters
-
     @Test
     fun `a wide character takes two cells`() {
         val t = TestTerminal(10, 3).feed("a中b")
@@ -250,7 +245,6 @@ class TerminalAttributesTest {
     fun `several marks and joiners stack on one cell`() {
         val t = TestTerminal(10, 3).feed("á̈b")
         assertEquals("́̈", t.emulator.line(0).combining(0))
-        // A ZWJ sequence: each emoji is its own wide cell, the joiner rides on the first.
         val family = TestTerminal(10, 3).feed("👩‍👧")
         assertEquals("‍", family.emulator.line(0).combining(0))
         assertEquals(0x1F467, family.emulator.line(0).codePoint(2))
@@ -292,8 +286,6 @@ class TerminalAttributesTest {
         assertEquals(0, CharWidth.of(0x200B))
         assertEquals(1, CharWidth.of(0x10FFFF))
     }
-
-    // ------------------------------------------------------------ UTF-8
 
     @Test
     fun `UTF-8 split at every byte boundary decodes the same`() {
@@ -352,8 +344,6 @@ class TerminalAttributesTest {
         TestTerminal(20, 2).emulator.feed(ByteArray(4), 2, 3)
     }
 
-    // ------------------------------------------------------------ tabs
-
     @Test
     fun `tab stops sit every eight columns`() {
         val t = TestTerminal(30, 2).feed("\tA\tB\t\tC")
@@ -395,8 +385,6 @@ class TerminalAttributesTest {
         assertEquals(0 to 0, t.cursor)
     }
 
-    // ------------------------------------------------------------ charsets
-
     @Test
     fun `DEC special graphics draws boxes`() {
         val t = TestTerminal(20, 4).feed("$ESC(0lqqk\r\nx  x\r\nmqqj$ESC(B lqk")
@@ -407,7 +395,6 @@ class TerminalAttributesTest {
     fun `the whole special graphics set maps to Unicode`() {
         val t = TestTerminal(40, 2).feed("$ESC(0`afgjklmnopqrstuvwxyz{|}~$ESC(B")
         assertEquals("◆▒°±┘┐┌└┼⎺⎻─⎼⎽├┤┴┬│≤≥π≠£·", t.row(0))
-        // Uppercase and digits are untouched.
         assertEquals("AZ09", TestTerminal(40, 2).feed("$ESC(0AZ09").row(0))
     }
 

@@ -2,10 +2,6 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { BotMenuView } from "../BotMenu";
 
-/**
- * The bot menu's open page. `?history=1` (the sidebar row's "Chat history")
- * opens it on its history page, and the parameter is dropped.
- */
 export function useHistoryMenu() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [menuView, setMenuView] = useState<BotMenuView>(null);

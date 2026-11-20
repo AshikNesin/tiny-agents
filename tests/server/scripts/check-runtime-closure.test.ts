@@ -1,12 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 import { checkRuntimeClosure } from "../../../scripts/check-runtime-closure.mjs";
 
-/**
- * The closure check keeps the production artifact's dependency owner honest.
- * These cases pin the classification on a synthetic metafile, so the check
- * fails closed without a full build: an emitted external import whose package
- * is not a root production dependency is an ownership error.
- */
 describe("checkRuntimeClosure", () => {
   const metafile = (imports: Array<{ path: string; kind: string; external?: boolean }>) => ({
     outputs: { "dist/bundle.js": { imports } },

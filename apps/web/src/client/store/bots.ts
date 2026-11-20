@@ -1,19 +1,3 @@
-/**
- * Bot list store.
- *
- * - `bots` is the list the sidebar shows. The app's one `/events` feed keeps
- *   it live: a bot's replying state and its waiting counts (approvals,
- *   questions) are patched in as they change, and a reply that finished
- *   refetches the list for its preview and unread flag. A patch made while
- *   a list request is in flight outlives that request's response, so a
- *   badge never flickers off because an older list landed late.
- * - `fullBots` holds the full rows the chat and the edit dialog need, by id.
- * - `connections` is the live MCP connection status from the same feed.
- *
- * Each bot's chat is its own session (store/chats.ts, read through
- * `useChat`); this store only drops one when the bot's row moves it to
- * another conversation (`adoptBot`) or the bot is gone (`forgetBot`).
- */
 import { create } from "zustand";
 import { toast } from "sonner";
 import type { Bot, BotListEntry } from "../../shared/api/bots";
@@ -24,7 +8,6 @@ import type { EventsFeedEvent } from "../lib/chat-types";
 import { errorMessage } from "../lib/errors";
 import { chatSessions } from "./chats";
 
-/** An MCP connection's live state, as the events feed last reported it. */
 interface ConnectionLive {
   status: string;
   error?: string;
@@ -35,69 +18,33 @@ interface BotsState {
   loading: boolean;
   error: string | null;
   canAnswer: boolean;
-  /** Inference providers and their setup state (the not-configured banner). */
   providers: ProviderSummary[];
   defaultModel?: string;
   models: CatalogModel[];
-  /** Full rows by id, fetched on demand (the chat, the edit dialog). */
   fullBots: Record<string, Bot>;
-  /** Live MCP connection status by id (the Connections pages' badges). */
   connections: Record<string, ConnectionLive>;
 
-  /**
-   * Refresh `bots` from the server. Resolves with the list that actually
-   * landed — including when a newer load superseded this one (then the
-   * newer list, once it lands) — so a caller that awaits and snapshots
-   * (the Memory page) never reads a stale store. Fire-and-forget callers
-   * ignore the value.
-   */
   loadBots: () => Promise<BotListEntry[]>;
   loadModels: () => Promise<void>;
   refreshBotsInBackground: () => void;
   markRead: (botId: string) => void;
-  /** Optimistic pin/unpin; rolls back and toasts if the server refuses. */
   togglePin: (botId: string) => Promise<void>;
-  /**
-   * The full bot, from the cache unless `fresh`. Rejects when it cannot be
-   * loaded (gone, offline); the cached row, if any, stays.
-   */
   loadBot: (botId: string, options?: { fresh?: boolean }) => Promise<Bot>;
-  /**
-   * A full row the app just received (a save, New chat, a continued Past
-   * chat): store it, and refresh the list. When it names another
-   * conversation, the cached chat is dropped first, so the chat reopens on
-   * the new conversation instead of showing (and growing) the old one.
-   */
   adoptBot: (bot: Bot) => void;
-  /** The bot is gone: drop its rows and its chat, and refresh the list. */
   forgetBot: (botId: string) => void;
 
-  // App-wide activity feed
   connectActivity: () => void;
   disconnectActivity: () => void;
 }
 
 let activityConnection: { close(): void } | null = null;
-/** Sequence of `loadBots` calls; a response from an older call is dropped. */
 let botsRequest = 0;
-/**
- * How the request numbered `botsRequest` last settled, for `loadBots` calls
- * whose own response was superseded: their promise resolves/rejects with
- * the newest request's outcome. A late subscriber (the stale response
- * arrives after the newest already landed) reads it instead of waiting.
- */
 let newestOutcome: { bots: BotListEntry[] } | { error: unknown } | undefined;
-/**
- * Resolvers for `loadBots` calls still waiting on the newest request's list
- * (their own response was superseded). The newest call resolves them when
- * its list lands; a failing newest call rejects them with its error.
- */
 const waitingForNewest = new Map<
   number,
   Array<{ resolve(bots: BotListEntry[]): void; reject(error: unknown): void }>
 >();
 
-/** Settle every waiter registered for `request` (no-op when there are none). */
 function settleWaiters(
   request: number,
   settle: (waiter: { resolve(bots: BotListEntry[]): void; reject(error: unknown): void }) => void,
@@ -108,20 +55,10 @@ function settleWaiters(
   for (const waiter of waiters) settle(waiter);
 }
 
-/**
- * A superseded request may itself carry waiters (promised its outcome by an
- * even older caller). They will never be settled by it — only the newest
- * request settles — so carry them forward to the newest generation before
- * awaiting it; three overlapping loads (mount, page, SSE) otherwise strand
- * the oldest caller's promise forever.
- */
 function carryWaitersForward(request: number): void {
   const stranded = waitingForNewest.get(request);
   if (!stranded) return;
   waitingForNewest.delete(request);
-  // The newest request may have already landed (and settled its own waiters):
-  // answer the stranded ones from its recorded outcome instead of parking
-  // them on a generation whose settleWaiters already ran.
   if (newestOutcome !== undefined) {
     for (const waiter of stranded) {
       if ("error" in newestOutcome) waiter.reject(newestOutcome.error);
@@ -133,12 +70,7 @@ function carryWaitersForward(request: number): void {
   waitingForNewest.set(botsRequest, [...current, ...stranded]);
 }
 
-/**
- * A promise for the list the request numbered `request` will land, when that
- * request is newer than the caller's own (superseded) one.
- */
 function newestBots(request: number): Promise<BotListEntry[]> {
-  // The newest request already settled before this stale caller arrived.
   if (newestOutcome !== undefined && request === botsRequest) {
     return "error" in newestOutcome
       ? Promise.reject(newestOutcome.error)
@@ -151,13 +83,6 @@ function newestBots(request: number): Promise<BotListEntry[]> {
   });
 }
 
-/**
- * Local changes to list entries (replying, waiting counts, pin, read), each
- * stamped in order. A list response reflects only what the server knew when
- * the request started, so the patches made after that are re-applied over
- * it rather than lost; a later response that started after a patch carries
- * its result and retires it.
- */
 interface ListPatch {
   seq: number;
   apply: (bot: BotListEntry) => BotListEntry;
@@ -170,24 +95,18 @@ function applyPatches(bots: BotListEntry[], list: readonly ListPatch[]): BotList
   return bots.map((bot) => list.reduce((next, patch) => patch.apply(next), bot));
 }
 
-/** A reply ended: its preview and unread flag come from the list. Bursts refetch once. */
 let refreshTimer: ReturnType<typeof setTimeout> | undefined;
 const REFRESH_COALESCE_MS = 300;
 
 export type ConnectionChange = Extract<EventsFeedEvent, { type: "connection" }>;
 const connectionListeners = new Set<(change: ConnectionChange) => void>();
 
-/**
- * Follow MCP connection changes from the app's one events feed (the
- * Connections pages refetch what they show). Returns the unsubscribe.
- */
 export function onConnectionChange(listener: (change: ConnectionChange) => void): () => void {
   connectionListeners.add(listener);
   return () => connectionListeners.delete(listener);
 }
 
 export const useBotsStore = create<BotsState>((set, get) => {
-  /** Change list entries now, and keep the change over any list request already in flight. */
   const patchBots = (apply: (bot: BotListEntry) => BotListEntry) => {
     const patch = { seq: ++patchSeq, apply };
     patches.push(patch);
@@ -196,11 +115,6 @@ export const useBotsStore = create<BotsState>((set, get) => {
   const patchBot = (botId: string, fields: Partial<BotListEntry>) =>
     patchBots((bot) => (bot.id === botId ? { ...bot, ...fields } : bot));
 
-  /**
-   * Store a full row. A row on another conversation than the one cached
-   * drops the bot's chat first: the order matters, or the pane reconnects
-   * while the old transcript stays on screen.
-   */
   const storeRow = (bot: Bot) => {
     const state = get();
     const known =
@@ -230,9 +144,6 @@ export const useBotsStore = create<BotsState>((set, get) => {
     connections: {},
 
     loadBots: async () => {
-      // Loads overlap (mount, a create, activity events). Only the newest
-      // may land: an older list answering last would drop a bot that was just
-      // created, and the chat route would treat its link as stale.
       const request = ++botsRequest;
       const since = patchSeq;
       newestOutcome = undefined;
@@ -240,14 +151,9 @@ export const useBotsStore = create<BotsState>((set, get) => {
       try {
         const bots = await botsApi.list();
         if (request !== botsRequest) {
-          // Superseded: a newer load owns the store now. Wait for the newest
-          // request to land so awaiting callers still see a fresh list, not
-          // the pre-request snapshot they'd read off the store.
           carryWaitersForward(request);
           return await newestBots(botsRequest);
         }
-        // Patches older than this request are in its response (or the
-        // server overruled them); the newer ones ride on top of it.
         patches = patches.filter((patch) => patch.seq > since);
         const landed = applyPatches(bots, patches);
         set({ bots: landed, loading: false });
@@ -256,8 +162,6 @@ export const useBotsStore = create<BotsState>((set, get) => {
         return landed;
       } catch (error) {
         if (request !== botsRequest) {
-          // Superseded on failure: the newest request decides the store.
-          // Surface this error only if nothing newer ever lands with data.
           carryWaitersForward(request);
           try {
             return await newestBots(botsRequest);
@@ -284,9 +188,7 @@ export const useBotsStore = create<BotsState>((set, get) => {
           models,
           defaultModel: defaultModelId ?? undefined,
         });
-      } catch {
-        // Banner state stays as-is; the chat pane shows its own error.
-      }
+      } catch {}
     },
 
     togglePin: async (botId) => {
@@ -310,9 +212,6 @@ export const useBotsStore = create<BotsState>((set, get) => {
     },
 
     markRead: (botId) => {
-      // The durable marker lives on the bot row (server lastReadAt); it is
-      // frozen into chat state as `unreadFrom` at connect time, so there is
-      // nothing to advance here — just clear the badge and persist.
       patchBot(botId, { unread: false });
       void botsApi.read(botId).catch(() => undefined);
     },
@@ -327,7 +226,6 @@ export const useBotsStore = create<BotsState>((set, get) => {
 
     adoptBot: (bot) => {
       storeRow(bot);
-      // The row's list entry changed too (name, model, preview after New chat).
       get().refreshBotsInBackground();
     },
 
@@ -362,25 +260,18 @@ export const useBotsStore = create<BotsState>((set, get) => {
         }
         if (typed.type !== "activity") return;
         if (!("conversation" in typed)) {
-          // The feed (re)opened with who is replying now. Anything missed
-          // while it was down is in the list.
           const busy = new Set(typed.busy);
           patchBots((bot) => ({ ...bot, replying: busy.has(bot.conversationId) }));
           get().refreshBotsInBackground();
           return;
         }
         const { conversation, approvals, questions } = typed;
-        // A routine's or a retired chat's conversation is nobody's row.
         if (!get().bots.some((bot) => bot.conversationId === conversation)) return;
-        // A tool waiting for approval or answers pauses a busy run: the
-        // counts arrive here, mid-run, and the badge must not wait for the
-        // reply to end.
         patchBots((bot) =>
           bot.conversationId === conversation
             ? { ...bot, replying: typed.busy, approvals, questions }
             : bot,
         );
-        // The reply that ended changed the preview and unread flag.
         if (!typed.busy) scheduleRefresh();
       });
     },

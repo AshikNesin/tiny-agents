@@ -1,10 +1,4 @@
 #!/usr/bin/env tsx
-/**
- * Fails when the rule table in AGENTS.md names a lint rule id that
- * scripts/lint/boundaries.ts does not enforce, or when an enforced id has no
- * row, so the table and the lint rules cannot drift apart. Paths and `pnpm`
- * scripts in the table are check:doc-refs' job.
- */
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";

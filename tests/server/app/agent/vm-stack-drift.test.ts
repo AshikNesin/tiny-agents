@@ -1,17 +1,3 @@
-/**
- * What the sandbox VM is sent and how its answers are read, pinned before
- * the browser and computer setups became instances of one `VmStack` and
- * every quote and exit-code sentinel went through one shell module
- * (docs/rewrite/README.md §4.2). Recorded on the code before that change.
- *
- * - Every generated script, byte for byte (`__snapshots__/vm-scripts/`):
- *   the exact text each setup sends over SSH is the observable output, and
- *   existing VMs keep the markers, locks and pid files it names.
- * - How each launch report is parsed, edge cases included.
- * - Each transport's setup sequence: which scripts run, in what order, with
- *   which timeouts and caps, and the exact error each failure reads as.
- * - Every exit-code sentinel: what each code means to its caller.
- */
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { ToolExecutionApi, ToolExecutionResult } from "@earendil-works/pi-durable";
 import { describe, expect, it } from "vite-plus/test";
@@ -65,7 +51,6 @@ import { fakeSandboxConnection, type FakeExecReply } from "./sandbox-connection-
 const QUOTED_DIR = "profiles/it's a; touch pwned #";
 const DESKTOP_DIR = ".tiny-agents/computer-profiles/bot-1";
 
-/** Every script a setup sends, one file each. */
 const SCRIPTS: Record<string, () => string> = {
   "browser-ready": () => stackReadyCommand(),
   "browser-install": () => installStackCommand(),
@@ -167,7 +152,6 @@ describe("the launch reports", () => {
   });
 });
 
-/** Exec calls as the sequence the VM sees: which script, and the options it ran with. */
 function steps(connection: ReturnType<typeof fakeSandboxConnection>, names: Map<string, string>) {
   return connection.execs.map((e) => ({
     script: names.get(e.command) ?? e.command.slice(0, 40),
@@ -406,7 +390,6 @@ describe("the desktop stack's setup sequence", () => {
     >;
     const click = () => desktop.click(1, 2, { button: "left", count: 1, modifiers: [] });
 
-    // A mismatch or a missing app reads as success outside the tool that expects it.
     for (const exitCode of [0, 95, 96]) {
       reply = { exitCode, stderr: "ignored" };
       await expect(click()).resolves.toBeUndefined();

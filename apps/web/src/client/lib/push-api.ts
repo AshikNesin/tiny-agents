@@ -1,4 +1,3 @@
-/** Phones that receive notifications (issue #306): the devices the Android app registered. */
 import { apiClient } from "@groot/shell/lib/api";
 import type { PushDeviceList, PushDeviceRemoved, PushDeviceTest } from "../../shared/api/push";
 
