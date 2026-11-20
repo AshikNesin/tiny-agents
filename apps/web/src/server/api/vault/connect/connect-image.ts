@@ -70,7 +70,9 @@ function registryClient(source: ImageSource, repo: string, doFetch: typeof fetch
     const params = Object.fromEntries(
       [...(challenge ?? "").matchAll(/(\w+)="([^"]*)"/g)].map((m) => [m[1]!, m[2]!]),
     );
-    if (!params.realm) throw new Error(`The registry asked for sign-in it didn't describe.`);
+    if (!params.realm || !URL.canParse(params.realm)) {
+      throw new Error(`The registry asked for sign-in it didn't describe.`);
+    }
     const url = new URL(params.realm);
     if (params.service) url.searchParams.set("service", params.service);
     url.searchParams.set("scope", params.scope ?? `repository:${repo}:pull`);

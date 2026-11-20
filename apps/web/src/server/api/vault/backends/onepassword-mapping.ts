@@ -45,7 +45,7 @@ const CATEGORY: Record<VaultKind, string> = {
   login: "LOGIN",
   card: "CREDIT_CARD",
   identity: "IDENTITY",
-  api_key: "API_CREDENTIAL",
+  api_key: "API_CREDENTIAL", // gitleaks:allow (a category name)
 };
 
 function kindOfCategory(category: string): VaultKind | "other" {
