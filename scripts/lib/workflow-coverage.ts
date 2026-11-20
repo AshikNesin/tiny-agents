@@ -5,13 +5,12 @@
  *  - each gate job of scripts/gates.mjs runs in exactly one step,
  *    `pnpm verify:static --job <job>`, and no other step runs a static check
  *    (a check that needs `pnpm build` first may follow the build step);
- *  - every job but the final `ci` records its start, checks its setup budget
- *    and ends with `node scripts/ci-budget.mjs run <its id>`, and the job ids
- *    are exactly the budgets in scripts/ci-budget.mjs;
- *  - a step that runs `--shard=${{ matrix.shard }}/N` sits in a job whose
- *    matrix lists shards 1 to N, so no shard (and none of its files) is
+ *  - every job records its start and checks its setup budget, and every phase
+ *    in scripts/ci-budget.mjs is checked exactly once, right after the step
+ *    that does its work and under the same `if`;
+ *  - a step that runs `--shard=${{ matrix.<key> }}/N` sits in a job whose
+ *    matrix lists <key> 1 to N, so no shard (and none of its files) is
  *    dropped;
- *  - the `ci` job needs every other job;
  *  - the workflow runs on `merge_group`, where the test jobs run everything
  *    (scripts/test-selection.mjs selects only on pull requests), so the full
  *    suite runs before anything reaches main.
@@ -19,6 +18,7 @@
 
 export interface WorkflowStep {
   name?: string;
+  if?: string;
   run?: string;
 }
 
@@ -46,7 +46,7 @@ const STATIC_CHECK =
   /\btsc\b|scripts\/check-[\w-]+|db:generate|\bpnpm ((?:check|typecheck)[\w:-]*)/g;
 const GATE_STEP = /^pnpm verify:static(?: --job (\S+))?$/;
 const START_STEP = 'echo "CI_STARTED_AT=$(date +%s)" >> "$GITHUB_ENV"';
-const SHARD = /--shard=\$\{\{ matrix\.shard \}\}\/(\d+)/;
+const SHARD = /--shard=\$\{\{ matrix\.(\w+) \}\}\/(\d+)/;
 
 export function workflowProblems({
   file,
@@ -103,37 +103,48 @@ export function workflowProblems({
     }
   }
 
-  // Budgets: every job but `ci` times itself, under its own id.
-  const timed = jobs.filter(([id]) => id !== "ci");
-  for (const [id, job] of timed) {
-    const runs = (job.steps ?? []).map((step) => step.run?.trim() ?? "");
-    const missing = [
-      [START_STEP, "record its start first"],
-      ["node scripts/ci-budget.mjs setup", "check its setup budget"],
-      [`node scripts/ci-budget.mjs run ${id}`, "check its run budget last"],
-    ].filter(([command]) => !runs.includes(command!));
-    for (const [command, what] of missing) {
-      problems.push(`${file} job "${id}" does not ${what}: add a step running \`${command}\`.`);
+  // Budgets: every job records its start first and checks its setup budget,
+  // and every phase in RUN_BUDGETS is checked exactly once, right after the
+  // step that does that phase's work and under the same condition.
+  const checked: string[] = [];
+  for (const [id, job] of jobs) {
+    const steps = job.steps ?? [];
+    const runs = steps.map((step) => step.run?.trim() ?? "");
+    if (runs[0] !== START_STEP) {
+      problems.push(
+        `${file} job "${id}" must record its start in its first step: \`${START_STEP}\`.`,
+      );
     }
-    if (runs[0] !== START_STEP && !missing.some(([command]) => command === START_STEP)) {
-      problems.push(`${file} job "${id}" must record CI_STARTED_AT in its first step.`);
+    if (!runs.includes("node scripts/ci-budget.mjs setup")) {
+      problems.push(
+        `${file} job "${id}" does not check its setup budget: add a step running \`node scripts/ci-budget.mjs setup\`.`,
+      );
     }
-    if (
-      runs.at(-1) !== `node scripts/ci-budget.mjs run ${id}` &&
-      runs.includes(`node scripts/ci-budget.mjs run ${id}`)
-    ) {
-      problems.push(`${file} job "${id}" must check its run budget in its last step.`);
+    steps.forEach((step, i) => {
+      const phase = /^node scripts\/ci-budget\.mjs run (\S+)$/.exec(runs[i]!)?.[1];
+      if (!phase) return;
+      checked.push(phase);
+      const before = steps[i - 1];
+      if (!before || (before.if ?? "") !== (step.if ?? "")) {
+        problems.push(
+          `${file} job "${id}" checks the "${phase}" budget under a different condition than the step before it, so the check can run without its phase or skip it.`,
+        );
+      }
+    });
+  }
+  for (const phase of Object.keys(runBudgets)) {
+    const count = checked.filter((c) => c === phase).length;
+    if (count !== 1) {
+      problems.push(
+        `${file} checks the "${phase}" budget (scripts/ci-budget.mjs) in ${count} steps. It needs exactly one, after the phase's work.`,
+      );
     }
   }
-  const timedIds = timed.map(([id]) => id);
-  for (const budget of Object.keys(runBudgets)) {
-    if (!timedIds.includes(budget)) {
-      problems.push(`scripts/ci-budget.mjs budgets a "${budget}" job that ${file} does not have.`);
-    }
-  }
-  for (const id of timedIds) {
-    if (!(id in runBudgets)) {
-      problems.push(`${file} job "${id}" has no budget in RUN_BUDGETS (scripts/ci-budget.mjs).`);
+  for (const phase of new Set(checked)) {
+    if (!(phase in runBudgets)) {
+      problems.push(
+        `${file} checks a "${phase}" budget that RUN_BUDGETS (scripts/ci-budget.mjs) does not have.`,
+      );
     }
   }
 
@@ -142,12 +153,13 @@ export function workflowProblems({
     for (const step of job.steps ?? []) {
       const shard = step.run ? SHARD.exec(step.run) : null;
       if (!shard) continue;
-      const count = Number(shard[1]);
-      const listed = job.strategy?.matrix?.shard;
+      const [, key, total] = shard;
+      const count = Number(total);
+      const listed = job.strategy?.matrix?.[key!];
       const expected = Array.from({ length: count }, (_, i) => i + 1);
       if (JSON.stringify(listed) !== JSON.stringify(expected)) {
         problems.push(
-          `${file} job "${id}" splits into ${count} shards but its matrix lists shard ${JSON.stringify(listed ?? null)}. List ${JSON.stringify(expected)}, or a shard's files never run.`,
+          `${file} job "${id}" splits into ${count} shards but its matrix lists ${key} ${JSON.stringify(listed ?? null)}. List ${JSON.stringify(expected)}, or a shard's files never run.`,
         );
       }
     }
@@ -160,16 +172,5 @@ export function workflowProblems({
     );
   }
 
-  // The required check waits for everything.
-  const ci = workflow.jobs.ci;
-  if (!ci) {
-    problems.push(`${file} has no "ci" job, the one required check.`);
-  } else {
-    const needs = [ci.needs ?? []].flat();
-    for (const id of timedIds) {
-      if (!needs.includes(id))
-        problems.push(`${file} job "ci" does not need "${id}", so CI can pass without it.`);
-    }
-  }
   return problems;
 }

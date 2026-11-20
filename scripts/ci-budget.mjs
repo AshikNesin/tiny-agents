@@ -7,9 +7,10 @@
 //   1. records its start before anything else:
 //        echo "CI_STARTED_AT=$(date +%s)" >> "$GITHUB_ENV"
 //   2. after checkout and setup:     node scripts/ci-budget.mjs setup
-//   3. after its work:               node scripts/ci-budget.mjs run <job>
-// Each check prints the phase's time against its budget, adds a line to the
-// job summary, and fails the step when the phase ran over.
+//   3. after each phase of its work: node scripts/ci-budget.mjs run <phase>
+// A phase is timed from the check before it. Each check prints the phase's
+// time against its budget, adds a line to the job summary, and fails the step
+// when the phase ran over.
 
 import { appendFileSync } from "node:fs";
 import process from "node:process";
@@ -18,7 +19,14 @@ import { pathToFileURL } from "node:url";
 /** Seconds from a job's first step to the end of `.github/actions/setup`. */
 export const SETUP_BUDGET = 30;
 
-/** Seconds each job's work may take after setup, by job id. */
+/**
+ * The same, when the setup action missed a cache (CI_SETUP_COLD=1) and
+ * installed or downloaded cold: a lockfile change, or a run before main has
+ * the caches. A warm setup is still held to SETUP_BUDGET.
+ */
+export const COLD_SETUP_BUDGET = 120;
+
+/** Seconds each phase may take, by phase. */
 export const RUN_BUDGETS = {
   secrets: 10,
   lint: 5,
@@ -58,10 +66,11 @@ function main() {
   let label;
   if (phase === "setup") {
     started = Number(env.CI_STARTED_AT);
-    budget = SETUP_BUDGET;
-    label = "setup";
+    const cold = env.CI_SETUP_COLD === "1";
+    budget = cold ? COLD_SETUP_BUDGET : SETUP_BUDGET;
+    label = cold ? "setup (cold cache)" : "setup";
   } else if (phase === "run" && job in RUN_BUDGETS) {
-    started = Number(env.CI_SETUP_DONE_AT);
+    started = Number(env.CI_PHASE_AT);
     const cold = env.CI_CACHE_COLD === "1" && job in COLD_RUN_BUDGETS;
     budget = cold ? COLD_RUN_BUDGETS[job] : RUN_BUDGETS[job];
     label = cold ? `${job} (cold cache)` : job;
@@ -73,15 +82,14 @@ function main() {
   }
   if (!Number.isFinite(started)) {
     console.error(
-      `No start time for "${label}": the job must record CI_STARTED_AT first and run "ci-budget.mjs setup" after setup.`,
+      `No start time for "${label}": the job must record CI_STARTED_AT first and run "ci-budget.mjs setup" after its setup.`,
     );
     process.exit(2);
   }
   const { over, line } = verdict(label, now - started, budget);
   console.log(line);
   if (env.GITHUB_STEP_SUMMARY) appendFileSync(env.GITHUB_STEP_SUMMARY, `${line}\n`);
-  if (phase === "setup" && env.GITHUB_ENV)
-    appendFileSync(env.GITHUB_ENV, `CI_SETUP_DONE_AT=${now}\n`);
+  if (env.GITHUB_ENV) appendFileSync(env.GITHUB_ENV, `CI_PHASE_AT=${now}\n`);
   if (over) {
     console.error(
       `::error::${label} took ${now - started}s, over its ${budget}s budget (scripts/ci-budget.mjs). Make it faster; raise the budget only with a reason in the PR.`,

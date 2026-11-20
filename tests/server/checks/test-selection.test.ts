@@ -24,6 +24,13 @@ describe("test selection", () => {
     });
   });
 
+  it("selects for the Android app's manifest, which no test here reads", () => {
+    expect(
+      selection({ event: "pull_request", mergeBase: BASE, changedFiles: ["mobile/package.json"] })
+        .args,
+    ).toEqual([`--changed=${BASE}`, "--passWithNoTests"]);
+  });
+
   it.each([
     "tests/server/setup.ts",
     "tests/client/setup.ts",

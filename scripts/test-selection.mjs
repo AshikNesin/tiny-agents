@@ -28,7 +28,8 @@ export const RUN_EVERYTHING = [
   /(^|\/)vite\.config[^/]*\.ts$/,
   /^apps\/web\/drizzle\//,
   /(^|\/)schema\.ts$/,
-  /(^|\/)package\.json$/,
+  // Not mobile/: the Android app has its own tooling and no tests here.
+  /^(?!mobile\/)(.*\/)?package\.json$/,
   /^pnpm-lock\.yaml$/,
   /^pnpm-workspace\.yaml$/,
   /^tsconfig[^/]*\.json$/,

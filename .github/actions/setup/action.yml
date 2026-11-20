@@ -27,7 +27,8 @@ runs:
 
     # Always: every job runs scripts/ci-budget.mjs. Node 24 is in the
     # runner's tool cache, so this takes about a second.
-    - uses: actions/setup-node@v5
+    - id: node
+      uses: actions/setup-node@v5
       with:
         node-version: "24"
         cache: ${{ inputs.deps == 'store' && 'pnpm' || '' }}
@@ -94,6 +95,16 @@ runs:
         fetch gitleaks/gitleaks "v$GITLEAKS_VERSION" "$gl_asset"
         echo "${GITLEAKS_SHA256}  $gl_asset" | sha256sum -c -
         tar -xzf "$gl_asset" -C ~/.ci-tools/bin gitleaks
+
+    # A missed cache means a cold install or download: the setup budget
+    # (scripts/ci-budget.mjs) uses its cold allowance only then.
+    - name: Note a cold cache
+      if: >-
+        (inputs.deps == 'node_modules' && steps.node-modules.outputs.cache-hit != 'true') ||
+        (inputs.deps == 'store' && steps.node.outputs.cache-hit != 'true') ||
+        (inputs.tools == 'true' && steps.tools.outputs.cache-hit != 'true')
+      shell: bash
+      run: echo "CI_SETUP_COLD=1" >> "$GITHUB_ENV"
 
     - name: Put CI tools on PATH
       if: inputs.tools == 'true'

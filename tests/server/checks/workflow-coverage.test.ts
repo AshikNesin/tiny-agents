@@ -17,13 +17,15 @@ const problems = (workflow: Workflow) =>
   });
 
 describe("the Tests workflow", () => {
-  it("runs every gate job once, times every job and drops no shard", () => {
+  const steps = (workflow: Workflow) => workflow.jobs.ci!.steps!;
+
+  it("runs every gate job once, times every phase and drops no shard", () => {
     expect(problems(real())).toEqual([]);
   });
 
   it("fails when a gate job's step is gone", () => {
     const workflow = real();
-    workflow.jobs.lint!.steps = workflow.jobs.lint!.steps!.filter(
+    workflow.jobs.ci!.steps = steps(workflow).filter(
       (step) => step.run !== "pnpm verify:static --job lint",
     );
     expect(problems(workflow)).toContain(
@@ -31,23 +33,30 @@ describe("the Tests workflow", () => {
     );
   });
 
-  it("fails when a shard is dropped from a matrix", () => {
+  it("fails when a part is dropped from the matrix", () => {
     const workflow = real();
-    workflow.jobs.client!.strategy!.matrix!.shard = [1, 2];
+    workflow.jobs.ci!.strategy!.matrix!.part = [1];
     expect(problems(workflow)).toContain(
-      `${FILE} job "client" splits into 3 shards but its matrix lists shard [1,2]. List [1,2,3], or a shard's files never run.`,
+      `${FILE} job "ci" splits into 2 shards but its matrix lists part [1]. List [1,2], or a shard's files never run.`,
     );
   });
 
-  it("fails when a job stops checking its budget, or CI stops waiting for it", () => {
+  it("fails when a phase's budget check is gone, or runs under another condition", () => {
     const workflow = real();
-    workflow.jobs.build!.steps = workflow.jobs.build!.steps!.slice(0, -1);
-    workflow.jobs.ci!.needs = ["secrets"];
+    workflow.jobs.ci!.steps = steps(workflow).filter(
+      (step) => step.run !== "node scripts/ci-budget.mjs run build",
+    );
+    const lint = steps(workflow).find(
+      (step) => step.run === "node scripts/ci-budget.mjs run lint",
+    )!;
+    delete lint.if;
     const found = problems(workflow);
     expect(found).toContain(
-      `${FILE} job "build" does not check its run budget last: add a step running \`node scripts/ci-budget.mjs run build\`.`,
+      `${FILE} checks the "build" budget (scripts/ci-budget.mjs) in 0 steps. It needs exactly one, after the phase's work.`,
     );
-    expect(found).toContain(`${FILE} job "ci" does not need "server", so CI can pass without it.`);
+    expect(found).toContain(
+      `${FILE} job "ci" checks the "lint" budget under a different condition than the step before it, so the check can run without its phase or skip it.`,
+    );
   });
 
   it("fails when the merge queue no longer runs it", () => {
@@ -60,7 +69,7 @@ describe("the Tests workflow", () => {
 
   it("fails a static check run outside the gates", () => {
     const workflow = real();
-    workflow.jobs.build!.steps!.splice(1, 0, { name: "Extra", run: "pnpm exec tsc --noEmit" });
+    steps(workflow).splice(3, 0, { name: "Extra", run: "pnpm exec tsc --noEmit" });
     expect(
       problems(workflow).some((p) =>
         p.includes('step "Extra" runs `tsc` outside the static gates'),

@@ -313,17 +313,15 @@ gitleaks, each checked against a pinned sha256 when downloaded. The checkout
 is blobless (`filter: blob:none`) with full history, so the gates can diff
 against `origin/<base>` without downloading every old file.
 
-`.github/workflows/test.yml` runs every job at once, each on its own VM:
+The runner pool runs two jobs at a time, and every job pays its own setup, so
+`.github/workflows/test.yml` is two jobs, `CI (1/2)` and `CI (2/2)`: both are
+the required checks. Each runs its phases one after another:
 
-| Job                                            | Runs                                                                                                                                                                                                                                                                                    |
-| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Secret scan                                    | gitleaks over the commits the PR or push adds (`scripts/secret-scan.sh`)                                                                                                                                                                                                                |
-| Typecheck · Lint & format · Gates · Migrations | `pnpm verify:static --job <job>`: the gates of `scripts/gates.mjs` with that `job`, in parallel                                                                                                                                                                                         |
-| Build & boot                                   | `pnpm build`, the runtime dependency closure check, and a pruned production boot (tracked files plus `dist` in a fresh directory, `pnpm install --prod --offline` from the warm store, `node dist/server/bundle.js`, `/health` and the client page answer, `SIGTERM` exits within 15 s) |
-| Server tests (1/2, 2/2)                        | the `server` and `server:isolated` projects, `--shard=i/2`                                                                                                                                                                                                                              |
-| Client tests (1/3 to 3/3)                      | the client suite, `--shard=i/3`                                                                                                                                                                                                                                                         |
-| Repo typecheck suites (1/2, 2/2)               | the two suites that typecheck copies of the repo, one each                                                                                                                                                                                                                              |
-| CI                                             | passes only when every job above passed: the one required check                                                                                                                                                                                                                         |
+| Part       | Phases                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `CI (1/2)` | `pnpm verify:static --job lint`, `--job typecheck` and `--job gates` (the gates of `scripts/gates.mjs` with that `job`, in parallel)                                                                                                                                                                                                                                                                   |
+| `CI (2/2)` | the secret scan (gitleaks over the commits the PR or push adds, `scripts/secret-scan.sh`), `--job migrations`, `pnpm build`, the runtime dependency closure check, and a pruned production boot (tracked files plus `dist` in a fresh directory, `pnpm install --prod --offline` from the warm store, `node dist/server/bundle.js`, `/health` and the client page answer, `SIGTERM` exits within 15 s) |
+| both       | shard `i/2` of the server suite (the `server` and `server:isolated` projects), the client suite and the two repo-typecheck suites                                                                                                                                                                                                                                                                      |
 
 ### Selection and the merge queue
 
@@ -336,7 +334,7 @@ Vite config, `apps/web/drizzle/`, any `schema.ts`, a `package.json`, the
 lockfile, a tsconfig, and the CI workflow and setup action.
 
 Selection only narrows PR feedback. Every other event runs every test: the
-merge queue (`merge_group`), where the `CI` job is the required check, pushes to
+merge queue (`merge_group`), where `CI (1/2)` and `CI (2/2)` are the required checks, pushes to
 `main` and `next`, and a manual run (Actions → Tests → Run workflow). So the
 full suite runs on the exact commit a branch lands as, before it lands. What
 selection cannot see, the queue catches: a script a test runs as a subprocess
@@ -349,13 +347,15 @@ shards finish together. Vitest's own `--shard` splits by count. Refresh the
 durations with `pnpm test:durations` when the suites change shape; a file it
 has not seen counts as the median.
 
-Every job times itself against `scripts/ci-budget.mjs`: 30 s from its first
-step through setup, then a budget for its work (5 s for lint and for the
-typecheck, 60 s for a test shard). The typecheck restores tsc's incremental
+Each part times itself against `scripts/ci-budget.mjs`: 30 s from its first
+step through setup (or its cold allowance when the setup action missed a
+cache: a lockfile change, or a run before `main` has the caches), then a budget for each phase, timed from the check before
+it (5 s for lint and for the typecheck, 60 s for a suite's shard). The typecheck restores tsc's incremental
 state (`node_modules/.cache/tsc`) from the Actions cache; only when that cache
 misses, as on the first run before `main` has one, is it held to its cold
-budget instead (`COLD_RUN_BUDGETS`). A job past its budget fails even when its checks passed. Make the job
-faster, or raise its budget in that table with the reason in the PR; never with
-a `timeout-minutes`. `pnpm check:coverage` holds the workflow to this layout:
-each gate job runs once, every job checks its budget, the `CI` job needs every
-job, and each test matrix lists every shard its command splits into.
+budget instead (`COLD_RUN_BUDGETS`). A phase past its budget fails the part
+even when its checks passed. Make the phase faster, or raise its budget in that
+table with the reason in the PR; never with a `timeout-minutes`. `pnpm
+check:coverage` holds the workflow to this layout: each gate job runs once,
+each phase's budget is checked once, right after the phase and under the same
+condition, and the matrix lists every shard the test commands split into.
