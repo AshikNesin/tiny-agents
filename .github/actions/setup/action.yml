@@ -31,6 +31,10 @@ runs:
       with:
         node-version: "24"
         cache: ${{ inputs.deps == 'store' && 'pnpm' || '' }}
+        # v5 caches the store on its own when package.json names a package
+        # manager. Only the store mode wants that: elsewhere it downloads a
+        # store nothing uses, and with no pnpm installed (deps: none) it fails.
+        package-manager-cache: ${{ inputs.deps == 'store' }}
 
     # node_modules holds compiled native addons (better-sqlite3), so the key
     # names the OS, the CPU and the Node major along with the lockfile.

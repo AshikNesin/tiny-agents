@@ -17,14 +17,39 @@ import { pathToFileURL } from "node:url";
 
 const MIGRATIONS_DIR = "apps/web/drizzle";
 
+/**
+ * tsc keeps each program's state in node_modules/.cache/tsc (the same files
+ * `pnpm typecheck` and the pre-push hook use), so a rerun checks only what
+ * changed. CI restores that directory from the Actions cache. The state is
+ * keyed by file content, so a fresh checkout reuses it.
+ */
+const incremental = (program) =>
+  `--incremental --tsBuildInfoFile node_modules/.cache/tsc/${program}.tsbuildinfo`;
+
 /** The CI jobs, in the order a summary lists them. */
 export const GATE_JOBS = ["typecheck", "lint", "gates", "migrations"];
 
 export const gates = [
-  { name: "Typecheck (server)", job: "typecheck", run: "pnpm exec tsc --noEmit" },
-  { name: "Typecheck (client)", job: "typecheck", run: "pnpm typecheck:client" },
-  { name: "Typecheck (e2e tests)", job: "typecheck", run: "pnpm typecheck:e2e" },
-  { name: "Typecheck kit consumers", job: "typecheck", run: "pnpm typecheck:kit" },
+  {
+    name: "Typecheck (server)",
+    job: "typecheck",
+    run: `pnpm exec tsc --noEmit ${incremental("server")}`,
+  },
+  {
+    name: "Typecheck (client)",
+    job: "typecheck",
+    run: `pnpm typecheck:client ${incremental("client")}`,
+  },
+  {
+    name: "Typecheck (e2e tests)",
+    job: "typecheck",
+    run: `pnpm typecheck:e2e ${incremental("e2e")}`,
+  },
+  {
+    name: "Typecheck kit consumers",
+    job: "typecheck",
+    run: `pnpm typecheck:kit ${incremental("kit")}`,
+  },
   // A child's own tsconfigs (e.g. a Workers test suite); groot defines none.
   {
     name: "Typecheck (app projects)",

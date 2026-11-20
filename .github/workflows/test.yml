@@ -60,6 +60,16 @@ jobs:
       - run: echo "CI_STARTED_AT=$(date +%s)" >> "$GITHUB_ENV"
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup
+      # tsc's incremental state from the latest run (keyed by content, so a
+      # fresh checkout reuses it). A miss means a cold check and the cold budget.
+      - id: tsc-cache
+        uses: actions/cache@v4
+        with:
+          path: node_modules/.cache/tsc
+          key: tsc-${{ runner.os }}-${{ github.sha }}
+          restore-keys: tsc-${{ runner.os }}-
+      - if: steps.tsc-cache.outputs.cache-matched-key == ''
+        run: echo "CI_CACHE_COLD=1" >> "$GITHUB_ENV"
       - run: node scripts/ci-budget.mjs setup
       - run: pnpm verify:static --job typecheck
       - run: node scripts/ci-budget.mjs run typecheck

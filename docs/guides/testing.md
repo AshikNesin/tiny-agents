@@ -350,8 +350,11 @@ durations with `pnpm test:durations` when the suites change shape; a file it
 has not seen counts as the median.
 
 Every job times itself against `scripts/ci-budget.mjs`: 30 s from its first
-step through setup, then a budget for its work (5 s for lint, 60 s for a test
-shard). A job past its budget fails even when its checks passed. Make the job
+step through setup, then a budget for its work (5 s for lint and for the
+typecheck, 60 s for a test shard). The typecheck restores tsc's incremental
+state (`node_modules/.cache/tsc`) from the Actions cache; only when that cache
+misses, as on the first run before `main` has one, is it held to its cold
+budget instead (`COLD_RUN_BUDGETS`). A job past its budget fails even when its checks passed. Make the job
 faster, or raise its budget in that table with the reason in the PR; never with
 a `timeout-minutes`. `pnpm check:coverage` holds the workflow to this layout:
 each gate job runs once, every job checks its budget, the `CI` job needs every

@@ -22,13 +22,22 @@ export const SETUP_BUDGET = 30;
 export const RUN_BUDGETS = {
   secrets: 10,
   lint: 5,
-  typecheck: 10,
+  typecheck: 5,
   gates: 30,
   migrations: 15,
   build: 30,
   server: 60,
   client: 60,
   "repo-typecheck": 60,
+};
+
+/**
+ * Budgets for a job whose own cache missed (CI_CACHE_COLD=1): the first run
+ * before main has the cache. Only a job that restores a cache of its own work
+ * has one; a warm run is still held to RUN_BUDGETS.
+ */
+export const COLD_RUN_BUDGETS = {
+  typecheck: 20,
 };
 
 /** The budget verdict for a phase that took `seconds`, as a line to print. */
@@ -53,8 +62,9 @@ function main() {
     label = "setup";
   } else if (phase === "run" && job in RUN_BUDGETS) {
     started = Number(env.CI_SETUP_DONE_AT);
-    budget = RUN_BUDGETS[job];
-    label = job;
+    const cold = env.CI_CACHE_COLD === "1" && job in COLD_RUN_BUDGETS;
+    budget = cold ? COLD_RUN_BUDGETS[job] : RUN_BUDGETS[job];
+    label = cold ? `${job} (cold cache)` : job;
   } else {
     console.error(
       `Usage: ci-budget.mjs setup | run <job>. Jobs: ${Object.keys(RUN_BUDGETS).join(", ")}.`,
