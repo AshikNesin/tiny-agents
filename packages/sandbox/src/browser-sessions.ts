@@ -222,6 +222,8 @@ export interface BrowserSessions {
   actionTurn(target: BrowserTarget): Promise<LiveBrowserTab>;
   /** Flip the driver of the target's browser; handing back wakes waiting action tools. */
   setDriver(target: BrowserTarget, driver: BrowserDriver): Promise<void>;
+  /** The owner gave input while driving; two minutes without any hands the browser back. */
+  ownerInput(profile: string): void;
   /**
    * Close and remove the target's browser (every tab in it), including one
    * still opening; later calls open fresh. With `wipeProfile` the persisted
@@ -315,6 +317,13 @@ export function createBrowserSessions(options: BrowserSessionsOptions = {}): Bro
     describeOpenError: describeBrowserError,
     // Reads are allowed while the owner drives (U11), so only an action's wait runs out.
     ownerDriving: () => new Error(OWNER_DRIVING),
+    // No bot tab to adopt the owner's for: each bot carries on in its own tab.
+    handBackIdle(profile) {
+      const entry = live.handBack(profile, false);
+      if (!entry) return;
+      entry.front = undefined;
+      live.release(entry);
+    },
   });
 
   /**
@@ -407,6 +416,7 @@ export function createBrowserSessions(options: BrowserSessionsOptions = {}): Bro
     async setDriver(target, driver) {
       if (driver === "human") {
         live.takeOver(target.profile);
+        live.ownerInput(target.profile);
         return;
       }
       // Waiters wake only once the agent adopted the owner's tab (`release` below).
@@ -422,6 +432,7 @@ export function createBrowserSessions(options: BrowserSessionsOptions = {}): Bro
       }
       live.release(entry);
     },
+    ownerInput: (profile) => live.ownerInput(profile),
     close: (target, { wipeProfile = false } = {}) =>
       live.close(target.profile, { wipe: wipeProfile }),
     async closeTab(target) {

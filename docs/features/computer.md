@@ -161,7 +161,10 @@ the way the Terminal page gives them the VM's shells:
   screen capable, view-only until you click it to take control (a green frame
   then marks it as yours). Taking control is the same driver flag the chat
   panel flips: the bots on that desktop pause and take no screenshots until
-  you hand it back, and handing back answers a bot's takeover request. One
+  you hand it back, and handing back answers a bot's takeover request. Two
+  minutes with no key or pointer input from you hands it back on its own
+  (`OWNER_IDLE_MS` in `packages/sandbox/src/live-sessions.ts`); a bot's
+  takeover request you have not touched yet waits for you. One
   bar over the view holds the tabs, a status chip and the tools, so full
   screen keeps them on screen.
 - **While you drive:** an **Apps** menu opens any installed application

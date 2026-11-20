@@ -4,6 +4,7 @@
  */
 import { describe, expect, it } from "vite-plus/test";
 import {
+  createRfbInputWatch,
   createRfbViewOnlyFilter,
   RfbViewOnlyError,
 } from "../../../../apps/web/src/server/api/bots/rfb-view-only";
@@ -79,5 +80,28 @@ describe("createRfbViewOnlyFilter", () => {
     expect(() => createRfbViewOnlyFilter().push(Buffer.concat([HANDSHAKE, b(255, 1)]))).toThrow(
       RfbViewOnlyError,
     );
+  });
+});
+
+describe("createRfbInputWatch", () => {
+  it("counts the owner's key and pointer messages, not picture requests", () => {
+    let inputs = 0;
+    const watch = createRfbInputWatch(() => (inputs += 1));
+    watch.push(Buffer.concat([HANDSHAKE, setPixelFormat, setEncodings, updateRequest]));
+    expect(inputs).toBe(0);
+    // A pointer message split across chunks counts once, when it completes.
+    watch.push(Buffer.concat([updateRequest, pointer.subarray(0, 3)]));
+    expect(inputs).toBe(0);
+    watch.push(Buffer.concat([pointer.subarray(3), key]));
+    expect(inputs).toBe(2);
+  });
+
+  it("counts every chunk as input once it cannot frame one", () => {
+    let inputs = 0;
+    const watch = createRfbInputWatch(() => (inputs += 1));
+    watch.push(Buffer.concat([HANDSHAKE, b(99)]));
+    expect(inputs).toBe(1);
+    watch.push(updateRequest);
+    expect(inputs).toBe(2);
   });
 });

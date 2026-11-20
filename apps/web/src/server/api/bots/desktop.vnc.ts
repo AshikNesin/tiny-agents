@@ -18,7 +18,7 @@ import type { Duplex } from "node:stream";
 import { WebSocketServer, type WebSocket } from "ws";
 import { logger } from "@groot/core/logger";
 import { holdLiveAccess, type LiveGrant } from "../people/live-access";
-import { createRfbViewOnlyFilter, RfbViewOnlyError } from "./rfb-view-only";
+import { createRfbInputWatch, createRfbViewOnlyFilter, RfbViewOnlyError } from "./rfb-view-only";
 import { isOriginAllowed, onUpgrade, rejectUpgrade, type TicketStore } from "../ws/upgrade";
 
 const MAX_VIEWERS_PER_BOT = 4;
@@ -31,6 +31,8 @@ export interface VncTarget {
   openStream(): Promise<Duplex>;
   /** Called on every ping: an open viewer keeps its desktop from idling out. */
   touch(): void;
+  /** Called on each key or pointer message from a viewer that may drive: the owner is still at it. */
+  ownerInput(): void;
 }
 
 export interface VncBridgeOptions<T extends LiveGrant> {
@@ -112,6 +114,7 @@ async function bridge(
   viewOnly: boolean,
 ): Promise<void> {
   const filter = viewOnly ? createRfbViewOnlyFilter() : undefined;
+  const watch = viewOnly ? undefined : createRfbInputWatch(() => target.ownerInput());
   let stream: Duplex;
   try {
     stream = await target.openStream();
@@ -168,6 +171,7 @@ async function bridge(
         }
         if (bytes.length === 0) return;
       }
+      watch?.push(raw);
       if (!stream.write(bytes)) {
         ws.pause();
         stream.once("drain", () => ws.resume());
