@@ -401,7 +401,7 @@ export async function createAppCredential(input: {
   tools?: string[];
 }): Promise<VaultItemRow> {
   await assertHandleFree(input.handle);
-  const name = input.backend ?? "local";
+  const name = input.backend ?? primaryBackend();
   const backend = backendFor(name);
   if (!backend.create) throw Boom.badRequest(`The ${name} backend is read-only`);
   const policy = {
@@ -592,7 +592,7 @@ async function movableLocalRows(): Promise<VaultItemRow[]> {
   const rows = await db
     .select()
     .from(vaultItems)
-    .where(and(eq(vaultItems.backend, "local"), eq(vaultItems.audience, "bots")))
+    .where(eq(vaultItems.backend, "local"))
     .orderBy(asc(vaultItems.label));
   return rows.filter((row) => !owned.has(row.id));
 }
