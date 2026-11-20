@@ -95,7 +95,7 @@ export function buildGroups(
     let group = groups.get(key);
     if (!group) {
       group = path
-        ? { key, label: path.split("/").filter(Boolean).pop() ?? path, path, nodes: [] }
+        ? { key, label: path.split("/").findLast(Boolean) ?? path, path, nodes: [] }
         : { key, label: "No folder", nodes: [] };
       groups.set(key, group);
     }

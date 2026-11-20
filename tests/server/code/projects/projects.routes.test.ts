@@ -561,6 +561,8 @@ describe("a check's log excerpt", () => {
     expect(log.lines).toContain("FAIL tests/login.test.ts > keeps the session");
     expect(log.lines.at(-1)).toBe("##[error]Process completed with exit code 1.");
     expect(log.lines).not.toContain("##[endgroup]");
+    // An ANSI escape is what it looks for.
+    // oxlint-disable-next-line no-control-regex
     expect(log.lines.some((l) => /^2026-|\u001b/.test(l))).toBe(false);
     // The excerpt, not the whole log: the early passes are left out.
     expect(log.lines).not.toContain("ok 1 passes");

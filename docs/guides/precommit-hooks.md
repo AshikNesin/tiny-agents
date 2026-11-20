@@ -1,7 +1,7 @@
 # Git hooks & secret detection
 
 Every commit runs secret detection (gitleaks) and staged lint/format (Vite+),
-and every branch push runs the typecheck. CI also scans every PR and push for
+and every branch push checks the files it changes and runs the typecheck. CI also scans every PR and push for
 secrets, so a commit made without gitleaks still gets a scan.
 
 ## What Gets Checked
@@ -27,12 +27,23 @@ staged: {
 Keep `--staged`: without it `gitleaks protect` reads `git diff` (working tree
 against the index) and skips exactly the content the commit will contain.
 
-`.vite-hooks/pre-push` runs `pnpm typecheck` (the server, client and e2e
-programs, their tests included) when the push updates a branch. It skips branch deletions and tag-only pushes.
-The typecheck reads the working tree, not the commits you push. It is
-incremental: each program keeps its state in `node_modules/.cache/tsc/`, so a
-push after a small edit rechecks only what changed. CI runs the same programs
-from scratch through `pnpm verify:static`.
+`.vite-hooks/pre-push` hands git's ref lines to `scripts/pre-push.mjs`, which
+skips tag-only pushes and branch deletions. For a push that updates a branch it
+takes the files the pushed commits change (against the remote's tip, or the
+merge base with `origin/main` for a new branch) and runs, at once:
+
+| Check                   | Command                                                 | Runs when                                                   |
+| ----------------------- | ------------------------------------------------------- | ----------------------------------------------------------- |
+| Format                  | `vp fmt --check <changed files>`                        | a changed file is one Oxfmt formats                         |
+| Lint                    | `vp lint <changed files>`                               | a changed file is JavaScript or TypeScript                  |
+| Typecheck (incremental) | `pnpm typecheck` (`pnpm verify:static --job typecheck`) | a `.ts`/`.tsx` file, a tsconfig or a `package.json` changed |
+
+It reads the working tree, not the commits you push. The typecheck runs the
+server, client, e2e and kit programs in parallel, each keeping its state in
+`node_modules/.cache/tsc/`, so a push after a small edit rechecks only what
+changed: about 3.5 s for the whole hook on a warm cache. The first push after a
+large change (a branch switch, a fresh worktree) rebuilds that state, about
+11 s. CI runs every check on every file.
 
 The Tests workflow runs a pinned gitleaks through `scripts/secret-scan.sh` on
 the commits each event adds: `origin/<base>..HEAD` on a PR and

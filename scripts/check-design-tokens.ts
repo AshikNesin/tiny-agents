@@ -123,7 +123,7 @@ const RULES: Rule[] = [
     // Square h-N w-N is icon sizing; rectangular pairs (skeleton bars) are fine.
     // The trailing guard keeps fractional widths like `w-4/6` out of the match.
     pattern: "\\bh-([0-9.]+) w-\\1(?![/\\d])",
-    message: "Legacy square icon sizing (h-N w-N).\n" + "   Use the size-N shorthand instead.",
+    message: "Legacy square icon sizing (h-N w-N).\n   Use the size-N shorthand instead.",
     pcre2: true,
   },
   {

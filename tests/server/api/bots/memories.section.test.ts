@@ -243,6 +243,8 @@ it("memory section injects active memories and the gates hold", { timeout: 15_00
     capabilities: { enabled: ["memory"], permissions: {} },
   });
   await rt.submit(conv, { requestId: `v${Date.now()}`, text: "What do you remember about me?" });
+  // `captured` is set by the model's callback while this loop waits.
+  // oxlint-disable-next-line no-unmodified-loop-condition
   for (let i = 0; i < 50 && !captured; i++) {
     await new Promise((resolve) => setTimeout(resolve, 100));
   }

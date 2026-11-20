@@ -26,13 +26,18 @@ import { formatDuration } from "../../lib/code/format";
 import { projectsApi } from "../../lib/code/projects";
 import type { CheckLogView, CheckStepView, PullView } from "../../../shared/api/code";
 
-type Check = NonNullable<PullView["snapshot"]>["checks"][number];
+type PullCheck = NonNullable<PullView["snapshot"]>["checks"][number];
 
-const ORDER: Record<Check["state"], number> = { failure: 0, pending: 1, success: 2, neutral: 3 };
+const ORDER: Record<PullCheck["state"], number> = {
+  failure: 0,
+  pending: 1,
+  success: 2,
+  neutral: 3,
+};
 /** Past this many, passing checks fold behind one row. */
 const FOLD_AFTER = 6;
 
-function CheckIcon({ state, className }: { state: Check["state"]; className?: string }) {
+function CheckIcon({ state, className }: { state: PullCheck["state"]; className?: string }) {
   if (state === "failure")
     return <CircleX className={cn("text-destructive size-3.5", className)} />;
   if (state === "pending")
@@ -41,7 +46,7 @@ function CheckIcon({ state, className }: { state: Check["state"]; className?: st
 }
 
 /** How long it ran; nothing under a second (a commit status has no run time, so it reads 0ms). */
-function took(c: Check): string | null {
+function took(c: PullCheck): string | null {
   if (!c.startedAt || !c.completedAt) return null;
   const ms = Date.parse(c.completedAt) - Date.parse(c.startedAt);
   return ms >= 1000 ? formatDuration(ms) : null;
@@ -79,7 +84,7 @@ function ChecksBar({
 }
 
 /** Failing first, then pending, then passing; and how many of each as one line. */
-function checksSummary(raw: Check[]) {
+function checksSummary(raw: PullCheck[]) {
   const checks = [...raw].sort(
     (a, b) => ORDER[a.state] - ORDER[b.state] || a.name.localeCompare(b.name),
   );
@@ -178,7 +183,7 @@ function CheckRow({
   onToggle,
 }: {
   threadId: string;
-  check: Check;
+  check: PullCheck;
   stalled: boolean;
   open: boolean;
   onToggle(): void;
@@ -232,7 +237,7 @@ function CheckRow({
   );
 }
 
-function CheckDetails({ threadId, check }: { threadId: string; check: Check }) {
+function CheckDetails({ threadId, check }: { threadId: string; check: PullCheck }) {
   return (
     <div className="space-y-3 px-3 pt-1 pb-3">
       <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-0.5 text-xs">
@@ -266,7 +271,15 @@ function FullLog({ url, label = "View full log" }: { url: string; label?: string
   );
 }
 
-function LogExcerpt({ threadId, jobId, check }: { threadId: string; jobId: number; check: Check }) {
+function LogExcerpt({
+  threadId,
+  jobId,
+  check,
+}: {
+  threadId: string;
+  jobId: number;
+  check: PullCheck;
+}) {
   const [log, setLog] = useState<CheckLogView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);

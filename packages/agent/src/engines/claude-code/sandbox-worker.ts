@@ -104,7 +104,8 @@ async function execOn(
     // closing; settle shortly after exit with what arrived.
     result = await connection.exec(command, { stdin, timeoutMs, settleOnExit: true });
   } catch (error) {
-    if (error instanceof SandboxTimeoutError) throw new Error(`Sandbox timed out: ${label}`);
+    if (error instanceof SandboxTimeoutError)
+      throw new Error(`Sandbox timed out: ${label}`, { cause: error });
     throw error;
   }
   const out = result.stdout.toString("utf8");

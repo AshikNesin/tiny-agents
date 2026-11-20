@@ -112,7 +112,7 @@ describe.each(ENGINES)("Tool gate on %s", (kind) => {
           tool: "send_email",
         }),
       );
-      expect(activity.filter((change) => change.conversation === ref).at(-1)).toMatchObject({
+      expect(activity.findLast((change) => change.conversation === ref)).toMatchObject({
         busy: true,
         approvals: 1,
       });

@@ -69,6 +69,8 @@ export function describeTurnOutcomeRule(
     for (const [turn, expected] of Object.entries(TURN_CASES) as Array<
       [TurnCase, (typeof TURN_CASES)[TurnCase]]
     >) {
+      // The shared suite takes each story's title as a value.
+      // oxlint-disable-next-line vitest/valid-title
       it(expected.story, async () => {
         const { harness, nativeId, events } = await play(turn);
         const ended = lastEnd(events, nativeId);

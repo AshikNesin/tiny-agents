@@ -88,6 +88,8 @@ export class HttpError extends Error {
 
     // Fix prototype chain for instanceof checks
     Object.setPrototypeOf(this, new.target.prototype);
+    // Not redundant: drops this constructor's own frames from the stack.
+    // oxlint-disable-next-line unicorn/no-useless-error-capture-stack-trace
     Error.captureStackTrace(this, this.constructor);
   }
 

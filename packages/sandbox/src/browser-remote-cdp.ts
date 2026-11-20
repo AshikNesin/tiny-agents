@@ -166,7 +166,8 @@ export function createRemoteCdpTransport(options: RemoteCdpTransportOptions): Br
       // Backgrounded commands never close the channel; settle after exit.
       result = await connection.exec(command, { timeoutMs, settleOnExit: true });
     } catch (error) {
-      if (error instanceof SandboxTimeoutError) throw new Error(`VM exec timed out: ${label}`);
+      if (error instanceof SandboxTimeoutError)
+        throw new Error(`VM exec timed out: ${label}`, { cause: error });
       throw error;
     }
     const text = result.stdout.toString("utf8");

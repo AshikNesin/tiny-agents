@@ -1,8 +1,7 @@
 command -v vp >/dev/null || { echo "vp not found: this worktree has no node_modules. Run pnpm install here, then push again."; exit 1; }
 
-# Git passes one line per ref: <local ref> <local sha> <remote ref> <remote sha>.
-# A deletion has an all-zero local sha.
-while read -r local_ref local_sha _; do
-  case "$local_ref" in refs/tags/*) continue ;; esac
-  case "$local_sha" in *[!0]*) exec pnpm typecheck ;; esac
-done
+# Git passes one line per ref on stdin: <local ref> <local sha> <remote ref>
+# <remote sha>. scripts/pre-push.mjs checks the files the pushed commits
+# change (format, lint) and runs the incremental typecheck; it skips tag-only
+# pushes and deletions.
+exec node scripts/pre-push.mjs

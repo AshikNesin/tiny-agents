@@ -157,7 +157,7 @@ describe("Code API", () => {
       skills: ["commit-highlights"],
     });
     expect(queued.body.data).toEqual({ status: "queued" });
-    const lastTo = (suffix: string) => shelley.seen.filter((x) => x.url.includes(suffix)).at(-1)!;
+    const lastTo = (suffix: string) => shelley.seen.findLast((x) => x.url.includes(suffix))!;
     expect(JSON.parse(lastTo("/chat").body.toString())).toEqual({
       message: "then the changelog",
       queue: true,
@@ -280,7 +280,7 @@ describe("Code API", () => {
     expect(((await upload.json()) as { data: { ref: string } }).data.ref).toBe(
       "file:/tmp/shelley-uploads/x.png",
     );
-    expect(shelley.seen.filter((x) => x.url.startsWith("/api/upload/raw")).at(-1)!.body).toEqual(
+    expect(shelley.seen.findLast((x) => x.url.startsWith("/api/upload/raw"))!.body).toEqual(
       Buffer.from([1, 2, 3]),
     );
     expect((await post("/uploads/shelley?filename=..%2F..%2Fx")).status).toBe(400);

@@ -353,7 +353,7 @@ export function ConversationView({
             >
               <FolderGit2 className="size-3.5 shrink-0" />
               <span className="truncate">
-                {projectName ?? row!.cwd!.split("/").filter(Boolean).pop() ?? row!.cwd}
+                {projectName ?? row!.cwd!.split("/").findLast(Boolean) ?? row!.cwd}
               </span>
               <span className="text-muted-foreground/60 pl-0.5" aria-hidden>
                 /

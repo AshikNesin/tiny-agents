@@ -543,6 +543,7 @@ export async function resolveConnectionSecret(
       error.code === "backend_error" || error.code === "missing_field"
         ? error.message
         : `Vault item "${handle}": ${error.message}`,
+      { cause: error },
     );
   }
 }

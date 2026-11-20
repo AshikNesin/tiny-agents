@@ -332,7 +332,7 @@ describe("the review inbox", () => {
 
     const inbox = await client.reviewInbox();
 
-    expect((fake.calls[1]?.body as { variables: unknown }).variables).toEqual({
+    expect((fake.calls[1]!.body as { variables: unknown }).variables).toEqual({
       login: "ashik",
       requested: "is:open is:pr archived:false review-requested:@me sort:updated-desc",
       reviewed: "is:open is:pr archived:false reviewed-by:@me -author:@me sort:updated-desc",
@@ -383,7 +383,7 @@ describe("the review inbox", () => {
       drafts: false,
     });
 
-    const { variables } = fake.calls[1]?.body as { variables: Record<string, string> };
+    const { variables } = fake.calls[1]!.body as { variables: Record<string, string> };
     expect(variables.requested).toBe(
       "is:open is:pr archived:false review-requested:@me updated:>=2026-10-07 draft:false repo:acme/web sort:updated-desc",
     );

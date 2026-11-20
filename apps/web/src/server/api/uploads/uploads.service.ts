@@ -77,6 +77,8 @@ const ALLOWED_EXTENSIONS = new Set([
 ]);
 
 function sanitizeName(name: string): string {
+  // Control characters are what it strips from a filename.
+  // oxlint-disable-next-line no-control-regex
   const trimmed = name.replace(/[\r\n"\\/\x00-\x1f]/g, "_").trim();
   return trimmed.slice(0, 200) || "file";
 }

@@ -208,7 +208,10 @@ function buildScene(file, id, fmt) {
       .map((s) => s.trim())
       .filter(Boolean)) {
       const [name, ...args] = call.split(":").map((s) => s.trim());
+      // Fixes are picked by name from the shot list.
+      // oxlint-disable-next-line import/namespace
       if (!fixes[name]) throw new Error(`${file}: unknown fix "${name}"`);
+      // oxlint-disable-next-line import/namespace
       fixes[name](win, { loadSnap, doc, args });
     }
     win.removeAttribute("data-fix");

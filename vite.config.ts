@@ -154,8 +154,149 @@ export default defineConfig({
       "scripts/demo/launch/assets/**",
       "scripts/demo/launch/snap/**",
     ],
-    rules: { "no-unused-vars": "error" },
-    overrides: boundaryOverrides("./scripts/lint/repo-plugin.mjs"),
+    // Every category but pedantic, style and restriction, and every plugin
+    // that applies to this stack, as errors. A rule turned off below says why.
+    plugins: ["eslint", "typescript", "unicorn", "oxc", "react", "jsx-a11y", "import", "vitest"],
+    categories: { correctness: "error", suspicious: "error", perf: "error" },
+    rules: {
+      "no-unused-vars": "error",
+      // From pedantic: loose equality other than `== null` hides type bugs.
+      eqeqeq: ["error", "smart"],
+      "no-redeclare": "error",
+
+      // Off, with the reason. The React JSX transform needs no React in scope.
+      "react/react-in-jsx-scope": "off",
+      // React Compiler-style rules (effects, memo, refs, purity, keys) run in
+      // react-doctor (.github/workflows/react-doctor.yml), triaged there (#413).
+      "react/set-state-in-effect": "off",
+      "react/exhaustive-effect-dependencies": "off",
+      "react/immutability": "off",
+      "react/refs": "off",
+      "react/purity": "off",
+      "react/globals": "off",
+      "react/memo-dependencies": "off",
+      "react/use-memo": "off",
+      "react/no-array-index-key": "off",
+      "react/no-unstable-nested-components": "off",
+      "react/no-object-type-as-default-prop": "off",
+      "react/jsx-no-constructed-context-values": "off",
+      "react-hooks/exhaustive-deps": "off",
+      // ARIA roles on the matching tag are deliberate: role="list" on a list
+      // styled without bullets keeps VoiceOver announcing it, and swapping a
+      // role="status" or role="img" for its tag changes layout and styling.
+      "jsx-a11y/prefer-tag-over-role": "off",
+      "jsx-a11y/no-redundant-roles": "off",
+      // Dialogs and the composer focus their first field on purpose.
+      "jsx-a11y/no-autofocus": "off",
+      // Awaits in a loop are deliberate here: ordered writes, polling, and
+      // calls a remote end rate-limits.
+      "no-await-in-loop": "off",
+      // Closures over a component's or test's scope are the style, not a bug.
+      "unicorn/consistent-function-scoping": "off",
+      // The arrays sorted or reversed in place are fresh copies.
+      "unicorn/no-array-sort": "off",
+      "unicorn/no-array-reverse": "off",
+      // Its "useless" spreads are copies taken before a loop that deletes
+      // from the collection it walks.
+      "unicorn/no-useless-spread": "off",
+      // The arrays it would make Sets hold three to five constants.
+      "unicorn/prefer-set-has": "off",
+      // Copying objects in .map() is how this code stays immutable.
+      "oxc/no-map-spread": "off",
+      // Shadowing (`db`, `app`, `row`) is common and intended.
+      "no-shadow": "off",
+      // Drizzle and SDK fields use leading underscores.
+      "no-underscore-dangle": "off",
+      // `new URL(x)` validates its input.
+      "no-new": "off",
+      // A socket's handler has one owner: `ws.onmessage = …` is fine.
+      "unicorn/prefer-add-event-listener": "off",
+      // Side-effect imports (CSS, setup modules) and default-import members
+      // (zod, dayjs) are the libraries' documented use.
+      "import/no-unassigned-import": "off",
+      "import/no-named-as-default-member": "off",
+      // Vitest: `expect(value, message)` is Vitest's message argument; the mock's
+      // type comes from what it mocks; throw messages and snapshot hints are
+      // style.
+      "vitest/valid-expect": ["error", { maxArgs: 2 }],
+      "vitest/require-mock-type-parameters": "off",
+      "vitest/require-to-throw-message": "off",
+      "vitest/prefer-snapshot-hint": "off",
+      // Table-driven tests assert per case under a condition, and setup hooks
+      // and helpers check their own preconditions. expect-expect still makes
+      // every test assert.
+      "vitest/no-conditional-expect": "off",
+      "vitest/no-standalone-expect": "off",
+      // Shared suites (golden flows, conformance) take their titles as values.
+      "vitest/valid-title": ["error", { allowArguments: true }],
+      // Helpers that assert: pinned snapshots, expectX/assertX, the waits that
+      // throw on timeout (until, eventually, closed, awaiting*), and the
+      // drift and SSRF helpers that compare or expect inside.
+      "vitest/expect-expect": [
+        "error",
+        {
+          assertFunctionNames: [
+            "expect",
+            "expect*",
+            "assert*",
+            "pin",
+            "until",
+            "eventually",
+            "closed",
+            "awaiting*",
+            "exact",
+            "refused",
+            "allowed",
+            "uploadFile",
+          ],
+        },
+      ],
+    },
+    overrides: [
+      ...boundaryOverrides("./scripts/lint/repo-plugin.mjs"),
+      // Vitest rules read source comments too: `fit()` (xterm's) reads as a
+      // focused test.
+      {
+        files: ["apps/**", "packages/**"],
+        rules: { "vitest/no-commented-out-tests": "off" },
+      },
+      // Keyboard and label gaps that predate these rules, one file each, so
+      // only a new one fails. Fix a file's sites, then delete it here.
+      {
+        files: [
+          "apps/web/src/client/components/Attachments.tsx",
+          "apps/web/src/client/components/ChatComposer.tsx",
+          "apps/web/src/client/components/chat-message/ToolRow.tsx",
+          "apps/web/src/client/components/fluid/ask-user-questions.tsx",
+          "apps/web/src/client/components/ui/code-block.tsx",
+          "apps/web/src/client/components/vault/PolicyForm.tsx",
+          "apps/web/src/client/pages/code/CodeSettings.tsx",
+          "apps/web/src/client/pages/code/Composer.tsx",
+          "apps/web/src/client/pages/code/DiffWorkspace.tsx",
+          "apps/web/src/client/pages/skills/Skills.tsx",
+          "apps/web/src/client/pages/terminal/TerminalView.tsx",
+          "packages/shell/src/pages/settings/SettingsSearch.tsx",
+          "packages/ui/src/card.tsx",
+          "packages/ui/src/command-menu.tsx",
+          "packages/ui/src/input-group.tsx",
+          "packages/ui/src/pagination.tsx",
+          "packages/ui/vendor/fluid/scroll-area.tsx",
+        ],
+        rules: {
+          "jsx-a11y/anchor-has-content": "off",
+          "jsx-a11y/aria-role": "off",
+          "jsx-a11y/click-events-have-key-events": "off",
+          "jsx-a11y/control-has-associated-label": "off",
+          "jsx-a11y/heading-has-content": "off",
+          "jsx-a11y/interactive-supports-focus": "off",
+          "jsx-a11y/label-has-associated-control": "off",
+          "jsx-a11y/no-noninteractive-element-interactions": "off",
+          "jsx-a11y/no-noninteractive-element-to-interactive-role": "off",
+          "jsx-a11y/no-noninteractive-tabindex": "off",
+          "jsx-a11y/no-static-element-interactions": "off",
+        },
+      },
+    ],
   },
 
   // Formatting configuration
