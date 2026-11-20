@@ -314,8 +314,14 @@ describe("getting it merged", () => {
     expect(screen.getByRole("button", { name: "Merge" })).toBeDisabled();
     expect(screen.getByText("Merge opens once checks pass.")).toBeInTheDocument();
 
-    checkState = "success";
     extra = { mergeable: "conflicting" };
+    act(() => screen.getByRole("button", { name: "Refresh" }).click());
+    await wait(0);
+    expect(
+      screen.getByText("Merge opens once checks pass and the conflict is resolved."),
+    ).toBeInTheDocument();
+
+    checkState = "success";
     act(() => screen.getByRole("button", { name: "Refresh" }).click());
     await wait(0);
     expect(screen.getByRole("button", { name: "Merge" })).toBeDisabled();

@@ -430,11 +430,15 @@ function ActivePull({
   const open = (snap?.threads ?? []).filter((t) => !t.resolved);
   const methods = snap?.mergeMethods ?? [];
   // GitHub may still allow it (a check that is not required), but merging red is rarely meant.
-  const mergeBlocked = failing
-    ? "Merge opens once checks pass."
-    : snap?.mergeable === "conflicting"
-      ? "Merge opens once the conflict is resolved."
-      : null;
+  const conflicting = snap?.mergeable === "conflicting";
+  const mergeBlocked =
+    failing && conflicting
+      ? "Merge opens once checks pass and the conflict is resolved."
+      : failing
+        ? "Merge opens once checks pass."
+        : conflicting
+          ? "Merge opens once the conflict is resolved."
+          : null;
 
   return (
     <>
