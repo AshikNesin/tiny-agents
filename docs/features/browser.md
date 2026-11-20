@@ -81,7 +81,12 @@ the agent can browse, but there is nothing to stream (the panel says so)
   after the action's own first line, dropped five at a time
   so the prompt cache keeps working (`context-trim.ts`, like screenshots).
   Vision is the `browser_screenshot` fallback (CSS-pixel scale, so a 2x
-  desktop does not double the image the model pays for).
+  desktop does not double the image the model pays for). With `labels`, each
+  control in view gets its ref drawn on it for that one capture (OpenClaw's
+  labeled refs): the refs come from a fresh snapshot, their boxes are looked
+  up together (up to 150), and a fixed overlay that takes no clicks is
+  removed right after, so a visual question can end in a click without a
+  separate snapshot.
 - Interaction uses those Playwright actions. `browser_click` clicks the
   ref: it scrolls the element into view and retries until that element is
   the one under the cursor. `browser_type` replaces the field with one

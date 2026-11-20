@@ -401,11 +401,22 @@ export function pageSession(
       ),
     scroll: (direction, amount) =>
       guarded((current) => scrollPage(current, open, direction, amount)),
-    screenshot: async () => ({
+    screenshot: async (options) => {
+      const current = page;
       // CSS scale: on a 2x desktop the default would double both dimensions
       // and the model would pay for pixels it cannot use.
-      data: (await page.screenshot({ type: "jpeg", quality: 60, scale: "css" })).toString("base64"),
-    }),
+      const capture = async () =>
+        (await current.screenshot({ type: "jpeg", quality: 60, scale: "css" })).toString("base64");
+      if (!options?.labels) return { data: await capture() };
+      const labeled = await drawRefLabels(current);
+      try {
+        return { data: await capture(), labeled };
+      } finally {
+        await current
+          .evaluate((id) => document.getElementById(id)?.remove(), LABELS_ID)
+          .catch(() => undefined);
+      }
+    },
     release: () => {
       // The first tab stays open, unguarded; the tabs the agent opened go.
       for (const tab of mine.filter((t) => t !== page)) {
@@ -423,6 +434,63 @@ export function pageSession(
     },
   };
   return session;
+}
+
+/** Most refs one labeled screenshot looks up: a page has rarely more controls in view. */
+const MAX_LABELS = 150;
+/** The overlay's id; a page of our own making would never use it. */
+const LABELS_ID = "__tiny_agents_ref_labels";
+
+/**
+ * Draw each in-view control's ref on it (OpenClaw's labeled refs), so a
+ * screenshot can be acted on without a separate snapshot. The refs come
+ * from a fresh snapshot, so they are the ones the next click resolves. The
+ * boxes are looked up together, one round trip's wait on the VM link, and
+ * drawn in one fixed overlay that takes no clicks. Returns how many it drew.
+ */
+async function drawRefLabels(page: Page): Promise<number> {
+  const tree = await snapshotOf(page);
+  const refs = [...new Set(Array.from(tree.matchAll(/\[ref=(f?\d*e\d+)\]/g), (m) => m[1]!))];
+  const viewport = page.viewportSize();
+  const boxes = await Promise.all(
+    refs.slice(0, MAX_LABELS).map(async (ref) => {
+      const box = await page
+        .getByRef(ref)
+        .boundingBox({ timeout: 1_000 })
+        .catch(() => null);
+      return box && { ref, x: box.x, y: box.y, width: box.width, height: box.height };
+    }),
+  );
+  const inView = boxes.filter(
+    (box): box is NonNullable<typeof box> =>
+      !!box &&
+      box.width > 0 &&
+      box.height > 0 &&
+      box.x + box.width > 0 &&
+      box.y + box.height > 0 &&
+      (!viewport || (box.x < viewport.width && box.y < viewport.height)),
+  );
+  await page.evaluate(
+    ({ id, labels }) => {
+      const layer = document.createElement("div");
+      layer.id = id;
+      layer.setAttribute("aria-hidden", "true");
+      layer.style.cssText = "position:fixed;inset:0;pointer-events:none;z-index:2147483647";
+      for (const { ref, x, y, width, height } of labels) {
+        const box = document.createElement("div");
+        box.style.cssText = `position:absolute;left:${x}px;top:${y}px;width:${width}px;height:${height}px;outline:2px solid #e11d48`;
+        const tag = document.createElement("span");
+        tag.textContent = ref;
+        tag.style.cssText =
+          "position:absolute;left:0;top:0;transform:translateY(-100%);background:#e11d48;color:#fff;font:bold 11px/1.2 monospace;padding:0 2px";
+        box.append(tag);
+        layer.append(box);
+      }
+      document.documentElement.append(layer);
+    },
+    { id: LABELS_ID, labels: inView },
+  );
+  return inView.length;
 }
 
 /**

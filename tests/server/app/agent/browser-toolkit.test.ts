@@ -342,6 +342,26 @@ describe("browser toolkit", () => {
     expect(switched.text).toBe('on tab 2: https://example.com/feed\nPage:\n- heading "Feed"');
   });
 
+  it("asks for a labeled screenshot and says how many controls it labeled", async () => {
+    const fake = fakeTransport();
+    const asked: unknown[] = [];
+    const transport: BrowserTransport = async (...args) => ({
+      ...(await fake.transport(...args)),
+      screenshot: async (options) => {
+        asked.push(options);
+        return { data: "anBn", ...(options?.labels ? { labeled: 3 } : {}) };
+      },
+    });
+    const tk = toolkit({ transport, profilesDir: "/tmp/ta-test-profiles" });
+    const labeled = await run(tk, "browser_screenshot", { labels: true });
+    expect(labeled.text).toBe(
+      "Screenshot captured as an attachment, 3 controls labeled with refs.",
+    );
+    const plain = await run(tk, "browser_screenshot", {});
+    expect(plain.text).toBe("Screenshot captured as an attachment.");
+    expect(asked).toEqual([{ labels: true }, undefined]);
+  });
+
   it("keeps typed text out of the page change it returns", async () => {
     const { transport, setSnapshot } = fakeTransport();
     const tk = toolkit({ transport, profilesDir: "/tmp/ta-test-profiles" });
