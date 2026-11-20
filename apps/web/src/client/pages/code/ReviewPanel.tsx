@@ -120,10 +120,7 @@ export function ReviewPanel({
   const [current, setCurrent] = useState<string | null>(null);
   // The open file's diff, with the file and content (hash) it was read for: a
   // re-read after the agent changed the file swaps it in place.
-  const [shown, setShown] = useState<{
-    key: string;
-    diff: ReviewFileDiff;
-  } | null>(null);
+  const [shown, setShown] = useState<{ key: string; diff: ReviewFileDiff } | null>(null);
   const [reload, setReload] = useState(0);
   // In the side panel: the list, or one file's diff.
   const [listing, setListing] = useState(!page);

@@ -135,11 +135,7 @@ router.post("/code/github/app/manifest", async (c) => {
   );
   const flow = await startManifest(env.ORIGIN, organization);
   setFlowCookie(c, flow.binding);
-  return ok(c, {
-    url: flow.url,
-    manifest: flow.manifest,
-    webhooks: flow.webhooks,
-  });
+  return ok(c, { url: flow.url, manifest: flow.manifest, webhooks: flow.webhooks });
 });
 
 /** Install the App on repositories, or change which: GitHub's page, then back to `installed`. */
@@ -199,10 +195,7 @@ const updateSchema = z.strictObject({
         .transform((text, ctx) => {
           const prefix = cleanBranchPrefix(text);
           if (prefix !== null) return prefix;
-          ctx.addIssue({
-            code: "custom",
-            message: "Git can't start a branch name with that.",
-          });
+          ctx.addIssue({ code: "custom", message: "Git can't start a branch name with that." });
           return z.NEVER;
         })
         .optional(),
@@ -327,10 +320,7 @@ router.get("/code/threads/:id/checkpoints", async (c) => {
 router.post("/code/threads/:id/checkpoints/:cp/revert", async (c) => {
   const id = threadParam(c.req.param("id"));
   const before = await revertTo(id, c.req.param("cp"));
-  return ok(c, {
-    reverted: true,
-    undo: before ? checkpointView(before) : null,
-  });
+  return ok(c, { reverted: true, undo: before ? checkpointView(before) : null });
 });
 
 router.patch("/code/threads/:id/pr", async (c) => {

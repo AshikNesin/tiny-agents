@@ -190,10 +190,7 @@ export async function openReview(input: string): Promise<PullReviewView> {
   const [row] = await db
     .insert(codeReviews)
     .values({ projectId: project.id, number: pr.number, ...values })
-    .onConflictDoUpdate({
-      target: [codeReviews.projectId, codeReviews.number],
-      set: values,
-    })
+    .onConflictDoUpdate({ target: [codeReviews.projectId, codeReviews.number], set: values })
     .returning();
   return reviewView(row!, project);
 }
@@ -210,9 +207,7 @@ export async function listReviews(): Promise<PullReviewView[]> {
 }
 
 async function findReview(id: string): Promise<{ row: CodeReviewRow; project: CodeProjectRow }> {
-  const row = await db.query.codeReviews.findFirst({
-    where: eq(codeReviews.id, id),
-  });
+  const row = await db.query.codeReviews.findFirst({ where: eq(codeReviews.id, id) });
   if (!row) throw Boom.notFound("No such review");
   const project = await db.query.codeProjects.findFirst({
     where: eq(codeProjects.id, row.projectId),

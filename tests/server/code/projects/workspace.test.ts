@@ -25,11 +25,7 @@ let checkout: string;
 beforeEach(async () => {
   local = localExec();
   bare = await bareRepo(local);
-  ws = createWorkspace({
-    exec: local.exec,
-    credential: { kind: "gh" },
-    remoteUrl: () => bare,
-  });
+  ws = createWorkspace({ exec: local.exec, credential: { kind: "gh" }, remoteUrl: () => bare });
   checkout = join(local.home, "projects", "web", "checkout");
   await ws.clone(repo, checkout);
 });

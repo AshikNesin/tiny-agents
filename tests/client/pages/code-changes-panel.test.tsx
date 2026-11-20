@@ -22,11 +22,7 @@ const shown = () => {
 };
 
 vi.mock("sonner", () => ({
-  toast: Object.assign(vi.fn(), {
-    success: vi.fn(),
-    error: vi.fn(),
-    message: vi.fn(),
-  }),
+  toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), message: vi.fn() }),
 }));
 
 /** The network: each GET path answers from this table (a function may hold the answer back). */

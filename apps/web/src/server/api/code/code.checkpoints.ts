@@ -61,11 +61,7 @@ export async function checkpointTurn(threadId: string): Promise<CodeCheckpoint |
   const ws = await codeGitHub().workspace(found.project);
   return takeCheckpoint(
     ws,
-    {
-      id: threadId,
-      branch: found.thread.branch,
-      worktree: found.thread.worktree,
-    },
+    { id: threadId, branch: found.thread.branch, worktree: found.thread.worktree },
     "turn",
   );
 }
@@ -110,11 +106,7 @@ export async function revertTo(
   const checkpoint = (await checkpointsOf(threadId)).find((c) => c.id === checkpointId);
   if (!checkpoint) throw Boom.notFound("No such checkpoint");
   const ws = await codeGitHub().workspace(found.project);
-  const thread = {
-    id: threadId,
-    branch: found.thread.branch,
-    worktree: found.thread.worktree,
-  };
+  const thread = { id: threadId, branch: found.thread.branch, worktree: found.thread.worktree };
   const before = await takeCheckpoint(ws, thread, "before_revert");
   await ws.restore(thread.worktree, checkpoint.sha);
   return before;

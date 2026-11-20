@@ -194,16 +194,8 @@ await journey(
         return route.fulfill(
           ok(
             file === "src/webhooks/retry.ts"
-              ? {
-                  path: file,
-                  oldContent: `${OLD.join("\n")}\n`,
-                  newContent: `${NEW.join("\n")}\n`,
-                }
-              : {
-                  path: file,
-                  oldContent: "",
-                  newContent: "export const queue = [];\n",
-                },
+              ? { path: file, oldContent: `${OLD.join("\n")}\n`, newContent: `${NEW.join("\n")}\n` }
+              : { path: file, oldContent: "", newContent: "export const queue = [];\n" },
           ),
         );
       });
@@ -319,9 +311,7 @@ await journey(
           )
           .click();
         await pr
-          .getByRole("textbox", {
-            name: "Comment on src/webhooks/retry.ts line 12",
-          })
+          .getByRole("textbox", { name: "Comment on src/webhooks/retry.ts line 12" })
           .fill(`Can this overflow for large attempts? (${stamp})`);
         await pr.getByRole("button", { name: "Ask assistant" }).click();
         await expect(pr.getByRole("note", { name: "Comment on line 12" })).toContainText(
@@ -360,9 +350,7 @@ await journey(
           '[data-gutter] > [data-column-number="25"]:not([data-line-type="change-deletion"])',
         )
         .click();
-      const box = pr.getByRole("textbox", {
-        name: "Comment on src/webhooks/retry.ts line 25",
-      });
+      const box = pr.getByRole("textbox", { name: "Comment on src/webhooks/retry.ts line 25" });
       await box.fill("Export it from the config instead:");
       await pr.getByRole("button", { name: "Suggest change" }).click();
       await expect(box).toHaveValue(
@@ -411,9 +399,7 @@ await journey(
           "queue.ts",
         );
         await pr.getByRole("button", { name: "Push to PR" }).click();
-        const dialog = page.getByRole("dialog", {
-          name: "Push to the pull request",
-        });
+        const dialog = page.getByRole("dialog", { name: "Push to the pull request" });
         await expect(dialog).toContainText("Adds a commit to @maria's branch retry-webhooks.");
         await dialog.getByRole("textbox", { name: "Commit message" }).fill("Cap the delay at 20s");
         await proof("push-to-pr");
@@ -450,9 +436,7 @@ await journey(
       ])
         await phone.route(pattern, handler);
       const p = await phone.newPage();
-      await p.goto(`/code/reviews/${review.id}`, {
-        waitUntil: "domcontentloaded",
-      });
+      await p.goto(`/code/reviews/${review.id}`, { waitUntil: "domcontentloaded" });
       await p.getByRole("button", { name: /retry\.ts/ }).tap();
       await expect(p.getByText("2 of 3")).toBeVisible({ timeout: 15_000 });
       const shots = path.join(process.env.TA_VERIFY_EVIDENCE, "code-reviews");

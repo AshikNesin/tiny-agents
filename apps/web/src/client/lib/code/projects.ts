@@ -67,11 +67,9 @@ export const projectsApi = {
   autofix: (id: string, enabled: boolean) =>
     apiClient.post<ThreadPullsView>(`${thread(id)}/pr/autofix`, { enabled }),
   fix: (id: string) =>
-    apiClient.post<{
-      started: boolean;
-      reason?: string;
-      view: ThreadPullsView;
-    }>(`${thread(id)}/pr/fix`),
+    apiClient.post<{ started: boolean; reason?: string; view: ThreadPullsView }>(
+      `${thread(id)}/pr/fix`,
+    ),
   autoMerge: (id: string, enabled: boolean) =>
     apiClient.post<ThreadPullsView>(`${thread(id)}/pr/automerge`, { enabled }),
   spendLimit: (id: string, limitUsd: number | null) =>
@@ -96,10 +94,7 @@ export const projectsApi = {
   reviewFiles: (id: string, scope = "base") =>
     apiClient.get<ReviewFile[]>(`${thread(id)}/review/files`, scoped(scope)),
   reviewFile: (id: string, path: string, scope = "base") =>
-    apiClient.get<ReviewFileDiff>(`${thread(id)}/review/file`, {
-      path,
-      ...scoped(scope),
-    }),
+    apiClient.get<ReviewFileDiff>(`${thread(id)}/review/file`, { path, ...scoped(scope) }),
   setViewed: (id: string, path: string, hash: string, viewed: boolean) =>
     apiClient.post(`${thread(id)}/review/viewed`, { path, hash, viewed }),
   drafts: (id: string) => apiClient.get<ReviewDraft[]>(`${thread(id)}/review/drafts`),
