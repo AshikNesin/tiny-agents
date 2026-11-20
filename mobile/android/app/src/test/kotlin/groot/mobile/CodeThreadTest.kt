@@ -27,11 +27,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
-/**
- * The Code screens' rules: the thread stream as the server sends it (`/code/threads/:id/events`),
- * ports of the web client's `lib/code/use-thread.ts`, `transcript.ts` and `list.ts`, and the
- * Changes screen's line diff.
- */
 @RunWith(AndroidJUnit4::class)
 class CodeThreadTest {
     private fun event(json: String): CodeThreadEvent = CodeThreadEvent.from(JSONObject(json))!!
@@ -59,7 +54,6 @@ class CodeThreadTest {
 
         state = reduceCodeThread(state, event("""{"type":"partial","text":"All green","thinking":""}"""))
         assertEquals("All green", state.partialText)
-        // The running tool finishes (same id, whole row again) and the answer arrives.
         state = reduceCodeThread(
             state,
             event(
@@ -74,7 +68,6 @@ class CodeThreadTest {
         assertEquals("", state.partialText)
         assertEquals(6, state.cursor)
 
-        // A replayed row changes nothing.
         val replayed = reduceCodeThread(state, event("""{"type":"items","cursor":6,"items":[{"kind":"assistant","id":"a1","text":"All green."}]}"""))
         assertEquals(state.items, replayed.items)
     }
@@ -138,7 +131,6 @@ class CodeThreadTest {
         val group = shown[1] as CodeDisplayItem.Group
         assertEquals(listOf("t1", "th1", "t2", "t3"), group.items.map { it.id })
         assertEquals("Ran 2 commands, edited 1 file · 1 failed", describeTools(group.tools))
-        // One finished call alone is not folded.
         assertEquals(listOf("t1"), groupTools(listOf(tool("t1", "bash"))).map { it.key })
     }
 
@@ -194,10 +186,8 @@ class CodeThreadTest {
             ),
             kinds,
         )
-        // Line numbers count on each side.
         assertEquals(5, diff.first { it.kind == DiffLine.Kind.Removed }.oldLine)
         assertEquals(5, diff.first { it.kind == DiffLine.Kind.Added }.newLine)
-        // A new file is all added; an unchanged one has nothing to show.
         assertEquals(2, lineDiff("", "a\nb\n").count { it.kind == DiffLine.Kind.Added })
         assertTrue(lineDiff(old, old).isEmpty())
     }
@@ -210,11 +200,9 @@ class CodeThreadTest {
         assertEquals("Binary file. Its contents are not shown.", binary.notice)
         val large = view("""{"path":"big.txt","oldContent":"","newContent":"","unshowable":"tooLarge"}""")
         assertEquals("This file is too large to show here (over 2 MB).", large.notice)
-        // A file it can show is its line diff, with no notice.
         val text = view("""{"path":"a.ts","oldContent":"a\n","newContent":"b\n"}""")
         assertNull(text.notice)
         assertEquals(listOf(DiffLine.Kind.Removed, DiffLine.Kind.Added), text.lines.map { it.kind })
-        // Git's binary flag on a changed file is read, so its row can say so before it opens.
         val file = ChangedFile.from(
             JSONObject("""{"path":"logo.png","status":"added","additions":0,"deletions":0,"isGenerated":false,"binary":true}"""),
         )

@@ -26,12 +26,10 @@ import kotlinx.coroutines.launch
 import java.util.TimeZone
 import java.util.UUID
 
-/** A file picked for the next message: uploading, ready (it has its [ref]), or failed. */
 data class StagedUpload(val id: String, val file: PickedFile, val ref: AttachmentRef? = null, val error: String? = null) {
     val uploading: Boolean get() = ref == null && error == null
 }
 
-/** One bot's chat screen: the live view of its session, the draft, and the owner's actions. */
 class ChatViewModel(private val container: AppContainer, val botId: String) : ViewModel() {
     private val zoneOffsetMs = TimeZone.getDefault().rawOffset.toLong()
 
@@ -52,7 +50,6 @@ class ChatViewModel(private val container: AppContainer, val botId: String) : Vi
         _draft.value = text
     }
 
-    /** The chat came on screen: open its stream and clear its unread mark. */
     fun show() {
         container.chats.open(botId, container.bots.state.value.bot(botId)?.lastReadAt)
         container.bots.markRead(botId)
@@ -88,11 +85,9 @@ class ChatViewModel(private val container: AppContainer, val botId: String) : Vi
     fun removeStaged(id: String) {
         val removed = _staged.value.firstOrNull { it.id == id } ?: return
         _staged.update { list -> list.filter { it.id != id } }
-        // An upload nobody sends is deleted on the server too.
         removed.ref?.let { ref -> viewModelScope.launch { runCatching { container.api.deleteUpload(ref.uploadId) } } }
     }
 
-    /** Send the draft and the ready attachments; a refused send puts both back. */
     fun send(whenBusy: String) {
         val text = _draft.value.trim()
         val staged = _staged.value
@@ -104,7 +99,6 @@ class ChatViewModel(private val container: AppContainer, val botId: String) : Vi
         if (text.isEmpty() && attachments.isEmpty()) return
         _draft.value = ""
         _staged.value = emptyList()
-        // On the app's scope: a send in flight outlives the screen.
         container.scope.launch {
             val sent = container.chats.send(botId, OwnerSubmission(text = text, attachments = attachments, whenBusy = whenBusy))
             if (!sent) {
@@ -126,7 +120,6 @@ class ChatViewModel(private val container: AppContainer, val botId: String) : Vi
         container.chats.decideApproval(botId, taskId, approved, alwaysAllow, grant)
     }
 
-    /** Answer a bot's questions; null dismisses them. */
     fun answer(taskId: Int, answers: List<OwnerAnswer>?) = act("Could not send your answers.") {
         container.api.answerQuestions(botId, taskId, answers)
     }
@@ -137,7 +130,6 @@ class ChatViewModel(private val container: AppContainer, val botId: String) : Vi
         container.chats.setYolo(botId, on)
     }
 
-    /** Start a new chat: the stream ends on the old conversation and reconnects onto the new one. */
     fun newChat() = act("Could not start a new chat.") {
         container.api.resetChat(botId)
         container.bots.refresh()
@@ -150,7 +142,6 @@ class ChatViewModel(private val container: AppContainer, val botId: String) : Vi
 
     fun cancelCredentials(taskId: Int) = act("Could not cancel the request.") { container.api.cancelCredentialRequest(taskId) }
 
-    /** Save an attachment to Downloads, then hand its Uri to [opened] (to view or share). */
     fun save(ref: AttachmentRef, opened: (Uri) -> Unit) = act("Could not save the file.") {
         val uri = container.files.saveToDownloads(ref)
         container.notices.show("Saved ${ref.name} to Downloads")

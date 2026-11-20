@@ -39,11 +39,9 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
-/** The server runs routines on IST, and the web client shows their times in IST; so does this. */
 private val ROUTINE_ZONE: ZoneId = ZoneId.of("Asia/Kolkata")
 private val TIME_OF_DAY: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
-/** A run's outcome in a word, as the web client words it (`RoutineRuns.tsx`). */
 internal fun runStatusWord(status: String): String = when (status) {
     "succeeded" -> "done"
     "blocked" -> "needs attention"
@@ -57,18 +55,13 @@ private fun failed(run: RoutineRunCard) = run.status != "succeeded" && !blocked(
 
 internal fun runTime(run: RoutineRunCard): String = TIME_OF_DAY.format(Instant.ofEpochMilli(run.finishedAt).atZone(ROUTINE_ZONE))
 
-/** The one line a group of runs folds into, in parts so the problem counts can take their colour. */
 internal data class RunsSummary(
-    /** The routine's name, or "3 routines". */
     val title: String,
-    /** "done" for one run, "ran 24×" for several. */
     val outcome: String,
     val failed: Int,
     val blocked: Int,
-    /** "16:20", or "last 16:20" for several. */
     val time: String,
 ) {
-    /** The whole line, for screen readers and tests. */
     val text: String
         get() = listOfNotNull(title, outcome, time, failedText, blockedText).joinToString(" \u00b7 ")
 
@@ -76,7 +69,6 @@ internal data class RunsSummary(
     val blockedText: String? get() = if (blocked > 0) "$blocked need${if (blocked == 1) "s" else ""} attention" else null
 }
 
-/** Port of the web client's summary: one routine's name or a count, the outcome, the latest time. */
 internal fun runsSummary(runs: List<RoutineRunCard>): RunsSummary {
     val latest = runs.maxBy { it.finishedAt }
     val names = runs.map { it.routineName }.toSet()
@@ -90,11 +82,6 @@ internal fun runsSummary(runs: List<RoutineRunCard>): RunsSummary {
     )
 }
 
-/**
- * Finished routine runs, kept quiet: one centred line for a run, or for runs that finished
- * back to back on the same day ("Process emails · ran 24× · last 16:20"). Tapping it lists
- * each run's output and error, newest first. Mirrors the web client's `RoutineRuns.tsx`.
- */
 @Composable
 fun RoutineRunsLine(runs: List<RoutineRunCard>, modifier: Modifier = Modifier) {
     if (runs.isEmpty()) return
@@ -132,7 +119,6 @@ fun RoutineRunsLine(runs: List<RoutineRunCard>, modifier: Modifier = Modifier) {
                 Text(summary.time, style = MaterialTheme.typography.labelMedium, color = muted, maxLines = 1)
                 AppIcon(AppIcons.ChevronDown, null, tint = muted, size = Dims.iconSmall, modifier = Modifier.rotate(chevron))
             }
-            // What went wrong gets its own line, so it never squeezes the routine's name.
             if (summary.failedText != null || summary.blockedText != null) {
                 Row(horizontalArrangement = Arrangement.spacedBy(S.xs), verticalAlignment = Alignment.CenterVertically) {
                     summary.failedText?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error, maxLines = 1) }
@@ -190,11 +176,9 @@ private fun RunDetail(run: RoutineRunCard, showName: Boolean) {
     }
 }
 
-/** The newest few runs, plus every run that failed or needs attention: problems never hide behind "Show earlier". */
 internal fun firstShown(newestFirst: List<RoutineRunCard>): List<RoutineRunCard> =
     newestFirst.filterIndexed { index, run -> index < FIRST_SHOWN || run.status != "succeeded" }
 
-/** Amber for a run that needs attention, red for one that failed, nothing for one that is done. */
 @Composable
 private fun statusColor(run: RoutineRunCard): Color? = when {
     blocked(run) -> Accents.warning
@@ -209,5 +193,4 @@ private fun Dot() {
 
 private const val HALF_TURN = 180f
 
-/** Runs listed before "Show N earlier": a day of hourly runs stays a short read. */
 private const val FIRST_SHOWN = 5

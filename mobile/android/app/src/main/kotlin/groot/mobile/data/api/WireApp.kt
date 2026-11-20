@@ -2,20 +2,12 @@ package groot.mobile.data.api
 
 import org.json.JSONObject
 
-/*
- * The app's wire types outside the chat transcript, as the server declares them in the
- * web app's shared/api folder. Dates arrive as ISO strings and are held as epoch milliseconds.
- */
-
 data class SessionUser(val id: Int, val email: String, val name: String?) {
     companion object {
         fun from(json: JSONObject) = SessionUser(json.int("id"), json.string("email"), json.stringOrNull("name"))
     }
 }
 
-// ---- Bots -------------------------------------------------------------------------------
-
-/** One bot as the drawer lists it. */
 data class BotListEntry(
     val id: String,
     val conversationId: String,
@@ -31,7 +23,6 @@ data class BotListEntry(
     val questions: Int,
     val pinnedAt: Long?,
 ) {
-    /** Something waits on the owner in this bot's chat. */
     val needsYou: Boolean get() = approvals + questions > 0
 
     companion object {
@@ -53,7 +44,6 @@ data class BotListEntry(
     }
 }
 
-/** A bot with everything its editor shows. */
 data class Bot(
     val id: String,
     val name: String,
@@ -66,9 +56,7 @@ data class Bot(
     val autoReview: Boolean,
     val yoloByDefault: Boolean,
     val pinnedAt: Long?,
-    /** "shared" or "own". */
     val browserProfile: String,
-    /** Tool name to "allow", "ask" or "off"; tools without an entry use their default. */
     val toolPermissions: Map<String, String>,
     val skillIds: List<String>,
     val connectionIds: List<String>,
@@ -96,7 +84,6 @@ data class Bot(
     }
 }
 
-/** What the bot editor sends; a null field is left out (unchanged on update). */
 data class BotDraft(
     val name: String? = null,
     val description: String? = null,
@@ -119,7 +106,6 @@ data class BotDraft(
     )
 }
 
-/** A chat the bot ran on before a "New chat". */
 data class PastChat(
     val id: String,
     val title: String?,
@@ -149,8 +135,6 @@ data class PastChatView(val chat: PastChat, val state: ChatState, val runs: List
         )
     }
 }
-
-// ---- Models and capabilities ------------------------------------------------------------
 
 data class CatalogModel(
     val id: String,
@@ -185,7 +169,6 @@ data class ProviderSummary(val id: String, val name: String, val kind: String, v
 data class ModelsResponse(
     val models: List<CatalogModel>,
     val defaultModelId: String?,
-    /** Some chat model can run now; false disables sending. */
     val canAnswer: Boolean,
     val providers: List<ProviderSummary>,
 ) {
@@ -205,9 +188,7 @@ data class ModelsResponse(
 
 data class ToolInfo(
     val name: String,
-    /** Past-tense label for the transcript ("Searched the web"). */
     val label: String,
-    /** Imperative phrase completing "<bot> wants to …". */
     val askLabel: String?,
     val description: String,
     val readOnly: Boolean,
@@ -215,21 +196,17 @@ data class ToolInfo(
     val askOnly: Boolean,
     val unattendedOnly: Boolean,
 ) {
-    /** The permission the tool runs with when the bot sets none. */
     val defaultPermission: String
         get() = if (askOnly) "ask" else if (readOnly || allowByDefault) "allow" else "ask"
 }
 
-/** A toolkit, the skills library or a connection, as a bot's settings list it. */
 data class Capability(
     val id: String,
-    /** "toolkit", "skills" or "connection". */
     val kind: String,
     val name: String,
     val description: String,
     val tools: List<ToolInfo>,
     val setupHint: String?,
-    /** Switched by the app itself, never a choice in a bot's settings. */
     val auto: Boolean,
 ) {
     companion object {
@@ -256,34 +233,24 @@ data class Capability(
     }
 }
 
-// ---- Live views -------------------------------------------------------------------------
-
-/** A bot's browser or computer, as the chat's live view polls it. */
 data class LiveStatus(
-    /** Computer only: false without a sandbox VM. Always true for a browser. */
     val configured: Boolean,
     val setupHint: String?,
     val active: Boolean,
     val starting: Boolean,
-    /** "installing" during the one-time VM setup, else "starting". */
     val phase: String?,
     val error: String?,
-    /** "agent" or "human"; null while closed. */
     val driver: String?,
-    /** Browser only: "vnc" streams, "headless" has no live view. */
     val mode: String?,
     val url: String?,
     val scale: Double?,
     val width: Int?,
     val height: Int?,
-    /** What a bot asked the owner to do while it waits for a hand-back. */
     val takeover: String?,
 ) {
-    /** There is a picture to stream: a desktop, or a browser that is not headless. */
     val viewable: Boolean get() = active && mode != "headless"
 
     companion object {
-
         fun from(json: JSONObject) = LiveStatus(
             configured = json.bool("configured", true),
             setupHint = json.stringOrNull("setupHint"),
@@ -302,9 +269,7 @@ data class LiveStatus(
     }
 }
 
-/** One browser or desktop on the Browser and Computer pages: a profile and who uses it. */
 data class LiveProfile(
-    /** "shared", or "bot-<id>". */
     val profile: String,
     val label: String,
     val botNames: List<String>,
@@ -312,7 +277,6 @@ data class LiveProfile(
 )
 
 data class LiveProfileList(
-    /** False when this server has no live view of this kind. */
     val available: Boolean,
     val setupHint: String?,
     val width: Int?,
@@ -320,7 +284,6 @@ data class LiveProfileList(
     val profiles: List<LiveProfile>,
 ) {
     companion object {
-        /** `GET /browser` (`browsers`, `liveView`) or `GET /computer` (`desktops`, `configured`). */
         fun from(json: JSONObject): LiveProfileList {
             val rows = if (json.has("browsers")) json.arr("browsers") else json.arr("desktops")
             val available = if (json.has("liveView")) json.bool("liveView") else json.bool("configured", true)
@@ -342,14 +305,10 @@ data class LiveProfileList(
     }
 }
 
-/** A one-time viewer ticket: a WebSocket path on the server and its pixel density. */
 data class VncTicket(val path: String, val scale: Double)
 
 data class DesktopApp(val id: String, val name: String)
 
-// ---- Terminal ---------------------------------------------------------------------------
-
-/** One tmux-backed tab on the sandbox VM. */
 data class TerminalTab(val name: String, val process: String?, val attached: Boolean, val createdAt: Long) {
     companion object {
         fun from(json: JSONObject) =
@@ -358,7 +317,6 @@ data class TerminalTab(val name: String, val process: String?, val attached: Boo
 }
 
 data class TerminalList(
-    /** "ready", "unconfigured", "unreachable" or "tmux-missing". */
     val status: String,
     val message: String?,
     val installCommand: String?,
@@ -377,14 +335,8 @@ data class TerminalList(
     }
 }
 
-// ---- Uploads ----------------------------------------------------------------------------
-
-/** One page of an upload's extracted text, for the preview. */
 data class UploadText(val status: String, val error: String?, val page: Int, val pages: Int, val text: String?, val rows: List<List<String>>, val entries: List<String>)
 
-// ---- Routines ---------------------------------------------------------------------------
-
-/** When a routine fires: once at an instant, on a cron expression, or every N minutes. */
 sealed interface Schedule {
     data class Once(val at: String) : Schedule
     data class Cron(val expr: String) : Schedule
@@ -419,7 +371,6 @@ data class Routine(
     val blockedStreak: Int,
     val pausedReason: String?,
 ) {
-    /** "scheduled", "struggling", "auto_paused", "done" or "paused" (shared/machines/routine.ts). */
     val state: String
         get() = when {
             enabled -> if (blockedStreak > 0) "struggling" else "scheduled"
@@ -474,15 +425,11 @@ data class RoutineRun(
     }
 }
 
-// ---- Tasks, skills, memory --------------------------------------------------------------
-
 data class OwnerTask(
     val id: String,
     val title: String,
     val description: String,
-    /** "todo", "in_progress" or "done". */
     val status: String,
-    /** "low", "medium", "high" or "urgent". */
     val priority: String,
     val dueAt: Long?,
     val completedAt: Long?,
@@ -530,9 +477,7 @@ data class Memory(
     val id: String,
     val botId: String,
     val text: String,
-    /** "preference", "fact", "goal" or "habit". */
     val category: String,
-    /** "active", "superseded", "archived", "expired" or "deleted". */
     val status: String,
     val source: String,
     val createdAt: Long,
@@ -550,11 +495,8 @@ data class Memory(
     }
 }
 
-// ---- Connections ------------------------------------------------------------------------
-
 data class ConnectionTool(
     val name: String,
-    /** As the server names it; the id in tool routes. */
     val serverName: String,
     val label: String,
     val description: String,
@@ -562,13 +504,11 @@ data class ConnectionTool(
     val enabled: Boolean,
 )
 
-/** An MCP server the bots can use. */
 data class Connection(
     val id: String,
     val name: String,
     val url: String,
     val authType: String,
-    /** "connecting", "connected", "error" or "needs_auth". */
     val status: String,
     val error: String?,
     val tools: List<ConnectionTool>,
@@ -590,19 +530,14 @@ data class Connection(
     }
 }
 
-// ---- Vault ------------------------------------------------------------------------------
-
-/** A vault item's metadata and policy: never a value. */
 data class VaultItem(
     val handle: String,
-    /** "login", "card", "identity" or "api_key". */
     val kind: String,
     val audience: String,
     val label: String,
     val username: String?,
     val origins: List<String>,
     val hosts: List<String>,
-    /** "every_use", "per_conversation" or "allowed". */
     val approval: String,
     val cardBrand: String?,
     val cardLast4: String?,
@@ -650,10 +585,8 @@ data class VaultItemDetail(val item: VaultItem, val title: String, val fields: L
     }
 }
 
-/** A step-up token for `X-Vault-Step-Up`, valid until [expiresAt] (epoch ms). */
 data class StepUpToken(val token: String, val expiresAt: Long)
 
-/** A bot's credential request as the sign-in sheet shows it: metadata only. */
 data class CredentialRequestView(
     val taskId: Int,
     val botName: String?,
@@ -680,21 +613,16 @@ data class CredentialRequestView(
     }
 }
 
-// ---- People -----------------------------------------------------------------------------
-
-/** Someone the owner shares bots with. */
 data class Guest(val id: Int, val email: String, val name: String?, val botIds: List<String>) {
     companion object {
         fun from(json: JSONObject) = Guest(json.int("id"), json.string("email"), json.stringOrNull("name"), json.arr("botIds").strings())
     }
 }
 
-/** `POST /notifications/devices` (`apps/web/src/shared/api/push.ts`, `PushDeviceBody`). */
 data class PushDeviceBody(
     val endpoint: String,
     val p256dh: String,
     val auth: String,
-    /** "fcm": the app registers through Google's embedded distributor only. */
     val distributor: String,
     val label: String?,
     val appVersion: String?,

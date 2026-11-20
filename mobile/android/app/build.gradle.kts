@@ -1,4 +1,3 @@
-// APP-owned: your app's build file. Shared config comes from the groot.* convention plugins.
 import java.util.Properties
 
 plugins {
@@ -8,7 +7,6 @@ plugins {
     alias(libs.plugins.roborazzi)
 }
 
-// Versions live in version.properties, never in this file (AGENTS.md).
 val versionProps = Properties().apply {
     rootProject.file("version.properties").inputStream().use { load(it) }
 }
@@ -19,7 +17,6 @@ val gitCommit: String = providers.exec {
 }.standardOutput.asText.map { it.trim().ifEmpty { "unknown" } }.getOrElse("unknown")
 
 android {
-    // The Kotlin namespace stays fixed; groot:setup changes only applicationId.
     namespace = "groot.mobile"
 
     defaultConfig {
@@ -27,8 +24,6 @@ android {
         versionName = versionProps.getProperty("VERSION_NAME")
         versionCode = versionProps.getProperty("VERSION_CODE").toInt()
         buildConfigField("String", "GIT_COMMIT", "\"$gitCommit\"")
-        // The server whose links (push notifications') open the app (AndroidManifest.xml).
-        // Another server: build with -PtinyAgents.linkHost=agents.example.com.
         manifestPlaceholders["linkHost"] = providers.gradleProperty("tinyAgents.linkHost").getOrElse("tiny-agents.ashiknesin.com")
     }
 
@@ -45,7 +40,6 @@ dependencies {
     implementation(project(":kit"))
     implementation(project(":vnc"))
     implementation(project(":terminal"))
-    // Already in the graph through the kit and activity: the share sheet uses its shortcut and intent helpers.
     implementation(libs.androidx.core)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.navigation.compose)
@@ -53,8 +47,6 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.compose.material3)
     implementation(libs.okhttp)
-    // Phone notifications (issue #306): Web Push through the owner's UnifiedPush distributor, else
-    // Google's, embedded (no Firebase project). Size budget: mobile/docs/app/README.md.
     implementation(libs.unifiedpush.connector)
     implementation(libs.unifiedpush.embedded.fcm)
 

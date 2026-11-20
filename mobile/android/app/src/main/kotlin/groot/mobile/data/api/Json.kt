@@ -4,12 +4,6 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.time.Instant
 
-/*
- * Small readers over org.json (part of the platform, so the app ships no JSON library).
- * Every reader treats a missing key and an explicit null alike, since the server omits
- * optional fields in some places and sends null in others.
- */
-
 internal fun JSONObject.stringOrNull(key: String): String? =
     if (!has(key) || isNull(key)) null else opt(key)?.toString()
 
@@ -38,7 +32,6 @@ internal fun JSONObject.objOrNull(key: String): JSONObject? = if (isNull(key)) n
 
 internal fun JSONObject.arr(key: String): JSONArray = (if (isNull(key)) null else optJSONArray(key)) ?: JSONArray()
 
-/** An ISO-8601 instant ("2026-11-09T21:19:43.123Z") as epoch milliseconds. */
 internal fun JSONObject.instantOrNull(key: String): Long? = stringOrNull(key)?.let(::parseInstant)
 
 internal fun JSONObject.instant(key: String): Long = instantOrNull(key) ?: 0L
@@ -70,7 +63,6 @@ internal fun JSONObject.stringMap(key: String): Map<String, String> {
     return out
 }
 
-/** A JSON object as a plain map, keys in the order the server sent them. */
 internal fun JSONObject.toPlainMap(): Map<String, Any?> {
     val out = LinkedHashMap<String, Any?>()
     for (name in keys()) out[name] = plain(opt(name))
@@ -84,14 +76,12 @@ private fun plain(value: Any?): Any? = when (value) {
     else -> value
 }
 
-/** Build a request body. A null value is sent as JSON null; use [jsonOfNotNull] to leave it out. */
 fun jsonOf(vararg pairs: Pair<String, Any?>): JSONObject {
     val out = JSONObject()
     for ((key, value) in pairs) out.put(key, wrap(value))
     return out
 }
 
-/** Build a request body, leaving out every null value (a PATCH that changes only what is set). */
 fun jsonOfNotNull(vararg pairs: Pair<String, Any?>): JSONObject {
     val out = JSONObject()
     for ((key, value) in pairs) if (value != null) out.put(key, wrap(value))

@@ -4,9 +4,7 @@ import groot.mobile.data.chat.ownerText
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-/** The owner's bubble hides the server's attachment notes, as the web client's `ownerText` does. */
 class AttachmentNotesTest {
-    // As a real server stored it (uploads.attach.ts + the agent's fence()).
     private val annotated = """
         What is the secret code in the attached file? Reply with the code only.
 

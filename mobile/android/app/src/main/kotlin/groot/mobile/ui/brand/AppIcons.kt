@@ -9,11 +9,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.addPathNodes
 import androidx.compose.ui.unit.dp
 
-/*
- * The app's icons: 24dp line icons, 2dp round strokes, drawn here so the app ships no icon
- * library. An icon takes the tint of the `Icon` that draws it.
- */
-
 private fun circle(cx: Float, cy: Float, r: Float): String =
     "M${cx - r},${cy}a$r,$r 0 1,0 ${2 * r},0a$r,$r 0 1,0 ${-2 * r},0"
 
@@ -41,7 +36,6 @@ private const val BRAND_BUBBLE =
         "M15 7.5a1.5 1.5 0 0 1 1.5 1.5v3a1.5 1.5 0 0 1-3 0V9a1.5 1.5 0 0 1 1.5-1.5z"
 
 object AppIcons {
-    /** The Tiny Agents mark: a chat bubble with eyes and an always-on dot (the web app's favicon without its tile). */
     val Brand by lazy {
         ImageVector.Builder(name = "tiny-agents", defaultWidth = 24.dp, defaultHeight = 24.dp, viewportWidth = 24f, viewportHeight = 24f).apply {
             addPath(pathData = addPathNodes(BRAND_BUBBLE), fill = SolidColor(Color.Black), pathFillType = PathFillType.EvenOdd)

@@ -63,8 +63,6 @@ class KeysymsTest {
 
     @Test
     fun `android key codes map to keysyms`() {
-        // The literals are android.view.KeyEvent.KEYCODE_* values; VncViewStateTest checks them
-        // against the real constants.
         assertEquals(Keysyms.BackSpace, Keysyms.fromAndroidKeyCode(67))
         assertEquals(Keysyms.Delete, Keysyms.fromAndroidKeyCode(112))
         assertEquals(Keysyms.Return, Keysyms.fromAndroidKeyCode(66))

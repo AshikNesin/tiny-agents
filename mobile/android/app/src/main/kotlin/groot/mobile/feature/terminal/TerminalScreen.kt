@@ -62,7 +62,6 @@ import tinyagents.terminal.TerminalView
 import tinyagents.terminal.TerminalViewState
 import tinyagents.terminal.rememberTerminalViewState
 
-/** What a key of the bar sends: a named key, fixed bytes, or a sticky modifier. */
 internal sealed interface TermKeyAction {
     data class Key(val key: TerminalKey) : TermKeyAction
     data class Bytes(val text: String) : TermKeyAction
@@ -70,7 +69,6 @@ internal sealed interface TermKeyAction {
     data object Alt : TermKeyAction
 }
 
-/** The keys a phone keyboard lacks, in the web app's key panel order. */
 internal val TERMINAL_KEYS: List<BarKey<TermKeyAction>> = listOf(
     BarKey(TermKeyAction.Key(TerminalKey.ESCAPE), "esc", description = "Escape"),
     BarKey(TermKeyAction.Key(TerminalKey.TAB), "tab", description = "Tab"),
@@ -96,7 +94,6 @@ internal val TERMINAL_KEYS: List<BarKey<TermKeyAction>> = listOf(
     BarKey(TermKeyAction.Key(TerminalKey.PAGE_DOWN), "pgdn", description = "Page down"),
 )
 
-/** The Terminal: tmux tabs on the sandbox, one on screen, typed into with the phone's keyboard and the key bar. */
 @Composable
 fun TerminalRoute(container: AppContainer, onBack: () -> Unit) {
     val viewModel: TerminalViewModel = viewModel(factory = viewModelFactory { initializer { TerminalViewModel(container) } })
@@ -111,7 +108,6 @@ fun TerminalRoute(container: AppContainer, onBack: () -> Unit) {
     var menu by remember { mutableStateOf(false) }
     var held by remember { mutableStateOf(emptySet<TermKeyAction>()) }
     var fontSize by rememberSaveable { mutableFloatStateOf(DEFAULT_FONT_SP) }
-    // The terminal sits on the app's own background, so the true-black theme has no seam under the tab strip.
     val background = MaterialTheme.colorScheme.background
     val dark = GrootTheme.isDark
     val colors = remember(dark, background) {
@@ -120,7 +116,6 @@ fun TerminalRoute(container: AppContainer, onBack: () -> Unit) {
     val ctrl = TermKeyAction.Ctrl in held
     val alt = TermKeyAction.Alt in held
 
-    // Whatever the owner types snaps the view back to the live screen and lets go of sticky modifiers.
     val type: (ByteArray) -> Unit = { bytes ->
         viewModel.send(bytes)
         viewState.scrollToBottom()
@@ -205,7 +200,6 @@ fun TerminalRoute(container: AppContainer, onBack: () -> Unit) {
             ) {
                 RemoteKeyboard(
                     active = keyboard && state.link == TerminalLink.Live,
-                    // Enter is CR on a terminal, whatever the keyboard calls it.
                     onText = { text -> type(TerminalInput.text(text.replace('\n', '\r'), ctrl = ctrl, alt = alt)) },
                     onBackspace = { type(TerminalInput.key(TerminalKey.BACKSPACE, ctrl = ctrl, alt = alt)) },
                 )
@@ -246,7 +240,6 @@ fun TerminalRoute(container: AppContainer, onBack: () -> Unit) {
     }
 }
 
-/** The open tabs, the screen of the active one, and the key bar. [overlay] draws over the screen. */
 @Composable
 internal fun TerminalTabs(
     tabs: List<TerminalTab>,
@@ -305,7 +298,6 @@ internal fun TerminalTabs(
     }
 }
 
-/** The open tabs: tap to switch, the cross to close. */
 @Composable
 private fun TabStrip(tabs: List<TerminalTab>, active: String?, onSelect: (String) -> Unit, onClose: (String) -> Unit) {
     Row(

@@ -29,7 +29,6 @@ import org.unifiedpush.android.connector.data.PushEndpoint
 
 private val Context.pushDataStore: DataStore<Preferences> by preferencesDataStore(name = "push")
 
-/** Where this phone stands with the server's notifications, for Settings. */
 data class PushStatus(
     val state: State = State.Unknown,
     val detail: String? = null,
@@ -37,11 +36,6 @@ data class PushStatus(
     enum class State { Unknown, Registering, On, PermissionOff, NoGooglePlay, ServerTooOld, Failed, Unsupported }
 
     companion object {
-        /**
-         * Where the server's answer to `GET /notifications/vapid-key` leaves this phone. A guest
-         * gets 403 and no notifications; a server from before issue #306 has no such route (404,
-         * or a page that isn't JSON), which the owner fixes by updating the server.
-         */
         fun ofKeyError(error: ApiException): PushStatus = when {
             error.status == 403 -> PushStatus(State.Unsupported)
             error.status == 404 || error.code == "BAD_RESPONSE" -> PushStatus(State.ServerTooOld)
@@ -50,12 +44,6 @@ data class PushStatus(
     }
 }
 
-/**
- * Registers this phone for the server's Web Push notifications (issue #306) through
- * UnifiedPush's embedded FCM distributor, which delivers through Google Play services and needs
- * no Firebase project. Only Google: UnifiedPush apps such as ntfy are not offered. The server's VAPID key binds the
- * endpoint to that server; a different key (another server, a rotated key) registers again.
- */
 class PushRegistrar(
     context: Context,
     private val api: TinyAgentsApi,
@@ -67,7 +55,6 @@ class PushRegistrar(
     val status: StateFlow<PushStatus> = _status.asStateFlow()
     private val _retries = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
 
-    /** Settings' "Try again": the open activity registers again (it can ask for the permission). */
     val retries: SharedFlow<Unit> = _retries.asSharedFlow()
 
     fun retry() {
@@ -77,11 +64,6 @@ class PushRegistrar(
     private fun hasPlayServices(): Boolean =
         runCatching { appContext.packageManager.getPackageInfo(GOOGLE_PLAY_SERVICES, 0) }.isSuccess
 
-    /**
-     * After sign-in, on each launch: fetch the server's key, ask for the notification
-     * permission ([askPermission], Android 13+), pick a distributor and register. Registering
-     * again on every launch keeps the server's copy fresh and brings back a device it revoked.
-     */
     suspend fun ensure(askPermission: suspend () -> Boolean) {
         val server = session.serverUrl ?: return
         val key = try {
@@ -99,7 +81,6 @@ class PushRegistrar(
         }
         val prefs = store.data.first()
         if (prefs[SERVER] != server || prefs[VAPID] != key) {
-            // Another server or a new key: the old endpoint is bound to the old key.
             if (prefs[VAPID] != null) withContext(Dispatchers.Main) { UnifiedPush.unregister(appContext) }
             store.edit {
                 it.remove(DEVICE_ID)
@@ -112,11 +93,9 @@ class PushRegistrar(
             _status.value = PushStatus(PushStatus.State.NoGooglePlay)
             return
         }
-        // This app's package is the embedded Google distributor.
         val target = appContext.packageName
         val current = UnifiedPush.getSavedDistributor(appContext)
         if (current != target) {
-            // 0.6.0 and 0.6.1 could register through a UnifiedPush app (ntfy): drop that endpoint.
             if (current != null) {
                 forgetDevice()
                 withContext(Dispatchers.Main) { UnifiedPush.removeDistributor(appContext) }
@@ -126,7 +105,6 @@ class PushRegistrar(
         withContext(Dispatchers.Main) { UnifiedPush.register(appContext, vapid = key) }
     }
 
-    /** The distributor gave this phone an endpoint (first time, or it changed): tell the server. */
     suspend fun onNewEndpoint(endpoint: PushEndpoint) {
         val keys = endpoint.pubKeySet ?: run {
             _status.value = PushStatus(PushStatus.State.Failed, detail = "The push service gave no encryption keys")
@@ -164,13 +142,11 @@ class PushRegistrar(
         )
     }
 
-    /** Google dropped this registration: Settings' "Try again" registers afresh. */
     suspend fun onUnregistered() {
         forgetDevice()
         _status.value = PushStatus(PushStatus.State.Failed, detail = "Google stopped delivering to this phone")
     }
 
-    /** Before signing out: the server stops sending here, and the distributor forgets the app. */
     suspend fun signOut() {
         forgetDevice()
         withContext(Dispatchers.Main) { UnifiedPush.unregister(appContext) }
@@ -182,7 +158,6 @@ class PushRegistrar(
         _status.value = PushStatus()
     }
 
-    /** Null when the test went out, else why not. */
     suspend fun sendTest(): String? {
         val id = store.data.first()[DEVICE_ID] ?: return "This phone isn't registered yet"
         return api.testPushDevice(id)

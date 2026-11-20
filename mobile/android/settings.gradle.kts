@@ -1,4 +1,3 @@
-// SHARED (3-way merged): children add their own modules to include(...).
 pluginManagement {
     includeBuild("build-logic")
     repositories {
@@ -20,6 +19,5 @@ rootProject.name = "groot-mobile"
 
 include(":kit")
 include(":app")
-// Tiny Agents: protocol clients the app's live views and terminal are built on.
 include(":vnc")
 include(":terminal")

@@ -8,11 +8,6 @@ import groot.mobile.data.api.CodeThreadSummary
 import groot.mobile.data.api.ThreadSettings
 import groot.mobile.data.api.TranscriptItem
 
-/**
- * One Code thread, live: a port of the web client's `lib/code/use-thread.ts`. The stream starts
- * with a full snapshot and then upserts rows by id, so a replay or reconnect never loses or
- * duplicates a row.
- */
 data class CodeThreadState(
     val loaded: Boolean = false,
     val error: String? = null,
@@ -24,11 +19,9 @@ data class CodeThreadState(
     val working: Boolean = false,
     val context: CodeContext = CodeContext(0, null),
     val costUsd: Double = 0.0,
-    /** Text and thinking the model is streaming right now (not yet a row). */
     val partialText: String = "",
     val partialThinking: String = "",
     val cursor: Int = 0,
-    /** The thread now lives under another id. */
     val movedTo: String? = null,
 )
 
@@ -45,7 +38,6 @@ fun CodeThreadState.withSnapshot(snapshot: CodeThreadSnapshot): CodeThreadState 
     cursor = snapshot.thread.cursor,
 )
 
-/** Apply one thread event. */
 fun reduceCodeThread(state: CodeThreadState, event: CodeThreadEvent): CodeThreadState = when (event) {
     is CodeThreadEvent.Snapshot -> state.withSnapshot(event.snapshot)
     is CodeThreadEvent.Items -> {
@@ -60,7 +52,6 @@ fun reduceCodeThread(state: CodeThreadState, event: CodeThreadEvent): CodeThread
                 items.add(item)
             }
         }
-        // A finished message replaces the streaming tail.
         val done = event.items.any { it is TranscriptItem.Assistant || it is TranscriptItem.Turn }
         state.copy(
             items = items,
@@ -85,9 +76,6 @@ fun reduceCodeThread(state: CodeThreadState, event: CodeThreadEvent): CodeThread
     is CodeThreadEvent.Moved -> state.copy(movedTo = event.to)
 }
 
-// ---- Transcript presentation (`lib/code/transcript.ts`) -----------------------------------
-
-/** What the transcript draws: a row, or a run of finished tool calls folded into one line. */
 sealed interface CodeDisplayItem {
     val key: String
 
@@ -95,24 +83,20 @@ sealed interface CodeDisplayItem {
         override val key: String get() = item.id
     }
 
-    /** Two or more finished tool calls (and the thinking between them). */
     data class Group(val tools: List<TranscriptItem.Tool>, val items: List<TranscriptItem>) : CodeDisplayItem {
         override val key: String get() = "group:${tools.first().id}"
     }
 }
 
-/** Tools that stand on their own: running ones, subagents, messages, plans and screenshots. */
 private fun standsAlone(tool: TranscriptItem.Tool): Boolean =
     tool.status == "running" ||
         tool.tool in setOf("subagent", "message_user", "message_parent", "todo") ||
         tool.images.isNotEmpty()
 
-/** Fold runs of two or more finished tool calls (and the thinking between them) into one group. */
 fun groupTools(items: List<TranscriptItem>): List<CodeDisplayItem> {
     val out = ArrayList<CodeDisplayItem>()
     var run = ArrayList<TranscriptItem>()
     fun flush() {
-        // Thinking after the last tool belongs to what follows, not the group.
         var end = run.size
         while (end > 0 && run[end - 1] is TranscriptItem.Thinking) end--
         val body = run.subList(0, end)
@@ -135,7 +119,6 @@ fun groupTools(items: List<TranscriptItem>): List<CodeDisplayItem> {
     return out
 }
 
-/** "Ran 3 commands, edited 2 files" for a group's line. */
 fun describeTools(tools: List<TranscriptItem.Tool>): String {
     fun count(kind: String) = tools.count { it.tool == kind }
     fun plural(n: Int, one: String, many: String) = "$n ${if (n == 1) one else many}"
@@ -158,7 +141,6 @@ fun describeTools(tools: List<TranscriptItem.Tool>): String {
     return if (failed > 0) "$text · $failed failed" else text
 }
 
-/** The id of the last error notice when nothing followed it: the one that offers recovery. */
 fun lastErrorId(items: List<TranscriptItem>): String? {
     for (item in items.asReversed()) {
         when (item) {
@@ -170,7 +152,6 @@ fun lastErrorId(items: List<TranscriptItem>): String? {
     return null
 }
 
-/** "Worked for 12s · $0.04" under a finished turn. */
 fun turnLine(turn: TranscriptItem.Turn): String? {
     val parts = listOfNotNull(
         turn.durationMs?.let { "Worked for ${durationText(it)}" },
@@ -179,7 +160,6 @@ fun turnLine(turn: TranscriptItem.Turn): String? {
     return parts.takeIf { it.isNotEmpty() }?.joinToString(" · ")
 }
 
-/** "850ms", "12s", "3m 4s", "1h 2m". */
 fun durationText(ms: Long): String = when {
     ms < 1_000 -> "${ms}ms"
     ms < 60_000 -> "${ms / 1_000}s"
@@ -187,7 +167,6 @@ fun durationText(ms: Long): String = when {
     else -> "${ms / 3_600_000}h ${(ms % 3_600_000) / 60_000}m"
 }
 
-/** "$0", "$0.0042", "$0.161", "$12.35" (the web client's `formatUsd`). */
 fun formatUsd(value: Double): String = when {
     value == 0.0 -> "$0"
     value < 0.01 -> "$" + String.format(java.util.Locale.ROOT, "%.4f", value)
@@ -196,7 +175,6 @@ fun formatUsd(value: Double): String = when {
     else -> "$" + Math.round(value)
 }
 
-/** "12k", "2.5M". */
 fun formatTokens(tokens: Long): String = when {
     tokens >= 999_500_000 -> String.format(java.util.Locale.ROOT, "%.1fB", tokens / 1e9)
     tokens >= 999_500 -> String.format(java.util.Locale.ROOT, "%.1fM", tokens / 1e6)
@@ -204,21 +182,16 @@ fun formatTokens(tokens: Long): String = when {
     else -> tokens.toString()
 }
 
-/** "…/app/src" style: the last two path segments. */
 fun shortPath(path: String?): String {
     if (path.isNullOrBlank()) return ""
     val parts = path.split('/').filter { it.isNotEmpty() }
     return if (parts.size <= 2) path else "…/" + parts.takeLast(2).joinToString("/")
 }
 
-// ---- The list (`lib/code/list.ts`) --------------------------------------------------------
-
-/** A thread and its subagents; [busy] and [unread] count the subagents too. */
 data class CodeListNode(val row: CodeThreadSummary, val children: List<CodeListNode>, val busy: Boolean, val unread: Boolean)
 
 data class CodeListSections(val working: List<CodeListNode>, val recent: List<CodeListNode>)
 
-/** Parent to children, newest first; a subagent whose parent is not listed stands on its own. */
 fun buildCodeTree(rows: List<CodeThreadSummary>): List<CodeListNode> {
     val ids = rows.map { it.id }.toSet()
     val byParent = rows.filter { it.parentId != null && it.parentId in ids && it.parentId != it.id }.groupBy { it.parentId!! }
@@ -231,13 +204,11 @@ fun buildCodeTree(rows: List<CodeThreadSummary>): List<CodeListNode> {
         .sortedByDescending { it.row.updatedAt }
 }
 
-/** Working now on top, then recent, narrowed to one harness when [instanceId] is set. */
 fun buildCodeSections(rows: List<CodeThreadSummary>, instanceId: String? = null): CodeListSections {
     val tree = buildCodeTree(rows.filter { instanceId == null || it.instanceId == instanceId })
     return CodeListSections(tree.filter { it.busy }, tree.filter { !it.busy })
 }
 
-/** Working directories threads used, most recent first: the New thread screen offers them. */
 fun recentDirectories(rows: List<CodeThreadSummary>, limit: Int = 6): List<String> =
     rows.sortedByDescending { it.updatedAt }.mapNotNull { it.cwd?.takeIf(String::isNotBlank) }.distinct().take(limit)
 

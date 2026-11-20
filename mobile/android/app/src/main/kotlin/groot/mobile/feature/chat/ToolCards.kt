@@ -59,11 +59,9 @@ import groot.mobile.ui.components.Field
 import groot.mobile.ui.components.PrimaryButton
 import groot.mobile.ui.components.SecondaryButton
 
-/** What a transcript's cards can do; a past chat passes [readOnly] and no handlers fire. */
 class ChatActions(
     val botName: String,
     val labels: ToolLabels,
-    /** Tools that can never be set to "always allow". */
     val askOnlyTools: Set<String>,
     val readOnly: Boolean,
     val now: () -> Long,
@@ -75,7 +73,6 @@ class ChatActions(
     val onOpenLink: (String) -> Unit,
 )
 
-/** A message's tool calls: cards for what waits on the owner, quiet trace lines for the rest. */
 @Composable
 fun ToolSteps(calls: List<ToolCall>, actions: ChatActions, modifier: Modifier = Modifier) {
     val steps = remember(calls, actions.readOnly) { toolSteps(calls, actions.readOnly) }
@@ -109,7 +106,6 @@ private fun ToolStepRow(call: ToolCall, actions: ChatActions) {
     }
 }
 
-/** One quiet line per call: a status mark, what it did, how it went. Tap to read its output. */
 @Composable
 private fun TraceLine(call: ToolCall, title: String, actions: ChatActions) {
     val view = viewOf(call, actions.readOnly)
@@ -164,7 +160,6 @@ private fun TraceLine(call: ToolCall, title: String, actions: ChatActions) {
     }
 }
 
-/** A run of finished calls folded into one line; tap to see each. */
 @Composable
 private fun ToolGroupRow(calls: List<ToolCall>, actions: ChatActions) {
     var open by rememberSaveable(calls.size, calls.firstOrNull()?.id) { mutableStateOf(false) }
@@ -331,7 +326,6 @@ private fun CodeHandoffCard(call: ToolCall, actions: ChatActions) {
     }
 }
 
-/** A bot's questions: options to pick, a line for the owner's own words, then Send or Dismiss. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun QuestionCard(call: ToolCall, actions: ChatActions) {
@@ -398,7 +392,6 @@ private fun QuestionBlock(question: OwnerQuestion, selected: List<String>, onTog
     }
 }
 
-/** Questions that no longer wait: what was asked and what the owner said. */
 @Composable
 private fun AskedQuestions(call: ToolCall, note: String?) {
     val questions = call.questions ?: return

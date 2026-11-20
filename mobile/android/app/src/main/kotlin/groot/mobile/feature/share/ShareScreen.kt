@@ -77,7 +77,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** The share sheet wired to its ViewModel, the bot list and the app's notices. */
 @Composable
 fun ShareRoute(
     container: AppContainer,
@@ -118,10 +117,6 @@ fun ShareRoute(
     )
 }
 
-/**
- * The sheet another app's share opens, drawn over that app: who it goes to (search and pick a
- * bot), what goes (the shared files and text), and a note to send with it.
- */
 @Composable
 fun ShareSheet(
     signedIn: Boolean,
@@ -155,7 +150,6 @@ fun ShareSheet(
                 .fillMaxSize()
                 .clip(RoundedCornerShape(topStart = Dims.sheetRadius, topEnd = Dims.sheetRadius))
                 .background(MaterialTheme.colorScheme.surfaceContainerLow)
-                // Taps inside the sheet stay in it.
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = {})
                 .navigationBarsPadding()
                 .imePadding(),
@@ -234,12 +228,10 @@ private fun ShareHeader(onCancel: () -> Unit) {
             textAlign = TextAlign.Center,
             modifier = Modifier.weight(1f),
         )
-        // Balances the close button so the title sits in the middle.
         Spacer(Modifier.size(Dims.iconButton))
     }
 }
 
-/** "To:", the chosen bot as a chip, and a search box that narrows the list below. */
 @Composable
 private fun ToField(selected: BotListEntry?, query: String, onQueryChange: (String) -> Unit, onClear: () -> Unit) {
     Row(
@@ -324,7 +316,6 @@ private fun BotList(bots: List<BotListEntry>, query: String, selectedId: String?
     }
 }
 
-/** What goes (the shared files and text, each removable), a note, attach more, and Send. */
 @Composable
 private fun ShareComposer(
     draft: ShareDraft,
@@ -398,7 +389,6 @@ private fun ShareComposer(
     }
 }
 
-/** A shared file: a thumbnail for an image, else its type over its name; a spinner while it uploads. */
 @Composable
 private fun SharedFileCard(upload: StagedUpload, onRemove: () -> Unit) {
     val file = upload.file
@@ -429,7 +419,6 @@ private fun SharedFileCard(upload: StagedUpload, onRemove: () -> Unit) {
     }
 }
 
-/** Shared text (a link, a selection) as a card, so the owner sees what goes with the note. */
 @Composable
 private fun SharedTextCard(text: String, onRemove: () -> Unit) {
     ShareCard(onRemove = onRemove, removeLabel = "Remove the shared text", wide = true) {
@@ -476,11 +465,9 @@ private fun TypeBadge(label: String) {
     )
 }
 
-/** A file's type as its extension says it, for the card's badge. */
 internal fun fileType(name: String): String =
     name.substringAfterLast('.', "").takeIf { it.isNotEmpty() && it.length <= MAX_EXTENSION && it != name }?.uppercase() ?: "FILE"
 
-/** A shared image's thumbnail from its content provider; null when it cannot make one. */
 @Composable
 private fun rememberThumbnail(uri: Uri): Bitmap? {
     val context = LocalContext.current

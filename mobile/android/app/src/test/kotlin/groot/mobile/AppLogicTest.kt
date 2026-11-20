@@ -25,7 +25,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
-/** Small pure pieces: wire parsing, the session store, the schedule form, Markdown blocks. */
 @RunWith(AndroidJUnit4::class)
 class AppLogicTest {
     @Test

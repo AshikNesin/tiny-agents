@@ -12,25 +12,15 @@ import org.json.JSONObject
 import java.io.InputStream
 import java.net.URLEncoder
 
-/** The token and user every sign-in route returns. */
 data class SignIn(val token: String, val user: SessionUser)
 
-/**
- * Every tiny-agents route the app calls, one function each, typed with the wire models.
- * Paths are under `/api/v1`; what each route does is documented where the server declares
- * it (`apps/web/src/server/api`).
- */
 class TinyAgentsApi(private val client: ApiClient) {
     private fun enc(value: String): String = URLEncoder.encode(value, "UTF-8").replace("+", "%20")
 
     private fun list(data: Any?): JSONArray = data as? JSONArray ?: JSONArray()
 
-    /** Open the WebSocket a ticket route answered with (its `path`, ticket included). */
     fun socket(path: String, listener: WebSocketListener): WebSocket = client.webSocket(path, listener)
 
-    // ---- Session ------------------------------------------------------------------------
-
-    /** Whether the server still needs its first account. Also the app's "is this a tiny-agents server" probe. */
     suspend fun needsSetup(): Boolean = client.getObject("/auth/setup").bool("needsSetup")
 
     suspend fun login(email: String, password: String): SignIn =
@@ -49,8 +39,6 @@ class TinyAgentsApi(private val client: ApiClient) {
     }
 
     suspend fun isGuest(): Boolean = client.getObject("/people/me").bool("guest")
-
-    // ---- Bots ---------------------------------------------------------------------------
 
     suspend fun bots(): List<BotListEntry> = list(client.get("/bots")).mapObjects(BotListEntry::from)
 
@@ -78,8 +66,6 @@ class TinyAgentsApi(private val client: ApiClient) {
     suspend fun capabilities(): List<Capability> =
         client.getObject("/capabilities").arr("capabilities").mapObjects(Capability::from)
 
-    // ---- Chat ---------------------------------------------------------------------------
-
     fun botStream(id: String) = client.events("/bots/${enc(id)}/stream")
 
     fun eventsFeed() = client.events("/events")
@@ -104,7 +90,6 @@ class TinyAgentsApi(private val client: ApiClient) {
         )
     }
 
-    /** Withdraw a message the server still holds queued. */
     suspend fun withdrawMessage(botId: String, requestId: String) {
         client.delete("/bots/${enc(botId)}/messages/${enc(requestId)}")
     }
@@ -116,7 +101,6 @@ class TinyAgentsApi(private val client: ApiClient) {
         client.post("/bots/${enc(botId)}/abort")
     }
 
-    /** Start a new chat; the one the bot was on becomes a past chat. */
     suspend fun resetChat(botId: String) {
         client.post("/bots/${enc(botId)}/reset")
     }
@@ -132,12 +116,8 @@ class TinyAgentsApi(private val client: ApiClient) {
         )
     }
 
-    // ── Phone notifications (issue #306) ──────────────────────────────────
-
-    /** The server's VAPID public key: what this device registers its push subscription with. */
     suspend fun vapidKey(): String = client.getObject("/notifications/vapid-key").string("publicKey")
 
-    /** Register (or refresh) this device's push endpoint; returns the device id. */
     suspend fun registerPushDevice(device: PushDeviceBody): String =
         client.postObject("/notifications/devices", device.toJson()).string("id")
 
@@ -145,13 +125,11 @@ class TinyAgentsApi(private val client: ApiClient) {
         client.delete("/notifications/devices/${enc(id)}")
     }
 
-    /** Send a test push to this device; null when it went out, else the push service's answer. */
     suspend fun testPushDevice(id: String): String? {
         val result = client.postObject("/notifications/devices/${enc(id)}/test")
         return if (result.bool("ok")) null else result.string("reason", "failed")
     }
 
-    /** Answer a bot's questions, one answer per question; null dismisses them. */
     suspend fun answerQuestions(botId: String, taskId: Int, answers: List<OwnerAnswer>?) {
         val body = if (answers != null) jsonOf("answers" to answers.map { it.toJson() }) else jsonOf("dismissed" to true)
         client.post("/bots/${enc(botId)}/questions/$taskId", body)
@@ -180,9 +158,6 @@ class TinyAgentsApi(private val client: ApiClient) {
         client.delete("/bots/${enc(botId)}/chats/${enc(chatId)}")
     }
 
-    // ---- Uploads ------------------------------------------------------------------------
-
-    /** Upload one file (up to 25 MB); [open] is called on a background thread, possibly more than once on a retry. */
     suspend fun upload(fileName: String, mimeType: String, length: Long, open: () -> InputStream): AttachmentRef {
         val body = object : RequestBody() {
             override fun contentType() = mimeType.toMediaTypeOrNull()
@@ -195,7 +170,6 @@ class TinyAgentsApi(private val client: ApiClient) {
         return AttachmentRef.from(stored.objOrNull("ref") ?: JSONObject())
     }
 
-    /** An upload's original bytes; the caller closes the response. */
     suspend fun uploadContent(uploadId: String): Response = client.download("/uploads/${enc(uploadId)}/content")
 
     suspend fun deleteUpload(uploadId: String) {
@@ -216,9 +190,6 @@ class TinyAgentsApi(private val client: ApiClient) {
         )
     }
 
-    // ---- Live views (browser, computer) -------------------------------------------------
-
-    /** [surface] is "browser" or "computer". */
     suspend fun botLiveStatus(botId: String, surface: String): LiveStatus =
         LiveStatus.from(client.getObject("/bots/${enc(botId)}/$surface"))
 
@@ -271,22 +242,16 @@ class TinyAgentsApi(private val client: ApiClient) {
 
     private fun ticket(json: JSONObject) = VncTicket(json.string("path"), json.doubleOrNull("scale") ?: 1.0)
 
-    // ---- Terminal -----------------------------------------------------------------------
-
     suspend fun terminalTabs(): TerminalList = TerminalList.from(client.getObject("/terminal/sessions"))
 
     suspend fun createTerminalTab(cols: Int, rows: Int): TerminalTab =
         TerminalTab.from(client.postObject("/terminal/sessions", jsonOf("cols" to cols, "rows" to rows)))
 
-    /** Close a tab; without [force] the server refuses (409) while something runs in it. */
     suspend fun closeTerminalTab(name: String, force: Boolean = false) {
         client.delete("/terminal/sessions/${enc(name)}", if (force) mapOf("force" to "1") else emptyMap())
     }
 
-    /** The WebSocket path for one attach, ticket included. */
     suspend fun terminalTicket(name: String): String = client.postObject("/terminal/sessions/${enc(name)}/ticket").string("path")
-
-    // ---- Routines -----------------------------------------------------------------------
 
     suspend fun routines(): List<Routine> = list(client.get("/routines")).mapObjects(Routine::from)
 
@@ -320,8 +285,6 @@ class TinyAgentsApi(private val client: ApiClient) {
     suspend fun routineRuns(id: String, limit: Int = 20): List<RoutineRun> =
         client.getObject("/routines/${enc(id)}/runs", mapOf("limit" to limit.toString())).arr("runs").mapObjects(RoutineRun::from)
 
-    // ---- Tasks --------------------------------------------------------------------------
-
     suspend fun tasks(): List<OwnerTask> = list(client.get("/tasks")).mapObjects(OwnerTask::from)
 
     suspend fun createTask(title: String, description: String = "", priority: String = "medium"): OwnerTask =
@@ -337,8 +300,6 @@ class TinyAgentsApi(private val client: ApiClient) {
         client.delete("/tasks/${enc(id)}")
     }
 
-    // ---- Skills -------------------------------------------------------------------------
-
     suspend fun skills(): List<Skill> = list(client.get("/skills")).mapObjects(Skill::from)
 
     suspend fun createSkill(name: String, description: String, body: String): Skill =
@@ -353,8 +314,6 @@ class TinyAgentsApi(private val client: ApiClient) {
     suspend fun deleteSkill(id: String) {
         client.delete("/skills/${enc(id)}")
     }
-
-    // ---- Memory -------------------------------------------------------------------------
 
     suspend fun memories(botId: String, includeArchived: Boolean = true): List<Memory> =
         client.getObject("/bots/${enc(botId)}/memories", mapOf("includeArchived" to includeArchived.toString()))
@@ -372,8 +331,6 @@ class TinyAgentsApi(private val client: ApiClient) {
     suspend fun deleteMemory(id: String) {
         client.delete("/memories/${enc(id)}")
     }
-
-    // ---- Connections --------------------------------------------------------------------
 
     suspend fun connections(): List<Connection> = list(client.get("/connections")).mapObjects(Connection::from)
 
@@ -405,7 +362,6 @@ class TinyAgentsApi(private val client: ApiClient) {
         client.post("/connections/${enc(id)}/reconnect")
     }
 
-    /** The consent URL to open for an OAuth connection, or null when it is already authorized. */
     suspend fun authorizeConnection(id: String): String? =
         client.postObject("/connections/${enc(id)}/authorize").stringOrNull("authorizationUrl")
 
@@ -413,13 +369,10 @@ class TinyAgentsApi(private val client: ApiClient) {
         client.patch("/connections/${enc(id)}/tools/${enc(serverName)}", jsonOf("enabled" to enabled))
     }
 
-    // ---- Vault --------------------------------------------------------------------------
-
     suspend fun vaultItems(): List<VaultItem> = client.getObject("/vault").arr("items").mapObjects(VaultItem::from)
 
     suspend fun vaultItem(handle: String): VaultItemDetail = VaultItemDetail.from(client.getObject("/vault/items/${enc(handle)}"))
 
-    /** Confirm it is the owner with their password; the token goes on step-up routes. */
     suspend fun stepUp(password: String): StepUpToken {
         val json = client.postObject("/vault/step-up", jsonOf("password" to password))
         return StepUpToken(json.string("token"), json.long("expiresAt"))
@@ -439,7 +392,6 @@ class TinyAgentsApi(private val client: ApiClient) {
     suspend fun credentialRequest(taskId: Int): CredentialRequestView =
         CredentialRequestView.from(client.getObject("/vault/requests/$taskId"))
 
-    /** Fill a bot's credential request; the values go to the page, never to the bot. */
     suspend fun submitCredentials(taskId: Int, values: Map<String, String>, save: Boolean) {
         client.post("/vault/requests/$taskId/submit", jsonOf("values" to values, "save" to save))
     }
@@ -449,8 +401,6 @@ class TinyAgentsApi(private val client: ApiClient) {
     }
 
     private fun stepUpHeader(token: String) = mapOf("X-Vault-Step-Up" to token)
-
-    // ---- People -------------------------------------------------------------------------
 
     suspend fun guests(): List<Guest> = client.getObject("/people").arr("guests").mapObjects(Guest::from)
 

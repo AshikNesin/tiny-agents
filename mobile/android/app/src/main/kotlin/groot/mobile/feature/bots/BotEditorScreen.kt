@@ -63,10 +63,8 @@ import groot.mobile.ui.components.Avatar
 import kotlinx.coroutines.delay
 import androidx.compose.runtime.produceState
 
-/** What the editor needs besides the bot itself: what it can be given. */
 data class BotEditorData(val bot: Bot?, val skills: List<Skill>, val connections: List<Connection>, val guests: List<Guest>)
 
-/** Create a bot ([botId] null) or edit one: who it is, its model, and what it may do. */
 @Composable
 fun BotEditorRoute(container: AppContainer, botId: String?, onBack: () -> Unit) {
     val bots by container.bots.state.collectAsStateWithLifecycle()
@@ -121,11 +119,9 @@ fun BotEditor(data: BotEditorData, bots: BotsState, onSave: (BotDraft) -> Unit, 
     var pickModel by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
 
-    // The model may be unset until the catalog loads; a bot can also run on the default (null).
     val model = bots.models.models.firstOrNull { it.id == (modelId ?: bots.models.defaultModelId) }
     val canSave = name.isNotBlank() && (bot != null || model != null)
 
-    // The avatar is seeded by the name (as on the web), so it previews as the owner types; settled, not per keystroke.
     val face by produceState(initialValue = name, name) {
         delay(AVATAR_PREVIEW_DELAY_MS)
         value = name
@@ -269,7 +265,6 @@ private fun ToggleRow(title: String, summary: String, checked: Boolean, onChange
     }
 }
 
-/** One toolkit: its tools, each set to Allow, Ask or Off. Collapsed until tapped. */
 @Composable
 private fun ToolkitCard(capability: Capability, permissions: MutableMap<String, String>) {
     var open by remember { mutableStateOf(false) }
@@ -306,7 +301,6 @@ private fun ToolPermissionRow(tool: ToolInfo, value: String, onChange: (String) 
     Column(verticalArrangement = Arrangement.spacedBy(S.xs)) {
         Text((tool.askLabel ?: tool.label).replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.bodyMedium)
         Row(Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.surfaceContainerHigh).padding(S.xxs)) {
-            // A tool that can never run unattended is not offered Allow.
             for (option in if (tool.askOnly) listOf("ask", "off") else listOf("allow", "ask", "off")) {
                 val selected = option == value
                 Text(

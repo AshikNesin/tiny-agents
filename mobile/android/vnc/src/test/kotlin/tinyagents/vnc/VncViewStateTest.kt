@@ -21,7 +21,6 @@ import tinyagents.vnc.FakeRfbServer.Companion.extendedDesktopSize
 import tinyagents.vnc.FakeRfbServer.Companion.rawRect
 import androidx.compose.ui.input.key.KeyEvent as ComposeKeyEvent
 
-/** [VncViewState]: the bitmap mirror, keyboard helpers and the view-to-remote mapping. */
 @RunWith(AndroidJUnit4::class)
 class VncViewStateTest {
     private val state = VncViewState()
@@ -35,7 +34,6 @@ class VncViewStateTest {
         return server
     }
 
-    /** Runs what the client's thread posted to the main thread. */
     private fun idle() = shadowOf(Looper.getMainLooper()).idle()
 
     private fun sent(server: FakeRfbServer, block: () -> Unit): List<String> {
@@ -60,7 +58,6 @@ class VncViewStateTest {
         assertFalse(state.isConnected)
         assertEquals(IntSize.Zero, state.remoteSize)
         assertEquals(1f, state.zoom)
-        // Nothing to send to, nothing happens.
         state.sendText("x")
         state.sendChord(Keysyms.Control_L, 'c'.code)
         assertNull(state.toRemote(Offset(1f, 1f)))
@@ -163,8 +160,6 @@ class VncViewStateTest {
         assertEquals("the last frame stays", 8, state.bitmap!!.width)
     }
 
-    // Keyboard
-
     @Test
     fun `sendText types each character as key down and up`() {
         val server = connect(8, 6)
@@ -222,8 +217,6 @@ class VncViewStateTest {
                 }
             },
         )
-        // Shift is its own key, and the letter arrives as the shifted character. Releasing
-        // Shift first still releases the keysym that was pressed.
         assertEquals(
             listOf(key(Keysyms.Shift_L, true), key('A'.code, true), key(Keysyms.Shift_L, false), key('A'.code, false)),
             sent(server) {
@@ -233,7 +226,6 @@ class VncViewStateTest {
                 hardware(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_A)
             },
         )
-        // Ctrl+C: Control and a plain c, which the server combines.
         assertEquals(
             listOf(key(Keysyms.Control_L, true), key('c'.code, true), key('c'.code, false), key(Keysyms.Control_L, false)),
             sent(server) {
@@ -300,12 +292,9 @@ class VncViewStateTest {
         assertNull(Keysyms.fromAndroidKeyCode(KeyEvent.KEYCODE_BACK))
     }
 
-    // Viewport
-
     @Test
     fun `view positions map to remote pixels under fit-to-view`() {
         connect(800, 600)
-        // Same aspect ratio: half scale, no letterbox.
         state.onViewSizeChanged(IntSize(400, 300))
         assertEquals(0.5f, state.scale())
         assertEquals(IntOffset(0, 0), state.toRemote(Offset(0f, 0f)))
@@ -314,7 +303,6 @@ class VncViewStateTest {
         assertNull(state.toRemote(Offset(400f, 150f)))
         assertNull(state.toRemote(Offset(-1f, 150f)))
 
-        // A taller view letterboxes: the image is 400x300, centred, 50 px bars above and below.
         state.onViewSizeChanged(IntSize(400, 400))
         assertEquals(0.5f, state.scale())
         assertEquals(Offset(0f, 50f), state.imageOrigin())
@@ -324,7 +312,6 @@ class VncViewStateTest {
         assertEquals(IntOffset(799, 599), state.toRemoteClamped(Offset(5000f, 5000f)))
         assertNull(state.toRemote(Offset(10f, 350f)))
 
-        // A wider view pillarboxes, and a small remote is scaled up.
         state.onViewSizeChanged(IntSize(2000, 1200))
         assertEquals(2f, state.scale())
         assertEquals(Offset(200f, 0f), state.imageOrigin())
@@ -359,11 +346,9 @@ class VncViewStateTest {
         state.onViewSizeChanged(IntSize(400, 300))
         state.transformBy(Offset(200f, 150f), Offset.Zero, 2f)
         assertEquals(IntOffset(400, 300), state.toRemote(Offset(200f, 150f)))
-        // Fingers move 50 px right: at 1 view px per remote px the content follows.
         state.transformBy(Offset(250f, 150f), Offset(50f, 0f), 1f)
         assertEquals(Offset(50f, 0f), state.pan)
         assertEquals(IntOffset(350, 300), state.toRemote(Offset(200f, 150f)))
-        // The image is 800x600 in a 400x300 view: it can move 200 px each way horizontally.
         state.transformBy(Offset(250f, 150f), Offset(5000f, -5000f), 1f)
         assertEquals(Offset(200f, -150f), state.pan)
         assertEquals(IntOffset(0, 599), state.toRemote(Offset(0f, 299.5f)))
@@ -372,7 +357,6 @@ class VncViewStateTest {
         assertEquals(1f, state.zoom)
         assertEquals(Offset.Zero, state.pan)
 
-        // Without zoom there is nothing to pan.
         state.transformBy(Offset(250f, 150f), Offset(50f, 30f), 1f)
         assertEquals(Offset.Zero, state.pan)
     }
@@ -384,13 +368,11 @@ class VncViewStateTest {
         state.transformBy(Offset(200f, 150f), Offset.Zero, 2f)
         state.transformBy(Offset(200f, 150f), Offset(200f, 150f), 1f)
         assertEquals(Offset(200f, 150f), state.pan)
-        // Half the view: the zoomed image is 400x300 in 200x150, so it can move 100 and 75 px.
         state.onViewSizeChanged(IntSize(200, 150))
         assertEquals(Offset(100f, 75f), state.pan)
         server.update(extendedDesktopSize(0, 0, 100, 600))
         server.expectUpdateRequest(incremental = false, 100, 600)
         idle()
-        // 100x600 in 200x150 at 2x is drawn 50x300: narrower than the view, so no horizontal pan.
         assertEquals(Offset(0f, 75f), state.pan)
     }
 }
