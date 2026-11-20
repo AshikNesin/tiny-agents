@@ -1508,7 +1508,6 @@ exports[`ChatMessageView, pinned > assistant: reasoning while streaming > markup
           data-slot="trace-collapsible-content"
           data-state="open"
           id="radix-<id1>"
-          style="transition-duration: 0s;"
         >
           <div
             class="mt-2 mb-1 ml-[calc(--spacing(2)-1px)] min-w-0 border-l pr-1 pl-4 leading-relaxed wrap-break-word text-muted-foreground"
@@ -4774,7 +4773,6 @@ exports[`ChatMessageView, pinned > reasoning folds when the turn finishes and op
           data-state="closed"
           hidden=""
           id="radix-<id1>"
-          style="transition-duration: 0s;"
         />
       </div>
       <div
