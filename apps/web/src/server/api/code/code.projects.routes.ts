@@ -40,7 +40,7 @@ import { threadReview } from "./code.review";
 import { checkpointRange, checkpointsOf, revertTo } from "./code.checkpoints";
 import { codeHub } from "./code.hub";
 import { checkLog } from "./code.checks";
-import { WorkspaceError, cleanBranchPrefix } from "./code.workspace";
+import { cleanBranchPrefix, saying } from "./code.workspace";
 import {
   archiveReview,
   askReview,
@@ -375,11 +375,13 @@ async function reviewRange(threadId: string, scope = "base") {
   if (reviewId) {
     const review = await reviewWorktree(reviewId);
     const at = { ws: review.ws, worktree: review.worktree, viewable: true };
-    if (scope === "base") return { ...at, from: `merge-base:${review.base}` };
-    if (scope === "mine") return { ...at, from: review.headSha };
+    if (scope === "base") return { ...at, from: `merge-base:${review.row.baseRef}` };
+    if (scope === "mine") return { ...at, from: review.row.headSha };
     if (scope !== "review") throw Boom.badRequest("A pull request review has no such scope.");
-    if (!review.reviewedSha) throw Boom.badRequest("You have not reviewed this pull request yet.");
-    return { ...at, from: review.reviewedSha };
+    if (!review.row.reviewedSha) {
+      throw Boom.badRequest("You have not reviewed this pull request yet.");
+    }
+    return { ...at, from: review.row.reviewedSha };
   }
   if (scope === "review" || scope === "mine") {
     throw Boom.badRequest("Only a pull request review has this view.");
@@ -403,12 +405,6 @@ async function reviewRange(threadId: string, scope = "base") {
     from: `merge-base:${found.project.baseBranch}`,
     viewable: true,
   };
-}
-
-/** A workspace failure the owner can act on, said as it is (409). */
-function saying(error: unknown): never {
-  if (error instanceof WorkspaceError) throw Boom.conflict(error.message);
-  throw error;
 }
 
 router.get("/code/threads/:id/review/files", async (c) => {

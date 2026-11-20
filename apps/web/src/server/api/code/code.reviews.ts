@@ -71,7 +71,7 @@ import { applyTitle } from "./code.naming";
 import { repoOf } from "./code.projects";
 import { threadReview, type DraftInput } from "./code.review";
 import { follow } from "./code.store";
-import { WorkspaceError, type Workspace } from "./code.workspace";
+import { saying, type Workspace } from "./code.workspace";
 
 type CodeReviewRow = typeof codeReviews.$inferSelect;
 
@@ -293,20 +293,17 @@ export async function getReview(id: string): Promise<PullReviewView> {
   return reviewView(row, project);
 }
 
-/**
- * What the review's file list and diffs read: its worktree, against the
- * PR's base, or (`since`) against the commit of the owner's last review.
- */
+/** The review's worktree; archiving a review removes it (404). */
+function worktreeOf(row: CodeReviewRow): string {
+  if (!row.worktree) throw Boom.notFound("This review is archived. Open the PR again.");
+  return row.worktree;
+}
+
+/** A review with its worktree: what its diffs read and its changes are made in. */
 export async function reviewWorktree(id: string) {
   const { row, project } = await findReview(id);
-  if (!row.worktree) throw Boom.notFound("This review is archived. Open the PR again.");
-  return {
-    worktree: row.worktree,
-    base: row.baseRef,
-    headSha: row.headSha,
-    reviewedSha: row.reviewedSha,
-    ws: await codeGitHub().workspace(project),
-  };
+  const worktree = worktreeOf(row);
+  return { row, project, worktree, ws: await codeGitHub().workspace(project) };
 }
 
 /**
@@ -323,7 +320,7 @@ export async function askReview(
   if (!hub) throw Boom.notFound("No coding agent is connected.");
   return hub.serial(reviewKey(id), async () => {
     const { row, project } = await findReview(id);
-    if (!row.worktree) throw Boom.badRequest("This review is archived. Open the PR again.");
+    const worktree = worktreeOf(row);
     const known = row.threadId ? hub.resolve(row.threadId) : undefined;
     const { result } = await threadReview(reviewKey(id)).send(async (comments) => {
       const message = comments ? `${comments}\n\n---\n\n${question}` : question;
@@ -331,7 +328,7 @@ export async function askReview(
         await known.instance.send(known.nativeId, { message });
         return row.threadId!;
       }
-      return startAssistant(row, project, row.worktree!, message, model);
+      return startAssistant(row, project, worktree, message, model);
     });
     return { threadId: result };
   });
@@ -604,36 +601,18 @@ export async function reviewInbox(query: InboxQuery = {}): Promise<InboxPullView
 
 // --- changing the PR's code -------------------------------------------------------------------
 
-/** A review with a worktree to change, its project and its workspace. */
-async function openWorktree(id: string) {
-  const { row, project } = await findReview(id);
-  if (!row.worktree) throw Boom.badRequest("This review is archived. Open the PR again.");
-  return {
-    row,
-    project,
-    worktree: row.worktree,
-    ws: await codeGitHub().workspace(project),
-  };
-}
-
 /**
  * A review whose worktree is its own to commit, push or reset: a coding
  * thread's worktree holds that thread's work, so those go through the thread.
  */
 async function ownWorktree(id: string) {
-  const found = await openWorktree(id);
+  const found = await reviewWorktree(id);
   if (found.worktree !== reviewPath(found.project, found.row.number)) {
     throw Boom.conflict(
       "This review shows the coding thread's worktree, so these changes are that thread's. Discard or push them from the thread.",
     );
   }
   return found;
-}
-
-/** A git failure the owner can act on, said as it is (409). */
-function saying(error: unknown): never {
-  if (error instanceof WorkspaceError) throw Boom.conflict(error.message);
-  throw error;
 }
 
 /**
@@ -701,7 +680,7 @@ function suggestion(lines: string[]): string {
  * or deleted, is skipped and counted.
  */
 export async function suggestReviewChanges(id: string): Promise<SuggestedChanges> {
-  const { row, worktree, ws } = await openWorktree(id);
+  const { row, worktree, ws } = await reviewWorktree(id);
   const files = await ws.files(worktree, row.headSha).catch(saying);
   const read = await Promise.all(
     files.map(async (file) => {
@@ -760,7 +739,7 @@ function suggestionsFor(path: string, mine: Hunk[], pull: Hunk[], headLines: str
 
 /** A Terminal tab that starts in the review's worktree. */
 export async function reviewTerminal(id: string): Promise<ReviewTerminal> {
-  const { worktree } = await openWorktree(id);
+  const { worktree } = await reviewWorktree(id);
   try {
     const tab = await getTerminalService().create(120, 34, {
       typeLine: `cd ${shQuote(worktree)}`,
