@@ -41,7 +41,6 @@ const TAB_LABELS: Record<Tab, string> = {
   completed: "Completed",
 };
 
-/** Today bucket: due by end of local day, or undated but in progress. */
 function isToday(task: Task, todayEnd: number): boolean {
   if (task.status === "done") return false;
   if (task.dueAt) return new Date(task.dueAt).getTime() <= todayEnd;
@@ -65,11 +64,9 @@ function startOfLocalDay(d: Date): number {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
 }
 
-/** "Today", "Tomorrow, 3:00 PM", "Oct 30": the day first, a time only if one was set. */
 function formatDue(iso: string): string {
   const d = new Date(iso);
   const now = new Date();
-  // Quick-add files tasks at the end of a day (23:59): a date, no time.
   const allDay =
     (d.getHours() === 23 && d.getMinutes() === 59) || (!d.getHours() && !d.getMinutes());
   const days = Math.round((startOfLocalDay(d) - startOfLocalDay(now)) / 86_400_000);
@@ -110,7 +107,6 @@ export function Tasks() {
     const open = (tasks ?? []).filter((t) => t.status !== "done");
     return {
       today: open.filter((t) => isToday(t, todayEnd)),
-      // Dated tasks soonest first, then the undated ones under "No date" (#97).
       upcoming: open
         .filter((t) => !isToday(t, todayEnd))
         .sort((a, b) => {
@@ -136,12 +132,7 @@ export function Tasks() {
   }, [quick]);
 
   const create = async (text: string, dueToday: boolean) => {
-    // "Call mom tomorrow 5pm !high": a day, time or priority typed in the
-    // box wins over the tab's default due date (#97).
     const parsed = parseQuickTask(text);
-    // Otherwise quick-add files the task where it was typed: today's tab
-    // due end of today, Upcoming due end of tomorrow (friction #36). An
-    // undated to-do counts as upcoming, so Today must not leave it undated.
     const due = parsed.due ?? new Date(dueToday ? todayEnd : todayEnd + 86_400_000);
     try {
       await mutations.create.mutateAsync({
@@ -151,8 +142,6 @@ export function Tasks() {
       });
       setQuick("");
       await refresh();
-      // A day typed in the box can file it under the other tab, where it
-      // would vanish from view: say where it went.
       const landed: Tab = due.getTime() <= todayEnd ? "today" : "upcoming";
       if (landed !== tab) {
         toast.success(`Added to ${TAB_LABELS[landed]}`, {
@@ -167,12 +156,10 @@ export function Tasks() {
 
   const toggle = async (task: Task) => {
     const status = task.status === "done" ? "todo" : "done";
-    // Optimistic flip; revert on failure.
     setTask(task.id, { status });
     try {
       await mutations.update.mutateAsync({ id: task.id, input: { status } });
       await refresh();
-      // Completing drops the row from the list; make that one tap to take back.
       if (status === "done") {
         toast.success("Task completed", {
           description: task.title,
@@ -211,7 +198,6 @@ export function Tasks() {
       description="Your to-dos. Bots can manage these from chat too."
       maxWidth="4xl"
     >
-      {/* Tabs (PRD §6.5: small uppercase section labels with counts) */}
       <div role="tablist" aria-label="Task filters" className="flex gap-1 rounded-lg bg-muted p-1">
         {(Object.keys(TAB_LABELS) as Tab[]).map((t) => (
           <button

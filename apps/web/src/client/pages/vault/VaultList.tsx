@@ -57,7 +57,6 @@ function lastUsed(item: VaultItem): string | undefined {
 function BackendCard({ backend }: { backend: VaultBackendView }) {
   const states = [backend.read, backend.write].filter(Boolean);
   const problem = states.find((s) => s!.state !== "ready");
-  // The bundled 1Password Connect server is still coming up (first start pulls it).
   const starting = problem?.code === "starting";
   return (
     <Card size="sm">
@@ -189,7 +188,6 @@ function LinkDialog({
   );
 }
 
-/** Keys the server uses itself (audience `app`): listed read-only, changed where they are used. */
 function AppItemsSection({ items }: { items: VaultItem[] }) {
   const appItems = items.filter((item) => item.audience === "app");
   if (appItems.length === 0) return null;
@@ -217,8 +215,6 @@ export function VaultList() {
     setRefreshing(false);
   };
 
-  // The primary backend must actually be able to create items (issue #124):
-  // the local backend is "configured" but unusable without SECRETS_KEY.
   const primary = overview?.backends.find((b) => b.name === overview.primaryBackend);
   const canCreate =
     !!overview &&
@@ -253,8 +249,6 @@ export function VaultList() {
             <RefreshCw className="size-4" />
             Refresh
           </Button>
-          {/* Wrapped so the reason still hovers while the button is disabled
-              (disabled buttons swallow pointer events). */}
           <span
             title={
               canCreate

@@ -3,7 +3,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@groot/ui/tabs";
 import { Textarea } from "@groot/ui/textarea";
 import { Streamdown } from "streamdown";
 
-/** The skill's markdown instructions: Edit, and a Preview of them. */
 export function SkillInstructions({
   form,
   setForm,

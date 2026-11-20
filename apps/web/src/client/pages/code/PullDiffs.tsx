@@ -1,11 +1,3 @@
-/**
- * A PR review's changes in the diff workspace (`DiffWorkspace`): the file tree
- * beside one column of every changed file. Which changes: since the owner's
- * last review, the whole PR, or Your changes in this checkout. Comment adds a
- * line comment to the PR's review on GitHub (sent with Submit review), Ask
- * assistant keeps it for the assistant; GitHub's conversations sit under their
- * lines.
- */
 import { useState, type ReactNode } from "react";
 import { ChevronDown, FileDiff as FileDiffIcon } from "lucide-react";
 import { EmptyState } from "@groot/ui";
@@ -16,7 +8,6 @@ import type { FileConversations } from "./PullThreads";
 import { DiffWorkspace, type DiffView } from "./DiffWorkspace";
 import { useReviewFiles } from "./use-review-files";
 
-/** `base` (the whole PR), `review` (since the owner's last review) or `mine` (Your changes). */
 type Scope = "base" | "review" | "mine";
 
 export function PullDiffs({
@@ -31,17 +22,11 @@ export function PullDiffs({
 }: {
   review: PullReviewView;
   refreshKey: unknown;
-  /** Split or unified, Fold all, and on phones the file tree sliding over the diff. */
   view: DiffView;
-  /** Line comments for the assistant. */
   commenting?: ThreadCommenting;
-  /** Line comments for the PR's review on GitHub. */
   github?: ThreadCommenting;
-  /** A PR review's conversations from GitHub, per file. */
   conversations?: (path: string) => FileConversations;
-  /** Push to PR, Post as suggestions and Discard, over Your changes; `done` reads them again. */
   yourChanges?: (done: () => void) => ReactNode;
-  /** A comment went to the assistant: the page shows it. */
   onAskedAssistant?: () => void;
 }) {
   const threadId = review.key;
@@ -67,7 +52,6 @@ export function PullDiffs({
       github={github}
       conversations={conversations}
       onAskedAssistant={onAskedAssistant}
-      // Viewed marks are per file content, so they hold in either whole-PR scope.
       onViewed={scope === "mine" ? undefined : workspace.onViewed}
       canEdit={() => scope !== "review"}
       scope={
@@ -99,7 +83,6 @@ export function PullDiffs({
   );
 }
 
-/** Which changes the column shows: since your review, the whole PR, or your changes. */
 function ScopePicker({
   scope,
   onScope,

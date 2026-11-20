@@ -1,14 +1,3 @@
-/**
- * When the Changes and Review panels re-read (ADR 0025).
- *
- * - `useLiveChanges`: the thread's change version, pushed by the server
- *   while a panel is open and moving only when the directory's files do;
- *   null when the directory cannot be watched (the panels then re-read on
- *   transcript activity).
- * - `useSteadyKey`: a key that follows its input at most once per period, on
- *   a fixed beat. Unlike a debounce it never waits for a pause, so a panel
- *   keeps up while an agent writes without stopping.
- */
 import { useEffect, useRef, useState } from "react";
 import { subscribeSse } from "../sse";
 import { codeApi } from "./api";
@@ -47,8 +36,6 @@ export function useSteadyKey<T>(key: T, ms = STEADY_MS): T {
   useEffect(() => {
     latest.current = key;
   }, [key]);
-  // Keyed on whether a catch-up is due, not on the key: a newer key while one
-  // is due rides along when it fires (a steady beat), instead of resetting it.
   const due = !Object.is(key, steady);
   useEffect(() => {
     if (!due) return;

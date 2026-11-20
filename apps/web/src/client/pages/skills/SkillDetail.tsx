@@ -1,9 +1,3 @@
-/**
- * Skill editor at /skills/:id (issue #1 M2). The name is the id-like slug bots
- * reference, so it stays read-only; description and body are editable, bot
- * assignment toggles PATCH immediately. The page holds the form and its
- * actions; its cards, the bots and the delete prompt are in `detail/`.
- */
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -30,8 +24,6 @@ export function SkillDetail({ id }: { id: string }) {
   const mutations = useSkillMutations();
   const bots = useBotChoices().data ?? null;
   const [form, setForm] = useState({ description: "", body: "" });
-  // The form takes the skill as it loads for this id; later answers (a
-  // save's) set it themselves, and a bot toggle leaves unsaved edits alone.
   const [formFor, setFormFor] = useState<string | null>(null);
   if (skill && formFor !== id) {
     setFormFor(id);
@@ -143,7 +135,6 @@ export function SkillDetail({ id }: { id: string }) {
         </>
       }
     >
-      {/* Deleting navigates away on purpose; nothing left to keep. */}
       <LeaveGuard when={dirty && !deleting} />
       <SkillDetailsCard skill={skill} form={form} setForm={setForm} />
 

@@ -1,21 +1,3 @@
-/**
- * Changed files laid out like a code host's review screen (after diffshub):
- * a file tree (Files and Comments, with search, a status filter and the
- * totals) and every changed file in one scrolling column of diffs, each under
- * a sticky header with its fold, Viewed and Edit. Built on @pierre/trees
- * (`FileTree`) and @pierre/diffs (`CodeView`, which draws only the files in
- * view). A PR review (`PullDiffs`), a project thread's Source control
- * (`ReviewPanel`) and a harness's own changes (`ChangesPanel`) all show their
- * files through it; each owns its files and its scopes.
- *
- * Two layouts: `page`, the tree beside the column (a drawer on phones), and
- * `panel`, for the narrow pane beside a thread: the column alone, the tree a
- * drawer over it opened from Files.
- *
- * A file's two sides are read as it is unfolded (a few at a time); generated
- * and viewed files start folded. A re-read keeps the last diff on screen until
- * the new one is in. Select line numbers, or the + beside a line, to comment.
- */
 import {
   useCallback,
   useEffect,
@@ -84,14 +66,12 @@ import {
 
 export type DiffStyle = "split" | "unified";
 
-/** One changed file, as any of the three lists gives it. */
 export interface WorkspaceFile {
   path: string;
   status: "added" | "modified" | "deleted";
   additions: number;
   deletions: number;
   isGenerated: boolean;
-  /** Changes with the file's content: its two sides are read again. */
   hash: string;
   viewed?: boolean;
 }
@@ -114,7 +94,6 @@ const STATUS_NAME: Record<FileStatus, string> = {
   deleted: "Deleted",
 };
 
-/** Files whose two sides are read at once. */
 const READ_AT_ONCE = 4;
 
 const STYLE_KEY = "code:diff-style";
@@ -128,21 +107,17 @@ function readStyle(): DiffStyle {
   }
 }
 
-/** Split or unified, remembered on this device for every diff column. */
 function useDiffStyle(): [DiffStyle, (style: DiffStyle) => void] {
   const [style, setStyle] = useState<DiffStyle>(readStyle);
   const change = useCallback((next: DiffStyle) => {
     setStyle(next);
     try {
       window.localStorage.setItem(STYLE_KEY, next);
-    } catch {
-      // not remembered in private mode
-    }
+    } catch {}
   }, []);
   return [style, change];
 }
 
-/** Whether the window is wide enough for side-by-side diffs. */
 function useWide(): boolean {
   return useSyncExternalStore(
     (change) => {
@@ -155,10 +130,8 @@ function useWide(): boolean {
   );
 }
 
-/** Fold or unfold every file: a new value each time the button is pressed. */
 export type CollapseAll = { all: boolean; at: number } | null;
 
-/** A diff column's view: split or unified (remembered), Fold all, and the phone file drawer. */
 export function useDiffView() {
   const [style, setStyle] = useDiffStyle();
   const wide = useWide();
@@ -170,7 +143,6 @@ export function useDiffView() {
 
 export type DiffView = ReturnType<typeof useDiffView>;
 
-/** Phones: slides the file tree over the column. */
 export function FilesButton({ view }: { view: DiffView }) {
   const { open, onOpenChange } = view.drawer;
   return (
@@ -187,7 +159,6 @@ export function FilesButton({ view }: { view: DiffView }) {
   );
 }
 
-/** Split or unified, and Fold all files: the column's two view buttons. */
 export function DiffViewButtons({ view }: { view: DiffView }) {
   const { style, setStyle: onStyle, collapse, setCollapse: onCollapse } = view;
   const allFolded = collapse?.all ?? false;
@@ -217,16 +188,11 @@ export function DiffViewButtons({ view }: { view: DiffView }) {
   );
 }
 
-/** What sits under a line: a saved comment, the composer, or a GitHub conversation. */
 type Note =
   | { kind: "comment"; comment: LineComment }
   | { kind: "composer" }
   | { kind: "note"; id: string };
 
-/**
- * The order the tree shows files in: folders before files at each level, each
- * by name. The diffs follow it, so the tree and the column read the same way.
- */
 export function treeOrder<T extends { path: string }>(files: T[]): T[] {
   return [...files].sort((a, b) => {
     const x = a.path.split("/");
@@ -264,38 +230,25 @@ export function DiffWorkspace<F extends WorkspaceFile>({
   drawer: outerDrawer,
   testId = "code-review",
 }: {
-  /** The changed files, in the order to show them; null while they are read. */
   files: F[] | null;
   error?: string | null;
-  /** Names what the files are changes to: a new one reads every diff afresh. */
   scopeKey: string;
-  /** A new one reads the unfolded files again, keeping the last diffs on screen meanwhile. */
   readKey?: string;
   read(path: string): Promise<ReviewFileDiff>;
   layout: "page" | "panel";
   diffStyle: DiffStyle;
   collapse?: CollapseAll;
-  /** Files take Viewed: marked, one folds away. */
   onViewed?: (file: F, viewed: boolean) => void;
-  /** Which files take Edit (the light editor), saved by `onSave`. */
   canEdit?: (file: F) => boolean;
   onSave?: (path: string, original: string, content: string) => Promise<void>;
-  /** The thread's (or the assistant's) line comments: absent, the diff takes none. */
   commenting?: ThreadCommenting;
-  /** Comments for the PR's review on GitHub. */
   github?: ThreadCommenting;
-  /** A PR review's conversations from GitHub, per file. */
   conversations?: (path: string) => FileConversations;
-  /** A comment went to the assistant. */
   onAskedAssistant?: () => void;
-  /** Which changes to show: in the sidebar (page) or the top bar (panel). */
   scope?: ReactNode;
-  /** Buttons for the scope (Revert to here, Push to PR). */
   actions?: ReactNode;
-  /** Shown when there are no files. */
   empty: ReactNode;
   onRefresh(): void;
-  /** Page layout on phones: the tree slides over the column (the caller's Files button). */
   drawer?: { open: boolean; onOpenChange(open: boolean): void };
   testId?: string;
 }) {
@@ -312,7 +265,6 @@ export function DiffWorkspace<F extends WorkspaceFile>({
 
   const listed = useMemo(() => (files ?? []).filter((f) => !hidden.has(f.status)), [files, hidden]);
 
-  // Folded files: generated and viewed ones start folded, until the owner unfolds them.
   const [folded, setFolded] = useState<Map<string, boolean>>(new Map());
   const isFolded = useCallback(
     (f: F) => folded.get(f.path) ?? (f.isGenerated || (viewable && Boolean(f.viewed))),
@@ -322,7 +274,6 @@ export function DiffWorkspace<F extends WorkspaceFile>({
   useEffect(() => {
     if (!collapse || !files) return;
     setFolded(new Map(files.map((f) => [f.path, collapse.all])));
-    // Only a press folds everything, not a re-read of the list.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [collapse]);
 
@@ -330,7 +281,6 @@ export function DiffWorkspace<F extends WorkspaceFile>({
 
   const toggleViewed = (file: F) => {
     const viewed = !file.viewed;
-    // Marked viewed, a file folds away; unmarked, it opens again.
     fold(file.path, viewed);
     onViewed?.(file, viewed);
   };
@@ -339,7 +289,6 @@ export function DiffWorkspace<F extends WorkspaceFile>({
     (path: string, line?: { side: "old" | "new"; line: number }) => {
       setFolded((m) => (m.get(path) === false ? m : new Map(m).set(path, false)));
       drawer.onOpenChange(false);
-      // After the unfold lands.
       requestAnimationFrame(() =>
         view.current?.scrollTo(
           line
@@ -357,7 +306,6 @@ export function DiffWorkspace<F extends WorkspaceFile>({
     [drawer],
   );
 
-  // Line comments: one selection at a time, in one file.
   const [selection, setSelection] = useState<{
     path: string;
     lines: LineSelection;
@@ -368,7 +316,6 @@ export function DiffWorkspace<F extends WorkspaceFile>({
   useEffect(() => {
     current.current = selection;
   }, [selection]);
-  // A new scope drops a half-written selection.
   useEffect(() => setSelection(null), [scopeKey]);
   const rows = useRef(new WeakMap<ReviewFileDiff, Row[] | null>());
   const rowsFor = useCallback(
@@ -390,7 +337,6 @@ export function DiffWorkspace<F extends WorkspaceFile>({
       if (!r) return;
       const next = toSelection(range, r);
       const prev = current.current;
-      // A new range (not a widened one) starts a new comment.
       const widened =
         prev &&
         prev.path === path &&
@@ -431,7 +377,6 @@ export function DiffWorkspace<F extends WorkspaceFile>({
     };
   }, [base, diffStyle, takes, rowsFor]);
 
-  // Each file's comments, from the two lists that hold them.
   const perFile = useMemo(() => {
     const map = new Map<string, ReturnType<typeof fileCommenting>>();
     for (const f of listed) {
@@ -460,7 +405,6 @@ export function DiffWorkspace<F extends WorkspaceFile>({
   }, [listed, conversations]);
 
   const versions = useRef(new Map<string, { sig: string; version: number }>());
-  // Each read diff parsed once: a re-read is a new object, so it parses again.
   const parsed = useRef(new WeakMap<ReviewFileDiff, FileDiffMetadata>());
   const items = useMemo(() => {
     return listed.map((f): CodeViewDiffItem<Note> => {
@@ -800,7 +744,6 @@ export function DiffWorkspace<F extends WorkspaceFile>({
   );
 }
 
-/** A number per read diff, so an item's version moves when its diff is a new read. */
 let nextId = 0;
 const ids = {
   map: new WeakMap<ReviewFileDiff, number>(),
@@ -814,12 +757,6 @@ const ids = {
   },
 };
 
-/**
- * Each unfolded file's two sides, read a few at a time in the column's order
- * and kept by content: a file whose hash changed (or a new `readKey`) is read
- * again, with its last diff kept on screen until the new one is in. A new
- * scope starts over.
- */
 function useFileDiffs<F extends WorkspaceFile>(
   scopeKey: string,
   readKey: string,
@@ -838,7 +775,6 @@ function useFileDiffs<F extends WorkspaceFile>(
     reader.current = read;
   }, [read]);
   const scope = useRef(scopeKey);
-  // A new scope starts over.
   useEffect(() => {
     scope.current = scopeKey;
     asked.current = new Set();
@@ -863,8 +799,6 @@ function useFileDiffs<F extends WorkspaceFile>(
       asked.current.add(key);
       try {
         const d = await reader.current(f.path);
-        // Kept even after this run is replaced (the next run skips what is
-        // already asked for), but not into another scope.
         setState((s) =>
           s.scope !== at || scope.current !== at
             ? s
@@ -875,7 +809,6 @@ function useFileDiffs<F extends WorkspaceFile>(
               },
         );
       } catch {
-        // Not read: unfolding it again asks once more.
         asked.current.delete(key);
       }
       await next();
@@ -885,7 +818,6 @@ function useFileDiffs<F extends WorkspaceFile>(
       cancelled = true;
       for (const f of queue) asked.current.delete(keyOf(f));
     };
-    // `wanted` is keyed by `wantedKey`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wantedKey, scopeKey, keyOf]);
 
@@ -1025,10 +957,8 @@ function Sidebar({
   );
 }
 
-/** The sidebar's Search button asks the tree to open its search line. */
 const OPEN_SEARCH = "tiny-agents:review-tree-search";
 
-/** The changed files as a tree: status letters, and a check on viewed ones. */
 function Tree({
   files,
   viewable,
@@ -1053,7 +983,6 @@ function Tree({
     gitStatus: status,
     initialExpansion: "open",
     flattenEmptyDirectories: true,
-    // The column's order (folders first), kept as given.
     presorted: true,
     sort: () => 0,
     stickyFolders: true,
@@ -1068,7 +997,6 @@ function Tree({
     renderRowDecoration: ({ item }) =>
       item.kind === "file" && viewed.current.has(item.path) ? { text: "✓", title: "Viewed" } : null,
   });
-  // Keep the model's paths and marks in step with the list.
   const first = useRef(true);
   useEffect(() => {
     if (first.current) {
@@ -1109,7 +1037,6 @@ const TREE_CSS = `
   [data-item-type='folder'] { color: var(--trees-fg); font-weight: 500; }
 `;
 
-/** Diff headers stay at the top while their file scrolls under them. */
 const DIFF_CSS = `
   :host { --diffs-bg: var(--background); }
   [data-deletions-count], [data-additions-count] { display: none; }
@@ -1122,7 +1049,6 @@ const DIFF_CSS = `
   }
 `;
 
-/** The tree in the app's colors and type. */
 const TREE_STYLE = {
   "--trees-bg": "transparent",
   "--trees-fg": "var(--foreground)",
@@ -1185,7 +1111,6 @@ function DiffStats({
   );
 }
 
-/** The Comments tab: what waits to be sent, and GitHub's conversations, by file. */
 function CommentList({
   files,
   perFile,

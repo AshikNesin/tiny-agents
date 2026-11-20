@@ -1,9 +1,3 @@
-/**
- * Shared pieces of the Code page (issue #143, ADR 0011): the composer's
- * model, effort and permission pickers (searchable; their options come from
- * the harness), the context ring, and archiving a thread with its subagents
- * (with Undo).
- */
 import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Brain, ChevronDown, Cpu, GitMerge, GitPullRequest, ShieldCheck } from "lucide-react";
@@ -25,7 +19,6 @@ import {
 import { UsagePopover } from "./UsagePopover";
 
 const modelsByHarness = new Map<string, Promise<ModelOption[]>>();
-/** A harness's models, read once per page load. */
 export function loadModels(instanceId: string): Promise<ModelOption[]> {
   let promise = modelsByHarness.get(instanceId);
   if (!promise) {
@@ -49,7 +42,6 @@ function formatTokens(n: number): string {
   return `${Math.round(n / 1000)}k`;
 }
 
-/** Searchable model picker; `withDefault` adds "Default" (the harness's choice). */
 export function ModelPicker({
   models,
   value,
@@ -61,7 +53,6 @@ export function ModelPicker({
   value: string;
   onChange(value: string): void;
   withDefault?: boolean;
-  /** Text only, no icon or chevron: half of the composer's "Model · Reasoning" label. */
   bare?: boolean;
 }) {
   const ready = models.filter((m) => m.ready !== false || m.id === value);
@@ -140,7 +131,6 @@ const LEVEL_HINT: Record<string, string> = {
   max: "As much as the model allows",
 };
 
-/** Searchable reasoning picker over the harness's levels ("default" = the model's default). */
 export function ReasoningPicker({
   levels,
   value,
@@ -195,11 +185,6 @@ const MODE_HINT: Record<PermissionMode, string> = {
   bypassPermissions: "Never ask (YOLO)",
 };
 
-/**
- * The mode a new thread's composer starts in: Bypass (YOLO) wherever the
- * harness offers it to this viewer (owner decision, 18 Nov 2026), else the
- * harness's own default. The picker still changes it per thread.
- */
 export function composerPermission(settings: {
   permissionModes: PermissionMode[];
   defaultPermissionMode?: PermissionMode;
@@ -208,7 +193,6 @@ export function composerPermission(settings: {
   return settings.defaultPermissionMode ?? null;
 }
 
-/** Permission mode, for harnesses that enforce one (never offered otherwise). */
 export function PermissionPicker({
   modes,
   value,
@@ -241,8 +225,6 @@ export function PermissionPicker({
   );
 }
 
-/** How full the context window is; click for the usage popup (compaction
- *  lives there, as in Shelley's own UI). */
 export function ContextRing({
   used,
   max,
@@ -255,7 +237,6 @@ export function ContextRing({
   max?: number;
   onCompact?: () => void;
   threadId?: string;
-  /** The harness can report usage in detail (the popup). */
   usage: boolean;
   hasSubagents?: boolean;
 }) {
@@ -308,12 +289,6 @@ export function ContextRing({
 
 const plural = (n: number, one: string) => `${n} ${n === 1 ? one : `${one}s`}`;
 
-/**
- * Archive (or restore) several threads at once (issue #148), each with its
- * subagents, with one Undo for all of them. Resolves to the ids that moved
- * (the rows themselves); a thread that failed stays where it was and the
- * toast says how many did. `leave` navigates away after an archive.
- */
 export function useArchiveMany() {
   const navigate = useNavigate();
   return useCallback(
@@ -357,10 +332,6 @@ export function useArchiveMany() {
   );
 }
 
-/**
- * Archive (or restore) a thread with its subagents, with Undo. `leave`
- * navigates away from it after an archive.
- */
 export function useArchive() {
   const navigate = useNavigate();
   return useCallback(
@@ -397,7 +368,6 @@ export function useArchive() {
   );
 }
 
-/** What a thread's pull request is waiting on, in a word or two (null: nothing to say). */
 export function pullState(loop: string): string | null {
   switch (loop) {
     case "needs_input":
@@ -419,7 +389,6 @@ const PULL_TONE: Record<string, string> = {
   green: "text-success",
 };
 
-/** A thread's pull request as a small chip: its number, toned by what it waits on. */
 export function PullChip({
   pr,
   className,

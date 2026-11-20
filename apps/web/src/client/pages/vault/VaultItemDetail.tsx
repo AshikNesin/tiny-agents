@@ -37,7 +37,6 @@ import { useStepUp } from "../../components/vault/StepUp";
 import { Switch } from "../../components/ui/switch";
 import { ValueFieldInput } from "./NewVaultItem";
 
-/** Revealed values hide, and copied ones leave the clipboard, after this long. */
 const SHOW_MS = 30_000;
 
 const OUTCOME_LABEL: Record<string, string> = {
@@ -91,7 +90,6 @@ function FieldRow({
 }: {
   handle: string;
   field: ValueField;
-  /** Display metadata the server already sends (a login's username). */
   plain?: string;
   canReveal: boolean;
   canEdit: boolean;
@@ -99,7 +97,6 @@ function FieldRow({
 }) {
   const { run } = useStepUp();
   const revealValue = useVaultReveal();
-  // The revealed value lives here only: never in a cache, gone with the row.
   const [value, setValue] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -171,7 +168,6 @@ export function VaultItemDetail({ handle }: { handle: string }) {
   const { data: detail, loadError, refresh } = useVaultItem(handle);
   const mutations = useVaultMutations();
   const [policy, setPolicy] = useState<VaultPolicy | null>(null);
-  // Each answer that lands resets the policy form to it.
   const [policyFrom, setPolicyFrom] = useState<Detail | null>(null);
   if (detail && detail !== policyFrom) {
     setPolicyFrom(detail);

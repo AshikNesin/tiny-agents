@@ -1,8 +1,3 @@
-/**
- * Skills library pages (issue #1 M2): the list lives at /skills, the editor at
- * /skills/:id. Both routes render this component (see App.tsx), so the id param
- * picks the view.
- */
 import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Plus, Search, Sparkles } from "lucide-react";
@@ -64,7 +59,6 @@ function SkillsList() {
         </>
       }
     >
-      {/* Search earns its place once there is something to search. */}
       {skills !== null && skills.length > 0 && (
         <Input
           type="search"

@@ -1,10 +1,3 @@
-/**
- * The PR tab's checks: one line of how they stand (with Fix CI when one
- * fails), then a row each, failing first. A row opens to when it ran and,
- * for an Actions job, the lines of its log around what went wrong, with a
- * link to the full log on GitHub. GitHub serves a job's log only once it
- * finishes, so a running job shows its steps until then.
- */
 import { useEffect, useMemo, useState } from "react";
 import {
   Check,
@@ -29,7 +22,6 @@ import type { CheckLogView, CheckStepView, PullView } from "../../../shared/api/
 type Check = NonNullable<PullView["snapshot"]>["checks"][number];
 
 const ORDER: Record<Check["state"], number> = { failure: 0, pending: 1, success: 2, neutral: 3 };
-/** Past this many, passing checks fold behind one row. */
 const FOLD_AFTER = 6;
 
 function CheckIcon({ state, className }: { state: Check["state"]; className?: string }) {
@@ -40,14 +32,12 @@ function CheckIcon({ state, className }: { state: Check["state"]; className?: st
   return <CircleCheck className={cn("text-success size-3.5", className)} />;
 }
 
-/** How long it ran; nothing under a second (a commit status has no run time, so it reads 0ms). */
 function took(c: Check): string | null {
   if (!c.startedAt || !c.completedAt) return null;
   const ms = Date.parse(c.completedAt) - Date.parse(c.startedAt);
   return ms >= 1000 ? formatDuration(ms) : null;
 }
 
-/** How often a running job's steps are read again. */
 const STEPS_EVERY_MS = 5000;
 
 const when = (iso: string | null) =>
@@ -55,7 +45,6 @@ const when = (iso: string | null) =>
     ? new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
     : "Not yet";
 
-/** Checks as one segmented bar: passed, failed, then pending (Hoplite). */
 function ChecksBar({
   passed,
   failed,
@@ -78,7 +67,6 @@ function ChecksBar({
   );
 }
 
-/** Failing first, then pending, then passing; and how many of each as one line. */
 function checksSummary(raw: Check[]) {
   const checks = [...raw].sort(
     (a, b) => ORDER[a.state] - ORDER[b.state] || a.name.localeCompare(b.name),
@@ -268,7 +256,6 @@ function FullLog({ url, label = "View full log" }: { url: string; label?: string
 
 function LogExcerpt({ threadId, jobId, check }: { threadId: string; jobId: number; check: Check }) {
   const [copied, setCopied] = useState(false);
-  // Every read lands as a new object, so a running job's next read is timed from it.
   const read = useResource<CheckLogView>(
     ["code", "check-log", threadId, jobId],
     () => projectsApi.checkLog(threadId, jobId),
@@ -277,8 +264,6 @@ function LogExcerpt({ threadId, jobId, check }: { threadId: string; jobId: numbe
   );
   const { data: log, loadError: error, refresh } = read;
 
-  // Read again when the check's state changes, and every few seconds while
-  // the job runs, so its steps move and the log replaces them once it ends.
   useRefreshOn(check.state, refresh);
   useEffect(() => {
     if (!log?.running) return;
@@ -328,7 +313,6 @@ function LogExcerpt({ threadId, jobId, check }: { threadId: string; jobId: numbe
   );
 }
 
-/** A finished job's excerpt: the line that says what went wrong, then the lines around it. */
 function FinishedLog({ log }: { log: CheckLogView }) {
   const marked = new Set(log.highlight);
   return (
@@ -349,7 +333,6 @@ function FinishedLog({ log }: { log: CheckLogView }) {
         >
           {log.lines.map((line, i) => (
             <div
-              // Lines repeat; their place in the excerpt is what tells them apart.
               // eslint-disable-next-line react/no-array-index-key
               key={i}
               className={cn(
@@ -373,7 +356,6 @@ function StepIcon({ state }: { state: CheckStepView["state"] }) {
   return <CircleDashed className="text-muted-foreground size-3.5" />;
 }
 
-/** A running job's steps: GitHub has no log to send until the job finishes. */
 function RunningSteps({ steps }: { steps: CheckStepView[] }) {
   return (
     <div className="space-y-1.5">

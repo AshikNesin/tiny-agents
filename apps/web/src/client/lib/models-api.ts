@@ -1,9 +1,3 @@
-/**
- * Typed client for Settings → Models (issue #179); the shapes are
- * `shared/api/models.ts`. Creating an account, changing its connection and
- * deleting it carry the vault's step-up token; the caller runs them through
- * `useStepUp().run`. Nothing here receives a key.
- */
 import { apiClient } from "@groot/shell/lib/api";
 import type { Deleted } from "../../shared/api/common";
 import type {
@@ -37,7 +31,6 @@ export const modelsApi = {
     }),
   updateConnection: (id: string, input: AccountConnectionBody) =>
     stepped<Account>("put", `/models/providers/${id}/connection`, input),
-  /** The models the account's endpoint lists that it doesn't have yet. */
   available: (id: string) => apiClient.get<DiscoveredModels>(`/models/providers/${id}/available`),
   refresh: (id: string) => apiClient.post<AccountRefresh>(`/models/providers/${id}/refresh`),
   remove: (id: string, moveTo?: string) =>

@@ -1,11 +1,3 @@
-/**
- * A thread's Review page (`/code/<id>/review`): what the side panes show
- * beside the thread, at full width. **Source control** (Review against the base
- * branch for a project thread, else the harness's own changes) and, for a
- * project thread, **Pull request**, each a tab (`?tab=pr`). Line comments
- * work as in the panes and wait in the tray at the bottom (Send now), or go
- * with the next message back in the thread.
- */
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, GitBranch, GitPullRequest } from "lucide-react";
@@ -33,11 +25,8 @@ export function ReviewPage({
   pr: { number: number; loop: string } | null;
   tab: ReviewTab;
   onTab(tab: ReviewTab): void;
-  /** The Changes tab's panel (null: the harness serves no diffs). */
   changes: ReactNode;
-  /** The Pull request tab's panel (null: not a project thread). */
   pull: ReactNode;
-  /** The thread list is folded away: leave room for Show sidebar. */
   sidebarHidden?: boolean;
 }) {
   const guest = useIsGuest();

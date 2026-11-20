@@ -22,7 +22,6 @@ import { SecretInput } from "../../components/vault/SecretInput";
 import { useStepUp } from "../../components/vault/StepUp";
 import { KIND_DEFAULT_TOOLS } from "../../../shared/vault-kinds";
 
-/** Browser autocomplete hints, so the owner's own password manager can help. */
 const AUTOCOMPLETE: Partial<Record<ValueField, string>> = {
   username: "username",
   card_number: "cc-number",

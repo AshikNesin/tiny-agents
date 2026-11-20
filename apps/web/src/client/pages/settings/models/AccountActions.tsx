@@ -3,8 +3,6 @@ import { Button } from "@groot/ui/button";
 import { CardAction } from "@groot/ui/card";
 import type { Account } from "../../../../shared/api/models";
 
-/** An account card's actions: Enable or Disable, Check again, Edit, Custom providers, Delete. */
-
 export function AccountActions({
   account,
   onToggle,
@@ -20,13 +18,9 @@ export function AccountActions({
   onCustomProviders: () => void;
   onDelete: () => void;
 }) {
-  // A Claude plan or faux account has no endpoint to edit. The Claude plan
-  // still checks again: Claude Code on the sandbox lists its models.
   const editable = account.kind !== "claude-plan" && account.kind !== "faux";
   const checkable = account.kind !== "faux";
   return (
-    // On a phone the actions go under the summary, which otherwise wraps
-    // into a narrow column beside them.
     <CardAction className="flex flex-wrap gap-1 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start">
       <Button variant="ghost" size="sm" onClick={onToggle}>
         {account.enabled ? "Disable" : "Enable"}

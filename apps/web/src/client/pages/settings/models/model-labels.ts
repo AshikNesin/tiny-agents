@@ -1,6 +1,3 @@
-/**
- * Labels Settings → Models shows for kinds, statuses and roles (issue #179).
- */
 import type { StatusVariant } from "@groot/ui/status-badge";
 import type { Account, ModelRole, ProviderKind } from "../../../../shared/api/models";
 
@@ -14,7 +11,6 @@ export const KIND_LABEL: Record<ProviderKind, string> = {
   faux: "Faux",
 };
 
-/** The kinds the dialog offers, in order. */
 export const KINDS: Exclude<ProviderKind, "faux">[] = [
   "anthropic",
   "openai-chat",
@@ -65,14 +61,12 @@ export const ROLE_LABEL: Record<ModelRole, { title: string; description: string 
 
 export const ROLES = Object.keys(ROLE_LABEL) as ModelRole[];
 
-/** "200K", "1M": a context window as the picker shows it. */
 export function formatTokens(tokens: number): string {
   if (tokens >= 1_000_000) return `${Math.round(tokens / 100_000) / 10}M`;
   if (tokens >= 1_000) return `${Math.round(tokens / 1_000)}K`;
   return String(tokens);
 }
 
-/** The host an account reaches, for its card. */
 export function hostOf(url: string | null): string | null {
   if (!url) return null;
   try {

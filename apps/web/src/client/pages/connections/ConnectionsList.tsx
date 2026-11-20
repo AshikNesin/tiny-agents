@@ -53,7 +53,6 @@ export function ConnectionsList() {
   const { data: connections, loadError, refresh } = useConnections();
   const [addOpen, setAddOpen] = useState(false);
 
-  // Status changes ride the app's one events feed; a finished sign-in too.
   useEffect(() => {
     const offChange = onConnectionChange(() => void refresh());
     const offSignIn = connectionAuth.onCompleted(undefined, () => void refresh());

@@ -1,8 +1,3 @@
-/**
- * Every comment on a pull request as one list for the PR tab: conversation
- * comments, review summaries and line threads, newest first, each marked as
- * a person's or a bot's so the tab can sort them into All, Humans and Bots.
- */
 import type { PullView } from "../../../shared/api/code";
 
 type Snapshot = NonNullable<PullView["snapshot"]>;
@@ -16,17 +11,12 @@ export interface PrComment {
   bot: boolean;
   body: string;
   createdAt: string;
-  /** A line thread's file and line. */
   where?: { path: string; line: number | null; resolved: boolean; outdated: boolean };
-  /** A review's verdict, when it is more than a comment. */
   verdict?: "approved" | "changes requested";
-  /** Later replies in a line thread. */
   replies: Array<{ id: string; author: string; bot: boolean; body: string; createdAt: string }>;
-  /** Auto-fix does not take instructions from this author. */
   ignored: boolean;
 }
 
-/** Review services GitHub reports as ordinary users. */
 const AUTOMATION = [
   "coderabbit",
   "greptile",

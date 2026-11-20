@@ -1,11 +1,3 @@
-/**
- * The context usage popup (issue #143), opened from the composer's context
- * ring: the harness's usage report (ADR 0011) as a table — total and
- * subtotal, one row group per model with its token bands (cache
- * read/write, input, output), "Other (indirect)" rows for usage a thread
- * incurs outside its own turns, a subagent column when children exist, and
- * "Compact in place" when the harness can compact.
- */
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Popover as PopoverPrimitive } from "radix-ui";
@@ -40,7 +32,6 @@ function TokenBandCell({ band }: { band: UsageBand }) {
   );
 }
 
-/** One model's row group: the model name over its token bands. */
 function ModelRows({
   model,
   showSubagents,
@@ -52,7 +43,6 @@ function ModelRows({
 }) {
   const bands = model.bands
     .map((band, i) => ({ band, sub: subagent?.bands[i] }))
-    // A zero cache-write band is noise for providers that never write it.
     .filter(({ band, sub }) => !(band.label === "Cache write" && !band.tokens && !sub?.tokens));
   return (
     <TableBody className="border-border/60">
@@ -96,11 +86,8 @@ export interface UsagePopoverProps {
   used: number;
   max?: number;
   threadId: string;
-  /** Subagents of this thread (the column appears when non-empty). */
   hasSubagents: boolean;
-  /** Children: the ring trigger itself. */
   children: React.ReactNode;
-  /** Runs /compact; the popup shows it as "Compact in place". */
   onCompact?: () => void;
 }
 
@@ -113,7 +100,6 @@ export function UsagePopover({
   onCompact,
 }: UsagePopoverProps) {
   const [open, setOpen] = useState(false);
-  // Read each time the popup opens; the last report stays meanwhile.
   const usage = useQuery({
     queryKey: ["code", "usage", threadId],
     queryFn: () => codeApi.usage(threadId),

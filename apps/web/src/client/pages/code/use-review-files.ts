@@ -8,12 +8,6 @@ import { useSteadyKey } from "../../lib/code/use-live-changes";
 import type { ReviewFile } from "../../../shared/api/code";
 import { treeOrder } from "./DiffWorkspace";
 
-/**
- * A worktree's changed files in one scope (`projectsApi.reviewFiles`: `base`,
- * `review`, `mine` or a checkpoint id), read again as `refreshKey` settles,
- * with the reads, Viewed marks and light-editor saves a `DiffWorkspace` takes.
- * `saved` is the toast after a save.
- */
 export function useReviewFiles(
   threadId: string,
   scope: string,
@@ -23,7 +17,6 @@ export function useReviewFiles(
   const settledKey = useSteadyKey(refreshKey);
   const [reload, setReload] = useState(0);
   const refresh = useCallback(() => setReload((n) => n + 1), []);
-  // The last list stays while the next scope's is out, and through a failed read.
   const filesKey = ["code", "review-files", threadId, scope];
   const {
     data: files,
@@ -35,7 +28,6 @@ export function useReviewFiles(
     "Could not read the changes.",
     { placeholderData: keepPreviousData },
   );
-  // Read again as the key settles and on refresh.
   useRefreshOn(`${String(settledKey)}\u0000${reload}`, refetch);
   const client = useQueryClient();
   const setFiles = (update: (list: ReviewFile[] | undefined) => ReviewFile[] | undefined) =>
@@ -50,7 +42,6 @@ export function useReviewFiles(
     settledKey,
     reload,
     refresh,
-    /** Spread onto `DiffWorkspace`. */
     workspace: {
       files,
       error,

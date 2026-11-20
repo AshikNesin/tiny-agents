@@ -1,8 +1,3 @@
-/**
- * Settings → Models (issue #179): the owner's provider accounts and their
- * models, the default model for each role, and the Add Models dialog.
- * Changes apply without a restart; pickers refresh on `models.changed`.
- */
 import { useMemo, useState } from "react";
 import { Bot, Plus } from "lucide-react";
 import { Button } from "@groot/ui/button";
@@ -107,7 +102,6 @@ function ModelsSettingsBody() {
   );
 }
 
-/** Settings → Models: step-up guards creating, editing and deleting accounts. */
 export function ModelsSettings() {
   return (
     <StepUpProvider>

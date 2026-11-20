@@ -37,10 +37,6 @@ import {
 } from "./routine-form";
 import { ScheduleFields } from "./ScheduleFields";
 
-/**
- * The routine editor: its bot, prompt, name and schedule, with the next
- * runs previewed before saving (issue #18).
- */
 export function RoutineEditor({
   open,
   routine,
@@ -59,8 +55,6 @@ export function RoutineEditor({
   const [saving, setSaving] = useState(false);
   const [loadedId, setLoadedId] = useState<string | null>(null);
 
-  // Each list that lands while the editor is open (every read is a new
-  // array): a new routine starts on the bot you chat with most recently.
   useEffect(() => {
     if (!open || !bots) return;
     const pick = landingBotId(bots);
@@ -78,15 +72,12 @@ export function RoutineEditor({
       setLoadedId(null);
       setForm(defaultForm());
     }
-    // The form resets per dialog open so a create never inherit the
-    // previously edited routine's values.
   }, [open, routine, loadedId]);
 
   const compiled = compileSchedule(form);
   const preview = useMemo(() => {
     if (!compiled.schedule) return null;
     try {
-      // A once schedule has one fire time; three identical rows would be noise.
       const count = compiled.schedule.kind === "once" ? 1 : 3;
       return {
         sentence: describeSchedule(compiled.schedule),
@@ -187,8 +178,6 @@ export function RoutineEditor({
 
             <ScheduleFields form={form} set={set} />
 
-            {/* Acceptance criterion (issue #18): the next 3 runs are visible
-              before saving. */}
             <div className="rounded-lg bg-muted/40 px-3 py-3">
               <p className={cn(metaLabelClass, "mb-1.5")}>Preview</p>
               {compiled.schedule && preview ? (

@@ -1,7 +1,3 @@
-/**
- * The page's two lists of runs: the next five across all routines, and the
- * recent runs with their status, trigger, duration and output or error.
- */
 import { CalendarDays, Clock, Zap } from "lucide-react";
 import { Card } from "@groot/ui/card";
 import { Badge } from "@groot/ui/badge";
@@ -22,12 +18,10 @@ const RUN_STATUS_VARIANT: Record<RoutineRun["status"], string> = {
   cancelled: "cancelled",
 };
 
-/** Status words where the stored value doesn't read well. */
 const RUN_STATUS_LABEL: Partial<Record<RoutineRun["status"], string>> = {
   blocked: "needs attention",
 };
 
-/** Seconds between two ISO strings, when both are present. */
 function durationSeconds(run: RoutineRun): number | null {
   if (!run.startedAt || !run.finishedAt) return null;
   const seconds = Math.round(
@@ -36,7 +30,6 @@ function durationSeconds(run: RoutineRun): number | null {
   return seconds >= 0 ? seconds : null;
 }
 
-/** A run's token spend, short: "820 tokens", "42k tokens", "1.2M tokens". */
 function formatTokens(tokens: number): string {
   if (tokens < 1000) return `${tokens} tokens`;
   if (tokens < 1_000_000) return `${Math.round(tokens / 1000)}k tokens`;
