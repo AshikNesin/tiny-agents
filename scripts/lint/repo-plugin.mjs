@@ -1,3 +1,7 @@
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
+import { BASELINE_PATH, isGenerated, isKeptComment } from "./comments.mjs";
+
 const jsxName = (node) =>
   node.type === "JSXElement" && node.openingElement.name.type === "JSXIdentifier"
     ? node.openingElement.name.name
@@ -135,6 +139,19 @@ const staticString = (node, lookup) => {
   }
 };
 
+const NO_COMMENTS_MESSAGE =
+  "R16: code carries no comments (ADR 0028). Say it in a name, a type or a test; record a decision in docs/adr/. The ratchet in scripts/lint/comment-baseline.json lets old comments stay until they go, and only shrinks.";
+
+const baselines = new Map();
+
+const allowedComments = (cwd, file) => {
+  if (!baselines.has(cwd)) {
+    const baseline = path.join(cwd, BASELINE_PATH);
+    baselines.set(cwd, existsSync(baseline) ? JSON.parse(readFileSync(baseline, "utf8")) : {});
+  }
+  return baselines.get(cwd)[path.relative(cwd, file).replaceAll("\\", "/")] ?? 0;
+};
+
 const MODULE_SCOPES = new Set(["module", "global"]);
 
 const MODULE_STATE_MESSAGE =
@@ -231,6 +248,22 @@ export default {
               if (node.kind === "const" && !isCollection(declarator.init)) continue;
               if (boundNames(declarator.id).every((name) => allowed.has(name))) continue;
               context.report({ node: declarator, message: MODULE_STATE_MESSAGE });
+            }
+          },
+        };
+      },
+    },
+    "no-comments": {
+      create(context) {
+        return {
+          Program() {
+            if (isGenerated(context.sourceCode.text)) return;
+            const comments = context.sourceCode
+              .getAllComments()
+              .filter((comment) => comment.type !== "Shebang" && !isKeptComment(comment.value));
+            const allowed = allowedComments(context.cwd ?? process.cwd(), context.filename);
+            for (const comment of comments.slice(allowed)) {
+              context.report({ loc: comment.loc, message: NO_COMMENTS_MESSAGE });
             }
           },
         };

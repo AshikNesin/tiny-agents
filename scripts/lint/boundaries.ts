@@ -1,4 +1,5 @@
 import { builtinModules } from "node:module";
+import { OUT_OF_SCOPE } from "./comments.mjs";
 
 /**
  * Oxlint does not merge two overrides that set the same rule on one file: the
@@ -400,6 +401,14 @@ const BOUNDARY_RULES: BoundaryRule[] = [
         },
       ],
     },
+  },
+  {
+    id: "R16",
+    kind: "plugin",
+    scope: "**",
+    rule: "repo/no-comments",
+    except: OUT_OF_SCOPE,
+    enabled: true,
   },
   {
     id: "R13",
