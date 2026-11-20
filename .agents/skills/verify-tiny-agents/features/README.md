@@ -123,5 +123,5 @@ These steps caught real bugs in the 2026-11 pass; the bugs are fixed and the ste
 - Auto-review approvals: a Cloudflare AI Gateway classifier, and the faux runtime passes no reviewer.
 - Claude Code sign-in and harness: a Claude plan account (Settings → Models) plus a real Claude Pro/Max login.
 - Real push delivery, Send test, delivery log: Pushover keys (never in a verification run).
-- Connection OAuth sign-in, skill import from GitHub: external services.
+- Connection OAuth sign-in, skill import from GitHub, 1Password vault items: external services.
 - Feedback submission: an external service.

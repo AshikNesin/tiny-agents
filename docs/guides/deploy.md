@@ -73,6 +73,11 @@ Set these on the host; defaults and the full list are in the
   directly, the same exposure as a peer on a `192.168` LAN. Rate limits
   count an IPv6 client by its /64, the block one host usually holds.
 
+To keep vault items in 1Password, set `OP_CONNECT_CREDENTIALS` and a Connect
+token: the app runs 1Password Connect inside its own container, so there is
+no second service to deploy (see the vault guide's
+[bundled Connect server](../features/vault.md#the-bundled-connect-server)).
+
 The server refuses to start in production with the development fallbacks or
 with any of the required variables missing, and lists what is wrong.
 tiny-agents' own variables (sandbox, models' vault key, browser, computer) are listed in

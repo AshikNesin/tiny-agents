@@ -17,6 +17,7 @@ import type { CodeChanges } from "./api/code/code.changes";
 import type { ConnectionManager } from "./api/connections/connections.manager";
 import type { HeldLiveAccess } from "./api/people/live-access";
 import type { VaultAlertSink } from "./api/vault/vault.alerts";
+import type { BundledConnect } from "./api/vault/connect/bundled-connect";
 import type { SupervisorChannel } from "./api/system/updates.service";
 import type { VapidKeys } from "@groot/core/notification/webpush.crypto";
 
@@ -80,6 +81,8 @@ export interface App {
   vaultStepUps: Map<string, { userId: number; expiresAt: number }>;
   /** Where vault alerts go (`setVaultAlertSink`); unset drops them. */
   vaultAlertSink?: VaultAlertSink;
+  /** The 1Password Connect server the app runs itself (`startBundledConnect`); unset when not bundled. */
+  bundledConnect?: BundledConnect;
   /** Credential requests a submit is filling right now (`submitRequest`, vault.requests.service.ts). */
   submittingRequests: Set<number>;
   /** The runtime `reloadModels` hands new model config to (`bindModelRuntime`). */

@@ -87,7 +87,7 @@ export const createItemSchema = z.object({
 });
 
 export const linkItemSchema = z.object({
-  backend: z.enum(["local"]),
+  backend: z.enum(["onepassword-connect", "local"]),
   externalId: z.string().min(1).max(200),
   policy: policySchema,
 });

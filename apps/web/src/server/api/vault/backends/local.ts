@@ -40,7 +40,7 @@ import {
 } from "./types";
 
 /** A card's brand from its number's prefix. */
-function cardBrand(number: string): string {
+export function cardBrand(number: string): string {
   const digits = number.replace(/\D/g, "");
   if (digits.startsWith("4")) return "Visa";
   if (/^(5[1-5]|2[2-7])/.test(digits)) return "Mastercard";

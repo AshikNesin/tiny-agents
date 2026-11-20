@@ -25,6 +25,7 @@ import { formatRelativeTime } from "@groot/shell/lib/date.utils";
 import type { ValueField, VaultItemDetail as Detail, VaultPolicy } from "../../../shared/api/vault";
 import {
   apiError,
+  BACKEND_LABEL,
   FIELD_LABEL,
   FIELDS_BY_KIND,
   KIND_LABEL,
@@ -255,7 +256,7 @@ export function VaultItemDetail({ handle }: { handle: string }) {
   const { item, capabilities } = detail;
   const missing = FIELDS_BY_KIND[item.kind].filter((field) => !detail.fields.includes(field));
   const readOnlyNote = !capabilities.update
-    ? "Read-only here: edit it in the source app."
+    ? `Read-only here: edit it in ${item.backend === "local" ? "the source app" : BACKEND_LABEL[item.backend]}.`
     : undefined;
 
   return (
@@ -269,7 +270,7 @@ export function VaultItemDetail({ handle }: { handle: string }) {
             : ""}
         </span>
       }
-      titleAdornment={<Badge variant="outline">Local</Badge>}
+      titleAdornment={<Badge variant="outline">{BACKEND_LABEL[item.backend]}</Badge>}
       backTo="/vault"
       maxWidth="4xl"
     >

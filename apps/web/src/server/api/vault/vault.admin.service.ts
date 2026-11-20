@@ -10,8 +10,10 @@ import { vaultAlert } from "./vault.alerts";
 import { secretRedactor, type VaultApproval, type VaultKind } from "@tiny-agents/agent";
 import { KIND_DEFAULT_TOOLS } from "../../../shared/vault-kinds";
 import { connections, db, vaultAuditEvents, vaultItems } from "../../db";
-import { readBackends } from "./backends";
+import { app } from "../../app-root";
+import { connectConfig, primaryBackend, readBackends } from "./backends";
 import { createLocalBackend } from "./backends/local";
+import { createConnectBackend } from "./backends/onepassword-connect";
 import {
   BackendError,
   type BackendItemSummary,
@@ -46,14 +48,29 @@ import { vaultPolicyDigest } from "./vault.policy";
 
 let adminBackends: Map<BackendName, VaultBackend> | undefined;
 
-/** Write-path backends: the local store. */
+/**
+ * Write-path backends: the local store, and 1Password Connect with the
+ * read+write token (`OP_CONNECT_ADMIN_TOKEN`), the only place that token is
+ * loaded. Without it the 1Password items are read-only here.
+ */
 function writeBackends(): Map<BackendName, VaultBackend> {
-  adminBackends ??= new Map<BackendName, VaultBackend>([["local", createLocalBackend()]]);
-  return adminBackends;
+  if (adminBackends) return adminBackends;
+  const map = new Map<BackendName, VaultBackend>([["local", createLocalBackend()]]);
+  const connect = connectConfig();
+  if (connect) {
+    map.set(
+      "onepassword-connect",
+      createConnectBackend({
+        host: connect.host,
+        vaultId: connect.vaultId,
+        token: connect.adminToken ?? connect.readToken ?? "",
+        writable: Boolean(connect.adminToken),
+      }),
+    );
+  }
+  adminBackends = map;
+  return map;
 }
-
-/** Where new items go. */
-const PRIMARY_BACKEND: BackendName = "local";
 
 /** Test seam. */
 export function setWriteBackendsForTests(map: Map<BackendName, VaultBackend> | undefined): void {
@@ -175,21 +192,32 @@ function itemView(row: VaultItemRow): VaultItemData {
   };
 }
 
+/** While the bundled Connect server isn't answering, say what it is doing instead of "unreachable". */
+function withBundledState(name: BackendName, status: BackendStatus): BackendStatus {
+  const bundled = name === "onepassword-connect" ? app().bundledConnect?.state() : undefined;
+  if (!bundled || status.state === "ready" || status.code !== "unreachable") return status;
+  return {
+    ...status,
+    ...(bundled.state === "starting" ? { code: "starting" } : {}),
+    detail: bundled.detail,
+  };
+}
+
 async function backendsView(): Promise<VaultBackendView[]> {
   const views: VaultBackendView[] = [];
-  for (const name of ["local"] as BackendName[]) {
+  for (const name of ["onepassword-connect", "local"] as BackendName[]) {
     const read = readBackends().get(name);
-    if (!read) {
-      views.push({ name, configured: false, read: { state: "unconfigured" } as BackendStatus });
-      continue;
-    }
+    // 1Password shows only once it is set up: the Vault page stays one card otherwise.
+    if (!read) continue;
     const write = writeBackends().get(name);
-    const readStatus = await backendStatus(name);
+    const readStatus = withBundledState(name, await backendStatus(name));
+    const writeStatus =
+      name === "local" || !write ? readStatus : withBundledState(name, await write.status());
     views.push({
       name,
       configured: true,
       read: readStatus,
-      write: readStatus,
+      write: writeStatus,
       capabilities: write?.capabilities ?? read.capabilities,
     });
   }
@@ -219,7 +247,7 @@ export async function overview(options: { refresh?: boolean } = {}): Promise<Vau
     }));
   return {
     backends: await backendsView(),
-    primaryBackend: PRIMARY_BACKEND,
+    primaryBackend: primaryBackend(),
     items: rows.map(itemView),
     unlinked,
     kindDefaults: KIND_DEFAULT_TOOLS,
@@ -349,7 +377,7 @@ export async function createItem(
   actor: { via: "vault_ui" | "credential_request" } = { via: "vault_ui" },
 ): Promise<VaultItemData> {
   await assertHandleFree(input.policy.handle);
-  const name = PRIMARY_BACKEND;
+  const name = primaryBackend();
   const backend = backendFor(name);
   if (!backend.create) throw Boom.badRequest(`The ${name} backend is read-only`);
   const draft: ItemDraft = {

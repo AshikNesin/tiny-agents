@@ -16,6 +16,7 @@ import type {
   StepUpBody,
   StepUpToken,
   ValueField,
+  VaultBackendName,
   VaultItem,
   VaultItemCreateBody,
   VaultItemDetail,
@@ -121,6 +122,11 @@ export const vaultApi = {
     } satisfies CredentialSubmitBody),
   cancelRequest: (taskId: number) =>
     apiClient.post<CredentialCancelled>(`/vault/requests/${taskId}/cancel`),
+};
+
+export const BACKEND_LABEL: Record<VaultBackendName, string> = {
+  "onepassword-connect": "1Password",
+  local: "Local",
 };
 
 export const KIND_LABEL: Record<VaultKind, string> = {
