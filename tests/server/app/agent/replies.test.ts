@@ -136,10 +136,31 @@ describe("finishedReplyTo", () => {
     ).toEqual({ status: "pending" });
   });
 
-  it("answers a silent turn with empty text once the next turn has started", () => {
-    expect(finishedReplyTo(idle([user("r1", 1), user("r2", 2)]), "r1")).toEqual({
+  it("answers a turn that settled unanswered with empty text", () => {
+    const silent = { ...user("r1", 1), status: "unanswered" as const, error: "No reply" };
+    expect(finishedReplyTo(idle([silent, user("r2", 2)]), "r1")).toEqual({
       status: "answered",
       reply: { text: "", createdAt: 1 },
+    });
+  });
+
+  it("gives every submission placed in one batch the batch's reply (#396)", () => {
+    const messages = [
+      user("r1", 1),
+      user("r2", 2),
+      assistant("answering both", 3),
+      user("r3", 4),
+      assistant("answer three", 5),
+    ];
+    expect(finishedReplyTo(idle(messages), "r1")).toEqual({
+      status: "answered",
+      reply: { text: "answering both", createdAt: 3 },
+    });
+    expect(finishedReplyTo(idle(messages), "r2")).toMatchObject({
+      reply: { text: "answering both" },
+    });
+    expect(finishedReplyTo(idle(messages), "r3")).toMatchObject({
+      reply: { text: "answer three" },
     });
   });
 });

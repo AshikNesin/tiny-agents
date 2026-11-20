@@ -361,6 +361,9 @@ export class AgentRuntime {
           models,
           registry,
           settings: {
+            // Follow-ups queued behind a busy reply are answered together in
+            // one run, not one run each (issue #396).
+            followUpMode: "all",
             ...options.settings,
             // Long chats are summarized past the context ceiling on every model.
             compaction: withContextCeiling(models, {

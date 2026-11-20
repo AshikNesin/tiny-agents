@@ -51,5 +51,11 @@ DELETE /bots/:id/messages/:requestId → AgentRuntime.withdraw
   pi-durable actually honored, so the bubble tag always matches reality.
 - Mentions and bot-to-bot deliveries keep the default follow-up behavior;
   only the owner's composer steers.
+- By default, follow-ups queued while a reply runs are placed together when
+  it ends (pi-durable `followUpMode: "all"`, issue #396; a host's own
+  `settings.followUpMode` wins): one run answers them all,
+  not one run each. `finishedReplyTo` gives every input of the batch that
+  shared reply, and the batch is a quiet turn only when none of its inputs
+  is the owner's.
 - The optimistic echo hands off to the queued bubble on the `queued` event
   (matched by requestId), so the message never flickers or doubles.

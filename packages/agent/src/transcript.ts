@@ -403,7 +403,9 @@ export function deriveChat(raw: RawChat): ChatMessage[] {
     }
   }
   // A turn another bot or a hand-off started is quiet until the owner writes.
+  // Inputs placed together share one turn: it is quiet only when none is the owner's.
   let quiet = false;
+  let afterUser = false;
   for (let i = 0; i < visible.length; i++) {
     const entry = visible[i];
     const id = Number(entry.id);
@@ -433,7 +435,8 @@ export function deriveChat(raw: RawChat): ChatMessage[] {
       const peer = peerOf(entry);
       const requestId = requestIdOf(entry);
       const author = entry.kind === CHAT_USER_ENTRY ? authorOfData(record(entry.data)) : undefined;
-      quiet = isQuietPeer(peer);
+      quiet = isQuietPeer(peer) && (quiet || !afterUser);
+      afterUser = true;
       out.push({
         id: `e${entry.id}`,
         role: "user",
@@ -449,6 +452,7 @@ export function deriveChat(raw: RawChat): ChatMessage[] {
     }
 
     // pi.assistant
+    afterUser = false;
     const assistant = message as AssistantMessage;
     if (assistant.stopReason === "aborted") {
       const next = visible.slice(i + 1).find((e) => e.kind !== "pi.compaction");

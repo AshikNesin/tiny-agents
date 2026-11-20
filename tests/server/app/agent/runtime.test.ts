@@ -270,6 +270,51 @@ describe("AgentRuntime", () => {
   );
 
   it(
+    "answers every follow-up queued behind a busy reply in one run (#396)",
+    { timeout: 20_000 },
+    async () => {
+      const runtime = await openTestRuntime({
+        storePath: ":memory:",
+        tokensPerSecond: 5,
+        reply: (text) => `Reply to ${text}, padded for a slow stream`,
+      });
+      try {
+        const ref = await runtime.createConversation({ modelId: TEST_MODEL, systemPrompt: "" });
+        const chat = await observeChat(runtime, ref);
+        await runtime.submit(ref, { requestId: "batch-1", text: "first" });
+        await until(() => chat.state().busy, "the run to start");
+        await runtime.submit(ref, { requestId: "batch-2", text: "second" });
+        await runtime.submit(ref, { requestId: "batch-3", text: "third" });
+        await until(() => chat.state().queued.length === 2, "both follow-ups to queue");
+
+        await until(
+          async () =>
+            finishedReplyTo(await runtime.readChat(ref), "batch-3").status === "answered" &&
+            chat.state().messages.at(-1)?.text === "Reply to third, padded for a slow stream" &&
+            chat.state().messages.at(-1)?.status === "done",
+          "the batch's reply",
+        );
+        const texts = chat.state().messages.map((message) => `${message.role}:${message.text}`);
+        expect(texts).toEqual([
+          "user:first",
+          "assistant:Reply to first, padded for a slow stream",
+          "user:second",
+          "user:third",
+          "assistant:Reply to third, padded for a slow stream",
+        ]);
+        const state = await runtime.readChat(ref);
+        expect(finishedReplyTo(state, "batch-2")).toMatchObject({
+          status: "answered",
+          reply: { text: "Reply to third, padded for a slow stream" },
+        });
+        await chat.stop();
+      } finally {
+        await runtime.close();
+      }
+    },
+  );
+
+  it(
     "withdraws a queued message and reports placed, settled, and unknown inputs",
     { timeout: 20_000 },
     async () => {
@@ -503,13 +548,15 @@ describe("AgentRuntime", () => {
     const runtime = await openTestRuntime({ storePath: ":memory:" });
     try {
       const ref = await runtime.createConversation({ modelId: TEST_MODEL, systemPrompt: "" });
+      // One turn at a time: follow-ups queued together would share one reply.
       for (let i = 0; i < 4; i++) {
         await runtime.submit(ref, { requestId: `window-${i}`, text: `message ${i}` });
+        await until(
+          async () =>
+            !runtime.isBusy(ref) && (await runtime.lastMessage(ref))?.text === `Echo: message ${i}`,
+          "the message to be answered",
+        );
       }
-      await until(
-        async () => (await runtime.lastMessage(ref))?.text === "Echo: message 3",
-        "every message to be answered",
-      );
       const full = (await runtime.readChat(ref)).messages;
       expect(full).toHaveLength(8);
 
