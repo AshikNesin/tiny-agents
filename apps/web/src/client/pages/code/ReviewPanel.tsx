@@ -97,10 +97,8 @@ export function ReviewPanel({
   useEffect(() => {
     let cancelled = false;
     setError(null);
-    const list = worktreeScope
-      ? projectsApi.reviewFiles(threadId)
-      : projectsApi.checkpointFiles(threadId, scope);
-    list
+    projectsApi
+      .reviewFiles(threadId, scope)
       .then((list) => !cancelled && setFiles(treeOrder(list)))
       .catch(
         (e: unknown) => !cancelled && setError(errorMessage(e, "Could not read the changes.")),
@@ -108,14 +106,11 @@ export function ReviewPanel({
     return () => {
       cancelled = true;
     };
-  }, [threadId, settledKey, reload, scope, worktreeScope]);
+  }, [threadId, settledKey, reload, scope]);
 
   const read = useCallback(
-    (path: string) =>
-      worktreeScope
-        ? projectsApi.reviewFile(threadId, path)
-        : projectsApi.checkpointFile(threadId, scope, path),
-    [threadId, scope, worktreeScope],
+    (path: string) => projectsApi.reviewFile(threadId, path, scope),
+    [threadId, scope],
   );
 
   const revert = async () => {

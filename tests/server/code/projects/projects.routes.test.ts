@@ -889,13 +889,13 @@ describe("the Thread-Id trailer and per-turn checkpoints", () => {
     ]);
     const firstTurn = list.find((c) => c.seq === 1)!;
     const files = (
-      await call<ReviewFile[]>("GET", `/threads/${enc}/checkpoints/${firstTurn.id}/files`)
+      await call<ReviewFile[]>("GET", `/threads/${enc}/review/files?scope=${firstTurn.id}`)
     ).body.data!;
     expect(files.map((f) => [f.path, f.status])).toEqual([["notes.txt", "added"]]);
     const file = (
       await call<{ oldContent: string; newContent: string }>(
         "GET",
-        `/threads/${enc}/checkpoints/${list[0]!.id}/file?path=notes.txt`,
+        `/threads/${enc}/review/file?path=notes.txt&scope=${list[0]!.id}`,
       )
     ).body.data!;
     expect(file).toMatchObject({

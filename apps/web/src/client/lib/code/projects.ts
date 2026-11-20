@@ -32,6 +32,9 @@ import type {
 const base = "/code";
 const thread = (id: string) => `${base}/threads/${encodeURIComponent(id)}`;
 
+/** The base scope is the server's default, so it is left off the query. */
+const scoped = (scope: string) => (scope === "base" ? undefined : { scope });
+
 export const projectsApi = {
   github: () => apiClient.get<GitHubStatus>(`${base}/github`),
   setToken: (token: string | null) => apiClient.put<GitHubStatus>(`${base}/github`, { token }),
@@ -74,12 +77,6 @@ export const projectsApi = {
   spendLimit: (id: string, limitUsd: number | null) =>
     apiClient.post<ThreadPullsView>(`${thread(id)}/spend-limit`, { limitUsd }),
   checkpoints: (id: string) => apiClient.get<CheckpointView[]>(`${thread(id)}/checkpoints`),
-  checkpointFiles: (id: string, cp: string) =>
-    apiClient.get<ReviewFile[]>(`${thread(id)}/checkpoints/${encodeURIComponent(cp)}/files`),
-  checkpointFile: (id: string, cp: string, path: string) =>
-    apiClient.get<ReviewFileDiff>(`${thread(id)}/checkpoints/${encodeURIComponent(cp)}/file`, {
-      path,
-    }),
   revert: (id: string, cp: string) =>
     apiClient.post<{ reverted: boolean }>(
       `${thread(id)}/checkpoints/${encodeURIComponent(cp)}/revert`,
@@ -92,11 +89,15 @@ export const projectsApi = {
   merge: (id: string, method: MergeMethod) =>
     apiClient.post<ThreadPullsView>(`${thread(id)}/pr/merge`, { method }),
 
-  /** `since: "review"`: a PR review's changes since the owner's last review. */
-  reviewFiles: (id: string, since?: "review" | "mine") =>
-    apiClient.get<ReviewFile[]>(`${thread(id)}/review/files`, since ? { since } : undefined),
-  reviewFile: (id: string, path: string, since?: "review" | "mine") =>
-    apiClient.get<ReviewFileDiff>(`${thread(id)}/review/file`, since ? { path, since } : { path }),
+  /**
+   * What a Review panel reads: `base` (the default) since the merge base;
+   * for a PR review `review` (since the owner's last review) or `mine` (the
+   * owner's changes on its head); or a checkpoint id, what that turn changed.
+   */
+  reviewFiles: (id: string, scope = "base") =>
+    apiClient.get<ReviewFile[]>(`${thread(id)}/review/files`, scoped(scope)),
+  reviewFile: (id: string, path: string, scope = "base") =>
+    apiClient.get<ReviewFileDiff>(`${thread(id)}/review/file`, { path, ...scoped(scope) }),
   /** The light editor's save: the file's new content, and what it was opened with. */
   editFile: (id: string, body: EditReviewFileBody) =>
     apiClient.put(`${thread(id)}/review/file`, body),

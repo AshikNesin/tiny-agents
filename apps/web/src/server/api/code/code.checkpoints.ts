@@ -10,7 +10,7 @@
  */
 import { desc, eq } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
-import { codeCheckpoints, db, type CodeCheckpoint, type CodeProjectRow } from "../../db";
+import { codeCheckpoints, db, type CodeCheckpoint } from "../../db";
 import { codeGitHub } from "./code.github";
 import { codeHub } from "./code.hub";
 import { projectThread } from "./code.projects";
@@ -42,7 +42,7 @@ async function takeCheckpoint(
   if (
     last &&
     reason === "turn" &&
-    (await ws.rangeFiles(thread.worktree, last.sha, sha)).length === 0
+    (await ws.changedPaths(thread.worktree, last.sha, sha)).length === 0
   ) {
     return undefined;
   }
@@ -73,7 +73,6 @@ export async function checkpointRange(
 ): Promise<{
   from: CodeCheckpoint;
   to: CodeCheckpoint;
-  project: CodeProjectRow;
   worktree: string;
   ws: Workspace;
 }> {
@@ -87,7 +86,6 @@ export async function checkpointRange(
   return {
     from,
     to,
-    project: found.project,
     worktree: found.thread.worktree,
     ws: await codeGitHub().workspace(found.project),
   };

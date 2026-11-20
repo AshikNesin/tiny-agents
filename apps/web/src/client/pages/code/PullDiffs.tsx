@@ -56,7 +56,6 @@ export function PullDiffs({
   const reviewedSha = review.reviewedSha !== review.headSha ? review.reviewedSha : null;
   const [picked, setScope] = useState<Scope | null>(null);
   const scope: Scope = picked ?? (reviewedSha ? "review" : "base");
-  const since = scope === "base" ? undefined : scope;
   const [reload, setReload] = useState(0);
   const [files, setFiles] = useState<ReviewFile[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -65,7 +64,7 @@ export function PullDiffs({
     let cancelled = false;
     setError(null);
     projectsApi
-      .reviewFiles(threadId, since)
+      .reviewFiles(threadId, scope)
       .then((list) => !cancelled && setFiles(treeOrder(list)))
       .catch(
         (e: unknown) => !cancelled && setError(errorMessage(e, "Could not read the changes.")),
@@ -73,11 +72,11 @@ export function PullDiffs({
     return () => {
       cancelled = true;
     };
-  }, [threadId, settledKey, reload, since]);
+  }, [threadId, settledKey, reload, scope]);
 
   const read = useCallback(
-    (path: string) => projectsApi.reviewFile(threadId, path, since),
-    [threadId, since],
+    (path: string) => projectsApi.reviewFile(threadId, path, scope),
+    [threadId, scope],
   );
   const refresh = () => setReload((n) => n + 1);
 
