@@ -10,7 +10,6 @@ import { ModelPicker, type ModelPickerOption } from "../../../components/ModelPi
 import { ROLE_LABEL, ROLES } from "./model-labels";
 import { modelOptions } from "./model-options";
 
-/** What an unset role shows: the model its fallback picks, or none. */
 function fallbackLabel(options: ModelPickerOption[], modelId: string | null): string {
   const option = modelId ? options.find((o) => o.id === modelId) : undefined;
   if (!option) return modelId ? "Default (fallback)" : "None";
@@ -64,7 +63,6 @@ export function DefaultModels({
                   {label.description}
                 </Text>
               </div>
-              {/* The picker shrinks so Reset always fits inside the card. */}
               <div className="flex min-w-0 items-center gap-2">
                 <ModelPicker
                   className="min-w-0 flex-1"

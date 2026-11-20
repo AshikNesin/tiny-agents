@@ -1,9 +1,3 @@
-/**
- * Typed client for the bots API (PRD §9). The shapes are the server's own,
- * declared once in `shared/api/` (bots, memories, uploads, live, models) and
- * the agent package's chat types; dates arrive as ISO strings. `apiClient`
- * unwraps the { success, data } envelope.
- */
 import { apiClient } from "@groot/shell/lib/api";
 import type {
   AnswerQuestionsBody,
@@ -49,20 +43,10 @@ export const claudeCodeApi = {
   account: () => apiClient.get<ClaudeCodeAccount>("/claude-code/account"),
 };
 
-/** Category display order, the same order the injected block renders in. */
 export const CATEGORY_ORDER: readonly MemoryCategory[] = ["preference", "fact", "goal", "habit"];
 
-// Capabilities are static per server boot, and every chat/dialog mount asks
-// for them, so memoize the promise: one request serves the whole session
-// (a page reload picks up a restarted server). A rejection clears the cache
-// so the next call retries instead of failing forever.
 let capabilitiesCache: Promise<CapabilityInfo[]> | null = null;
 
-/**
- * The route returns `{ capabilities }`; unwrap here so callers get the
- * array (a raw `.get<CapabilityInfo[]>()` would hand them the wrapper
- * object and crash on the first `.filter`/`.flatMap`).
- */
 async function fetchCapabilities(): Promise<CapabilityInfo[]> {
   try {
     return (await apiClient.get<CapabilityList>("/capabilities")).capabilities ?? [];
@@ -76,7 +60,6 @@ export const botsApi = {
   list: () => apiClient.get<BotListEntry[]>("/bots"),
   create: (input: BotCreateBody) => apiClient.post<Bot>("/bots", input),
   get: (id: string) => apiClient.get<Bot>(`/bots/${id}`),
-  /** Older messages, just before message `before` (issue #92). */
   history: (id: string, before: string, limit = 50) =>
     apiClient.get<HistoryPage>(`/bots/${id}/messages`, {
       before,
@@ -100,7 +83,6 @@ export const botsApi = {
       ...(attachments?.length ? { attachments } : {}),
       ...(whenBusy ? { whenBusy } : {}),
     } satisfies SendMessageBody),
-  /** Withdraw a queued message (the x on a queued/steering bubble). */
   withdraw: (id: string, requestId: string) =>
     apiClient.delete(`/bots/${id}/messages/${encodeURIComponent(requestId)}`),
   upload: (file: File) => {
@@ -118,10 +100,8 @@ export const botsApi = {
   pastChats: (id: string) => apiClient.get<PastChatList>(`/bots/${id}/chats`).then((r) => r.chats),
   pastChat: (id: string, chatId: string) =>
     apiClient.get<PastChatView>(`/bots/${id}/chats/${chatId}`),
-  /** Older messages of a past chat, just before message `before`. */
   pastChatHistory: (id: string, chatId: string, before: string, limit = 50) =>
     apiClient.get<HistoryPage>(`/bots/${id}/chats/${chatId}/messages`, { before, limit }),
-  /** Move the bot back onto a past chat; the chat it was on becomes a past chat. */
   continuePastChat: (id: string, chatId: string) =>
     apiClient.post<Bot>(`/bots/${id}/chats/${chatId}/continue`),
   deletePastChat: (id: string, chatId: string) =>
@@ -129,7 +109,6 @@ export const botsApi = {
   read: (id: string) => apiClient.post<Bot>(`/bots/${id}/read`),
   pin: (id: string, pinned: boolean) =>
     apiClient.post<Bot>(`/bots/${id}/pin`, { pinned } satisfies PinBody),
-  /** YOLO mode for the bot's current chat (issue #151): owner only. */
   setYolo: (id: string, on: boolean) =>
     apiClient.put<YoloState>(`/bots/${id}/yolo`, { on } satisfies YoloBody),
   capabilities: () => (capabilitiesCache ??= fetchCapabilities()),
@@ -138,7 +117,6 @@ export const botsApi = {
     taskId: number,
     decision: "approved" | "denied",
     alwaysAllow?: string,
-    /** Vault cards: approve this handle for the rest of the conversation. */
     grant?: boolean,
   ) =>
     apiClient.post(`/bots/${id}/approvals/${taskId}`, {
@@ -146,7 +124,6 @@ export const botsApi = {
       ...(alwaysAllow ? { alwaysAllow } : {}),
       ...(grant ? { grant } : {}),
     } satisfies ApprovalBody),
-  /** Answer a bot's questions (one answer per question), or dismiss them with `null`. */
   answerQuestions: (id: string, taskId: number, answers: OwnerAnswer[] | null) =>
     apiClient.post(
       `/bots/${id}/questions/${taskId}`,

@@ -1,9 +1,3 @@
-/**
- * Settings → Updates state (docs/guides/local-updates.md): the supervisor's
- * status, polled while something is happening, and the check and apply
- * actions. After "Update & restart" it polls through the restart and reloads
- * the page once the new release answers.
- */
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import type { UpdatePhase, UpdateStatus, UpdateView } from "../../shared/local-updates";
@@ -13,7 +7,6 @@ import { errorMessage } from "../lib/errors";
 const BUSY: UpdatePhase[] = ["checking", "building", "restarting"];
 const POLL_MS = 2000;
 
-/** What a poll means, given the status it read and the commit an update started from. */
 export function pollOutcome(
   status: UpdateStatus | null | undefined,
   updatingFrom: string | null,
@@ -30,7 +23,6 @@ export function isBusy(status: UpdateStatus | null, updatingFrom: string | null)
 
 export function useUpdates() {
   const [view, setView] = useState<UpdateView | null>(null);
-  /** The commit running when "Update & restart" was pressed; the page reloads once it changes. */
   const [updatingFrom, setUpdatingFrom] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -39,7 +31,6 @@ export function useUpdates() {
       setView(next);
       return next;
     } catch {
-      // The server is restarting: keep the last view and try again.
       return null;
     }
   }, []);
@@ -68,7 +59,6 @@ export function useUpdates() {
   const check = useCallback(async () => {
     try {
       setView(await updatesApi.check());
-      // The answer comes from the supervisor a moment later.
       setTimeout(() => void load(), 500);
     } catch (error) {
       toast.error(errorMessage(error, "Could not check for updates"));

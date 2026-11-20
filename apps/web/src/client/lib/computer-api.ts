@@ -1,8 +1,3 @@
-/**
- * The Computer page's API: the desktops on the sandbox VM by profile
- * (`shared`, `bot-<id>`), not by bot. See `server/api/live/live.routes.ts`;
- * the shapes are `shared/api/live.ts`.
- */
 import { apiClient } from "@groot/shell/lib/api";
 import type {
   DesktopApps,

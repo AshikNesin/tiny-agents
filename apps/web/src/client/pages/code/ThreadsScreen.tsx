@@ -1,9 +1,3 @@
-/**
- * The Threads screen (`/code/threads`, `?project=<id>` for one project),
- * after Hoplite: a project's threads at full width by where they stand
- * (Working, Needs you, In review, Done), each row its status, title, pull
- * requests and date. Archived sits folded at the foot and loads on demand.
- */
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
@@ -151,7 +145,6 @@ export function ThreadsScreen({
   const [query, setQuery] = useState("");
   const [closed, setClosed] = useState<Set<string>>(() => new Set());
   const [archivedOpen, setArchivedOpen] = useState(false);
-  // Read the first time the archived section opens.
   const archived =
     useQuery({
       queryKey: ["code", "threads", "archived"],

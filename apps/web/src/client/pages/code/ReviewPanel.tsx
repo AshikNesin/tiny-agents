@@ -1,15 +1,3 @@
-/**
- * Source control for a project thread (issue #297 §8): every change since
- * the merge base with the project's base branch, committed or not, in the
- * diff workspace (`DiffWorkspace`): one column of every changed file under
- * sticky headers (fold, Viewed, Edit), and the file tree with Files and
- * Comments. On the Review page the tree sits beside the column, with split or
- * unified and Fold all files; in the side pane the tree is a drawer (Files).
- * Viewed marks come back unmarked when the agent changes the file again.
- * Line comments wait above the thread's composer and go to the agent with the
- * next message. The scope picker also shows what one turn changed (its
- * checkpoint against the one before), with Revert to here.
- */
 import { useState } from "react";
 import { ChevronDown, FileDiff as FileDiffIcon, GitBranch, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
@@ -35,25 +23,18 @@ export function ReviewPanel({
   page = false,
   editable = false,
 }: {
-  /** The thread. */
   threadId: string;
   baseBranch: string;
   refreshKey: unknown;
-  /** At full width on the Review page: the tree beside the column. */
   page?: boolean;
-  /** Files have Edit: the light editor, saving to the worktree. */
   editable?: boolean;
-  /** The thread's line comments: absent, the diff takes none. */
   commenting?: ThreadCommenting;
-  /** Uncommitted changes or one commit, from the harness (when it serves diffs). */
   onOtherScopes?: () => void;
 }) {
   const confirm = useConfirm();
-  /** `base` or a checkpoint id. */
   const [scope, setScope] = useState("base");
   const worktreeScope = scope === "base";
   const { settledKey, reload, refresh, workspace } = useReviewFiles(threadId, scope, refreshKey);
-  // A failed read offers no checkpoints.
   const checkpointList = useResource(
     ["code", "checkpoints", threadId],
     () => projectsApi.checkpoints(threadId).catch((): CheckpointView[] => []),
@@ -64,7 +45,6 @@ export function ReviewPanel({
   const checkpoint = checkpoints.find((c) => c.id === scope);
   const view = useDiffView();
 
-  // No reconcile with GitHub: only the branch and how far it is ahead, shared with the PR tab.
   const pulls = useThreadPulls(threadId, {
     refreshKey: `${String(settledKey)}:${reload}`,
     fresh: false,

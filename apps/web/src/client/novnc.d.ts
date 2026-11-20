@@ -1,5 +1,3 @@
-// noVNC ships no type declarations. This covers only the surface the browser
-// panel uses (see lib/novnc.ts, which also touches a few private fields).
 declare module "@novnc/novnc" {
   export interface RfbOptions {
     shared?: boolean;

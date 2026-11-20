@@ -1,4 +1,3 @@
-/** A Claude plan account's own settings: its fallback model and max turns. */
 import { useState } from "react";
 import { Checkbox } from "@groot/ui/checkbox";
 import { Field } from "@groot/ui/form";
@@ -35,15 +34,8 @@ export function ClaudePlanFallback({
   );
 }
 
-/** The worker's default `maxTurns` when the account sets none. */
 const DEFAULT_MAX_TURNS = 100;
 
-/**
- * How many steps (each tool call is one) Claude Code may take in one reply
- * before it stops with "Reached maximum number of turns". Saved on blur or
- * Enter; blank goes back to the default. "No limit" is opt-in: a reply then
- * runs until it finishes or is stopped.
- */
 export function ClaudePlanMaxTurns({
   account,
   onSet,

@@ -1,12 +1,3 @@
-/**
- * Start a thread (issue #143, ADR 0011): one composer for the task, with
- * the harness's model, reasoning and permission chips inside it and, above
- * it, where it runs: a project (its own worktree and branch), or a working
- * directory (searchable: recent ones, a typed path, a folder browser,
- * validated by the harness) with an optional fresh git worktree, and the
- * harness when there are several. A sidebar group's New thread opens it
- * with its project (`?project=`) or folder (`?cwd=`) picked.
- */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
@@ -74,16 +65,12 @@ function read(name: string, fallback = ""): string {
   }
 }
 
-/** Remembered per browser: the last harness, and per harness the directory, model and effort. */
 function save(name: string, value: string) {
   try {
     window.localStorage.setItem(name, value);
-  } catch {
-    // not remembered in private mode
-  }
+  } catch {}
 }
 
-/** Shelley's settings from before the harness layer carry over once. */
 function readLegacy(harness: string, what: "cwd" | "model" | "effort"): string | undefined {
   if (harness !== "shelley") return undefined;
   const legacy = { cwd: "cwd", model: "model", effort: "thinking" }[what];
@@ -107,14 +94,12 @@ function DirectoryBrowser({
   onPick(path: string): void;
   onOpenChange(open: boolean): void;
 }) {
-  // The folder shown; each opening starts again from `start`.
   const [path, go] = useState<string | undefined>(() => start || undefined);
   const [wasOpen, setWasOpen] = useState(open);
   if (open !== wasOpen) {
     setWasOpen(open);
     if (open) go(start || undefined);
   }
-  // Read while open, again each time it opens; the last folder stays while the next one loads.
   const read = useQuery({
     queryKey: ["code", "directories", harness.id, path],
     queryFn: () => codeApi.directories(harness.id, path),
@@ -194,7 +179,6 @@ function DirectoryBrowser({
   );
 }
 
-/** "now", "4m", "5h", "3d" — how long ago, compactly. */
 export function shortAgo(iso: string): string {
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return "";
@@ -209,7 +193,6 @@ export function shortAgo(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-/** Which harness gets the new thread: the last one used, else the first. */
 function initialHarness(harnesses: HarnessInfo[]): string {
   const last = read(HARNESS_KEY);
   return harnesses.find((h) => h.id === last)?.id ?? harnesses[0]?.id ?? "";
@@ -222,16 +205,12 @@ export function NewConversation({
 }: {
   rows: ThreadSummary[];
   harnesses: HarnessInfo[];
-  /** The owner's projects (null: none to offer, as for a guest). */
   projects?: ProjectView[] | null;
 }) {
   const navigate = useNavigate();
-  // A sidebar group's New thread links here with its project or folder; the
-  // page remounts per link (CodePage keys it by the query), so this is read once.
   const [params] = useSearchParams();
   const linkProject = params.get("project");
   const [linkCwd] = useState(() => params.get("cwd"));
-  // The first harness effect starts in the link's folder; later ones in the remembered one.
   const linkCwdUsed = useRef(false);
   const [harnessId, setHarnessId] = useState(() => {
     const preferred = projects?.find((p) => p.id === linkProject)?.defaultInstanceId;
@@ -260,7 +239,6 @@ export function NewConversation({
   const [permission, setPermission] = useState<PermissionMode | null>(null);
   const [browsing, setBrowsing] = useState(false);
 
-  // Each harness remembers its own directory, model and effort.
   useEffect(() => {
     const remembered = read(key(harness.id, "cwd"), readLegacy(harness.id, "cwd") ?? "");
     setCwd(!linkCwdUsed.current && linkCwd ? linkCwd : remembered);
@@ -282,7 +260,6 @@ export function NewConversation({
       .catch(() => setModels([]));
   }, [harness, linkCwd]);
 
-  // Recent directories of this harness, most recent first: one click to reuse.
   const recent = useMemo(() => {
     const seen = new Set<string>();
     const list: string[] = [];
@@ -297,7 +274,6 @@ export function NewConversation({
     return list;
   }, [rows, harness.id]);
 
-  // Without worktrees, two threads in one directory share its files: say so.
   const sharing = useMemo(
     () =>
       cwd.trim() && !caps.workspace.worktrees
@@ -369,7 +345,6 @@ export function NewConversation({
     navigate(threadPath(threadId));
   };
 
-  // A pick is remembered at once, so leaving the page and coming back keeps it (#319).
   const pickModel = (value: string) => {
     setModel(value);
     save(key(harness.id, "model"), value);

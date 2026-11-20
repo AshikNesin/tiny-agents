@@ -10,7 +10,6 @@ import { ChatPane } from "../../components/ChatPane";
 import { PastChatPane } from "../../components/PastChatPane";
 import { BotsSection } from "../../components/shell/BotsSection";
 
-/** Desktop layout (the sidebar is on screen), tracked live across resizes. */
 const DESKTOP_QUERY = "(min-width: 768px)";
 function subscribeDesktop(onChange: () => void) {
   if (typeof window.matchMedia !== "function") return () => {};
@@ -22,13 +21,6 @@ function isDesktop(): boolean {
   return typeof window.matchMedia === "function" && window.matchMedia(DESKTOP_QUERY).matches;
 }
 
-/**
- * Chat area beside the sidebar (PRD §6.2): the open bot's chat. `/chats` is
- * not a page of its own on desktop, where the sidebar already lists the
- * bots: it opens the last-opened bot (else the sidebar's top one). On
- * mobile with no bot open it is the full-screen bot list, the app's home.
- * With no bots at all it is the "create your first bot" screen everywhere.
- */
 export function ChatWorkspace() {
   const { botId, chatId } = useParams();
   const navigate = useNavigate();
@@ -43,7 +35,6 @@ export function ChatWorkspace() {
   const loadBot = useBotsStore((s) => s.loadBot);
   useFocusParam();
 
-  // `/chats?new=1` (older links, the command palette) opens the create dialog.
   useEffect(() => {
     if (searchParams.get("new") !== "1") return;
     openCreateBot();
@@ -56,9 +47,6 @@ export function ChatWorkspace() {
   const currentId = currentListBot?.id;
   const currentConversation = currentListBot?.conversationId;
 
-  // The chat needs fields the list entry lacks: the store's full row, read
-  // fresh on open and again when "New chat" moves the bot to a fresh
-  // conversation. A save updates the row in the store, so no refetch then.
   const fullBot = useBotsStore((s) => (currentId ? (s.fullBots[currentId] ?? null) : null));
   useEffect(() => {
     if (!currentId) return;
@@ -73,9 +61,6 @@ export function ChatWorkspace() {
     if (currentId) rememberLastBot(currentId);
   }, [currentId]);
 
-  // Desktop never rests on a bare /chats: land in a conversation. A link to
-  // a bot that no longer exists goes to that landing bot on desktop, and
-  // back to the bot list on phones, which keep /chats as their home.
   useEffect(() => {
     if (!loaded || currentId) return;
     if (!desktop && !botId) return;
@@ -86,7 +71,6 @@ export function ChatWorkspace() {
   return (
     <div className="h-full min-h-0">
       {fullBot && currentListBot && chatId ? (
-        // A past chat (issue #101), read-only until continued.
         <PastChatPane key={`${fullBot.id}-${chatId}`} bot={fullBot} chatId={chatId} />
       ) : fullBot && currentListBot ? (
         <ChatPane
@@ -98,7 +82,6 @@ export function ChatWorkspace() {
         />
       ) : (
         <>
-          {/* Mobile, nothing open: the bot list is the screen (messenger flow). */}
           {!noBots && (
             <div className="flex h-full flex-col md:hidden">
               <div className="flex shrink-0 items-center gap-3 px-3 pt-4 pb-2">

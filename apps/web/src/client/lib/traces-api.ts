@@ -1,4 +1,3 @@
-/** Typed client for the Traces API (issue #363); shapes in `shared/api/traces.ts`. */
 import { apiClient } from "@groot/shell/lib/api";
 import type {
   SideCallList,

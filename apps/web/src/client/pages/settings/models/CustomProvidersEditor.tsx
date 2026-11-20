@@ -1,9 +1,3 @@
-/**
- * A gateway account's custom providers (issue #216): providers the owner
- * configured in Cloudflare AI Gateway itself (BYOK "custom providers", e.g.
- * Z.AI's coding plan). Each is its gateway slug and the path the gateway
- * appends; its models then sit beside the gateway's own, on the same token.
- */
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@groot/ui/button";
 import { Input } from "@groot/ui/input";
@@ -15,7 +9,6 @@ export interface CustomProvider {
   basePath?: string;
 }
 
-/** Rows with a slug, trimmed: what the API takes. */
 export function cleanCustomProviders(rows: CustomProvider[]): CustomProvider[] {
   return rows.flatMap((row) => {
     const slug = row.slug.trim();

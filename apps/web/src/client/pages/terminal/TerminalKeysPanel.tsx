@@ -1,10 +1,3 @@
-/**
- * The keys panel (Termius-shaped): a collapsible column of terminal keys
- * that writes pty bytes into the active tab. Below md it overlays the
- * terminal (absolute, translucent); at md+ it docks beside it as a column.
- * It is chrome, not content: 11px mono labels, muted, no borders on keys,
- * every state readable without hover.
- */
 import { useState, type MouseEvent } from "react";
 import {
   ChevronDown,
@@ -17,11 +10,6 @@ import {
 import { cn } from "@groot/ui/lib/utils";
 import { pasteFromClipboard, type TerminalControls } from "./TerminalView";
 
-/**
- * One key. `char` marks a typeable character, it composes with the sticky
- * modifiers. Everything else is a fixed sequence that is already composed
- * (`^C` *is* Ctrl+C), so modifiers never touch it.
- */
 interface PanelKey {
   testid: string;
   label?: string;
@@ -61,7 +49,6 @@ const SYMBOL_KEYS: PanelKey[] = [
 
 const ENCODER = new TextEncoder();
 
-/** Ctrl masks a letter to its control byte; alt prefixes ESC. */
 function composeKey(key: PanelKey, ctrl: boolean, alt: boolean): string {
   if (key.char === undefined) return key.seq ?? "";
   const base =
@@ -71,13 +58,8 @@ function composeKey(key: PanelKey, ctrl: boolean, alt: boolean): string {
   return alt ? `\x1b${base}` : base;
 }
 
-/**
- * Keys never take focus: on a phone, focus leaving xterm's textarea closes
- * the soft keyboard after every press.
- */
 const keepFocus = (event: MouseEvent) => event.preventDefault();
 
-/** Quiet chrome: text keys are labels; icons optically match at size-3.5. */
 const keyClass =
   "flex h-8 min-h-8 items-center justify-center rounded-md px-1 font-mono text-[11px] text-muted-foreground select-none hover:bg-muted hover:text-foreground active:bg-muted active:text-foreground md:min-w-8";
 
@@ -101,14 +83,12 @@ export function TerminalKeysPanel({
   getControls,
   onCollapse,
 }: {
-  /** Resolved per press: sockets register after the panel first renders. */
   getControls: () => TerminalControls | undefined;
   onCollapse: () => void;
 }) {
   const [ctrl, setCtrl] = useState(false);
   const [alt, setAlt] = useState(false);
 
-  // Any press consumes the modifiers, even when they didn't compose.
   const press = (key: PanelKey) => {
     setCtrl(false);
     setAlt(false);
@@ -117,8 +97,6 @@ export function TerminalKeysPanel({
     controls?.focus();
   };
 
-  // A paste, not keystrokes: bracketed, so a multi-line paste doesn't run
-  // each line as it lands.
   const paste = async () => {
     setCtrl(false);
     setAlt(false);

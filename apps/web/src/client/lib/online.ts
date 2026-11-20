@@ -9,7 +9,6 @@ function subscribe(onChange: () => void): () => void {
   };
 }
 
-/** Whether the browser believes it is online (navigator.onLine), live. */
 export function useOnline(): boolean {
   return useSyncExternalStore(
     subscribe,

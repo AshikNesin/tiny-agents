@@ -1,10 +1,3 @@
-/**
- * The thread's right panel: one strip of tabs over what it shows. Source
- * control (the changed files and their diffs) and, for a project thread,
- * Pull request (checks with their logs, comments, merge). Open as a page
- * and Close sit at the strip's end, so the panels below carry no chrome
- * of their own.
- */
 import type { ReactNode } from "react";
 import { GitBranch, GitPullRequest, Maximize2, X } from "lucide-react";
 import { Button } from "@groot/ui";
@@ -24,9 +17,7 @@ export function ReviewSidebar({
 }: {
   tab: SideTab;
   onTab(tab: SideTab): void;
-  /** The thread's open pull request, for the tab's label. */
   pr: { number: number; loop: string } | null;
-  /** A project thread: it has a Pull request tab. */
   hasPull: boolean;
   onExpand(): void;
   onClose(): void;
@@ -57,7 +48,6 @@ export function ReviewSidebar({
               onClick={() => onTab(id)}
               className={cn(
                 "flex h-8 min-w-0 items-center gap-1.5 rounded-lg px-2.5 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-                // A lone tab reads as the panel's title, not a pressed button.
                 tab === id
                   ? cn("text-foreground", tabs.length > 1 && "bg-muted")
                   : "text-muted-foreground hover:text-foreground",

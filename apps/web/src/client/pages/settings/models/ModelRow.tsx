@@ -5,8 +5,6 @@ import { monoClass, Text } from "@groot/ui/typography";
 import type { AccountModel } from "../../../../shared/api/models";
 import { formatTokens } from "./model-labels";
 
-/** One model of an account: offer it in the picker, what it is, Test and Delete. */
-
 export function ModelRow({
   model,
   warning,
@@ -15,7 +13,6 @@ export function ModelRow({
   onDelete,
 }: {
   model: AccountModel;
-  /** Why the model can't answer as set up, when the card can tell. */
   warning?: string | undefined;
   onChange: (input: { enabled: boolean }) => void;
   onTest: () => void;

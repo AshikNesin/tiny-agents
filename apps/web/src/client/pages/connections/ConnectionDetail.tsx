@@ -1,8 +1,3 @@
-/**
- * A connection's page at /connections/:id: its status, its tools, the bots
- * that use them, and removing it. The page holds the connection and its
- * actions; each section is in `detail/`.
- */
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -31,13 +26,11 @@ export function ConnectionDetail({ id }: { id: string }) {
   const { data: connection, loadError, refresh } = useConnection(id);
   const setConnection = useSetConnection(id);
   const mutations = useConnectionMutations();
-  // The bot list the shell already keeps live; null only before its first load.
   const bots = useBotsStore((s) => (s.loading && s.bots.length === 0 ? null : s.bots));
   const [busy, setBusy] = useState(false);
   const [removing, setRemoving] = useState(false);
   const { run } = useStepUp();
   const [confirmRemove, setConfirmRemove] = useState(false);
-  // Another connection opens with the remove prompt closed.
   const [shownId, setShownId] = useState(id);
   if (shownId !== id) {
     setShownId(id);
@@ -74,7 +67,6 @@ export function ConnectionDetail({ id }: { id: string }) {
     }
   };
 
-  // Runs in the click itself: the popup must open before any await.
   const signIn = () => {
     setBusy(true);
     const started = connectionAuth.signIn(id);

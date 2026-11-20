@@ -1,7 +1,3 @@
-/**
- * App chrome state: sidebar collapse (desktop, persisted) and drawer (mobile),
- * plus the single create/edit bot dialog the sidebar and chat header share.
- */
 import { create } from "zustand";
 import { toast } from "sonner";
 import type { Bot } from "../../shared/api/bots";
@@ -25,10 +21,8 @@ interface UiState {
   setMobileOpen: (open: boolean) => void;
 
   botDialogOpen: boolean;
-  /** Bot being edited; null while creating. */
   editingBot: Bot | null;
   openCreateBot: () => void;
-  /** Loads the full bot first: the list entry lacks the editable fields. */
   openEditBot: (botId: string) => Promise<void>;
   setBotDialogOpen: (open: boolean) => void;
 }
@@ -38,9 +32,7 @@ export const useUiStore = create<UiState>((set) => ({
   setCollapsed: (collapsed) => {
     try {
       localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(collapsed));
-    } catch {
-      // Private mode: the toggle still works for this session.
-    }
+    } catch {}
     set({ collapsed });
   },
   mobileOpen: false,
@@ -51,7 +43,6 @@ export const useUiStore = create<UiState>((set) => ({
   openCreateBot: () => set({ botDialogOpen: true, editingBot: null, mobileOpen: false }),
   openEditBot: async (botId) => {
     try {
-      // Fresh: the form must start from what the server has now.
       const bot = await useBotsStore.getState().loadBot(botId, { fresh: true });
       set({ botDialogOpen: true, editingBot: bot, mobileOpen: false });
     } catch (error) {

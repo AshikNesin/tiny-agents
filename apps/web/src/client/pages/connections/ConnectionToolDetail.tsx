@@ -62,7 +62,6 @@ function pretty(value: unknown): string {
   return JSON.stringify(value, null, 2);
 }
 
-/** Text that is JSON is shown indented; anything else as is. */
 function prettyText(text: string): string {
   try {
     return pretty(JSON.parse(text));
@@ -184,7 +183,6 @@ function FieldInput({
   );
 }
 
-/** A result's content blocks with ids; each call replaces the whole list, so it never reorders. */
 function contentBlocks(content: ToolCallResult["result"]["content"] = []) {
   return content.map((block, position) => ({
     id: `${position}-${block.type}`,
@@ -313,7 +311,6 @@ function Playground({ tool }: { tool: ToolDetail }) {
       setJsonError(null);
       args = parsed.args;
     }
-    // A tool that may change data runs for real; ask first.
     if (tool.readOnly) void execute(args);
     else setPendingArgs(args);
   };

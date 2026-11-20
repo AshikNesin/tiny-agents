@@ -1,14 +1,3 @@
-/**
- * A thread's line comments that have not reached its agent yet, shared by
- * the Changes and Review panels (where they are written, under their lines)
- * and the thread (where they wait above the composer and go with the next
- * message). Kept on the server per thread, so they survive a reload and work
- * for every harness. A guest has none: the panels put a guest's comment in
- * the composer instead.
- *
- * A PR review's pending GitHub comments (issue #345) live in the same store
- * under `githubCommentsKey(reviewId)`, read from and saved to the review.
- */
 import { useEffect, useMemo, useRef } from "react";
 import { create } from "zustand";
 import { toast } from "sonner";
@@ -19,10 +8,8 @@ import { projectsApi } from "./projects";
 
 const GITHUB = "github:";
 
-/** Where a PR review's pending GitHub comments are kept in the store. */
 export const githubCommentsKey = (reviewId: string) => `${GITHUB}${reviewId}`;
 
-/** The server's comments behind a store key: a thread's (or review's) for the agent, or GitHub's. */
 function draftsOf(key: string) {
   const github = key.startsWith(GITHUB);
   const id = github ? `review:${key.slice(GITHUB.length)}` : key;
@@ -39,11 +26,9 @@ interface CommentsState {
   load(threadId: string): Promise<void>;
   add(threadId: string, body: ReviewDraftBody): Promise<void>;
   remove(threadId: string, draftId: string): Promise<void>;
-  /** They went to the agent (with a message, or on their own). */
   sent(threadId: string): void;
 }
 
-/** Reads in flight, so the panels and the thread opening together read once. */
 const reading = new Map<string, Promise<void>>();
 
 export const useCommentStore = create<CommentsState>((set, get) => ({
@@ -75,7 +60,6 @@ export const useCommentStore = create<CommentsState>((set, get) => ({
 
 const NONE: ReviewDraft[] = [];
 
-/** The thread's unsent comments, read once when it opens (none for a guest). */
 export function useThreadComments(threadId: string | undefined, enabled = true): ReviewDraft[] {
   const load = useCommentStore((s) => s.load);
   const comments = useCommentStore((s) => (threadId ? s.byThread[threadId] : undefined));
@@ -86,7 +70,6 @@ export function useThreadComments(threadId: string | undefined, enabled = true):
   return enabled ? (comments ?? NONE) : NONE;
 }
 
-/** A comment as plain text for the composer (a guest's, which cannot be saved). */
 function commentText(draft: ReviewDraftBody): string {
   const lines =
     draft.startLine === draft.endLine
@@ -95,19 +78,12 @@ function commentText(draft: ReviewDraftBody): string {
   return `\`${draft.path}:${lines}\`${draft.side === "old" ? " (old side)" : ""} ${draft.body}`;
 }
 
-/** How a panel takes and shows a thread's comments (built by the Code page). */
 export interface ThreadCommenting {
   comments: ReviewDraft[];
   add(body: ReviewDraftBody): Promise<void>;
   remove(draftId: string): void;
 }
 
-/**
- * One file's share of the thread's comments, as `FileDiff` takes them: a new
- * comment carries its quoted lines (from the side it was made on). With
- * `github` (a PR review), comments for the PR's review sit beside the
- * assistant's, each tagged with where it goes.
- */
 export function fileCommenting(
   commenting: ThreadCommenting | undefined,
   file: { path: string; oldContent: string; newContent: string },
@@ -145,12 +121,9 @@ export function fileCommenting(
   };
 }
 
-/** One line comment as the agent received it. */
 export interface SentComment {
   path: string;
-  /** `30` or `30-34`. */
   lines: string;
-  /** On removed lines (old-file numbers). */
   old: boolean;
   quote: string;
   body: string;
@@ -159,11 +132,6 @@ export interface SentComment {
 const COMMENT =
   /^\*\*`(.+):(\d+(?:-\d+)?)`\*\*( \(old side\))?(?:\n```\n([\s\S]*?)\n```)?\n([\s\S]*)$/;
 
-/**
- * A message of line comments (the server's `reviewMessage`, with the owner's
- * message after a `---` line) back into its comments and that message; null
- * for any other message.
- */
 export function parseReviewMessage(
   text: string,
 ): { comments: SentComment[]; message: string } | null {
@@ -187,11 +155,6 @@ export function parseReviewMessage(
   return { comments, message: parts.slice(count).join("\n\n---\n\n") };
 }
 
-/**
- * The thread's commenting for the diff panels: the owner's comments are
- * saved for the thread (a failure says so and keeps the text); a guest's,
- * which cannot be saved, are handed to `onGuestText` for the composer.
- */
 export function useThreadCommenting(
   threadId: string | undefined,
   onGuestText: (text: string) => void,

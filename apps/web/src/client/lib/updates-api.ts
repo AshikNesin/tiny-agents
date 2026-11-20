@@ -1,4 +1,3 @@
-/** Local self-updates (docs/guides/local-updates.md): status, check, update & restart. */
 import { apiClient } from "@groot/shell/lib/api";
 import type { UpdateView } from "../../shared/local-updates";
 

@@ -8,11 +8,6 @@ import type { Routine } from "../../../shared/api/routines";
 import { formatIst } from "../../lib/routines-schedule";
 import { ROUTINE_NEEDS_ATTENTION, routineState } from "../../../shared/machines/routine";
 
-/**
- * One routine on the Schedules grid: its bot, schedule and next run (or why
- * it is paused or struggling), its switch, and Resume, Run now, Edit, Delete.
- */
-
 export function RoutineCard({
   routine,
   busy,

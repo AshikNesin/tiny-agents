@@ -1,11 +1,3 @@
-/**
- * Dividers that let you give a side panel more or less room on wide screens:
- * the right panel beside a thread, a review's file list on the left of its
- * diff, and a PR review's assistant on the far left. Drag one, or
- * focus it and use the arrow keys (Shift for bigger steps, Home and End for
- * the limits). Each width is remembered in this browser on its own; a
- * double-click or Enter goes back to the default.
- */
 import {
   useCallback,
   useRef,
@@ -21,26 +13,20 @@ import { cn } from "@groot/ui/lib/utils";
 const STEP = 16;
 const BIG_STEP = 64;
 
-/** How one panel may be sized, and where its width is remembered. */
 interface PanelLimits {
   key: string;
-  /** Which side of its divider the panel sits. */
   side: "left" | "right";
   min: number;
-  /** At most this wide, whatever the room. */
   max?: number;
-  /** What the content on the divider's other side always keeps. */
   keep: number;
 }
 
-/** The right panel: a thread's conversation keeps 360px. */
 const REVIEW_PANEL: PanelLimits = {
   key: "code:review-width",
   side: "right",
   min: 320,
   keep: 360,
 };
-/** A review's file list: 200px to 640px, and the diff keeps 360px. */
 const FILE_LIST: PanelLimits = {
   key: "code:files-width",
   side: "left",
@@ -49,7 +35,6 @@ const FILE_LIST: PanelLimits = {
   keep: 360,
 };
 
-/** A PR review's assistant, open on the left: the files and diff keep 560px. */
 const ASSISTANT: PanelLimits = {
   key: "code:assistant-width",
   side: "left",
@@ -71,12 +56,9 @@ function saveWidth(key: string, width: number | null) {
   try {
     if (width === null) window.localStorage.removeItem(key);
     else window.localStorage.setItem(key, String(Math.round(width)));
-  } catch {
-    // not remembered in private mode
-  }
+  } catch {}
 }
 
-/** A panel's chosen width in px, or null for its default. */
 function useStoredWidth(key: string) {
   const [width, setWidth] = useState(() => readWidth(key));
   const change = useCallback(
@@ -89,11 +71,6 @@ function useStoredWidth(key: string) {
   return [width, change] as const;
 }
 
-/**
- * The right panel with its divider. Dragged to a width, the panel keeps it
- * (shrinking only as far as its minimum when the window narrows); otherwise
- * it takes about half.
- */
 export function ResizablePane({
   children,
   className,
@@ -131,11 +108,6 @@ export function ResizablePane({
   );
 }
 
-/**
- * A review's list of changed files, left of its diff, with its divider (from
- * `md`, where the two sit side by side). Below that the list sits above the
- * diff at full width.
- */
 export function FileListPane({ children, className }: { children: ReactNode; className?: string }) {
   const [width, setWidth] = useStoredWidth(FILE_LIST.key);
   const panelRef = useRef<HTMLElement>(null);
@@ -167,10 +139,6 @@ export function FileListPane({ children, className }: { children: ReactNode; cla
   );
 }
 
-/**
- * A PR review's assistant when it is open, on the left of the files and the
- * diff, with its divider (from `lg`; below that it takes the whole screen).
- */
 export function AssistantPane({
   children,
   className,
@@ -178,7 +146,6 @@ export function AssistantPane({
 }: {
   children: ReactNode;
   className?: string;
-  /** Off while the pane shows only on a phone (folded on wide screens). */
   resizable?: boolean;
 }) {
   const [width, setWidth] = useStoredWidth(ASSISTANT.key);
@@ -224,18 +191,14 @@ function PanelResizer({
 }: {
   limits: PanelLimits;
   label: string;
-  /** The panel's id. */
   controls: string;
-  /** From which breakpoint the divider shows, such as `lg:block`. */
   className: string;
-  /** The panel being resized; its parent row bounds how wide it may grow. */
   panelRef: RefObject<HTMLElement | null>;
   width: number | null;
   onWidth(width: number | null, persist: boolean): void;
 }) {
   const [dragging, setDragging] = useState(false);
   const { min, keep, side } = limits;
-  // The panel and what sits past the divider share the room they have now.
   const bounds = () => {
     const panel = panelRef.current;
     const other =
@@ -248,7 +211,6 @@ function PanelResizer({
     return { max, current: width ?? panel?.offsetWidth ?? min };
   };
   const clamp = (value: number, max: number) => Math.round(Math.min(max, Math.max(min, value)));
-  // Moving the divider right grows a panel on its left and shrinks one on its right.
   const grow = side === "left" ? 1 : -1;
   const { max, current } = bounds();
   const now = clamp(current, max);

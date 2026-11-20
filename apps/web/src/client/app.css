@@ -1,15 +1,5 @@
-/*
- * tiny-agents app-level styles.
- *
- * The shell's index.css (synced from groot) carries the warm monochrome
- * palette; this file only adds the chat-specific tokens and styles. It loads
- * after the shell stylesheet (see main.tsx import order).
- */
-
-/* Chat surfaces */
 :root {
   --bubble: #f0efed;
-  /* Fluid ChatMessage: the owner's bubble is the accent tint, not a dark pill. */
   --bubble-user: color-mix(in oklab, var(--accent), var(--foreground) 4%);
   --bubble-user-foreground: var(--foreground);
   --composer: #ffffff;
@@ -30,15 +20,12 @@
   --inline-code-fg: #fdba74;
 }
 
-/* Markdown inside a reply card (15px / 22.5px, 15px paragraph rhythm). */
 .chat-md {
   font-size: 15px;
   line-height: 22.5px;
   overflow-wrap: anywhere;
 }
 
-/* Streamdown's list utilities (list-disc, list-inside) are not in the
-   Tailwind source scan, and preflight strips the default markers. */
 .chat-md ul {
   list-style: disc inside;
 }
@@ -60,8 +47,6 @@
   line-height: 21px;
 }
 
-/* The Code transcript reads like Amp and Hoplite: a touch denser, and inline
-   code in neutral mono rather than the chat's highlighted chips. */
 .code-md {
   font-size: 14px;
   line-height: 22px;
@@ -73,12 +58,6 @@
   line-height: 20px;
 }
 
-/*
- * Fluid Functionalism kit (components/fluid, vendored from
- * fluidfunctionalism.com). Its state tokens are drawn from the foreground so
- * hover, selection and focus stay in the warm monochrome palette instead of
- * the kit's blue accent.
- */
 :root {
   --hover: color-mix(in oklab, var(--foreground) 4%, transparent);
   --active: color-mix(in oklab, var(--foreground) 7%, transparent);
@@ -95,7 +74,6 @@
   --focus-ring: color-mix(in oklab, var(--foreground) 55%, transparent);
 }
 
-/* ThinkingIndicator: a bright band sweeping across the label's letters. */
 @keyframes fluid-shimmer {
   0% {
     background-position: 100% 0;

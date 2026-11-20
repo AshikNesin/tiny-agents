@@ -1,10 +1,3 @@
-/**
- * One session's trace: the whole interaction as a transcript, read from the
- * conversation's stored entries. Each turn shows its prompt, then the
- * model's thoughts, replies and tool calls in order (a tool opens to its
- * input and output), and where the context was summarized. A sidebar counts
- * each kind of event and filters to the checked ones (a sheet on a phone).
- */
 import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
@@ -51,7 +44,6 @@ import { countEvents, shows, toolDisplayName, type FilterKey } from "./filters";
 import { formatCost, formatDuration, formatTime, formatTokens, dayLabel } from "./format";
 import { HARNESS_LABEL, KIND_LABEL } from "./Traces";
 
-/** Where the session's messages can be read in the app. */
 function chatLink(session: TraceSession): string | undefined {
   if (session.kind === "chat") return `/chats/${session.bot.id}`;
   if (session.kind === "past_chat" && session.chatId) {
@@ -63,7 +55,6 @@ function chatLink(session: TraceSession): string | undefined {
 
 const NORMAL_STOPS = new Set(["stop", "toolUse", "done", "streaming"]);
 
-/** The session's totals as one line: cost, tokens, calls and failures. */
 function Totals({ detail }: { detail: TraceSessionDetail }) {
   const { usage } = detail.trace;
   const steps = detail.trace.turns.flatMap((turn) => turn.steps);
@@ -94,7 +85,6 @@ function Totals({ detail }: { detail: TraceSessionDetail }) {
   );
 }
 
-/** One filter row: a checkbox, icon, label and count, dotted between. */
 function FilterRow({
   label,
   icon,
@@ -204,10 +194,8 @@ const preClass = cn(
   "bg-muted/50 text-foreground max-h-96 overflow-auto rounded-md px-3 py-2 text-xs whitespace-pre-wrap break-words",
 );
 
-/** Arguments that read best as plain text when they are the only one. */
 const RAW_ARGS = new Set(["command", "cmd", "script", "code", "query"]);
 
-/** A tool call's input as text: a lone command or query as is, else JSON. */
 function inputText(input: Record<string, unknown>): string {
   const entries = Object.entries(input);
   if (entries.length === 1 && RAW_ARGS.has(entries[0]![0]) && typeof entries[0]![1] === "string") {
@@ -307,7 +295,6 @@ function EventRow({ event, labels }: { event: TraceEvent; labels: ToolLabelCatal
   }
 }
 
-/** A turn's model calls, tokens, cost and time, under its events. */
 function turnMeta(turn: TraceTurn, index: number): string {
   const calls = turn.steps.filter((step) => step.type === "llm");
   let input = 0;

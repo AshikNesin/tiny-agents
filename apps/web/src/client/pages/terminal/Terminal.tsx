@@ -1,17 +1,3 @@
-/**
- * Terminal page (issue #28): real shells on the sandbox VM, in tabs, inside
- * the app. A tab IS a tmux session on the VM, so the list is read from the
- * VM and polled every 5s; tabs opened from another device appear on their
- * own, and tabs survive the browser, the app process and the device.
- *
- * Mounting policy: one TerminalView per session, mounted the whole time the
- * session is listed, inactive ones hidden with display:none and re-fitted on
- * activation. xterm.js is happy rendering into a display:none host (it just
- * has no measurable box until shown), so scrollback, the pty stream and the
- * ticketed socket all stay warm across tab switches, switching back is a
- * local repaint, not a reconnect, and output landing on a background tab is
- * already in its buffer when the owner returns.
- */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -40,41 +26,30 @@ import { DEFAULT_FONT_SIZE, MAX_FONT_SIZE, MIN_FONT_SIZE } from "../../lib/xterm
 import { isMac } from "../../lib/clipboard";
 import { useFullScreen } from "../../lib/live-view";
 
-/** The modifier the terminal's font chords use on this platform. */
 const MOD = isMac() ? "⌘" : "Ctrl";
-
-/** GET /terminal/sessions answers { status, sessions } (frozen contract). */
 
 type TabStatus = Record<string, TerminalConnectionState>;
 
-/** The strip shows a dot while a tab's socket is still establishing itself. */
 const CONNECTING: ReadonlySet<TerminalConnectionState> = new Set(["connecting", "reconnecting"]);
 
-/** `ta-term-3` -> "3": the prefix is ours, the number is the whole signal. */
 function tabLabel(name: string): string {
   return name.replace(/^ta-term-/, "");
 }
 
-/** Below md the panel would cover most of a phone's terminal, so a first
- * visit starts it collapsed there and open everywhere else. */
 const KEYS_KEY = "tiny-agents:terminal-keys";
 
 function readKeysOpen(): boolean {
   try {
     const stored = window.localStorage.getItem(KEYS_KEY);
     if (stored !== null) return stored === "1";
-  } catch {
-    /* storage unavailable: fall through to the viewport default */
-  }
+  } catch {}
   return !window.matchMedia?.("(max-width: 767px)").matches;
 }
 
 function storeKeysOpen(open: boolean): void {
   try {
     window.localStorage.setItem(KEYS_KEY, open ? "1" : "0");
-  } catch {
-    /* storage unavailable: the choice just won't persist */
-  }
+  } catch {}
 }
 
 const FONT_KEY = "tiny-agents:terminal-font-size";
@@ -83,28 +58,22 @@ function readFontSize(): number {
   try {
     const stored = Number(window.localStorage.getItem(FONT_KEY));
     if (stored >= MIN_FONT_SIZE && stored <= MAX_FONT_SIZE) return stored;
-  } catch {
-    /* storage unavailable: the default */
-  }
+  } catch {}
   return DEFAULT_FONT_SIZE;
 }
 
 function storeFontSize(px: number): void {
   try {
     window.localStorage.setItem(FONT_KEY, String(px));
-  } catch {
-    /* storage unavailable: the choice just won't persist */
-  }
+  } catch {}
 }
 
-/** In full screen Escape goes to the shell (vim, less) instead of leaving it. */
 const LOCKED_KEYS = ["Escape"];
 
 export function TerminalPage() {
   const [sessions, setSessions] = useState<TerminalSession[] | null>(null);
   const [status, setStatus] = useState<TerminalStatusWire | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  // `?tab=` opens on that tab (Settings → Models → Claude plan → Sign in links here).
   const [searchParams] = useSearchParams();
   const [active, setActive] = useState<string | null>(() => searchParams.get("tab"));
   const [tabStatus, setTabStatus] = useState<TabStatus>({});
@@ -113,19 +82,12 @@ export function TerminalPage() {
   const [fontSize, setFontSize] = useState(readFontSize);
   const confirm = useConfirm();
   const regionRef = useRef<HTMLDivElement>(null);
-  // Full screen is the CSS state (fixed inset-0), so it works where the
-  // Fullscreen API doesn't (iOS Safari never fullscreens a div). The API is
-  // best-effort chrome-hiding; when it does work, its events stay in sync.
   const { fullscreen, toggleFullscreen } = useFullScreen(regionRef, LOCKED_KEYS, {
     fallback: "css",
   });
 
-  // Live views by tab name: the keys panel writes into the active one. A ref,
-  // not state, registrations happen on socket lifecycles that don't render.
   const controlsRef = useRef(new Map<string, TerminalControls>());
 
-  // The current grid, for "New tab" (a tab opens at the size the owner sees).
-  // Ref, not state: it changes on every resize without deserving a re-render.
   const sizeRef = useRef<{ cols: number; rows: number } | null>(null);
 
   const refresh = useCallback(async () => {
@@ -139,7 +101,6 @@ export function TerminalPage() {
     }
   }, []);
 
-  // Poll the VM (tabs change from any device) and refetch on window focus.
   useEffect(() => {
     void refresh();
     const timer = setInterval(() => void refresh(), 5000);
@@ -153,10 +114,8 @@ export function TerminalPage() {
 
   const names = useMemo(() => (sessions ?? []).map((s) => s.name), [sessions]);
 
-  // The active tab must exist: one closed elsewhere falls forward to the
-  // first remaining tab; none left shows the ready empty state.
   useEffect(() => {
-    if (sessions === null) return; // not loaded yet: keep a requested tab
+    if (sessions === null) return;
     if (names.length === 0) {
       setActive((current) => (current === null ? current : null));
       return;
@@ -164,7 +123,6 @@ export function TerminalPage() {
     if (!active || !names.includes(active)) setActive(names[0]!);
   }, [sessions, names, active]);
 
-  // Prune statuses of tabs that left the list.
   useEffect(() => {
     const listed = new Set(names);
     setTabStatus((prev) => {
@@ -215,7 +173,6 @@ export function TerminalPage() {
     setTabStatus((prev) => (prev[name] === state ? prev : { ...prev, [name]: state }));
   }, []);
 
-  // One size for every tab: switching tabs never changes the text size.
   const stepFont = useCallback((step: 1 | -1 | 0) => {
     setFontSize((current) => {
       const next =
@@ -291,8 +248,6 @@ export function TerminalPage() {
         />
       );
     }
-    // The first list is an SSH round trip to the VM; until it answers there
-    // is nothing to say "No tabs" about.
     if (sessions === null) return <LoadingState text="Connecting to sandbox…" />;
     if (sessions.length === 0) {
       return (
@@ -383,8 +338,6 @@ export function TerminalPage() {
           >
             <Plus />
           </Button>
-          {/* Inside the region, so it stays reachable in the CSS full screen that
-              covers the page header (no Fullscreen API on iOS Safari, #170). */}
           {fullscreen && (
             <Button
               variant="ghost"
@@ -399,15 +352,7 @@ export function TerminalPage() {
             </Button>
           )}
         </div>
-        {/* The terminal row: the view column and the keys panel. Below md
-            the panel overlays the terminal (it is positioned against this
-            row), at md+ it docks beside it, and since the terminal keeps
-            its column either way, its box only changes on the md crossing. */}
         <div className="relative flex min-h-0 flex-1">
-          {/* min-w-0 + overflow-hidden: the column takes its width from the
-              row, never from xterm's canvas. Without them a bigger font
-              widened the column, which refit the grid, which widened it
-              again, and the keys panel got squeezed. */}
           <div className="h-[60vh] min-h-[320px] min-w-0 flex-1 overflow-hidden md:h-full md:min-h-0">
             {sessions.map((session) => (
               <TerminalView
@@ -443,7 +388,6 @@ export function TerminalPage() {
     );
   })();
 
-  // No sandbox to open a tab on: not set up, down, or without tmux.
   const sandboxDown =
     status?.kind === "unconfigured" ||
     status?.kind === "unreachable" ||
@@ -455,7 +399,6 @@ export function TerminalPage() {
       description="Shells on the sandbox VM. Tabs keep running when you leave."
       maxWidth="full"
       actions={
-        // Nothing to act on without a usable sandbox.
         sandboxDown ? undefined : (
           <>
             {active && (
@@ -511,8 +454,6 @@ export function TerminalPage() {
                 >
                   <Keyboard className="size-4" />
                 </Button>
-                {/* Enter only: in full screen the region covers this header, so the
-                    exit control lives inside the region (#170). */}
                 {!fullscreen && (
                   <Button
                     variant="ghost"

@@ -1,9 +1,3 @@
-/**
- * App-wide Code state (ADR 0011): the configured harnesses (with their
- * capabilities and connection), and the live merged thread list — one SSE
- * for the whole app, feeding the Code page's list, the sidebar's unread
- * badge and ⌘K. An open thread streams on its own connection (useCodeThread).
- */
 import { create } from "zustand";
 import { subscribeSse, type SseConnection } from "../lib/sse";
 import {
@@ -15,13 +9,11 @@ import {
 } from "../lib/code/api";
 
 interface CodeState {
-  /** null until the status call answered. */
   harnesses: HarnessInfo[] | null;
   statuses: Record<string, InstanceStatus>;
   threads: ThreadSummary[] | null;
   connect(): void;
   disconnect(): void;
-  /** Optimistic local edits (seen, archived) until the next list event. */
   patch(threadId: string, change: Partial<ThreadSummary>): void;
 }
 
@@ -64,7 +56,6 @@ export const useCodeStore = create<CodeState>((set, get) => ({
   },
 }));
 
-/** The harness behind a thread or instance id. */
 export function harnessOf(
   harnesses: HarnessInfo[] | null,
   instanceId: string | null | undefined,
@@ -72,7 +63,6 @@ export function harnessOf(
   return harnesses?.find((h) => h.id === instanceId);
 }
 
-/** Top-level threads with unread turns (the sidebar badge). */
 export function unreadCount(rows: ThreadSummary[] | null): number {
   return (rows ?? []).filter((r) => r.unread && !r.parentId).length;
 }

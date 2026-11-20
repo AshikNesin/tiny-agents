@@ -1,21 +1,3 @@
-/**
- * Every diff in the app renders here, with @pierre/diffs (diffs.com, ADR
- * 0009), so callers never touch the library: `PatchView` draws a unified diff
- * (Shelley's `patch` tool output), `FileDiff` an old/new pair (the Changes and
- * Review panels).
- *
- * A `FileDiff` reads like a review: one stacked column with syntax colors,
- * long lines wrapped, unchanged runs folded behind expanders, and, when the
- * caller takes comments, line selection on the numbers. Click a number, then
- * drag (mouse or finger) or shift-click to take a range; a composer opens
- * under its last line once you let go. Saved comments stay under their lines
- * until they are sent. The library draws the diff in a shadow root; the
- * composer and saved comments are ours, slotted in as annotations.
- *
- * In a PR review (`reviewing`), a comment is for the PR's review on GitHub
- * (Comment, ⌘↵) or for the assistant (Ask assistant), and Suggest change
- * starts a GitHub suggestion block with the selected lines.
- */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { diffLines } from "diff";
 import { FilePen, Trash2 } from "lucide-react";
@@ -30,28 +12,23 @@ import { useTheme } from "@groot/shell/lib/theme";
 import { Button, Textarea } from "@groot/ui";
 import { Spinner } from "../../components/ui/spinner";
 
-/** Lines commented on: new-file numbers, or old-file ones for removed lines. */
 export interface LineSelection {
   from: number;
   to: number;
   side: "old" | "new";
 }
 
-/** Who a comment is for: the agent (or the review's assistant), or the PR's review on GitHub. */
 export type CommentTarget = "agent" | "github";
 
-/** A saved comment, drawn under the last line it covers. */
 export interface LineComment {
   id: string;
   side: "old" | "new";
   startLine: number;
   endLine: number;
   body: string;
-  /** What it waits for, shown beside it (default "Not sent"). */
   tag?: string;
 }
 
-/** Something else drawn under a line, such as a PR's conversation from GitHub. */
 export interface LineNote {
   id: string;
   side: "old" | "new";
@@ -59,12 +36,10 @@ export interface LineNote {
   node: ReactNode;
 }
 
-/** A GitHub suggestion block replacing the selected lines with `lines` (edit them in place). */
 function suggestionBlock(lines: string): string {
   return `\`\`\`suggestion\n${lines}\n\`\`\``;
 }
 
-/** +added / −removed counts of a unified diff. */
 export function diffStats(patchText: string): {
   additions: number;
   deletions: number;
@@ -79,16 +54,10 @@ export function diffStats(patchText: string): {
   return { additions, deletions };
 }
 
-/** Give up diffing after this long rather than freeze the tab. */
 const DIFF_TIMEOUT_MS = 1_500;
 
-/** Diff rows drawn at most; a longer diff says how many it left out. */
 const MAX_DRAWN_ROWS = 4_000;
 
-/**
- * The look every diff shares: stacked, wrapped, the app's theme, no header of
- * its own (callers draw theirs), and the app's mono font and size.
- */
 export function useBaseOptions() {
   const { resolvedTheme } = useTheme();
   return useMemo(
@@ -107,13 +76,11 @@ export function useBaseOptions() {
   );
 }
 
-/** Where a diff row is, in the order the diff reads. */
 export interface Row {
   oldNo?: number;
   newNo?: number;
 }
 
-/** Every line of old → new in reading order; null when diffing took too long. */
 export function rowsOf(oldContent: string, newContent: string): Row[] | null {
   const changes = diffLines(oldContent, newContent, {
     timeout: DIFF_TIMEOUT_MS,
@@ -137,11 +104,6 @@ export const SIDE = { old: "deletions", new: "additions" } as const;
 const sideOf = (side: SelectedLineRange["side"]): "old" | "new" =>
   side === "deletions" ? "old" : "new";
 
-/**
- * The library's selection as the lines a comment covers. A range that starts
- * on removed lines and ends on added ones (or the reverse) is commented on by
- * the new-file lines inside it, or the old ones when it has none.
- */
 export function toSelection(range: SelectedLineRange, rows: Row[]): LineSelection {
   const startSide = sideOf(range.side);
   const endSide = sideOf(range.endSide ?? range.side);
@@ -181,19 +143,14 @@ export function Composer({
 }: {
   path: string;
   selection: LineSelection;
-  /** Held by the diff, so widening the range keeps what was typed. */
   body: string;
   setBody(body: string): void;
   onSubmit(body: string, target: CommentTarget): Promise<void>;
   onCancel(): void;
-  /** A PR review: Comment goes to GitHub, Ask assistant to the assistant. */
   reviewing?: boolean;
-  /** The selected new-side lines, for Suggest change. */
   selected?: string;
 }) {
   const [busy, setBusy] = useState<CommentTarget | null>(null);
-  // The diff slots the composer in after React mounts it, so autoFocus finds
-  // it detached: take the keyboard once it is in the page.
   const box = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
     const frame = requestAnimationFrame(() => box.current?.focus({ preventScroll: true }));
@@ -205,7 +162,6 @@ export function Composer({
     try {
       await onSubmit(body.trim(), target);
     } catch {
-      // The caller says what went wrong; the text stays to try again.
       setBusy(null);
     }
   };
@@ -320,19 +276,16 @@ export function SavedComment({
   );
 }
 
-/** Shelley's patches can start at the first hunk; the renderer wants file headers. */
 function withHeaders(patch: string, path: string): string {
   return /^(---|diff --git) /m.test(patch) ? patch : `--- a/${path}\n+++ b/${path}\n${patch}`;
 }
 
-/** A unified diff (Shelley's `patch` tool result). */
 export function PatchView({
   patch,
   path = "file",
   className,
 }: {
   patch: string;
-  /** Names the language for syntax colors. */
   path?: string;
   className?: string;
 }) {
@@ -356,13 +309,11 @@ export const UNSHOWABLE_TEXT = {
   tooLarge: "This file is too large to show here (over 2 MB).",
 } as const;
 
-/** What sits under a line: a saved comment, or the composer for the selection. */
 type Note =
   | { kind: "comment"; comment: LineComment }
   | { kind: "composer" }
   | { kind: "note"; id: string };
 
-/** One file's old → new contents (the Changes and Review panels). */
 export function FileDiff({
   path,
   oldContent,
@@ -377,16 +328,11 @@ export function FileDiff({
   path: string;
   oldContent: string;
   newContent: string;
-  /** The server could not send this file as text: say why. */
   unshowable?: keyof typeof UNSHOWABLE_TEXT;
-  /** Takes comments on lines: the line numbers select a range to comment on. */
   onComment?(selection: LineSelection, body: string, target: CommentTarget): Promise<void> | void;
-  /** Saved, unsent comments on this file, shown under their lines. */
   comments?: LineComment[];
   onRemoveComment?(id: string): void;
-  /** A PR review: comments for GitHub or the assistant, and suggestions. */
   reviewing?: boolean;
-  /** Drawn under their lines whether or not the diff takes comments. */
   notes?: LineNote[];
 }) {
   const base = useBaseOptions();
@@ -398,7 +344,6 @@ export function FileDiff({
   const rows = hidden > 0 ? all!.slice(0, MAX_DRAWN_ROWS) : all;
   const fileDiff = useMemo<FileDiffMetadata | null>(() => {
     if (!all) return null;
-    // A very long diff is drawn up to its last shown row on each side.
     const drawn = all.slice(0, MAX_DRAWN_ROWS);
     const upTo = (content: string, key: keyof Row) => {
       if (drawn.length === all.length) return content;
@@ -413,7 +358,6 @@ export function FileDiff({
   const [selection, setSelection] = useState<LineSelection | null>(null);
   const [dragging, setDragging] = useState(false);
   const [draft, setDraft] = useState("");
-  // The current selection, for the library's callbacks (set once per options).
   const current = useRef(selection);
   useEffect(() => {
     current.current = selection;
@@ -425,7 +369,6 @@ export function FileDiff({
       if (!range) return;
       const next = toSelection(range, rows);
       const prev = current.current;
-      // A new range (not a widened one) starts a new comment.
       const widened =
         prev && prev.side === next.side && next.from <= prev.from && next.to >= prev.to;
       if (!widened) setDraft("");

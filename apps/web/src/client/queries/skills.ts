@@ -1,4 +1,3 @@
-/** The Skills pages' resources: the library, one skill, and their writes (`lib/skills-api.ts`). */
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type {
   Skill,
@@ -15,11 +14,9 @@ const skillKey = (id: string) => ["skills", "detail", id] as const;
 export const useSkills = () =>
   useResource(SKILLS_KEY, () => skillsApi.list(), "Failed to load skills");
 
-/** One skill; another id starts over from its loading state. */
 export const useSkill = (id: string) =>
   useResource(skillKey(id), () => skillsApi.get(id), "Failed to load skill");
 
-/** Show `update` on the skill's page at once, without a fetch: a write's answer, or an optimistic change. */
 export function useSetSkill(id: string) {
   const client = useQueryClient();
   return (update: Skill | ((skill: Skill) => Skill)) =>
@@ -28,11 +25,6 @@ export function useSetSkill(id: string) {
     );
 }
 
-/**
- * The skill writes. None refetches: a create opens the new skill's page, and
- * its page shows what each write answers (`useSetSkill`). Each marks the
- * library out of date, without reading it again.
- */
 export function useSkillMutations() {
   const client = useQueryClient();
   const libraryChanged = () =>
@@ -53,7 +45,6 @@ export function useSkillMutations() {
     onSuccess: libraryChanged,
     ...RESOURCE_MUTATION,
   });
-  /** Parse a pasted SKILL.md or a GitHub folder; nothing is saved. */
   const preview = useMutation({
     mutationFn: (input: SkillPreviewBody) => skillsApi.preview(input),
     ...RESOURCE_MUTATION,
