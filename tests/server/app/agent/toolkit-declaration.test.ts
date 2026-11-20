@@ -1431,7 +1431,7 @@ describe("one declaration per tool (3.2)", () => {
               "replay": "unsafe",
             },
             {
-              "description": "Click an element by its ref from the last snapshot. The element is scrolled into view first. Returns what changed on the page, or the new page's first part if the click opened one.",
+              "description": "Click an element by its ref from the last snapshot. The element is scrolled into view first. Returns what changed on the page, or the new page's first part if the click opened one (in a new tab too: you go on in that tab).",
               "fields": [
                 "deferred",
                 "description",
@@ -1603,6 +1603,35 @@ describe("one declaration per tool (3.2)", () => {
               "replay": "safe",
             },
             {
+              "description": "List your tabs (the one you started in and the ones your clicks opened). Pass select to go on in tab N, or close to close tab N.",
+              "fields": [
+                "deferred",
+                "description",
+                "execute",
+                "name",
+                "parameters",
+                "replay",
+              ],
+              "gated": false,
+              "name": "browser_tabs",
+              "parameters": {
+                "properties": {
+                  "close": {
+                    "maximum": 50,
+                    "minimum": 1,
+                    "type": "integer",
+                  },
+                  "select": {
+                    "maximum": 50,
+                    "minimum": 1,
+                    "type": "integer",
+                  },
+                },
+                "type": "object",
+              },
+              "replay": "unsafe",
+            },
+            {
               "description": "Scroll the page up or down.",
               "fields": [
                 "deferred",
@@ -1672,7 +1701,7 @@ describe("one declaration per tool (3.2)", () => {
         "extensionKeys": "name,tools",
         "gates": {},
         "info": {
-          "description": "A real browser the bot drives: navigate, read, click, type, scroll, wait, go back.",
+          "description": "A real browser the bot drives: navigate, read, click, type, scroll, wait, go back, tabs.",
           "id": "browser",
           "kind": "toolkit",
           "name": "Browser",
@@ -1729,6 +1758,12 @@ describe("one declaration per tool (3.2)", () => {
               "readOnly": true,
             },
             {
+              "askLabel": "switch browser tabs",
+              "description": "List, switch or close the bot's tabs.",
+              "label": "Switched tabs",
+              "name": "browser_tabs",
+            },
+            {
               "askLabel": "scroll the page",
               "description": "Scroll the page up or down.",
               "label": "Scrolled",
@@ -1753,6 +1788,7 @@ describe("one declaration per tool (3.2)", () => {
           "name,label,askLabel,description",
           "name,label,askLabel,description",
           "name,label,askLabel,description,readOnly",
+          "name,label,askLabel,description",
           "name,label,askLabel,description",
           "name,label,askLabel,description,readOnly",
         ],
@@ -1881,7 +1917,7 @@ describe("one declaration per tool (3.2)", () => {
               "replay": "unsafe",
             },
             {
-              "description": "Click an element by its ref from the last snapshot. The element is scrolled into view first. Returns what changed on the page, or the new page's first part if the click opened one.",
+              "description": "Click an element by its ref from the last snapshot. The element is scrolled into view first. Returns what changed on the page, or the new page's first part if the click opened one (in a new tab too: you go on in that tab).",
               "fields": [
                 "deferred",
                 "description",
@@ -2051,6 +2087,35 @@ describe("one declaration per tool (3.2)", () => {
                 "type": "object",
               },
               "replay": "safe",
+            },
+            {
+              "description": "List your tabs (the one you started in and the ones your clicks opened). Pass select to go on in tab N, or close to close tab N.",
+              "fields": [
+                "deferred",
+                "description",
+                "execute",
+                "name",
+                "parameters",
+                "replay",
+              ],
+              "gated": false,
+              "name": "browser_tabs",
+              "parameters": {
+                "properties": {
+                  "close": {
+                    "maximum": 50,
+                    "minimum": 1,
+                    "type": "integer",
+                  },
+                  "select": {
+                    "maximum": 50,
+                    "minimum": 1,
+                    "type": "integer",
+                  },
+                },
+                "type": "object",
+              },
+              "replay": "unsafe",
             },
             {
               "description": "Scroll the page up or down.",
@@ -2203,7 +2268,7 @@ describe("one declaration per tool (3.2)", () => {
           "browser_fill_secret": "plan,settled",
         },
         "info": {
-          "description": "A real browser the bot drives: navigate, read, click, type, scroll, wait, go back.",
+          "description": "A real browser the bot drives: navigate, read, click, type, scroll, wait, go back, tabs.",
           "id": "browser",
           "kind": "toolkit",
           "name": "Browser",
@@ -2260,6 +2325,12 @@ describe("one declaration per tool (3.2)", () => {
               "readOnly": true,
             },
             {
+              "askLabel": "switch browser tabs",
+              "description": "List, switch or close the bot's tabs.",
+              "label": "Switched tabs",
+              "name": "browser_tabs",
+            },
+            {
               "askLabel": "scroll the page",
               "description": "Scroll the page up or down.",
               "label": "Scrolled",
@@ -2298,6 +2369,7 @@ describe("one declaration per tool (3.2)", () => {
           "name,label,askLabel,description",
           "name,label,askLabel,description",
           "name,label,askLabel,description,readOnly",
+          "name,label,askLabel,description",
           "name,label,askLabel,description",
           "name,label,askLabel,description,readOnly",
           "name,label,askLabel,description,vault",
@@ -2428,7 +2500,7 @@ describe("one declaration per tool (3.2)", () => {
               "replay": "unsafe",
             },
             {
-              "description": "Click an element by its ref from the last snapshot. The element is scrolled into view first. Returns what changed on the page, or the new page's first part if the click opened one.",
+              "description": "Click an element by its ref from the last snapshot. The element is scrolled into view first. Returns what changed on the page, or the new page's first part if the click opened one (in a new tab too: you go on in that tab).",
               "fields": [
                 "deferred",
                 "description",
@@ -2598,6 +2670,35 @@ describe("one declaration per tool (3.2)", () => {
                 "type": "object",
               },
               "replay": "safe",
+            },
+            {
+              "description": "List your tabs (the one you started in and the ones your clicks opened). Pass select to go on in tab N, or close to close tab N.",
+              "fields": [
+                "deferred",
+                "description",
+                "execute",
+                "name",
+                "parameters",
+                "replay",
+              ],
+              "gated": false,
+              "name": "browser_tabs",
+              "parameters": {
+                "properties": {
+                  "close": {
+                    "maximum": 50,
+                    "minimum": 1,
+                    "type": "integer",
+                  },
+                  "select": {
+                    "maximum": 50,
+                    "minimum": 1,
+                    "type": "integer",
+                  },
+                },
+                "type": "object",
+              },
+              "replay": "unsafe",
             },
             {
               "description": "Scroll the page up or down.",
@@ -2794,7 +2895,7 @@ describe("one declaration per tool (3.2)", () => {
         "extensionKeys": "name,tools",
         "gates": {},
         "info": {
-          "description": "A real browser the bot drives: navigate, read, click, type, scroll, wait, go back.",
+          "description": "A real browser the bot drives: navigate, read, click, type, scroll, wait, go back, tabs.",
           "id": "browser",
           "kind": "toolkit",
           "name": "Browser",
@@ -2851,6 +2952,12 @@ describe("one declaration per tool (3.2)", () => {
               "readOnly": true,
             },
             {
+              "askLabel": "switch browser tabs",
+              "description": "List, switch or close the bot's tabs.",
+              "label": "Switched tabs",
+              "name": "browser_tabs",
+            },
+            {
               "askLabel": "scroll the page",
               "description": "Scroll the page up or down.",
               "label": "Scrolled",
@@ -2882,6 +2989,7 @@ describe("one declaration per tool (3.2)", () => {
           "name,label,askLabel,description",
           "name,label,askLabel,description",
           "name,label,askLabel,description,readOnly",
+          "name,label,askLabel,description",
           "name,label,askLabel,description",
           "name,label,askLabel,description,readOnly",
           "name,label,askLabel,description,readOnly",
@@ -3012,7 +3120,7 @@ describe("one declaration per tool (3.2)", () => {
                 "replay": "unsafe",
               },
               {
-                "description": "Click an element by its ref from the last snapshot. The element is scrolled into view first. Returns what changed on the page, or the new page's first part if the click opened one.",
+                "description": "Click an element by its ref from the last snapshot. The element is scrolled into view first. Returns what changed on the page, or the new page's first part if the click opened one (in a new tab too: you go on in that tab).",
                 "fields": [
                   "deferred",
                   "description",
@@ -3182,6 +3290,35 @@ describe("one declaration per tool (3.2)", () => {
                   "type": "object",
                 },
                 "replay": "safe",
+              },
+              {
+                "description": "List your tabs (the one you started in and the ones your clicks opened). Pass select to go on in tab N, or close to close tab N.",
+                "fields": [
+                  "deferred",
+                  "description",
+                  "execute",
+                  "name",
+                  "parameters",
+                  "replay",
+                ],
+                "gated": false,
+                "name": "browser_tabs",
+                "parameters": {
+                  "properties": {
+                    "close": {
+                      "maximum": 50,
+                      "minimum": 1,
+                      "type": "integer",
+                    },
+                    "select": {
+                      "maximum": 50,
+                      "minimum": 1,
+                      "type": "integer",
+                    },
+                  },
+                  "type": "object",
+                },
+                "replay": "unsafe",
               },
               {
                 "description": "Scroll the page up or down.",
@@ -3459,7 +3596,7 @@ describe("one declaration per tool (3.2)", () => {
             "browser_fill_secret": "plan,settled",
           },
           "info": {
-            "description": "A real browser the bot drives: navigate, read, click, type, scroll, wait, go back.",
+            "description": "A real browser the bot drives: navigate, read, click, type, scroll, wait, go back, tabs.",
             "id": "browser",
             "kind": "toolkit",
             "name": "Browser",
@@ -3516,6 +3653,12 @@ describe("one declaration per tool (3.2)", () => {
                 "readOnly": true,
               },
               {
+                "askLabel": "switch browser tabs",
+                "description": "List, switch or close the bot's tabs.",
+                "label": "Switched tabs",
+                "name": "browser_tabs",
+              },
+              {
                 "askLabel": "scroll the page",
                 "description": "Scroll the page up or down.",
                 "label": "Scrolled",
@@ -3561,6 +3704,7 @@ describe("one declaration per tool (3.2)", () => {
             "name,label,askLabel,description",
             "name,label,askLabel,description",
             "name,label,askLabel,description,readOnly",
+            "name,label,askLabel,description",
             "name,label,askLabel,description",
             "name,label,askLabel,description,readOnly",
             "name,label,askLabel,description,vault",

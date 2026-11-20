@@ -118,7 +118,17 @@ export interface BrowserSession {
    * `OriginMismatchError` when the page is elsewhere.
    */
   fillSecret?(fill: SecretFill): Promise<{ filled: string[] }>;
-  click(ref: string): Promise<{ url: string }>;
+  /** `newTab` when the click opened a tab, which the session then drives. */
+  click(ref: string): Promise<{ url: string; newTab?: boolean }>;
+  /**
+   * The agent's tabs, oldest first: the one it started in and the ones its
+   * clicks opened. `current` is the one it drives.
+   */
+  tabs?(): Promise<{ url: string; title?: string; current: boolean }[]>;
+  /** Drive the agent's tab at `index` (0-based, as `tabs` lists them). */
+  switchTab?(index: number): Promise<{ url: string; title?: string }>;
+  /** Close the agent's tab at `index`; never its only one. */
+  closeTabAt?(index: number): Promise<void>;
   type(ref: string, text: string): Promise<{ url: string }>;
   press(key: string): Promise<void>;
   scroll(direction: "up" | "down", amount: number): Promise<void>;
