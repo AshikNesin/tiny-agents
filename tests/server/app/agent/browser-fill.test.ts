@@ -13,6 +13,7 @@ import {
   FrameOriginError,
   OriginMismatchError,
   pageOrigin,
+  refOrigin,
 } from "../../../../packages/sandbox/src/browser-fill";
 import { SecretValue, VaultTargetMovedError } from "../../../../packages/agent/src/vault";
 
@@ -187,6 +188,8 @@ describe.skipIf(!executable)("vault fills in the page", () => {
     expect(error).toBeInstanceOf(FrameOriginError);
     expect(error).toMatchObject({ actual: origin });
     expect(await frame!.inputValue("#u")).toBe("");
+    // What a credential request records, so the card can name the frame.
+    expect(await refOrigin(page, ref!)).toBe(origin);
   });
 
   it("fills a card by autocomplete tokens and labels", async () => {

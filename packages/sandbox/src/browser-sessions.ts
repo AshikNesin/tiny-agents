@@ -112,6 +112,8 @@ export interface BrowserSession {
   waitFor?(wait: { text?: string; gone?: boolean; timeoutMs: number }): Promise<boolean>;
   /** The top-level page's origin as the live document reports it ("null" for about:blank). */
   origin?(): Promise<string>;
+  /** The origin of the frame holding the element `ref` names (a sign-in widget's frame). */
+  refOrigin?(ref: string): Promise<string>;
   /**
    * Fill vault values (issue #56), asserting the origin inside the page
    * before each write; returns the keys filled, never a value. Throws

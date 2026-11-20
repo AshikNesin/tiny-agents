@@ -21,6 +21,7 @@ const REQUEST: CredentialRequestView = {
   title: "Sign in to Amazon.in",
   purpose: "Start the return of your recent order",
   fields: [{ key: "email", label: "Email", type: "email", required: true, autocomplete: "email" }],
+  frameOrigin: null,
   savedHandle: null,
   expiresAt: Date.parse(FIXED_NOW) + 10 * 60_000,
   liveOrigin: "https://www.amazon.in",

@@ -45,11 +45,14 @@ function fakePage(start: string) {
     origin: start,
     /** The page navigates here as the fill starts (a redirect racing the call). */
     movesTo: undefined as string | undefined,
+    /** Refs inside another site's frame, and that frame's origin (The Hindu's id.tinypass.com). */
+    framed: {} as Record<string, string>,
     fills: [] as { origin: string; values: Record<string, string> }[],
   };
   const session: BrowserSession = {
     url: () => `${state.origin}/`,
     origin: async () => state.origin,
+    refOrigin: async (ref: string) => state.framed[ref] ?? state.origin,
     fillSecret: async (fill: SecretFill) => {
       if (state.movesTo) state.origin = state.movesTo;
       if (fill.origin !== state.origin) throw new OriginMismatchError(state.origin);
@@ -310,6 +313,48 @@ describe("request_credentials", () => {
       status: "filled",
     });
     await expect(runtime.credentialRequest(waiting.taskId!)).rejects.toThrow(/not waiting/);
+  }, 20_000);
+
+  it("records the frame a sign-in field sits in, for the card to show (#302)", async () => {
+    const page = fakePage("https://www.thehindu.com");
+    page.state.framed = { f1e3: "https://id.tinypass.com" };
+    const framed: JsonObject = {
+      title: "Sign in to The Hindu",
+      purpose: "Read the article",
+      fields: [{ key: "email", label: "Email", type: "email", autocomplete: "email", ref: "f1e3" }],
+    };
+    const { runtime, ref, events } = await open(page, [["request_credentials", framed]]);
+    await runtime.submit(ref, { requestId: "r1", text: "sign in" });
+    const waiting = await until(
+      () =>
+        lastCall(events, "request_credentials")?.status === "awaiting_credentials"
+          ? lastCall(events, "request_credentials")
+          : undefined,
+      "credential request",
+    );
+    const pending = await runtime.credentialRequest(waiting.taskId!);
+    expect(pending.request).toMatchObject({
+      origin: "https://www.thehindu.com",
+      frameOrigin: "https://id.tinypass.com",
+    });
+  }, 20_000);
+
+  it("refuses fields in frames from two different sites (#302)", async () => {
+    const page = fakePage("https://www.thehindu.com");
+    page.state.framed = { f1e3: "https://id.tinypass.com", f2e3: "https://evil.example" };
+    const split: JsonObject = {
+      title: "Sign in",
+      purpose: "Read",
+      fields: [
+        { key: "email", label: "Email", type: "email", autocomplete: "email", ref: "f1e3" },
+        { key: "password", label: "Password", type: "password", ref: "f2e3" },
+      ],
+    };
+    const { runtime, ref, events } = await open(page, [["request_credentials", split]]);
+    await runtime.submit(ref, { requestId: "r1", text: "sign in" });
+    const text = await until(() => result(events), "result");
+    expect(text).toMatch(/frames from more than one site/);
+    expect(runtime.pendingApprovals(ref)).toBe(0);
   }, 20_000);
 
   it("tells the bot which fields the page never showed (a sign-in stopped between steps)", async () => {

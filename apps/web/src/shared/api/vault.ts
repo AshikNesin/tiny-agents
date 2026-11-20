@@ -216,6 +216,8 @@ export interface CredentialRequestView {
   taskId: number;
   bot: { id: string; name: string } | null;
   origin: string;
+  /** Another site's frame on that page that holds the fields (#302), named on the card. */
+  frameOrigin: string | null;
   title: string;
   purpose: string;
   fields: Omit<CredentialField, "ref">[];

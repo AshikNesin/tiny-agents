@@ -209,6 +209,14 @@ export async function pageOrigin(page: Page): Promise<string> {
   }
 }
 
+/** The origin of the frame holding the element `ref` names. */
+export async function refOrigin(page: Page, ref: string): Promise<string> {
+  assertRefShape(ref);
+  return page
+    .getByRef(ref)
+    .evaluate(() => location.origin, undefined, { timeout: ACTION_TIMEOUT_MS });
+}
+
 /**
  * Fill `fill.fields`; returns the keys filled. Throws `OriginMismatchError`
  * when the page is off-origin before anything is filled. With `fill.steps`,
@@ -302,10 +310,7 @@ async function fillPass(
       const top = await pageOrigin(page);
       if (field.ref && top === fill.origin) {
         // The page stayed put: the ref names a field in another site's frame.
-        const frame = await page
-          .getByRef(field.ref)
-          .evaluate(() => location.origin, undefined, { timeout: ACTION_TIMEOUT_MS })
-          .catch(() => undefined);
+        const frame = await refOrigin(page, field.ref).catch(() => undefined);
         if (frame && frame !== top) throw new FrameOriginError(frame);
       }
       throw new OriginMismatchError(top);
