@@ -791,6 +791,13 @@ describe("thread lifecycle", () => {
     await commit(thread.worktree, "a.txt");
     await onThreadArchived(thread.id, true);
     expect(existsSync(thread.worktree)).toBe(false);
+    const enc = encodeURIComponent(thread.id);
+    const [start] = (await call<CheckpointView[]>("GET", `/threads/${enc}/checkpoints`)).body.data!;
+    const revert = await call("POST", `/threads/${enc}/checkpoints/${start!.id}/revert`);
+    expect([revert.status, revert.body.error?.message]).toEqual([
+      404,
+      "Its worktree went when the thread was archived. Unarchive it to see the changes.",
+    ]);
     expect(
       await sh(local, `git -C ${project.checkoutPath} rev-parse --verify ${thread.branch}`),
     ).toMatch(/^[0-9a-f]{40}$/);

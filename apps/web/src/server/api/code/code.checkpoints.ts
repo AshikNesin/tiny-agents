@@ -13,7 +13,7 @@ import { Boom } from "@groot/core/errors";
 import { codeCheckpoints, db, type CodeCheckpoint } from "../../db";
 import { codeGitHub } from "./code.github";
 import { codeHub } from "./code.hub";
-import { projectThread } from "./code.projects";
+import { projectThread, threadWorktree } from "./code.projects";
 import { checkpointRef, type Workspace } from "./code.workspace";
 
 type CheckpointReason = "start" | "turn" | "before_revert";
@@ -67,28 +67,13 @@ export async function checkpointTurn(threadId: string): Promise<CodeCheckpoint |
 }
 
 /** A checkpoint and the one before it (what that turn changed). */
-export async function checkpointRange(
-  threadId: string,
-  checkpointId: string,
-): Promise<{
-  from: CodeCheckpoint;
-  to: CodeCheckpoint;
-  worktree: string;
-  ws: Workspace;
-}> {
-  const found = await projectThread(threadId);
-  if (!found?.thread.worktree) throw Boom.notFound("The thread has no worktree.");
+export async function checkpointRange(threadId: string, checkpointId: string) {
+  const { worktree, ws } = await threadWorktree(threadId);
   const all = await checkpointsOf(threadId);
   const index = all.findIndex((c) => c.id === checkpointId);
   if (index < 0) throw Boom.notFound("No such checkpoint");
   const to = all[index]!;
-  const from = all[index + 1] ?? to;
-  return {
-    from,
-    to,
-    worktree: found.thread.worktree,
-    ws: await codeGitHub().workspace(found.project),
-  };
+  return { from: all[index + 1] ?? to, to, worktree, ws };
 }
 
 /** Put the worktree back as it was at a checkpoint (never while the agent works). */
@@ -96,17 +81,13 @@ export async function revertTo(
   threadId: string,
   checkpointId: string,
 ): Promise<CodeCheckpoint | undefined> {
-  const found = await projectThread(threadId);
-  if (!found?.thread.worktree || !found.thread.branch) {
-    throw Boom.notFound("The thread has no worktree.");
-  }
+  const { worktree, branch, ws } = await threadWorktree(threadId);
   const target = codeHub()?.resolve(threadId);
   const outcome = await target?.instance.outcome(target.nativeId).catch(() => undefined);
   if (outcome?.working) throw Boom.conflict("Stop the agent before reverting its files.");
   const checkpoint = (await checkpointsOf(threadId)).find((c) => c.id === checkpointId);
   if (!checkpoint) throw Boom.notFound("No such checkpoint");
-  const ws = await codeGitHub().workspace(found.project);
-  const thread = { id: threadId, branch: found.thread.branch, worktree: found.thread.worktree };
+  const thread = { id: threadId, branch, worktree };
   const before = await takeCheckpoint(ws, thread, "before_revert");
   await ws.restore(thread.worktree, checkpoint.sha);
   return before;
