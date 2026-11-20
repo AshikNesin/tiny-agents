@@ -10,7 +10,7 @@
  * next message. The scope picker also shows what one turn changed (its
  * checkpoint against the one before), with Revert to here.
  */
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { ChevronDown, FileDiff as FileDiffIcon, GitBranch, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { Button, EmptyState, monoClass } from "@groot/ui";
@@ -19,6 +19,7 @@ import { cn } from "@groot/ui/lib/utils";
 import { SearchSelect } from "../../components/ui/search-select";
 import { errorMessage } from "../../lib/errors";
 import { projectsApi } from "../../lib/code/projects";
+import { useRefreshOn, useResource } from "../../queries/resource";
 import { useThreadPulls } from "../../lib/code/use-thread-pulls";
 import type { CheckpointView } from "../../../shared/api/code";
 import type { ThreadCommenting } from "../../lib/code/comments";
@@ -52,7 +53,14 @@ export function ReviewPanel({
   const [scope, setScope] = useState("base");
   const worktreeScope = scope === "base";
   const { settledKey, reload, refresh, workspace } = useReviewFiles(threadId, scope, refreshKey);
-  const [checkpoints, setCheckpoints] = useState<CheckpointView[]>([]);
+  // A failed read offers no checkpoints.
+  const checkpointList = useResource(
+    ["code", "checkpoints", threadId],
+    () => projectsApi.checkpoints(threadId).catch((): CheckpointView[] => []),
+    "",
+  );
+  useRefreshOn(`${String(settledKey)}\u0000${reload}`, checkpointList.refresh);
+  const checkpoints = checkpointList.data ?? [];
   const checkpoint = checkpoints.find((c) => c.id === scope);
   const view = useDiffView();
 
@@ -62,17 +70,6 @@ export function ReviewPanel({
     fresh: false,
   });
   const branch = pulls.view ? { name: pulls.view.branch, ahead: pulls.view.ahead } : null;
-
-  useEffect(() => {
-    let cancelled = false;
-    projectsApi
-      .checkpoints(threadId)
-      .then((list) => !cancelled && setCheckpoints(list))
-      .catch(() => !cancelled && setCheckpoints([]));
-    return () => {
-      cancelled = true;
-    };
-  }, [threadId, settledKey, reload]);
 
   const revert = async () => {
     if (!checkpoint) return;

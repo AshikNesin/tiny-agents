@@ -5,7 +5,8 @@
  * (which credential reaches GitHub, and the optional GitHub App). Owner-only:
  * a guest sees neither (issue #297 §6, §7.2).
  */
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -26,6 +27,7 @@ import { Spinner } from "../../components/ui/spinner";
 import { Switch } from "../../components/ui/switch";
 import { errorMessage } from "../../lib/errors";
 import { projectsApi } from "../../lib/code/projects";
+import { RESOURCE_QUERY, useResource } from "../../queries/resource";
 import type { HarnessInfo, ModelOption } from "../../lib/code/api";
 import { useIsGuest } from "../../store/people";
 import type { GitHubStatus, ProjectUpdateBody, ProjectView } from "../../../shared/api/code";
@@ -355,33 +357,30 @@ function AddProject({ harnesses, onChange }: { harnesses: HarnessInfo[]; onChang
   // `?repo=owner/name`: the Reviews screen's Add project for a PR outside any project.
   const [params] = useSearchParams();
   const prefill = params.get("repo") ?? "";
-  const [github, setGitHub] = useState<GitHubStatus | null>(null);
+  const github = useGitHubStatus().status;
   const [repo, setRepo] = useState(prefill);
   const [instanceId, setInstanceId] = useState(harnesses[0]?.id ?? "");
   const [viaApp, setViaApp] = useState(false);
-  const [appRepos, setAppRepos] = useState<Array<{ fullName: string }> | null>(null);
   const [busy, setBusy] = useState(false);
+  // With the App set up, new projects use it unless you say otherwise.
+  const hasApp = Boolean(github?.app);
   useEffect(() => {
-    projectsApi
-      .github()
-      .then((status) => {
-        setGitHub(status);
-        // With the App set up, new projects use it unless you say otherwise.
-        if (status.app) setViaApp(true);
-      })
-      .catch(() => setGitHub(null));
-  }, []);
+    if (hasApp) setViaApp(true);
+  }, [hasApp]);
+  useEffect(() => setRepo(prefill), [viaApp, prefill]);
+  // Read each time the App is chosen (or the prefill changes); a failure says so and offers the plain field.
+  const appRepoQuery = useQuery({
+    queryKey: ["code", "github", "app-repositories", prefill],
+    queryFn: () => projectsApi.appRepositories(),
+    enabled: viaApp,
+    ...RESOURCE_QUERY,
+  });
+  const appRepos = appRepoQuery.isError ? null : (appRepoQuery.data ?? null);
   useEffect(() => {
-    setRepo(prefill);
-    if (!viaApp) return;
-    projectsApi
-      .appRepositories()
-      .then(setAppRepos)
-      .catch((e: unknown) => {
-        toast.error(errorMessage(e, "Could not list the App's repositories."));
-        setAppRepos(null);
-      });
-  }, [viaApp, prefill]);
+    if (appRepoQuery.error) {
+      toast.error(errorMessage(appRepoQuery.error, "Could not list the App's repositories."));
+    }
+  }, [appRepoQuery.error]);
   const create = async () => {
     setBusy(true);
     try {
@@ -892,16 +891,23 @@ function DangerZone({ project, onChange }: { project: ProjectView; onChange(): v
 
 // --- GitHub ------------------------------------------------------------------------------
 
+const GITHUB_KEY = ["code", "github", "status"];
+
+/** The GitHub sign-in and App status; null while loading or when it cannot be read. */
+function useGitHubStatus() {
+  const { data } = useResource(GITHUB_KEY, () => projectsApi.github().catch(() => null), "");
+  const client = useQueryClient();
+  const setStatus = useCallback(
+    (next: GitHubStatus) => client.setQueryData<GitHubStatus | null>(GITHUB_KEY, next),
+    [client],
+  );
+  return { status: data, setStatus };
+}
+
 function GitHubSettings() {
-  const [status, setStatus] = useState<GitHubStatus | null>(null);
+  const { status, setStatus } = useGitHubStatus();
   const [token, setToken] = useState("");
   const [busy, setBusy] = useState(false);
-  useEffect(() => {
-    projectsApi
-      .github()
-      .then(setStatus)
-      .catch(() => setStatus(null));
-  }, []);
   const save = async (value: string | null) => {
     setBusy(true);
     try {

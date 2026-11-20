@@ -8,6 +8,7 @@
  * capabilities: what the harness cannot do is not offered.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMutation } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Archive,
@@ -69,6 +70,7 @@ import {
   type ThreadSettings,
   type ThreadSummary,
 } from "../../lib/code/api";
+import { RESOURCE_MUTATION } from "../../queries/resource";
 import { ancestry } from "../../lib/code/list";
 import { foldTurns, lastErrorId } from "../../lib/code/transcript";
 import { useCodeThread } from "../../lib/code/use-thread";
@@ -232,12 +234,16 @@ export function ConversationView({
 
   // Unread: what is on screen while the tab is visible counts as seen.
   const cursor = state.cursor;
+  const { mutate: markSeen } = useMutation({
+    mutationFn: (seen: { id: string; cursor: number }) => codeApi.markSeen(seen.id, seen.cursor),
+    ...RESOURCE_MUTATION,
+  });
   useEffect(() => {
     if (!cursor) return;
     const mark = () => {
       if (document.visibilityState !== "visible") return;
       patchList(id, { unread: false, followed: true });
-      void codeApi.markSeen(id, cursor).catch(() => undefined);
+      markSeen({ id, cursor });
     };
     const timer = setTimeout(mark, 600);
     document.addEventListener("visibilitychange", mark);
@@ -245,7 +251,7 @@ export function ConversationView({
       clearTimeout(timer);
       document.removeEventListener("visibilitychange", mark);
     };
-  }, [id, cursor, patchList]);
+  }, [id, cursor, patchList, markSeen]);
 
   const run = useCallback(
     async (what: string, action: () => Promise<unknown>, after?: () => void) => {

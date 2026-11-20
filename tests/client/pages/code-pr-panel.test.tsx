@@ -6,10 +6,21 @@
  * background read keeps what is shown.
  */
 import React from "react";
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render as renderBare, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { PullPanel } from "@/pages/code/PullPanel";
 import type { CheckLogView, ThreadPullsView } from "../../../apps/web/src/shared/api/code";
+import { notifyManager } from "@tanstack/react-query";
+import { AppQueryProvider } from "../query-provider";
+
+// React Query hands answers to the page on a zero timeout, which fake timers
+// push a millisecond on when it is set mid-tick; as microtasks, a tick of 0
+// lands an answer as a plain promise does.
+notifyManager.setScheduler(queueMicrotask);
+
+/** Each render gets its own React Query cache, as the app gives the page one. */
+const render = (ui: Parameters<typeof renderBare>[0]) =>
+  renderBare(ui, { wrapper: AppQueryProvider });
 
 type Snapshot = NonNullable<NonNullable<ThreadPullsView["active"]>["snapshot"]>;
 type CheckState = Snapshot["checks"][number]["state"];

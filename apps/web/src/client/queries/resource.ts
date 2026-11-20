@@ -6,7 +6,7 @@
  * user saw (the tables in docs/rewrite/README.md §4.5), so the shell's query
  * defaults are overridden for them.
  */
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   hashKey,
   useMutation,
@@ -37,6 +37,40 @@ export const RESOURCE_QUERY = {
 /** A write runs once (the app's default retries a mutation once) and never waits for the network to look online. */
 export const RESOURCE_MUTATION = { retry: false, networkMode: "always" } as const;
 
+/**
+ * Wait `ms` inside a query function before it asks: a debounce or a settle
+ * that a newer key (or the last reader leaving) cancels through `signal`, so
+ * the request it guards is never sent.
+ */
+export function wait(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) return reject(signal.reason);
+    const timer = setTimeout(resolve, ms);
+    signal.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        reject(signal.reason);
+      },
+      { once: true },
+    );
+  });
+}
+
+/**
+ * Read a resource again each time `trigger` moves (a live version, a turn
+ * ending, a Refresh count), never on the first render, where the resource
+ * reads itself. `refresh` is a `Resource`'s, so a read still out is dropped.
+ */
+export function useRefreshOn(trigger: unknown, refresh: () => Promise<void>): void {
+  const readFor = useRef(trigger);
+  useEffect(() => {
+    if (Object.is(readFor.current, trigger)) return;
+    readFor.current = trigger;
+    void refresh();
+  }, [trigger, refresh]);
+}
+
 /** A page's resource as the page reads it. */
 export interface Resource<T> {
   /** The last list or record that landed; null until the first one does. */
@@ -49,13 +83,14 @@ export interface Resource<T> {
 
 /**
  * What a page may change about how its resource lands: `structuralSharing:
- * false` makes every answer a new object even when nothing changed, and
+ * false` makes every answer a new object even when nothing changed,
  * `placeholderData: keepPreviousData` keeps the last key's answer on screen
- * until the next key's lands.
+ * until the next key's lands, and `enabled: false` holds the read (and keeps
+ * what landed) until it turns true.
  */
 export type ResourceOptions<T> = Pick<
   UseQueryOptions<T, Error, T, QueryKey>,
-  "structuralSharing" | "placeholderData"
+  "structuralSharing" | "placeholderData" | "enabled"
 >;
 
 /** Read `queryKey` with `RESOURCE_QUERY`; a failure is worded with `fallback`. */

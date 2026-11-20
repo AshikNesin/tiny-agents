@@ -6,13 +6,15 @@
  * incurs outside its own turns, a subagent column when children exist, and
  * "Compact in place" when the harness can compact.
  */
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Popover as PopoverPrimitive } from "radix-ui";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@groot/ui/table";
 import { cn } from "@groot/ui/lib/utils";
 import { Spinner } from "../../components/ui/spinner";
 import { codeApi, type UsageBand, type UsageReport, type UsageRow } from "../../lib/code/api";
 import { formatTokenCount, formatUnitPrice, formatUsd } from "../../lib/code/format";
+import { RESOURCE_QUERY } from "../../queries/resource";
 
 function TokenBandCell({ band }: { band: UsageBand }) {
   if (!band.tokens) {
@@ -111,25 +113,15 @@ export function UsagePopover({
   onCompact,
 }: UsagePopoverProps) {
   const [open, setOpen] = useState(false);
-  const [report, setReport] = useState<UsageReport | null>(null);
-  const [state, setState] = useState<"idle" | "loading" | "error">("idle");
-
-  useEffect(() => {
-    if (!open) return;
-    let live = true;
-    setState("loading");
-    codeApi
-      .usage(threadId)
-      .then((r) => {
-        if (!live) return;
-        setReport(r);
-        setState("idle");
-      })
-      .catch(() => live && setState("error"));
-    return () => {
-      live = false;
-    };
-  }, [open, threadId]);
+  // Read each time the popup opens; the last report stays meanwhile.
+  const usage = useQuery({
+    queryKey: ["code", "usage", threadId],
+    queryFn: () => codeApi.usage(threadId),
+    enabled: open,
+    ...RESOURCE_QUERY,
+  });
+  const report: UsageReport | null = usage.data ?? null;
+  const failed = usage.isError && !usage.isFetching;
 
   const showSubagents = hasSubagents && (report?.subagents.length ?? 0) > 0;
   const pct = max && used ? Math.min(100, Math.round((used / max) * 100)) : null;
@@ -159,7 +151,7 @@ export function UsagePopover({
             </div>
 
             {!report ? (
-              state === "error" ? (
+              failed ? (
                 <p className="text-muted-foreground py-3">Usage is not available right now.</p>
               ) : (
                 <p className="text-muted-foreground flex items-center gap-1.5 py-3">

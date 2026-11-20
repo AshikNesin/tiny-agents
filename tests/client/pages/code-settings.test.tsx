@@ -5,7 +5,7 @@
  * on the new-thread screen with that project picked.
  */
 import React from "react";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render as renderBare, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
@@ -15,6 +15,11 @@ import { CodePage } from "@/pages/code/CodePage";
 import { useCodeStore } from "@/store/code";
 import type { HarnessInfo } from "@/lib/code/api";
 import type { GitHubStatus, ProjectView } from "../../../apps/web/src/shared/api/code";
+import { AppQueryProvider } from "../query-provider";
+
+/** Each render gets its own React Query cache, as the app gives the page one. */
+const render = (ui: Parameters<typeof renderBare>[0]) =>
+  renderBare(ui, { wrapper: AppQueryProvider });
 
 /** PATCHes the page sent, as `[path, body]`. */
 const patches: Array<[string, unknown]> = [];

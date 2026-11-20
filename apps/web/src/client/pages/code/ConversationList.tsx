@@ -37,7 +37,9 @@ import {
 } from "@groot/ui/dropdown-menu";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@groot/ui/input-group";
 import { cn } from "@groot/ui/lib/utils";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Spinner } from "../../components/ui/spinner";
+import { RESOURCE_QUERY, wait } from "../../queries/resource";
 import { codeApi, threadPath, type HarnessInfo, type ThreadSummary } from "../../lib/code/api";
 import {
   buildGroups,
@@ -380,6 +382,8 @@ function Group({
   );
 }
 
+const ARCHIVED_KEY = ["code", "threads", "archived"];
+
 export function ConversationList({
   threads,
   harnesses,
@@ -393,7 +397,6 @@ export function ConversationList({
   projects?: ProjectView[] | null;
 }) {
   const [view, setView] = useState<"active" | "archived">("active");
-  const [archived, setArchived] = useState<ThreadSummary[] | null>(null);
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const toggleGroup = useCallback((key: string) => {
     setCollapsed((prev) => {
@@ -408,7 +411,6 @@ export function ConversationList({
   useEffect(() => saveGrouped(grouped), [grouped]);
   const [searching, setSearching] = useState(false);
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<ThreadSummary[] | null>(null);
   const caps = useMemo(() => new Map(harnesses.map((h) => [h.id, h.capabilities])), [harnesses]);
   const canArchive = useCallback(
     (row: ThreadSummary) => Boolean(caps.get(row.instanceId)?.threads.archive),
@@ -427,43 +429,45 @@ export function ConversationList({
   // A selection belongs to the view it was made in.
   useEffect(() => setSelected((prev) => (prev ? new Set() : prev)), [view]);
 
-  useEffect(() => {
-    if (view !== "archived") return;
-    let cancelled = false;
-    codeApi
-      .list("archived")
-      .then((rows) => !cancelled && setArchived(rows))
-      .catch(() => !cancelled && setArchived([]));
-    return () => {
-      cancelled = true;
-    };
-  }, [view]);
+  // Read each time the archived view opens; the last list stays meanwhile.
+  const archivedQuery = useQuery({
+    queryKey: ARCHIVED_KEY,
+    queryFn: () => codeApi.list("archived").catch((): ThreadSummary[] => []),
+    enabled: view === "archived",
+    ...RESOURCE_QUERY,
+  });
+  const archived = archivedQuery.data ?? null;
+  const queryClient = useQueryClient();
+  const setArchived = useCallback(
+    (update: (rows: ThreadSummary[] | undefined) => ThreadSummary[] | undefined) =>
+      queryClient.setQueryData<ThreadSummary[]>(ARCHIVED_KEY, update),
+    [queryClient],
+  );
 
-  useEffect(() => {
-    const q = query.trim();
-    if (q.length < 2) {
-      setResults(null);
-      return;
-    }
-    if (!canSearch) {
-      // No harness searches: filter the list by title.
-      const needle = q.toLowerCase();
-      const source = view === "archived" ? archived : threads;
-      setResults((source ?? []).filter((t) => t.title.toLowerCase().includes(needle)));
-      return;
-    }
-    let cancelled = false;
-    const timer = setTimeout(() => {
-      codeApi
-        .search(q, view === "archived")
-        .then((rows) => !cancelled && setResults(Array.isArray(rows) ? rows : []))
-        .catch(() => !cancelled && setResults([]));
-    }, 200);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [query, view, canSearch, threads, archived]);
+  const q = query.trim();
+  const inArchived = view === "archived";
+  // The last answer stays while the next query waits out its pause.
+  const searched = useQuery({
+    queryKey: ["code", "threads", "search", q, inArchived],
+    queryFn: async ({ signal }) => {
+      await wait(200, signal);
+      return codeApi
+        .search(q, inArchived)
+        .then((rows) => (Array.isArray(rows) ? rows : []))
+        .catch((): ThreadSummary[] => []);
+    },
+    enabled: canSearch && q.length >= 2,
+    placeholderData: keepPreviousData,
+    ...RESOURCE_QUERY,
+  });
+  const results = useMemo(() => {
+    if (q.length < 2) return null;
+    if (canSearch) return searched.data ?? null;
+    // No harness searches: filter the list by title.
+    const needle = q.toLowerCase();
+    const source = inArchived ? archived : threads;
+    return (source ?? []).filter((t) => t.title.toLowerCase().includes(needle));
+  }, [q, canSearch, searched.data, inArchived, archived, threads]);
 
   const archive = useArchive();
   const onArchive = useCallback(
@@ -480,10 +484,10 @@ export function ConversationList({
           n.children.forEach(collect);
         };
         collect(node);
-        setArchived((prev) => prev?.filter((r) => !gone.has(r.id)) ?? prev);
+        setArchived((prev) => prev?.filter((r) => !gone.has(r.id)));
       });
     },
-    [archive, view, activeId],
+    [archive, view, activeId, setArchived],
   );
 
   const rows = view === "archived" ? archived : threads;
@@ -563,13 +567,13 @@ export function ConversationList({
           n.children.forEach(collect);
         };
         picked.roots.filter((node) => done.has(node.row.id)).forEach(collect);
-        setArchived((prev) => prev?.filter((r) => !gone.has(r.id)) ?? prev);
+        setArchived((prev) => prev?.filter((r) => !gone.has(r.id)));
       }
       setSelected(null);
     } finally {
       setMoving(false);
     }
-  }, [picked, view, activeId, archiveMany]);
+  }, [picked, view, activeId, archiveMany, setArchived]);
 
   const listProps: RowProps = {
     activeId,

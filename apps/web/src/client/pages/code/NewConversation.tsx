@@ -37,6 +37,7 @@ import {
   searchSelectTriggerClass,
   type SearchSelectOption,
 } from "../../components/ui/search-select";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Spinner } from "../../components/ui/spinner";
 import {
   codeApi,
@@ -49,6 +50,7 @@ import {
   type ThreadSummary,
 } from "../../lib/code/api";
 import type { ProjectView } from "../../../shared/api/code";
+import { RESOURCE_QUERY } from "../../queries/resource";
 import { Composer } from "./Composer";
 import {
   DEFAULT,
@@ -105,19 +107,23 @@ function DirectoryBrowser({
   onPick(path: string): void;
   onOpenChange(open: boolean): void;
 }) {
-  const [listing, setListing] = useState<DirectoryListing | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const go = (path?: string) => {
-    setError(null);
-    codeApi
-      .directories(harness.id, path)
-      .then(setListing)
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
-  };
-  useEffect(() => {
+  // The folder shown; each opening starts again from `start`.
+  const [path, go] = useState<string | undefined>(() => start || undefined);
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
     if (open) go(start || undefined);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload only when opened
-  }, [open]);
+  }
+  // Read while open, again each time it opens; the last folder stays while the next one loads.
+  const read = useQuery({
+    queryKey: ["code", "directories", harness.id, path],
+    queryFn: () => codeApi.directories(harness.id, path),
+    enabled: open,
+    placeholderData: keepPreviousData,
+    ...RESOURCE_QUERY,
+  });
+  const listing: DirectoryListing | null = read.data ?? null;
+  const error = read.error ? read.error.message : null;
   const dirs = (listing?.entries ?? []).filter((e) => e.isDir && !e.name.startsWith("."));
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

@@ -5,13 +5,18 @@
  * on GitHub fold into one More actions menu, so the PR's title keeps its
  * room. The network is the boundary: fetch is stubbed.
  */
-import { render, screen } from "@testing-library/react";
+import { render as renderBare, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { ConfirmProvider } from "@groot/ui/primitives";
 import { PullReview } from "@/pages/code/PullReview";
 import type { PullReviewView } from "../../../apps/web/src/shared/api/code";
+import { AppQueryProvider } from "../query-provider";
+
+/** Each render gets its own React Query cache, as the app gives the page one. */
+const render = (ui: Parameters<typeof renderBare>[0]) =>
+  renderBare(ui, { wrapper: AppQueryProvider });
 
 const REVIEW: PullReviewView = {
   id: "rv1",

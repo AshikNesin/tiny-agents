@@ -7,7 +7,7 @@
  * suggestions and Discard; Open in terminal opens a tab in the checkout.
  * The network is the boundary: fetch is stubbed.
  */
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render as renderBare, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
@@ -17,6 +17,11 @@ import { ReviewPanel } from "@/pages/code/ReviewPanel";
 import { OpenInTerminal, YourChangesActions } from "@/pages/code/YourChanges";
 import type { PullReviewView } from "../../../apps/web/src/shared/api/code";
 import type { DiffView } from "@/pages/code/DiffWorkspace";
+import { AppQueryProvider } from "../query-provider";
+
+/** Each render gets its own React Query cache, as the app gives the page one. */
+const render = (ui: Parameters<typeof renderBare>[0]) =>
+  renderBare(ui, { wrapper: AppQueryProvider });
 
 /** Unified diffs, nothing folded, the file drawer shut. */
 const STILL_VIEW: DiffView = {

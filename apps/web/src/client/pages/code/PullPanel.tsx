@@ -10,7 +10,7 @@
  * re-read while it is on screen (every 15 seconds), so a project without
  * the App's webhooks (`gh` or a token) keeps up as fast as one with them.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import {
   ExternalLink,
   GitMerge,
@@ -41,6 +41,7 @@ import { Switch } from "../../components/ui/switch";
 import { errorMessage } from "../../lib/errors";
 import { markdownComponents } from "../../lib/markdown";
 import { projectsApi } from "../../lib/code/projects";
+import { useRefreshOn, useResource } from "../../queries/resource";
 import { useThreadPulls } from "../../lib/code/use-thread-pulls";
 import type { MergeMethod, PullView, ThreadPullsView } from "../../../shared/api/code";
 import { PullChecks } from "./PullChecks";
@@ -344,17 +345,14 @@ function Uncommitted({
   refreshKey: unknown;
   onAsk(): void;
 }) {
-  const [count, setCount] = useState(0);
-  useEffect(() => {
-    let cancelled = false;
-    projectsApi
-      .reviewFiles(threadId)
-      .then((files) => !cancelled && setCount(files.length))
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [threadId, refreshKey]);
+  const files = useResource(
+    ["code", "uncommitted", threadId],
+    () => projectsApi.reviewFiles(threadId),
+    "",
+  );
+  // A failed read keeps the last count.
+  useRefreshOn(refreshKey, files.refresh);
+  const count = files.data?.length ?? 0;
   if (count === 0) return null;
   return (
     <div className="border-border flex items-center gap-3 rounded-xl border px-3 py-2.5">

@@ -5,7 +5,7 @@
  * says so instead of drawing a whole-file change or freezing the tab.
  */
 import React from "react";
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render as renderBare, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { ConfirmProvider } from "@groot/ui/primitives";
 import { ChangesPanel } from "@/pages/code/ChangesPanel";
@@ -15,6 +15,17 @@ import type { PullReviewView } from "../../../apps/web/src/shared/api/code";
 import { FileDiff } from "@/pages/code/UnifiedDiff";
 import { clickLine, diffText, line } from "../diff-dom";
 import type { DiffView } from "@/pages/code/DiffWorkspace";
+import { notifyManager } from "@tanstack/react-query";
+import { AppQueryProvider } from "../query-provider";
+
+// React Query hands answers to the page on a zero timeout, which fake timers
+// push a millisecond on when it is set mid-tick; as microtasks, a tick of 0
+// lands an answer as a plain promise does.
+notifyManager.setScheduler(queueMicrotask);
+
+/** Each render gets its own React Query cache, as the app gives the page one. */
+const render = (ui: Parameters<typeof renderBare>[0]) =>
+  renderBare(ui, { wrapper: AppQueryProvider });
 
 /** Unified diffs, nothing folded, the file drawer shut. */
 const STILL_VIEW: DiffView = {
@@ -259,7 +270,7 @@ describe("Review panel", () => {
     );
     await wait(0);
     expect(screen.getByRole("navigation", { name: "Changed files" })).toBeInTheDocument();
-    act(() => screen.getByRole("checkbox", { name: "Viewed src/b.ts" }).click());
+    await act(async () => screen.getByRole("checkbox", { name: "Viewed src/b.ts" }).click());
     expect(screen.getByRole("button", { name: "Unfold src/b.ts" })).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Diff stats" })).toHaveTextContent("1 of 2");
   });

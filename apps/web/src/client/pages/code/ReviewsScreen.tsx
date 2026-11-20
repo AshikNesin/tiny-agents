@@ -31,7 +31,9 @@ import {
 import { cn } from "@groot/ui/lib/utils";
 import { Spinner } from "../../components/ui/spinner";
 import { errorMessage } from "../../lib/errors";
-import { projectsApi, reviewPath, reviewsApi } from "../../lib/code/projects";
+import { reviewPath, reviewsApi, useProjects } from "../../lib/code/projects";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { RESOURCE_MUTATION, useResource } from "../../queries/resource";
 import type { InboxPullView, InboxQuery, PullReviewView } from "../../../shared/api/code";
 
 const dateOf = (iso: string) =>
@@ -385,11 +387,17 @@ function OpenHere({
 
 export function ReviewsScreen({ sidebarHidden = false }: { sidebarHidden?: boolean }) {
   const navigate = useNavigate();
-  const [reviews, setReviews] = useState<PullReviewView[] | null>(null);
+  const reviewsKey = ["code", "reviews", "list"];
+  // A failed read shows no reviews, as an empty list.
+  const reviewList = useResource(
+    reviewsKey,
+    () => reviewsApi.list().catch((): PullReviewView[] => []),
+    "",
+  );
+  const reviews = reviewList.data;
+  const queryClient = useQueryClient();
   const [link, setLink] = useState("");
   const [opening, setOpening] = useState(false);
-  const [pulls, setPulls] = useState<InboxPullView[] | null>(null);
-  const [inboxError, setInboxError] = useState<string | null>(null);
   const [filter, setFilter] = useState<InboxQuery>(storedFilter);
   // Repositories to filter by: the projects', and every one the inbox has shown.
   const [repos, setRepos] = useState<string[]>([]);
@@ -399,30 +407,20 @@ export function ReviewsScreen({ sidebarHidden = false }: { sidebarHidden?: boole
       return all.size === list.length ? list : [...all].sort((a, b) => a.localeCompare(b));
     });
   }, []);
+  const { projects } = useProjects();
+  const inbox = useResource(
+    ["code", "reviews", "inbox", filter],
+    () => reviewsApi.inbox(asParams(filter)),
+    "Could not read your review requests.",
+  );
+  const pulls = inbox.data;
+  const inboxError = inbox.loadError;
   useEffect(() => {
-    projectsApi
-      .list()
-      .then((projects) => addRepos(projects.map((p) => `${p.repo.owner}/${p.repo.name}`)))
-      .catch(() => {});
-  }, [addRepos]);
+    addRepos((projects ?? []).map((p) => `${p.repo.owner}/${p.repo.name}`));
+  }, [projects, addRepos]);
   useEffect(() => {
-    let current = true;
-    setPulls(null);
-    setInboxError(null);
-    reviewsApi
-      .inbox(asParams(filter))
-      .then((list) => {
-        if (!current) return;
-        setPulls(list);
-        addRepos(list.map((p) => p.repo));
-      })
-      .catch((e: unknown) => {
-        if (current) setInboxError(errorMessage(e, "Could not read your review requests."));
-      });
-    return () => {
-      current = false;
-    };
-  }, [filter, addRepos]);
+    if (pulls) addRepos(pulls.map((p) => p.repo));
+  }, [pulls, addRepos]);
   const changeFilter = (next: InboxQuery) => {
     storeFilter(next);
     setFilter(next);
@@ -432,14 +430,6 @@ export function ReviewsScreen({ sidebarHidden = false }: { sidebarHidden?: boole
   const inInbox = new Set(pulls?.map((p) => p.url));
   const others =
     reviews && (pulls || inboxError) ? reviews.filter((r) => !inInbox.has(r.url)) : null;
-
-  const load = useCallback(() => {
-    reviewsApi
-      .list()
-      .then(setReviews)
-      .catch(() => setReviews([]));
-  }, []);
-  useEffect(load, [load]);
 
   const open = async (event: FormEvent) => {
     event.preventDefault();
@@ -471,12 +461,14 @@ export function ReviewsScreen({ sidebarHidden = false }: { sidebarHidden?: boole
   };
 
   const close = async (review: PullReviewView) => {
-    setReviews((list) => list?.filter((r) => r.id !== review.id) ?? list);
+    queryClient.setQueryData<PullReviewView[]>(reviewsKey, (list) =>
+      list?.filter((r) => r.id !== review.id),
+    );
     try {
       await reviewsApi.archive(review.id);
     } catch (error) {
       toast.error(errorMessage(error, "Could not close the review."));
-      load();
+      void reviewList.refresh();
     }
   };
 
@@ -545,19 +537,23 @@ export function OpenReviewLink() {
   const [search] = useSearchParams();
   const navigate = useNavigate();
   const pr = owner && repo && number ? `${owner}/${repo}#${number}` : search.get("pr")?.trim();
+  const { mutate: openReview } = useMutation({
+    mutationFn: (link: string) => reviewsApi.open(link),
+    ...RESOURCE_MUTATION,
+  });
   useEffect(() => {
     if (!pr) {
       navigate("/code/reviews", { replace: true });
       return;
     }
-    reviewsApi
-      .open(pr)
-      .then((review) => navigate(reviewPath(review.id), { replace: true }))
-      .catch((error: unknown) => {
+    openReview(pr, {
+      onSuccess: (review) => navigate(reviewPath(review.id), { replace: true }),
+      onError: (error) => {
         toast.error(errorMessage(error, "Could not open that pull request."));
         navigate("/code/reviews", { replace: true });
-      });
-  }, [pr, navigate]);
+      },
+    });
+  }, [pr, navigate, openReview]);
   return (
     <div className="flex h-dvh items-center justify-center">
       <Spinner />
