@@ -207,7 +207,7 @@ await journey(
           ),
         );
       });
-      await context.route(`**/api/v1/code/reviews/${review.id}/comments`, (route) => {
+      await context.route(`**/api/v1/code/threads/${key}/review/drafts?target=github`, (route) => {
         if (route.request().method() !== "POST") return route.fulfill(ok(githubComments));
         const comment = {
           id: `g${githubComments.length + 1}`,

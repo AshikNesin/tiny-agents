@@ -34,6 +34,7 @@ const thread = (id: string) => `${base}/threads/${encodeURIComponent(id)}`;
 
 /** The base scope is the server's default, so it is left off the query. */
 const scoped = (scope: string) => (scope === "base" ? undefined : { scope });
+const targeted = (target?: "github") => (target ? `?target=${target}` : "");
 
 export const projectsApi = {
   github: () => apiClient.get<GitHubStatus>(`${base}/github`),
@@ -103,11 +104,15 @@ export const projectsApi = {
     apiClient.put(`${thread(id)}/review/file`, body),
   setViewed: (id: string, path: string, hash: string, viewed: boolean) =>
     apiClient.post(`${thread(id)}/review/viewed`, { path, hash, viewed }),
-  drafts: (id: string) => apiClient.get<ReviewDraft[]>(`${thread(id)}/review/drafts`),
-  addDraft: (id: string, body: ReviewDraftBody) =>
-    apiClient.post<ReviewDraft>(`${thread(id)}/review/drafts`, body),
-  removeDraft: (id: string, draftId: string) =>
-    apiClient.delete(`${thread(id)}/review/drafts/${encodeURIComponent(draftId)}`),
+  /** Line comments waiting for the agent, or (`github`, a PR review's) for GitHub. */
+  drafts: (id: string, target?: "github") =>
+    apiClient.get<ReviewDraft[]>(`${thread(id)}/review/drafts${targeted(target)}`),
+  addDraft: (id: string, body: ReviewDraftBody, target?: "github") =>
+    apiClient.post<ReviewDraft>(`${thread(id)}/review/drafts${targeted(target)}`, body),
+  removeDraft: (id: string, draftId: string, target?: "github") =>
+    apiClient.delete(
+      `${thread(id)}/review/drafts/${encodeURIComponent(draftId)}${targeted(target)}`,
+    ),
   sendDrafts: (id: string) => apiClient.post<{ sent: number }>(`${thread(id)}/review/send`),
 };
 
@@ -124,15 +129,6 @@ export const reviewsApi = {
   ask: (id: string, body: AskReviewBody) =>
     apiClient.post<{ threadId: string }>(`${base}/reviews/${encodeURIComponent(id)}/ask`, body),
   archive: (id: string) => apiClient.post(`${base}/reviews/${encodeURIComponent(id)}/archive`),
-  /** Comments waiting for the review on GitHub. */
-  comments: (id: string) =>
-    apiClient.get<ReviewDraft[]>(`${base}/reviews/${encodeURIComponent(id)}/comments`),
-  addComment: (id: string, body: ReviewDraftBody) =>
-    apiClient.post<ReviewDraft>(`${base}/reviews/${encodeURIComponent(id)}/comments`, body),
-  removeComment: (id: string, commentId: string) =>
-    apiClient.delete(
-      `${base}/reviews/${encodeURIComponent(id)}/comments/${encodeURIComponent(commentId)}`,
-    ),
   /** Post the review on GitHub with every waiting comment. */
   submit: (id: string, body: SubmitReviewBody) =>
     apiClient.post<{ url: string; comments: number }>(

@@ -15,7 +15,7 @@ import { toast } from "sonner";
 import { errorMessage } from "../errors";
 import { useIsGuest } from "../../store/people";
 import type { ReviewDraft, ReviewDraftBody } from "../../../shared/api/code";
-import { projectsApi, reviewsApi } from "./projects";
+import { projectsApi } from "./projects";
 
 const GITHUB = "github:";
 
@@ -24,18 +24,13 @@ export const githubCommentsKey = (reviewId: string) => `${GITHUB}${reviewId}`;
 
 /** The server's comments behind a store key: a thread's (or review's) for the agent, or GitHub's. */
 function draftsOf(key: string) {
-  if (key.startsWith(GITHUB)) {
-    const review = key.slice(GITHUB.length);
-    return {
-      list: () => reviewsApi.comments(review),
-      add: (body: ReviewDraftBody) => reviewsApi.addComment(review, body),
-      remove: (id: string) => reviewsApi.removeComment(review, id),
-    };
-  }
+  const github = key.startsWith(GITHUB);
+  const id = github ? `review:${key.slice(GITHUB.length)}` : key;
+  const target = github ? "github" : undefined;
   return {
-    list: () => projectsApi.drafts(key),
-    add: (body: ReviewDraftBody) => projectsApi.addDraft(key, body),
-    remove: (id: string) => projectsApi.removeDraft(key, id),
+    list: () => projectsApi.drafts(id, target),
+    add: (body: ReviewDraftBody) => projectsApi.addDraft(id, body, target),
+    remove: (draftId: string) => projectsApi.removeDraft(id, draftId, target),
   };
 }
 
