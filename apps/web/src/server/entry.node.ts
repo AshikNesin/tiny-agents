@@ -57,35 +57,19 @@ import { processChannel, startUpdates, SUPERVISED_ENV } from "./api/system/updat
 import { installFixedClock } from "./fixed-clock";
 import { rearmRoutinesOnBoot } from "./api/routines/routines.arming";
 
-/**
- * Node entry: SQLite on disk, uploads on the local filesystem, jobs on a
- * poller, the pi-durable agent runtime in-process. In development Vite serves
- * the client with HMR on the same port; in production the built client is
- * served from `dist/client`. tiny-agents runs on Node only (Chromium, ssh2 and
- * the agent store), so there is no Workers entry.
- */
-
 if (existsSync(".env")) process.loadEnvFile(".env");
-// Deterministic verify runs only (faux mode): see fixed-clock.ts.
 const fixedNow = installFixedClock(process.env);
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const isProduction = process.env.NODE_ENV === "production";
 
-// The production database path default (db/open.ts) applies before bootstrap validates.
 applyDatabaseDefaults();
 
-// Sentry is loaded below only when a DSN is configured: importing @sentry/node
-// costs tens of MB of RSS even with nothing to send, and most self-hosted
-// instances run without error reporting. Until it initialises, this slot is a
-// no-op — the same outcome as calling Sentry before init().
 let captureException: ErrorReporter | undefined;
 
 bootstrap({
   env: process.env,
   config: appConfig,
-  // A database still in the pre-Drizzle (Prisma) layout is copied into a
-  // fresh one on first boot; see db/legacy-copy.ts and db/open.ts.
   db: (validated) => openNodeAppDatabase(validated, { besideBundle: here }),
   storage: (validated) => localStorage(uploadsRoot(validated)),
   reportError: (error, context) => captureException?.(error, context),
@@ -95,12 +79,9 @@ if (config.sentry.dsn) {
   const Sentry = await import("@sentry/node");
   Sentry.init({
     dsn: config.sentry.dsn,
-    // scripts/build.mjs bakes the same release name it uploads source maps under.
     release: config.sentry.release,
     environment: env.NODE_ENV,
     integrations: [Sentry.zodErrorsIntegration()],
-    // Values the app registered as secret never leave in an event; request
-    // bodies of the vault routes are dropped outright.
     beforeSend(event) {
       if (event.request?.url?.includes("/vault/")) delete event.request.data;
       return scrubValue(event);
@@ -112,26 +93,15 @@ if (config.sentry.dsn) {
 
 registerJobHandlers();
 const app = createWebApp({
-  // The socket peer, or the hop a TRUSTED_PROXIES proxy vouches for.
   clientAddress: peerClientAddress((c) => getConnInfo(c).remote.address),
   rateLimitStore: memoryRateLimitStore(),
-  // /health stays 503 until the agent store is open and resumed, so
-  // orchestrators never route traffic at a half-booted server (PRD §7.2).
   readiness: () => (agentRuntimeReady() ? undefined : "agent-runtime-starting"),
 });
 const port = config.app.port;
 const clientRoot = path.resolve(process.cwd(), "apps/web");
 
-/**
- * Open the agent runtime (exclusive store lock → Harness → resume) before the
- * HTTP server accepts requests. StoreLockedError (another process owns
- * agent.db, e.g. an overlapping deploy) exits non-zero.
- */
 async function openRuntime(): Promise<AgentRuntime> {
   mkdirSync(path.dirname(agentDbPath()), { recursive: true });
-  // pi-durable error rules: a storage error ends the Harness (fatal — exit so
-  // the orchestrator restarts us and resume() picks the work back up); a
-  // throwing hook/listener/tool result is only reported (log, keep running).
   const durableHandlers = {
     onFatal: (error: unknown) => {
       logger.error({ error }, "Agent runtime failed; shutting down");
@@ -143,9 +113,7 @@ async function openRuntime(): Promise<AgentRuntime> {
   };
   try {
     return fauxMode()
-      ? // Dev/E2E escape hatch: a faux-provider runtime (no network, no keys)
-        // so streaming and durability can be exercised end-to-end anywhere.
-        await openFauxAgentRuntime(agentDbPath(), { ...durableHandlers, env: process.env })
+      ? await openFauxAgentRuntime(agentDbPath(), { ...durableHandlers, env: process.env })
       : await openAgentRuntime({ storePath: agentDbPath(), ...durableHandlers, env: process.env });
   } catch (error) {
     logger.error({ error }, "Failed to open agent runtime");
@@ -153,11 +121,6 @@ async function openRuntime(): Promise<AgentRuntime> {
   }
 }
 
-/**
- * Boot is a flat list of parts (lifecycle.ts): they start in this order and
- * stop in reverse, each stop isolated and the whole under a deadline. To add
- * a part, add an entry; place it after what it needs.
- */
 async function main(): Promise<void> {
   const lifecycle = createLifecycle({
     log: {
@@ -167,12 +130,8 @@ async function main(): Promise<void> {
   });
   const add = lifecycle.add;
 
-  // The one SSH connection to the sandbox: first in, so it stops last, after
-  // the runtime, the browsers and the desktops ran their teardown over it.
   add({ name: "sandbox connection", stop: () => closeSandboxConnections() });
 
-  // Secrets an older version kept in the KV store or on a connection row move
-  // into the vault's tables (Q4) before anything resolves one. Never fails boot.
   add({
     name: "vault import",
     start: () => {
@@ -184,9 +143,6 @@ async function main(): Promise<void> {
     },
   });
 
-  // The bundled 1Password Connect server (ADR 0027), when OP_CONNECT_CREDENTIALS
-  // asks for it. Starts in the background (the first start pulls its binaries);
-  // vault uses fail closed until it answers. Stops after everything using it.
   add({
     name: "1password connect",
     start: () => startBundledConnectFromEnv(),
@@ -194,8 +150,6 @@ async function main(): Promise<void> {
   });
 
   let runtime!: AgentRuntime;
-  // Side-calls (memory capture, chat titles) run on the opened runtime's
-  // models. Faux mode makes none: no capture, first-message titles.
   let sideCaller: SideCaller | undefined;
   add({
     name: "agent runtime",
@@ -207,23 +161,17 @@ async function main(): Promise<void> {
     stop: () => closeAgentRuntime(),
   });
 
-  // Browsers drive agent work, so they close before the runtime and after
-  // everything that could still ask for a page.
   add({
     name: "browser sessions",
     needs: ["agent runtime"],
     stop: () => closeAllBrowserSessions(),
   });
-  // Desktops on the VM stop with the app; one left by a crash is reattached
-  // by the next launch for its profile.
   add({
     name: "computer sessions",
     needs: ["agent runtime"],
     stop: () => closeAllComputerSessions(),
   });
 
-  // Remote MCP connections: install cached tools now, connect in the
-  // background (never blocks /health or boot).
   add({
     name: "mcp connections",
     needs: ["agent runtime"],
@@ -234,10 +182,6 @@ async function main(): Promise<void> {
     stop: () => getConnectionManager().close(),
   });
 
-  // Push notifications (issue #57): approvals, questions, failed or long runs
-  // and routine results reach the owner's phone. A no-op without Pushover
-  // credentials; never blocks the agent. The vault raises owner alerts
-  // through a port; pushes are their destination.
   let notifications!: ReturnType<typeof startNotifications>;
   let unsetVaultAlerts = () => {};
   let detachWebPush = () => {};
@@ -246,7 +190,6 @@ async function main(): Promise<void> {
     needs: ["agent runtime"],
     start: () => {
       notifications = startNotifications(runtime);
-      // Phones registered through the app (issue #306), beside Pushover.
       detachWebPush = attachWebPush();
       notificationService.start();
       unsetVaultAlerts = setVaultAlertSink((kind, title, message) =>
@@ -261,7 +204,6 @@ async function main(): Promise<void> {
     },
   });
 
-  // Upload extraction (issue #58): files a restart interrupted extract again.
   add({
     name: "upload extraction sweep",
     start: () =>
@@ -270,7 +212,6 @@ async function main(): Promise<void> {
       ),
   });
 
-  // After the agent runtime: it stops a deleted bot's chat that resume() picked back up.
   add({
     name: "bot release sweep",
     needs: ["agent runtime"],
@@ -280,11 +221,6 @@ async function main(): Promise<void> {
       ),
   });
 
-  // A conversation that settles (its reply finished) answers its Deliveries
-  // (issue #12), resolves its awaiting routine runs (issue #63), updates the
-  // bot list, pushes and arms memory capture (issue #22), in that order, and
-  // the steps' boot sweeps run once it listens (bots.settled.ts). Faux mode
-  // has no side-caller, so it never makes capture calls.
   let stopSettled = () => {};
   add({
     name: "settled conversations",
@@ -298,18 +234,12 @@ async function main(): Promise<void> {
     stop: () => stopSettled(),
   });
 
-  // Armed routines whose fire job is gone get it back (routines.arming.ts),
-  // in the background like the settling sweeps just above, and before the
-  // job workers that run those jobs.
   add({
     name: "routine re-arm",
     needs: ["agent runtime"],
     start: () => void rearmRoutinesOnBoot(),
   });
 
-  // Code (issue #143, ADR 0011): one live connection per coding agent
-  // (Shelley, Claude Code); hand-off finishes go into bots' chats and
-  // followed threads push. Empty without a configured harness.
   let stopCode = () => {};
   add({
     name: "code",
@@ -320,8 +250,6 @@ async function main(): Promise<void> {
     stop: () => stopCode(),
   });
 
-  // Past-chat titles (issue #101): one lightweight side-call per "New chat"
-  // names the chat that ended. Faux mode keeps the first-message titles.
   add({
     name: "chat titles",
     needs: ["agent runtime"],
@@ -331,9 +259,6 @@ async function main(): Promise<void> {
     },
   });
 
-  // HTTP last to start, first to stop: new connections are refused, then the
-  // long-lived ones (SSE streams, VNC and terminal sockets) are ended so
-  // close() can finish, while everything they used is still up.
   let server!: http.Server;
   let browserVnc!: ReturnType<typeof attachBrowserVnc>;
   let computerVnc!: ReturnType<typeof attachComputerVnc>;
@@ -343,8 +268,6 @@ async function main(): Promise<void> {
     needs: ["agent runtime", "settled conversations", "code"],
     start: async () => {
       server = isProduction ? await createProductionServer() : await createDevServer();
-      // VNC viewers for bot browsers and terminal tabs connect over WebSocket
-      // on the same server; each handles only its own upgrade path.
       browserVnc = attachBrowserVnc(server);
       computerVnc = attachComputerVnc(server);
       terminalWs = attachTerminalWs(server);
@@ -357,7 +280,6 @@ async function main(): Promise<void> {
     },
     stop: async () => {
       markShuttingDown();
-      // Give the load balancer a moment to stop routing traffic here.
       if (isProduction) await new Promise((r) => setTimeout(r, 2000));
       const closed = new Promise<void>((resolve) => server.close(() => resolve()));
       server.closeIdleConnections();
@@ -379,7 +301,6 @@ async function main(): Promise<void> {
     stop: () => stopWorkers(),
   });
 
-  // A silent startup ping in production.
   add({
     name: "startup ping",
     needs: ["notifications"],
@@ -388,9 +309,6 @@ async function main(): Promise<void> {
     },
   });
 
-  // Under `pnpm local` (scripts/local.ts): tells the supervisor the server is
-  // up and relays update checks and restarts (docs/guides/local-updates.md).
-  // Last, so "ready" means everything above started.
   let stopUpdates = () => {};
   add({
     name: "local updates",
@@ -405,7 +323,6 @@ async function main(): Promise<void> {
   lifecycle.handleSignals(["SIGTERM", "SIGINT"]);
 }
 
-/** Production: Hono serves the API and the built client (SPA fallback to index.html). */
 async function createProductionServer(): Promise<http.Server> {
   const clientDist = [
     path.resolve(here, "../client"),
@@ -419,7 +336,6 @@ async function createProductionServer(): Promise<http.Server> {
     serveStatic({
       root: path.relative(process.cwd(), clientDist) || ".",
       onFound: (filePath, c) => {
-        // Hashed assets can be cached forever; everything else must revalidate.
         c.header(
           "Cache-Control",
           filePath.includes("/assets/") ? "public, max-age=31536000, immutable" : "no-cache",
@@ -429,21 +345,15 @@ async function createProductionServer(): Promise<http.Server> {
   );
   app.get("*", (c) => {
     if (c.req.path.startsWith("/api/")) return c.notFound();
-    // A missing build file must 404, not get index.html with a 200: a stale
-    // tab importing an old chunk would run HTML as JS, and a CDN would cache
-    // that HTML under the asset's URL.
     if (isAssetRequest(c.req.path)) {
       return c.text("Not found", 404, { "Cache-Control": "no-store" });
     }
     return c.html(indexHtml, 200, { "Cache-Control": "no-cache" });
   });
 
-  // Created without listening (unlike `serve()`, which listens at once): main()
-  // attaches the WebSocket handlers, then listens exactly once.
   return http.createServer(getRequestListener(app.fetch));
 }
 
-/** Development: Vite in middleware mode handles everything that is not the API. */
 async function createDevServer(): Promise<http.Server> {
   const { createServer: createViteServer } = await import("vite-plus");
   const server = http.createServer();

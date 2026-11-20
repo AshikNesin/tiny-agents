@@ -56,7 +56,6 @@ const LOAD_IN_EFFECT_MESSAGE =
 
 const EFFECT_HOOKS = new Set(["useEffect", "useLayoutEffect"]);
 
-// useEffect(...) or React.useEffect(...).
 const isEffectCall = (node) => {
   if (node?.type !== "CallExpression") return false;
   const callee = node.callee;
@@ -69,7 +68,6 @@ const isEffectCall = (node) => {
   );
 };
 
-// fetch(...) or someApi.method(...): the client's request helpers are named *Api.
 const isLoadCall = (node) => {
   const callee = node.callee;
   if (callee.type === "Identifier") return callee.name === "fetch";
@@ -97,8 +95,6 @@ const RAW_ENV_MESSAGE =
 const TRANSACTION_MESSAGE =
   "R7: no transactions in packages/ (AGENTS.md). Use one statement with RETURNING, a compare-and-set update (WHERE on the expected old value), or an idempotent retry. An app that needs a transaction runs a sync db.transaction() in apps/ and passes the tx in.";
 
-// `db` and `tx` by name, plus anything imported from the database module or
-// drizzle, typed with a type from there, or a function that returns one.
 const DB_NAMES = ["db", "tx"];
 const DATABASE_MODULE = /(^|\/)database(\/index)?(\.[cm]?[jt]s)?$|^drizzle-orm(\/|$)/;
 
@@ -106,7 +102,6 @@ const SESSION_INVALID_NAMES = new Set(["sessionInvalid", "SESSION_INVALID"]);
 const SESSION_INVALID_MESSAGE =
   "R9: only the session guard (packages/core/src/session/index.ts) throws sessionInvalid() or sets the SESSION_INVALID code, because the client signs the owner out on it. For a wrong password, passkey or other credential failure, throw a plain Boom.unauthorized.";
 
-// Typed in the source, not written as an escape: an escape is the opt-out.
 const EM_DASH = "\u2014";
 const EM_DASH_MESSAGE =
   'R10: no em dash in UI copy: it reads as machine-written. Use a period, colon, comma or parentheses, and "-" for an empty value. If one is really needed (a quoted title, a typographic convention), write it as \\u2014.';
@@ -183,7 +178,6 @@ const isCollection = (node) => {
   );
 };
 
-/** The names a declarator binds: `a`, or each name in `{ a, b: [c] }`. */
 const boundNames = (pattern) => {
   switch (pattern?.type) {
     case "Identifier":
@@ -452,8 +446,6 @@ export default {
     },
     "no-load-in-effect": {
       create(context) {
-        // Loads outside an effect, by the name of the const holding them, so
-        // `const load = useCallback(() => api.list())` then `useEffect(load)` counts.
         const held = [];
         const effectNames = new Set();
         const isFunction = (n) =>
@@ -476,9 +468,6 @@ export default {
           }
           return names;
         };
-        // Names an effect runs: the effect itself (`useEffect(load)`), what it
-        // calls (`load()`), and what it hands on (`setInterval(load)`). A key or
-        // property that only spells the same name does not count.
         const collectNames = (node) => {
           if (!node || typeof node.type !== "string") return;
           if (node.type === "Identifier") effectNames.add(node.name);

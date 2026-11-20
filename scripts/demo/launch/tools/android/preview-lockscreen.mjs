@@ -1,6 +1,3 @@
-// Renders ../../android/lockscreen.html to lockscreen.png (412x892 CSS px at 3x, the chat
-// stills' size) and writes where the notification is to lockscreen-positions.json.
-//   node scripts/demo/launch/tools/android/preview-lockscreen.mjs
 import { createRequire } from "node:module";
 import { writeFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";

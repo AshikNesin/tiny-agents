@@ -1,13 +1,6 @@
 import { builtinModules } from "node:module";
 import { OUT_OF_SCOPE } from "./comments.mjs";
 
-/**
- * Oxlint does not merge two overrides that set the same rule on one file: the
- * later override replaces the earlier. So the generator gives every file
- * exactly one `no-restricted-imports` entry, holding every import row that
- * applies to it.
- */
-
 type Scope = "**" | `${string}/**`;
 
 type ImportRestriction = {
@@ -16,7 +9,6 @@ type ImportRestriction = {
 };
 
 type BoundaryRule = {
-  /** The AGENTS.md rule table id this entry enforces. Two entries may share one. */
   id: string;
   except?: string[];
   enabled: boolean;
@@ -56,45 +48,32 @@ const DRIVER_HOMES = [
   "packages/core/src/database/node.ts",
   "packages/core/src/database/d1.ts",
   "apps/web/src/server/db/**",
-  // Workers: the D1 binding only exists per request, so the entry opens it.
   "apps/web/src/server/entry.worker.ts",
   "tests/**",
-  // The launch film's staging scripts seed a throwaway instance's own database
-  // (data/verify/<area>/app.db), never the app's.
   "scripts/demo/launch/tools/**",
-  // A file lock for the agent store, not the app database.
   "packages/agent/src/lock.ts",
 ];
 
-/**
- * R12's allowlist, `<file under apps/web/src/server>:<name>`: module state
- * that stays out of the App root (docs/rewrite/DECISIONS.md D8). It only
- * shrinks; Phase 1 of docs/rewrite/PLAN.md moves the rest into `App`.
- */
 const SERVER = "apps/web/src/server";
 const R12_ALLOWED = [
-  // Caches: derived from durable state, safe to lose, rebuilt on a miss.
-  "crypto/secret-box.ts:derived", // HKDF keys derived from the master secret
-  "api/vault/vault.service.ts:statusCache", // backend health, TTL-bound
-  "api/vault/vault.service.ts:appValues", // resolved app credentials, TTL-bound
-  "api/vault/vault.admin.service.ts:adminBackends", // backends built from config on first use
-  "api/vault/vault.admin.service.ts:candidatesCache", // backend item listing, TTL-bound
-  "api/vault/backends/index.ts:backends", // backends built from config on first use
-  "api/uploads/uploads.extraction.ts:cache", // extracted attachment text
-  "api/uploads/uploads.prepare.ts:processor", // the image processor, loaded once
-  "api/bots/sandbox-host.ts:keyFiles", // SANDBOX_SSH_KEY_FILE contents, read once per path
-  "api/ws/upgrade.ts:upgradePatterns", // per-server upgrade paths, keyed weakly by the server
-  "db/index.ts:connections", // the driver behind each db instance, keyed weakly
-  // The extraction queue: work state of one module, drained on idle; moves with the uploads re-cut.
+  "crypto/secret-box.ts:derived",
+  "api/vault/vault.service.ts:statusCache",
+  "api/vault/vault.service.ts:appValues",
+  "api/vault/vault.admin.service.ts:adminBackends",
+  "api/vault/vault.admin.service.ts:candidatesCache",
+  "api/vault/backends/index.ts:backends",
+  "api/uploads/uploads.extraction.ts:cache",
+  "api/uploads/uploads.prepare.ts:processor",
+  "api/bots/sandbox-host.ts:keyFiles",
+  "api/ws/upgrade.ts:upgradePatterns",
+  "db/index.ts:connections",
   "api/uploads/uploads.extraction.ts:runner",
   "api/uploads/uploads.extraction.ts:jobs",
   "api/uploads/uploads.extraction.ts:cancelled",
   "api/uploads/uploads.extraction.ts:active",
   "api/uploads/uploads.extraction.ts:idle",
   "api/uploads/uploads.extraction.ts:markIdle",
-  // The entry's Sentry slot, set before the App root exists.
   "entry.node.ts:captureException",
-  // Constants: Sets never written after they are built.
   "api/bots/rfb-view-only.ts:FORWARD",
   "api/bots/memories.store.ts:GENERIC_WORDS",
   "api/uploads/uploads.sniff.ts:TEXT_EXTENSIONS",
@@ -149,13 +128,9 @@ const BOUNDARY_RULES: BoundaryRule[] = [
       ".groot/**",
       "**/*.config.ts",
       "**/*.config.*.ts",
-      // Loads .env and hands process.env to bootstrap() and the agent runtime.
       "apps/web/src/server/entry.node.ts",
-      // Sets the production DATABASE_URL default before bootstrap() validates env.
       "apps/web/src/server/db/open.ts",
-      // The Claude worker runs on the sandbox VM, outside the app's env; its entry reads process.env.
       "packages/claude-worker/src/bin.ts",
-      // Hands the worker's environment to git with three overrides; reads no key.
       "packages/claude-worker/src/coding-ops.ts",
     ],
     enabled: true,
@@ -250,11 +225,7 @@ const BOUNDARY_RULES: BoundaryRule[] = [
     id: "R8b",
     kind: "import",
     scope: "**",
-    except: [
-      "packages/core/src/bootstrap.ts",
-      // Reads core.db through a namespace import, which the rule can't tell from a setDb import.
-      "apps/web/src/server/db/index.ts",
-    ],
+    except: ["packages/core/src/bootstrap.ts", "apps/web/src/server/db/index.ts"],
     enabled: true,
     restrict: {
       patterns: [
@@ -313,7 +284,6 @@ const BOUNDARY_RULES: BoundaryRule[] = [
       ],
     },
   },
-  // UI copy: strings and JSX text in code that renders the app's screens.
   ...[
     "apps/web/src/client/**",
     "packages/shell/src/**",
@@ -331,10 +301,7 @@ const BOUNDARY_RULES: BoundaryRule[] = [
     kind: "plugin",
     scope: "apps/web/src/client/**",
     rule: "repo/no-load-in-effect",
-    // Files that loaded this way before R15. Remove a file once it reads
-    // through useResource; never add one for a new request/response load.
     except: [
-      // The rest move when a change next reworks their loading.
       "apps/web/src/client/components/ChatHistoryMenu.tsx",
       "apps/web/src/client/components/ClaudePlanStatus.tsx",
       "apps/web/src/client/components/FilePreview.tsx",
@@ -346,9 +313,7 @@ const BOUNDARY_RULES: BoundaryRule[] = [
       "apps/web/src/client/lib/use-tool-labels.ts",
       "apps/web/src/client/pages/terminal/Terminal.tsx",
       "apps/web/src/client/store/use-updates.ts",
-      // Live: the thread's change versions, an SSE stream (only its path is built in the effect).
       "apps/web/src/client/lib/code/use-live-changes.ts",
-      // Live: the thread's transcript, an SSE stream (only its path is built in the effect).
       "apps/web/src/client/lib/code/use-thread.ts",
     ],
     enabled: true,
@@ -359,12 +324,8 @@ const BOUNDARY_RULES: BoundaryRule[] = [
     scope: "**",
     rule: "repo/no-session-invalid",
     except: [
-      // The guard. `sessionInvalid` is module-private there, but the code is
-      // public in ErrorCode, so a hand-built error elsewhere still needs this rule.
       "packages/core/src/session/index.ts",
-      // Defines the code.
       "packages/core/src/errors/index.ts",
-      // The client, which signs the owner out on the code.
       "packages/shell/src/lib/api.ts",
       "scripts/lint/repo-plugin.mjs",
       "tests/**",
@@ -428,7 +389,6 @@ const BOUNDARY_RULES: BoundaryRule[] = [
   },
 ];
 
-/** The AGENTS.md rule ids the enabled rules enforce. */
 export const enforcedRuleIds = new Set(BOUNDARY_RULES.filter((r) => r.enabled).map((r) => r.id));
 
 const covers = (glob: string, zone: string) =>

@@ -1,25 +1,7 @@
-/* Film helpers shared by every scene.
- *
- * A scene calls Film.scene(id, seconds, build). build(S) places tweens on S.tl
- * at absolute seconds through the helpers below. Everything visible is a
- * function of timeline time, so any frame renders on its own.
- *
- * The same scene file serves all three cuts. The host that mounts it may carry
- * data-film-in / data-film-out (scene seconds): the scene then plays that
- * stretch across the host's data-duration, which trims and re-times it without
- * a second copy of the scene.
- *
- * Rules the helpers rely on:
- *  - a first appearance is a fromTo (hidden from the start); later changes to
- *    the same property are `to` tweens, built in time order;
- *  - layout is measured once, at build time, with everything in its final
- *    place (hide with opacity, never display).
- */
 (function () {
   const FMT = document.documentElement.dataset.fmt === "v" ? "v" : "h";
   const H = FMT === "h";
   const FRAME = H ? { w: 1920, h: 1080 } : { w: 1080, h: 1920 };
-  /** Lowest y that text may reach (the platform's own UI covers the rest of a vertical frame). */
   const SAFE_BOTTOM = H ? 1026 : 1330;
 
   gsap.config({ force3D: false, nullTargetWarn: false });
@@ -29,10 +11,6 @@
     () => document.fonts.ready,
   );
 
-  /**
-   * A number GSAP can tween that calls `fn` whenever it is set. Unlike an
-   * onUpdate callback it also runs on a seek that suppresses events.
-   */
   function driven(fn, start = 0) {
     let v = start;
     return {
@@ -53,9 +31,6 @@
       .then(() => {
         const tl = gsap.timeline({ paused: true });
         const S = api(root, tl, dur);
-        // HyperFrames keeps a scene undisplayed until its slot comes up, and an
-        // undisplayed element measures as nothing. Lay the scene out while it is
-        // built, then hand its display back.
         const undisplayed = [];
         for (let el = root; el && el !== document.documentElement; el = el.parentElement) {
           if (getComputedStyle(el).display !== "none") continue;
@@ -67,8 +42,6 @@
           el.style.setProperty("display", "block", "important");
         }
         try {
-          // A scroll offset is lost whenever its element is undisplayed, so the
-          // app's scrolled panes are held by a transform instead.
           for (const el of root.querySelectorAll("[data-st]")) S.scroller(el).set(+el.dataset.st);
           build(S);
         } finally {
@@ -81,12 +54,6 @@
         const a = +(host.dataset.filmIn ?? 0);
         const b = +(host.dataset.filmOut ?? dur);
         const slot = +(host.dataset.filmSlot ?? b - a);
-        // The registered timeline scrubs the scene's own: slot seconds play
-        // the stretch [a, b]. It is scrubbed through a plain number, not by
-        // tweening the timeline's `time`: GSAP undoes a fromTo's start value
-        // when it rewinds, which sent the scene back to 0 and un-hid everything
-        // that had not appeared yet. The scene is never set to exactly 0 for
-        // the same reason.
         const at = (p) => tl.time(Math.max(0.0001, a + (b - a) * p));
         const outer = gsap.timeline({ paused: true });
         outer.to(driven(at), { v: 1, duration: slot, ease: "none" }, 0);
@@ -108,9 +75,7 @@
     const list = [];
     const sfx = (t, name, extra) => list.push({ t: +t.toFixed(3), name, ...extra });
 
-    /** Preview scales the stage; a render does not. */
     const stageScale = () => root.getBoundingClientRect().width / FRAME.w || 1;
-    /** An element's box in frame pixels, as laid out right now. */
     const rect = (el) => {
       const r = q(el).getBoundingClientRect();
       const o = root.getBoundingClientRect();
@@ -118,11 +83,6 @@
       return { x: (r.left - o.left) / k, y: (r.top - o.top) / k, w: r.width / k, h: r.height / k };
     };
 
-    /**
-     * A camera over one app window: `.vp > .cam > .appwin`. Targets are
-     * measured in the app window's own pixels, so a framing stays right
-     * whatever the camera is doing when it is asked for.
-     */
     function camera(camSel) {
       const el = q(camSel);
       const vp = rect(el.parentElement);
@@ -147,13 +107,7 @@
         vp,
         win,
         local,
-        /** The whole app window, fitted to the screen's width. */
         full: () => ({ x: 0, y: 0, scale: vp.w / win.w }),
-        /**
-         * A framing that puts `target` at (ax, ay) of the screen's safe area.
-         * Give `scale`, or `fit` (the share of the screen's width the target
-         * should take). The app window never leaves a gap at an edge.
-         */
         frame(target, o = {}) {
           const L = local(target);
           const full = vp.w / win.w;
@@ -176,13 +130,11 @@
           hist.push({ t: t + d, f });
           return t + d;
         },
-        /** The framing the camera has settled on by time t. */
         at(t) {
           let f = hist[0]?.f ?? { x: 0, y: 0, scale: 1 };
           for (const h of hist) if (h.t <= t + 1e-6) f = h.f;
           return f;
         },
-        /** Where a point of `target` is on the frame once the camera has settled at t. */
         point(target, t, px = 0.5, py = 0.5) {
           const L = local(target);
           const f = cam.at(t);
@@ -195,17 +147,11 @@
       return cam;
     }
 
-    /**
-     * The bot list on its own: the screen narrows to a tall panel that holds
-     * just the sidebar. Returns the screen's box and the camera's framing for
-     * that panel, and the screen's full box to return to.
-     */
     function listPanel(cam, sidebar, bots) {
       const W = 760;
       const b = cam.local(sidebar);
       const k = W / b.w;
       const list = bots ? cam.local(bots) : null;
-      // With the list given, the panel starts just above it and is only as tall as it.
       const y = list ? -(list.y - 12) * k : 0;
       const height = list ? Math.min(cam.vp.h, Math.round((list.h + 30) * k)) : cam.vp.h;
       return {
@@ -215,7 +161,6 @@
       };
     }
 
-    /** The pointer. Points are frame pixels; the arrow's tip lands on them. */
     function cursor(sel = ".cursor") {
       const el = q(sel);
       const art = el.firstElementChild;
@@ -223,12 +168,10 @@
       gsap.set(el, { opacity: 0 });
       const cur = {
         el,
-        /** Already on screen at p when the scene starts (it was left there by the scene before). */
         place(p) {
           gsap.set(el, { x: p.x - tip.x, y: p.y - tip.y, opacity: 1 });
           return cur;
         },
-        /** Appears at `from` and travels to `to`, arriving at t + d. */
         enter(t, from, to, d = 0.7) {
           tl.set(el, { x: from.x - tip.x, y: from.y - tip.y }, t);
           tl.to(el, { opacity: 1, duration: 0.12 }, t);
@@ -251,10 +194,8 @@
       return cur;
     }
 
-    /** A finger tap on a touch screen, centred on p. */
     function tap(sel, t, p) {
       const el = q(sel);
-      // In place before it starts to show.
       tl.set(el, { x: p.x, y: p.y }, t - 0.18);
       tl.fromTo(
         el,
@@ -291,7 +232,6 @@
       return [...el.querySelectorAll("." + cls)];
     };
 
-    /** A caption: words blur in from t0, the line holds, and it is gone by t1. */
     function cap(sel, t0, t1) {
       const el = q(sel);
       const words = splitWords(el, "w");
@@ -309,10 +249,6 @@
         );
     }
 
-    /**
-     * A scrolling pane of the app, moved by a transform on its content. `max`
-     * is how far it can scroll; set() and to() take an offset like scrollTop.
-     */
     const scrollers = new Map();
     function scroller(target) {
       const el = q(target);
@@ -340,7 +276,6 @@
       return sc;
     }
 
-    /** A first appearance. */
     const show = (t, target, o = {}) =>
       tl.fromTo(
         qa(target),
@@ -362,7 +297,6 @@
         t,
       );
 
-    /** Text arriving the way a model streams it: word after word, in place. */
     function stream(t, target, d = 1.2) {
       const words = qa(target).flatMap((el) => splitWords(el, "sw"));
       if (!words.length) return t;
@@ -376,7 +310,6 @@
       return t + each * words.length + 0.1;
     }
 
-    /** Text typed into a field or an element. */
     function type(t, target, text, o = {}) {
       const el = q(target);
       const d = text.length / (o.cps ?? 26);
@@ -387,13 +320,11 @@
       return t + d;
     }
 
-    /** One layer gives way to another on the same stage. */
     function swap(t, from, to, d = 0.16) {
       if (from) tl.to(qa(from), { autoAlpha: 0, duration: d, ease: "none" }, t);
       tl.fromTo(qa(to), { autoAlpha: 0 }, { autoAlpha: 1, duration: d, ease: "none" }, t);
     }
 
-    /** A control answering a click. */
     function press(t, target) {
       const el = q(target);
       tl.to(el, { filter: "brightness(0.9)", duration: 0.07 }, t);

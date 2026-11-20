@@ -1,6 +1,3 @@
-// The Tests workflow runs these through `pnpm verify:static`, so a gate added
-// here runs locally and in CI.
-
 import { spawnSync } from "node:child_process";
 import { readFileSync, readdirSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -15,7 +12,6 @@ export const gates = [
   { name: "Typecheck (e2e tests)", run: "pnpm typecheck:e2e" },
   { name: "Typecheck coverage", run: "pnpm exec tsx scripts/check-typecheck-coverage.ts" },
   { name: "Typecheck kit consumers", run: "pnpm typecheck:kit" },
-  // A child's own tsconfigs (e.g. a Workers test suite); groot defines none.
   { name: "Typecheck (app projects)", run: "pnpm run --if-present typecheck:app" },
   {
     name: "Kit export guard",

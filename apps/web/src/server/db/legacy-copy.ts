@@ -8,30 +8,11 @@ import { LOCAL_UPLOADS_ROOT } from "@groot/core/storage/node";
 import { createAppDb, sqliteConnection, type AppDatabase } from "./index";
 import * as schema from "./schema";
 
-/**
- * One-off move from the Prisma database (tiny-agents before groot 3.0) to the
- * Drizzle one, run on the first boot that finds the old layout.
- *
- * The copy is built in a sibling file (`<file>.migrating-<timestamp>`) from
- * the Drizzle migrations while the old database stays in place and is read
- * only; it is swapped in, and the old file kept as
- * `<file>.prisma-backup-<timestamp>`, only once every row has copied. A copy
- * that fails leaves the old database exactly where it was, so the next boot
- * finds the Prisma layout again and retries. The Prisma models and the Drizzle tables
- * share table names and field names (columns go camelCase → snake_case), so
- * rows map field by field; dates (ISO text in Prisma's SQLite) become
- * millisecond timestamps, booleans and JSON are normalised. Keyv entries move
- * to the `kv` table. The old job queue (honker) is not copied: routines re-arm
- * their next run on boot (`routines.jobs.ts`), and stale job logs are dropped.
- */
-
 export interface OpenAppDatabaseOptions {
   migrationsFolder: string;
-  /** Where uploads live now; files still under the old local root are copied here. */
   uploadsRoot?: string;
 }
 
-/** Open the app database, first copying a pre-Drizzle database into the new layout. */
 export function openAppDatabase(url: string, options: OpenAppDatabaseOptions): AppDatabase {
   const file = resolveSqlitePath(url);
   if (file !== ":memory:" && existsSync(file) && isLegacyLayout(file)) {
@@ -40,7 +21,6 @@ export function openAppDatabase(url: string, options: OpenAppDatabaseOptions): A
   return createAppDb(url, { migrationsFolder: options.migrationsFolder });
 }
 
-/** Prisma left `_prisma_migrations`; a database Drizzle has migrated has `__drizzle_migrations`. */
 export function isLegacyLayout(file: string): boolean {
   const sqlite = new Database(file, { readonly: true, fileMustExist: true });
   try {
@@ -56,7 +36,6 @@ export function isLegacyLayout(file: string): boolean {
   }
 }
 
-/** Tables copied as-is (same name, same field names), parents before children. */
 const COPIED_TABLES: Table[] = [
   schema.users,
   schema.passkeys,
@@ -91,8 +70,6 @@ function copyLegacyDatabase(
 ): AppDatabase & { legacyCopyReport?: LegacyCopyReport } {
   logger.warn({ file }, "Found a pre-Drizzle (Prisma) database; copying it into the new layout");
 
-  // Fold the WAL into the main file so the copy and the backup carry every
-  // committed row.
   const old = new Database(file);
   old.pragma("wal_checkpoint(TRUNCATE)");
   old.close();
@@ -100,8 +77,6 @@ function copyLegacyDatabase(
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   const backup = `${file}.prisma-backup-${stamp}`;
   const staging = `${file}.migrating-${stamp}`;
-  // A copy a crash cut short leaves its staging file behind: never the real
-  // database, so it is swept, not resumed.
   for (const name of readdirSync(path.dirname(file))) {
     if (name.startsWith(`${path.basename(file)}.migrating-`)) {
       rmSync(path.join(path.dirname(file), name), { force: true });
@@ -113,7 +88,6 @@ function copyLegacyDatabase(
   const source = new Database(file, { readonly: true, fileMustExist: true });
   try {
     copyRows(source, target, report);
-    // Checkpoint so the staging file is whole before it moves.
     sqliteConnection(target).pragma("wal_checkpoint(TRUNCATE)");
   } catch (error) {
     source.close();
@@ -125,7 +99,6 @@ function copyLegacyDatabase(
   source.close();
   sqliteConnection(target).close();
 
-  // Every row is across: the old file becomes the backup, the copy takes its place.
   renameSync(file, backup);
   for (const suffix of ["-wal", "-shm"]) {
     if (existsSync(file + suffix)) renameSync(file + suffix, backup + suffix);
@@ -140,7 +113,6 @@ function copyLegacyDatabase(
   return Object.assign(db, { legacyCopyReport: report });
 }
 
-/** Copy every app table and the Keyv entries from the old database into the new one. */
 function copyRows(source: Database.Database, target: AppDatabase, report: LegacyCopyReport): void {
   const sourceTables = new Set(
     source
@@ -154,10 +126,7 @@ function copyRows(source: Database.Database, target: AppDatabase, report: Legacy
       if (!sourceTables.has(name)) continue;
       const rows = source.prepare(`SELECT * FROM "${name}"`).all() as Record<string, unknown>[];
       const converted = rows.map((row) => convertRow(table, row));
-      // Old job ids point at the retired queue; routines re-arm on boot.
       if (table === schema.routines) for (const row of converted) row.pendingJobId = null;
-      // Old model ids were strings; models are now rows (issue #179). A
-      // copied bot runs on the default model until the owner picks one.
       if (table === schema.bots) for (const row of converted) row.modelId = null;
       for (let i = 0; i < converted.length; i += 200) {
         tx.insert(table)
@@ -181,7 +150,6 @@ function copyRows(source: Database.Database, target: AppDatabase, report: Legacy
   });
 }
 
-/** Map an old row onto a table's fields, converting each value to the field's mode. */
 function convertRow(table: Table, row: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [field, column] of Object.entries(getTableColumns(table))) {
@@ -193,8 +161,6 @@ function convertRow(table: Table, row: Record<string, unknown>): Record<string, 
     }
     const mode = (column as { mode?: string }).mode;
     const sqlType = column.getSQLType().toLowerCase();
-    // JSON text columns are their own column type (no `mode`); Drizzle
-    // stringifies on insert, so hand them the parsed value.
     const isJson = column.columnType === "SQLiteTextJson" || mode === "json";
     if (mode === "timestamp_ms" || mode === "timestamp") out[field] = toDate(value);
     else if (mode === "boolean") out[field] = toBoolean(value);
@@ -208,13 +174,11 @@ function convertRow(table: Table, row: Record<string, unknown>): Record<string, 
   return out;
 }
 
-/** Prisma's SQLite adapter wrote ISO text; older rows may hold epoch milliseconds. */
 export function toDate(value: unknown): Date {
   if (value instanceof Date) return value;
   if (typeof value === "number" || typeof value === "bigint") return new Date(Number(value));
   const text = String(value).trim();
   if (/^\d+$/.test(text)) return new Date(Number(text));
-  // "YYYY-MM-DD HH:MM:SS" (SQLite CURRENT_TIMESTAMP) is UTC without a zone.
   const normalised = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(text)
     ? `${text.replace(" ", "T")}Z`
     : text;
@@ -227,13 +191,6 @@ function toBoolean(value: unknown): boolean {
   return value === true || value === 1 || value === 1n || value === "1" || value === "true";
 }
 
-/**
- * A Keyv row: namespaced keys are `NAMESPACE:key` (exactly what
- * `createNamespaceKv` uses); un-namespaced ones carried Keyv's default
- * `keyv:` prefix. Values are `{ value, expires }` in Keyv's JSON encoding
- * (strings starting with ":" are escaped with a second ":", buffers are
- * ":base64:…"). Expired entries are skipped.
- */
 export function convertKeyvEntry(entry: {
   key: string;
   value: string;
@@ -254,11 +211,6 @@ export function convertKeyvEntry(entry: {
   return { key, value: JSON.stringify(parsed.value ?? null), expiresAt: expires };
 }
 
-/**
- * Before groot 3.0 the local storage driver wrote to `./local/uploads`; uploads
- * now live beside the database. Copy anything still in the old folder (files
- * already in the new one win). Returns true when something was copied.
- */
 function copyLegacyUploads(uploadsRoot: string): boolean {
   const from = path.resolve(LOCAL_UPLOADS_ROOT);
   const to = path.resolve(uploadsRoot);

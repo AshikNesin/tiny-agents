@@ -1,11 +1,3 @@
-/**
- * The state machine behind `pnpm local` (scripts/local.ts,
- * docs/guides/local-updates.md): run one built release of the server as a
- * child, check the tracked ref for new commits, build them beside the
- * running release, swap them in, and roll back when the new one does not
- * come up. Git, the build and the child process come in as ports, so the
- * flow is tested without them (tests/server/scripts/local-supervisor.test.ts).
- */
 import type {
   ServerMessage,
   UpdateCommit,
@@ -15,13 +7,10 @@ import type {
 } from "../../apps/web/src/shared/local-updates";
 import { isServerMessage } from "../../apps/web/src/shared/local-updates";
 
-/** A running server process. */
 export interface ServerHandle {
   send(message: unknown): void;
   onMessage(listener: (message: unknown) => void): void;
-  /** Fires once, when the process exits for any reason. */
   onExit(listener: (code: number | null) => void): void;
-  /** SIGTERM, then SIGKILL after a grace period; resolves when it has exited. */
   stop(): Promise<void>;
 }
 
@@ -32,17 +21,13 @@ export interface CheckResult {
 }
 
 export interface SupervisorPorts {
-  /** Fetch the tracked ref and compare it with `current`. */
   check(current: string): Promise<CheckResult>;
   releaseInfo(sha: string): Promise<UpdateRelease>;
   isBuilt(sha: string): boolean;
-  /** Check out and build `sha` beside the running release. */
   build(sha: string, onLine: (line: string) => void): Promise<void>;
   launch(sha: string): ServerHandle;
-  /** True once the server answers its readiness probe; releases from before the IPC message rely on it. */
   probe(): Promise<boolean>;
   saveCurrent(sha: string): void;
-  /** Delete built releases other than `keep`. */
   prune(keep: string[]): Promise<void>;
   log(line: string): void;
 }
@@ -50,17 +35,13 @@ export interface SupervisorPorts {
 export interface SupervisorOptions {
   track: string;
   auto: boolean;
-  /** How long a new server may take to say it is ready. */
   readyTimeoutMs: number;
-  /** How often to call `probe` while waiting. */
   probeIntervalMs: number;
-  /** Delay before restarting a server that crashed, doubled per crash up to 30 s. */
   crashBackoffMs: number;
 }
 
 const LOG_LINES = 30;
 const MAX_BACKOFF_MS = 30_000;
-/** A server up this long resets the crash backoff. */
 const HEALTHY_MS = 60_000;
 
 export class Supervisor {
@@ -74,7 +55,6 @@ export class Supervisor {
   private logLines: string[] = [];
   private lastCheckedAt: number | null = null;
   private stopping = false;
-  /** Set while this supervisor stops the server on purpose. */
   private swapping = false;
   private backoff: number;
   private restartTimer: ReturnType<typeof setTimeout> | undefined;
@@ -101,7 +81,6 @@ export class Supervisor {
     };
   }
 
-  /** Run `sha`, building it first if needed. Rejects when it never comes up. */
   async start(sha: string): Promise<void> {
     if (!this.ports.isBuilt(sha)) {
       this.ports.log(`Building ${sha.slice(0, 7)} for the first run`);
@@ -113,7 +92,6 @@ export class Supervisor {
     this.ports.saveCurrent(sha);
   }
 
-  /** Fetch the tracked ref; with `auto`, update straight away when it moved. */
   async check(): Promise<void> {
     if (this.phase === "checking" || this.phase === "building" || this.phase === "restarting") {
       return;
@@ -138,7 +116,6 @@ export class Supervisor {
     return this.latest !== null && this.latest.sha !== this.running.sha;
   }
 
-  /** Build the latest commit and restart onto it; the running server keeps serving until then. */
   async apply(): Promise<void> {
     if (this.phase === "building" || this.phase === "restarting" || this.stopping) return;
     if (!this.latest) await this.check();
@@ -174,7 +151,6 @@ export class Supervisor {
       return;
     }
 
-    // The new release never said it was ready: go back to the one that worked.
     this.ports.log(`Release ${target.sha.slice(0, 7)} did not start; rolling back`);
     await this.stopServer();
     this.running = from;
@@ -184,7 +160,6 @@ export class Supervisor {
     );
   }
 
-  /** Stop the server and every timer; the supervisor then exits. */
   async shutdown(): Promise<void> {
     this.stopping = true;
     clearTimeout(this.restartTimer);
@@ -236,11 +211,6 @@ export class Supervisor {
     if (message.type === "update-apply") void this.apply();
   }
 
-  /**
-   * A server exited. One that had come up and was not stopped on purpose
-   * crashed: start the release again. One that never came up is its
-   * launcher's to handle (rollback, or the next restart attempt).
-   */
   private onServerExit(
     server: ServerHandle,
     code: number | null,
@@ -254,7 +224,6 @@ export class Supervisor {
     this.scheduleRestart(code);
   }
 
-  /** Start the running release again after the backoff, and again until it comes up. */
   private scheduleRestart(code: number | null): void {
     clearTimeout(this.restartTimer);
     const delay = this.backoff;

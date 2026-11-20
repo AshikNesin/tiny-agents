@@ -1,6 +1,3 @@
-// drizzle-kit writes JSON the formatter rewrites, so format its output here
-// and `pnpm check` passes on a fresh migration.
-
 import { spawnSync } from "node:child_process";
 import process from "node:process";
 

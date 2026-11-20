@@ -1,31 +1,9 @@
 #!/usr/bin/env tsx
-/**
- * Old-modules gate: the rewrite's retired-paths list (scripts/old-modules.json,
- * linked from docs/rewrite/PLAN.md) stays retired. It fails when
- *
- * - a retired path exists, or any source file imports it (relative, `@/` or
- *   a workspace package subpath);
- * - a retired symbol is declared or exported anywhere;
- * - a retired module singleton is declared again at the top of its file;
- * - a helper the rewrite made single is declared outside its one module;
- * - a retired pattern (the old transcript file, hand-copied wire types, a
- *   hand-rolled shell quote, a past chat's own fetching) matches;
- * - a narrowed module (docs/rewrite/DECISIONS.md D13) grows back: chat
- *   actions in bots.service.ts, manager logic in the session instances,
- *   state in the live-view wrappers;
- * - something in this repo imports a deprecated re-export of
- *   `@tiny-agents/agent`, kept only for outside importers until a major;
- * - an entry's `replacedBy` path does not exist.
- *
- * Usage: tsx scripts/check-old-modules.ts
- */
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import micromatch from "micromatch";
-// TypeScript 7 (the native compiler) ships no classic JS API; the TS 6 package
-// keeps it for AST scripts like this one.
 import ts from "@typescript/typescript6";
 
 export const LIST = "scripts/old-modules.json";
@@ -95,7 +73,6 @@ function parse(root: string, file: string): ts.SourceFile {
   );
 }
 
-/** Every module specifier a file names: imports, re-exports, `import()`, `require()`, `vi.mock()`. */
 function specifiersOf(source: ts.SourceFile): string[] {
   const out: string[] = [];
   const visit = (node: ts.Node) => {
@@ -127,7 +104,6 @@ function specifiersOf(source: ts.SourceFile): string[] {
   return out;
 }
 
-/** Workspace package names to their directory and `exports` map. */
 function workspacePackages(
   root: string,
 ): Map<string, { dir: string; exports: Record<string, unknown> }> {
@@ -164,7 +140,6 @@ function exportTarget(target: unknown): string | undefined {
   return undefined;
 }
 
-/** The repo path (extension dropped) a specifier names, or undefined for an outside module. */
 function resolve(
   from: string,
   specifier: string,
@@ -193,7 +168,6 @@ function hits(resolved: string, retired: string): boolean {
   return resolved === bare || resolved === `${bare}/index` || resolved.startsWith(`${bare}/`);
 }
 
-/** Names a node declares: functions, classes, types, variables, members and export names. */
 function declaredNames(source: ts.SourceFile): Map<string, number> {
   const names = new Map<string, number>();
   const add = (name: ts.Node | undefined) => {
@@ -231,7 +205,6 @@ function declaredNames(source: ts.SourceFile): Map<string, number> {
   return names;
 }
 
-/** Names declared by the file's top-level statements (or the given ones of them). */
 function topLevelNames(
   source: ts.SourceFile,
   statements: readonly ts.Statement[] = source.statements,
@@ -265,7 +238,6 @@ function lineOf(text: string, index: number): number {
   return text.slice(0, index).split("\n").length;
 }
 
-/** Names `packages/agent/src/index.ts` re-exports under a `@deprecated` tag. */
 function deprecatedNames(rootText: string): Set<string> {
   return new Set(
     [...rootText.matchAll(/\/\*\*[^*]*@deprecated[^*]*\*\/\s*(?:type\s+)?(\w+)/g)].map((m) => m[1]),
@@ -294,8 +266,6 @@ export function oldModuleProblems(root: string, list: OldModules): string[] {
     }
     return body;
   };
-  // Parsing every file is the slow part, so a file is parsed only when its
-  // text names something the check looks for.
   const mentions = (file: string, needles: readonly string[]) =>
     needles.some((needle) => text(file).includes(needle));
   const exists = (file: string) => existsSync(path.join(root, file));
@@ -315,7 +285,6 @@ export function oldModuleProblems(root: string, list: OldModules): string[] {
     }
   }
 
-  // Retired paths: gone, and nothing imports them.
   for (const { path: retired, replacedBy } of list.paths ?? []) {
     if (exists(retired)) {
       problems.push(
@@ -324,8 +293,6 @@ export function oldModuleProblems(root: string, list: OldModules): string[] {
     }
   }
   const retiredPaths = (list.paths ?? []).map((entry) => entry.path);
-  // A specifier names a retired path by its last segment, or by a package
-  // export key that maps into it.
   const pathNeedles = [
     ...retiredPaths.map((retired) =>
       path.posix.basename(retired.replace(/\/$/, "")).replace(EXTENSION, ""),
@@ -357,7 +324,6 @@ export function oldModuleProblems(root: string, list: OldModules): string[] {
     }
   }
 
-  // Retired symbols: declared nowhere.
   const symbols = new Map((list.symbols ?? []).map((entry) => [entry.symbol, entry]));
   if (symbols.size > 0) {
     for (const file of files) {
@@ -376,7 +342,6 @@ export function oldModuleProblems(root: string, list: OldModules): string[] {
     }
   }
 
-  // Retired module singletons: not declared again at the top of their file.
   for (const entry of list.moduleState ?? []) {
     if (!exists(entry.file)) continue;
     const declared = topLevelNames(sourceOf(entry.file));
@@ -390,7 +355,6 @@ export function oldModuleProblems(root: string, list: OldModules): string[] {
     }
   }
 
-  // Helpers made single: declared only in their one module.
   for (const entry of list.definedOnlyIn ?? []) {
     const wanted = new Set(entry.symbols);
     for (const file of files) {
@@ -406,7 +370,6 @@ export function oldModuleProblems(root: string, list: OldModules): string[] {
     }
   }
 
-  // Retired patterns.
   for (const entry of list.patterns ?? []) {
     const regex = new RegExp(entry.pattern, `g${entry.flags ?? ""}`);
     for (const file of files) {
@@ -421,7 +384,6 @@ export function oldModuleProblems(root: string, list: OldModules): string[] {
     }
   }
 
-  // Narrowed modules (D13) stay narrow.
   for (const entry of list.narrowed ?? []) {
     if (!exists(entry.file)) {
       problems.push(
@@ -457,7 +419,6 @@ export function oldModuleProblems(root: string, list: OldModules): string[] {
     }
   }
 
-  // Deprecated re-exports: kept for outside importers, used by nobody here.
   if (list.deprecated) {
     const { package: name, root: rootFile, subpaths } = list.deprecated;
     const names = deprecatedNames(text(rootFile));
@@ -505,7 +466,6 @@ export function oldModuleProblems(root: string, list: OldModules): string[] {
   return problems;
 }
 
-/** What the list holds, for the summary line. */
 function countOf(list: OldModules): string {
   return [
     `${list.paths?.length ?? 0} retired paths`,

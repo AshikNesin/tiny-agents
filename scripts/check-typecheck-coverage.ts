@@ -1,40 +1,10 @@
 #!/usr/bin/env tsx
-/**
- * Typecheck coverage guard over the enumerated roots (apps/web/src,
- * packages/<name>/src and tests).
- *
- * A source file with no importers and no tsconfig include escapes every
- * checked project silently. This repo shipped that defect: 9e5602a claimed
- * to restore the @groot/ui tooltip barrel export, but tooltip.tsx (added in
- * e997f40) had never been exported from the barrel at all, and nothing
- * failed until this guard existed.
- *
- * What this guard owns: every .ts and .tsx file under the enumerated roots
- * must be a member of at least one program that CI typechecks (the root
- * tsconfig.json, apps/web/tsconfig.json, tests/e2e/tsconfig.json, the
- * kit-consumer fixture and a child's `typecheck:app` projects), and every repo-owned .d.ts under those roots must
- * pass a dedicated declarations pass. Membership is
- * what tsc actually compiles: include globs plus the import closure. A file
- * matched by a package tsconfig that no script or CI step runs does not
- * count.
- *
- * What this guard does not own: scripts/, apps/web/drizzle/, and any
- * package directory without a src/ are outside the roots. Files there are
- * invisible to every gate. Adopting them is a follow-up, not a silent
- * default.
- */
-
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-// TypeScript 7 (the native compiler) ships no classic JS API; the TS 6 package
-// keeps it for AST scripts like this one.
 import ts from "@typescript/typescript6";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-// The kit-consumer fixture (`pnpm typecheck:kit`) imports every public kit
-// entrypoint, so kit code is covered whether or not an app uses it: a child
-// that never mounts jobs or storage still typechecks them.
 const KIT_PROJECTS = [
   "tsconfig.json",
   "apps/web/tsconfig.json",
@@ -42,12 +12,6 @@ const KIT_PROJECTS = [
   "tests/kit-consumers/tsconfig.json",
 ];
 
-/**
- * A child app's own typecheck projects: every `-p <dir>` in the root
- * package.json's `typecheck:app` script, which the "Typecheck (app projects)"
- * gate runs. Groot has none; a child with, say, a Workers test suite under its
- * own tsconfig lists it there instead of editing this synced file.
- */
 function appProjects(): string[] {
   const manifest = path.join(repoRoot, "package.json");
   if (!fs.existsSync(manifest)) return [];
@@ -67,7 +31,6 @@ function toRepoRelative(absolutePath: string): string {
   return path.relative(repoRoot, absolutePath).split(path.sep).join("/");
 }
 
-/** Files the compiler actually loads for a project: include set + imports. */
 function programFiles(configPath: string): Set<string> {
   const absolute = path.join(repoRoot, configPath);
   const read = ts.readConfigFile(absolute, ts.sys.readFile);
@@ -91,7 +54,6 @@ function programFiles(configPath: string): Set<string> {
   return new Set(program.getSourceFiles().map((file) => toRepoRelative(file.fileName)));
 }
 
-/** The roots this guard enumerates. Anything outside them is unowned. */
 function sourceRoots(): string[] {
   const packages = fs
     .readdirSync(path.join(repoRoot, "packages"), { withFileTypes: true })
@@ -119,15 +81,6 @@ function listSourceFiles(): { sources: string[]; declarations: string[] } {
   return { sources: sources.sort(), declarations: declarations.sort() };
 }
 
-/**
- * Repo-owned declarations are members of the checked programs, but both
- * tsconfigs set skipLibCheck: true, so no program reports their errors. This
- * pass is the only thing in the repo that typechecks them, one program per
- * checked config because the two configs disagree on lib and DOM types.
- * Diagnostics are requested per repo-owned file, not program-wide: a
- * program-wide pass would also diagnose every third-party .d.ts the
- * declarations import, which is skipLibCheck's job, not this guard's.
- */
 function declarationDiagnostics(declarations: string[]): string[] {
   const failures: string[] = [];
   for (const configPath of CHECKED_PROJECTS) {

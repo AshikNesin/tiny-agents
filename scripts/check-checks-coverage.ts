@@ -1,27 +1,4 @@
 #!/usr/bin/env tsx
-/**
- * Checks-coverage guard for the declared test ownership in
- * `.groot/lib/patterns.ts` (TEST_AREA_OWNERSHIP).
- *
- * Catches the two ways that map silently stops guarding:
- *
- *  1. An owned source root stops existing (renamed or deleted), so the map
- *     claims ownership of source that is no longer there.
- *  2. A declared test area stops existing or holds no tests. A renamed test
- *     area silently unschedules every suite under it — those tests fall to
- *     drift in sync — and nothing turns red.
- *
- * It also holds the static gates to one list, `scripts/gates.mjs`, so local
- * runs and CI can't drift apart:
- *
- *  3. The Tests workflow runs `pnpm verify:static`, and no other step of it
- *     runs a static check.
- *  4. Every `check:*` and `typecheck:*` package script is a gate, or a check
- *     the workflow runs after the build.
- *
- * Usage:  tsx scripts/check-checks-coverage.ts
- * Exit:   0 = covered, 1 = stale ownership entry or a check outside the gates.
- */
 import { readdirSync, existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { load as loadYaml } from "js-yaml";
@@ -36,7 +13,6 @@ const { additional_exclusions } = await loadConfig(ROOT);
 const excludedFromSync = (dirOrRoot: string) =>
   micromatch.isMatch(dirOrRoot.replace(/\/\*\*$/, ""), additional_exclusions);
 
-/** Expand a root pattern (may contain one `*` segment) to the dirs that exist. */
 function expandRoot(root: string): string[] {
   if (!root.includes("*")) return existsSync(join(ROOT, root)) ? [root] : [];
   const parts = root.split("/");
@@ -62,7 +38,6 @@ interface Failure {
 
 const failures: Failure[] = [];
 
-// --- 1. Owned source roots (what the synced test areas own) exist. --------
 const ownedRoots = ownedSourceRootsForTests().filter((root) => !excludedFromSync(root));
 for (const root of ownedRoots) {
   const dir = root.replace(/\/\*\*$/, "");
@@ -74,9 +49,6 @@ for (const root of ownedRoots) {
   }
 }
 
-// --- 2. Every declared ownership area exists on disk and holds at least one
-// test. Counting a test file (not "any file") keeps an area from being kept
-// alive by its setup files alone.
 function countTestFiles(dir: string): number {
   let count = 0;
   for (const entry of readdirSync(join(ROOT, dir), { withFileTypes: true })) {
@@ -107,10 +79,7 @@ for (const area of areas) {
   }
 }
 
-// --- 3. The Tests workflow runs the gates, and only through gates.mjs. -----
 const WORKFLOW = ".github/workflows/test.yml";
-// Need `pnpm build` first: the closure reads the server bundle's metafile, and the
-// wrangler dry run uploads dist/client as the Worker's assets.
 const POST_BUILD_CHECKS = ["check:closure", "check:worker"];
 const STATIC_CHECK =
   /\btsc\b|scripts\/check-[\w-]+|db:generate|\bpnpm ((?:check|typecheck)[\w:-]*)/g;
@@ -151,11 +120,9 @@ for (const step of runSteps) {
   }
 }
 
-// --- 4. Every check script is a gate. --------------------------------------
 const { scripts } = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")) as {
   scripts: Record<string, string>;
 };
-// `pnpm run --if-present x` runs script x, like `pnpm x`.
 const gateCommands = gates.flatMap((gate) =>
   typeof gate.run === "string" ? [gate.run.replace(/^pnpm run (--if-present )?/, "pnpm ")] : [],
 );
@@ -171,7 +138,6 @@ for (const script of Object.keys(scripts)) {
   }
 }
 
-// --- Report. --------------------------------------------------------------
 if (failures.length > 0) {
   console.error(
     `❌ Checks-coverage failed (${failures.length} gap${failures.length === 1 ? "" : "s"}):\n`,

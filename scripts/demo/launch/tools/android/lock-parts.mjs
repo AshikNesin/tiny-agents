@@ -1,8 +1,3 @@
-// Splits the lock screen into the two layers the film animates:
-//   android/lock-empty.png  the lock screen with no notification
-//   android/lock-notif.png  the notification alone, on a transparent ground
-// Both at 3x, like the chat stills.
-//   node scripts/demo/launch/tools/android/lock-parts.mjs
 import { createRequire } from "node:module";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, resolve } from "node:path";

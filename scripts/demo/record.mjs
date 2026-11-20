@@ -1,5 +1,3 @@
-// Demo-only recorder: drives the app inside the stage page and captures
-// 1920x1080 frames over a CDP screencast (frames + timestamps for encode.py).
 import { readFileSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { chromium } from "playwright-core";
@@ -16,7 +14,7 @@ const rand = (a, b) => a + Math.random() * (b - a);
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH });
 const context = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
 await context.request.post(`${BASE}/api/v1/auth/login`, {
-  data: { email: "demo@example.com", password: "demo@example.com" }, // gitleaks:allow seeded demo login
+  data: { email: "demo@example.com", password: "demo@example.com" }, // gitleaks:allow
 });
 const bots = (await (await context.request.get(`${BASE}/api/v1/bots`)).json()).data;
 const botId = (name) => bots.find((b) => b.name === name).id;
@@ -30,7 +28,6 @@ await page.goto(`${BASE}/__stage`);
 const app = page.frameLocator("#app");
 const stage = (fn, ...args) => page.evaluate(([f, a]) => window.stage[f](...a), [fn, args]);
 
-// ── Capture ──────────────────────────────────────────────────────────────
 const frames = [];
 const cdp = await context.newCDPSession(page);
 cdp.on("Page.screencastFrame", ({ data, metadata, sessionId }) => {
@@ -40,18 +37,14 @@ cdp.on("Page.screencastFrame", ({ data, metadata, sessionId }) => {
   cdp.send("Page.screencastFrameAck", { sessionId }).catch(() => undefined);
 });
 
-// ── Cursor & input ───────────────────────────────────────────────────────
-// Page coordinates (1920x1080); the cursor rests over the app's empty right side.
 const REST = { x: 1660, y: 900 };
 let cur = { x: 1800, y: 1040 };
 async function moveTo(x, y, ms = 700) {
   const from = { ...cur };
   const started = Date.now();
-  // Time-based, so a move takes `ms` however slow each CDP round-trip is.
   for (;;) {
     const t = Math.min(1, (Date.now() - started) / ms);
     const e = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-    // A slight arc reads as a hand, not a robot.
     const arc = Math.sin(Math.PI * t) * Math.min(40, Math.hypot(x - from.x, y - from.y) * 0.08);
     const px = from.x + (x - from.x) * e;
     const py = from.y + (y - from.y) * e - arc;
@@ -87,7 +80,6 @@ async function type(text, [min, max] = [28, 70]) {
   }
 }
 async function palette(query) {
-  // Keys go to the app, whichever document had focus.
   await app.locator("html").evaluate(() => window.focus());
   await page.keyboard.press("Control+k");
   const input = app.getByPlaceholder("Type a command or search...");
@@ -98,7 +90,6 @@ async function palette(query) {
   await page.keyboard.press("Enter");
   await sleep(400);
 }
-// Stretches spent watching a bot stream play back faster in the edit.
 const speedups = [];
 async function fast(factor, fn) {
   const from = Date.now() / 1000;
@@ -110,7 +101,6 @@ async function fast(factor, fn) {
 }
 const composer = (name) => app.getByPlaceholder(new RegExp(`^Message ${name}`));
 
-// ── Scenes ───────────────────────────────────────────────────────────────
 const scenes = {
   async intro() {
     await stage("cardIn", "Your team of always-on AI bots", []);
@@ -198,7 +188,6 @@ const scenes = {
     await app
       .getByText(/Best Friday-evening pick|Here are Friday's flights/)
       .waitFor({ timeout: 60_000 });
-    // The panel's status line polls every 4 s; let it catch up with the page.
     await fast(2, () =>
       app
         .getByTestId("browser-url")
@@ -232,7 +221,6 @@ const scenes = {
     await Promise.race([create.waitFor({ timeout: 20_000 }), xterm.waitFor({ timeout: 20_000 })]);
     if (await create.isVisible()) await click(create, { ms: 450 });
     await xterm.waitFor({ timeout: 20_000 });
-    // A fresh tab attaches over SSH + tmux; let the shell's prompt arrive first.
     await sleep(2200);
     await click(xterm, { ms: 400 });
     await page.keyboard.press("Control+l");
@@ -316,7 +304,6 @@ const scenes = {
   },
 };
 
-// Start in a lived-in chat, fully loaded before capture begins.
 await page.evaluate(
   (src) => (document.getElementById("app").src = src),
   `${BASE}/chats/${botId("Fitness Coach")}`,
@@ -326,8 +313,6 @@ await app
   .first()
   .waitFor({ timeout: 30_000 });
 await app.getByText(/no-equipment routine/).waitFor({ timeout: 30_000 });
-// Warm the Researcher's browser (Xtigervnc + Chrome on the "VM") so the
-// live view doesn't wait on a cold launch mid-scene.
 await context.request.post(`${BASE}/api/v1/bots/${botId("Researcher")}/browser/start`);
 for (let i = 0; i < 60; i++) {
   const status = await (
@@ -336,8 +321,6 @@ for (let i = 0; i < 60; i++) {
   if (status.data?.phase === "active" || status.data?.active) break;
   await sleep(500);
 }
-// A fresh Chrome window focuses its address bar; one real click in the page
-// moves focus there, so the bot's navigation doesn't leave the URL selected.
 await sleep(1500);
 const display = execSync(
   "ps -u exedev -o args= | grep -o 'Xtigervnc :[0-9]*' | head -1 | cut -d: -f2",
@@ -349,7 +332,6 @@ await page.mouse.move(cur.x, cur.y);
 await stage("cursor", cur.x, cur.y);
 await sleep(1500);
 
-// Partial runs (SCENES=...) skip the intro, so its card must not cover the app.
 if (ONLY && !ONLY.includes("intro")) await stage("cardOut");
 await cdp.send("Page.startScreencast", {
   format: "jpeg",

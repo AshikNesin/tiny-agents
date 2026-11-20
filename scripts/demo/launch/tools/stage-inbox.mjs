@@ -1,31 +1,4 @@
 #!/usr/bin/env node
-// Stages the film's inbox states (the bot list, Chief of Staff's create_bot
-// approval, the end state) in a throwaway tiny-agents instance and saves each
-// with snaplib. Re-runnable: every mode starts from an empty data directory.
-//
-//   node scripts/demo/launch/tools/stage-inbox.mjs            # desktop, then mobile
-//   node scripts/demo/launch/tools/stage-inbox.mjs desktop    # one mode
-//   node scripts/demo/launch/tools/stage-inbox.mjs --down     # stop the instance
-//
-// The instance is this script's own: port 3130 (3131 is Vite's HMR socket),
-// data in data/verify/inbox/. It is rebuilt before each mode, because the
-// approvals the states end on cannot be taken back, and left running in the
-// end state when the script finishes.
-//
-// What is real and what is seeded (also in ../snap/NOTES-inbox.md):
-// - the account is created through first-run setup (name "Ashik");
-// - bots are created and messages sent through /api/v1;
-// - the fake model says the CAST.md lines (inbox-director.mjs); its
-//   create_bot and create_routine calls wait on real approval cards, which
-//   are answered by clicking the card's real Approve button;
-// - the server's clock is set back while each chat is seeded
-//   (inbox-register.mjs), so the bot list shows 12m, 1h, 3h and 5h;
-// - seeded in app.db (the app only writes these when a turn finishes, and a
-//   turn waiting on an approval has not): the list preview of the two bots
-//   waiting on the owner, so it is the bot's line rather than the owner's;
-//   and, for the end state, Expense Tracker's last-activity time, so the
-//   newest bot is on top (Chief of Staff's reply is a moment newer).
-// No DOM is edited.
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";
@@ -41,15 +14,12 @@ const REPO = path.resolve(import.meta.dirname, "../../../..");
 const STATE = path.join(REPO, "data/verify/inbox");
 const RUN_FILE = path.join(STATE, "run.json");
 const CLOCK_FILE = path.join(STATE, "clock-offset");
-const LOGIN = { email: "demo@example.com", password: "demo@example.com" }; // gitleaks:allow (throwaway instance)
+const LOGIN = { email: "demo@example.com", password: "demo@example.com" }; // gitleaks:allow
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const log = (...parts) => console.log("[stage-inbox]", ...parts);
 
-// ── CAST.md ───────────────────────────────────────────────────────────────
-
-// Seeded oldest first, so the list ends in CAST order (most recent first).
 const BOTS = [
   {
     key: "researcher",
@@ -96,8 +66,6 @@ const NEW_BOT = "Expense Tracker";
 const CHIEF_AFTER = "Expense Tracker has joined the team. Send it a receipt to try it.";
 const TRAVEL_AFTER = "Done. You're in 14A and 14B.";
 
-// ── The instance ──────────────────────────────────────────────────────────
-
 const alive = (pid) => {
   try {
     process.kill(pid, 0);
@@ -116,7 +84,6 @@ async function answers(port) {
   }
 }
 
-/** Stops the instance this script started earlier (never anyone else's) and deletes its data. */
 async function down() {
   if (existsSync(RUN_FILE)) {
     const { pid } = JSON.parse(readFileSync(RUN_FILE, "utf8"));
@@ -131,16 +98,12 @@ async function down() {
   rmSync(STATE, { recursive: true, force: true });
 }
 
-/** A fresh instance: empty databases, the fake model scripted by inbox-director.mjs. */
 async function up() {
   if ((await answers(PORT)) || (await answers(PORT + 1)))
     throw new Error(`port ${PORT} or ${PORT + 1} is in use, and not by this script's instance`);
   mkdirSync(path.join(STATE, "uploads"), { recursive: true });
   writeFileSync(CLOCK_FILE, "0");
 
-  // As `ta-verify up --empty` starts it (.agents/skills/verify-tiny-agents),
-  // plus the preload: no keys, no sandbox, nothing from the caller's
-  // environment or the repo's .env.
   const env = Object.fromEntries(
     Object.entries(process.env).filter(([key]) =>
       /^(PATH|HOME|USER|LOGNAME|SHELL|LANG|LC_\w+|TZ|TMPDIR|TERM|NODE_EXTRA_CA_CERTS|SSL_CERT_FILE)$/.test(
@@ -206,8 +169,6 @@ async function up() {
   }
 }
 
-// ── Seeding ───────────────────────────────────────────────────────────────
-
 let token;
 async function call(method, url, body) {
   const res = await fetch(`${URL_BASE}/api/v1${url}`, {
@@ -234,7 +195,6 @@ async function until(what, check, timeout = 60_000) {
   }
 }
 
-/** Sets the server's clock `ms` behind real time (0: real time) and waits for it to take. */
 async function setClockBack(ms) {
   writeFileSync(CLOCK_FILE, String(-ms));
   await until("the server clock", async () => {
@@ -245,7 +205,6 @@ async function setClockBack(ms) {
 
 const listEntry = async (id) => (await call("GET", "/bots")).find((bot) => bot.id === id);
 
-/** Writes list fields of one `bots` row in the instance's app.db (see the header). */
 function seedBotRow(id, fields) {
   const db = new DatabaseSync(path.join(STATE, "app.db"));
   try {
@@ -260,9 +219,7 @@ function seedBotRow(id, fields) {
   }
 }
 
-/** The start state: the account, the four bots, their chats, two approvals waiting. */
 async function setupAccount() {
-  // First-run setup creates the owner, with the name the account menu shows.
   token = (await call("POST", "/auth/setup", { ...LOGIN, name: "Ashik" })).token;
 }
 
@@ -283,8 +240,6 @@ async function seedBots() {
       text: bot.ask,
     });
     if (bot.waits) {
-      // A turn waiting on an approval has not finished, so the row still
-      // previews the owner's message: seed the bot's own line (see header).
       await until(
         `${bot.name}'s approval card`,
         async () => (await listEntry(created.id)).approvals === 1,
@@ -296,7 +251,6 @@ async function seedBots() {
         return entry.lastMessagePreview?.startsWith(bot.preview) && !entry.replying;
       });
     }
-    // Researcher is read (it is the open chat); the others were never opened.
     if (bot.key === "researcher") await call("POST", `/bots/${created.id}/read`);
     log(`seeded ${bot.name} (${bot.ago / MINUTE} min ago)`);
   }
@@ -319,8 +273,6 @@ async function seedBots() {
   return ids;
 }
 
-// ── Snapshots ─────────────────────────────────────────────────────────────
-
 const results = [];
 const messages = (page) => page.getByRole("region", { name: "Messages" });
 const botsRegion = (page) => page.locator('section[aria-label="Bots"]').first();
@@ -328,14 +280,12 @@ const approvalCard = (page, botName, ask) =>
   page.locator('[data-slot="item"]').filter({ hasText: `${botName} wants to ${ask}` });
 
 async function settle(page) {
-  // Nothing focused, as after a click on empty space: the snapshot cannot carry focus.
   await page.evaluate(() => document.activeElement?.blur?.());
   await page.waitForLoadState("networkidle", { timeout: 5_000 }).catch(() => {});
   await page.evaluate(() => document.fonts.ready);
   await page.waitForTimeout(600);
 }
 
-/** Fails on what must never be in a frame: an error toast, an echo, a dev overlay. */
 async function assertClean(page) {
   const bad = await page.evaluate(() => {
     const text = document.body.innerText;
@@ -349,15 +299,6 @@ async function assertClean(page) {
   if (bad.length) throw new Error(`frame not clean: ${bad.join(", ")}`);
 }
 
-/**
- * The one DOM edit (mobile only, listed in NOTES-inbox.md). A phone draws
- * overlay scrollbars, so the chat scroller's `[scrollbar-gutter:stable]`
- * reserves no width there; the film mounts the markup in desktop Chrome,
- * where that gutter is 10px and every line of the chat rewraps. Swapping the
- * class for the app's own `scrollbar-hide` (zero-width scrollbar, so no
- * gutter) changes nothing in the phone screenshot and makes the embed lay
- * out as the phone did.
- */
 async function phoneScrollbars(page) {
   await page.evaluate(() => {
     for (const el of document.querySelectorAll('[class~="[scrollbar-gutter:stable]"]')) {
@@ -371,7 +312,6 @@ async function shoot(s, name) {
   await settle(s.page);
   await assertClean(s.page);
   await dumpCss(s.page, s.mode);
-  // The chat can take focus back after a load; snap takes the screenshot 250 ms in.
   for (let i = 0; i < 10; i++) {
     const focused = await s.page.evaluate(() => {
       document.activeElement?.blur?.();
@@ -387,7 +327,6 @@ async function shoot(s, name) {
   log(`${s.mode}/${name}: verify ${diff.toFixed(5)}${diff < 0.003 ? "" : "  << OVER 0.003"}`);
 }
 
-/** Opens a bot's chat the way a click on its row does, and waits for its last line. */
 async function openChat(s, id, lastLine, rows) {
   await s.page.goto(`/chats/${id}`, { waitUntil: "domcontentloaded" });
   await messages(s.page).getByText(lastLine, { exact: false }).last().waitFor({ timeout: 30_000 });
@@ -398,7 +337,6 @@ async function openChat(s, id, lastLine, rows) {
     );
 }
 
-/** The bot list screen on a phone (`/chats` with no bot open). */
 async function openList(s, rows) {
   await s.page.goto("/chats", { waitUntil: "domcontentloaded" });
   await until(
@@ -408,15 +346,9 @@ async function openList(s, rows) {
 }
 
 async function stageMode(mode) {
-  // Sign in before any bot exists: on desktop, /chats opens the top bot,
-  // which would mark Code Buddy read. The page waits on a blank tab while
-  // the bots are seeded.
   const s = await open(mode, LOGIN);
   const { page } = s;
   try {
-    // The dev server's HMR socket (port + 1) reloads the page whenever any
-    // file in the repo changes, other helpers' snapshots included. This
-    // browser's pages get a socket that stays open and says nothing.
     await s.ctx.routeWebSocket(
       (url) => url.port === String(PORT + 1),
       () => {},
@@ -429,8 +361,6 @@ async function stageMode(mode) {
       await shoot(s, "list-start");
     }
 
-    // The start state with each chat open. Code Buddy last: opening it marks
-    // it read, and the others' frames show its unread dot.
     for (const key of ["researcher", "travel", "chief", "code"]) {
       const name = {
         researcher: "side-researcher",
@@ -442,7 +372,6 @@ async function stageMode(mode) {
       await shoot(s, name);
     }
 
-    // Chief of Staff's create_bot approval, the whole card in view.
     await openChat(s, ids.chief, BY_KEY.chief.last, 4);
     const card = approvalCard(page, "Chief of Staff", "create a new bot");
     await card.waitFor();
@@ -450,7 +379,6 @@ async function stageMode(mode) {
     await page.getByRole("button", { name: "Read more" }).waitFor();
     await shoot(s, "chief-pending");
 
-    // The owner approves through the card's real button.
     await card.getByRole("button", { name: "Approve", exact: true }).click();
     await messages(page).getByText(CHIEF_AFTER).waitFor({ timeout: 30_000 });
     if (mode === "desktop")
@@ -462,8 +390,6 @@ async function stageMode(mode) {
     await messages(page).getByText(CHIEF_AFTER).scrollIntoViewIfNeeded();
     await shoot(s, "chief-approved");
 
-    // The end state. Travel Planner's card is answered too, with the server
-    // clock where its chat was, so its row keeps its place and time.
     await setClockBack(BY_KEY.travel.ago);
     await openChat(s, ids.travel, BY_KEY.travel.last, 5);
     await approvalCard(page, "Travel Planner", "create a routine")
@@ -497,8 +423,6 @@ async function stageMode(mode) {
     await s.browser.close();
   }
 }
-
-// ── Main ──────────────────────────────────────────────────────────────────
 
 const args = process.argv.slice(2);
 if (args.includes("--down")) {

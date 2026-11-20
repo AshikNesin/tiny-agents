@@ -2,16 +2,6 @@ import { Check, Roll, Stage, States, Text, type Act } from "../parts";
 import { after, done } from "../chain";
 import "./approve.css";
 
-// Step 3, "Say yes when it counts": the approval card the agent stops on
-// before it pays. The cursor presses Approve; the button goes busy on
-// itself, then reads Paid; the card's kicker rolls from "Needs your
-// approval" to "Approved", amber to green, and Deny steps back.
-//
-// Real strings: the kicker, the title, the flight and card, the two buttons.
-//
-// Framing: one component shown whole at real size, a 24px gutter all round,
-// the way the page's other step cards sit on their tile.
-
 type S = { pay: "ask" | "busy" | "paid" };
 
 const initial: S = { pay: "ask" };
@@ -26,7 +16,6 @@ async function script(a: Act<S>) {
   await a.wait(1100);
   a.mark("paid");
   a.put({ pay: "paid" });
-  // Off the button, so "Paid" reads clear
   await a.move({ x: 318, y: 238 });
   await a.wait(2400);
   done("approve");
