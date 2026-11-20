@@ -162,8 +162,13 @@ export function isUnauthorized(error: unknown): boolean {
   );
 }
 
-/** Above this many tools, a server's tools are deferred behind `tool_search`. */
-export const MCP_DEFER_THRESHOLD = 30;
+/**
+ * Once a server's tool schemas (name, description and input schema, as sent)
+ * pass this many characters (~2k tokens), its tools are deferred behind
+ * `tool_search`. Size, not count: a few GitHub-style tools can outweigh
+ * dozens of small ones (issue #360).
+ */
+export const MCP_DEFER_CHARS = 8_000;
 
 /**
  * The longest tool description the model is sent, as in Claude Code. Some
@@ -209,16 +214,26 @@ function resultOf(result: McpCallResult): ToolExecutionResult {
 
 export function createMcpCapability(options: McpCapabilityOptions): Capability {
   const id = `mcp:${options.slug}`;
-  const defer = options.tools.length > MCP_DEFER_THRESHOLD;
-  const tools = options.tools.map((tool) =>
+  const sent = options.tools.map((tool) => ({
+    tool,
+    name: mcpToolName(options.slug, tool.name),
+    description: clipDescription(tool.description ?? tool.title ?? tool.name),
+    schema:
+      tool.inputSchema && typeof tool.inputSchema === "object"
+        ? tool.inputSchema
+        : { type: "object" },
+  }));
+  const size = sent.reduce(
+    (sum, { name, description, schema }) =>
+      sum + name.length + description.length + JSON.stringify(schema).length,
+    0,
+  );
+  const defer = size > MCP_DEFER_CHARS;
+  const tools = sent.map(({ tool, name, description, schema }) =>
     defineTool({
-      name: mcpToolName(options.slug, tool.name),
-      description: clipDescription(tool.description ?? tool.title ?? tool.name),
-      parameters: Type.Unsafe<Record<string, unknown>>(
-        tool.inputSchema && typeof tool.inputSchema === "object"
-          ? tool.inputSchema
-          : { type: "object" },
-      ),
+      name,
+      description,
+      parameters: Type.Unsafe<Record<string, unknown>>(schema),
       // Large servers: hidden until the model finds them with tool_search.
       ...(defer ? { deferred: true } : {}),
       replay: tool.readOnly || tool.idempotent ? "safe" : "unsafe",

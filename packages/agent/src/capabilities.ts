@@ -41,6 +41,12 @@ export interface ToolInfo {
    */
   unattendedOnly?: boolean;
   /**
+   * Offered only in chats, never where nobody watches (`ask_owner`: nobody
+   * can answer). `askOnly` tools are chat-only too, since nobody can approve
+   * them there; removing them saves their schemas on every unattended request.
+   */
+  chatOnly?: boolean;
+  /**
    * The tool can put a vault item's value somewhere (a sink, issue #56).
    * The pi gate tells a vault use per call from the sink's gate plan; the
    * Claude-plan engine has no plans, so YOLO mode keeps every call of a
@@ -96,6 +102,20 @@ export function defaultPermission(tool: ToolInfo): ToolPermission {
   return tool.readOnly || tool.allowByDefault ? "allow" : "ask";
 }
 
+/**
+ * Whether a tool is left out of the model's tools for where the conversation
+ * runs: unattended-only tools in chats, chat-only and ask-only ones (which
+ * could never run there) in unattended conversations.
+ */
+export function hiddenWhere(
+  tool: ToolInfo,
+  selection: { unattended?: boolean } | undefined,
+): boolean {
+  return selection?.unattended === true
+    ? tool.chatOnly === true || tool.askOnly === true
+    : tool.unattendedOnly === true;
+}
+
 /** The permission a tool runs with for a selection (`askOnly` tools never resolve to `allow`). */
 export function effectivePermission(
   tool: ToolInfo,
@@ -109,11 +129,30 @@ export function effectivePermission(
  * The `tool_search` capability (pi's `deferred` exposure): deferred tools, a
  * large toolkit's or a large connection's, are not sent until the model loads
  * them with `tool_search`. Its section names each group that has deferred
- * tools, so the model knows what it can load. The section lists loaded tools
+ * tools, and a connection's tool names, so the model knows what it can load. The section lists loaded tools
  * too, so loading changes nothing in it and the prompt cache holds.
  *
  * `describe` looks up a group's capability (an extension name is its id).
  */
+/**
+ * A connection's tool names, so the model knows what it can search for
+ * (Claude Code lists deferred MCP tools the same way). Their shared
+ * `mcp__<slug>__` prefix is written once.
+ */
+function toolNames(names: string[]): string {
+  const prefix = /^mcp__.+?__/.exec(names[0] ?? "")?.[0];
+  const shared = prefix !== undefined && names.every((name) => name.startsWith(prefix));
+  const shown = names
+    .slice(0, LISTED_TOOLS_MAX)
+    .map((name) => (shared ? name.slice(prefix.length) : name));
+  const more =
+    names.length > LISTED_TOOLS_MAX ? `, and ${names.length - LISTED_TOOLS_MAX} more` : "";
+  return `${shared ? `Tools (each named ${prefix}<name>)` : "Tools"}: ${shown.join(", ")}${more}`;
+}
+
+/** The most tool names a deferred connection lists; tool_search finds the rest. */
+const LISTED_TOOLS_MAX = 40;
+
 /** The tool search capability's id (and extension name). */
 export const TOOL_SEARCH_CAPABILITY = "tool-search";
 
@@ -130,13 +169,16 @@ export function createToolSearchCapability(
     if (deferred.size === 0) return undefined;
     const lines: string[] = [];
     for (const group of input.agent.extensions) {
-      const count = (group.tools ?? []).filter((tool) => deferred.has(tool.name)).length;
+      const names = (group.tools ?? [])
+        .map((tool) => tool.name)
+        .filter((name) => deferred.has(name));
+      const count = names.length;
       if (count === 0) continue;
       const info = describe(group.name);
       const about = !info
         ? ""
         : info.kind === "connection"
-          ? `: ${info.name}, a connection`
+          ? `: ${info.name}, a connection. ${toolNames(names)}`
           : `: ${info.name}. ${info.description}`;
       lines.push(`- ${group.name} (${count} tool${count === 1 ? "" : "s"})${about}`);
     }

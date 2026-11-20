@@ -26,7 +26,6 @@ import {
   ConnectionManager,
   setConnectionManagerForTests,
 } from "../../../apps/web/src/server/api/connections/connections.manager";
-import { MCP_DEFER_THRESHOLD } from "../../../packages/agent/src/mcp";
 import { api, createTestApp, type TestApp } from "../helpers";
 import { authToken, until } from "../fixtures";
 import { issueStepUp } from "../../../apps/web/src/server/api/vault/vault.stepup";
@@ -766,7 +765,8 @@ describe("MCP connection lifecycle (the manager owns it)", () => {
   it("leaves tool_search to the runtime, however large its connections are", async () => {
     await new Promise<void>((resolve) => mcpServer.server.close(() => resolve()));
     await manager.close();
-    await startManager(await startMcpServer(MCP_DEFER_THRESHOLD));
+    // 300 small tools pass MCP_DEFER_CHARS.
+    await startManager(await startMcpServer(300));
     const app = buildApp();
     const big = await createDemo(app, { name: "Big one" });
     await call(app, `/api/v1/connections/${big.data.id}`, 200, { method: "DELETE" });

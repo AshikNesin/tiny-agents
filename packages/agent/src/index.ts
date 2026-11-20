@@ -118,7 +118,7 @@ export {
 export {
   connectMcp,
   createMcpCapability,
-  MCP_DEFER_THRESHOLD,
+  MCP_DEFER_CHARS,
   isUnauthorized,
   mcpAuth,
   mcpToolName,

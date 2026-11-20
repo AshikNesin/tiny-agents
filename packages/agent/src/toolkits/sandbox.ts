@@ -231,13 +231,12 @@ export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capab
     summary: "Run a shell command on the sandbox VM",
     vault: true,
     description:
-      "Run a shell command on the sandbox VM and return stdout, stderr and the exit code. " +
-      "One command string per call — chain with && or ; for steps. " +
-      "Set detached:true for long builds or servers: the command keeps running after this call returns." +
+      "Run a shell command on the sandbox VM; returns stdout, stderr and the exit code. " +
+      "Chain steps with && or ;. detached:true keeps long builds or servers running after the call." +
       (broker
-        ? " To give the command an API key, pass secrets: [{handle, env}] with a vault handle that allows run_command; " +
-          'the value arrives in that env var (use "$GITHUB_TOKEN", never echo it), every such call is approved by the owner, ' +
-          "and the command can only reach the item's hosts. " +
+        ? " For an API key, pass secrets: [{handle, env}] with a vault handle that allows run_command; " +
+          'the value arrives in that env var (use "$GITHUB_TOKEN", never echo it), the owner approves each such call, ' +
+          "and the command can reach only the item's hosts. " +
           VAULT_RULE
         : "") +
       (egress.entries.length > 0

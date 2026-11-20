@@ -583,12 +583,10 @@ export function createBrowserVaultTools(
       policy: { readOnly: true },
       description:
         "Ask the owner to type credentials for the current page into a secure sheet: a sign-in, " +
-        "a one-time code sent by SMS or email, or a card. The server fills what they type " +
-        "straight into the page (only on its current origin) and you only learn which fields " +
-        "were filled. Call vault_list first and prefer browser_fill_secret when a handle exists. " +
-        "Fields: 1-8, each with a slug key, a short label and a type; text, email and select " +
-        "fields need an identifier autocomplete (username, email, name, postal-code, …). " +
-        "Your reply pauses until the owner answers (10 minutes at most). " +
+        "a one-time code or a card. The server fills them into the page (current origin only); " +
+        "you learn only which fields were filled. Text, email and select fields need an identifier " +
+        "autocomplete; select also needs options. Call vault_list first and prefer " +
+        "browser_fill_secret when a handle exists. Waits up to 10 minutes for the owner. " +
         VAULT_RULE,
       parameters: Type.Object({
         origin: Type.Optional(

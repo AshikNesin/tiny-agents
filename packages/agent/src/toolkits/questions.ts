@@ -168,8 +168,7 @@ const questionSchema = Type.Object({
     Type.Array(optionSchema, {
       minItems: 2,
       maxItems: MAX_OPTIONS,
-      description:
-        "Likely answers to pick from. The owner can always answer in their own words instead. Omit for open questions.",
+      description: "Likely answers; the owner can still write their own. Omit for open questions.",
     }),
   ),
   multiple: Type.Optional(
@@ -238,11 +237,13 @@ function formatAnswers(questions: readonly OwnerQuestion[], answers: readonly Ow
   return `The owner answered your questions:\n\n${lines.join("\n\n")}`;
 }
 
-const UNATTENDED =
-  "Nobody can answer questions here: this is a scheduled routine run, not a chat with the owner. Continue on your best judgment, say which assumptions you made, and put any open question in your reply.";
-
 const DISMISSED =
   "The owner dismissed these questions without answering (a message from them may follow). Don't ask them again: go by their message, or continue on your best judgment and say which assumptions you made.";
+
+// Unattended conversations are not offered ask_owner; this covers a call made
+// before that, replayed after a restart.
+const UNATTENDED =
+  "Nobody can answer questions here: this is a scheduled routine run, not a chat with the owner. Continue on your best judgment, say which assumptions you made, and put any open question in your reply.";
 
 export function createQuestionsCapability(tracker: WaitTracker): Capability {
   const askOwner = tool({
@@ -250,9 +251,10 @@ export function createQuestionsCapability(tracker: WaitTracker): Capability {
     label: "Asked you questions",
     askLabel: "ask you questions",
     summary: "Ask you clarifying questions and wait for your answers",
-    policy: { readOnly: true },
+    // Nobody can answer in a routine run or a bot message's conversation.
+    policy: { readOnly: true, chatOnly: true },
     description:
-      "Ask the owner 1-4 clarifying questions and wait for their answers. Use it when a request is ambiguous and a wrong guess would waste real work, or when a decision is the owner's to make (preferences, trade-offs, details you cannot look up). Don't ask what your other tools can find out or what you can sensibly assume, and don't ask permission to run a tool (tools that need approval ask for it themselves). Your reply pauses until the owner answers.",
+      "Ask the owner 1-4 clarifying questions and wait for their answers. Only when a wrong guess would waste real work or the decision is theirs (preferences, trade-offs). Not for what your tools can find out or you can sensibly assume, and not for permission to run a tool (tools ask for that themselves).",
     parameters: Type.Object({
       questions: Type.Array(questionSchema, { minItems: 1, maxItems: MAX_QUESTIONS }),
     }),

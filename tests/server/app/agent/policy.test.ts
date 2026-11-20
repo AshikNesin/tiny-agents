@@ -21,13 +21,20 @@ const mail: Capability = {
   description: "",
   extension: defineExtension({
     name: "mail",
-    tools: [tool("read_inbox"), tool("send_email"), tool("save_skill"), tool("report_blocked")],
+    tools: [
+      tool("read_inbox"),
+      tool("send_email"),
+      tool("save_skill"),
+      tool("report_blocked"),
+      tool("ask_owner"),
+    ],
   }),
   tools: [
     { name: "read_inbox", label: "", description: "", readOnly: true },
     { name: "send_email", label: "", description: "" },
     { name: "save_skill", label: "", description: "", askOnly: true },
     { name: "report_blocked", label: "", description: "", readOnly: true, unattendedOnly: true },
+    { name: "ask_owner", label: "", description: "", readOnly: true, chatOnly: true },
   ],
 };
 const catalog = new Map([[mail.id, mail]]);
@@ -42,37 +49,37 @@ describe("compilePolicy", () => {
     [
       "defaults: read-only allowed, the rest asks",
       {},
-      ["read_inbox"],
+      ["read_inbox", "ask_owner"],
       undefined,
       ["report_blocked"],
     ],
     [
       "an explicit allow, an off tool is removed",
       { permissions: { send_email: "allow", read_inbox: "off" } },
-      ["send_email"],
+      ["send_email", "ask_owner"],
       undefined,
       ["read_inbox", "report_blocked"],
     ],
     [
       "askOnly never resolves to allow",
       { permissions: { save_skill: "allow" } },
-      ["read_inbox"],
+      ["read_inbox", "ask_owner"],
       undefined,
       ["report_blocked"],
     ],
     [
       "auto-review lists the asking tools, never askOnly ones",
       { autoReview: true },
-      ["read_inbox"],
+      ["read_inbox", "ask_owner"],
       ["send_email"],
       ["report_blocked"],
     ],
     [
-      "unattended: review is off, unattended-only tools are offered",
+      "unattended: review is off, unattended-only tools are offered, chat-only and ask-only ones removed",
       { autoReview: true, unattended: true },
       ["read_inbox", "report_blocked"],
       undefined,
-      [],
+      ["save_skill", "ask_owner"],
     ],
   ] as const)("%s", (_case, selection, allow, review, removed) => {
     const selected: Partial<CapabilitySelection> = selection;
@@ -105,7 +112,7 @@ describe("compilePolicy", () => {
     );
     expect(policy.extensions).toEqual([]);
     expect(policy.remove).toEqual([]);
-    expect(policy.permissions.allow).toEqual(["read_inbox"]);
+    expect(policy.permissions.allow).toEqual(["read_inbox", "ask_owner"]);
   });
 
   it("applyPermissions writes and clears the optional fields", () => {

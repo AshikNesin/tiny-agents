@@ -8,6 +8,8 @@ import { z } from "zod";
 import { claudeToolSurface } from "../../../../packages/agent/src/engines/claude-code/tools";
 import { createToolSearchCapability } from "../../../../packages/agent/src/capabilities";
 import { defineToolkit, tool } from "../../../../packages/agent/src/toolkit";
+import { createQuestionsCapability } from "../../../../packages/agent/src/toolkits/questions";
+import { WaitTracker } from "../../../../packages/agent/src/waiting";
 import {
   createSdkQueryFactory,
   type ClaudeSdkModule,
@@ -55,6 +57,19 @@ describe("claudeToolSurface", () => {
     expect(surface.tools.find((t) => t.name === "desk_read")?.description).toBe(
       "Read what is on the desk. Use before moving anything.",
     );
+  });
+
+  it("leaves ask_owner out where nobody can answer, and keeps it in chats", () => {
+    const questions = createQuestionsCapability(new WaitTracker());
+    const catalog = new Map([[questions.id, questions]]);
+    const names = (unattended: boolean) =>
+      claudeToolSurface(catalog, {
+        enabled: [questions.id],
+        permissions: {},
+        ...(unattended ? { unattended: true } : {}),
+      }).tools.map((t) => t.name);
+    expect(names(false)).toEqual(["ask_owner", "message_owner"]);
+    expect(names(true)).toEqual(["message_owner"]);
   });
 
   it("leaves out tools the toolkit does not offer the model", () => {

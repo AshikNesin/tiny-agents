@@ -30,6 +30,9 @@ import {
   openTestRuntime,
   TEST_MODEL,
 } from "../../../../packages/agent/src/testing";
+import { createMcpCapability } from "../../../../packages/agent/src/mcp";
+import { createQuestionsCapability } from "../../../../packages/agent/src/toolkits/questions";
+import { WaitTracker } from "../../../../packages/agent/src/waiting";
 import { defineToolkit, tool } from "../../../../packages/agent/src/toolkit";
 
 const ok = (text: string) => async () => ({ output: [{ type: "text" as const, text }] });
@@ -145,6 +148,79 @@ describe("deferred toolkits", () => {
     expect(JSON.stringify(results.at(-1))).toContain("a pen");
   }, 20_000);
 
+  it("lists a deferred connection's tool names in the prompt, so the model knows what to search for", async () => {
+    const requests: PiContext[] = [];
+    // Two tools with large schemas: deferred by size, not count.
+    const schema = {
+      type: "object",
+      properties: { q: { type: "string", description: "x".repeat(5_000) } },
+    };
+    const issues = createMcpCapability({
+      slug: "issues",
+      name: "Issues",
+      url: "https://issues.example.test/mcp",
+      tools: [
+        { name: "search_issues", description: "Search issues.", inputSchema: schema },
+        { name: "create_issue", description: "Create an issue.", inputSchema: schema },
+      ],
+      call: async () => ({ content: [] }),
+    });
+    const runtime: AgentRuntime = await openTestRuntime({
+      storePath: ":memory:",
+      capabilities: [issues, notesToolkit()],
+      respondWith: (context: PiContext) => {
+        requests.push(structuredClone(context));
+        return fauxAssistantMessage([fauxText("done")]);
+      },
+    });
+    cleanup.push(() => runtime.close());
+    const ref = await runtime.createConversation({
+      modelId: TEST_MODEL,
+      systemPrompt: "",
+      capabilities: { enabled: ["mcp:issues", "notes", "tool-search"], permissions: {} },
+    });
+    await runtime.submit(ref, { requestId: "r1", text: "hi" });
+    await until(() => requests.length >= 1, "reply");
+    expect(offered(requests[0]!)).toEqual(["note_add", "tool_search"]);
+    expect(JSON.stringify(requests[0]!.messages)).toContain(
+      "- mcp:issues (2 tools): Issues, a connection. Tools (each named mcp__issues__<name>): search_issues, create_issue",
+    );
+  }, 20_000);
+
+  it("lists at most 40 of a deferred connection's tool names, and counts the rest", async () => {
+    const requests: PiContext[] = [];
+    const many = createMcpCapability({
+      slug: "many",
+      name: "Many",
+      url: "https://many.example.test/mcp",
+      tools: Array.from({ length: 45 }, (_, i) => ({
+        name: `tool_${i}`,
+        description: "x".repeat(200),
+        inputSchema: { type: "object" },
+      })),
+      call: async () => ({ content: [] }),
+    });
+    const runtime: AgentRuntime = await openTestRuntime({
+      storePath: ":memory:",
+      capabilities: [many],
+      respondWith: (context: PiContext) => {
+        requests.push(structuredClone(context));
+        return fauxAssistantMessage([fauxText("done")]);
+      },
+    });
+    cleanup.push(() => runtime.close());
+    const ref = await runtime.createConversation({
+      modelId: TEST_MODEL,
+      systemPrompt: "",
+      capabilities: { enabled: ["mcp:many", "tool-search"], permissions: {} },
+    });
+    await runtime.submit(ref, { requestId: "r1", text: "hi" });
+    await until(() => requests.length >= 1, "reply");
+    const prompt = JSON.stringify(requests[0]!.messages);
+    expect(prompt).toContain("tool_38, tool_39, and 5 more");
+    expect(prompt).not.toContain("tool_40");
+  }, 20_000);
+
   it("offers no tool_search where nothing is deferred", async () => {
     const requests: PiContext[] = [];
     const runtime: AgentRuntime = await openTestRuntime({
@@ -205,5 +281,30 @@ describe("deferred toolkits", () => {
         toolkit.id,
       ).toBe(false);
     }
+  });
+
+  it("keeps the tools every request carries under 10,500 characters", () => {
+    // Issue #360: what a request re-sends, measured as the provider gets it.
+    const stub = {} as never;
+    const direct = [
+      createTasksToolkit(stub),
+      createRoutinesToolkit(stub),
+      createWebToolkit({ apiKey: "key" }),
+      createSandboxToolkit({ connection: stub }),
+      createMemoryCapability(stub),
+      createSkillsCapability(stub),
+      createBotsToolkit(stub),
+      createQuestionsCapability(new WaitTracker()),
+    ];
+    const size = direct
+      .flatMap((toolkit) => toolkit.extension.tools ?? [])
+      .reduce(
+        (sum, t) =>
+          sum +
+          JSON.stringify({ name: t.name, description: t.description, input_schema: t.parameters })
+            .length,
+        0,
+      );
+    expect(size).toBeLessThan(10_500);
   });
 });

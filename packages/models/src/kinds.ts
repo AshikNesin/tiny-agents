@@ -14,6 +14,7 @@ import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completio
 import { openAIResponsesApi } from "@earendil-works/pi-ai/api/openai-responses.lazy";
 import { classifySystemOne } from "@earendil-works/pi-ai/api/system-one-shared";
 import { createProvider, type Provider } from "@earendil-works/pi-ai/models";
+import { ANTHROPIC_MODELS } from "@earendil-works/pi-ai/providers/anthropic.models";
 import { CLOUDFLARE_AI_GATEWAY_MODELS } from "@earendil-works/pi-ai/providers/cloudflare-ai-gateway.models";
 import { cloudflareStreams } from "@earendil-works/pi-ai/providers/cloudflare-stream";
 import { CLOUDFLARE_WORKERS_AI_CLASSIFIER_MODELS } from "@earendil-works/pi-ai/providers/cloudflare-workers-ai.models";
@@ -102,8 +103,28 @@ const API_FACTORIES: Record<ChatApi, () => ReturnType<typeof openAICompletionsAp
 
 const ZERO_COST = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
 
+const ANTHROPIC_CATALOG = new Map(
+  (Object.values(ANTHROPIC_MODELS) as Model<Api>[]).map((model) => [model.id, model]),
+);
+
+/**
+ * The gateway's catalog, with each Claude model's Anthropic compat flags
+ * under its own: the gateway passes Messages requests through, but pi-ai's
+ * gateway entries leave out `supportsMidConvoToolChanges` and
+ * `supportsMidConvoSystemMessages`, so every tool load would resend the
+ * whole tool list and miss the prompt cache (issue #360).
+ */
 const GATEWAY_CATALOG = new Map(
-  (Object.values(CLOUDFLARE_AI_GATEWAY_MODELS) as Model<Api>[]).map((model) => [model.id, model]),
+  (Object.values(CLOUDFLARE_AI_GATEWAY_MODELS) as Model<Api>[]).map((model) => {
+    const anthropic =
+      model.api === "anthropic-messages" ? ANTHROPIC_CATALOG.get(model.id) : undefined;
+    return [
+      model.id,
+      anthropic
+        ? ({ ...model, compat: { ...anthropic.compat, ...model.compat } } as Model<Api>)
+        : model,
+    ];
+  }),
 );
 
 const WORKERS_AI_CLASSIFIERS = new Map(
@@ -133,7 +154,8 @@ function chatModel(
     contextWindow: row.contextWindow,
     maxTokens: row.maxOutputTokens,
     cost: base?.cost ?? ZERO_COST,
-    ...(row.compat ? { compat: row.compat } : {}),
+    // The row's flags on top of pi-ai's, so an owner-set flag never drops one.
+    ...(row.compat ? { compat: { ...base?.compat, ...row.compat } } : {}),
     ...thinkingMap(base, row.compat),
   } as Model<Api>;
 }

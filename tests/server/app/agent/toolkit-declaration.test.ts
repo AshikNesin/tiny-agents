@@ -1162,7 +1162,7 @@ describe("one declaration per tool (3.2)", () => {
           "tasks": 0,
           "tools": [
             {
-              "description": "Create a new bot for the owner: its name, a one-line description and its instructions (system prompt). Use only when the owner asks for a new bot. Write the instructions in the second person ("You help the owner with …"), with everything the owner told you about its job, paths, tools and rules. The new bot gets every built-in toolkit and runs on your model unless \`model\` names another. The owner reviews and approves every new bot before it is created. Afterwards you can message it with message_bot.",
+              "description": "Create a new bot, only when the owner asks for one. Write its instructions in the second person ("You help the owner with …") with everything the owner told you about its job, paths, tools and rules. It gets every built-in toolkit and your model unless \`model\` names another. The owner approves it first; then you can message it with message_bot.",
               "fields": [
                 "deferred",
                 "description",
@@ -2777,7 +2777,7 @@ describe("one declaration per tool (3.2)", () => {
               "replay": "safe",
             },
             {
-              "description": "Ask the owner to type credentials for the current page into a secure sheet: a sign-in, a one-time code sent by SMS or email, or a card. The server fills what they type straight into the page (only on its current origin) and you only learn which fields were filled. Call vault_list first and prefer browser_fill_secret when a handle exists. Fields: 1-8, each with a slug key, a short label and a type; text, email and select fields need an identifier autocomplete (username, email, name, postal-code, …). Your reply pauses until the owner answers (10 minutes at most). Never type, ask for or repeat a password, card number, security code or one-time code yourself.",
+              "description": "Ask the owner to type credentials for the current page into a secure sheet: a sign-in, a one-time code or a card. The server fills them into the page (current origin only); you learn only which fields were filled. Text, email and select fields need an identifier autocomplete; select also needs options. Call vault_list first and prefer browser_fill_secret when a handle exists. Waits up to 10 minutes for the owner. Never type, ask for or repeat a password, card number, security code or one-time code yourself.",
               "fields": [
                 "deferred",
                 "description",
@@ -3479,7 +3479,7 @@ describe("one declaration per tool (3.2)", () => {
                 "replay": "unsafe",
               },
               {
-                "description": "Ask the owner to type credentials for the current page into a secure sheet: a sign-in, a one-time code sent by SMS or email, or a card. The server fills what they type straight into the page (only on its current origin) and you only learn which fields were filled. Call vault_list first and prefer browser_fill_secret when a handle exists. Fields: 1-8, each with a slug key, a short label and a type; text, email and select fields need an identifier autocomplete (username, email, name, postal-code, …). Your reply pauses until the owner answers (10 minutes at most). Never type, ask for or repeat a password, card number, security code or one-time code yourself.",
+                "description": "Ask the owner to type credentials for the current page into a secure sheet: a sign-in, a one-time code or a card. The server fills them into the page (current origin only); you learn only which fields were filled. Text, email and select fields need an identifier autocomplete; select also needs options. Call vault_list first and prefer browser_fill_secret when a handle exists. Waits up to 10 minutes for the owner. Never type, ask for or repeat a password, card number, security code or one-time code yourself.",
                 "fields": [
                   "deferred",
                   "description",
@@ -6453,7 +6453,7 @@ describe("one declaration per tool (3.2)", () => {
           "tasks": 0,
           "tools": [
             {
-              "description": "Ask the owner 1-4 clarifying questions and wait for their answers. Use it when a request is ambiguous and a wrong guess would waste real work, or when a decision is the owner's to make (preferences, trade-offs, details you cannot look up). Don't ask what your other tools can find out or what you can sensibly assume, and don't ask permission to run a tool (tools that need approval ask for it themselves). Your reply pauses until the owner answers.",
+              "description": "Ask the owner 1-4 clarifying questions and wait for their answers. Only when a wrong guess would waste real work or the decision is theirs (preferences, trade-offs). Not for what your tools can find out or you can sensibly assume, and not for permission to run a tool (tools ask for that themselves).",
               "fields": [
                 "description",
                 "execute",
@@ -6478,7 +6478,7 @@ describe("one declaration per tool (3.2)", () => {
                           "type": "boolean",
                         },
                         "options": {
-                          "description": "Likely answers to pick from. The owner can always answer in their own words instead. Omit for open questions.",
+                          "description": "Likely answers; the owner can still write their own. Omit for open questions.",
                           "items": {
                             "properties": {
                               "description": {
@@ -6565,6 +6565,7 @@ describe("one declaration per tool (3.2)", () => {
           "tools": [
             {
               "askLabel": "ask you questions",
+              "chatOnly": true,
               "description": "Ask you clarifying questions and wait for your answers",
               "label": "Asked you questions",
               "name": "ask_owner",
@@ -6581,7 +6582,7 @@ describe("one declaration per tool (3.2)", () => {
         },
         "keyOrder": [
           "id,kind,name,description,tools",
-          "name,label,askLabel,description,readOnly",
+          "name,label,askLabel,description,readOnly,chatOnly",
           "name,label,askLabel,description,readOnly",
         ],
       }
@@ -6598,7 +6599,7 @@ describe("one declaration per tool (3.2)", () => {
           "tasks": 0,
           "tools": [
             {
-              "description": "Create a routine: this bot runs the prompt on a schedule and replies in this chat. Use it for reminders and recurring work (in 30 minutes, every weekday at 9am). Show the owner the returned card so they can confirm the schedule.",
+              "description": "Create a routine: this bot runs the prompt on a schedule (reminders, recurring work) and replies here. Show the owner the returned card to confirm the schedule.",
               "fields": [
                 "description",
                 "execute",
@@ -6629,7 +6630,7 @@ describe("one declaration per tool (3.2)", () => {
                             "type": "string",
                           },
                           "minutes": {
-                            "description": "One time, this many minutes from now (reminders: in 30 minutes)",
+                            "description": "Once, this many minutes from now",
                             "maximum": 10080,
                             "minimum": 1,
                             "type": "integer",
@@ -6644,7 +6645,7 @@ describe("one declaration per tool (3.2)", () => {
                       {
                         "properties": {
                           "at": {
-                            "description": "One time, ISO datetime with an explicit offset, e.g. 2026-11-01T09:00:00+05:30",
+                            "description": "Once, ISO datetime with offset, e.g. 2026-11-01T09:00:00+05:30",
                             "format": "date-time",
                             "type": "string",
                           },
@@ -6662,7 +6663,7 @@ describe("one declaration per tool (3.2)", () => {
                       {
                         "properties": {
                           "expr": {
-                            "description": "Recurring, 5-field cron in IST (minute hour day-of-month month day-of-week), e.g. "0 9 * * 1-5" for weekdays at 09:00",
+                            "description": "5-field cron in IST, e.g. "0 9 * * 1-5" (weekdays 09:00)",
                             "type": "string",
                           },
                           "kind": {
@@ -6725,7 +6726,7 @@ describe("one declaration per tool (3.2)", () => {
               "replay": "safe",
             },
             {
-              "description": "Update a routine by id; omit the fields that stay. enabled false pauses it, true resumes it.",
+              "description": "Update a routine by id; omit fields that stay. enabled false pauses, true resumes.",
               "fields": [
                 "description",
                 "execute",
@@ -6763,7 +6764,7 @@ describe("one declaration per tool (3.2)", () => {
                             "type": "string",
                           },
                           "minutes": {
-                            "description": "One time, this many minutes from now (reminders: in 30 minutes)",
+                            "description": "Once, this many minutes from now",
                             "maximum": 10080,
                             "minimum": 1,
                             "type": "integer",
@@ -6778,7 +6779,7 @@ describe("one declaration per tool (3.2)", () => {
                       {
                         "properties": {
                           "at": {
-                            "description": "One time, ISO datetime with an explicit offset, e.g. 2026-11-01T09:00:00+05:30",
+                            "description": "Once, ISO datetime with offset, e.g. 2026-11-01T09:00:00+05:30",
                             "format": "date-time",
                             "type": "string",
                           },
@@ -6796,7 +6797,7 @@ describe("one declaration per tool (3.2)", () => {
                       {
                         "properties": {
                           "expr": {
-                            "description": "Recurring, 5-field cron in IST (minute hour day-of-month month day-of-week), e.g. "0 9 * * 1-5" for weekdays at 09:00",
+                            "description": "5-field cron in IST, e.g. "0 9 * * 1-5" (weekdays 09:00)",
                             "type": "string",
                           },
                           "kind": {
@@ -6990,7 +6991,7 @@ describe("one declaration per tool (3.2)", () => {
           "tasks": 0,
           "tools": [
             {
-              "description": "Run a shell command on the sandbox VM and return stdout, stderr and the exit code. One command string per call — chain with && or ; for steps. Set detached:true for long builds or servers: the command keeps running after this call returns.",
+              "description": "Run a shell command on the sandbox VM; returns stdout, stderr and the exit code. Chain steps with && or ;. detached:true keeps long builds or servers running after the call.",
               "fields": [
                 "description",
                 "execute",
@@ -7141,7 +7142,7 @@ describe("one declaration per tool (3.2)", () => {
           "tasks": 0,
           "tools": [
             {
-              "description": "Run a shell command on the sandbox VM and return stdout, stderr and the exit code. One command string per call — chain with && or ; for steps. Set detached:true for long builds or servers: the command keeps running after this call returns.",
+              "description": "Run a shell command on the sandbox VM; returns stdout, stderr and the exit code. Chain steps with && or ;. detached:true keeps long builds or servers running after the call.",
               "fields": [
                 "description",
                 "execute",
@@ -7299,7 +7300,7 @@ describe("one declaration per tool (3.2)", () => {
           "tasks": 0,
           "tools": [
             {
-              "description": "Run a shell command on the sandbox VM and return stdout, stderr and the exit code. One command string per call — chain with && or ; for steps. Set detached:true for long builds or servers: the command keeps running after this call returns. To give the command an API key, pass secrets: [{handle, env}] with a vault handle that allows run_command; the value arrives in that env var (use "$GITHUB_TOKEN", never echo it), every such call is approved by the owner, and the command can only reach the item's hosts. Never type, ask for or repeat a password, card number, security code or one-time code yourself. Commands can only connect to the owner's allowlist: github.com, 10.0.0.0/8.",
+              "description": "Run a shell command on the sandbox VM; returns stdout, stderr and the exit code. Chain steps with && or ;. detached:true keeps long builds or servers running after the call. For an API key, pass secrets: [{handle, env}] with a vault handle that allows run_command; the value arrives in that env var (use "$GITHUB_TOKEN", never echo it), the owner approves each such call, and the command can reach only the item's hosts. Never type, ask for or repeat a password, card number, security code or one-time code yourself. Commands can only connect to the owner's allowlist: github.com, 10.0.0.0/8.",
               "fields": [
                 "description",
                 "execute",
@@ -7468,331 +7469,331 @@ describe("one declaration per tool (3.2)", () => {
   it("sandbox, not configured, with a vault and an invalid allowlist", () => {
     expect(full(createSandboxToolkit({ vault: stub, egressAllowlist: "github.com not_a_host!" })))
       .toMatchInlineSnapshot(`
-      {
-        "extension": {
-          "hooks": 0,
-          "name": "sandbox",
-          "sections": [],
-          "tasks": 0,
-          "tools": [
-            {
-              "description": "Run a shell command on the sandbox VM and return stdout, stderr and the exit code. One command string per call — chain with && or ; for steps. Set detached:true for long builds or servers: the command keeps running after this call returns. To give the command an API key, pass secrets: [{handle, env}] with a vault handle that allows run_command; the value arrives in that env var (use "$GITHUB_TOKEN", never echo it), every such call is approved by the owner, and the command can only reach the item's hosts. Never type, ask for or repeat a password, card number, security code or one-time code yourself. Commands can only connect to the owner's allowlist: github.com.",
-              "fields": [
-                "description",
-                "execute",
-                "name",
-                "parameters",
-                "replay",
-              ],
-              "gated": true,
-              "name": "run_command",
-              "parameters": {
-                "properties": {
-                  "command": {
-                    "maxLength": 20000,
-                    "minLength": 1,
-                    "type": "string",
-                  },
-                  "detached": {
-                    "type": "boolean",
-                  },
-                  "secrets": {
-                    "items": {
-                      "properties": {
-                        "env": {
-                          "description": "Env var name, e.g. GITHUB_TOKEN",
-                          "maxLength": 64,
-                          "minLength": 1,
-                          "type": "string",
-                        },
-                        "handle": {
-                          "description": "Vault handle (vault_list)",
-                          "maxLength": 64,
-                          "minLength": 1,
-                          "type": "string",
-                        },
-                      },
-                      "required": [
-                        "handle",
-                        "env",
-                      ],
-                      "type": "object",
+        {
+          "extension": {
+            "hooks": 0,
+            "name": "sandbox",
+            "sections": [],
+            "tasks": 0,
+            "tools": [
+              {
+                "description": "Run a shell command on the sandbox VM; returns stdout, stderr and the exit code. Chain steps with && or ;. detached:true keeps long builds or servers running after the call. For an API key, pass secrets: [{handle, env}] with a vault handle that allows run_command; the value arrives in that env var (use "$GITHUB_TOKEN", never echo it), the owner approves each such call, and the command can reach only the item's hosts. Never type, ask for or repeat a password, card number, security code or one-time code yourself. Commands can only connect to the owner's allowlist: github.com.",
+                "fields": [
+                  "description",
+                  "execute",
+                  "name",
+                  "parameters",
+                  "replay",
+                ],
+                "gated": true,
+                "name": "run_command",
+                "parameters": {
+                  "properties": {
+                    "command": {
+                      "maxLength": 20000,
+                      "minLength": 1,
+                      "type": "string",
                     },
-                    "maxItems": 4,
-                    "minItems": 1,
-                    "type": "array",
+                    "detached": {
+                      "type": "boolean",
+                    },
+                    "secrets": {
+                      "items": {
+                        "properties": {
+                          "env": {
+                            "description": "Env var name, e.g. GITHUB_TOKEN",
+                            "maxLength": 64,
+                            "minLength": 1,
+                            "type": "string",
+                          },
+                          "handle": {
+                            "description": "Vault handle (vault_list)",
+                            "maxLength": 64,
+                            "minLength": 1,
+                            "type": "string",
+                          },
+                        },
+                        "required": [
+                          "handle",
+                          "env",
+                        ],
+                        "type": "object",
+                      },
+                      "maxItems": 4,
+                      "minItems": 1,
+                      "type": "array",
+                    },
+                    "timeout_secs": {
+                      "maximum": 600,
+                      "minimum": 1,
+                      "type": "integer",
+                    },
                   },
-                  "timeout_secs": {
-                    "maximum": 600,
-                    "minimum": 1,
-                    "type": "integer",
-                  },
+                  "required": [
+                    "command",
+                  ],
+                  "type": "object",
                 },
-                "required": [
-                  "command",
-                ],
-                "type": "object",
+                "replay": "unsafe",
               },
-              "replay": "unsafe",
-            },
-            {
-              "description": "Read a file from the sandbox VM. Binary-safe; non-UTF-8 bytes are described, not corrupted. Use max_bytes to cap huge files.",
-              "fields": [
-                "description",
-                "execute",
-                "name",
-                "parameters",
-                "replay",
-              ],
-              "gated": false,
-              "name": "read_file",
-              "parameters": {
-                "properties": {
-                  "max_bytes": {
-                    "maximum": 1000000,
-                    "minimum": 1,
-                    "type": "integer",
+              {
+                "description": "Read a file from the sandbox VM. Binary-safe; non-UTF-8 bytes are described, not corrupted. Use max_bytes to cap huge files.",
+                "fields": [
+                  "description",
+                  "execute",
+                  "name",
+                  "parameters",
+                  "replay",
+                ],
+                "gated": false,
+                "name": "read_file",
+                "parameters": {
+                  "properties": {
+                    "max_bytes": {
+                      "maximum": 1000000,
+                      "minimum": 1,
+                      "type": "integer",
+                    },
+                    "path": {
+                      "maxLength": 4096,
+                      "minLength": 1,
+                      "type": "string",
+                    },
                   },
-                  "path": {
-                    "maxLength": 4096,
-                    "minLength": 1,
-                    "type": "string",
-                  },
+                  "required": [
+                    "path",
+                  ],
+                  "type": "object",
                 },
-                "required": [
-                  "path",
-                ],
-                "type": "object",
+                "replay": "safe",
               },
-              "replay": "safe",
-            },
-            {
-              "description": "Create or overwrite a file on the sandbox VM with UTF-8 content. Written to a temp name then renamed, so a crash mid-write never leaves a half file.",
-              "fields": [
-                "description",
-                "execute",
-                "name",
-                "parameters",
-                "replay",
-              ],
-              "gated": false,
-              "name": "write_file",
-              "parameters": {
-                "properties": {
-                  "content": {
-                    "maxLength": 500000,
-                    "type": "string",
+              {
+                "description": "Create or overwrite a file on the sandbox VM with UTF-8 content. Written to a temp name then renamed, so a crash mid-write never leaves a half file.",
+                "fields": [
+                  "description",
+                  "execute",
+                  "name",
+                  "parameters",
+                  "replay",
+                ],
+                "gated": false,
+                "name": "write_file",
+                "parameters": {
+                  "properties": {
+                    "content": {
+                      "maxLength": 500000,
+                      "type": "string",
+                    },
+                    "path": {
+                      "maxLength": 4096,
+                      "minLength": 1,
+                      "type": "string",
+                    },
                   },
-                  "path": {
-                    "maxLength": 4096,
-                    "minLength": 1,
-                    "type": "string",
-                  },
+                  "required": [
+                    "path",
+                    "content",
+                  ],
+                  "type": "object",
                 },
-                "required": [
-                  "path",
-                  "content",
-                ],
-                "type": "object",
+                "replay": "unsafe",
               },
-              "replay": "unsafe",
-            },
+            ],
+            "wraps": 0,
+          },
+          "extensionKeys": "name,tools",
+          "gates": {
+            "run_command": "plan,settled",
+          },
+          "info": {
+            "description": "Keyless shell and files on the sandbox VM over Tailscale SSH",
+            "id": "sandbox",
+            "kind": "toolkit",
+            "name": "Sandbox",
+            "setupHint": "SANDBOX_EGRESS_ALLOWLIST has entries that aren't hosts, IPs or CIDRs: not_a_host!",
+            "tools": [
+              {
+                "askLabel": "run a command",
+                "description": "Run a shell command on the sandbox VM",
+                "label": "Ran a command",
+                "name": "run_command",
+                "vault": true,
+              },
+              {
+                "askLabel": "read a file",
+                "description": "Read a file from the sandbox VM",
+                "label": "Read a file",
+                "name": "read_file",
+                "readOnly": true,
+              },
+              {
+                "askLabel": "write a file",
+                "description": "Write a file on the sandbox VM",
+                "label": "Wrote a file",
+                "name": "write_file",
+              },
+            ],
+          },
+          "keyOrder": [
+            "id,kind,name,description,tools,setupHint",
+            "name,label,askLabel,description,vault",
+            "name,label,askLabel,description,readOnly",
+            "name,label,askLabel,description",
           ],
-          "wraps": 0,
-        },
-        "extensionKeys": "name,tools",
-        "gates": {
-          "run_command": "plan,settled",
-        },
-        "info": {
-          "description": "Keyless shell and files on the sandbox VM over Tailscale SSH",
-          "id": "sandbox",
-          "kind": "toolkit",
-          "name": "Sandbox",
-          "setupHint": "SANDBOX_EGRESS_ALLOWLIST has entries that aren't hosts, IPs or CIDRs: not_a_host!",
-          "tools": [
-            {
-              "askLabel": "run a command",
-              "description": "Run a shell command on the sandbox VM",
-              "label": "Ran a command",
-              "name": "run_command",
-              "vault": true,
-            },
-            {
-              "askLabel": "read a file",
-              "description": "Read a file from the sandbox VM",
-              "label": "Read a file",
-              "name": "read_file",
-              "readOnly": true,
-            },
-            {
-              "askLabel": "write a file",
-              "description": "Write a file on the sandbox VM",
-              "label": "Wrote a file",
-              "name": "write_file",
-            },
-          ],
-        },
-        "keyOrder": [
-          "id,kind,name,description,tools,setupHint",
-          "name,label,askLabel,description,vault",
-          "name,label,askLabel,description,readOnly",
-          "name,label,askLabel,description",
-        ],
-      }
-    `);
+        }
+      `);
   });
 
   it("sandbox, configured, with an invalid allowlist", () => {
     expect(full(createSandboxToolkit({ connection: stub, egressAllowlist: "bad!entry" })))
       .toMatchInlineSnapshot(`
-      {
-        "extension": {
-          "hooks": 0,
-          "name": "sandbox",
-          "sections": [],
-          "tasks": 0,
-          "tools": [
-            {
-              "description": "Run a shell command on the sandbox VM and return stdout, stderr and the exit code. One command string per call — chain with && or ; for steps. Set detached:true for long builds or servers: the command keeps running after this call returns.",
-              "fields": [
-                "description",
-                "execute",
-                "name",
-                "parameters",
-                "replay",
-              ],
-              "gated": true,
-              "name": "run_command",
-              "parameters": {
-                "properties": {
-                  "command": {
-                    "maxLength": 20000,
-                    "minLength": 1,
-                    "type": "string",
-                  },
-                  "detached": {
-                    "type": "boolean",
-                  },
-                  "timeout_secs": {
-                    "maximum": 600,
-                    "minimum": 1,
-                    "type": "integer",
-                  },
-                },
-                "required": [
-                  "command",
+        {
+          "extension": {
+            "hooks": 0,
+            "name": "sandbox",
+            "sections": [],
+            "tasks": 0,
+            "tools": [
+              {
+                "description": "Run a shell command on the sandbox VM; returns stdout, stderr and the exit code. Chain steps with && or ;. detached:true keeps long builds or servers running after the call.",
+                "fields": [
+                  "description",
+                  "execute",
+                  "name",
+                  "parameters",
+                  "replay",
                 ],
-                "type": "object",
-              },
-              "replay": "unsafe",
-            },
-            {
-              "description": "Read a file from the sandbox VM. Binary-safe; non-UTF-8 bytes are described, not corrupted. Use max_bytes to cap huge files.",
-              "fields": [
-                "description",
-                "execute",
-                "name",
-                "parameters",
-                "replay",
-              ],
-              "gated": false,
-              "name": "read_file",
-              "parameters": {
-                "properties": {
-                  "max_bytes": {
-                    "maximum": 1000000,
-                    "minimum": 1,
-                    "type": "integer",
+                "gated": true,
+                "name": "run_command",
+                "parameters": {
+                  "properties": {
+                    "command": {
+                      "maxLength": 20000,
+                      "minLength": 1,
+                      "type": "string",
+                    },
+                    "detached": {
+                      "type": "boolean",
+                    },
+                    "timeout_secs": {
+                      "maximum": 600,
+                      "minimum": 1,
+                      "type": "integer",
+                    },
                   },
-                  "path": {
-                    "maxLength": 4096,
-                    "minLength": 1,
-                    "type": "string",
-                  },
+                  "required": [
+                    "command",
+                  ],
+                  "type": "object",
                 },
-                "required": [
-                  "path",
-                ],
-                "type": "object",
+                "replay": "unsafe",
               },
-              "replay": "safe",
-            },
-            {
-              "description": "Create or overwrite a file on the sandbox VM with UTF-8 content. Written to a temp name then renamed, so a crash mid-write never leaves a half file.",
-              "fields": [
-                "description",
-                "execute",
-                "name",
-                "parameters",
-                "replay",
-              ],
-              "gated": false,
-              "name": "write_file",
-              "parameters": {
-                "properties": {
-                  "content": {
-                    "maxLength": 500000,
-                    "type": "string",
+              {
+                "description": "Read a file from the sandbox VM. Binary-safe; non-UTF-8 bytes are described, not corrupted. Use max_bytes to cap huge files.",
+                "fields": [
+                  "description",
+                  "execute",
+                  "name",
+                  "parameters",
+                  "replay",
+                ],
+                "gated": false,
+                "name": "read_file",
+                "parameters": {
+                  "properties": {
+                    "max_bytes": {
+                      "maximum": 1000000,
+                      "minimum": 1,
+                      "type": "integer",
+                    },
+                    "path": {
+                      "maxLength": 4096,
+                      "minLength": 1,
+                      "type": "string",
+                    },
                   },
-                  "path": {
-                    "maxLength": 4096,
-                    "minLength": 1,
-                    "type": "string",
-                  },
+                  "required": [
+                    "path",
+                  ],
+                  "type": "object",
                 },
-                "required": [
-                  "path",
-                  "content",
-                ],
-                "type": "object",
+                "replay": "safe",
               },
-              "replay": "unsafe",
-            },
+              {
+                "description": "Create or overwrite a file on the sandbox VM with UTF-8 content. Written to a temp name then renamed, so a crash mid-write never leaves a half file.",
+                "fields": [
+                  "description",
+                  "execute",
+                  "name",
+                  "parameters",
+                  "replay",
+                ],
+                "gated": false,
+                "name": "write_file",
+                "parameters": {
+                  "properties": {
+                    "content": {
+                      "maxLength": 500000,
+                      "type": "string",
+                    },
+                    "path": {
+                      "maxLength": 4096,
+                      "minLength": 1,
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "path",
+                    "content",
+                  ],
+                  "type": "object",
+                },
+                "replay": "unsafe",
+              },
+            ],
+            "wraps": 0,
+          },
+          "extensionKeys": "name,tools",
+          "gates": {
+            "run_command": "plan",
+          },
+          "info": {
+            "description": "Keyless shell and files on the sandbox VM over Tailscale SSH",
+            "id": "sandbox",
+            "kind": "toolkit",
+            "name": "Sandbox",
+            "setupHint": "SANDBOX_EGRESS_ALLOWLIST has entries that aren't hosts, IPs or CIDRs: bad!entry",
+            "tools": [
+              {
+                "askLabel": "run a command",
+                "description": "Run a shell command on the sandbox VM",
+                "label": "Ran a command",
+                "name": "run_command",
+                "vault": true,
+              },
+              {
+                "askLabel": "read a file",
+                "description": "Read a file from the sandbox VM",
+                "label": "Read a file",
+                "name": "read_file",
+                "readOnly": true,
+              },
+              {
+                "askLabel": "write a file",
+                "description": "Write a file on the sandbox VM",
+                "label": "Wrote a file",
+                "name": "write_file",
+              },
+            ],
+          },
+          "keyOrder": [
+            "id,kind,name,description,tools,setupHint",
+            "name,label,askLabel,description,vault",
+            "name,label,askLabel,description,readOnly",
+            "name,label,askLabel,description",
           ],
-          "wraps": 0,
-        },
-        "extensionKeys": "name,tools",
-        "gates": {
-          "run_command": "plan",
-        },
-        "info": {
-          "description": "Keyless shell and files on the sandbox VM over Tailscale SSH",
-          "id": "sandbox",
-          "kind": "toolkit",
-          "name": "Sandbox",
-          "setupHint": "SANDBOX_EGRESS_ALLOWLIST has entries that aren't hosts, IPs or CIDRs: bad!entry",
-          "tools": [
-            {
-              "askLabel": "run a command",
-              "description": "Run a shell command on the sandbox VM",
-              "label": "Ran a command",
-              "name": "run_command",
-              "vault": true,
-            },
-            {
-              "askLabel": "read a file",
-              "description": "Read a file from the sandbox VM",
-              "label": "Read a file",
-              "name": "read_file",
-              "readOnly": true,
-            },
-            {
-              "askLabel": "write a file",
-              "description": "Write a file on the sandbox VM",
-              "label": "Wrote a file",
-              "name": "write_file",
-            },
-          ],
-        },
-        "keyOrder": [
-          "id,kind,name,description,tools,setupHint",
-          "name,label,askLabel,description,vault",
-          "name,label,askLabel,description,readOnly",
-          "name,label,askLabel,description",
-        ],
-      }
-    `);
+        }
+      `);
   });
 
   it("self-improve", () => {
