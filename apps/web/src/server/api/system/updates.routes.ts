@@ -4,7 +4,6 @@ import { Boom } from "@groot/core/errors";
 import { ok } from "@groot/core/utils/api-response.utils";
 import { requestApply, requestCheck, updateView } from "./updates.service";
 
-/** Owner only (guest.guard.ts): local self-updates, docs/guides/local-updates.md. */
 const router = new Hono<AppEnv>();
 
 const NOT_SUPERVISED = "Updates from the app need the server started with `pnpm local`";

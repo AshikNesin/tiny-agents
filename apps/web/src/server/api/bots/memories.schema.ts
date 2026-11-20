@@ -1,9 +1,7 @@
-/** Request validation for the memories API (issue #22). */
 import { z } from "zod";
 import { memoryCategorySchema, memoryTextSchema } from "./memories.domain";
 
 export const listMemoriesSchema = z.object({
-  // stringbool, not coerce: coerce.boolean() would read the string "false" as true.
   includeArchived: z.stringbool().optional().default(false),
 });
 

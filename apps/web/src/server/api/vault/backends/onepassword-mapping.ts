@@ -1,20 +1,3 @@
-/**
- * tiny-agents kinds ↔ 1Password item categories and fields (issue #56).
- *
- * | kind     | category       | fields                                                      |
- * | -------- | -------------- | ----------------------------------------------------------- |
- * | login    | LOGIN          | purpose USERNAME / PASSWORD / NOTES, an OTP field, urls[]   |
- * | card     | CREDIT_CARD    | ccnum, expiry (MONTH_YEAR), cvv, cardholder, type, address  |
- * | identity | IDENTITY       | firstname/lastname, email, phone, address                   |
- * | api_key  | API_CREDENTIAL | credential (CONCEALED), username, hostname                  |
- *
- * The Connect reference does not list the CREDIT_CARD / IDENTITY template
- * field ids; the ids here are 1Password's template ids as returned by
- * `GET …/items/{id}` for items made in the 1Password apps, with a label
- * fallback, and are pinned in tests. Edits rewrite the whole item Connect
- * returned, so fields
- * this mapping does not model survive.
- */
 import type { VaultKind } from "@tiny-agents/agent";
 import { cardBrand } from "./local";
 import type { BackendItemSummary, ItemDraft, ValueField } from "./types";
@@ -64,13 +47,11 @@ function kindOfCategory(category: string): VaultKind | "other" {
   }
 }
 
-/** How to find (and create) each value field of a kind. */
 interface FieldSpec {
   id: string;
   type: string;
   purpose?: string;
   label: string;
-  /** Matches an existing field by label when its id differs. */
   labelPattern?: RegExp;
 }
 
@@ -138,7 +119,6 @@ const FIELDS: Record<VaultKind, Partial<Record<ValueField, FieldSpec>>> = {
   },
 };
 
-/** The item's field for `field`, if it has one. */
 export function findField(item: ConnectItem, field: ValueField): ConnectField | undefined {
   const kind = kindOfCategory(item.category);
   if (kind === "other") return undefined;
@@ -158,7 +138,6 @@ export function findField(item: ConnectItem, field: ValueField): ConnectField | 
   );
 }
 
-/** 1Password stores MONTH_YEAR as YYYYMM; the vault speaks MM/YYYY. */
 export function expiryFromConnect(value: string): string {
   const compact = value.match(/^(\d{4})(\d{2})$/);
   if (compact) return `${compact[2]}/${compact[1]}`;
@@ -176,7 +155,6 @@ export function expiryToConnect(value: string): string {
   return match ? `${match[2]}${match[1]}` : value;
 }
 
-/** Metadata only: never a secret value (username and card last4/expiry are display data). */
 export function summarize(item: ConnectItem): BackendItemSummary {
   const kind = kindOfCategory(item.category);
   const fields: ValueField[] = [];
@@ -221,7 +199,6 @@ export function fromConnectValue(field: ValueField, value: string): string {
   return field === "card_expiry" ? expiryFromConnect(value) : value;
 }
 
-/** A new Connect item for a draft, pinned to `vaultId`. */
 export function toConnectItem(draft: ItemDraft, vaultId: string): ConnectItem {
   const specs = FIELDS[draft.kind];
   const fields: ConnectField[] = [];
@@ -261,10 +238,6 @@ export function toConnectItem(draft: ItemDraft, vaultId: string): ConnectItem {
   };
 }
 
-/**
- * `item` with the draft's values set (fields the draft doesn't name are kept,
- * missing ones added): the body of a full PUT.
- */
 export function applyDraft(item: ConnectItem, draft: Partial<ItemDraft>): ConnectItem {
   const kind = kindOfCategory(item.category);
   const next: ConnectItem = structuredClone(item);

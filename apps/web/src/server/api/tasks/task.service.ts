@@ -1,10 +1,3 @@
-/**
- * Tasks: the owner's to-dos. One module owns the rules, and two thin
- * adapters sit on it: the HTTP routes (task.routes.ts, the Tasks page) and
- * the agent's task tools (task.store.ts, the `TaskStore` port). Both views
- * share the row mapping, the update rule and the idempotent create, so they
- * never diverge.
- */
 import { asc, desc, eq, sql } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { db, tasks } from "../../db";
@@ -12,38 +5,29 @@ import type { TaskStatus } from "../../../shared/machines/task";
 import type { TaskData, TaskPriority } from "../../../shared/api/tasks";
 import type { CreateTaskDTO, UpdateTaskDTO } from "./task.schema";
 
-/** A task as both adapters see it: the Tasks API's wire type (`shared/api/tasks.ts`). */
 export type TaskRow = TaskData;
 
-/** What creates a task: the page's form or a bot's tool call. */
 export interface NewTask {
   title: string;
   description?: string;
   status?: TaskStatus;
   priority?: TaskPriority;
   dueAt?: Date | null;
-  /**
-   * Durable tool-call id: a create replayed by pi-durable with the same key
-   * returns the task it made the first time instead of a second one.
-   */
   sourceKey?: string;
 }
 
-/** What may change on a task. `status` carries `completedAt` with it. */
 export type TaskPatch = Partial<
   Pick<NewTask, "title" | "description" | "priority" | "dueAt" | "status">
 >;
 
 type DbTask = typeof tasks.$inferSelect;
 
-/** DB row → the task as both adapters see it: `sourceKey` is a tool-idempotency detail, not surface. */
 function toRow(row: DbTask): TaskRow {
   return {
     id: row.id,
     title: row.title,
     description: row.description,
     status: row.status,
-    // A text column in SQLite; only the DTO union ever writes it.
     priority: row.priority as TaskPriority,
     dueAt: row.dueAt,
     completedAt: row.completedAt,
@@ -82,7 +66,6 @@ export async function createTask(input: NewTask): Promise<TaskRow> {
       status,
       priority: input.priority ?? "medium",
       dueAt: input.dueAt ?? null,
-      // "done" always has a completion time (the Completed tab sorts by it).
       completedAt: status === "done" ? new Date() : null,
       ...(input.sourceKey ? { sourceKey: input.sourceKey } : {}),
     })
@@ -90,18 +73,11 @@ export async function createTask(input: NewTask): Promise<TaskRow> {
   return toRow(row!);
 }
 
-/**
- * The task machine's edge rule (`shared/machines/task.ts`), as one SQL
- * expression read against the row before the update: entering `done` stamps
- * now, staying `done` keeps the first stamp (a repeated "complete" never
- * moves a task in the Completed tab), any other status clears it.
- */
 function completedAtOnMoveTo(status: TaskStatus) {
   if (status !== "done") return null;
   return sql<Date>`CASE WHEN ${tasks.status} = 'done' AND ${tasks.completedAt} IS NOT NULL THEN ${tasks.completedAt} ELSE ${Date.now()} END`;
 }
 
-/** Apply a patch; undefined when the task is gone (each adapter says so its own way). */
 export async function updateTask(id: string, patch: TaskPatch): Promise<TaskRow | undefined> {
   const changes = {
     ...(patch.title !== undefined ? { title: patch.title } : {}),
@@ -117,13 +93,10 @@ export async function updateTask(id: string, patch: TaskPatch): Promise<TaskRow 
   return row ? toRow(row) : undefined;
 }
 
-/** True when a task was removed; false when there was none. */
 export async function removeTask(id: string): Promise<boolean> {
   const deleted = await db.delete(tasks).where(eq(tasks.id, id)).returning({ id: tasks.id });
   return deleted.length > 0;
 }
-
-// ── The HTTP adapter's shape: 404s where the page expects them ──────────
 
 export { listTasks as list };
 export const create = (input: CreateTaskDTO) => createTask(input);

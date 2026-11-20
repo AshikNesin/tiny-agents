@@ -1,27 +1,17 @@
-/**
- * Names for Code work, from one small call each on the `chat_title` model
- * role: a new thread's branch slug and its short title (one call, both
- * lines), and a pull request's title from its commits. The context stays
- * small: the task cut short, or the commit subjects. With no model, a
- * timeout or no usable answer, each falls back to words already at hand.
- */
 import type { HarnessInstance } from "@tiny-agents/code/contracts";
 import { logger } from "@groot/core/logger";
 import { app } from "../../app-root";
 import type { SideCaller } from "../bots/side-call";
 import { branchSlug, cleanBranchSlug } from "./code.workspace";
 
-/** What naming needs: the side-caller (on the `chat_title` model role). */
 export interface CodeBranchNamer {
   sideCaller: SideCaller;
 }
 
-/** Boot wiring (entry.node.ts). Unset (tests, faux mode): names come from the task's words. */
 export function setCodeBranchNamer(next: CodeBranchNamer | undefined): void {
   app().codeBranchNamer = next;
 }
 
-/** A thread start waits on the name, so the call is short. */
 const NAME_TIMEOUT_MS = 8_000;
 const TASK_CHARS = 1_500;
 const MAX_COMMITS = 15;
@@ -42,7 +32,6 @@ const PULL_SYSTEM =
   "imperative and sentence case, at most 60 characters, no trailing period, and no prefix " +
   "such as feat:, fix: or a ticket number.";
 
-/** A model's title line, clean: no label, quotes, markdown, `type:` prefix or trailing period. */
 function cleanTitle(raw: string): string | null {
   let text = raw
     .replace(/<think>[\s\S]*?<\/think>/gi, "")
@@ -66,7 +55,6 @@ function cleanTitle(raw: string): string | null {
   return text[0]!.toUpperCase() + text.slice(1);
 }
 
-/** The value after `label:` on its own line, if the answer has one. */
 function line(answer: string, label: RegExp): string | undefined {
   for (const l of answer.split("\n")) {
     const match = label.exec(l.trim());
@@ -75,11 +63,6 @@ function line(answer: string, label: RegExp): string | undefined {
   return undefined;
 }
 
-/**
- * A new thread's branch slug and short title, from one call: what the model
- * says the task is (`fix-google-callback`, "Fix Google sign-in callback"),
- * or the task's first words without the filler and no title.
- */
 export async function threadNames(task: string): Promise<{ slug: string; title: string | null }> {
   const namer = app().codeBranchNamer;
   const text = task.trim().slice(0, TASK_CHARS);
@@ -101,7 +84,6 @@ export async function threadNames(task: string): Promise<{ slug: string; title: 
   return { slug: branchSlug(task), title: null };
 }
 
-/** Give the thread its short title, where the harness can rename; a failure is logged. */
 export async function applyTitle(
   instance: HarnessInstance,
   nativeId: string,
@@ -113,7 +95,6 @@ export async function applyTitle(
   });
 }
 
-/** A thread outside a project: named after it starts, so the start never waits. */
 export function titleLater(instance: HarnessInstance, nativeId: string, task: string): void {
   if (!app().codeBranchNamer || typeof instance.rename !== "function") return;
   void threadNames(task)
@@ -121,7 +102,6 @@ export function titleLater(instance: HarnessInstance, nativeId: string, task: st
     .catch(() => undefined);
 }
 
-/** A pull request's title from the thread's title and its commit subjects, or null. */
 export async function pullTitle(input: {
   thread: string | null;
   commits: string[];

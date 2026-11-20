@@ -1,10 +1,3 @@
-/**
- * TaskStore adapter: the agent's task tools (packages/agent/src/toolkits/tasks)
- * over the tasks module (task.service.ts), which the Tasks page shares.
- * Dependency direction stays one-way: `@tiny-agents/agent` defines the port,
- * apps/web implements it. This file only translates shapes: ISO strings for
- * dates, `undefined` for a missing task.
- */
 import type { TaskRecord, TaskStore } from "@tiny-agents/agent";
 import { createTask, listTasks, removeTask, updateTask, type TaskRow } from "./task.service";
 
@@ -28,8 +21,6 @@ export const taskStore: TaskStore = {
         description: input.description,
         priority: input.priority,
         dueAt: input.dueAt ? new Date(input.dueAt) : null,
-        // Exactly-once across pi-durable replays: the key is the durable tool
-        // task's identity (unique per agent store, stable when the call reruns).
         sourceKey: input.idempotencyKey,
       }),
     );
@@ -47,7 +38,6 @@ export const taskStore: TaskStore = {
       ...(input.dueAt !== undefined ? { dueAt: input.dueAt ? new Date(input.dueAt) : null } : {}),
       ...(input.status !== undefined ? { status: input.status } : {}),
     });
-    // A missing id updates nothing: surface it as a tool error.
     return row ? toRecord(row) : undefined;
   },
 

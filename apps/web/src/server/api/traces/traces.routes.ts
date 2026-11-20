@@ -1,4 +1,3 @@
-/** Traces (issue #363): read-only views of every LLM call. Owner only. */
 import { Hono } from "hono";
 import type { AppEnv } from "@groot/core/types";
 import { ok } from "@groot/core/utils/api-response.utils";

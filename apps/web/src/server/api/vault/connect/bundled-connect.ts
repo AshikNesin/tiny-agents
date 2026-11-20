@@ -1,16 +1,3 @@
-/**
- * The bundled 1Password Connect server (ADR 0027): with
- * `OP_CONNECT_CREDENTIALS` set and no `OP_CONNECT_HOST`, the app runs
- * Connect's two processes itself, inside its own container, instead of a
- * separate service. `connect-api` answers the vault backend on loopback and
- * `connect-sync` keeps the local copy of the vault current; they find each
- * other over Connect's bus on fixed loopback ports, the layout 1Password
- * documents for running both where broadcast discovery isn't available.
- *
- * Their state (the encrypted vault cache) lives next to the agent store on
- * the data volume, so a redeploy starts from it. A process that exits is
- * started again with backoff; stopping the app stops both.
- */
 import { spawn, type ChildProcess } from "node:child_process";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
@@ -24,7 +11,6 @@ import {
   type ConnectBinary,
 } from "./connect-image";
 
-/** Loopback ports: the API the backend calls, sync's own HTTP port, and the two bus ports. */
 const BUNDLED_PORTS = { api: 11280, sync: 11281, apiBus: 11282, syncBus: 11283 };
 
 export const BUNDLED_CONNECT_HOST = `http://127.0.0.1:${BUNDLED_PORTS.api}`;
@@ -45,11 +31,6 @@ const unquote = (value: string | undefined) =>
     .replace(/^(['"])([\s\S]*)\1$/, "$2")
     .trim() || undefined;
 
-/**
- * `1password-credentials.json` from `OP_CONNECT_CREDENTIALS`, as the base64
- * Connect's `OP_SESSION` takes. The variable holds the file's JSON or its
- * base64; anything else is refused with a reason.
- */
 export function sessionFromCredentials(raw: string): string {
   const value = unquote(raw) ?? "";
   const json = value.startsWith("{") ? value : Buffer.from(value, "base64").toString("utf8");
@@ -58,39 +39,31 @@ export function sessionFromCredentials(raw: string): string {
     if (parsed && typeof parsed === "object" && "deviceUuid" in parsed) {
       return Buffer.from(json, "utf8").toString("base64");
     }
-  } catch {
-    // Reported below.
-  }
+  } catch {}
   throw new Error(
     "OP_CONNECT_CREDENTIALS must hold the 1password-credentials.json file, as JSON or base64.",
   );
 }
 
-/** True when the app should run Connect itself: credentials given and no external host. */
 export function bundledConnectWanted(): boolean {
   const env = appEnv();
   return Boolean(unquote(env.OP_CONNECT_CREDENTIALS)) && !unquote(env.OP_CONNECT_HOST);
 }
 
-/** Where the bundled server keeps its binaries and vault cache: beside the agent store. */
 function bundledConnectDir(): string {
   return path.join(path.dirname(path.resolve(agentDbPath())), "op-connect");
 }
 
 export interface StartOptions {
-  /** Base64 `OP_SESSION`. */
   session: string;
   dir: string;
-  /** Resolves each binary's path (pulls it on first use). */
   binary?: (name: ConnectBinary) => Promise<string>;
   ports?: typeof BUNDLED_PORTS;
-  /** First restart delay; doubles per crash up to a minute. */
   restartDelayMs?: number;
   platform?: NodeJS.Platform;
 }
 
 const MAX_RESTART_DELAY_MS = 60_000;
-/** A process that ran this long is healthy again: its next crash restarts at the first delay. */
 const HEALTHY_AFTER_MS = 60_000;
 
 export function startBundledConnect(options: StartOptions): BundledConnect {
@@ -216,10 +189,6 @@ export function startBundledConnect(options: StartOptions): BundledConnect {
   };
 }
 
-/**
- * Boot: start the bundled server when the env asks for one. Never fails boot;
- * a bad credentials file shows on the Vault page and in the log.
- */
 export function startBundledConnectFromEnv(): void {
   if (!bundledConnectWanted()) return;
   let session: string;
@@ -234,7 +203,6 @@ export function startBundledConnectFromEnv(): void {
   app().bundledConnect = startBundledConnect({ session, dir: bundledConnectDir() });
 }
 
-/** Shutdown: stop both Connect processes. */
 export async function stopBundledConnect(): Promise<void> {
   const running = app().bundledConnect;
   app().bundledConnect = undefined;

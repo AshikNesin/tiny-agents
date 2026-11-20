@@ -1,9 +1,3 @@
-/**
- * Request validation for the routines API. The schedule union itself lives in
- * routines.schedule.ts; these schemas add the API-level envelope (bot id,
- * name, prompt caps) and parse the stored Json schedule through the same
- * boundary parser.
- */
 import { z } from "zod";
 import { MAX_NAME_CHARS, MAX_PROMPT_CHARS, scheduleSchema } from "./routines.schedule";
 

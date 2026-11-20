@@ -16,7 +16,6 @@ export const createConnectionSchema = z
     authType: z.enum(["none", "header", "oauth"]).optional().default("none"),
     headerName: headerName.optional(),
     secret: secret.optional(),
-    /** Pre-registered OAuth client, for servers without automatic registration. */
     clientId: z.string().trim().min(1).max(500).optional(),
     clientSecret: z.string().min(1).max(2000).optional(),
     botIds: z.array(z.string()).max(200).optional(),
@@ -30,9 +29,7 @@ export const updateConnectionSchema = z.object({
   name: z.string().trim().min(1).max(60).optional(),
   url: url.optional(),
   headerName: headerName.optional(),
-  /** Replaces the stored header value (and drops a vault reference). */
   secret: secret.optional(),
-  /** Vault handle holding the header value (issue #56); null goes back to the stored value. */
   secretRef: z
     .string()
     .trim()

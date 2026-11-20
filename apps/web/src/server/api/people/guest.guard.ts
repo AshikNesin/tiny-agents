@@ -11,7 +11,6 @@ import { canOpenBot, canReachUpload, resolveViewer, type Viewer } from "./access
 
 declare module "hono" {
   interface ContextVariableMap {
-    /** Who is asking: set once by `guestGuard` on every protected request. */
     viewer: Viewer;
   }
 }
@@ -23,7 +22,6 @@ interface GuestRoute {
   upload?: { id: string; reach: UploadReach };
 }
 
-/** The rule a guest's request matches, with the bot or upload it names; undefined = owner only. */
 export function matchGuestRoute(method: string, path: string): GuestRoute | undefined {
   const bot = BOT_PATH.exec(path);
   const upload = UPLOAD_PATH.exec(path);
@@ -42,11 +40,6 @@ export function matchGuestRoute(method: string, path: string): GuestRoute | unde
   return undefined;
 }
 
-/**
- * Runs after the JWT middleware, mounted at the API root (`/api/v1`). Sets
- * `viewer`; for a guest, refuses anything outside `GUEST_ACCESS`, any bot not
- * shared with them and any upload they do not reach.
- */
 export function guestGuard(prefix = "/api/v1"): MiddlewareHandler<AppEnv> {
   return async (c, next) => {
     const user = c.get("user");

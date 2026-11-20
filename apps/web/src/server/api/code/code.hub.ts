@@ -1,14 +1,3 @@
-/**
- * The Code hub (ADR 0011): the app's one view over every configured
- * harness. It starts each instance, keeps a cached thread list per instance
- * (re-read when the instance says it changed), decorates rows with what
- * tiny-agents tracks (followed, unread), counts who is watching a thread,
- * runs the bots' starts and sends one at a time per key, and relays
- * instance events (turn ends, attention, reconnects) to the
- * watcher that delivers hand-offs and pushes.
- *
- * It never asks which kind of harness an instance is.
- */
 import { logger } from "@groot/core/logger";
 import {
   LEGACY_INSTANCE_ID,
@@ -35,39 +24,23 @@ export interface CodeHub {
   stop(): void;
   instances(): HarnessInstance[];
   instance(instanceId: string): HarnessInstance | undefined;
-  /** Resolve a thread id to its instance; legacy bare ids belong to the default Shelley. */
   resolve(threadId: string): { instance: HarnessInstance; nativeId: string } | undefined;
   statuses(): Record<string, InstanceStatus>;
-  /** Every instance's active threads, decorated (followed, unread). */
   list(): Promise<ThreadSummary[]>;
-  /** Re-read one instance's list now (after a change made here). */
   refresh(instanceId: string): Promise<void>;
-  /** Watch one thread; counts as a viewer while open. */
   watch(threadId: string, listener: (event: ThreadEvent) => void): () => void;
   viewers(threadId: string): number;
-  /**
-   * Run `work` once the earlier work under `key` has settled, one at a time
-   * in call order (in this process): a hand-off's start by its idempotency
-   * key, a thread's bot sends by its id.
-   */
   serial<T>(key: string, work: () => Promise<T>): Promise<T>;
   onChange(listener: (change: HubChange) => void): () => void;
-  /** What the list adds to a thread changed (its PR opened, moved or closed): send the list again. */
   listChanged(): void;
   onEvent(listener: (event: HubEvent) => void): () => void;
-  /**
-   * A bot's hand-off now runs on this thread (a start recorded its thread):
-   * the watcher checks whether its turn already ended meanwhile.
-   */
   handedOff(threadId: string): void;
   onHandoff(listener: (threadId: string) => void): () => void;
 }
 
 export interface HubOptions {
   instances: HarnessInstance[];
-  /** List refetch debounce after an instance says its list changed. */
   listDebounceMs?: number;
-  /** The instance bare (pre-ADR-0011) thread ids belong to. */
   legacyInstanceId?: string;
 }
 
@@ -146,7 +119,6 @@ export function createCodeHub(options: HubOptions): CodeHub {
     instances: () => [...byId.values()],
     instance: (instanceId) => byId.get(instanceId),
     resolve(threadId) {
-      // Bare ids are links written before ADR 0011 (`/code/<shelley conversation id>`).
       const parsed = parseThreadId(threadId, legacy);
       const instance = parsed && byId.get(parsed.instanceId);
       return instance ? { instance, nativeId: parsed.nativeId } : undefined;
@@ -230,7 +202,6 @@ export function createCodeHub(options: HubOptions): CodeHub {
   };
 }
 
-/** The process's hub (`app().codeHub`); undefined until boot (or when no harness is configured). */
 export function codeHub(): CodeHub | undefined {
   return app().codeHub;
 }

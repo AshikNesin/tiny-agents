@@ -1,8 +1,3 @@
-/**
- * Code projects, GitHub, pull requests and review (issue #297), under
- * `/api/v1/code`. Owner-only: none of these paths is in `GUEST_ACCESS`, so
- * the guest guard refuses them before they get here.
- */
 import { createHash } from "node:crypto";
 import { Hono, type Context } from "hono";
 import { z } from "zod";
@@ -85,8 +80,6 @@ import {
 
 const router = new Hono<AppEnv>();
 
-/** A repository-relative path from the query: no `..`, not absolute. */
-/** The largest file the review's light editor saves (characters). */
 const MAX_EDIT_BYTES = 1_000_000;
 
 function safePath(raw: string | undefined): string {
@@ -108,8 +101,6 @@ const threadParam = (raw: string | undefined) => {
   return id;
 };
 
-// --- GitHub settings ---------------------------------------------------------------------
-
 router.get("/code/github", async (c) => ok<GitHubStatus>(c, await githubStatus()));
 
 router.put("/code/github", async (c) => {
@@ -121,11 +112,6 @@ router.put("/code/github", async (c) => {
   return ok<GitHubStatus>(c, await githubStatus());
 });
 
-/**
- * Create the GitHub App in one click (GitHub's App Manifest flow, as
- * FeedbackBee does): answers the manifest the page posts to GitHub, and
- * binds the flow to this browser with a short-lived httpOnly cookie.
- */
 router.post("/code/github/app/manifest", async (c) => {
   const { organization } = await parseBody(
     c,
@@ -142,7 +128,6 @@ router.post("/code/github/app/manifest", async (c) => {
   return ok(c, { url: flow.url, manifest: flow.manifest, webhooks: flow.webhooks });
 });
 
-/** Install the App on repositories, or change which: GitHub's page, then back to `installed`. */
 router.post("/code/github/app/install", async (c) => {
   const flow = await startInstall();
   setFlowCookie(c, flow.binding);
@@ -157,8 +142,6 @@ router.delete("/code/github/app", async (c) => {
   await disconnectGitHubApp();
   return ok<GitHubStatus>(c, await githubStatus());
 });
-
-// --- projects ------------------------------------------------------------------------------
 
 router.get("/code/projects", async (c) =>
   ok<ProjectView[]>(c, (await listProjects()).map(projectView)),
@@ -238,8 +221,6 @@ router.delete("/code/projects/:project", async (c) => {
   return ok(c, { deleted: true });
 });
 
-// --- one thread's pull requests ------------------------------------------------------------
-
 router.get("/code/threads/:id/pr", async (c) => {
   const fresh = c.req.query("fresh") !== "false";
   return ok<ThreadPullsView>(c, await threadPulls(threadParam(c.req.param("id")), fresh));
@@ -307,8 +288,6 @@ router.post("/code/threads/:id/spend-limit", async (c) => {
   return ok<ThreadPullsView>(c, await threadPulls(id, false));
 });
 
-// --- per-turn checkpoints ---------------------------------------------------------------
-
 const checkpointView = (row: CodeCheckpoint): CheckpointView => ({
   id: row.id,
   seq: row.seq,
@@ -360,16 +339,6 @@ router.post("/code/threads/:id/pr/draft", async (c) => {
   return ok<ThreadPullsView>(c, await threadPulls(id, false));
 });
 
-// --- review: base-branch diff, viewed marks, batched comments -----------------------------
-
-/**
- * What a Review panel reads, by `?scope=`. A project thread's worktree, or a
- * PR review's (`review:<id>`): `base` (the default), since the merge base
- * with the base branch. A PR review also has `review`, since the commit of
- * the owner's last review, and `mine`, what the owner and the assistant
- * changed on top of the PR's head. Any other scope is a project thread's
- * checkpoint: what that turn changed, against the checkpoint before it.
- */
 async function reviewRange(threadId: string, scope = "base") {
   const reviewId = reviewIdOfKey(threadId);
   if (reviewId) {
@@ -416,12 +385,6 @@ router.get("/code/threads/:id/review/file", async (c) => {
   });
 });
 
-/**
- * The light editor's save: one file's whole new content, written in the
- * thread's (or PR review's) worktree when the file is still as the owner
- * opened it. An edit by the agent meanwhile is kept, and the owner is told
- * to open the file again. Only a regular file inside the worktree is written.
- */
 router.put("/code/threads/:id/review/file", async (c) => {
   const id = threadParam(c.req.param("id"));
   const body = await parseBody(
@@ -461,10 +424,6 @@ router.post("/code/threads/:id/review/viewed", async (c) => {
   return ok(c, { viewed: body.viewed });
 });
 
-/**
- * Whose waiting line comments: the agent's, or with `?target=github` a PR
- * review's (`review:<id>`) pending comments for GitHub.
- */
 async function draftsOf(c: Context<AppEnv>) {
   const id = threadParam(c.req.param("id"));
   const target = c.req.query("target");
@@ -508,8 +467,6 @@ router.post("/code/threads/:id/review/send", async (c) => {
   });
   return ok(c, { sent, status: result.status });
 });
-
-// --- PR reviews (issue #345) ----------------------------------------------------------------
 
 router.get("/code/reviews", async (c) => ok<PullReviewView[]>(c, await listReviews()));
 

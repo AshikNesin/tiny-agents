@@ -8,12 +8,10 @@ import type { GuestListData, PeopleMe } from "../../../shared/api/people";
 
 const router = new Hono<AppEnv>();
 
-/** Whether the signed-in account is a guest (the client shows a guest's shell). */
 router.get("/people/me", (c) => {
   return ok<PeopleMe>(c, { guest: c.get("viewer").kind === "guest" });
 });
 
-// Owner only (guest.guard.ts): managing guests.
 router.get("/people", async (c) => {
   return ok<GuestListData>(c, { guests: await people.listGuests() });
 });

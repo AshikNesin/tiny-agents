@@ -1,9 +1,3 @@
-/**
- * OAuth 2.1 for MCP connections (issue #1 D9–D11). The MCP SDK runs the
- * protocol (discovery, PKCE, Client ID Metadata Document or dynamic
- * registration, token refresh); this provider persists its state encrypted on
- * the connection row and hands consent URLs to the manager.
- */
 import { randomBytes } from "node:crypto";
 import { and, eq, isNotNull } from "drizzle-orm";
 import { env } from "@groot/core/env";
@@ -18,13 +12,10 @@ import { connections, db } from "../../db";
 import { SecretLockedError } from "../../crypto/secret-box";
 import { openOAuthState, sealOAuthState } from "./connection-secrets";
 
-/** What a connection stores about its OAuth sign-in (encrypted in `oauthEnc`). */
 export interface OAuthState {
-  /** Registered (or manually entered) client. */
   client?: OAuthClientInformationMixed;
   tokens?: OAuthTokens;
   verifier?: string;
-  /** Pending authorization request's state parameter. */
   state?: string;
 }
 
@@ -36,7 +27,6 @@ function oauthCallbackUrl(): string {
   return `${appOrigin()}/api/v1/connections/oauth/callback`;
 }
 
-/** Public Client ID Metadata Document URL — only usable on an https origin. */
 export function clientMetadataUrl(): string | undefined {
   const origin = appOrigin();
   return origin.startsWith("https://")
@@ -54,7 +44,6 @@ export function clientMetadata(): OAuthClientMetadata {
   };
 }
 
-/** The stored state. Throws `SecretLockedError` when it can't be opened; the manager reports that. */
 export async function readOAuthState(connectionId: string): Promise<OAuthState> {
   const row = await db.query.connections.findFirst({
     where: eq(connections.id, connectionId),
@@ -63,12 +52,6 @@ export async function readOAuthState(connectionId: string): Promise<OAuthState> 
   return openOAuthState<OAuthState>(connectionId, row?.oauthEnc) ?? {};
 }
 
-/**
- * The state as a sign-in reads and changes it. A stored state that can't be
- * opened (the pre-v2 format, or another SECRETS_KEY) counts as none, so
- * signing in again replaces it instead of failing on it; the connection has
- * already asked the owner to sign in again.
- */
 function openForSignIn(connectionId: string, stored: string | null | undefined): OAuthState {
   try {
     return openOAuthState<OAuthState>(connectionId, stored) ?? {};
@@ -86,12 +69,6 @@ async function readForSignIn(connectionId: string): Promise<OAuthState> {
   return openForSignIn(connectionId, row?.oauthEnc);
 }
 
-/**
- * Change one part of the state. The read, the change and the write are one
- * synchronous transaction (C11): two steps of concurrent flows (a token
- * refresh and a new sign-in's verifier) can't read the same state and have
- * the second write drop the first one's change.
- */
 async function writeOAuthState(
   connectionId: string,
   change: (state: OAuthState) => OAuthState,
@@ -102,7 +79,6 @@ async function writeOAuthState(
       .from(connections)
       .where(eq(connections.id, connectionId))
       .get();
-    // The connection was removed (Prisma's update threw P2025 → 404).
     if (!row) return false;
     const next = change(openForSignIn(connectionId, row.oauthEnc));
     tx.update(connections)
@@ -114,7 +90,6 @@ async function writeOAuthState(
   if (!written) throw Boom.notFound("Record not found");
 }
 
-/** The connection whose pending authorization used `state`. */
 export async function connectionForState(state: string): Promise<string | undefined> {
   const rows = await db
     .select({ id: connections.id, oauthEnc: connections.oauthEnc })
@@ -123,9 +98,7 @@ export async function connectionForState(state: string): Promise<string | undefi
   for (const row of rows) {
     try {
       if (openOAuthState<OAuthState>(row.id, row.oauthEnc)?.state === state) return row.id;
-    } catch {
-      // unreadable rows can't match
-    }
+    } catch {}
   }
   return undefined;
 }

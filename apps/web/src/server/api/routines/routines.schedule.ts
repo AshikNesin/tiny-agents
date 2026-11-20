@@ -1,14 +1,7 @@
-/**
- * Routine schedule math, pure and DB-free: the discriminated schedule union,
- * IST next-occurrence computation, the missed-run grace window, and the
- * human-facing labels every surface (API, prompts, future UI) reuses.
- * IST-only by design (issue #18): one owner, one timezone, no DST.
- */
 import { CronExpressionParser } from "cron-parser";
 import cronstrue from "cronstrue";
 import { z } from "zod";
 
-/** The single timezone constant (PRD 5.2). Everything renders in this zone. */
 export const TZ_IST = "Asia/Kolkata";
 
 const MIN_INTERVAL_MINUTES = 15;
@@ -17,7 +10,6 @@ export const MAX_ROUTINES = 50;
 export const MAX_NAME_CHARS = 80;
 export const MAX_PROMPT_CHARS = 20_000;
 
-/** 5-field cron expressions only; 6-field (with seconds) are out of scope. */
 const cronExpr = z
   .string()
   .trim()
@@ -37,7 +29,6 @@ const cronExpr = z
     { message: "Not a valid cron expression" },
   );
 
-/** once: a single instant. Offset required so a bare wall-clock never implies UTC. */
 const onceSchema = z.object({
   kind: z.literal("once"),
   at: z.string().refine((value) => z.iso.datetime({ offset: true }).safeParse(value).success, {
@@ -67,32 +58,15 @@ export const scheduleSchema = z.discriminatedUnion("kind", [
 
 export type Schedule = z.infer<typeof scheduleSchema>;
 
-/**
- * Parse a stored/transported schedule value. Every boundary (API, job handler,
- * future toolkit) funnels through this, so an invalid schedule can never reach
- * the scheduling engine.
- */
 export function parseSchedule(value: unknown): Schedule {
   return scheduleSchema.parse(value);
 }
 
-/** Parse without throwing; used where a 400 response or a skip is preferable. */
 export function safeParseSchedule(value: unknown): Schedule | undefined {
   const result = scheduleSchema.safeParse(value);
   return result.success ? result.data : undefined;
 }
 
-/**
- * The next fire after `from`, as an absolute UTC instant.
- *
- * - once: the instant itself (even if already past; lateness is the fire
- *   handler's call, not the parser's).
- * - cron: cron-parser in IST. An expression whose next slot after `from` does
- *   not exist (Feb 29 on non-leap years) rolls to the next matching date.
- * - interval: `from + minutes`. The routine's createdAt anchors drift-free
- *   recurrence across restarts: each fire schedules the next from the
- *   occurrence just fired, not from wall-clock now.
- */
 export function nextOccurrence(schedule: Schedule, from: Date): Date {
   switch (schedule.kind) {
     case "once":
@@ -109,7 +83,6 @@ export function nextOccurrence(schedule: Schedule, from: Date): Date {
   }
 }
 
-/** Minutes between consecutive occurrences of a recurring schedule (once has none). */
 export function periodMinutes(schedule: Schedule): number | undefined {
   if (schedule.kind === "interval") return schedule.minutes;
   if (schedule.kind !== "cron") return undefined;
@@ -128,12 +101,10 @@ export function periodMinutes(schedule: Schedule): number | undefined {
   }
 }
 
-/** A one-time schedule whose instant has already passed (it ran, or never can). */
 export function isSpentOnce(schedule: Schedule, now: Date): boolean {
   return schedule.kind === "once" && new Date(schedule.at).getTime() <= now.getTime();
 }
 
-/** Lateness in words: "7m", "3h 12m", "2 days". */
 export function formatLateness(minutes: number): string {
   if (minutes < 60) return `${minutes}m`;
   if (minutes < 24 * 60) {
@@ -144,16 +115,10 @@ export function formatLateness(minutes: number): string {
   return days === 1 ? "1 day" : `${days} days`;
 }
 
-/** Lateness grace: half the period, clamped to [5, 120] minutes (PRD 5.5). */
 export function graceMinutes(periodMin: number): number {
   return Math.min(120, Math.max(5, Math.round(periodMin / 2)));
 }
 
-/**
- * Decide whether an overdue occurrence still fires. `once` always fires late
- * (a reminder at 9:05 is still useful); recurring schedules past their grace
- * are recorded missed.
- */
 export function withinGrace(schedule: Schedule, scheduledFor: Date, now: Date): boolean {
   if (schedule.kind === "once") return true;
   const period = periodMinutes(schedule);
@@ -162,7 +127,6 @@ export function withinGrace(schedule: Schedule, scheduledFor: Date, now: Date): 
   return lateMs <= graceMinutes(period) * 60_000;
 }
 
-/** Plain-English schedule sentence (cronstrue for cron; fixed wording otherwise). */
 export function describeSchedule(schedule: Schedule): string {
   switch (schedule.kind) {
     case "once":
@@ -180,7 +144,6 @@ export function describeSchedule(schedule: Schedule): string {
   }
 }
 
-/** IST wall-clock rendering, e.g. "Tue, 20 Oct 2026, 09:00 IST". */
 export function formatIst(value: Date | string | number): string {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
@@ -198,7 +161,6 @@ export function formatIst(value: Date | string | number): string {
     .replace(/(\d{2}:\d{2})$/, "$1 IST");
 }
 
-/** The prompt header a fired routine carries (PRD 5.4), with the occurrence pinned. */
 export function composeRoutineLabel(
   name: string,
   scheduledFor: Date,
@@ -211,11 +173,6 @@ export function composeRoutineLabel(
   return `**Routine "${name}" (scheduled ${formatIst(scheduledFor)})${late}:**`;
 }
 
-/**
- * The full text a run's fresh conversation gets: the label, the prompt, and
- * the routine's latest results (newest first), all a run knows of earlier
- * ones, so a routine that should only report what is new still can.
- */
 export function composeRoutinePrompt(
   name: string,
   prompt: string,

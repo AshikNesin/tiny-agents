@@ -1,30 +1,3 @@
-/**
- * An Auto-fix pass (issue #297 §9.3, ADR 0023), reusing the hand-off
- * pattern: a row claimed before the harness hears anything, the finish read
- * when the thread's turn ends, and a finish still owed swept up by the next
- * reconcile.
- *
- * 1. Claim a `code_autofix_passes` row keyed by the PR's state; a second
- *    claim for the same state loses and does nothing.
- * 2. Sync the worktree to the remote head (commits pushed elsewhere come in;
- *    a divergence waits for the owner).
- * 3. Send the fix request to the thread, queued behind any running turn:
- *    the failing-check log tails and review comments inside a block marked
- *    untrusted, plus fixed instructions and the report format.
- * 4. When the turn ends, the app applies the push rules (§7.3): a pass with
- *    no new commit, or one touching a protected path, is not pushed; the
- *    push is never forced. Then it replies to each fixed thread with the
- *    commit and resolves it. Without a parseable report it posts one summary
- *    comment and resolves nothing.
- *
- * Every comment the app posts carries a hidden marker and its id is
- * recorded, so it never starts a pass, whoever GitHub says wrote it.
- *
- * Permissions (§9.3, question 5): a pass is not a turn the owner started, so
- * the thread's own permission mode applies; anything the harness asks
- * during a pass waits for the owner (the loop shows `needs_input` once the
- * pass times out). A pass never turns permission prompts off.
- */
 import { logger } from "@groot/core/logger";
 import { notificationService } from "@groot/core/notification/notification.service";
 import type { HarnessInstance, TurnOutcome } from "@tiny-agents/code/server";
@@ -46,7 +19,6 @@ import {
 import { matchesGlob, WorkspaceError } from "./code.workspace";
 import { FINAL_HEAD, PASS_HEAD } from "../../../shared/code-messages";
 
-/** The fenced block a harness without a report tool ends its pass with. */
 const REPORT_FENCE = "autofix-report";
 const LOG_TAIL_CHARS = 3000;
 const MAX_LOGS = 3;
@@ -57,7 +29,6 @@ interface ReportEntry {
   reason?: string;
 }
 
-/** The last `autofix-report` block in the agent's answer, if it parses. */
 function parseReport(text: string): ReportEntry[] | undefined {
   const blocks = [
     ...text.matchAll(new RegExp("```" + REPORT_FENCE + "\\s*\\n([\\s\\S]*?)```", "g")),
@@ -83,10 +54,8 @@ function parseReport(text: string): ReportEntry[] | undefined {
   }
 }
 
-/** A marker the app puts on every comment it posts (§9.5). */
 const marker = (passId: string) => `${APP_MARKER} pass=${passId} -->`;
 
-/** The fix request: untrusted material in one marked block, fixed instructions around it. */
 function passMessage(
   items: Array<AutofixItem & { log?: string }>,
   context: { check?: string; protectedPaths: string[] },
@@ -154,7 +123,6 @@ function notifyNeedsYou(pull: CodePullRow, reason: string) {
   notificationService.notify(codePullUpdate(pull, "needs_input", reason));
 }
 
-/** What the thread has cost so far (USD), where its harness reports cost. */
 async function threadCost(threadId: string): Promise<number | null> {
   const target = codeHub()?.resolve(threadId);
   if (!target) return null;
@@ -162,14 +130,12 @@ async function threadCost(threadId: string): Promise<number | null> {
   return snapshot && snapshot.costUsd > 0 ? snapshot.costUsd : null;
 }
 
-/** What a pass cost: the thread's cost now less its cost when the pass started. */
 async function passCost(pass: CodeAutofixPass, threadId: string): Promise<number | null> {
   if (pass.startCostUsd === null) return null;
   const now = await threadCost(threadId);
   return now === null ? null : Math.max(0, now - pass.startCostUsd);
 }
 
-/** End a pass that cannot go on: the loop waits for the owner. */
 async function stop(
   pass: CodeAutofixPass,
   pull: CodePullRow,
@@ -183,7 +149,6 @@ async function stop(
   }
 }
 
-/** Failing-check log tails for the pass, a few at most. */
 async function withLogs(
   github: GitHubClient,
   project: CodeProjectRow,
@@ -202,10 +167,6 @@ async function withLogs(
   );
 }
 
-/**
- * Claim and send one pass. Answers the pass row when this caller started
- * it, undefined when another claim for the same state won (or it stopped).
- */
 export async function startPass(
   pullRow: CodePullRow,
   trigger: string,
@@ -256,7 +217,6 @@ export async function startPass(
       check: scripts.check,
       protectedPaths: settings.protectedPaths,
     });
-    // Running before the send, so a turn that ends at once still finds it.
     const startCostUsd = await threadCost(pull.threadId);
     await movePass(pass.id, "running", { startSha, startCostUsd, startedAt: new Date() });
     await ctx.instance.send(ctx.nativeId, { message, queue: true });
@@ -267,23 +227,15 @@ export async function startPass(
   }
 }
 
-/** The agent's full last answer (the turn outcome is cut to chat size). */
 async function lastAnswer(ctx: PassContext, outcome?: TurnOutcome): Promise<string> {
   try {
     const snapshot = await ctx.instance.getThread(ctx.nativeId);
     const last = [...snapshot.items].reverse().find((item) => item.kind === "assistant");
     if (last && last.kind === "assistant") return last.text;
-  } catch {
-    // Fall back to the outcome's excerpt.
-  }
+  } catch {}
   return outcome?.text ?? "";
 }
 
-/**
- * The thread's turn ended (or a reconcile found it idle): check, push,
- * answer the reviewers and close the pass. Idempotent: only the caller that
- * moves the pass to `finished` acts.
- */
 export async function finishPass(pass: CodeAutofixPass, outcome?: TurnOutcome): Promise<void> {
   const pull = await getPull(pass.pullId);
   if (!pull) return;
@@ -298,7 +250,6 @@ export async function finishPass(pass: CodeAutofixPass, outcome?: TurnOutcome): 
   const head = await ws.headSha(worktree);
   const finalOnly = pass.trigger === "final";
   if (finalOnly && pass.startSha && head === pass.startSha) {
-    // The final check found nothing to change: that is its good ending.
     const costUsd = await passCost(pass, pull.threadId);
     if (
       await movePass(pass.id, "finished", { outcome: "clean", costUsd, finishedAt: new Date() })
@@ -353,7 +304,6 @@ export async function finishPass(pass: CodeAutofixPass, outcome?: TurnOutcome): 
   const short = pushed.slice(0, 7);
   try {
     if (finalOnly) {
-      // A final check answers no reviewer.
     } else if (report) {
       for (const entry of report) {
         const item = items.find((i) => i.id === entry.id);
@@ -383,7 +333,6 @@ export async function finishPass(pass: CodeAutofixPass, outcome?: TurnOutcome): 
   logger.info({ pr: `${repoSlug(repo)}#${pull.number}`, sha: short }, "Auto-fix pass pushed");
 }
 
-/** A pass past its time: interrupt the turn and wait for the owner. */
 export async function timeOutPass(pass: CodeAutofixPass): Promise<void> {
   const pull = await getPull(pass.pullId);
   if (!pull) return;
