@@ -301,6 +301,12 @@ describe("PR reviews", () => {
     expect((await call<PullReviewView[]>("GET", "/reviews")).body.data).toEqual([]);
     const files = await call("GET", `/threads/${encodeURIComponent(review.key)}/review/files`);
     expect(files.status).toBe(404);
+    // Every way into its worktree says the same.
+    const ask = await call("POST", `/reviews/${review.id}/ask`, { message: "Still there?" });
+    expect([ask.status, ask.body.error?.message]).toEqual([
+      404,
+      "This review is archived. Open the PR again.",
+    ]);
   });
 });
 

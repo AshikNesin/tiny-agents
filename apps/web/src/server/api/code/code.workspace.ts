@@ -14,6 +14,7 @@
  *   stdin and lives only in that command's environment, never on its command
  *   line or on disk; without a token, `gh auth git-credential` answers.
  */
+import { Boom } from "@groot/core/errors";
 import { shQuote } from "@tiny-agents/sandbox";
 import type { ExecPort, ExecResult, RepoRef } from "@tiny-agents/github";
 import type { GitFile, GitFileDiff } from "@tiny-agents/code/contracts";
@@ -49,6 +50,12 @@ export class WorkspaceError extends Error {
     super(message);
     this.name = "WorkspaceError";
   }
+}
+
+/** A workspace failure the owner can act on, said as it is (409): `.catch(saying)`. */
+export function saying(error: unknown): never {
+  if (error instanceof WorkspaceError) throw Boom.conflict(error.message);
+  throw error;
 }
 
 export interface ProjectScripts {
