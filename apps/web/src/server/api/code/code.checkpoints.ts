@@ -68,8 +68,10 @@ export async function checkpointTurn(threadId: string): Promise<CodeCheckpoint |
 
 /** A checkpoint and the one before it (what that turn changed). */
 export async function checkpointRange(threadId: string, checkpointId: string) {
-  const { worktree, ws } = await threadWorktree(threadId);
-  const all = await checkpointsOf(threadId);
+  const [{ worktree, ws }, all] = await Promise.all([
+    threadWorktree(threadId),
+    checkpointsOf(threadId),
+  ]);
   const index = all.findIndex((c) => c.id === checkpointId);
   if (index < 0) throw Boom.notFound("No such checkpoint");
   const to = all[index]!;
