@@ -237,6 +237,20 @@ export async function projectThread(
   return project ? { thread, project } : undefined;
 }
 
+/** A project thread with its worktree and workspace, or a 404 that says why it has none. */
+export async function threadWorktree(threadId: string) {
+  const found = await projectThread(threadId);
+  if (!found) throw Boom.notFound("This thread is not in a project.");
+  const { thread, project } = found;
+  if (!thread.worktree || !thread.branch) {
+    throw Boom.notFound(
+      "Its worktree went when the thread was archived. Unarchive it to see the changes.",
+    );
+  }
+  const ws = await codeGitHub().workspace(project);
+  return { thread, project, worktree: thread.worktree, branch: thread.branch, ws };
+}
+
 /** The scripts that apply: the project's overrides over the checked-in file. */
 export async function scriptsFor(
   project: CodeProjectRow,

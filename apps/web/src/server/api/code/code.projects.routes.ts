@@ -65,7 +65,7 @@ import {
   createProject,
   deleteProject,
   listProjects,
-  projectThread,
+  threadWorktree,
   projectView,
   updateProject,
 } from "./code.projects";
@@ -390,21 +390,8 @@ async function reviewRange(threadId: string, scope = "base") {
     const { from, to, worktree, ws } = await checkpointRange(threadId, scope);
     return { ws, worktree, from: from.sha, to: to.sha, viewable: false };
   }
-  const found = await projectThread(threadId);
-  if (found && !found.thread.worktree) {
-    throw Boom.notFound(
-      "Its worktree went when the thread was archived. Unarchive it to see the changes.",
-    );
-  }
-  if (!found?.thread.worktree) {
-    throw Boom.notFound("Review against the base branch is for project threads with a worktree.");
-  }
-  return {
-    ws: await codeGitHub().workspace(found.project),
-    worktree: found.thread.worktree,
-    from: `merge-base:${found.project.baseBranch}`,
-    viewable: true,
-  };
+  const { project, worktree, ws } = await threadWorktree(threadId);
+  return { ws, worktree, from: `merge-base:${project.baseBranch}`, viewable: true };
 }
 
 router.get("/code/threads/:id/review/files", async (c) => {
