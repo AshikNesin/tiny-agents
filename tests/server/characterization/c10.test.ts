@@ -1,17 +1,3 @@
-/**
- * Characterization of behavior-register row C10: `upsertRun` can move a run
- * `failed → awaiting`. Cancelled runs are written by the service and never
- * announced live.
- * Preserve: this pins today's behavior, quirk included; change it only with a
- * signed-off register row.
- *
- * `upsertRun` (routines.runs.ts) is an insert-or-update on (routine, slot)
- * with no guard on the current status, so `recordAwaiting` after
- * `recordSubmitFailed` for the same slot puts a terminal run back to
- * `awaiting`. Moving a routine to another bot (routines.service.ts `update`)
- * sets its awaiting runs to `cancelled` with a plain update: no push, no
- * `routine-run` chat event.
- */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { eq } from "drizzle-orm";
 import { notificationService } from "@groot/core/notification/notification.service";
@@ -78,7 +64,6 @@ describe("C10: routine run writes outside the machine's guarded moves", () => {
       new Error("model gone"),
     );
     expect(await runRow(failedId)).toMatchObject({ status: "failed" });
-    // The failed submit is announced (push and card), unlike a cancel below.
     expect(notify).toHaveBeenCalledTimes(1);
     await until(() => events.some((event) => event.type === "routine-run"), "the failed card");
 
@@ -90,7 +75,6 @@ describe("C10: routine run writes outside the machine's guarded moves", () => {
       error: null,
       requestId: runRequestId(routine.id, slot),
     });
-    // The failed move's finishedAt is not cleared: an awaiting run with a finish time.
     expect(row?.finishedAt?.getTime()).toBe(failedAt.getTime());
     expect(await db.$count(routineRuns)).toBe(1);
   });
@@ -123,7 +107,6 @@ describe("C10: routine run writes outside the machine's guarded moves", () => {
       error: "Moved to another bot",
       finishedAt: expect.any(Date),
     });
-    // Give any fire-and-forget announcement a chance to land.
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(notify).not.toHaveBeenCalled();
     expect(events.filter(([, event]) => event.type === "routine-run")).toEqual([]);

@@ -1,7 +1,3 @@
-/**
- * The guest viewer's RFB filter (S2): handshake and picture requests pass,
- * every input message is dropped, and anything it cannot frame fails.
- */
 import { describe, expect, it } from "vite-plus/test";
 import {
   createRfbInputWatch,
@@ -89,7 +85,6 @@ describe("createRfbInputWatch", () => {
     const watch = createRfbInputWatch(() => (inputs += 1));
     watch.push(Buffer.concat([HANDSHAKE, setPixelFormat, setEncodings, updateRequest]));
     expect(inputs).toBe(0);
-    // A pointer message split across chunks counts once, when it completes.
     watch.push(Buffer.concat([updateRequest, pointer.subarray(0, 3)]));
     expect(inputs).toBe(0);
     watch.push(Buffer.concat([pointer.subarray(3), key]));

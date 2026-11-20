@@ -1,8 +1,3 @@
-/**
- * Golden flows: tasks, memory, skills, people and routines, through their
- * APIs, with the tables behind them. Routine fires run on the faux model and
- * the job queue is ticked by hand. See recorder.ts.
- */
 import { runTick } from "@groot/jobs/server/tick";
 import { afterAll, beforeAll, describe, vi } from "vite-plus/test";
 import { createTestApp } from "../helpers";
@@ -235,7 +230,6 @@ describe("golden: tasks, memory, skills, people, routines", () => {
     }, "the manual run settled");
     await r.http("runs", `/api/v1/routines/${every.id}/runs`);
 
-    // A once routine a minute from now: the queue fires it once the clock passes it.
     const at = new Date(Date.parse(FIXED_NOW) + 60_000);
     const once = await r.http("create a once routine in a minute", "/api/v1/routines", {
       method: "POST",

@@ -94,7 +94,6 @@ function pin(name?: string) {
 
 const settle = () => act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
 
-/** A clicked tab leaves the pointer on the tab list: its hover highlight fades in first. */
 const hoverShown = () =>
   waitFor(() => {
     const highlights = document.querySelectorAll<HTMLElement>(
@@ -109,9 +108,6 @@ const DAY = 24 * 60 * 60_000;
 beforeEach(() => {
   for (const fn of Object.values(api)) fn.mockReset();
 });
-
-// ---------------------------------------------------------------------------
-// Memory
 
 function memory(partial: Partial<MemoryRecord> & { id: string; botId: string }): MemoryRecord {
   return {
@@ -182,7 +178,6 @@ async function mountMemory() {
   await settle();
 }
 
-/** Each bot's switch and memories load on their own; pin once every read has answered. */
 async function memoryLoaded() {
   await screen.findByText("Journals every night");
   const bots = (await api.botsList.mock.results[0]?.value) as unknown[];
@@ -252,9 +247,6 @@ describe("Memory, pinned", () => {
     pin();
   });
 });
-
-// ---------------------------------------------------------------------------
-// A skill
 
 const skill = (partial: Partial<Skill> = {}): Skill => ({
   id: "s1",
@@ -355,9 +347,6 @@ describe("SkillDetail, pinned", () => {
     pin("delete");
   });
 });
-
-// ---------------------------------------------------------------------------
-// A connection
 
 const connection = (partial: Partial<Connection> = {}): Connection => ({
   id: "c1",

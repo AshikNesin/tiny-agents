@@ -1,8 +1,3 @@
-/**
- * Context trim: a browser or computer session's old screenshots are not
- * re-sent on every later request. Drives a real runtime whose tool returns a
- * screenshot each step and reads what the model was sent.
- */
 import { describe, expect, it } from "vite-plus/test";
 import type { Context as PiContext } from "@earendil-works/pi-ai";
 import { Type } from "@earendil-works/pi-ai";
@@ -37,7 +32,6 @@ const screenshot = defineExtension({
   ],
 });
 
-/** A browser that reads a long page each step, as `browser_snapshot` does. */
 const pageReads = defineExtension({
   name: "pages",
   tools: [
@@ -51,7 +45,6 @@ const pageReads = defineExtension({
   ],
 });
 
-/** A click whose result carries the page after it, as `browser_click` does. */
 const clicks = defineExtension({
   name: "clicks",
   tools: [
@@ -112,13 +105,8 @@ describe("context trim", () => {
       });
       await until(() => seen.length === 15 && !runtime.isBusy(ref), "the run to finish");
 
-      // Request n carries n-1 screenshots. Up to 12 (3 kept + fewer than 10
-      // over) all are sent; at 13 the oldest 10 drop at once, leaving 3, and
-      // the prefix then stays put until 10 more pile up.
       expect(seen.map((s) => s.images)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 3, 4]);
-      // Dropped images leave their tool results (and a note) in place.
       expect(seen[14].toolResults).toBe(14);
-      // The owner's attached image is never dropped.
       expect(seen.every((s) => s.userImages === 1)).toBe(true);
     } finally {
       await runtime.close();
@@ -150,8 +138,6 @@ describe("context trim", () => {
       await runtime.submit(ref, { requestId: "reads", text: "browse" });
       await until(() => seen.length === 10 && !runtime.isBusy(ref), "the run to finish");
 
-      // Request n carries n-1 reads. Up to 6 (2 kept + fewer than 5 over)
-      // all are sent; at 7 the oldest 5 drop at once, leaving 2.
       expect(seen).toEqual([0, 1, 2, 3, 4, 5, 6, 2, 3, 4]);
     } finally {
       await runtime.close();
@@ -182,7 +168,6 @@ describe("context trim", () => {
       const texts = results.map((m) =>
         m.content.map((block) => (block.type === "text" ? block.text : "")).join("|"),
       );
-      // 7 results: the oldest 5 dropped at once, the newest 2 whole.
       expect(texts.slice(0, 5)).toEqual(
         Array(5).fill(
           "clicked e3 — https://example.com/|[Older page read left out to save context; its refs are stale. Read the page again if you need it.]",

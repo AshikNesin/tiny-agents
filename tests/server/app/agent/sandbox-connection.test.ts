@@ -1,13 +1,3 @@
-/**
- * The sandbox connection, once, at its interface: the real ssh2 client
- * against the in-process SSH server. One pooled connection for execs, ptys,
- * file transfers and forwards; the retry rule (a refusal is retried once on a
- * fresh connection, a stalled exec is not); a dropped connection retired and
- * redialed; the idle close; the tailscaled rule for closed forwards; TOFU
- * host keys; and the one "Cannot reach the sandbox" wording. The dial's own
- * guarantees (a late ssh2 error never crashes the process) use a fake ssh2
- * Client class, since a real server cannot provoke them on demand.
- */
 import { EventEmitter } from "node:events";
 import { createServer, type Server } from "node:net";
 import type { Duplex } from "node:stream";
@@ -40,7 +30,6 @@ afterEach(() => {
   for (const cleanup of cleanups.splice(0).reverse()) cleanup();
 });
 
-/** Echo whatever follows `echo `; everything else answers empty. */
 const echo: ExecHandler = (command) =>
   command.startsWith("echo ") ? { stdout: command.slice(5) } : { stdout: "" };
 
@@ -70,7 +59,6 @@ async function sandbox(
 
 const text = (result: { stdout: Buffer }) => result.stdout.toString("utf8");
 
-/** A TCP echo service standing in for a port on the sandbox's loopback. */
 async function echoService(): Promise<{ port: number; server: Server }> {
   const server = createServer((socket) => socket.pipe(socket));
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -148,7 +136,7 @@ describe("sandbox connection: the retry rule", () => {
     const { server, connection } = await sandbox((command) =>
       refuse-- > 0 ? null : echo(command),
     );
-    await connection.exec("echo warm").catch(() => {}); // refused, then retried
+    await connection.exec("echo warm").catch(() => {});
     expect(server.connections).toBe(2);
     expect(text(await connection.exec("echo after"))).toBe("after");
     expect(server.connections).toBe(2);
@@ -168,7 +156,6 @@ describe("sandbox connection: the retry rule", () => {
     await connection.exec("echo warm");
     await expect(connection.exec("stall")).rejects.toBeInstanceOf(ChannelStallError);
     expect(server.execCalls).toEqual(["echo warm", "stall"]);
-    // The stalled connection is retired: the next call dials a fresh one.
     expect(text(await connection.exec("echo fresh"))).toBe("fresh");
     expect(server.connections).toBe(2);
   });
@@ -206,7 +193,7 @@ describe("sandbox connection: ptys, files and forwards share the connection", ()
       ["attach 2", 80, 24],
     ]);
     first.destroy();
-    await new Promise((resolve) => setTimeout(resolve, 120)); // past the idle timeout
+    await new Promise((resolve) => setTimeout(resolve, 120));
     expect(text(await connection.exec("echo while attached"))).toBe("while attached");
     expect(server.connections).toBe(1);
 
@@ -218,7 +205,6 @@ describe("sandbox connection: ptys, files and forwards share the connection", ()
     ptys[1]!.emit("hello");
     expect(await output).toBe("hello");
 
-    // The program exits: the stream ends, then the idle close ends the connection.
     second.resume();
     ptys[1]!.end();
     expect(await second.done).toEqual({ exitCode: 0 });
@@ -230,7 +216,7 @@ describe("sandbox connection: ptys, files and forwards share the connection", ()
     const { server, connection } = await sandbox();
     const payload = "line one\nline two — ünïcödé ✓\n";
     await connection.writeFile("/notes.txt", payload);
-    await connection.writeFile("/notes.txt", payload); // overwrite: temp name, then rename
+    await connection.writeFile("/notes.txt", payload);
     const file = await connection.readFile("/notes.txt");
     expect(file.bytes.toString("utf8")).toBe(payload);
     expect(file.truncated).toBe(false);
@@ -273,10 +259,8 @@ describe("sandbox connection: ptys, files and forwards share the connection", ()
     tunnel.destroy();
     await closed;
 
-    // New channels go to a fresh connection (tailscaled stalls them on the old one)…
     expect(text(await connection.exec("echo next"))).toBe("next");
     expect(server.connections).toBe(2);
-    // …and the pty on the retired one carries on until it closes.
     const output = new Promise((resolve) => pty.once("data", (d: Buffer) => resolve(String(d))));
     ptys[0]!.emit("still attached");
     expect(await output).toBe("still attached");
@@ -313,7 +297,6 @@ describe("sandbox connection: TOFU host keys", () => {
     expect(pinned).toMatch(/^sha256:/);
     connection.close();
 
-    // Another server on the same host presents a different key.
     const { server: other, connection: intercepted } = await sandbox(echo, {
       endpoint: { hostKeys },
     });
@@ -330,7 +313,6 @@ type ConnectConfig = {
   hostVerifier?: (key: Buffer, verify: (ok: boolean) => void) => void;
 };
 
-/** A fake ssh2 Client class whose handshake the test drives by hand. */
 function fakeSsh2(key = Buffer.from("host-key-A")) {
   const clients: FakeClient[] = [];
   class FakeClient extends EventEmitter {
@@ -365,7 +347,6 @@ describe("the dial", () => {
   it("keeps handling errors after ready, so a late ssh2 error cannot crash the process", async () => {
     const ssh = fakeSsh2();
     const client = await dialSsh({ host: "vm" }, ssh.Client);
-    // An EventEmitter with no 'error' listener throws here; ours must not.
     expect(() => client.emit("error", new Error("Connection lost"))).not.toThrow();
     expect(() => client.emit("error", new Error("Connection lost again"))).not.toThrow();
   });

@@ -1,11 +1,3 @@
-/**
- * The Code page's thread list (issue #143, ADR 0011): one line per thread,
- * subagents nested, Archive on a row moves the thread together with its
- * subagents (the server cascades; the toast says how many, with Undo), and
- * a harness that cannot archive offers no Archive. Select mode (issue #148)
- * archives many threads at once. Threads are grouped by project, then by
- * folder, each group with its own New thread.
- */
 import React from "react";
 import { render as renderBare, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -17,7 +9,6 @@ import type { HarnessInfo, ThreadSummary } from "@/lib/code/api";
 import type { ProjectView } from "../../../apps/web/src/shared/api/code";
 import { AppQueryProvider } from "../query-provider";
 
-/** Each render gets its own React Query cache, as the app gives the page one. */
 const render = (ui: Parameters<typeof renderBare>[0]) =>
   renderBare(ui, { wrapper: AppQueryProvider });
 
@@ -229,15 +220,12 @@ describe("Code thread list", () => {
       </MemoryRouter>,
     );
     await openMenuItem("Select threads");
-    // Rows become checkboxes; a harness that cannot archive offers none.
     expect(screen.queryByRole("checkbox", { name: "Select c1" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Archive parent" })).toBeNull();
     await userEvent.click(screen.getByRole("checkbox", { name: "Select parent" }));
-    // The subagent goes along with its parent: ticked, not its own pick.
     const child = screen.getByRole("checkbox", { name: "Select child" });
     expect(child).toBeChecked();
     expect(child).toBeDisabled();
-    // A click on the row picks it instead of opening it.
     const other = screen
       .getAllByTestId("code-conversation-row")
       .find((r) => r.textContent?.startsWith("other"))!;
@@ -247,7 +235,6 @@ describe("Code thread list", () => {
 
     await userEvent.click(within(bar).getByRole("button", { name: "Archive" }));
     await waitFor(() => expect(toastSuccess).toHaveBeenCalled());
-    // Only the topmost picks are sent: the server moves subagents itself.
     expect(archiveMock.mock.calls.map((c) => c[0]).sort()).toEqual([
       "shelley:other",
       "shelley:parent",
@@ -258,7 +245,6 @@ describe("Code thread list", () => {
       { action: { label: string; onClick(): void } },
     ];
     expect(message).toBe("Archived 2 threads and 1 subagent");
-    // Done: Select mode ends.
     expect(screen.queryByRole("toolbar", { name: "Selected threads" })).toBeNull();
 
     archiveMock.mockClear();
@@ -301,11 +287,9 @@ describe("Code thread list", () => {
       </MemoryRouter>,
     );
     expect(screen.getAllByTestId("code-group")).toHaveLength(2);
-    // The list's options sit behind one menu; grouping is on.
     await userEvent.click(screen.getByRole("button", { name: "List options" }));
     const group = screen.getByRole("menuitemcheckbox", { name: "Group by repository" });
     expect(group).toHaveAttribute("aria-checked", "true");
-    // Off: no folder headers, one list, newest first.
     await userEvent.click(group);
     expect(screen.queryAllByTestId("code-group")).toHaveLength(0);
     expect(
@@ -313,13 +297,10 @@ describe("Code thread list", () => {
         .getAllByTestId("code-conversation-row")
         .map((r) => r.textContent?.replace(/\d+[mh]$/, "")),
     ).toEqual(["newest", "middle", "older"]);
-    // Search sits behind an icon.
     expect(screen.queryByRole("textbox", { name: "Search threads" })).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "Search threads" }));
-    // Nothing typed: leaving the box puts the Search row back.
     expect(screen.getByRole("textbox", { name: "Search threads" })).toHaveFocus();
 
-    // The choice is remembered in this browser.
     expect(window.localStorage.getItem("tiny-agents:code-grouped")).toBe("0");
   });
 
@@ -344,7 +325,6 @@ describe("Code thread list", () => {
         .sort();
     expect(titles("tiny-agents")).toEqual(["add-testsnow", "fix-loginnow"]);
     expect(titles("notes")).toEqual(["scratchnow"]);
-    // A project with no threads yet is still there to start one in.
     expect(titles("quiet")).toEqual([]);
     expect(screen.getByRole("link", { name: "New thread in tiny-agents" })).toHaveAttribute(
       "href",
@@ -359,7 +339,6 @@ describe("Code thread list", () => {
       "/code/settings/projects/p1",
     );
 
-    // A group folds away.
     await userEvent.click(screen.getByRole("button", { name: "tiny-agents", expanded: true }));
     expect(titles("tiny-agents")).toEqual([]);
     expect(

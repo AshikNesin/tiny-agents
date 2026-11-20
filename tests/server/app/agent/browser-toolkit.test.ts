@@ -1,9 +1,3 @@
-/**
- * The browser toolkit (issue #24): unit tests against a fake transport.
- * The real Chromium path is smoke-tested in /tmp scripts during development
- * and by the live e2e; here we verify the port contract, gating, driver
- * arbitration, URL rules, and the never-echo-typed-secrets rule.
- */
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { ToolExecutionApi, ToolExecutionResult } from "@earendil-works/pi-durable";
 import { beforeEach, describe, expect, it } from "vite-plus/test";
@@ -21,11 +15,6 @@ import {
 } from "../../../../packages/agent/src/toolkits/browser";
 import type { Capability } from "../../../../packages/agent/src/capabilities";
 
-/**
- * Each test's toolkit acts through a session manager of its own (the app
- * creates one per process); the helpers below read and drive that manager
- * the way the app's routes do.
- */
 let current: BrowserSessions | undefined;
 function toolkit(options: BrowserToolkitOptions = {}): Capability {
   current = createBrowserSessions(options);
@@ -44,7 +33,6 @@ async function resetBrowserSessionsForTests() {
   await previous?.closeAll();
 }
 
-/** The default mapping: conversation 4242 gets a browser of its own. */
 const TARGET = conversationBrowserTarget(4242);
 
 async function run(
@@ -69,7 +57,6 @@ function fakeTransport() {
   let snapshotText = '- body [ref=e1]\n  - input [ref=e2]\n  - button "Go" [ref=e3]';
   let pageText = "Hello";
   const history: string[] = [];
-  /** One entry per session the transport opened: calling it reports that browser dead. */
   const deaths: (() => void)[] = [];
   const transport: BrowserTransport = async () => {
     const session: BrowserSession = {
@@ -142,8 +129,6 @@ function fakeTransport() {
 }
 
 describe("browser toolkit", () => {
-  // The session map is module-level (one per server process); tests must not
-  // inherit each other's fake transports.
   beforeEach(async () => {
     await resetBrowserSessionsForTests();
   });
@@ -193,7 +178,6 @@ describe("browser toolkit", () => {
     expect(snap.text).toContain("[ref=e2]");
     const typed = await run(tk, "browser_type", { ref: "e2", text: "hunter2" });
     expect(typed.isError).toBeUndefined();
-    // The tool result must not contain the typed value (secrets discipline).
     expect(typed.text).not.toContain("hunter2");
     expect(log.some((e) => e.method === "type")).toBe(true);
     const clicked = await run(tk, "browser_click", { ref: "e3" });
@@ -203,7 +187,6 @@ describe("browser toolkit", () => {
   it("reads a long page in windows instead of cutting it at the top", async () => {
     const { transport, setSnapshot } = fakeTransport();
     const tk = toolkit({ transport, profilesDir: "/tmp/ta-test-profiles" });
-    // 1,000 lines of 30 characters: 30k characters, past one read's 20k.
     const lines = Array.from(
       { length: 1000 },
       (_, i) => `- link "Story ${String(i).padStart(4, "0")}" [ref=e${i}]`,
@@ -273,7 +256,6 @@ describe("browser toolkit", () => {
       '200 https://example.com/join\nPage:\n- heading "Sign up"\n- textbox "Email" [ref=e2]\n- button "Join" [ref=e3]',
     );
 
-    // The click shows an error under the form: one new line, under the line it follows.
     setSnapshot(
       '- heading "Sign up"\n- textbox "Email" [ref=e2]\n- button "Join" [ref=e3]\n- alert:\n  - text: Email is required',
     );
@@ -411,7 +393,7 @@ describe("browser toolkit", () => {
     setDriver(TARGET, "human");
     const pending = run(tk, "browser_click", { ref: "e3" });
     await new Promise((r) => setTimeout(r, 300));
-    expect(log.filter((e) => e.method === "click")).toHaveLength(0); // still waiting
+    expect(log.filter((e) => e.method === "click")).toHaveLength(0);
     setDriver(TARGET, "agent");
     const done = await pending;
     expect(done.isError).toBeUndefined();
@@ -425,8 +407,6 @@ describe("browser toolkit", () => {
       profilesDir: "/tmp/ta-test-profiles",
       humanDriverWaitMs: 1500,
     });
-    // A session must exist before takeover can be claimed (the routes
-    // requireSession first); create it, then flip the driver.
     await run(tk, "browser_snapshot", {});
     setDriver(TARGET, "human");
     const pending = run(tk, "browser_navigate", { url: "https://example.com/" });
@@ -445,7 +425,6 @@ describe("browser toolkit", () => {
     await closeBrowserSession(TARGET);
     expect(getLiveBrowserSession(TARGET)).toBeUndefined();
     expect(log.some((e) => e.method === "close")).toBe(true);
-    // The next navigate opens a fresh session (a second transport dial).
     const dials = log.filter((e) => e.method === "navigate").length;
     await run(tk, "browser_navigate", { url: "https://example.com/2" });
     expect(log.filter((e) => e.method === "navigate").length).toBeGreaterThan(dials);
@@ -458,11 +437,9 @@ describe("browser toolkit", () => {
     expect(getLiveBrowserSession(TARGET)).toBeDefined();
     expect(deaths).toHaveLength(1);
 
-    deaths[0]!(); // the link to the browser dropped
+    deaths[0]!();
     expect(getLiveBrowserSession(TARGET)).toBeUndefined();
-    // The dead session is torn down (the remote processes must not leak) ...
     expect(log.filter((e) => e.method === "close")).toHaveLength(1);
-    // ... and the next tool call starts over instead of failing on a corpse.
     const next = await run(tk, "browser_navigate", { url: "https://example.com/2" });
     expect(next.isError).toBeUndefined();
     expect(deaths).toHaveLength(2);
@@ -479,7 +456,7 @@ describe("browser toolkit", () => {
     await run(tk, "browser_snapshot", {});
     await setDriver(TARGET, "human");
     const pending = run(tk, "browser_click", { ref: "e3" });
-    await new Promise((r) => setTimeout(r, 300)); // parked behind the takeover
+    await new Promise((r) => setTimeout(r, 300));
 
     deaths[0]!();
     const outcome = await Promise.race([
@@ -499,7 +476,7 @@ describe("browser toolkit", () => {
     expect(deaths).toHaveLength(2);
     expect(log.filter((e) => e.method === "close")).toHaveLength(1);
 
-    deaths[0]!(); // the first session's late "gone" report
+    deaths[0]!();
     expect(getLiveBrowserSession(TARGET)).toBe(fresh);
     expect(log.filter((e) => e.method === "close")).toHaveLength(1);
   });
@@ -515,7 +492,7 @@ describe("browser toolkit", () => {
     const { transport, log } = fakeTransport();
     const tk = toolkit({ transport, profilesDir: "/tmp/ta-test-profiles" });
     await run(tk, "browser_snapshot", {});
-    await setDriver(TARGET, "agent"); // already the agent: nothing to adopt
+    await setDriver(TARGET, "agent");
     expect(log.filter((e) => e.method === "adoptActiveTab")).toHaveLength(0);
     await setDriver(TARGET, "human");
     expect(log.filter((e) => e.method === "adoptActiveTab")).toHaveLength(0);
@@ -576,7 +553,6 @@ describe("shared browser profiles", () => {
     await resetBrowserSessionsForTests();
   });
 
-  /** Conversation n is bot n's, and every bot is on the one shared profile. */
   const resolveTarget = (conversationId: number) => ({
     profile: "shared",
     tab: `bot-${conversationId}`,
@@ -584,7 +560,6 @@ describe("shared browser profiles", () => {
   const SHARED = { profile: "shared", tab: "bot-1" };
   const PROFILES = "/tmp/ta-test-profiles";
 
-  /** A browser whose first tab is `t0` and whose later tabs are `t1`, `t2`... */
   function tabbedTransport() {
     const log: string[] = [];
     let launches = 0;
@@ -631,7 +606,6 @@ describe("shared browser profiles", () => {
       resolveTarget,
       profilesDir: PROFILES,
     });
-    // Both agents' first calls race: still one launch, and two tabs.
     await Promise.all([
       run(tk, "browser_navigate", { url: "https://a.example/" }, "1"),
       run(tk, "browser_navigate", { url: "https://b.example/" }, "2"),
@@ -642,7 +616,6 @@ describe("shared browser profiles", () => {
       "t1:navigate",
     ]);
     expect([...getLiveBrowserSession(SHARED)!.tabs.keys()].sort()).toEqual(["bot-1", "bot-2"]);
-    // Each agent keeps its tab on later calls.
     await run(tk, "browser_snapshot", {}, "2");
     expect(fake.log).toContain("t1:snapshot");
   });
@@ -693,7 +666,7 @@ describe("shared browser profiles", () => {
     });
     await run(tk, "browser_snapshot", {}, "1");
     await run(tk, "browser_snapshot", {}, "1");
-    expect(fake.log.filter((e) => e.endsWith(":focus"))).toEqual([]); // alone in the browser
+    expect(fake.log.filter((e) => e.endsWith(":focus"))).toEqual([]);
     await run(tk, "browser_snapshot", {}, "2");
     await run(tk, "browser_snapshot", {}, "1");
     await run(tk, "browser_snapshot", {}, "1");
@@ -710,7 +683,6 @@ describe("shared browser profiles", () => {
     });
     await run(tk, "browser_snapshot", {}, "1");
     await run(tk, "browser_snapshot", {}, "2");
-    // Taken from bot 1's panel: bot 2 waits too, since it is the same Chrome.
     await setDriver(SHARED, "human");
     const pending = run(tk, "browser_click", { ref: "e1" }, "2");
     await new Promise((r) => setTimeout(r, 300));
@@ -719,7 +691,6 @@ describe("shared browser profiles", () => {
     await setDriver({ profile: "shared", tab: "bot-2" }, "agent");
     expect((await pending).isError).toBeUndefined();
     expect(fake.log).toContain("t1:click");
-    // Only the bot it was handed back to adopts the tab in front.
     expect(fake.log.filter((e) => e.endsWith(":adopt"))).toEqual(["t1:adopt"]);
   });
 

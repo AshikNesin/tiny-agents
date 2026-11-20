@@ -168,7 +168,6 @@ function mount(which: "browser" | "computer", path = `/${which}`) {
 const viewerCreated = () =>
   waitFor(() => expect(fakes.rfbs.length).toBeGreaterThan(0), { timeout: 4000 });
 
-/** The viewer connects: what's left on screen is the page's own state. */
 const connect = async () => {
   await viewerCreated();
   act(() => {

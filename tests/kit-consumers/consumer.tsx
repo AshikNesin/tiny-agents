@@ -1,22 +1,5 @@
-/**
- * Compiled consumer fixture for the shipped kit surface.
- *
- * This file is what a child project's code looks like. `pnpm typecheck:kit`
- * compiles it, so deleting a public kit export breaks CI the same way it
- * broke downstream projects in f191f76. Imports below cover the capabilities
- * restored by 9e5602a plus every entrypoint the import census in
- * evidence/architecture-audit.md records as consumed downstream
- * (groot in-repo importers and the finance app). Every @groot/ui and
- * @groot/jobs subpath here is also an explicit entrypoint in the package's
- * exports map; scripts/check-kit-exports.ts fails when the two lists drift.
- *
- * Types are exercised, not just imported: typeof checks, type annotations,
- * and light call signatures. The fixture is never executed.
- */
-
 import type { ReactNode } from "react";
 
-// The seven capabilities restored by 9e5602a on demonstrated child demand.
 import { Alert, AlertTitle, AlertDescription } from "@groot/ui/alert";
 import { Pagination, PaginationContent } from "@groot/ui/pagination";
 import { Select, SelectTrigger, SelectValue } from "@groot/ui/select";
@@ -24,8 +7,6 @@ import { Tooltip, TooltipProvider } from "@groot/ui/tooltip";
 import { addBreadcrumb, logPerformance, logger, type Breadcrumb } from "@groot/core/logger";
 import { copyFile } from "@groot/core/storage/storage.service";
 
-// Every other explicit @groot/ui entrypoint (census: groot apps/packages,
-// tests, and the finance app).
 import { Badge } from "@groot/ui/badge";
 import { Breadcrumb as UiBreadcrumb, Breadcrumbs } from "@groot/ui/breadcrumb";
 import { Button, type ButtonProps } from "@groot/ui/button";
@@ -46,7 +27,6 @@ import { cn } from "@groot/ui/lib/utils";
 import { listRowClass, listRowGridClass } from "@groot/ui/list-row";
 import { Skeleton, SkeletonList } from "@groot/ui/loading-skeleton";
 import { LoadingSpinner, LoadingState } from "@groot/ui/loading-spinner";
-// @groot/ui primitives (alert-dialog, confirm) and the package barrel sides of jobs.
 import { ConfirmProvider, useConfirm } from "@groot/ui/primitives";
 import { AlertDialog, AlertDialogAction } from "@groot/ui/primitives/alert-dialog";
 import { type ConfirmOptions } from "@groot/ui/primitives/confirm";
@@ -60,10 +40,8 @@ import { FluidHighlight, spring, useModalPresence } from "@groot/ui/motion";
 import { Textarea } from "@groot/ui/textarea";
 import { Text } from "@groot/ui/typography";
 
-// The @groot/ui barrel, alongside the subpaths above.
 import { Button as ButtonFromBarrel, Toaster as ToasterFromBarrel } from "@groot/ui";
 
-// @groot/jobs server surface.
 import { addJob as addJobFromBarrel, runTick, type JobHandler } from "@groot/jobs/server";
 import {
   JOB_STATES,
@@ -121,7 +99,6 @@ import { jobsKeys, useAvailableJobs } from "@groot/jobs/client/queries";
 import { useJobActions } from "@groot/jobs/client/useJobActions";
 import { useJobDetail } from "@groot/jobs/client/useJobDetail";
 
-// @groot/shell pages, transport, and state.
 import { Layout } from "@groot/shell/components/Layout";
 import type { CommandGroupEntry } from "@groot/shell/components/CommandPalette";
 import { ShellProvider, type ShellConfig } from "@groot/shell/lib/shell-config";
@@ -141,7 +118,6 @@ import {
   SHELL_QUERY_DEFAULTS,
 } from "@groot/shell/lib/query-client";
 import { describeError, toastError, useAction, type ActionResult } from "@groot/shell/lib/feedback";
-// Shell pages and guards an app mounts as routes (or leaves out).
 import { Login } from "@groot/shell/pages/auth/Login";
 import { Setup } from "@groot/shell/pages/auth/Setup";
 import { useSetupStatus } from "@groot/shell/hooks/useSetupStatus";
@@ -149,7 +125,6 @@ import { Settings } from "@groot/shell/pages/settings/Settings";
 import { Storage } from "@groot/shell/pages/storage/Storage";
 import { ProtectedRoute } from "@groot/shell/components/ProtectedRoute";
 
-// @groot/core database singleton, errors, config, kv.
 import { db, users, type Database, type User } from "@groot/core/database";
 import { HttpError, type HttpErrorOutput } from "@groot/core/errors";
 import { config, defineConfig, type AppConfig as CoreConfig } from "@groot/core/config";
@@ -157,7 +132,6 @@ import { kv } from "@groot/core/kv";
 import { getContentType, sanitizeFileName } from "@groot/core/storage/storage.utils";
 import type { FileInfo } from "@groot/core/storage/storage.service";
 
-// typeof checks: the imported values carry the shapes downstream code relies on.
 const checks = {
   restoredKit: [Alert, Pagination, Select, Tooltip, addBreadcrumb, logPerformance, copyFile],
   uiBarrel: [ButtonFromBarrel, ToasterFromBarrel, Form, Field],
@@ -284,7 +258,6 @@ const checks = {
 };
 export { checks };
 
-// Signatures and types a child project would actually write.
 addBreadcrumb("sync", "fixture compiled", "info", { fixture: true });
 logPerformance({ operation: "fixture-compile", duration: 1 });
 
@@ -364,8 +337,6 @@ const commandGroups: CommandGroupEntry[] = [
   { heading: "Kit", items: [{ label: "Compile", onSelect: () => undefined }] },
 ];
 
-// Signature and type baselines a child project relies on. Exported so the
-// compiler and linter both treat each as used kit surface.
 export type ErrorShape = HttpErrorOutput["code"];
 export const jobStates: typeof JOB_STATES = JOB_STATES;
 export const failedJobActions: JobAction[] = allowedJobActions("failed");

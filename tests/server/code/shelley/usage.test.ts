@@ -1,8 +1,3 @@
-/**
- * The Shelley usage report for the context popup: per-model token bands
- * with estimated cost, indirect usage, and subagent usage, mirroring
- * Shelley's own TokenCostGraph math.
- */
 import { describe, expect, it } from "vite-plus/test";
 import {
   distinctModels,

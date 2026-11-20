@@ -1,12 +1,3 @@
-/**
- * The VM launch script run for real in bash, against stand-ins for Xtigervnc
- * and Chrome, so the lock and process behaviour is checked rather than the
- * script's text.
- *
- * A launch holds a VM-wide lock while it picks a display and ports. Browsers
- * must not inherit that lock: one that does keeps it for as long as it runs,
- * and every other bot's launch waits on it.
- */
 import { execFileSync, spawn, type ChildProcess } from "node:child_process";
 import { until } from "../../fixtures/until";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -30,9 +21,7 @@ const hasPython = (() => {
 })();
 const runIfPython = hasPython ? describe : describe.skip;
 
-/** Stand-ins that put the script through the same waits the real ones do. */
 const FAKES: Record<string, string> = {
-  // Binds the X socket the script waits for and removes it on SIGTERM.
   Xtigervnc: `#!/usr/bin/env python3
 import os, signal, socket, sys, time
 
@@ -50,8 +39,6 @@ time.sleep(600)
   vncconfig: `#!/bin/sh
 exec sleep 600
 `,
-  // Answers /json/version on the DevTools port, like Chrome once it is up,
-  // and notes how it was started (its clock's zone and its flags).
   "google-chrome-stable": `#!/usr/bin/env python3
 import json, os, socket, sys
 
@@ -71,7 +58,6 @@ while True:
 `,
 };
 
-/** For machines without util-linux (macOS); they sit last on PATH so real tools win. */
 const SHIMS: Record<string, string> = {
   setsid: `#!/bin/sh
 exec "$@"
@@ -102,7 +88,6 @@ while True:
 `,
 };
 
-/** Running, and not a zombie: orphans of the script may sit under an init that never reaps. */
 function alive(pid: number): boolean {
   try {
     process.kill(pid, 0);
@@ -112,7 +97,7 @@ function alive(pid: number): boolean {
   try {
     return !/\) Z /.test(readFileSync(`/proc/${pid}/stat`, "utf8"));
   } catch {
-    return true; // no /proc (macOS)
+    return true;
   }
 }
 
@@ -134,7 +119,6 @@ interface Run {
   timedOut: boolean;
 }
 
-/** Run a command string the way SSH does, resolving at exit even if children linger. */
 function run(command: string, env: NodeJS.ProcessEnv, timeoutMs: number): Promise<Run> {
   return new Promise((resolve) => {
     const child = spawn("sh", ["-c", command], {
@@ -151,21 +135,16 @@ function run(command: string, env: NodeJS.ProcessEnv, timeoutMs: number): Promis
       timedOut = true;
       try {
         process.kill(-child.pid!, "SIGKILL");
-      } catch {
-        // already gone
-      }
+      } catch {}
     }, timeoutMs);
     child.once("exit", (code) => {
       clearTimeout(timer);
-      // Output can trail the exit event.
       setTimeout(() => resolve({ code, stdout, stderr, timedOut }), 50);
     });
   });
 }
 
 runIfPython("browser stack launch script", () => {
-  // Written once for the file: macOS scans every new executable on its first
-  // run, which costs ~0.7s each.
   let tools: string;
   let root: string;
   let home: string;
@@ -198,7 +177,6 @@ runIfPython("browser stack launch script", () => {
       ...process.env,
       HOME: home,
       FAKE_X11_DIR: x11,
-      // Fakes first so they win over a real install; shims last so real tools win over them.
       PATH: `${join(tools, "bin")}:${process.env.PATH}:${join(tools, "shims")}`,
     };
     profiles = [];
@@ -211,9 +189,7 @@ runIfPython("browser stack launch script", () => {
       for (const pid of stackPids(profile)) {
         try {
           process.kill(pid, "SIGKILL");
-        } catch {
-          // already gone
-        }
+        } catch {}
       }
     }
     rmSync(root, { recursive: true, force: true });
@@ -234,7 +210,6 @@ runIfPython("browser stack launch script", () => {
       ...(locale ? { locale } : {}),
       ...(timezone ? { timezone } : {}),
     });
-    // The script names the VM's real X socket directory; aim it at the fake one.
     expect(command).toContain("/tmp/.X11-unix");
     command = command
       .replaceAll("/tmp/.X11-unix", x11)
@@ -248,7 +223,6 @@ runIfPython("browser stack launch script", () => {
 
   const lockFile = () => join(home, ".tiny-agents", LAUNCH_LOCK_FILE);
 
-  /** True when another process holds the launch lock (same flock(2) the script takes). */
   function lockHeld(): boolean {
     expect(existsSync(lockFile())).toBe(true);
     try {
@@ -289,7 +263,7 @@ runIfPython("browser stack launch script", () => {
     expect(a.code).toBe(0);
     parseLaunchOutput(a.stdout);
     const pids = stackPids(a.profile);
-    expect(pids).toHaveLength(3); // Xtigervnc, vncconfig, Chrome
+    expect(pids).toHaveLength(3);
     expect(pids.every(alive)).toBe(true);
     expect(lockHeld()).toBe(false);
   }, 60_000);
@@ -342,7 +316,6 @@ runIfPython("browser stack launch script", () => {
   it("closes the computer's Chrome on the same profile before starting", async () => {
     const profile = join(root, "profiles", "shared");
     mkdirSync(profile, { recursive: true });
-    // The desktop's Chrome (computer-vm-setup.ts) on this profile, and one on another.
     const desktopChrome = spawn(
       "python3",
       ["-c", "import time; time.sleep(600)", `--user-data-dir=${profile}`, "about:blank"],

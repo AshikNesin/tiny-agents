@@ -1,9 +1,3 @@
-/**
- * What a tool call says (lib/tool-call-text.ts): labels, the approval and
- * vault cards' sentences, the approval note, durations, and how runs of
- * finished calls fold and are described. ChatMessageView draws these as
- * they come; its own tests keep one rendering per card.
- */
 import { describe, expect, it } from "vite-plus/test";
 import type { ChatToolCall } from "@/lib/chat-types";
 import {

@@ -37,10 +37,6 @@ const ok = (data: unknown) => json(200, { success: true, data });
 const sessionInvalid = () =>
   json(401, { success: false, error: { code: "SESSION_INVALID", message: "Session expired" } });
 
-/**
- * A fake server with a cookie session: `/auth/login` signs in whoever
- * `nextUser` names, `/passkey/list` answers for the signed-in user.
- */
 function serve() {
   const server = {
     nextUser: ALICE,
@@ -107,7 +103,6 @@ describe("ShellQueryProvider", () => {
     await useAuthStore.getState().logout();
     await waitFor(() => expect(screen.queryByText("Alice's laptop")).not.toBeInTheDocument());
 
-    // Within the 5-minute staleTime: without the reset Bob would see Alice's list.
     server.nextUser = BOB;
     await useAuthStore.getState().login(BOB.email, "secret");
     expect(await screen.findByText("Bob's phone")).toBeInTheDocument();
@@ -128,12 +123,10 @@ describe("ShellQueryProvider", () => {
     );
     expect(await screen.findByText("Alice's laptop")).toBeInTheDocument();
 
-    // Leave the page (the query goes inactive but stays cached), keep the binding.
     unmount();
     const binding = render(<ShellQueryProvider client={queryClient}>{null}</ShellQueryProvider>);
     expect(queryClient.getQueryData(["passkeys"])).toHaveLength(1);
 
-    // The cookie expires: the next request is refused and the store ends the session.
     vi.stubGlobal("fetch", async () => sessionInvalid());
     await expect(apiClient.get("/todos")).rejects.toMatchObject({ status: 401 });
     expect(useAuthStore.getState().isAuthenticated).toBe(false);

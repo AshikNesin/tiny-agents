@@ -1,9 +1,3 @@
-/**
- * What the app sent the agent on the owner's behalf reads short in the
- * thread: a project thread's first message shows its branch, not the
- * agent's instructions, and an Auto-fix request is one card naming what it
- * fixes, with the full request one click away.
- */
 import React from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";

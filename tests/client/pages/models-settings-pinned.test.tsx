@@ -199,7 +199,6 @@ beforeEach(() => {
   });
 });
 
-/** The confirm dialog and its overlay fade in; pin them once both are fully shown. */
 const dialogShown = () =>
   waitFor(() => {
     const dialog = screen.getByRole("alertdialog");

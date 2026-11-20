@@ -1,9 +1,3 @@
-/**
- * The worker's coding mode (the Code page's Claude Code threads): protocol,
- * SDK options, its own caps, the login check and path checks, and that the
- * bot protocol on the same socket is unchanged. A localhost WebSocket and an
- * injected SDK; nothing here calls Anthropic.
- */
 import { randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -152,7 +146,6 @@ describe("coding protocol", () => {
     ).toBeUndefined();
     expect(isCodingMessage(send)).toBe(true);
     expect(isCodingMessage({ type: "turn" })).toBe(false);
-    // A coding message is not a bot message.
     expect(parseClientMessage(send)).toBeUndefined();
   });
 
@@ -278,8 +271,6 @@ describe("coding mode on the worker socket", () => {
         content: [{ type: "tool_result", tool_use_id: "toolu_1", content: "Updated." }],
       },
     };
-    // getSessionMessages leaves the tool's structured result out; Claude
-    // Code's own session file keeps it as `toolUseResult`.
     sdk.transcripts.set(claudeSessionId, [edit, result]);
     const project = path.join(configDir, "projects", dir.replaceAll(/[^A-Za-z0-9]/g, "-"));
     await mkdir(project, { recursive: true });

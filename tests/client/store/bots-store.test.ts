@@ -1,9 +1,3 @@
-/**
- * The bot list store: the activity feed's live patches, full rows (and
- * adopting a fresh one drops a chat that moved conversation), and
- * overlapping list loads. Chat sessions have their own tests
- * (chats.test.ts, chat-session.test.ts).
- */
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const listeners = new Map<string, (event: unknown) => void>();
@@ -50,7 +44,6 @@ function listEntry(id: string, conversationId: string, overrides: Partial<BotLis
   } satisfies BotListEntry;
 }
 
-/** A list request the test answers when it wants to. */
 function deferredList() {
   let resolve!: (bots: BotListEntry[]) => void;
   const promise = new Promise<BotListEntry[]>((r) => {
@@ -73,7 +66,6 @@ describe("bots store — activity feed", () => {
     useBotsStore.getState().connectActivity();
     return listeners.get("/api/v1/events") as (event: EventsFeedEvent) => void;
   };
-  /** A conversation's activity change, as the feed sends it. */
   const activity = (
     conversation: string,
     busy: boolean,
@@ -89,23 +81,18 @@ describe("bots store — activity feed", () => {
   it("updates the approvals and questions badge while the bot is still replying", () => {
     const onEvent = feed();
     onEvent(activity("7", true, { approvals: 0 }));
-    // A tool call now waits for the owner: same busy run, new count.
     onEvent(activity("7", true, { approvals: 1 }));
     expect(useBotsStore.getState().bots[0]).toMatchObject({ replying: true, approvals: 1 });
-    // The bot asks the owner questions: same run, its own count.
     onEvent(activity("7", true, { approvals: 0, questions: 2 }));
     expect(useBotsStore.getState().bots[0]).toMatchObject({ approvals: 0, questions: 2 });
   });
 
   it("keeps a waiting badge that arrived while an older list request was in flight", async () => {
     const onEvent = feed();
-    // A list request starts (another bot went idle)…
     const answer = deferredList();
     const load = useBotsStore.getState().loadBots();
-    // …then this bot asks for an approval, mid-run.
     onEvent(activity("7", true, { approvals: 1 }));
     expect(useBotsStore.getState().bots[0]).toMatchObject({ replying: true, approvals: 1 });
-    // The stale list lands last: it knows nothing of the approval.
     answer([listEntry("b1", "7", { lastMessagePreview: "newer preview" })]);
     await load;
     expect(useBotsStore.getState().bots[0]).toMatchObject({
@@ -113,8 +100,6 @@ describe("bots store — activity feed", () => {
       approvals: 1,
       lastMessagePreview: "newer preview",
     });
-    // A list request that starts after the badge retires the patch: the
-    // server's answer is the truth from then on.
     vi.mocked(botsApi.list).mockResolvedValueOnce([listEntry("b1", "7")]);
     await useBotsStore.getState().loadBots();
     expect(useBotsStore.getState().bots[0]).toMatchObject({ replying: false, approvals: 0 });
@@ -136,12 +121,9 @@ describe("bots store — activity feed", () => {
       const onEvent = feed();
       onEvent(activity("7", true));
       expect(useBotsStore.getState().bots[0]!.replying).toBe(true);
-      // A routine's conversation and a retired chat: no row, no list request.
       onEvent(activity("42", false));
       await vi.advanceTimersByTimeAsync(1000);
       expect(botsApi.list).not.toHaveBeenCalled();
-      // The chat's reply ends: replying clears at once; preview and unread
-      // come from one list request, however many idles land together.
       onEvent(activity("7", false));
       onEvent(activity("7", false));
       expect(useBotsStore.getState().bots[0]!.replying).toBe(false);
@@ -188,7 +170,6 @@ describe("bots store — full bots", () => {
   const row = (conversationId: string) =>
     ({ id: "b1", name: "Bot", conversationId }) as unknown as Bot;
 
-  /** Open the bot's chat and let its stream deliver a transcript. */
   function openChat(text: string) {
     chatSessions.open("b1", null);
     listeners.get("/api/v1/bots/b1/stream")!({
@@ -208,7 +189,6 @@ describe("bots store — full bots", () => {
     expect(botsApi.get).toHaveBeenCalledTimes(1);
     await useBotsStore.getState().loadBot("b1", { fresh: true });
     expect(botsApi.get).toHaveBeenCalledTimes(2);
-    // A save hands the store the row: no refetch needed afterwards.
     const saved = { ...row("7"), name: "Renamed" };
     useBotsStore.getState().adoptBot(saved);
     expect(await useBotsStore.getState().loadBot("b1")).toBe(saved);
@@ -226,7 +206,6 @@ describe("bots store — full bots", () => {
   it("adopting a bot on a new conversation drops the cached transcript first", () => {
     useBotsStore.getState().adoptBot(row("7"));
     openChat("old conversation");
-    // New chat (or a continued Past chat): the row names another conversation.
     useBotsStore.getState().adoptBot(row("8"));
     expect(chatSessions.store.getState().sessions.b1).toBeUndefined();
     expect(listeners.has("/api/v1/bots/b1/stream")).toBe(false);
@@ -262,15 +241,11 @@ describe("bots store — loadBots resolves with the landed list (issue #119)", (
   });
 
   it("resolves a superseded load with the newer request's list, not a stale snapshot", async () => {
-    // The page's load starts first…
     const answerFirst = deferredList();
     const pageLoad = useBotsStore.getState().loadBots();
-    // …a newer load (app mount / SSE refresh) supersedes it and lands first.
     const newest = [listEntry("b1", "7")];
     vi.mocked(botsApi.list).mockResolvedValueOnce(newest);
     await useBotsStore.getState().loadBots();
-    // The stale response arrives last; it must not resolve the page's load
-    // with the (possibly empty) pre-request snapshot of the store.
     answerFirst([]);
     await expect(pageLoad).resolves.toEqual(newest);
   });
@@ -288,18 +263,12 @@ describe("bots store — loadBots resolves with the landed list (issue #119)", (
   });
 
   it("resolves the page's load across three overlapping generations (prod repro)", async () => {
-    // Mount, page and SSE refresh can overlap: gen1 (the page) registers a
-    // waiter on gen2, then gen3 supersedes gen2 before gen2 lands. Only the
-    // newest request settles waiters — gen1's waiter on gen2 would be
-    // stranded and the Memory page's skeleton would never resolve (prod).
     const answerGen1 = deferredList();
     const answerGen2 = deferredList();
     const pageLoad = useBotsStore.getState().loadBots();
     const middleLoad = useBotsStore.getState().loadBots();
-    // gen1 lands while gen2 is still in flight: gen1 parks on gen2.
     answerGen1([]);
     await Promise.resolve();
-    // gen3 starts and lands: it settles only its own waiters.
     const newest = [listEntry("b1", "7")];
     vi.mocked(botsApi.list).mockResolvedValueOnce(newest);
     await useBotsStore.getState().loadBots();

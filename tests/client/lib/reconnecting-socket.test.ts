@@ -1,9 +1,3 @@
-/**
- * The reconnecting socket the terminal and the browser viewer share: a fresh
- * ticket per attempt, the backoff schedule, a clean end that stops it, a
- * gone ticket that stops it at once, and a close that cancels everything,
- * including an attempt that was still opening.
- */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import {
   reconnectingSocket,
@@ -68,7 +62,7 @@ describe("reconnectingSocket", () => {
     expect(states.at(-1)).toBe("live");
     handles[2]!.events.dropped();
     await vi.advanceTimersByTimeAsync(1000);
-    expect(transport.ticket).toHaveBeenCalledTimes(4); // back on the 1s step
+    expect(transport.ticket).toHaveBeenCalledTimes(4);
   });
 
   it("stops for good when the server ends the connection", async () => {
@@ -120,7 +114,6 @@ describe("reconnectingSocket", () => {
     await vi.advanceTimersByTimeAsync(60_000);
     expect(transport.ticket).toHaveBeenCalledTimes(1);
 
-    // An attempt whose ticket was in flight when the socket closed opens nothing.
     const late = fakeTransport();
     let answer!: (ticket: { n: number }) => void;
     late.transport.ticket.mockReturnValueOnce(new Promise((resolve) => (answer = resolve)));
@@ -130,7 +123,6 @@ describe("reconnectingSocket", () => {
     await settle();
     expect(late.transport.open).not.toHaveBeenCalled();
 
-    // One that was mid-open is closed as soon as it resolves.
     const opening = fakeTransport();
     let finishOpen!: (handle: FakeHandle) => void;
     opening.transport.open.mockReturnValueOnce(new Promise((resolve) => (finishOpen = resolve)));
@@ -150,7 +142,6 @@ describe("reconnectingSocket", () => {
     handles[0]!.events.dropped();
     await vi.advanceTimersByTimeAsync(1000);
     expect(socket.current()).toBe(handles[1]);
-    // The old transport reports in late: no state change, no extra retry.
     handles[0]!.events.live();
     handles[0]!.events.dropped();
     expect(states.at(-1)).toBe("reconnecting");

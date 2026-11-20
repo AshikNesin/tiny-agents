@@ -1,15 +1,3 @@
-/**
- * Characterization of behavior-register row C16: settling re-runs when wait
- * counts change after the idle edge, bumping the memory-capture counter
- * twice (and rewriting the list). Narrow: a plain turn emits one idle event.
- * Preserve: this pins today's behavior, quirk included; change it only with
- * a signed-off register row.
- *
- * The sequence that reaches it: a Claude plan turn stopped while a tool call
- * waits for approval. The engine goes idle at once, with the approval still
- * counted; the gate drops the approval just after, which is a second idle
- * activity change, and the settled pipeline settles the conversation again.
- */
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import type { AgentRuntime } from "../../../packages/agent/src/runtime";
 import type { ActivityChange, ConversationRef } from "../../../packages/agent/src/types";
@@ -25,7 +13,6 @@ import {
 } from "../app/agent/engine-harness";
 import { resetAppTables, seedBot, until } from "../fixtures";
 
-/** Run notifications go nowhere here. */
 const silentNotifier = {
   notify: () => undefined,
   cancel: () => undefined,
@@ -49,7 +36,6 @@ async function setup() {
     systemPrompt: "",
     capabilities: { enabled: ["mail"], permissions: {} },
   });
-  // The bot's own chat, memory on: memory capture counts its settled turns.
   await seedBot({ name: "Mailer", conversationId: String(ref) });
   const captures: SideCallRequest[] = [];
   const stop = startSettledPipeline(runtime, {
@@ -74,7 +60,6 @@ async function setup() {
   return { ...engine, ref, captures, activity, chat };
 }
 
-/** One turn whose send_email waits for approval, stopped before the owner answers. */
 async function stoppedWhileWaiting(
   runtime: AgentRuntime,
   send: (ref: ConversationRef, input: { requestId: string; text: string }) => Promise<void>,
@@ -114,7 +99,6 @@ describe("C16: a second idle edge after a stopped Claude plan turn", () => {
     const { runtime, send, chat, ref, activity, captures } = await setup();
 
     await stoppedWhileWaiting(runtime, send, chat, ref, 1);
-    // The golden: busy, the card, idle with the card still counted, idle again.
     expect(
       activity.map(({ busy, approvals, questions }) => ({ busy, approvals, questions })),
     ).toEqual([
@@ -126,11 +110,9 @@ describe("C16: a second idle edge after a stopped Claude plan turn", () => {
 
     await stoppedWhileWaiting(runtime, send, chat, ref, 2);
     expect(idleCount(activity)).toBe(4);
-    // Four settles so far: under the limit, and the 2-minute quiet window is far off.
     await new Promise((resolve) => setTimeout(resolve, 100));
     expect(captures).toHaveLength(0);
 
-    // The third stopped turn is the sixth settle: capture runs at once.
     await stoppedWhileWaiting(runtime, send, chat, ref, 3);
     expect(idleCount(activity)).toBe(6);
     await until(() => captures.length > 0, "the turn-limit capture");

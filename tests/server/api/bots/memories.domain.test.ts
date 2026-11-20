@@ -90,8 +90,6 @@ describe("renderMemoryBlock", () => {
   });
 
   it("keeps the newest memories across categories, rendered in category order", () => {
-    // Old preferences (rendered first) and new habits (rendered last): the
-    // cap must drop the old preferences, not the newest habits.
     const memories = [
       ...Array.from({ length: 60 }, (_, i) => ({
         ...base,
@@ -114,14 +112,12 @@ describe("renderMemoryBlock", () => {
     expect(kept.filter((l) => l.includes("New habit"))).toHaveLength(60);
     expect(block).not.toContain("Old preference 00");
     expect(lines.at(-1)).toBe(`- …${120 - kept.length} older memories omitted`);
-    // Kept preferences still render before habits.
     const firstHabit = kept.findIndex((l) => l.includes("New habit"));
     expect(kept.slice(0, firstHabit).every((l) => l.includes("Old preference"))).toBe(true);
     expect(block.length).toBeLessThanOrEqual(MEMORY_RENDER_CHAR_CAP + 60);
   });
 
   it("renders the until date as a suffix", () => {
-    // A fixed clock: against the real one this memory expires and renders nothing.
     const now = new Date("2026-10-20T00:00:00.000Z");
     const block = renderMemoryBlock(
       [{ ...base, text: "Is in Goa until Friday", until: "2026-10-23T18:00:00.000Z" }],
@@ -175,8 +171,6 @@ describe("extractionResultSchema", () => {
 
 describe("active budget", () => {
   it("fits a full budget of typical memories in the prompt, none omitted", () => {
-    // Issue #334 A: about 80 chars a memory; past the render cap a memory
-    // would sit in the store with no way for the bot to reach it.
     const memories = Array.from({ length: MEMORY_MAX_ACTIVE }, (_, i) => ({
       ...base,
       id: `m${i}`,

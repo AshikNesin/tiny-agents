@@ -58,11 +58,6 @@ const row = (id: string, providerId: string): ModelRow => ({
   missing: false,
 });
 
-/**
- * A runtime with two pi models (`bot-model`, `light`) and a Claude plan model
- * (`plan-model`), answering with `reply`. The catalog is the real one; the
- * registry serves every pi model it is asked for.
- */
 function fakeRuntime(
   reply: Completion = async () => fauxAssistantMessage([fauxText("answer")]),
   roles: ModelConfig["roles"] = {},
@@ -201,7 +196,7 @@ describe("createSideCaller: failures", () => {
     let signal: AbortSignal | undefined;
     const { runtime } = fakeRuntime((_model, _context, options) => {
       signal = options?.signal;
-      return new Promise(() => undefined); // never settles
+      return new Promise(() => undefined);
     });
     const answer = createSideCaller(runtime).complete(request({ timeoutMs: 500 }));
     await vi.advanceTimersByTimeAsync(500);

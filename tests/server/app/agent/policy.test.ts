@@ -45,7 +45,6 @@ const compile = (selection: Partial<CapabilitySelection>) =>
 
 describe("compilePolicy", () => {
   it.each([
-    // [case, selection, allow, review, removed, unattended]
     [
       "defaults: read-only allowed, the rest asks",
       {},

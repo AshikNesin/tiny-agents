@@ -1,6 +1,3 @@
-/**
- * The ticket store and Origin policy shared by the VNC and terminal bridges.
- */
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import {
   createTicketStore,
@@ -9,7 +6,6 @@ import {
 } from "../../../apps/web/src/server/api/ws/upgrade";
 import { authToken } from "../fixtures";
 
-// Tickets are held as live access, which needs their accounts to exist.
 await authToken("ticket-owner-1@example.com", 1);
 await authToken("ticket-owner-2@example.com", 2);
 
@@ -44,7 +40,6 @@ describe("ticket store", () => {
     store.issue({ userId: 1 });
     store.issue({ userId: 1 });
     expect(() => store.issue({ userId: 1 })).toThrow(/Too many/);
-    // Another user is unaffected; expiry frees the cap.
     expect(() => store.issue({ userId: 2 })).not.toThrow();
     vi.advanceTimersByTime(TICKET_TTL_MS + 1);
     expect(() => store.issue({ userId: 1 })).not.toThrow();

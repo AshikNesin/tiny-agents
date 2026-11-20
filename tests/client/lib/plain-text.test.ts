@@ -1,7 +1,3 @@
-/**
- * Routine run output is a model reply shown inline: markdown syntax goes,
- * the words (and snake_case names) stay.
- */
 import { describe, expect, it } from "vite-plus/test";
 import { markdownToPlainText } from "@/lib/plain-text";
 

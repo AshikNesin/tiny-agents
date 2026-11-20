@@ -1,7 +1,3 @@
-/**
- * Connections and step-up (S4): adding, re-pointing and deleting a
- * connection need the vault's step-up token; renaming and bot links don't.
- */
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { apiClient } from "@groot/shell/lib/api";
 import { connectionsApi } from "@/lib/connections-api";

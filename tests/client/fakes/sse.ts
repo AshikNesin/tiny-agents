@@ -1,11 +1,3 @@
-/**
- * A fake `lib/sse` for component tests: it records every stream the app
- * opens, so a test plays the server's side of a bot's chat stream.
- *
- *   vi.mock("@/lib/sse", async () => (await import("../fakes/sse")).sseModule);
- *   render(<ChatPane … />);
- *   botStream("host").send({ type: "snapshot", state: { … } });
- */
 import { act } from "@testing-library/react";
 import type { BotStreamEvent } from "../../../apps/web/src/client/lib/chat-types";
 
@@ -16,7 +8,6 @@ interface OpenStream {
 }
 
 const open = new Map<string, OpenStream>();
-/** Every path opened, in order (reconnects included). */
 export const openedPaths: string[] = [];
 
 export const sseModule = {
@@ -36,7 +27,6 @@ export const sseModule = {
   },
 };
 
-/** The server's side of one bot's chat stream. */
 export function botStream(botId: string) {
   const path = `/api/v1/bots/${botId}/stream`;
   const current = () => {
@@ -48,7 +38,6 @@ export function botStream(botId: string) {
     get isOpen() {
       return open.has(path);
     },
-    /** The stream (re)opens and carries `events`, in order. */
     send(...events: BotStreamEvent[]) {
       act(() => {
         const stream = current();
@@ -59,7 +48,6 @@ export function botStream(botId: string) {
   };
 }
 
-/** The server's side of any stream, by the path the app opened. */
 export function streamAt(path: string) {
   return {
     get isOpen() {

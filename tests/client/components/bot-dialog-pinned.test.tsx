@@ -186,7 +186,6 @@ function pin(name?: string) {
   expect(markup(document.body)).toMatchSnapshot(name ? `${name} markup` : "markup");
 }
 
-/** A clicked tab leaves the pointer on the tab list: its hover highlight fades in first. */
 const hoverShown = () =>
   waitFor(() => {
     const highlights = document.querySelectorAll<HTMLElement>(

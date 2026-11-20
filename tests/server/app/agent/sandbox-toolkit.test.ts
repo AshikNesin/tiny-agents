@@ -1,10 +1,3 @@
-/**
- * The sandbox toolkit (issue #19): unit tests against an in-memory sandbox
- * connection and integration tests through the in-process SSH server (real
- * ssh2 client, real wire protocol, none-auth — the shape Tailscale SSH
- * presents). Pooling, retry and host keys belong to the connection and are
- * tested once in `sandbox-connection.test.ts`.
- */
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { ToolExecutionApi, ToolExecutionResult } from "@earendil-works/pi-durable";
 import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
@@ -51,7 +44,6 @@ describe("sandbox toolkit (unit, in-memory connection)", () => {
     expect(result.text).toBe("ran: ls");
     expect(result.isError).toBeUndefined();
     expect(result.details).toEqual({ exitCode: 0 });
-    // The default timeout, and a byte cap before the character cap trims.
     expect(connection.execs[0]!.options).toEqual({ timeoutMs: 120_000, maxBytes: 60_000 });
   });
 
@@ -105,7 +97,7 @@ describe("sandbox toolkit (unit, in-memory connection)", () => {
     expect(result.text).toBe(
       "Command timed out after 5s. Rerun with detached:true if it must keep running.",
     );
-    expect(connection.execs).toHaveLength(1); // exactly once
+    expect(connection.execs).toHaveLength(1);
   });
 
   it("marks replay policy: read_file safe, side effects unsafe", () => {
@@ -140,7 +132,6 @@ describe("sandbox toolkit (unit, in-memory connection)", () => {
     const sandbox = createSandboxToolkit({ connection: fakeSandboxConnection({ files }) });
     const binary = await run(sandbox, "read_file", { path: "/blob.bin" });
     expect(binary.text).toMatch(/^\[binary file, 4 bytes\]/);
-    // A cap that splits a rune still reads as text.
     const cut = await run(sandbox, "read_file", { path: "/cut.txt", max_bytes: 2 });
     expect(cut.text).toBe("a�");
     expect(cut.details).toEqual({ truncated: true });

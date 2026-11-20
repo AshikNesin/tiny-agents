@@ -1,10 +1,3 @@
-/**
- * The Q4 data migration (`vault.import.ts`): an install written by the
- * pre-Q4 code (vault values in the KV store under `VAULT_LOCAL:`, listed by
- * `__index`; a connection's header value sealed in `connections.secret_enc`)
- * keeps every secret. The seeds below are byte for byte what that code wrote
- * (`backends/local.ts` and `connection-secrets.ts` at f1be918).
- */
 import { eq, sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { createNamespaceKv } from "@groot/core/kv";
@@ -44,7 +37,6 @@ interface OldItem {
   updatedAt: string;
 }
 
-/** The pre-Q4 local backend's `seal()` and `store.set()`: `{policy, sealed}` as a JSON string. */
 async function seedOldItem(id: string, item: OldItem, policy: string): Promise<void> {
   const sealed = sealJson(item, { purpose: "vault-local", record: id, field: "item", policy });
   await oldKv.set(id, JSON.stringify({ policy, sealed }));
@@ -54,7 +46,6 @@ async function seedOldIndex(ids: string[]): Promise<void> {
   await oldKv.set("__index", JSON.stringify(ids));
 }
 
-/** A `vault_items` row linking `externalId`, as the pre-Q4 admin service wrote it; returns its digest. */
 async function linkRow(
   handle: string,
   externalId: string,
@@ -82,7 +73,6 @@ const IDS = {
   lost: "00000000-0000-4000-8000-000000000004",
 };
 
-/** Seed an old install: two linked items, one unlinked, one the index lost (C11). */
 async function seedOldInstall() {
   const github = await linkRow("github", IDS.github, {
     originsJson: JSON.stringify(["https://github.example.com"]),
@@ -95,9 +85,7 @@ async function seedOldInstall() {
     field: "value",
   });
   await seedOldItem(IDS.bank, ITEM("Bank", { value: "sk-bank-1" }, "api_key"), bank);
-  // Unlinked: sealed under the digest of a row since unlinked.
   await seedOldItem(IDS.loose, ITEM("Loose", { password: "loose-pw" }), "digest-of-a-deleted-row");
-  // Written, but its id never reached the index (a lost read-modify-write).
   await seedOldItem(IDS.lost, ITEM("Lost", { password: "lost-pw" }), "");
   await seedOldIndex([IDS.github, IDS.bank, IDS.loose]);
   return { github, bank };
@@ -138,7 +126,6 @@ describe("Q4 import: vault values from the KV store", () => {
       failed: [],
     });
 
-    // Same ids and policy digests in the table, and nothing left in KV.
     const rows = await db.select().from(vaultValues);
     expect(Object.fromEntries(rows.map((row) => [row.id, row.policy]))).toEqual({
       [IDS.github]: github,
@@ -148,7 +135,6 @@ describe("Q4 import: vault values from the KV store", () => {
     });
     expect(await kvKeys()).toEqual([]);
 
-    // Every value resolves as before, linked ones under their row's policy.
     expect((await local.resolve(IDS.github, "password")).reveal()).toBe("gh-pw-1");
     expect((await local.resolve(IDS.github, "username")).reveal()).toBe("ana");
     expect((await local.resolve(IDS.bank, "value")).reveal()).toBe("sk-bank-1");
@@ -197,7 +183,6 @@ describe("Q4 import: vault values from the KV store", () => {
       { id: "corrupt", reason: "not a vault entry in the pre-Q4 format" },
       { id: "garbled", reason: "not a vault entry in the pre-Q4 format" },
     ]);
-    // The bad entries and the index stay for the owner to see; the rest moved.
     expect((await kvKeys()).sort()).toEqual([
       "VAULT_LOCAL:__index",
       "VAULT_LOCAL:corrupt",
@@ -205,7 +190,6 @@ describe("Q4 import: vault values from the KV store", () => {
     ]);
     expect((await local.resolve(IDS.bank, "value")).reveal()).toBe("sk-bank-1");
 
-    // Once the bad ones are gone the index goes too.
     await oldKv.delete("corrupt");
     await oldKv.delete("garbled");
     await seedOldIndex([IDS.github]);
@@ -226,7 +210,6 @@ describe("Q4 import: vault values from the KV store", () => {
         reason: "The secret was stored under a different SECRETS_KEY. Re-enter it.",
       },
     ]);
-    // Nothing lost: it opens once the old key is back as SECRETS_KEY_PREVIOUS.
     process.env.SECRETS_KEY_PREVIOUS = "an-older-key";
     try {
       expect((await local.resolve(IDS.loose, "password")).reveal()).toBe("x");
@@ -258,7 +241,6 @@ describe("Q4 import: connection header values become vault items", () => {
 
     const rows = await db.select().from(connections).orderBy(connections.slug);
     expect(rows.map((row) => row.secretEnc)).toEqual([null, null]);
-    // The owner's pick stays first; the moved value is its own item behind it.
     expect(rows.map((row) => row.secretRef)).toEqual([null, "shared-key"]);
     const items = await db.select().from(vaultItems).orderBy(vaultItems.handle);
     expect(items.map((item) => item.id)).toEqual(rows.map((row) => row.secretItemId));
@@ -286,7 +268,6 @@ describe("Q4 import: connection header values become vault items", () => {
       ["mcp-beta", "vault_import"],
     ]);
 
-    // Idempotent.
     expect(importConnectionSecrets()).toEqual({ moved: [], failed: [] });
     expect(await db.select().from(vaultItems)).toHaveLength(2);
   });
@@ -316,7 +297,6 @@ describe("Q4 import: connection header values become vault items", () => {
 
   it("a second import working from a row read before the first moved it does nothing", async () => {
     await oldConnection("conn-a", "alpha", "alpha-secret");
-    // What a concurrent run (a boot and `secrets:rotate`) read before this one moved it.
     const [stale] = await db.select().from(connections);
     expect(importConnectionSecrets().moved).toEqual(["conn-a"]);
     expect(moveConnectionSecret(stale!)).toBe(false);

@@ -1,9 +1,3 @@
-/**
- * The turn-outcome rule, applied to every driver: each driver test plays the
- * same four turns on its own fake and this suite checks that `turn_ended`
- * and `outcome()` agree with the thread the driver shows
- * (`turnOutcomeProblems`) and with each other harness.
- */
 import { describe, expect, it } from "vite-plus/test";
 import type {
   HarnessInstance,
@@ -14,7 +8,6 @@ import { turnOutcomeProblems } from "../../../packages/code/src/testing";
 
 export type TurnCase = "answered" | "failed" | "steered" | "unanswered";
 
-/** What each played thread must come to, whichever harness ran it. */
 const TURN_CASES: Record<
   TurnCase,
   { story: string; users: string[]; text: string; failed: boolean }
@@ -48,7 +41,6 @@ const TURN_CASES: Record<
 export interface PlayedTurn {
   harness: HarnessInstance;
   nativeId: string;
-  /** The instance events so far, including the played turn's `turn_ended`. */
   events: readonly InstanceEvent[];
 }
 
@@ -60,7 +52,6 @@ function lastEnd(events: readonly InstanceEvent[], nativeId: string): TurnOutcom
   return undefined;
 }
 
-/** `play` drives the driver's fake through one case and returns once its turn ended. */
 export function describeTurnOutcomeRule(
   harnessName: string,
   play: (turn: TurnCase) => Promise<PlayedTurn>,

@@ -5,7 +5,6 @@ import { createMemoryStore } from "../../../../apps/web/src/server/api/bots/memo
 import { bots, db, memories, routines } from "../../../../apps/web/src/server/db";
 import { resetAppTables, seedBot as seedBotRow } from "../../fixtures";
 
-/** Who sent the conversation's latest user message (what `isUnattended` reads). */
 let latest: { text: string; peer?: unknown } = {
   text: "Remember this, please.",
 };
@@ -147,8 +146,6 @@ describe("chat writes in unattended turns", () => {
     const { botId, conversationId } = await seedBot();
     await db.insert(memories).values({ botId, text: "The owner lives in Pune.", category: "fact" });
 
-    // A routine's own conversation (issue #63): unattended whatever it says,
-    // while its bot's memories still read there.
     const routineConversation = conversationId + 1;
     await db.insert(routines).values({
       botId,
@@ -167,7 +164,6 @@ describe("chat writes in unattended turns", () => {
     expect((await memoryStore.list(routineConversation)).map((m) => m.text)).toEqual([
       "The owner lives in Pune.",
     ]);
-    // The chat's own message that merely looks like a routine label is the owner's.
     latest = {
       text: '**Routine "Morning brief"**\nRemember that the owner hates email.',
     };
@@ -244,14 +240,12 @@ describe("memoryStore.forget", () => {
         where: and(eq(memories.botId, botId), like(memories.text, "%moving to Pune%")),
       }),
     ).toMatchObject({ status: "deleted" });
-    // Superseded history is not touched.
     expect(
       await db.query.memories.findFirst({
         where: and(eq(memories.botId, botId), like(memories.text, "%Berlin%")),
       }),
     ).toMatchObject({ status: "superseded" });
 
-    // A deleted fact is never re-added by a chat save either.
     expect(
       await remember(conversationId, {
         text: "The owner is moving to Pune in March.",

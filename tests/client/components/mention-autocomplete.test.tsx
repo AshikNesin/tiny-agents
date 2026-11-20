@@ -35,7 +35,6 @@ function renderOverlay(props: Partial<Parameters<typeof MentionAutocomplete>[0]>
       {...props}
     />,
   );
-  // The composer owns focus, so keys reach the overlay through its handle.
   const press = (key: string) =>
     act(() => {
       expect(
@@ -79,11 +78,9 @@ describe("MentionAutocomplete", () => {
     press("ArrowDown");
     expect(options()[2]).toHaveAttribute("aria-selected", "true");
 
-    // Wraps to the top.
     press("ArrowDown");
     expect(options()[0]).toHaveAttribute("aria-selected", "true");
 
-    // And back up.
     press("ArrowUp");
     expect(options()[2]).toHaveAttribute("aria-selected", "true");
   });

@@ -1,4 +1,3 @@
-/** The `vision` toolkit (issue #17): see_image side-call, fail-open, store lookup. */
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { ToolExecutionApi, ToolExecutionResult } from "@earendil-works/pi-durable";
 import { describe, expect, it, vi } from "vite-plus/test";

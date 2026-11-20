@@ -26,7 +26,6 @@ async function storePasskey(
   });
 }
 
-/** clientDataJSON as a browser would send it: base64url JSON carrying the challenge. */
 function clientData(challenge: string): string {
   return Buffer.from(
     JSON.stringify({ type: "webauthn.get", challenge, origin: "http://localhost:3000" }),
@@ -98,7 +97,7 @@ describe("passkey API", () => {
       json: bogus,
       token,
     });
-    expect(first.status).toBe(400); // challenge consumed, attestation invalid
+    expect(first.status).toBe(400);
     expect(first.body.error?.message).not.toMatch(/Challenge not found/);
     const second = await api(app, "/api/v1/passkey/register/verify", {
       method: "POST",
@@ -130,7 +129,6 @@ describe("passkey API", () => {
         json: { response },
       });
 
-    // Two concurrent verifications of one challenge: exactly one signs in.
     const results = await Promise.all([verify(), verify()]);
     expect(results.map((r) => r.status).toSorted()).toEqual([200, 400]);
     const signedIn = results.find((r) => r.status === 200)!;
@@ -221,7 +219,6 @@ describe("passkey API", () => {
     const { token, user } = await signIn(app);
     const passkey = await createSoftPasskey(user.id);
 
-    // A registration challenge does not sign anyone in.
     const reg = await api<{ challenge: string }>(app, "/api/v1/passkey/register/options", {
       method: "POST",
       token,
@@ -233,7 +230,6 @@ describe("passkey API", () => {
     expect(signInWithReg.status).toBe(400);
     expect(signInWithReg.body.error?.message).toMatch(/Challenge not found or expired/);
 
-    // A sign-in challenge does not register a passkey.
     const login = await api<{ challenge: string }>(app, "/api/v1/passkey/login/options", {
       method: "POST",
       json: {},

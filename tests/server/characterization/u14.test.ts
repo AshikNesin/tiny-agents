@@ -1,9 +1,3 @@
-/**
- * Characterization of behavior-register row U14: deleting a bot or a past
- * chat leaves its conversations orphaned in `agent.db`.
- * Preserve: this pins today's behavior, quirk included; change it only with
- * a signed-off register row.
- */
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import type { AgentRuntime } from "../../../packages/agent/src/runtime";

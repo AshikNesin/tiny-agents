@@ -1,7 +1,3 @@
-/**
- * The connection tool page: schema, the per-tool switch and the playground,
- * which asks before running a tool that may change data.
- */
 import React from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -86,7 +82,6 @@ describe("ConnectionToolDetail", () => {
     expect(await screen.findByRole("heading", { name: "Save a file" })).toBeTruthy();
     expect(screen.getByText("mcp__upsy__save_file")).toBeTruthy();
     expect(screen.getByText("may change data")).toBeTruthy();
-    // Once in the input schema, once on the playground field.
     expect(screen.getAllByText("File name")).toHaveLength(2);
 
     await user.click(screen.getByRole("switch", { name: "Available to bots" }));
@@ -107,7 +102,6 @@ describe("ConnectionToolDetail", () => {
 
     await user.type(screen.getByLabelText(/^name/), "notes.md");
     await user.click(screen.getByRole("button", { name: "Run tool" }));
-    // Not read-only: asks before running for real.
     await user.click(await screen.findByRole("button", { name: "Run" }));
     await waitFor(() =>
       expect(callToolMock).toHaveBeenCalledWith("c1", "save_file", { name: "notes.md" }),

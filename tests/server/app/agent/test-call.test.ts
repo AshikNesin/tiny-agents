@@ -1,7 +1,3 @@
-/**
- * The Test button on a classifier row (Jev, Clef): one real classify call,
- * not a chat completion, so a classifier tests green when it can answer.
- */
 import type { ClassifierApi, ClassifierModel } from "@earendil-works/pi-ai";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { testClassifierCall } from "../../../../packages/models/src/test-call";

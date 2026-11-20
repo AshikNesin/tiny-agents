@@ -1,9 +1,3 @@
-/**
- * Imperative tool labels (issue #85): every built-in tool carries an
- * `askLabel` that completes "<bot> wants to …" on an approval card, and the
- * bot editor capitalizes it for the tool's row. Toolkits are built with every
- * optional tool switched on, so a new tool without one fails here.
- */
 import { describe, expect, it } from "vite-plus/test";
 import { createToolSearchCapability } from "../../../../packages/agent/src/capabilities";
 import { createSkillsCapability } from "../../../../packages/agent/src/skills";
@@ -64,7 +58,6 @@ describe("built-in tool askLabels", () => {
     "%s has a lowercase imperative askLabel",
     (_, tool) => {
       expect(tool.askLabel, tool.name).toMatch(/^[a-z]/);
-      // An imperative verb, not the done-label's past tense ("opened a page").
       expect(tool.askLabel!.split(" ")[0]).not.toMatch(/ed$/);
     },
   );

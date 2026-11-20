@@ -1,15 +1,3 @@
-/**
- * The verify skill's journeys and feature recipes name app pages; when a page
- * moves they rot silently, because CI never drives them (issue #241: the
- * settings revamp left eleven journeys on `/settings?tab=…`). This keeps the
- * paths they name honest against the real route table:
- *
- * - every `page.goto("/…")` in a journey matches a route other than the
- *   catch-all redirect;
- * - every `/settings/<section>` a journey or recipe names is a real section;
- * - nobody drives the old `/settings?tab=` links except the probes that
- *   check they still redirect.
- */
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { matchRoutes } from "react-router-dom";
@@ -28,10 +16,8 @@ function filesIn(dir: string, ext: string) {
 const journeys = filesIn("journeys", ".mjs");
 const recipes = filesIn("features", ".md");
 
-/** A template literal's `${…}` parts become one path segment's worth of text. */
 const concrete = (raw: string) => raw.replace(/\$\{[^}]*\}/g, "x").replace(/[?#].*$/, "");
 
-/** The section ids `SettingsPage` mounts, from `sections.ts` (owner and guest alike). */
 const sectionIds = new Set(
   [
     ...readFileSync(
@@ -41,7 +27,6 @@ const sectionIds = new Set(
   ].map((m) => m[1]),
 );
 
-/** Journeys and recipes that open an old `?tab=` link on purpose, to check it redirects. */
 const LEGACY_TAB_PROBES = new Set(["account-shell.mjs", "account-shell.md"]);
 
 describe("verify journeys name real pages", () => {

@@ -1,8 +1,3 @@
-/**
- * Wire shapes for the routines client (issue #18 phase B): every method hits
- * the route the server actually exposes, and runs endpoints unwrap the
- * `{ runs: [...] }` wrapper instead of handing callers the envelope.
- */
 import { describe, expect, it, vi } from "vite-plus/test";
 
 const getMock = vi.fn().mockResolvedValue(undefined);

@@ -19,11 +19,9 @@ import type { PullReviewView } from "../../../apps/web/src/shared/api/code";
 import type { DiffView } from "@/pages/code/DiffWorkspace";
 import { AppQueryProvider } from "../query-provider";
 
-/** Each render gets its own React Query cache, as the app gives the page one. */
 const render = (ui: Parameters<typeof renderBare>[0]) =>
   renderBare(ui, { wrapper: AppQueryProvider });
 
-/** Unified diffs, nothing folded, the file drawer shut. */
 const STILL_VIEW: DiffView = {
   style: "unified",
   setStyle: () => undefined,
@@ -54,7 +52,6 @@ const file = (path: string) => ({
   viewed: false,
 });
 
-/** Answers by method, path and `scope`; records every call. */
 function stubFetch(answers: Record<string, unknown>) {
   const fetch = vi.fn(async (url: string, init?: RequestInit) => {
     const at = new URL(String(url), "http://x");
@@ -131,7 +128,6 @@ describe("your changes to a PR", () => {
 
     await pickYourChanges(user);
 
-    // Each file's header in the column: only yours.
     await waitFor(() =>
       expect(screen.queryByRole("button", { name: "Fold src/b.ts" })).not.toBeInTheDocument(),
     );
@@ -253,19 +249,16 @@ describe("the light editor", () => {
       original: "b\n",
       content: "B\n",
     });
-    // Back to the diff once saved.
     expect(await screen.findByRole("button", { name: "Edit src/a.ts" })).toBeInTheDocument();
     expect(screen.queryByRole("textbox", { name: "Edit src/a.ts" })).not.toBeInTheDocument();
   });
 
   it("opens the file in the highlighted code editor where the browser can measure text", async () => {
-    // jsdom has no canvas, which the editor measures text with; browsers do.
     const canvas = vi
       .spyOn(HTMLCanvasElement.prototype, "getContext")
       .mockImplementation(
         () => ({ font: "", measureText: (t: string) => ({ width: t.length * 7 }) }) as never,
       );
-    // Its tokenizer posts to itself without a target origin, which jsdom refuses.
     const post = window.postMessage.bind(window);
     const message = vi
       .spyOn(window, "postMessage")

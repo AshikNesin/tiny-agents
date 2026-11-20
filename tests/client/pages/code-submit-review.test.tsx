@@ -63,7 +63,6 @@ function stubFetch() {
   return fetch;
 }
 
-/** The header's Submit review, opened. */
 async function show(review: PullReviewView, comments: ThreadCommenting) {
   const view = render(
     <MemoryRouter>
@@ -86,7 +85,6 @@ describe("Submit review", () => {
       "src/retry.ts:12Cap the delay",
     );
     await user.click(screen.getByRole("button", { name: "Request changes" }));
-    // GitHub needs a summary to request changes.
     expect(
       within(screen.getByRole("dialog")).getByRole("button", { name: "Submit review" }),
     ).toBeDisabled();

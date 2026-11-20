@@ -1,8 +1,3 @@
-/**
- * Every lifecycle the app stores, as data (docs/reference/state-machines.md):
- * each graph is well formed, and the app's machines name the same states as
- * the agent package's views of them (packages never import from apps/).
- */
 import { describe, expect, expectTypeOf, it } from "vite-plus/test";
 import type { AttachmentStatus, TaskRecord } from "@tiny-agents/agent";
 import { defineMachine, type StateMachine } from "../../../apps/web/src/shared/state-machine";
@@ -93,7 +88,6 @@ describe("the app's machines", () => {
       "cancelled",
     ]);
     for (const to of routineRunMachine.terminal) {
-      // A missed run is recorded at its fire and never moves.
       expect(routineRunMachine.sourcesOf(to)).toEqual(to === "missed" ? [] : ["awaiting"]);
     }
   });

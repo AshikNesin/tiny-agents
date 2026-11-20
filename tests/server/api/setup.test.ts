@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 import { api, createTestApp } from "../helpers";
 
-// Each test file gets a fresh database, so this one starts with no users.
 const app = createTestApp();
 const payload = { email: "owner@example.com", password: "long-enough-pw", name: "Owner" };
 

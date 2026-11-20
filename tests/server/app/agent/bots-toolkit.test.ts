@@ -1,8 +1,3 @@
-/**
- * The `bots` toolkit (issue #12): message_bot delivers through the injected
- * BotMessagingStore, keyed on the durable tool task so replays dedupe, and
- * the roster section lists the other bots only when there are any.
- */
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { ProviderState } from "@earendil-works/pi-durable";
 import { ProviderDoc } from "@earendil-works/pi-durable";
@@ -15,9 +10,7 @@ import {
 } from "../../../../packages/agent/src/toolkits/bots";
 
 interface MemoryStore extends BotMessagingStore {
-  /** Every deliver invocation, replays included. */
   invocations: { toName: string; text: string; requestId: string; sourceKey: string }[];
-  /** Rows the "unique requestId column" accepted: one per real delivery. */
   deliveries: string[];
   nextResult: {
     delivered: boolean;
@@ -39,8 +32,6 @@ function memoryStore(
     async deliver(input) {
       invocations.push(input);
       if (!this.nextResult.delivered) return { ...this.nextResult };
-      // Simulates the app store's requestId unique column: a replayed deliver
-      // finds the existing row and reports success without a second insert.
       if (!deliveries.includes(input.requestId)) deliveries.push(input.requestId);
       return { delivered: true, ...(this.nextResult.queued ? { queued: true } : {}) };
     },
@@ -50,7 +41,6 @@ function memoryStore(
   };
 }
 
-/** A ToolExecutionApi with just what message_bot reads: ids and the provider snapshot. */
 function api(overrides: Partial<ToolExecutionApi> = {}): ToolExecutionApi {
   const base = {
     taskId: 7,
@@ -105,7 +95,6 @@ describe("bots toolkit", () => {
       "botmsg-pi:sess-abc:7",
       "botmsg-pi:sess-abc:7",
     ]);
-    // A different task (a later tool call) gets its own keys.
     await run(bots, { to: "Researcher", text: "three" }, api({ taskId: 8 as TaskId }));
     expect(store.invocations[2]).toMatchObject({ requestId: "botmsg-pi:sess-abc:8" });
   });
@@ -130,9 +119,6 @@ describe("bots toolkit", () => {
     const second = await run(bots, { to: "Researcher", text: "exactly once" });
     expect(first.isError).toBeUndefined();
     expect(second.isError).toBeUndefined();
-    // Both runs derived the same deterministic requestId (same durable tool
-    // task, same session), so the store's unique column accepted one row:
-    // two invocations, exactly one delivery.
     expect(store.invocations).toHaveLength(2);
     expect(store.deliveries).toEqual(["botmsg-pi:sess-abc:7"]);
   });
@@ -180,13 +166,8 @@ describe("bots toolkit", () => {
   });
 
   it("renders the same roster whether or not a bot is busy, so the prompt section never churns", async () => {
-    // pi-durable re-sends a section into the transcript each time its text
-    // changes: a busy flag would add a fresh roster copy every time any bot
-    // starts or stops a reply.
     const render = (busy: boolean) => {
       const store = memoryStore();
-      // The app's roster rows once carried a busy flag; whatever extra a row
-      // carries, the section must not render it.
       const row = { name: "Researcher", description: "Digs into sources", busy };
       store.roster = async () => [row];
       return createBotsToolkit(store)

@@ -108,7 +108,6 @@ const user = userEvent.setup();
 
 beforeEach(() => {
   sendMock.mockClear();
-  // The composer keeps unsent drafts per bot; start every test blank.
   localStorage.clear();
 });
 
@@ -127,7 +126,6 @@ describe("ChatPane mention wiring", () => {
     await user.type(composer, "{Enter}");
     expect(composer.value).toBe("hey @Ada ");
 
-    // The overlay closed; Enter now sends.
     expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
   });
 
@@ -167,7 +165,6 @@ describe("ChatPane mention wiring", () => {
     expect(sendMock.mock.calls[0]![3]).toEqual(["b1", "b2"]);
   });
 
-  // Issue #80: two bots share a name (older data).
   const twins = [
     { id: "e1", name: "Echo", description: "" },
     { id: "e2", name: "Echo", description: "Echoes back" },

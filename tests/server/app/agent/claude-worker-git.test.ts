@@ -1,8 +1,3 @@
-/**
- * The worker's git ops for the Code page's Changes panel, on real git in a
- * temporary repository: what the panel is sent for files it cannot show as
- * text, and that reading never rewrites the index an agent commits through.
- */
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -63,7 +58,6 @@ it("says a binary or oversized working file cannot be shown instead of sending i
 });
 
 it("lists changes without rewriting the index, so an agent's commit never meets our lock", async () => {
-  // Same content, newer timestamp: a refreshing read would rewrite the index.
   await new Promise((resolve) => setTimeout(resolve, 1100));
   writeFileSync(path.join(repo, "README.md"), "hello\n");
   const index = path.join(repo, ".git", "index");

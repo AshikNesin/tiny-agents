@@ -1,9 +1,3 @@
-/**
- * An in-memory `SandboxConnection` for toolkit and transport tests: each
- * method answers from what the test gives it and records the call. The pool,
- * retry, idle close and host keys are tested once, against the fake SSH
- * server, in `sandbox-connection.test.ts`.
- */
 import type { Duplex } from "node:stream";
 import type {
   SandboxConnection,

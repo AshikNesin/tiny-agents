@@ -1,9 +1,3 @@
-/**
- * The chat sessions store (store/chats.ts) behind fake ports: a scripted
- * server, a fake bot stream and a switchable online signal. One request id
- * per Echo, reused by every attempt, so an offline resend can never place
- * the message twice; a refusal withdraws the Echo and hands the draft back.
- */
 import { describe, expect, it, vi } from "vite-plus/test";
 import { ApiError } from "@groot/shell/lib/api";
 
@@ -24,7 +18,6 @@ const SUBMISSION: OwnerSubmission = {
   whenBusy: "steer",
 };
 
-/** Fake ports: a scripted server, one fake stream per bot, a switchable online signal. */
 function harness(responses: Array<() => Promise<unknown>> = []) {
   let online = true;
   const onlineListeners = new Set<() => void>();
@@ -64,7 +57,6 @@ function harness(responses: Array<() => Promise<unknown>> = []) {
     send,
     errors,
     streams,
-    /** Play the server's side of the bot's stream. */
     emit: (botId: string, ...events: BotStreamEvent[]) => {
       for (const event of events) streams.get(botId)!.onEvent(event);
     },
@@ -110,7 +102,6 @@ describe("chat sessions: owner send", () => {
     h.goOffline();
     const outcome = h.chats.send("b1", SUBMISSION);
     await vi.waitFor(() => expect(outbox(h)).toEqual(["req-1:offline"]));
-    // Still offline: the Echo stays, nothing goes again yet.
     await Promise.resolve();
     expect(h.send).toHaveBeenCalledTimes(1);
 
@@ -127,7 +118,6 @@ describe("chat sessions: owner send", () => {
     h.goOffline();
     const outcome = h.chats.send("b1", SUBMISSION);
     await vi.waitFor(() => expect(h.send).toHaveBeenCalledTimes(1));
-    // Back for a moment: the resend fails and the browser drops again.
     h.send.mockImplementationOnce(() => {
       h.goOffline();
       return lostAnswer();
@@ -179,7 +169,6 @@ describe("chat sessions: the stream and the cache", () => {
     h.chats.close("b1");
     expect(h.streams.has("b1")).toBe(false);
     expect(h.view("b1")).toMatchObject({ health: "loading", messages: [hi] });
-    // The next visit keeps the cache (and its read marker) until its snapshot.
     h.chats.open("b1", 9_999);
     expect(h.chats.store.getState().sessions.b1!.unreadFrom).toBe(500);
     h.streams.get("b1")!.onDrop();

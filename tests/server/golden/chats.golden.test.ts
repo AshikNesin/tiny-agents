@@ -1,7 +1,3 @@
-/**
- * Golden flows: bots and their chats, as the owner sees them over HTTP and
- * the chat stream. See recorder.ts.
- */
 import { afterAll, beforeAll, describe } from "vite-plus/test";
 import { createTestApp } from "../helpers";
 import { botChats, botMessages, bots, promptRevisions } from "../../../apps/web/src/server/db";
@@ -34,7 +30,6 @@ afterAll(async () => {
 const setup = { app, token: () => token };
 const BOT = { description: "Says it back", systemPrompt: "Be brief.", modelId: TEST_MODEL };
 
-/** Until the sidebar shows the bot idle again with a preview: the turn settled. */
 async function settled(r: Recorder, botId: string, preview: string) {
   await until(async () => {
     // oxlint-disable-next-line typescript/no-explicit-any -- list rows

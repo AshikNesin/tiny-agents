@@ -1,11 +1,3 @@
-/**
- * Engine tests: the routine-fire handler's exactly-once contract (double
- * delivery, crash between submit and chain, missed-run grace, late once),
- * the routine's own conversation (issue #63: never the bot's chat), and the
- * completion watcher (idle resolution, refused tools, restart boot sweep,
- * chat cards). Real SQLite test DB, fake runtime, and the real queue table
- * (no worker runs in tests, so queued jobs only wait there).
- */
 import { and, eq, sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { bots, db, jobs, routineRuns, routines } from "../../../../apps/web/src/server/db";
@@ -33,7 +25,6 @@ import {
   type FakeRuntime,
 } from "../../fixtures";
 
-/** Routine-fire jobs queued so far, oldest first. */
 async function sentJobs() {
   return db
     .select()
@@ -61,12 +52,9 @@ async function runById(id: string) {
 
 const clearTables = resetAppTables;
 
-/** The bot's chat, where the owner talks (seeded on the bot row). */
 const CHAT = 7;
-/** The conversation the fake runtime creates for a routine on its first fire. */
 const ROUTINE_CONVERSATION = 42;
 
-/** The shared fake, with the routine's conversation created on its first fire. */
 function fakeRuntime(overrides: Partial<FakeRuntime> = {}) {
   const fake = createFakeRuntime(overrides);
   if (!overrides.createConversation)
@@ -77,7 +65,6 @@ function fakeRuntime(overrides: Partial<FakeRuntime> = {}) {
 async function seedBotAndRoutine(schedule: unknown, options: { enabled?: boolean } = {}) {
   const [bot] = await db
     .insert(bots)
-    // The chat thread started before the fixed slots these tests fire at.
     .values({
       name: "Bot",
       modelId: "m1",
@@ -98,7 +85,7 @@ async function seedBotAndRoutine(schedule: unknown, options: { enabled?: boolean
   return { bot: bot!, routine: routine! };
 }
 
-const SLOT = new Date("2026-10-21T03:30:00.000Z"); // 09:00 IST Wed
+const SLOT = new Date("2026-10-21T03:30:00.000Z");
 const ON_TIME = new Date("2026-10-21T03:30:05.000Z");
 
 function payloadOf(
@@ -134,8 +121,6 @@ describe("routine-fire dispatch", () => {
     expect(run).toMatchObject({ status: "awaiting", trigger: "schedule" });
     expect(run?.requestId).toBe(runRequestId(routine.id, SLOT));
 
-    // Into the routine's own conversation, created on this first fire from
-    // the bot's config and set to refuse what would ask: never the chat.
     const submits = vi.mocked(runtime.submit).mock.calls;
     expect(submits).toHaveLength(1);
     expect(submits[0][0]).toBe(ROUTINE_CONVERSATION);
@@ -153,7 +138,6 @@ describe("routine-fire dispatch", () => {
     expect(submits[0][1].text).toContain('Routine "digest"');
     expect(submits[0][1].text).toContain("Wed, 21 Oct 2026, 09:00 IST");
 
-    // The chain advanced: next slot queued with a fresh pendingJobId.
     const queued = await sentJobs();
     expect(queued).toHaveLength(1);
     expect(queued[0]!.data).toMatchObject({
@@ -181,7 +165,6 @@ describe("routine-fire dispatch", () => {
     ]);
     expect((await runOf(routine.id, SLOT))?.conversationId).toBe(String(ROUTINE_CONVERSATION));
     expect((await runOf(routine.id, nextSlot))?.conversationId).toBe("43");
-    // The routine names its newest run's conversation: the one a move or delete stops.
     expect((await routineRow(routine.id))?.conversationId).toBe("43");
   });
 
@@ -275,19 +258,16 @@ describe("routine-fire dispatch", () => {
   it("a crash between submit and chaining is repaired by the redelivery", async () => {
     const { routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
     await dispatchOccurrence(payloadOf(routine.id, SLOT), ON_TIME);
-    // Simulate the crash: the row kept awaiting status but the chain never queued.
     await db.update(routines).set({ pendingJobId: null }).where(eq(routines.id, routine.id));
     await db.delete(jobs);
 
     await dispatchOccurrence(payloadOf(routine.id, SLOT), ON_TIME);
-    expect(await sentJobs()).toHaveLength(1); // chain repaired
-    expect(vi.mocked(runtime.submit).mock.calls).toHaveLength(1); // no duplicate submit
+    expect(await sentJobs()).toHaveLength(1);
+    expect(vi.mocked(runtime.submit).mock.calls).toHaveLength(1);
   });
 
   it("a job the queue retries after a crash past the submit repairs the chain", async () => {
     const { routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
-    // The delivering job is still the pending handle: the crash came before
-    // the next occurrence was queued.
     const [delivering] = await db
       .insert(jobs)
       .values({ id: "job-retried", name: ROUTINE_FIRE_JOB, state: "active", runAt: SLOT })
@@ -314,14 +294,13 @@ describe("routine-fire dispatch", () => {
   });
 
   it("an overdue occurrence beyond grace is recorded missed and never submitted", async () => {
-    const { routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" }); // grace 120m
+    const { routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
     const veryLate = new Date(SLOT.getTime() + 3 * 60 * 60_000);
     await dispatchOccurrence(payloadOf(routine.id, SLOT), veryLate);
 
     const run = await runOf(routine.id);
     expect(run).toMatchObject({ status: "missed" });
     expect(vi.mocked(runtime.submit)).not.toHaveBeenCalled();
-    // Backlog collapses: the next job schedules from now, not from the stale slot.
     expect(await sentJobs()).toHaveLength(1);
     const row = await routineRow(routine.id);
     expect(row?.nextRunAt).toBeTruthy();
@@ -329,7 +308,7 @@ describe("routine-fire dispatch", () => {
   });
 
   it("a late once still fires and carries the lateness note", async () => {
-    const at = new Date("2026-10-20T03:30:00.000Z"); // 09:00 IST Tue
+    const at = new Date("2026-10-20T03:30:00.000Z");
     const { routine } = await seedBotAndRoutine({
       kind: "once",
       at: at.toISOString(),
@@ -341,7 +320,6 @@ describe("routine-fire dispatch", () => {
     expect(run?.status).toBe("awaiting");
     const text = vi.mocked(runtime.submit).mock.calls[0]![1].text as string;
     expect(text).toContain("(late by 5m)");
-    // A fired once archives itself.
     const row = await routineRow(routine.id);
     expect(row).toMatchObject({ enabled: false, nextRunAt: null, pendingJobId: null });
     expect(await sentJobs()).toHaveLength(0);
@@ -374,7 +352,6 @@ describe("routine-fire dispatch", () => {
       .where(eq(routines.id, routine.id));
     await dispatchOccurrence(payloadOf(routine.id, SLOT, "manual"), ON_TIME);
     expect(vi.mocked(runtime.submit)).toHaveBeenCalledTimes(1);
-    // Manual runs never touch the chain.
     expect(await sentJobs()).toHaveLength(0);
   });
 
@@ -399,13 +376,12 @@ describe("routine-fire dispatch", () => {
     const run = await runOf(routine.id, SLOT);
     expect(run?.status).toBe("failed");
     expect(run?.error).toContain("model gone");
-    // The failed run's card says the routine paused; nothing is written to the chat.
     expect(run?.error).toContain("paused");
     const after = await routineRow(routine.id);
     expect(after?.enabled).toBe(false);
     expect(after?.pendingJobId).toBeNull();
     expect(after?.nextRunAt).toBeNull();
-    expect(await sentJobs()).toHaveLength(0); // no chain after a failed submit
+    expect(await sentJobs()).toHaveLength(0);
     expect(vi.mocked(failing.submit).mock.calls.map(([ref]) => ref)).toEqual([
       ROUTINE_CONVERSATION,
     ]);
@@ -415,8 +391,6 @@ describe("routine-fire dispatch", () => {
   });
 
   it("a model removed from the catalog pauses the routine instead of retrying", async () => {
-    // The reconcile before submit is where a vanished model throws
-    // (ModelNotFoundError); it must take the same fail-once path as submit.
     const { routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
     const failing = fakeRuntime({
       configure: vi
@@ -436,7 +410,6 @@ describe("routine-fire dispatch", () => {
 describe("completion watcher", () => {
   let runtime: ReturnType<typeof fakeRuntime>;
 
-  /** The run's turn finished with this reply. */
   function answer(run: { requestId: string }, reply: Omit<FinishedReply, "createdAt">) {
     runtime.script.answer(run.requestId, reply, ROUTINE_CONVERSATION);
   }
@@ -516,7 +489,6 @@ describe("completion watcher", () => {
     await dispatchOccurrence(payloadOf(routine.id, SLOT), ON_TIME);
     const run = await runOf(routine.id);
     answer(run!, { text: "Routine's answer" });
-    // The answer sits in the routine's conversation; the chat has none.
     const watcher = createRoutinesCompletionWatcher(runtime);
 
     expect(await watcher.resolveConversation(CHAT)).toBe(0);
@@ -532,7 +504,6 @@ describe("completion watcher", () => {
     const { routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
     await dispatchOccurrence(payloadOf(routine.id, SLOT), ON_TIME);
     const run = await runOf(routine.id);
-    // The turn's refusals are collected across its messages by the runtime.
     answer(run!, { text: "Drafted the email but could not send it.", refused: ["send_email"] });
     const watcher = createRoutinesCompletionWatcher(runtime);
     expect(await watcher.resolveConversation(ROUTINE_CONVERSATION)).toBe(1);
@@ -561,7 +532,6 @@ describe("completion watcher", () => {
     });
   });
 
-  /** Fire the next hourly slot and resolve it with `reply` (issue #87 helpers). */
   async function runOnce(routineId: string, hour: number, reply: Omit<FinishedReply, "createdAt">) {
     const slot = new Date(SLOT.getTime() + hour * 60 * 60_000);
     await dispatchOccurrence(payloadOf(routineId, slot), new Date(slot.getTime() + 5_000));
@@ -622,7 +592,6 @@ describe("completion watcher", () => {
     const { bot, routine } = await seedBotAndRoutine({ kind: "cron", expr: "0 9 * * 1-5" });
     await dispatchOccurrence(payloadOf(routine.id, SLOT), ON_TIME);
     const run = await runOf(routine.id);
-    // An awaiting run has no card yet.
     expect(await chatCards(bot.id, bot.chatStartedAt)).toEqual([]);
 
     const seen: { botId: string; card: RoutineRunCard }[] = [];
@@ -645,7 +614,6 @@ describe("completion watcher", () => {
     };
     expect(seen[0]).toEqual({ botId: bot.id, card: expect.objectContaining(card) });
     expect(await chatCards(bot.id, bot.chatStartedAt)).toEqual([expect.objectContaining(card)]);
-    // A thread started after the run ("New chat") does not show it.
     expect(await chatCards(bot.id, new Date(Date.now() + 1000))).toEqual([]);
   });
 
@@ -668,7 +636,6 @@ describe("completion watcher", () => {
     const run = await runOf(routine.id);
     answer(run!, { text: "Late reply." });
     const watcher = createRoutinesCompletionWatcher(runtime);
-    // The routine moves to another bot after the resolver listed the run.
     const resolved = await watcher.resolveConversation(ROUTINE_CONVERSATION, async () => {
       await db
         .update(routineRuns)

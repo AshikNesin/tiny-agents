@@ -2,7 +2,6 @@ import { describe, expect, it } from "vite-plus/test";
 import { ApiError } from "@groot/shell/lib/api";
 import { errorMessage, OFFLINE_MESSAGE, TIMEOUT_MESSAGE } from "@/lib/errors";
 
-/** What `apiClient` throws when the server answered with its error envelope. */
 function apiFailure(
   status: number,
   error: { code: string; message: string; details?: unknown },
@@ -39,7 +38,6 @@ describe("errorMessage", () => {
   });
 
   it("never shows the status-line text of a response without an envelope", () => {
-    // A proxy's HTML page: ApiError falls back to the status text and an HTTP_<status> code.
     const error = new ApiError({
       status: 500,
       code: "HTTP_500",

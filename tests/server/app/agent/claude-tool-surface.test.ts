@@ -1,7 +1,3 @@
-/**
- * What a Claude plan conversation is told about its tools: the same tools,
- * descriptions and parameters a pi conversation gets.
- */
 import { Type } from "@earendil-works/pi-ai";
 import { describe, expect, it } from "vite-plus/test";
 import { z } from "zod";

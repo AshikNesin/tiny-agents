@@ -1,8 +1,3 @@
-/**
- * The bot chat handle (bots.chat.ts): one lookup resolves the bot's current
- * conversation, every action acts on that ref, and Owner-wait errors answer
- * as HTTP from one table. Real SQLite test DB; the runtime is a stub.
- */
 import { HttpError } from "@groot/core/errors";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import {

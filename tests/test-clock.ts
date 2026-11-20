@@ -9,8 +9,6 @@ export function futureIso(days: number): string {
 export function pinClockWhileLoadingAndBeforeEachTest(): void {
   vi.setSystemTime(FIXED_NOW);
   beforeEach(() => {
-    // A test that left `vi.useFakeTimers({ toFake })` on without "Date" would
-    // otherwise keep the real Date: setSystemTime then moves only its clock.
     vi.useRealTimers();
     vi.setSystemTime(FIXED_NOW);
   });

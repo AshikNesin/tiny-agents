@@ -1,8 +1,3 @@
-/**
- * The `skills` capability (issue #1 D5–D7): the prompt lists only the bot's
- * skills, `load_skill` returns the instructions on demand, and `save_skill`
- * always waits for the owner's approval.
- */
 import type { Context as PiContext } from "@earendil-works/pi-ai";
 import { until } from "../../fixtures/until";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -74,7 +69,6 @@ describe("skills capability", () => {
       storePath: ":memory:",
       capabilities: [createSkillsCapability(store)],
       respondWith: (context: PiContext) => {
-        // Sections reach the model as system context (pi-durable `pi.system` entries).
         prompts.push(JSON.stringify(context));
         const last = context.messages.at(-1);
         if (last?.role === "toolResult") {

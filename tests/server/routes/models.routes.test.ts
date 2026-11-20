@@ -1,9 +1,3 @@
-/**
- * Settings → Models routes (issue #179): accounts, discovery, models, roles.
- * A local HTTP server stands in for an OpenAI-compatible endpoint (a private
- * address, so accounts opt in to private networks). The key never comes
- * back from any route and is never stored in the clear.
- */
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { eq } from "drizzle-orm";
@@ -145,7 +139,6 @@ async function createAccount(stepUpToken: string, extra: Record<string, unknown>
   });
 }
 
-/** Every place a key could leak: rows, vault rows, the sealed values, the list. */
 async function assertNoSentinel(): Promise<void> {
   const dumps = [
     JSON.stringify(await db.select().from(providers)),
@@ -180,7 +173,6 @@ describe("models routes", () => {
         expect.objectContaining({ upstreamId: "model-a", enabled: true, source: "discovered" }),
       ],
     });
-    // The key is an app vault item for the endpoint's host, invisible to bots.
     const [item] = await db.select().from(vaultItems);
     expect(item).toMatchObject({ audience: "app", kind: "api_key" });
     expect(JSON.parse(item!.hostsJson)).toEqual([new URL(endpoint).host]);
@@ -188,7 +180,6 @@ describe("models routes", () => {
   });
 
   it("connects a Claude plan with no models until Claude Code can list them", async () => {
-    // No sandbox in tests: Claude Code can't be asked, and nothing is assumed in its place.
     const found = await call("/models/discover", {
       method: "POST",
       json: { kind: "claude-plan", allowPrivateNetwork: false },
@@ -202,7 +193,6 @@ describe("models routes", () => {
     });
     expect(created.status).toBe(201);
     expect(created.body.data.models).toEqual([]);
-    // Checking again asks Claude Code; with no sandbox the account says so.
     const checked = await call(`/models/providers/${created.body.data.id}/refresh`, {
       method: "POST",
     });
@@ -318,7 +308,6 @@ describe("models routes", () => {
       json: { name: "Again" },
     });
     expect(stale.status).toBe(412);
-    // A disabled account's models stay listed, greyed out with the reason.
     const model = ((await call("/models")).body.data.models as Data[]).find(
       (m) => m.name === "model-a",
     );
@@ -350,7 +339,6 @@ describe("models routes", () => {
       (a) => a.id === created.id,
     );
     expect(account?.checkedAt).toBe(created.checkedAt);
-    // The faux account has nothing to discover.
     const faux = ((await call("/models/providers")).body.data.accounts as Data[]).find(
       (a) => a.kind === "faux",
     );
@@ -381,13 +369,9 @@ describe("models routes", () => {
     expect(moved.status).toBe(200);
     expect((await db.select().from(bots))[0]?.modelId).toBe("test-model");
     expect((await db.select().from(modelRoles))[0]?.modelId).toBe("test-model");
-    // The account's key went with it.
     expect(await db.$count(vaultItems)).toBe(0);
   });
 
-  // Register row C12 (fixed in 4.6): a move puts each user only where it
-  // could have been set: the classifier role on a classifier model, bots and
-  // chat roles on a chat model, and the Claude plan's fallback on pi.
   it("moves the classifier role and the Claude plan's fallback only where they could be set", async () => {
     const token1 = await stepUp();
     const account = (await createAccount(token1)).body.data;

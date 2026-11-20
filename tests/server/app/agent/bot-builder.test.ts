@@ -1,8 +1,3 @@
-/**
- * The `bot-builder` capability (issue #149): `create_bot` always waits for
- * the owner's approval — even when the tool is set to `allow` — and the
- * store's refusals reach the model.
- */
 import type { Context as PiContext } from "@earendil-works/pi-ai";
 import { loaded } from "../../fixtures/loaded-tools";
 import { until } from "../../fixtures/until";
@@ -46,7 +41,6 @@ afterEach(async () => {
   await Promise.allSettled(runtimes.splice(0).map((r) => r.close()));
 });
 
-/** A bot that calls create_bot once, then answers; tool results land in `results`. */
 async function openBuilder(
   store: BotCreationStore,
   args: Parameters<typeof fauxToolCall>[1] = ARGS,

@@ -42,7 +42,6 @@ describe("sandboxEndpoint", () => {
     const first = sandboxEndpoint(env);
     const second = sandboxEndpoint(env);
     expect(first).toMatchObject({ host: "vm", port: 2222, user: "ops" });
-    // The sandbox toolkit, the terminal and the browser tunnel pin by the same store.
     expect(first?.hostKeys).toBe(second?.hostKeys);
     expect(sandboxEndpoint({ NODE_ENV: "development" })).toBeUndefined();
   });
@@ -54,7 +53,6 @@ describe("sandboxConnection", () => {
     const env = appEnv({ SANDBOX_HOST: "vm", SANDBOX_PORT: "2222", NODE_ENV: "test" });
     const first = sandboxConnection(env);
     expect(first?.host).toBe("vm");
-    // The toolkits, the terminal, the browser, the computer and the worker all get this one.
     expect(sandboxConnection({ ...env })).toBe(first);
     expect(sandboxConnection({ ...env, SANDBOX_PORT: "2223" })).not.toBe(first);
     expect(sandboxConnection({ NODE_ENV: "development" })).toBeUndefined();

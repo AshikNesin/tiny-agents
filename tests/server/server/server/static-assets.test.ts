@@ -1,11 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 import { isAssetRequest } from "../../../../apps/web/src/server/static-assets";
 
-/**
- * The SPA fallback's asset check (issue #83): a request for build output that
- * is not on disk must 404 rather than get index.html with a 200, so the
- * fallback has to tell build files apart from client-side routes.
- */
 describe("static assets", () => {
   it("tells build files apart from app routes", () => {
     expect(isAssetRequest("/assets/nope-123.js")).toBe(true);
@@ -23,7 +18,6 @@ describe("static assets", () => {
     expect(isAssetRequest("/robots.txt")).toBe(true);
     expect(isAssetRequest("/LOGO.PNG")).toBe(true);
     expect(isAssetRequest("/index-abc123.js.map")).toBe(true);
-    // An extension only counts at the end of the path.
     expect(isAssetRequest("/skills/my.js-helper")).toBe(false);
     expect(isAssetRequest("/")).toBe(false);
   });

@@ -1,8 +1,3 @@
-/**
- * The suggested next message in a Code thread's composer: shown as the
- * empty composer's placeholder, Tab fills it in, Esc dismisses it, and it
- * is gone while the agent works.
- */
 import React from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -27,7 +22,6 @@ const composer = (props: Partial<React.ComponentProps<typeof Composer>>) => (
   </AppQueryProvider>
 );
 
-// The composer keeps its draft per thread: each test starts empty.
 afterEach(() => localStorage.clear());
 
 describe("the suggested next message", () => {

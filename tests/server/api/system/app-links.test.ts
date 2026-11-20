@@ -1,8 +1,3 @@
-/**
- * Android App Links (docs/features/mobile-app.md): with the app's signing certificate set,
- * the server publishes the Digital Asset Links statement Android verifies before it lets
- * the app open this server's links (a push notification's `/chats/<bot>?focus=…`).
- */
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { assetLinks } from "../../../../apps/web/src/server/api/system/app-links";
 import { createTestApp } from "../../helpers";

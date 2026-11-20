@@ -17,7 +17,6 @@ it("fetches the catalog once and hands it to every later mount at once", async (
     { tools: [{ name: "browser_navigate", label: "Opened a page", askLabel: "open a page" }] },
   ]);
 
-  // A failed load leaves the empty catalog, and the next mount retries.
   const failed = renderHook(() => useToolLabels());
   await waitFor(() => expect(capabilities).toHaveBeenCalledTimes(1));
   expect(failed.result.current).toEqual({ done: {}, ask: {} });

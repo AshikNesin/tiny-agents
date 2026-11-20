@@ -1,7 +1,3 @@
-/**
- * The Claude Code harness against an in-process worker (coding mode) with a
- * scripted Agent SDK. Real WebSockets on loopback; nothing calls Anthropic.
- */
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -163,7 +159,6 @@ async function attention(events: InstanceEvent[], index = 0) {
 describe("Claude Code harness", () => {
   it("offers the Claude plan's models, and nothing hardcoded before Claude Code reports any", async () => {
     const { harness, host } = await setup(manual);
-    // No session yet and no plan models: no invented list ("Default" is the picker's own).
     expect(await harness.models()).toEqual([]);
     const plan = [{ id: "claude-opus-5-5", label: "Claude Opus 5.5", supportsReasoning: true }];
     const withPlan = createClaudeCodeHarness({
@@ -245,7 +240,6 @@ describe("Claude Code harness", () => {
     const usage = await harness.usage!(nativeId);
     expect(usage.models[0]).toMatchObject({ label: "claude-opus-4-7", priced: true });
     expect(usage.totalUsd).toBeCloseTo(0.01);
-    // supportedCommands / supportedModels were cached from the first session.
     await vi.waitFor(() =>
       expect(harness.commands!().map((command) => command.command)).toContain("/review"),
     );
@@ -365,8 +359,6 @@ describe("Claude Code harness", () => {
     expect(steer).toMatchObject({ priority: "next", message: { content: "keep the old API" } });
     query.emit(toolResult(query, "toolu_read", "export function parse() {}"));
     query.emit(text(query, "Keeping the old API."));
-    // The CLI ran the steer in its own turn: still working after the first result,
-    // and the steer belongs to the turn it went into, so no turn end yet.
     query.emit(result(query, { totalCost: 0.01, queuedTurnCount: 1 }));
     await vi.waitFor(async () => expect((await harness.getThread(nativeId)).thread.cursor).toBe(1));
     expect((await harness.outcome(nativeId)).working).toBe(true);
@@ -436,7 +428,6 @@ describe("Claude Code harness", () => {
     expect(query.interrupts).toBe(0);
     expect(query.received).toHaveLength(0);
     expect((await harness.outcome(nativeId)).working).toBe(false);
-    // The next prompt is the first one Claude Code reads.
     await harness.send(nativeId, { message: "now go" });
     const next = await query.nextInput();
     expect(next?.message.content).toBe("now go");
@@ -451,7 +442,6 @@ describe("Claude Code harness", () => {
     await query.nextInput();
     await harness.interrupt(nativeId);
     await vi.waitFor(() => expect(query.interrupts).toBe(1));
-    // The CLI ignored it and the turn starts anyway: the first output re-sends the stop.
     query.emit(delta(query, "Sure, "));
     await vi.waitFor(() => expect(query.interrupts).toBe(2));
     query.emit(result(query, { totalCost: 0, isError: true, errors: ["aborted"] }));
@@ -524,7 +514,6 @@ describe("Claude Code harness", () => {
     expect(byId.get(ask2.key)).toMatchObject({ status: "denied" });
     expect(byId.get("toolu_rm")).toMatchObject({ status: "done" });
     expect(byId.get("toolu_push")).toMatchObject({ status: "denied" });
-    // An answer to a closed request is a no-op, not an error.
     await expect(
       harness.respond!(nativeId, ask.key, { decision: "deny" }),
     ).resolves.toBeUndefined();
@@ -613,7 +602,6 @@ describe("Claude Code harness", () => {
     await waitTurnEnds(events, 1);
     const before = await harness.getThread(nativeId);
 
-    // A second app process: same thread index, fresh driver.
     const again = createClaudeCodeHarness({
       host,
       resolveWorker: async () => ({ url: setupResult.server.url, token: TOKEN }),
@@ -623,11 +611,8 @@ describe("Claude Code harness", () => {
     cleanups.push(() => again.stop());
     const after = await again.getThread(nativeId);
     expect(after.items).toEqual(before.items);
-    // One app process owns the index: the old one is gone.
     again.stop();
 
-    // The worker restarts: a watcher starts over from the transcript on disk,
-    // and the next turn resumes the stored Claude session.
     const watch = collect();
     cleanups.push(harness.watchThread(nativeId, watch.listener));
     await watch.next((event) => event.type === "snapshot");
@@ -730,7 +715,6 @@ describe("Claude Code harness", () => {
     await expect(harness.createThread({ message: "b", cwd: dir })).rejects.toThrow(
       /turns are already running/,
     );
-    // The refused thread is not left behind.
     expect(await harness.listThreads("active")).toHaveLength(1);
   });
 
@@ -754,9 +738,6 @@ describe("Claude Code harness", () => {
     ).rejects.toThrow(/does not exist/);
   });
 
-  // Register row C13 (fixed in 4.6): bad input is a 400 and an unknown thread
-  // a 404, typed at the driver and kept by the Code routes; anything the
-  // driver did not expect stays a 500.
   it("answers bad input with 400 and an unknown thread with 404, through the Code routes", async () => {
     const { harness, dir, events } = await setup(echo);
     await expect(harness.createThread({ message: "x" })).rejects.toMatchObject({
@@ -811,7 +792,6 @@ describe("Claude Code harness", () => {
     expect(badSetting.status).toBe(400);
     expect(message(badSetting)).toMatch(/^Unknown effort "extreme"/);
 
-    // The worker unreachable is not the caller's fault: still a 500.
     harness.stop();
     const unreachable = await call("/threads", {
       instanceId: "claude-code",

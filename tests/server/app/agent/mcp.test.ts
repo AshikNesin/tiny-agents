@@ -1,8 +1,3 @@
-/**
- * Remote MCP servers as capabilities (issue #1 M3), against an in-memory MCP
- * server: tool listing with annotations, list_changed, calls through a bot's
- * durable conversation, and the default permissions annotations imply.
- */
 import type { Context as PiContext } from "@earendil-works/pi-ai";
 import { until } from "../../fixtures/until";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -192,7 +187,6 @@ describe("MCP connections", () => {
         tools,
         call: async () => ({ content: [] }),
       });
-    // Three tools with large schemas (~9k characters) are deferred.
     const heavy = Array.from({ length: 3 }, (_, i) => ({
       name: `heavy_${i}`,
       inputSchema: {
@@ -202,7 +196,6 @@ describe("MCP connections", () => {
     }));
     const big = capability("big", heavy);
     expect(big.extension.tools?.every((tool) => tool.deferred === true)).toBe(true);
-    // Forty small tools stay direct.
     const light = Array.from({ length: 40 }, (_, i) => ({
       name: `tool_${i}`,
       inputSchema: { type: "object" },

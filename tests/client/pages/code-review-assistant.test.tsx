@@ -14,7 +14,6 @@ import { PullReview } from "@/pages/code/PullReview";
 import type { PullReviewView } from "../../../apps/web/src/shared/api/code";
 import { AppQueryProvider } from "../query-provider";
 
-/** Each render gets its own React Query cache, as the app gives the page one. */
 const render = (ui: Parameters<typeof renderBare>[0]) =>
   renderBare(ui, { wrapper: AppQueryProvider });
 
@@ -79,7 +78,6 @@ describe("the review assistant's model", () => {
       </MemoryRouter>,
     );
 
-    // The assistant starts folded to a rail.
     await user.click(await screen.findByRole("button", { name: "Open assistant" }));
     const picker = await screen.findByRole("button", { name: "Model" });
     expect(picker).toHaveTextContent("Sonnet");

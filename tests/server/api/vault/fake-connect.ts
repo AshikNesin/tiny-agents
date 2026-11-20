@@ -1,7 +1,3 @@
-/**
- * A fake 1Password Connect server (the REST subset the vault uses): vaults,
- * items, per-token vault visibility and read/write permission.
- */
 import { randomUUID } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -12,7 +8,6 @@ import type { ConnectItem } from "../../../../apps/web/src/server/api/vault/back
 export interface FakeConnect {
   url: string;
   items: Map<string, ConnectItem>;
-  /** token → vaults it sees and whether it may write. */
   tokens: Map<string, { vaults: string[]; write: boolean }>;
   vaults: { id: string; name: string }[];
   requests: { method: string; path: string; token: string }[];

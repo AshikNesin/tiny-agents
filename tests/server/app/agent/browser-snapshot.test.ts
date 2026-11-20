@@ -1,8 +1,3 @@
-/**
- * What the model reads of a page: Playwright's `ai` snapshot made compact,
- * and long reads cut into windows the model can read on through. The input
- * below is a trimmed copy of a real snapshot of news.ycombinator.com.
- */
 import { describe, expect, it } from "vite-plus/test";
 import {
   compactSnapshot,
@@ -101,7 +96,7 @@ describe("page window", () => {
   });
 
   it("ends a window at a line break and says where to read on", () => {
-    const text = "aaaa\nbbbb\ncccc\ndddd"; // 19 characters
+    const text = "aaaa\nbbbb\ncccc\ndddd";
     const first = pageWindow(text, 0, 12, "");
     expect(first).toEqual({
       text: "aaaa\nbbbb\n…(9 more characters. Call again with offset 10 to read on)",

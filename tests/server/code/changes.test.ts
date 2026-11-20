@@ -1,10 +1,3 @@
-/**
- * The change monitor behind the Changes and Review panels' live refresh:
- * one poll per directory however many panels watch it, a new version only
- * when the stamp moves, never two reads at once, a stop when the last panel
- * closes, and an honest "unavailable" (the panel then falls back to
- * re-reading on transcript activity) that clears once reads work again.
- */
 import { describe, expect, it } from "vite-plus/test";
 import { CodeChanges, type ChangeEvent } from "../../../apps/web/src/server/api/code/code.changes";
 import { until } from "../fixtures/until";
@@ -50,7 +43,6 @@ describe("the change monitor", () => {
 
     const before = stamp.calls();
     await new Promise((resolve) => setTimeout(resolve, 60));
-    // Nothing moved: no new version, and the two panels share each read.
     expect(a).toHaveLength(1);
     expect(stamp.calls() - before).toBeLessThan(60 / intervals.activeMs + 2);
 
@@ -85,7 +77,6 @@ describe("the change monitor", () => {
     stamp.fail(true);
     await until(() => last(events)?.type === "unavailable", "unavailable");
     expect(last(events)).toEqual({ type: "unavailable", message: "Cannot reach the sandbox" });
-    // Said once, not on every failed read.
     await new Promise((resolve) => setTimeout(resolve, 30));
     expect(events.filter((e) => e.type === "unavailable")).toHaveLength(1);
 

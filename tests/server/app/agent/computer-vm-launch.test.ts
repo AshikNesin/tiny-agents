@@ -1,9 +1,3 @@
-/**
- * The desktop launch script (issue #108) run for real in bash, against
- * stand-ins for Xtigervnc, the session bus and XFCE, so the lock, reattach
- * and process behaviour is checked rather than the script's text. Also runs
- * the window-bound secret typing script against stand-in X tools.
- */
 import { execFileSync, spawn } from "node:child_process";
 import { until } from "../../fixtures/until";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -38,7 +32,6 @@ const hasPython = (() => {
 const runIfPython = hasPython ? describe : describe.skip;
 
 const FAKES: Record<string, string> = {
-  // Binds the X socket the script waits for and removes it on SIGTERM.
   Xtigervnc: `#!/usr/bin/env python3
 import os, signal, socket, sys, time
 
@@ -56,7 +49,6 @@ time.sleep(600)
   vncconfig: `#!/bin/sh
 exec sleep 600
 `,
-  // A bus daemon that outlives dbus-launch, like the real one.
   "dbus-launch": `#!/bin/sh
 sleep 600 >/dev/null 2>&1 </dev/null &
 echo "DBUS_SESSION_BUS_ADDRESS='unix:path=/tmp/fake-bus,guid=1';"
@@ -67,7 +59,6 @@ echo "DBUS_SESSION_BUS_PID=$!;"
 echo "$DISPLAY $XDG_CONFIG_HOME" > "$XDG_CONFIG_HOME/../.session-env"
 exec sleep 600
 `,
-  // A window manager answers once the session runs.
   wmctrl: `#!/bin/sh
 [ "$1" = "-m" ] && exit 0
 exit 0
@@ -153,16 +144,13 @@ function run(
     let timedOut = false;
     child.stdout.on("data", (chunk) => (stdout += chunk));
     child.stderr.on("data", (chunk) => (stderr += chunk));
-    // A script that exits before reading stdin makes this write fail with EPIPE.
     child.stdin.on("error", () => {});
     child.stdin.end(stdin ?? "");
     const timer = setTimeout(() => {
       timedOut = true;
       try {
         process.kill(-child.pid!, "SIGKILL");
-      } catch {
-        // already gone
-      }
+      } catch {}
     }, timeoutMs);
     child.once("exit", (code) => {
       clearTimeout(timer);
@@ -213,9 +201,7 @@ runIfPython("desktop launch script", () => {
       for (const pid of desktopPids(profile)) {
         try {
           process.kill(pid, "SIGKILL");
-        } catch {
-          // already gone
-        }
+        } catch {}
       }
     }
     rmSync(root, { recursive: true, force: true });
@@ -261,7 +247,7 @@ runIfPython("desktop launch script", () => {
     const launched = parseDesktopLaunch(a.stdout);
     expect(launched.reused).toBe(false);
     const pids = desktopPids(a.profile);
-    expect(pids).toHaveLength(4); // Xtigervnc, vncconfig, the bus, the session
+    expect(pids).toHaveLength(4);
     expect(pids.every(alive)).toBe(true);
     expect(lockHeld()).toBe(false);
     const envFile = readFileSync(join(a.profile, DESKTOP_ENV_FILE), "utf8");
@@ -311,7 +297,6 @@ runIfPython("desktop launch script", () => {
     expect(entry).toContain(`Exec=${profile}/bin/google-chrome-stable %U`);
     expect(entry).toContain(`TryExec=${profile}/bin/google-chrome-stable\n`);
 
-    // The browser toolkit's Chrome holds the profile: the desktop's stops it first.
     const browserChrome = spawn("sleep", ["600"], { stdio: "ignore" });
     try {
       writeFileSync(join(browserProfile, ".stack-pids"), `${browserChrome.pid}\n`);
@@ -326,7 +311,6 @@ runIfPython("desktop launch script", () => {
       browserChrome.kill("SIGKILL");
     }
 
-    // Without a browser profile the desktop's Chrome is the system one again.
     const plain = await run(
       aimAtFakeX(launchDesktopCommand({ profileDir: profile, width: 1280, height: 800 })),
       env,
@@ -392,7 +376,6 @@ runIfPython("desktop launch script", () => {
   }, 60_000);
 
   describe("tool execs", () => {
-    /** Stand-in X tools for one desktop: the active window and what was typed. */
     function xTools(dir: string) {
       const bin = join(dir, "xbin");
       mkdirSync(bin, { recursive: true });

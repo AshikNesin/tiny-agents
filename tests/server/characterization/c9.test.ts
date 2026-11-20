@@ -1,14 +1,3 @@
-/**
- * Characterization of behavior-register row C9: relays land in the host
- * bot's current chat, not the chat that asked. A routine sender gets no relay.
- * Preserve: this pins today's behavior, quirk included; change it only with a
- * signed-off register row.
- *
- * The ledger row keeps only `replyToBotId`; the relay (bots.delivery.ts)
- * submits to that bot's row conversation as it is at answer time. A send
- * from one of the bot's routine runs is recorded with `replyToBotId = null`
- * (bots.messaging.ts), so its answer is marked answered and goes nowhere.
- */
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { eq } from "drizzle-orm";
 import { botMessages, bots, db, routines } from "../../../apps/web/src/server/db";
@@ -31,7 +20,6 @@ let runtime: FakeRuntime;
 
 beforeEach(async () => {
   runtime = installFakeRuntime(createFakeRuntime());
-  // Busy target: nothing answers until the test calls `answer`.
   runtime.isBusy.mockReturnValue(true);
   await resetAppTables();
 });
@@ -56,14 +44,12 @@ describe("C9: where a relayed answer lands", () => {
       }),
     ).toMatchObject({ delivered: true });
 
-    // "New chat" on the sender before the target answers.
     await db
       .update(bots)
       .set({ conversationId: String(NEW_CHAT) })
       .where(eq(bots.id, sender.id));
     runtime.submit.mockClear();
 
-    // The target answers in the conversation pinned on the row (its own).
     const row = await ledgerRow("c9-ask");
     const answeredIn = Number(row!.conversationId);
     expect(answeredIn).not.toBe(TARGET_CHAT);

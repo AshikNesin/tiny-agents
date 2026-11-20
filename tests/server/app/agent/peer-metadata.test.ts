@@ -1,14 +1,8 @@
-/**
- * Trusted peer attribution (Grok-style cards): the delivery pipeline's
- * `peer` metadata survives submit → transcript round-trips, and text that
- * merely imitates a provenance prefix carries no metadata (spoofing guard).
- */
 import { describe, expect, it } from "vite-plus/test";
 import { openTestRuntime } from "../../../../packages/agent/src/testing";
 import { until } from "../../fixtures/until";
 import type { ChatEvent, ChatState } from "@tiny-agents/agent";
 
-/** Wait until the transcript carries `count` assistant replies, then return the messages. */
 async function afterReplies(
   rt: Awaited<ReturnType<typeof openTestRuntime>>,
   ref: number,
@@ -31,7 +25,6 @@ async function afterReplies(
   throw new Error(`transcript never carried ${count} replies`);
 }
 
-/** Wait until the transcript carries `count` user entries, then return them. */
 async function userMessages(
   rt: Awaited<ReturnType<typeof openTestRuntime>>,
   ref: number,
@@ -105,7 +98,6 @@ describe("peer metadata on chat.user entries", () => {
         text: "**Reply from Claude Code:** PR is up",
         peer: { kind: "reply", name: "Claude Code" },
       });
-      // Still busy once both are admitted: both wait behind the first run.
       expect(rt.isBusy(ref)).toBe(true);
       const messages = await afterReplies(rt, ref, 2);
       const users = messages.filter((m) => m.role === "user").map((m) => m.requestId);

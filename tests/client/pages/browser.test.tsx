@@ -136,7 +136,6 @@ describe("BrowserPage", () => {
       2,
     );
     expect(fakes.rfbs[0]!.viewOnly).toBe(true);
-    // The stream itself is the Take control button.
     const viewport = screen.getByTestId("browser-page-viewport");
     expect(
       await within(viewport).findByRole("button", { name: "Take control" }),
@@ -156,7 +155,6 @@ describe("BrowserPage", () => {
     expect(screen.getByTestId("browser-page-status")).toHaveTextContent("You're driving");
     expect(within(viewport).getByTestId("browser-page-driving-frame")).toBeInTheDocument();
     expect(within(viewport).queryByRole("button", { name: "Take control" })).toBeNull();
-    // The tools sit in the view's bar, so they stay on screen in full screen.
     const region = screen.getByTestId("browser-region");
     expect(within(region).getByTestId("browser-page-fullscreen")).toBeInTheDocument();
     await user.click(within(region).getByRole("button", { name: "Hand back" }));

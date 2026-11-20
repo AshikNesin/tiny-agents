@@ -9,7 +9,6 @@ import { appConfig } from "../../apps/web/src/server/config";
 
 export type TestApp = Hono<AppEnv>;
 
-/** The web app, with fresh rate-limit counters. Pass `clientAddress` to say who each request is from. */
 export function createTestApp(options: Omit<CreateAppOptions, "routes"> = {}): TestApp {
   return createWebApp(options);
 }
@@ -23,11 +22,6 @@ function merge(base: unknown, overrides: unknown): unknown {
   return out;
 }
 
-/**
- * Set the config the way `entry.node.ts` does, the app's own overrides
- * included, with `overrides` on top. Call it with none to restore the app's
- * config: a bare `setConfig()` would drop the app's overrides too.
- */
 export function setAppConfig(overrides: DeepPartial<AppConfig> = {}): void {
   setConfig(
     (e) =>
@@ -48,7 +42,6 @@ export interface JsonResponse<T = unknown> {
   };
 }
 
-/** Send a request and parse the JSON envelope (204/empty bodies yield `{ success: true }`). */
 export async function api<T = unknown>(
   app: TestApp,
   path: string,
@@ -69,7 +62,6 @@ export async function api<T = unknown>(
 
 let userCounter = 0;
 
-/** Create a user and log in; returns a bearer token for `api()`. */
 export async function signIn(app: TestApp, overrides: { email?: string; password?: string } = {}) {
   userCounter += 1;
   const email = overrides.email ?? `user${userCounter}@example.com`;

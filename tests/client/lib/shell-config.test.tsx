@@ -37,7 +37,6 @@ function renderLayout(config: ShellConfig, props: Parameters<typeof Layout>[0] =
   );
 }
 
-/** `/login` waits for `GET /auth/setup`; answer that setup is done. */
 function setupDone() {
   vi.stubGlobal(
     "fetch",
@@ -104,7 +103,6 @@ describe("ShellConfig", () => {
     const rows = within(menu)
       .getAllByRole("menuitem")
       .map((row) => row.textContent);
-    // jsdom is not a Mac, so the hints spell Ctrl rather than ⌘.
     expect(rows).toEqual(["Log out", "Command paletteCtrl K", "Storage", "SettingsCtrl ,"]);
     expect(within(menu).queryByRole("menuitem", { name: "Theme" })).not.toBeInTheDocument();
     expect(within(menu).getByRole("menuitem", { name: "Log out" })).not.toHaveAttribute(
@@ -148,7 +146,6 @@ describe("ShellConfig", () => {
     });
     const palette = screen.getByRole("dialog");
     for (const name of ["Todos", "Storage", "Settings", "Star", "Dark theme", "Log out"]) {
-      // A row's accessible name ends with its shortcut caps, if any.
       expect(
         within(palette).getByRole("option", { name: new RegExp(`^${name}`) }),
       ).toBeInTheDocument();

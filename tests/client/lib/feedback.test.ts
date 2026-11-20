@@ -10,7 +10,6 @@ const FALLBACK = "Unable to save";
 const apiError = (status: number, message: string, fromServer: boolean) =>
   new ApiError({ status, code: `HTTP_${status}`, message, url: "/x", fromServer });
 
-/** A WebAuthn failure as @simplewebauthn/browser rethrows it: the DOMException's name, an ERROR_* code. */
 const webAuthnError = (name: string) =>
   Object.assign(new Error("The operation either timed out or was not allowed."), {
     name,

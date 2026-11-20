@@ -1,9 +1,3 @@
-/**
- * Sniffing and extraction (issue #58) on real in-memory files: spoofed and
- * executable uploads are refused, each format extracts to pages, outline,
- * sheets or a listing, and the caps hold (zip bombs are listed and flagged,
- * never expanded).
- */
 import { gzipSync } from "node:zlib";
 import { strToU8, zipSync } from "fflate";
 import { describe, expect, it } from "vite-plus/test";
@@ -50,9 +44,7 @@ describe("sniffFile", () => {
 
   it("refuses bytes that disagree with the extension", () => {
     expect(() => sniffFile(strToU8("not a pdf"), "pdf")).toThrow(SniffError);
-    // A zip that is not a Word document.
     expect(() => sniffFile(zipSync({ "a.txt": strToU8("a") }), "docx")).toThrow(SniffError);
-    // Binary under a text name.
     expect(() => sniffFile(new Uint8Array([0x41, 0x00, 0x42]), "csv")).toThrow(SniffError);
   });
 

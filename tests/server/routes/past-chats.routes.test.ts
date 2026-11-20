@@ -17,13 +17,6 @@ import {
   type SpiedRuntime,
 } from "../fixtures";
 
-/**
- * Past chats (issue #101): "New chat" records the chat it leaves, which the
- * owner can list, read (paged like the live chat), continue or delete. Runs
- * on the real runtime: the owner's messages go through the API and the faux
- * model answers each with "Echo: <text>".
- */
-
 const token = await authToken("past-chats-test@example.com");
 
 type Msg = { id: string; role: string; text: string };
@@ -33,7 +26,6 @@ const app = createTestApp();
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- response data varies per route
 type Data = any;
 
-/** An authenticated JSON request through the app. */
 function call(path: string, init: { method?: string; json?: unknown } = {}) {
   return api<Data>(app, path, { ...init, token });
 }
@@ -50,13 +42,11 @@ async function createBot(name = "Travel"): Promise<{ id: string; conversationId:
   return response.body.data as { id: string; conversationId: string };
 }
 
-/** The bot's current conversation, as the row names it. */
 async function chatOf(botId: string): Promise<number> {
   const response = await call(`/api/v1/bots/${botId}`);
   return Number(response.body.data.conversationId);
 }
 
-/** Send each owner message and wait for its reply, so the transcript holds owner, bot, owner, bot… */
 async function converse(botId: string, ...texts: string[]): Promise<void> {
   const conversation = await chatOf(botId);
   for (const [i, text] of texts.entries()) {
@@ -114,7 +104,6 @@ describe("Past chats", () => {
         messageCount: 2,
       }),
     ]);
-    // The conversation id stays server-side.
     expect(chats[0]).not.toHaveProperty("conversationId");
     const row = await db.query.botChats.findFirst({ where: eq(botChats.botId, bot.id) });
     expect(row?.conversationId).toBe(bot.conversationId);
@@ -154,7 +143,6 @@ describe("Past chats", () => {
 
   it("reads the newest window and pages older messages", async () => {
     const bot = await createBot();
-    // Enough owner messages that owner + reply pairs overflow the window.
     const owner = Array.from({ length: Math.ceil(CHAT_WINDOW / 2) + 3 }, (_, i) => `turn ${i + 1}`);
     await converse(bot.id, ...owner);
     const all = owner.flatMap((text) => [text, `Echo: ${text}`]);
@@ -197,7 +185,6 @@ describe("Past chats", () => {
     expect(continued.status).toBe(200);
     expect(continued.body.data).toMatchObject({ conversationId: String(first) });
     expect(await chatOf(bot.id)).toBe(first);
-    // The chat it left is stopped and recorded; the one it returned to is reconciled.
     expect(runtime.abort).toHaveBeenCalledWith(second);
     expect((await listChats(bot.id)).map((chat) => chat.title)).toEqual(["Current topic"]);
     expect(runtime.configure).toHaveBeenCalledWith(first, expect.anything());
@@ -239,7 +226,6 @@ describe("Past chats", () => {
     const reader = response.body!.getReader();
     const decoder = new TextDecoder();
     let text = "";
-    // The snapshot arrives first; then "New chat" ends the stream.
     while (!text.includes('"type":"snapshot"')) {
       const { value, done } = await reader.read();
       if (done) throw new Error("stream ended before its snapshot");

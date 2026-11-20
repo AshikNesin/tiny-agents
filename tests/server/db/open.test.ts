@@ -1,8 +1,3 @@
-/**
- * db/open.ts: the one way a Node process opens the app database. The
- * production path default and the migrations-folder lookup live here, so
- * the server, `pnpm db:migrate` and `pnpm seed` agree.
- */
 import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";

@@ -1,10 +1,3 @@
-/**
- * The Code API (ADR 0011): one route set for every harness, owner-only,
- * ids and paths validated before they reach a harness, harness errors kept,
- * capabilities enforced, and the list decorated with followed / unread.
- * Shelley runs through its real driver against the fake Shelley; a second,
- * fake harness proves nothing here is Shelley-specific.
- */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vite-plus/test";
 import { createShelleyHarness } from "@tiny-agents/code/server";
 import { testHost } from "@tiny-agents/code/testing";
@@ -133,7 +126,6 @@ describe("Code API", () => {
     });
     expect(other.body.data?.threadId).toBe("fake:t1");
     expect((await post("/threads", { instanceId: "nope", message: "x" })).status).toBe(404);
-    // A permission mode the harness does not enforce is refused, never faked.
     expect(
       (
         await post("/threads", {
@@ -188,7 +180,6 @@ describe("Code API", () => {
     });
     expect((await get<unknown[]>("/threads/fake:t1/review/drafts")).body.data).toEqual([]);
 
-    // Sent once: the next message goes alone.
     await post("/threads/fake:t1/messages", { message: "Thanks", withReview: true });
     expect(fake.sent.at(-1)?.message).toBe("Thanks");
   });
@@ -213,7 +204,6 @@ describe("Code API", () => {
   });
 
   it("rejects odd ids, traversal and unknown settings before calling a harness", async () => {
-    // The stream and its list reads run in the background; count the rest.
     const calls = () =>
       shelley.seen.filter((s) => !/^\/api\/(stream2|conversations\/snapshot)/.test(s.url)).length;
     const before = calls();
@@ -285,9 +275,6 @@ describe("Code API", () => {
     );
     expect((await post("/uploads/shelley?filename=..%2F..%2Fx")).status).toBe(400);
 
-    // Over the route's own limit (not the app's 1 MB default): a worded 413,
-    // before the body is read or forwarded.
-    // Count only uploads: the stream's background list refresh may land meanwhile.
     const uploadsSeen = () => shelley.seen.filter((r) => r.method === "POST").length;
     const forwarded = uploadsSeen();
     const oversized = await app.request("/api/v1/code/uploads/shelley?filename=big.bin", {
@@ -304,7 +291,6 @@ describe("Code API", () => {
       "Uploads are limited to 25 MB",
     );
     expect(uploadsSeen()).toBe(forwarded);
-    // Bigger than the app's 1 MB API default, within the route's 25 MB.
     const midsize = await app.request("/api/v1/code/uploads/shelley?filename=log.txt", {
       method: "POST",
       headers: { authorization: `Bearer ${token}`, "content-type": "text/plain" },
@@ -343,7 +329,6 @@ describe("Code API", () => {
 });
 
 describe("live changes for the Changes panel", () => {
-  /** Read a thread's change stream until `done` holds for what arrived. */
   async function changes(path: string, done: (text: string) => boolean, step?: () => void) {
     const response = await app.request(`/api/v1/code/threads/${path}`, {
       headers: { authorization: `Bearer ${token}` },
@@ -462,7 +447,6 @@ describe("Code API for a guest (S3)", () => {
     ).toBe(403);
     expect((await asGuest("/harnesses/fake/asset?ref=file%3A%2Fetc%2Fpasswd")).status).toBe(403);
     expect((await asGuest("/harnesses/fake/asset?ref=%2Fetc%2Fpasswd")).status).toBe(403);
-    // A message's own image is the harness's to answer, not refused for the guest.
     expect((await asGuest("/harnesses/fake/asset?ref=img%3Aabc%3A0%3A0")).status).not.toBe(403);
   });
 

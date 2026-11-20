@@ -68,7 +68,6 @@ const bot: Bot = {
   replying: false,
 } as unknown as Bot;
 
-/** The panel confirms a reset through the app's confirm dialog. */
 const render = (ui: React.ReactElement) =>
   rtlRender(
     <MemoryRouter>
@@ -108,7 +107,6 @@ function mockApi(initial: BrowserStatus) {
   return api;
 }
 
-/** A ResizeObserver whose callback the test fires by hand (jsdom has no layout). */
 function stubResizeObserver() {
   const observer = { notify: () => {} };
   vi.stubGlobal(
@@ -125,8 +123,6 @@ function stubResizeObserver() {
 }
 
 const latestRfb = () => fakes.rfbs[fakes.rfbs.length - 1]!;
-// Generous: a viewer that appears after "Open browser" waits for the next
-// 1.5s status poll before it mounts.
 const connected = async () => {
   await waitFor(() => expect(fakes.rfbs.length).toBeGreaterThan(0), { timeout: 4000 });
   act(() => {
@@ -163,7 +159,6 @@ describe("BrowserPanel", () => {
     await connected();
     expect(screen.queryByText("Connecting to the browser…")).not.toBeInTheDocument();
     expect(screen.getByTestId("browser-driver").textContent).toBe("Surfer is driving");
-    // The streamed Chrome shows its own address bar, so the header does not repeat the URL.
     expect(screen.queryByTestId("browser-url")).not.toBeInTheDocument();
     expect(screen.getByTestId("browser-takeover")).toBeEnabled();
     expect(screen.queryByTestId("browser-paste")).not.toBeInTheDocument();
@@ -200,7 +195,6 @@ describe("BrowserPanel", () => {
 
     expect(screen.getByRole("heading", { name: "Browser" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Take control" })).toBeInTheDocument();
-    // Full screen is an icon: its name, no label beside it.
     expect(screen.getByRole("button", { name: "Full screen" })).toHaveTextContent("");
     expect(screen.getByRole("button", { name: "Reset browser profile" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Close browser panel" })).toBeInTheDocument();
@@ -211,14 +205,12 @@ describe("BrowserPanel", () => {
     render(<BrowserPanel bot={bot} onClose={vi.fn()} />);
     await connected();
 
-    // The header has no Take control button: the stream itself is the control.
     const viewport = screen.getByTestId("browser-viewport");
     fireEvent.click(within(viewport).getByRole("button", { name: "Take control" }));
     await waitFor(() => expect(api.driver).toHaveBeenCalledWith("b1", "human"));
     await waitFor(() => expect(latestRfb().viewOnly).toBe(false));
     expect(latestRfb().focus).toHaveBeenCalled();
     expect(screen.getByTestId("browser-driver").textContent).toBe("You're driving");
-    // Nothing covers the stream while the owner drives; a frame marks it as theirs.
     expect(screen.queryByTestId("browser-takeover")).not.toBeInTheDocument();
     expect(within(viewport).getByTestId("browser-driving-frame")).toBeInTheDocument();
     expect(screen.queryByTestId("browser-url")).not.toBeInTheDocument();
@@ -232,7 +224,6 @@ describe("BrowserPanel", () => {
     fireEvent.click(screen.getByTestId("browser-release"));
     await waitFor(() => expect(api.driver).toHaveBeenCalledWith("b1", "agent"));
     await waitFor(() => expect(latestRfb().viewOnly).toBe(true));
-    // Releasing re-reads the status at once.
     await waitFor(() => expect(api.status.mock.calls.length).toBeGreaterThan(polls));
     expect(screen.getByTestId("browser-driver").textContent).toBe("Surfer is driving");
     expect(screen.queryByTestId("browser-driving-frame")).not.toBeInTheDocument();
@@ -258,7 +249,6 @@ describe("BrowserPanel", () => {
 
     fireEvent.click(await screen.findByTestId("browser-paste"));
     await waitFor(() => expect(latestRfb().clipboardPasteFrom).toHaveBeenCalledWith("hello"));
-    // Then Ctrl+V: control down, v down, v up, control up.
     await waitFor(() => expect(latestRfb().sendKey).toHaveBeenCalledTimes(4));
     expect(latestRfb().sendKey.mock.calls.map(([keysym, , down]) => [keysym, down])).toEqual([
       [0xffe3, true],
@@ -352,7 +342,7 @@ describe("BrowserPanel", () => {
         },
       );
       const burst = api.resize.mock.calls.filter(([, size]) => size.width === 801).length;
-      expect(burst).toBeLessThanOrEqual(2); // the burst collapsed into one request (+ the first connect)
+      expect(burst).toBeLessThanOrEqual(2);
     } finally {
       vi.unstubAllGlobals();
     }
@@ -379,20 +369,16 @@ describe("BrowserPanel", () => {
       const panel = screen.getByTestId("browser-panel");
       expect(panel).toHaveAttribute("data-layout", "pip");
       expect(screen.getByTestId("browser-driver").textContent).toBe("Surfer is driving");
-      // Watching only: the stream is not a take-control button, and the
-      // heavier tools stay in the docked panel.
       expect(screen.queryByRole("button", { name: "Take control" })).not.toBeInTheDocument();
       expect(screen.queryByTestId("browser-fullscreen")).not.toBeInTheDocument();
       expect(screen.queryByTestId("browser-reset")).not.toBeInTheDocument();
       expect(screen.queryByRole("separator")).not.toBeInTheDocument();
 
-      // The remote display and Chrome keep their size; the small view only scales them.
       expect(latestRfb().resizeSession).toBe(false);
       observer.notify();
       await new Promise((resolve) => setTimeout(resolve, 300));
       expect(api.resize).not.toHaveBeenCalled();
 
-      // A click on the stream expands it back to the panel.
       fireEvent.click(screen.getByTestId("browser-pip-expand-stream"));
       expect(onLayout).toHaveBeenLastCalledWith("docked");
       fireEvent.click(screen.getByTestId("browser-pip-expand"));
@@ -411,7 +397,6 @@ describe("BrowserPanel", () => {
     const ratio = () => Number.parseFloat(viewport.style.aspectRatio);
     expect(ratio()).toBe(1.6);
 
-    // noVNC sizes its canvas to the remote display: a 1200x900 display is 4:3.
     const canvas = document.createElement("canvas");
     canvas.width = 1200;
     canvas.height = 900;
@@ -420,7 +405,6 @@ describe("BrowserPanel", () => {
     });
     await waitFor(() => expect(ratio()).toBeCloseTo(4 / 3));
 
-    // A tall phone-shaped display stops at 1:2.
     act(() => {
       canvas.width = 700;
       canvas.height = 1600;
@@ -445,7 +429,6 @@ describe("BrowserPanel", () => {
     await connected();
     const panel = screen.getByTestId("browser-panel");
     expect(panel.style.right).toContain("16px");
-    // jsdom's window is 1024x768; the view sits 16px from the right, 112px from the bottom.
     vi.spyOn(panel, "getBoundingClientRect").mockReturnValue({
       left: 688,
       right: 1008,
@@ -467,7 +450,6 @@ describe("BrowserPanel", () => {
   });
 
   it("asks for a window Chrome can draw when the viewer is narrower than that", async () => {
-    // Chrome will not be narrower than 500px; a smaller window would show cropped.
     const api = mockApi(vncStatus());
     stubResizeObserver();
     vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
@@ -478,7 +460,6 @@ describe("BrowserPanel", () => {
       render(<BrowserPanel bot={bot} onClose={vi.fn()} />);
       await connected();
 
-      // The viewer scales this window down to its own box: same shape.
       await waitFor(
         () => expect(api.resize).toHaveBeenCalledWith("b1", { width: 500, height: 1176 }),
         { timeout: 2000 },
@@ -502,11 +483,9 @@ describe("BrowserPanel", () => {
     try {
       render(<BrowserPanel bot={bot} onClose={vi.fn()} />);
       await connected();
-      // The fit that follows the viewer connecting is still out when full screen resizes the box.
       await waitFor(() => expect(api.resize).toHaveBeenCalledTimes(1), { timeout: 2000 });
       box = { width: 1440, height: 900 };
       observer.notify();
-      // Long enough for any debounce to have run: still no second request.
       await new Promise((resolve) => setTimeout(resolve, 700));
       expect(api.resize).toHaveBeenCalledTimes(1);
 
@@ -535,7 +514,7 @@ describe("BrowserPanel", () => {
           await vi.advanceTimersByTimeAsync(ms);
         });
 
-      await advance(350); // the fit that follows the viewer connecting
+      await advance(350);
       expect(api.resize).toHaveBeenCalledTimes(1);
       await advance(1000);
       expect(api.resize).toHaveBeenCalledTimes(2);
@@ -562,7 +541,7 @@ describe("BrowserPanel", () => {
     expect(screen.getByText("Reconnecting…")).toBeInTheDocument();
 
     await waitFor(() => expect(fakes.rfbs.length).toBe(2), { timeout: 3000 });
-    expect(api.ticket).toHaveBeenCalledTimes(2); // tickets are single use
+    expect(api.ticket).toHaveBeenCalledTimes(2);
     act(() => {
       latestRfb().dispatchEvent(new Event("connect"));
     });
@@ -579,7 +558,6 @@ describe("BrowserPanel", () => {
   });
 
   it("remembers the panel width dragged on the edge", async () => {
-    // The panel docks (and resizes) only on wide screens.
     const innerWidth = window.innerWidth;
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 1600 });
     onTestFinished(() => {
@@ -612,7 +590,6 @@ describe("BrowserPanel", () => {
     expect(screen.getByTestId("browser-url").textContent).toBe("https://example.com/");
     expect(screen.queryByTestId("browser-vnc")).not.toBeInTheDocument();
     expect(screen.queryByTestId("browser-fullscreen")).not.toBeInTheDocument();
-    // Without a display there is nothing to take over.
     expect(screen.queryByTestId("browser-takeover")).not.toBeInTheDocument();
     expect(createRfb).not.toHaveBeenCalled();
   });

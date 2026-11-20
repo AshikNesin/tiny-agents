@@ -74,7 +74,6 @@ describe("pollInterval", () => {
 
 describe("panel width", () => {
   it("never lets a dragged panel crowd out the chat (issue #89)", () => {
-    // 1280 - 256px sidebar - 416px chat leaves at most 608px for the panel.
     expect(maxPanelWidth(1280)).toBe(608);
     expect(clampPanelWidth(5000, 1280)).toBe(608);
   });

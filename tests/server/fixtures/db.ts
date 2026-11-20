@@ -1,6 +1,3 @@
-/**
- * App rows for server tests: a bot with a conversation, and a clean slate.
- */
 import {
   bots,
   db,
@@ -45,11 +42,6 @@ let nextFakeConversation = 1_000;
 
 export type SeededBot = typeof bots.$inferSelect;
 
-/**
- * Insert a bot row. On the real app runtime its conversation is created
- * there (so the bot can be written to); on a fake, or with none installed,
- * it gets a fresh numeric id. Pass `conversationId` to pin one.
- */
 export async function seedBot(
   overrides: Partial<typeof bots.$inferInsert> = {},
 ): Promise<SeededBot> {
@@ -73,7 +65,6 @@ export async function seedBot(
   return bot!;
 }
 
-/** Delete every app row, children before parents. */
 export async function resetAppTables(): Promise<void> {
   await db.delete(codeHandoffFinishes);
   await db.delete(codeHandoffs);

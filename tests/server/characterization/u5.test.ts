@@ -1,15 +1,3 @@
-/**
- * Characterization of behavior-register row U5: `message_bot` resolves the
- * target name exactly and case-sensitively, while bot-name uniqueness is
- * case-insensitive.
- * Preserve: this pins today's behavior, quirk included; change it only with a
- * signed-off register row.
- *
- * `assertNameFree` (bots.service.ts) compares trimmed, lower-cased names, so
- * "echo" is refused when "Echo" exists. The messaging store
- * (bots.messaging.ts) finds the target with SQL `name = toName`, so a
- * `message_bot` to "echo" or " Echo" finds no bot.
- */
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { createBotMessagingStore } from "../../../apps/web/src/server/api/bots/bots.messaging";
 import { api, createTestApp, type TestApp } from "../helpers";
@@ -30,7 +18,6 @@ let runtime: FakeRuntime;
 
 beforeEach(async () => {
   runtime = installFakeRuntime(createFakeRuntime());
-  // Busy target: no fast answer runs behind the deliveries.
   runtime.isBusy.mockReturnValue(true);
   await resetAppTables();
   app = createTestApp();
