@@ -1,7 +1,3 @@
-/**
- * Test helpers: an AgentRuntime backed by pi-ai's faux provider, so tests run
- * the real durable machinery without network access or API keys.
- */
 import type { Context as PiContext } from "@earendil-works/pi-ai";
 import { createModels } from "@earendil-works/pi-ai/models";
 import {
@@ -13,7 +9,6 @@ import {
 } from "@earendil-works/pi-ai/providers/faux";
 
 export { fauxAssistantMessage, fauxText, fauxThinking, fauxToolCall };
-/** In-memory MCP server pieces for connection tests (no network). */
 export { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 export { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 export { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -24,10 +19,6 @@ export const TEST_PROVIDER = "faux";
 export const TEST_MODEL = "test-model";
 export const TEST_MODEL_2 = "test-model-2";
 
-/**
- * A faux model row: the row id is the upstream id, so tests and the faux dev
- * boot name a model as `test-model` everywhere.
- */
 export function fauxModelRow(
   id: string,
   name: string,
@@ -49,7 +40,6 @@ export function fauxModelRow(
   };
 }
 
-/** A model config with one faux account holding `rows` (the host registers the faux provider). */
 export function fauxModelConfig(
   rows: readonly ModelRow[],
   extra: Partial<ModelConfig> = {},
@@ -77,16 +67,9 @@ export function fauxModelConfig(
 
 export interface TestRuntimeOptions extends Partial<AgentRuntimeOptions> {
   storePath: string;
-  /** Builds the reply text for the latest user message. Default: `Echo: <text>`. */
   reply?: (userText: string, systemPrompt: string | undefined) => string;
-  /**
-   * Full control of each faux reply (e.g. tool calls via `fauxToolCall`).
-   * The queue cycles: each function is reused after the queue drains.
-   */
   respondWith?: (context: PiContext) => ReturnType<typeof fauxAssistantMessage>;
-  /** Optional thinking text attached to each reply. */
   reasoning?: string;
-  /** Streaming speed of the faux model (tokens per second). Default: instant. */
   tokensPerSecond?: number;
 }
 
@@ -114,8 +97,6 @@ export async function openTestRuntime(options: TestRuntimeOptions): Promise<Agen
     ...(options.tokensPerSecond ? { tokensPerSecond: options.tokensPerSecond } : {}),
   });
   const reply = options.reply ?? ((text: string) => `Echo: ${text}`);
-  // respondWith gets full control (tool calls, multi-step); otherwise the
-  // plain echo/text reply.
   const respond = (context: PiContext) => {
     if (options.respondWith) return options.respondWith(context);
     const system = typeof context.systemPrompt === "string" ? context.systemPrompt : undefined;
@@ -124,7 +105,6 @@ export async function openTestRuntime(options: TestRuntimeOptions): Promise<Agen
       options.reasoning ? [fauxThinking(options.reasoning), fauxText(text)] : [fauxText(text)],
     );
   };
-  // The faux provider consumes one queued response per request; keep plenty queued.
   faux.setResponses(Array.from({ length: 500 }, () => respond));
   models.setProvider(faux.provider);
   const { reply: _r, reasoning: _t, tokensPerSecond: _s, respondWith: _w, ...rest } = options;
@@ -138,16 +118,5 @@ export async function openTestRuntime(options: TestRuntimeOptions): Promise<Agen
     settings: { retry: { enabled: false }, ...rest.settings },
   });
 }
-// Moved to @tiny-agents/sandbox/testing (rewrite step 3.4). Re-exported so
-// importers of this subpath keep compiling; nothing in this repo imports them
-// from here.
-export {
-  /** @deprecated Import from `@tiny-agents/sandbox/testing`. */
-  startFakeSandboxServer,
-} from "@tiny-agents/sandbox/testing";
-export type {
-  /** @deprecated Import from `@tiny-agents/sandbox/testing`. */
-  ExecHandler,
-  /** @deprecated Import from `@tiny-agents/sandbox/testing`. */
-  FakeSandboxServer,
-} from "@tiny-agents/sandbox/testing";
+export { startFakeSandboxServer } from "@tiny-agents/sandbox/testing";
+export type { ExecHandler, FakeSandboxServer } from "@tiny-agents/sandbox/testing";

@@ -1,15 +1,3 @@
-/**
- * Remote MCP servers as capabilities (issue #1 D8–D14).
- *
- * - `connectMcp` opens an MCP client over Streamable HTTP, falling back to
- *   legacy HTTP+SSE (remote transports only — the app never spawns local
- *   servers), optionally signed in through an OAuth provider (the MCP SDK runs
- *   discovery, PKCE, registration and refresh).
- * - `createMcpCapability` turns a server's tool list into a pi-durable
- *   extension named `mcp:<slug>`, tools `mcp__<slug>__<tool>`. Tools are
- *   `replay: "unsafe"` unless the server marks them read-only or idempotent,
- *   so an interrupted call is reported, not repeated.
- */
 import { Type } from "@earendil-works/pi-ai";
 import { defineExtension, defineTool, type ToolExecutionResult } from "@earendil-works/pi-durable";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -30,13 +18,11 @@ export type {
 
 export type McpTransportKind = "streamable-http" | "sse";
 
-/** A server tool as cached by the app (enough to rebuild the capability offline). */
 export type McpToolInfo = {
   name: string;
   title?: string;
   description?: string;
   inputSchema: Record<string, unknown>;
-  /** JSON Schema of `structuredContent`, when the server declares one. */
   outputSchema?: Record<string, unknown>;
   readOnly?: boolean;
   idempotent?: boolean;
@@ -62,11 +48,8 @@ export interface ConnectMcpOptions {
   transport: McpTransportKind;
   headers?: Record<string, string>;
   authProvider?: OAuthClientProvider;
-  /** The server changed its tool list (`notifications/tools/list_changed`). */
   onToolsChanged?: (tools: McpToolInfo[]) => void;
-  /** The connection closed (server went away, network error). */
   onClose?: () => void;
-  /** Transport override for tests (e.g. an in-memory pair). */
   createTransport?: () => Transport;
 }
 
@@ -97,11 +80,6 @@ async function listAllTools(client: Client): Promise<McpToolInfo[]> {
   return tools;
 }
 
-/**
- * Connect, initialize and list tools. Throws the SDK's `UnauthorizedError`
- * when the server needs (re)authorization — the provider's
- * `redirectToAuthorization` has then been called with the consent URL.
- */
 export async function connectMcp(options: ConnectMcpOptions): Promise<McpConnection> {
   const attempt = async (kind: McpTransportKind): Promise<McpConnection> => {
     const client = new Client(
@@ -148,7 +126,6 @@ export async function connectMcp(options: ConnectMcpOptions): Promise<McpConnect
   try {
     return await attempt(options.transport);
   } catch (error) {
-    // Legacy servers speak HTTP+SSE only; auth errors are not a transport problem.
     if (options.transport === "sse" || options.createTransport || isUnauthorized(error))
       throw error;
     return attempt("sse");
@@ -162,25 +139,14 @@ export function isUnauthorized(error: unknown): boolean {
   );
 }
 
-/**
- * Once a server's tool schemas (name, description and input schema, as sent)
- * pass this many characters (~2k tokens), its tools are deferred behind
- * `tool_search`. Size, not count: a few GitHub-style tools can outweigh
- * dozens of small ones (issue #360).
- */
 export const MCP_DEFER_CHARS = 8_000;
 
-/**
- * The longest tool description the model is sent, as in Claude Code. Some
- * servers put whole manuals in descriptions, and every request re-sends them.
- */
 const MCP_DESCRIPTION_MAX = 2_048;
 
 function clipDescription(text: string): string {
   return text.length <= MCP_DESCRIPTION_MAX ? text : `${text.slice(0, MCP_DESCRIPTION_MAX - 1)}…`;
 }
 
-/** `mcp__<slug>__<tool>`, restricted to provider-safe characters and 64 chars. */
 export function mcpToolName(slug: string, tool: string): string {
   const name = `mcp__${slug}__${tool}`.replace(/[^a-zA-Z0-9_-]/g, "_");
   return name.length <= 64 ? name : name.slice(0, 64);
@@ -191,7 +157,6 @@ export interface McpCapabilityOptions {
   name: string;
   url: string;
   tools: McpToolInfo[];
-  /** Call a tool on the live connection (the app reconnects as needed). */
   call: (
     tool: string,
     args: Record<string, unknown>,
@@ -234,7 +199,6 @@ export function createMcpCapability(options: McpCapabilityOptions): Capability {
       name,
       description,
       parameters: Type.Unsafe<Record<string, unknown>>(schema),
-      // Large servers: hidden until the model finds them with tool_search.
       ...(defer ? { deferred: true } : {}),
       replay: tool.readOnly || tool.idempotent ? "safe" : "unsafe",
       execute: async (args, _api, context) => {

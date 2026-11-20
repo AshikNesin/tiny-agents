@@ -1,10 +1,3 @@
-/**
- * The browser's vault sinks (issue #56): fill a vault item into the page,
- * enter a one-time code, or have the owner type into a credential request
- * sheet. Values go server → page over CDP; results only say which fields
- * were filled. Everything here acts on the agent's live tab through the
- * session manager and never opens a browser just to plan a call.
- */
 import type { Context } from "@earendil-works/chord";
 import { Type } from "@earendil-works/pi-ai";
 import type { ToolExecutionApi, ToolExecutionResult } from "@earendil-works/pi-durable";
@@ -39,11 +32,8 @@ import {
 import { safeMessage, vaultUseFromSink, vaultGatePlan } from "./vault";
 
 export interface BrowserVaultOptions {
-  /** The vault broker: enables `browser_fill_secret` and `browser_enter_code`. */
   vault?: VaultBroker;
-  /** Counts credential requests waiting on the owner; without it `request_credentials` is not offered. */
   ownerWaits?: WaitTracker;
-  /** Comma-separated hosts exempt from the https rule for credential requests. */
   allowedPrivateHosts?: string;
 }
 
@@ -76,7 +66,6 @@ const ORIGIN_MOVED = (origin: string) =>
 
 const OPEN_PAGE_FIRST = "Open the sign-in or checkout page in the browser first.";
 
-/** A credential request's fields as the tool accepts them. */
 const credentialFieldSchema = Type.Object({
   key: Type.String({ minLength: 1, maxLength: 32, description: "Slug: password, email, code" }),
   label: Type.String({ minLength: 1, maxLength: 60 }),
@@ -95,7 +84,6 @@ const credentialFieldSchema = Type.Object({
   ref: Type.Optional(Type.String({ minLength: 2, maxLength: 32 })),
 });
 
-/** Identifier-like tokens a visible (text, email, select) field may carry: no free text. */
 const IDENTIFIER_TOKENS = new Set([
   "username",
   "email",
@@ -120,7 +108,6 @@ const IDENTIFIER_TOKENS = new Set([
 const DEFAULT_TOKEN: Record<CredentialFieldType, string> = {
   text: "username",
   email: "email",
-  // The HTML autocomplete token, not a credential.
   password: "current-password", // gitleaks:allow
   otp: "one-time-code",
   card_number: "cc-number",
@@ -144,7 +131,6 @@ type CredentialArgs = {
   }[];
 };
 
-/** The request as stored and shown, or why it is refused. */
 function normalizeCredentialRequest(
   args: CredentialArgs,
   pageOrigin: string,
@@ -206,10 +192,6 @@ function normalizeCredentialRequest(
   };
 }
 
-/**
- * The one other site whose frame holds the request's ref'd fields (#302),
- * undefined when they are all on the page itself, or why it can't be asked.
- */
 async function frameOriginOf(
   session: BrowserSession,
   request: CredentialRequest,
@@ -246,12 +228,6 @@ async function frameOriginOf(
   return url.origin;
 }
 
-/**
- * The vault sink tools, acting on the agent's tab through `sessions`, in
- * the browser toolkit's order; one the options leave out is `undefined`.
- * `targetOf` maps a conversation to its browser target (the toolkit's
- * resolver).
- */
 export function createBrowserVaultTools(
   options: BrowserVaultOptions,
   sessions: BrowserSessions,
@@ -259,15 +235,12 @@ export function createBrowserVaultTools(
 ) {
   const broker = options.vault;
   const tracker = options.ownerWaits;
-  /** Open credential requests and recent ones, per conversation (rate limits). */
   const openRequests = new Map<number, number>();
   const recentRequests = new Map<number, number[]>();
 
-  /** The agent's tab if its browser is open; planning never launches one. */
   const peek = async (conversationId: number): Promise<LiveBrowserTab | undefined> =>
     sessions.peek(await targetOf(conversationId));
 
-  /** The page's origin for planning, or undefined when no browser or page is open. */
   const plannedOrigin = async (conversationId: number): Promise<string | undefined> => {
     const tab = await peek(conversationId);
     if (!tab) return undefined;
@@ -275,7 +248,6 @@ export function createBrowserVaultTools(
     return /^https?:\/\//.test(origin) ? origin : undefined;
   };
 
-  /** Ask the owner through the credential request sheet and wait (shared by enter_code). */
   const requestCredentials = async (
     args: CredentialArgs,
     api: ToolExecutionApi,
@@ -287,8 +259,6 @@ export function createBrowserVaultTools(
     const existing = await api.snapshot(CredentialRequestDoc, api.taskId, context);
     let request = existing ? storedRequest(existing) : null;
     if (!request) {
-      // A routine's run (issue #63) has nobody to fill the sheet: refused like
-      // an approval nobody can give, so the run shows as needing attention (#87).
       if (await isUnattendedConversation(api, context)) {
         return refuseUnattended(
           "Nobody can fill credentials here: this is a scheduled routine run. Use a saved vault item, or say in your reply what is needed.",
@@ -474,7 +444,6 @@ export function createBrowserVaultTools(
               }
               const fill: SecretFill = {
                 origin,
-                // An embedded payment form may sit on one of the item's other origins.
                 frameOrigins: item.origins.filter((o) => o !== origin),
                 fields,
               };
@@ -607,8 +576,6 @@ export function createBrowserVaultTools(
         }
       },
       gate: {
-        // Without a handle the call only parks on the credential sheet, so a
-        // restart re-attaches to it instead of reporting "interrupted".
         replaySafe: (args: { handle?: string }) => !args.handle,
         ...vaultGatePlan(broker, false, async (args: { handle?: string }, api) => {
           if (!args.handle) return undefined;
@@ -631,7 +598,6 @@ export function createBrowserVaultTools(
       label: "Asked you to sign in",
       askLabel: "ask you to sign in",
       summary: "Ask you to type a sign-in, code or card into a secure sheet.",
-      // The owner's submit is the consent.
       policy: { readOnly: true },
       description:
         "Ask the owner to type credentials for the current page into a secure sheet: a sign-in, " +
@@ -649,7 +615,6 @@ export function createBrowserVaultTools(
         purpose: Type.String({ minLength: 1, maxLength: 200 }),
         fields: Type.Array(credentialFieldSchema, { minItems: 1, maxItems: 8 }),
       }),
-      // Re-running only re-attaches to the call's document (waitForOwner).
       replay: "safe",
       execute: async (args, api, context) => {
         try {

@@ -1,25 +1,17 @@
-/**
- * The Test button (issue #179): one real, minimal completion against a model
- * as configured, saved or not, so the owner sees the key and endpoint work
- * before a bot depends on them.
- */
 import type { Api, ClassifierApi, ClassifierModel, Model } from "@earendil-works/pi-ai";
 import { createModels } from "@earendil-works/pi-ai/models";
 import type { CredentialResolver, ModelConfig } from "./config";
 import { buildProviders } from "./kinds";
 
-/** A 1×1 transparent PNG: checks that the model takes image input. */
 const PIXEL =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
 
 export interface TestResult {
   ok: boolean;
   latencyMs: number;
-  /** The provider's error, cut to 500 characters (the caller redacts it). */
   error?: string;
 }
 
-/** Call `model` once: 16 tokens at most, `timeoutMs` at most. */
 export async function testModelCall(
   models: { completeSimple: ReturnType<typeof createModels>["completeSimple"] },
   model: Model<Api>,
@@ -65,7 +57,6 @@ export async function testModelCall(
   }
 }
 
-/** Call classifier `model` once with one yes/no question, `timeoutMs` at most. */
 export async function testClassifierCall(
   models: { classify: ReturnType<typeof createModels>["classify"] },
   model: ClassifierModel<ClassifierApi>,
@@ -109,7 +100,6 @@ export async function testClassifierCall(
   }
 }
 
-/** Test a model of an account that isn't saved yet. */
 export function testUnsavedModel(
   config: ModelConfig,
   credentials: CredentialResolver,

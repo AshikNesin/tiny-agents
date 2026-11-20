@@ -1,30 +1,12 @@
-/**
- * Traces (issue #363): a conversation's model and tool calls as metadata,
- * read from the entries it already stores. Nothing here is written: a pi
- * `pi.assistant` entry is one model call (model, usage, cost, stop reason,
- * duration), a `pi.tool-result` entry one tool call, and `pi.usage` holds
- * the conversation's totals. Each turn also carries its transcript
- * (`events`): the prompt, thoughts, replies, tool inputs and outputs, and
- * compaction summaries, cut at a limit for the page.
- *
- * Field meanings follow the OpenTelemetry GenAI conventions (provider,
- * request model, finish reason, input/output/cache tokens), so an exporter
- * could map them one to one.
- */
 import type { EntryRecord, UsageState } from "@earendil-works/pi-durable";
 import type { AssistantMessage, ToolResultMessage, Usage } from "@earendil-works/pi-ai";
 import { claudeRecordOf, type ClaudeReply } from "./engines/claude-code/transcript";
 import { userMessagesOf } from "./transcript";
 
-/** Characters of a turn's input kept as its preview. */
 const INPUT_PREVIEW = 200;
-/** Characters of a failed call's error kept. */
 const ERROR_PREVIEW = 300;
-/** Characters of a prompt, reply, thought or compaction summary sent to the page. */
 const TEXT_LIMIT = 20_000;
-/** Characters of a tool's output sent to the page. */
 const OUTPUT_LIMIT = 8_000;
-/** Characters of one tool argument sent to the page. */
 const ARG_LIMIT = 4_000;
 
 export interface TraceUsage {
@@ -32,38 +14,29 @@ export interface TraceUsage {
   output: number;
   cacheRead: number;
   cacheWrite: number;
-  /** Reasoning tokens (a part of `output`), when the provider reports them. */
   reasoning?: number;
   costUsd: number;
 }
 
-/** A conversation's totals, and the models that ran in it. */
 export interface ConversationUsage extends TraceUsage {
-  /** Model ids, most tokens first (from `pi.usage` keys `provider/model`). */
   models: string[];
 }
 
-/** Which engine made the call: pi (any provider) or the Claude plan (Claude Code). */
 export type TraceHarness = "pi" | "claude-plan";
 
 export type TraceStep =
   | {
       type: "llm";
-      /** When the request started (ms). */
       at: number;
       durationMs?: number;
       harness: TraceHarness;
       provider?: string;
       model: string;
-      /** The model the provider answered with, when it differs. */
       responseModel?: string;
       thinkingLevel?: string;
-      /** pi-ai stop reason (stop, toolUse, length, error, aborted) or the Claude plan's turn status. */
       stopReason: string;
       error?: string;
-      /** Absent where the harness does not report usage (the Claude plan). */
       usage?: TraceUsage;
-      /** Names of the tools this call asked for, in order. */
       toolCalls: string[];
     }
   | {
@@ -72,17 +45,10 @@ export type TraceStep =
       durationMs?: number;
       name: string;
       error: boolean;
-      /** The tool's own model spend (vision), when it reports one. */
       usage?: TraceUsage;
     }
   | { type: "compaction"; reason: string };
 
-/**
- * One thing that happened in a turn, in order, as the transcript shows it:
- * what was asked, what the model thought and said, each tool it ran with its
- * input and output, and where the context was summarized. Read from the
- * stored entries; long text is cut at a limit, never stored again.
- */
 export type TraceEvent =
   | { type: "prompt"; at: number; text: string; peer: boolean }
   | { type: "response"; at: number; text: string }
@@ -92,7 +58,6 @@ export type TraceEvent =
       at: number;
       name: string;
       input: Record<string, unknown>;
-      /** Absent while the call has no result (it was cut off, or is still running). */
       output?: string;
       error: boolean;
       durationMs?: number;
@@ -100,20 +65,15 @@ export type TraceEvent =
   | { type: "compaction"; at: number; reason: string; summary: string };
 
 export interface TraceTurn {
-  /** When the turn's input arrived (ms); the first call's start when it has none. */
   at: number;
-  /** The input's first characters; empty for calls before any input. */
   input: string;
-  /** Another bot's message, a relayed reply or a mention, not the owner's. */
   peer: boolean;
   steps: TraceStep[];
-  /** The turn's transcript: its prompt, thoughts, replies, tool calls and compactions. */
   events: TraceEvent[];
 }
 
 export interface ConversationTrace {
   turns: TraceTurn[];
-  /** The conversation's `pi.usage` totals: every model call, compaction and tool spend. */
   usage: ConversationUsage;
 }
 
@@ -122,14 +82,12 @@ function clip(text: string, max: number): string {
   return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
 }
 
-/** Text cut at `max` characters, whitespace kept. */
 function cut(text: string, max: number): string {
   return text.length > max
     ? `${text.slice(0, max)}\n… (${text.length - max} more characters)`
     : text;
 }
 
-/** Tool arguments with each long string cut, so one huge write stays readable. */
 function argsOf(args: unknown): Record<string, unknown> {
   if (!args || typeof args !== "object" || Array.isArray(args)) return {};
   return Object.fromEntries(
@@ -144,7 +102,6 @@ function argsOf(args: unknown): Record<string, unknown> {
   );
 }
 
-/** A message's content blocks as text: text blocks joined, images named. */
 function contentText(content: unknown): string {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return "";
@@ -156,7 +113,6 @@ function contentText(content: unknown): string {
     .join("\n");
 }
 
-/** An assistant message's thoughts, replies and tool calls, in the order it wrote them. */
 function assistantEvents(message: AssistantMessage): TraceEvent[] {
   const at = finite(message.timestamp);
   const events: TraceEvent[] = [];
@@ -182,7 +138,6 @@ function assistantEvents(message: AssistantMessage): TraceEvent[] {
   return events;
 }
 
-/** A Claude plan reply's tool calls, then its text. */
 function claudeEvents(reply: ClaudeReply): TraceEvent[] {
   const at = reply.createdAt;
   const events: TraceEvent[] = (reply.toolCalls ?? []).map((call) => ({
@@ -202,7 +157,6 @@ function finite(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
-/** One pi-ai `Usage` as trace usage. */
 function traceUsageOf(usage: Partial<Usage> | undefined): TraceUsage | undefined {
   if (!usage) return undefined;
   return {
@@ -215,7 +169,6 @@ function traceUsageOf(usage: Partial<Usage> | undefined): TraceUsage | undefined
   };
 }
 
-/** The sum of a conversation's `pi.usage` buckets (models and tools). */
 export function usageTotalsOf(state: Readonly<UsageState> | undefined): ConversationUsage {
   const total: ConversationUsage = {
     input: 0,
@@ -295,12 +248,6 @@ function claudeStep(reply: ClaudeReply): TraceStep {
   };
 }
 
-/**
- * A conversation's turns and their calls, from its stored entries (ascending)
- * and its `pi.usage` document. A Claude plan turn is one step: its reply
- * entries are snapshots of the same turn, and the newest wins. `usage` is the
- * conversation's totals (`usageTotalsOf` its `pi.usage`).
- */
 export function traceOf(
   entries: readonly EntryRecord[],
   usage: ConversationUsage,
@@ -308,7 +255,6 @@ export function traceOf(
   const turns: TraceTurn[] = [];
   let current: TraceTurn | undefined;
   const claudeTurns = new Map<string, { turn: TraceTurn; index: number; events: TraceEvent[] }>();
-  /** The tool calls still waiting for their result, by call id. */
   let pending: { id: string; event: Extract<TraceEvent, { type: "tool" }> }[] = [];
 
   const open = (at: number): TraceTurn => {
@@ -412,7 +358,6 @@ export function traceOf(
       const events = claudeEvents(record.data);
       const seen = claudeTurns.get(record.data.turnId);
       if (seen) {
-        // A newer snapshot of the same turn: it replaces the older one in place.
         seen.turn.steps[seen.index] = step;
         const at = seen.turn.events.indexOf(seen.events[0]!);
         if (at >= 0) seen.turn.events.splice(at, seen.events.length, ...events);

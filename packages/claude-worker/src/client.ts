@@ -1,8 +1,3 @@
-/**
- * The app's side of the worker socket (`@tiny-agents/claude-worker/client`).
- * The bot engine and the Claude Code harness each put their protocol on a
- * `WorkerConnection`; the worker itself never imports this.
- */
 export {
   DEFAULT_CONNECTION_TIMINGS,
   WorkerRequestError,

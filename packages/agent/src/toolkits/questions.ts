@@ -1,17 +1,3 @@
-/**
- * Questions for the owner (human in the loop): `ask_owner` lets a bot ask one
- * to four clarifying questions mid-reply and wait for the answers, which come
- * back to the model as the tool's result.
- *
- * The wait is the approval gate's (`waiting.ts`): the call creates its
- * task-scoped `tiny.questions` document holding the questions, publishes
- * `{ question: "pending", questions }` details the chat renders the
- * questionnaire from, and resumes when the host records the owner's answers
- * or dismissal (`AgentRuntime.answerQuestions`) — also after a restart. The
- * runtime installs this capability itself, since it owns the document.
- * A conversation nobody watches (a routine's, issue #63) gets no wait: the
- * call returns at once and the model carries on without the answers.
- */
 import type { JsonValue } from "@earendil-works/chord";
 import { Type } from "@earendil-works/pi-ai";
 import { defineDoc, type TaskId, type ToolExecutionResult } from "@earendil-works/pi-durable";
@@ -36,13 +22,10 @@ const ASK_OWNER = "ask_owner";
 
 const MAX_QUESTIONS = 4;
 const MAX_OPTIONS = 6;
-/** Longest answer in the owner's own words. */
 export const MAX_ANSWER_TEXT = 2_000;
 
-/** One ask_owner call's questions and the owner's response, owned by its tool task. */
 const QuestionsDoc = defineDoc<{
   status: "pending" | "answered" | "dismissed";
-  /** The normalized questions: what the answers are checked against. */
   questions: JsonValue[];
   answers: JsonValue[];
 }>({
@@ -53,7 +36,6 @@ const QuestionsDoc = defineDoc<{
   checkpointWhen: () => false,
 });
 
-/** The questions were already answered or dismissed, or their call ended. */
 export class QuestionNotPendingError extends Error {
   constructor(taskId: number) {
     super(`Tool call ${taskId} is not waiting for answers`);
@@ -61,7 +43,6 @@ export class QuestionNotPendingError extends Error {
   }
 }
 
-/** The answers do not fit the questions they answer. */
 export class InvalidAnswersError extends Error {
   constructor(message: string) {
     super(message);
@@ -87,9 +68,6 @@ const ownerAnswers: z.ZodType<OwnerAnswer[]> = z.array(
 const storedQuestions = (doc: { questions: JsonValue[] }) =>
   parseStored("tiny.questions.questions", doc.questions, ownerQuestions);
 
-// ── The card's details: one shape, produced and parsed here ─────────────
-
-/** An `ask_owner` call as the chat reads it off the call's details. */
 export interface QuestionView extends Pick<ChatToolCall, "questions" | "answers"> {
   pending: boolean;
 }
@@ -99,7 +77,6 @@ const pendingDetails = (questions: OwnerQuestion[]) => ({
   questions: toJson(questions),
 });
 
-/** The questions (and answers) of an `ask_owner` call's details; `pending` while it waits. */
 export function questionsOf(details: unknown): QuestionView {
   const value = innerDetails(details);
   if (!value || !Array.isArray(value.questions)) return { pending: false };
@@ -110,15 +87,6 @@ export function questionsOf(details: unknown): QuestionView {
   };
 }
 
-// ── Host side: the owner's answers ──────────────────────────────────────
-
-/**
- * Record the owner's answers (or a dismissal with `null`) on a waiting
- * `ask_owner` call, in the host's transaction. Throws
- * `QuestionNotPendingError` for a call that is not waiting on questions
- * (another tool's call, already answered, ended) and `InvalidAnswersError`
- * when the answers do not fit.
- */
 export async function recordAnswers(
   tx: HostTx,
   conversation: number,
@@ -128,8 +96,6 @@ export async function recordAnswers(
   const id = taskId as TaskId;
   const notPending = () => new QuestionNotPendingError(taskId);
   await pendingToolTask(tx, id, conversation, notPending);
-  // Another tool's task has no questions (and the throw rolls back the
-  // document this read would create).
   const doc = await tx.doc(QuestionsDoc, id);
   if (doc.status !== "pending" || doc.questions.length === 0) throw notPending();
   if (answers) {
@@ -140,7 +106,6 @@ export async function recordAnswers(
   }
 }
 
-/** Map a sealed-document error (the call ended) to `QuestionNotPendingError`; rethrow the rest. */
 export function questionNotPending(error: unknown, taskId: number): never {
   if (error instanceof QuestionNotPendingError || error instanceof InvalidAnswersError) {
     throw error;
@@ -176,7 +141,6 @@ const questionSchema = Type.Object({
   ),
 });
 
-/** Trimmed, without empty fields or repeated options. */
 function normalizeQuestions(questions: readonly OwnerQuestion[]): OwnerQuestion[] {
   return questions.map((input) => {
     const seen = new Set<string>();
@@ -198,11 +162,6 @@ function normalizeQuestions(questions: readonly OwnerQuestion[]): OwnerQuestion[
   });
 }
 
-/**
- * The owner's answers checked against the questions, normalized: one answer
- * per question, picks among its options (at most one unless `multiple`), own
- * words trimmed and bounded.
- */
 function checkAnswers(questions: readonly OwnerQuestion[], answers: readonly OwnerAnswer[]) {
   if (answers.length !== questions.length) {
     throw new InvalidAnswersError(`Expected ${questions.length} answer(s), got ${answers.length}`);
@@ -226,7 +185,6 @@ function checkAnswers(questions: readonly OwnerQuestion[], answers: readonly Own
   });
 }
 
-/** The answers as the model reads them. */
 function formatAnswers(questions: readonly OwnerQuestion[], answers: readonly OwnerAnswer[]) {
   const lines = questions.map((question, index) => {
     const { selected, text } = answers[index];
@@ -240,8 +198,6 @@ function formatAnswers(questions: readonly OwnerQuestion[], answers: readonly Ow
 const DISMISSED =
   "The owner dismissed these questions without answering (a message from them may follow). Don't ask them again: go by their message, or continue on your best judgment and say which assumptions you made.";
 
-// Unattended conversations are not offered ask_owner; this covers a call made
-// before that, replayed after a restart.
 const UNATTENDED =
   "Nobody can answer questions here: this is a scheduled routine run, not a chat with the owner. Continue on your best judgment, say which assumptions you made, and put any open question in your reply.";
 
@@ -251,17 +207,14 @@ export function createQuestionsCapability(tracker: WaitTracker): Capability {
     label: "Asked you questions",
     askLabel: "ask you questions",
     summary: "Ask you clarifying questions and wait for your answers",
-    // Nobody can answer in a routine run or a bot message's conversation.
     policy: { readOnly: true, chatOnly: true },
     description:
       "Ask the owner 1-4 clarifying questions and wait for their answers. Only when a wrong guess would waste real work or the decision is theirs (preferences, trade-offs). Not for what your tools can find out or you can sensibly assume, and not for permission to run a tool (tools ask for that themselves).",
     parameters: Type.Object({
       questions: Type.Array(questionSchema, { minItems: 1, maxItems: MAX_QUESTIONS }),
     }),
-    // Re-running only re-attaches to the call's document (waitForOwner).
     replay: "safe",
     execute: async (args, api, context): Promise<ToolExecutionResult> => {
-      // Decided once per call, so a replay never starts waiting after all.
       if (await unattendedOnce(api, context, "questions:unattended")) {
         return refuseUnattended(UNATTENDED);
       }

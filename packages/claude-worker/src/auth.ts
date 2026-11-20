@@ -1,8 +1,3 @@
-/**
- * `claude auth status` must show a subscription login. This runs the CLI and
- * reads only loggedIn / authMethod / subscriptionType. It does not open the
- * Keychain, the credentials file, or a token.
- */
 import { spawn } from "node:child_process";
 import { assertNoOverrides } from "./guards";
 
@@ -37,7 +32,6 @@ export class SubscriptionRequired extends Error {
   }
 }
 
-/** A subscription login: logged in, a plan name, and not an API-key method. */
 export function isSubscriptionLogin(status: ClaudeAuthStatus): boolean {
   if (status.loggedIn !== true) return false;
   const plan = status.subscriptionType?.trim();
@@ -53,10 +47,6 @@ export function assertSubscriptionLogin(status: ClaudeAuthStatus): void {
   }
 }
 
-/**
- * The checks before Claude Code starts for a session, under either protocol:
- * no backend override in `env`, and a subscription login.
- */
 export async function assertSessionMayStart(
   env: Record<string, string | undefined>,
   authStatus: () => Promise<ClaudeAuthStatus>,
@@ -113,7 +103,6 @@ const defaultRunner: CommandRunner = (command, args, env) =>
     child.once("exit", (code) => resolve({ code: code ?? 1, stdout, stderr }));
   });
 
-/** Run `claude auth status`. Missing binary is "not available", not a thrown error. */
 export async function readClaudeAuth(
   env: Record<string, string | undefined>,
   run: CommandRunner = defaultRunner,

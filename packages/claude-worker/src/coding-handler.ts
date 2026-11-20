@@ -1,9 +1,3 @@
-/**
- * The coding protocol (`coding-protocol.ts`) on the worker socket: the Code
- * page's Claude Code sessions. Sockets that sent `coding.hello` follow every
- * coding session, its streaming text and the command catalog. Every request
- * answers one `reply`, a failure included.
- */
 import { CodingError, type CodingBook, type CodingSession } from "./coding";
 import { runCodingOp } from "./coding-ops";
 import { claudeConfigDir, withSessionPatches } from "./session-patches";
@@ -26,9 +20,7 @@ const codingEvent: EventFrame<CodingEvent> = (event) => ({
 });
 
 export function createCodingHandler(deps: {
-  /** Absent: the worker runs without coding mode and every request answers `unavailable`. */
   book: CodingBook | undefined;
-  /** The sockets that sent `coding.hello`. */
   audience: Audience;
   bootId: string;
   limits: CodingLimits;
