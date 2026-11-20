@@ -1,44 +1,25 @@
-/**
- * Auto-review (issue #65): a classifier decides, before the owner is asked,
- * whether a gated tool call can run without its approval card.
- *
- * The reviewer only ever removes a card: it answers "approve" or "ask the
- * owner", never "deny", and any failure (no answer, timeout, malformed reply)
- * is "ask the owner". It sees the owner's own messages and the pending call,
- * never tool results or fetched content, where injected instructions arrive,
- * and never a guest's messages in a shared chat.
- */
 import type { JsonObject } from "@earendil-works/pi-durable";
 import type { Classifier, ClassifierAnswer, ClassifierQuestion } from "./classifier";
 import { fromOwner, type GateUserMessage } from "./policy";
 import { secretRedactor } from "./redact";
 
-/** What the reviewer judges: the pending call and what the owner asked for. */
 export interface ReviewInput {
   tool: string;
   args: unknown;
-  /** The bot's persona / system prompt. */
   instructions?: string;
-  /** The owner's latest messages, oldest first (routine runs are never reviewed). */
   ownerMessages: string[];
 }
 
-/** A review's outcome; `approve: false` means the owner gets the card as before. */
 export interface ReviewVerdict {
   approve: boolean;
-  /** Classifier id that judged the call. */
   classifier: string;
-  /** P(the owner asked for this exact action). */
   requested?: number;
-  /** Worst-outcome score, 0 (harmless) … 3 (destructive). */
   risk?: number;
-  /** Why no verdict came back (the call fell back to the card). */
   error?: string;
 }
 
 export type Reviewer = (input: ReviewInput) => Promise<ReviewVerdict>;
 
-/** One review, for the host's log: never the call's arguments. */
 export interface ReviewEvent {
   tool: string;
   verdict: ReviewVerdict;
@@ -69,7 +50,6 @@ export const REVIEW_QUESTIONS = {
   },
 } satisfies Record<string, ClassifierQuestion>;
 
-/** Approve only when the owner clearly asked and the worst case is minor. */
 const REVIEW_THRESHOLDS = {
   minRequested: 0.9,
   maxRisk: 1,
@@ -80,7 +60,6 @@ const REVIEW_TIMEOUT_MS = 3_000;
 const MAX_INSTRUCTIONS = 4_000;
 const MAX_OWNER_MESSAGE = 2_000;
 const MAX_ARGS = 8_000;
-/** Owner messages a review reads, and how many newest entries it looks through for them. */
 const OWNER_MESSAGES = 5;
 export const REVIEW_ENTRY_LOOKBACK = 50;
 
@@ -88,7 +67,6 @@ function clip(text: string, max: number): string {
   return text.length > max ? `${text.slice(0, max)}…` : text;
 }
 
-/** The classifier state: bounded, and scrubbed of vault values (a backstop). */
 export function reviewState(input: ReviewInput): JsonObject {
   let args: string;
   try {
@@ -148,14 +126,6 @@ export function createReviewer(
   };
 }
 
-/**
- * The owner's latest messages (oldest first) from a conversation's user
- * messages (newest first). `undefined` when the turn was started by another
- * bot (a peer delivery) or, in a shared chat, by a guest, or no owner
- * message is in reach: nothing to judge the call against. `owner` is the
- * owner's user id; whose message it is follows YOLO's rule (`fromOwner`),
- * so a guest's words never count as the owner's request (S6).
- */
 export function ownerMessages(
   newestFirst: readonly GateUserMessage[],
   owner: number | undefined,

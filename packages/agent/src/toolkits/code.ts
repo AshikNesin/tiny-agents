@@ -1,18 +1,3 @@
-/**
- * Code hand-off tools (issue #143, ADR 0011): a bot gives coding work to one
- * of the owner's coding agents ("harnesses": Shelley, Claude Code) instead
- * of doing it itself or polling for a result.
- *
- * `code_start` starts a thread and returns at once with a link to it on the
- * Code page; when the harness's turn ends the app delivers the outcome into
- * this chat as a reply from that harness (nothing polls). Shelley is the
- * default harness; a bot names another with `harness`. The app provides the
- * `CodeStore` (apps/web code.bots.ts): the harnesses, the hand-off table,
- * and which bot a conversation belongs to.
- *
- * `shelley_start` and `shelley_send` stay as aliases (fixed to Shelley) so
- * bots and approval settings from before the harness layer keep working.
- */
 import {
   section,
   type ToolExecutionApi,
@@ -26,16 +11,12 @@ import { toolIdempotencyKey } from "./tasks";
 import { sanitizePeerText } from "./peer-text";
 
 export interface CodeHandoffRecord {
-  /** `<harness>:<native id>`. */
   threadId: string;
-  /** The harness's label ("Shelley"). */
   harness: string;
   title: string | null;
   task: string;
   cwd: string | null;
-  /** "running" until its turn ends and the finish was delivered. */
   status: "running" | "finished";
-  /** App path of the thread on the Code page. */
   url: string;
   createdAt: string;
 }
@@ -51,10 +32,8 @@ interface CodeThreadStatus {
   harness: string;
   working: boolean;
   title: string | null;
-  /** The last answer (trimmed), or the last error. */
   text: string;
   failed: boolean;
-  /** Uncommitted changes in the thread's working directory. */
   changedFiles?: CodeChangedFile[];
   url: string;
 }
@@ -71,23 +50,16 @@ interface CodeModelRecord {
   isDefault: boolean;
 }
 
-/** What the app provides. `conversationId` is the bot's durable conversation. */
 export interface CodeStore {
   harnesses(): Promise<CodeHarnessRecord[]>;
   start(input: {
     conversationId: number;
     idempotencyKey: string;
-    /** Harness instance id; the default when omitted. */
     harness?: string;
     task: string;
     cwd?: string;
     model?: string;
   }): Promise<CodeHandoffRecord | { error: string }>;
-  /**
-   * Steer (or queue) a message on a thread: one this bot started, or an
-   * existing one it adopts (its finishes come back here from then on).
-   * `idempotencyKey` keys the adoption.
-   */
   send(input: {
     conversationId: number;
     idempotencyKey: string;
@@ -100,12 +72,10 @@ export interface CodeStore {
     threadId: string;
   }): Promise<CodeThreadStatus | undefined>;
   list(conversationId: number): Promise<CodeHandoffRecord[]>;
-  /** A harness's ready models, its default first. */
   models(harness?: string): Promise<CodeModelRecord[] | { error: string }>;
 }
 
 export interface CodeToolkitOptions {
-  /** Without it the toolkit offers no tools and the bot editor shows why. */
   store?: CodeStore;
   setupHint?: string;
 }
@@ -143,7 +113,6 @@ function presentHandoff(h: CodeHandoffRecord): string {
   return `[${h.threadId}] ${h.harness}: ${h.title ?? "(untitled)"} · ${h.status}${where} · ${h.url} — ${h.task.slice(0, 120)}`;
 }
 
-/** A bare id (from `shelley_*`) belongs to Shelley. */
 function shelleyThread(id: string): string {
   return id.includes(":") ? id : `shelley:${id}`;
 }
@@ -178,7 +147,6 @@ export function createCodeToolkit(options: CodeToolkitOptions): Capability {
           text: `${handoff.harness} started ${handoff.title ? `"${handoff.title}" ` : "a thread "}(${handoff.threadId}). Link: ${handoff.url}. Its outcome will arrive here as "Reply from ${handoff.harness}" — do not poll.`,
         },
       ],
-      // The chat renders the call as a card linking to the Code page.
       details: {
         code: {
           threadId: handoff.threadId,
@@ -251,8 +219,6 @@ export function createCodeToolkit(options: CodeToolkitOptions): Capability {
     context: Context,
   ): Promise<ToolExecutionResult> {
     if (!store) return notConfigured();
-    // Harness chat endpoints have no idempotency key: a rerun after a crash
-    // must not send twice, so the outcome is memoised per tool task.
     const done = await api.memo<string>("code_send:status", context);
     if (done !== undefined) return ok(`Sent (${done}).`);
     const result = await store.send({
@@ -377,12 +343,10 @@ export function createCodeToolkit(options: CodeToolkitOptions): Capability {
 
   return defineToolkit({
     id: "code",
-    // Used in few conversations: loaded with tool_search (issue #360).
     deferred: true,
     name: "Code",
     description: "Hand coding work to the owner's coding agents (Shelley, Claude Code)",
     tools: [start, send, status, list, models, shelleyStart, shelleySend],
-    // Without a harness the tools are listed (with the setup hint) but not offered.
     offered: () => Boolean(store),
     sections: [guidance],
     ...(options.setupHint ? { setupHint: options.setupHint } : {}),

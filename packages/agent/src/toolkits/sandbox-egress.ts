@@ -1,45 +1,16 @@
-/**
- * Confined sandbox commands (issue #56, phase 3): vault secrets as env vars
- * for one `run_command`, and an outbound allowlist for model-chosen commands
- * on the VM.
- *
- * The sandbox user has passwordless sudo, so a firewall it could edit (or a
- * group it could leave) would be undone by the next command. A confined
- * command therefore runs in a transient systemd unit (`sudo systemd-run`) the
- * command itself cannot loosen:
- *
- * - `NoNewPrivileges=yes`: sudo, su and other setuid helpers stop working;
- * - `IPAddressDeny=any` + `IPAddressAllow=<allowlist>`: the kernel's cgroup
- *   firewall drops every other destination, loopback and the tailnet included
- *   (so no Chrome DevTools port, no local proxy, no Connect server);
- * - `RestrictAddressFamilies=AF_INET AF_INET6`: no unix sockets (D-Bus, the
- *   resolver, X, docker), so names resolve only through
- * - a read-only `/etc/hosts` holding the allowlisted names, resolved just
- *   before the run: there is no DNS to tunnel a secret through.
- *
- * Secrets travel over the SSH channel's stdin, one line each, and are read
- * into the named env vars inside the unit — never argv (`/proc/*\/cmdline`),
- * never a file, never ssh `AcceptEnv`. Everything here is a pure string
- * builder so it can be tested without a VM.
- */
 import { bashScript, exitWith, shQuote } from "@tiny-agents/sandbox";
 
-/** Exit code the wrapper uses for "the VM can't confine commands". */
 export const CONFINE_UNAVAILABLE = 97;
 
-/** Exit code when the secrets didn't arrive on stdin. */
 const SECRETS_MISSING = 96;
 
-/** What a confined command's exit code can say besides its own status. */
 export const CONFINED_EXITS = {
   confineUnavailable: CONFINE_UNAVAILABLE,
   secretsMissing: SECRETS_MISSING,
 };
 
-/** Most secrets one command may carry. */
 export const MAX_COMMAND_SECRETS = 4;
 
-/** Env names a secret may not take: they change how the shell or loader runs. */
 const RESERVED_ENV = new Set([
   "PATH",
   "HOME",
@@ -58,7 +29,6 @@ const RESERVED_ENV = new Set([
   "PERL5OPT",
 ]);
 
-/** Why `name` can't hold a secret, or `undefined` when it can. */
 export function checkEnvName(name: string): string | undefined {
   if (!/^[A-Z_][A-Z0-9_]{0,63}$/.test(name)) {
     return `"${name}" is not an env var name (uppercase letters, digits and _).`;
@@ -69,14 +39,12 @@ export function checkEnvName(name: string): string | undefined {
   return undefined;
 }
 
-/** A hostname (`api.github.com`) or an IP / CIDR (`140.82.112.0/20`). */
 export type EgressEntry = { host: string } | { cidr: string };
 
 const HOST = /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
 const IPV4_CIDR = /^(\d{1,3})(\.\d{1,3}){3}(\/\d{1,2})?$/;
 const IPV6_CIDR = /^[0-9a-f:]+(\/\d{1,3})?$/;
 
-/** Parse a comma- or space-separated allowlist; unknown entries are reported, not dropped silently. */
 export function parseEgressList(raw: string | readonly string[]): {
   entries: EgressEntry[];
   invalid: string[];
@@ -95,7 +63,6 @@ export function parseEgressList(raw: string | readonly string[]): {
   return { entries, invalid };
 }
 
-/** Hosts a command names in URLs (`https://evil.example/…`, `user@host:`-style git remotes). */
 export function commandHosts(command: string): string[] {
   const hosts = new Set<string>();
   for (const match of command.matchAll(
@@ -109,7 +76,6 @@ export function commandHosts(command: string): string[] {
   return [...hosts];
 }
 
-/** The lines a confined command starts with: one stdin line per secret, into its env var. */
 function secretPrelude(envNames: readonly string[]): string {
   return envNames
     .map(
@@ -121,24 +87,15 @@ function secretPrelude(envNames: readonly string[]): string {
 
 export interface ConfinedCommandOptions {
   command: string;
-  /** Destinations the command may reach; nothing else, not even loopback. */
   allow: readonly EgressEntry[];
-  /** Env vars filled from stdin, in order. */
   secretEnv?: readonly string[];
-  /** The unit is stopped after this long. */
   timeoutSecs: number;
 }
 
-/**
- * The remote shell line for a confined command: resolve the allowlist, then
- * run the command in a locked-down transient unit, forwarding stdin, stdout,
- * stderr and the exit code.
- */
 export function confinedCommand(options: ConfinedCommandOptions): string {
   return bashScript(confinedScript(options));
 }
 
-/** The script `confinedCommand` runs, unwrapped (tests run it with stub tools). */
 export function confinedScript(options: ConfinedCommandOptions): string {
   const hosts = options.allow.flatMap((entry) => ("host" in entry ? [entry.host] : []));
   const cidrs = options.allow.flatMap((entry) => ("cidr" in entry ? [entry.cidr] : []));
@@ -151,7 +108,6 @@ export function confinedScript(options: ConfinedCommandOptions): string {
     'TA_HOSTS="$(mktemp)"',
     "printf '127.0.0.1 localhost\\n::1 localhost\\n' > \"$TA_HOSTS\"",
     `TA_ALLOW=${shQuote(cidrs.join(" "))}`,
-    // `for … in ;` with no words is a syntax error in some shells.
     ...(hosts.length > 0
       ? [
           `for TA_H in ${hosts.map(shQuote).join(" ")}; do`,

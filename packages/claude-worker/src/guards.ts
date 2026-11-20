@@ -1,11 +1,5 @@
-/**
- * Startup guards. The worker refuses to run when the environment would
- * change who Claude Code authenticates as or where its requests go.
- * It never sets ANTHROPIC_BASE_URL.
- */
 import { envFlagEnabled } from "./env";
 
-/** Vars that would switch Claude Code off the subscription login or off the official API. */
 export const FORBIDDEN_OVERRIDE_KEYS = [
   "ANTHROPIC_API_KEY",
   "ANTHROPIC_AUTH_TOKEN",
@@ -32,7 +26,6 @@ export class OverrideRefusal extends Error {
   }
 }
 
-/** Env keys that must be removed before a Claude Code process is spawned. */
 export function conflictingOverrides(env: Readonly<Record<string, string | undefined>>): string[] {
   const conflicts: string[] = [];
   for (const key of FORBIDDEN_OVERRIDE_KEYS) {
@@ -49,10 +42,6 @@ export function assertNoOverrides(env: Readonly<Record<string, string | undefine
   if (conflicts.length > 0) throw new OverrideRefusal(conflicts);
 }
 
-/**
- * Env passed to the Agent SDK. Overrides are refused first. The official
- * API host is left untouched: ANTHROPIC_BASE_URL is never set.
- */
 export function workerProcessEnv(
   env: Readonly<Record<string, string | undefined>>,
 ): Record<string, string> {

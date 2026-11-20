@@ -1,14 +1,3 @@
-/**
- * The `attachments` toolkit (issue #58): bots read the files the owner
- * attached — PDFs, documents, spreadsheets, text and code, archive listings —
- * through tools instead of having whole files pasted into context.
- *
- * The app extracts every upload in the background and serves the result
- * through an injected `AttachmentStore` (`apps/web` uploads.store.ts), which
- * only resolves ids attached to this conversation (as `see_image` does).
- * Every piece of file content leaves fenced as untrusted data: instructions
- * inside a file are never the owner's.
- */
 import { createHash } from "node:crypto";
 import { Type } from "@earendil-works/pi-ai";
 import type { ToolExecutionResult } from "@earendil-works/pi-durable";
@@ -18,7 +7,6 @@ import { defineToolkit, tool } from "../toolkit";
 
 export type AttachmentStatus = "none" | "pending" | "ready" | "failed" | "unsupported";
 
-/** An attachment as the tools list it (metadata only). */
 export interface AttachmentSummary {
   uploadId: string;
   name: string;
@@ -26,20 +14,17 @@ export interface AttachmentSummary {
   size: number;
   kind: "image" | "file";
   status: AttachmentStatus;
-  /** Why extraction failed or the type can't be read. */
   error?: string;
   pages?: number;
   sheets?: number;
   lines?: number;
   entries?: number;
-  /** Extraction stopped at a cap (pages, characters, cells, entries). */
   truncated?: boolean;
 }
 
 export interface AttachmentSheet {
   name: string;
   hidden?: boolean;
-  /** Extracted rows, header first; cells as text (formulas as their values). */
   rows: string[][];
   totalRows: number;
   totalColumns: number;
@@ -51,14 +36,11 @@ export interface AttachmentEntry {
   size: number;
   compressedSize?: number;
   dir?: boolean;
-  /** Why this entry is suspicious (unsafe path, extreme compression ratio). */
   flag?: string;
 }
 
-/** What extraction produced: pages to read and search, plus structure. */
 export interface AttachmentContent {
   format: "text" | "pdf" | "document" | "spreadsheet" | "slides" | "archive";
-  /** PDF pages, slides, or ~4k-token chunks of text. */
   pages: { label: string; text: string }[];
   outline?: string[];
   sheets?: AttachmentSheet[];
@@ -66,14 +48,11 @@ export interface AttachmentContent {
 }
 
 export interface AttachmentStore {
-  /** Attachments of the conversation's recent sends, newest first. */
   list(conversationId: number): Promise<AttachmentSummary[]>;
-  /** One attachment of the conversation; content only once extracted. Undefined: not attached here. */
   open(
     conversationId: number,
     uploadId: string,
   ): Promise<{ summary: AttachmentSummary; content?: AttachmentContent } | undefined>;
-  /** The original bytes (for the sandbox copy). */
   original(
     conversationId: number,
     uploadId: string,
@@ -81,11 +60,9 @@ export interface AttachmentStore {
 }
 
 export interface AttachmentsToolkitOptions {
-  /** With the app's sandbox connection, `copy_attachment_to_sandbox` is offered. */
   sandbox?: SandboxConnection;
 }
 
-/** ≈16k tokens per read. */
 const READ_CHARS = 64_000;
 const MAX_HITS = 50;
 const SNIPPET = 160;
@@ -97,7 +74,6 @@ const fail = (text: string): ToolExecutionResult => ({
 
 const attr = (value: string) => value.replace(/["<>&\r\n]/g, "_");
 
-/** Content fenced as untrusted; a fence-like sequence inside cannot close it. */
 export function fence(summary: Pick<AttachmentSummary, "uploadId" | "name">, body: string): string {
   const safe = body.replace(/<(\/?)attachment/gi, "<$1attachment​");
   return `<attachment id="${attr(summary.uploadId)}" name="${attr(summary.name)}" untrusted>\n${safe}\n</attachment>`;
@@ -111,11 +87,6 @@ const NOTE_LINES = [
   /^\(The owner attached image\(s\); call see_image /,
 ];
 
-/**
- * An owner message without the app's attachment notes (reference lines,
- * fenced file text): what the owner actually wrote. Memory capture reads
- * this, so a file can never plant "facts about the owner".
- */
 export function stripAttachmentNotes(text: string): string {
   return text
     .replace(FENCED, "")
@@ -167,7 +138,6 @@ function notReady(summary: AttachmentSummary): ToolExecutionResult {
   };
 }
 
-/** "3", "3-5", "3–5": a 1-based inclusive range. */
 function parseRange(value: string | undefined, max: number): [number, number] | undefined {
   if (!value) return undefined;
   const match = /^\s*(\d+)\s*(?:[-–]\s*(\d+))?\s*$/.exec(value);
@@ -196,7 +166,6 @@ function clip(text: string): { text: string; clipped: boolean } {
     : { text: text.slice(0, READ_CHARS), clipped: true };
 }
 
-/** Reject patterns with nested quantifiers (catastrophic backtracking). */
 function safePattern(source: string): RegExp | string {
   if (source.length > 200) return "Patterns are limited to 200 characters.";
   if (/\([^)]*[+*}][^)]*\)\s*[+*{]/.test(source)) return "Nested quantifiers are not allowed.";
@@ -447,7 +416,6 @@ export function createAttachmentsToolkit(
         const original = await store.original(Number(api.conversationId), args.uploadId);
         if (!original) return unknown(args.uploadId);
         const safeName = original.name.replace(/[^\w.-]+/g, "_").replace(/^\.+/, "") || "file";
-        // SFTP paths are relative to the user's home; "~/" means the same.
         const dest = (
           args.dest ?? `attachments/${args.uploadId.replace(/[^\w-]/g, "")}/${safeName}`
         ).replace(/^~\//, "");
@@ -475,7 +443,6 @@ export function createAttachmentsToolkit(
 
   return defineToolkit({
     id: "attachments",
-    // Used in few conversations: loaded with tool_search (issue #360).
     deferred: true,
     name: "Attachments",
     description: "Read, search and copy the files you attach",

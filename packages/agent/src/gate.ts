@@ -1,34 +1,3 @@
-/**
- * The Tool gate: the one place a bot's tool call is let through, whichever
- * engine runs the conversation (ADR 0014). Each engine adapts its own call
- * to a `GateCall` and hands the gate the tool's run; the gate decides, in
- * this order and once per call:
- *
- * 1. The tool's gate plan (its `gate`, vault sinks and the like) may
- *    refuse the call, or ask whatever the tool's permission says.
- * 2. Otherwise the conversation's permissions (`tiny.permissions`) say
- *    whether the call asks the owner.
- * 3. A conversation nobody watches never asks: the call is refused.
- * 4. YOLO mode (`tiny.yolo`) runs an asking call without a card in the
- *    owner's own turns, never a vault use.
- * 5. Auto-review may run an asking call the owner clearly asked for, in
- *    the owner's own turns (a guest's message is not the owner's), never a
- *    vault use.
- * 6. Anything still asking waits for the owner: counted by the runtime's
- *    approvals `WaitTracker` (the Bot list badge, push notifications), with
- *    the answer kept in a task document (pi, survives a restart) or in
- *    memory (the Claude plan engine).
- * 7. The result leaves the gate scrubbed of registered vault values.
- *
- * Before all of that, a conversation with a token budget (a routine run's)
- * that has used it up refuses every call, so the model answers with what it
- * has; one far past it is stopped. Likewise a run (one reply, through all
- * its tool rounds) past `RUN_TOOL_CALL_LIMIT` calls is refused, and stopped
- * if it keeps calling: a stuck loop must not run until someone presses Stop.
- *
- * Every decision is memoized on the call's api (`gate:*`), so a replay after
- * a restart, or a permission change mid-call, never flips it.
- */
 import type { Context } from "@earendil-works/chord";
 import type { JsonObject, ToolExecutionApi, ToolExecutionResult } from "@earendil-works/pi-durable";
 import { z } from "zod";
@@ -54,79 +23,38 @@ import { secretRedactor } from "./redact";
 import { ownerMessages, type Reviewer, type ReviewVerdict } from "./reviewer";
 import { refuseUnattended, unattendedOnce, type WaitInfo, type WaitTracker } from "./waiting";
 
-/** One tool call as an engine hands it to the gate. */
 export interface GateCall {
   readonly name: string;
   readonly args: unknown;
-  /** The tool may run again after a restart (pi's `replay: "safe"`). */
   readonly replaySafe: boolean;
-  /** The tool's own say in its gate (its registration's `gate`), if any. */
   readonly hooks: GateHooks<unknown> | undefined;
-  /**
-   * The call's tool api: its decided-once memos, the conversation's
-   * documents (permissions, YOLO, grants) and the details the chat shows.
-   * A pi task's, or the Claude plan engine's partial one. The tool's plan
-   * hooks see the same api.
-   */
   readonly api: ToolExecutionApi;
   readonly context: Context;
-  /**
-   * Where the owner's answer is kept: `document`, the call's
-   * `tiny.approval` task document the host writes (pi; a restart re-attaches
-   * to it), or `memory`, held by the gate until `decide()`.
-   */
   readonly answers: "document" | "memory";
-  /** The conversation's user messages, newest first: whose turn it is and what the owner asked. */
   userMessages(): Promise<readonly GateUserMessage[]>;
-  /**
-   * A key for the run (the reply) this call belongs to, so the gate can cap
-   * its tool calls; undefined, or absent (the Claude plan, which has its own
-   * `maxTurns`), means no cap.
-   */
   run?(): Promise<string | undefined>;
-  /** The bot's instructions, for auto-review. */
   instructions(): Promise<string | undefined>;
 }
 
-/**
- * The host side of answers kept in the durable store (pi's harness). The
- * runtime implements it; a gate without one only answers calls it holds in
- * memory.
- */
 export interface GateStore {
-  /** Record the owner's decision. Throws `ApprovalNotPendingError` for a call not waiting. */
   decide(
     conversation: number,
     taskId: number,
     decision: ApprovalDecision,
     options: { grant?: boolean },
   ): Promise<void>;
-  /** YOLO mode approves a waiting call. Throws for a call it does not answer (a vault use, a question, …). */
   approveForYolo(conversation: number, taskId: number): Promise<void>;
-  /** Record a standing grant for the conversation ("Approve for this conversation"). */
   grant(conversation: number, grant: string): Promise<void>;
 }
 
 export interface ToolGateOptions {
-  /** Counts calls waiting on the owner's approval (shared with credential requests). */
   approvals: WaitTracker;
-  /**
-   * Stop the conversation's run: called (not awaited) when a budgeted
-   * conversation keeps calling tools far past its budget.
-   */
   stop?: (conversation: number) => void;
-  /** Auto-review (issue #65); without one every asking call shows its card. */
   reviewer?: Reviewer;
-  /**
-   * The owner's user id. In a shared chat auto-review reads only their
-   * messages, as YOLO trusts only its `by` (S6); without one, no message
-   * with an author counts as the owner's.
-   */
   ownerUserId?: () => Promise<number | undefined>;
   store?: GateStore;
 }
 
-/** An approval the gate holds in memory, until `decide()` or the turn ends. */
 interface HeldAnswer {
   vault: boolean;
   grant?: string;
@@ -148,14 +76,10 @@ const noStore: GateStore = {
 
 const heldKey = (conversation: number, taskId: number) => `${conversation}:${taskId}`;
 
-/** Past this multiple of its budget, a conversation's run is stopped, not just refused tools. */
 const BUDGET_STOP_FACTOR = 1.5;
 
-/** Tool calls one run (a reply, through all its tool rounds) may make. */
 export const RUN_TOOL_CALL_LIMIT = 150;
-/** Calls past the limit after which the run is stopped, not just refused. */
 const RUN_STOP_AFTER = 20;
-/** Runs whose calls are counted at once; the oldest is forgotten past this. */
 const RUN_COUNTS_KEPT = 500;
 
 function runCapRefusal(name: string): string {
@@ -166,7 +90,6 @@ function runCapRefusal(name: string): string {
   );
 }
 
-/** The refusal a call gets once its conversation has spent its token budget. */
 function budgetRefusal(name: string, used: number, budget: number): string {
   return (
     `${name} did not run: this run has used ${used.toLocaleString("en-US")} tokens, ` +
@@ -182,7 +105,6 @@ export class ToolGate {
   readonly #store: GateStore;
   readonly #stop: ((conversation: number) => void) | undefined;
   readonly #held = new Map<string, HeldAnswer>();
-  /** Tool calls per run key, counted once per call. */
   readonly #runCalls = new Map<string, number>();
 
   constructor(options: ToolGateOptions) {
@@ -193,12 +115,10 @@ export class ToolGate {
     this.#store = options.store ?? noStore;
   }
 
-  /** Calls of the conversation waiting for the owner's approval. */
   waiting(conversation: number): number {
     return this.#approvals.count(conversation);
   }
 
-  /** Let one tool call through: `execute` runs only once the gate allows it. */
   async run(
     call: GateCall,
     execute: () => Promise<ToolExecutionResult>,
@@ -223,7 +143,6 @@ export class ToolGate {
     if (plan?.refuse) {
       return { output: text(plan.refuse), isError: true, details: { refused: true } };
     }
-    // Decided once per call, so a permission change mid-call can't flip it on replay.
     const ask = await api.memo(
       "gate:ask",
       plan ? plan.ask : await mustAsk(name, api, context),
@@ -234,7 +153,6 @@ export class ToolGate {
         `${name} needs the owner's approval, and nobody is here to give it: this is a scheduled routine run. It did not run. Finish without it and say what it was for.`,
       );
     }
-    // Vault uses always reach the owner: their policy, not YOLO or the classifier, decides.
     const vault = Boolean(plan?.details?.vault);
     const yoloed = ask && !vault ? await yoloOnce(call) : false;
     const verdict =
@@ -242,7 +160,6 @@ export class ToolGate {
         ? await reviewOnce(call, this.#reviewer, this.#ownerUserId)
         : undefined;
     const auto = yoloed || verdict?.approve === true;
-    // How long the call sat on the owner, so its duration can leave that out.
     let waitedMs: number | undefined;
     if (ask && !auto) {
       const waitStarted = Date.now();
@@ -270,7 +187,6 @@ export class ToolGate {
       await api.memo("gate:effect", true, context);
     }
     const result = scrubResult(await execute());
-    // The pending card's details must not outlive the decision.
     if (!ask) return result;
     return {
       ...result,
@@ -286,11 +202,6 @@ export class ToolGate {
     };
   }
 
-  /**
-   * The conversation's budget and use when it has spent its budget (decided
-   * once per call, so a replay keeps the answer); stops the run when it is
-   * far past it.
-   */
   async #overBudget(call: GateCall): Promise<{ used: number; budget: number } | undefined> {
     const { api, context } = call;
     const state = await tokenBudget(api, context);
@@ -307,12 +218,6 @@ export class ToolGate {
     return decided;
   }
 
-  /**
-   * Whether this call is past its run's tool-call limit. Counted and decided
-   * once per call (a replay keeps the answer); a run that keeps calling well
-   * past the limit is stopped. Counts live in memory: a restart starts them
-   * over, which only ever allows more.
-   */
   async #overRunCap(call: GateCall): Promise<boolean> {
     const { api, context } = call;
     if (!call.run) return false;
@@ -334,11 +239,6 @@ export class ToolGate {
     return over;
   }
 
-  /**
-   * The owner's answer to a waiting call (`taskId` from the chat's tool
-   * call). With `grant`, an approval also records the standing grant the
-   * card offered. Throws `ApprovalNotPendingError` when it is not waiting.
-   */
   async decide(
     conversation: number,
     taskId: number,
@@ -353,11 +253,6 @@ export class ToolGate {
     held.settle(decision);
   }
 
-  /**
-   * YOLO mode was switched on: approve the calls already waiting that it
-   * would have run (never a vault use, and only in the owner's turn, `by`
-   * in a shared chat). Returns their task ids.
-   */
   async approveWaiting(
     conversation: number,
     by: number | undefined,
@@ -377,15 +272,11 @@ export class ToolGate {
       try {
         await this.#store.approveForYolo(conversation, taskId);
         approved.push(taskId);
-      } catch {
-        // Not an approval YOLO answers (a vault use, a question, a
-        // credential request) or no longer waiting: it stays as it is.
-      }
+      } catch {}
     }
     return approved;
   }
 
-  /** The conversation's turn ended: answers held in memory will never come. */
   abandon(conversation: number): void {
     for (const [key, held] of this.#held) {
       if (key.startsWith(`${conversation}:`)) held.abandon();
@@ -399,7 +290,6 @@ export class ToolGate {
     return this.#holdForOwner(call, plan);
   }
 
-  /** Wait for the owner with the answer held here (engines without task documents). */
   async #holdForOwner(
     call: GateCall,
     plan: GatePlan | undefined,
@@ -480,10 +370,6 @@ async function planOnce(call: GateCall, hooks: GateHooks<unknown>): Promise<Gate
   return planMemo.keep(api, await hooks.plan(call.args, api, context, toolAsks), context);
 }
 
-/**
- * Whether YOLO mode runs this call, decided once (a replay or a toggle
- * mid-call never flips it): on, and the turn is the owner's.
- */
 async function yoloOnce(call: GateCall): Promise<boolean> {
   const { api, context } = call;
   const stored = await api.memo<boolean>("gate:yolo", context);
@@ -504,12 +390,6 @@ const reviewMemo = durableMemo<ReviewVerdict>(
   }),
 );
 
-/**
- * Auto-review a call that would ask, once: `undefined` when the conversation
- * does not let auto-review approve this tool, or the turn is not the owner's
- * (another bot's or a guest's) or no owner message is in reach (the card
- * shows as before). A verdict is memoized before it is acted on.
- */
 async function reviewOnce(
   call: GateCall,
   reviewer: Reviewer,
@@ -523,7 +403,7 @@ async function reviewOnce(
   try {
     owner = await ownerUserId();
   } catch {
-    return undefined; // Whose turn it is can't be told: the owner gets the card.
+    return undefined;
   }
   const messages = ownerMessages(await call.userMessages(), owner);
   if (!messages) return undefined;

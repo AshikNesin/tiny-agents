@@ -1,21 +1,3 @@
-/**
- * Task tools: the durable bridge between bots and the app's task list.
- *
- * The app injects a `TaskStore` (an adapter over its own database) when it
- * opens the runtime; the tools below run inside pi-durable with
- * `replay: "safe"`, so a call interrupted by a restart re-executes on
- * recovery. Exactly-once is the store's job: `create` takes an idempotency
- * key (a unique column), so a replayed create returns the existing row
- * instead of duplicating it.
- *
- * The key is the durable tool task's identity, not the model's tool call id:
- * `callId` comes from the provider and is only unique within one assistant
- * message — OpenAI-compatible upstreams may send short ids ("call_0") or none
- * at all (pi-ai stores ""), which would collide across turns and bots. The
- * tool task id is what re-executes on replay, but it is a per-store counter,
- * so it is salted with the conversation's persisted UUIDv7 (`pi.provider`):
- * a fresh agent.db next to an old app.db must never hit old rows.
- */
 import { ProviderDoc } from "@earendil-works/pi-durable";
 import type { Extension, ToolExecutionApi, ToolExecutionResult } from "@earendil-works/pi-durable";
 import type { Context } from "@earendil-works/chord";
@@ -28,7 +10,6 @@ import { defineToolkit, tool } from "../toolkit";
 type TaskStatus = "todo" | "in_progress" | "done";
 type TaskPriority = "low" | "medium" | "high" | "urgent";
 
-/** The task as tools see and return it (ISO date strings). */
 export interface TaskRecord {
   id: string;
   title: string;
@@ -39,9 +20,7 @@ export interface TaskRecord {
   completedAt: string | null;
 }
 
-/** What the app provides: CRUD over its task table. */
 export interface TaskStore {
-  /** `idempotencyKey` (the durable tool task's identity) makes replays return the same row. */
   create(input: {
     idempotencyKey: string;
     title: string;
@@ -77,7 +56,6 @@ const isoDateSchema = Type.Unsafe<string>({
   format: "date-time",
 });
 
-/** Compact task line for the model. */
 function present(t: TaskRecord): string {
   const bits = [t.title];
   if (t.dueAt) bits.push(`due ${t.dueAt.slice(0, 16).replace("T", " ")}`);
@@ -94,21 +72,14 @@ const fail = (text: string): ToolExecutionResult => ({
   isError: true,
 });
 
-/** delete_task's memos: an attempt started, and whether it removed the row. */
 const startedMemo = durableMemo("delete_task:started", z.boolean());
 const removedMemo = durableMemo("delete_task:removed", z.boolean());
 
-/** Replay-stable, store-independent idempotency key for a tool call's side effect (see header). */
 export async function toolIdempotencyKey(api: ToolExecutionApi, context: Context): Promise<string> {
   const provider = await api.snapshot(ProviderDoc, api.conversationId, context);
   return `pi:${provider?.sessionId ?? `conversation-${api.conversationId}`}:${api.taskId}`;
 }
 
-/**
- * The `tasks` toolkit: the owner's task list (`apps/web` Tasks page). `store`
- * is the app-side adapter over its task table (see apps/web
- * bots.runtime.ts); the tools close over it.
- */
 export function createTasksToolkit(store: TaskStore): Capability {
   const createTask = tool({
     name: "create_task",
@@ -202,10 +173,6 @@ export function createTasksToolkit(store: TaskStore): Capability {
     parameters: Type.Object({ id: Type.String() }),
     replay: "safe",
     execute: async (args, api, context) => {
-      // Deletes are naturally idempotent, but a rerun after a crash would find
-      // the row already gone and tell the model "no task" for a delete that
-      // succeeded. Durable memos (per tool task) remember that an attempt
-      // started and how it ended, so the rerun reports the real outcome.
       const outcome = await removedMemo.read(api, context);
       if (outcome === undefined) {
         const resumed = (await startedMemo.read(api, context)) === true;
@@ -225,7 +192,6 @@ export function createTasksToolkit(store: TaskStore): Capability {
   });
 }
 
-/** The "tasks" extension alone (tests run it on a bare harness). */
 export function createTasksExtension(store: TaskStore): Extension {
   return createTasksToolkit(store).extension;
 }
