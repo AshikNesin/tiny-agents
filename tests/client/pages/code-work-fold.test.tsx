@@ -1,7 +1,3 @@
-/**
- * A finished turn's work folds behind one quiet "Worked for" row, the way Amp
- * and Hoplite read: the progress notes and commands are one click away.
- */
 import React from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";

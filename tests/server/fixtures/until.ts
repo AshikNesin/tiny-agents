@@ -16,8 +16,6 @@ export function boundWaitsByTestTimeout(): void {
   });
 }
 
-// Not Date.now(): tests freeze Date (tests/test-clock.ts). Not
-// performance.now(): vi.useFakeTimers() fakes it too.
 function realTimeDeadline(ms: number): () => boolean {
   const at = Math.min(vi.getRealSystemTime() + ms, testTimeoutAt);
   return () => vi.getRealSystemTime() >= at;

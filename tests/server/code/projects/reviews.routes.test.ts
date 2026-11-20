@@ -1,9 +1,3 @@
-/**
- * PR reviews (issue #345) through the real routes and the real git
- * workspace: a local bare repository stands in for GitHub's (a PR's head is
- * only under `refs/pull/N/head`, as a fork's is), with an in-memory GitHub
- * API and the in-memory harness.
- */
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
@@ -98,11 +92,6 @@ async function newProject(): Promise<ProjectView> {
   return res.body.data!;
 }
 
-/**
- * Someone's PR #7 from a fork: its commits live only under
- * `refs/pull/7/head` in the "GitHub" repository, never as a branch there.
- * Answers the head sha.
- */
 async function forkPull(lines: string[], author = "maria"): Promise<string> {
   const fork = join(local.home, "fork");
   if (!existsSync(fork)) {
@@ -180,7 +169,6 @@ describe("PR reviews", () => {
       oldContent: "export const a = 1;\n",
       newContent: "export const a = 2;\n",
     });
-    // Nothing was asked yet: no assistant, so no model call.
     expect(harness.created).toEqual([]);
     const list = (await call<PullReviewView[]>("GET", "/reviews")).body.data!;
     expect(list.map((r) => r.id)).toEqual([review.id]);
@@ -216,7 +204,6 @@ describe("PR reviews", () => {
     ]);
     const review = (await call<PullReviewView>("POST", "/reviews", { pr: "acme/web#7" })).body
       .data!;
-    // A line comment written before the assistant exists goes with the first question.
     const draft = await call<ReviewDraft>(
       "POST",
       `/threads/${encodeURIComponent(review.key)}/review/drafts`,
@@ -242,7 +229,6 @@ describe("PR reviews", () => {
     expect(message).toContain("Changed files (2, +2 −1):\nM src/a.ts +1 −1\n");
     expect(message).toContain("Generated files and lockfiles: 1 (not listed)");
     expect(message).not.toContain("pnpm-lock.yaml");
-    // The comment, then the question.
     expect(message).toMatch(
       /Review comments \(1\):\n\n\*\*`src\/a\.ts:1`\*\*\n```\nexport const a = 2;\n```\nWhy 2\?\n\n---\n\nIs this safe to merge\?$/,
     );
@@ -256,7 +242,6 @@ describe("PR reviews", () => {
     ).body.data!;
     expect(waiting).toEqual([]);
 
-    // A later question goes to the same assistant, without the card.
     await call("POST", `/reviews/${review.id}/ask`, { message: "And the tests?" });
     expect(harness.created).toHaveLength(1);
     expect(harness.sent).toEqual([{ nativeId: "t1", message: "And the tests?" }]);
@@ -301,7 +286,6 @@ describe("PR reviews", () => {
     expect((await call<PullReviewView[]>("GET", "/reviews")).body.data).toEqual([]);
     const files = await call("GET", `/threads/${encodeURIComponent(review.key)}/review/files`);
     expect(files.status).toBe(404);
-    // Every way into its worktree says the same.
     const ask = await call("POST", `/reviews/${review.id}/ask`, { message: "Still there?" });
     expect([ask.status, ask.body.error?.message]).toEqual([
       404,
@@ -313,11 +297,6 @@ describe("PR reviews", () => {
 describe("reviewing a Code thread's own PR", () => {
   const REVIEW_DIR = () => join(local.home, "tiny-agents-code/acme--web/reviews/pr-8");
 
-  /**
-   * A Code thread with one commit on its branch, pushed and opened as PR #8
-   * (also under `refs/pull/8/head`, as GitHub keeps every PR). `after` runs
-   * in the thread's worktree once the PR is up.
-   */
   async function threadPull(after: string[] = []) {
     const project = await newProject();
     const res = await call<{ threadId: string }>("POST", "/threads", {
@@ -459,7 +438,6 @@ describe("submitting a PR review", () => {
       endLine: 1,
       body: "Why drop 1?",
     });
-    // A comment for the assistant stays out of the review.
     await call("POST", `/threads/${encodeURIComponent(review.key)}/review/drafts`, {
       path: "src/a.ts",
       startLine: 1,
@@ -491,7 +469,6 @@ describe("submitting a PR review", () => {
       },
     ]);
     expect((await call<ReviewDraft[]>("GET", comments(review.id))).body.data).toEqual([]);
-    // Only a review has comments for GitHub.
     const notReview = await call("GET", "/threads/fake%3At1/review/drafts?target=github");
     expect(notReview.status).toBe(400);
     const typo = await call(
@@ -542,7 +519,6 @@ describe("submitting a PR review", () => {
       "GitHub does not let you approve or request changes on your own pull request. Submit it as a comment.",
     );
     expect(github.submitted).toEqual([]);
-    // The comment still waits, and goes as a comment.
     const comment = await call("POST", `/reviews/${review.id}/submit`, { event: "COMMENT" });
     expect(comment.status).toBe(200);
     expect(github.submitted.map((r) => [r.event, r.comments.length])).toEqual([["COMMENT", 1]]);
@@ -754,7 +730,6 @@ describe("the review inbox", () => {
     );
 
     expect(res.status).toBe(200);
-    // FIXED_NOW is 2026-11-06, so 30 days back is 2026-10-07.
     expect(github.inboxFilter).toEqual({
       updatedSince: "2026-10-07",
       repos: [{ owner: "acme", name: "web" }],
@@ -823,7 +798,6 @@ describe("changes since your review", () => {
       ["src/two.ts", "added"],
     ]);
     expect(diff).toMatchObject({ oldContent: "one\n", newContent: "ONE\n" });
-    // Against the base, src/one.ts is new.
     const all = (await call<ReviewFile[]>("GET", `/threads/${key}/review/files`)).body.data!;
     expect(all.find((f) => f.path === "src/one.ts")?.status).toBe("added");
   });
@@ -854,7 +828,6 @@ describe("changes since your review", () => {
 describe("changing the PR's code", () => {
   const WORKTREE = () => join(local.home, "tiny-agents-code/acme--web/reviews/pr-7");
 
-  /** Opens PR #7 (one file, three lines) with `edit` run in the review's worktree after. */
   async function reviewWith(edit: string[], over: { maintainerCanModify?: boolean } = {}) {
     await newProject();
     const head = await forkPull([`printf 'one\\ntwo\\nthree\\n' > src/a.ts`]);
@@ -902,7 +875,6 @@ describe("changing the PR's code", () => {
       `Shout the second line\n${head}`,
     );
     expect(await sh(local, `git -C ${bare} show ${sha}:src/a.ts`)).toBe("one\nTWO\nthree");
-    // The review now reads the pushed commit as the PR's head: nothing of yours is left.
     expect((await call<PullReviewView>("GET", `/reviews/${review.id}`)).body.data!.headSha).toBe(
       sha,
     );
@@ -938,7 +910,6 @@ describe("changing the PR's code", () => {
   it("turns your changes into suggestion comments on the lines they replace", async () => {
     const { review } = await reviewWith([
       `printf 'one\\nTWO\\nthree\\nfour\\n' > src/a.ts`,
-      // Not part of the PR: GitHub takes no comment there.
       `printf 'bye\\n' > README.md`,
     ]);
 
@@ -953,7 +924,6 @@ describe("changing the PR's code", () => {
     ).body.data!;
     expect(pending.map((d) => [d.path, d.side, d.startLine, d.endLine, d.body])).toEqual([
       ["src/a.ts", "new", 2, 2, "```suggestion\nTWO\n```"],
-      // An added line is suggested with the line it follows.
       ["src/a.ts", "new", 3, 3, "```suggestion\nthree\nfour\n```"],
     ]);
   });

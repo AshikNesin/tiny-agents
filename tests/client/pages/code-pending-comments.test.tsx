@@ -1,8 +1,3 @@
-/**
- * Line comments wait in the thread, above the composer, until they reach the
- * agent: the thread lists them (each removable), and Send now posts them as
- * one message, after which the thread has none waiting.
- */
 import React from "react";
 import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";

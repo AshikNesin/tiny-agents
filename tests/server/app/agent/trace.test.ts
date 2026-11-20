@@ -1,7 +1,3 @@
-/**
- * Traces (issue #363): a conversation's model and tool calls, read back from
- * the entries it stores, with the conversation's usage totals.
- */
 import { describe, expect, it } from "vite-plus/test";
 import type { Context as PiContext } from "@earendil-works/pi-ai";
 import { Type } from "@earendil-works/pi-ai";
@@ -37,14 +33,12 @@ const pingToolkit = defineToolkit({
   ],
 });
 
-/** Calls `ping` once after each user message, then answers. */
 function respond(context: PiContext) {
   const last = context.messages.at(-1);
   if (last?.role === "toolResult") return fauxAssistantMessage(fauxText("done"));
   return { ...fauxAssistantMessage(fauxToolCall("ping", {})), stopReason: "toolUse" as const };
 }
 
-/** Thinks, says it will look, calls `ping` with a host, then answers. */
 function respondWithThoughts(context: PiContext) {
   const last = context.messages.at(-1);
   if (last?.role === "toolResult") return fauxAssistantMessage(fauxText("The server is up."));
@@ -81,7 +75,6 @@ describe("conversation trace", () => {
       const trace = await runtime.trace(ref);
       expect(trace.turns).toHaveLength(1);
       const [turn] = trace.turns;
-      // Whitespace folded, clipped to 200 characters.
       expect(turn.input.startsWith("check the server xxx")).toBe(true);
       expect(turn.input).toHaveLength(200);
       expect(turn.peer).toBe(false);
@@ -101,7 +94,6 @@ describe("conversation trace", () => {
       expect(first.usage?.input).toBeGreaterThan(0);
       expect(trace.usage.models).toEqual([TEST_MODEL]);
 
-      // The totals are the conversation's pi.usage: both calls' tokens.
       const usage = await runtime.usage(ref);
       expect(trace.usage).toEqual(usage);
       const callInput = turn.steps.reduce(

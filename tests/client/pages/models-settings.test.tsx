@@ -105,7 +105,6 @@ describe("Settings → Models", () => {
         apiKey: "sk-ant-api-test",
       }),
     );
-    // A direct vendor starts with every model checked; untick one.
     await user.click(await within(dialog).findByRole("checkbox", { name: "Claude Haiku 4.5" }));
     await user.click(within(dialog).getByRole("button", { name: "Connect" }));
     await waitFor(() =>
@@ -139,7 +138,6 @@ describe("Settings → Models", () => {
   });
 });
 
-/** A connected account with two models, as the server returns after refresh. */
 const account = (models: Partial<AccountModel>[]): Account => ({
   id: "acc1",
   name: "Anthropic",
@@ -245,7 +243,6 @@ describe("Settings → Models · delete", () => {
 
 describe("Settings → Models · account summary", () => {
   it("says when the account was last checked as a relative time", async () => {
-    // FIXED_NOW is 2026-11-06T06:30Z: an hour after this check.
     api.accounts.mockResolvedValue({
       accounts: [{ ...account([{}]), checkedAt: "2026-11-06T05:30:00.000Z" }],
       templates: TEMPLATES,

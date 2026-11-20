@@ -1,7 +1,3 @@
-/**
- * The context ceiling: a chat on a big-window model is summarized once its
- * context passes about 150k tokens, not only near the model's full window.
- */
 import { describe, it } from "vite-plus/test";
 import { createModels } from "@earendil-works/pi-ai/models";
 import { fauxProvider } from "@earendil-works/pi-ai/providers/faux";
@@ -38,9 +34,6 @@ describe("context ceiling", () => {
     const runtime = await openBigWindowRuntime();
     try {
       const ref = await runtime.createConversation({ modelId: BIG, systemPrompt: "" });
-      // Two long owner messages of about 90k tokens each (the faux provider
-      // counts 4 characters a token): about 180k tokens of context, far under
-      // the model's 1M window but over the 150k ceiling.
       const long = (tag: string) => `${tag} ${"lorem ipsum ".repeat(30_000)}`;
       for (const [id, text] of [
         ["one", long("first")],

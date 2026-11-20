@@ -1,7 +1,3 @@
-/**
- * A page with unsaved edits holds navigation: leaving asks first, "Keep
- * editing" stays put, "Discard" goes; a clean page leaves without asking.
- */
 import React, { useState } from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -56,7 +52,6 @@ describe("LeaveGuard", () => {
     expect(router.state.location.pathname).toBe("/edit");
     expect((screen.getByLabelText("Body") as HTMLInputElement).value).toBe("draft");
 
-    // The dialog animates out before the page behind it is interactive again.
     await user.click(await screen.findByRole("link", { name: "Leave" }));
     await user.click(await screen.findByRole("button", { name: "Discard" }));
     expect(await screen.findByText("Elsewhere")).toBeTruthy();

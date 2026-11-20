@@ -19,7 +19,6 @@ vi.mock("streamdown", () => ({
   Streamdown: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 }));
 
-// A recording fake: the cards act only through the owner actions in scope.
 const decideApproval = vi.fn();
 const actions: OwnerActions = {
   decideApproval: (...args) => decideApproval(...args),
@@ -93,7 +92,6 @@ describe("ApprovalCard wording", () => {
     expect(card("mcp__notion__search_pages")).toHaveTextContent(
       "E2E Test wants to use Search pages",
     );
-    // Not in the catalog at all: the prettified connection tool name.
     expect(toolAskLabel(NO_TOOL_LABELS, "mcp__linear__create_issue")).toBe(
       "use Create Issue via linear",
     );
@@ -108,7 +106,6 @@ describe("ApprovalCard read-more (long payloads fold)", () => {
     const el = card("update_instructions", { instructions: longInstructions });
     expect(el).toHaveTextContent("E2E Test wants to update own instructions");
     expect(screen.getByRole("button", { name: "Read more" })).toBeTruthy();
-    // The full text is hidden until expanded.
     expect(el?.querySelector("pre")).toBeNull();
   });
 

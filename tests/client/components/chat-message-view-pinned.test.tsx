@@ -21,7 +21,6 @@ import { OwnerActionsProvider, type OwnerActions } from "@/lib/owner-actions";
 import { markup, outline } from "../dom-outline";
 import { AppQueryProvider } from "../query-provider";
 
-// The credential card's form loads its request; pinned while it loads.
 vi.mock("@/lib/vault-api", () => ({
   apiError: (_error: unknown, fallback: string) => fallback,
   vaultApi: { request: () => new Promise(() => {}) },

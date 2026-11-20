@@ -1,8 +1,3 @@
-/**
- * The `self-improve` capability: the bot's current instructions render as a
- * prompt section, and `update_instructions` always waits for the owner's
- * approval — even when the tool is set to `allow`.
- */
 import type { Context as PiContext } from "@earendil-works/pi-ai";
 import { loaded } from "../../fixtures/loaded-tools";
 import { until } from "../../fixtures/until";
@@ -166,7 +161,6 @@ describe("self-improve capability", () => {
       events.push(...batch);
     });
     await runtime.submit(ref, { requestId: "r1", text: "be brief" });
-    // The owner approves (a routine or peer turn asked); the store still refuses.
     const call = await until(
       () =>
         reduce(events)

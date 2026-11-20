@@ -1,16 +1,6 @@
 import { test, expect, type Page, type Route } from "@playwright/test";
 import { login } from "./helpers/login";
 
-/**
- * Terminal page e2e (issue #28), deterministic without a sandbox VM: every
- * terminal REST call is stubbed with page.route, so CI (no tailnet) sees the
- * same page states a dev machine does. The stubbed env has no WS bridge, so
- * attached views sit in their teardown/reconnect states; nothing here
- * asserts live terminal content. The full pty round trip is the live spec
- * (terminal.live.spec.ts) and the server tests.
- */
-
-/** One tab as GET /terminal/sessions returns it (the frozen wire DTO). */
 interface SessionWire {
   name: string;
   process: string | null;
@@ -28,7 +18,6 @@ const session = (name: string, process: string | null = null): SessionWire => ({
 const json = (route: Route, status: number, body: unknown) =>
   route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
 
-/** A ticket 404 makes every mounted view tear its socket down quietly. */
 async function stubTickets(page: Page): Promise<void> {
   await page.route("**/api/v1/terminal/sessions/*/ticket", (route) =>
     json(route, 404, { success: false, error: { message: "stubbed: no ws bridge" } }),
@@ -156,14 +145,12 @@ test.describe("Terminal page states", () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/terminal");
 
-    // A narrow first visit has no stored preference: the panel starts hidden.
     const panel = page.getByTestId("terminal-keys-panel");
     await expect(page.getByTestId("terminal-key-esc")).not.toBeVisible();
 
     await page.getByTestId("terminal-keys-toggle").click();
     await expect(page.getByTestId("terminal-key-esc")).toBeVisible();
 
-    // Below md the panel overlays the terminal area instead of squeezing it.
     const rowBox = await page.locator('[data-testid^="terminal-view-"]').boundingBox();
     const panelBox = await panel.boundingBox();
     expect(rowBox).not.toBeNull();
@@ -190,7 +177,6 @@ test.describe("Terminal page states", () => {
       const url = new URL(route.request().url());
       const name = url.pathname.split("/").pop()!;
       const forced = url.searchParams.get("force") === "1";
-      // 409 with error.details.process is the shape the confirm dialog reads.
       if (!forced && sessions.some((s) => s.name === name && s.process)) {
         return json(route, 409, {
           success: false,

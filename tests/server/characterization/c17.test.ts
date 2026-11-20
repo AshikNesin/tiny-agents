@@ -1,9 +1,3 @@
-/**
- * Characterization of behavior-register row C17: the Code harness set is
- * fixed at boot, so turning the Claude plan on later needs a restart.
- * Preserve: this pins today's behavior, quirk included; change it only with
- * a signed-off register row.
- */
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import type { ClaudeWorkerLocator } from "@tiny-agents/agent/claude-worker";
 import { startCode } from "../../../apps/web/src/server/api/code/code.boot";
@@ -13,7 +7,6 @@ import type { DeliveryRuntime } from "../../../apps/web/src/server/api/bots/bots
 import { api, createTestApp } from "../helpers";
 import { authToken, installFakeRuntime } from "../fixtures";
 
-// A sandbox is configured: the shared worker locator exists, signed in, never reached.
 vi.mock("../../../apps/web/src/server/api/bots/claude-worker", () => {
   const locator = {
     mode: "sandbox",
@@ -43,7 +36,6 @@ describe("C17: the Claude plan turned on after boot", () => {
     const fake = installFakeRuntime();
     fake.catalog.claudePlan.mockReturnValue({ enabled: false });
 
-    // Boot with the Claude plan off: no harness at all (no SHELLEY_URL in tests).
     stop = startCode(fake as unknown as DeliveryRuntime);
     expect(
       codeHub()
@@ -52,7 +44,6 @@ describe("C17: the Claude plan turned on after boot", () => {
     ).toEqual([]);
     expect(await statusIds()).toEqual([]);
 
-    // The owner turns the Claude plan on (Settings → Models). Nothing rebuilds the set.
     fake.catalog.claudePlan.mockReturnValue({ enabled: true });
     expect(
       codeHub()
@@ -61,7 +52,6 @@ describe("C17: the Claude plan turned on after boot", () => {
     ).toEqual([]);
     expect(await statusIds()).toEqual([]);
 
-    // Only a fresh build (what a restart does) sees it.
     expect(buildHarnesses().map((instance) => instance.id)).toEqual(["claude-code"]);
     stop();
     stop = startCode(fake as unknown as DeliveryRuntime);

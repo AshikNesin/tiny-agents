@@ -1,10 +1,3 @@
-/**
- * Characterization of behavior-register row C21. The edit half is fixed
- * (owner, 2026-11-17): `PATCH /memories/:id` goes through the ledger's
- * `edit`, so an edit into another memory's text lands on that memory and
- * never leaves two active copies. Preserved: `GET /bots/:id/memories` calls
- * `memoryLedger().history()`, which first updates due rows to `expired`.
- */
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { eq } from "drizzle-orm";
 import { db, memories } from "../../../apps/web/src/server/db";

@@ -1,9 +1,3 @@
-/**
- * The bundled 1Password Connect server (ADR 0027): pulling the pinned
- * binaries from a registry (a fake one here, the network boundary) and
- * running both processes with the bus wired over loopback (fake executables,
- * the subprocess boundary).
- */
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
@@ -39,7 +33,6 @@ afterEach(async () => {
   await rm(dir, { recursive: true, force: true });
 });
 
-/** A gzipped layer holding `files` (path → contents), made by the system tar like an image build. */
 async function layer(files: Record<string, string>): Promise<Uint8Array> {
   const root = path.join(dir, `layer-${Object.keys(files).join("-").replace(/\W/g, "")}`);
   for (const [file, contents] of Object.entries(files)) {
@@ -57,7 +50,6 @@ interface FakeRegistry {
   close(): Promise<void>;
 }
 
-/** The registry HTTP subset a pull uses: a bearer challenge, manifests by digest, blobs behind a redirect. */
 async function startFakeRegistry(): Promise<FakeRegistry> {
   const state = {
     manifests: new Map<string, Uint8Array>(),
@@ -95,7 +87,6 @@ async function startFakeRegistry(): Promise<FakeRegistry> {
   };
 }
 
-/** Publish an image of `layers` (bottom first) and return its manifest digest. */
 function publish(registry: FakeRegistry, layers: Uint8Array[]): string {
   const descriptors = layers.map((bytes) => {
     const digest = digestOf(bytes);
@@ -141,7 +132,6 @@ describe("pulling the Connect binaries", () => {
     expect(file).toBe(path.join(dir, "bin", "9.9.9", "connect-api"));
     expect(await readFile(file, "utf8")).toBe("#!/bin/sh\necho api\n");
     expect((await stat(file)).mode & 0o777).toBe(0o755);
-    // Only the top layer had to be read.
     expect(registry.requests.filter((r) => r.startsWith("blobs/"))).toHaveLength(1);
 
     registry.requests.length = 0;
@@ -151,7 +141,6 @@ describe("pulling the Connect binaries", () => {
 
   it("refuses a manifest that isn't the pinned one", async () => {
     const real = publish(registry, [await layer({ "usr/bin/connect-api": "real" })]);
-    // The registry serves other bytes under the pinned digest.
     registry.manifests.set(real, Buffer.from(JSON.stringify({ schemaVersion: 2, layers: [] })));
 
     await expect(
@@ -197,7 +186,6 @@ describe("running the bundled server", () => {
 
   const ports = { api: 1, sync: 2, apiBus: 3, syncBus: 4 };
 
-  /** A stand-in executable: records its env, fails its first run when asked, then stays up. */
   async function fakeBinary(name: string, failFirst = false): Promise<string> {
     const file = path.join(dir, name);
     await writeFile(

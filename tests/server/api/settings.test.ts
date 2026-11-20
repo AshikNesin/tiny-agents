@@ -56,7 +56,6 @@ describe("settings API", () => {
     const kept = await api(app, "/api/v1/settings/flags", { token });
     expect(kept.body.data).toMatchObject({ value: { beta: true } });
 
-    // PUT keeps its upsert semantics for saving.
     const saved = await api(app, "/api/v1/settings/flags", {
       method: "PUT",
       json: { value: { beta: false } },

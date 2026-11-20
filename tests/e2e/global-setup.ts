@@ -11,10 +11,6 @@ const SEED_USER = {
   name: "Demo User",
 };
 
-/**
- * Make sure the e2e login user exists. The dev server started by Playwright's
- * webServer uses the same DATABASE_URL, so the user is visible to it.
- */
 async function globalSetup() {
   bootstrap({
     env: process.env,

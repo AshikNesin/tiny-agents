@@ -31,7 +31,6 @@ async function load(id: string) {
   return job;
 }
 
-/** Put a job in `active` as if a process claimed it and then crashed. */
 async function crashWhileActive(id: string): Promise<void> {
   const longAgo = new Date(Date.now() - (config.jobs.activeTimeoutSeconds + 1) * 1000);
   await db.update(jobs).set({ state: "active", startedAt: longAgo }).where(eq(jobs.id, id));
@@ -52,7 +51,6 @@ describe("retry policy", () => {
     registerJobHandler("policy-fails", () => {
       throw new Error("boom");
     });
-    // No handler for "policy-crashes": the test plays the process that claimed it and died.
     const options = { retryLimit: 2, retryDelaySeconds: 10 };
     const failed = await addJob("policy-fails", null, options);
     const crashed = await addJob("policy-crashes", null, options);
@@ -97,7 +95,6 @@ describe("retry policy", () => {
     const id = await addJob("policy-raced", null, { retryLimit: 1 });
     await crashWhileActive(id);
     const [stale] = await db.select().from(jobs).where(eq(jobs.id, id));
-    // Another process recovered it and a fresh claim started a new attempt.
     await db.update(jobs).set({ startedAt: new Date() }).where(eq(jobs.id, id));
 
     expect(await jobRunner.transitions.apply(stale!, { type: "timeout" })).toBeNull();
@@ -120,7 +117,6 @@ describe("inline tick", () => {
     return id;
   }
 
-  /** Due `created` jobs a registered handler could take. */
   async function dueAndRunnable() {
     return db
       .select({ id: jobs.id })
@@ -134,7 +130,6 @@ describe("inline tick", () => {
       );
   }
 
-  // Every event, and whether it lands a due `created` job (so must nudge).
   const cases: Array<{
     event: string;
     nudges: boolean;
@@ -230,7 +225,6 @@ describe("inline tick", () => {
     await act(id);
     await jobRunner.idle();
 
-    // The inline tick is the one that skips schedules; the act's own ticks do not.
     const inline = ticks.mock.calls.filter(([options]) => options?.schedules === false);
     expect(inline.length > 0).toBe(nudges);
     if (nudges) expect(await dueAndRunnable()).toEqual([]);
@@ -270,7 +264,6 @@ describe("tick scheduling", () => {
     const first = runTick({ housekeeping: false });
     await running;
     await addJob("ordered", "second");
-    // One tick at a time: the second call joins the running one.
     expect(runTick()).toBe(first);
     release();
 
@@ -299,7 +292,6 @@ describe("tick scheduling", () => {
     const second = await addJob("held", "second");
     void runTick();
     jobRunner.reset();
-    // reset drops handlers too. Put one back so a forgotten re-run would run the second job.
     registerJobHandler<string>("held", handler);
     release();
     await first;

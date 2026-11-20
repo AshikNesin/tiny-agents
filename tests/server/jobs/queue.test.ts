@@ -78,7 +78,6 @@ describe("queue + tick", () => {
     expect(job).toMatchObject({ state: "failed", retryCount: 1, error: "attempt 2 failed" });
     expect(attempts).toBe(2);
 
-    // Retry delay pushes runAt into the future so the next tick skips it.
     const delayed = await addJob("flaky", null, { retryLimit: 1, retryDelaySeconds: 600 });
     await runTick();
     expect((await load(delayed)).runAt.getTime()).toBeGreaterThan(Date.now() + 500_000);
@@ -195,7 +194,6 @@ describe("queue + tick", () => {
   it("does not let a stale cancel or retry overwrite a job that moved on", async () => {
     registerJobHandler("quick", () => "done");
     const id = await addJob("quick", null);
-    // The dashboard still shows the job as created; the tick finishes it first.
     await runTick();
     await expect(cancelJob(id)).rejects.toThrow(/Cannot cancel a completed job/);
     await expect(retryJob(id)).rejects.toThrow(/Cannot retry a completed job/);
@@ -225,7 +223,6 @@ describe("queue + tick", () => {
 
   it("recovers jobs stuck in active past the timeout", async () => {
     registerJobHandler("stuck", () => "ok");
-    // No backoff, so the recovered job is due again in the same tick.
     const id = await addJob("stuck", null, { retryLimit: 3, retryDelaySeconds: 0 });
     const longAgo = new Date(Date.now() - (config.jobs.activeTimeoutSeconds + 60) * 1000);
     await db.update(jobs).set({ state: "active", startedAt: longAgo }).where(eq(jobs.id, id));

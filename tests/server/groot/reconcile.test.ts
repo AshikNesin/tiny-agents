@@ -2,12 +2,6 @@ import { describe, it, expect } from "vite-plus/test";
 import { reconcileFile, isBinary, type FileSides } from "../../../.groot/lib/reconcile";
 import type { MergeFileResult } from "../../../.groot/lib/git";
 
-/**
- * Unit tests for the pure per-file reconciliation decision table used by
- * groot sync v5. The `git merge-file` subprocess is injected, so every branch
- * is exercised deterministically without touching git or the filesystem.
- */
-
 const buf = (s: string | null): Buffer | null => (s === null ? null : Buffer.from(s, "utf-8"));
 
 function sides(
@@ -82,9 +76,6 @@ describe("reconcileFile — additions and local deletions", () => {
   it("respects a local deletion of a synced file", async () => {
     const outcome = await reconcileFile(sides("a.ts", null, "old", "newer"), neverMerge);
     expect(outcome.kind).toBe("kept-local-deletion");
-    // The engine restores theirs when this turns out to be a phantom deletion
-    // (file never committed in the child repo), so the upstream content must
-    // ride along on the outcome rather than be re-derived by the caller.
     if (outcome.kind === "kept-local-deletion") {
       expect(outcome.theirs.toString()).toBe("newer");
     }
@@ -186,8 +177,8 @@ describe("reconcileFile — package.json deterministic merge", () => {
     expect(outcome).toMatchObject({ kind: "auto-merged" });
     if (outcome.kind === "auto-merged") {
       const merged = JSON.parse(outcome.content);
-      expect(merged.name).toBe("child-renamed"); // non-managed key: local wins
-      expect(merged.dependencies.zod).toBe("^4.0.0"); // managed, unmodified: theirs
+      expect(merged.name).toBe("child-renamed");
+      expect(merged.dependencies.zod).toBe("^4.0.0");
     }
   });
 

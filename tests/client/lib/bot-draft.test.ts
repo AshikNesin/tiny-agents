@@ -1,7 +1,3 @@
-/**
- * The bot dialog's form without React: a draft from a bot or from nothing,
- * what blocks saving, the payload it becomes, and selection toggles.
- */
 import { describe, expect, it } from "vite-plus/test";
 import {
   canSaveDraft,

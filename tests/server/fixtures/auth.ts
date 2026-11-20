@@ -1,4 +1,3 @@
-/** A bearer token for `api()`, one per email, made once. */
 import { generateToken } from "@groot/core/utils/jwt.utils";
 import { db, users } from "../../../apps/web/src/server/db";
 

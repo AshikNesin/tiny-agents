@@ -1,8 +1,3 @@
-/**
- * The workspace module (issue #297 §6, §7.3) on real git: worktrees per
- * thread, diffs against the base branch, sync to the remote head, and the
- * push rules (never forced, hooks off, the token only on stdin).
- */
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -164,19 +159,16 @@ describe("diffs against the base branch", () => {
     const first = await ws.changeStamp(a);
     expect(await ws.changeStamp(a)).toBe(first);
 
-    // A second write to a file that is already changed.
     await sh(local, `cd ${a} && printf 'two\\n' >> README.md`);
     const second = await ws.changeStamp(a);
     expect(second).not.toBe(first);
 
-    // Ignored files and an unchanged file's timestamp are not changes.
     await sh(
       local,
       `cd ${a} && mkdir -p node_modules && printf 'x' > node_modules/x.js && touch src/a.ts`,
     );
     expect(await ws.changeStamp(a)).toBe(second);
 
-    // A new file, and a commit, are.
     await sh(local, `cd ${a} && printf 'n\\n' > new.ts`);
     const third = await ws.changeStamp(a);
     expect(third).not.toBe(second);
@@ -187,7 +179,6 @@ describe("diffs against the base branch", () => {
   it("never rewrites the index while reading, so an agent's commit never meets our lock", async () => {
     const a = join(local.home, "a");
     await ws.addWorktree(checkout, a, "ta/a-1", "main");
-    // Same content, newer timestamp: a refreshing read would rewrite the index.
     await sh(local, `cd ${a} && sleep 1 && touch README.md src/a.ts`);
     const index = await sh(local, `git -C ${a} rev-parse --git-path index`);
     const before = await sh(local, `cd ${a} && stat -c %Y.%Z ${index} && sha1sum ${index}`);
@@ -217,7 +208,6 @@ describe("push", () => {
     const a = await worktree("a", "ta/a-1");
     await sh(local, `cd ${a} && printf '1\\n' > x.txt && git add -A && git commit --quiet -m one`);
     await ws.push(a, repo, "ta/a-1");
-    // Someone pushes to the branch from elsewhere.
     const other = await worktree("other", "other");
     await sh(
       local,
@@ -311,7 +301,6 @@ describe("names and paths", () => {
     expect(branchSlug("Let's add a dark mode toggle to the settings page")).toBe(
       "add-dark-mode-toggle",
     );
-    // Long words stop at a word boundary, under 28 characters.
     expect(branchSlug("Refactor authentication middleware configuration loading")).toBe(
       "refactor-authentication",
     );
@@ -377,7 +366,6 @@ describe("checkpoints", () => {
       `cd ${a} && printf 'hello\\nturn one\\n' > README.md && printf 'new\\n' > new.txt`,
     );
     const one = await ws.checkpoint(a, "refs/tiny-agents/checkpoints/a/1");
-    // The worktree is as it was: nothing staged, nothing committed.
     expect(await ws.uncommitted(a)).toEqual([" M README.md", "?? new.txt"]);
     const head = await ws.headSha(a);
 
@@ -398,7 +386,6 @@ describe("checkpoints", () => {
     expect(readFileSync(join(a, "README.md"), "utf8")).toBe("hello\nturn one\n");
     expect(readFileSync(join(a, "new.txt"), "utf8")).toBe("new\n");
     expect(existsSync(join(a, "later.txt"))).toBe(false);
-    // History is untouched: the restore is a change on top of it.
     expect(await sh(local, `git -C ${a} log -1 --format=%s`)).toBe("later");
     expect(await ws.headSha(a)).not.toBe(head);
   });

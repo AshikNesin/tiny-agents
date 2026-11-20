@@ -1,8 +1,3 @@
-/**
- * Pure mention-token parsing and mention resolution (issue #12): these rules
- * decide when the composer opens the overlay and which bots a sent message
- * tags, so they are pinned here rather than through the ChatPane UI.
- */
 import { describe, expect, it } from "vite-plus/test";
 import {
   activeMentionToken,
@@ -46,13 +41,10 @@ describe("activeMentionToken", () => {
   });
 
   it("tracks the caret inside a longer query", () => {
-    // Caret moved back one character: the query is the text up to it.
     expect(activeMentionToken("hi @ada", 6)).toEqual({ start: 3, query: "ad" });
   });
 
   it("stops at the nearest preceding @ only", () => {
-    // The caret sits in the second token; the first (already inserted)
-    // mention does not interfere.
     expect(activeMentionToken("@Ada what @pi", 14)).toEqual({ start: 10, query: "pi" });
   });
 
@@ -89,13 +81,10 @@ describe("mentionedBotIds", () => {
   });
 
   it("keeps a mention when more text follows the name", () => {
-    // The autocomplete inserts "@Name "; the user may keep typing.
     expect(mentionedBotIds("@Ada Lovelace hi", BOTS, "host")).toEqual(["b1"]);
   });
 
   it("falls back to case-insensitive for a hand-typed tag", () => {
-    // Exact case still wins; "@ada" still reaches "Ada" instead of silently
-    // dropping the tag.
     expect(mentionedBotIds("@ada hi", BOTS, "host")).toEqual(["b1"]);
     expect(mentionedBotIds("@Ada hi", BOTS, "host")).toEqual(["b1"]);
   });
@@ -139,8 +128,6 @@ describe("mentionedBotIds", () => {
   });
 });
 
-// Older data can hold two bots with one name (issue #80): the autocomplete
-// pick, not the text, says which one is meant.
 const TWINS = [
   { id: "e1", name: "Echo" },
   { id: "e2", name: "Echo" },
@@ -161,7 +148,6 @@ describe("resolveMentions", () => {
       ids: ["b1"],
       ambiguous: ["Echo"],
     });
-    // A pick elsewhere does not settle another, typed, occurrence.
     const picked = [{ start: 0, botId: "e1", name: "Echo" }];
     expect(resolveMentions("@Echo and @Echo", TWINS, "host", picked)).toEqual({
       ids: ["e1"],
@@ -170,7 +156,6 @@ describe("resolveMentions", () => {
   });
 
   it("falls back to name matching once the picked text was edited", () => {
-    // "@Echo" became "@Echoes": not a mention of anyone.
     const picked = [{ start: 0, botId: "e1", name: "Echo" }];
     expect(resolveMentions("@Echoes @Ada", TWINS, "host", picked)).toEqual({
       ids: ["b1"],

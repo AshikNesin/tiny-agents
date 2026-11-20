@@ -1,9 +1,3 @@
-/**
- * Code projects end to end (issue #297): a project, a thread in its own
- * worktree, Publish, the PR tab, and Auto-fix passes, through the real
- * routes and the real git workspace (a local bare repository stands in for
- * GitHub's), with an in-memory GitHub API and the in-memory harness.
- */
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { createHmac } from "node:crypto";
 import { existsSync } from "node:fs";
@@ -47,14 +41,12 @@ let local: LocalExec;
 let bare: string;
 let github: FakeGitHub;
 let harness: FakeHarness;
-/** Manifest codes the fake GitHub was asked to convert. */
 let manifestCodes: string[] = [];
 const PEM = `-----BEGIN RSA PRIVATE KEY-----\n${"A".repeat(120)}\n-----END RSA PRIVATE KEY-----`;
 const SECRET = "webhook-secret-for-tests";
 
 beforeEach(async () => {
   await resetAppTables();
-  // GitHub settings and setup flows live in KV, outside the app tables.
   await createNamespaceKv("CODE_GITHUB").clear();
   await createNamespaceKv("CODE_GITHUB_FLOW").clear();
   manifestCodes = [];
@@ -204,7 +196,6 @@ describe("projects", () => {
   });
 
   it("keeps an archived thread's project in the archived list (#383)", async () => {
-    // A harness that archives, as Shelley does: archived threads list apart.
     setCodeHub(undefined);
     harness = fakeHarness("fake", {
       threads: { ...NO_CAPABILITIES.threads, archive: true },
@@ -304,7 +295,6 @@ describe("branch names", () => {
     expect(harness.renamed).toEqual([
       { nativeId: thread.nativeId, title: "Fix Google sign-in callback" },
     ]);
-    // One small call: the task, cut short, and nothing else.
     expect(asked).toHaveLength(1);
     expect(asked[0]!.user.length).toBeLessThan(1_700);
   });
@@ -316,7 +306,6 @@ describe("branch names", () => {
     });
     expect(saved.body.data?.settings.branchPrefix).toBe("ashik/");
     expect((await newThread(project.id, task)).branch).toBe("ashik/fix-login-flow-users");
-    // A prefix git cannot name a branch with is refused, and the saved one stays.
     for (const branchPrefix of ["bad prefix/", "a..b/", "/lead", "x~1/"]) {
       const res = await call("PATCH", `/projects/${project.id}`, {
         settings: { branchPrefix },
@@ -337,7 +326,6 @@ describe("branch names", () => {
     const project = await newProject();
     const thread = await newThread(project.id, task);
     expect(thread.branch).toBe("ta/fix-login-flow-users");
-    // The title is the branch's words, not the project line at the top of the message.
     expect(harness.renamed).toEqual([{ nativeId: thread.nativeId, title: "Fix login flow users" }]);
   });
 
@@ -404,7 +392,6 @@ describe("publish and the PR tab", () => {
     const enc = encodeURIComponent(thread.id);
     await commit(thread.worktree, "src/login.ts");
     const hub = codeHub()!;
-    // Let the thread's own list read settle first.
     await new Promise((resolve) => setTimeout(resolve, 20));
     const changes: string[] = [];
     const off = hub.onChange((change) => changes.push(change));
@@ -562,7 +549,6 @@ describe("a check's log excerpt", () => {
     expect(log.lines.at(-1)).toBe("##[error]Process completed with exit code 1.");
     expect(log.lines).not.toContain("##[endgroup]");
     expect(log.lines.some((l) => /^2026-|\u001b/.test(l))).toBe(false);
-    // The excerpt, not the whole log: the early passes are left out.
     expect(log.lines).not.toContain("ok 1 passes");
     expect(log.lines.length).toBeLessThanOrEqual(30);
     expect(log.highlight.map((i) => log.lines[i])).toEqual([
@@ -705,7 +691,6 @@ describe("Auto-fix", () => {
     expect(passes.map((p) => [p.status, p.outcome, p.pushedSha])).toEqual([
       ["finished", "pushed", head],
     ]);
-    // CI runs again on the pushed commit.
     p.checks = [
       {
         ...failing(),
@@ -755,7 +740,6 @@ describe("Auto-fix", () => {
     await call("POST", `/threads/${encodeURIComponent(thread.id)}/messages`, {
       message: "Try again with logs",
     });
-    // The owner's message moves the loop on (the same failure stays handled).
     expect((await pr(thread.id)).active?.loop.status).toBe("watching");
   });
 
@@ -867,13 +851,11 @@ describe("the reconcile chain", () => {
     await run(first);
     const second = (await link())!;
     expect(second).not.toBe(first);
-    // A stale or duplicate run of the old link forks nothing.
     await run(first);
     expect(await link()).toBe(second);
     expect((await pending()).map((j) => j.id)).toContain(second);
     expect((await pending()).filter((j) => j.id !== first)).toHaveLength(1);
 
-    // The link's job is gone (a crash, a wiped queue): boot arms a new one.
     await db.delete(jobs);
     expect(await rearmReconcilers()).toBe(1);
     expect((await pending()).map((j) => j.id)).toEqual([await link()]);
@@ -912,7 +894,6 @@ describe("the Thread-Id trailer and per-turn checkpoints", () => {
     await turnEnds();
     await commit(thread.worktree, "notes.txt", "turn two");
     await turnEnds();
-    // A turn that changed nothing takes no checkpoint.
     await turnEnds();
 
     const list = (await call<CheckpointView[]>("GET", `/threads/${enc}/checkpoints`)).body.data!;
@@ -1018,7 +999,6 @@ describe("phase 6 on a published PR", () => {
 
   it("runs a final check when green, and settles green when it changes nothing", async () => {
     const { thread } = await published({ autofix: { finalCheck: true } });
-    // The agent is busy with the pass until its turn ends.
     harness.outcomes.set(thread.nativeId, {
       working: true,
       title: "t",
@@ -1073,7 +1053,6 @@ describe("the GitHub App", () => {
       body,
       headers: { "content-type": "application/json", ...headers },
     });
-  /** A request as the browser makes it: the owner's session, and the setup cookie when it has one. */
   const browser = (path: string, init: { method?: string; json?: unknown; cookie?: string } = {}) =>
     app.request(path, {
       method: init.method ?? "GET",
@@ -1087,7 +1066,6 @@ describe("the GitHub App", () => {
   const flowCookie = (res: Response) =>
     /tiny_agents_github_flow=[^;]+/.exec(res.headers.get("set-cookie") ?? "")?.[0];
 
-  /** Start the one-click setup, and come back from GitHub with `code`. */
   async function createApp(code = "manifest-code") {
     const started = await browser("/api/v1/code/github/app/manifest", {
       method: "POST",
@@ -1121,7 +1099,6 @@ describe("the GitHub App", () => {
         checks: "read",
       },
     });
-    // GitHub cannot deliver webhooks to a plain-http origin: Code polls instead.
     expect(started.webhooks).toBe(false);
     expect(started.manifest).not.toHaveProperty("hook_attributes");
 
@@ -1135,7 +1112,6 @@ describe("the GitHub App", () => {
       webhooks: true,
     });
 
-    // The state works once.
     const replay = await app.request(`/api/v1/code/github/callback?code=again&state=${state}`, {
       headers: { cookie },
     });
@@ -1200,7 +1176,6 @@ describe("the GitHub App", () => {
     const thread = await newThread(project.id);
     await commit(thread.worktree, "a.txt");
     await call("POST", `/threads/${encodeURIComponent(thread.id)}/publish`, {});
-    // The fake client answers viewer() with "ashik"; under the App that is not the owner.
     github.pull(1).threads = [
       {
         id: "T_11",

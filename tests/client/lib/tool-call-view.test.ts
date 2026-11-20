@@ -1,8 +1,3 @@
-/**
- * How a tool call is shown (lib/tool-call-view.ts), as one table: status ×
- * the call's fields × read-only (a Past chat). The components render what
- * this says; their own tests keep one rendering per card.
- */
 import { describe, expect, it } from "vite-plus/test";
 import {
   isActive,
@@ -129,7 +124,6 @@ describe("viewOf: Owner waits", () => {
     const view = viewOf(input, { readOnly: true });
     expect(view).toMatchObject({ ...waiting, waitingOn: expected.waitingOn, note: "not answered" });
     expect(view.anchor).toBeUndefined();
-    // Questions still show what was asked, without the questionnaire.
     expect(view.card).toBe(input.questions ? "asked-questions" : undefined);
   });
 });

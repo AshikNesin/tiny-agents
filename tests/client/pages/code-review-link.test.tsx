@@ -23,7 +23,6 @@ function stubFetch() {
   return fetch;
 }
 
-/** Render the page the app's routes choose for `url`, beside a stand-in review page. */
 function visit(url: string) {
   const leaf = matchRoutes(appRoutes, url)?.at(-1)?.route;
   if (!leaf?.path) throw new Error(`no route for ${url}`);

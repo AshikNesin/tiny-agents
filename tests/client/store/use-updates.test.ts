@@ -1,8 +1,3 @@
-/**
- * Settings → Updates polling (docs/guides/local-updates.md): after "Update &
- * restart" the page reloads only once a different release is up and idle,
- * and stops waiting when the update failed.
- */
 import { describe, expect, it } from "vite-plus/test";
 import { isBusy, pollOutcome } from "@/store/use-updates";
 import type { UpdateStatus } from "../../../apps/web/src/shared/local-updates";

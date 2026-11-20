@@ -5,7 +5,6 @@ import { createLogger, type LogRecord } from "@groot/core/logger";
 import { errorHandler } from "@groot/core/middlewares/error-handler.middleware";
 import type { AppEnv } from "@groot/core/types";
 
-/** An app whose only route throws `error`, logging into `records`. */
 function appThrowing(error: Error, records: LogRecord[]) {
   const app = new Hono<AppEnv>();
   app.use(async (c, next) => {

@@ -17,7 +17,6 @@ function Example({ dismissOnOutsideClick }: { dismissOnOutsideClick?: boolean })
   );
 }
 
-/** The overlay is what a user actually clicks "outside" on; body is pointer-events:none while open. */
 async function clickOutside(user: ReturnType<typeof userEvent.setup>) {
   const overlay = document.querySelector<HTMLElement>('[data-slot="dialog-overlay"]');
   expect(overlay).not.toBeNull();
@@ -40,7 +39,6 @@ describe("DialogContent", () => {
     const user = userEvent.setup();
     render(<Example dismissOnOutsideClick={false} />);
     await user.click(screen.getByRole("button", { name: "Open" }));
-    // Fully open (its entrance applied) before the stray click.
     await waitFor(() => expect(screen.getByText("Dialog body")).toBeVisible());
 
     await clickOutside(user);

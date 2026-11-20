@@ -1,12 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { login } from "./helpers/login";
 
-/**
- * A bot's questions for the owner (ask_owner), on the faux model: "/ask"
- * makes the bot ask a single-choice, a multiple-choice and an open question,
- * and it echoes the tool result it gets back.
- */
-
 async function createBot(page: Page, name: string) {
   await page
     .getByRole("button", { name: /new bot|create your first bot/i })
@@ -21,7 +15,6 @@ async function createBot(page: Page, name: string) {
 }
 
 test.describe("Questions for the owner", () => {
-  // The faux model streams slowly (playwright.config), and each test waits on two replies.
   test.setTimeout(90_000);
 
   test("the bot waits for the answers and goes on with them, across a reload", async ({ page }) => {
@@ -36,14 +29,11 @@ test.describe("Questions for the owner", () => {
     const card = page.getByTestId("question-card");
     await expect(card).toBeVisible({ timeout: 30_000 });
     await expect(card.getByText(`${name} has 3 questions for you`)).toBeVisible();
-    // The sidebar shows the bot is waiting on the owner.
     await expect(page.getByLabel("1 question for you", { exact: true })).toBeVisible();
 
-    // A reload keeps the questions waiting.
     await page.reload();
     await expect(card).toBeVisible({ timeout: 15_000 });
 
-    // A single-choice question answers on the click and moves on.
     await card.getByRole("radio", { name: /React/ }).click();
     await expect(card.getByText("Question 2 of 3")).toBeVisible();
     await card.getByRole("checkbox", { name: /Auth/ }).click();

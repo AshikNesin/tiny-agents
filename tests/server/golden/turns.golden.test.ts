@@ -1,9 +1,3 @@
-/**
- * Golden flows: turns that wait on the owner (approval cards, Questions) and
- * YOLO mode. The faux model is scripted: a message `/tool NAME {json}` makes
- * one call to NAME with those arguments, then the bot echoes the tool's
- * result; anything else is echoed. See recorder.ts.
- */
 import type { Context as PiContext } from "@earendil-works/pi-ai";
 import { afterAll, beforeAll, describe } from "vite-plus/test";
 import { fauxAssistantMessage, fauxText, fauxToolCall } from "../../../packages/agent/src/testing";
@@ -28,7 +22,6 @@ const textOf = (message: PiContext["messages"][number]): string =>
         .map((b) => (b as { text: string }).text)
         .join("");
 
-/** The scripted model: one tool round for `/tool NAME {json}`, then an echo. */
 function script(context: PiContext) {
   const messages = context.messages;
   let userAt = -1;
@@ -39,7 +32,6 @@ function script(context: PiContext) {
     }
   }
   const text = userAt >= 0 ? textOf(messages[userAt]!) : "";
-  // One round per user message: once its tool answered, say what it said.
   const result = messages.slice(userAt + 1).find((m) => m.role === "toolResult");
   if (result) return fauxAssistantMessage(fauxText(`Tool said: ${textOf(result)}`));
   const tool = /\/tool (\S+) (\{.*\})\s*$/s.exec(text);
@@ -95,7 +87,6 @@ const settledWith = (botId: string, preview: string) =>
 const snapshotDone = (frames: unknown[]) =>
   frames.some((f) => (f as { type: string }).type === "yolo");
 
-/** The waiting call's task id, from the stream's snapshot. */
 function waitingTask(frames: unknown[]): number {
   type Call = { taskId?: number; status: string };
   const state = (frames[0] as { state: { messages: { toolCalls?: Call[] }[] } }).state;
@@ -303,8 +294,6 @@ describe("golden: turns that wait on the owner", () => {
         text: `/tool message_bot ${JSON.stringify({ to: "Helper", text: "what is 2+2?" })}`,
       },
     });
-    // The helper answers in a conversation of its own, not its chat: only
-    // the relayed reply shows, in the host's chat.
     await waitFor(host.id, "the relay answered", (row) =>
       String(row.lastMessagePreview ?? "").startsWith("Echo: **Reply from Helper:**"),
     );

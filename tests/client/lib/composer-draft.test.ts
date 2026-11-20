@@ -1,9 +1,3 @@
-/**
- * The composer draft model (lib/composer-draft.ts): text, picked mentions
- * and staged attachments as one value. The offsets that move under the
- * owner's edits — a pick after trimming, a refused send put back ahead of
- * what was typed meanwhile — are pinned here rather than through the UI.
- */
 import { describe, expect, it } from "vite-plus/test";
 import {
   canSend,
@@ -33,7 +27,6 @@ function done(id: string): StagedUpload<Ref> {
   return { key: `k-${id}`, name: `${id}.txt`, status: "done", ref: { id, name: `${id}.txt` } };
 }
 
-/** The `@Name` each pick points at in the text. */
 function pickedText(d: ComposerDraft<Ref>): string[] {
   return d.picked.map((pick) => d.text.slice(pick.start, pick.start + 1 + pick.name.length));
 }
@@ -59,7 +52,6 @@ describe("editing and mentions", () => {
     expect(next.text).toBe("hi @Ada ");
     expect(caret).toBe(8);
     expect(next.picked).toEqual([{ start: 3, botId: "ada-2", name: "Ada" }]);
-    // Picking again at the same @ replaces the earlier pick.
     const again = activeMentionToken(next.text, 7)!;
     const repicked = insertMention(next, again, 7, ada1).draft;
     expect(repicked.picked).toEqual([{ start: 3, botId: "ada-1", name: "Ada" }]);
@@ -84,7 +76,6 @@ describe("sending", () => {
     const sent = outgoing(draft(text, [{ start: 9, botId: "ada-2", name: "Ada" }]));
     expect(sent.body).toBe("ping @Ada please");
     expect(sent.picked).toEqual([{ start: 5, botId: "ada-2", name: "Ada" }]);
-    // The re-based pick still reaches the bot picked, not the first "Ada".
     expect(resolveMentions(sent.body, [ada1, ada2], "host", sent.picked).ids).toEqual(["ada-2"]);
   });
 
@@ -123,13 +114,11 @@ describe("restoring a refused send", () => {
     expect(restored.text).toBe("ping @Ada\n\nand @Bob too");
     expect(restored.picked.map((pick) => pick.botId)).toEqual(["ada-2", "bob"]);
     expect(pickedText(restored)).toEqual(["@Ada", "@Bob"]);
-    // The sent attachments come back first, ready, under fresh keys.
     expect(restored.staged.map((item) => [item.name, item.status, item.previewUrl])).toEqual([
       ["a.txt", "done", "/preview/a"],
       ["b.txt", "done", undefined],
     ]);
     expect(restored.staged[0]!.key).not.toBe("k-a");
-    // The restored draft resolves to the same bots it was sent to.
     const again = outgoing(restored);
     expect(resolveMentions(again.body, [ada1, ada2, bob], "host", again.picked).ids).toEqual([
       "ada-2",

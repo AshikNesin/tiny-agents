@@ -53,7 +53,7 @@ describe("Pagination", () => {
     expect(onPage).toHaveBeenCalledWith(2);
 
     await user.click(screen.getByRole("link", { name: /go to next page/i }));
-    expect(onPage).toHaveBeenCalledWith(2); // page 1 + 1
+    expect(onPage).toHaveBeenCalledWith(2);
   });
 
   it("aria-current marks the active link", () => {

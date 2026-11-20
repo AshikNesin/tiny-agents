@@ -1,7 +1,3 @@
-/**
- * A fake computer for the toolkit and route tests: records every call, and
- * answers screenshots with a tiny JPEG-shaped buffer.
- */
 import type {
   ComputerDesktop,
   ComputerTransport,
@@ -18,19 +14,13 @@ export const FAKE_JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 
 export interface FakeComputer {
   transport: ComputerTransport;
   log: { method: string; args?: unknown; profile: string }[];
-  /** Profiles opened, in order (a relaunch shows up twice). */
   opened: string[];
   wiped: string[];
   windows: ComputerWindow[];
-  /** What `typeSecret` typed, by window class (tests assert the value went there). */
   typedSecrets: { value: string; binding: WindowBinding }[];
-  /** The next tool call on this profile finds the desktop gone. */
   killNext(profile: string): void;
-  /** Make the next open fail with this message. */
   failNextOpen(message: string): void;
-  /** Hold opens until released (to observe the `starting` phase). */
   holdOpens(): () => void;
-  /** The desktop most recently opened for a profile. */
   desktop(profile: string): ComputerDesktop | undefined;
 }
 

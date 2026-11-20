@@ -1,8 +1,3 @@
-/**
- * The sequenced session log both Claude worker protocols keep per session.
- * The wire around it (resume replies, replays, fan-out to sockets) is tested
- * through a real socket in claude-worker.test.ts and claude-worker-coding.test.ts.
- */
 import { describe, expect, it } from "vite-plus/test";
 import {
   SessionLog,

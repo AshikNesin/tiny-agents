@@ -32,7 +32,6 @@ describe("guest access table", () => {
   it("names a real page for every guest feature", () => {
     for (const [name, feature] of Object.entries(GUEST_ACCESS)) {
       if (!feature.page) continue;
-      // A splat route (`/settings/*`) serves the page and its sub-paths.
       const served = gatedPaths.some(
         (path) => path === feature.page || path === `${feature.page}/*`,
       );

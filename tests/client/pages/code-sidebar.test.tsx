@@ -1,8 +1,3 @@
-/**
- * The Code page's thread list folds away on wide screens, as in other coding
- * workspaces: Hide sidebar (or ⌘B) gives the thread the room, Show sidebar
- * brings the list back, and the choice is remembered in this browser.
- */
 import React from "react";
 import { fireEvent, render as renderBare, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -15,7 +10,6 @@ import { useCodeStore } from "@/store/code";
 import type { HarnessInfo } from "@/lib/code/api";
 import { AppQueryProvider } from "../query-provider";
 
-/** Each render gets its own React Query cache, as the app gives the page one. */
 const render = (ui: Parameters<typeof renderBare>[0]) =>
   renderBare(ui, { wrapper: AppQueryProvider });
 

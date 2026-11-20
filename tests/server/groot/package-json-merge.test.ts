@@ -6,13 +6,6 @@ import {
   PACKAGE_JSON_MERGE_KEYS,
 } from "../../../.groot/lib/package-json-merge";
 
-/**
- * Deterministic package.json merge — what sync's reconcile step uses for the
- * root package.json instead of `git merge-file`, so project-owned keys never
- * raise conflict markers. A malformed package.json breaks the whole
- * toolchain, so this logic must be airtight.
- */
-
 describe("mergeObject3Way", () => {
   it("keeps locally-changed keys (local wins)", () => {
     const merged = mergeObject3Way(
@@ -20,8 +13,8 @@ describe("mergeObject3Way", () => {
       { express: "^3.0.0", zod: "^3.0.0" },
       { express: "^3.1.0", zod: "^3.2.0" },
     );
-    expect(merged.express).toBe("^5.0.0"); // local changed -> local wins
-    expect(merged.zod).toBe("^3.2.0"); // unmodified locally -> adopt theirs
+    expect(merged.express).toBe("^5.0.0");
+    expect(merged.zod).toBe("^3.2.0");
   });
 
   it("accepts upstream deletion of an unmodified key", () => {
@@ -72,10 +65,10 @@ describe("mergePackageJson", () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     const out = JSON.parse(r.text);
-    expect(out.name).toBe("app"); // project-owned, untouched
-    expect(out.version).toBe("1.0.0"); // project-owned, untouched
-    expect(out.scripts).toEqual({ a: "1", b: "2" }); // upstream addition adopted
-    expect(out.dependencies.x).toBe("^2"); // unmodified locally -> upstream bump adopted
+    expect(out.name).toBe("app");
+    expect(out.version).toBe("1.0.0");
+    expect(out.scripts).toEqual({ a: "1", b: "2" });
+    expect(out.dependencies.x).toBe("^2");
   });
 
   it("preserves a local version bump and adopts an upstream addition + bump", () => {
@@ -87,9 +80,9 @@ describe("mergePackageJson", () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     const out = JSON.parse(r.text);
-    expect(out.dependencies.express).toBe("^5.0.0"); // local wins
-    expect(out.dependencies.zod).toBe("^3.2.0"); // unmodified -> adopt theirs
-    expect(out.dependencies["@biomejs/biome"]).toBe("^1.0.0"); // theirs-only added
+    expect(out.dependencies.express).toBe("^5.0.0");
+    expect(out.dependencies.zod).toBe("^3.2.0");
+    expect(out.dependencies["@biomejs/biome"]).toBe("^1.0.0");
   });
 
   it("preserves a local-only key even when groot lacks it", () => {

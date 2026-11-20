@@ -1,9 +1,3 @@
-/**
- * Pure tmux domain (issue #28): the command strings are the contract with
- * tmux 3.4 on the sandbox VM, live-verified before these expectations were
- * frozen (tabs in the ls format are real TAB bytes; LC_ALL is required
- * because ssh2 sessions carry no LANG).
- */
 import { execFileSync } from "node:child_process";
 import { describe, expect, it } from "vite-plus/test";
 import {
@@ -78,15 +72,12 @@ describe("command builders", () => {
       "LC_ALL=C.UTF-8 tmux -L ta-terminal " +
         [...TERMINAL_SETTINGS, "attach-session -t ta-term-5"].join(" \\; "),
     );
-    // `-d` detached every other client: a second device closed the first.
     expect(command).not.toMatch(/attach-session -d/);
   });
 
   it("has the settings copy and colour depend on", () => {
-    // OSC 52 out of tmux, so a mouse selection reaches the browser clipboard.
     expect(TERMINAL_SETTINGS).toContain("set -s set-clipboard on");
     const features = TERMINAL_SETTINGS.find((s) => s.includes("terminal-features"));
-    // An indexed slot, never `-a`: the chain runs on every attach.
     expect(features).toMatch(/terminal-features\[\d+\]/);
     expect(features).toMatch(/clipboard/);
     expect(features).toMatch(/RGB/);
@@ -161,7 +152,6 @@ describe("parseSessionList", () => {
       kind: "tmux-missing",
     });
     expect(parseSessionList("", "sh: tmux: not found\n", 127)).toEqual({ kind: "tmux-missing" });
-    // `not found` inside the standard sh/bash phrasing, any exit shape
     expect(parseSessionList("", "127\nsh: tmux: Not Found\n", 127)).toEqual({
       kind: "tmux-missing",
     });
@@ -233,10 +223,6 @@ const hasTmux = (() => {
   }
 })();
 
-/**
- * The chain against a real tmux, where one is installed: a typo in an
- * option name only fails here, and the strings above can't catch it.
- */
 describe.skipIf(!hasTmux)("settings chain against real tmux", () => {
   const socket = `ta-test-${process.pid}`;
   const run = (command: string) =>
@@ -248,7 +234,6 @@ describe.skipIf(!hasTmux)("settings chain against real tmux", () => {
   it("is accepted by tmux, twice, without duplicating anything", () => {
     try {
       run(newSessionCommand(name(1), 100, 30));
-      // The attach chain minus the attach itself (no tty here).
       const settingsOnly = attachCommand(name(1)).replace(/ \\; attach-session -t \S+$/, "");
       run(settingsOnly);
       run(settingsOnly);
@@ -262,9 +247,7 @@ describe.skipIf(!hasTmux)("settings chain against real tmux", () => {
     } finally {
       try {
         execFileSync("tmux", ["-L", socket, "kill-server"], { stdio: "ignore" });
-      } catch {
-        // Already gone.
-      }
+      } catch {}
     }
   });
 });

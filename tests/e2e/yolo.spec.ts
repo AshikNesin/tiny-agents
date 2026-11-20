@@ -1,13 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { login } from "./helpers/login";
 
-/**
- * YOLO mode (issue #151), on the faux model: "/improve" makes the bot call
- * update_instructions, an Ask (always) tool that normally shows an approval
- * card. With YOLO on it runs without one; off again, the card is back.
- * Vault uses keep their card under YOLO (covered by tests/server yolo.test.ts).
- */
-
 async function createBot(page: Page, name: string) {
   await page
     .getByRole("button", { name: /new bot|create your first bot/i })
@@ -22,7 +15,6 @@ async function createBot(page: Page, name: string) {
 }
 
 test.describe("YOLO mode", () => {
-  // The faux model streams slowly (playwright.config), and the test waits on two replies.
   test.setTimeout(90_000);
 
   test("runs tools without asking while on, and asks again once off", async ({ page }) => {
@@ -30,7 +22,6 @@ test.describe("YOLO mode", () => {
     const name = `Yolo ${Date.now()}`;
     await createBot(page, name);
 
-    // The switch is a checkbox row in the bot menu (the header's bot name).
     const toggle = page.getByTestId("yolo-toggle");
     const expectYolo = async (on: boolean) => {
       await page.getByRole("button", { name: `${name} menu` }).click();
@@ -45,7 +36,6 @@ test.describe("YOLO mode", () => {
     await expect(page.getByTestId("yolo-banner")).toBeVisible();
     await expectYolo(true);
 
-    // The switch survives a reload: it is the chat's, on the server.
     await page.reload();
     await expect(page.getByTestId("yolo-banner")).toBeVisible({ timeout: 15_000 });
 

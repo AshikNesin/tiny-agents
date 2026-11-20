@@ -1,10 +1,3 @@
-/**
- * Characterization of behavior-register row U3: the sidebar preview in a
- * shared chat includes `Name: `, a tool-only last reply clears the preview
- * to null, and the image hint mixes counts.
- * Preserve: this pins today's behavior, quirk included; change it only with
- * a signed-off register row.
- */
 import { randomUUID } from "node:crypto";
 import { eq, inArray } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
@@ -49,7 +42,6 @@ describe("U3: the sidebar preview", () => {
 
     await sendMessage(bot.id, { requestId: "o1", text: "hi Gus" }, undefined, owner);
     expect((await row(bot.id))?.lastMessagePreview).toBe("Olga: hi Gus");
-    // The bot reads the same prefixed text.
     expect(fake.submit.mock.calls.map(([, input]) => input.text)).toEqual([
       "Gus: hello all",
       "Olga: hi Gus",
@@ -96,13 +88,10 @@ describe("U3: the sidebar preview", () => {
       mimeType: "text/plain",
       size: 1,
     });
-    // Two images and a file: "+2 more" counts the file too.
     expect(previewText("", [image("a.png"), image("b.png"), file("c.txt")])).toBe(
       "[Image] +2 more",
     );
-    // One image and two files: the files are not counted at all.
     expect(previewText("", [image("a.png"), file("b.txt"), file("c.txt")])).toBe("[Image] a.png");
-    // A file first: only the first attachment names the hint.
     expect(previewText("", [file("a.txt"), image("b.png"), image("c.png")])).toBe("[File] a.txt");
   });
 });

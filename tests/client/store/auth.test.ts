@@ -9,7 +9,6 @@ const USER = { id: 1, email: "demo@example.com", name: "Demo" };
 
 type Route = { status: number; body?: unknown };
 
-/** Answer each `/api/v1/<path>` from `routes`; anything else is a 404. */
 function serve(routes: Record<string, Route | (() => Route | Promise<Route>)>) {
   vi.stubGlobal("fetch", async (url: string) => {
     const entry = routes[url.replace("/api/v1", "")];

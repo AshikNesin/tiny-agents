@@ -12,7 +12,6 @@ import { useCommandPaletteStore } from "@groot/shell/store/command-palette";
 
 const noop = () => undefined;
 
-// Two groups share the heading "Recent" but not the id.
 const GROUPS: CommandGroupEntry[] = [
   { id: "recent-todos", heading: "Recent", items: [{ label: "Buy milk", onSelect: noop }] },
   { id: "recent-jobs", heading: "Recent", items: [{ label: "report job", onSelect: noop }] },

@@ -1,9 +1,3 @@
-/**
- * The Code page's diff, as a reviewer uses it: click a line number to open a
- * composer for that line, drag or shift-click to take a range, and saved
- * comments stay under their lines until they are sent. The diff is drawn by
- * @pierre/diffs (diffs.com); the composer and saved comments are ours.
- */
 import React from "react";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -153,7 +147,6 @@ describe("commenting on lines", () => {
     );
     const saved = await screen.findByRole("note", { name: "Comment on line 2" });
     expect(saved).toHaveTextContent("Lowercase, please");
-    // Slotted under its line: the slot names the line it follows.
     expect(saved.closest("[slot]")?.getAttribute("slot")).toMatch(/additions-2/);
     await user.click(within(saved).getByRole("button", { name: "Remove comment" }));
     expect(onRemove).toHaveBeenCalledWith("d1");

@@ -1,16 +1,3 @@
-/**
- * Characterization of behavior-register row U7: a missed recurring slot
- * collapses the backlog. Once-routines always fire, however late. A failed
- * submit disarms the routine, even for Run now.
- * Preserve: this pins today's behavior, quirk included; change it only with a
- * signed-off register row.
- *
- * `dispatchOccurrence` (routines.jobs.ts): past its grace window a recurring
- * slot is recorded `missed` once and the chain restarts from now, skipping
- * every slot in between; `withinGrace` is always true for `once`; and any
- * submit failure goes through `recordSubmitFailed`, which disarms the
- * routine whatever the trigger.
- */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { eq } from "drizzle-orm";
 import type { AgentRuntime } from "@tiny-agents/agent";
@@ -62,12 +49,10 @@ describe("U7: routine firing policy", () => {
       now,
     );
 
-    // One run for the stale slot; the nine slots after it never exist.
     const runs = await runsOf(routine.id);
     expect(runs).toHaveLength(1);
     expect(runs[0]).toMatchObject({ status: "missed", scheduledFor: slot });
     expect(runtime.submit).not.toHaveBeenCalled();
-    // The next slot is one period from now, not from the missed slot.
     expect((await routineRow(routine.id))?.nextRunAt?.getTime()).toBe(now.getTime() + HOUR);
     const queued = await fireJobs();
     expect(queued).toHaveLength(1);
@@ -108,7 +93,6 @@ describe("U7: routine firing policy", () => {
     const [run] = await runsOf(routine.id);
     expect(run).toMatchObject({ id: runId, status: "failed", trigger: "manual" });
     expect(run!.error).toContain("gateway down");
-    // A manual click paused the scheduled chain too.
     expect(await routineRow(routine.id)).toMatchObject({
       enabled: false,
       nextRunAt: null,

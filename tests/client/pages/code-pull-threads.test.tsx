@@ -19,7 +19,6 @@ import type {
 import { diffRoot } from "../diff-dom";
 import { AppQueryProvider } from "../query-provider";
 
-/** Each render gets its own React Query cache, as the app gives the page one. */
 const render = (ui: Parameters<typeof renderBare>[0]) =>
   renderBare(ui, { wrapper: AppQueryProvider });
 
@@ -48,7 +47,6 @@ const thread = (over: Partial<PullThreadView>): PullThreadView => ({
   ...over,
 });
 
-/** Answers the threads read with `data`; records every call. */
 function stubFetch(data: PullThreadsView) {
   const fetch = vi.fn(async (url: string, _init?: RequestInit) =>
     String(url).endsWith("/threads")
@@ -89,7 +87,6 @@ describe("a review's conversations from GitHub", () => {
 
     const card = await screen.findByRole("group", { name: "Conversation on line 2" });
     expect(card).toHaveTextContent("Why caps?");
-    // Slotted under its line.
     expect(card.closest("[slot]")?.getAttribute("slot")).toMatch(/additions-2/);
 
     await user.click(within(card).getByRole("button", { name: "Reply" }));

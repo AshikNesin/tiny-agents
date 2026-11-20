@@ -11,13 +11,6 @@ import {
 import { ok } from "@groot/core/utils/api-response.utils";
 import type { AppEnv } from "@groot/core/types";
 
-/**
- * The rate-limit store contract (packages/core/src/rate-limit/store.ts), run
- * once per adapter. The Cloudflare store runs against a fake binding that
- * counts like the real one: a fixed window per key, with the limit and period
- * that `wrangler.jsonc` would give it (here, the rule's own).
- */
-
 function fakeRateLimitBinding(limit: number, periodMs: number) {
   const windows = new Map<string, { count: number; endsAt: number }>();
   return {
@@ -178,7 +171,6 @@ describe("rateLimit headers", () => {
     const bindings = { AUTH_LIMITER: fakeRateLimitBinding(1, 60_000) };
     expect((await app.request("/api/v1/limited", {}, bindings)).status).toBe(200);
     expect((await app.request("/api/v1/limited", {}, bindings)).status).toBe(429);
-    // Without the binding the app's own memory counts, from zero.
     expect((await app.request("/api/v1/limited")).status).toBe(200);
   });
 });

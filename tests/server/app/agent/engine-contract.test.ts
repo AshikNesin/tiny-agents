@@ -1,10 +1,3 @@
-/**
- * The AgentEngine contract (ADR 0014), through AgentRuntime: every case
- * runs once on pi (the faux model) and once on the Claude plan engine (a
- * fake worker socket). The runtime picks the engine per conversation; what
- * its callers read (chat state, streams, pages, the Bot list preview, busy
- * activity, Finished replies) must not depend on which one runs.
- */
 import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -38,7 +31,6 @@ afterEach(async () => {
   vi.unstubAllEnvs();
 });
 
-/** A file store (agent.db) in a fresh directory, for cases that close and reopen it. */
 async function storeFile(): Promise<string> {
   const directory = await mkdtemp(join(tmpdir(), "tiny-agents-engine-"));
   directories.push(directory);
@@ -54,7 +46,6 @@ async function setup(kind: EngineKind) {
     capabilities: { enabled: ["mail"], permissions: {} },
   });
   const ref = await engine.runtime.createConversation(config());
-  /** The chat once it is idle with `text`'s echo as its newest message. */
   const replied = (text: string, conversation = ref) =>
     until(async () => {
       const state = await engine.runtime.readChat(conversation);
@@ -63,7 +54,6 @@ async function setup(kind: EngineKind) {
         ? state
         : undefined;
     }, `the reply to ${text}`);
-  /** Send a message and wait for its reply. */
   const reply = async (text: string, requestId: string) => {
     await engine.send(ref, { requestId, text });
     return replied(text);
@@ -194,7 +184,6 @@ describe.each(ENGINES)("AgentEngine contract on %s", (kind) => {
     expect((await runtime.readChat(ref)).busy).toBe(false);
   }, 15_000);
 
-  // Register C1: a retry is one message, a send while busy waits its turn.
   it("admits a retried request id once", async () => {
     const { runtime, worker, ref, send, replied } = await setup(kind);
     await send(ref, { requestId: "r1", text: "hello" });
@@ -215,7 +204,6 @@ describe.each(ENGINES)("AgentEngine contract on %s", (kind) => {
     const chat = await watch(runtime, ref);
     await send(ref, { requestId: "r1", text: "send_email ana@x.dev" });
     const waiting = await awaitingApproval(chat, "send_email");
-    // The send returns while the first reply still waits on the owner.
     await send(ref, { requestId: "r2", text: "two" });
     const busy = await runtime.readChat(ref);
     expect(busy.busy).toBe(true);
@@ -271,7 +259,6 @@ describe.each(ENGINES)("AgentEngine contract on %s", (kind) => {
     await chat.stop();
   }, 15_000);
 
-  // Register C2: a stopped reply stays stopped.
   it("keeps a stopped reply as it stopped, whatever arrives for it later", async () => {
     const { runtime, worker, ref, send } = await setup(kind);
     const chat = await watch(runtime, ref);
@@ -285,7 +272,6 @@ describe.each(ENGINES)("AgentEngine contract on %s", (kind) => {
       expect(stopped?.toolCalls).toEqual([
         expect.objectContaining({ name: "send_email", status: "aborted" }),
       ]);
-      // The worker still answers the stopped turn: its call's result, its text, its end.
       await until(() => worker.ended.includes("r1"), "the stopped turn's late events");
     }
     await new Promise((resolve) => setTimeout(resolve, 50));
@@ -308,7 +294,6 @@ describe.each(ENGINES)("AgentEngine contract on %s", (kind) => {
     expect(await runtime.finishedReplies(ref)).toEqual([]);
   }, 15_000);
 
-  // Register C4: after a restart the same engine answers reads, from the store.
   it("keeps the transcript across a restart, and the same engine answers", async () => {
     const storePath = await storeFile();
     const config = {
@@ -326,7 +311,6 @@ describe.each(ENGINES)("AgentEngine contract on %s", (kind) => {
 
     const second = await openEngine(kind, { storePath });
     runtimes.push(second.runtime);
-    // No configure yet: reads come from the store alone.
     const read = await second.runtime.readChat(ref);
     expect(read.messages.map((m) => [m.role, m.text])).toEqual([
       ["user", "before"],
@@ -347,15 +331,12 @@ describe.each(ENGINES)("AgentEngine contract on %s", (kind) => {
       "Echo: after",
     ]);
     if (kind === "claude-code") {
-      // The turn resumes the Claude session the first process recorded.
       expect(second.worker.turns).toEqual([
         expect.objectContaining({ text: "after", resume: `claude-${ref}` }),
       ]);
     }
   }, 20_000);
 });
-
-// ── Owner wait cards ────────────────────────────────────────────────────
 
 const questions = [{ question: "Which repo?", options: [{ label: "web" }, { label: "api" }] }];
 const request = {
@@ -365,11 +346,6 @@ const request = {
   fields: [{ key: "username", label: "Username", type: "text", required: true }],
 };
 
-/**
- * One tool per Owner wait card that is not an approval: each publishes the
- * card's pending details (the shape its wait kind writes), holds until the
- * test lets it go, then finishes with the card's answered details.
- */
 const CARDS = [
   {
     tool: "ask_questions",
@@ -472,12 +448,9 @@ describe.each(ENGINES)("Owner wait cards on %s", (kind) => {
   );
 });
 
-// ── The Claude plan's old transcript file ─────────────────────────────────
-
 describe("importing the Claude plan's old .claude.json", () => {
   const onClaude = { modelId: "claude-sonnet", systemPrompt: "Be brief." };
 
-  /** A store with one Claude plan conversation, closed again. */
   async function storeWithConversation() {
     const storePath = await storeFile();
     const first = await openEngine("claude-code", { storePath });
@@ -493,7 +466,6 @@ describe("importing the Claude plan's old .claude.json", () => {
     const messages = [
       { id: "u-1", role: "user", text: "remember the number 42", status: "done", createdAt: 1 },
       { id: "a-1", role: "assistant", text: "Got it.", status: "done", createdAt: 2 },
-      // A retry the old engine stored twice (register C1): imported once.
       { id: "u-1", role: "user", text: "remember the number 42", status: "done", createdAt: 3 },
       { id: "a-1", role: "assistant", text: "Got it again.", status: "done", createdAt: 4 },
     ];
@@ -508,9 +480,7 @@ describe("importing the Claude plan's old .claude.json", () => {
             messages,
             nextTask: 2_000_000_005,
           },
-          // A conversation that had fallen back to pi stays there.
           [String(piRef)]: { surface: "pi", messages: [] },
-          // One the store no longer has is skipped.
           "999999": { surface: "claude", messages },
         },
       }),
@@ -530,7 +500,6 @@ describe("importing the Claude plan's old .claude.json", () => {
     await expect(stat(legacy)).rejects.toMatchObject({ code: "ENOENT" });
     expect(JSON.parse(await readFile(`${legacy}.imported`, "utf8")).sessions).toBeDefined();
 
-    // The next turn resumes the imported Claude session.
     await second.runtime.configure(ref, onClaude);
     await second.send(ref, { requestId: "r2", text: "still there?" });
     await until(async () => {
@@ -540,7 +509,6 @@ describe("importing the Claude plan's old .claude.json", () => {
     expect(second.worker.turns).toEqual([
       expect.objectContaining({ text: "still there?", resume: "sess-abc" }),
     ]);
-    // The conversation that had left the plan runs on pi.
     await second.runtime.configure(piRef, onClaude);
     await second.send(piRef, { requestId: "p1", text: "on pi" });
     await until(async () => {
@@ -550,7 +518,6 @@ describe("importing the Claude plan's old .claude.json", () => {
     expect(second.worker.turns).toHaveLength(1);
     await second.runtime.close();
 
-    // Imported once: a later start finds nothing to import and no duplicate.
     const third = await openEngine("claude-code", { storePath });
     runtimes.push(third.runtime);
     expect((await third.runtime.readChat(ref)).messages.map((m) => m.text)).toEqual([
@@ -623,7 +590,6 @@ describe("choosing the engine", () => {
     await runtime.submit(ref, { requestId: "r1", text: "hi" });
     const state = await runtime.readChat(ref);
     expect(state.messages.at(-1)?.error).toMatch(/Claude plan is turned off/);
-    // Register C2: the paused turn keeps the owner's message.
     expect(state.messages[0]).toMatchObject({ role: "user", text: "hi", requestId: "r1" });
     expect(finishedReplyTo(state, "r1")).toMatchObject({ status: "answered" });
     expect(worker.turns).toEqual([]);
@@ -638,7 +604,6 @@ describe("choosing the engine", () => {
       return !state.busy && state.messages.at(-1)?.text === "Echo: first";
     }, "the gateway reply");
 
-    // The latch holds even once the engine is back and the bot is reconfigured.
     runtime.applyModelConfig(engineModelConfig({ fallback: true }));
     await runtime.configure(ref, config());
     await runtime.submit(ref, { requestId: "r2", text: "second" });

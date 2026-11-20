@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { subscribeSse } from "@/lib/sse";
 
-/** A fetch whose streams stay open until aborted, counting connects. */
 function hangingFetch() {
   const calls: AbortSignal[] = [];
   const fetchMock = vi.fn((_url: string, init: RequestInit) => {
@@ -50,7 +49,6 @@ describe("subscribeSse", () => {
     expect(calls[0].aborted).toBe(true);
     expect(onDrop).toHaveBeenCalledTimes(1);
 
-    // Back online: no 1.5s backoff wait.
     window.dispatchEvent(new Event("online"));
     await tick();
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -59,8 +57,6 @@ describe("subscribeSse", () => {
     expect(calls[1].aborted).toBe(true);
   });
 
-  // A browser opens at most 6 connections per origin over plain HTTP: streams
-  // held by background tabs would leave every new request waiting for good.
   it("gives its connection back while the tab is hidden, and reconnects at once when shown", async () => {
     const { fetchMock, calls } = hangingFetch();
     vi.stubGlobal("fetch", fetchMock);
@@ -72,7 +68,6 @@ describe("subscribeSse", () => {
     showTab("hidden");
     await tick();
     expect(calls[0].aborted).toBe(true);
-    // No reconnect while hidden, even past the 1.5s backoff.
     await tick(1_700);
     expect(fetchMock).toHaveBeenCalledTimes(1);
 

@@ -1,9 +1,3 @@
-/**
- * Extraction as one owner of `extractStatus` (issue #58): a send waits on
- * the job itself, a delete cancels it without leaving bytes behind, an
- * upload from before extraction is queued the first time anyone asks, and
- * the worker runner's timeout/crash paths against a fake worker.
- */
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { storageService } from "@groot/core/storage";
@@ -27,7 +21,6 @@ import type { ExtractStatus } from "../../../../apps/web/src/shared/machines/ext
 
 let seq = 0;
 
-/** A stored text file with a row in the given state. */
 async function seedFile(extractStatus: ExtractStatus, text = "hello") {
   const id = `upl-${++seq}-${Date.now().toString(36)}`;
   const storageKey = `chat/${id}/original`;
@@ -55,7 +48,6 @@ async function seedFile(extractStatus: ExtractStatus, text = "hello") {
 
 const rowOf = (id: string) => db.query.uploads.findFirst({ where: eq(uploads.id, id) });
 
-/** A runner that holds every job until released. */
 function gate() {
   let release!: (result: ExtractResult) => void;
   const held = new Promise<ExtractResult>((resolve) => (release = resolve));
@@ -97,7 +89,7 @@ describe("extraction owns extractStatus", () => {
     setExtractRunnerForTests(g.runner);
     const row = await seedFile("pending");
     const job = queueExtraction(row.id);
-    await new Promise((r) => setTimeout(r, 10)); // the job is now inside the runner
+    await new Promise((r) => setTimeout(r, 10));
 
     await deleteUpload(row.id);
     g.release();
@@ -115,7 +107,6 @@ describe("extraction owns extractStatus", () => {
       runs += 1;
       return g.runner();
     });
-    // Two jobs fill the concurrency; the third waits in the queue.
     const [a, b, c] = [
       await seedFile("pending"),
       await seedFile("pending"),
@@ -138,7 +129,6 @@ describe("extraction owns extractStatus", () => {
     expect(asked.extractStatus).toBe("pending");
     await extractionIdle();
     expect((await rowOf(row.id))?.extractStatus).toBe("ready");
-    // Asking again changes nothing.
     expect((await ensureExtracting((await rowOf(row.id))!)).extractStatus).toBe("ready");
   });
 });

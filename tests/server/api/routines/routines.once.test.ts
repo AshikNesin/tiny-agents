@@ -1,9 +1,3 @@
-/**
- * One-time routines at the service boundary (issues #73, #74): a time in the
- * past is refused on create and reschedule, a one-shot whose time has passed
- * cannot be re-armed, it reads as done rather than paused, and its preview
- * and lateness wording stay sane. Real SQLite test DB and queue table.
- */
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { db, routines } from "../../../../apps/web/src/server/db";

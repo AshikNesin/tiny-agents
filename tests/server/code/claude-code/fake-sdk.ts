@@ -1,12 +1,3 @@
-/**
- * A scripted stand-in for the Agent SDK's coding surface (`query`,
- * `getSessionMessages`, `forkSession`), shaped after sdk.d.ts 0.3.x. A test
- * gives a `brain` that reads prompts and emits SDK messages; the fake keeps
- * a transcript the way Claude Code persists one (prompts with the uuid the
- * client sent, assistant and tool-result messages; no results, no stream
- * events), so history reads behave like the real thing. Nothing here talks
- * to Anthropic.
- */
 import { randomUUID } from "node:crypto";
 import type {
   CodingHistoryMessage,
@@ -56,7 +47,6 @@ export class FakeQuery implements CodingQuery {
     return this.sdk.sessionIdOf(this);
   }
 
-  /** The next prompt Claude Code reads (undefined when the input closed). */
   async nextInput(): Promise<CodingSdkUserMessage | undefined> {
     const next = await this.inputIterator.next();
     if (next.done) return undefined;
@@ -70,7 +60,6 @@ export class FakeQuery implements CodingQuery {
     return next.value;
   }
 
-  /** Emit an SDK message; transcript-worthy ones are persisted too. */
   emit(message: CodingSdkMessage): void {
     if (this.closed) return;
     const persisted =
@@ -126,7 +115,6 @@ export class FakeQuery implements CodingQuery {
 
   private closeWaiters: Array<() => void> = [];
 
-  /** Resolves when the worker closes this process. */
   whenClosed(): Promise<void> {
     if (this.closed) return Promise.resolve();
     return new Promise((resolve) => this.closeWaiters.push(resolve));
@@ -152,13 +140,11 @@ export class FakeQuery implements CodingQuery {
 
 export type Brain = (query: FakeQuery) => Promise<void>;
 
-/** A process the test drives by hand: it says hello and lives until closed. */
 export const manual: Brain = async (query) => {
   query.emit(init(query));
   await query.whenClosed();
 };
 
-/** Answers every prompt with `Echo: <prompt>`, streaming it first. */
 export const echo: Brain = async (query) => {
   query.emit(init(query));
   let cost = 0;
@@ -216,7 +202,6 @@ export class FakeSdk implements CodingSdk {
     this.queries.push(query);
     void this.brain(query).then(
       () => query.end(),
-      // A brain that throws plays a Claude Code process that crashed.
       (error: unknown) => query.out.push({ type: "__crash", error }),
     );
     return query;
@@ -244,8 +229,6 @@ export class FakeSdk implements CodingSdk {
     return { sessionId: forkId };
   }
 }
-
-// --- SDK message builders (shapes from sdk.d.ts) ------------------------------
 
 function init(query: FakeQuery): CodingSdkMessage {
   return {

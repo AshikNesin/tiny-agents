@@ -1,9 +1,3 @@
-/**
- * The terminal's key rules (lib/xterm.ts classifyKey): which chords reach
- * the browser as a native paste, which copy, and which stay terminal input.
- * The paste rule is the fix for "can't paste into the terminal": xterm
- * turned Ctrl+V into ^V and cancelled the browser's paste event.
- */
 import { describe, expect, it } from "vite-plus/test";
 import { classifyKey, type KeyLike } from "@/lib/xterm";
 
@@ -47,7 +41,6 @@ describe("classifyKey on Windows/Linux", () => {
     for (const code of ["KeyA", "KeyD", "KeyR", "KeyZ", "KeyL", "KeyW"]) {
       expect(pc(key(code, { ctrlKey: true }))).toBe("pass");
     }
-    // Alt chords are Meta for the shell (Alt+V, Alt+C).
     expect(pc(key("KeyV", { ctrlKey: true, altKey: true }))).toBe("pass");
     expect(pc(key("KeyV"))).toBe("pass");
     expect(pc(key("KeyV", { type: "keyup", ctrlKey: true }))).toBe("pass");

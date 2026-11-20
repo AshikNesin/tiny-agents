@@ -2,7 +2,6 @@ import { beforeAll, describe, expect, it } from "vite-plus/test";
 import { addJob, getJobs } from "@groot/jobs/server";
 import { api, createTestApp, signIn } from "../helpers";
 
-// This file's database is its own, so the counts below are exact.
 const reportIds: string[] = [];
 let invoiceId: string;
 

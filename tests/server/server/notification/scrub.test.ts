@@ -1,8 +1,3 @@
-/**
- * Content rules for notification text: plain text, no links, registered
- * redactors, secret-looking runs scrubbed, ≤200 chars, and heavily scrubbed
- * fields dropped.
- */
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { registerRedactor, scrubText, shapeTitle } from "@groot/core/notification/scrub";
 

@@ -1,9 +1,3 @@
-/**
- * Memory capture: the prompt, the window, the parse and the debounce. What
- * lands is the ledger's (memories.ledger.test.ts) and how the model is
- * picked and called is the side-caller's (side-call.test.ts); here the
- * side-caller is one faked `complete`.
- */
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { and, eq } from "drizzle-orm";
 import {
@@ -44,7 +38,6 @@ function findBot(id: string) {
   return db.query.bots.findFirst({ where: eq(bots.id, id) });
 }
 
-/** The side-caller port, faked: one `complete` answering with `reply`. */
 function sideCaller(reply = "[]") {
   return { complete: vi.fn<SideCaller["complete"]>().mockResolvedValue(reply) };
 }
@@ -65,7 +58,6 @@ describe("buildCapturePrompt", () => {
     expect(prompt).toContain("third person");
     expect(prompt).toContain("Today is 2026-10-21");
     expect(prompt).toContain("even if reworded");
-    // Issue #334 D: nothing reads confidence, so the prompt stops asking.
     expect(prompt).not.toContain("confidence");
   });
 
@@ -171,12 +163,10 @@ describe("captureWindow", () => {
       "Scout",
     );
     expect(window.ownerBytes).toBe(6);
-    // Replies are only context for the owner's words: the first 500 characters.
     expect(window.lines).toEqual(["Owner: 你好", `Scout: ${"x".repeat(500)}`]);
   });
 
   it("caps a long window to its newest lines but still ends at the newest owner turn", () => {
-    // A never-captured bot (null watermark) with ~100k chars of history.
     const messages = Array.from({ length: 200 }, (_, i) => ({
       role: "user",
       text: `Turn ${String(i).padStart(3, "0")} ${"y".repeat(500)}`,
@@ -410,8 +400,6 @@ describe("captureConversation", () => {
       status: "deleted",
       updatedAt: new Date(Date.UTC(2026, 9, 2)),
     });
-    // A scripted extractor that, like a model following the prompt, drops a
-    // reworded fact the prompt lists as removed.
     const caller = sideCaller();
     caller.complete.mockImplementation(async ({ system }) =>
       JSON.stringify(
@@ -445,7 +433,6 @@ describe("captureConversation", () => {
 
 const settledChat = async () => ({ messages: [], busy: false, queued: [] });
 
-/** A settled conversation of a bot's own chat, memory on unless said otherwise. */
 const settled = (conversationId: number, owner?: ConversationOwner) => ({
   conversationId,
   chat: settledChat,
@@ -473,9 +460,9 @@ describe("memory capture debounce (a settled step)", () => {
       quietMs: 100,
       turnLimit: 6,
     });
-    await capture.onSettled.run(settled(7)); // turn 1
+    await capture.onSettled.run(settled(7));
     vi.advanceTimersByTime(50);
-    await capture.onSettled.run(settled(7)); // turn 2 pushes the window back
+    await capture.onSettled.run(settled(7));
     vi.advanceTimersByTime(60);
     expect(captureNow).not.toHaveBeenCalled();
     vi.advanceTimersByTime(50);
@@ -531,7 +518,7 @@ describe("memory capture debounce (a settled step)", () => {
     expect(captureNow).toHaveBeenCalledTimes(1);
     await emit(4);
     await vi.advanceTimersByTimeAsync(0);
-    expect(captureNow).toHaveBeenCalledTimes(1); // still inflight
+    expect(captureNow).toHaveBeenCalledTimes(1);
     gates[0]!();
     await vi.advanceTimersByTimeAsync(0);
     await emit(3);
@@ -552,7 +539,7 @@ describe("memory capture debounce (a settled step)", () => {
     await capture.onSettled.run(settled(11));
     await vi.advanceTimersByTimeAsync(100);
     expect(captureNow).toHaveBeenCalledTimes(1);
-    await capture.onSettled.run(settled(11)); // settles while the capture runs: not lost
+    await capture.onSettled.run(settled(11));
     gates[0]!();
     await vi.advanceTimersByTimeAsync(0);
     expect(captureNow).toHaveBeenCalledTimes(1);

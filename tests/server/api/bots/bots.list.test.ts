@@ -1,7 +1,3 @@
-/**
- * The Bot list (bots.list.ts): one preview for sends and replies, the unread
- * rule, and the settled step that folds a Finished reply into the row.
- */
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { bots, db } from "../../../../apps/web/src/server/db";
@@ -99,7 +95,6 @@ describe("botListStep", () => {
     await botListStep().run(settled(503, [owner]));
     await botListStep().run(settled(503, [assistant("typing", { status: "streaming" })]));
     expect((await row(bot.id))?.lastMessagePreview).toBe("before");
-    // A routine's conversation: no row to update, no error.
     await expect(
       botListStep().run(settled(999, [assistant("routine output")])),
     ).resolves.toBeUndefined();

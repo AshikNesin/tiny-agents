@@ -1,7 +1,3 @@
-/**
- * The chat projection folded over recorded pi-durable events: what used to
- * be testable only through a live runtime (`observeChat`).
- */
 import type { AgentEvent, EntryRecord } from "@earendil-works/pi-durable";
 import { describe, expect, it } from "vite-plus/test";
 import { ChatProjection, unansweredOf } from "../../../../packages/agent/src/projection";
@@ -54,7 +50,6 @@ function reduce(state: ReturnType<ChatProjection["full"]>, events: ChatEvent[]) 
 
 describe("ChatProjection", () => {
   it("streams a reply as deltas and lands it as an entry", () => {
-    // The run has started: the owner's message is not unanswered, just not answered yet.
     const projection = new ChatProjection({ entries: [user(1, "hi")], busy: true, tools: [] });
     expect(projection.state.messages.map((m) => [m.text, m.status])).toEqual([["hi", "done"]]);
 
@@ -132,7 +127,6 @@ describe("ChatProjection", () => {
       message: { id: "e1", status: "unanswered", error: expect.stringMatching(/model/) },
     });
 
-    // A reconnect or one-shot read recovers the reasons from the records.
     const records = [
       { type: "input", status: "unanswered", entry: 1, reason: "no_model" },
       { type: "input", status: "done", entry: 2 },

@@ -1,9 +1,3 @@
-/**
- * The computer toolkit behind the approval gate (issue #108), on real
- * pi-durable turns: closing shortcuts and closing windows ask even under
- * always-allow, the takeover request shows as its own card, and a vault
- * value typed into a window never reaches the model or the transcript.
- */
 import type { Context as PiContext, JsonObject } from "@earendil-works/pi-ai";
 import { until } from "../../fixtures/until";
 import { loaded } from "../../fixtures/loaded-tools";
@@ -129,7 +123,6 @@ function loginBroker() {
     use.handle !== "mail"
       ? { refused: "unknown_handle" as const, message: "No vault item." }
       : {
-          // A window target asks every time, like the app's policy.
           approve: true,
           grantable: false,
           unattended: false,

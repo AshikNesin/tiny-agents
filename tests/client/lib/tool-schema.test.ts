@@ -1,4 +1,3 @@
-/** The tool page's reading of MCP input schemas: fields, form values, JSON. */
 import { describe, expect, it } from "vite-plus/test";
 import {
   buildArgs,

@@ -1,8 +1,3 @@
-/**
- * The Code page list (issue #143, ADR 0011): every harness's threads as one
- * tree, subagents nested, working ones first, grouped by project, then by
- * repository or folder.
- */
 import { describe, expect, it } from "vite-plus/test";
 import { ancestry, buildGroups, statusSections } from "@/lib/code/list";
 import type { ThreadSummary } from "@/lib/code/api";
@@ -29,7 +24,6 @@ describe("Code page list", () => {
     const rows = [
       row("old", { updatedAt: "2026-11-01T00:00:00Z" }),
       row("parent", { updatedAt: "2026-11-03T09:00:00Z" }),
-      // A subagent stays under its parent, even working in another directory.
       row("child", { parentId: "shelley:parent", working: true, cwd: "/tmp/elsewhere" }),
       row("grandchild", { parentId: "shelley:child", unread: true }),
       row("orphan", { parentId: "shelley:gone", updatedAt: "2026-11-03T11:00:00Z" }),
@@ -67,7 +61,6 @@ describe("Code page list", () => {
       ["folder:/repo/a", "a", ["a"]],
       ["folder:/repo/b", "b", ["b"]],
       ["none", "No folder", ["loose"]],
-      // A project with no thread yet comes last, ready to start one in.
       ["project:p2", "idle", []],
     ]);
     expect(groups[1]!.path).toBe("/repo/a");

@@ -42,7 +42,6 @@ const msg = (n: number, extra: Partial<ChatMessage> = {}): ChatMessage => ({
   ...extra,
 });
 
-/** A fake page source: two pages in memory, the older one loads on demand. */
 function PagedTranscript({ loadOlder }: { loadOlder: (before: string) => Promise<ChatMessage[]> }) {
   const [pages, setPages] = useState({ messages: [msg(3), msg(4)], hasMore: true });
   const [loadingOlder, setLoadingOlder] = useState(false);
@@ -79,17 +78,14 @@ describe("Transcript paging", () => {
     render(<PagedTranscript loadOlder={loadOlder} />);
     expect(screen.getByTestId("older-messages")).toHaveTextContent("Earlier messages");
 
-    // The scroller's own jump to the latest message never loads a page.
     fireEvent.scroll(viewport());
     expect(loadOlder).not.toHaveBeenCalled();
 
-    // The owner's wheel at the top asks for the page above.
     fireEvent.wheel(viewport());
     expect(loadOlder).toHaveBeenCalledTimes(1);
     expect(loadOlder).toHaveBeenCalledWith("e3");
     expect(await screen.findByText("Loading earlier messages…")).toBeInTheDocument();
 
-    // While it loads, more scrolling does not ask again.
     fireEvent.scroll(viewport());
     fireEvent.wheel(viewport());
     expect(loadOlder).toHaveBeenCalledTimes(1);

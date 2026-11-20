@@ -1,8 +1,3 @@
-/**
- * A subagent row (Claude Code's Task/Agent tool) opens to show what the
- * subagent was asked and what it reported back, so the owner can read its
- * work without leaving the thread.
- */
 import React from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";

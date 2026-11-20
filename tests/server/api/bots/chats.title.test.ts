@@ -13,7 +13,6 @@ import { resetAppTables, seedBot } from "../../fixtures";
 
 beforeEach(resetAppTables);
 
-/** A parked chat whose provisional title the side-call may replace. */
 async function parkedChat(title: string) {
   const bot = await seedBot();
   const [chat] = await db

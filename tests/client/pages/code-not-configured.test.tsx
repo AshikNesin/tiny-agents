@@ -1,8 +1,3 @@
-/**
- * The Code page with no coding agent (issue #242): the app sidebar stays away
- * from `/code`, so the empty state carries the workspace header's way back to
- * the app and links Settings → Models, or a direct link to `/code` is a dead end.
- */
 import React from "react";
 import { render as renderBare, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vite-plus/test";
@@ -11,7 +6,6 @@ import { CodePage } from "@/pages/code/CodePage";
 import { useCodeStore } from "@/store/code";
 import { AppQueryProvider } from "../query-provider";
 
-/** Each render gets its own React Query cache, as the app gives the page one. */
 const render = (ui: Parameters<typeof renderBare>[0]) =>
   renderBare(ui, { wrapper: AppQueryProvider });
 

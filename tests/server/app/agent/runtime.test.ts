@@ -164,7 +164,6 @@ describe("AgentRuntime", () => {
         await runtime.submit(ref, { requestId: "steer-1", text: "start a slow reply" });
         await until(() => chat.state().busy, "the run to start");
 
-        // Sent while busy: the message is durably held, not lost.
         await runtime.submit(ref, {
           requestId: "steer-2",
           text: "steer me",
@@ -178,15 +177,11 @@ describe("AgentRuntime", () => {
           { requestId: "steer-2", mode: "steer", text: "steer me" },
         ]);
 
-        // A watcher that attaches mid-queue sees it in its fresh snapshot
-        // (a reload keeps showing the held message).
         const lateChat = await observeChat(runtime, ref);
         expect(lateChat.state().queued).toEqual([
           { requestId: "steer-2", mode: "steer", text: "steer me" },
         ]);
 
-        // The steer joins the reply: placed as a user message and answered
-        // in the same run, then the queue empties.
         await until(
           () =>
             chat
@@ -239,8 +234,6 @@ describe("AgentRuntime", () => {
         );
         expect(chat.state().queued[0].mode).toBe("followUp");
 
-        // The first run answers, then the follow-up places and starts the
-        // next one — both messages end up answered in order.
         await until(
           () =>
             !chat.state().busy &&
@@ -340,18 +333,14 @@ describe("AgentRuntime", () => {
           "the message to queue",
         );
 
-        // Withdrawn while queued: gone from the stream, never answered.
         expect(await runtime.withdraw(ref, "withdraw-2")).toBe("withdrawn");
         await until(() => chat.state().queued.length === 0, "the queue to clear");
-        // Re-withdrawing the same input is idempotent, not a conflict.
         expect(await runtime.withdraw(ref, "withdraw-2")).toBe("withdrawn");
         expect(await runtime.withdraw(ref, "never-submitted")).toBe("not_found");
 
-        // The run ends and answers "withdraw-1": its input is settled.
         await until(() => !chat.state().busy, "the run to end");
         expect(await runtime.withdraw(ref, "withdraw-1")).toBe("settled");
 
-        // A placed input belongs to its run: withdrawal is refused with 409.
         await runtime.submit(ref, { requestId: "withdraw-3", text: "place me" });
         await until(() => chat.state().busy, "the placed run to start");
         expect(await runtime.withdraw(ref, "withdraw-3")).toBe("already_placed");
@@ -465,7 +454,6 @@ describe("AgentRuntime", () => {
       const directory = await mkdtemp(join(tmpdir(), "tiny-agents-resume-"));
       const storePath = join(directory, "agent.db");
       try {
-        // First process: a slow reply, killed (closed) mid-stream.
         const first = await openTestRuntime({
           storePath,
           tokensPerSecond: 2,
@@ -481,7 +469,6 @@ describe("AgentRuntime", () => {
         await before.stop();
         await first.close();
 
-        // Second process on the same store: resume() finishes the reply.
         const second = await openTestRuntime({ storePath, reply: () => "finished after restart" });
         try {
           const after = await observeChat(second, ref);
@@ -499,11 +486,9 @@ describe("AgentRuntime", () => {
           expect(messages.filter((message) => message.role === "user")).toEqual([
             expect.objectContaining({ text: "keep going", status: "done" }),
           ]);
-          // The cut-off attempt is hidden; only the resumed answer shows.
           expect(messages.filter((message) => message.role === "assistant")).toEqual([
             expect.objectContaining({ text: "finished after restart", status: "done" }),
           ]);
-          // Retrying the same send after the restart does not submit twice.
           await second.submit(ref, { requestId: "survive-restart", text: "keep going" });
           expect(second.isBusy(ref)).toBe(false);
           await after.stop();
@@ -520,7 +505,6 @@ describe("AgentRuntime", () => {
     const runtime = await openTestRuntime({ storePath: ":memory:" });
     try {
       const ref = await runtime.createConversation({ modelId: TEST_MODEL, systemPrompt: "" });
-      // > 1 storage page (500 entries) of user + assistant entries.
       const turns = 300;
       for (let i = 0; i < turns; i++) {
         await runtime.submit(ref, { requestId: `long-${i}`, text: `message ${i}` });
@@ -548,7 +532,6 @@ describe("AgentRuntime", () => {
     const runtime = await openTestRuntime({ storePath: ":memory:" });
     try {
       const ref = await runtime.createConversation({ modelId: TEST_MODEL, systemPrompt: "" });
-      // One turn at a time: follow-ups queued together would share one reply.
       for (let i = 0; i < 4; i++) {
         await runtime.submit(ref, { requestId: `window-${i}`, text: `message ${i}` });
         await until(
@@ -566,7 +549,6 @@ describe("AgentRuntime", () => {
         state: { hasMore: true, cursor: full[5].id, messages: full.slice(5) },
       });
 
-      // New messages extend the window: nothing older is removed from it.
       await runtime.submit(ref, { requestId: "window-4", text: "message 4" });
       await until(
         () =>
@@ -589,14 +571,12 @@ describe("AgentRuntime", () => {
       ]);
       await chat.stop();
 
-      // History above the window, page by page.
       const page = await runtime.readChatPage(ref, { before: full[5].id, limit: 3 });
       expect(page).toEqual({ messages: full.slice(2, 5), hasMore: true });
       const last = await runtime.readChatPage(ref, { before: full[2].id, limit: 3 });
       expect(last).toEqual({ messages: full.slice(0, 2), hasMore: false });
       expect(await runtime.readChatPage(ref, { before: "e9999", limit: 3 })).toBeUndefined();
 
-      // A short conversation fits its window whole.
       const other = await runtime.createConversation({ modelId: TEST_MODEL, systemPrompt: "" });
       const short = await observeChat(runtime, other, { window: 3 });
       expect(short.batches[0][0]).toMatchObject({
@@ -694,7 +674,6 @@ describe("AgentRuntime", () => {
       );
       const users = chat.state().messages.filter((m) => m.role === "user");
       expect(users[0]).toMatchObject({ requestId: "with-file" });
-      // Plain sends record their request id too, so an Echo confirms by id.
       expect(users[1]).toMatchObject({ requestId: "plain" });
       await chat.stop();
     } finally {
@@ -837,8 +816,6 @@ describe("transcript derivation", () => {
       ),
     );
     const windowed = windowChat(state, 5);
-    // e3 is unanswered because the runtime recorded it so, and e6 is not
-    // because the live reply answers it: both judged over the full transcript.
     expect(windowed?.messages.map((m) => [m.id, m.status])).toEqual([
       ["e3", "unanswered"],
       ["e4", "done"],
@@ -848,9 +825,7 @@ describe("transcript derivation", () => {
     ]);
     expect(windowed).toMatchObject({ hasMore: true, cursor: "e3", busy: true });
 
-    // A window that holds everything has nothing more above it.
     expect(windowChat(state, 50)).toMatchObject({ hasMore: false, cursor: "e1" });
-    // Anchored at an id, the window keeps every message from it on.
     expect(windowChat(state, 2, "e4")?.messages.map((m) => m.id)).toEqual([
       "e4",
       "e5",
@@ -858,7 +833,6 @@ describe("transcript derivation", () => {
       "live",
     ]);
     expect(windowChat(state, 2, "e99")).toBeUndefined();
-    // An empty chat: no cursor.
     expect(windowChat(chatState(rawChat([])), 4)).toEqual({
       messages: [],
       busy: false,
@@ -903,18 +877,14 @@ describe("transcript derivation", () => {
       ["4", record("4", "with-attachment")],
     ]);
     const items = [
-      // A plain owner steer.
       { id: "1", mode: "steer", content: "wait up" },
-      // A mention delivered cross-bot: not the owner's message.
       {
         id: "2",
         mode: "followUp",
         content: "tagged from elsewhere",
         entry: { kind: CHAT_USER_ENTRY, data: { peer: { kind: "mention", hostName: "Host" } } },
       },
-      // A write submission (a compaction summary): not a chat message.
       { id: "3", mode: "write", entry: { kind: "app.note", data: {} } },
-      // An owner send with attachments, content split into blocks.
       {
         id: "4",
         mode: "followUp",

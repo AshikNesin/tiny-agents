@@ -1,10 +1,3 @@
-/**
- * The `routines` toolkit (issue #18 phase C): create/list/update/delete/run
- * reach the injected RoutineStore, saves echo the pre-rendered confirmation
- * card (sentence + next 3 IST fires), store failures surface as tool errors
- * with the reason, delete uses the durable-memo exactly-once report, and
- * permission defaults match the repo convention (list allow, mutations ask).
- */
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { ProviderDoc, type ProviderState } from "@earendil-works/pi-durable";
 import type { ToolExecutionApi, ToolExecutionResult } from "@earendil-works/pi-durable";
@@ -51,8 +44,6 @@ function memoryStore(): MemoryStore {
     async create(_conversationId, input) {
       calls.push(`create:${input.name}`);
       if (this.nextError) throw this.nextError;
-      // The app store's sourceKey unique column: a replayed create with the
-      // same key returns the existing row instead of inserting.
       for (const row of rows.values()) if (row.id === `r${input.idempotencyKey}`) return row;
       const row = record({
         id: `r${input.idempotencyKey}`,
@@ -90,7 +81,6 @@ function memoryStore(): MemoryStore {
   };
 }
 
-/** A ToolExecutionApi with just what the tools read: ids, provider doc, memos. */
 function api(overrides: Partial<ToolExecutionApi> = {}): ToolExecutionApi {
   const memos = new Map<string, unknown>();
   const base = {
@@ -102,8 +92,6 @@ function api(overrides: Partial<ToolExecutionApi> = {}): ToolExecutionApi {
         ? ({ sessionId: "sess-abc" } satisfies ProviderState)
         : undefined;
     },
-    // The durable memo overloads: (name, context) reads, (name, candidate,
-    // context) stores unless present and returns the winner.
     async memo(name: string, ...rest: unknown[]) {
       if (rest.length <= 1) return memos.get(name);
       if (!memos.has(name)) memos.set(name, rest[0]);
@@ -147,7 +135,6 @@ describe("routines toolkit", () => {
       schedule: { kind: "in", minutes: 90 },
     });
     expect(created!.schedule).toEqual({ kind: "once", at: "2026-10-23T11:30:00.000Z" });
-    // Other schedules pass through untouched.
     await run(routines, "update_routine", { id: created!.id, name: "stretch break" });
     expect(created!.schedule).toEqual({ kind: "once", at: "2026-10-23T11:30:00.000Z" });
   });
@@ -162,7 +149,6 @@ describe("routines toolkit", () => {
     });
     expect(result.isError).toBeUndefined();
     expect(store.calls).toEqual(["create:weekday-digest"]);
-    // The idempotency key is the durable tool task's identity, not the call id.
     expect([...store.rows.keys()]).toEqual(["rpi:sess-abc:7"]);
     expect(result.text).toContain("Created routine");
     expect(result.text).toContain("At 09:00, Monday through Friday");
@@ -258,8 +244,6 @@ describe("routines toolkit", () => {
   it("a delete rerun after a crash reports the real outcome from the memos", async () => {
     const store = memoryStore();
     store.rows.set("r1", record());
-    // Crash between the row delete and its outcome memo: the effect ran,
-    // the "removed" memo never committed.
     let died = false;
     const flaky: MemoryStore = {
       ...store,
@@ -276,12 +260,9 @@ describe("routines toolkit", () => {
     const taskApi = api();
     const crashed = await run(routines, "delete_routine", { id: "r1" }, taskApi);
     expect(crashed.isError).toBe(true);
-    // The rerun (same durable task, same memos) finds the row gone; the
-    // "started" memo rescues the report from a false "no routine".
     const replay = await run(routines, "delete_routine", { id: "r1" }, taskApi);
     expect(replay.isError).toBeUndefined();
     expect(replay.text).toBe("Deleted routine r1.");
-    // A later, memo-less call for the same id is a plain missing-id error.
     const fresh = await run(routines, "delete_routine", { id: "r1" });
     expect(fresh.isError).toBe(true);
     expect(fresh.text).toBe('No routine with id "r1".');

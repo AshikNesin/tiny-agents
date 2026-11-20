@@ -109,7 +109,6 @@ function seedStore(opts: { lastReadAt?: string | null } = {}) {
 const done = (id: string, role: ChatMessage["role"], text: string, createdAt: number) =>
   ({ id, role, text, status: "done", createdAt }) satisfies ChatMessage;
 
-/** The bot's stream opens with this transcript. */
 function snapshot(messages: ChatMessage[], busy = false) {
   botStream("host").send({ type: "snapshot", state: { messages, busy, queued: [] } });
 }
@@ -146,8 +145,6 @@ describe("ChatPane composer — Enter behavior by pointer type", () => {
 
   it("inserts a newline on Enter with a coarse (touch) pointer and sends only via the button", async () => {
     seedStore();
-    // jsdom has no matchMedia; stand in with a stub whose `matches` reports
-    // the coarse-pointer query as active.
     const listeners: Array<(e: { matches: boolean }) => void> = [];
     const mediaLike = {
       matches: false,
@@ -225,7 +222,6 @@ describe("ChatPane transcript", () => {
     expect(await screen.findByText("also this")).toBeInTheDocument();
     expect(screen.queryByTestId("queued-bubble")).toBeNull();
 
-    // The server holds it to steer the running reply: a row, not a bubble.
     const requestId = sendMock.mock.calls[0]![1] as string;
     botStream("host").send({
       type: "queued",
@@ -270,7 +266,6 @@ describe("ChatPane composer — one action button", () => {
     expect(abortMock).toHaveBeenCalledOnce();
     expect(await screen.findByRole("button", { name: "Stopping" })).toBeDisabled();
 
-    // A second press while stopping does not abort again.
     await user.keyboard("{Escape}");
     expect(abortMock).toHaveBeenCalledOnce();
   });
@@ -281,7 +276,6 @@ describe("ChatPane composer — one action button", () => {
     await user.type(composer, "half-written thought");
     cleanup();
 
-    // Another bot starts blank and keeps its own draft.
     const other = { ...HOST, id: "other", conversationId: "c2", name: "Other Bot" };
     const otherComposer = renderPane(other);
     expect(otherComposer.value).toBe("");
@@ -311,7 +305,6 @@ describe("ChatPane header", () => {
         .getAllByRole("button")
         .map((b) => b.getAttribute("aria-label")),
     ).toEqual(["Open menu", "Host Bot menu", "Open live view", "Start a new chat"]);
-    // The model is the composer's chip and the description the menu's: not repeated here.
     expect(within(header).queryByText("Test Model")).toBeNull();
     expect(within(header).queryByText("Plans trips")).toBeNull();
   });
@@ -352,7 +345,6 @@ describe("ChatPane header", () => {
     seedStore();
     const fresh = { ...HOST, conversationId: "c2" };
     resetMock.mockResolvedValueOnce(fresh);
-    // As the chats page does: the pane renders the store's full row.
     useBotsStore.setState({ fullBots: { host: HOST } });
     function Live() {
       const bot = useBotsStore((s) => s.fullBots.host) ?? HOST;

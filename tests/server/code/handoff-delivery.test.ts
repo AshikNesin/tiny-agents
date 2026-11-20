@@ -1,16 +1,3 @@
-/**
- * Register row C7 (fixed in 4.6): Code hand-offs are started once and
- * finished at least once, into the bot's real chat, which takes each finish
- * once (the submit is idempotent by request id).
- *
- * - A finish is owed durably with the hand-off's running → finished move,
- *   so a crash before (or during) its delivery leaves it owed, and the next
- *   watcher (a restart) or the retry timer sends it until it lands.
- * - A replayed `code_start` makes one thread, while the first run is still
- *   starting and after a restart interrupted it.
- * - A follow-up arms its hand-off before the harness hears it, and a
- *   thread's sends run one at a time.
- */
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import {
@@ -72,17 +59,14 @@ afterEach(async () => {
 
 const settle = (ms = 50) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** What the app does with a finish: a reply from the harness, back where it was asked. */
 const intoChat: WatcherDeps["deliver"] = (finish) => deliverHandoffFinish(runtime, finish);
 
-/** A watcher, as one process runs it; the returned stop is that process dying. */
 function watch(deliver: WatcherDeps["deliver"] = intoChat, retryMs = 60_000): () => void {
   const stop = startCodeWatcher({ hub, deliver, notify: () => {}, retryMs });
   stops.push(stop);
   return stop;
 }
 
-/** The finishes in the bot's chat, or in another of its conversations. */
 async function finishesIn(where: SeededBot | number): Promise<string[]> {
   const ref = typeof where === "number" ? where : Number(where.conversationId);
   const state = await runtime.readChat(ref);
@@ -131,7 +115,6 @@ describe("hand-off finishes (C7a: at least once, never twice)", () => {
   it("delivers a finish owed when the app died before submitting it, once, after the restart", async () => {
     const bot = await seedBot();
     await handOff(bot, "t1");
-    // The first process records the finish, then dies inside the submit.
     const crash = watch(() => new Promise<void>(() => {}));
     harness.outcomes.set("t1", ended("All tests pass.", 3));
     harness.endTurn("t1");
@@ -146,7 +129,6 @@ describe("hand-off finishes (C7a: at least once, never twice)", () => {
     expect(delivered).toHaveLength(1);
     expect(delivered[0]).toContain("All tests pass.");
 
-    // The same turn's end again, a reconnect: nothing more arrives.
     harness.endTurn("t1");
     harness.emit({ type: "connected" });
     await settle();
@@ -220,8 +202,6 @@ describe("hand-off starts (C7b: one thread per tool call)", () => {
 
   it("does not repeat a start a restart interrupted after the harness made its thread", async () => {
     const bot = await seedBot();
-    // The first run claimed the start and the harness made the thread; the
-    // app died before recording it.
     await claimHandoff({
       botId: bot.id,
       conversationId: bot.conversationId,
@@ -253,8 +233,6 @@ describe("hand-off starts (C7b: one thread per tool call)", () => {
     const bot = await seedBot();
     watch();
     hub.start();
-    // A fast harness: the first turn ends, and the watcher hears it, while
-    // the start is still `starting`. No reconnect follows.
     const create = harness.createThread.bind(harness);
     harness.createThread = async (input) => {
       const made = await create(input);
@@ -293,8 +271,6 @@ describe("hand-off follow-ups (C7c: sends wait for their reopen)", () => {
     harness.endTurn(nativeId);
     await eventually(async () => expect(await finishesIn(bot)).toHaveLength(1));
 
-    // A fast harness: the follow-up's turn ends, and the watcher hears it,
-    // before the send returns.
     const send = harness.send.bind(harness);
     harness.send = async (id, input) => {
       const result = await send(id, input);
@@ -347,8 +323,6 @@ describe("hand-off follow-ups (C7c: sends wait for their reopen)", () => {
     expect(order).toEqual(["one", "two", "three"]);
     expect(most).toBe(1);
 
-    // No watcher here: the turn's end is recorded by hand. A follow-up the
-    // harness refuses leaves the hand-off finished, as it found it.
     const [running] = await runningHandoffs();
     expect(await finishHandoffOnce(running!.id)).toBe(true);
     await expect(send("refused", 4)).rejects.toThrow("the harness refused it");
@@ -357,7 +331,6 @@ describe("hand-off follow-ups (C7c: sends wait for their reopen)", () => {
 
   it("never owes again, on a reconnect after a follow-up, a turn that ended before it", async () => {
     const bot = await seedBot();
-    // A hand-off finished before the upgrade: no finish row records its turn.
     const handoff = await recordHandoff({
       botId: bot.id,
       conversationId: bot.conversationId,
@@ -383,7 +356,6 @@ describe("hand-off follow-ups (C7c: sends wait for their reopen)", () => {
       threadId: "fake:tOld",
       message: "also logout",
     });
-    // A reconnect before the follow-up's turn starts reads the old outcome.
     harness.emit({ type: "connected" });
     await settle();
     expect(await finishesIn(bot)).toEqual([]);
@@ -399,7 +371,6 @@ describe("hand-off follow-ups (C7c: sends wait for their reopen)", () => {
 describe("hand-off finishes go back to the conversation that asked", () => {
   const conversation = () => runtime.createConversation({ modelId: TEST_MODEL, systemPrompt: "" });
 
-  /** A routine run's own conversation (each run starts a fresh one, issue #63). */
   async function routineRunConversation(bot: SeededBot): Promise<number> {
     const ref = await conversation();
     const [routine] = await db
@@ -423,7 +394,6 @@ describe("hand-off finishes go back to the conversation that asked", () => {
 
   async function startFrom(ref: number, key: string) {
     hub.start();
-    // The thread it makes is still working when the start records it.
     harness.outcomes.set(`t${harness.created.length + 1}`, working);
     const handoff = ok(
       await codeStore.start({
@@ -453,8 +423,6 @@ describe("hand-off finishes go back to the conversation that asked", () => {
   it("answers a hand-off another bot asked for where it asked, and relays that answer back", async () => {
     const asker = await seedBot({ name: "Asker" });
     const coder = await seedBot({ name: "Coder" });
-    // Asker messaged Coder from its chat; Coder answered in a conversation
-    // of its own (PR 337) and handed the work off from there.
     const own = await conversation();
     await db.insert(botMessages).values({
       fromBotId: asker.id,
@@ -477,7 +445,6 @@ describe("hand-off finishes go back to the conversation that asked", () => {
 
     await eventually(async () => expect(await finishesIn(own)).toHaveLength(1));
     expect(await finishesIn(coder)).toEqual([]);
-    // Coder's answer to the finish reaches Asker, as its first answer did.
     const relayed = async () =>
       (await runtime.readChat(Number(asker.conversationId))).messages
         .filter((m) => m.role === "user")
@@ -498,7 +465,6 @@ describe("hand-off finishes go back to the conversation that asked", () => {
     harness.endTurn(nativeId);
     await eventually(async () => expect(await finishesIn(run)).toHaveLength(1));
 
-    // The owner, in the bot's chat, asks for more on the same thread.
     await codeStore.send({
       conversationId: Number(bot.conversationId),
       idempotencyKey: "r2-follow-up",

@@ -1,14 +1,3 @@
-/**
- * Characterization of behavior-register row S12: any bot can steer, adopt or
- * read the status of any Code thread id.
- * Preserve: this pins today's behavior, quirk included; change it only with a
- * signed-off register row.
- *
- * `codeStore` (code.bots.ts) only checks that some bot owns the asking
- * conversation. `send` to a thread another bot handed off (or one the owner
- * started) is passed to the harness and adopts the thread for the sender;
- * `status` reads any thread the harness knows.
- */
 import { afterAll, beforeEach, describe, expect, it } from "vite-plus/test";
 import { asc, eq } from "drizzle-orm";
 import { db, codeHandoffs } from "../../../apps/web/src/server/db";
@@ -52,12 +41,10 @@ describe("S12: Code threads are not scoped to the bot that started them", () => 
     );
     expect(started.threadId).toBe("fake:t1");
 
-    // Status: readable from the other bot's conversation.
     expect(
       await codeStore.status({ conversationId: INTRUDER_CHAT, threadId: started.threadId }),
     ).toMatchObject({ harness: "Fake", text: "Done.", url: "/code/fake%3At1" });
 
-    // Steer: the message reaches the harness thread.
     expect(
       await codeStore.send({
         conversationId: INTRUDER_CHAT,
@@ -70,7 +57,6 @@ describe("S12: Code threads are not scoped to the bot that started them", () => 
       { nativeId: "t1", message: "also delete the tests", queue: undefined },
     ]);
 
-    // Adopt: the intruder now has its own hand-off row for the same thread.
     const rows = await db
       .select({ botId: codeHandoffs.botId, task: codeHandoffs.task })
       .from(codeHandoffs)

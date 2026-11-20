@@ -1,8 +1,3 @@
-/**
- * The Changes panel's live version: it follows what the server pushes while
- * the panel is open, falls back (null) when the directory cannot be watched
- * or the stream drops, and opens no stream while the panel is closed.
- */
 import { renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { useLiveChanges } from "@/lib/code/use-live-changes";

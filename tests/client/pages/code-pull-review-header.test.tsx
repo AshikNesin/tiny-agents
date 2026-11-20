@@ -14,7 +14,6 @@ import { PullReview } from "@/pages/code/PullReview";
 import type { PullReviewView } from "../../../apps/web/src/shared/api/code";
 import { AppQueryProvider } from "../query-provider";
 
-/** Each render gets its own React Query cache, as the app gives the page one. */
 const render = (ui: Parameters<typeof renderBare>[0]) =>
   renderBare(ui, { wrapper: AppQueryProvider });
 

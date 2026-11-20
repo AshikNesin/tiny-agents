@@ -1,9 +1,3 @@
-/**
- * Wire shapes for the memory endpoints (issue #22 phase C): every method
- * hits the route the server exposes, unwrap the `{ memories }` /
- * `{ memory }` wrappers instead of handing callers the envelope, and the
- * `memoryEnabled` toggle rides the existing bots PATCH as its only field.
- */
 import { describe, expect, it, vi } from "vite-plus/test";
 
 const getMock = vi.fn().mockResolvedValue(undefined);

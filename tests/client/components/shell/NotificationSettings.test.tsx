@@ -12,7 +12,6 @@ import { GrootUIProvider } from "@groot/ui/provider";
 import { createShellQueryClient, ShellQueryProvider } from "@groot/shell/lib/query-client";
 import { NotificationSettings } from "@groot/shell/components/NotificationSettings";
 
-/** A fake `/api/v1/notifications/*` holding one settings value; returns what was saved. */
 function serve(deliverTo: string) {
   const saved: Record<string, unknown>[] = [];
   let settings: Record<string, unknown> = {

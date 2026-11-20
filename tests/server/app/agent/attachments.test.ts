@@ -1,4 +1,3 @@
-/** Attachment entries (issue #17): chat.user entries carry attachment refs. */
 import { describe, expect, it } from "vite-plus/test";
 import type { EntryRecord } from "@earendil-works/pi-durable";
 import { chatState, CHAT_USER_ENTRY } from "../../../../packages/agent/src/transcript";

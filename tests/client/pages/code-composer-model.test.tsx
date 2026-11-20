@@ -19,7 +19,6 @@ import { AppQueryProvider } from "../query-provider";
 const render = (ui: Parameters<typeof renderBare>[0]) =>
   renderBare(ui, { wrapper: AppQueryProvider });
 
-// A harness id of its own, so no other test's cached model list leaks in.
 const harness: HarnessInfo = {
   id: "claude-code-319",
   kind: "claude-code",
@@ -95,7 +94,6 @@ describe("the new-thread composer's model", () => {
     await user.click(await screen.findByRole("option", { name: /Opus/ }));
     expect(screen.getByRole("button", { name: "Model" })).toHaveTextContent("Opus");
 
-    // Another page, then back: the composer mounts again.
     first.unmount();
     open();
     expect(await screen.findByRole("button", { name: "Model" })).toHaveTextContent("Opus");

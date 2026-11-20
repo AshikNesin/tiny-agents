@@ -1,8 +1,3 @@
-/**
- * An exec port that runs commands in a local bash (the subprocess is the
- * boundary), so workspace tests drive real git against a local bare repo
- * instead of the sandbox. Every command and its stdin are recorded.
- */
 import { spawn } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -38,7 +33,6 @@ export function localExec(): LocalExec {
       child.stdout.on("data", (d: Buffer) => (stdout += d.toString("utf8")));
       child.stderr.on("data", (d: Buffer) => (stderr += d.toString("utf8")));
       child.on("error", reject);
-      // A command that never reads its stdin closes it early: not an error.
       child.stdin.on("error", () => undefined);
       child.on("close", (code) => resolve({ stdout, stderr, exitCode: code ?? 255 }));
       child.stdin.end(options.stdin ?? "");
@@ -47,14 +41,12 @@ export function localExec(): LocalExec {
   return { exec, calls, home, cleanup: () => rmSync(home, { recursive: true, force: true }) };
 }
 
-/** Run a shell line in `cwd` and answer stdout; throws on failure. */
 export async function sh(local: LocalExec, line: string): Promise<string> {
   const result = await local.exec(line);
   if (result.exitCode !== 0) throw new Error(`${line}: ${result.stderr}`);
   return result.stdout.trim();
 }
 
-/** A bare "GitHub" repository with one commit on main. */
 export async function bareRepo(local: LocalExec, name = "origin.git"): Promise<string> {
   const bare = join(local.home, name);
   const seed = join(local.home, `${name}-seed`);

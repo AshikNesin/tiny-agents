@@ -1,9 +1,3 @@
-/**
- * Characterization of behavior-register row C18: terminal idle close never
- * happens while output is chatty, and backpressure stacks `drain` listeners.
- * Preserve: this pins today's behavior, quirk included; change it only with
- * a signed-off register row.
- */
 import { open } from "node:fs";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -18,13 +12,8 @@ import { setTerminalServiceForTests } from "../../../apps/web/src/server/api/ter
 import type { PtyStream, TerminalService } from "../../../packages/sandbox/src/terminal/terminal";
 import { authToken } from "../fixtures";
 
-// Tickets are held as live access, which needs their accounts to exist.
 await authToken("c18-owner@example.com", 1);
 
-/**
- * An in-memory pty. `stuck`: the remote end never takes a write, so after
- * the first byte every `write()` returns false until `release()`.
- */
 function fakePty(options: { stuck?: boolean } = {}) {
   const writes: Buffer[] = [];
   const held: Array<() => void> = [];
@@ -43,7 +32,6 @@ function fakePty(options: { stuck?: boolean } = {}) {
   return {
     stream,
     writes,
-    /** The remote end takes everything from now on. */
     release: () => {
       options.stuck = false;
       held.splice(0).forEach((callback) => callback());
@@ -64,7 +52,6 @@ function serviceFor(stream: PtyStream): TerminalService {
   };
 }
 
-/** A real macrotask turn fake timers cannot intercept, so queued socket I/O runs. */
 const realTick = () => new Promise<void>((resolve) => open("/dev/null", "r", () => resolve()));
 
 let server: Server;
@@ -107,7 +94,6 @@ describe("C18: the terminal bridge", () => {
     ws.addEventListener("close", (event) => void (closedWith = (event as CloseEvent).code));
 
     vi.useFakeTimers();
-    // One line of output every five minutes for an hour; the client sends nothing.
     for (let minute = 0; minute < 60; minute += 5) {
       pty.stream.push(Buffer.from(`tick ${minute}\r\n`));
       for (let step = 0; step < 5; step++) {
@@ -119,7 +105,6 @@ describe("C18: the terminal bridge", () => {
     expect(ws.readyState).toBe(ws.OPEN);
     expect(pty.writes).toEqual([]);
 
-    // Contrast: the output stops, and ten quiet minutes later it closes 4000.
     for (let step = 0; step < 11; step++) {
       await vi.advanceTimersByTimeAsync(60_000);
       await realTick();
@@ -139,14 +124,12 @@ describe("C18: the terminal bridge", () => {
     }) as PtyStream["write"];
     const ws = await connect(pty.stream);
 
-    // A burst of keystrokes arrives together; the pty takes none of them.
     for (const key of ["a", "b", "c", "d", "e"]) ws.send(Buffer.from(key));
     await vi.waitFor(() => expect(refusals.length).toBeGreaterThan(0));
     await new Promise((resolve) => setTimeout(resolve, 100));
     expect(refusals.length).toBeGreaterThan(1);
     expect(pty.stream.listenerCount("drain")).toBe(refusals.length);
 
-    // One drain fires them all, and each resumes the socket.
     pty.release();
     await vi.waitFor(() => expect(pty.stream.listenerCount("drain")).toBe(0));
   });

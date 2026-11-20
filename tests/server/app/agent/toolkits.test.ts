@@ -1,4 +1,3 @@
-/** Built-in toolkits (issue #1 D15/D16): web search/fetch via TinyFish (faked), today's date. */
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { ToolExecutionApi, ToolExecutionResult } from "@earendil-works/pi-durable";
 import { describe, expect, it } from "vite-plus/test";
@@ -148,7 +147,6 @@ describe("web toolkit", () => {
     expect(calls).toEqual([]);
     const unconfigured = createWebToolkit({});
     expect(unconfigured.setupHint).toMatch(/TINYFISH_API_KEY/);
-    // Every bot has the toolkit: unconfigured, it offers the model no tools.
     expect(unconfigured.extension.tools).toEqual([]);
   });
 });
@@ -158,7 +156,7 @@ describe("today capability", () => {
     today.extension.sections![0]!.render({ conversationId: 1 } as never, BACKGROUND_CONTEXT);
 
   it("puts today's date in the owner's zone in the prompt, with no tools", async () => {
-    const late = new Date("2026-10-23T20:00:00Z"); // already the 24th in India
+    const late = new Date("2026-10-23T20:00:00Z");
     const today = createTodayCapability({ timeZone: "Asia/Kolkata", now: () => late });
     expect(today.extension.tools ?? []).toEqual([]);
     expect(today.auto).toBe(true);

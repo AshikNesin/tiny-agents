@@ -1,11 +1,3 @@
-/**
- * The app-side RoutineStore adapter (issue #18 phase C): the recursion guard
- * rejects mutations from a routine's own conversation (issue #63; list stays
- * open) and never from the owner's chat, creates validate the schedule like the API, sourceKey
- * makes a replayed create return the same routine, and every save path
- * renders the sentence and next 3 IST fire times. Real SQLite test DB; arming
- * queues on the real jobs table (no worker runs in tests).
- */
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { addJob } from "@groot/jobs/server/queue";
@@ -18,7 +10,6 @@ import {
 import { resetAppTables, seedBot as seedBotRow } from "../../fixtures";
 
 const CONVERSATION = 7;
-/** The routine's own conversation, where its runs happen (issue #63). */
 const ROUTINE_CONVERSATION = 70;
 
 const seedBot = (name = "Bot", conversationId = String(CONVERSATION)) =>
@@ -39,7 +30,6 @@ async function seedRoutine(botId: string, conversationId?: number) {
   return routine!;
 }
 
-/** A run of the routine waiting for its reply in the routine's conversation. */
 async function seedAwaitingRun(routineId: string) {
   const at = new Date("2026-10-21T03:30:00.000Z");
   const [run] = await db
@@ -92,8 +82,6 @@ describe("routines toolkit store adapter", () => {
     expect(row?.nextRunAt).toBeTruthy();
   });
 
-  // One-time routines must be in the future, so date them next year rather
-  // than on a fixed day that eventually passes.
   const NEXT_YEAR = new Date().getUTCFullYear() + 1;
 
   it("a create with the same idempotency key returns the same routine", async () => {
@@ -167,7 +155,6 @@ describe("routines toolkit store adapter", () => {
     ).rejects.toThrow(RECURSION_MSG);
     await expect(store.remove(ROUTINE_CONVERSATION, routine.id)).rejects.toThrow(RECURSION_MSG);
     await expect(store.runNow(ROUTINE_CONVERSATION, routine.id)).rejects.toThrow(RECURSION_MSG);
-    // The guard rejects before any effect: still enabled, still there.
     expect(await routineRow(routine.id)).toMatchObject({ enabled: true });
 
     const listed = await store.list(ROUTINE_CONVERSATION);

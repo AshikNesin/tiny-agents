@@ -1,8 +1,3 @@
-/**
- * Attribution-envelope parsing for cross-bot deliveries (Grok-style UI).
- * Each provenance prefix must resolve to payload text; anything an owner
- * could type themselves must never match.
- */
 import { describe, expect, it } from "vite-plus/test";
 import { parsePeerEnvelope, stripPeerEnvelope } from "@tiny-agents/agent/peer-envelope";
 

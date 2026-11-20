@@ -1,15 +1,3 @@
-/**
- * The local backend on `vault_values` (Q4), and the two register rows it
- * fixes:
- *
- * - C11: no read-modify-write on a shared index or state. Concurrent creates
- *   and edits all land, one unreadable item no longer empties the list, and
- *   concurrent OAuth steps don't overwrite each other.
- * - S11: every read opens an item under its authoritative policy (the row
- *   that links it). A policy edited in the database without re-sealing, on
- *   the row or beside the ciphertext, fails on list, describe, resolve and
- *   reveal alike.
- */
 import { eq, sql } from "drizzle-orm";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vite-plus/test";
 import {
@@ -158,7 +146,6 @@ describe("C11: no lost writes, no empty list", () => {
 });
 
 describe("S11: every read checks the authoritative policy", () => {
-  /** A linked login, then `tamper` applied straight to the database. */
   async function tampered(tamper: (externalId: string) => Promise<void>) {
     await createItem(login("bank"));
     const row = (await findItem("bank"))!;
@@ -242,7 +229,6 @@ describe("S11: every read checks the authoritative policy", () => {
 
   it("two policy edits at once both land, and the item still opens (C11)", async () => {
     await createItem(login("bank"));
-    // Both read the row before either writes it.
     await Promise.all([
       updateItem("bank", { policy: { hosts: ["api.bank.example.com"] } } as never),
       updateItem("bank", {

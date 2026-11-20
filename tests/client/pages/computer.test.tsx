@@ -72,7 +72,6 @@ function mockApi(initial: DesktopList) {
         desktops: current.desktops.map((d) => (d.profile === profile ? { ...d, driver } : d)),
       };
     }),
-    // The server marks the desktop as starting before it answers.
     start: vi.spyOn(computerApi, "start").mockImplementation(async (profile) => {
       current = {
         ...current,
@@ -143,7 +142,6 @@ describe("ComputerPage", () => {
       { remoteResize: false },
     );
     expect(fakes.rfbs[0]!.viewOnly).toBe(true);
-    // View only: the driving tools appear once the owner takes control.
     expect(screen.queryByTestId("computer-apps")).not.toBeInTheDocument();
     expect(screen.queryByTestId("computer-keys")).not.toBeInTheDocument();
     expect(
@@ -172,7 +170,6 @@ describe("ComputerPage", () => {
     await user.click(screen.getByTestId("computer-keys"));
     const menu = await screen.findByRole("menu");
     await user.click(within(menu).getByRole("menuitem", { name: /Switch windows/ }));
-    // Alt down, Tab down, Tab up, Alt up.
     expect(fakes.rfbs[0]!.sendKey.mock.calls).toEqual([
       [0xffe9, "AltLeft", true],
       [0xff09, "Tab", true],

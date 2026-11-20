@@ -12,9 +12,7 @@ import { Storage } from "@groot/shell/pages/storage/Storage";
 import type { StorageFile as FileInfo } from "@groot/shell/pages/storage/hooks/useStorage";
 import { FIXED_NOW } from "../../test-clock";
 
-/** The fake server's objects: key → bytes. Folders are key prefixes, as on an object store. */
 let objects: Map<string, string>;
-/** Every request the page sent, as "METHOD path". */
 let requests: string[];
 
 function listing(folder: string): FileInfo[] {
@@ -69,13 +67,9 @@ async function fakeFetch(input: RequestInfo | URL, init: RequestInit = {}): Prom
 
 function renderStorage(search = "") {
   const client = createShellQueryClient({ queries: { retry: false } });
-  // `searchParams` stands in for the URL: re-rendering with another value is
-  // a navigation from outside the page (the sidebar or ⌘K "Storage" link
-  // resets `?path` while the page stays mounted).
   const tree = (searchParams: string) => (
     <ShellQueryProvider client={client}>
       <GrootUIProvider>
-        {/* Shell pages render inside the app's router; a PageLayout may navigate. */}
         <MemoryRouter>
           <NuqsTestingAdapter searchParams={searchParams} hasMemory>
             <Storage />
@@ -88,11 +82,9 @@ function renderStorage(search = "") {
   return { navigate: (searchParams: string) => view.rerender(tree(searchParams)) };
 }
 
-/** The desktop table row of `name`. */
 const rowOf = (name: string) =>
   screen.getAllByRole("row").find((row) => within(row).queryByText(name, { exact: true }))!;
 
-/** The mobile card (list item) of `name`. */
 const cardOf = (name: string) =>
   within(screen.getByRole("list", { name: "Files" }))
     .getAllByRole("listitem")
@@ -102,7 +94,7 @@ const buttonNames = (element: HTMLElement) =>
   within(element)
     .getAllByRole("button")
     .map((button) => button.getAttribute("aria-label") ?? button.textContent)
-    .filter((name) => name !== "a.txt" && name !== "docs"); // the name cell's own button
+    .filter((name) => name !== "a.txt" && name !== "docs");
 
 async function select(user: ReturnType<typeof userEvent.setup>, name: string) {
   await user.click(within(rowOf(name)).getByRole("checkbox", { name: `Select ${name}` }));
@@ -128,7 +120,6 @@ describe("Storage browser", () => {
     const user = userEvent.setup();
     renderStorage();
     await screen.findByText("root.txt", { selector: "td *" });
-    // At the root a trail would be a lone home button to where you already are.
     expect(screen.queryByRole("button", { name: "Go to root folder" })).not.toBeInTheDocument();
 
     await user.click(within(rowOf("a")).getByRole("button", { name: "a" }));
@@ -152,7 +143,6 @@ describe("Storage browser", () => {
 
     expect(screen.queryByRole("button", { name: "Delete" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Clear/ })).not.toBeInTheDocument();
-    // Coming back does not revive the old picks either.
     await user.click(within(rowOf("a")).getByRole("button", { name: "a" }));
     await screen.findByText("one.txt", { selector: "td *" });
     expect(screen.queryByRole("button", { name: /^Clear/ })).not.toBeInTheDocument();

@@ -56,7 +56,7 @@ describe("logger", () => {
     child.child({ jobId: "j1" }).debug({ step: 2 }, "sunk, not printed");
     expect(sunk.map((r) => r.msg)).toEqual(["kept by sink", "sunk, not printed"]);
     expect(sunk[1]).toMatchObject({ component: "jobs", jobId: "j1", step: 2 });
-    expect(lines).toHaveLength(1); // the debug record never reached the console
+    expect(lines).toHaveLength(1);
   });
 
   it("scrubs messages, fields and secret-named values", () => {
@@ -75,7 +75,7 @@ describe("logger", () => {
   });
 
   it("breadcrumbs live in the request context", () => {
-    addBreadcrumb("db", "outside"); // dropped
+    addBreadcrumb("db", "outside");
     expect(getBreadcrumbs()).toEqual([]);
     runWithRequestContext({}, () => {
       addBreadcrumb("db", "query", "debug", { ms: 1 });

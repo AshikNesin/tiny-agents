@@ -1,8 +1,3 @@
-/**
- * The tabs an agent's clicks open, in real Chromium: a link that opens a new
- * tab takes the agent there, and the agent can list its tabs, switch back
- * and close one.
- */
 import { existsSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -11,7 +6,6 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import { pageSession } from "../../../../packages/sandbox/src/browser-chromium";
 import { navigationGuard } from "../../../../packages/sandbox/src/navigation-guard";
 
-/** A Chromium this machine has, if any (CI may have none). */
 const chromiumPath = [
   chromium.executablePath(),
   "/usr/bin/chromium",

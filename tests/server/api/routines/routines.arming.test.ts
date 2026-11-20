@@ -1,9 +1,3 @@
-/**
- * A routine's armed state (routines.arming.ts): each transition is one
- * compare-and-set write, the handle a write replaces is cancelled, and a job
- * queued for a write that lost is cancelled too, so a routine never keeps two
- * chains. Real SQLite test DB and the real queue table (no worker runs).
- */
 import { eq, sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { db, jobs, routines } from "../../../../apps/web/src/server/db";

@@ -1,4 +1,3 @@
-/** Uploads API (issue #17): upload, sniff, prepare, serve, delete, send paths. */
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { bots, db, uploads } from "../../../apps/web/src/server/db";
@@ -30,14 +29,12 @@ interface UploadRef {
   ref: { uploadId: string; status?: string; mimeType: string; [key: string]: unknown };
 }
 
-/** POST one file as multipart (the composer's request shape). */
 function postFile(app: TestApp, bytes: Uint8Array, filename: string, type: string, field = "file") {
   const form = new FormData();
   form.append(field, new File([new Uint8Array(bytes)], filename, { type }));
   return api<UploadRef>(app, "/api/v1/uploads", { method: "POST", body: form, token });
 }
 
-/** GET a non-JSON response (the original bytes). */
 function getContent(app: TestApp, uploadId: string) {
   return app.request(`/api/v1/uploads/${uploadId}/content`, { headers: authorization });
 }
@@ -46,7 +43,6 @@ async function uploadRow(id: string) {
   return db.query.uploads.findFirst({ where: eq(uploads.id, id) });
 }
 
-// 1x1 transparent PNG (real bytes; Photon decodes it).
 const TINY_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
   "base64",
@@ -58,7 +54,6 @@ const models = [
 ];
 
 let nextConversationId = 100;
-/** The shared fake, listing a text model and a vision model. */
 const agentRuntime = createFakeRuntime({ catalog: fakeCatalog(models) });
 
 async function createBot(app: TestApp, modelId: string): Promise<string> {
@@ -221,7 +216,6 @@ describe("uploads API", () => {
     expect(submit.text).toContain(`[image attached: shot.png`);
     expect(submit.text).toContain(uploadId);
     expect(submit.text).toContain("see_image");
-    // Image-only send keeps a non-empty preview for the bot list.
     const bot = await db.query.bots.findFirst({ where: eq(bots.id, botId) });
     expect(bot?.lastMessagePreview).toContain("[Image]");
   });
@@ -247,7 +241,6 @@ describe("uploads API", () => {
   });
 });
 
-/** Upload a file and expect `status`; returns the response body's data. */
 async function uploadFile(
   app: TestApp,
   name: string,
@@ -260,7 +253,6 @@ async function uploadFile(
   return response.body.data!;
 }
 
-/** GET a JSON route under /api/v1/uploads and expect 200. */
 async function getJson<T = Record<string, unknown>>(app: TestApp, path: string) {
   const response = await api<T>(app, `/api/v1/uploads/${path}`, { token });
   expect(response.status).toBe(200);
@@ -277,7 +269,6 @@ describe("reading uploaded files (issue #58)", () => {
       "text/plain",
     );
     const { uploadId, status, mimeType } = response.ref;
-    // The stored type is the sniffed one, not what the browser claimed.
     expect(mimeType).toBe("text/markdown");
     expect(status).toBe("pending");
     await extractionIdle();

@@ -1,8 +1,3 @@
-/**
- * Local self-updates, the server's half (docs/guides/local-updates.md): the
- * owner reads the status the `pnpm local` supervisor sends and asks it to
- * check or update; a server nothing supervises says so.
- */
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { matchGuestRoute } from "../../../../apps/web/src/server/api/people/guest.guard";
 import {

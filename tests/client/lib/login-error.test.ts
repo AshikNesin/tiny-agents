@@ -2,7 +2,6 @@ import { describe, expect, it } from "vite-plus/test";
 import { ApiError } from "@groot/shell/lib/api";
 import { loginErrorDescription } from "@groot/shell/pages/auth/Login";
 
-// A refusal worded by the server's error envelope, as the API client builds it.
 const apiError = (status: number, message: string) =>
   new ApiError({
     status,

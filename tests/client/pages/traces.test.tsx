@@ -1,7 +1,3 @@
-/**
- * Traces pages (issue #363): the list shows sessions with their model and
- * cost, and a session's page shows its totals and each call, failures in red.
- */
 import React from "react";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vite-plus/test";
@@ -137,7 +133,6 @@ describe("Traces", () => {
     expect(screen.getAllByTestId("trace-response")[0]).toHaveTextContent(
       "Let me read the front page.",
     );
-    // Totals: 8k of 10k input tokens were cache reads; two failures.
     expect(screen.getByTestId("trace-totals")).toHaveTextContent(
       "$0.01 · 10K in (80% cached) · 300 out · 2 model calls · 1 tool call · 2 failed",
     );

@@ -1,10 +1,3 @@
-/**
- * Terminal page behavior (issue #28): status-driven empty/error states, the
- * tab strip off the polled list, close-with-409 force flow, active-tab
- * switching, and the connecting dot fed by each view's connection state.
- * The xterm wrapper and the ws client are mocked (unit-tested elsewhere);
- * no server is involved.
- */
 import React from "react";
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -34,7 +27,6 @@ vi.mock("@/lib/terminal-api", async (importOriginal) => {
   };
 });
 
-/** Each connection's handlers, captured so tests can drive states. */
 const connections: {
   handlers: { onData: (bytes: Uint8Array) => void; onStateChange: (state: string) => void };
   connection: TerminalConnection;
@@ -126,19 +118,12 @@ async function findTab(n: number) {
   return await screen.findByTestId(`terminal-tab-ta-term-${n}`);
 }
 
-/**
- * The pty bytes each sendInput call carried, as plain arrays: this stack's
- * deep-equal does not match TextEncoder output against a constructed
- * Uint8Array, but the bytes themselves are the observable contract.
- */
 function sentBytes(connection: TerminalConnection): number[][] {
   return vi.mocked(connection.sendInput).mock.calls.map((call) => Array.from(call[0]!));
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
-  // No auto-cleanup in this environment: a leaked tree's 5s poll keeps
-  // answering the current test's mocked list and mounting views into it.
   cleanup();
   connections.length = 0;
   window.localStorage.clear();
@@ -154,7 +139,6 @@ describe("Terminal page", () => {
     mount();
     expect(await screen.findByText("Sandbox not configured")).toBeTruthy();
     expect(screen.getByText(/SANDBOX_HOST/)).toBeTruthy();
-    // There is no sandbox to open a tab on.
     expect(screen.queryByTestId("terminal-create")).toBeNull();
   });
 
@@ -225,7 +209,6 @@ describe("Terminal page", () => {
     mount();
     expect(await screen.findByTestId("terminal-connecting-ta-term-1")).toBeTruthy();
     await waitFor(() => expect(connections.length).toBeGreaterThan(0));
-    // The socket opening is not enough: tmux has not painted anything yet.
     act(() => connections[0]!.handlers.onStateChange("live"));
     expect(screen.getByTestId("terminal-connecting-ta-term-1")).toBeTruthy();
     act(() => connections[0]!.handlers.onData(new Uint8Array([36, 32])));
@@ -305,7 +288,6 @@ describe("Terminal page", () => {
 });
 
 describe("Terminal keys panel", () => {
-  /** Mount with one live tab and return its captured connection. */
   async function mountLive(n = 1) {
     listMock.mockResolvedValue(ready([session(n)]));
     mount();
@@ -328,11 +310,9 @@ describe("Terminal keys panel", () => {
     const { connection } = await mountLive();
     const user = userEvent.setup({ pointerEventsCheck: 0 });
 
-    // ctrl masks a typeable character to its control byte.
     await user.click(screen.getByTestId("terminal-key-ctrl"));
     expect(screen.getByTestId("terminal-key-ctrl").getAttribute("aria-pressed")).toBe("true");
     await user.click(screen.getByTestId("terminal-key-tilde"));
-    // ~ is not a letter: ctrl does not mask it, but it is consumed.
     expect(sentBytes(connection)).toEqual([[0x7e]]);
     expect(screen.getByTestId("terminal-key-ctrl").getAttribute("aria-pressed")).toBe("false");
 
@@ -345,14 +325,12 @@ describe("Terminal keys panel", () => {
     const { connection } = await mountLive();
     const user = userEvent.setup({ pointerEventsCheck: 0 });
 
-    // ^L is already Ctrl+L; sticky ctrl must not double-mask it.
     await user.click(screen.getByTestId("terminal-key-ctrl"));
     await user.click(screen.getByTestId("terminal-key-ctrl-l"));
     expect(sentBytes(connection)).toEqual([[0x0c]]);
     expect(screen.getByTestId("terminal-key-ctrl").getAttribute("aria-pressed")).toBe("false");
   });
 
-  /** The fake xterm handle the live view was given. */
   async function liveTerminal(): Promise<TerminalHandle> {
     return (await createTerminalMock.mock.results.at(-1)!.value) as TerminalHandle;
   }
@@ -369,8 +347,6 @@ describe("Terminal keys panel", () => {
     secureClipboard({ readText: vi.fn().mockResolvedValue("ls\npwd") });
 
     await user.click(screen.getByTestId("terminal-key-paste"));
-    // Through xterm's paste, never raw keystrokes: raw, each line would run
-    // the moment it landed.
     await waitFor(() => expect(terminal.paste).toHaveBeenCalledWith("ls\npwd"));
     expect(sentBytes(connection)).toEqual([]);
   });
@@ -458,7 +434,6 @@ describe("Terminal full screen", () => {
 
     const request = vi.fn().mockResolvedValue(undefined);
     const exit = vi.fn().mockResolvedValue(undefined);
-    // jsdom ships none of the Fullscreen API; install the bits the page reads.
     let fullscreenElement: Element | null = null;
     Object.defineProperty(document, "fullscreenElement", {
       configurable: true,
@@ -470,8 +445,6 @@ describe("Terminal full screen", () => {
 
     await user.click(toggle);
     expect(request).toHaveBeenCalledTimes(1);
-    // In full screen the header toggle is covered, so it gives way to an exit
-    // control inside the region (#170).
     expect(screen.queryByTestId("terminal-fullscreen")).toBeNull();
     expect(
       within(screen.getByTestId("terminal-region")).getByRole("button", {
@@ -506,7 +479,6 @@ describe("Terminal full screen", () => {
     await user.click(screen.getByTestId("terminal-fullscreen"));
     const region = screen.getByTestId("terminal-region");
     expect(region.className).toContain("fixed");
-    // The region covers the page header: the way out must live inside it (#170).
     await user.click(within(region).getByRole("button", { name: "Exit full screen" }));
     expect(screen.getByTestId("terminal-region").className).not.toContain("fixed");
     expect(screen.getByTestId("terminal-fullscreen").getAttribute("aria-label")).toBe(

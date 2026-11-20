@@ -1,8 +1,3 @@
-/**
- * The Code Threads screen (after Hoplite): a project's threads at full width,
- * by where they stand (Working, Needs you, In review, Done), each with its
- * pull requests and date; Archived loads when opened.
- */
 import React from "react";
 import { render as renderBare, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -13,7 +8,6 @@ import type { ThreadSummary } from "@/lib/code/api";
 import type { ProjectView } from "../../../apps/web/src/shared/api/code";
 import { AppQueryProvider } from "../query-provider";
 
-/** Each render gets its own React Query cache, as the app gives the page one. */
 const render = (ui: Parameters<typeof renderBare>[0]) =>
   renderBare(ui, { wrapper: AppQueryProvider });
 
@@ -78,7 +72,6 @@ describe("the Code Threads screen", () => {
         name: /Fix CI/,
       }),
     ).toBeInTheDocument();
-    // Another project's (or no project's) thread is not on this screen.
     expect(screen.queryByText("elsewhere")).toBeNull();
 
     await userEvent.click(screen.getByRole("button", { name: /Archived/ }));
