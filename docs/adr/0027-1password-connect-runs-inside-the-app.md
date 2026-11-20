@@ -21,7 +21,12 @@ no Dockerfile or compose file of its own.
   token sees, and a token that sees more is refused as before. With only the
   read+write token, bots use it too; the docs say why a separate read token is
   better. New items go to 1Password when the read+write token is set; the
-  app's own credentials and connection secrets stay local.
+  app's own credentials and connection secrets stay local. _Amended:_ the
+  app's own credentials (model provider keys, the GitHub App key and webhook
+  secret) follow the new items and can be moved, because the owner wants every
+  secret in 1Password. A key the server read stays usable while Connect is
+  down, and a cold Connect gets a retry window shorter than GitHub's webhook
+  timeout. MCP connection secrets stay local.
 - **Bundle Connect in the app's container.** With `OP_CONNECT_CREDENTIALS`
   (the `1password-credentials.json` contents) and no `OP_CONNECT_HOST`, the
   app supervises both Connect processes itself: it pulls 1Password's images

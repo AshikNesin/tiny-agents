@@ -14,6 +14,7 @@ export interface FakeConnect {
   syncLag: { gets: number };
   unsynced: Map<string, number>;
   refuseCreate?: { status: 400 | 404 | 500; message: string };
+  unavailable: { requests: number };
   close(): Promise<void>;
 }
 
@@ -28,9 +29,14 @@ export async function startFakeConnect(): Promise<FakeConnect> {
     requests: [] as { method: string; path: string; token: string }[],
     syncLag: { gets: 0 },
     unsynced: new Map<string, number>(),
+    unavailable: { requests: 0 },
   };
   const app = new Hono();
   app.use(async (c, next) => {
+    if (state.unavailable.requests > 0) {
+      state.unavailable.requests -= 1;
+      return c.json({ status: 503, message: "Connect is starting" }, 503);
+    }
     const token = (c.req.header("authorization") ?? "").replace(/^Bearer /, "");
     state.requests.push({ method: c.req.method, path: c.req.path, token });
     const grant = state.tokens.get(token);

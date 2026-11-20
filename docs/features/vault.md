@@ -257,18 +257,24 @@ sees. Without `OP_CONNECT_CREDENTIALS` and `OP_CONNECT_HOST` there is no
 1Password card.
 
 **Where new items go.** With `OP_CONNECT_ADMIN_TOKEN` set, every new item from
-the Vault page goes to the 1Password vault (the pinned one); the app's own keys
-and connection secrets stay local. A Connect server can answer a fresh item's
+the Vault page goes to the 1Password vault (the pinned one), and so does a new
+key the app uses itself (a model provider's key, the GitHub App's private key
+and webhook secret). MCP connection secrets stay local. A Connect server can answer a fresh item's
 `GET` with 404 until its sync catches up, so the backend retries and, for ten
 minutes, describes a new item from the `POST` answer. A refused write names the
 step and Connect's own message.
 
 **Moving local items.** The 1Password card shows **Move N local items here**
-when bots' items live in the local vault. After step-up it copies each one
+when items live in the local vault, the app's own keys included. After step-up it copies each one
 (values, URLs, OTP seed) into 1Password, points the item at the copy, and
 deletes the local value (`POST /vault/move-to-1password`). An item that fails
-stays local and the toast says why. The app's own keys and connection secrets
-are not moved.
+stays local and the toast says why. MCP connection secrets are not moved.
+
+**The app's keys in 1Password.** Bots still can't use them: the vault refuses an
+`app` item to every bot whatever backend holds it. The server keeps each value
+it read for 5 minutes. When Connect fails (still starting after a deploy, or
+down), it serves the last value it read; with none yet it retries for about
+8 seconds, inside GitHub's 10-second webhook timeout, before the call fails.
 
 **Scoping guard.** The backend calls `GET /v1/vaults` before its first use and
 at least every 6 hours after (the Vault page re-checks when it loads). Unless

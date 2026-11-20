@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vite-plus/test";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { generateToken } from "@groot/core/utils/jwt.utils";
 import { hashPassword } from "@groot/core/utils/password.utils";
 import {
@@ -15,7 +15,13 @@ import {
   createAppCredential,
   setWriteBackendsForTests,
 } from "../../../apps/web/src/server/api/vault/vault.admin.service";
-import { clearStatusCache, runItemUse } from "../../../apps/web/src/server/api/vault/vault.service";
+import {
+  clearStatusCache,
+  forgetAppCredential,
+  resolveGitHubToken,
+  resolveProviderSecret,
+  runItemUse,
+} from "../../../apps/web/src/server/api/vault/vault.service";
 import { clearStepUpsForTests } from "../../../apps/web/src/server/api/vault/vault.stepup";
 import { secretRedactor } from "../../../packages/agent/src/redact";
 import { startFakeConnect, type FakeConnect } from "../api/vault/fake-connect";
@@ -261,7 +267,7 @@ describe("1Password Connect at OP_CONNECT_HOST", () => {
 });
 
 describe("moving local items to 1Password", () => {
-  it("moves the bots' local items with their values, and leaves the app's own keys local", async () => {
+  it("moves local items with their values, the app's own keys too", async () => {
     rebuildBackends();
     const grant = await stepUp();
     for (const [handle, password] of [
@@ -293,19 +299,22 @@ describe("moving local items to 1Password", () => {
     process.env.OP_CONNECT_TOKEN = "read-token";
     process.env.OP_CONNECT_ADMIN_TOKEN = "admin-token";
     rebuildBackends();
-    expect((await vault("")).body.data.movableToOnePassword).toBe(2);
+    expect((await vault("")).body.data.movableToOnePassword).toBe(3);
 
     const moved = await vault("/move-to-1password", { method: "POST", stepUp: grant, json: {} });
     expect(moved.status).toBe(200);
-    expect(moved.body.data).toEqual({ moved: ["github", "umami"], failed: [] });
+    expect(moved.body.data).toEqual({ moved: ["openai", "github", "umami"], failed: [] });
 
     const rows = await db.select().from(vaultItems);
     expect(Object.fromEntries(rows.map((r) => [r.handle, r.backend]))).toEqual({
       github: "onepassword-connect",
       umami: "onepassword-connect",
-      openai: "local",
+      openai: "onepassword-connect",
     });
-    expect(await db.select().from(vaultValues)).toHaveLength(1);
+    expect(await db.select().from(vaultValues)).toHaveLength(0);
+    expect(
+      await resolveProviderSecret("openai", { providerName: "OpenAI", host: "api.openai.com" }),
+    ).toBe("canary-app-key");
     const umami = connect.items.get(rows.find((r) => r.handle === "umami")!.externalId)!;
     expect(umami).toMatchObject({
       title: "umami",
@@ -333,6 +342,30 @@ describe("moving local items to 1Password", () => {
     );
     expect(filled).toBe("canary-umami");
     expect((await vault("")).body.data.movableToOnePassword).toBe(0);
+  });
+
+  it("keeps the app's keys working while Connect is starting or down", async () => {
+    process.env.OP_CONNECT_HOST = connect.url;
+    process.env.OP_CONNECT_TOKEN = "read-token";
+    process.env.OP_CONNECT_ADMIN_TOKEN = "admin-token";
+    rebuildBackends();
+    forgetAppCredential();
+    await createAppCredential({
+      handle: "gh-app-webhook",
+      label: "Code: GitHub App webhook secret",
+      value: "canary-webhook",
+      hosts: ["api.github.com", "github.com"],
+      inject: { as: "header", name: "Authorization", format: "Bearer {value}" },
+      tools: ["github"],
+    });
+    expect((await db.select().from(vaultItems))[0]!.backend).toBe("onepassword-connect");
+
+    connect.unavailable.requests = 2;
+    expect(await resolveGitHubToken("gh-app-webhook")).toBe("canary-webhook");
+
+    vi.setSystemTime(new Date(Date.now() + 60 * 60_000));
+    connect.unavailable.requests = 1000;
+    expect(await resolveGitHubToken("gh-app-webhook")).toBe("canary-webhook");
   });
 
   it("needs the read+write token", async () => {

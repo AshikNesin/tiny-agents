@@ -476,6 +476,47 @@ export async function resolveConnectionSecret(
 const APP_VALUE_TTL_MS = 5 * 60_000;
 const appValues = new Map<string, { at: number; value: string }>();
 
+const APP_RETRY_DELAYS_MS = [500, 1000, 2000, 4000];
+
+async function remoteItem(handle: string): Promise<boolean> {
+  const row = await db.query.vaultItems.findFirst({
+    where: eq(vaultItems.handle, handle),
+    columns: { backend: true },
+  });
+  return row !== undefined && row.backend !== "local";
+}
+
+async function appValue(
+  handle: string,
+  key: string,
+  resolve: () => Promise<string>,
+): Promise<string> {
+  const cached = appValues.get(key);
+  if (cached && Date.now() - cached.at < APP_VALUE_TTL_MS) return cached.value;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const value = await resolve();
+      appValues.set(key, { at: Date.now(), value });
+      return value;
+    } catch (error) {
+      const passing =
+        error instanceof VaultError &&
+        (error.code === "backend_error" || error.code === "vault_locked");
+      if (!passing || !(await remoteItem(handle))) throw error;
+      if (cached) {
+        logger.warn({ item: handle }, "Vault backend failed; using the last value");
+        return cached.value;
+      }
+      const delay = APP_RETRY_DELAYS_MS[attempt];
+      if (delay === undefined) throw error;
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      for (const [name, entry] of statusCache) {
+        if (entry.status.state !== "ready") statusCache.delete(name);
+      }
+    }
+  }
+}
+
 export function forgetAppCredential(handle?: string): void {
   if (handle === undefined) return appValues.clear();
   for (const key of appValues.keys()) {
@@ -487,31 +528,25 @@ export async function resolveProviderSecret(
   handle: string,
   input: { providerName: string; host: string },
 ): Promise<string> {
-  const key = `${handle}\0${input.host.toLowerCase()}`;
-  const cached = appValues.get(key);
-  if (cached && Date.now() - cached.at < APP_VALUE_TTL_MS) return cached.value;
-  const value = await runUse(
-    { handle, tool: "model", targetKind: "provider", target: input.host, approved: false },
-    { unattended: false },
-    { botScoped: false, usedBy: input.providerName, auditUse: false },
-    ["value"],
-    async (values) => values.value!.reveal(),
+  return appValue(handle, `${handle}\0${input.host.toLowerCase()}`, () =>
+    runUse(
+      { handle, tool: "model", targetKind: "provider", target: input.host, approved: false },
+      { unattended: false },
+      { botScoped: false, usedBy: input.providerName, auditUse: false },
+      ["value"],
+      async (values) => values.value!.reveal(),
+    ),
   );
-  appValues.set(key, { at: Date.now(), value });
-  return value;
 }
 
 export async function resolveGitHubToken(handle: string): Promise<string> {
-  const key = `${handle}\0github`;
-  const cached = appValues.get(key);
-  if (cached && Date.now() - cached.at < APP_VALUE_TTL_MS) return cached.value;
-  const value = await runUse(
-    { handle, tool: "github", targetKind: "github", target: "api.github.com", approved: false },
-    { unattended: false },
-    { botScoped: false, usedBy: "code:github", auditUse: false },
-    ["value"],
-    async (values) => values.value!.reveal(),
+  return appValue(handle, `${handle}\0github`, () =>
+    runUse(
+      { handle, tool: "github", targetKind: "github", target: "api.github.com", approved: false },
+      { unattended: false },
+      { botScoped: false, usedBy: "code:github", auditUse: false },
+      ["value"],
+      async (values) => values.value!.reveal(),
+    ),
   );
-  appValues.set(key, { at: Date.now(), value });
-  return value;
 }
