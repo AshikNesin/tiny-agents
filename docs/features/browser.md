@@ -217,7 +217,9 @@ browser" in its label), and the owner opens the view from there.
 - **Take control.** The viewer starts view-only, and the stream itself is the
   "Take control" button: hover shows "Click to take control" (a touch screen
   always shows it), and a click enables input and focus. While you drive, a
-  green frame marks the stream as yours; "Hand back" returns it to the bot. On a Mac, Cmd
+  green frame marks the stream as yours; "Hand back" returns it to the bot,
+  and so do two minutes with no key or pointer input from you
+  (`OWNER_IDLE_MS` in `packages/sandbox/src/live-sessions.ts`). On a Mac, Cmd
   shortcuts are sent as Ctrl shortcuts to the remote Linux Chrome.
 - **Clipboard.** Text copied in the remote Chrome lands on your clipboard.
   "Paste" (or Cmd+V on a Mac while driving) sends your clipboard to the remote

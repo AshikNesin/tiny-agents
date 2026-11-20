@@ -17,6 +17,10 @@
  *
  * Anything else cannot be framed, so the filter fails and the bridge closes
  * the viewer rather than guess.
+ *
+ * The owner's viewer runs behind the same framing with nothing dropped
+ * (`createRfbInputWatch`): its input messages are what tell the idle sweep
+ * the owner is still driving.
  */
 
 export class RfbViewOnlyError extends Error {}
@@ -28,6 +32,7 @@ export interface RfbViewOnlyFilter {
   push(chunk: Buffer): Buffer;
 }
 
+/** Messages that only ask for pictures; every other type is input. */
 const FORWARD = new Set([0, 2, 3, 150, 248]);
 
 /** The full length of the message at the start of `buf`, or undefined until enough has arrived. */
@@ -68,7 +73,8 @@ function messageLength(buf: Buffer): number | undefined {
   }
 }
 
-export function createRfbViewOnlyFilter(): RfbViewOnlyFilter {
+/** Frames the viewer's bytes; `keep` says whether a whole message (by its type) reaches the desktop. */
+function createRfbFramer(keep: (type: number) => boolean): RfbViewOnlyFilter {
   let phase: Phase = "version";
   let pending: Buffer = Buffer.alloc(0);
 
@@ -106,12 +112,44 @@ export function createRfbViewOnlyFilter(): RfbViewOnlyFilter {
         if (pending.length < 1) break;
         const length = messageLength(pending);
         if (length === undefined) break;
-        if (FORWARD.has(pending[0]!)) out.push(pending.subarray(0, length));
+        if (keep(pending[0]!)) out.push(pending.subarray(0, length));
         pending = pending.subarray(length);
       }
       // Keep only what is still unread, copied off the chunks it came from.
       pending = Buffer.from(pending);
       return out.length === 1 ? out[0]! : Buffer.concat(out);
+    },
+  };
+}
+
+export function createRfbViewOnlyFilter(): RfbViewOnlyFilter {
+  return createRfbFramer((type) => FORWARD.has(type));
+}
+
+/**
+ * Reads the owner's viewer alongside the bridge, which forwards every byte
+ * untouched, and calls `onInput` for each input message. A message it cannot
+ * frame stops the watch, never the viewer: from then on every chunk counts
+ * as input.
+ */
+export function createRfbInputWatch(onInput: () => void): { push(chunk: Buffer): void } {
+  const framer = createRfbFramer((type) => {
+    if (!FORWARD.has(type)) onInput();
+    return false;
+  });
+  let framing = true;
+  return {
+    push(chunk) {
+      if (framing) {
+        try {
+          framer.push(chunk);
+          return;
+        } catch (error) {
+          if (!(error instanceof RfbViewOnlyError)) throw error;
+          framing = false;
+        }
+      }
+      onInput();
     },
   };
 }

@@ -184,6 +184,8 @@ export interface ComputerSessions {
   actionTurn(profile: string): Promise<LiveComputer>;
   /** Flip the driver; handing back wakes waiting tools and ends a takeover request. */
   setDriver(profile: string, driver: ComputerDriver): Promise<void>;
+  /** The owner gave input while driving; two minutes without any hands the desktop back. */
+  ownerInput(profile: string): void;
   /**
    * The bot asks the owner to take over: the driver becomes `human` with the
    * reason recorded, and this resolves `released` once the owner hands back,
@@ -254,6 +256,7 @@ export function createComputerSessions(options: ComputerSessionsOptions): Comput
     onRelease: (entry) => {
       entry.takeover = undefined;
     },
+    handBackIdle: (profile) => void live.handBack(profile),
   });
 
   const manager: ComputerSessions = {
@@ -276,9 +279,12 @@ export function createComputerSessions(options: ComputerSessionsOptions): Comput
         },
       }),
     async setDriver(profile, driver) {
-      if (driver === "human") live.takeOver(profile);
-      else live.handBack(profile);
+      if (driver === "human") {
+        live.takeOver(profile);
+        live.ownerInput(profile);
+      } else live.handBack(profile);
     },
+    ownerInput: (profile) => live.ownerInput(profile),
     async requestTakeover(profile, reason, ms) {
       const entry = await live.open(profile);
       // Closed or reset between the open and now: nobody is driving it.

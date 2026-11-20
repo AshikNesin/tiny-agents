@@ -59,6 +59,7 @@ function desktopTarget(profile: string): VncTarget | undefined {
       const live = getComputerSessions()?.get(profile);
       if (live) live.lastActivity = Date.now();
     },
+    ownerInput: () => getComputerSessions()?.ownerInput(profile),
   };
 }
 

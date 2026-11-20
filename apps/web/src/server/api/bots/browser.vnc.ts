@@ -77,6 +77,7 @@ function browserTarget(target: BrowserTarget): VncTarget | undefined {
       const live = getBrowserSessions().get(target);
       if (live) live.lastActivity = Date.now();
     },
+    ownerInput: () => getBrowserSessions().ownerInput(target.profile),
   };
 }
 

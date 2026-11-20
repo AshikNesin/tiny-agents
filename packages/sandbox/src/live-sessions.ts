@@ -7,7 +7,9 @@
  *   as a session that finished opening after it;
  * - the driver flag: reads may be refused and actions wait, bounded, while
  *   the owner drives; a hand-back wakes every waiter;
- * - the idle sweep, on an injectable clock (an open takeover is activity);
+ * - the idle sweep, on an injectable clock: an owner's takeover goes back to
+ *   the bot once they stop giving input, and a bot's session closes once
+ *   nothing uses it;
  * - dropping a session that died under the app, so the next call reopens;
  * - `peek`, which never launches: planning a tool call must not start one.
  *
@@ -57,6 +59,8 @@ export interface LiveEntry {
   lastActivity: number;
   /** This session's idle close window (ms), from the manager options. */
   idleMs: number;
+  /** The owner's last input while they drive; unset for a bot's takeover request nobody answered yet. */
+  ownerInputAt?: number;
 }
 
 /** What the manager needs from the thing a session drives (a browser, a desktop). */
@@ -103,6 +107,8 @@ export interface LiveSessionsOptions<U extends LiveSurface, S extends LiveEntry>
   ownerDriving(kind: "read" | "act"): Error;
   /** Bookkeeping cleared whenever waiters are released (before they wake). */
   onRelease?(entry: S): void;
+  /** The owner stopped giving input while driving: hand the session back to the bot. */
+  handBackIdle(profile: string): void;
 }
 
 /**
@@ -129,6 +135,8 @@ export interface LiveSessions<S extends LiveEntry> {
   driver(profile: string): LiveDriver | undefined;
   /** The owner (or a bot's request) takes the wheel; the session if live. */
   takeOver(profile: string): S | undefined;
+  /** The owner gave input (took over, typed, moved the pointer): restarts their idle window. */
+  ownerInput(profile: string): void;
   /**
    * Back to the bot. Returns the session when the owner was driving it; its
    * waiters wake at once, or with `wake: false` when the caller `release`s.
@@ -157,6 +165,8 @@ export interface LiveSessions<S extends LiveEntry> {
 }
 
 const IDLE_SWEEP_MS = 60_000;
+/** How long an owner may drive with no input before the session goes back to the bot (issue 233). */
+const OWNER_IDLE_MS = 2 * 60_000;
 
 interface Opening<S> {
   promise: Promise<S>;
@@ -189,7 +199,12 @@ export function createLiveSessions<U extends LiveSurface, S extends LiveEntry>(
     sweeper = clock.setInterval(() => {
       const now = clock.now();
       for (const [key, entry] of live) {
-        if (entry.driver === "human") continue; // an open takeover is activity
+        if (entry.driver === "human") {
+          // An open takeover is activity until the owner's input stops.
+          const input = entry.ownerInputAt;
+          if (input !== undefined && input < now - OWNER_IDLE_MS) options.handBackIdle(key);
+          continue;
+        }
         if (entry.lastActivity < now - entry.idleMs) {
           live.delete(key);
           if (options.sweepReleases) release(entry);
@@ -354,11 +369,16 @@ export function createLiveSessions<U extends LiveSurface, S extends LiveEntry>(
       entry.lastActivity = clock.now();
       return entry;
     },
+    ownerInput(profile) {
+      const entry = live.get(profile);
+      if (entry?.driver === "human") entry.ownerInputAt = clock.now();
+    },
     handBack(profile, wake = true) {
       const entry = live.get(profile);
       if (!entry) return undefined;
       const released = entry.driver === "human";
       entry.driver = "agent";
+      entry.ownerInputAt = undefined;
       if (options.touchOnHandBack) entry.lastActivity = clock.now();
       if (!released) return undefined;
       if (wake) release(entry);
