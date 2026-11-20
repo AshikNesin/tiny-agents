@@ -1672,7 +1672,7 @@ describe("one declaration per tool (3.2)", () => {
               "replay": "unsafe",
             },
             {
-              "description": "Capture the viewport as a JPEG. Use for layout or canvas questions a snapshot cannot answer.",
+              "description": "Capture the viewport as a JPEG. Use for layout or canvas questions a snapshot cannot answer. With labels: true, each control in view shows its ref, so you can click what you see.",
               "fields": [
                 "deferred",
                 "description",
@@ -1685,6 +1685,10 @@ describe("one declaration per tool (3.2)", () => {
               "name": "browser_screenshot",
               "parameters": {
                 "properties": {
+                  "labels": {
+                    "description": "Draw each control's ref on it",
+                    "type": "boolean",
+                  },
                   "question": {
                     "description": "What to look for",
                     "maxLength": 500,
@@ -2158,7 +2162,7 @@ describe("one declaration per tool (3.2)", () => {
               "replay": "unsafe",
             },
             {
-              "description": "Capture the viewport as a JPEG. Use for layout or canvas questions a snapshot cannot answer.",
+              "description": "Capture the viewport as a JPEG. Use for layout or canvas questions a snapshot cannot answer. With labels: true, each control in view shows its ref, so you can click what you see.",
               "fields": [
                 "deferred",
                 "description",
@@ -2171,6 +2175,10 @@ describe("one declaration per tool (3.2)", () => {
               "name": "browser_screenshot",
               "parameters": {
                 "properties": {
+                  "labels": {
+                    "description": "Draw each control's ref on it",
+                    "type": "boolean",
+                  },
                   "question": {
                     "description": "What to look for",
                     "maxLength": 500,
@@ -2741,7 +2749,7 @@ describe("one declaration per tool (3.2)", () => {
               "replay": "unsafe",
             },
             {
-              "description": "Capture the viewport as a JPEG. Use for layout or canvas questions a snapshot cannot answer.",
+              "description": "Capture the viewport as a JPEG. Use for layout or canvas questions a snapshot cannot answer. With labels: true, each control in view shows its ref, so you can click what you see.",
               "fields": [
                 "deferred",
                 "description",
@@ -2754,6 +2762,10 @@ describe("one declaration per tool (3.2)", () => {
               "name": "browser_screenshot",
               "parameters": {
                 "properties": {
+                  "labels": {
+                    "description": "Draw each control's ref on it",
+                    "type": "boolean",
+                  },
                   "question": {
                     "description": "What to look for",
                     "maxLength": 500,
@@ -3361,7 +3373,7 @@ describe("one declaration per tool (3.2)", () => {
                 "replay": "unsafe",
               },
               {
-                "description": "Capture the viewport as a JPEG. Use for layout or canvas questions a snapshot cannot answer.",
+                "description": "Capture the viewport as a JPEG. Use for layout or canvas questions a snapshot cannot answer. With labels: true, each control in view shows its ref, so you can click what you see.",
                 "fields": [
                   "deferred",
                   "description",
@@ -3374,6 +3386,10 @@ describe("one declaration per tool (3.2)", () => {
                 "name": "browser_screenshot",
                 "parameters": {
                   "properties": {
+                    "labels": {
+                      "description": "Draw each control's ref on it",
+                      "type": "boolean",
+                    },
                     "question": {
                       "description": "What to look for",
                       "maxLength": 500,

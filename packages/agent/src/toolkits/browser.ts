@@ -542,18 +542,24 @@ export function createBrowserToolkit(options: BrowserToolkitOptions = {}): Capab
         summary: "JPEG screenshot for visual questions.",
         policy: { readOnly: true },
         description:
-          "Capture the viewport as a JPEG. Use for layout or canvas questions a snapshot cannot answer.",
+          "Capture the viewport as a JPEG. Use for layout or canvas questions a snapshot cannot answer. " +
+          "With labels: true, each control in view shows its ref, so you can click what you see.",
         parameters: Type.Object({
           question: Type.Optional(Type.String({ maxLength: 500, description: "What to look for" })),
+          labels: Type.Optional(Type.Boolean({ description: "Draw each control's ref on it" })),
         }),
         replay: "safe",
-        execute: async (_args, api) => {
+        execute: async (args, api) => {
           try {
             const s = await readTurn(Number(api.conversationId));
-            const shot = await s.session.screenshot();
+            const shot = await s.session.screenshot(args.labels ? { labels: true } : undefined);
+            const text =
+              shot.labeled === undefined
+                ? "Screenshot captured as an attachment."
+                : `Screenshot captured as an attachment, ${shot.labeled} control${shot.labeled === 1 ? "" : "s"} labeled with refs.`;
             return {
               output: [
-                { type: "text", text: "Screenshot captured as an attachment." },
+                { type: "text", text },
                 { type: "image", data: shot.data, mimeType: "image/jpeg" },
               ],
               details: { screenshot: true },

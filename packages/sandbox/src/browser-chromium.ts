@@ -401,11 +401,22 @@ export function pageSession(
       ),
     scroll: (direction, amount) =>
       guarded((current) => scrollPage(current, open, direction, amount)),
-    screenshot: async () => ({
+    screenshot: async (options) => {
+      const current = page;
       // CSS scale: on a 2x desktop the default would double both dimensions
       // and the model would pay for pixels it cannot use.
-      data: (await page.screenshot({ type: "jpeg", quality: 60, scale: "css" })).toString("base64"),
-    }),
+      const capture = async () =>
+        (await current.screenshot({ type: "jpeg", quality: 60, scale: "css" })).toString("base64");
+      if (!options?.labels) return { data: await capture() };
+      const labels = await drawRefLabels(current);
+      try {
+        return { data: await capture(), labeled: labels.count };
+      } finally {
+        await current
+          .evaluate((id) => document.getElementById(id)?.remove(), labels.id)
+          .catch(() => undefined);
+      }
+    },
     release: () => {
       // The first tab stays open, unguarded; the tabs the agent opened go.
       for (const tab of mine.filter((t) => t !== page)) {
@@ -423,6 +434,69 @@ export function pageSession(
     },
   };
   return session;
+}
+
+/** Most labels one screenshot draws, and how many boxes are looked up at a time. */
+const MAX_LABELS = 150;
+
+/**
+ * Draw each in-view control's ref on it (OpenClaw's labeled refs), so a
+ * screenshot can be acted on without a separate snapshot. The refs come
+ * from a fresh snapshot, so they are the ones the next click resolves. The
+ * boxes are looked up a batch at a time, one round trip's wait each on the
+ * VM link, until the view has its labels or the refs run out (a page
+ * scrolled far down has its first hundreds above the view). They are drawn
+ * in one fixed overlay that takes no clicks, under an id of this capture's
+ * own. Returns that id and how many it drew.
+ */
+async function drawRefLabels(page: Page): Promise<{ id: string; count: number }> {
+  const tree = await snapshotOf(page);
+  const refs = [...new Set(Array.from(tree.matchAll(/\[ref=(f?\d*e\d+)\]/g), (m) => m[1]!))];
+  const viewport = page.viewportSize();
+  const inView: { ref: string; x: number; y: number; width: number; height: number }[] = [];
+  for (let at = 0; at < refs.length && inView.length < MAX_LABELS; at += MAX_LABELS) {
+    const boxes = await Promise.all(
+      refs.slice(at, at + MAX_LABELS).map(async (ref) => {
+        const box = await page
+          .getByRef(ref)
+          .boundingBox({ timeout: 1_000 })
+          .catch(() => null);
+        return box && { ref, x: box.x, y: box.y, width: box.width, height: box.height };
+      }),
+    );
+    for (const box of boxes) {
+      const shown =
+        !!box &&
+        box.width > 0 &&
+        box.height > 0 &&
+        box.x + box.width > 0 &&
+        box.y + box.height > 0 &&
+        (!viewport || (box.x < viewport.width && box.y < viewport.height));
+      if (shown && inView.length < MAX_LABELS) inView.push(box);
+    }
+  }
+  const id = `__tiny_agents_ref_labels_${crypto.randomUUID()}`;
+  await page.evaluate(
+    ({ id, labels }) => {
+      const layer = document.createElement("div");
+      layer.id = id;
+      layer.setAttribute("aria-hidden", "true");
+      layer.style.cssText = "position:fixed;inset:0;pointer-events:none;z-index:2147483647";
+      for (const { ref, x, y, width, height } of labels) {
+        const box = document.createElement("div");
+        box.style.cssText = `position:absolute;left:${x}px;top:${y}px;width:${width}px;height:${height}px;outline:2px solid #e11d48`;
+        const tag = document.createElement("span");
+        tag.textContent = ref;
+        tag.style.cssText =
+          "position:absolute;left:0;top:0;transform:translateY(-100%);background:#e11d48;color:#fff;font:bold 11px/1.2 monospace;padding:0 2px";
+        box.append(tag);
+        layer.append(box);
+      }
+      document.documentElement.append(layer);
+    },
+    { id, labels: inView },
+  );
+  return { id, count: inView.length };
 }
 
 /**

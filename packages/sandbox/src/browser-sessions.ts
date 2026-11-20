@@ -132,7 +132,11 @@ export interface BrowserSession {
   type(ref: string, text: string): Promise<{ url: string }>;
   press(key: string): Promise<void>;
   scroll(direction: "up" | "down", amount: number): Promise<void>;
-  screenshot(): Promise<{ data: string }>;
+  /**
+   * A JPEG of the viewport. With `labels`, each control in view has its
+   * snapshot ref drawn on it for this one capture; `labeled` counts them.
+   */
+  screenshot(options?: { labels?: boolean }): Promise<{ data: string; labeled?: number }>;
   close(): Promise<void>;
 }
 
