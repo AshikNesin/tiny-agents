@@ -174,8 +174,19 @@ describe("extractionResultSchema", () => {
   });
 });
 
-describe("budget constants", () => {
-  it("keeps the active budget at the PRD value", () => {
-    expect(MEMORY_MAX_ACTIVE).toBe(100);
+describe("active budget", () => {
+  it("fits a full budget of typical memories in the prompt, none omitted", () => {
+    // Issue #334 A: about 80 chars a memory; past the render cap a memory
+    // would sit in the store with no way for the bot to reach it.
+    const memories = Array.from({ length: MEMORY_MAX_ACTIVE }, (_, i) => ({
+      ...base,
+      id: `m${i}`,
+      text: `The owner keeps a typical fact of about eighty characters long, numbered ${String(i).padStart(3, "0")} now`,
+      createdAt: new Date(Date.UTC(2026, 9, 1, 0, i)).toISOString(),
+    }));
+    expect(memories[0]!.text).toHaveLength(80);
+    const block = renderMemoryBlock(memories)!;
+    expect(block).not.toContain("omitted");
+    expect(block.split("\n").filter((line) => line.startsWith("- The owner"))).toHaveLength(60);
   });
 });

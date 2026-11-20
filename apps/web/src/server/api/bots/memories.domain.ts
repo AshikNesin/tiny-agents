@@ -24,7 +24,8 @@ const MEMORY_CATEGORIES = [
 /** Category display order in every rendered surface (prompt and page). */
 export const CATEGORY_ORDER: readonly MemoryCategory[] = MEMORY_CATEGORY_ORDER;
 
-export const MEMORY_MAX_ACTIVE = 100;
+/** Active budget: about 60 memories of ~80 chars fit the render cap whole (#334). */
+export const MEMORY_MAX_ACTIVE = 60;
 const MEMORY_TEXT_MAX = 300;
 /** Capture window cap: the newest transcript characters one extraction reads. */
 export const MEMORY_CAPTURE_CHAR_CAP = 24_000;

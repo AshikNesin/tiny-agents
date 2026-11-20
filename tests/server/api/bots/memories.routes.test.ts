@@ -110,13 +110,13 @@ describe("Memories API routes", () => {
 
   it("archives the oldest active rows past the budget", async () => {
     const botId = await seedBot(app);
-    for (let i = 0; i < 101; i++) {
+    for (let i = 0; i < 61; i++) {
       await addMemory(app, botId, { text: `Fact number ${i}`, category: "fact" });
     }
     const list = await listMemories(app, botId, "?includeArchived=true");
     expect(list.status).toBe(200);
     const rows = list.body.data!.memories;
-    expect(rows.filter((m) => m.status === "active")).toHaveLength(100);
+    expect(rows.filter((m) => m.status === "active")).toHaveLength(60);
     expect(rows.filter((m) => m.status === "archived")).toHaveLength(1);
     expect(rows.find((m) => m.status === "archived")).toMatchObject({ text: "Fact number 0" });
   });
@@ -170,7 +170,7 @@ describe("Memories API routes", () => {
       createdAt: new Date(10),
     });
     await db.insert(memories).values(
-      Array.from({ length: 100 }, (_, i) => ({
+      Array.from({ length: 60 }, (_, i) => ({
         botId,
         text: `Fact number ${i}`,
         category: "fact",
@@ -189,7 +189,7 @@ describe("Memories API routes", () => {
     expect(restored.status).toBe(200);
     expect(restored.body.data!.memory.status).toBe("active");
     const rows = (await listMemories(app, botId, "?includeArchived=true")).body.data!.memories;
-    expect(rows.filter((m) => m.status === "active")).toHaveLength(100);
+    expect(rows.filter((m) => m.status === "active")).toHaveLength(60);
     expect(rows.find((m) => m.status === "archived")).toMatchObject({ text: "Fact number 0" });
   });
 

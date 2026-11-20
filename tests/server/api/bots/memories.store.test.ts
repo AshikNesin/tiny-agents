@@ -113,7 +113,7 @@ describe("memoryStore.remember", () => {
   it("enforces the active budget and validates memory inputs", async () => {
     const { botId, conversationId } = await seedBot();
     await db.insert(memories).values(
-      Array.from({ length: 100 }, (_, i) => ({
+      Array.from({ length: 60 }, (_, i) => ({
         botId,
         text: `Old fact ${i}`,
         category: "fact",
@@ -123,7 +123,7 @@ describe("memoryStore.remember", () => {
     expect(await remember(conversationId, input)).toEqual({ status: "saved" });
     expect(
       await db.$count(memories, and(eq(memories.botId, botId), eq(memories.status, "active"))),
-    ).toBe(100);
+    ).toBe(60);
     expect(
       await db.query.memories.findFirst({
         where: and(eq(memories.botId, botId), eq(memories.status, "archived")),
