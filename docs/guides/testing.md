@@ -304,6 +304,15 @@ CI does not run Playwright.
 
 ## Continuous integration
 
+The runners (`instabox-medium`) are a fresh VM per job, so nothing survives
+between jobs on disk. `.github/actions/setup` makes each job warm from GitHub's
+own Actions cache instead: Node 24, pnpm, then either `node_modules` (keyed by
+the lockfile, the OS, the CPU and the Node major; a hit skips the install) or
+the pnpm store (for a job that installs again), and, when asked, ripgrep and
+gitleaks, each checked against a pinned sha256 when downloaded. The checkout
+is blobless (`filter: blob:none`) with full history, so the gates can diff
+against `origin/<base>` without downloading every old file.
+
 `.github/workflows/test.yml` runs, in order: a gitleaks scan of the commits
 the PR or push adds (`scripts/secret-scan.sh`), the static gates through
 `pnpm verify:static` (typechecks for the server, the client, the e2e specs,
@@ -313,5 +322,5 @@ design-token check, and a migration freshness check that `pnpm db:generate`
 adds no migration; the list lives in `scripts/gates.mjs`), server and client
 tests, `pnpm build`, the runtime dependency closure check, and a pruned
 production boot (tracked files plus `dist` copied to a fresh directory,
-`pnpm install --prod`, `node dist/server/bundle.js`, `/health` answers,
+`pnpm install --prod --offline` from the warm store, `node dist/server/bundle.js`, `/health` answers,
 `SIGTERM` exits within 15 s).

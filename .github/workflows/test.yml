@@ -24,43 +24,26 @@ jobs:
     env:
       NODE_ENV: test
     steps:
+      # Full history (the gates diff against origin/<base> and the secret scan
+      # walks the new commits) without file contents: git fetches a blob only
+      # when something reads it.
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
+          filter: blob:none
+      # The pruned production boot installs again, so this job keeps the pnpm
+      # store warm rather than node_modules.
+      - uses: ./.github/actions/setup
         with:
-          node-version: "24"
-          cache: pnpm
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+          deps: store
+          tools: "true"
+          github-token: ${{ github.token }}
 
-      - name: Install ripgrep
-        # The instabox CI image, unlike ubuntu-latest, ships without ripgrep,
-        # which scripts/check-design-tokens.ts shells out to.
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq ripgrep
       - name: Secret scan (gitleaks)
         # The pre-commit hook skips gitleaks where it isn't installed.
         env:
-          GITLEAKS_VERSION: 8.30.1
-          GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
           BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
-          # gh, the download fallback, needs a token even for a public release.
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          asset="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
-          url="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${asset}"
-          # github.com release-asset downloads 504 at the CDN edge at times
-          # (seen repeatedly 2026-11-08); gh (api.github.com) reaches the same
-          # asset over different routing. Either way the sha256 pin still gates
-          # what runs, so the fallback cannot serve tampered bits.
-          if ! curl -fsSL --retry 3 --retry-all-errors --retry-delay 2 -o "$RUNNER_TEMP/gitleaks.tgz" "$url"; then
-            echo "curl failed for $url, falling back to gh release download"
-            gh release download "v$GITLEAKS_VERSION" -R gitleaks/gitleaks -p "$asset" -O "$RUNNER_TEMP/gitleaks.tgz"
-          fi
-          echo "${GITLEAKS_SHA256}  $RUNNER_TEMP/gitleaks.tgz" | sha256sum -c -
-          tar -xzf "$RUNNER_TEMP/gitleaks.tgz" -C "$RUNNER_TEMP" gitleaks
-          bash scripts/secret-scan.sh "$RUNNER_TEMP/gitleaks" "$BASE"
+        run: bash scripts/secret-scan.sh gitleaks "$BASE"
 
       - name: Static gates (scripts/gates.mjs)
         run: pnpm verify:static
@@ -87,7 +70,8 @@ jobs:
           rm -rf ../pruned-boot && mkdir -p ../pruned-boot
           tar cf - $(git ls-files) dist | tar xf - -C ../pruned-boot
           cd ../pruned-boot
-          pnpm install --frozen-lockfile --prod --ignore-scripts
+          # --offline: from the store the setup restored, never the network.
+          pnpm install --frozen-lockfile --prod --ignore-scripts --offline
           pnpm rebuild
           DATABASE_URL=file:./tmp/boot.db AGENT_DB_PATH=./tmp/agent.db PORT=3999 \
             node dist/server/bundle.js > boot.log 2>&1 < /dev/null &
