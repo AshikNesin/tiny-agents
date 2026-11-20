@@ -51,6 +51,10 @@ export function CredentialRequestForm({
   const [busy, setBusy] = useState(false);
 
   const host = hostOf(request.origin);
+  // A sign-in widget from another site (The Hindu's id.tinypass.com, #302).
+  const where = request.frameOrigin
+    ? `${host}, in its sign-in frame from ${hostOf(request.frameOrigin)}`
+    : host;
   const moved = request.liveOrigin !== null && request.liveOrigin !== request.origin;
   // OTPs and security codes are never saved; a password, a card number or a
   // sign-in's identifier (username, email, mobile number) can be.
@@ -173,7 +177,7 @@ export function CredentialRequestForm({
         )}
 
         <p className="text-center text-xs text-muted-foreground">
-          Only filled on {host}. Never shown to {botName}. Expires in{" "}
+          Only filled on {where}. Never shown to {botName}. Expires in{" "}
           {minutesLeft(request.expiresAt)}.
         </p>
 

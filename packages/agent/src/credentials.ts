@@ -44,6 +44,12 @@ export interface CredentialField {
 export interface CredentialRequest {
   /** The page's top-level origin when the bot asked; values only ever fill there. */
   origin: string;
+  /**
+   * The other site whose frame on that page holds the asked fields (The
+   * Hindu signs in through an id.tinypass.com frame). The card names it, and
+   * values fill in that frame only while the page is still on `origin`.
+   */
+  frameOrigin?: string;
   title: string;
   purpose: string;
   fields: CredentialField[];
@@ -207,6 +213,7 @@ export function credentialSubject(request: Pick<CredentialRequest, "origin" | "t
 
 const credentialRequest: z.ZodType<CredentialRequest> = z.object({
   origin: z.string(),
+  frameOrigin: z.string().optional(),
   title: z.string(),
   purpose: z.string(),
   fields: z.array(

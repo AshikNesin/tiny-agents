@@ -10,7 +10,7 @@ import { statSync } from "node:fs";
 import { promisify } from "node:util";
 import { chromium } from "playwright-core";
 import type { Locator, Page, Response } from "playwright-core";
-import { fillSecretFields, pageOrigin } from "./browser-fill";
+import { fillSecretFields, pageOrigin, refOrigin } from "./browser-fill";
 import { assertRefShape, isBlockedPrivateUrl, parseExemptHosts } from "./browser-guard";
 import { compactSnapshot, tidyText } from "./browser-snapshot";
 import type { BrowserSession, BrowserVnc, OpenBrowserOptions } from "./browser-sessions";
@@ -349,6 +349,7 @@ export function pageSession(
     text: (scope) => textOf(page, scope),
     waitFor: (wait) => waitForText(page, wait),
     origin: () => pageOrigin(page),
+    refOrigin: (ref) => refOrigin(page, ref),
     fillSecret: (fill) => guarded((current) => fillSecretFields(current, fill)),
     click: (ref) =>
       guarded(async (current) => {

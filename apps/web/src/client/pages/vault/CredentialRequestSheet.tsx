@@ -46,6 +46,11 @@ export function CredentialRequestSheet({ taskId }: { taskId: number }) {
             <p className={cn(monoClass, "text-base font-semibold break-all text-foreground")}>
               {request.origin}
             </p>
+            {request.frameOrigin && (
+              <p className="text-xs text-muted-foreground">
+                in its sign-in frame from {request.frameOrigin}
+              </p>
+            )}
             <p className="text-xs text-muted-foreground">
               {botName} asked: “{request.purpose}”
             </p>

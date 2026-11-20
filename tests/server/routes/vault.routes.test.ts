@@ -38,6 +38,7 @@ import { clearStepUpsForTests } from "../../../apps/web/src/server/api/vault/vau
 import {
   submitRequest,
   cancelRequest,
+  requestView,
 } from "../../../apps/web/src/server/api/vault/vault.requests.service";
 import {
   createBrowserSessions,
@@ -642,7 +643,12 @@ describe("card fills", () => {
 describe("credential request submit", () => {
   const conversation = 4242;
   const target = { profile: "shared", tab: `conversation-${conversation}` };
-  const fills: { origin: string; steps?: boolean; fields: { key: string; value: string }[] }[] = [];
+  const fills: {
+    origin: string;
+    frameOrigins?: string[];
+    steps?: boolean;
+    fields: { key: string; value: string }[];
+  }[] = [];
   let origin = "https://hi.nesin.io";
   /** The page navigates here as the fill starts (a redirect racing the submit). */
   let movesTo: string | undefined;
@@ -658,6 +664,7 @@ describe("credential request submit", () => {
       if (framedBy) throw new FrameOriginError(framedBy);
       fills.push({
         origin: fill.origin,
+        ...(fill.frameOrigins ? { frameOrigins: fill.frameOrigins } : {}),
         ...(fill.steps !== undefined ? { steps: fill.steps } : {}),
         fields: fill.fields.map((f) => ({ key: f.key, value: f.value.reveal() })),
       });
@@ -748,6 +755,40 @@ describe("credential request submit", () => {
     });
     expect(saved).toMatchObject({ kind: "login", username: "ana@example.com" });
     await assertNoCanary();
+  });
+
+  it("fills a sign-in frame the card named, and the saved login fills there too (#302)", async () => {
+    origin = "https://www.thehindu.com";
+    const runtime = fakeRuntime({
+      origin: "https://www.thehindu.com",
+      frameOrigin: "https://id.tinypass.com",
+      title: "Sign in to The Hindu",
+      purpose: "Read the article",
+      fields: [
+        { key: "email", label: "Email", type: "email", required: true, autocomplete: "email" },
+      ],
+    });
+    const view = await requestView(7, runtime as never);
+    expect(view).toMatchObject({
+      origin: "https://www.thehindu.com",
+      frameOrigin: "https://id.tinypass.com",
+    });
+    await submitRequest(7, { values: { email: "ana@example.com" }, save: true }, runtime as never);
+    expect(fills).toEqual([
+      {
+        origin: "https://www.thehindu.com",
+        frameOrigins: ["https://id.tinypass.com"],
+        steps: true,
+        fields: [{ key: "email", value: "ana@example.com" }],
+      },
+    ]);
+    const saved = await db.query.vaultItems.findFirst({
+      where: eq(vaultItems.handle, "thehindu-com"),
+    });
+    expect(JSON.parse(saved!.originsJson)).toEqual([
+      "https://www.thehindu.com",
+      "https://id.tinypass.com",
+    ]);
   });
 
   it("refuses when the page moved to another origin", async () => {

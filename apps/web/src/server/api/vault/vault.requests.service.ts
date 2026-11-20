@@ -58,6 +58,7 @@ export async function requestView(
     taskId,
     bot: bot ?? null,
     origin: request.origin,
+    frameOrigin: request.frameOrigin ?? null,
     title: request.title,
     purpose: request.purpose,
     fields: request.fields.map(({ ref: _ref, ...field }) => field),
@@ -124,6 +125,8 @@ async function save(
   );
   const number = of((f) => f.type === "card_number");
   const host = new URL(request.origin).host;
+  // A saved item fills the same sign-in frame later (the item's other origins).
+  const origins = request.frameOrigin ? [request.origin, request.frameOrigin] : [request.origin];
   if (password || username) {
     const values = { ...(password ? { password } : {}), ...(username ? { username } : {}) };
     if (request.savedHandle) {
@@ -138,7 +141,7 @@ async function save(
         values,
         policy: {
           handle: await freeHandle(slug(host)),
-          origins: [request.origin],
+          origins,
           hosts: [],
           tools: [],
           bots: null,
@@ -166,7 +169,7 @@ async function save(
         },
         policy: {
           handle: await freeHandle(`card-${slug(host)}`),
-          origins: [request.origin],
+          origins,
           hosts: [],
           tools: [],
           bots: null,
@@ -240,6 +243,8 @@ async function fillRequest(
     // Sign-ins split over pages (Amazon's email, then password) are walked through.
     result = await getBrowserSessions().fillSecret(target, {
       origin: request.origin,
+      // A sign-in frame from another site the card named (#302).
+      ...(request.frameOrigin ? { frameOrigins: [request.frameOrigin] } : {}),
       fields,
       steps: true,
     });

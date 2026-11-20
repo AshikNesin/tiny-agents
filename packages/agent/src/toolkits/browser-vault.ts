@@ -207,6 +207,46 @@ function normalizeCredentialRequest(
 }
 
 /**
+ * The one other site whose frame holds the request's ref'd fields (#302),
+ * undefined when they are all on the page itself, or why it can't be asked.
+ */
+async function frameOriginOf(
+  session: BrowserSession,
+  request: CredentialRequest,
+  allowedPrivateHosts?: string,
+): Promise<string | undefined> {
+  if (!session.refOrigin) return undefined;
+  const frames = new Set<string>();
+  for (const field of request.fields) {
+    if (!field.ref) continue;
+    const origin = await session.refOrigin(field.ref).catch(() => request.origin);
+    if (origin !== request.origin) frames.add(origin);
+  }
+  if (frames.size > 1) {
+    throw new Error(
+      "The fields sit in frames from more than one site. Ask for one frame's fields at a time.",
+    );
+  }
+  const [frame] = frames;
+  if (!frame) return undefined;
+  let url: URL;
+  try {
+    url = new URL(frame);
+  } catch {
+    throw new Error(
+      "The field sits in a frame with no web origin. Pick the field on the page itself.",
+    );
+  }
+  if (
+    url.protocol !== "https:" &&
+    !parseExemptHosts(allowedPrivateHosts).has(url.hostname.toLowerCase())
+  ) {
+    throw new Error("Credentials can only be requested for an https frame.");
+  }
+  return url.origin;
+}
+
+/**
  * The vault sink tools, acting on the agent's tab through `sessions`, in
  * the browser toolkit's order; one the options leave out is `undefined`.
  * `targetOf` maps a conversation to its browser target (the toolkit's
@@ -261,6 +301,14 @@ export function createBrowserVaultTools(
         options.allowedPrivateHosts,
       );
       if (typeof normalized === "string") return fail(normalized);
+      let frameOrigin: string | undefined;
+      try {
+        frameOrigin = tab
+          ? await frameOriginOf(tab.session, normalized, options.allowedPrivateHosts)
+          : undefined;
+      } catch (error) {
+        return fail((error as Error).message);
+      }
       const open = openRequests.get(conversation);
       if (open !== undefined && open !== taskId) {
         return fail("A credential request is already open in this chat. Wait for the owner.");
@@ -278,7 +326,11 @@ export function createBrowserVaultTools(
             .requested({ conversation, taskId, origin: normalized.origin, title: normalized.title })
             .catch(() => ({ savedHandle: undefined }))
         : { savedHandle: undefined };
-      request = { ...normalized, ...(saved.savedHandle ? { savedHandle: saved.savedHandle } : {}) };
+      request = {
+        ...normalized,
+        ...(frameOrigin ? { frameOrigin } : {}),
+        ...(saved.savedHandle ? { savedHandle: saved.savedHandle } : {}),
+      };
     }
     const stored = request;
     openRequests.set(conversation, taskId);
@@ -583,7 +635,8 @@ export function createBrowserVaultTools(
       policy: { readOnly: true },
       description:
         "Ask the owner to type credentials for the current page into a secure sheet: a sign-in, " +
-        "a one-time code or a card. The server fills them into the page (current origin only); " +
+        "a one-time code or a card. The server fills them into the page (current origin only; " +
+        "for a sign-in frame from another site, pass the fields' refs); " +
         "you learn only which fields were filled. Text, email and select fields need an identifier " +
         "autocomplete; select also needs options. Call vault_list first and prefer " +
         "browser_fill_secret when a handle exists. Waits up to 10 minutes for the owner. " +
