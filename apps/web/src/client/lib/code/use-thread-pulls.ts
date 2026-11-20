@@ -1,6 +1,6 @@
 /**
  * A Code thread's pull request view (`ThreadPullsView`), as every panel on
- * the page reads it: one copy per thread, so a read or an action's answer
+ * the page reads it: the same in every panel, so a read or an action's answer
  * in one panel (the PR tab) is what the others (the Review panel's branch
  * line) show too, without a second read.
  *
@@ -12,34 +12,17 @@
  * `fresh` reconciles with GitHub first (the PR tab); without it, only the
  * branch and how far it is ahead are current.
  */
-import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { RESOURCE_QUERY } from "../../queries/resource";
 import { errorMessage } from "../errors";
 import { projectsApi } from "./projects";
 import type { ThreadPullsView } from "../../../shared/api/code";
 
 const LIVE_MS = 15_000;
 
-const views = new Map<string, ThreadPullsView>();
-const listeners = new Map<string, Set<() => void>>();
-
-function setThreadPulls(threadId: string, view: ThreadPullsView): void {
-  views.set(threadId, view);
-  for (const listener of listeners.get(threadId) ?? []) listener();
-}
-
-function subscribe(threadId: string, listener: () => void): () => void {
-  const set = listeners.get(threadId) ?? new Set();
-  set.add(listener);
-  listeners.set(threadId, set);
-  return () => {
-    set.delete(listener);
-    // The last reader gone: the next mount reads afresh, as before.
-    if (set.size === 0) {
-      listeners.delete(threadId);
-      views.delete(threadId);
-    }
-  };
-}
+/** Every read of one thread's view, whichever panel holds it. */
+const pullsKey = (threadId: string) => ["code", "thread-pulls", threadId] as const;
 
 interface ThreadPulls {
   view: ThreadPullsView | null;
@@ -56,61 +39,47 @@ export function useThreadPulls(
   options: { refreshKey: unknown; fresh?: boolean; live?: boolean; enabled?: boolean },
 ): ThreadPulls {
   const { refreshKey, fresh = true, live = false, enabled = true } = options;
-  const view = useSyncExternalStore(
-    useCallback((listener: () => void) => subscribe(threadId, listener), [threadId]),
-    () => views.get(threadId) ?? null,
-  );
-  const [error, setError] = useState<string | null>(null);
+  const client = useQueryClient();
   const [reloads, setReloads] = useState(0);
-
-  useEffect(() => {
-    if (!enabled) return;
-    let cancelled = false;
-    setError(null);
-    projectsApi
-      .pulls(threadId, fresh)
-      .then((next) => !cancelled && setThreadPulls(threadId, next))
-      .catch((e: unknown) => !cancelled && setError(errorMessage(e, "Could not read the PR.")));
-    return () => {
-      cancelled = true;
-    };
-  }, [threadId, fresh, refreshKey, reloads, enabled]);
-
+  // Each panel's reads have their own key; an answer lands in all of them.
+  const setView = useCallback(
+    (next: ThreadPullsView) => {
+      client.setQueriesData<ThreadPullsView>({ queryKey: pullsKey(threadId) }, next);
+    },
+    [client, threadId],
+  );
+  const query = useQuery({
+    queryKey: [...pullsKey(threadId), { fresh, refreshKey, reloads }],
+    queryFn: async ({ signal }) => {
+      const next = await projectsApi.pulls(threadId, fresh);
+      // An answer to a read a newer one replaced is dropped (its query was cancelled).
+      if (!signal.aborted) setView(next);
+      return next;
+    },
+    enabled,
+    // What is shown stays while the next read is out.
+    placeholderData: keepPreviousData,
+    ...RESOURCE_QUERY,
+    // Live: again on a beat while the page is visible (React Query skips a hidden page's beat).
+    refetchInterval: live ? LIVE_MS : false,
+  });
+  // Live: at once when the page is shown again.
+  const { refetch } = query;
   useEffect(() => {
     if (!live || !enabled) return;
-    let cancelled = false;
-    let reading = false;
-    const read = () => {
-      if (reading || document.visibilityState !== "visible") return;
-      reading = true;
-      projectsApi
-        .pulls(threadId, fresh)
-        .then((next) => {
-          if (cancelled) return;
-          setThreadPulls(threadId, next);
-          setError(null);
-        })
-        .catch(() => undefined)
-        .finally(() => {
-          reading = false;
-        });
-    };
-    const timer = setInterval(read, LIVE_MS);
     const onVisibility = () => {
-      if (document.visibilityState === "visible") read();
+      if (document.visibilityState === "visible") void refetch();
     };
     document.addEventListener("visibilitychange", onVisibility);
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-      document.removeEventListener("visibilitychange", onVisibility);
-    };
-  }, [threadId, fresh, live, enabled]);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [live, enabled, refetch]);
+  // A key's first read is the foreground one; a failed background read keeps what is shown.
+  const failed = query.isError && query.data === undefined;
 
   return {
-    view,
-    error,
-    setView: useCallback((next: ThreadPullsView) => setThreadPulls(threadId, next), [threadId]),
+    view: query.data ?? null,
+    error: failed ? errorMessage(query.error, "Could not read the PR.") : null,
+    setView,
     reload: useCallback(() => setReloads((n) => n + 1), []),
   };
 }

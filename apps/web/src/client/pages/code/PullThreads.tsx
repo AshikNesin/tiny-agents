@@ -6,13 +6,14 @@
  * older one, or the code moved on (outdated), they are listed above the
  * file's diff instead.
  */
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronRight, MessagesSquare } from "lucide-react";
 import { toast } from "sonner";
 import { Badge, Button, Textarea } from "@groot/ui";
 import { Spinner } from "../../components/ui/spinner";
 import { errorMessage } from "../../lib/errors";
 import { reviewsApi } from "../../lib/code/projects";
+import { useRefreshOn, useResource } from "../../queries/resource";
 import type { PullReviewView, PullThreadView, PullThreadsView } from "../../../shared/api/code";
 import { CommentBody, CommentByline } from "./PullComments";
 import type { LineNote } from "./UnifiedDiff";
@@ -199,15 +200,15 @@ export function usePullConversations(
   review: PullReviewView | null,
   reload: unknown,
 ): ((path: string) => FileConversations) | undefined {
-  const [data, setData] = useState<PullThreadsView | null>(null);
   const id = review?.id;
-  const read = useCallback(async () => {
-    if (!id) return;
-    setData(await reviewsApi.threads(id));
-  }, [id]);
-  useEffect(() => {
-    read().catch(() => setData(null));
-  }, [read, reload]);
+  // A failed read shows no conversations.
+  const { data, refresh: read } = useResource(
+    ["code", "reviews", "threads", id],
+    () => reviewsApi.threads(id!).catch((): PullThreadsView | null => null),
+    "",
+    { enabled: Boolean(id) },
+  );
+  useRefreshOn(reload, read);
 
   return useMemo(() => {
     if (!data || !review) return undefined;

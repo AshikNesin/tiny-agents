@@ -21,9 +21,9 @@ import { cn } from "@groot/ui/lib/utils";
 import { Spinner } from "../../components/ui/spinner";
 import { relativeTime } from "../../lib/bot-groups";
 import { copyText } from "../../lib/clipboard";
-import { errorMessage } from "../../lib/errors";
 import { formatDuration } from "../../lib/code/format";
 import { projectsApi } from "../../lib/code/projects";
+import { useRefreshOn, useResource } from "../../queries/resource";
 import type { CheckLogView, CheckStepView, PullView } from "../../../shared/api/code";
 
 type Check = NonNullable<PullView["snapshot"]>["checks"][number];
@@ -267,34 +267,24 @@ function FullLog({ url, label = "View full log" }: { url: string; label?: string
 }
 
 function LogExcerpt({ threadId, jobId, check }: { threadId: string; jobId: number; check: Check }) {
-  const [log, setLog] = useState<CheckLogView | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-
-  const [reads, setReads] = useState(0);
+  // Every read lands as a new object, so a running job's next read is timed from it.
+  const read = useResource<CheckLogView>(
+    ["code", "check-log", threadId, jobId],
+    () => projectsApi.checkLog(threadId, jobId),
+    "Could not read the log.",
+    { structuralSharing: false },
+  );
+  const { data: log, loadError: error, refresh } = read;
 
   // Read again when the check's state changes, and every few seconds while
   // the job runs, so its steps move and the log replaces them once it ends.
-  useEffect(() => {
-    let cancelled = false;
-    projectsApi
-      .checkLog(threadId, jobId)
-      .then((l) => {
-        if (cancelled) return;
-        setLog(l);
-        setError(null);
-      })
-      .catch((e: unknown) => !cancelled && setError(errorMessage(e, "Could not read the log.")));
-    return () => {
-      cancelled = true;
-    };
-  }, [threadId, jobId, check.state, reads]);
-
+  useRefreshOn(check.state, refresh);
   useEffect(() => {
     if (!log?.running) return;
-    const timer = setTimeout(() => setReads((n) => n + 1), STEPS_EVERY_MS);
+    const timer = setTimeout(() => void refresh(), STEPS_EVERY_MS);
     return () => clearTimeout(timer);
-  }, [log]);
+  }, [log, refresh]);
 
   const running = log?.running != null;
 

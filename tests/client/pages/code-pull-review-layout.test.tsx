@@ -6,7 +6,7 @@
  * until opened, and line comments on any file of the column. The network is
  * the boundary: fetch is stubbed.
  */
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render as renderBare, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { MemoryRouter } from "react-router-dom";
@@ -14,6 +14,11 @@ import { ConfirmProvider } from "@groot/ui/primitives";
 import { PullReview } from "@/pages/code/PullReview";
 import type { PullReviewView } from "../../../apps/web/src/shared/api/code";
 import { clickLine, line } from "../diff-dom";
+import { AppQueryProvider } from "../query-provider";
+
+/** Each render gets its own React Query cache, as the app gives the page one. */
+const render = (ui: Parameters<typeof renderBare>[0]) =>
+  renderBare(ui, { wrapper: AppQueryProvider });
 
 const REVIEW = {
   id: "rv1",

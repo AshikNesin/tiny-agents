@@ -4,13 +4,18 @@
  * pull requests and date; Archived loads when opened.
  */
 import React from "react";
-import { render, screen, within } from "@testing-library/react";
+import { render as renderBare, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { MemoryRouter } from "react-router-dom";
 import { ThreadsScreen } from "@/pages/code/ThreadsScreen";
 import type { ThreadSummary } from "@/lib/code/api";
 import type { ProjectView } from "../../../apps/web/src/shared/api/code";
+import { AppQueryProvider } from "../query-provider";
+
+/** Each render gets its own React Query cache, as the app gives the page one. */
+const render = (ui: Parameters<typeof renderBare>[0]) =>
+  renderBare(ui, { wrapper: AppQueryProvider });
 
 const listMock = vi.fn();
 vi.mock("@/lib/code/api", async (importOriginal) => {

@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { NO_CAPABILITIES } from "@tiny-agents/code/contracts";
 import { Composer } from "@/pages/code/Composer";
 import type { HarnessInfo } from "@/lib/code/api";
+import { AppQueryProvider } from "../query-provider";
 
 const harness: HarnessInfo = {
   id: "fake",
@@ -21,7 +22,9 @@ const harness: HarnessInfo = {
 };
 
 const composer = (props: Partial<React.ComponentProps<typeof Composer>>) => (
-  <Composer draftKey="fake:c1" harness={harness} onSend={async () => {}} {...props} />
+  <AppQueryProvider>
+    <Composer draftKey="fake:c1" harness={harness} onSend={async () => {}} {...props} />
+  </AppQueryProvider>
 );
 
 // The composer keeps its draft per thread: each test starts empty.

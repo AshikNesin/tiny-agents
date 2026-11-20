@@ -4,7 +4,7 @@
  * half-width side pane, with the way back to the thread.
  */
 import React from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render as renderBare, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
@@ -13,6 +13,11 @@ import { NO_CAPABILITIES } from "@tiny-agents/code/contracts";
 import { CodePage } from "@/pages/code/CodePage";
 import { useCodeStore } from "@/store/code";
 import type { HarnessInfo, ThreadSummary } from "@/lib/code/api";
+import { AppQueryProvider } from "../query-provider";
+
+/** Each render gets its own React Query cache, as the app gives the page one. */
+const render = (ui: Parameters<typeof renderBare>[0]) =>
+  renderBare(ui, { wrapper: AppQueryProvider });
 
 vi.mock("sonner", () => ({
   toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), message: vi.fn() }),

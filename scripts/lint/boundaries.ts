@@ -333,28 +333,6 @@ const BOUNDARY_RULES: BoundaryRule[] = [
     // Files that loaded this way before R15. Remove a file once it reads
     // through useResource; never add one for a new request/response load.
     except: [
-      // Code: issue #412 PR 3 moves these.
-      "apps/web/src/client/lib/code/projects.ts",
-      "apps/web/src/client/lib/code/use-live-changes.ts",
-      "apps/web/src/client/lib/code/use-next-prompt.ts",
-      "apps/web/src/client/lib/code/use-thread-pulls.ts",
-      "apps/web/src/client/lib/code/use-thread.ts",
-      "apps/web/src/client/pages/code/ChangesPanel.tsx",
-      "apps/web/src/client/pages/code/CodePage.tsx",
-      "apps/web/src/client/pages/code/CodeSettings.tsx",
-      "apps/web/src/client/pages/code/Composer.tsx",
-      "apps/web/src/client/pages/code/ConversationList.tsx",
-      "apps/web/src/client/pages/code/ConversationView.tsx",
-      "apps/web/src/client/pages/code/NewConversation.tsx",
-      "apps/web/src/client/pages/code/PullChecks.tsx",
-      "apps/web/src/client/pages/code/PullPanel.tsx",
-      "apps/web/src/client/pages/code/PullReview.tsx",
-      "apps/web/src/client/pages/code/PullThreads.tsx",
-      "apps/web/src/client/pages/code/ReviewPanel.tsx",
-      "apps/web/src/client/pages/code/ReviewsScreen.tsx",
-      "apps/web/src/client/pages/code/ThreadsScreen.tsx",
-      "apps/web/src/client/pages/code/UsagePopover.tsx",
-      "apps/web/src/client/pages/code/use-review-files.ts",
       // The rest move when a change next reworks their loading.
       "apps/web/src/client/components/ChatHistoryMenu.tsx",
       "apps/web/src/client/components/ClaudePlanStatus.tsx",
@@ -367,6 +345,10 @@ const BOUNDARY_RULES: BoundaryRule[] = [
       "apps/web/src/client/lib/use-tool-labels.ts",
       "apps/web/src/client/pages/terminal/Terminal.tsx",
       "apps/web/src/client/store/use-updates.ts",
+      // Live: the thread's change versions, an SSE stream (only its path is built in the effect).
+      "apps/web/src/client/lib/code/use-live-changes.ts",
+      // Live: the thread's transcript, an SSE stream (only its path is built in the effect).
+      "apps/web/src/client/lib/code/use-thread.ts",
     ],
     enabled: true,
   },

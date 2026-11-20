@@ -3,8 +3,8 @@
  * calls to `server/api/code/code.projects.routes.ts`. Wire types live in
  * `shared/api/code.ts`.
  */
-import { useCallback, useEffect, useState } from "react";
 import { apiClient } from "@groot/shell/lib/api";
+import { useResource } from "../../queries/resource";
 import type {
   CheckLogView,
   CheckpointView,
@@ -172,13 +172,10 @@ export function useProjects(): {
   projects: ProjectView[] | null;
   reload(): void;
 } {
-  const [projects, setProjects] = useState<ProjectView[] | null>(null);
-  const reload = useCallback(() => {
-    projectsApi
-      .list()
-      .then(setProjects)
-      .catch(() => setProjects(null));
-  }, []);
-  useEffect(reload, [reload]);
-  return { projects, reload };
+  const { data, refresh } = useResource(
+    ["code", "projects"],
+    () => projectsApi.list().catch(() => null),
+    "",
+  );
+  return { projects: data, reload: refresh };
 }

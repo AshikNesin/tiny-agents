@@ -7,7 +7,7 @@
  * folder, each group with its own New thread.
  */
 import React from "react";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render as renderBare, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { MemoryRouter } from "react-router-dom";
@@ -15,6 +15,11 @@ import { NO_CAPABILITIES } from "@tiny-agents/code/contracts";
 import { ConversationList } from "@/pages/code/ConversationList";
 import type { HarnessInfo, ThreadSummary } from "@/lib/code/api";
 import type { ProjectView } from "../../../apps/web/src/shared/api/code";
+import { AppQueryProvider } from "../query-provider";
+
+/** Each render gets its own React Query cache, as the app gives the page one. */
+const render = (ui: Parameters<typeof renderBare>[0]) =>
+  renderBare(ui, { wrapper: AppQueryProvider });
 
 const archiveMock = vi.fn();
 const toastSuccess = vi.fn();

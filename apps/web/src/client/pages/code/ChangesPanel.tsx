@@ -8,14 +8,15 @@
  * and goes to the agent with the next message. Diffs come from the thread's
  * harness (capability `workspace.diffs`).
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { ChevronDown, FileDiff as FileDiffIcon } from "lucide-react";
+import { keepPreviousData } from "@tanstack/react-query";
 import { EmptyState } from "@groot/ui";
 import { cn } from "@groot/ui/lib/utils";
 import { formatRelativeTime } from "@groot/shell/lib/date.utils";
 import { SearchSelect, type SearchSelectOption } from "../../components/ui/search-select";
-import { errorMessage } from "../../lib/errors";
 import { codeApi, type GitDiff, type GitFile } from "../../lib/code/api";
+import { useRefreshOn, useResource } from "../../queries/resource";
 import type { ThreadCommenting } from "../../lib/code/comments";
 import { useSteadyKey } from "../../lib/code/use-live-changes";
 import {
@@ -42,58 +43,49 @@ export function ChangesPanel({
   /** At full width on the Review page: the tree beside the column. */
   page?: boolean;
 }) {
-  const [diffs, setDiffs] = useState<GitDiff[] | null>(null);
   const [diffId, setDiffId] = useState<string>("working");
-  // The files of the scope they were read for: a re-read of the same scope
-  // swaps them in place, so the list (and what was folded) never blinks out.
-  const [listed, setListed] = useState<{ diffId: string; files: GitFile[] } | null>(null);
-  const files = listed?.diffId === diffId ? listed.files : null;
-  const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
   // Re-read on a steady beat while the key moves (a pushed change, or transcript activity).
   const settledKey = useSteadyKey(refreshKey);
 
-  useEffect(() => {
-    let cancelled = false;
-    setError(null);
-    codeApi
-      .diffs(instanceId, cwd)
-      .then((r) => {
-        if (cancelled) return;
-        const list = r.diffs ?? [];
-        setDiffs(list);
-        setDiffId((current) => {
-          if (list.some((d) => d.id === current && (d.id !== "working" || d.filesCount > 0)))
-            return current;
-          const working = list.find((d) => d.id === "working" && d.filesCount > 0);
-          return working?.id ?? list.find((d) => d.id !== "working")?.id ?? "working";
-        });
-      })
-      .catch(
-        (err: unknown) => !cancelled && setError(errorMessage(err, "Could not read the changes.")),
-      );
-    return () => {
-      cancelled = true;
-    };
-  }, [instanceId, cwd, settledKey, reload]);
-
-  useEffect(() => {
-    if (!diffs) return;
-    let cancelled = false;
-    codeApi
-      .diffFiles(instanceId, diffId, cwd)
-      .then((list) => {
-        if (cancelled) return;
-        setError(null);
-        setListed({ diffId, files: Array.isArray(list) ? list : [] });
-      })
-      .catch(
-        (err: unknown) => !cancelled && setError(errorMessage(err, "Could not list the files.")),
-      );
-    return () => {
-      cancelled = true;
-    };
-  }, [instanceId, diffs, diffId, cwd]);
+  // Every read lands as a new list, so the scope is checked against each one.
+  const diffList = useResource(
+    ["code", "diffs", instanceId, cwd],
+    async () => (await codeApi.diffs(instanceId, cwd)).diffs ?? [],
+    "Could not read the changes.",
+    { structuralSharing: false, placeholderData: keepPreviousData },
+  );
+  const diffs = diffList.data;
+  // Each list that lands keeps the scope if it still has changes, else picks
+  // one that does, before its files are read.
+  const [checked, setChecked] = useState<GitDiff[] | null>(null);
+  if (diffs && diffs !== checked) {
+    setChecked(diffs);
+    if (!diffs.some((d) => d.id === diffId && (d.id !== "working" || d.filesCount > 0))) {
+      const working = diffs.find((d) => d.id === "working" && d.filesCount > 0);
+      setDiffId(working?.id ?? diffs.find((d) => d.id !== "working")?.id ?? "working");
+    }
+  }
+  // The files of the scope shown: a re-read of the same scope swaps them in
+  // place, so the list (and what was folded) never blinks out.
+  const fileList = useResource(
+    ["code", "diff-files", instanceId, cwd, diffId],
+    async () => {
+      const list = await codeApi.diffFiles(instanceId, diffId, cwd);
+      return Array.isArray(list) ? list : [];
+    },
+    "Could not list the files.",
+    { enabled: diffs !== null },
+  );
+  const files: GitFile[] | null = fileList.data;
+  const error = diffList.loadError ?? fileList.loadError;
+  const refreshDiffs = diffList.refresh;
+  const refreshFiles = fileList.refresh;
+  const readAgain = useCallback(async () => {
+    await refreshDiffs();
+    await refreshFiles();
+  }, [refreshDiffs, refreshFiles]);
+  useRefreshOn(`${String(settledKey)}\u0000${reload}`, readAgain);
 
   const selected = diffs?.find((d) => d.id === diffId);
   const diffOptions: SearchSelectOption[] = (diffs ?? []).map((d) => ({

@@ -28,6 +28,7 @@ import {
 } from "react-router-dom";
 import { ArrowLeft, Code2, PanelLeftClose, PanelLeftOpen, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Button, EmptyState, monoClass } from "@groot/ui";
 import { cn } from "@groot/ui/lib/utils";
 import { CommandPaletteTrigger } from "@groot/shell/components/CommandPalette";
@@ -43,6 +44,7 @@ import {
   type ThreadSummary,
 } from "../../lib/code/api";
 import { reviewPath, reviewsApi, useProjects } from "../../lib/code/projects";
+import { RESOURCE_MUTATION, RESOURCE_QUERY, useResource } from "../../queries/resource";
 import { harnessOf, useCodeStore } from "../../store/code";
 import { ChangesPanel } from "./ChangesPanel";
 import { CodeSettings } from "./CodeSettings";
@@ -117,6 +119,11 @@ function useCodeShortcuts(
   toggleChanges: () => void,
   toggleSidebar: () => void,
 ) {
+  const { mutate: interrupt } = useMutation({
+    mutationFn: (id: string) => codeApi.interrupt(id),
+    ...RESOURCE_MUTATION,
+    onError: (error) => toast.error(errorMessage(error, "Could not stop it.")),
+  });
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (!(event.metaKey || event.ctrlKey)) return;
@@ -128,9 +135,7 @@ function useCodeShortcuts(
       if (!threadId) return;
       if (event.key === ".") {
         event.preventDefault();
-        codeApi
-          .interrupt(threadId)
-          .catch((error: unknown) => toast.error(errorMessage(error, "Could not stop it.")));
+        interrupt(threadId);
       } else if (event.shiftKey && event.key.toLowerCase() === "d") {
         event.preventDefault();
         toggleChanges();
@@ -138,7 +143,7 @@ function useCodeShortcuts(
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [threadId, toggleChanges, toggleSidebar]);
+  }, [threadId, toggleChanges, toggleSidebar, interrupt]);
 }
 
 /**
@@ -149,34 +154,32 @@ function useArchivedRow(
   threadId: string | undefined,
   threads: ThreadSummary[] | null,
 ): ThreadSummary | undefined {
-  const [found, setFound] = useState<ThreadSummary | undefined>();
   const listed = threads === null || threads.some((t) => t.id === threadId);
-  useEffect(() => {
-    setFound(undefined);
-    if (!threadId || listed) return;
-    let cancelled = false;
-    codeApi
-      .list("archived")
-      .then((rows) => !cancelled && setFound(rows.find((r) => r.id === threadId)))
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [threadId, listed]);
-  return found;
+  const enabled = Boolean(threadId) && !listed;
+  const archived = useQuery({
+    queryKey: ["code", "threads", "archived", threadId],
+    queryFn: () => codeApi.list("archived"),
+    enabled,
+    ...RESOURCE_QUERY,
+  });
+  return enabled ? archived.data?.find((r) => r.id === threadId) : undefined;
 }
 
 function SlugRedirect({ slug }: { slug: string }) {
   const navigate = useNavigate();
+  const { data: thread, loadError } = useResource(
+    ["code", "threads", "by-title", slug],
+    () => codeApi.byTitle(slug),
+    "",
+  );
   useEffect(() => {
-    codeApi
-      .byTitle(slug)
-      .then((t) => navigate(threadPath(t.id), { replace: true }))
-      .catch(() => {
-        toast.error(`No thread “${slug}”.`);
-        navigate("/code", { replace: true });
-      });
-  }, [slug, navigate]);
+    if (thread) navigate(threadPath(thread.id), { replace: true });
+  }, [thread, navigate]);
+  useEffect(() => {
+    if (loadError === null) return;
+    toast.error(`No thread “${slug}”.`);
+    navigate("/code", { replace: true });
+  }, [loadError, slug, navigate]);
   return (
     <div className="flex h-full items-center justify-center">
       <Spinner />

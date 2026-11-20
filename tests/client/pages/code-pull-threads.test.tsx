@@ -6,7 +6,7 @@
  * when GitHub has them on a newer commit or the code moved on. The network
  * is the boundary: fetch is stubbed.
  */
-import { render, screen, within } from "@testing-library/react";
+import { render as renderBare, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { usePullConversations } from "@/pages/code/PullThreads";
@@ -17,6 +17,11 @@ import type {
   PullThreadView,
 } from "../../../apps/web/src/shared/api/code";
 import { diffRoot } from "../diff-dom";
+import { AppQueryProvider } from "../query-provider";
+
+/** Each render gets its own React Query cache, as the app gives the page one. */
+const render = (ui: Parameters<typeof renderBare>[0]) =>
+  renderBare(ui, { wrapper: AppQueryProvider });
 
 const REVIEW = {
   id: "rv1",

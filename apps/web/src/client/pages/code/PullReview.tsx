@@ -28,6 +28,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button, EmptyState, Textarea, monoClass } from "@groot/ui";
 import { cn } from "@groot/ui/lib/utils";
 import {
@@ -45,6 +46,7 @@ import {
   type ThreadSummary,
 } from "../../lib/code/api";
 import { reviewsApi } from "../../lib/code/projects";
+import { useResource } from "../../queries/resource";
 import {
   githubCommentsKey,
   useCommentStore,
@@ -76,8 +78,14 @@ export function PullReview({
   rows: ThreadSummary[];
 }) {
   const navigate = useNavigate();
-  const [review, setReview] = useState<PullReviewView | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const reviewKey = ["code", "reviews", "detail", reviewId];
+  const { data: review, loadError: error } = useResource(
+    reviewKey,
+    () => reviewsApi.get(reviewId),
+    "Could not open the review.",
+  );
+  const client = useQueryClient();
+  const setReview = (next: PullReviewView) => client.setQueryData(reviewKey, next);
   const [updating, setUpdating] = useState(false);
   const [reload, setReload] = useState(0);
   // Phones: the diff or the assistant.
@@ -86,17 +94,6 @@ export function PullReview({
   const [assistantOpen, setAssistantOpen] = useState(false);
   const view = useDiffView();
   const wide = view.wide;
-
-  useEffect(() => {
-    let cancelled = false;
-    reviewsApi
-      .get(reviewId)
-      .then((r) => !cancelled && setReview(r))
-      .catch((e: unknown) => !cancelled && setError(errorMessage(e, "Could not open the review.")));
-    return () => {
-      cancelled = true;
-    };
-  }, [reviewId]);
 
   const threadId = review?.threadId ?? null;
   const assistantRow = threadId ? rows.find((r) => r.id === threadId) : undefined;

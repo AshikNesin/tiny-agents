@@ -36,9 +36,11 @@ import {
   DropdownMenuTrigger,
 } from "@groot/ui/dropdown-menu";
 import { cn } from "@groot/ui/lib/utils";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Spinner } from "../../components/ui/spinner";
 import { errorMessage } from "../../lib/errors";
 import { codeApi, type HarnessInfo, type Skill } from "../../lib/code/api";
+import { RESOURCE_QUERY, wait } from "../../queries/resource";
 import {
   canSend as draftCanSend,
   editText,
@@ -187,25 +189,32 @@ export function Composer({
       setSuggestions([]);
       return;
     }
-    let cancelled = false;
-    const timer = setTimeout(() => {
-      codeApi
-        .findFiles(harness.id, cwd, token.query)
-        .then((matches) => {
-          if (cancelled) return;
-          // Paths are relative to the working directory.
-          setSuggestions(
-            matches.slice(0, 12).map((m) => ({ value: m.path, label: m.path, dir: m.isDir })),
-          );
-          setActive(0);
-        })
-        .catch(() => !cancelled && setSuggestions([]));
-    }, 120);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [token, cwd, canFind, commands, harness.id]);
+    // Files: the query below sets them as each answer lands.
+  }, [token, cwd, canFind, commands]);
+  const fileQuery = token && token.kind !== "/" && cwd && canFind ? token.query : null;
+  const files = useQuery({
+    queryKey: ["code", "find-files", harness.id, cwd, fileQuery],
+    queryFn: async ({ signal }) => {
+      await wait(120, signal);
+      // Paths are relative to the working directory.
+      return codeApi
+        .findFiles(harness.id, cwd!, fileQuery!)
+        .then((matches) =>
+          matches.slice(0, 12).map((m) => ({ value: m.path, label: m.path, dir: m.isDir })),
+        )
+        .catch(() => []);
+    },
+    enabled: fileQuery !== null,
+    // What is offered stays until the next keystroke's answer lands.
+    placeholderData: keepPreviousData,
+    structuralSharing: false,
+    ...RESOURCE_QUERY,
+  });
+  useEffect(() => {
+    if (fileQuery === null || !files.data || files.isPlaceholderData) return;
+    setSuggestions(files.data);
+    setActive(0);
+  }, [fileQuery, files.data, files.isPlaceholderData]);
 
   const loadSkills = useCallback(() => {
     if (skills || !cwd || !canSkills) return;
