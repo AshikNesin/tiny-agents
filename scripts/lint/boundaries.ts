@@ -1,15 +1,5 @@
 import { builtinModules } from "node:module";
 import { OUT_OF_SCOPE } from "./comments.mjs";
-<<<<<<< HEAD
-
-/**
- * Oxlint does not merge two overrides that set the same rule on one file: the
- * later override replaces the earlier. So the generator gives every file
- * exactly one `no-restricted-imports` entry, holding every import row that
- * applies to it.
- */
-=======
->>>>>>> sweep-1
 
 type Scope = "**" | `${string}/**`;
 
