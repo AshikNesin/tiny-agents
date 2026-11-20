@@ -5,3 +5,7 @@
 # The seeded demo account's sign-in (demo@example.com), used by a throwaway
 # local instance to stage the launch film; the line carries gitleaks:allow now.
 06684adf7a939b48df1e9a63f7e8980b9d72ea33:scripts/demo/launch/tools/stage-code.mjs:generic-password-assignment:45
+
+# 1Password's API_CREDENTIAL item category name (onepassword-mapping.ts), not a
+# secret; the line carries gitleaks:allow now.
+9b40d1067a9455143c17dccee25c83b923a464cd:apps/web/src/server/api/vault/backends/onepassword-mapping.ts:generic-secret-assignment:48
