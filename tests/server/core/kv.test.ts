@@ -1,6 +1,9 @@
-import { describe, expect, it, vi } from "vite-plus/test";
+import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { createNamespaceKv, kv, purgeExpiredKv } from "@groot/core/kv";
+import { useFreshTestDatabase } from "../fixtures/test-db";
 
+// Each test starts from the seeded database, as if it ran first.
+beforeEach(useFreshTestDatabase);
 describe("kv", () => {
   it("round-trips JSON values", async () => {
     await kv.set("k1", { count: 3, ok: true });

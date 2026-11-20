@@ -74,10 +74,7 @@ const SERVER = "apps/web/src/server";
 const R12_ALLOWED = [
   // Caches: derived from durable state, safe to lose, rebuilt on a miss.
   "crypto/secret-box.ts:derived", // HKDF keys derived from the master secret
-  "api/vault/vault.service.ts:statusCache", // backend health, TTL-bound
-  "api/vault/vault.service.ts:appValues", // resolved app credentials, TTL-bound
   "api/vault/vault.admin.service.ts:adminBackends", // backends built from config on first use
-  "api/vault/vault.admin.service.ts:candidatesCache", // backend item listing, TTL-bound
   "api/vault/backends/index.ts:backends", // backends built from config on first use
   "api/uploads/uploads.extraction.ts:cache", // extracted attachment text
   "api/uploads/uploads.prepare.ts:processor", // the image processor, loaded once

@@ -4,7 +4,7 @@
  * calling out, settings round-trip with defaults and validation, and every
  * route needs a session.
  */
-import { afterAll, beforeAll, describe, expect, it, vi } from "vite-plus/test";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { createNamespaceKv } from "@groot/core/kv";
 import { createDbLogStore } from "@groot/core/notification/notification.log";
 import { NOTIFICATION_SETTINGS_KEY } from "@groot/core/notification/notification.settings";
@@ -26,8 +26,12 @@ interface SettingsBody {
 
 beforeAll(async () => {
   token = await authToken("notifications-test@example.com");
-  await kv.delete(NOTIFICATION_SETTINGS_KEY);
   notificationService.defineEvents(NOTIFICATION_EVENTS);
+});
+// Every test reads the defaults unless it saves its own.
+beforeEach(async () => {
+  await kv.delete(NOTIFICATION_SETTINGS_KEY);
+  notificationService.forgetSettings();
 });
 
 afterAll(async () => {

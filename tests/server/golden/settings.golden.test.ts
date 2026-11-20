@@ -3,7 +3,7 @@
  * attachments, notification settings) and the Code page on a fake harness.
  * See recorder.ts.
  */
-import { afterAll, afterEach, beforeAll, describe } from "vite-plus/test";
+import { afterEach, beforeEach, describe } from "vite-plus/test";
 import { createTestApp } from "../helpers";
 import { createNamespaceKv } from "@groot/core/kv";
 import {
@@ -23,16 +23,20 @@ import { createCodeHub, setCodeHub } from "../../../apps/web/src/server/api/code
 import { authToken, closeAppRuntime, openAppRuntime, resetAppTables } from "../fixtures";
 import { fakeHarness } from "../code/fake-harness";
 import { goldenFlow } from "./recorder";
+import { useFreshTestDatabase } from "../fixtures/test-db";
 
 const app = createTestApp();
 let token = "";
 
-beforeAll(async () => {
+// Each flow starts as if it ran first: a new database copy and runtime, so
+// the ids it records do not depend on which flows ran before it.
+beforeEach(async () => {
+  await useFreshTestDatabase();
   token = await authToken("golden-settings@example.com");
   await openAppRuntime();
   await resetAppTables();
 });
-afterAll(() => closeAppRuntime());
+afterEach(() => closeAppRuntime());
 
 const setup = { app, token: () => token };
 /** The owner confirmed it's them: a fresh step-up token on every call that needs one. */

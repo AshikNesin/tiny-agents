@@ -4,7 +4,7 @@
  * the job queue is ticked by hand. See recorder.ts.
  */
 import { runTick } from "@groot/jobs/server/tick";
-import { afterAll, beforeAll, describe, vi } from "vite-plus/test";
+import { afterEach, beforeEach, describe, vi } from "vite-plus/test";
 import { createTestApp } from "../helpers";
 import {
   botGuests,
@@ -28,19 +28,23 @@ import {
 } from "../fixtures";
 import { FIXED_NOW } from "../../test-clock";
 import { goldenFlow } from "./recorder";
+import { useFreshTestDatabase } from "../fixtures/test-db";
 
 const app = createTestApp();
 let token = "";
 let stopSettled = () => {};
 
-beforeAll(async () => {
+// Each flow starts as if it ran first: a new database copy and runtime, so
+// the ids it records do not depend on which flows ran before it.
+beforeEach(async () => {
+  await useFreshTestDatabase();
   token = await authToken("golden-work@example.com");
   const runtime = await openAppRuntime();
   stopSettled = startSettledPipeline(runtime);
   registerRoutineJobs();
   await resetAppTables();
 });
-afterAll(async () => {
+afterEach(async () => {
   stopSettled();
   await closeAppRuntime();
 });

@@ -12,7 +12,7 @@
         "description": "",
         "systemPrompt": "Be brief.",
         "modelId": "test-model",
-        "conversationId": "65",
+        "conversationId": "2",
         "chatStartedAt": "2026-11-06T06:30:00.000Z",
         "lastReadAt": null,
         "lastActivityAt": "2026-11-06T06:30:00.000Z",
@@ -138,18 +138,6 @@
     "tables": {
       "tasks": [
         {
-          "id": "<id4>",
-          "title": "Book flights",
-          "description": "",
-          "status": "todo",
-          "priority": "medium",
-          "dueAt": null,
-          "completedAt": null,
-          "sourceKey": "pi:<id5>:14",
-          "createdAt": "2026-11-06T06:30:00.000Z",
-          "updatedAt": "2026-11-06T06:30:00.000Z"
-        },
-        {
           "id": "<id3>",
           "title": "Buy milk",
           "description": "",
@@ -157,7 +145,7 @@
           "priority": "medium",
           "dueAt": null,
           "completedAt": null,
-          "sourceKey": "pi:<id6>:78",
+          "sourceKey": "pi:<id4>:15",
           "createdAt": "2026-11-06T06:30:00.000Z",
           "updatedAt": "2026-11-06T06:30:00.000Z"
         }

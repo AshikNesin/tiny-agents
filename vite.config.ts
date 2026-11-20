@@ -184,11 +184,9 @@ export default defineConfig({
   // Test configuration - client tests only
   // Server tests run from vitest.config.server.ts
   test: {
-    // Vitest v4 compatibility: preserve mock call history.
-    // Remove after tests no longer rely on calls from setup or earlier tests.
-    // https://viteplus.dev/guide/vitest-v5#remove-unneeded-compatibility-settings
-    // https://vitest.dev/guide/migration/#clearmocks-is-enabled-by-default
-    clearMocks: false,
+    // A new random order of files and tests every run; the seed is printed at
+    // the top. Rerun one order with --sequence.seed=<seed>.
+    sequence: { shuffle: true },
     include: ["../../tests/client/**/*.test.{ts,tsx}"],
     exclude: ["src/**/*.test.{ts,tsx}"],
     environment: "jsdom",

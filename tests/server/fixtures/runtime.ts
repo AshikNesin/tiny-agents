@@ -32,7 +32,7 @@ import {
   botsCapability,
 } from "../../../apps/web/src/server/api/bots/bots.runtime";
 import { appEnv } from "../../../apps/web/src/server/env";
-import { installAppForTests } from "../../../apps/web/src/server/app-root";
+import { app, installAppForTests } from "../../../apps/web/src/server/app-root";
 import { currentRuntimeSlot, setCurrentRuntimeSlot } from "./runtime-slot";
 
 export { TEST_MODEL } from "../../../packages/agent/src/testing";
@@ -73,7 +73,11 @@ export async function openAppRuntime(
 export async function closeAppRuntime(): Promise<void> {
   const open = currentAppRuntime();
   setCurrentRuntimeSlot(undefined);
-  if (open?.kind === "real") await open.runtime.close();
+  if (open?.kind === "real") {
+    // Uninstall it too, unless the test installed another since.
+    if (app().runtime === open.runtime) useTestRuntime(undefined);
+    await open.runtime.close();
+  }
 }
 
 // ── The typed fake ──────────────────────────────────────────────────────

@@ -1,7 +1,8 @@
-import { describe, expect, it } from "vite-plus/test";
+import { beforeEach, describe, expect, it } from "vite-plus/test";
 import { storage } from "@groot/core/storage";
 import { copyFile, deleteFolder } from "@groot/core/storage/storage.service";
 import { api, createTestApp, signIn } from "../helpers";
+import { useFreshTestDatabase } from "../fixtures/test-db";
 
 const app = createTestApp();
 
@@ -24,6 +25,8 @@ function uploadForm(files: File[], folder?: string): FormData {
   return form;
 }
 
+// Each test starts from the seeded database, as if it ran first.
+beforeEach(useFreshTestDatabase);
 describe("storage API", () => {
   it("uploads, lists, downloads, renames and deletes files", async () => {
     const { token } = await signIn(app);

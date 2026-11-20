@@ -2,6 +2,7 @@ import { expect, afterEach } from "vite-plus/test";
 import { cleanup } from "@testing-library/react";
 import * as matchers from "@testing-library/jest-dom/matchers";
 import { MotionGlobalConfig } from "motion/react";
+import { toast } from "sonner";
 import { pinClockWhileLoadingAndBeforeEachTest } from "../test-clock";
 
 pinClockWhileLoadingAndBeforeEachTest();
@@ -51,7 +52,23 @@ if (typeof window !== "undefined") {
   }
 }
 
+// <html> and <body> attributes as the file found them. Overlays write to them
+// (Radix sets and then empties body's style), and a pinned snapshot of the body
+// would otherwise record what an earlier test left behind.
+const rootAttributes = (el: Element) => new Map([...el.attributes].map((a) => [a.name, a.value]));
+const initialAttributes =
+  typeof document === "undefined"
+    ? []
+    : [document.documentElement, document.body].map((el) => [el, rootAttributes(el)] as const);
+
 // Cleanup after each test
 afterEach(() => {
   cleanup();
+  // Sonner keeps toasts in module state and replays the active ones to the
+  // next Toaster that mounts, so a test would see the previous test's toasts.
+  toast.dismiss();
+  for (const [el, attributes] of initialAttributes) {
+    for (const { name } of [...el.attributes]) if (!attributes.has(name)) el.removeAttribute(name);
+    for (const [name, value] of attributes) el.setAttribute(name, value);
+  }
 });

@@ -57,11 +57,10 @@ for (const key of [
 export default defineConfig({
   root: ".",
   test: {
-    // Vitest v4 compatibility: preserve mock call history.
-    // Remove after tests no longer rely on calls from setup or earlier tests.
-    // https://viteplus.dev/guide/vitest-v5#remove-unneeded-compatibility-settings
-    // https://vitest.dev/guide/migration/#clearmocks-is-enabled-by-default
-    clearMocks: false,
+    // Files and the tests in them run in a new random order every run, so a
+    // test that leans on another's leftovers fails. The seed is printed at the
+    // top of the run; rerun one order with --sequence.seed=<seed>.
+    sequence: { shuffle: true },
     environment: "node",
     setupFiles: ["./tests/server/setup.ts"],
     maxWorkers: availableParallelism() * WORKERS_PER_CORE,

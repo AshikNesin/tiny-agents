@@ -36,7 +36,28 @@ pnpm test:e2e       # Playwright (starts the dev server itself)
   background; tests call `runTick()` when they want jobs processed
 
 Within a file, clear what you need in `beforeEach` (e.g.
-`await db.delete(tasks)`, `jobRunner.reset()`).
+`await db.delete(tasks)`, `jobRunner.reset()`). A test that records ids or
+reads whole tables calls `await useFreshTestDatabase()` (from
+`tests/server/fixtures/test-db.ts`) first in `beforeEach`. It gets a new copy
+of the seeded database and an empty App root, the way a new file starts, so
+the ids it sees do not depend on the tests before it. The golden flows do
+this.
+
+## Random order
+
+Both suites run with `sequence.shuffle`: files, and the tests in each file,
+run in a new random order every run. A test that passes only after (or
+before) another one fails sooner or later. The seed is printed at the top of
+the run (`Running tests with seed "1234"`). Rerun that order with
+`pnpm test --sequence.seed=1234` (or `pnpm test:client --sequence.seed=1234`)
+and fix the dependency; never pin a seed. Mock call history is cleared before
+every test (Vitest's default `clearMocks`), so a test never sees calls an
+earlier one made.
+
+The client setup (`tests/client/setup.ts`) undoes what a test leaves in the
+document after each test: it unmounts with `cleanup()`, dismisses Sonner's
+toasts (Sonner replays the active ones to the next `Toaster`), and puts the
+`<html>` and `<body>` attributes back.
 
 ## Isolation between files
 

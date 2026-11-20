@@ -19,6 +19,8 @@ import type { HeldLiveAccess } from "./api/people/live-access";
 import type { VaultAlertSink } from "./api/vault/vault.alerts";
 import type { SupervisorChannel } from "./api/system/updates.service";
 import type { VapidKeys } from "@groot/core/notification/webpush.crypto";
+import type { BackendItemSummary, BackendName } from "./api/vault/backends/types";
+import type { BackendStatus } from "../shared/api/vault";
 
 /**
  * The composition root (docs/rewrite/DECISIONS.md, D8): the app's long-lived
@@ -80,6 +82,16 @@ export interface App {
   vaultStepUps: Map<string, { userId: number; expiresAt: number }>;
   /** Where vault alerts go (`setVaultAlertSink`); unset drops them. */
   vaultAlertSink?: VaultAlertSink;
+  /**
+   * What the Vault read from its backends, each kept a short while and read
+   * again on a miss: each backend's health (`backendStatus`), resolved app
+   * credentials (`appCredential`) and the item listing (`candidates`).
+   */
+  vault: {
+    backendStatus: Map<BackendName, { at: number; status: BackendStatus }>;
+    appValues: Map<string, { at: number; value: string }>;
+    candidates?: { at: number; items: (BackendItemSummary & { backend: BackendName })[] };
+  };
   /** Credential requests a submit is filling right now (`submitRequest`, vault.requests.service.ts). */
   submittingRequests: Set<number>;
   /** The runtime `reloadModels` hands new model config to (`bindModelRuntime`). */
@@ -117,6 +129,7 @@ function emptyApp(): App {
     backgroundBotReleases: new Set(),
     liveAccess: new Set(),
     vaultStepUps: new Map(),
+    vault: { backendStatus: new Map(), appValues: new Map() },
     submittingRequests: new Set(),
     modelListeners: new Set(),
     updateStatus: null,

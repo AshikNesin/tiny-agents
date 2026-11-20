@@ -1,9 +1,10 @@
-import { describe, expect, it } from "vite-plus/test";
+import { beforeEach, describe, expect, it } from "vite-plus/test";
 import type { SessionUser, SignInResponse } from "@groot/core/auth/auth.schema";
 import * as authService from "@groot/core/auth/auth.service";
 import * as passkeyService from "@groot/core/passkey/passkey.service";
 import { api, createTestApp, type JsonResponse } from "../helpers";
 import { createSoftPasskey } from "../fixtures/passkey";
+import { useFreshTestDatabase } from "../fixtures/test-db";
 
 // Each test file gets a fresh database, so first-run setup is still open here.
 const app = createTestApp();
@@ -32,6 +33,8 @@ async function expectSignedIn(
   return cookieAttributes(response);
 }
 
+// Each test starts from the seeded database, as if it ran first.
+beforeEach(useFreshTestDatabase);
 describe("sign-in paths", () => {
   it("first-run setup, password login and passkey login start the same session", async () => {
     const setup = await api<SignInResponse>(app, "/api/v1/auth/setup", {

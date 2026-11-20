@@ -702,6 +702,10 @@ describe("MCP connection lifecycle (the manager owns it)", () => {
     await db.delete(botConnections);
     await db.delete(connections);
     await db.delete(bots);
+    // Connections deleted above leave their own header-value items (Q4).
+    await db.delete(vaultAuditEvents);
+    await db.delete(vaultItems);
+    await db.delete(vaultValues);
   });
 
   const createDemo = (app: TestApp, extra: Record<string, unknown> = {}) =>

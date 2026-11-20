@@ -2,7 +2,7 @@
  * Golden flows: bots and their chats, as the owner sees them over HTTP and
  * the chat stream. See recorder.ts.
  */
-import { afterAll, beforeAll, describe } from "vite-plus/test";
+import { afterEach, beforeEach, describe } from "vite-plus/test";
 import { createTestApp } from "../helpers";
 import { botChats, botMessages, bots, promptRevisions } from "../../../apps/web/src/server/db";
 import { startSettledPipeline } from "../../../apps/web/src/server/api/bots/bots.settled";
@@ -15,18 +15,22 @@ import {
   until,
 } from "../fixtures";
 import { goldenFlow, type Recorder } from "./recorder";
+import { useFreshTestDatabase } from "../fixtures/test-db";
 
 const app = createTestApp();
 let token = "";
 let stopSettled = () => {};
 
-beforeAll(async () => {
+// Each flow starts as if it ran first: a new database copy and runtime, so
+// the ids it records do not depend on which flows ran before it.
+beforeEach(async () => {
+  await useFreshTestDatabase();
   token = await authToken("golden-chats@example.com");
   const runtime = await openAppRuntime();
   stopSettled = startSettledPipeline(runtime);
   await resetAppTables();
 });
-afterAll(async () => {
+afterEach(async () => {
   stopSettled();
   await closeAppRuntime();
 });

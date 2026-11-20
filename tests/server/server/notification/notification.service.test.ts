@@ -493,7 +493,7 @@ describe("NotificationHub", () => {
     const webpush = build({ log, settings, channel: phone });
     const hub = new NotificationHub(pushover.service);
     hub.add(webpush.service);
-    return { hub, log, pushover, webpush };
+    return { hub, log, pushover, webpush, settings };
   }
 
   it("delivers through the one channel the owner chose", async () => {
@@ -547,5 +547,17 @@ describe("NotificationHub", () => {
     await flush();
     expect(webpush.channel.sent).toHaveLength(1);
     expect(pushover.channel.send).not.toHaveBeenCalled();
+  });
+
+  it("reads the store again after forgetSettings, on every channel", async () => {
+    const { hub, settings, webpush } = hubOf({ reminderMinutes: 15 });
+    expect((await hub.getSettings()).reminderMinutes).toBe(15);
+    expect((await webpush.service.getSettings()).reminderMinutes).toBe(15);
+    // The store changes under the caches, as when the server tests swap the database.
+    await settings.save({ ...(await settings.load()), reminderMinutes: 40 });
+    expect((await hub.getSettings()).reminderMinutes).toBe(15);
+    hub.forgetSettings();
+    expect((await hub.getSettings()).reminderMinutes).toBe(40);
+    expect((await webpush.service.getSettings()).reminderMinutes).toBe(40);
   });
 });

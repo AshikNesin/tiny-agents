@@ -208,6 +208,15 @@ export class NotificationService {
     this.#settingsCache = { value, at: this.#now() };
   }
 
+  /**
+   * Drop the cached settings, so the next read loads them from the store.
+   * For a store whose database was swapped under it (each server test file
+   * gets its own database; the clock is frozen, so the cache never expires).
+   */
+  forgetSettings(): void {
+    this.#settingsCache = undefined;
+  }
+
   /** The channel this service delivers through. */
   get channelId(): string {
     return this.#channel.id;
@@ -879,6 +888,11 @@ export class NotificationHub {
 
   events(): NotificationEventDef[] {
     return this.primary.events();
+  }
+
+  /** `forgetSettings()` on every channel. */
+  forgetSettings(): void {
+    for (const service of this.#services) service.forgetSettings();
   }
 
   /** The settings with "auto" read as the channel it stands for, so the page shows a real choice. */

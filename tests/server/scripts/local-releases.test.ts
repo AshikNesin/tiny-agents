@@ -7,7 +7,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import {
   compare,
   fetchTracked,
@@ -34,7 +34,9 @@ function commit(version: string, message: string, file = "app.txt"): string {
 
 let first: string;
 
-beforeAll(() => {
+// A repository and clone per test: each test commits, and a later one must
+// not see what an earlier one added.
+beforeEach(() => {
   base = mkdtempSync(path.join(os.tmpdir(), "local-releases-"));
   upstream = path.join(base, "upstream");
   clone = path.join(base, "clone");
@@ -48,7 +50,7 @@ beforeAll(() => {
   execFileSync("git", ["clone", "-q", upstream, clone]);
 });
 
-afterAll(() => rmSync(base, { recursive: true, force: true }));
+afterEach(() => rmSync(base, { recursive: true, force: true }));
 
 describe("local releases", () => {
   it("follows a branch and lists the commits an update brings", async () => {

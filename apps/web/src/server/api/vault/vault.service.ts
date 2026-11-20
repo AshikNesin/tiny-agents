@@ -29,6 +29,7 @@ import {
 } from "@tiny-agents/agent";
 import { KIND_DEFAULT_TOOLS } from "../../../shared/vault-kinds";
 import { db, vaultAuditEvents, vaultItems, type VaultItem } from "../../db";
+import { app } from "../../app-root";
 import { readBackends } from "./backends";
 import {
   BackendError,
@@ -113,23 +114,22 @@ export function normalizeOrigin(raw: string): string | undefined {
 // ── Backend status ──────────────────────────────────────────────────────
 
 const STATUS_TTL_MS = 60_000;
-const statusCache = new Map<BackendName, { at: number; status: BackendStatus }>();
 
 export async function backendStatus(name: BackendName, force = false): Promise<BackendStatus> {
   const backend = readBackends().get(name);
   if (!backend) return { state: "unconfigured", detail: "Not configured." };
-  const cached = statusCache.get(name);
+  const cached = app().vault.backendStatus.get(name);
   if (!force && cached && Date.now() - cached.at < STATUS_TTL_MS) return cached.status;
   const status = await backend.status().catch((error: unknown): BackendStatus => ({
     state: "error",
     detail: (error as Error).message,
   }));
-  statusCache.set(name, { at: Date.now(), status });
+  app().vault.backendStatus.set(name, { at: Date.now(), status });
   return status;
 }
 
 export function clearStatusCache(): void {
-  statusCache.clear();
+  app().vault.backendStatus.clear();
 }
 
 // ── Audit ───────────────────────────────────────────────────────────────
@@ -551,13 +551,12 @@ export async function resolveConnectionSecret(
 
 /** How long a resolved app credential is kept in memory. */
 const APP_VALUE_TTL_MS = 5 * 60_000;
-const appValues = new Map<string, { at: number; value: string }>();
 
 /** Drop a cached app credential (its item was edited, rotated or deleted). */
 export function forgetAppCredential(handle?: string): void {
-  if (handle === undefined) return appValues.clear();
-  for (const key of appValues.keys()) {
-    if (key.startsWith(`${handle}\0`)) appValues.delete(key);
+  if (handle === undefined) return app().vault.appValues.clear();
+  for (const key of app().vault.appValues.keys()) {
+    if (key.startsWith(`${handle}\0`)) app().vault.appValues.delete(key);
   }
 }
 
@@ -576,7 +575,7 @@ export async function resolveProviderSecret(
   input: { providerName: string; host: string },
 ): Promise<string> {
   const key = `${handle}\0${input.host.toLowerCase()}`;
-  const cached = appValues.get(key);
+  const cached = app().vault.appValues.get(key);
   if (cached && Date.now() - cached.at < APP_VALUE_TTL_MS) return cached.value;
   const value = await runUse(
     { handle, tool: "model", targetKind: "provider", target: input.host, approved: false },
@@ -586,7 +585,7 @@ export async function resolveProviderSecret(
     ["value"],
     async (values) => values.value!.reveal(),
   );
-  appValues.set(key, { at: Date.now(), value });
+  app().vault.appValues.set(key, { at: Date.now(), value });
   return value;
 }
 
@@ -600,7 +599,7 @@ export async function resolveProviderSecret(
  */
 export async function resolveGitHubToken(handle: string): Promise<string> {
   const key = `${handle}\0github`;
-  const cached = appValues.get(key);
+  const cached = app().vault.appValues.get(key);
   if (cached && Date.now() - cached.at < APP_VALUE_TTL_MS) return cached.value;
   const value = await runUse(
     { handle, tool: "github", targetKind: "github", target: "api.github.com", approved: false },
@@ -609,6 +608,6 @@ export async function resolveGitHubToken(handle: string): Promise<string> {
     ["value"],
     async (values) => values.value!.reveal(),
   );
-  appValues.set(key, { at: Date.now(), value });
+  app().vault.appValues.set(key, { at: Date.now(), value });
   return value;
 }

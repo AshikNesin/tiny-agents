@@ -12,7 +12,7 @@
         "description": "",
         "systemPrompt": "Be brief.",
         "modelId": "test-model",
-        "conversationId": "99",
+        "conversationId": "2",
         "chatStartedAt": "2026-11-06T06:30:00.000Z",
         "lastReadAt": null,
         "lastActivityAt": "2026-11-06T06:30:00.000Z",
@@ -109,7 +109,7 @@
                     "title": "Water plants"
                   },
                   "status": "awaiting_approval",
-                  "taskId": 111
+                  "taskId": 14
                 }
               ],
               "status": "done",
@@ -164,7 +164,7 @@
   {
     "http": "approve",
     "method": "POST",
-    "path": "/api/v1/bots/<id1>/approvals/111",
+    "path": "/api/v1/bots/<id1>/approvals/14",
     "status": 200,
     "body": {
       "success": true,

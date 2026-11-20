@@ -8,9 +8,8 @@
  */
 import { bootstrap } from "@groot/core/bootstrap";
 import { memoryStorage } from "@groot/core/storage/memory";
-import { sqliteConnection } from "../../apps/web/src/server/db";
 import { guardFileIsolation } from "./fixtures/file-isolation";
-import { freshTestDatabase } from "./fixtures/test-db";
+import { closeTestDatabase, freshTestDatabase } from "./fixtures/test-db";
 import { pinClockWhileLoadingAndBeforeEachTest } from "../test-clock";
 import { boundWaitsByTestTimeout } from "./fixtures/until";
 
@@ -44,7 +43,7 @@ const seedModels = async () => {
   );
 };
 
-const database = await freshTestDatabase(
+await freshTestDatabase(
   (db) =>
     bootstrap({
       env: { ...process.env, NODE_ENV: "test", DATABASE_URL: ":memory:" },
@@ -56,4 +55,4 @@ const database = await freshTestDatabase(
   seedModels,
 );
 
-guardFileIsolation(() => sqliteConnection(database).close());
+guardFileIsolation(closeTestDatabase);

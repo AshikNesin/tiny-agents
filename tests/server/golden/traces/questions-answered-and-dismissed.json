@@ -12,7 +12,7 @@
         "description": "",
         "systemPrompt": "Be brief.",
         "modelId": "test-model",
-        "conversationId": "38",
+        "conversationId": "2",
         "chatStartedAt": "2026-11-06T06:30:00.000Z",
         "lastReadAt": null,
         "lastActivityAt": "2026-11-06T06:30:00.000Z",
@@ -88,7 +88,7 @@
                     ]
                   },
                   "status": "awaiting_answer",
-                  "taskId": 50,
+                  "taskId": 14,
                   "questions": [
                     {
                       "question": "Which stack?",
@@ -131,7 +131,7 @@
   {
     "http": "answer badly",
     "method": "POST",
-    "path": "/api/v1/bots/<id1>/questions/50",
+    "path": "/api/v1/bots/<id1>/questions/14",
     "status": 400,
     "body": {
       "success": false,
@@ -144,7 +144,7 @@
   {
     "http": "answer",
     "method": "POST",
-    "path": "/api/v1/bots/<id1>/questions/50",
+    "path": "/api/v1/bots/<id1>/questions/14",
     "status": 200,
     "body": {
       "success": true,
@@ -385,7 +385,7 @@
                     ]
                   },
                   "status": "awaiting_answer",
-                  "taskId": 60,
+                  "taskId": 24,
                   "questions": [
                     {
                       "question": "Which stack?",
@@ -428,7 +428,7 @@
   {
     "http": "dismiss",
     "method": "POST",
-    "path": "/api/v1/bots/<id1>/questions/60",
+    "path": "/api/v1/bots/<id1>/questions/24",
     "status": 200,
     "body": {
       "success": true,

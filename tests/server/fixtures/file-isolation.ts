@@ -131,7 +131,9 @@ async function settle(open: Opened, ms = 250): Promise<string[]> {
  * (apps/web/src/server/entry.node.ts), so a file's services cannot keep
  * working into the next file: agent runtimes (the App root's and the runtime
  * fixture's), MCP connections, browser and desktop sessions, sandbox SSH
- * connections and the Code hub. Loaded here, after the file ran, so the
+ * connections and the Code hub; and forget what module services outside it
+ * cached from the old database (notification settings, the job runner's
+ * claims). Loaded here, after the file ran, so the
  * setup never loads them ahead of a file's `vi.mock`.
  */
 async function stopAppServices(): Promise<void> {
@@ -159,6 +161,11 @@ async function stopAppServices(): Promise<void> {
   ]);
   closeSandboxConnections();
   if (typeof root.codeHub?.stop === "function") root.codeHub.stop();
+  // Module services outside the App root that cache what the database held.
+  const { notificationService } = await import("@groot/core/notification/notification.service");
+  notificationService.forgetSettings();
+  const { jobRunner } = await import("@groot/jobs/server");
+  jobRunner.reset();
 }
 
 /**
