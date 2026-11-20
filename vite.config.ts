@@ -7,6 +7,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { boundaryOverrides } from "./scripts/lint/boundaries";
+import { DurationSequencer } from "./tests/sequencer";
 
 const rootDir = path.dirname(fileURLToPath(import.meta.url));
 const clientSrc = path.resolve(rootDir, "apps/web/src/client");
@@ -186,7 +187,7 @@ export default defineConfig({
   test: {
     // A new random order of files and tests every run; the seed is printed at
     // the top. Rerun one order with --sequence.seed=<seed>.
-    sequence: { shuffle: true },
+    sequence: { shuffle: true, sequencer: DurationSequencer },
     include: ["../../tests/client/**/*.test.{ts,tsx}"],
     exclude: ["src/**/*.test.{ts,tsx}"],
     environment: "jsdom",

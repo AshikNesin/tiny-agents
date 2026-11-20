@@ -16,48 +16,113 @@ concurrency:
   group: tests-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# Every job runs in parallel on its own fresh instabox VM, gets warm through
+# .github/actions/setup, and checks its own time budget (scripts/ci-budget.mjs).
+# The static gates come from scripts/gates.mjs, one job per gate job; `pnpm
+# check:coverage` holds this file to that list. The CI job at the end is the
+# one required check.
 jobs:
-  test:
-    name: Tests
+  secrets:
+    name: Secret scan
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: instabox-medium
-    env:
-      NODE_ENV: test
     steps:
-      # Full history (the gates diff against origin/<base> and the secret scan
-      # walks the new commits) without file contents: git fetches a blob only
-      # when something reads it.
+      - run: echo "CI_STARTED_AT=$(date +%s)" >> "$GITHUB_ENV"
+      # Full history without file contents: the scan walks the new commits.
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
           filter: blob:none
-      # The pruned production boot installs again, so this job keeps the pnpm
-      # store warm rather than node_modules.
       - uses: ./.github/actions/setup
         with:
-          deps: store
+          deps: none
           tools: "true"
           github-token: ${{ github.token }}
-
+      - run: node scripts/ci-budget.mjs setup
       - name: Secret scan (gitleaks)
         # The pre-commit hook skips gitleaks where it isn't installed.
         env:
           BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
         run: bash scripts/secret-scan.sh gitleaks "$BASE"
+      - run: node scripts/ci-budget.mjs run secrets
 
-      - name: Static gates (scripts/gates.mjs)
-        run: pnpm verify:static
+  typecheck:
+    name: Typecheck
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: instabox-medium
+    steps:
+      - run: echo "CI_STARTED_AT=$(date +%s)" >> "$GITHUB_ENV"
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup
+      - run: node scripts/ci-budget.mjs setup
+      - run: pnpm verify:static --job typecheck
+      - run: node scripts/ci-budget.mjs run typecheck
 
-      - name: Server tests
-        run: pnpm test
-      - name: Client tests
-        run: pnpm test:client
+  lint:
+    name: Lint & format
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: instabox-medium
+    steps:
+      - run: echo "CI_STARTED_AT=$(date +%s)" >> "$GITHUB_ENV"
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup
+      - run: node scripts/ci-budget.mjs setup
+      - run: pnpm verify:static --job lint
+      - run: node scripts/ci-budget.mjs run lint
 
+  gates:
+    name: Gates
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: instabox-medium
+    steps:
+      - run: echo "CI_STARTED_AT=$(date +%s)" >> "$GITHUB_ENV"
+      # The kit export and changeset gates diff against origin/<base>.
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          filter: blob:none
+      # ripgrep for the design-token gate.
+      - uses: ./.github/actions/setup
+        with:
+          tools: "true"
+          github-token: ${{ github.token }}
+      - run: node scripts/ci-budget.mjs setup
+      - run: pnpm verify:static --job gates
+      - run: node scripts/ci-budget.mjs run gates
+
+  migrations:
+    name: Migrations
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: instabox-medium
+    steps:
+      - run: echo "CI_STARTED_AT=$(date +%s)" >> "$GITHUB_ENV"
+      # The immutability gate diffs against origin/<base>.
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          filter: blob:none
+      - uses: ./.github/actions/setup
+      - run: node scripts/ci-budget.mjs setup
+      - run: pnpm verify:static --job migrations
+      - run: node scripts/ci-budget.mjs run migrations
+
+  build:
+    name: Build & boot
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: instabox-medium
+    steps:
+      - run: echo "CI_STARTED_AT=$(date +%s)" >> "$GITHUB_ENV"
+      - uses: actions/checkout@v5
+      # The pruned boot installs again, so this job keeps the pnpm store warm
+      # rather than node_modules.
+      - uses: ./.github/actions/setup
+        with:
+          deps: store
+      - run: node scripts/ci-budget.mjs setup
       - name: Build (client + Node server)
         run: pnpm build
       - name: Runtime dependency closure
         run: pnpm check:closure
-
       - name: Pruned production boot
         env:
           NODE_ENV: production
@@ -79,7 +144,10 @@ jobs:
           for i in $(seq 1 60); do
             if curl -fsS -m 5 http://localhost:3999/health; then
               echo "health endpoint answered"
-              curl -fsS -m 5 http://localhost:3999/ | grep -q '<div id="root">' && echo "client served"
+              # A plain command, not `grep && echo`: set -e ignores a failure
+              # on the left of &&, so that form never failed.
+              curl -fsS -m 5 http://localhost:3999/ | grep -q '<div id="root">'
+              echo "client served"
               kill -TERM "$server_pid"
               for j in $(seq 1 15); do
                 kill -0 "$server_pid" 2>/dev/null || exit 0
@@ -98,3 +166,73 @@ jobs:
           echo "server did not answer /health within 60s"
           cat boot.log
           exit 1
+      - run: node scripts/ci-budget.mjs run build
+
+  # Test shards split files by recorded duration (tests/sequencer.ts,
+  # tests/durations.json), so each takes about the same time.
+  server:
+    name: Server tests (${{ matrix.shard }}/2)
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: instabox-medium
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    steps:
+      - run: echo "CI_STARTED_AT=$(date +%s)" >> "$GITHUB_ENV"
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup
+      - run: node scripts/ci-budget.mjs setup
+      - run: pnpm test --project server --project server:isolated --shard=${{ matrix.shard }}/2
+      - run: node scripts/ci-budget.mjs run server
+
+  client:
+    name: Client tests (${{ matrix.shard }}/3)
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: instabox-medium
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - run: echo "CI_STARTED_AT=$(date +%s)" >> "$GITHUB_ENV"
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup
+      - run: node scripts/ci-budget.mjs setup
+      - run: pnpm test:client --shard=${{ matrix.shard }}/3
+      - run: node scripts/ci-budget.mjs run client
+
+  # The two suites that typecheck whole copies of the repo, one per shard.
+  repo-typecheck:
+    name: Repo typecheck suites (${{ matrix.shard }}/2)
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: instabox-medium
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    steps:
+      - run: echo "CI_STARTED_AT=$(date +%s)" >> "$GITHUB_ENV"
+      # The kit export suite diffs against origin/main.
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          filter: blob:none
+      - uses: ./.github/actions/setup
+      - run: node scripts/ci-budget.mjs setup
+      - run: pnpm test --project server:repo-typecheck --shard=${{ matrix.shard }}/2
+      - run: node scripts/ci-budget.mjs run repo-typecheck
+
+  # The one required check: green only when every job above passed. A job
+  # that failed, was cancelled or was skipped fails it.
+  ci:
+    name: CI
+    if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    needs: [secrets, typecheck, lint, gates, migrations, build, server, client, repo-typecheck]
+    runs-on: instabox-medium
+    steps:
+      - env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          echo "$RESULTS" | jq -e 'all(.[]; .result == "success")' > /dev/null

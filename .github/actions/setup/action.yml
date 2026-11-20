@@ -10,6 +10,7 @@ inputs:
       node_modules: restore node_modules keyed by the lockfile and skip the
       install on a hit (fastest). store: restore the pnpm store and install
       from it, for a job that installs again (the pruned production boot).
+      none: Node only, no pnpm or dependencies (the secret scan).
     default: node_modules
   tools:
     description: Set to "true" to put ripgrep and gitleaks on PATH.
@@ -21,8 +22,11 @@ inputs:
 runs:
   using: composite
   steps:
-    - uses: pnpm/action-setup@v4
+    - if: inputs.deps != 'none'
+      uses: pnpm/action-setup@v4
 
+    # Always: every job runs scripts/ci-budget.mjs. Node 24 is in the
+    # runner's tool cache, so this takes about a second.
     - uses: actions/setup-node@v5
       with:
         node-version: "24"
@@ -42,7 +46,7 @@ runs:
         key: node-modules-${{ runner.os }}-${{ runner.arch }}-node24-${{ hashFiles('pnpm-lock.yaml', 'pnpm-workspace.yaml', '.npmrc', 'patches/**') }}
 
     - name: Install dependencies
-      if: inputs.deps == 'store' || steps.node-modules.outputs.cache-hit != 'true'
+      if: inputs.deps == 'store' || (inputs.deps == 'node_modules' && steps.node-modules.outputs.cache-hit != 'true')
       shell: bash
       run: pnpm install --frozen-lockfile
 

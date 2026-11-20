@@ -47,7 +47,8 @@
     "packages/models/src/**/*",
     "packages/sandbox/src/**/*",
     "tests/server/**/*",
-    "tests/test-clock.ts"
+    "tests/test-clock.ts",
+    "tests/sequencer.ts"
   ],
   "exclude": ["node_modules", "dist"]
 }

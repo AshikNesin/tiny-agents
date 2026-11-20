@@ -28,6 +28,7 @@
     "golden:check": "NODE_ENV=test vp test run --config vitest.config.server.ts tests/server/golden",
     "golden:update": "GOLDEN_UPDATE=1 NODE_ENV=test vp test run --config vitest.config.server.ts tests/server/golden",
     "test:all": "pnpm test && pnpm test:client",
+    "test:durations": "node scripts/record-test-durations.mjs",
     "verify": "pnpm verify:static && pnpm test && pnpm test:client",
     "verify:static": "node scripts/gates.mjs",
     "test:watch": "NODE_ENV=test vp test --config vitest.config.server.ts",

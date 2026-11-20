@@ -313,14 +313,28 @@ gitleaks, each checked against a pinned sha256 when downloaded. The checkout
 is blobless (`filter: blob:none`) with full history, so the gates can diff
 against `origin/<base>` without downloading every old file.
 
-`.github/workflows/test.yml` runs, in order: a gitleaks scan of the commits
-the PR or push adds (`scripts/secret-scan.sh`), the static gates through
-`pnpm verify:static` (typechecks for the server, the client, the e2e specs,
-typecheck coverage and the kit fixture, the kit export guard, the changeset gate, the
-checks-coverage guard, lint + format, the doc reference check, the
-design-token check, and a migration freshness check that `pnpm db:generate`
-adds no migration; the list lives in `scripts/gates.mjs`), server and client
-tests, `pnpm build`, the runtime dependency closure check, and a pruned
-production boot (tracked files plus `dist` copied to a fresh directory,
-`pnpm install --prod --offline` from the warm store, `node dist/server/bundle.js`, `/health` answers,
-`SIGTERM` exits within 15 s).
+`.github/workflows/test.yml` runs every job at once, each on its own VM:
+
+| Job                                            | Runs                                                                                                                                                                                                                                                                                    |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Secret scan                                    | gitleaks over the commits the PR or push adds (`scripts/secret-scan.sh`)                                                                                                                                                                                                                |
+| Typecheck · Lint & format · Gates · Migrations | `pnpm verify:static --job <job>`: the gates of `scripts/gates.mjs` with that `job`, in parallel                                                                                                                                                                                         |
+| Build & boot                                   | `pnpm build`, the runtime dependency closure check, and a pruned production boot (tracked files plus `dist` in a fresh directory, `pnpm install --prod --offline` from the warm store, `node dist/server/bundle.js`, `/health` and the client page answer, `SIGTERM` exits within 15 s) |
+| Server tests (1/2, 2/2)                        | the `server` and `server:isolated` projects, `--shard=i/2`                                                                                                                                                                                                                              |
+| Client tests (1/3 to 3/3)                      | the client suite, `--shard=i/3`                                                                                                                                                                                                                                                         |
+| Repo typecheck suites (1/2, 2/2)               | the two suites that typecheck copies of the repo, one each                                                                                                                                                                                                                              |
+| CI                                             | passes only when every job above passed: the one required check                                                                                                                                                                                                                         |
+
+A shard holds the files `tests/sequencer.ts` gives it: longest first, each
+onto the shard with the least recorded time (`tests/durations.json`), so the
+shards finish together. Vitest's own `--shard` splits by count. Refresh the
+durations with `pnpm test:durations` when the suites change shape; a file it
+has not seen counts as the median.
+
+Every job times itself against `scripts/ci-budget.mjs`: 30 s from its first
+step through setup, then a budget for its work (5 s for lint, 60 s for a test
+shard). A job past its budget fails even when its checks passed. Make the job
+faster, or raise its budget in that table with the reason in the PR; never with
+a `timeout-minutes`. `pnpm check:coverage` holds the workflow to this layout:
+each gate job runs once, every job checks its budget, the `CI` job needs every
+job, and each test matrix lists every shard its command splits into.

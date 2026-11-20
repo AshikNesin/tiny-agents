@@ -2,6 +2,7 @@ import { defineConfig } from "vite-plus";
 import { readFileSync, readdirSync } from "node:fs";
 import { availableParallelism } from "node:os";
 import path from "node:path";
+import { DurationSequencer } from "./tests/sequencer";
 
 const rootDir = path.resolve();
 // Most server test files wait on timers and child processes, not the CPU.
@@ -60,7 +61,7 @@ export default defineConfig({
     // Files and the tests in them run in a new random order every run, so a
     // test that leans on another's leftovers fails. The seed is printed at the
     // top of the run; rerun one order with --sequence.seed=<seed>.
-    sequence: { shuffle: true },
+    sequence: { shuffle: true, sequencer: DurationSequencer },
     environment: "node",
     setupFiles: ["./tests/server/setup.ts"],
     maxWorkers: availableParallelism() * WORKERS_PER_CORE,
