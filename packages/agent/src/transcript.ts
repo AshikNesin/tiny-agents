@@ -13,6 +13,7 @@ import type {
 } from "./types";
 import type { GateUserMessage } from "./policy";
 import { finishedToolRow, liveToolRow, type LiveTool } from "./tool-call-row";
+import { sentTextsOf } from "./toolkits/message-owner";
 
 /** Raw pieces of a conversation the chat view is derived from. */
 export interface RawChat {
@@ -102,7 +103,11 @@ export function lastMessageOf(messages: readonly ChatMessage[]): LastMessage | u
     const message = messages[i];
     if (!message || (message.role !== "user" && message.role !== "assistant")) continue;
     const text =
-      message.role === "assistant" && message.error ? `⚠ ${message.error}` : message.text;
+      message.role === "assistant" && message.error
+        ? `⚠ ${message.error}`
+        : message.quiet
+          ? (message.sent?.at(-1) ?? "")
+          : message.text;
     if (!text) continue;
     return { role: message.role, text, createdAt: message.createdAt };
   }
@@ -156,6 +161,15 @@ function withoutAuthor(text: string, author: ChatAuthor | undefined): string {
   if (!author) return text;
   const prefix = authoredText(author.name, "");
   return text.startsWith(prefix) ? text.slice(prefix.length) : text;
+}
+
+/**
+ * Whether a user message starts a quiet turn (issue #396): a hand-off's
+ * finish or another bot's reply (`reply`), or a bot's message (`message`).
+ * An owner's @mention is the owner's own turn.
+ */
+function isQuietPeer(peer: ChatMessage["peer"] | undefined): boolean {
+  return peer?.kind === "reply" || peer?.kind === "message";
 }
 
 /**
@@ -334,12 +348,14 @@ function assistantToChat(
         ? "error"
         : "done";
   const toolCalls = toolCallsOf(message, tools?.results, tools?.live, tools?.settled ?? !streaming);
+  const sent = sentTextsOf(toolCalls);
   return {
     id,
     role: "assistant",
     text: textOf(message.content),
     ...(reasoning ? { reasoning } : {}),
     ...(toolCalls.length > 0 ? { toolCalls } : {}),
+    ...(sent.length > 0 ? { sent } : {}),
     status,
     ...(status === "error" ? { error: modelErrorText(message) } : {}),
     model: message.model,
@@ -386,6 +402,8 @@ export function deriveChat(raw: RawChat): ChatMessage[] {
       markersBeforeHead.set(head, list);
     }
   }
+  // A turn another bot or a hand-off started is quiet until the owner writes.
+  let quiet = false;
   for (let i = 0; i < visible.length; i++) {
     const entry = visible[i];
     const id = Number(entry.id);
@@ -415,6 +433,7 @@ export function deriveChat(raw: RawChat): ChatMessage[] {
       const peer = peerOf(entry);
       const requestId = requestIdOf(entry);
       const author = entry.kind === CHAT_USER_ENTRY ? authorOfData(record(entry.data)) : undefined;
+      quiet = isQuietPeer(peer);
       out.push({
         id: `e${entry.id}`,
         role: "user",
@@ -436,14 +455,13 @@ export function deriveChat(raw: RawChat): ChatMessage[] {
       const retried = next ? next.kind === "pi.assistant" : raw.live !== undefined;
       if (retried) continue;
     }
-    out.push(
-      assistantToChat(`e${entry.id}`, assistant, false, {
-        results: results.get(id),
-        // Live slots belong to the current round: the newest assistant entry.
-        live: entry === lastAssistant ? raw.tools : undefined,
-        settled: settled || entry !== lastAssistant,
-      }),
-    );
+    const reply = assistantToChat(`e${entry.id}`, assistant, false, {
+      results: results.get(id),
+      // Live slots belong to the current round: the newest assistant entry.
+      live: entry === lastAssistant ? raw.tools : undefined,
+      settled: settled || entry !== lastAssistant,
+    });
+    out.push(quiet ? { ...reply, quiet: true } : reply);
   }
 
   // Flag inputs that never got an answer. Inputs that landed in the same turn
@@ -466,7 +484,10 @@ export function deriveChat(raw: RawChat): ChatMessage[] {
     };
   }
 
-  if (raw.live) out.push(assistantToChat("live", raw.live, true));
+  if (raw.live) {
+    const live = assistantToChat("live", raw.live, true);
+    out.push(quiet ? { ...live, quiet: true } : live);
+  }
   return out;
 }
 

@@ -83,7 +83,8 @@ again.
 | `question.asked`       | `ask_owner` waits for answers (preview: the first question)                                                                | 1           | `/chats/:botId?focus=question:<task>` |
 | `credential.requested` | A bot asked for a login it doesn't have (`request_credentials`); vanishes when the request expires                         | 1           | `/vault/requests/<task>`              |
 | `input.reminder`       | Still waiting after `reminderMinutes` (15); one reminder per call                                                          | 1           | same as above                         |
-| `routine.succeeded`    | A routine run finished (preview of the reply; ttl 24 h)                                                                    | -1 (quiet)  | `/routines`                           |
+| `bot.message`          | A bot sent `message_owner` in a turn you didn't start (a hand-off's finish, another bot's reply) while nobody watched      | 0           | `/chats/:botId`                       |
+| `routine.succeeded`    | A routine run sent `message_owner` (its text; ttl 24 h). A run that sent nothing pushes nothing                            | -1 (quiet)  | `/routines`                           |
 | `routine.failed`       | A run failed, was missed, was interrupted, or its routine paused                                                           | 0           | `/routines` (paused: the chat)        |
 | `run.failed`           | A reply ended in a model error while nobody had the chat open                                                              | 0           | `/chats/:botId`                       |
 | `run.long_done`        | A reply that ran ≥ `longRunMinutes` (5) ended while nobody watched                                                         | -1          | `/chats/:botId`                       |

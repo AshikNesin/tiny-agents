@@ -29,13 +29,18 @@ import { createFakeRuntime, resetAppTables, seedBot, until } from "../../fixture
 
 const CONVERSATION = 4242;
 
+/** A finished reply, quiet when a turn the owner didn't start made it. */
+type Reply = FinishedReply & { quiet?: true };
+
 /** A finished reply as the transcript holds it. */
-const asMessage = (reply: FinishedReply, index: number): ChatMessage => ({
+const asMessage = (reply: Reply, index: number): ChatMessage => ({
   id: `a${index}`,
   role: "assistant",
   text: reply.text,
   status: reply.error !== undefined ? "error" : "done",
   ...(reply.error !== undefined ? { error: reply.error } : {}),
+  ...(reply.sent ? { sent: reply.sent } : {}),
+  ...(reply.quiet ? { quiet: reply.quiet } : {}),
   createdAt: reply.createdAt,
 });
 
@@ -47,9 +52,9 @@ const asMessage = (reply: FinishedReply, index: number): ChatMessage => ({
 function fakeRuntime() {
   const fake = createFakeRuntime();
   const starts = new Map<number, number>();
-  let replies: FinishedReply[] = [];
+  let replies: Reply[] = [];
   return Object.assign(fake, {
-    setReplies: (next: FinishedReply[]) => {
+    setReplies: (next: Reply[]) => {
       replies = next;
     },
     wait: (event: WaitEvent) => fake.emitWait(event),
@@ -438,6 +443,75 @@ describe("run notifications", () => {
   });
 });
 
+describe("messages a bot sends (#396)", () => {
+  it("push what a turn sent while nobody watches, and nothing else", async () => {
+    const runtime = fakeRuntime();
+    const notifier = fakeNotifier({ longRunMinutes: 5 });
+    wiring = startNotifications(runtime, notifier);
+    const start = Date.now();
+    const now = vi.spyOn(Date, "now");
+    try {
+      now.mockReturnValue(start);
+      runtime.activity(true);
+      now.mockReturnValue(start + 9 * 60_000);
+      runtime.setReplies([
+        {
+          text: "Checked the PR; CI is green, merging is up to the owner.",
+          sent: ["Your PR is green and ready to merge."],
+          quiet: true,
+          createdAt: start + 9 * 60_000,
+        },
+      ]);
+      runtime.activity(false);
+      await until(() => notifier.sent.length === 1, "bot message push");
+      await settle();
+      expect(notifier.sent).toHaveLength(1);
+      expect(notifier.sent[0]).toMatchObject({
+        event: "bot.message",
+        title: "💬 Ops bot",
+        message: "Your PR is green and ready to merge.",
+        path: `/chats/${botId}`,
+      });
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  it("leave an owner's own turn to its reply, even when it called message_owner", async () => {
+    const runtime = fakeRuntime();
+    const notifier = fakeNotifier();
+    wiring = startNotifications(runtime, notifier);
+    runtime.activity(true);
+    runtime.setReplies([
+      { text: "Here's the plan.", sent: ["Here's the plan."], createdAt: Date.now() + 1 },
+    ]);
+    runtime.activity(false);
+    await settle();
+    expect(notifier.sent).toHaveLength(0);
+  });
+
+  it("keep a quiet turn that sent nothing silent, even a long one", async () => {
+    const runtime = fakeRuntime();
+    const notifier = fakeNotifier({ longRunMinutes: 5 });
+    wiring = startNotifications(runtime, notifier);
+    const start = Date.now();
+    const now = vi.spyOn(Date, "now");
+    try {
+      now.mockReturnValue(start);
+      runtime.activity(true);
+      now.mockReturnValue(start + 9 * 60_000);
+      runtime.setReplies([
+        { text: "Noted the hand-off's result.", quiet: true, createdAt: start + 9 * 60_000 },
+      ]);
+      runtime.activity(false);
+      await settle();
+      expect(notifier.sent).toHaveLength(0);
+    } finally {
+      now.mockRestore();
+    }
+  });
+});
+
 describe("vault alerts", () => {
   it("are locked security pushes to the vault", () => {
     const notifier = fakeNotifier();
@@ -460,9 +534,20 @@ describe("vault alerts", () => {
 describe("routine notifications", () => {
   const run = { runId: "run-1", routineName: "Morning digest", bot: { id: "b1", name: "Ops bot" } };
 
-  it("render success quietly with a preview and a day's ttl", () => {
+  it("push a succeeded run only when it messaged the owner (#396)", () => {
     const notifier = fakeNotifier();
-    notifyRoutineRun(run, { status: "succeeded", output: "3 new issues, 1 PR merged." }, notifier);
+    notifyRoutineRun(run, { status: "succeeded", output: "Nothing new since 08:00." }, notifier);
+    expect(notifier.sent).toHaveLength(0);
+    notifyRoutineRun(
+      run,
+      {
+        status: "succeeded",
+        output: "Checked GitHub: 3 new issues, 1 PR merged.",
+        sent: ["3 new issues, 1 PR merged."],
+      },
+      notifier,
+    );
+    expect(notifier.sent).toHaveLength(1);
     expect(notifier.sent[0]).toMatchObject({
       event: "routine.succeeded",
       title: "✅ Morning digest",
@@ -471,6 +556,19 @@ describe("routine notifications", () => {
       ttlSeconds: 86_400,
       dedupeKey: "routine:run-1:succeeded",
     });
+  });
+
+  it("push what a run sent even when it then failed", () => {
+    const notifier = fakeNotifier();
+    notifyRoutineRun(
+      run,
+      { status: "failed", error: "model error", sent: ["Found 2 new invoices."] },
+      notifier,
+    );
+    expect(notifier.sent.map((n) => [n.event, n.message])).toEqual([
+      ["routine.succeeded", "Ops bot: Found 2 new invoices."],
+      ["routine.failed", expect.any(String)],
+    ]);
   });
 
   it("render failures, misses and pauses with the reason", () => {

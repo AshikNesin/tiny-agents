@@ -7,6 +7,29 @@ import { describe, expect, it } from "vite-plus/test";
 import { openTestRuntime } from "../../../../packages/agent/src/testing";
 import type { ChatEvent, ChatState } from "@tiny-agents/agent";
 
+/** Wait until the transcript carries `count` assistant replies, then return the messages. */
+async function afterReplies(
+  rt: Awaited<ReturnType<typeof openTestRuntime>>,
+  ref: number,
+  count: number,
+) {
+  for (let attempt = 0; attempt < 200; attempt++) {
+    let state: ChatState | undefined;
+    const subscription = await rt.watchChat(ref, (events) => {
+      const snapshot = events.find(
+        (event): event is Extract<ChatEvent, { type: "snapshot" }> => event.type === "snapshot",
+      );
+      if (snapshot) state = snapshot.state;
+    });
+    await subscription.stop();
+    const messages = state?.messages ?? [];
+    const done = messages.filter((m) => m.role === "assistant" && m.status === "done");
+    if (!state?.busy && done.length >= count) return messages;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error(`transcript never carried ${count} replies`);
+}
+
 /** Wait until the transcript carries `count` user entries, then return them. */
 async function userMessages(
   rt: Awaited<ReturnType<typeof openTestRuntime>>,
@@ -45,6 +68,25 @@ describe("peer metadata on chat.user entries", () => {
       const typed = users.find((m) => m.text.includes("typed by owner"));
       expect(relay?.peer).toEqual({ kind: "reply", name: "Radar" });
       expect(typed?.peer).toBeUndefined();
+    } finally {
+      await rt.close();
+    }
+  });
+
+  it("marks the replies to a hand-off's finish quiet until the owner writes (#396)", async () => {
+    const rt = await openTestRuntime({ storePath: ":memory:", tokensPerSecond: 1_000 });
+    try {
+      const ref = await rt.createConversation({ modelId: "test-model", systemPrompt: "" });
+      await rt.submit(ref, {
+        requestId: "finish-1",
+        text: "**Reply from Claude Code:** PR is up",
+        peer: { kind: "reply", name: "Claude Code" },
+      });
+      await afterReplies(rt, ref, 1);
+      await rt.submit(ref, { requestId: "owner-1", text: "thanks, what next?" });
+      const messages = await afterReplies(rt, ref, 2);
+      const replies = messages.filter((m) => m.role === "assistant");
+      expect(replies.map((m) => m.quiet)).toEqual([true, undefined]);
     } finally {
       await rt.close();
     }

@@ -33,9 +33,11 @@ function normalized(root: Element): Element {
   for (const el of clone.querySelectorAll<HTMLElement>("[style]")) {
     el.style.removeProperty("opacity");
     el.style.removeProperty("transform");
-    // Radix Presence sets these for a frame on mount, by timing too.
+    // Radix Presence sets these for a frame on mount, by timing too, and
+    // Radix Collapsible zeroes transition-duration until its first frame.
     el.style.removeProperty("animation-duration");
     el.style.removeProperty("animation-name");
+    el.style.removeProperty("transition-duration");
     if (!el.getAttribute("style")) el.removeAttribute("style");
   }
   return clone;

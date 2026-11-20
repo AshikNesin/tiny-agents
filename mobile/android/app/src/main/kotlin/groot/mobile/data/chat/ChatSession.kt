@@ -269,6 +269,17 @@ private fun isToolRound(message: ChatMessage): Boolean =
         message.text.isBlank() &&
         message.toolCalls.isNotEmpty()
 
+/**
+ * A quiet turn's message (issue #396: a hand-off's finish or another bot's
+ * reply started it) as the owner sees it: what it sent is its text, and its
+ * own words fold away with its thinking.
+ */
+private fun presentQuiet(message: ChatMessage): ChatMessage {
+    if (!message.quiet) return message
+    val reasoning = listOfNotNull(message.reasoning, message.text.ifBlank { null }).joinToString("\n\n")
+    return message.copy(text = message.sent.joinToString("\n\n"), reasoning = reasoning.ifEmpty { null })
+}
+
 /** Transcript messages with the routine cards merged in by time; tool-only rounds fold forward. */
 fun chatTimeline(messages: List<ChatMessage>, runs: List<RoutineRunCard>, zoneOffsetMs: Long = 0L): List<TimelineItem> {
     val cards = runs.sortedBy { it.finishedAt }
@@ -285,8 +296,9 @@ fun chatTimeline(messages: List<ChatMessage>, runs: List<RoutineRunCard>, zoneOf
         }
     }
     var next = 0
-    messages.forEachIndexed { index, message ->
-        if (isHiddenReply(message)) return@forEachIndexed
+    messages.forEachIndexed { index, original ->
+        if (isHiddenReply(original)) return@forEachIndexed
+        val message = presentQuiet(original)
         while (next < cards.size && cards[next].finishedAt < message.createdAt) addRun(cards[next++])
         val last = items.lastOrNull()
         if (last is TimelineItem.Message &&

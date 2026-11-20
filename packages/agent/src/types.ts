@@ -200,6 +200,14 @@ export interface ChatMessage {
   createdAt: number;
   /** For markers: what happened. */
   marker?: "compaction";
+  /**
+   * Assistant role only: the turn was not the owner's (a hand-off's finish
+   * or another bot's reply started it), so the text is the bot's own
+   * working and only `sent` is meant for the owner (issue #396).
+   */
+  quiet?: true;
+  /** Assistant role only: what this message's `message_owner` calls sent, in order. */
+  sent?: string[];
 }
 
 /**
@@ -299,6 +307,8 @@ export interface FinishedReply {
   blocked?: string;
   /** The run limit the gate stopped the turn's tool calls on, newest in the turn. */
   stoppedBy?: RunLimit;
+  /** What the turn's `message_owner` calls sent the owner, in order (issue #396). */
+  sent?: string[];
 }
 
 /** A limit one run is held to (gate.ts): its token budget, or its tool-call cap. */

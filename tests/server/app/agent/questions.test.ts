@@ -164,7 +164,10 @@ describe("ask_owner", () => {
     expect(runtime.listCapabilities()).toContainEqual(
       expect.objectContaining({
         id: "questions",
-        tools: [expect.objectContaining({ name: "ask_owner", readOnly: true })],
+        tools: [
+          expect.objectContaining({ name: "ask_owner", readOnly: true }),
+          expect.objectContaining({ name: "message_owner", readOnly: true }),
+        ],
       }),
     );
   });

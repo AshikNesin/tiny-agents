@@ -61,6 +61,22 @@ function isToolRound(message: ChatMessage): boolean {
   );
 }
 
+/**
+ * A quiet turn's message (issue #396: a hand-off's finish or another bot's
+ * reply started it) as the owner sees it: what it sent with `message_owner`
+ * is its text, and its own words fold away with its thinking.
+ */
+function presentQuiet(message: ChatMessage): ChatMessage {
+  if (!message.quiet) return message;
+  const reasoning = [message.reasoning, message.text].filter(Boolean).join("\n\n");
+  const { reasoning: _reasoning, ...rest } = message;
+  return {
+    ...rest,
+    text: (message.sent ?? []).join("\n\n"),
+    ...(reasoning ? { reasoning } : {}),
+  };
+}
+
 export function chatTimeline(
   messages: readonly ChatMessage[],
   runs: readonly RoutineRunCard[],
@@ -79,8 +95,9 @@ export function chatTimeline(
     }
   };
   let next = 0;
-  messages.forEach((message, index) => {
-    if (isHiddenReply(message)) return;
+  messages.forEach((original, index) => {
+    if (isHiddenReply(original)) return;
+    const message = presentQuiet(original);
     while (next < cards.length && cards[next].at < message.createdAt) addRun(cards[next++]);
     const last = items.at(-1);
     if (

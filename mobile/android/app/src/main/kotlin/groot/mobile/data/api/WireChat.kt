@@ -226,6 +226,10 @@ data class ChatMessage(
     val createdAt: Long = 0L,
     /** For markers: what happened ("compaction"). */
     val marker: String? = null,
+    /** A turn the owner didn't start (issue #396): the text is the bot's own working. */
+    val quiet: Boolean = false,
+    /** What this message's `message_owner` calls sent the owner, in order. */
+    val sent: List<String> = emptyList(),
 ) {
     companion object {
         fun from(json: JSONObject) = ChatMessage(
@@ -253,6 +257,8 @@ data class ChatMessage(
             model = json.stringOrNull("model"),
             createdAt = json.long("createdAt"),
             marker = json.stringOrNull("marker"),
+            quiet = json.bool("quiet"),
+            sent = json.arr("sent").strings(),
         )
     }
 }

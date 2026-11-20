@@ -20,6 +20,7 @@ import { innerDetails } from "../approvals";
 import type { Capability } from "../capabilities";
 import { parseStored, toJson } from "../durable-json";
 import { defineToolkit, tool } from "../toolkit";
+import { messageOwnerTool } from "./message-owner";
 import type { ChatToolCall, OwnerAnswer, OwnerQuestion } from "../types";
 import {
   pendingToolTask,
@@ -292,7 +293,7 @@ export function createQuestionsCapability(tracker: WaitTracker): Capability {
   return defineToolkit({
     id: "questions",
     name: "Questions",
-    description: "Asks you clarifying questions mid-reply",
-    tools: [askOwner],
+    description: "Asks you clarifying questions mid-reply, and messages you",
+    tools: [askOwner, messageOwnerTool],
   });
 }

@@ -282,13 +282,20 @@
             "id": "questions",
             "kind": "toolkit",
             "name": "Questions",
-            "description": "Asks you clarifying questions mid-reply",
+            "description": "Asks you clarifying questions mid-reply, and messages you",
             "tools": [
               {
                 "name": "ask_owner",
                 "label": "Asked you questions",
                 "askLabel": "ask you questions",
                 "description": "Ask you clarifying questions and wait for your answers",
+                "readOnly": true
+              },
+              {
+                "name": "message_owner",
+                "label": "Messaged you",
+                "askLabel": "message you",
+                "description": "Send you a message when you didn't start the turn",
                 "readOnly": true
               }
             ]

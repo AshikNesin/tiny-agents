@@ -139,7 +139,8 @@ describe("Code settings", () => {
     renderAt("/code/settings/projects?repo=other%2Flib");
     const add = await screen.findByRole("button", { name: "Add" });
     await waitFor(() => expect(add).toBeEnabled());
-    expect(screen.getByText("other/lib")).toBeInTheDocument();
+    // The picked repository can land a render after the button enables.
+    expect(await screen.findByText("other/lib")).toBeInTheDocument();
   });
 
   it("saves each project setting on its own page", async () => {
