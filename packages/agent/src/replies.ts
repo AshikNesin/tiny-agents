@@ -1,7 +1,8 @@
 /**
  * Finished replies: which assistant messages answer what. A turn starts at a
- * user message and runs until the next one; every assistant message in
- * between belongs to it (a tool-calling turn writes several). The Finished
+ * user message and runs until the next one after its first reply; every
+ * assistant message in between belongs to it (a tool-calling turn writes
+ * several). Inputs placed together, back to back, share one turn. The Finished
  * reply to a submission is found by the submission's request id, never by
  * timestamps, so a mid-turn "Let me check…" never stands in for the answer
  * and a queued second submission never takes the first one's reply.
@@ -89,9 +90,13 @@ export function finishedReplyTo(
   let blocked: string | undefined;
   let stoppedBy: FinishedReply["stoppedBy"];
   const sent: string[] = [];
-  let closed = false;
-  for (const message of messages.slice(start + 1)) {
+  // A turn that settled without an answer is over, whatever follows it.
+  let closed = messages[start].status === "unanswered";
+  for (const message of closed ? [] : messages.slice(start + 1)) {
     if (message.role === "user") {
+      // Inputs placed together (queued follow-ups, a steer with them) sit
+      // back to back and share the reply that follows them (issue #396).
+      if (!last) continue;
       closed = true;
       break;
     }
