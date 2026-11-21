@@ -37,6 +37,7 @@ merge base with `origin/main` for a new branch) and runs, at once:
 | Format                  | `vp fmt --check <changed files>`                        | a changed file is one Oxfmt formats                                                     |
 | Lint                    | `vp lint <changed files>`                               | a changed file is JavaScript or TypeScript                                              |
 | Typecheck (incremental) | `pnpm typecheck` (`pnpm verify:static --job typecheck`) | a `.ts`/`.tsx` file, a tsconfig or a `package.json` changed, was deleted or was renamed |
+| Merges with main        | `pnpm check:merge-main`                                 | always                                                                                  |
 
 It reads the working tree, not the commits you push. The typecheck runs the
 server, client, e2e and kit programs in parallel, each keeping its state in
