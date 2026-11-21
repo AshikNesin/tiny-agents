@@ -3,19 +3,19 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>Tiny Agents: a personal AI assistant you run yourself</title>
+    <title>Tiny Agents: your own AI assistant, on your own server</title>
     <meta
       name="description"
-      content="Tiny Agents is a personal AI assistant that runs on your own server. Message it like a friend: it remembers what you like, handles the legwork in its own browser and computer, and checks with you before anything that matters. Open source soon."
+      content="Your own AI assistant, on your own server. Tiny Agents is a messenger where each contact is a bot that can browse the web, run commands, work on a schedule and remember you, and it asks before it does anything you haven't allowed. Open source, MIT."
     />
     <meta name="theme-color" content="#ffffff" />
     <meta name="color-scheme" content="light" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Tiny Agents" />
-    <meta property="og:title" content="Tiny Agents: a personal AI assistant you run yourself" />
+    <meta property="og:title" content="Tiny Agents: your own AI assistant, on your own server" />
     <meta
       property="og:description"
-      content="A personal AI assistant on your own server. It remembers you, does the legwork, and asks first. Open source soon."
+      content="Your own AI assistant, on your own server. Bots that browse, run commands, work on a schedule and ask first. Open source, MIT."
     />
     <meta property="og:url" content="https://tiny-agents.nesin.io/" />
     <meta property="og:image" content="https://tiny-agents.nesin.io/media/og.png" />
@@ -250,11 +250,6 @@
       }
       @media (max-width: 720px) {
         .nav-links {
-          display: none;
-        }
-      }
-      @media (max-width: 400px) {
-        .wide {
           display: none;
         }
       }
@@ -772,12 +767,91 @@
         }
       }
 
+      /* Why */
+      .why {
+        max-width: 680px;
+      }
+      .why h2 {
+        margin-bottom: 18px;
+      }
+      .why p + p {
+        margin-top: 18px;
+      }
+      .why .lead {
+        max-width: none;
+        color: var(--ink2);
+      }
+      .why .sig {
+        font-size: 15px;
+        color: var(--muted);
+      }
+
+      /* Screens */
+      .shot {
+        margin: 0;
+      }
+      .shot img {
+        width: 100%;
+        height: auto;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: #111;
+        box-shadow:
+          0 30px 60px -36px rgb(20 20 30 / 35%),
+          0 2px 6px rgb(20 20 30 / 5%);
+      }
+      .shot figcaption {
+        margin-top: 12px;
+        font-size: 15.5px;
+        color: var(--muted);
+      }
+      .shot figcaption b {
+        font-weight: 600;
+        color: var(--ink);
+      }
+      .shot-lead {
+        margin-bottom: clamp(32px, 5vw, 48px);
+      }
+      .grid-2 {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: clamp(24px, 4vw, 40px) 24px;
+      }
+      @media (max-width: 700px) {
+        .grid-2 {
+          grid-template-columns: 1fr;
+        }
+      }
+
       /* Self-host */
+      .quick {
+        margin: 28px 0 0;
+        padding: 16px 18px;
+        overflow-x: auto;
+        border-radius: 12px;
+        background: var(--ink);
+        color: #e9e9ee;
+        font: 14px/1.7 var(--mono);
+        font-variant-ligatures: none;
+      }
+      .quick-note {
+        margin-top: 14px;
+        font-size: 15px;
+        color: var(--muted);
+      }
+      .quick-note a,
+      .why a {
+        text-decoration: underline;
+        text-underline-offset: 3px;
+      }
       .split {
         display: grid;
         grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
         gap: clamp(32px, 6vw, 72px);
         align-items: start;
+      }
+      .split > * {
+        min-width: 0;
       }
       .split h2 {
         margin-bottom: 18px;
@@ -1015,6 +1089,12 @@
             stroke-linecap="round"
           />
         </symbol>
+        <symbol id="gh" viewBox="0 0 24 24">
+          <path
+            fill="currentColor"
+            d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.7 5.4-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"
+          />
+        </symbol>
         <symbol id="x" viewBox="0 0 24 24">
           <path
             fill="currentColor"
@@ -1031,14 +1111,19 @@
           Tiny Agents
         </a>
         <nav class="nav-links" aria-label="Sections">
-          <a href="#how">How it works</a>
+          <a href="#why">Why</a>
+          <a href="#screens">Screens</a>
           <a href="#features">Features</a>
-          <a href="#self-host">Self-host</a>
+          <a href="#self-host">Run it</a>
           <a href="#faq">FAQ</a>
         </nav>
-        <a class="btn btn-secondary btn-sm" href="https://x.com/AshikNesin" rel="noopener">
-          <svg aria-hidden="true"><use href="#x" /></svg>
-          <span>Follow<span class="wide"> for updates</span></span>
+        <a
+          class="btn btn-secondary btn-sm"
+          href="https://github.com/AshikNesin/tiny-agents"
+          rel="noopener"
+        >
+          <svg aria-hidden="true"><use href="#gh" /></svg>
+          <span>GitHub</span>
         </a>
       </div>
     </header>
@@ -1046,27 +1131,31 @@
     <main id="top">
       <section class="hero">
         <div class="container">
-          <a class="eyebrow" href="#open-source"
-            ><span class="dot" aria-hidden="true"></span>Open source soon</a
+          <a class="eyebrow" href="https://github.com/AshikNesin/tiny-agents" rel="noopener"
+            ><span class="dot" aria-hidden="true"></span>Open source, MIT</a
           >
-          <h1>Your personal AI assistant. <span class="soft">On your own server.</span></h1>
+          <h1>Your own AI assistant. <span class="soft">On your own server.</span></h1>
           <p class="lead">
-            Message it like a friend. It books the flight, briefs you on your day and fixes the
-            failing test, and checks with you before anything that matters.
+            A messenger where each contact is a bot that can browse the web, run commands, work on a
+            schedule and remember you. It asks before it does anything you haven't allowed.
           </p>
           <div class="ctas">
-            <a class="btn btn-primary" href="#demo" data-play>
+            <a
+              class="btn btn-primary"
+              href="https://github.com/AshikNesin/tiny-agents"
+              rel="noopener"
+            >
+              <svg aria-hidden="true"><use href="#gh" /></svg>
+              Get it on GitHub
+            </a>
+            <a class="btn btn-secondary" href="#demo" data-play>
               <svg viewBox="0 0 16 16" aria-hidden="true">
                 <path d="M4 2.5v11l9-5.5z" fill="currentColor" />
               </svg>
               Watch the demo
             </a>
-            <a class="btn btn-secondary" href="https://x.com/AshikNesin" rel="noopener">
-              <svg aria-hidden="true"><use href="#x" /></svg>
-              Follow @AshikNesin
-            </a>
           </div>
-          <p class="note">Your memories. Your models. Your server.</p>
+          <p class="note">Your data. Your models. Your server.</p>
         </div>
       </section>
 
@@ -1083,12 +1172,96 @@
           ></video>
           <button class="play" type="button" aria-label="Play the demo (76 seconds, with sound)">
             <span class="disc" aria-hidden="true"
-              ><svg viewBox="0 0 24 24"><path d="M6 3.5v17l14-8.5z" fill="currentColor" /></svg
+              ><svg viewBox="0 0 24 24">
+                <path d="M6 3.5v17l14-8.5z" fill="currentColor" /></svg
             ></span>
             <span class="pill" aria-hidden="true">Watch the demo<em>1:16</em></span>
           </button>
         </div>
       </div>
+
+      <section class="section" id="why">
+        <div class="container">
+          <div class="why">
+            <h2>Why I built it</h2>
+            <p class="lead">
+              I built Tiny Agents to solve my own problems, and I think everyone should have a
+              personal assistant they fully control.
+            </p>
+            <p class="lead">
+              Your data stays in SQLite files on your machine, you pick the model provider, and you
+              decide what each bot may do without asking.
+            </p>
+            <p class="sig">
+              Ashik Nesin,
+              <a href="https://x.com/AshikNesin" rel="noopener">@AshikNesin</a>
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="screens">
+        <div class="container">
+          <div class="section-head">
+            <h2>What it looks like</h2>
+            <p>The app, as it runs on your server.</p>
+          </div>
+          <figure class="shot shot-lead">
+            <img
+              src="media/tool-permissions.webp"
+              width="1600"
+              height="1000"
+              loading="lazy"
+              alt="A bot's Tools tab: each tool set to Allow, Ask or Off"
+            />
+            <figcaption>
+              <b>Tools and permissions.</b> Set each tool to Allow, Ask or Off, bot by bot.
+            </figcaption>
+          </figure>
+          <div class="grid-2">
+            <figure class="shot">
+              <img
+                src="media/browser.webp"
+                width="1600"
+                height="1000"
+                loading="lazy"
+                alt="Browser: a bot's Chrome, live"
+              />
+              <figcaption><b>Browser.</b> Watch a bot's Chrome live, or take over.</figcaption>
+            </figure>
+            <figure class="shot">
+              <img
+                src="media/computer.webp"
+                width="1600"
+                height="1000"
+                loading="lazy"
+                alt="Computer: a bot's desktop, live"
+              />
+              <figcaption><b>Computer.</b> A full desktop the bots share with you.</figcaption>
+            </figure>
+            <figure class="shot">
+              <img
+                src="media/terminal.webp"
+                width="1280"
+                height="800"
+                loading="lazy"
+                alt="Terminal: shells on the sandbox VM"
+              />
+              <figcaption><b>Terminal.</b> Shells on the sandbox that keep running.</figcaption>
+            </figure>
+            <figure class="shot">
+              <img
+                src="media/routines.webp"
+                width="1600"
+                height="1000"
+                loading="lazy"
+                alt="Routines run a bot on a schedule"
+              />
+              <figcaption><b>Routines.</b> Run a bot on a schedule.</figcaption>
+            </figure>
+          </div>
+        </div>
+      </section>
 
       <section class="section" id="how">
         <div class="container">
@@ -1210,8 +1383,7 @@
       <section class="section" id="features">
         <div class="container">
           <div class="section-head">
-            <h2>Less chatbot, more assistant.</h2>
-            <p>It keeps context, uses real tools and carries on while you're away.</p>
+            <h2>What a bot can do</h2>
           </div>
           <div class="grid-3">
             <article class="feature">
@@ -1224,15 +1396,13 @@
                   stroke-linecap="round"
                   stroke-linejoin="round"
                 >
-                  <path
-                    d="M12 3a6 6 0 0 0-6 6c0 2.3 1.2 3.6 2.2 4.6.6.6.8 1.2.8 2V17h6v-1.4c0-.8.2-1.4.8-2 1-1 2.2-2.3 2.2-4.6a6 6 0 0 0-6-6Z"
-                  />
-                  <path d="M9.5 20.5h5" /></svg
+                  <path d="M12 3 4 6v6c0 4.5 3.4 8 8 9 4.6-1 8-4.5 8-9V6l-8-3Z" />
+                  <path d="m9 12 2 2 4-4" /></svg
               ></span>
-              <h3>Remembers you</h3>
+              <h3>Ask before acting</h3>
               <p>
-                Your window seat, your budget, the projects you're on. Read or edit anything it
-                knows.
+                Set each tool to Allow, Ask or Off. Approve from the web app, a push notification or
+                the Android app.
               </p>
             </article>
             <article class="feature">
@@ -1248,48 +1418,10 @@
                   <rect x="3" y="4" width="18" height="12" rx="2" />
                   <path d="M8 20h8M12 16v4" /></svg
               ></span>
-              <h3>Has its own computer</h3>
+              <h3>Use a real browser and computer</h3>
               <p>
-                A real browser and a sandboxed desktop, separate from yours. Watch it work, or take
-                over any time.
-              </p>
-            </article>
-            <article class="feature">
-              <span class="icon" aria-hidden="true"
-                ><svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M12 3 4 6v6c0 4.5 3.4 8 8 9 4.6-1 8-4.5 8-9V6l-8-3Z" />
-                  <path d="m9 12 2 2 4-4" /></svg
-              ></span>
-              <h3>Asks before it acts</h3>
-              <p>
-                Set each tool to Allow, Ask or Off. Anything beyond reading asks first unless you
-                say otherwise.
-              </p>
-            </article>
-            <article class="feature">
-              <span class="icon" aria-hidden="true"
-                ><svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <rect x="5" y="11" width="14" height="10" rx="2" />
-                  <path d="M8 11V8a4 4 0 0 1 8 0v3" /></svg
-              ></span>
-              <h3>Keeps your secrets</h3>
-              <p>
-                Passwords and cards live in a vault and are filled in for it. The model never sees
-                them.
+                A bot drives its own Chrome and, on a sandbox VM, a full desktop. You can watch live
+                and take over.
               </p>
             </article>
             <article class="feature">
@@ -1305,10 +1437,30 @@
                   <circle cx="12" cy="12" r="9" />
                   <path d="M12 7v5l3 2" /></svg
               ></span>
-              <h3>Works while you're away</h3>
+              <h3>Run on a schedule</h3>
               <p>
-                A morning brief, a weekly check-in. A push to your phone when it's done or needs
-                you, and the Android app to answer it.
+                Routines run a bot's prompt once, daily, weekly or on an interval, and report back.
+              </p>
+            </article>
+            <article class="feature">
+              <span class="icon" aria-hidden="true"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path
+                    d="M12 3a6 6 0 0 0-6 6c0 2.3 1.2 3.6 2.2 4.6.6.6.8 1.2.8 2V17h6v-1.4c0-.8.2-1.4.8-2 1-1 2.2-2.3 2.2-4.6a6 6 0 0 0-6-6Z"
+                  />
+                  <path d="M9.5 20.5h5" /></svg
+              ></span>
+              <h3>Remember you</h3>
+              <p>
+                Per-bot memory, and a vault that fills logins and cards without the model seeing
+                them.
               </p>
             </article>
             <article class="feature">
@@ -1328,10 +1480,25 @@
                   <circle cx="19.5" cy="18" r="1.8" />
                   <path d="m6 7 3.6 3M18 7l-3.6 3M6 17l3.6-3M18 17l-3.6-3" /></svg
               ></span>
-              <h3>Fits into your day</h3>
+              <h3>Connect your tools</h3>
+              <p>Add any remote MCP server.</p>
+            </article>
+            <article class="feature">
+              <span class="icon" aria-hidden="true"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <rect x="3" y="4" width="18" height="16" rx="2" />
+                  <path d="m8 10 2 2-2 2M13 14h3" /></svg
+              ></span>
+              <h3>Hand off code</h3>
               <p>
-                Connect your tools over MCP. Hand the coding to Claude Code, ask for a new
-                specialist bot, or bring a friend into the chat.
+                The Code page drives coding agents (Claude Code, Shelley) and their pull requests.
               </p>
             </article>
           </div>
@@ -1341,20 +1508,40 @@
       <section class="section" id="self-host">
         <div class="container split">
           <div>
-            <h2>Private by default.</h2>
+            <h2>Try it in two minutes.</h2>
             <p class="lead">
-              No account with us and no hosted tier. Your chats and memories stay in your own
-              database; only the model calls leave your server. Close the tab mid-reply or restart
-              the server, and it picks up where it left off.
+              No account with us and no hosted tier. You need Node.js 24 and pnpm 10.
+            </p>
+            <pre class="quick"><code>npm install -g portless
+git clone https://github.com/AshikNesin/tiny-agents.git
+cd tiny-agents
+pnpm install
+TINY_AGENTS_FAUX=1 pnpm dev</code></pre>
+            <p class="quick-note">
+              The test model echoes you, so no API key is needed. Real models, servers and the
+              sandbox are in the
+              <a href="https://github.com/AshikNesin/tiny-agents#readme" rel="noopener">README</a>.
             </p>
           </div>
           <ul class="facts">
             <li><span>Runtime</span><span>Node 24, one process</span></li>
             <li><span>Storage</span><span>SQLite</span></li>
-            <li><span>Models</span><span>Claude, GPT and more</span></li>
+            <li><span>Models</span><span>Anthropic, OpenAI, Gemini and more</span></li>
             <li><span>Provider keys</span><span>Stay on your server or gateway</span></li>
             <li><span>Sandbox</span><span>Your own VM or a Docker container</span></li>
             <li><span>Sign-in</span><span>Password or passkey</span></li>
+            <li>
+              <span>Android app</span
+              ><span
+                >Play Store soon,
+                <a
+                  href="https://release-hub.nesin.io/apps/tiny-agents/download?channel=direct"
+                  rel="noopener"
+                  ><u>APK now</u></a
+                ></span
+              >
+            </li>
+            <li><span>License</span><span>MIT</span></li>
           </ul>
         </div>
       </section>
@@ -1364,11 +1551,12 @@
           <div class="section-head"><h2>Questions</h2></div>
           <div class="faq">
             <details>
-              <summary>When can I try it?</summary>
+              <summary>How do I try it?</summary>
               <div class="a">
-                Soon. I'm getting the code ready to open source. Follow
-                <a href="https://x.com/AshikNesin" rel="noopener"><u>@AshikNesin</u></a> on X and
-                you'll hear the day it ships.
+                Clone it from
+                <a href="https://github.com/AshikNesin/tiny-agents" rel="noopener"><u>GitHub</u></a>
+                and run it with the built-in test model, as above. Add a real model in Settings when
+                you're ready.
               </div>
             </details>
             <details>
@@ -1388,8 +1576,8 @@
             <details>
               <summary>Which models does it use?</summary>
               <div class="a">
-                The ones you already pay for, such as Claude or GPT. Call a provider directly or go
-                through Cloudflare AI Gateway.
+                The ones you already pay for: Anthropic, OpenAI, Gemini, any OpenAI-compatible host,
+                Cloudflare AI Gateway or your Claude plan.
               </div>
             </details>
             <details>
@@ -1399,24 +1587,44 @@
                 number.
               </div>
             </details>
+            <details>
+              <summary>Is there a phone app?</summary>
+              <div class="a">
+                Yes, for Android. It does what the web app does, with push notifications you can
+                approve from. It's coming to the Play Store soon; until then,
+                <a
+                  href="https://release-hub.nesin.io/apps/tiny-agents/download?channel=direct"
+                  rel="noopener"
+                  ><u>download the APK</u></a
+                >.
+              </div>
+            </details>
+            <details>
+              <summary>What's the license?</summary>
+              <div class="a">MIT. Use it, change it, run it wherever you like.</div>
+            </details>
           </div>
         </div>
       </section>
 
       <section class="cta" id="open-source">
         <div class="container">
-          <span class="eyebrow"><span class="dot" aria-hidden="true"></span>Open source soon</span>
-          <h2>Tiny Agents is going open source.</h2>
-          <p class="lead">
-            I'm getting it ready for release. Follow along on X for the launch and what I'm building
-            next.
-          </p>
+          <span class="eyebrow"><span class="dot" aria-hidden="true"></span>MIT licensed</span>
+          <h2>Tiny Agents is open source.</h2>
+          <p class="lead">Clone it, run it on your own server, and make it yours.</p>
           <div class="ctas">
-            <a class="btn btn-primary" href="https://x.com/AshikNesin" rel="noopener">
+            <a
+              class="btn btn-primary"
+              href="https://github.com/AshikNesin/tiny-agents"
+              rel="noopener"
+            >
+              <svg aria-hidden="true"><use href="#gh" /></svg>
+              Get it on GitHub
+            </a>
+            <a class="btn btn-secondary" href="https://x.com/AshikNesin" rel="noopener">
               <svg aria-hidden="true"><use href="#x" /></svg>
               Follow @AshikNesin
             </a>
-            <a class="btn btn-secondary" href="#demo" data-play>Watch the demo</a>
           </div>
         </div>
       </section>
@@ -1429,7 +1637,9 @@
           Tiny Agents
         </a>
         <span
-          >Open source soon ·
+          >MIT licensed ·
+          <a href="https://github.com/AshikNesin/tiny-agents" rel="noopener">GitHub</a>
+          ·
           <a href="https://x.com/AshikNesin" rel="noopener">Updates on X</a></span
         >
       </div>
@@ -1464,6 +1674,8 @@
       document.documentElement.classList.add("js");
       const groups = [
         ".section-head",
+        ".why",
+        ".shot",
         ".feature",
         "#self-host .split > *",
         ".facts li",
@@ -1527,7 +1739,10 @@
       document.querySelectorAll("[data-play]").forEach((a) =>
         a.addEventListener("click", (e) => {
           e.preventDefault();
-          player.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "center" });
+          player.scrollIntoView({
+            behavior: reduce ? "auto" : "smooth",
+            block: "center",
+          });
           play();
         }),
       );
