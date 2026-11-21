@@ -86,6 +86,9 @@ OpenAI-compatible host, Cloudflare AI Gateway or your Claude plan
   ([guide](docs/guides/local-updates.md)).
 - **On a server:** deploy with Railpack on Coolify or Railway, one replica
   with a persistent volume ([guide](docs/guides/deploy.md)).
+- **On your phone:** the Android app does what the web app does, with
+  push notifications you can approve from. It's coming to the Play Store soon; until then,
+  [download the APK](https://release-hub.nesin.io/apps/tiny-agents/download?channel=direct).
 
 The terminal, the desktop and the live browser view need a sandbox VM; you
 can [run one in Docker](docs/guides/local-sandbox.md). Every setting is in
