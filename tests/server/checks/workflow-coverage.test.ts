@@ -13,7 +13,6 @@ const problems = (workflow: Workflow) =>
     workflow,
     gateJobs: GATE_JOBS,
     runBudgets: RUN_BUDGETS,
-    postBuildChecks: ["check:closure"],
   });
 
 describe("the Tests workflow", () => {
@@ -65,6 +64,18 @@ describe("the Tests workflow", () => {
     expect(problems(workflow)).toContain(
       `${FILE} does not run on merge_group. The merge queue's full run is what keeps PR test selection honest.`,
     );
+  });
+
+  it("fails a post-build check moved before the build", () => {
+    const workflow = real();
+    const closure = steps(workflow).findIndex((step) => step.run === "pnpm check:closure");
+    const [step] = steps(workflow).splice(closure, 1);
+    steps(workflow).splice(3, 0, step!);
+    expect(
+      problems(workflow).some((p) =>
+        p.includes('step "Runtime dependency closure" runs `pnpm check:closure` outside'),
+      ),
+    ).toBe(true);
   });
 
   it("fails a static check run outside the gates", () => {
