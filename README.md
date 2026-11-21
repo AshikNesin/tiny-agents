@@ -7,7 +7,7 @@ allowed.
 
 [![Tests](https://github.com/AshikNesin/tiny-agents/actions/workflows/test.yml/badge.svg)](https://github.com/AshikNesin/tiny-agents/actions/workflows/test.yml)
 
-![A bot's tool settings: each tool is set to Allow, Ask or Off](docs/screenshots/tool-permissions.png)
+[![Watch the tiny-agents demo (1:16)](docs/demo/launch-poster.jpg)](docs/demo/tiny-agents-launch.mp4)
 
 ## Why
 
