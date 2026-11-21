@@ -2224,6 +2224,7 @@ describe("one declaration per tool (3.2)", () => {
             {
               "description": "Enter a 2FA one-time code into the current page. With a vault handle whose item has a one-time-password seed, the server generates the code and fills it. Without one (codes sent by SMS or email), the owner is asked to type it into a secure sheet. Never type, ask for or repeat a password, card number, security code or one-time code yourself.",
               "fields": [
+                "cancel",
                 "deferred",
                 "description",
                 "execute",
@@ -2762,6 +2763,7 @@ describe("one declaration per tool (3.2)", () => {
             {
               "description": "Ask the owner to type credentials for the current page into a secure sheet: a sign-in, a one-time code or a card. The server fills them into the page (current origin only; for a sign-in frame from another site, pass the fields' refs); you learn only which fields were filled. Text, email and select fields need an identifier autocomplete; select also needs options. Call vault_list first and prefer browser_fill_secret when a handle exists. Waits up to 10 minutes for the owner. Never type, ask for or repeat a password, card number, security code or one-time code yourself.",
               "fields": [
+                "cancel",
                 "deferred",
                 "description",
                 "execute",
@@ -3435,6 +3437,7 @@ describe("one declaration per tool (3.2)", () => {
               {
                 "description": "Enter a 2FA one-time code into the current page. With a vault handle whose item has a one-time-password seed, the server generates the code and fills it. Without one (codes sent by SMS or email), the owner is asked to type it into a secure sheet. Never type, ask for or repeat a password, card number, security code or one-time code yourself.",
                 "fields": [
+                  "cancel",
                   "deferred",
                   "description",
                   "execute",
@@ -3464,6 +3467,7 @@ describe("one declaration per tool (3.2)", () => {
               {
                 "description": "Ask the owner to type credentials for the current page into a secure sheet: a sign-in, a one-time code or a card. The server fills them into the page (current origin only; for a sign-in frame from another site, pass the fields' refs); you learn only which fields were filled. Text, email and select fields need an identifier autocomplete; select also needs options. Call vault_list first and prefer browser_fill_secret when a handle exists. Waits up to 10 minutes for the owner. Never type, ask for or repeat a password, card number, security code or one-time code yourself.",
                 "fields": [
+                  "cancel",
                   "deferred",
                   "description",
                   "execute",
@@ -6438,6 +6442,7 @@ describe("one declaration per tool (3.2)", () => {
             {
               "description": "Ask the owner 1-4 clarifying questions and wait for their answers. Only when a wrong guess would waste real work or the decision is theirs (preferences, trade-offs). Not for what your tools can find out or you can sensibly assume, and not for permission to run a tool (tools ask for that themselves).",
               "fields": [
+                "cancel",
                 "description",
                 "execute",
                 "name",

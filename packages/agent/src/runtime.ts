@@ -82,7 +82,7 @@ import type {
   WaitEvent,
   WithdrawOutcome,
 } from "./types";
-import { WaitTracker, type WaitTransition } from "./waiting";
+import { restoreParkedWaits, WaitTracker, type WaitTransition } from "./waiting";
 import type { Reviewer } from "./reviewer";
 import { GrantsDoc } from "./vault";
 import type { ConversationTrace, ConversationUsage } from "./trace";
@@ -250,7 +250,7 @@ export class AgentRuntime {
       for (const provider of initial) models.setProvider(provider);
       const registry = createRegistry();
       const approvals = options.approvalTracker ?? new WaitTracker();
-      const questions = new WaitTracker();
+      const questions = new WaitTracker("question");
       const capabilities = [
         ...(options.capabilities ?? []),
         createQuestionsCapability(questions),
@@ -337,6 +337,7 @@ export class AgentRuntime {
       });
       await opened.#store.start();
       for (const engine of opened.#engines) await engine.start();
+      await restoreParkedWaits(harness, [approvals, questions], ctx);
       opened.#busy = new Set(opened.#store.replyingConversations());
       opened.#store.resume();
       return opened;

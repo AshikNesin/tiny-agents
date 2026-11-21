@@ -608,24 +608,26 @@ export class ClaudeCodeEngine implements AgentEngine {
     });
     const runner = session.runners.get(call.name);
     try {
-      const result = await this.gate.run(
-        {
-          name: call.name,
-          args,
-          replaySafe: runner?.replay === "safe",
-          hooks: runner ? gateHooksOf(runner) : undefined,
-          api,
-          context: ctx,
-          answers: "memory",
-          userMessages: () => this.userMessages(ref),
-          instructions: async () => session.system || undefined,
-        },
-        async () => {
-          row(liveToolRow({ status: "running", taskId }));
-          if (!runner) return unavailable(call.name);
-          return ranToResult(await runner.execute(args, api, ctx));
-        },
-      );
+      const result = await this.gate
+        .run(
+          {
+            name: call.name,
+            args,
+            replaySafe: runner?.replay === "safe",
+            hooks: runner ? gateHooksOf(runner) : undefined,
+            api,
+            context: ctx,
+            answers: "memory",
+            userMessages: () => this.userMessages(ref),
+            instructions: async () => session.system || undefined,
+          },
+          async (inner) => {
+            row(liveToolRow({ status: "running", taskId }));
+            if (!runner) return unavailable(call.name);
+            return ranToResult(await runner.execute(args, inner, ctx));
+          },
+        )
+        .then(ranToResult);
       const content = resultText(result);
       finished(
         finishedToolRow({

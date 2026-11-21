@@ -1,6 +1,6 @@
 import type { Context } from "@earendil-works/chord/context";
 import { Type } from "typebox";
-import type { ToolExecutionApi, ToolExecutionResult } from "@earendil-works/pi-durable";
+import type { ToolExecutionApi, ToolExecutionResult, ToolPark } from "@earendil-works/pi-durable";
 import { isUnattendedConversation } from "../approvals";
 import {
   CREDENTIAL_REQUEST_TTL_MS,
@@ -17,7 +17,7 @@ import {
 import { toJson } from "../durable-json";
 import { tool } from "../toolkit";
 import { SecretValue, VAULT_RULE, type VaultBroker } from "../vault";
-import { refuseUnattended, waitForOwner, type WaitTracker } from "../waiting";
+import { isParked, parkForOwner, refuseUnattended, type WaitTracker } from "../waiting";
 import {
   assertRefShape,
   describeBrowserError,
@@ -238,6 +238,17 @@ export function createBrowserVaultTools(
   const openRequests = new Map<number, number>();
   const recentRequests = new Map<number, number[]>();
 
+  const release = (conversation: number, taskId: number) => {
+    if (openRequests.get(conversation) === taskId) openRequests.delete(conversation);
+  };
+
+  const cancelRequest = async (_args: unknown, api: ToolExecutionApi) => {
+    const conversation = Number(api.conversationId);
+    const taskId = Number(api.taskId);
+    release(conversation, taskId);
+    tracker?.remove(conversation, taskId);
+  };
+
   const peek = async (conversationId: number): Promise<LiveBrowserTab | undefined> =>
     sessions.peek(await targetOf(conversationId));
 
@@ -252,7 +263,7 @@ export function createBrowserVaultTools(
     args: CredentialArgs,
     api: ToolExecutionApi,
     context: Context,
-  ): Promise<ToolExecutionResult> => {
+  ): Promise<ToolExecutionResult | ToolPark> => {
     if (!tracker) return fail("Credential requests are not available.");
     const conversation = Number(api.conversationId);
     const taskId = Number(api.taskId);
@@ -304,45 +315,46 @@ export function createBrowserVaultTools(
     }
     const stored = request;
     openRequests.set(conversation, taskId);
-    try {
-      const doc = await waitForOwner(
-        api,
-        tracker,
-        CredentialRequestDoc,
-        (value) => pendingCredentialDetails(stored, value.expiresAt),
-        context,
-        (value) => {
-          if (!value.request) {
-            value.request = toJson(stored);
-            value.expiresAt = Date.now() + CREDENTIAL_REQUEST_TTL_MS;
-          }
-        },
-        { tool: "request_credentials", subject: credentialSubject(stored) },
-      );
-      const result = {
-        status: doc.status,
-        filled_fields: doc.filled,
-        ...(doc.savedHandle ? { saved_item_handle: doc.savedHandle } : {}),
-      };
-      const unfilled = stored.fields
-        .map((field) => field.key)
-        .filter((key) => !doc.filled?.includes(key));
-      const next =
-        doc.status === "filled"
-          ? unfilled.length
-            ? ` Not filled: ${unfilled.join(", ")}. The page didn't show ${unfilled.length > 1 ? "those fields" : "that field"} (a captcha or another step may be in the way): take a snapshot, and ask again once ${unfilled.length > 1 ? "they show" : "it shows"}.`
-            : " Submit the form (take a snapshot to find the button)."
-          : doc.status === "cancelled"
-            ? " The owner cancelled: don't ask again unless they say so."
-            : " Nobody answered in time.";
-      return {
-        output: [{ type: "text", text: JSON.stringify(result) + next }],
-        ...(doc.status === "filled" ? {} : { isError: true }),
-        details: credentialResultDetails(doc, stored),
-      };
-    } finally {
-      if (openRequests.get(conversation) === taskId) openRequests.delete(conversation);
-    }
+    const doc = await parkForOwner(
+      api,
+      tracker,
+      CredentialRequestDoc,
+      (value) => pendingCredentialDetails(stored, value.expiresAt),
+      context,
+      (value) => {
+        if (!value.request) {
+          value.request = toJson(stored);
+          value.expiresAt = Date.now() + CREDENTIAL_REQUEST_TTL_MS;
+        }
+      },
+      { tool: "request_credentials", subject: credentialSubject(stored) },
+    ).catch((error: unknown) => {
+      release(conversation, taskId);
+      throw error;
+    });
+    if (isParked(doc)) return doc;
+    release(conversation, taskId);
+    const result = {
+      status: doc.status,
+      filled_fields: doc.filled,
+      ...(doc.savedHandle ? { saved_item_handle: doc.savedHandle } : {}),
+    };
+    const unfilled = stored.fields
+      .map((field) => field.key)
+      .filter((key) => !doc.filled?.includes(key));
+    const next =
+      doc.status === "filled"
+        ? unfilled.length
+          ? ` Not filled: ${unfilled.join(", ")}. The page didn't show ${unfilled.length > 1 ? "those fields" : "that field"} (a captcha or another step may be in the way): take a snapshot, and ask again once ${unfilled.length > 1 ? "they show" : "it shows"}.`
+          : " Submit the form (take a snapshot to find the button)."
+        : doc.status === "cancelled"
+          ? " The owner cancelled: don't ask again unless they say so."
+          : " Nobody answered in time.";
+    return {
+      output: [{ type: "text", text: JSON.stringify(result) + next }],
+      ...(doc.status === "filled" ? {} : { isError: true }),
+      details: credentialResultDetails(doc, stored),
+    };
   };
 
   const fillSecret =
@@ -523,6 +535,10 @@ export function createBrowserVaultTools(
         try {
           if (args.ref) assertRefShape(args.ref);
           if (!args.handle) return await askOwner();
+          if (api.wake !== undefined) {
+            const asked = await api.snapshot(CredentialRequestDoc, api.taskId, context);
+            if (asked?.request) return await askOwner();
+          }
           const s = await sessions.actionTurn(await targetOf(Number(api.conversationId)));
           const origin = await currentOrigin(s.session);
           let hasSeed = true;
@@ -575,6 +591,7 @@ export function createBrowserVaultTools(
           return fail(safeMessage(error));
         }
       },
+      cancel: cancelRequest,
       gate: {
         replaySafe: (args: { handle?: string }) => !args.handle,
         ...vaultGatePlan(broker, false, async (args: { handle?: string }, api) => {
@@ -623,6 +640,7 @@ export function createBrowserVaultTools(
           return fail(describeBrowserError(error));
         }
       },
+      cancel: cancelRequest,
     });
 
   return [fillSecret, enterCode, credentials];

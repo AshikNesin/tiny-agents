@@ -392,12 +392,12 @@ describe("ask_owner across restarts", () => {
     runtimes.splice(runtimes.indexOf(first), 1);
 
     const second = await open(askThenReport(), { storePath });
+    expect(second.pendingQuestions(ref)).toBe(1);
     const after: ChatEvent[] = [];
     await second.watchChat(ref, (batch) => {
       after.push(...batch);
     });
     const waiting = await waitingCall(after);
-    await until(() => second.pendingQuestions(ref) === 1, "wait re-registered");
     await second.answerQuestions(ref, waiting.taskId!, [
       { selected: ["Postgres"] },
       { selected: ["Search"] },

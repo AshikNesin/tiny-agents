@@ -5,6 +5,7 @@ import {
   type TaskId,
   type ToolExecutionApi,
   type ToolExecutionResult,
+  type ToolPark,
   type ToolRegistration,
 } from "@earendil-works/pi-durable";
 import type { JsonObject } from "@earendil-works/pi-durable";
@@ -13,9 +14,11 @@ import { isUnattendedConversation } from "./policy";
 import type { ChatVaultUse } from "./types";
 import { GrantsDoc, VAULT_KINDS } from "./vault";
 import {
+  isParked,
+  parkForOwner,
   pendingToolTask,
   sealedAsNotPending,
-  waitForOwner,
+  wakeOwnerWait,
   type HostTx,
   type WaitInfo,
   type WaitTracker,
@@ -143,6 +146,7 @@ export async function recordDecision(
   await pendingToolTask(tx, id, conversation, notPending);
   const doc = await tx.doc(ApprovalDoc, id);
   if (doc.asked !== true || doc.status !== "pending") throw notPending();
+  await wakeOwnerWait(tx, ApprovalDoc, id);
   doc.status = decision;
   if (decision === "approved" && options.grant && doc.grant) {
     const grants = await tx.doc(GrantsDoc, conversation as ConversationId);
@@ -160,6 +164,7 @@ export async function recordYoloDecision(
   await pendingToolTask(tx, id, conversation, notPending);
   const doc = await tx.doc(ApprovalDoc, id);
   if (doc.asked !== true || doc.status !== "pending" || doc.vault === true) throw notPending();
+  await wakeOwnerWait(tx, ApprovalDoc, id);
   doc.status = "approved";
 }
 
@@ -227,8 +232,8 @@ export async function waitForApproval(
   tool: string,
   context: Context,
   plan?: GatePlan,
-): Promise<ApprovalDecision | "expired"> {
-  const doc = await waitForOwner(
+): Promise<ApprovalDecision | "expired" | ToolPark> {
+  const doc = await parkForOwner(
     api,
     tracker,
     ApprovalDoc,
@@ -249,5 +254,6 @@ export async function waitForApproval(
     },
     approvalWaitInfo(tool, plan),
   );
+  if (isParked(doc)) return doc;
   return doc.status as ApprovalDecision | "expired";
 }

@@ -385,7 +385,7 @@
                     ]
                   },
                   "status": "awaiting_answer",
-                  "taskId": 24,
+                  "taskId": 25,
                   "questions": [
                     {
                       "question": "Which stack?",
@@ -428,7 +428,7 @@
   {
     "http": "dismiss",
     "method": "POST",
-    "path": "/api/v1/bots/<id1>/questions/24",
+    "path": "/api/v1/bots/<id1>/questions/25",
     "status": 200,
     "body": {
       "success": true,

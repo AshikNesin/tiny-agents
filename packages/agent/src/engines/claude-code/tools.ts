@@ -46,7 +46,11 @@ export function claudeToolSurface(
       if (!registration) continue;
       if (registration.name === TOOL_SEARCH_TOOL_NAME) continue;
       const parameters = registration.parameters as
-        | { type?: string; properties?: Record<string, unknown>; required?: string[] }
+        | {
+            type?: string;
+            properties?: Record<string, unknown>;
+            required?: string[];
+          }
         | undefined;
       tools.push({
         name: info.name,
@@ -80,16 +84,20 @@ export function claudeToolApi(options: {
     if (rest.length >= 2 && !memos.has(name)) memos.set(name, toJson(rest[0]));
     return memos.get(name);
   }
-  const own: Pick<ToolExecutionApi, "conversationId" | "taskId" | "memo" | "snapshot" | "details"> =
-    {
-      conversationId: options.conversation as ConversationId,
-      taskId: options.task as TaskId,
-      memo,
-      snapshot: options.docs ? options.docs.snapshot.bind(options.docs) : async () => undefined,
-      details: async (value) => {
-        options.details?.(value);
-      },
-    };
+  const own: Pick<
+    ToolExecutionApi,
+    "conversationId" | "taskId" | "wake" | "checkpoint" | "memo" | "snapshot" | "details"
+  > = {
+    conversationId: options.conversation as ConversationId,
+    taskId: options.task as TaskId,
+    wake: undefined,
+    checkpoint: undefined,
+    memo,
+    snapshot: options.docs ? options.docs.snapshot.bind(options.docs) : async () => undefined,
+    details: async (value) => {
+      options.details?.(value);
+    },
+  };
   return new Proxy(own, {
     get(target, prop) {
       if (typeof prop === "symbol" || prop === "then") return undefined;
