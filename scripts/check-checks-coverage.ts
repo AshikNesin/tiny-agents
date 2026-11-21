@@ -7,7 +7,7 @@ import { loadConfig } from "../.groot/lib/config";
 import { ownedSourceRootsForTests, TEST_AREA_OWNERSHIP } from "../.groot/lib/patterns";
 import { GATE_JOBS, gates } from "./gates.mjs";
 import { RUN_BUDGETS } from "./ci-budget.mjs";
-import { workflowProblems, type Workflow } from "./lib/workflow-coverage";
+import { POST_BUILD_CHECKS, workflowProblems, type Workflow } from "./lib/workflow-coverage";
 
 const ROOT = new URL("..", import.meta.url).pathname;
 
@@ -76,13 +76,11 @@ for (const area of areas) {
 }
 
 const WORKFLOW = ".github/workflows/test.yml";
-const POST_BUILD_CHECKS = ["check:closure", "check:worker"];
 for (const detail of workflowProblems({
   file: WORKFLOW,
   workflow: loadYaml(readFileSync(join(ROOT, WORKFLOW), "utf8")) as Workflow,
   gateJobs: GATE_JOBS,
   runBudgets: RUN_BUDGETS,
-  postBuildChecks: POST_BUILD_CHECKS,
 })) {
   failures.push({ kind: "workflow", detail });
 }
@@ -100,7 +98,7 @@ for (const script of Object.keys(scripts)) {
   ) {
     failures.push({
       kind: "script-not-a-gate",
-      detail: `package.json script "${script}" is not a static gate, so neither CI nor \`pnpm verify:static\` runs it. Add { name, run: "pnpm ${script}" } to scripts/gates.mjs, or, if it needs \`pnpm build\` first, add "${script}" to POST_BUILD_CHECKS in scripts/check-checks-coverage.ts and run it after the build step in ${WORKFLOW}.`,
+      detail: `package.json script "${script}" is not a static gate, so neither CI nor \`pnpm verify:static\` runs it. Add { name, run: "pnpm ${script}" } to scripts/gates.mjs, or, if it needs \`pnpm build\` first, add "${script}" to POST_BUILD_CHECKS in scripts/lib/workflow-coverage.ts and run it after the build step in ${WORKFLOW}.`,
     });
   }
 }

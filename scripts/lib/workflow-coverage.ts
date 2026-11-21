@@ -20,8 +20,9 @@ export interface CoverageInputs {
   workflow: Workflow;
   gateJobs: readonly string[];
   runBudgets: Record<string, number>;
-  postBuildChecks: readonly string[];
 }
+
+export const POST_BUILD_CHECKS: readonly string[] = ["check:closure"];
 
 const STATIC_CHECK =
   /\btsc\b|scripts\/check-[\w-]+|db:generate|\bpnpm (?:run )?((?:check|typecheck)[\w:-]*)/g;
@@ -34,7 +35,6 @@ export function workflowProblems({
   workflow,
   gateJobs,
   runBudgets,
-  postBuildChecks,
 }: CoverageInputs): string[] {
   const problems: string[] = [];
   const jobs = Object.entries(workflow.jobs);
@@ -56,10 +56,11 @@ export function workflowProblems({
         return;
       }
       for (const match of step.run.matchAll(STATIC_CHECK)) {
-        if (match[1] && postBuildChecks.includes(match[1])) continue;
+        const afterBuild = buildAt !== -1 && i > buildAt;
+        if (afterBuild && match[1] && POST_BUILD_CHECKS.includes(match[1])) continue;
         const fix =
-          buildAt !== -1 && i > buildAt && match[1]
-            ? `If it needs \`pnpm build\` first, add "${match[1]}" to POST_BUILD_CHECKS in scripts/check-checks-coverage.ts. Otherwise move it to scripts/gates.mjs and delete the step.`
+          afterBuild && match[1]
+            ? `If it needs \`pnpm build\` first, add "${match[1]}" to POST_BUILD_CHECKS in scripts/lib/workflow-coverage.ts. Otherwise move it to scripts/gates.mjs and delete the step.`
             : "Add it to scripts/gates.mjs and delete the step, so `pnpm verify:static` runs it locally too.";
         problems.push(
           `${file} job "${id}" step "${step.name ?? step.run}" runs \`${match[0]}\` outside the static gates. ${fix}`,
