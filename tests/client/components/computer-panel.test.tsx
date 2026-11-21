@@ -23,6 +23,7 @@ import type { Bot } from "../../../apps/web/src/shared/api/bots";
 import type { ComputerStatus } from "../../../apps/web/src/shared/api/live";
 import { botsApi } from "@/lib/bots-api";
 import { createRfb } from "@/lib/novnc";
+import { usePeopleStore } from "@/store/people";
 
 const fakes = vi.hoisted(() => ({ rfbs: [] as (EventTarget & { viewOnly: boolean })[] }));
 
@@ -95,6 +96,7 @@ describe("ComputerPanel", () => {
     fakes.rfbs.length = 0;
     vi.mocked(createRfb).mockClear();
     window.localStorage.clear();
+    usePeopleStore.setState({ role: "owner" });
   });
   afterEach(() => {
     vi.restoreAllMocks();

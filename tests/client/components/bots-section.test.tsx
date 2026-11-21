@@ -5,12 +5,14 @@
  * indicators, and the pin action in the row menu.
  */
 import React from "react";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { beforeEach, describe, expect, it, onTestFinished, vi } from "vite-plus/test";
 import { MemoryRouter } from "react-router-dom";
 import { BotRail, BotsSection } from "@/components/shell/BotsSection";
 import { useBotsStore } from "@/store/bots";
+import { peopleApi } from "@/lib/people-api";
+import { usePeopleStore } from "@/store/people";
 import type { BotListEntry } from "../../../apps/web/src/shared/api/bots";
 
 const pinMock = vi.fn();
@@ -59,6 +61,7 @@ const user = userEvent.setup();
 
 beforeEach(() => {
   pinMock.mockReset();
+  usePeopleStore.setState({ role: "owner" });
 });
 
 describe("BotsSection", () => {
@@ -132,6 +135,29 @@ describe("BotsSection", () => {
     await user.click(await screen.findByRole("menuitem", { name: "Pin" }));
     await waitFor(() => expect(pinMock).toHaveBeenCalled());
     await waitFor(() => expect(useBotsStore.getState().bots[0].pinnedAt).toBeNull());
+  });
+});
+
+describe("BotsSection while /people/me is unanswered", () => {
+  it("hides New bot until the viewer is known to be the owner", async () => {
+    let answer: (value: { guest: boolean }) => void = () => undefined;
+    const me = vi
+      .spyOn(peopleApi, "me")
+      .mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    onTestFinished(() => me.mockRestore());
+    usePeopleStore.setState(usePeopleStore.getInitialState());
+    const loading = usePeopleStore.getState().load();
+    renderSection([bot("a")]);
+
+    expect(screen.queryByRole("button", { name: "New bot" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Bot a actions" })).not.toBeInTheDocument();
+
+    await act(async () => {
+      answer({ guest: false });
+      await loading;
+    });
+    expect(screen.getByRole("button", { name: "New bot" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Bot a actions" })).toBeInTheDocument();
   });
 });
 

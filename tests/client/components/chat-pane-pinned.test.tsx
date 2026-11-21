@@ -182,7 +182,7 @@ beforeEach(() => {
   api.computerStatus.mockReset().mockResolvedValue({ configured: false });
   api.setYolo.mockReset().mockResolvedValue({ on: true });
   api.reset.mockReset();
-  usePeopleStore.setState({ guest: false });
+  usePeopleStore.setState({ role: "owner" });
   localStorage.clear();
 });
 
@@ -212,7 +212,7 @@ describe("ChatPane, pinned", () => {
 
   it("a guest's pane", async () => {
     seed();
-    usePeopleStore.setState({ guest: true });
+    usePeopleStore.setState({ role: "guest" });
     mount();
     open([done("u1", "user", "hi")]);
     botStream("host").send({ type: "yolo", on: true });

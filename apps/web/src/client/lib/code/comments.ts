@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { create } from "zustand";
 import { toast } from "sonner";
 import { errorMessage } from "../errors";
-import { useIsGuest } from "../../store/people";
+import { useViewerRole } from "../../store/people";
 import type { ReviewDraft, ReviewDraftBody } from "../../../shared/api/code";
 import { projectsApi } from "./projects";
 
@@ -159,8 +159,8 @@ export function useThreadCommenting(
   threadId: string | undefined,
   onGuestText: (text: string) => void,
 ): ThreadCommenting | undefined {
-  const guest = useIsGuest();
-  const comments = useThreadComments(threadId, !guest);
+  const role = useViewerRole();
+  const comments = useThreadComments(threadId, role === "owner");
   const add = useCommentStore((s) => s.add);
   const remove = useCommentStore((s) => s.remove);
   const guestText = useRef(onGuestText);
@@ -168,11 +168,11 @@ export function useThreadCommenting(
     guestText.current = onGuestText;
   });
   return useMemo(() => {
-    if (!threadId) return undefined;
+    if (!threadId || role === null) return undefined;
     return {
       comments,
       add: async (body: ReviewDraftBody) => {
-        if (guest) {
+        if (role === "guest") {
           guestText.current(commentText(body));
           return;
         }
@@ -188,5 +188,5 @@ export function useThreadCommenting(
           toast.error(errorMessage(error, "Could not remove it.")),
         ),
     };
-  }, [threadId, comments, guest, add, remove]);
+  }, [threadId, comments, role, add, remove]);
 }

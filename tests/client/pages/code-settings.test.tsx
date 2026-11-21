@@ -7,6 +7,7 @@ import { ConfirmProvider } from "@groot/ui/primitives";
 import { NO_CAPABILITIES } from "@tiny-agents/code/contracts";
 import { CodePage } from "@/pages/code/CodePage";
 import { useCodeStore } from "@/store/code";
+import { usePeopleStore } from "@/store/people";
 import type { HarnessInfo } from "@/lib/code/api";
 import type { GitHubStatus, ProjectView } from "../../../apps/web/src/shared/api/code";
 import { AppQueryProvider } from "../query-provider";
@@ -118,6 +119,7 @@ function renderAt(path: string) {
 }
 
 beforeEach(() => {
+  usePeopleStore.setState({ role: "owner" });
   patches.length = 0;
   useCodeStore.setState({ harnesses: [shelley], statuses: {}, threads: [] });
 });

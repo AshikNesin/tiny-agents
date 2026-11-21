@@ -105,7 +105,7 @@ function seedStore(opts: { lastReadAt?: string | null } = {}) {
     fullBots: {},
   });
   chatSessions.store.setState({ sessions: {} });
-  usePeopleStore.setState({ guest: false });
+  usePeopleStore.setState({ role: "owner" });
 }
 
 const done = (id: string, role: ChatMessage["role"], text: string, createdAt: number) =>
@@ -384,7 +384,7 @@ describe("ChatPane header", () => {
 
   it("/new keeps the draft until the chat and the account have loaded", async () => {
     seedStore();
-    usePeopleStore.setState({ guest: null });
+    usePeopleStore.setState({ role: null });
     const composer = renderPane();
 
     await user.type(composer, "/new{Enter}");
@@ -397,7 +397,7 @@ describe("ChatPane header", () => {
     expect(composer.value).toBe("/new");
     expect(resetMock).not.toHaveBeenCalled();
 
-    usePeopleStore.setState({ guest: false });
+    usePeopleStore.setState({ role: "owner" });
     await user.keyboard("{Enter}");
     await waitFor(() => expect(resetMock).toHaveBeenCalledWith("host"));
     expect(composer.value).toBe("");

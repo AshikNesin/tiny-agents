@@ -35,7 +35,7 @@ import { BrandMark } from "./components/shell/BrandMark";
 import { APP_NAV, guestNav } from "./components/shell/nav";
 import { isGuestPage } from "../shared/guest-access";
 import { useUiStore } from "./store/ui";
-import { usePeopleStore, useIsGuest } from "./store/people";
+import { useViewerRole } from "./store/people";
 
 const SHELL_CONFIG: ShellConfig = {
   brand: { label: "tiny-agents", icon: BrandMark, to: "/chats" },
@@ -77,10 +77,10 @@ const SHELL_CONFIG: ShellConfig = {
 const TOASTER = { position: "top-center" } as const;
 
 function Root() {
-  const guest = useIsGuest();
+  const restricted = useViewerRole() !== "owner";
   const config = useMemo<ShellConfig>(
     () =>
-      guest
+      restricted
         ? {
             ...SHELL_CONFIG,
             nav: [
@@ -95,7 +95,7 @@ function Root() {
             ],
           }
         : SHELL_CONFIG,
-    [guest],
+    [restricted],
   );
   return (
     <NuqsAdapter>
@@ -109,10 +109,11 @@ function Root() {
 }
 
 function GuestGate() {
-  const guest = usePeopleStore((s) => s.guest);
+  const role = useViewerRole();
   const { pathname } = useLocation();
-  if (guest === true && !isGuestPage(pathname)) return <Navigate to="/chats" replace />;
-  return <Outlet />;
+  if (role === "owner" || isGuestPage(pathname)) return <Outlet />;
+  if (role === "guest") return <Navigate to="/chats" replace />;
+  return null;
 }
 
 export const appRoutes: RouteObject[] = [

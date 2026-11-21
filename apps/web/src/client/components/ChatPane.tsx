@@ -7,7 +7,7 @@ import { useBotsStore } from "../store/bots";
 import type { OwnerSubmission } from "../store/chats";
 import { useChat } from "../store/use-chat";
 import { useUiStore } from "../store/ui";
-import { useIsGuest, usePeopleStore } from "../store/people";
+import { useViewerRole } from "../store/people";
 import { BrowserPanel } from "./BrowserPanel";
 import { ComputerPanel } from "./ComputerPanel";
 import { ChatComposer, type ChatComposerHandle } from "./ChatComposer";
@@ -47,8 +47,8 @@ function ChatPaneBody({ bot, models, canAnswer, onEditBot }: ChatPaneProps) {
   const setMobileOpen = useUiStore((s) => s.setMobileOpen);
   const [confirmReset, setConfirmReset] = useState(false);
   const [confirmYolo, setConfirmYolo] = useState(false);
-  const guest = useIsGuest();
-  const knownOwner = usePeopleStore((s) => s.guest === false);
+  const role = useViewerRole();
+  const owner = role === "owner";
   const [menuView, setMenuView] = useHistoryMenu();
   const composerRef = useRef<ChatComposerHandle>(null);
   const scroller = useMessageScroller();
@@ -58,7 +58,7 @@ function ChatPaneBody({ bot, models, canAnswer, onEditBot }: ChatPaneProps) {
     setConfirmYolo(false);
     await chat.setYolo(on);
   };
-  const canReset = !guest && (messages.length > 0 || chat.outbox.length > 0);
+  const canReset = owner && (messages.length > 0 || chat.outbox.length > 0);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -102,7 +102,7 @@ function ChatPaneBody({ bot, models, canAnswer, onEditBot }: ChatPaneProps) {
   };
 
   const newChatFromComposer = () => {
-    if (!knownOwner || chat.health === "loading") return false;
+    if (!owner || chat.health === "loading") return false;
     if (canReset) void doReset();
     return true;
   };
@@ -113,7 +113,7 @@ function ChatPaneBody({ bot, models, canAnswer, onEditBot }: ChatPaneProps) {
         {dragging && <DropOverlay />}
         <ChatPaneHeader
           bot={bot}
-          guest={guest}
+          guest={!owner}
           menuView={menuView}
           onMenuViewChange={setMenuView}
           onEditBot={onEditBot}
@@ -135,12 +135,12 @@ function ChatPaneBody({ bot, models, canAnswer, onEditBot }: ChatPaneProps) {
           <QueuedMessages held={held} onWithdraw={(requestId) => void chat.withdraw(requestId)} />
         )}
 
-        {yolo && <YoloBanner guest={guest} onTurnOff={() => void setYolo(false)} />}
+        {yolo && <YoloBanner guest={!owner} onTurnOff={() => void setYolo(false)} />}
 
         <ChatComposer
           ref={composerRef}
           models={models}
-          onModelChange={guest ? undefined : changeModel}
+          onModelChange={owner ? changeModel : undefined}
           bot={bot}
           model={model}
           canAnswer={canAnswer}
@@ -148,7 +148,7 @@ function ChatPaneBody({ bot, models, canAnswer, onEditBot }: ChatPaneProps) {
           onSend={send}
           onStop={chat.stop}
           onEditBot={onEditBot}
-          onNewChat={guest ? undefined : newChatFromComposer}
+          onNewChat={role === "guest" ? undefined : newChatFromComposer}
         />
       </div>
       {live.showBrowser && (

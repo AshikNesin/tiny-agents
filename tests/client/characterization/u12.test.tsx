@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { createMemoryRouter, RouterProvider, type RouteObject } from "react-router-dom";
 import { appRoutes } from "@/App";
 import { peopleApi } from "@/lib/people-api";
-import { useIsGuest, usePeopleStore } from "@/store/people";
+import { useViewerRole, usePeopleStore } from "@/store/people";
 
 function gateElement(routes: RouteObject[]): React.ReactNode {
   for (const route of routes) {
@@ -34,19 +34,19 @@ function renderAt(path: string) {
 
 afterEach(() => {
   vi.restoreAllMocks();
-  usePeopleStore.setState({ guest: null });
+  usePeopleStore.setState({ role: null });
 });
 
 describe("U12: who the shell thinks is signed in", () => {
-  it("shows a guest the owner's page until /people/me answers, then sends them away", async () => {
+  it("shows no owner page until /people/me answers, then sends a guest away", async () => {
     let answer: (value: { guest: boolean }) => void = () => undefined;
     vi.spyOn(peopleApi, "me").mockReturnValue(new Promise((resolve) => (answer = resolve)));
-    usePeopleStore.setState({ guest: null });
+    usePeopleStore.setState({ role: null });
     const router = renderAt("/vault");
     const loading = usePeopleStore.getState().load();
 
-    expect(screen.getByText("Vault page (owner only)")).toBeInTheDocument();
-    expect(renderHook(() => useIsGuest()).result.current).toBe(false);
+    expect(screen.queryByText("Vault page (owner only)")).not.toBeInTheDocument();
+    expect(renderHook(() => useViewerRole()).result.current).toBeNull();
 
     await act(async () => {
       answer({ guest: true });
@@ -58,11 +58,11 @@ describe("U12: who the shell thinks is signed in", () => {
 
   it("takes a failed /people/me as the owner", async () => {
     vi.spyOn(peopleApi, "me").mockRejectedValue(new Error("network down"));
-    usePeopleStore.setState({ guest: null });
+    usePeopleStore.setState({ role: null });
     renderAt("/vault");
     await act(() => usePeopleStore.getState().load());
 
-    expect(usePeopleStore.getState().guest).toBe(false);
+    expect(usePeopleStore.getState().role).toBe("owner");
     expect(screen.getByText("Vault page (owner only)")).toBeInTheDocument();
   });
 });

@@ -67,7 +67,7 @@ import { foldTurns, lastErrorId } from "../../lib/code/transcript";
 import { useCodeThread } from "../../lib/code/use-thread";
 import { useNextPrompt } from "../../lib/code/use-next-prompt";
 import { useCodeStore } from "../../store/code";
-import { useIsGuest } from "../../store/people";
+import { useViewerRole } from "../../store/people";
 import { useCommentStore, useThreadComments } from "../../lib/code/comments";
 import { Composer } from "./Composer";
 import { PendingComments } from "./PendingComments";
@@ -202,9 +202,9 @@ export function ConversationView({
   const [dialog, setDialog] = useState<"rename" | "cwd" | null>(null);
   const patchList = useCodeStore((s) => s.patch);
   const archive = useArchive();
-  const guest = useIsGuest();
-  const comments = useThreadComments(id, !guest);
-  const nextPrompt = useNextPrompt(id, items, working, state.loaded && !guest);
+  const owner = useViewerRole() === "owner";
+  const comments = useThreadComments(id, owner);
+  const nextPrompt = useNextPrompt(id, items, working, state.loaded && owner);
   const commentsSent = useCommentStore((s) => s.sent);
 
   useEffect(() => {
@@ -625,7 +625,7 @@ export function ConversationView({
           )}
           {!archived && (
             <>
-              <PendingComments threadId={id} enabled={!guest} onShow={onShowChanges} />
+              <PendingComments threadId={id} enabled={owner} onShow={onShowChanges} />
               <Composer
                 draftKey={id}
                 harness={harness}

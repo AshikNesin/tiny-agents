@@ -9,7 +9,7 @@ import { Settings, type SettingsSection } from "@groot/shell/pages/settings/Sett
 import { PeopleSettings } from "../../components/PeopleSettings";
 import { PhoneNotificationSettings } from "../../components/PhoneNotificationSettings";
 import { UpdatesSettings } from "../../components/UpdatesSettings";
-import { useIsGuest } from "../../store/people";
+import { useViewerRole } from "../../store/people";
 import { ModelsSettings } from "./models/ModelsSettings";
 import { settingsSectionsFor } from "./sections";
 
@@ -33,10 +33,10 @@ const LEGACY_TABS: Record<string, string> = { general: "account", claude: "model
 export function SettingsPage() {
   const { pathname, search } = useLocation();
   const legacyTab = new URLSearchParams(search).get("tab");
-  const guest = useIsGuest();
+  const restricted = useViewerRole() !== "owner";
   const sections = useMemo<SettingsSection[]>(
-    () => settingsSectionsFor(guest).map((s) => ({ ...s, element: ELEMENTS[s.id] })),
-    [guest],
+    () => settingsSectionsFor(restricted).map((s) => ({ ...s, element: ELEMENTS[s.id] })),
+    [restricted],
   );
   if (legacyTab && pathname.replace(/\/+$/, "") === "/settings") {
     return <Navigate to={`/settings/${LEGACY_TABS[legacyTab] ?? legacyTab}`} replace />;
