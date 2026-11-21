@@ -95,13 +95,10 @@ const BROWSER_STACK: VmStackSpec<LaunchStackOptions> = {
     ],
     ports: [
       `PORTS="$(python3 -c 'import socket
-def free():
-    s = socket.socket()
+held = [socket.socket() for _ in range(3)]
+for s in held:
     s.bind(("127.0.0.1", 0))
-    p = s.getsockname()[1]
-    s.close()
-    return p
-print(free(), free(), free())')"`,
+print(*(s.getsockname()[1] for s in held))')"`,
       "set -- $PORTS",
       "VNC=$1",
       "CDP=$2",

@@ -78,11 +78,15 @@ function refuseTunnel(socket: Duplex, status: string, refused: boolean) {
   socket.end(`HTTP/1.1 ${status}\r\n${header}Content-Length: 0\r\nConnection: close\r\n\r\n`);
 }
 
-async function dialAny(addresses: readonly string[], port: number): Promise<Socket> {
+async function dialAny(
+  addresses: readonly string[],
+  port: number,
+  track: (socket: Socket) => void,
+): Promise<Socket> {
   let last: unknown;
   for (const address of addresses) {
     try {
-      return await dial(address, port);
+      return await dial(address, port, track);
     } catch (error) {
       last = error;
     }
@@ -90,9 +94,10 @@ async function dialAny(addresses: readonly string[], port: number): Promise<Sock
   throw last;
 }
 
-function dial(address: string, port: number): Promise<Socket> {
+function dial(address: string, port: number, track: (socket: Socket) => void): Promise<Socket> {
   return new Promise((resolve, reject) => {
     const socket = connect({ host: address, port });
+    track(socket);
     socket.setTimeout(DIAL_TIMEOUT_MS, () => socket.destroy(new Error("connect timed out")));
     socket.once("connect", () => {
       socket.setTimeout(0);
@@ -105,7 +110,9 @@ function dial(address: string, port: number): Promise<Socket> {
 export async function startEgressProxy(options: EgressProxyOptions): Promise<EgressProxy> {
   const { exempt, resolveHost } = options;
   const open = new Set<Duplex>();
+  let closed = false;
   const track = (socket: Duplex) => {
+    if (closed) return void socket.destroy();
     open.add(socket);
     socket.once("close", () => open.delete(socket));
   };
@@ -137,12 +144,12 @@ export async function startEgressProxy(options: EgressProxyOptions): Promise<Egr
     delete headers["proxy-authorization"];
     let socket: Socket;
     try {
-      socket = await dialAny(verdict.addresses, Number(target.port) || 80);
+      socket = await dialAny(verdict.addresses, Number(target.port) || 80, track);
     } catch {
       res.writeHead(502).end();
       return;
     }
-    track(socket);
+    res.once("close", () => socket.destroy());
     const upstream = httpRequest({
       createConnection: () => socket,
       method: req.method,
@@ -174,11 +181,10 @@ export async function startEgressProxy(options: EgressProxyOptions): Promise<Egr
     if ("failed" in verdict) return refuseTunnel(client, "502 Bad Gateway", false);
     let upstream: Socket;
     try {
-      upstream = await dialAny(verdict.addresses, authority.port);
+      upstream = await dialAny(verdict.addresses, authority.port, track);
     } catch {
       return refuseTunnel(client, "502 Bad Gateway", false);
     }
-    track(upstream);
     if (client.destroyed) return void upstream.destroy();
     client.write("HTTP/1.1 200 Connection Established\r\n\r\n");
     if (head.length > 0) upstream.write(head);
@@ -204,6 +210,7 @@ export async function startEgressProxy(options: EgressProxyOptions): Promise<Egr
     url: `http://127.0.0.1:${address.port}`,
     close: () =>
       new Promise<void>((resolve) => {
+        closed = true;
         for (const socket of open) socket.destroy();
         server.close(() => resolve());
       }),
