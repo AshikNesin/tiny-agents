@@ -38,7 +38,7 @@ import {
   type ListNode,
 } from "../../lib/code/list";
 import type { ProjectView } from "../../../shared/api/code";
-import { SIDEBAR_ROW, SidebarFold } from "../../components/shell/ModeSwitch";
+import { SIDEBAR_ROW } from "../../components/shell/ModeSwitch";
 import { PullChip, useArchive, useArchiveMany } from "./controls";
 import { shortAgo } from "./NewConversation";
 
@@ -359,13 +359,11 @@ export function ConversationList({
   harnesses,
   activeId,
   projects = null,
-  onHide,
 }: {
   threads: ThreadSummary[] | null;
   harnesses: HarnessInfo[];
   activeId?: string;
   projects?: ProjectView[] | null;
-  onHide?: () => void;
 }) {
   const { pathname } = useLocation();
   const at = (path: string) => pathname === path || pathname.startsWith(`${path}/`);
@@ -746,22 +744,17 @@ export function ConversationList({
           </Button>
         </div>
       )}
-      {!selected && (projects || onHide) && (
-        <div className="flex shrink-0 items-center gap-1 p-2.5">
-          {projects ? (
-            <Link
-              to="/code/settings"
-              data-testid="code-settings"
-              aria-current={at("/code/settings") ? "page" : undefined}
-              className={cn(navRow(at("/code/settings")), "min-w-0 flex-1")}
-            >
-              <Settings2 />
-              Settings
-            </Link>
-          ) : (
-            <span className="flex-1" />
-          )}
-          {onHide && <SidebarFold label="Hide sidebar" onClick={onHide} controls="code-sidebar" />}
+      {!selected && projects && (
+        <div className="shrink-0 p-2.5">
+          <Link
+            to="/code/settings"
+            data-testid="code-settings"
+            aria-current={at("/code/settings") ? "page" : undefined}
+            className={navRow(at("/code/settings"))}
+          >
+            <Settings2 />
+            Settings
+          </Link>
         </div>
       )}
     </div>

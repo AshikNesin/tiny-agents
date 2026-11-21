@@ -1,12 +1,13 @@
 import React from "react";
-import { fireEvent, render as renderBare, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { act, fireEvent, render as renderBare, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { ConfirmProvider } from "@groot/ui/primitives";
 import { NO_CAPABILITIES } from "@tiny-agents/code/contracts";
 import { CodePage } from "@/pages/code/CodePage";
 import { useCodeStore } from "@/store/code";
+import { useUiStore } from "@/store/ui";
+import { sidebarCommand } from "@/components/shell/sidebar-command";
 import type { HarnessInfo } from "@/lib/code/api";
 import { AppQueryProvider } from "../query-provider";
 
@@ -49,6 +50,7 @@ const renderPage = () =>
   );
 
 beforeEach(() => {
+  useUiStore.setState({ codeSidebarOpen: true });
   useCodeStore.setState({ harnesses: [shelley], statuses: {}, threads: [] });
 });
 afterEach(() => window.localStorage.clear());
@@ -56,29 +58,27 @@ afterEach(() => window.localStorage.clear());
 const sidebar = () => screen.getByRole("complementary", { name: "Threads" });
 
 describe("the Code sidebar", () => {
-  it("hides and shows the thread list, and remembers it", async () => {
-    const user = userEvent.setup();
+  it("has no hide or show buttons; ⌘B folds it and it remembers", () => {
     const { unmount } = renderPage();
     expect(sidebar()).toHaveAttribute("data-state", "open");
+    expect(screen.queryByRole("button", { name: "Hide sidebar" })).toBeNull();
 
-    await user.click(screen.getByRole("button", { name: "Hide sidebar" }));
+    fireEvent.keyDown(window, { key: "b", metaKey: true });
     expect(sidebar()).toHaveAttribute("data-state", "closed");
-    const show = screen.getByRole("button", { name: "Show sidebar" });
-    expect(show).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("button", { name: "Show sidebar" })).toBeNull();
 
     unmount();
     renderPage();
     expect(sidebar()).toHaveAttribute("data-state", "closed");
-    await user.click(screen.getByRole("button", { name: "Show sidebar" }));
+    fireEvent.keyDown(window, { key: "b", ctrlKey: true });
     expect(sidebar()).toHaveAttribute("data-state", "open");
-    expect(screen.queryByRole("button", { name: "Show sidebar" })).toBeNull();
   });
 
-  it("toggles with ⌘B", () => {
+  it("toggles from the command palette's Toggle sidebar", () => {
     renderPage();
-    fireEvent.keyDown(window, { key: "b", metaKey: true });
+    act(() => sidebarCommand("code").onSelect());
     expect(sidebar()).toHaveAttribute("data-state", "closed");
-    fireEvent.keyDown(window, { key: "b", ctrlKey: true });
+    act(() => sidebarCommand("code").onSelect());
     expect(sidebar()).toHaveAttribute("data-state", "open");
   });
 });

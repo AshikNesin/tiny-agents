@@ -7,10 +7,10 @@ import {
   useParams,
   useSearchParams,
 } from "react-router-dom";
-import { ArrowLeft, Code2, PanelLeftOpen, TriangleAlert } from "lucide-react";
+import { ArrowLeft, Code2, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Button, EmptyState, monoClass } from "@groot/ui";
+import { EmptyState, monoClass } from "@groot/ui";
 import { cn } from "@groot/ui/lib/utils";
 import { CommandPaletteTrigger } from "@groot/shell/components/CommandPalette";
 import { useShellConfig } from "@groot/shell/lib/shell-config";
@@ -49,31 +49,11 @@ function readSideTab(): SideTab {
   }
 }
 import { SidebarTop } from "../../components/shell/ModeSwitch";
+import { useUiStore } from "../../store/ui";
 import { ConversationList } from "./ConversationList";
 import { ConversationView } from "./ConversationView";
 import { NewConversation } from "./NewConversation";
 import { ThreadsScreen } from "./ThreadsScreen";
-
-const SIDEBAR_KEY = "tiny-agents:code-sidebar";
-
-function readSidebar(): boolean {
-  try {
-    return window.localStorage.getItem(SIDEBAR_KEY) !== "closed";
-  } catch {
-    return true;
-  }
-}
-
-function useSidebar(): [boolean, () => void] {
-  const [open, setOpen] = useState(readSidebar);
-  const toggle = useCallback(() => setOpen((shown) => !shown), []);
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(SIDEBAR_KEY, open ? "open" : "closed");
-    } catch {}
-  }, [open]);
-  return [open, toggle];
-}
 
 function useGitHubSetupResult(result: string | null, reloadProjects: () => void) {
   const navigate = useNavigate();
@@ -175,7 +155,9 @@ export function CodePage() {
   const statuses = useCodeStore((s) => s.statuses);
   const threads = useCodeStore((s) => s.threads);
   const [insert, setInsert] = useState<{ text: string; nonce: number } | null>(null);
-  const [sidebarOpen, toggleSidebar] = useSidebar();
+  const sidebarOpen = useUiStore((s) => s.codeSidebarOpen);
+  const toggleUiSidebar = useUiStore((s) => s.toggleSidebar);
+  const toggleSidebar = useCallback(() => toggleUiSidebar("code"), [toggleUiSidebar]);
   const [viewCwd, setViewCwd] = useState<string | null>(null);
   const threadId = rawId ? normalizeThreadId(decodeURIComponent(rawId)) : undefined;
   const changesOpen = Boolean(threadId) && pathname.endsWith("/changes");
@@ -339,7 +321,6 @@ export function CodePage() {
             harnesses={harnesses}
             activeId={threadId}
             projects={projects}
-            onHide={toggleSidebar}
           />
           <ConnectionNotices offline={offline} />
         </aside>
@@ -357,23 +338,8 @@ export function CodePage() {
                 : "hidden md:flex",
           )}
         >
-          {!sidebarOpen && (
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={toggleSidebar}
-              aria-label="Show sidebar"
-              aria-controls="code-sidebar"
-              aria-expanded={false}
-              title="Show sidebar (⌘B)"
-              className="text-muted-foreground absolute top-2.5 left-2 z-10 hidden md:inline-flex"
-            >
-              <PanelLeftOpen />
-            </Button>
-          )}
           {inSettings ? (
             <CodeSettings
-              sidebarHidden={!sidebarOpen}
               section={settingsProjectId ? "projects" : section}
               projectId={settingsProjectId}
               harnesses={harnesses}
@@ -381,9 +347,9 @@ export function CodePage() {
               onChange={reloadProjects}
             />
           ) : browsing ? (
-            <ThreadsScreen threads={listed} projects={projects} sidebarHidden={!sidebarOpen} />
+            <ThreadsScreen threads={listed} projects={projects} />
           ) : reviewing ? (
-            <ReviewsScreen sidebarHidden={!sidebarOpen} />
+            <ReviewsScreen />
           ) : threadId && harness && reviewOpen ? (
             <ReviewPage
               threadId={threadId}
@@ -393,12 +359,10 @@ export function CodePage() {
               onTab={(tab) => openPage(tab)}
               changes={changesPanel(true)}
               pull={row?.projectId ? pullPanel(true) : null}
-              sidebarHidden={!sidebarOpen}
             />
           ) : threadId && harness ? (
             <ConversationView
               key={threadId}
-              sidebarHidden={!sidebarOpen}
               id={threadId}
               harness={harness}
               rows={rows}

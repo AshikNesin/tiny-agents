@@ -17,7 +17,7 @@ import { useAuthStore } from "@groot/shell/store/auth";
 import { useTheme } from "@groot/shell/lib/theme";
 import { toast } from "sonner";
 import { useBotsStore } from "../../store/bots";
-import { useUiStore } from "../../store/ui";
+import { modeOf, useUiStore } from "../../store/ui";
 import { useCodeStore } from "../../store/code";
 import { threadPath } from "../../lib/code/api";
 import type { Bot as BotRow } from "../../../shared/api/bots";
@@ -25,6 +25,7 @@ import { BotDialog } from "../BotDialog";
 import { AppSidebar } from "./AppSidebar";
 import { APP_NAV, guestNav } from "./nav";
 import { settingsCommandGroup } from "./settings-commands";
+import { sidebarCommand } from "./sidebar-command";
 import { useIsGuest, usePeopleStore } from "../../store/people";
 import { BADGED_FAVICON, documentTitle, waitingCount } from "../../lib/attention";
 
@@ -121,6 +122,7 @@ export function AppShell() {
       {
         heading: "Actions",
         items: [
+          sidebarCommand(modeOf(pathname)),
           ...(guest ? [] : [{ label: "New bot", icon: Plus, onSelect: openCreateBot }]),
           ...(codeConfigured
             ? [
@@ -184,7 +186,18 @@ export function AppShell() {
         ],
       },
     ];
-  }, [bots, navigate, openCreateBot, theme, setTheme, logout, codeThreads, codeConfigured, guest]);
+  }, [
+    bots,
+    navigate,
+    openCreateBot,
+    theme,
+    setTheme,
+    logout,
+    codeThreads,
+    codeConfigured,
+    guest,
+    pathname,
+  ]);
 
   const onSaved = (bot: BotRow) => {
     useBotsStore.getState().adoptBot(bot);

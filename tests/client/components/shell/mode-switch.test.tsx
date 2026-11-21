@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render as renderBare, screen, within } from "@testing-library/react";
+import { act, fireEvent, render as renderBare, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -11,6 +11,7 @@ import { CodePage } from "@/pages/code/CodePage";
 import { useCodeStore } from "@/store/code";
 import { useBotsStore } from "@/store/bots";
 import { useUiStore } from "@/store/ui";
+import { sidebarCommand } from "@/components/shell/sidebar-command";
 import type { HarnessInfo } from "@/lib/code/api";
 import { AppQueryProvider } from "../../query-provider";
 
@@ -105,6 +106,7 @@ describe("the Chat/Code mode switch", () => {
     useCommandPaletteStore.setState({ open: false });
     renderAt("/chats");
     const nav = within(screen.getByRole("navigation", { name: "Primary" }));
+    expect(nav.getByRole("button", { name: "Search" })).toHaveTextContent(/^Search$/);
     await userEvent.click(nav.getByRole("button", { name: "Search" }));
     expect(useCommandPaletteStore.getState().open).toBe(true);
   });
@@ -114,8 +116,16 @@ describe("the Chat/Code mode switch", () => {
     renderAt("/chats");
     fireEvent.keyDown(window, { key: "b", metaKey: true });
     expect(useUiStore.getState().collapsed).toBe(true);
-    expect(screen.getByRole("button", { name: "Expand sidebar" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /(Expand|Collapse) sidebar/ })).toBeNull();
     fireEvent.keyDown(window, { key: "b", ctrlKey: true });
     expect(useUiStore.getState().collapsed).toBe(false);
+  });
+
+  it("folds the chat sidebar from the command palette's Toggle sidebar", () => {
+    useUiStore.setState({ collapsed: false });
+    const command = sidebarCommand("chat");
+    expect(command.label).toBe("Toggle sidebar");
+    act(() => command.onSelect());
+    expect(useUiStore.getState().collapsed).toBe(true);
   });
 });

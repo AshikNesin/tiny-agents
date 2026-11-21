@@ -18,7 +18,6 @@ export function ReviewPage({
   onTab,
   changes,
   pull,
-  sidebarHidden = false,
 }: {
   threadId: string;
   title: string;
@@ -27,7 +26,6 @@ export function ReviewPage({
   onTab(tab: ReviewTab): void;
   changes: ReactNode;
   pull: ReactNode;
-  sidebarHidden?: boolean;
 }) {
   const guest = useIsGuest();
   const state = pr ? pullState(pr.loop) : null;
@@ -44,10 +42,7 @@ export function ReviewPage({
   return (
     <div className="flex h-full min-h-0 flex-col" data-testid="code-review-page">
       <header
-        className={cn(
-          "border-border flex h-13 shrink-0 items-center gap-1 border-b px-2 sm:px-3",
-          sidebarHidden && "md:pl-12",
-        )}
+        className={cn("border-border flex h-13 shrink-0 items-center gap-1 border-b px-2 sm:px-3")}
       >
         <Button asChild variant="ghost" size="icon-sm" className="shrink-0">
           <Link

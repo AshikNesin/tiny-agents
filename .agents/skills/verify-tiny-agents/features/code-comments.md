@@ -10,7 +10,7 @@ Reviewing a Code thread's changes as a reviewer does: the Changes panel folds un
 - `code-comment-tray` region `Comments for the agent` above the composer: `N comment(s) go(es) with your next message`, `Show comments` / `Hide comments`, `Send now`, `Remove comment` per comment.
 - `code-comment-sent` the next message takes them along: the tray goes, the transcript shows an `article` per comment (`<path>:<lines>`, the quoted lines, the comment) and then the message.
 - `code-review-page` the right panel's `Open as a page` opens `/code/<id>/review` (`code-review-page`): tabs `Source control` and, for a project thread, `Pull request #N` (`?tab=pr`), at full width; comments work there and wait in the tray at the bottom; link `Back to the thread`.
-- `code-sidebar` `Hide sidebar` (foot of the thread list, shown on hover, ⌘B) folds the `complementary` `Threads` away (`data-state="closed"`); `Show sidebar` (top left, `aria-expanded` false) brings it back.
+- `code-sidebar` the palette's `Toggle sidebar` folds the `complementary` `Threads` away (`data-state="closed"`); Ctrl+B brings it back.
 - Not driven: the Review panel of a project thread (needs GitHub), a guest's comment going into the composer, `Send now` (covered by `tests/client/pages/code-pending-comments.test.tsx`), the PR chip on rows (needs a project's PR).
 
 ## How to get to it (user POV)
@@ -28,7 +28,7 @@ Preconditions: `ta-verify up --shelley` (the journey requires `shelley`).
 - **Comment.** Hover line 30 → `Comment on line 30` → textbox focused → type → `Comment`: POST `/review/drafts` 201, a `note` `Comment on line 30`, the tray reads `1 comment goes with your next message`, `Show comments` lists `src/app.ts:30`; the API lists the draft.
 - **Send.** `echo: thanks-<stamp>` + Enter: the tray goes, an `article` with `src/app.ts:30` and the comment, then `echo: thanks-<stamp>`; no `note` left; the API lists no drafts.
 - **Review page.** `Open as a page` in the panel: URL ends `/review`, tab `Source control` selected, one `code-file`, the `Changed files` tree beside it, no transcript; at phone width the tree hides behind `Files`; a comment on line 30 there shows in the page's tray; `Back to the thread`: the thread's tray reads `1 comment…`.
-- **Sidebar.** `Hide sidebar`: `Threads` closed, `Show sidebar` visible; `Show sidebar`: open again.
+- **Sidebar.** `Toggle sidebar` in the palette: `Threads` closed; Ctrl+B: open again.
 - **Proof.** `ta-verify drive $S/journeys/code-comments.mjs` → `code-comments/changes-folded`, `composer-inline`, `comment-waiting`, `comment-sent`, `review-page`, `sidebar-hidden`.
 
 ## Gotchas

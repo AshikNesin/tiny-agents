@@ -119,17 +119,19 @@ await journey("account-shell", async ({ page, step, proof, cleanup, api, stamp }
   await step("sidebar collapses to an icon rail, persists across reload, expands", async () => {
     // Settings is a full page with its own chrome: the app sidebar lives elsewhere.
     await page.goto("/tasks");
-    await page.getByRole("button", { name: "Collapse sidebar" }).click();
-    await expect(page.getByRole("button", { name: "Expand sidebar" })).toBeVisible();
+    await sidebar.getByRole("button", { name: "Search" }).click();
+    await page
+      .getByRole("dialog")
+      .getByRole("option", { name: /Toggle sidebar/ })
+      .click();
     await expect(sidebar.getByText("Demo User")).toBeHidden();
     await expect(sidebar.getByRole("link", { name: "Tasks" })).toHaveAttribute("title", "Tasks");
     await page.reload();
-    await expect(page.getByRole("button", { name: "Expand sidebar" })).toBeVisible();
+    await expect(sidebar.getByText("Demo User")).toBeHidden();
   });
   await proof("sidebar-rail");
-  await step("expand the sidebar again", async () => {
-    await page.getByRole("button", { name: "Expand sidebar" }).click();
-    await expect(page.getByRole("button", { name: "Collapse sidebar" })).toBeVisible();
+  await step("expand the sidebar again with Ctrl+B", async () => {
+    await page.keyboard.press("Control+b");
     await expect(sidebar.getByText("Demo User")).toBeVisible();
   });
   await step(
@@ -194,7 +196,6 @@ await journey("account-shell", async ({ page, step, proof, cleanup, api, stamp }
       await expect(sidebar.getByRole("link", { name })).toBeVisible();
     }
     await expect(sidebar.getByRole("link", { name: "Routines" })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Collapse sidebar" })).toBeHidden();
   });
   await proof("phone-drawer");
   await step("phone: a drawer link navigates and closes the drawer", async () => {

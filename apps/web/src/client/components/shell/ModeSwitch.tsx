@@ -1,15 +1,12 @@
 import type { ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Code2, MessageSquare, PanelLeftClose, type LucideIcon } from "lucide-react";
+import { Code2, MessageSquare, type LucideIcon } from "lucide-react";
 import { cn } from "@groot/ui/lib/utils";
 import { waitingCount } from "../../lib/attention";
 import { useBotsStore } from "../../store/bots";
 import { unreadCount, useCodeStore } from "../../store/code";
 import { modeOf, useUiStore, type AppMode } from "../../store/ui";
 import { BrandMark } from "./BrandMark";
-
-export const SIDEBAR_ICON =
-  "text-muted-foreground hover:bg-sidebar-accent hover:text-foreground flex size-8 shrink-0 items-center justify-center rounded-xl outline-none focus-visible:ring-1 focus-visible:ring-sidebar-ring";
 
 export const SIDEBAR_ROW =
   "flex h-9 w-full items-center gap-2 rounded-xl px-1.5 text-left text-sm outline-none focus-visible:ring-1 focus-visible:ring-sidebar-ring [&>svg]:text-muted-foreground [&>svg]:size-4 [&>svg]:shrink-0";
@@ -100,33 +97,6 @@ export function ModeSwitch({
         onNavigate={onNavigate}
       />
     </nav>
-  );
-}
-
-export function SidebarFold({
-  label,
-  onClick,
-  controls,
-}: {
-  label: string;
-  onClick: () => void;
-  controls?: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={label}
-      aria-controls={controls}
-      aria-expanded
-      title={`${label} (⌘B)`}
-      className={cn(
-        SIDEBAR_ICON,
-        "hidden md:flex md:opacity-0 md:group-hover/sidebar:opacity-100 md:focus-visible:opacity-100 pointer-coarse:opacity-100",
-      )}
-    >
-      <PanelLeftClose className="size-4" />
-    </button>
   );
 }
 
