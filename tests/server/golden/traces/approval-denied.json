@@ -12,7 +12,7 @@
         "description": "",
         "systemPrompt": "Be brief.",
         "modelId": "test-model",
-        "conversationId": "20",
+        "conversationId": "2",
         "chatStartedAt": "2026-11-06T06:30:00.000Z",
         "lastReadAt": null,
         "lastActivityAt": "2026-11-06T06:30:00.000Z",
@@ -73,7 +73,7 @@
                     "title": "Sell the car"
                   },
                   "status": "awaiting_approval",
-                  "taskId": 32
+                  "taskId": 14
                 }
               ],
               "status": "done",
@@ -100,7 +100,7 @@
   {
     "http": "deny",
     "method": "POST",
-    "path": "/api/v1/bots/<id1>/approvals/32",
+    "path": "/api/v1/bots/<id1>/approvals/14",
     "status": 200,
     "body": {
       "success": true,
@@ -180,23 +180,8 @@
       "success": true,
       "data": [
         {
-          "id": "<id3>",
-          "conversationId": "2",
-          "name": "Improver",
-          "description": "",
-          "modelId": "test-model",
-          "lastMessagePreview": "Tool said: Created task [<id4>] Book flights · medium · todo",
-          "lastActivityAt": "2026-11-06T06:30:00.000Z",
-          "lastReadAt": null,
-          "unread": true,
-          "replying": false,
-          "approvals": 0,
-          "questions": 0,
-          "pinnedAt": null
-        },
-        {
           "id": "<id1>",
-          "conversationId": "20",
+          "conversationId": "2",
           "name": "Denied",
           "description": "",
           "modelId": "test-model",
@@ -215,20 +200,7 @@
   {
     "db": "no task added",
     "tables": {
-      "tasks": [
-        {
-          "id": "<id4>",
-          "title": "Book flights",
-          "description": "",
-          "status": "todo",
-          "priority": "medium",
-          "dueAt": null,
-          "completedAt": null,
-          "sourceKey": "pi:<id5>:14",
-          "createdAt": "2026-11-06T06:30:00.000Z",
-          "updatedAt": "2026-11-06T06:30:00.000Z"
-        }
-      ]
+      "tasks": []
     }
   }
 ]

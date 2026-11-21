@@ -78,6 +78,7 @@ export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capab
       if (error instanceof SandboxTimeoutError) {
         throw new Error(
           `Command timed out after ${Math.round(execOptions.timeoutMs / 1000)}s. Rerun with detached:true if it must keep running.`,
+          { cause: error },
         );
       }
       throw error;

@@ -7,12 +7,26 @@ import {
   rmSync,
   symlinkSync,
 } from "node:fs";
+import { spawn } from "node:child_process";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 const repoRoot = process.cwd();
 
-export function withRepoCopy<T>(use: (root: string) => T): T {
+export type ScriptRun = { status: number | null; stdout: string; stderr: string };
+
+export function runTsxScript(script: string, args: string[], timeout: number): Promise<ScriptRun> {
+  return new Promise((resolve) => {
+    const child = spawn("pnpm", ["exec", "tsx", script, ...args], { cwd: repoRoot, timeout });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk: Buffer) => (stdout += chunk.toString("utf8")));
+    child.stderr.on("data", (chunk: Buffer) => (stderr += chunk.toString("utf8")));
+    child.on("close", (status) => resolve({ status, stdout, stderr }));
+  });
+}
+
+export async function withRepoCopy<T>(use: (root: string) => T | Promise<T>): Promise<T> {
   const root = mkdtempSync(path.join(tmpdir(), "repo-copy-"));
   try {
     const packages = readdirSync(path.join(repoRoot, "packages")).map((name) => `packages/${name}`);
@@ -38,7 +52,7 @@ export function withRepoCopy<T>(use: (root: string) => T): T {
       mkdirSync(path.join(root, dir), { recursive: true });
       symlinkSync(modules, path.join(root, dir, "node_modules"));
     }
-    return use(root);
+    return await use(root);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

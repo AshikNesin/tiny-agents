@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
-import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vite-plus/test";
 
 const SCRIPT = path.resolve("scripts/check-doc-refs.mjs");
 
@@ -34,7 +34,7 @@ function runChecker(): { status: number | null; lines: string[] } {
   return { status: result.status, lines: result.stdout.trim().split("\n") };
 }
 
-beforeAll(() => {
+beforeEach(() => {
   root = mkdtempSync(path.join(tmpdir(), "doc-refs-"));
   for (const [file, body] of Object.entries(TREE)) {
     mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
@@ -44,7 +44,7 @@ beforeAll(() => {
   execFileSync("git", ["add", "."], { cwd: root });
 });
 
-afterAll(() => rmSync(root, { recursive: true, force: true }));
+afterEach(() => rmSync(root, { recursive: true, force: true }));
 
 describe("check-doc-refs", () => {
   it("fails on exactly the dead links and the unknown script, naming file and line", () => {

@@ -266,7 +266,7 @@ describe("Shelley harness", () => {
     shelley.rows[0]!.tags = '["release"]';
     await shelley.waitForStreams(1);
     await harness.fork!("cA", "m1");
-    const forked = shelley.seen.filter((s) => s.url.endsWith("/tags")).at(-1)!;
+    const forked = shelley.seen.findLast((s) => s.url.endsWith("/tags"))!;
     expect(forked.url).not.toBe("/api/conversation/cA/tags");
     expect(JSON.parse(forked.body.toString())).toEqual({ tags: ["release", "tiny-agents"] });
   });

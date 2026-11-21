@@ -78,7 +78,8 @@ async function execOn(
   try {
     result = await connection.exec(command, { stdin, timeoutMs, settleOnExit: true });
   } catch (error) {
-    if (error instanceof SandboxTimeoutError) throw new Error(`Sandbox timed out: ${label}`);
+    if (error instanceof SandboxTimeoutError)
+      throw new Error(`Sandbox timed out: ${label}`, { cause: error });
     throw error;
   }
   const out = result.stdout.toString("utf8");
@@ -199,10 +200,13 @@ export function createSandboxClaudeWorker(options: SandboxWorkerOptions): Claude
     async account() {
       if (installing) return { state: "installing" };
       if (!ensured) this.prepare();
+      let wait: ReturnType<typeof setTimeout> | undefined;
       try {
-        await Promise.race([ensured, new Promise((resolve) => setTimeout(resolve, 1500))]);
+        await Promise.race([ensured, new Promise((resolve) => (wait = setTimeout(resolve, 1500)))]);
       } catch {
         return { state: "error", detail: lastError ?? "Claude Code could not be set up." };
+      } finally {
+        clearTimeout(wait);
       }
       if (installing) return { state: "installing" };
       let output: string;

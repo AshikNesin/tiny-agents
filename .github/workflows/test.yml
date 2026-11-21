@@ -5,6 +5,12 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: ["main", "next"]
+  # The merge queue: every PR is tested in full, as the commit main will get,
+  # before it lands. CI (1/2) and CI (2/2) are the required checks there.
+  merge_group:
+    types: [checks_requested]
+  # A full run of any branch on demand.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -16,66 +22,86 @@ concurrency:
   group: tests-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# Two jobs, CI (1/2) and CI (2/2), one per runner VM: the runner pool runs two
+# at a time, and every extra job pays its own setup. Each part runs half of the
+# static work and shard i/2 of every test suite, phase after phase, each phase
+# timed against its budget (scripts/ci-budget.mjs). The gates come from
+# scripts/gates.mjs; `pnpm check:coverage` holds this file to that list. Both
+# parts are the required checks.
 jobs:
-  test:
-    name: Tests
+  ci:
+    name: CI (${{ matrix.part }}/2)
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: instabox-medium
-    env:
-      NODE_ENV: test
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [1, 2]
     steps:
+      - run: echo "CI_STARTED_AT=$(date +%s)" >> "$GITHUB_ENV"
+      # Full history without file contents: the gates diff against
+      # origin/<base>, the selection against the merge base, and the secret
+      # scan walks the new commits.
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
+          filter: blob:none
+      # Part 2 installs again for the pruned boot, so it keeps the pnpm store
+      # warm; part 1 restores node_modules. Both put ripgrep (design tokens)
+      # and gitleaks on PATH.
+      - uses: ./.github/actions/setup
         with:
-          node-version: "24"
-          cache: pnpm
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+          deps: ${{ matrix.part == 2 && 'store' || 'node_modules' }}
+          tools: "true"
+          github-token: ${{ github.token }}
+      # tsc's incremental state from the latest run, keyed by content so a
+      # fresh checkout reuses it. A miss means a cold check, on its cold budget.
+      - id: tsc-cache
+        if: matrix.part == 1
+        uses: actions/cache@v4
+        with:
+          path: node_modules/.cache/tsc
+          key: tsc-${{ runner.os }}-${{ github.sha }}
+          restore-keys: tsc-${{ runner.os }}-
+      - if: matrix.part == 1 && steps.tsc-cache.outputs.cache-matched-key == ''
+        run: echo "CI_CACHE_COLD=1" >> "$GITHUB_ENV"
+      - run: node scripts/ci-budget.mjs setup
 
-      - name: Install ripgrep
-        # The instabox CI image, unlike ubuntu-latest, ships without ripgrep,
-        # which scripts/check-design-tokens.ts shells out to.
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq ripgrep
+      # Part 1: lint, typecheck and the other gates.
+      - if: matrix.part == 1
+        run: pnpm verify:static --job lint
+      - if: matrix.part == 1
+        run: node scripts/ci-budget.mjs run lint
+      - if: matrix.part == 1
+        run: pnpm verify:static --job typecheck
+      - if: matrix.part == 1
+        run: node scripts/ci-budget.mjs run typecheck
+      - if: matrix.part == 1
+        run: pnpm verify:static --job gates
+      - if: matrix.part == 1
+        run: node scripts/ci-budget.mjs run gates
+
+      # Part 2: the secret scan, the migration gates, the build and its boot.
       - name: Secret scan (gitleaks)
+        if: matrix.part == 2
         # The pre-commit hook skips gitleaks where it isn't installed.
         env:
-          GITLEAKS_VERSION: 8.30.1
-          GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
-          BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
-          # gh, the download fallback, needs a token even for a public release.
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          asset="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
-          url="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${asset}"
-          # github.com release-asset downloads 504 at the CDN edge at times
-          # (seen repeatedly 2026-11-08); gh (api.github.com) reaches the same
-          # asset over different routing. Either way the sha256 pin still gates
-          # what runs, so the fallback cannot serve tampered bits.
-          if ! curl -fsSL --retry 3 --retry-all-errors --retry-delay 2 -o "$RUNNER_TEMP/gitleaks.tgz" "$url"; then
-            echo "curl failed for $url, falling back to gh release download"
-            gh release download "v$GITLEAKS_VERSION" -R gitleaks/gitleaks -p "$asset" -O "$RUNNER_TEMP/gitleaks.tgz"
-          fi
-          echo "${GITLEAKS_SHA256}  $RUNNER_TEMP/gitleaks.tgz" | sha256sum -c -
-          tar -xzf "$RUNNER_TEMP/gitleaks.tgz" -C "$RUNNER_TEMP" gitleaks
-          bash scripts/secret-scan.sh "$RUNNER_TEMP/gitleaks" "$BASE"
-
-      - name: Static gates (scripts/gates.mjs)
-        run: pnpm verify:static
-
-      - name: Server tests
-        run: pnpm test
-      - name: Client tests
-        run: pnpm test:client
-
+          BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event_name == 'merge_group' && github.event.merge_group.base_sha || github.event.before }}
+        run: bash scripts/secret-scan.sh gitleaks "$BASE"
+      - if: matrix.part == 2
+        run: node scripts/ci-budget.mjs run secrets
+      - if: matrix.part == 2
+        run: pnpm verify:static --job migrations
+      - if: matrix.part == 2
+        run: node scripts/ci-budget.mjs run migrations
       - name: Build (client + Node server)
+        if: matrix.part == 2
         run: pnpm build
       - name: Runtime dependency closure
+        if: matrix.part == 2
         run: pnpm check:closure
-
       - name: Pruned production boot
+        if: matrix.part == 2
         env:
           NODE_ENV: production
           JWT_SECRET_KEY: ci-boot-secret-key-0123456789abcdef0123456789
@@ -87,7 +113,8 @@ jobs:
           rm -rf ../pruned-boot && mkdir -p ../pruned-boot
           tar cf - $(git ls-files) dist | tar xf - -C ../pruned-boot
           cd ../pruned-boot
-          pnpm install --frozen-lockfile --prod --ignore-scripts
+          # --offline: from the store the setup restored, never the network.
+          pnpm install --frozen-lockfile --prod --ignore-scripts --offline
           pnpm rebuild
           DATABASE_URL=file:./tmp/boot.db AGENT_DB_PATH=./tmp/agent.db PORT=3999 \
             node dist/server/bundle.js > boot.log 2>&1 < /dev/null &
@@ -95,7 +122,10 @@ jobs:
           for i in $(seq 1 60); do
             if curl -fsS -m 5 http://localhost:3999/health; then
               echo "health endpoint answered"
-              curl -fsS -m 5 http://localhost:3999/ | grep -q '<div id="root">' && echo "client served"
+              # A plain command, not `grep && echo`: set -e ignores a failure
+              # on the left of &&, so that form never failed.
+              curl -fsS -m 5 http://localhost:3999/ | grep -q '<div id="root">'
+              echo "client served"
               kill -TERM "$server_pid"
               for j in $(seq 1 15); do
                 kill -0 "$server_pid" 2>/dev/null || exit 0
@@ -114,3 +144,17 @@ jobs:
           echo "server did not answer /health within 60s"
           cat boot.log
           exit 1
+      - if: matrix.part == 2
+        run: node scripts/ci-budget.mjs run build
+
+      # Both parts: shard i/2 of each suite, files split by recorded duration
+      # (tests/sequencer.ts). Pull requests run the tests their diff reaches;
+      # every other event runs all of them (scripts/test-selection.mjs).
+      - id: select
+        run: echo "args=$(node scripts/test-selection.mjs)" >> "$GITHUB_OUTPUT"
+      - run: pnpm test --project server --project server:isolated --shard=${{ matrix.part }}/2 ${{ steps.select.outputs.args }}
+      - run: node scripts/ci-budget.mjs run server
+      - run: pnpm test:client --shard=${{ matrix.part }}/2 ${{ steps.select.outputs.args }}
+      - run: node scripts/ci-budget.mjs run client
+      - run: pnpm test --project server:repo-typecheck --shard=${{ matrix.part }}/2 ${{ steps.select.outputs.args }}
+      - run: node scripts/ci-budget.mjs run repo-typecheck

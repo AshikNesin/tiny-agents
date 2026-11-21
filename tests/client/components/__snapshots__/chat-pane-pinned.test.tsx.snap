@@ -965,9 +965,7 @@ p [testid=composer-hint, aria-hidden=true]
 `;
 
 exports[`ChatPane, pinned > a computer: the toggle, then the tabs > browser in front markup 1`] = `
-"<body
-  style=""
->
+"<body>
   <div>
     <div
       class="flex h-full min-h-0 flex-col md:flex-row"
@@ -1442,9 +1440,7 @@ complementary
 `;
 
 exports[`ChatPane, pinned > a computer: the toggle, then the tabs > closed again markup 1`] = `
-"<body
-  style=""
->
+"<body>
   <div>
     <div
       class="flex h-full min-h-0 flex-col md:flex-row"
@@ -1842,9 +1838,7 @@ p [testid=composer-hint, aria-hidden=true]
 `;
 
 exports[`ChatPane, pinned > a computer: the toggle, then the tabs > closed markup 1`] = `
-"<body
-  style=""
->
+"<body>
   <div>
     <div
       class="flex h-full min-h-0 flex-col md:flex-row"
@@ -2242,9 +2236,7 @@ p [testid=composer-hint, aria-hidden=true]
 `;
 
 exports[`ChatPane, pinned > a computer: the toggle, then the tabs > computer in front markup 1`] = `
-"<body
-  style=""
->
+"<body>
   <div>
     <div
       class="flex h-full min-h-0 flex-col md:flex-row"
@@ -4067,9 +4059,7 @@ p [testid=composer-hint, aria-hidden=true]
 `;
 
 exports[`ChatPane, pinned > a takeover request leaves the computer closed > markup 1`] = `
-"<body
-  style=""
->
+"<body>
   <div>
     <div
       class="flex h-full min-h-0 flex-col md:flex-row"
@@ -8452,9 +8442,7 @@ span [aria-hidden=true]"
 `;
 
 exports[`ChatPane, pinned > the bot using the browser leaves its panel closed and lights the toggle > closed while in use markup 1`] = `
-"<body
-  style=""
->
+"<body>
   <div>
     <div
       class="flex h-full min-h-0 flex-col md:flex-row"
@@ -8892,9 +8880,7 @@ p [testid=composer-hint, aria-hidden=true]
 `;
 
 exports[`ChatPane, pinned > the bot using the browser leaves its panel closed and lights the toggle > opened from the toggle markup 1`] = `
-"<body
-  style=""
->
+"<body>
   <div>
     <div
       class="flex h-full min-h-0 flex-col md:flex-row"
@@ -9338,9 +9324,7 @@ complementary
 `;
 
 exports[`ChatPane, pinned > the bot using the computer, with a computer > closed while in use markup 1`] = `
-"<body
-  style=""
->
+"<body>
   <div>
     <div
       class="flex h-full min-h-0 flex-col md:flex-row"
@@ -9778,9 +9762,7 @@ p [testid=composer-hint, aria-hidden=true]
 `;
 
 exports[`ChatPane, pinned > the bot using the computer, with a computer > opened from the toggle markup 1`] = `
-"<body
-  style=""
->
+"<body>
   <div>
     <div
       class="flex h-full min-h-0 flex-col md:flex-row"
@@ -11527,9 +11509,7 @@ p [testid=composer-hint, aria-hidden=true]
 `;
 
 exports[`ChatPane, pinned > the transcript's Open computer brings the computer up > markup 1`] = `
-"<body
-  style=""
->
+"<body>
   <div>
     <div
       class="flex h-full min-h-0 flex-col md:flex-row"

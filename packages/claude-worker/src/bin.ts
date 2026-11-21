@@ -23,6 +23,7 @@ async function loadSdk(): Promise<AgentSdk> {
     throw new Error(
       "Install @anthropic-ai/claude-agent-sdk on this machine (the worker VM), then start again. " +
         detail,
+      { cause: error },
     );
   }
 }

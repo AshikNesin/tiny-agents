@@ -57,10 +57,7 @@ const DRIVER_HOMES = [
 const SERVER = "apps/web/src/server";
 const R12_ALLOWED = [
   "crypto/secret-box.ts:derived",
-  "api/vault/vault.service.ts:statusCache",
-  "api/vault/vault.service.ts:appValues",
   "api/vault/vault.admin.service.ts:adminBackends",
-  "api/vault/vault.admin.service.ts:candidatesCache",
   "api/vault/backends/index.ts:backends",
   "api/uploads/uploads.extraction.ts:cache",
   "api/uploads/uploads.prepare.ts:processor",

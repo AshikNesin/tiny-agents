@@ -100,7 +100,7 @@ export function tar(files: { name: string; data: string }[]): Uint8Array {
     block.set(strToU8("0000644\0"), 100);
     block.set(strToU8(size.toString(8).padStart(11, "0") + "\0"), 124);
     block[156] = type.charCodeAt(0);
-    block.set(strToU8("ustar\0" + "00"), 257);
+    block.set(strToU8("ustar\u000000"), 257);
     return block;
   };
   const pad = (data: Uint8Array) => {

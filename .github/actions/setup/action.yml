@@ -1,0 +1,115 @@
+name: Set up the repository
+description: >
+  Node, pnpm and the dependencies, warm from GitHub's own Actions cache, and
+  optionally the pinned ripgrep and gitleaks binaries. Runners are ephemeral
+  (a fresh VM per job), so everything warm comes from actions/cache.
+
+inputs:
+  deps:
+    description: >
+      node_modules: restore node_modules keyed by the lockfile and skip the
+      install on a hit (fastest). store: restore the pnpm store and install
+      from it, for a job that installs again (the pruned production boot).
+      none: Node only, no pnpm or dependencies (the secret scan).
+    default: node_modules
+  tools:
+    description: Set to "true" to put ripgrep and gitleaks on PATH.
+    default: "false"
+  github-token:
+    description: Token for the gh fallback when a release download fails.
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - if: inputs.deps != 'none'
+      uses: pnpm/action-setup@v4
+
+    # Always: every job runs scripts/ci-budget.mjs. Node 24 is in the
+    # runner's tool cache, so this takes about a second.
+    - id: node
+      uses: actions/setup-node@v5
+      with:
+        node-version: "24"
+        cache: ${{ inputs.deps == 'store' && 'pnpm' || '' }}
+        # v5 caches the store on its own when package.json names a package
+        # manager. Only the store mode wants that: elsewhere it downloads a
+        # store nothing uses, and with no pnpm installed (deps: none) it fails.
+        package-manager-cache: ${{ inputs.deps == 'store' }}
+
+    # node_modules holds compiled native addons (better-sqlite3), so the key
+    # names the OS, the CPU and the Node major along with the lockfile.
+    - name: Restore node_modules
+      if: inputs.deps == 'node_modules'
+      id: node-modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          node_modules
+          apps/*/node_modules
+          packages/*/node_modules
+        key: node-modules-${{ runner.os }}-${{ runner.arch }}-node24-${{ hashFiles('pnpm-lock.yaml', 'pnpm-workspace.yaml', '.npmrc', 'patches/**') }}
+
+    - name: Install dependencies
+      if: inputs.deps == 'store' || (inputs.deps == 'node_modules' && steps.node-modules.outputs.cache-hit != 'true')
+      shell: bash
+      run: pnpm install --frozen-lockfile
+
+    # One cache entry holds both binaries; a miss downloads both and checks
+    # each against its pinned sha256 before anything runs.
+    - name: Restore CI tools
+      if: inputs.tools == 'true'
+      id: tools
+      uses: actions/cache@v4
+      with:
+        path: ~/.ci-tools
+        key: ci-tools-${{ runner.os }}-${{ runner.arch }}-rg-14.1.1-gitleaks-8.30.1
+
+    - name: Download CI tools
+      if: inputs.tools == 'true' && steps.tools.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        RIPGREP_VERSION: 14.1.1
+        RIPGREP_SHA256: 4cf9f2741e6c465ffdb7c26f38056a59e2a2544b51f7cc128ef28337eeae4d8e
+        GITLEAKS_VERSION: 8.30.1
+        GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: |
+        set -euo pipefail
+        mkdir -p ~/.ci-tools/bin "$RUNNER_TEMP/ci-tools"
+        cd "$RUNNER_TEMP/ci-tools"
+        # github.com release downloads 504 at the CDN edge at times (seen
+        # 2026-11-08); gh reaches the same asset over api.github.com. The
+        # sha256 pin gates what runs either way.
+        fetch() { # repo tag asset
+          curl -fsSL --retry 3 --retry-all-errors --retry-delay 2 -o "$3" \
+            "https://github.com/$1/releases/download/$2/$3" ||
+            gh release download "$2" -R "$1" -p "$3" -O "$3"
+        }
+        rg_asset="ripgrep-${RIPGREP_VERSION}-x86_64-unknown-linux-musl.tar.gz"
+        fetch BurntSushi/ripgrep "$RIPGREP_VERSION" "$rg_asset"
+        echo "${RIPGREP_SHA256}  $rg_asset" | sha256sum -c -
+        tar -xzf "$rg_asset" --strip-components=1 -C ~/.ci-tools/bin \
+          "ripgrep-${RIPGREP_VERSION}-x86_64-unknown-linux-musl/rg"
+        gl_asset="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+        fetch gitleaks/gitleaks "v$GITLEAKS_VERSION" "$gl_asset"
+        echo "${GITLEAKS_SHA256}  $gl_asset" | sha256sum -c -
+        tar -xzf "$gl_asset" -C ~/.ci-tools/bin gitleaks
+
+    # A missed cache means a cold install or download: the setup budget
+    # (scripts/ci-budget.mjs) uses its cold allowance only then.
+    - name: Note a cold cache
+      if: >-
+        (inputs.deps == 'node_modules' && steps.node-modules.outputs.cache-hit != 'true') ||
+        (inputs.deps == 'store' && steps.node.outputs.cache-hit != 'true') ||
+        (inputs.tools == 'true' && steps.tools.outputs.cache-hit != 'true')
+      shell: bash
+      run: echo "CI_SETUP_COLD=1" >> "$GITHUB_ENV"
+
+    - name: Put CI tools on PATH
+      if: inputs.tools == 'true'
+      shell: bash
+      run: |
+        echo "$HOME/.ci-tools/bin" >> "$GITHUB_PATH"
+        "$HOME/.ci-tools/bin/rg" --version | head -1
+        "$HOME/.ci-tools/bin/gitleaks" version

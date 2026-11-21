@@ -93,6 +93,7 @@ export function createShelleyStream(options: StreamOptions): ShelleyStream {
           refreshAgain = false;
           // eslint-disable-next-line react-doctor/async-await-in-loop -- one read at a time
           await readSnapshot();
+          // oxlint-disable-next-line no-unmodified-loop-condition
         } while (refreshAgain && !stopped);
       } catch (error) {
         logger.warn("Could not read Shelley's conversation list", { error: String(error) });
@@ -139,6 +140,7 @@ export function createShelleyStream(options: StreamOptions): ShelleyStream {
 
   async function loop() {
     let delay = minBackoff;
+    // oxlint-disable-next-line no-unmodified-loop-condition
     while (!stopped) {
       const attempt = new AbortController();
       current = attempt;

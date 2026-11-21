@@ -1,31 +1,21 @@
-import { spawnSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vite-plus/test";
-import { withRepoCopy } from "./repo-copy";
+import { runTsxScript, withRepoCopy, type ScriptRun } from "./repo-copy";
 
 const repoRoot = process.cwd();
 const SCRIPT = path.join("scripts", "check-typecheck-coverage.ts");
 const TIMEOUT = 120_000;
 
-function runCoverageScript(checkedRepo = repoRoot): {
-  status: number | null;
-  stdout: string;
-  stderr: string;
-} {
-  const result = spawnSync("pnpm", ["exec", "tsx", path.join(checkedRepo, SCRIPT)], {
-    cwd: repoRoot,
-    encoding: "utf8",
-    timeout: TIMEOUT,
-  });
-  return { status: result.status, stdout: result.stdout ?? "", stderr: result.stderr ?? "" };
+function runCoverageScript(checkedRepo = repoRoot): Promise<ScriptRun> {
+  return runTsxScript(path.join(checkedRepo, SCRIPT), [], TIMEOUT);
 }
 
-describe("typecheck coverage", () => {
+describe.concurrent("typecheck coverage", () => {
   it(
     "owns every source file at head",
-    () => {
-      const run = runCoverageScript();
+    async () => {
+      const run = await runCoverageScript();
       expect(run.status).toBe(0);
       expect(run.stdout).toMatch(/(\d+)\/\1 source files covered/);
     },
@@ -35,12 +25,12 @@ describe("typecheck coverage", () => {
   it(
     "typechecks repo-owned declarations",
     () =>
-      withRepoCopy((root) => {
+      withRepoCopy(async (root) => {
         writeFileSync(
           path.join(root, "packages/core/src/audit-broken.d.ts"),
           'declare module "__audit_broken__" {\n  export const broken: numbr;\n}\n',
         );
-        const run = runCoverageScript(root);
+        const run = await runCoverageScript(root);
         expect(run.status).toBe(1);
         expect(run.stderr).toContain("packages/core/src/audit-broken.d.ts");
       }),
@@ -50,12 +40,12 @@ describe("typecheck coverage", () => {
   it(
     "names an unowned source file and nothing else in the copy",
     () =>
-      withRepoCopy((root) => {
+      withRepoCopy(async (root) => {
         writeFileSync(
           path.join(root, "packages/ui/src/orphan-coverage-probe.tsx"),
           "export function Orphan() {\n  return null;\n}\n",
         );
-        const run = runCoverageScript(root);
+        const run = await runCoverageScript(root);
         expect(run.status).toBe(1);
         expect(run.stderr.match(/not covered by any checked typecheck project: .*/g)).toEqual([
           "not covered by any checked typecheck project: packages/ui/src/orphan-coverage-probe.tsx",
@@ -67,10 +57,10 @@ describe("typecheck coverage", () => {
   it(
     "counts the projects a child lists in its typecheck:app script",
     () =>
-      withRepoCopy((root) => {
+      withRepoCopy(async (root) => {
         mkdirSync(path.join(root, "tests/worker"), { recursive: true });
         writeFileSync(path.join(root, "tests/worker/probe.test.ts"), "export const probe = 1;\n");
-        expect(runCoverageScript(root).stderr).toContain(
+        expect((await runCoverageScript(root)).stderr).toContain(
           "not covered by any checked typecheck project: tests/worker/probe.test.ts",
         );
 
@@ -82,7 +72,7 @@ describe("typecheck coverage", () => {
           path.join(root, "package.json"),
           JSON.stringify({ scripts: { "typecheck:app": "tsc --noEmit -p tests/worker" } }),
         );
-        const run = runCoverageScript(root);
+        const run = await runCoverageScript(root);
         expect(run.stderr).toBe("");
         expect(run.status).toBe(0);
       }),

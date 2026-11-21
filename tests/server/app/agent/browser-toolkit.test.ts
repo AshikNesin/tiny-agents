@@ -459,10 +459,11 @@ describe("browser toolkit", () => {
     await new Promise((r) => setTimeout(r, 300));
 
     deaths[0]!();
+    let wait: ReturnType<typeof setTimeout> | undefined;
     const outcome = await Promise.race([
       pending.then(() => "released"),
-      new Promise((r) => setTimeout(() => r("still waiting"), 1500)),
-    ]);
+      new Promise((r) => (wait = setTimeout(() => r("still waiting"), 1500))),
+    ]).finally(() => clearTimeout(wait));
     expect(outcome).toBe("released");
   });
 

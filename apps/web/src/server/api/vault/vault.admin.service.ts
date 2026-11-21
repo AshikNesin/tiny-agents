@@ -65,11 +65,11 @@ function writeBackends(): Map<BackendName, VaultBackend> {
 
 export function setWriteBackendsForTests(map: Map<BackendName, VaultBackend> | undefined): void {
   adminBackends = map;
-  candidatesCache = undefined;
+  app().vault.candidates = undefined;
 }
 
 export function vaultItemsChanged(): void {
-  candidatesCache = undefined;
+  app().vault.candidates = undefined;
 }
 
 function backendFor(name: string): VaultBackend {
@@ -90,13 +90,11 @@ function backendFailure(error: unknown): never {
 
 const CANDIDATES_TTL_MS = 5 * 60_000;
 const UNREADABLE_TITLE = "Unreadable item";
-let candidatesCache:
-  | { at: number; items: (BackendItemSummary & { backend: BackendName })[] }
-  | undefined;
 
 async function candidates(force = false) {
-  if (!force && candidatesCache && Date.now() - candidatesCache.at < CANDIDATES_TTL_MS) {
-    return candidatesCache.items;
+  const cached = app().vault.candidates;
+  if (!force && cached && Date.now() - cached.at < CANDIDATES_TTL_MS) {
+    return cached.items;
   }
   const items: (BackendItemSummary & { backend: BackendName })[] = [];
   for (const [name, backend] of readBackends()) {
@@ -123,7 +121,7 @@ async function candidates(force = false) {
       })),
     );
   }
-  candidatesCache = { at: Date.now(), items };
+  app().vault.candidates = { at: Date.now(), items };
   return items;
 }
 
@@ -386,7 +384,7 @@ export async function createItem(
     })
     .returning();
   const row = inserted!;
-  candidatesCache = undefined;
+  app().vault.candidates = undefined;
   await audit({ item: row, handle: row.handle, tool: actor.via, target: name, outcome: "created" });
   return itemView(row);
 }
@@ -434,7 +432,7 @@ export async function createAppCredential(input: {
       approval: "allowed",
     })
     .returning();
-  candidatesCache = undefined;
+  app().vault.candidates = undefined;
   await audit({
     item: row!,
     handle: row!.handle,
@@ -489,7 +487,7 @@ export async function linkItem(input: {
   } catch (error) {
     backendFailure(error);
   }
-  candidatesCache = undefined;
+  app().vault.candidates = undefined;
   await audit({
     item: row,
     handle: row.handle,
@@ -566,7 +564,7 @@ async function updateItemRow(
     backendFailure(error);
   }
   forgetAppCredential(row.handle);
-  candidatesCache = undefined;
+  app().vault.candidates = undefined;
   await audit({
     item: updated,
     handle: updated.handle,
@@ -637,7 +635,7 @@ export async function moveLocalItemsToOnePassword(): Promise<VaultMoveResult> {
       logger.warn({ handle: row.handle, error: reason }, "Vault item not moved to 1Password");
     }
   }
-  candidatesCache = undefined;
+  app().vault.candidates = undefined;
   return result;
 }
 
@@ -676,7 +674,7 @@ export async function deleteItemRow(
   }
   await db.delete(vaultItems).where(eq(vaultItems.id, row.id));
   forgetAppCredential(row.handle);
-  candidatesCache = undefined;
+  app().vault.candidates = undefined;
   await audit({
     handle: row.handle,
     tool: "vault_ui",

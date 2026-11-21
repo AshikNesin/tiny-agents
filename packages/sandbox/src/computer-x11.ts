@@ -284,7 +284,9 @@ export function createX11ComputerTransport(
       return { stdout: result.stdout, stderr: result.stderr.slice(0, 4000), code: result.exitCode };
     } catch (error) {
       if (error instanceof SandboxTimeoutError) {
-        throw new Error(`The computer did not answer within ${timeoutMs / 1000}s`);
+        throw new Error(`The computer did not answer within ${timeoutMs / 1000}s`, {
+          cause: error,
+        });
       }
       throw error;
     }

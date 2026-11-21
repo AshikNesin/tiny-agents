@@ -74,7 +74,7 @@ const RULES: Rule[] = [
   {
     name: "legacy-icon-sizing",
     pattern: "\\bh-([0-9.]+) w-\\1(?![/\\d])",
-    message: "Legacy square icon sizing (h-N w-N).\n" + "   Use the size-N shorthand instead.",
+    message: "Legacy square icon sizing (h-N w-N).\n   Use the size-N shorthand instead.",
     pcre2: true,
   },
   {

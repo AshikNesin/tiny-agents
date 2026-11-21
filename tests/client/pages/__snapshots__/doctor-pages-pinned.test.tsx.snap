@@ -1,9 +1,7 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
 exports[`ConnectionDetail, pinned > after a failed load > markup 1`] = `
-"<body
-  style=""
->
+"<body>
   <div>
     <div
       class="max-w-4xl mx-auto "
@@ -146,9 +144,7 @@ region "Notifications alt+T" [aria-live=polite]"
 `;
 
 exports[`ConnectionDetail, pinned > connected, with tools and bots > markup 1`] = `
-"<body
-  style=""
->
+"<body>
   <div>
     <div
       class="max-w-4xl mx-auto "
@@ -769,9 +765,7 @@ region "Notifications alt+T" [aria-live=polite]"
 `;
 
 exports[`ConnectionDetail, pinned > connected, without tools, bots loading > markup 1`] = `
-"<body
-  style=""
->
+"<body>
   <div>
     <div
       class="max-w-4xl mx-auto "
@@ -1176,9 +1170,7 @@ region "Notifications alt+T" [aria-live=polite]"
 `;
 
 exports[`ConnectionDetail, pinned > connecting, without tools, bots loading > markup 1`] = `
-"<body
-  style=""
->
+"<body>
   <div>
     <div
       class="max-w-4xl mx-auto "
@@ -1583,9 +1575,7 @@ region "Notifications alt+T" [aria-live=polite]"
 `;
 
 exports[`ConnectionDetail, pinned > error, without tools, bots loading > markup 1`] = `
-"<body
-  style=""
->
+"<body>
   <div>
     <div
       class="max-w-4xl mx-auto "
@@ -1996,9 +1986,7 @@ region "Notifications alt+T" [aria-live=polite]"
 `;
 
 exports[`ConnectionDetail, pinned > needs_auth, without tools, bots loading > markup 1`] = `
-"<body
-  style=""
->
+"<body>
   <div>
     <div
       class="max-w-4xl mx-auto "
@@ -2403,9 +2391,7 @@ region "Notifications alt+T" [aria-live=polite]"
 `;
 
 exports[`ConnectionDetail, pinned > no bots > markup 1`] = `
-"<body
-  style=""
->
+"<body>
   <div>
     <div
       class="max-w-4xl mx-auto "
@@ -5164,9 +5150,7 @@ span [aria-hidden=true]"
 `;
 
 exports[`ConnectionDetail, pinned > while loading > markup 1`] = `
-"<body
-  style=""
->
+"<body>
   <div>
     <div
       class="max-w-4xl mx-auto "
@@ -9200,9 +9184,7 @@ region "Notifications alt+T" [aria-live=polite]"
 `;
 
 exports[`SkillDetail, pinned > after a failed load > markup 1`] = `
-"<body
-  style=""
->
+"<body>
   <div>
     <div
       class="max-w-4xl mx-auto "
@@ -10015,9 +9997,7 @@ span [aria-hidden=true]"
 `;
 
 exports[`SkillDetail, pinned > edited, previewed, then asked to delete > dirty markup 1`] = `
-"<body
-  style=""
->
+"<body>
   <div>
     <div
       class="max-w-4xl mx-auto "
@@ -10577,9 +10557,7 @@ region "Notifications alt+T" [aria-live=polite]"
 `;
 
 exports[`SkillDetail, pinned > edited, previewed, then asked to delete > preview markup 1`] = `
-"<body
-  style=""
->
+"<body>
   <div>
     <div
       class="max-w-4xl mx-auto "
@@ -11151,9 +11129,7 @@ region "Notifications alt+T" [aria-live=polite]"
 `;
 
 exports[`SkillDetail, pinned > no bots > markup 1`] = `
-"<body
-  style=""
->
+"<body>
   <div>
     <div
       class="max-w-4xl mx-auto "
@@ -11609,9 +11585,7 @@ region "Notifications alt+T" [aria-live=polite]"
 `;
 
 exports[`SkillDetail, pinned > used by none > edit markup 1`] = `
-"<body
-  style=""
->
+"<body>
   <div>
     <div
       class="max-w-4xl mx-auto "
@@ -12107,9 +12081,7 @@ region "Notifications alt+T" [aria-live=polite]"
 `;
 
 exports[`SkillDetail, pinned > used by none > empty preview markup 1`] = `
-"<body
-  style=""
->
+"<body>
   <div>
     <div
       class="max-w-4xl mx-auto "
@@ -12612,9 +12584,7 @@ region "Notifications alt+T" [aria-live=polite]"
 `;
 
 exports[`SkillDetail, pinned > used by one bot > markup 1`] = `
-"<body
-  style=""
->
+"<body>
   <div>
     <div
       class="max-w-4xl mx-auto "
@@ -13153,9 +13123,7 @@ region "Notifications alt+T" [aria-live=polite]"
 `;
 
 exports[`SkillDetail, pinned > used by one bot, bots still loading > markup 1`] = `
-"<body
-  style=""
->
+"<body>
   <div>
     <div
       class="max-w-4xl mx-auto "
@@ -13605,9 +13573,7 @@ region "Notifications alt+T" [aria-live=polite]"
 `;
 
 exports[`SkillDetail, pinned > while loading > markup 1`] = `
-"<body
-  style=""
->
+"<body>
   <div>
     <div
       class="max-w-4xl mx-auto "

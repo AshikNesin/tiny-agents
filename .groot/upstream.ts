@@ -123,7 +123,7 @@ async function getChildAppName(projectRoot: string): Promise<string> {
     return name;
   } catch (err) {
     if (err instanceof Error && err.message.includes("Missing")) throw err;
-    throw new Error(`Could not read package.json at ${pkgPath}`);
+    throw new Error(`Could not read package.json at ${pkgPath}`, { cause: err });
   }
 }
 

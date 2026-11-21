@@ -1,9 +1,12 @@
 import { generateToken } from "@groot/core/utils/jwt.utils";
+import { db as currentDatabase } from "@groot/core/database";
 import { db, users } from "../../../apps/web/src/server/db";
 
-const tokens = new Map<string, Promise<string>>();
+const tokensByDatabase = new WeakMap<object, Map<string, Promise<string>>>();
 
 export function authToken(email = "test@example.com", userId = 1): Promise<string> {
+  let tokens = tokensByDatabase.get(currentDatabase);
+  if (!tokens) tokensByDatabase.set(currentDatabase, (tokens = new Map()));
   let token = tokens.get(email);
   if (!token) {
     token = db

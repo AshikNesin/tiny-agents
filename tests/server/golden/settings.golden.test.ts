@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, describe } from "vite-plus/test";
+import { afterEach, beforeEach, describe } from "vite-plus/test";
 import { createTestApp } from "../helpers";
 import { createNamespaceKv } from "@groot/core/kv";
 import {
@@ -18,16 +18,18 @@ import { createCodeHub, setCodeHub } from "../../../apps/web/src/server/api/code
 import { authToken, closeAppRuntime, openAppRuntime, resetAppTables } from "../fixtures";
 import { fakeHarness } from "../code/fake-harness";
 import { goldenFlow } from "./recorder";
+import { useFreshTestDatabase } from "../fixtures/test-db";
 
 const app = createTestApp();
 let token = "";
 
-beforeAll(async () => {
+beforeEach(async () => {
+  await useFreshTestDatabase();
   token = await authToken("golden-settings@example.com");
   await openAppRuntime();
   await resetAppTables();
 });
-afterAll(() => closeAppRuntime());
+afterEach(() => closeAppRuntime());
 
 const setup = { app, token: () => token };
 const steppedUp = () => ({ "X-Vault-Step-Up": issueStepUp(1).token });

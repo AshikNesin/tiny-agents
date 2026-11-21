@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { eq } from "drizzle-orm";
 import { connections, db, vaultValues } from "../../../apps/web/src/server/db";
 import {
@@ -17,6 +17,7 @@ import {
   createLocalBackend,
   resealLocalItems,
 } from "../../../apps/web/src/server/api/vault/backends/local";
+import { useFreshTestDatabase } from "../fixtures/test-db";
 
 const KEY = process.env.SECRETS_KEY!;
 const binding: SecretBinding = { purpose: "connection", record: "c1", field: "secret_enc" };
@@ -84,6 +85,8 @@ describe("SecretBox", () => {
 });
 
 describe("secrets:rotate", () => {
+  beforeEach(useFreshTestDatabase);
+
   it("re-seals local vault items and connection secrets under the new key", async () => {
     const backend = createLocalBackend();
     const itemId = await backend.create!({

@@ -11,6 +11,7 @@ export type AppDatabase = BetterSQLite3Database<typeof schema>;
 
 export interface CreateAppDbOptions {
   migrationsFolder?: string;
+  image?: Buffer;
 }
 
 const connections = new WeakMap<AppDatabase, Database.Database>();
@@ -23,9 +24,9 @@ export function sqliteConnection(instance: AppDatabase): Database.Database {
 
 export function createAppDb(url: string, options: CreateAppDbOptions = {}): AppDatabase {
   const file = resolveSqlitePath(url);
-  if (file !== ":memory:") mkdirSync(dirname(file), { recursive: true });
+  if (!options.image && file !== ":memory:") mkdirSync(dirname(file), { recursive: true });
 
-  const sqlite = new Database(file);
+  const sqlite = new Database(options.image ?? file);
   sqlite.pragma("journal_mode = WAL");
   sqlite.pragma("foreign_keys = ON");
   sqlite.pragma("busy_timeout = 5000");

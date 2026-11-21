@@ -24,17 +24,81 @@ pnpm test:e2e       # Playwright (starts the dev server itself)
 
 ## Server test setup
 
-`tests/server/setup.ts` runs once per test file and calls the same
+`tests/server/setup.ts` runs before every test file and calls the same
 `bootstrap()` as the entry, with:
 
 - `NODE_ENV=test`, `DATABASE_URL=":memory:"`, `LOG_LEVEL=silent`
-- `createAppDb(":memory:")`: a fresh database per file with every migration applied
+- a fresh in-memory database per file: a copy of one database per worker
+  that every migration and the faux model rows went into once
+  (`tests/server/fixtures/test-db.ts`)
 - `memoryStorage()` for uploads
 - `jobs.enabled = false` (a `NODE_ENV=test` default), so nothing runs in the
   background; tests call `runTick()` when they want jobs processed
 
-Files are isolated from each other for free. Within a file, clear what you
-need in `beforeEach` (e.g. `await db.delete(tasks)`, `jobRunner.reset()`).
+Within a file, clear what you need in `beforeEach` (e.g.
+`await db.delete(tasks)`, `jobRunner.reset()`). A test that records ids or
+reads whole tables calls `await useFreshTestDatabase()` (from
+`tests/server/fixtures/test-db.ts`) first in `beforeEach`. It gets a new copy
+of the seeded database and an empty App root, the way a new file starts, so
+the ids it sees do not depend on the tests before it. The golden flows do
+this.
+
+## Random order
+
+Both suites run with `sequence.shuffle`: files, and the tests in each file,
+run in a new random order every run. A test that passes only after (or
+before) another one fails sooner or later. The seed is printed at the top of
+the run (`Running tests with seed "1234"`). Rerun that order with
+`pnpm test --sequence.seed=1234` (or `pnpm test:client --sequence.seed=1234`)
+and fix the dependency; never pin a seed. Mock call history is cleared before
+every test (Vitest's default `clearMocks`), so a test never sees calls an
+earlier one made.
+
+The client setup (`tests/client/setup.ts`) undoes what a test leaves in the
+document after each test: it unmounts with `cleanup()`, dismisses Sonner's
+toasts (Sonner replays the active ones to the next `Toaster`), and puts the
+`<html>` and `<body>` attributes back.
+
+## Isolation between files
+
+The `server` project runs with `isolate: false`: each worker loads the app's
+modules once and runs file after file in them, instead of loading them again
+for every file. That cut the suite from about 190 s to 45 s. What one file
+leaves in a module is there for the next file in its worker, so after every
+file `tests/server/fixtures/file-isolation.ts`:
+
+1. Undoes vitest's own changes: `vi.useRealTimers()`, `vi.unstubAllEnvs()`,
+   `vi.unstubAllGlobals()`, `vi.restoreAllMocks()`.
+2. Stops what the App root holds, as the entry's shutdown does: agent
+   runtimes (the App root's and `openAppRuntime`'s), MCP connections, browser
+   and desktop sessions, sandbox SSH connections, the Code hub.
+3. Resets the App root (`resetAppForTests()`) and closes the file's database.
+   The next file gets a new one.
+4. Fails the file if it left behind anything the reset cannot undo:
+   - `process.env` changed without `vi.stubEnv`
+   - a global added without `vi.stubGlobal`
+   - a server, socket, child process, pipe or watcher it opened and did not close
+   - a timer it set that is still due
+
+The rules that follow:
+
+- Set env vars with `vi.stubEnv` and globals with `vi.stubGlobal`, never by
+  assignment.
+- Close every server, socket and child process the file opens, in the test or
+  in `afterAll`, and await the close.
+- Clear a timer you race against (`Promise.race([work, timeout])`): put the
+  `clearTimeout` in a `finally`. An unref'd timer does not count, so
+  `AbortSignal.timeout()` after a finished fetch is fine. A loop that must
+  stop belongs in a service the reset stops.
+- Keep fixture caches per database, not per process
+  (`tests/server/fixtures/auth.ts` keys its tokens by the database).
+- A file that calls `vi.mock` or `vi.doMock` runs in the `server:isolated`
+  project, which loads modules per file. `vitest.config.server.ts` finds those
+  files by reading them, so there is no list to keep. A mock cannot replace a
+  module an earlier file in a shared worker already loaded.
+
+`tests/server/checks/file-isolation.test.ts` runs a probe file for each kind
+of leak through the real setup and checks that each one fails.
 
 ## Helpers (`tests/server/helpers.ts`)
 
@@ -240,14 +304,58 @@ CI does not run Playwright.
 
 ## Continuous integration
 
-`.github/workflows/test.yml` runs, in order: a gitleaks scan of the commits
-the PR or push adds (`scripts/secret-scan.sh`), the static gates through
-`pnpm verify:static` (typechecks for the server, the client, the e2e specs,
-typecheck coverage and the kit fixture, the kit export guard, the changeset gate, the
-checks-coverage guard, lint + format, the doc reference check, the
-design-token check, and a migration freshness check that `pnpm db:generate`
-adds no migration; the list lives in `scripts/gates.mjs`), server and client
-tests, `pnpm build`, the runtime dependency closure check, and a pruned
-production boot (tracked files plus `dist` copied to a fresh directory,
-`pnpm install --prod`, `node dist/server/bundle.js`, `/health` answers,
-`SIGTERM` exits within 15 s).
+The runners (`instabox-medium`) are a fresh VM per job, so nothing survives
+between jobs on disk. `.github/actions/setup` makes each job warm from GitHub's
+own Actions cache instead: Node 24, pnpm, then either `node_modules` (keyed by
+the lockfile, the OS, the CPU and the Node major; a hit skips the install) or
+the pnpm store (for a job that installs again), and, when asked, ripgrep and
+gitleaks, each checked against a pinned sha256 when downloaded. The checkout
+is blobless (`filter: blob:none`) with full history, so the gates can diff
+against `origin/<base>` without downloading every old file.
+
+The runner pool runs two jobs at a time, and every job pays its own setup, so
+`.github/workflows/test.yml` is two jobs, `CI (1/2)` and `CI (2/2)`: both are
+the required checks. Each runs its phases one after another:
+
+| Part       | Phases                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `CI (1/2)` | `pnpm verify:static --job lint`, `--job typecheck` and `--job gates` (the gates of `scripts/gates.mjs` with that `job`, in parallel)                                                                                                                                                                                                                                                                   |
+| `CI (2/2)` | the secret scan (gitleaks over the commits the PR or push adds, `scripts/secret-scan.sh`), `--job migrations`, `pnpm build`, the runtime dependency closure check, and a pruned production boot (tracked files plus `dist` in a fresh directory, `pnpm install --prod --offline` from the warm store, `node dist/server/bundle.js`, `/health` and the client page answer, `SIGTERM` exits within 15 s) |
+| both       | shard `i/2` of the server suite (the `server` and `server:isolated` projects), the client suite and the two repo-typecheck suites                                                                                                                                                                                                                                                                      |
+
+### Selection and the merge queue
+
+On a pull request the test jobs run only the test files the diff can reach:
+`scripts/test-selection.mjs` adds `--changed=<merge base>`, and Vitest keeps
+the changed test files and every test that imports a changed file, however
+indirectly. A change to something the import graph cannot see runs everything
+on the PR too: the test setups and clock, `tests/server/fixtures/`, a Vitest or
+Vite config, `apps/web/drizzle/`, any `schema.ts`, a `package.json`, the
+lockfile, a tsconfig, and the CI workflow and setup action.
+
+Selection only narrows PR feedback. Every other event runs every test: the
+merge queue (`merge_group`), where `CI (1/2)` and `CI (2/2)` are the required checks, pushes to
+`main` and `next`, and a manual run (Actions → Tests → Run workflow). So the
+full suite runs on the exact commit a branch lands as, before it lands. What
+selection cannot see, the queue catches: a script a test runs as a subprocess
+(`tests/server/checks/*` spawn `scripts/check-*.mjs`), a worker entry started
+from a string, a file read at runtime.
+
+A shard holds the files `tests/sequencer.ts` gives it: longest first, each
+onto the shard with the least recorded time (`tests/durations.json`), so the
+shards finish together. Vitest's own `--shard` splits by count. Refresh the
+durations with `pnpm test:durations` when the suites change shape; a file it
+has not seen counts as the median.
+
+Each part times itself against `scripts/ci-budget.mjs`: 30 s from its first
+step through setup (or its cold allowance when the setup action missed a
+cache: a lockfile change, or a run before `main` has the caches), then a budget for each phase, timed from the check before
+it (5 s for lint and for the typecheck, 60 s for a suite's shard). The typecheck restores tsc's incremental
+state (`node_modules/.cache/tsc`) from the Actions cache; only when that cache
+misses, as on the first run before `main` has one, is it held to its cold
+budget instead (`COLD_RUN_BUDGETS`). A phase past its budget fails the part
+even when its checks passed. Make the phase faster, or raise its budget in that
+table with the reason in the PR; never with a `timeout-minutes`. `pnpm
+check:coverage` holds the workflow to this layout: each gate job runs once,
+each phase's budget is checked once, right after the phase and under the same
+condition, and the matrix lists every shard the test commands split into.

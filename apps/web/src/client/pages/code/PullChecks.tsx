@@ -19,12 +19,17 @@ import { projectsApi } from "../../lib/code/projects";
 import { useRefreshOn, useResource } from "../../queries/resource";
 import type { CheckLogView, CheckStepView, PullView } from "../../../shared/api/code";
 
-type Check = NonNullable<PullView["snapshot"]>["checks"][number];
+type PullCheck = NonNullable<PullView["snapshot"]>["checks"][number];
 
-const ORDER: Record<Check["state"], number> = { failure: 0, pending: 1, success: 2, neutral: 3 };
+const ORDER: Record<PullCheck["state"], number> = {
+  failure: 0,
+  pending: 1,
+  success: 2,
+  neutral: 3,
+};
 const FOLD_AFTER = 6;
 
-function CheckIcon({ state, className }: { state: Check["state"]; className?: string }) {
+function CheckIcon({ state, className }: { state: PullCheck["state"]; className?: string }) {
   if (state === "failure")
     return <CircleX className={cn("text-destructive size-3.5", className)} />;
   if (state === "pending")
@@ -32,7 +37,7 @@ function CheckIcon({ state, className }: { state: Check["state"]; className?: st
   return <CircleCheck className={cn("text-success size-3.5", className)} />;
 }
 
-function took(c: Check): string | null {
+function took(c: PullCheck): string | null {
   if (!c.startedAt || !c.completedAt) return null;
   const ms = Date.parse(c.completedAt) - Date.parse(c.startedAt);
   return ms >= 1000 ? formatDuration(ms) : null;
@@ -67,7 +72,7 @@ function ChecksBar({
   );
 }
 
-function checksSummary(raw: Check[]) {
+function checksSummary(raw: PullCheck[]) {
   const checks = [...raw].sort(
     (a, b) => ORDER[a.state] - ORDER[b.state] || a.name.localeCompare(b.name),
   );
@@ -166,7 +171,7 @@ function CheckRow({
   onToggle,
 }: {
   threadId: string;
-  check: Check;
+  check: PullCheck;
   stalled: boolean;
   open: boolean;
   onToggle(): void;
@@ -220,7 +225,7 @@ function CheckRow({
   );
 }
 
-function CheckDetails({ threadId, check }: { threadId: string; check: Check }) {
+function CheckDetails({ threadId, check }: { threadId: string; check: PullCheck }) {
   return (
     <div className="space-y-3 px-3 pt-1 pb-3">
       <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-0.5 text-xs">
@@ -254,7 +259,15 @@ function FullLog({ url, label = "View full log" }: { url: string; label?: string
   );
 }
 
-function LogExcerpt({ threadId, jobId, check }: { threadId: string; jobId: number; check: Check }) {
+function LogExcerpt({
+  threadId,
+  jobId,
+  check,
+}: {
+  threadId: string;
+  jobId: number;
+  check: PullCheck;
+}) {
   const [copied, setCopied] = useState(false);
   const read = useResource<CheckLogView>(
     ["code", "check-log", threadId, jobId],

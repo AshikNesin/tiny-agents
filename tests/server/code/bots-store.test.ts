@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { eq } from "drizzle-orm";
 import { createShelleyHarness } from "@tiny-agents/code/server";
 import { testHost } from "@tiny-agents/code/testing";
@@ -21,16 +21,13 @@ import { fakeHarness, type FakeHarness } from "./fake-harness";
 let shelley: FakeShelley;
 let fake: FakeHarness;
 
-beforeAll(async () => {
-  shelley = await startFakeShelley();
-});
-afterAll(async () => {
+afterEach(async () => {
   setCodeHub(undefined);
   await shelley.close();
 });
 beforeEach(async () => {
   await resetAppTables();
-  shelley.seen.length = 0;
+  shelley = await startFakeShelley();
   fake = fakeHarness("claude-code", {
     workspace: {
       diffs: false,

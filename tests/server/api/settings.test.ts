@@ -1,8 +1,10 @@
-import { describe, expect, it } from "vite-plus/test";
+import { beforeEach, describe, expect, it } from "vite-plus/test";
 import { api, createTestApp, signIn } from "../helpers";
+import { useFreshTestDatabase } from "../fixtures/test-db";
 
 const app = createTestApp();
 
+beforeEach(useFreshTestDatabase);
 describe("settings API", () => {
   it("upserts, lists, reads and deletes settings", async () => {
     const { token } = await signIn(app);

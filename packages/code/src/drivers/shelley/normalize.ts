@@ -101,7 +101,7 @@ export function summarizeInput(name: string, input: unknown): string {
 }
 
 function basename(path: string): string {
-  return path.split("/").filter(Boolean).at(-1) ?? path;
+  return path.split("/").findLast(Boolean) ?? path;
 }
 
 function fileAsset(path: string): AssetRef {

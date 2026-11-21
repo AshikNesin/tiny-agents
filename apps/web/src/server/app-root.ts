@@ -20,6 +20,8 @@ import type { VaultAlertSink } from "./api/vault/vault.alerts";
 import type { BundledConnect } from "./api/vault/connect/bundled-connect";
 import type { SupervisorChannel } from "./api/system/updates.service";
 import type { VapidKeys } from "@groot/core/notification/webpush.crypto";
+import type { BackendItemSummary, BackendName } from "./api/vault/backends/types";
+import type { BackendStatus } from "../shared/api/vault";
 
 export interface App {
   runtime: AgentRuntime | undefined;
@@ -48,6 +50,11 @@ export interface App {
   liveAccess: Set<HeldLiveAccess>;
   vaultStepUps: Map<string, { userId: number; expiresAt: number }>;
   vaultAlertSink?: VaultAlertSink;
+  vault: {
+    backendStatus: Map<BackendName, { at: number; status: BackendStatus }>;
+    appValues: Map<string, { at: number; value: string }>;
+    candidates?: { at: number; items: (BackendItemSummary & { backend: BackendName })[] };
+  };
   bundledConnect?: BundledConnect;
   submittingRequests: Set<number>;
   modelRuntime?: Pick<AgentRuntime, "applyModelConfig">;
@@ -61,25 +68,30 @@ export interface App {
   };
 }
 
-const current: App = {
-  runtime: undefined,
-  runtimeReady: false,
-  sandboxConnections: new Map(),
-  ownerWaits: new WaitTracker(),
-  botMessagingStores: new WeakMap(),
-  turnBudgets: new WeakMap(),
-  botViewers: new Map(),
-  botChatListeners: new Map(),
-  openSseStreams: new Set(),
-  backgroundBotReleases: new Set(),
-  liveAccess: new Set(),
-  vaultStepUps: new Map(),
-  submittingRequests: new Set(),
-  modelListeners: new Set(),
-  updateStatus: null,
-  updatesUnlisten: () => {},
-  webPush: { activeDevices: 0 },
-};
+function emptyApp(): App {
+  return {
+    runtime: undefined,
+    runtimeReady: false,
+    sandboxConnections: new Map(),
+    ownerWaits: new WaitTracker(),
+    botMessagingStores: new WeakMap(),
+    turnBudgets: new WeakMap(),
+    botViewers: new Map(),
+    botChatListeners: new Map(),
+    openSseStreams: new Set(),
+    backgroundBotReleases: new Set(),
+    liveAccess: new Set(),
+    vaultStepUps: new Map(),
+    vault: { backendStatus: new Map(), appValues: new Map() },
+    submittingRequests: new Set(),
+    modelListeners: new Set(),
+    updateStatus: null,
+    updatesUnlisten: () => {},
+    webPush: { activeDevices: 0 },
+  };
+}
+
+const current: App = emptyApp();
 
 export function app(): App {
   return current;
@@ -87,4 +99,9 @@ export function app(): App {
 
 export function installAppForTests(services: Partial<App>): void {
   Object.assign(current, services);
+}
+
+export function resetAppForTests(): void {
+  for (const key of Object.keys(current) as (keyof App)[]) delete current[key];
+  Object.assign(current, emptyApp());
 }

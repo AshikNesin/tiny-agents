@@ -20,6 +20,7 @@
         "site/demos/vite.config.ts",
         "tests/**/*.{test,spec}.{ts,tsx}",
         "tests/{server,client}/setup.ts",
+        "tests/server/checks/isolation-probes/*.probe.ts",
         "tests/e2e/**/*.ts",
         "tests/kit-consumers/consumer.tsx",
         "playwright.headless.config.ts",

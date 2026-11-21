@@ -1,5 +1,5 @@
 import type { Context as PiContext } from "@earendil-works/pi-ai";
-import { afterAll, beforeAll, describe } from "vite-plus/test";
+import { afterEach, beforeEach, describe } from "vite-plus/test";
 import { fauxAssistantMessage, fauxText, fauxToolCall } from "../../../packages/agent/src/testing";
 import { createTestApp } from "../helpers";
 import { botMessages, tasks } from "../../../apps/web/src/server/db";
@@ -13,6 +13,7 @@ import {
   until,
 } from "../fixtures";
 import { goldenFlow } from "./recorder";
+import { useFreshTestDatabase } from "../fixtures/test-db";
 
 const textOf = (message: PiContext["messages"][number]): string =>
   typeof message.content === "string"
@@ -48,13 +49,14 @@ const app = createTestApp();
 let token = "";
 let stopSettled = () => {};
 
-beforeAll(async () => {
+beforeEach(async () => {
+  await useFreshTestDatabase();
   token = await authToken("golden-turns@example.com");
   const runtime = await openAppRuntime({ respondWith: script });
   stopSettled = startSettledPipeline(runtime);
   await resetAppTables();
 });
-afterAll(async () => {
+afterEach(async () => {
   stopSettled();
   await closeAppRuntime();
 });

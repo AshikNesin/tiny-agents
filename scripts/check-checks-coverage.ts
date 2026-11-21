@@ -5,7 +5,9 @@ import { load as loadYaml } from "js-yaml";
 import micromatch from "micromatch";
 import { loadConfig } from "../.groot/lib/config";
 import { ownedSourceRootsForTests, TEST_AREA_OWNERSHIP } from "../.groot/lib/patterns";
-import { gates } from "./gates.mjs";
+import { GATE_JOBS, gates } from "./gates.mjs";
+import { RUN_BUDGETS } from "./ci-budget.mjs";
+import { workflowProblems, type Workflow } from "./lib/workflow-coverage";
 
 const ROOT = new URL("..", import.meta.url).pathname;
 
@@ -26,13 +28,7 @@ function expandRoot(root: string): string[] {
 }
 
 interface Failure {
-  kind:
-    | "root-missing"
-    | "area-missing"
-    | "area-empty"
-    | "gates-not-in-ci"
-    | "check-outside-gates"
-    | "script-not-a-gate";
+  kind: "root-missing" | "area-missing" | "area-empty" | "workflow" | "script-not-a-gate";
   detail: string;
 }
 
@@ -81,43 +77,14 @@ for (const area of areas) {
 
 const WORKFLOW = ".github/workflows/test.yml";
 const POST_BUILD_CHECKS = ["check:closure", "check:worker"];
-const STATIC_CHECK =
-  /\btsc\b|scripts\/check-[\w-]+|db:generate|\bpnpm ((?:check|typecheck)[\w:-]*)/g;
-
-interface WorkflowStep {
-  name?: string;
-  run?: string;
-}
-const workflow = loadYaml(readFileSync(join(ROOT, WORKFLOW), "utf8")) as {
-  jobs: Record<string, { steps?: WorkflowStep[] }>;
-};
-const runSteps = Object.values(workflow.jobs).flatMap((job) => {
-  const steps = (job.steps ?? []).filter(
-    (step): step is WorkflowStep & { run: string } => typeof step.run === "string",
-  );
-  const buildAt = steps.findIndex((step) => /\bpnpm build\b/.test(step.run));
-  return steps.map((step, i) => ({ ...step, afterBuild: buildAt !== -1 && i > buildAt }));
-});
-const gateSteps = runSteps.filter((step) => step.run.trim() === "pnpm verify:static");
-if (gateSteps.length !== 1) {
-  failures.push({
-    kind: "gates-not-in-ci",
-    detail: `${WORKFLOW} has ${gateSteps.length} steps running \`pnpm verify:static\`. It needs exactly one, so CI runs every gate in scripts/gates.mjs.`,
-  });
-}
-for (const step of runSteps) {
-  if (gateSteps.includes(step)) continue;
-  for (const match of step.run.matchAll(STATIC_CHECK)) {
-    if (match[1] && POST_BUILD_CHECKS.includes(match[1])) continue;
-    const fix =
-      step.afterBuild && match[1]
-        ? `If it needs \`pnpm build\` first, add "${match[1]}" to POST_BUILD_CHECKS in scripts/check-checks-coverage.ts. Otherwise move it to scripts/gates.mjs and delete the step.`
-        : "Add it to scripts/gates.mjs and delete the step, so `pnpm verify:static` runs it locally too.";
-    failures.push({
-      kind: "check-outside-gates",
-      detail: `${WORKFLOW} step "${step.name ?? step.run}" runs \`${match[0]}\` outside the static gates. ${fix}`,
-    });
-  }
+for (const detail of workflowProblems({
+  file: WORKFLOW,
+  workflow: loadYaml(readFileSync(join(ROOT, WORKFLOW), "utf8")) as Workflow,
+  gateJobs: GATE_JOBS,
+  runBudgets: RUN_BUDGETS,
+  postBuildChecks: POST_BUILD_CHECKS,
+})) {
+  failures.push({ kind: "workflow", detail });
 }
 
 const { scripts } = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")) as {
@@ -151,6 +118,7 @@ if (failures.length > 0) {
 console.log(
   `✓ Checks covered: ${areas.length} declared test areas ` +
     `owning ${ownedRoots.length} source roots, all present on disk; ` +
-    `${gates.length} static gates, all run by \`pnpm verify:static\` in ${WORKFLOW}.`,
+    `${gates.length} static gates in ${GATE_JOBS.length} jobs, each run once by ${WORKFLOW}, ` +
+    `every job timed against its budget.`,
 );
 process.exit(0);

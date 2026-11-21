@@ -192,6 +192,7 @@ export function createSdkModelLister(
     if ("ANTHROPIC_BASE_URL" in workerEnv) throw new Error("Refusing to set ANTHROPIC_BASE_URL.");
     let release: () => void = () => {};
     const closed = new Promise<void>((resolve) => (release = resolve));
+    // oxlint-disable-next-line require-yield
     const prompt = (async function* (): AsyncIterable<SdkUserMessage> {
       await closed;
     })();
@@ -273,6 +274,7 @@ export function createSdkQueryFactory(
       mcpServer,
       toolNames: ctx.tools.map((spec) => spec.name),
     });
+    // oxlint-disable-next-line require-yield
     const prompt = (async function* (): AsyncIterable<SdkUserMessage> {
       for await (const turn of ctx.turns) {
         if (ctx.signal.aborted) return;

@@ -1,38 +1,81 @@
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { readFileSync, readdirSync, unlinkSync, writeFileSync } from "node:fs";
+import { availableParallelism } from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
 
 const MIGRATIONS_DIR = "apps/web/drizzle";
 
+const incremental = (program) =>
+  `--incremental --tsBuildInfoFile node_modules/.cache/tsc/${program}.tsbuildinfo`;
+
+export const GATE_JOBS = ["typecheck", "lint", "gates", "migrations"];
+
 export const gates = [
-  { name: "Typecheck (server)", run: "pnpm exec tsc --noEmit" },
-  { name: "Typecheck (client)", run: "pnpm typecheck:client" },
-  { name: "Typecheck (e2e tests)", run: "pnpm typecheck:e2e" },
-  { name: "Typecheck coverage", run: "pnpm exec tsx scripts/check-typecheck-coverage.ts" },
-  { name: "Typecheck kit consumers", run: "pnpm typecheck:kit" },
-  { name: "Typecheck (app projects)", run: "pnpm run --if-present typecheck:app" },
+  {
+    name: "Typecheck (server)",
+    job: "typecheck",
+    run: `pnpm exec tsc --noEmit ${incremental("server")}`,
+  },
+  {
+    name: "Typecheck (client)",
+    job: "typecheck",
+    run: `pnpm typecheck:client ${incremental("client")}`,
+  },
+  {
+    name: "Typecheck (e2e tests)",
+    job: "typecheck",
+    run: `pnpm typecheck:e2e ${incremental("e2e")}`,
+  },
+  {
+    name: "Typecheck kit consumers",
+    job: "typecheck",
+    run: `pnpm typecheck:kit ${incremental("kit")}`,
+  },
+  {
+    name: "Typecheck (app projects)",
+    job: "typecheck",
+    run: "pnpm run --if-present typecheck:app",
+  },
+  { name: "Lint & format check", job: "lint", run: "pnpm check" },
+  {
+    name: "Typecheck coverage",
+    job: "gates",
+    run: "pnpm exec tsx scripts/check-typecheck-coverage.ts",
+  },
   {
     name: "Kit export guard",
+    job: "gates",
     run: "pnpm exec tsx scripts/check-kit-exports.ts --base origin/${GITHUB_BASE_REF:-main}",
   },
-  { name: "Changeset gate", run: "pnpm check:changesets --base origin/${GITHUB_BASE_REF:-main}" },
-  { name: "Checks coverage", run: "pnpm check:coverage" },
-  { name: "Lint & format check", run: "pnpm check" },
-  { name: "Doc references", run: "pnpm check:doc-refs" },
-  { name: "Rule table", run: "pnpm exec tsx scripts/check-rule-table.ts" },
-  { name: "Dead code", run: "pnpm check:dead" },
-  { name: "Design tokens", run: "pnpm check:tokens" },
-  { name: "pnpm policy", run: "pnpm check:pnpm-policy" },
-  { name: "Old modules", run: "pnpm check:old-modules" },
+  {
+    name: "Changeset gate",
+    job: "gates",
+    run: "pnpm check:changesets --base origin/${GITHUB_BASE_REF:-main}",
+  },
+  { name: "Checks coverage", job: "gates", run: "pnpm check:coverage" },
+  { name: "Doc references", job: "gates", run: "pnpm check:doc-refs" },
+  { name: "Rule table", job: "gates", run: "pnpm exec tsx scripts/check-rule-table.ts" },
+  { name: "Dead code", job: "gates", run: "pnpm check:dead" },
+  { name: "Design tokens", job: "gates", run: "pnpm check:tokens" },
+  { name: "pnpm policy", job: "gates", run: "pnpm check:pnpm-policy" },
+  { name: "Old modules", job: "gates", run: "pnpm check:old-modules" },
   {
     name: "Comment ratchet",
+    job: "gates",
     run: "pnpm check:comments --base origin/${GITHUB_BASE_REF:-main}",
   },
-  { name: "Migrations are up to date with the schema", run: migrationsMatchSchema },
+  {
+    name: "Migrations are up to date with the schema",
+    job: "migrations",
+    exclusive: true,
+    run: migrationsMatchSchema,
+  },
   {
     name: "Applied migrations unchanged",
+    job: "migrations",
+    exclusive: true,
     run: "pnpm check:migrations-immutable --base origin/${GITHUB_BASE_REF:-main}",
   },
 ];
@@ -77,22 +120,85 @@ function migrationsMatchSchema() {
   return false;
 }
 
-function runGates() {
-  const inActions = process.env.GITHUB_ACTIONS === "true";
-  for (const gate of gates) {
-    console.log(inActions ? `::group::${gate.name}` : `\n▶ ${gate.name}`);
-    const started = performance.now();
-    const passed = typeof gate.run === "function" ? gate.run() : sh(gate.run);
-    const seconds = ((performance.now() - started) / 1000).toFixed(1);
-    if (inActions) console.log("::endgroup::");
-    if (!passed) {
-      const rerun = typeof gate.run === "string" ? ` Rerun it alone with: ${gate.run}` : "";
-      console.error(`${inActions ? "::error::" : ""}✗ ${gate.name} failed (${seconds}s).${rerun}`);
-      process.exit(1);
-    }
-    console.log(`✓ ${gate.name} (${seconds}s)`);
+function runGate(gate) {
+  const started = performance.now();
+  const done = (passed, output) => ({
+    passed,
+    output,
+    seconds: (performance.now() - started) / 1000,
+  });
+  if (typeof gate.run === "function") {
+    return Promise.resolve(done(gate.run(), ""));
   }
-  console.log(`\nAll ${gates.length} static gates passed.`);
+  return new Promise((resolve) => {
+    const child = spawn(gate.run, { shell: true, stdio: ["ignore", "pipe", "pipe"] });
+    const chunks = [];
+    child.stdout.on("data", (chunk) => chunks.push(chunk));
+    child.stderr.on("data", (chunk) => chunks.push(chunk));
+    child.on("close", (code) => resolve(done(code === 0, Buffer.concat(chunks).toString())));
+  });
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) runGates();
+async function pool(list, limit, run) {
+  const results = Array.from({ length: list.length });
+  let next = 0;
+  const worker = async () => {
+    while (next < list.length) {
+      const at = next++;
+      results[at] = await run(list[at]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, list.length) }, worker));
+  return results;
+}
+
+export function selectGates(argv) {
+  const at = argv.indexOf("--job");
+  if (at === -1) return { gates };
+  const job = argv[at + 1];
+  if (!GATE_JOBS.includes(job)) {
+    return { error: `Unknown gate job "${job}". Jobs: ${GATE_JOBS.join(", ")}.` };
+  }
+  return { gates: gates.filter((gate) => gate.job === job) };
+}
+
+async function runGates() {
+  const inActions = process.env.GITHUB_ACTIONS === "true";
+  const selected = selectGates(process.argv.slice(2));
+  if (selected.error) {
+    console.error(selected.error);
+    process.exit(2);
+  }
+  const report = (gate, result) => {
+    console.log(inActions ? `::group::${gate.name}` : `\n▶ ${gate.name}`);
+    if (result.output) process.stdout.write(result.output);
+    if (inActions) console.log("::endgroup::");
+    const seconds = result.seconds.toFixed(1);
+    if (result.passed) {
+      console.log(`✓ ${gate.name} (${seconds}s)`);
+      return;
+    }
+    const rerun = typeof gate.run === "string" ? ` Rerun it alone with: ${gate.run}` : "";
+    console.error(`${inActions ? "::error::" : ""}✗ ${gate.name} failed (${seconds}s).${rerun}`);
+  };
+  const together = selected.gates.filter((gate) => !gate.exclusive);
+  const alone = selected.gates.filter((gate) => gate.exclusive);
+  const results = await pool(together, availableParallelism(), async (gate) => {
+    const result = await runGate(gate);
+    report(gate, result);
+    return result;
+  });
+  for (const gate of alone) {
+    const result = await runGate(gate);
+    report(gate, result);
+    results.push(result);
+  }
+  const failed = results.filter((result) => !result.passed).length;
+  if (failed > 0) {
+    console.error(`\n${failed} of ${results.length} static gates failed.`);
+    process.exit(1);
+  }
+  console.log(`\nAll ${results.length} static gates passed.`);
+}
+
+if (import.meta.url === pathToFileURL(process.argv[1]).href) await runGates();

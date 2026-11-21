@@ -176,6 +176,10 @@ export class NotificationService {
     this.#settingsCache = { value, at: this.#now() };
   }
 
+  forgetSettings(): void {
+    this.#settingsCache = undefined;
+  }
+
   get channelId(): string {
     return this.#channel.id;
   }
@@ -803,6 +807,10 @@ export class NotificationHub {
 
   events(): NotificationEventDef[] {
     return this.primary.events();
+  }
+
+  forgetSettings(): void {
+    for (const service of this.#services) service.forgetSettings();
   }
 
   async getSettings(): Promise<NotificationSettings> {

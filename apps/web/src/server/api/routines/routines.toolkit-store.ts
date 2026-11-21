@@ -68,7 +68,7 @@ export function createRoutineStore(): RoutineStore {
         });
         return toRecord(routine);
       } catch (error) {
-        throw new Error(reasonOf(error));
+        throw new Error(reasonOf(error), { cause: error });
       }
     },
 
@@ -87,7 +87,7 @@ export function createRoutineStore(): RoutineStore {
         return toRecord(await service.update(id, input));
       } catch (error) {
         if (error instanceof HttpError && error.statusCode === 404) return undefined;
-        throw new Error(reasonOf(error));
+        throw new Error(reasonOf(error), { cause: error });
       }
     },
 
@@ -108,8 +108,8 @@ export function createRoutineStore(): RoutineStore {
         return await service.runNow(id);
       } catch (error) {
         if (error instanceof HttpError && error.statusCode === 404)
-          throw new Error(`No routine with id "${id}".`);
-        throw new Error(reasonOf(error));
+          throw new Error(`No routine with id "${id}".`, { cause: error });
+        throw new Error(reasonOf(error), { cause: error });
       }
     },
   };

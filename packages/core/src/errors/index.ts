@@ -62,6 +62,7 @@ export class HttpError extends Error {
     this.data = data;
 
     Object.setPrototypeOf(this, new.target.prototype);
+    // oxlint-disable-next-line unicorn/no-useless-error-capture-stack-trace
     Error.captureStackTrace(this, this.constructor);
   }
 
