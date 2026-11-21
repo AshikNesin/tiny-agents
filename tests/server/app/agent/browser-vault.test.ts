@@ -66,7 +66,7 @@ function fakePage(start: string) {
   return { session, state };
 }
 
-function loginBroker(): VaultBroker & { uses: VaultUse[] } {
+function loginBroker(options: { totp?: boolean } = {}): VaultBroker & { uses: VaultUse[] } {
   const item: VaultItemMeta = {
     handle: "github",
     kind: "login",
@@ -74,7 +74,7 @@ function loginBroker(): VaultBroker & { uses: VaultUse[] } {
     username: "ana",
     origins: ["https://github.com"],
     allowedHosts: [],
-    hasTotp: false,
+    hasTotp: options.totp === true,
     approval: "allowed",
     tools: ["browser_fill_secret", "browser_enter_code"],
   };
@@ -169,10 +169,10 @@ afterEach(async () => {
 async function open(
   page: ReturnType<typeof fakePage>,
   steps: [string, JsonObject][],
-  options: { unattended?: boolean } = {},
+  options: { unattended?: boolean; totp?: boolean } = {},
 ) {
   const tracker = new WaitTracker();
-  const broker = loginBroker();
+  const broker = loginBroker({ totp: options.totp });
   const sessions = createBrowserSessions({ transport: async () => page.session });
   const browser = createBrowserToolkit({ sessions, vault: broker, ownerWaits: tracker });
   const runtime = await openTestRuntime({
@@ -245,6 +245,28 @@ describe("browser_fill_secret", () => {
     );
     expect(page.state.fills).toEqual([]);
     expect(broker.uses).toEqual([]);
+  }, 20_000);
+});
+
+describe("browser_enter_code", () => {
+  it("fills the vault's code once the owner approves the card, without asking for it", async () => {
+    const page = fakePage("https://github.com");
+    const { runtime, ref, events } = await open(
+      page,
+      [["browser_enter_code", { handle: "github" }]],
+      { totp: true },
+    );
+    await runtime.submit(ref, { requestId: "r1", text: "enter the code" });
+    const waiting = await until(
+      () =>
+        lastCall(events, "browser_enter_code")?.status === "awaiting_approval"
+          ? lastCall(events, "browser_enter_code")
+          : undefined,
+      "card",
+    );
+    await runtime.decideApproval(ref, waiting.taskId!, "approved");
+    expect(await until(() => result(events), "result")).toContain('"filled":["code"]');
+    expect(page.state.fills).toEqual([{ origin: "https://github.com", values: { code: CANARY } }]);
   }, 20_000);
 });
 

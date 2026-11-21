@@ -20,10 +20,11 @@ and wake on a signal or a deadline.
 `parkForOwner` in `packages/agent/src/waiting.ts` is the one owner wait.
 It writes the pending state to the call's task document, records the wait
 (its tracker channel and what the push names) in `tiny.wait`, and returns
-`{ sleep: { signals: [OwnerAnswered], until: expiresAt } }`. The code that
+`{ sleep: { signals: [OwnerAnswered.key(<the document kind>)], until: expiresAt } }`. The code that
 records the owner's answer (`recordDecision`, `recordYoloDecision`,
-`recordAnswers`, `settleRequest`) delivers `OwnerAnswered` in the same
-commit. The woken call runs `execute()` again and reads the settled
+`recordAnswers`, `settleRequest`) delivers `OwnerAnswered` under that kind
+in the same commit. Each document kind has its own key, because a key wakes
+only one wait and one call can wait twice: an approval card, then a sheet. The woken call runs `execute()` again and reads the settled
 document; a deadline wake marks it expired. Nothing waits in memory, and
 the expiry needs no timer.
 

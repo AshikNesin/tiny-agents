@@ -105,7 +105,7 @@ export async function recordAnswers(
   await pendingToolTask(tx, id, conversation, notPending);
   const doc = await tx.doc(QuestionsDoc, id);
   if (doc.status !== "pending" || doc.questions.length === 0) throw notPending();
-  await wakeOwnerWait(tx, id);
+  await wakeOwnerWait(tx, QuestionsDoc, id);
   if (answers) {
     doc.answers = checkAnswers(storedQuestions(doc), answers).map(toJson);
     doc.status = "answered";

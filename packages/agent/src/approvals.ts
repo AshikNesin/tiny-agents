@@ -146,7 +146,7 @@ export async function recordDecision(
   await pendingToolTask(tx, id, conversation, notPending);
   const doc = await tx.doc(ApprovalDoc, id);
   if (doc.asked !== true || doc.status !== "pending") throw notPending();
-  await wakeOwnerWait(tx, id);
+  await wakeOwnerWait(tx, ApprovalDoc, id);
   doc.status = decision;
   if (decision === "approved" && options.grant && doc.grant) {
     const grants = await tx.doc(GrantsDoc, conversation as ConversationId);
@@ -164,7 +164,7 @@ export async function recordYoloDecision(
   await pendingToolTask(tx, id, conversation, notPending);
   const doc = await tx.doc(ApprovalDoc, id);
   if (doc.asked !== true || doc.status !== "pending" || doc.vault === true) throw notPending();
-  await wakeOwnerWait(tx, id);
+  await wakeOwnerWait(tx, ApprovalDoc, id);
   doc.status = "approved";
 }
 

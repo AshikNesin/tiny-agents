@@ -137,10 +137,12 @@ const OwnerAnswered = defineSignal({
   schema: Type.Object({}),
 });
 
-const ANSWER = "answer";
-
-export async function wakeOwnerWait(tx: Pick<HostTx, "signal">, id: TaskId): Promise<void> {
-  await tx.signal(id, OwnerAnswered, ANSWER, {});
+export async function wakeOwnerWait<T extends JsonObject>(
+  tx: Pick<HostTx, "signal">,
+  doc: TaskDocToken<T>,
+  id: TaskId,
+): Promise<void> {
+  await tx.signal(id, OwnerAnswered, doc.definition.kind, {});
 }
 
 export type WaitChannel = "approval" | "question";
@@ -166,11 +168,12 @@ export async function restoreParkedWaits(
   trackers: readonly WaitTracker[],
   context: Context,
 ): Promise<void> {
+  const byChannel = new Map(trackers.map((tracker) => [tracker.channel, tracker]));
   const inspection = await harness.inspect(context);
   for (const { record, state } of inspection.tasks) {
     if (record.kind !== "pi.tool" || state.kind !== "sleeping") continue;
     const wait = await harness.snapshot(WaitDoc, record.id, context);
-    const tracker = trackers.find((candidate) => candidate.channel === wait?.channel);
+    const tracker = wait?.channel ? byChannel.get(wait.channel) : undefined;
     if (!wait || !tracker) continue;
     let info: WaitInfo = {};
     try {
@@ -217,7 +220,7 @@ export async function parkForOwner<T extends JsonObject & { status: string }>(
   });
   return {
     sleep: {
-      signals: [OwnerAnswered.key(ANSWER)],
+      signals: [OwnerAnswered.key(doc.definition.kind)],
       ...(deadline !== undefined ? { until: deadline } : {}),
     },
   };

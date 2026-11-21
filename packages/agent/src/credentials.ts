@@ -138,7 +138,7 @@ export async function settleRequest(
   await pendingToolTask(tx, id, undefined, notPending);
   const doc = await tx.doc(CredentialRequestDoc, id);
   if (doc.status !== "pending" || !doc.request) throw notPending();
-  await wakeOwnerWait(tx, id);
+  await wakeOwnerWait(tx, CredentialRequestDoc, id);
   doc.status = outcome.status;
   if (outcome.status === "filled") {
     doc.filled = [...outcome.filled];

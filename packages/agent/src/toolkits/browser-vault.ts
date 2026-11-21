@@ -534,7 +534,11 @@ export function createBrowserVaultTools(
           );
         try {
           if (args.ref) assertRefShape(args.ref);
-          if (!args.handle || api.wake !== undefined) return await askOwner();
+          if (!args.handle) return await askOwner();
+          if (api.wake !== undefined) {
+            const asked = await api.snapshot(CredentialRequestDoc, api.taskId, context);
+            if (asked?.request) return await askOwner();
+          }
           const s = await sessions.actionTurn(await targetOf(Number(api.conversationId)));
           const origin = await currentOrigin(s.session);
           let hasSeed = true;
