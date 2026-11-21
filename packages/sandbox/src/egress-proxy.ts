@@ -133,6 +133,7 @@ export async function startEgressProxy(options: EgressProxyOptions): Promise<Egr
       agent: false,
       timeout: DIAL_TIMEOUT_MS,
     });
+    upstream.once("socket", track);
     upstream.once("timeout", () => upstream.destroy(new Error("upstream timed out")));
     upstream.once("response", (reply) => {
       res.writeHead(reply.statusCode ?? 502, reply.rawHeaders);

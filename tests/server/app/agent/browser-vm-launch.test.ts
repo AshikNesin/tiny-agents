@@ -340,7 +340,10 @@ runIfPython("browser stack launch script", () => {
       expect(exempt).toMatch(/inside$/);
       expect(hits).toEqual(["/exempt"]);
     } finally {
-      await new Promise((resolve) => target.close(resolve));
+      await new Promise((resolve) => {
+        target.close(resolve);
+        target.closeAllConnections();
+      });
     }
   }, 60_000);
 

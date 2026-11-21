@@ -30,7 +30,13 @@ async function serve(body: (path: string) => string, type = "text/plain") {
     res.writeHead(200, { "content-type": type, "access-control-allow-origin": "*" });
     res.end(body(req.url ?? ""));
   });
-  cleanups.push(() => new Promise((resolve) => server.close(resolve)));
+  cleanups.push(
+    () =>
+      new Promise((resolve) => {
+        server.close(resolve);
+        server.closeAllConnections();
+      }),
+  );
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   return { hits, port: (server.address() as AddressInfo).port };
 }
