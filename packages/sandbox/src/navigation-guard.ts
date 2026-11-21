@@ -31,8 +31,9 @@ export async function refusesNavigation(
   const name = bare.replace(/\.+$/, "");
   if (!resolveHost || isIP(bare) || exempt.has(host) || exempt.has(name)) return false;
   const addresses = await within(resolveHost(name), LOOKUP_TIMEOUT_MS, "lookup timed out").catch(
-    () => [],
+    () => null,
   );
+  if (addresses === null) return true;
   const exemptAddress = (address: string) => exempt.has(address) || exempt.has(`[${address}]`);
   return addresses.some((address) => isPrivateAddress(address) && !exemptAddress(address));
 }

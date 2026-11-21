@@ -36,7 +36,7 @@ data class Session(
 }
 
 interface TokenCipher {
-    fun seal(plain: String): String
+    fun seal(plain: String): String?
 
     fun open(sealed: String): String?
 }
@@ -55,13 +55,13 @@ class KeystoreTokenCipher : TokenCipher {
         }
     }.getOrNull()
 
-    override fun seal(plain: String): String {
-        val key = key() ?: return PLAIN + plain
+    override fun seal(plain: String): String? {
+        val key = key() ?: return null
         return runCatching {
             val cipher = Cipher.getInstance(TRANSFORM).apply { init(Cipher.ENCRYPT_MODE, key) }
             val sealed = cipher.iv + cipher.doFinal(plain.toByteArray(Charsets.UTF_8))
             SEALED + Base64.encodeToString(sealed, Base64.NO_WRAP)
-        }.getOrElse { PLAIN + plain }
+        }.getOrNull()
     }
 
     override fun open(sealed: String): String? {
@@ -124,7 +124,8 @@ class SessionStore(
     suspend fun signedIn(token: String, user: SessionUser) {
         _state.update { it.copy(token = token, user = user) }
         dataStore.edit {
-            it[TOKEN] = cipher.seal(token)
+            val sealed = cipher.seal(token)
+            if (sealed != null) it[TOKEN] = sealed else it.remove(TOKEN)
             it[USER_ID] = user.id
             it[USER_EMAIL] = user.email
             if (user.name != null) it[USER_NAME] = user.name else it.remove(USER_NAME)
