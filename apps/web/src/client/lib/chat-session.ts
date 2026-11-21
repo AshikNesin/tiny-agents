@@ -69,25 +69,8 @@ export function newChatSession(unreadFrom: number | null = null): ChatSession {
   };
 }
 
-function attachmentIds(message: { attachments?: { uploadId: string }[] }): string {
-  return (message.attachments ?? [])
-    .map((a) => a.uploadId)
-    .sort()
-    .join(",");
-}
-
-const LEGACY_ECHO_SKEW_MS = 5_000;
-
-function echoMatches(
-  echo: Pick<Echo, "requestId" | "text" | "createdAt" | "attachments">,
-  message: Pick<ChatMessage, "text" | "requestId" | "createdAt" | "attachments">,
-): boolean {
-  if (message.requestId) return message.requestId === echo.requestId;
-  return (
-    message.createdAt >= echo.createdAt - LEGACY_ECHO_SKEW_MS &&
-    echo.text.trim() === message.text.trim() &&
-    attachmentIds(echo) === attachmentIds(message)
-  );
+function echoMatches(echo: Pick<Echo, "requestId">, message: Pick<ChatMessage, "requestId">) {
+  return message.requestId === echo.requestId;
 }
 
 function unconfirmed(

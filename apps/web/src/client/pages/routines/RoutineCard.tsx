@@ -5,7 +5,7 @@ import { StatusBadge } from "@groot/ui/status-badge";
 import { cn } from "@groot/ui/lib/utils";
 import { Switch } from "../../components/ui/switch";
 import type { Routine } from "../../../shared/api/routines";
-import { formatIst } from "../../lib/routines-schedule";
+import { formatIst } from "../../../shared/routines-schedule";
 import { ROUTINE_NEEDS_ATTENTION, routineState } from "../../../shared/machines/routine";
 
 export function RoutineCard({

@@ -1,6 +1,5 @@
 import { Worker } from "node:worker_threads";
 import { extract, type ExtractInput, type ExtractResult } from "./uploads.extract";
-import { appEnv } from "../../env";
 
 const EXTRACT_TIMEOUT_MS = 60_000;
 const WORKER_HEAP_MB = 512;
@@ -77,5 +76,6 @@ export function createWorkerRunner(
 
 const runInWorker: ExtractRunner = createWorkerRunner();
 
-export const defaultRunner: ExtractRunner = (input, mime) =>
-  appEnv().VITEST ? extract(input, mime) : runInWorker(input, mime);
+export const defaultRunner: ExtractRunner = runInWorker;
+
+export const inProcessRunner: ExtractRunner = extract;

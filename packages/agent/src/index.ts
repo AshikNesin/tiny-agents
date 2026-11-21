@@ -39,7 +39,7 @@ export { secretRedactor } from "./redact";
 export { type CredentialField, type CredentialRequest } from "./credentials";
 export { createVaultToolkit } from "./toolkits/vault";
 export type { SecretFillField } from "@tiny-agents/sandbox/browser";
-export { InvalidAnswersError, MAX_ANSWER_TEXT } from "./toolkits/questions";
+export { InvalidAnswersError } from "./toolkits/questions";
 export { createTasksToolkit, type TaskRecord, type TaskStore } from "./toolkits/tasks";
 export { createCodeToolkit, type CodeHandoffRecord, type CodeStore } from "./toolkits/code";
 export { createTodayCapability } from "./toolkits/today";
@@ -135,14 +135,8 @@ export type {
   ProviderTemplate,
   TestResult,
 } from "@tiny-agents/models";
-export {
-  windowChat,
-  pageBefore,
-  CHAT_WINDOW,
-  authoredText,
-  isSkipReply,
-  SKIP_REPLY,
-} from "./transcript";
+export { windowChat, pageBefore, CHAT_WINDOW, authoredText } from "./transcript";
+export { isSkipReply, SKIP_REPLY, MAX_ANSWER_TEXT } from "./wire";
 export type * from "./types";
 export { RUN_TOOL_CALL_LIMIT } from "./gate";
 export { createNodePhotonImages } from "@earendil-works/pi-durable/images/node";

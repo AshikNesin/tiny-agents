@@ -95,5 +95,4 @@ Some status-like fields were looked at and left as they are:
 | `bot_messages` delivered / answered    | Two timestamps (pending → delivered → answered) owned by `bots.delivery.ts`.                 |
 | `code_handoff_finishes.delivered_at`   | One timestamp (owed → delivered) owned by `code.watcher.ts`.                                 |
 | `notification_log.status`              | `packages/core` is groot-owned: change it upstream, then `pnpm groot:sync`.                  |
-| `shelley_handoffs.status`              | Legacy, read once by `copyShelleyTables()` into `code_handoffs`, never written.              |
 | Staged uploads, connection-auth popups | In-memory UI flows inside one component or hook, with their own status unions.               |

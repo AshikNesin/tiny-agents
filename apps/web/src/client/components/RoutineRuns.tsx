@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { CalendarClock, ChevronDown } from "lucide-react";
 import { cn } from "@groot/ui/lib/utils";
 import { markdownToPlainText } from "../lib/plain-text";
-import { formatIst, TZ_IST } from "../lib/routines-schedule";
+import { formatIst, TZ_IST } from "../../shared/routines-schedule";
 import type { RoutineRunCard } from "../lib/chat-types";
 
 const STATUS_WORD: Record<RoutineRunCard["status"], string> = {

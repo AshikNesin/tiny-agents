@@ -7,7 +7,6 @@ import {
   type DefaultValues,
   type FieldValues,
   type FieldPath,
-  type Resolver,
   type SubmitHandler,
 } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -20,7 +19,7 @@ interface FormProps<TValues extends FieldValues> extends Omit<
   React.ComponentProps<"form">,
   "onSubmit"
 > {
-  schema: z.ZodType<TValues>;
+  schema: z.ZodType<TValues, TValues>;
   defaultValues: TValues;
   onSubmit: (values: TValues) => void | Promise<void>;
 }
@@ -33,7 +32,7 @@ function FormRoot<TValues extends FieldValues>({
   ...props
 }: FormProps<TValues>) {
   const form = useForm<TValues>({
-    resolver: zodResolver(schema as never) as unknown as Resolver<TValues>,
+    resolver: zodResolver<TValues, unknown, TValues>(schema),
     defaultValues: defaultValues as DefaultValues<TValues>,
   });
   return (
@@ -53,7 +52,18 @@ interface FormFieldProps<TValues extends FieldValues> {
   description?: React.ReactNode;
   hint?: React.ReactNode;
   className?: string;
-  children: React.ReactElement;
+  children: React.ReactElement<BoundInputProps>;
+}
+
+interface BoundInputProps {
+  id?: string;
+  name?: string;
+  value?: unknown;
+  disabled?: boolean;
+  onChange?: (...event: never[]) => void;
+  onBlur?: (...event: never[]) => void;
+  ref?: React.Ref<never>;
+  "aria-invalid"?: boolean | "true" | "false" | "grammar" | "spelling";
 }
 
 function FormField<TValues extends FieldValues = FieldValues>({
@@ -77,11 +87,11 @@ function FormField<TValues extends FieldValues = FieldValues>({
             </Label>
           )}
           {description && <p className="text-xs text-muted-foreground">{description}</p>}
-          {React.cloneElement(
-            children,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            { ...field, id: name, "aria-invalid": fieldState.invalid } as any,
-          )}
+          {React.cloneElement(children, {
+            ...field,
+            id: name,
+            "aria-invalid": fieldState.invalid,
+          })}
           {fieldState.error ? (
             <p className="text-xs text-destructive">{fieldState.error.message}</p>
           ) : (

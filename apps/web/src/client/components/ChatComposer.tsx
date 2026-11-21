@@ -91,7 +91,7 @@ function ModelChip({
   onChange,
 }: {
   models: CatalogModel[];
-  value: string;
+  value: string | null;
   onChange?: (modelId: string) => Promise<void> | void;
 }) {
   const current = models.find((m) => m.id === value);
@@ -129,7 +129,7 @@ function ModelChip({
   return (
     <SearchSelect
       label="Model"
-      value={value}
+      value={value ?? ""}
       onValueChange={(next) => void onChange(next)}
       options={options}
       searchPlaceholder="Search models…"
@@ -443,7 +443,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
               {models.length > 0 && (
                 <ModelChip
                   models={models}
-                  value={model?.id ?? (bot.modelId as string)}
+                  value={model?.id ?? bot.modelId}
                   onChange={onModelChange}
                 />
               )}

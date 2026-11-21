@@ -584,21 +584,15 @@ pinned by `live-routes-drift.test.ts` (recorded on the old routers):
 | Ticket store and fields     | by bot `userId, botId, target, viewOnly`; by profile `userId, profile, target` | by bot `userId, botId, profile, viewOnly`; by profile `userId, profile`                   | `bots.issueTicket`, `profiles.issueTicket` | each VNC path redeems only its own store (`*.vnc.ts`, unchanged)              |
 | Resize                      | a route, by bot and by profile                                                 | none: 404 "Cannot POST …"                                                                 | `resize`                                   | the desktop has a fixed size the viewer scales                                |
 | Apps                        | none                                                                           | by profile only                                                                           | `apps`                                     | a Computer page action                                                        |
-| Body and bot, by bot        | the body first: a bad body is 400 even for an unknown bot                      | together: an unknown bot is 404 even with a bad body                                      | `bots.bodyBeforeBot`                       | which status a doubly bad request gets                                        |
+| Body and bot, by bot        | the body first: a bad body is 400 even for an unknown bot                      | the bot first: an unknown bot is 404 even with a bad body                                 | `bots.bodyBeforeBot`                       | which status a doubly bad request gets                                        |
 | Takeover stamp              | the route writes `Date.now()` after the manager's `takeOver`                   | the manager's stamp, on its own clock                                                     | `touchOnTakeover`                          | the same in production; differs under an injected clock                       |
 | Reset                       | `close(target, { wipeProfile: true })`, "Could not reset the browser."         | `close(profile, { wipe: true })`, "Could not reset the computer."                         | `ops().reset`, `resetFailed`               | the managers differ                                                           |
 
 By profile, the address is the profile and the owner's tab (`owner`); by bot,
 the bot's profile and its tab (its id). The desktop ignores the tab. The
-profile routes read the profile and the body together (`Promise.all`, as
-the old routers did), and so do the computer's bot routes: a request bad on
-both counts gets whichever refusal settles first, and the runtime decides
-that (the lookup wins on Node 22, the body read on Node 24, in the old code
-and the new alike). The drift tests pin each refusal on its own and accept
-either for the double case. The lookup's await depth is kept per surface
-(`profiles.lookupInWrapper`): the browser's goes through a one-step async
-wrapper (`ownerTarget`), the computer's hands `knownProfile`'s own promise
-to `Promise.all` (`knownDesktop`).
+profile routes, and the computer's bot routes, look the target up first and
+read the body after: a request bad on both counts is 404. The drift tests pin
+that.
 
 **`access`, as built in 4.2** (`apps/web/src/server/api/people/`).
 `access.ts` owns the `Viewer` and every guest or owner check past the guard;

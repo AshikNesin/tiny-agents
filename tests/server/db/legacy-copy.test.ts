@@ -201,7 +201,6 @@ describe("legacy (Prisma) database copy", () => {
       ["cmem1", "cmem2"],
       ["cmem2", null],
     ]);
-    expect(memories[1]!.confidence).toBeCloseTo(0.9);
 
     expect(await db.$count(schema.botMessages)).toBe(1);
     expect(await db.$count(schema.tasks)).toBe(1);

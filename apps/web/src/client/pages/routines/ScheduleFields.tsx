@@ -8,7 +8,7 @@ import {
   MAX_INTERVAL_MINUTES,
   MIN_INTERVAL_MINUTES,
   istInputFromAt,
-} from "../../lib/routines-schedule";
+} from "../../../shared/routines-schedule";
 import type { EditorForm, ScheduleKind } from "./routine-form";
 
 const DAYS_OF_WEEK = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;

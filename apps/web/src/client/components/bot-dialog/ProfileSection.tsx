@@ -74,7 +74,7 @@ export function ProfileSection({
           models={models}
           value={modelId}
           onChange={(next) => edit("modelId", next)}
-          unknownValue={modelMissing ? (bot?.modelId as string | undefined) : undefined}
+          unknownValue={modelMissing ? (bot?.modelId ?? undefined) : undefined}
         />
       </div>
 

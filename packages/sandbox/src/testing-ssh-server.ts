@@ -6,6 +6,7 @@ import {
   unlinkSync,
   statSync,
   rmSync,
+  type Stats,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
@@ -17,7 +18,8 @@ const { Server: SshServer, Client: Ssh2Client } = ssh2;
 type Connection = import("ssh2").Connection;
 export { Ssh2Client };
 export type { ClientChannel, ExecOptions } from "ssh2";
-type SftpServerStream = EventEmitter & Record<string, any>;
+type SftpServerStream = import("ssh2").SFTPWrapper;
+type Attributes = import("ssh2").Attributes;
 interface PtyServerStream extends EventEmitter {
   setWindow(rows: number, cols: number, height?: number, width?: number): void;
   write(data: string | Buffer): boolean;
@@ -178,7 +180,7 @@ export function startFakeSandboxServer(
         if (!reply.keepOpen) stream.end();
       });
       session.on("sftp", (acceptSftp) => {
-        handleSftp(acceptSftp() as unknown as SftpServerStream, root);
+        handleSftp(acceptSftp(), root);
       });
     });
     client.on("tcpip", (accept, reject, info) => {
@@ -232,6 +234,19 @@ function safe(root: string, path: string): string | null {
   return rel.startsWith("..") || rel === "" ? null : resolved;
 }
 
+const NO_ATTRIBUTES: Attributes = { mode: 0, uid: 0, gid: 0, size: 0, atime: 0, mtime: 0 };
+
+function attributesOf(stat: Stats): Attributes {
+  return {
+    mode: stat.mode,
+    uid: stat.uid,
+    gid: stat.gid,
+    size: stat.size,
+    atime: Math.floor(stat.atimeMs / 1000),
+    mtime: Math.floor(stat.mtimeMs / 1000),
+  };
+}
+
 function handleSftp(sftp: SftpServerStream, root: string): void {
   const handles = new Map<number, { path: string }>();
   let nextHandle = 1;
@@ -283,7 +298,7 @@ function handleSftp(sftp: SftpServerStream, root: string): void {
     if (!entry) return status(reqId, 2, "no such file");
     try {
       const stat = statSync(entry.path);
-      sftp.attrs(reqId, stat);
+      sftp.attrs(reqId, attributesOf(stat));
     } catch {
       status(reqId, 2, "no such file");
     }
@@ -318,14 +333,15 @@ function handleSftp(sftp: SftpServerStream, root: string): void {
   });
 
   sftp.on("REALPATH", (reqId, path) => {
-    sftp.name(reqId, ["/" + path.replace(/^\/+/, "")]);
+    const filename = "/" + path.replace(/^\/+/, "");
+    sftp.name(reqId, [{ filename, longname: filename, attrs: NO_ATTRIBUTES }]);
   });
 
   sftp.on("STAT", (reqId, path) => {
     const from = safe(root, path);
     if (!from) return status(reqId, 2, "no such file");
     try {
-      sftp.attrs(reqId, statSync(from));
+      sftp.attrs(reqId, attributesOf(statSync(from)));
     } catch {
       status(reqId, 2, "no such file");
     }

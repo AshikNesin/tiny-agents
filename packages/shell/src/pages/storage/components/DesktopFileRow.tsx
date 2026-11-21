@@ -54,7 +54,7 @@ export function DesktopFileRow({ file, selected, onToggle, onNavigate, actions }
         </button>
       </TableCell>
       <TableCell>{file.isDirectory ? "-" : formatBytes(file.size)}</TableCell>
-      <TableCell>{file.isDirectory ? "-" : formatDate(file.lastModified)}</TableCell>
+      <TableCell>{file.lastModified ? formatDate(file.lastModified) : "-"}</TableCell>
       <TableCell className="text-right">
         <div className="flex justify-end gap-2">
           {actions.map(({ id, label, ariaLabel, icon: Icon, destructive, run }) => (

@@ -7,7 +7,8 @@ import { Form, FormField } from "@groot/ui/form";
 import { loginErrorDescription, useAuthStore } from "@groot/shell/store/auth";
 import { type LoginFeature, useShellConfig } from "@groot/shell/lib/shell-config";
 import { useSetupStatus } from "@groot/shell/hooks/useSetupStatus";
-import { z } from "zod";
+import type { z } from "zod";
+import { loginSchema } from "@groot/core/auth/auth.schema";
 import { toast } from "sonner";
 import { LayoutDashboard, ShieldCheck, Zap, ArrowRight, KeyRound } from "lucide-react";
 
@@ -15,10 +16,6 @@ const isDev = import.meta.env.DEV;
 
 const DEMO_CREDENTIALS = { email: "demo@example.com", password: "demo@example.com" }; // gitleaks:allow
 
-const loginSchema = z.object({
-  email: z.email("Invalid email address"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
-});
 type LoginValues = z.infer<typeof loginSchema>;
 
 export { loginErrorDescription };

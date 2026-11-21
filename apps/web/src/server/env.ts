@@ -24,7 +24,6 @@ const appEnvSchema = z.object({
   TINYFISH_API_KEY: z.string().optional(),
   TZ: z.string().optional(),
   TINY_AGENTS_FAUX_TOKENS_PER_SECOND: z.string().optional(),
-  VITEST: z.string().optional(),
   DATA_DIR: z.string().optional(),
   AGENT_DB_PATH: z.string().optional(),
   OP_CONNECT_CREDENTIALS: z.string().optional(),

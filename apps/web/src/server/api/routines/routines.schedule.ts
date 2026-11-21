@@ -1,14 +1,20 @@
 import { CronExpressionParser } from "cron-parser";
-import cronstrue from "cronstrue";
 import { z } from "zod";
+import {
+  MAX_INTERVAL_MINUTES,
+  MAX_NAME_CHARS,
+  MAX_PROMPT_CHARS,
+  MIN_INTERVAL_MINUTES,
+  TZ_IST,
+  describeSchedule,
+  formatIst,
+  isValidCron,
+  nextOccurrence,
+} from "../../../shared/routines-schedule";
 
-export const TZ_IST = "Asia/Kolkata";
+export { TZ_IST, MAX_NAME_CHARS, MAX_PROMPT_CHARS, describeSchedule, formatIst, nextOccurrence };
 
-const MIN_INTERVAL_MINUTES = 15;
-const MAX_INTERVAL_MINUTES = 1440;
 export const MAX_ROUTINES = 50;
-export const MAX_NAME_CHARS = 80;
-export const MAX_PROMPT_CHARS = 20_000;
 
 const cronExpr = z
   .string()
@@ -17,17 +23,7 @@ const cronExpr = z
   .refine((value) => value.split(/\s+/).length === 5, {
     message: "Use a 5-field cron expression (minute hour day-of-month month day-of-week)",
   })
-  .refine(
-    (value) => {
-      try {
-        CronExpressionParser.parse(value, { tz: TZ_IST });
-        return true;
-      } catch {
-        return false;
-      }
-    },
-    { message: "Not a valid cron expression" },
-  );
+  .refine(isValidCron, { message: "Not a valid cron expression" });
 
 const onceSchema = z.object({
   kind: z.literal("once"),
@@ -65,22 +61,6 @@ export function parseSchedule(value: unknown): Schedule {
 export function safeParseSchedule(value: unknown): Schedule | undefined {
   const result = scheduleSchema.safeParse(value);
   return result.success ? result.data : undefined;
-}
-
-export function nextOccurrence(schedule: Schedule, from: Date): Date {
-  switch (schedule.kind) {
-    case "once":
-      return new Date(schedule.at);
-    case "cron":
-      return CronExpressionParser.parse(schedule.expr, {
-        currentDate: from,
-        tz: TZ_IST,
-      })
-        .next()
-        .toDate();
-    case "interval":
-      return new Date(from.getTime() + schedule.minutes * 60_000);
-  }
 }
 
 export function periodMinutes(schedule: Schedule): number | undefined {
@@ -125,40 +105,6 @@ export function withinGrace(schedule: Schedule, scheduledFor: Date, now: Date): 
   if (period === undefined) return true;
   const lateMs = now.getTime() - scheduledFor.getTime();
   return lateMs <= graceMinutes(period) * 60_000;
-}
-
-export function describeSchedule(schedule: Schedule): string {
-  switch (schedule.kind) {
-    case "once":
-      return `Once, ${formatIst(schedule.at)}`;
-    case "cron":
-      return cronstrue.toString(schedule.expr, { use24HourTimeFormat: true });
-    case "interval": {
-      const minutes = schedule.minutes;
-      if (minutes % 60 === 0) {
-        const hours = minutes / 60;
-        return hours === 1 ? "Every hour" : `Every ${hours} hours`;
-      }
-      return `Every ${minutes} minutes`;
-    }
-  }
-}
-
-export function formatIst(value: Date | string | number): string {
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
-  return new Intl.DateTimeFormat("en-GB", {
-    timeZone: TZ_IST,
-    weekday: "short",
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  })
-    .format(date)
-    .replace(/(\d{2}:\d{2})$/, "$1 IST");
 }
 
 export function composeRoutineLabel(

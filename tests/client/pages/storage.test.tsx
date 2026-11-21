@@ -37,7 +37,7 @@ function listing(folder: string): FileInfo[] {
     key: `${folder}${name}/`,
     name,
     size: 0,
-    lastModified: new Date(0).toISOString(),
+    lastModified: null,
     isDirectory: true,
   }));
   return [...dirs, ...files.sort((a, b) => a.name.localeCompare(b.name))];

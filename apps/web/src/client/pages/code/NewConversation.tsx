@@ -71,16 +71,6 @@ function save(name: string, value: string) {
   } catch {}
 }
 
-function readLegacy(harness: string, what: "cwd" | "model" | "effort"): string | undefined {
-  if (harness !== "shelley") return undefined;
-  const legacy = { cwd: "cwd", model: "model", effort: "thinking" }[what];
-  try {
-    return window.localStorage.getItem(`tiny-agents:shelley-${legacy}`) ?? undefined;
-  } catch {
-    return undefined;
-  }
-}
-
 function DirectoryBrowser({
   harness,
   open,
@@ -240,11 +230,11 @@ export function NewConversation({
   const [browsing, setBrowsing] = useState(false);
 
   useEffect(() => {
-    const remembered = read(key(harness.id, "cwd"), readLegacy(harness.id, "cwd") ?? "");
+    const remembered = read(key(harness.id, "cwd"), "");
     setCwd(!linkCwdUsed.current && linkCwd ? linkCwd : remembered);
     linkCwdUsed.current = true;
-    setModel(read(key(harness.id, "model"), readLegacy(harness.id, "model") ?? DEFAULT));
-    setEffort(read(key(harness.id, "effort"), readLegacy(harness.id, "effort") ?? DEFAULT));
+    setModel(read(key(harness.id, "model"), DEFAULT));
+    setEffort(read(key(harness.id, "effort"), DEFAULT));
     setPermission(composerPermission(harness.capabilities.settings));
     setWorktree(false);
     setCwdError(null);

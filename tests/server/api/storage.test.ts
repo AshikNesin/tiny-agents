@@ -40,7 +40,12 @@ describe("storage API", () => {
 
     const root = await api<FileInfo[]>(app, "/api/v1/storage/files", { token });
     expect(root.body.data).toEqual([
-      expect.objectContaining({ key: "docs/", name: "docs", isDirectory: true }),
+      expect.objectContaining({
+        key: "docs/",
+        name: "docs",
+        isDirectory: true,
+        lastModified: null,
+      }),
     ]);
 
     const docs = await api<FileInfo[]>(app, "/api/v1/storage/files?folder=docs", { token });

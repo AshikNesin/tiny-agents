@@ -12,7 +12,8 @@
     "./computer": "./src/subpaths/computer.ts",
     "./claude-worker": "./src/subpaths/claude-worker.ts",
     "./testing": "./src/testing.ts",
-    "./peer-envelope": "./src/toolkits/peer-envelope.ts"
+    "./peer-envelope": "./src/toolkits/peer-envelope.ts",
+    "./wire": "./src/wire.ts"
   },
   "dependencies": {
     "@earendil-works/chord": "1.4.0",

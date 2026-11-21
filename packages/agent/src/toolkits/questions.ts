@@ -8,6 +8,7 @@ import { parseStored, toJson } from "../durable-json";
 import { defineToolkit, tool } from "../toolkit";
 import { messageOwnerTool } from "./message-owner";
 import type { ChatToolCall, OwnerAnswer, OwnerQuestion } from "../types";
+import { MAX_ANSWER_TEXT } from "../wire";
 import {
   pendingToolTask,
   refuseUnattended,
@@ -22,7 +23,6 @@ const ASK_OWNER = "ask_owner";
 
 const MAX_QUESTIONS = 4;
 const MAX_OPTIONS = 6;
-export const MAX_ANSWER_TEXT = 2_000;
 
 const QuestionsDoc = defineDoc<{
   status: "pending" | "answered" | "dismissed";

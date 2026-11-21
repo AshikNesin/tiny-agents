@@ -41,6 +41,7 @@ const SIDEBAR_COLLAPSED_KEY = "groot.sidebar.collapsed";
 
 export interface LayoutProps {
   header?: ReactNode;
+  chrome?: boolean;
   commandGroups?: CommandGroupEntry[];
   commandBuiltIns?: boolean;
   padded?: boolean;
@@ -50,6 +51,7 @@ export interface LayoutProps {
 
 export function Layout({
   header,
+  chrome = true,
   commandGroups,
   commandBuiltIns,
   padded = true,
@@ -64,7 +66,7 @@ export function Layout({
   const setPaletteOpen = useCommandPaletteStore((state) => state.setOpen);
   const openingPalette = useRef(false);
 
-  const useDefaultSidebar = header == null;
+  const useDefaultSidebar = chrome && header == null;
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(() => {
@@ -156,7 +158,7 @@ export function Layout({
         item.shortcut ? <NavShortcut key={item.to} shortcut={item.shortcut} to={item.to} /> : null,
       )}
 
-      {fullPage
+      {fullPage || !chrome
         ? null
         : (header ?? (
             <SidebarNav
