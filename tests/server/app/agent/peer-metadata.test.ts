@@ -109,6 +109,30 @@ describe("peer metadata on chat.user entries", () => {
     }
   });
 
+  it("keeps a bot's queued message through the owner's Stop and answers it with the next run", async () => {
+    const rt = await openTestRuntime({ storePath: ":memory:", tokensPerSecond: 5 });
+    try {
+      const ref = await rt.createConversation({ modelId: "test-model", systemPrompt: "" });
+      await rt.submit(ref, { requestId: "owner-1", text: "start a long answer" });
+      await until(() => rt.isBusy(ref), "the first run to start");
+      await rt.submit(ref, {
+        requestId: "finish-1",
+        text: "**Reply from Claude Code:** PR is up",
+        peer: { kind: "reply", name: "Claude Code" },
+      });
+      await rt.abort(ref);
+      await until(() => !rt.isBusy(ref), "the stop to settle");
+
+      await rt.submit(ref, { requestId: "owner-2", text: "ok" });
+      const messages = await afterReplies(rt, ref, 1);
+      const users = messages.filter((m) => m.role === "user");
+      expect(users.map((m) => m.requestId)).toEqual(["owner-1", "finish-1", "owner-2"]);
+      expect(users.find((m) => m.requestId === "finish-1")?.status).toBe("done");
+    } finally {
+      await rt.close();
+    }
+  });
+
   it("round-trips message and mention attributions", async () => {
     const rt = await openTestRuntime({ storePath: ":memory:", tokensPerSecond: 5 });
     try {

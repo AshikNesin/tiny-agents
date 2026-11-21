@@ -265,7 +265,8 @@ export class ClaudeCodeEngine implements AgentEngine {
   async abort(ref: ConversationRef): Promise<void> {
     const session = this.sessions.get(ref);
     if (!session) return;
-    const queued = session.queue.splice(0);
+    const queued = session.queue.filter((input) => !input.peer);
+    session.queue = session.queue.filter((input) => input.peer);
     if (queued.length > 0) {
       await this.withdrawn(
         ref,
