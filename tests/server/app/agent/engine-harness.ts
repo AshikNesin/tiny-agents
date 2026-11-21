@@ -1,4 +1,5 @@
-import { Type, type Context as PiContext, type JsonObject } from "@earendil-works/pi-ai";
+import type { Context as PiContext, JsonObject } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import { until } from "../../fixtures/until";
 import { defineExtension, defineTool } from "@earendil-works/pi-durable";
 import type { Capability } from "../../../../packages/agent/src/capabilities";

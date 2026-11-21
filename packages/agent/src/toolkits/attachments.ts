@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import type { ToolExecutionResult } from "@earendil-works/pi-durable";
 import type { Capability } from "../capabilities";
 import { shQuote, type SandboxConnection } from "@tiny-agents/sandbox";

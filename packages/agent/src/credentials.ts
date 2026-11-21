@@ -1,4 +1,4 @@
-import type { JsonValue } from "@earendil-works/chord";
+import type { JsonValue } from "@earendil-works/chord/json";
 import { defineDoc, type JsonObject, type TaskId } from "@earendil-works/pi-durable";
 import { z } from "zod";
 import { innerDetails } from "./approvals";

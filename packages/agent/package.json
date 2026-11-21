@@ -16,13 +16,14 @@
     "./wire": "./src/wire.ts"
   },
   "dependencies": {
-    "@earendil-works/chord": "1.4.0",
-    "@earendil-works/pi-ai": "1.4.0",
-    "@earendil-works/pi-durable": "1.4.0",
+    "@earendil-works/chord": "1.6.0",
+    "@earendil-works/pi-ai": "1.6.0",
+    "@earendil-works/pi-durable": "1.6.0",
     "@modelcontextprotocol/sdk": "1.32.2",
     "@tiny-agents/claude-worker": "workspace:*",
     "@tiny-agents/models": "workspace:*",
     "@tiny-agents/sandbox": "workspace:*",
+    "typebox": "1.3.27",
     "undici": "8.12.3",
     "ws": "8.22.0",
     "zod": "^4.6.7"

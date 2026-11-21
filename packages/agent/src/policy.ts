@@ -1,6 +1,6 @@
 import type { Extension, Registry, ToolRegistration } from "@earendil-works/pi-durable";
 import { defineDoc, UsageDoc, type UsageState } from "@earendil-works/pi-durable";
-import type { Context } from "@earendil-works/chord";
+import type { Context } from "@earendil-works/chord/context";
 import type { ToolExecutionApi } from "@earendil-works/pi-durable";
 import { TOOL_SEARCH_TOOL_NAME } from "@earendil-works/pi-durable/tool-search";
 import {

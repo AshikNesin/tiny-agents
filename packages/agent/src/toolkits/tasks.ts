@@ -1,7 +1,7 @@
 import { ProviderDoc } from "@earendil-works/pi-durable";
 import type { Extension, ToolExecutionApi, ToolExecutionResult } from "@earendil-works/pi-durable";
-import type { Context } from "@earendil-works/chord";
-import { Type } from "@earendil-works/pi-ai";
+import type { Context } from "@earendil-works/chord/context";
+import { Type } from "typebox";
 import { z } from "zod";
 import type { Capability } from "../capabilities";
 import { durableMemo } from "../durable-json";

@@ -1,4 +1,4 @@
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import { defineExtension, defineTool, type ToolExecutionResult } from "@earendil-works/pi-durable";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import type { OAuthClientProvider } from "@modelcontextprotocol/sdk/client/auth.js";

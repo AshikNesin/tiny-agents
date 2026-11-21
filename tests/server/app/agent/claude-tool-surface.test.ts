@@ -1,4 +1,4 @@
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
 import { z } from "zod";
 import { claudeToolSurface } from "../../../../packages/agent/src/engines/claude-code/tools";

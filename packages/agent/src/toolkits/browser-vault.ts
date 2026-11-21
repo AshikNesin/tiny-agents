@@ -1,5 +1,5 @@
-import type { Context } from "@earendil-works/chord";
-import { Type } from "@earendil-works/pi-ai";
+import type { Context } from "@earendil-works/chord/context";
+import { Type } from "typebox";
 import type { ToolExecutionApi, ToolExecutionResult } from "@earendil-works/pi-durable";
 import { isUnattendedConversation } from "../approvals";
 import {

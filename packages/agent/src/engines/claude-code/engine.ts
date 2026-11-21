@@ -1,5 +1,5 @@
 import { readFile, rename } from "node:fs/promises";
-import type { Context } from "@earendil-works/chord";
+import type { Context } from "@earendil-works/chord/context";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import {
   defineDoc,
@@ -20,7 +20,7 @@ import {
   type CompiledConversation,
   type EngineSubmission,
 } from "../../engine";
-import { ToolGate } from "../../gate";
+import { ranToResult, ToolGate } from "../../gate";
 import { finishedToolRow, liveToolRow, type ToolCallRow } from "../../tool-call-row";
 import { gateUserMessages, windowChat } from "../../transcript";
 import type {
@@ -622,7 +622,7 @@ export class ClaudeCodeEngine implements AgentEngine {
         async () => {
           row(liveToolRow({ status: "running", taskId }));
           if (!runner) return unavailable(call.name);
-          return runner.execute(args, api, ctx);
+          return ranToResult(await runner.execute(args, api, ctx));
         },
       );
       const content = resultText(result);

@@ -1,4 +1,4 @@
-import type { Context } from "@earendil-works/chord";
+import type { Context } from "@earendil-works/chord/context";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import {
   configure as configureAgent,
@@ -41,8 +41,9 @@ export class ConversationStore {
     const graph = await this.harness.watchTaskGraph(ctx);
     this.#graph = graph;
     this.#replying = replyingFromGraph(graph.value);
-    graph.start(async (value) => {
-      const next = replyingFromGraph(value);
+    graph.start(async (call) => {
+      if (call.kind !== "value") return;
+      const next = replyingFromGraph(call.value);
       const changed: ConversationRef[] = [];
       for (const ref of next) if (!this.#replying.has(ref)) changed.push(ref);
       for (const ref of this.#replying) if (!next.has(ref)) changed.push(ref);

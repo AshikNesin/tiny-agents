@@ -1,5 +1,10 @@
-import type { Context } from "@earendil-works/chord";
-import type { JsonObject, ToolExecutionApi, ToolExecutionResult } from "@earendil-works/pi-durable";
+import type { Context } from "@earendil-works/chord/context";
+import type {
+  JsonObject,
+  ToolExecutionApi,
+  ToolExecutionResult,
+  ToolPark,
+} from "@earendil-works/pi-durable";
 import { z } from "zod";
 import {
   ApprovalNotPendingError,
@@ -338,6 +343,11 @@ export class ToolGate {
       this.#approvals.remove(conversation, taskId);
     }
   }
+}
+
+export function ranToResult(result: ToolExecutionResult | ToolPark): ToolExecutionResult {
+  if ("sleep" in result || "wait" in result) throw new Error("tool parked outside the gate");
+  return result;
 }
 
 function scrubResult(result: ToolExecutionResult): ToolExecutionResult {

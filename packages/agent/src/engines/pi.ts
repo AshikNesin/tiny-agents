@@ -1,21 +1,22 @@
-import type { Context } from "@earendil-works/chord";
+import type { Context } from "@earendil-works/chord/context";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import {
   InboxDoc,
   LiveDoc,
-  watchEvents,
   type Conversation,
+  type ConversationView,
   type ConversationId,
   type EntryRecord,
   type Extension,
   type Harness,
+  type LiveState,
   type ToolRegistration,
 } from "@earendil-works/pi-durable";
 import { gateHooksOf } from "../approvals";
 import { loadHistory, type ConversationStore } from "../conversation-store";
 import type { AgentEngine, EngineSubmission } from "../engine";
 import { toJson } from "../durable-json";
-import type { ToolGate } from "../gate";
+import { ranToResult, type ToolGate } from "../gate";
 import type { GateUserMessage } from "../policy";
 import { ChatProjection, unansweredOf, type ProjectionSnapshot } from "../projection";
 import { REVIEW_ENTRY_LOOKBACK } from "../reviewer";
@@ -151,13 +152,21 @@ export class PiEngine implements AgentEngine {
     options: { window?: number },
   ): Promise<ChatSubscription> {
     const conversation = await this.#conversation(ref);
-    const stream = await watchEvents(this.#harness, ref as ConversationId, ctx);
+    const watch = await conversation.watch(ctx);
+    const first = liveOf(watch.value);
     const projection = new ChatProjection(
-      await this.#snapshot(conversation, ref, stream.snapshot),
+      await this.#snapshot(conversation, ref, {
+        entries: watch.value.entries,
+        generation: first?.generation,
+        run: first?.run,
+        tools: first?.tools ?? [],
+      }),
       options,
     );
     const initial = projection.state;
     let stopped = false;
+    let inbox = docKey(watch.value, "pi.inbox");
+    let failure = JSON.stringify(first?.runFailure ?? null);
 
     const subscription: ChatSubscription = {
       initial,
@@ -165,25 +174,28 @@ export class PiEngine implements AgentEngine {
         if (stopped) return;
         stopped = true;
         this.#chats.delete(subscription);
-        await stream.stop();
+        await watch.stop();
       },
     };
     this.#chats.add(subscription);
 
     await listener([{ type: "snapshot", state: initial }]);
 
-    stream.start(async (events) => {
-      if (stopped) return;
-      const outcome = projection.fold(events);
-      if (outcome.resnapshot) {
-        const fresh = events.findLast((event) => event.type === "snapshot");
-        if (fresh && fresh.type === "snapshot") {
-          projection.reset(await this.#snapshot(conversation, ref, fresh));
-        }
-      } else if (outcome.inboxChanged) {
+    watch.start(async (call) => {
+      if (stopped || call.kind !== "value") return;
+      const live = liveOf(call.value);
+      projection.observe(call.value.entries, live);
+      const nextInbox = docKey(call.value, "pi.inbox");
+      if (nextInbox !== inbox) {
+        inbox = nextInbox;
         projection.setQueued(await this.#queued(ref));
       }
-      const diff = projection.flush({ resnapshot: outcome.resnapshot });
+      const nextFailure = JSON.stringify(live?.runFailure ?? null);
+      if (nextFailure !== failure) {
+        failure = nextFailure;
+        if (live?.runFailure) projection.markUnanswered(await this.#unanswered(ref));
+      }
+      const diff = projection.flush();
       if (diff.length > 0) await listener(diff);
     });
 
@@ -227,6 +239,13 @@ export class PiEngine implements AgentEngine {
     };
   }
 
+  async #unanswered(ref: ConversationRef): Promise<Map<number, string>> {
+    const inspection = await this.#harness.inspect(ctx);
+    return unansweredOf(
+      inspection.submissions.filter((record) => Number(record.conversationId) === ref),
+    );
+  }
+
   async #queued(ref: ConversationRef): Promise<QueuedMessage[]> {
     const inbox = await this.#harness.snapshot(InboxDoc, ref as ConversationId, ctx);
     const items = inbox?.items ?? [];
@@ -243,6 +262,14 @@ export class PiEngine implements AgentEngine {
   #conversation(ref: ConversationRef): Promise<Conversation> {
     return this.#store.conversation(ref);
   }
+}
+
+function liveOf(view: ConversationView): LiveState | undefined {
+  return view.docs["pi.live"] as LiveState | undefined;
+}
+
+function docKey(view: ConversationView, kind: string): string {
+  return JSON.stringify(view.docs[kind] ?? null);
 }
 
 export function gateExtension(
@@ -283,7 +310,7 @@ function gateTool(
           },
           instructions: async () => (await api.agent(context)).instructions,
         },
-        () => tool.execute(args, api, context),
+        async () => ranToResult(await tool.execute(args, api, context)),
       ),
   };
 }

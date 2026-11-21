@@ -1,5 +1,5 @@
-import type { JsonValue } from "@earendil-works/chord";
-import { Type } from "@earendil-works/pi-ai";
+import type { JsonValue } from "@earendil-works/chord/json";
+import { Type } from "typebox";
 import { defineDoc, type TaskId, type ToolExecutionResult } from "@earendil-works/pi-durable";
 import { z } from "zod";
 import { innerDetails } from "../approvals";

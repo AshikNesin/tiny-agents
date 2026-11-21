@@ -1,4 +1,4 @@
-import type { AgentEvent, EntryRecord } from "@earendil-works/pi-durable";
+import type { EntryRecord, LiveState } from "@earendil-works/pi-durable";
 import { describe, expect, it } from "vite-plus/test";
 import { ChatProjection, unansweredOf } from "../../../../packages/agent/src/projection";
 import type { ChatEvent } from "../../../../packages/agent/src/index";
@@ -28,7 +28,8 @@ const assistant = (id: number, text: string, stopReason = "stop"): EntryRecord =
 const liveMessage = (text = "") =>
   ({ role: "assistant", content: [{ type: "text", text }], model: "m", timestamp: 9 }) as never;
 
-const ev = (event: unknown) => event as AgentEvent;
+const live = (state: unknown) => state as LiveState;
+const run = { taskId: 3, inputs: [1], first: 1, turns: 0 };
 
 function reduce(state: ReturnType<ChatProjection["full"]>, events: ChatEvent[]) {
   let next = structuredClone(state);
@@ -53,31 +54,22 @@ describe("ChatProjection", () => {
     const projection = new ChatProjection({ entries: [user(1, "hi")], busy: true, tools: [] });
     expect(projection.state.messages.map((m) => [m.text, m.status])).toEqual([["hi", "done"]]);
 
-    projection.fold([ev({ type: "message_start", message: liveMessage() })]);
+    projection.observe([], live({ run, generation: { attempt: 1, message: liveMessage() } }));
     let shown = projection.state;
     let events = projection.flush();
     expect(events.map((e) => e.type)).toEqual(["upsert"]);
     shown = reduce(shown, events);
     expect(shown.messages.at(-1)).toMatchObject({ id: "live", status: "streaming" });
 
-    projection.fold([
-      ev({
-        type: "message_update",
-        changes: [{ type: "text_delta", contentIndex: 0, delta: "Hel" }],
-      }),
-      ev({
-        type: "message_update",
-        changes: [{ type: "text_delta", contentIndex: 0, delta: "lo" }],
-      }),
-    ]);
+    projection.observe(
+      [],
+      live({ run, generation: { attempt: 1, message: liveMessage("Hello") } }),
+    );
     events = projection.flush();
     expect(events).toEqual([{ type: "delta", id: "live", text: "Hello" }]);
     shown = reduce(shown, events);
 
-    projection.fold([
-      ev({ type: "message_end", entry: assistant(2, "Hello") }),
-      ev({ type: "run_end" }),
-    ]);
+    projection.observe([assistant(2, "Hello")], live({}));
     events = projection.flush();
     expect(events.map((e) => e.type).sort()).toEqual(["busy", "remove", "upsert"]);
     shown = reduce(shown, events);
@@ -88,39 +80,21 @@ describe("ChatProjection", () => {
     ]);
   });
 
-  it("keeps a window's start fixed and re-windows on a re-snapshot", () => {
+  it("keeps a window's start fixed as entries arrive", () => {
     const entries = [user(1, "a"), assistant(2, "b"), user(3, "c"), assistant(4, "d")];
     const projection = new ChatProjection({ entries, busy: false, tools: [] }, { window: 2 });
     expect(projection.state).toMatchObject({ hasMore: true, cursor: "e3" });
     expect(projection.state.messages.map((m) => m.id)).toEqual(["e3", "e4"]);
 
-    projection.fold([ev({ type: "entry_appended", entry: user(5, "e") })]);
+    projection.observe([user(5, "e")], live({}));
     const events = projection.flush();
     expect(events).toEqual([{ type: "upsert", message: expect.objectContaining({ id: "e5" }) }]);
     expect(projection.state.messages.map((m) => m.id)).toEqual(["e3", "e4", "e5"]);
-
-    const outcome = projection.fold([ev({ type: "snapshot", entries: [], tools: [] })]);
-    expect(outcome.resnapshot).toBe(true);
-    projection.reset({
-      entries: [...entries, user(5, "e"), assistant(6, "f")],
-      busy: false,
-      tools: [],
-    });
-    const [snapshot] = projection.flush({ resnapshot: true });
-    expect(snapshot.type).toBe("snapshot");
-    if (snapshot.type === "snapshot") {
-      expect(snapshot.state.messages.map((m) => m.id)).toEqual(["e5", "e6"]);
-    }
   });
 
-  it("flags an unanswered input from a live submission event and keeps it across a reset", () => {
+  it("flags an unanswered input once its run fails and on a fresh projection", () => {
     const projection = new ChatProjection({ entries: [user(1, "hi")], busy: false, tools: [] });
-    projection.fold([
-      ev({
-        type: "submission",
-        record: { type: "input", status: "unanswered", entry: 1, reason: "no_model" },
-      }),
-    ]);
+    projection.markUnanswered(new Map([[1, "no_model"]]));
     const [upsert] = projection.flush();
     expect(upsert).toMatchObject({
       type: "upsert",
@@ -142,6 +116,25 @@ describe("ChatProjection", () => {
     expect(again.state.messages[0]).toMatchObject({ status: "unanswered" });
   });
 
+  it("explains in words why a run ended without an answer", () => {
+    const projection = new ChatProjection({
+      entries: [user(1, "a"), user(2, "b")],
+      busy: false,
+      tools: [],
+    });
+    projection.markUnanswered(
+      new Map([
+        [1, "interrupted"],
+        [2, "restart_limit"],
+      ]),
+    );
+    projection.flush();
+    expect(projection.state.messages.map((m) => m.error)).toEqual([
+      "The app restarted while the model was answering. Send it again.",
+      "This kept failing after restarts, so it was stopped. Send it again.",
+    ]);
+  });
+
   it("a tool round: start, details, end", () => {
     const call = {
       role: "assistant",
@@ -155,21 +148,36 @@ describe("ChatProjection", () => {
       busy: true,
       tools: [],
     });
-    projection.fold([ev({ type: "tool_execution_start", toolCallId: "c1", taskId: 7 })]);
+    projection.observe(
+      [],
+      live({
+        run,
+        tools: [{ callId: "c1", toolName: "send_email", status: "running", taskId: 7 }],
+      }),
+    );
     projection.flush();
     expect(projection.state.messages[1].toolCalls?.[0]).toMatchObject({
       status: "running",
       taskId: 7,
     });
-    projection.fold([
-      ev({ type: "tool_execution_update", toolCallId: "c1", details: { approval: "pending" } }),
-    ]);
+    projection.observe(
+      [],
+      live({
+        run,
+        tools: [
+          {
+            callId: "c1",
+            toolName: "send_email",
+            status: "running",
+            taskId: 7,
+            details: { approval: "pending" },
+          },
+        ],
+      }),
+    );
     projection.flush();
     expect(projection.state.messages[1].toolCalls?.[0].status).toBe("awaiting_approval");
-    projection.fold([
-      ev({ type: "tool_execution_end", toolCallId: "c1" }),
-      ev({ type: "run_end" }),
-    ]);
+    projection.observe([], live({}));
     projection.flush();
     expect(projection.state.busy).toBe(false);
   });

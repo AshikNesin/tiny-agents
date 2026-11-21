@@ -1,8 +1,7 @@
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import type {
-  AgentEvent,
   EntryRecord,
-  MessageChange,
+  LiveState,
   SubmissionRecord,
   ToolSlot,
 } from "@earendil-works/pi-durable";
@@ -19,11 +18,6 @@ export interface ProjectionSnapshot {
   unanswered?: ReadonlyMap<number, string>;
 }
 
-export interface FoldOutcome {
-  resnapshot: boolean;
-  inboxChanged: boolean;
-}
-
 export function unansweredOf(records: Iterable<SubmissionRecord>): Map<number, string> {
   const out = new Map<number, string>();
   for (const record of records) {
@@ -38,7 +32,7 @@ function liveTools(slots: readonly ToolSlot[]): Map<string, LiveTool> {
   const tools = new Map<string, LiveTool>();
   for (const slot of slots) {
     tools.set(slot.callId, {
-      status: slot.status,
+      status: slot.status === "pending" || slot.status === "done" ? slot.status : "running",
       ...(slot.taskId !== undefined ? { taskId: Number(slot.taskId) } : {}),
       ...(slot.output ? { output: slot.output } : {}),
       ...(slot.details !== undefined ? { details: slot.details } : {}),
@@ -72,106 +66,26 @@ export class ChatProjection {
     return chatState(this.#raw());
   }
 
-  reset(snapshot: ProjectionSnapshot): void {
-    this.#entries.clear();
-    this.#unanswered.clear();
-    this.#load(snapshot);
-    this.#from = undefined;
-  }
-
   setQueued(queued: readonly QueuedMessage[]): void {
     this.#queued = queued;
   }
 
-  fold(events: readonly AgentEvent[]): FoldOutcome {
-    const outcome: FoldOutcome = { resnapshot: false, inboxChanged: false };
-    for (const event of events) {
-      if (event.type === "snapshot") {
-        outcome.resnapshot = true;
-        continue;
-      }
-      if (event.type === "inbox_update") {
-        outcome.inboxChanged = true;
-        continue;
-      }
-      this.apply(event);
-    }
-    return outcome;
+  observe(entries: readonly EntryRecord[], live: LiveState | undefined): void {
+    for (const entry of entries) this.#entries.set(Number(entry.id), entry);
+    const message = live?.generation?.message as AssistantMessage | undefined;
+    this.#live = message ? structuredClone(message) : undefined;
+    this.#busy = live?.run !== undefined;
+    this.#tools = liveTools(live?.tools ?? []);
   }
 
-  apply(event: AgentEvent): void {
-    switch (event.type) {
-      case "tool_execution_start":
-        if (event.parentToolCallId === undefined) {
-          this.#tools.set(event.toolCallId, {
-            status: "running",
-            ...(event.taskId !== undefined ? { taskId: Number(event.taskId) } : {}),
-          });
-        }
-        break;
-      case "tool_execution_update": {
-        const slot = this.#tools.get(event.toolCallId);
-        if (!slot || event.parentToolCallId !== undefined) break;
-        const next: LiveTool = { ...slot };
-        if (event.details !== undefined) next.details = event.details ?? undefined;
-        if (event.output) {
-          next.output =
-            "set" in event.output
-              ? event.output.set
-              : (slot.output ?? "").slice(event.output.trimStart ?? 0) +
-                (event.output.append ?? "");
-        }
-        this.#tools.set(event.toolCallId, next);
-        break;
-      }
-      case "tool_execution_end":
-        if (event.parentToolCallId !== undefined) break;
-        this.#tools.delete(event.toolCallId);
-        if (event.entry) this.#entries.set(Number(event.entry.id), event.entry);
-        break;
-      case "message_start":
-        if (event.message.role === "assistant") this.#live = structuredClone(event.message);
-        break;
-      case "message_update":
-        if (this.#live) {
-          for (const change of event.changes) this.#live = applyChange(this.#live, change);
-        }
-        break;
-      case "message_end":
-        this.#entries.set(Number(event.entry.id), event.entry);
-        if (event.entry.kind === "pi.assistant") this.#live = undefined;
-        break;
-      case "entry_appended":
-        this.#entries.set(Number(event.entry.id), event.entry);
-        break;
-      case "run_start":
-        this.#busy = true;
-        break;
-      case "run_end":
-        this.#busy = false;
-        this.#live = undefined;
-        this.#tools.clear();
-        break;
-      case "submission":
-        if (
-          event.record.type === "input" &&
-          event.record.status === "unanswered" &&
-          event.record.entry !== undefined
-        ) {
-          this.#unanswered.set(Number(event.record.entry), event.record.reason);
-        }
-        break;
-      default:
-        break;
-    }
+  markUnanswered(unanswered: ReadonlyMap<number, string>): void {
+    for (const [entry, reason] of unanswered) this.#unanswered.set(entry, reason);
   }
 
-  flush(options: { resnapshot?: boolean } = {}): ChatEvent[] {
-    let resnapshot = options.resnapshot === true;
-    const kept = resnapshot ? undefined : this.#windowed(false);
-    if (!kept) resnapshot = true;
+  flush(): ChatEvent[] {
+    const kept = this.#windowed(false);
     const next = kept ?? this.#windowed(true)!;
-    const events = resnapshot
+    const events = !kept
       ? [{ type: "snapshot", state: next } as ChatEvent]
       : diffChat(this.#shown, next);
     this.#shown = next;
@@ -207,36 +121,4 @@ export class ChatProjection {
     if (next) this.#from = next.hasMore ? next.cursor : undefined;
     return next;
   }
-}
-
-function applyChange(message: AssistantMessage, change: MessageChange): AssistantMessage {
-  if (change.type === "message") return structuredClone(change.message);
-  const content = [...message.content];
-  switch (change.type) {
-    case "text_start":
-    case "thinking_start":
-    case "toolcall_start":
-    case "block":
-      content[change.contentIndex] = structuredClone(change.block);
-      break;
-    case "text_delta": {
-      const block = content[change.contentIndex];
-      content[change.contentIndex] =
-        block?.type === "text"
-          ? { ...block, text: block.text + change.delta }
-          : { type: "text", text: change.delta };
-      break;
-    }
-    case "thinking_delta": {
-      const block = content[change.contentIndex];
-      content[change.contentIndex] =
-        block?.type === "thinking"
-          ? { ...block, thinking: block.thinking + change.delta }
-          : { type: "thinking", thinking: change.delta };
-      break;
-    }
-    default:
-      break;
-  }
-  return { ...message, content };
 }

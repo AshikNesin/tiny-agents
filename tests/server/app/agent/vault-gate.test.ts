@@ -1,11 +1,7 @@
-import type { Context } from "@earendil-works/chord";
+import type { Context } from "@earendil-works/chord/context";
 import { until } from "../../fixtures/until";
-import {
-  Type,
-  type Context as PiContext,
-  type JsonObject,
-  type JsonValue,
-} from "@earendil-works/pi-ai";
+import { Type } from "typebox";
+import { type Context as PiContext, type JsonObject, type JsonValue } from "@earendil-works/pi-ai";
 import { defineExtension, defineTool, type ToolExecutionApi } from "@earendil-works/pi-durable";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import type { Capability } from "../../../../packages/agent/src/capabilities";
