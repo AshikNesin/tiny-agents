@@ -3,7 +3,6 @@ import { createRoot } from "react-dom/client";
 import { setDefaultTheme, initTheme } from "@groot/shell/lib/theme";
 import { ShellQueryProvider, createShellQueryClient } from "@groot/shell/lib/query-client";
 import App from "./App";
-import { installFeedbackLabels } from "./lib/feedback";
 import "@fontsource-variable/inter";
 import "@groot/shell/index.css";
 import "streamdown/styles.css";
@@ -27,7 +26,6 @@ window.setTimeout(() => {
 
 setDefaultTheme("dark");
 initTheme();
-installFeedbackLabels();
 
 const queryClient = createShellQueryClient({ mutations: { retry: 1 } });
 
