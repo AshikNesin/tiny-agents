@@ -8,15 +8,16 @@ const FORMATTED = /\.(?:[cm]?[jt]sx?|json|jsonc|ya?ml|md|css|html)$/;
 const LINTED = /\.(?:[cm]?[jt]sx?)$/;
 const TYPED = /\.(?:[cm]?tsx?)$|(?:^|\/)(?:tsconfig[^/]*\.json|package\.json)$/;
 
-export function prePushPlan(files) {
+export function prePushPlan(files, removed = []) {
   return {
     fmt: files.filter((file) => FORMATTED.test(file) && file !== "pnpm-lock.yaml"),
     lint: files.filter((file) => LINTED.test(file)),
-    typecheck: files.some((file) => TYPED.test(file)),
+    typecheck: [...files, ...removed].some((file) => TYPED.test(file)),
   };
 }
 
-const git = (...args) => execFileSync("git", args, { encoding: "utf8" }).trim();
+const git = (...args) =>
+  execFileSync("git", args, { encoding: "utf8", maxBuffer: 256 * 1024 * 1024 }).trim();
 
 function quietly(...args) {
   try {
@@ -28,6 +29,7 @@ function quietly(...args) {
 
 function changedFiles(refLines) {
   const files = new Set();
+  const removed = new Set();
   for (const line of refLines) {
     const [localRef, localSha, , remoteSha] = line.split(" ");
     if (!localSha || localRef.startsWith("refs/tags/") || ZERO.test(localSha)) continue;
@@ -36,11 +38,15 @@ function changedFiles(refLines) {
         ? remoteSha
         : quietly("merge-base", localSha, "origin/main");
     const listed = base
-      ? quietly("diff", "--name-only", "--diff-filter=ACMR", base, localSha)
+      ? quietly("diff", "--name-only", "--no-renames", base, localSha)
       : quietly("ls-files");
-    for (const file of listed.split("\n")) if (file && existsSync(file)) files.add(file);
+    for (const file of listed.split("\n")) {
+      if (!file) continue;
+      if (existsSync(file)) files.add(file);
+      else removed.add(file);
+    }
   }
-  return [...files];
+  return { files: [...files], removed: [...removed] };
 }
 
 function run(name, command, args) {
@@ -61,9 +67,9 @@ function run(name, command, args) {
 
 async function main() {
   const refLines = readFileSync(0, "utf8").split("\n").filter(Boolean);
-  const files = changedFiles(refLines);
-  if (files.length === 0) return;
-  const plan = prePushPlan(files);
+  const { files, removed } = changedFiles(refLines);
+  if (files.length === 0 && removed.length === 0) return;
+  const plan = prePushPlan(files, removed);
   const checks = [];
   if (plan.fmt.length > 0) {
     checks.push(run(`Format (${plan.fmt.length} files)`, "vp", ["fmt", "--check", ...plan.fmt]));
@@ -83,4 +89,4 @@ async function main() {
   }
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) await main();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await main();

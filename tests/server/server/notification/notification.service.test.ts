@@ -546,6 +546,30 @@ describe("NotificationHub", () => {
     expect(pushover.channel.send).not.toHaveBeenCalled();
   });
 
+  it("does not cache a load that was in flight when forgetSettings ran", async () => {
+    let value: NotificationSettings = { ...DEFAULT_NOTIFICATION_SETTINGS, reminderMinutes: 15 };
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    let calls = 0;
+    const { service } = build({
+      settings: {
+        load: async () => {
+          calls += 1;
+          const seen = value;
+          if (calls === 1) await held;
+          return seen;
+        },
+        save: async (next: NotificationSettings) => (value = next),
+      },
+    });
+    const stale = service.getSettings();
+    value = { ...value, reminderMinutes: 40 };
+    service.forgetSettings();
+    release();
+    expect((await stale).reminderMinutes).toBe(15);
+    expect((await service.getSettings()).reminderMinutes).toBe(40);
+  });
+
   it("reads the store again after forgetSettings, on every channel", async () => {
     const { hub, settings, webpush } = hubOf({ reminderMinutes: 15 });
     expect((await hub.getSettings()).reminderMinutes).toBe(15);

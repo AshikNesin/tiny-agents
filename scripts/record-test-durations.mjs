@@ -22,8 +22,7 @@ try {
       { stdio: "inherit", env: { ...process.env, NODE_ENV: "test" } },
     );
     if (run.status !== 0) {
-      console.error(`The ${suite.name} suite failed; durations not written.`);
-      process.exit(1);
+      throw new Error(`The ${suite.name} suite failed; durations not written.`);
     }
     const { testResults } = JSON.parse(readFileSync(report, "utf8"));
     for (const file of testResults) {

@@ -1,7 +1,7 @@
 # Git hooks & secret detection
 
 Every commit runs secret detection (gitleaks) and staged lint/format (Vite+),
-and every branch push checks the files it changes and runs the typecheck. CI also scans every PR and push for
+and every branch push checks the files it changes, typechecking when TypeScript or its config changed. CI also scans every PR and push for
 secrets, so a commit made without gitleaks still gets a scan.
 
 ## What Gets Checked
@@ -32,11 +32,11 @@ skips tag-only pushes and branch deletions. For a push that updates a branch it
 takes the files the pushed commits change (against the remote's tip, or the
 merge base with `origin/main` for a new branch) and runs, at once:
 
-| Check                   | Command                                                 | Runs when                                                   |
-| ----------------------- | ------------------------------------------------------- | ----------------------------------------------------------- |
-| Format                  | `vp fmt --check <changed files>`                        | a changed file is one Oxfmt formats                         |
-| Lint                    | `vp lint <changed files>`                               | a changed file is JavaScript or TypeScript                  |
-| Typecheck (incremental) | `pnpm typecheck` (`pnpm verify:static --job typecheck`) | a `.ts`/`.tsx` file, a tsconfig or a `package.json` changed |
+| Check                   | Command                                                 | Runs when                                                                               |
+| ----------------------- | ------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Format                  | `vp fmt --check <changed files>`                        | a changed file is one Oxfmt formats                                                     |
+| Lint                    | `vp lint <changed files>`                               | a changed file is JavaScript or TypeScript                                              |
+| Typecheck (incremental) | `pnpm typecheck` (`pnpm verify:static --job typecheck`) | a `.ts`/`.tsx` file, a tsconfig or a `package.json` changed, was deleted or was renamed |
 
 It reads the working tree, not the commits you push. The typecheck runs the
 server, client, e2e and kit programs in parallel, each keeping its state in

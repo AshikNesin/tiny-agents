@@ -121,6 +121,7 @@ async function stopAppServices(): Promise<void> {
   const { notificationService } = await import("@groot/core/notification/notification.service");
   notificationService.forgetSettings();
   const { jobRunner } = await import("@groot/jobs/server");
+  await jobRunner.stop();
   jobRunner.reset();
 }
 

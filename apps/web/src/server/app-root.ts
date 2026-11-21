@@ -102,6 +102,7 @@ export function installAppForTests(services: Partial<App>): void {
 }
 
 export function resetAppForTests(): void {
+  current.updatesUnlisten?.();
   for (const key of Object.keys(current) as (keyof App)[]) delete current[key];
   Object.assign(current, emptyApp());
 }

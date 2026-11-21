@@ -196,9 +196,10 @@ async function runGates() {
   const failed = results.filter((result) => !result.passed).length;
   if (failed > 0) {
     console.error(`\n${failed} of ${results.length} static gates failed.`);
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
   console.log(`\nAll ${results.length} static gates passed.`);
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) await runGates();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await runGates();
