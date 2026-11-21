@@ -4,7 +4,7 @@ export interface FileInfo {
   key: string;
   name: string;
   size: number;
-  lastModified: string;
+  lastModified: string | null;
   isDirectory: boolean;
 }
 

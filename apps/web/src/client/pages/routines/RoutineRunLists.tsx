@@ -7,7 +7,7 @@ import { cn } from "@groot/ui/lib/utils";
 import { Section } from "@groot/shell/components/layout/Section";
 import type { Routine, RoutineRun } from "../../../shared/api/routines";
 import { markdownToPlainText } from "../../lib/plain-text";
-import { formatIst } from "../../lib/routines-schedule";
+import { formatIst } from "../../../shared/routines-schedule";
 
 const RUN_STATUS_VARIANT: Record<RoutineRun["status"], string> = {
   awaiting: "pending",

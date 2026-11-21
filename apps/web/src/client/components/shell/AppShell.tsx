@@ -210,7 +210,7 @@ export function AppShell() {
       {!fullPage && <AppSidebar />}
       <div className="h-dvh min-w-0 flex-1 overflow-y-auto">
         <Layout
-          header={<span />}
+          chrome={false}
           commandGroups={commandGroups}
           commandBuiltIns={false}
           padded={!inChats && !inSettings}

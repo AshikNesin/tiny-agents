@@ -56,7 +56,7 @@ export function MobileFileCard({ file, selected, onToggle, onNavigate, actions }
         <div>
           <span className="block">Modified</span>
           <span className="font-medium text-foreground">
-            {file.isDirectory ? "-" : formatDate(file.lastModified)}
+            {file.lastModified ? formatDate(file.lastModified) : "-"}
           </span>
         </div>
       </div>

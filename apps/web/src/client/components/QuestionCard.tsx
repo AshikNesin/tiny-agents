@@ -1,3 +1,4 @@
+import { MAX_ANSWER_TEXT } from "@tiny-agents/agent/wire";
 import { useMemo } from "react";
 import { MessageCircleQuestion } from "lucide-react";
 import { Button } from "@groot/ui/button";
@@ -20,8 +21,6 @@ import {
   TraceLine,
   TraceTitle,
 } from "./ui/trace";
-
-const MAX_ANSWER_TEXT = 2_000;
 
 const questionId = (index: number) => `q${index}`;
 const optionId = (index: number) => `o${index}`;

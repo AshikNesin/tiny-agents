@@ -6,7 +6,7 @@ import {
   istInputFromAt,
   isValidCron,
   onceAtFromIstInput,
-} from "../../lib/routines-schedule";
+} from "../../../shared/routines-schedule";
 
 export type ScheduleKind = "once" | "daily" | "weekly" | "interval" | "cron";
 

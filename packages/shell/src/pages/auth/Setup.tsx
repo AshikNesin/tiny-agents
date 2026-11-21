@@ -2,6 +2,7 @@ import { Navigate, useNavigate } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
+import { createUserSchema } from "@groot/core/auth/auth.schema";
 import { Button } from "@groot/ui/button";
 import { Form, FormField } from "@groot/ui/form";
 import { Input } from "@groot/ui/input";
@@ -12,11 +13,9 @@ import { useShellConfig } from "@groot/shell/lib/shell-config";
 import { useSetupStatus } from "@groot/shell/hooks/useSetupStatus";
 import { loginErrorDescription, useAuthStore } from "@groot/shell/store/auth";
 
-const setupSchema = z
-  .object({
+const setupSchema = createUserSchema
+  .extend({
     name: z.string(),
-    email: z.email("Invalid email address"),
-    password: z.string().min(6, "Password must be at least 6 characters"),
     confirmPassword: z.string(),
   })
   .refine((v) => v.password === v.confirmPassword, {

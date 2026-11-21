@@ -7,7 +7,7 @@ import {
   nextOccurrence,
   onceAtFromIstInput,
   previewFireTimes,
-} from "@/lib/routines-schedule";
+} from "../../../apps/web/src/shared/routines-schedule";
 
 describe("formatIst", () => {
   it("renders an IST wall clock with day-crossing awareness", () => {

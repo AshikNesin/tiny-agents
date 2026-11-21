@@ -26,7 +26,7 @@ import {
   describeSchedule,
   formatIst,
   previewFireTimes,
-} from "../../lib/routines-schedule";
+} from "../../../shared/routines-schedule";
 import { errorMessage } from "../../lib/errors";
 import {
   compileSchedule,

@@ -34,7 +34,7 @@ function fileFor(files: StorageFile[], key: string, name: string): StorageFile {
       key,
       name,
       size: 0,
-      lastModified: new Date(0).toISOString(),
+      lastModified: null,
       isDirectory: false,
     }
   );

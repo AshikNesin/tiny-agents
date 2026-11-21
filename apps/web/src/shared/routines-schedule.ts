@@ -1,6 +1,6 @@
 import { CronExpressionParser } from "cron-parser";
 import cronstrue from "cronstrue";
-import type { Schedule } from "../../shared/api/routines";
+import type { Schedule } from "./api/routines";
 
 export const TZ_IST = "Asia/Kolkata";
 

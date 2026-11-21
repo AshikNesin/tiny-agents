@@ -17,7 +17,7 @@ export async function listFiles({ folder }: { folder: string }): Promise<FileInf
         key: dirKey,
         name: dirKey.slice(folder.length, -1),
         size: 0,
-        lastModified: new Date(0).toISOString(),
+        lastModified: null,
         isDirectory: true,
       });
     }
@@ -26,7 +26,7 @@ export async function listFiles({ folder }: { folder: string }): Promise<FileInf
         key: object.key,
         name: object.key.slice(folder.length),
         size: object.size,
-        lastModified: (object.lastModified ?? new Date(0)).toISOString(),
+        lastModified: object.lastModified?.toISOString() ?? null,
         isDirectory: false,
       });
     }
