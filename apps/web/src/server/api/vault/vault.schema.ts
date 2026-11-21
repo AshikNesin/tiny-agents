@@ -45,11 +45,11 @@ const host = z
   .toLowerCase()
   .regex(/^[a-z0-9.-]+(:\d+)?$/, "A hostname, optionally with a port");
 
-const policySchema = z.object({
+const policyFields = {
   handle,
-  label: z.string().trim().min(1).max(120).optional(),
-  origins: z.array(origin).max(20).default([]),
-  hosts: z.array(host).max(20).default([]),
+  label: z.string().trim().min(1).max(120),
+  origins: z.array(origin).max(20),
+  hosts: z.array(host).max(20),
   inject: z
     .object({
       as: z.literal("header"),
@@ -61,15 +61,29 @@ const policySchema = z.object({
         .regex(/^[A-Za-z0-9-]+$/),
       format: z.string().max(200).default("{value}"),
     })
-    .optional()
     .nullable(),
-  tools: z.array(z.string().min(1).max(64)).max(20).default([]),
-  bots: z.array(z.string().min(1).max(64)).max(100).nullable().default(null),
-  approval: z.enum(["every_use", "per_conversation", "allowed"]).default("per_conversation"),
-  allowUnattended: z.boolean().default(false),
-  whenToUse: z.string().trim().max(300).optional().nullable(),
-  disabled: z.boolean().default(false),
-  field: z.enum(VALUE_FIELDS).optional().nullable(),
+  tools: z.array(z.string().min(1).max(64)).max(20),
+  bots: z.array(z.string().min(1).max(64)).max(100).nullable(),
+  approval: z.enum(["every_use", "per_conversation", "allowed"]),
+  allowUnattended: z.boolean(),
+  whenToUse: z.string().trim().max(300).nullable(),
+  disabled: z.boolean(),
+  field: z.enum(VALUE_FIELDS).nullable(),
+};
+
+const policySchema = z.object({
+  ...policyFields,
+  label: policyFields.label.optional(),
+  origins: policyFields.origins.default([]),
+  hosts: policyFields.hosts.default([]),
+  inject: policyFields.inject.optional(),
+  tools: policyFields.tools.default([]),
+  bots: policyFields.bots.default(null),
+  approval: policyFields.approval.default("per_conversation"),
+  allowUnattended: policyFields.allowUnattended.default(false),
+  whenToUse: policyFields.whenToUse.optional(),
+  disabled: policyFields.disabled.default(false),
+  field: policyFields.field.optional(),
 });
 
 const values = z.partialRecord(z.enum(VALUE_FIELDS), z.string().max(10_000));
@@ -92,7 +106,7 @@ export const updateItemSchema = z.object({
   title: z.string().trim().min(1).max(120).optional(),
   urls: z.array(z.string().trim().url().max(2000)).max(20).optional(),
   values: values.optional(),
-  policy: policySchema.partial({ handle: true }).optional(),
+  policy: z.object(policyFields).partial().optional(),
 });
 
 export const patchValueSchema = z.object({

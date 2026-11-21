@@ -208,6 +208,34 @@ describe("S11: every read checks the authoritative policy", () => {
     expect((await local.listCandidates()).items.map((item) => item.title)).toEqual(["bank"]);
   });
 
+  it("turning an item off through the request schema keeps the rest of its policy", async () => {
+    await createItem(
+      createItemSchema.parse({
+        kind: "login",
+        title: "bank",
+        urls: ["https://bank.example.com/login"],
+        values: { username: "ana", password: "pw" },
+        policy: {
+          handle: "bank",
+          origins: ["https://bank.example.com"],
+          tools: ["fill_login"],
+          bots: ["helper"],
+          approval: "allowed",
+          allowUnattended: true,
+        },
+      }),
+    );
+    const item = await updateItem("bank", updateItemSchema.parse({ policy: { disabled: true } }));
+    expect(item).toMatchObject({
+      disabled: true,
+      origins: ["https://bank.example.com"],
+      tools: ["fill_login"],
+      bots: ["helper"],
+      approval: "allowed",
+      allowUnattended: true,
+    });
+  });
+
   it("a row write that fails rolls the re-seal back with it", async () => {
     await createItem(login("bank"));
     db.run(

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.10.0
+
+### Minor Changes
+
+- The Vault does everything the web's does. Add a login, card, contact or API key from the + button, edit or
+  add any value, change who may use an item (handle, sites, hosts, header, approval, routines, bots, tools, hint),
+  link an item that is in 1Password but not linked yet, move local items to 1Password, and choose between
+  unlinking an item and deleting it everywhere. Each item opens on its own screen, and a `/vault/items/…` link
+  opens it in the app.
+- Turning an item off or on no longer resets its sites, bots and approval.
+
 ## 0.9.0
 
 ### Minor Changes

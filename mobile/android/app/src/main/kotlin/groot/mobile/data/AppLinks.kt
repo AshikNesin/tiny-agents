@@ -40,6 +40,7 @@ fun parseAppLink(url: String, serverUrl: String?): AppLink? {
         )
         segments.size == 3 && segments[0] == "vault" && segments[1] == "requests" -> segments[2].toIntOrNull()?.let { AppLink.CredentialRequest(it) }
         segments == listOf("vault") -> AppLink.Screen(Routes.VAULT)
+        segments.size == 3 && segments[0] == "vault" && segments[1] == "items" -> AppLink.Screen(Routes.vaultItem(segments[2]))
         segments == listOf("routines") -> AppLink.Screen(Routes.ROUTINES)
         segments == listOf("tasks") -> AppLink.Screen(Routes.TASKS)
         segments == listOf("code") -> AppLink.Screen(Routes.CODE)

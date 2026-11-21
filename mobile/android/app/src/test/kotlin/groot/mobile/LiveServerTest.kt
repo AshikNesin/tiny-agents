@@ -18,6 +18,10 @@ import groot.mobile.data.chat.ChatSession
 import groot.mobile.data.chat.ChatStore
 import groot.mobile.data.chat.OwnerSubmission
 import groot.mobile.data.chat.chatView
+import groot.mobile.data.vault.VaultPolicyDraft
+import groot.mobile.data.vault.vaultCreateBody
+import groot.mobile.data.vault.vaultPolicyBody
+import groot.mobile.data.vault.vaultValueBody
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -278,7 +282,19 @@ class LiveServerTest {
         assertTrue(wrong is ApiException)
         val stepUp = api.stepUp(password)
         assertTrue(stepUp.token.isNotBlank() && stepUp.expiresAt > System.currentTimeMillis())
-        api.vaultItems()
+        val created = api.createVaultItem(
+            vaultCreateBody("login", "Live $stamp", "example.com/login", mapOf("username" to "ana", "password" to "pw-1"), VaultPolicyDraft.defaultFor("login", "live-$stamp")),
+            stepUp.token,
+        )
+        assertEquals(listOf("https://example.com"), created.origins)
+        api.updateVaultItem(created.handle, vaultPolicyBody("login", VaultPolicyDraft.of(created).copy(disabled = true)), stepUp.token)
+        api.updateVaultItem(created.handle, vaultValueBody("password", "pw-2"), stepUp.token)
+        val edited = api.vaultItem(created.handle)
+        assertTrue(edited.item.disabled)
+        assertEquals(listOf("https://example.com"), edited.item.origins)
+        assertEquals("pw-2", api.revealVaultValue(created.handle, "password", stepUp.token))
+        api.deleteVaultItem(created.handle, purge = true, stepUp.token)
+        assertTrue(api.vaultOverview().items.none { it.handle == created.handle })
         api.connections()
 
         val browser = api.botLiveStatus(botId, "browser")
