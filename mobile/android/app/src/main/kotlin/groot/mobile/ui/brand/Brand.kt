@@ -52,6 +52,10 @@ object Dims {
     val contentMaxWidth = 720.dp
     val sheetHandleWidth = 36.dp
 
+    val pipMaxWidth = 240.dp
+    val pipMaxStreamHeight = 160.dp
+    val pipElevation = 8.dp
+
     val keyMinWidth = 44.dp
     val keyHeight = 38.dp
 

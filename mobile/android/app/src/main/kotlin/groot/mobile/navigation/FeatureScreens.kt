@@ -24,6 +24,7 @@ import groot.mobile.feature.manage.SkillsRoute
 import groot.mobile.feature.manage.TasksRoute
 import groot.mobile.feature.manage.VaultRoute
 import groot.mobile.feature.terminal.TerminalRoute
+import kotlinx.coroutines.launch
 
 internal fun NavGraphBuilder.featureScreens(container: AppContainer, navigate: (String) -> Unit, back: () -> Unit) {
     composable(Routes.BOT_NEW) { ScreenContainer { BotEditorRoute(container, botId = null, onBack = back) } }
@@ -42,7 +43,13 @@ internal fun NavGraphBuilder.featureScreens(container: AppContainer, navigate: (
     composable(Routes.LIVE_BOT) { entry ->
         val surface = entry.arguments?.getString("surface").orEmpty()
         val botId = entry.arguments?.getString("botId").orEmpty()
-        ScreenContainer { LiveRoute(container, LiveTarget(surface, botId = botId), title = if (surface == "browser") "Browser" else "Computer", onBack = back) }
+        ScreenContainer {
+            LiveRoute(container, LiveTarget(surface, botId = botId), title = if (surface == "browser") "Browser" else "Computer", onBack = back, onPip = {
+                container.livePip.open(surface, botId)
+                container.scope.launch { container.appPreferences.setLivePip(true) }
+                back()
+            })
+        }
     }
     composable(Routes.LIVE_PAGE) { entry ->
         val surface = entry.arguments?.getString("surface").orEmpty()
