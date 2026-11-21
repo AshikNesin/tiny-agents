@@ -16,7 +16,7 @@ Pages). Nothing in it depends on the app.
 | `media/tiny-agents-demo.mp4` | Web encode of `docs/demo/tiny-agents-launch.mp4` (7.7 MB)         |
 | `media/demo-poster.jpg`      | Poster frame from the film (2.4 s, the bot list)                  |
 | `media/og.png`               | Link preview image, 1200x630 (`scripts/demo/launch/tools/og.mjs`) |
-| `media/*.webp`               | App screenshots, 1600px webp encodes of `docs/screenshots/`       |
+| `media/*.webp`               | App screenshots as webp (`docs/screenshots/`, plus PR 471)        |
 | `assets/demos.{js,css}`      | Built "How it works" demos (from `demos/`, committed)             |
 | `demos/`                     | Source of those demos: React + the Stageshow kit                  |
 
@@ -25,8 +25,8 @@ film into `docs/demo/` (see [the film's README](../scripts/demo/launch/README.md
 
 The copy follows the repo's README: the tagline, the "Why", the screenshots
 and the quick start. When the README changes, update the page to match. The
-main call to action is the GitHub repo; the Android APK link is in "Run it"
-and the FAQ.
+only call to action is the GitHub repo; the Android APK link is in "Run it".
+Anything the README or another section already says stays out.
 
 The video's start button is a `<button>` laid over the poster. It hides by a
 `.playing` class on the player, not the `hidden` attribute: the button's own
