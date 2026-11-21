@@ -7,7 +7,7 @@ allowed.
 
 [![Tests](https://github.com/AshikNesin/tiny-agents/actions/workflows/test.yml/badge.svg)](https://github.com/AshikNesin/tiny-agents/actions/workflows/test.yml)
 
-[![Watch the tiny-agents demo (1:16)](docs/demo/launch-poster.jpg)](docs/demo/tiny-agents-launch.mp4)
+https://github.com/user-attachments/assets/906ab28e-d438-4205-a03a-6e501a60b9eb
 
 ## Why
 
