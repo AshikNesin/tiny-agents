@@ -6,10 +6,10 @@ production, on Node.
 ## Prerequisites
 
 - **Node.js 24** (`engines` in `package.json`) and **pnpm**.
-- **portless**, installed globally (`npm install -g portless`): `pnpm dev` runs
-  through it to serve `https://tiny-agents.localhost`. `PORTLESS=0` bypasses the
-  proxy, but the `portless` command must still exist. See
-  [Portless & HTTPS](./guides/portless-https.md).
+- Optional: **portless**, installed globally (`npm install -g portless`). When
+  it is installed, `pnpm dev` runs through it to serve
+  `https://tiny-agents.localhost`; without it, or with `PORTLESS=0`, the app is
+  at `http://localhost:3000`. See [Portless & HTTPS](./guides/portless-https.md).
 - Nothing for the database: SQLite ships inside `better-sqlite3`.
 
 ## Zero-config development
@@ -83,8 +83,8 @@ Generate secrets with `openssl rand -base64 48 | tr -d '/+=' | cut -c1-48`.
 ## Local development
 
 ```bash
-pnpm dev                 # https://tiny-agents.localhost (portless) — migrates + seeds first
-PORTLESS=0 pnpm dev      # http://localhost:3000
+pnpm dev                 # http://localhost:3000, or https://tiny-agents.localhost[:8888] with portless; migrates + seeds first
+PORTLESS=0 pnpm dev      # http://localhost:3000 even with portless installed
 ```
 
 `pnpm dev` runs `scripts/dev.ts`: seed (which applies migrations), then

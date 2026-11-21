@@ -4,11 +4,10 @@ How local dev gets a stable `https://tiny-agents.localhost` URL instead of a ran
 
 This project uses [portless](https://github.com/vercel-labs/portless) to replace port numbers with stable, named `.localhost` URLs during local development. HTTPS with HTTP/2 is enabled by default.
 
-`pnpm dev` runs:
-
-```bash
-NODE_ENV=development PORTLESS_PORT=8888 portless run --name $npm_package_name tsx scripts/dev.ts
-```
+Portless is optional. `scripts/with-portless.ts` runs `pnpm dev` under
+`portless run --name $npm_package_name` when the `portless` command exists and
+`PORTLESS` is not `0`; otherwise it runs the app directly at
+`http://localhost:<PORT>` (3000 by default).
 
 The name comes from `package.json` → `name`. Which URL you get
 depends on the portless proxy:
@@ -27,7 +26,7 @@ the worktree name as a prefix (`https://<worktree>.tiny-agents.localhost`).
 
 ## 1. Install Portless (One-Time)
 
-Portless must be installed **globally**. Do not add it as a project dependency.
+Portless must be installed **globally**, and only if you want the `.localhost` URL. Do not add it as a project dependency.
 `pnpm groot:setup` offers to install it; otherwise:
 
 ```bash

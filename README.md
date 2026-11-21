@@ -54,7 +54,6 @@ without asking.
 You need Node.js 24 and pnpm 10.
 
 ```sh
-npm install -g portless
 git clone https://github.com/AshikNesin/tiny-agents.git
 cd tiny-agents
 pnpm install

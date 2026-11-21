@@ -8,7 +8,7 @@
   "type": "module",
   "main": "dist/server/bundle.js",
   "scripts": {
-    "dev": "NODE_ENV=development PORTLESS_PORT=8888 portless run --name $npm_package_name tsx scripts/dev.ts",
+    "dev": "NODE_ENV=development PORTLESS_PORT=8888 tsx scripts/with-portless.ts tsx scripts/dev.ts",
     "build": "rm -rf dist && vp build && node scripts/build.mjs",
     "start": "NODE_ENV=production node dist/server/bundle.js",
     "local": "tsx scripts/local.ts",
@@ -59,7 +59,7 @@
     "site:build": "vp build --config site/demos/vite.config.ts",
     "db:generate": "node scripts/db-generate.mjs",
     "db:studio": "drizzle-kit studio",
-    "dev:debug": "NODE_ENV=development PORTLESS_PORT=8888 portless run --name $npm_package_name node --inspect --import ./node_modules/tsx/dist/loader.mjs apps/web/src/server/entry.node.ts",
+    "dev:debug": "NODE_ENV=development PORTLESS_PORT=8888 tsx scripts/with-portless.ts node --inspect --import ./node_modules/tsx/dist/loader.mjs apps/web/src/server/entry.node.ts",
     "check:pnpm-policy": "tsx scripts/check-pnpm-policy.ts",
     "check:old-modules": "tsx scripts/check-old-modules.ts",
     "check:comments": "tsx scripts/check-comment-ratchet.ts",
