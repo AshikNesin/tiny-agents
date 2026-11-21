@@ -7,6 +7,7 @@ import {
   fauxThinking,
   fauxToolCall,
 } from "@earendil-works/pi-ai/providers/faux";
+import { createNodePhotonImages } from "@earendil-works/pi-durable/images/node";
 
 export { fauxAssistantMessage, fauxText, fauxThinking, fauxToolCall };
 export { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -113,6 +114,7 @@ export async function openTestRuntime(options: TestRuntimeOptions): Promise<Agen
       fauxModelRow(TEST_MODEL, "Test Model", { reasoning: true }),
       fauxModelRow(TEST_MODEL_2, "Test Model 2"),
     ]),
+    images: await createNodePhotonImages({ worker: false }),
     ...rest,
     models,
     settings: { retry: { enabled: false }, ...rest.settings },

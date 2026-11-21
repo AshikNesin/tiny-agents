@@ -12,6 +12,8 @@ import {
 } from "./capabilities";
 import { CONTEXT_TRIM } from "./context-trim";
 
+const FIT_IMAGES = "fit-images";
+
 export const PermissionsDoc = defineDoc<{
   allow: string[];
   review?: string[];
@@ -64,6 +66,8 @@ export function compilePolicy(
   const remove: ToolRegistration[] = [];
   const allow: string[] = [];
   const review: string[] = [];
+  const fit = installed.extension(FIT_IMAGES);
+  if (fit) extensions.push(fit);
   const trim = installed.extension(CONTEXT_TRIM);
   if (trim) extensions.push(trim);
   for (const capability of selected) {

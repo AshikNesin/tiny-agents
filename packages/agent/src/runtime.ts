@@ -13,6 +13,9 @@ import {
   type Report,
   type Storage,
 } from "@earendil-works/pi-durable";
+import type { ImageProcessor } from "@earendil-works/pi-durable/tools";
+import { createFitImagesExtension } from "@earendil-works/pi-durable/images/fit";
+import { createNodePhotonImages } from "@earendil-works/pi-durable/images/node";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
 import {
   ApprovalNotPendingError,
@@ -120,6 +123,7 @@ export interface AgentRuntimeOptions {
   onFatal?: (error: unknown) => void;
   claudeWorker?: ClaudeWorkerLocator;
   claudeConnect?: (url: string, token: string) => WebSocketLike;
+  images?: ImageProcessor;
 }
 
 export class AgentRuntime {
@@ -172,6 +176,7 @@ export class AgentRuntime {
     approvals: WaitTracker,
     questions: WaitTracker,
     capabilities: readonly Capability[],
+    images: ImageProcessor,
     legacyPath?: string,
     claudeWorker?: ClaudeWorkerLocator,
     claudeConnect?: (url: string, token: string) => WebSocketLike,
@@ -181,7 +186,7 @@ export class AgentRuntime {
       onReplying: (ref) => this.#busyChanged(ref),
     });
     this.#gate = gate;
-    this.#pi = new PiEngine(this.#store);
+    this.#pi = new PiEngine(this.#store, images);
     this.claudePlan = new ClaudePlan({
       state: () => claudePlanState(this.#catalog),
       ...(claudeWorker ? { worker: claudeWorker } : {}),
@@ -249,6 +254,8 @@ export class AgentRuntime {
         createQuestionsCapability(questions),
         createToolSearchCapability((id) => runtime?.capabilityInfo(id)),
       ];
+      const images = options.images ?? (await createNodePhotonImages());
+      registry.install(createFitImagesExtension(images));
       registry.install(createContextTrimExtension());
       for (const extension of options.extensions ?? []) registry.install(extension);
       const gate = new ToolGate({
@@ -314,6 +321,7 @@ export class AgentRuntime {
         approvals,
         questions,
         capabilities,
+        images,
         inMemory ? undefined : `${options.storePath}.claude.json`,
         options.claudeWorker,
         options.claudeConnect,
