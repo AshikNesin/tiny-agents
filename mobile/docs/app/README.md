@@ -54,7 +54,8 @@ or need attention. Tapping it lists the runs newest first: the latest five plus 
 An owner message is first an Echo (an optimistic copy with a `requestId` minted once), then a queued item if the
 server holds it behind a running reply, then a transcript message. `ChatStore.send` retries a send that got no
 answer with the same `requestId`, which the server dedupes; a refused send removes the Echo and puts the draft
-back. `ToolCallText.kt`, `ToolCallView.kt` and `AttachmentNotes.kt` port the web client's `lib/tool-call-text.ts`,
+back. `Mentions.kt` ports `lib/mentions.ts`: typing @ lists the other bots, and the message's `mentions` are resolved the
+same way (picked names first, then typed names; a name two bots share asks you to pick). `ToolCallText.kt`, `ToolCallView.kt` and `AttachmentNotes.kt` port the web client's `lib/tool-call-text.ts`,
 `lib/tool-call-view.ts` and `lib/attachment-notes.ts` the same way (the last hides the server's notes for the model
 from the owner's bubble). A change to these rules in one client must be made in the other.
 
@@ -124,6 +125,8 @@ now, recent, subagents nested). Change both clients together.
 - **Thread.** Live from the thread's stream (a snapshot, then rows upserted by id). Streaming text and thinking,
   tool calls (bash output, edit diffs, plans, subagents with Open), runs of finished calls folded into one line,
   "Worked for 12s · $0.04". Allow or Deny an approval and answer questions; Retry or Resume after an error.
+- **Next prompt.** After a finished reply the thread asks `GET /code/threads/:id/next-prompt` for a suggestion and
+  shows it over the composer; tapping it fills the composer.
 - **Steering.** While the agent works, Send steers the running turn and the queue button holds the message for
   when it ends; with nothing typed the button is Stop. Queued messages can be sent now or cancelled.
 - **Settings.** Model, reasoning and permission mode as chips over the composer, with context use and cost. The

@@ -213,3 +213,6 @@ fun recentDirectories(rows: List<CodeThreadSummary>, limit: Int = 6): List<Strin
     rows.sortedByDescending { it.updatedAt }.mapNotNull { it.cwd?.takeIf(String::isNotBlank) }.distinct().take(limit)
 
 private const val MAX_DEPTH = 20
+
+fun answeredRow(items: List<TranscriptItem>): String? =
+    items.lastOrNull()?.takeIf { it is TranscriptItem.Turn || it is TranscriptItem.Assistant }?.id

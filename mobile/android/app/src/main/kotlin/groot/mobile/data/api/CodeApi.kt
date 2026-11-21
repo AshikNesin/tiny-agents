@@ -162,6 +162,9 @@ class CodeApi(private val client: ApiClient) {
     suspend fun merge(id: String, method: String): ThreadPulls =
         ThreadPulls.from(client.postObject("${thread(id)}/pr/merge", jsonOf("method" to method)))
 
+    suspend fun nextPrompt(id: String, after: String): String? =
+        client.getObject("${thread(id)}/next-prompt", mapOf("after" to after)).stringOrNull("text")?.ifBlank { null }
+
     suspend fun reviews(): List<CodeReview> = list(client.get("/code/reviews")).mapObjects(CodeReview::from)
 
     suspend fun reviewInbox(): List<InboxPull> = list(client.get("/code/reviews/inbox")).mapObjects(InboxPull::from)

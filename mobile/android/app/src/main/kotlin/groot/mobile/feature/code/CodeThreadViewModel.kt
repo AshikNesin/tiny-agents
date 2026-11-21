@@ -18,6 +18,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import groot.mobile.data.ViewerRole
+import groot.mobile.data.code.answeredRow
 
 class CodeThreadViewModel(private val container: AppContainer, val threadId: String) : ViewModel() {
     private val api = container.code
@@ -39,6 +42,12 @@ class CodeThreadViewModel(private val container: AppContainer, val threadId: Str
 
     private val _closed = MutableStateFlow(false)
     val closed: StateFlow<Boolean> = _closed.asStateFlow()
+
+    private val _suggestion = MutableStateFlow<String?>(null)
+    val suggestion: StateFlow<String?> = _suggestion.asStateFlow()
+    private var suggestedAfter: String? = null
+    private val dismissed = mutableSetOf<String>()
+    private var suggesting: Job? = null
 
     private var stream: Job? = null
     private var seenCursor = -1
@@ -64,6 +73,7 @@ class CodeThreadViewModel(private val container: AppContainer, val threadId: Str
                     is SseSignal.Event -> CodeThreadEvent.from(signal.json)?.let { event ->
                         _state.update { reduceCodeThread(it, event) }
                         markSeen()
+                        suggestNext()
                     }
                 }
             }
@@ -81,6 +91,31 @@ class CodeThreadViewModel(private val container: AppContainer, val threadId: Str
         if (!now.loaded || now.working || now.cursor <= seenCursor) return
         seenCursor = now.cursor
         viewModelScope.launch { runCatching { api.markSeen(threadId, now.cursor) } }
+    }
+
+    private fun suggestNext() {
+        val now = _state.value
+        val after = if (now.loaded && !now.working && container.bots.state.value.role == ViewerRole.Owner) answeredRow(now.items) else null
+        if (after == suggestedAfter) return
+        suggestedAfter = after
+        suggesting?.cancel()
+        _suggestion.value = null
+        if (after == null || after in dismissed) return
+        suggesting = viewModelScope.launch {
+            delay(SUGGEST_SETTLE_MS)
+            _suggestion.value = runCatching { api.nextPrompt(threadId, after) }.getOrNull()
+        }
+    }
+
+    fun dismissSuggestion() {
+        suggestedAfter?.let(dismissed::add)
+        _suggestion.value = null
+    }
+
+    fun useSuggestion() {
+        val text = _suggestion.value ?: return
+        _draft.value = text
+        dismissSuggestion()
     }
 
     fun setDraft(text: String) {
@@ -158,3 +193,5 @@ fun instanceOf(threadId: String): String {
     val at = threadId.indexOf(':')
     return if (at <= 0) "shelley" else threadId.substring(0, at)
 }
+
+private const val SUGGEST_SETTLE_MS = 600L
