@@ -7,6 +7,7 @@ object Routes {
     const val SETTINGS = "settings"
     const val ABOUT = "about"
     const val PEOPLE = "people"
+    const val NOTIFICATIONS = "settings/notifications"
 
     const val BOT_NEW = "bot/new"
     const val BOT_EDIT = "bot/{botId}/edit"

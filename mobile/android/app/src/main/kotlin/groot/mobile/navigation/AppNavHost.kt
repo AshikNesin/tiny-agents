@@ -80,6 +80,7 @@ fun AppNavHost(
                     onNavigateUp = back,
                     onOpenAbout = { navigate(Routes.ABOUT) },
                     onOpenPeople = { navigate(Routes.PEOPLE) },
+                    onOpenNotifications = { navigate(Routes.NOTIFICATIONS) },
                 )
             }
         }

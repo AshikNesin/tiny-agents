@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.11.0
+
+### Minor Changes
+
+- Settings, Notifications, Where and what to send: pick where notifications go (this phone app, Pushover or off),
+  which events send one, quiet hours, and the timing (long reply, reminder, grouping window), the same as the web's
+  Settings, Notifications. Pushover shows its state, a test and a re-check.
+
 ## 0.10.1
 
 ### Patch Changes

@@ -19,6 +19,7 @@ import groot.mobile.feature.live.LiveTarget
 import groot.mobile.feature.manage.ConnectionsRoute
 import groot.mobile.feature.manage.MemoryRoute
 import groot.mobile.feature.manage.PeopleRoute
+import groot.mobile.feature.settings.NotificationPrefsRoute
 import groot.mobile.feature.manage.RoutinesRoute
 import groot.mobile.feature.manage.SkillsRoute
 import groot.mobile.feature.manage.TasksRoute
@@ -93,6 +94,7 @@ internal fun NavGraphBuilder.featureScreens(container: AppContainer, navigate: (
         }
     }
     composable(Routes.PEOPLE) { ScreenContainer { PeopleRoute(container, back) } }
+    composable(Routes.NOTIFICATIONS) { ScreenContainer { NotificationPrefsRoute(container, back) } }
     codeScreens(container, navigate, back)
 }
 

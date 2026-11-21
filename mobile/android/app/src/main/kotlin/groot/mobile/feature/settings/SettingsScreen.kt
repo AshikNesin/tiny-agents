@@ -31,6 +31,7 @@ fun SettingsRoute(
     onNavigateUp: () -> Unit,
     onOpenAbout: () -> Unit,
     onOpenPeople: () -> Unit,
+    onOpenNotifications: () -> Unit,
 ) {
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
     val session by viewModel.session.collectAsStateWithLifecycle()
@@ -45,6 +46,7 @@ fun SettingsRoute(
         guest = bots.role != ViewerRole.Owner,
         onSignOut = viewModel::signOut,
         onOpenPeople = onOpenPeople,
+        onOpenNotifications = onOpenNotifications,
         onResetData = viewModel::resetAll,
         buildInfo = buildInfo,
         onNavigateUp = onNavigateUp,
@@ -66,6 +68,7 @@ fun SettingsScreen(
     onSignOut: () -> Unit,
     onOpenPeople: () -> Unit,
     onResetData: () -> Unit,
+    onOpenNotifications: () -> Unit = {},
     buildInfo: BuildInfo,
     onNavigateUp: () -> Unit,
     onOpenAbout: () -> Unit,
@@ -110,35 +113,52 @@ fun SettingsScreen(
             }
             SettingsActionRow(title = "Sign out", icon = rememberVectorPainter(AppIcons.LogOut), onClick = onSignOut)
         }
-        if (!guest && push.state != PushStatus.State.Unsupported) {
+        if (!guest) {
             SettingsSection(title = "Notifications") {
-                SettingsInfoRow(
-                    title = pushTitle(push),
-                    summary = pushSummary(push),
-                    icon = rememberVectorPainter(AppIcons.Bell),
+                SettingsNavigationRow(
+                    title = "Where and what to send",
+                    summary = "Phone, Pushover or off, events, quiet hours",
+                    icon = rememberVectorPainter(AppIcons.Settings),
+                    onClick = onOpenNotifications,
                 )
-                when (push.state) {
-                    PushStatus.State.On -> SettingsActionRow(
-                        title = "Send test notification",
-                        summary = testNote,
-                        icon = rememberVectorPainter(AppIcons.Zap),
-                        onClick = onSendTest,
-                    )
-                    PushStatus.State.PermissionOff -> SettingsActionRow(
-                        title = "Allow notifications",
-                        summary = "Opens Android settings for this app",
-                        icon = rememberVectorPainter(AppIcons.External),
-                        onClick = onOpenNotificationSettings,
-                    )
-                    PushStatus.State.Registering, PushStatus.State.Unknown -> Unit
-                    else -> SettingsActionRow(
-                        title = "Try again",
-                        icon = rememberVectorPainter(AppIcons.Refresh),
-                        onClick = onRetryPush,
-                    )
-                }
+                if (push.state != PushStatus.State.Unsupported) PushRows(push, testNote, onSendTest, onRetryPush, onOpenNotificationSettings)
             }
         }
+    }
+}
+
+@Composable
+private fun PushRows(
+    push: PushStatus,
+    testNote: String?,
+    onSendTest: () -> Unit,
+    onRetryPush: () -> Unit,
+    onOpenNotificationSettings: () -> Unit,
+) {
+    SettingsInfoRow(
+        title = pushTitle(push),
+        summary = pushSummary(push),
+        icon = rememberVectorPainter(AppIcons.Bell),
+    )
+    when (push.state) {
+        PushStatus.State.On -> SettingsActionRow(
+            title = "Send test notification",
+            summary = testNote,
+            icon = rememberVectorPainter(AppIcons.Zap),
+            onClick = onSendTest,
+        )
+        PushStatus.State.PermissionOff -> SettingsActionRow(
+            title = "Allow notifications",
+            summary = "Opens Android settings for this app",
+            icon = rememberVectorPainter(AppIcons.External),
+            onClick = onOpenNotificationSettings,
+        )
+        PushStatus.State.Registering, PushStatus.State.Unknown -> Unit
+        else -> SettingsActionRow(
+            title = "Try again",
+            icon = rememberVectorPainter(AppIcons.Refresh),
+            onClick = onRetryPush,
+        )
     }
 }
 

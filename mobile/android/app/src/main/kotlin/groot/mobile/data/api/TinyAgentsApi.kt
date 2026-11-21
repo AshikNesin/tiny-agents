@@ -130,6 +130,21 @@ class TinyAgentsApi(private val client: ApiClient) {
         return if (result.bool("ok")) null else result.string("reason", "failed")
     }
 
+    suspend fun notificationSettings(): NotificationSettingsView =
+        NotificationSettingsView.from(client.getObject("/notifications/settings"))
+
+    suspend fun saveNotificationSettings(prefs: NotificationPrefs): NotificationSettingsView =
+        NotificationSettingsView.from(client.put("/notifications/settings", prefs.toJson()) as? JSONObject ?: JSONObject())
+
+    suspend fun pushoverStatus(): PushoverStatus = PushoverStatus.from(client.getObject("/notifications/status"))
+
+    suspend fun checkPushover(): PushoverStatus = PushoverStatus.from(client.postObject("/notifications/validate"))
+
+    suspend fun testPushover(): String? {
+        val result = client.postObject("/notifications/test")
+        return if (result.bool("ok")) null else result.stringOrNull("detail") ?: result.string("reason", "failed")
+    }
+
     suspend fun answerQuestions(botId: String, taskId: Int, answers: List<OwnerAnswer>?) {
         val body = if (answers != null) jsonOf("answers" to answers.map { it.toJson() }) else jsonOf("dismissed" to true)
         client.post("/bots/${enc(botId)}/questions/$taskId", body)

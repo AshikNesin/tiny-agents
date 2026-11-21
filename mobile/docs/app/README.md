@@ -101,6 +101,7 @@ paths are under `/api/v1`. `{surface}` is `browser` or `computer`.
 | Code pull request | `code/thread/{threadId}/pr` | `GET /code/threads/:id/pr`, `POST /code/threads/:id/publish`, `POST /code/threads/:id/pr/link`, `POST /code/threads/:id/pr/unlink`, `POST /code/threads/:id/pr/autofix`, `POST /code/threads/:id/pr/automerge`, `POST /code/threads/:id/pr/fix`, `POST /code/threads/:id/pr/merge` |
 | People | `people` | `GET /people`, `POST /people`, `DELETE /people/:id` |
 | Settings | `settings` | `POST /auth/logout` |
+| Notification preferences | `settings/notifications` | `GET` and `PUT /notifications/settings`, `GET /notifications/status`, `POST /notifications/validate`, `POST /notifications/test` |
 | About | `about` | none |
 
 The drawer lists the bots, then a three-wide grid of tiles for Tasks, Code, Terminal, Computer, Browser, Routines,
@@ -193,7 +194,8 @@ screen for `TERM=xterm-256color`.
 - An approval has the chat card's buttons: Deny, Approve, and Always allow (a tool) or For this chat (a grantable
   vault use). They need the phone unlocked: Android 12+ runs `NotificationActionReceiver` after the unlock, and on
   10 and 11 `UnlockToAnswerActivity` asks for it. `ApprovalAnswerer` posts the chat card's body.
-- Settings, Notifications shows the state and sends a test.
+- Settings, Notifications shows the state and sends a test. Where and what to send picks the one place notifications
+  go (phone, Pushover or off), the events, quiet hours and timing, like the web.
 
 ## Links from notifications
 
