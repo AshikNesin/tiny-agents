@@ -45,8 +45,8 @@ Email `demo@example.com`, password `demo@example.com` (from `scripts/seed.ts`).
 To create another user, call the admin endpoint with the development admin key:
 
 ```bash
-# http://localhost:3000 under PORTLESS=0
-curl -X POST https://tiny-agents.localhost/api/v1/auth/users \
+# https://tiny-agents.localhost under portless
+curl -X POST http://localhost:3000/api/v1/auth/users \
   -H "Content-Type: application/json" \
   -H "X-Admin-Auth-Key: dev-only-admin-key" \
   -d '{"email":"you@example.com","password":"a-long-password"}'

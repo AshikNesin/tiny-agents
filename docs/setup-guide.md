@@ -83,7 +83,7 @@ Generate secrets with `openssl rand -base64 48 | tr -d '/+=' | cut -c1-48`.
 ## Local development
 
 ```bash
-pnpm dev                 # http://localhost:3000, or https://tiny-agents.localhost with portless; migrates + seeds first
+pnpm dev                 # http://localhost:3000, or https://tiny-agents.localhost[:8888] with portless; migrates + seeds first
 PORTLESS=0 pnpm dev      # http://localhost:3000 even with portless installed
 ```
 

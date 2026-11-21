@@ -7,7 +7,7 @@ This project uses [portless](https://github.com/vercel-labs/portless) to replace
 Portless is optional. `scripts/with-portless.ts` runs `pnpm dev` under
 `portless run --name $npm_package_name` when the `portless` command exists and
 `PORTLESS` is not `0`; otherwise it runs the app directly at
-`http://localhost:3000`.
+`http://localhost:<PORT>` (3000 by default).
 
 The name comes from `package.json` → `name`. Which URL you get
 depends on the portless proxy:
