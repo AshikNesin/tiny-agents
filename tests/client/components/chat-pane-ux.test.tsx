@@ -17,6 +17,7 @@ import { BrowserRouter } from "react-router-dom";
 import { ChatPane } from "@/components/ChatPane";
 import { useBotsStore } from "@/store/bots";
 import { chatSessions } from "@/store/chats";
+import { usePeopleStore } from "@/store/people";
 import type { Bot } from "../../../apps/web/src/shared/api/bots";
 import type { CatalogModel } from "../../../apps/web/src/shared/api/models";
 import type { ChatMessage } from "@/lib/chat-types";
@@ -104,6 +105,7 @@ function seedStore(opts: { lastReadAt?: string | null } = {}) {
     fullBots: {},
   });
   chatSessions.store.setState({ sessions: {} });
+  usePeopleStore.setState({ guest: false });
 }
 
 const done = (id: string, role: ChatMessage["role"], text: string, createdAt: number) =>
@@ -378,6 +380,27 @@ describe("ChatPane header", () => {
     expect(sendMock).not.toHaveBeenCalled();
     expect(composer.value).toBe("");
     expect(screen.queryByRole("dialog", { name: "Start a new chat?" })).toBeNull();
+  });
+
+  it("/new keeps the draft until the chat and the account have loaded", async () => {
+    seedStore();
+    usePeopleStore.setState({ guest: null });
+    const composer = renderPane();
+
+    await user.type(composer, "/new{Enter}");
+    expect(composer.value).toBe("/new");
+    expect(resetMock).not.toHaveBeenCalled();
+    expect(sendMock).not.toHaveBeenCalled();
+
+    snapshot([done("u1", "user", "the old conversation", 1_000)]);
+    await user.keyboard("{Enter}");
+    expect(composer.value).toBe("/new");
+    expect(resetMock).not.toHaveBeenCalled();
+
+    usePeopleStore.setState({ guest: false });
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(resetMock).toHaveBeenCalledWith("host"));
+    expect(composer.value).toBe("");
   });
 
   it("lists past chats on the bot menu's Chat history page", async () => {

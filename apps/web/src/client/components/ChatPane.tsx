@@ -7,7 +7,7 @@ import { useBotsStore } from "../store/bots";
 import type { OwnerSubmission } from "../store/chats";
 import { useChat } from "../store/use-chat";
 import { useUiStore } from "../store/ui";
-import { useIsGuest } from "../store/people";
+import { useIsGuest, usePeopleStore } from "../store/people";
 import { BrowserPanel } from "./BrowserPanel";
 import { ComputerPanel } from "./ComputerPanel";
 import { ChatComposer, type ChatComposerHandle } from "./ChatComposer";
@@ -48,6 +48,7 @@ function ChatPaneBody({ bot, models, canAnswer, onEditBot }: ChatPaneProps) {
   const [confirmReset, setConfirmReset] = useState(false);
   const [confirmYolo, setConfirmYolo] = useState(false);
   const guest = useIsGuest();
+  const knownOwner = usePeopleStore((s) => s.guest === false);
   const [menuView, setMenuView] = useHistoryMenu();
   const composerRef = useRef<ChatComposerHandle>(null);
   const scroller = useMessageScroller();
@@ -100,6 +101,12 @@ function ChatPaneBody({ bot, models, canAnswer, onEditBot }: ChatPaneProps) {
     }
   };
 
+  const newChatFromComposer = () => {
+    if (!knownOwner || chat.health === "loading") return false;
+    if (canReset) void doReset();
+    return true;
+  };
+
   return (
     <div className="flex h-full min-h-0 flex-col md:flex-row">
       <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col" {...dropHandlers}>
@@ -141,7 +148,7 @@ function ChatPaneBody({ bot, models, canAnswer, onEditBot }: ChatPaneProps) {
           onSend={send}
           onStop={chat.stop}
           onEditBot={onEditBot}
-          onNewChat={guest ? undefined : () => void (canReset && doReset())}
+          onNewChat={guest ? undefined : newChatFromComposer}
         />
       </div>
       {live.showBrowser && (

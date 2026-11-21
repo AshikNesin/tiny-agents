@@ -8,6 +8,7 @@ import groot.mobile.data.FileActions
 import groot.mobile.data.PickedFile
 import groot.mobile.data.api.AttachmentRef
 import groot.mobile.data.api.OwnerAnswer
+import groot.mobile.data.chat.ChatHealth
 import groot.mobile.data.chat.ChatView
 import groot.mobile.data.chat.OwnerSubmission
 import groot.mobile.data.chat.chatView
@@ -26,7 +27,14 @@ import kotlinx.coroutines.launch
 import java.util.TimeZone
 import java.util.UUID
 
-internal fun isNewChatCommand(text: String, attachments: Int): Boolean = attachments == 0 && text.trim() == "/new"
+internal enum class NewChatCommand { Send, Wait, Clear, Reset }
+
+internal fun newChatCommand(text: String, attachments: Int, guest: Boolean?, health: ChatHealth, empty: Boolean): NewChatCommand = when {
+    attachments > 0 || text.trim() != "/new" || guest == true -> NewChatCommand.Send
+    guest == null || health == ChatHealth.Loading -> NewChatCommand.Wait
+    empty -> NewChatCommand.Clear
+    else -> NewChatCommand.Reset
+}
 
 data class StagedUpload(val id: String, val file: PickedFile, val ref: AttachmentRef? = null, val error: String? = null) {
     val uploading: Boolean get() = ref == null && error == null
@@ -99,10 +107,27 @@ class ChatViewModel(private val container: AppContainer, val botId: String) : Vi
         }
         val attachments = staged.mapNotNull { it.ref }
         if (text.isEmpty() && attachments.isEmpty()) return
-        if (isNewChatCommand(text, staged.size) && !container.bots.state.value.guest) {
-            _draft.value = ""
-            newChat()
-            return
+        val bots = container.bots.state.value
+        val current = view.value
+        val command = newChatCommand(
+            text,
+            staged.size,
+            guest = if (bots.guestKnown) bots.guest else null,
+            health = current.health,
+            empty = current.timeline.isEmpty() && current.held.isEmpty(),
+        )
+        when (command) {
+            NewChatCommand.Send -> Unit
+            NewChatCommand.Wait -> return
+            NewChatCommand.Clear -> {
+                _draft.value = ""
+                return
+            }
+            NewChatCommand.Reset -> {
+                _draft.value = ""
+                newChat()
+                return
+            }
         }
         _draft.value = ""
         _staged.value = emptyList()

@@ -79,7 +79,7 @@ interface ChatComposerProps {
   onSend: (submission: OwnerSubmission) => Promise<OwnerSendOutcome>;
   onStop: () => Promise<void>;
   onEditBot: () => void;
-  onNewChat?: () => void;
+  onNewChat?: () => boolean;
 }
 
 function formatContext(tokens: number): string {
@@ -225,9 +225,9 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
   const send = async (whenBusy: "steer" | "followUp" = "steer") => {
     if (!canSend) return;
     if (onNewChat && isNewChatCommand(draft)) {
+      if (!onNewChat()) return;
       setDraft(emptyDraft());
       setMentionHint(null);
-      onNewChat();
       return;
     }
     const sent = outgoing(draft);
