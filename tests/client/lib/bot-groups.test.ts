@@ -79,4 +79,13 @@ describe("bot row helpers", () => {
       "Steps 1. Gather sources quote",
     );
   });
+
+  it("previewLine keeps underscores inside names like update_instructions", () => {
+    expect(previewLine("Ran update_instructions on _notes_ and my_file.py")).toBe(
+      "Ran update_instructions on notes and my_file.py",
+    );
+    expect(previewLine("Calls foo__bar, _private and __bold__")).toBe(
+      "Calls foo__bar, _private and bold",
+    );
+  });
 });

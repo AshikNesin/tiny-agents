@@ -81,27 +81,25 @@ export function ChatWorkspace() {
           onEditBot={() => void openEditBot(fullBot.id)}
         />
       ) : (
-        <>
+        <div className="flex h-full flex-col">
+          <div className="flex shrink-0 items-center gap-3 px-3 pt-4 pb-2 md:hidden">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setMobileOpen(true)}
+              aria-label="Open menu"
+            >
+              <Menu className="size-5" />
+            </Button>
+            <h1 className="text-lg font-semibold">Chats</h1>
+          </div>
           {!noBots && (
-            <div className="flex h-full flex-col md:hidden">
-              <div className="flex shrink-0 items-center gap-3 px-3 pt-4 pb-2">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setMobileOpen(true)}
-                  aria-label="Open menu"
-                >
-                  <Menu className="size-5" />
-                </Button>
-                <h1 className="text-lg font-semibold">Chats</h1>
-              </div>
-              <div className="min-h-0 flex-1 overflow-y-auto pb-4">
-                <BotsSection bots={bots} activeId={null} />
-              </div>
+            <div className="min-h-0 flex-1 overflow-y-auto pb-4 md:hidden">
+              <BotsSection bots={bots} activeId={null} />
             </div>
           )}
           {noBots && (
-            <div className="flex h-full flex-col items-center justify-center gap-4 p-6 text-center">
+            <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 p-6 text-center">
               <div className="bg-muted text-foreground flex size-14 items-center justify-center rounded-2xl">
                 <Bot className="size-7" />
               </div>
@@ -118,7 +116,7 @@ export function ChatWorkspace() {
               </Button>
             </div>
           )}
-        </>
+        </div>
       )}
     </div>
   );

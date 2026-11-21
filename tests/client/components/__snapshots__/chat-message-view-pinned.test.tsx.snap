@@ -129,6 +129,12 @@ exports[`ChatMessageView, pinned > a failed tool row opens to a destructive outp
                 >
                   Opened a page
                 </span>
+                <span
+                  class="shrink-0 text-muted-foreground/70 tabular-nums"
+                  data-slot="trace-description"
+                >
+                  failed
+                </span>
               </span>
               <span
                 aria-hidden="true"
@@ -226,8 +232,9 @@ exports[`ChatMessageView, pinned > a failed tool row opens to a destructive outp
 `;
 
 exports[`ChatMessageView, pinned > a failed tool row opens to a destructive output > outline 1`] = `
-"button "Opened a page" [aria-expanded=true]
+"button "Opened a pagefailed" [aria-expanded=true]
   "Opened a page"
+  "failed"
   span [aria-hidden=true]
     icon lucide-chevron-right
 "Output"
@@ -409,6 +416,12 @@ exports[`ChatMessageView, pinned > a group opens to its calls > markup 1`] = `
                         >
                           Searched the web
                         </span>
+                        <span
+                          class="shrink-0 text-muted-foreground/70 tabular-nums"
+                          data-slot="trace-description"
+                        >
+                          failed
+                        </span>
                       </span>
                       <span
                         aria-hidden="true"
@@ -480,8 +493,9 @@ exports[`ChatMessageView, pinned > a group opens to its calls > outline 1`] = `
   "1.0s"
   "Read a page"
   "1.5s"
-  button "Searched the web" [aria-expanded=false]
+  button "Searched the webfailed" [aria-expanded=false]
     "Searched the web"
+    "failed"
     span [aria-hidden=true]
       icon lucide-chevron-right
 "Opened a page""
@@ -5224,6 +5238,12 @@ exports[`ChatMessageView, pinned > tool: error > markup 1`] = `
                 >
                   Opened a page
                 </span>
+                <span
+                  class="shrink-0 text-muted-foreground/70 tabular-nums"
+                  data-slot="trace-description"
+                >
+                  failed
+                </span>
               </span>
               <span
                 aria-hidden="true"
@@ -5261,8 +5281,9 @@ exports[`ChatMessageView, pinned > tool: error > markup 1`] = `
 `;
 
 exports[`ChatMessageView, pinned > tool: error > outline 1`] = `
-"button "Opened a page" [aria-expanded=false]
+"button "Opened a pagefailed" [aria-expanded=false]
   "Opened a page"
+  "failed"
   span [aria-hidden=true]
     icon lucide-chevron-right"
 `;

@@ -78,7 +78,7 @@ import type {
   WaitEvent,
   WithdrawOutcome,
 } from "./types";
-import { WaitTracker } from "./waiting";
+import { WaitTracker, type WaitTransition } from "./waiting";
 import type { Reviewer } from "./reviewer";
 import { GrantsDoc } from "./vault";
 import type { ConversationTrace, ConversationUsage } from "./trace";
@@ -209,6 +209,21 @@ export class AgentRuntime {
     for (const capability of capabilities) this.#capabilities.set(capability.id, capability);
     approvals.onChange((conversation) => this.#emitActivity(this.#activity(conversation)));
     questions.onChange((conversation) => this.#emitActivity(this.#activity(conversation)));
+    questions.onTransition((transition) => {
+      if (transition.change === "added") {
+        void this.#dismissIfOwnerWrote(transition).catch((error: unknown) => onReport?.(error));
+      }
+    });
+  }
+
+  async #dismissIfOwnerWrote({ conversation, task }: WaitTransition): Promise<void> {
+    const { queued } = await this.readChat(conversation);
+    if (queued.length === 0) return;
+    try {
+      await this.answerQuestions(conversation, task, null);
+    } catch (error) {
+      if (!(error instanceof QuestionNotPendingError)) throw error;
+    }
   }
 
   static async open(options: AgentRuntimeOptions): Promise<AgentRuntime> {

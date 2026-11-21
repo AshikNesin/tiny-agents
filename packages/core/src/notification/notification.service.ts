@@ -765,8 +765,10 @@ export class NotificationHub {
     const choice = settings.deliverTo;
     if (choice === "off") return null;
     if (choice !== "auto") return choice;
-    const ready = this.#services.slice(1).find((service) => service.configured);
-    return (ready ?? this.primary).channelId;
+    const others = this.#services.slice(1);
+    const ready = others.find((service) => service.configured);
+    if (ready) return ready.channelId;
+    return (this.primary.configured ? this.primary : (others[0] ?? this.primary)).channelId;
   }
 
   #route(service: NotificationService): void {
