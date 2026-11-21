@@ -37,6 +37,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import groot.kit.theme.S
 import groot.mobile.data.BotsState
+import groot.mobile.data.ViewerRole
 import groot.mobile.data.api.BotListEntry
 import groot.mobile.data.api.SessionUser
 import groot.mobile.feature.chat.CountBadge
@@ -96,7 +97,7 @@ fun AppDrawer(
             horizontalArrangement = Arrangement.spacedBy(S.sm),
         ) {
             SearchField(query, onQuery = { query = it }, modifier = Modifier.weight(1f))
-            if (!bots.guest) IconBtn(AppIcons.Compose, "New bot", onNewBot)
+            if (bots.role == ViewerRole.Owner) IconBtn(AppIcons.Compose, "New bot", onNewBot)
         }
         LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(horizontal = S.sm, vertical = S.xs)) {
             if (bots.error != null && bots.bots.isEmpty()) {
@@ -124,7 +125,7 @@ fun AppDrawer(
                     )
                 }
             }
-            if (!bots.guest && query.isBlank()) {
+            if (bots.role == ViewerRole.Owner && query.isBlank()) {
                 item(key = "workspace-label") { SectionLabel("Workspace", Modifier.padding(start = S.md, top = S.lg)) }
                 items(OWNER_DESTINATIONS.chunked(WORKSPACE_COLUMNS), key = { row -> row.first().route }) { row ->
                     Row(Modifier.fillMaxWidth()) {
@@ -147,7 +148,7 @@ fun AppDrawer(
             Avatar(user?.name ?: user?.email ?: "?", size = Dims.avatarSmall)
             Column(Modifier.weight(1f)) {
                 Text(user?.name ?: user?.email.orEmpty(), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (bots.guest) Text("Guest", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (bots.role == ViewerRole.Guest) Text("Guest", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             AppIcon(AppIcons.Settings, "Settings", tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }

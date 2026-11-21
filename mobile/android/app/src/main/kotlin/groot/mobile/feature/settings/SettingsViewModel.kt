@@ -7,6 +7,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import groot.kit.theme.ThemeMode
 import groot.mobile.AppContainer
+import groot.mobile.data.BotsState
 import groot.mobile.data.Session
 import groot.mobile.push.PushStatus
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,7 +23,7 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
 
     val session: StateFlow<Session> = container.session.state
 
-    val guest: Boolean get() = container.bots.state.value.guest
+    val bots: StateFlow<BotsState> = container.bots.state
 
     val push: StateFlow<PushStatus> = container.push.status
 

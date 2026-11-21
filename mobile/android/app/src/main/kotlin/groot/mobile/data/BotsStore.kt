@@ -17,6 +17,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+enum class ViewerRole { Owner, Guest }
+
 data class BotsState(
     val bots: List<BotListEntry> = emptyList(),
     val loading: Boolean = true,
@@ -24,8 +26,7 @@ data class BotsState(
     val models: ModelsResponse = ModelsResponse.Empty,
     val capabilities: List<Capability> = emptyList(),
     val labels: ToolLabels = ToolLabels(),
-    val guest: Boolean = false,
-    val guestKnown: Boolean = false,
+    val role: ViewerRole? = null,
     val connectionStatus: Map<String, String> = emptyMap(),
 ) {
     val sorted: List<BotListEntry>
@@ -75,8 +76,7 @@ class BotsStore(
     }
 
     private suspend fun loadStatic() {
-        runQuietly { _state.update { it.copy(guest = api.isGuest()) } }
-        _state.update { it.copy(guestKnown = true) }
+        _state.update { it.copy(role = viewerRole()) }
         runQuietly { val models = api.models(); _state.update { it.copy(models = models) } }
         runQuietly {
             val capabilities = api.capabilities()
@@ -144,6 +144,15 @@ class BotsStore(
             }
         }
     }
+
+    private suspend fun viewerRole(): ViewerRole =
+        try {
+            if (api.isGuest()) ViewerRole.Guest else ViewerRole.Owner
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            ViewerRole.Owner
+        }
 
     private suspend fun runQuietly(block: suspend () -> Unit) {
         try {

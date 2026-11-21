@@ -38,6 +38,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import groot.kit.theme.S
 import groot.mobile.AppContainer
 import groot.mobile.data.BotsState
+import groot.mobile.data.ViewerRole
 import groot.mobile.data.api.BotListEntry
 import groot.mobile.data.chat.ChatSession
 import groot.mobile.feature.chat.ChatPane
@@ -121,7 +122,7 @@ fun HomeRoute(container: AppContainer, onNavigate: (String) -> Unit) {
                     actionLabel = "Try again",
                     onAction = viewModel::retry,
                 )
-                bots.guest -> EmptyState(title = "Nothing shared with you yet", body = "When the owner shares a bot with you, it shows up here.", icon = AppIcons.Brand)
+                bots.role == ViewerRole.Guest -> EmptyState(title = "Nothing shared with you yet", body = "When the owner shares a bot with you, it shows up here.", icon = AppIcons.Brand)
                 else -> EmptyState(
                     title = "Create your first bot",
                     body = "A bot is a contact you chat with. Give it a name, a model and what it should be good at.",
@@ -203,7 +204,7 @@ internal fun HomeTopBar(bot: BotListEntry?, bots: BotsState, onMenu: () -> Unit,
             }
             if (bot != null) AppIcon(AppIcons.ChevronDown, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, size = Dims.iconSmall)
         }
-        if (bot != null && !bots.guest) IconBtn(AppIcons.Compose, "New chat", onNewChat)
+        if (bot != null && bots.role == ViewerRole.Owner) IconBtn(AppIcons.Compose, "New chat", onNewChat)
     }
 }
 
@@ -217,7 +218,7 @@ private fun BotMenuSheet(
     onNavigate: (String) -> Unit,
     onTogglePin: () -> Unit,
 ) {
-    val guest = bots.guest
+    val guest = bots.role != ViewerRole.Owner
     Sheet(onDismiss = onDismiss) {
         Row(horizontalArrangement = Arrangement.spacedBy(S.md), verticalAlignment = Alignment.CenterVertically) {
             BotAvatar(bot.name, size = Dims.avatarSheet)

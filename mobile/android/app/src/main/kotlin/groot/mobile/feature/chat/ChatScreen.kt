@@ -55,6 +55,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import groot.kit.theme.S
 import groot.mobile.AppContainer
 import groot.mobile.data.BotsState
+import groot.mobile.data.ViewerRole
 import groot.mobile.data.api.AttachmentRef
 import groot.mobile.data.api.BotListEntry
 import groot.mobile.data.api.ChatMessage
@@ -158,7 +159,7 @@ fun ChatPane(
         bot = bot,
         view = view,
         canAnswer = bots.models.canAnswer,
-        guest = bots.guest,
+        guest = bots.role != ViewerRole.Owner,
         actions = actions,
         draft = draft,
         staged = staged,

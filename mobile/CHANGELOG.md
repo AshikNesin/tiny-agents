@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.10.1
+
+### Patch Changes
+
+- Owner-only controls (New bot, New chat, Turn off YOLO, notification settings) wait until the app knows you are the
+  owner, so a guest no longer sees them while the app starts. The live view stays watch only until then, and it now
+  hands control to the owner as soon as that loads instead of only when the screen is reopened.
+
 ## 0.10.0
 
 ### Minor Changes

@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.emptyPreferences
 import groot.kit.buildinfo.BuildInfo
 import groot.mobile.data.AvatarStore
 import groot.mobile.data.BotsState
+import groot.mobile.data.ViewerRole
 import groot.mobile.data.api.AttachmentRef
 import groot.mobile.data.api.Bot
 import groot.mobile.data.api.BotListEntry
@@ -114,6 +115,7 @@ val sampleBotsState = BotsState(
         providers = emptyList(),
     ),
     labels = sampleLabels,
+    role = ViewerRole.Owner,
 )
 
 fun message(
