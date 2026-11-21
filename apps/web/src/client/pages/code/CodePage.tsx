@@ -328,17 +328,18 @@ export function CodePage() {
           aria-label="Threads"
           data-state={sidebarOpen ? "open" : "closed"}
           className={cn(
-            "bg-sidebar text-sidebar-foreground border-sidebar-border w-full shrink-0 flex-col md:w-68 md:border-r-[0.5px]",
+            "group/sidebar bg-sidebar text-sidebar-foreground border-sidebar-border w-full shrink-0 flex-col md:w-68 md:border-r-[0.5px]",
             threadId || composing || browsing || reviewing || inSettings ? "hidden" : "flex",
             !sidebarOpen ? "md:hidden" : sideOpen ? "2xl:flex" : "md:flex",
           )}
         >
-          <SidebarTop onHide={toggleSidebar} hideControls="code-sidebar" />
+          <SidebarTop />
           <ConversationList
             threads={listed}
             harnesses={harnesses}
             activeId={threadId}
             projects={projects}
+            onHide={toggleSidebar}
           />
           <ConnectionNotices offline={offline} />
         </aside>
