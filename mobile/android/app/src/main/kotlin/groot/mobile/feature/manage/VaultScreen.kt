@@ -60,6 +60,7 @@ private fun kindIcon(kind: String): ImageVector = when (kind) {
 
 private fun subtitle(item: VaultItem): String {
     if (item.cardLast4 != null) return "${item.cardBrand.orEmpty()} ••${item.cardLast4}${item.cardExpiry?.let { " · $it" }.orEmpty()}"
+    if (item.kind == "identity") return listOfNotNull(item.username, VaultKinds.label(item.kind)).joinToString(" · ")
     val where = if (item.kind == "api_key") item.hosts else item.origins
     return listOfNotNull(item.username, where.joinToString(", ").ifEmpty { null }).joinToString(" · ").ifEmpty { "No origin yet" }
 }

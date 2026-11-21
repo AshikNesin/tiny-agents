@@ -1,7 +1,9 @@
 package groot.mobile.feature.manage
 
 import android.content.ClipData
+import android.content.ClipDescription
 import android.content.ClipboardManager
+import android.os.PersistableBundle
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -161,12 +163,9 @@ private fun VaultItemContent(
                 Column(verticalArrangement = Arrangement.spacedBy(S.md)) {
                     VaultToggleRow(
                         title = "Let bots use this item",
-                        summary = if (policy.disabled) "Off" else "On",
-                        checked = !policy.disabled,
-                        onChange = { on ->
-                            policy = policy.copy(disabled = !on)
-                            savePolicy(VaultPolicyDraft.of(item).copy(disabled = !on))
-                        },
+                        summary = if (item.disabled) "Off" else "On",
+                        checked = !item.disabled,
+                        onChange = { on -> savePolicy(VaultPolicyDraft.of(item).copy(disabled = !on)) },
                     )
                     VaultPolicyForm(
                         kind = item.kind,
@@ -216,7 +215,7 @@ private fun VaultItemContent(
         Sheet(onDismiss = { editing = null }, title = VaultKinds.fieldLabel(field)) {
             Text("Saved straight to the backend; tiny-agents keeps no copy.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             VaultValueInput(field, draft, { draft = it }, label = "New value")
-            PrimaryButton("Save", modifier = Modifier.fillMaxWidth(), onClick = {
+            PrimaryButton("Save", modifier = Modifier.fillMaxWidth(), enabled = draft.isNotEmpty(), onClick = {
                 gate.run { token ->
                     resource.act("Couldn't save.", done = {
                         editing = null
@@ -321,7 +320,11 @@ private fun ValueRow(
                 gate.run { token ->
                     resource.act("Couldn't copy it.") {
                         val value = container.api.revealVaultValue(handle, field, token, purpose = "copy")
-                        context.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText(VaultKinds.fieldLabel(field), value))
+                        context.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(
+                            ClipData.newPlainText(VaultKinds.fieldLabel(field), value).apply {
+                                description.extras = PersistableBundle().apply { putBoolean(ClipDescription.EXTRA_IS_SENSITIVE, true) }
+                            },
+                        )
                         container.notices.show("Copied")
                     }
                 }

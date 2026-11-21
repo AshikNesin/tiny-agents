@@ -286,14 +286,17 @@ class LiveServerTest {
             vaultCreateBody("login", "Live $stamp", "example.com/login", mapOf("username" to "ana", "password" to "pw-1"), VaultPolicyDraft.defaultFor("login", "live-$stamp")),
             stepUp.token,
         )
-        assertEquals(listOf("https://example.com"), created.origins)
-        api.updateVaultItem(created.handle, vaultPolicyBody("login", VaultPolicyDraft.of(created).copy(disabled = true)), stepUp.token)
-        api.updateVaultItem(created.handle, vaultValueBody("password", "pw-2"), stepUp.token)
-        val edited = api.vaultItem(created.handle)
-        assertTrue(edited.item.disabled)
-        assertEquals(listOf("https://example.com"), edited.item.origins)
-        assertEquals("pw-2", api.revealVaultValue(created.handle, "password", stepUp.token))
-        api.deleteVaultItem(created.handle, purge = true, stepUp.token)
+        try {
+            assertEquals(listOf("https://example.com"), created.origins)
+            api.updateVaultItem(created.handle, vaultPolicyBody("login", VaultPolicyDraft.of(created).copy(disabled = true)), stepUp.token)
+            api.updateVaultItem(created.handle, vaultValueBody("password", "pw-2"), stepUp.token)
+            val edited = api.vaultItem(created.handle)
+            assertTrue(edited.item.disabled)
+            assertEquals(listOf("https://example.com"), edited.item.origins)
+            assertEquals("pw-2", api.revealVaultValue(created.handle, "password", stepUp.token))
+        } finally {
+            runCatching { api.deleteVaultItem(created.handle, purge = true, stepUp.token) }
+        }
         assertTrue(api.vaultOverview().items.none { it.handle == created.handle })
         api.connections()
 

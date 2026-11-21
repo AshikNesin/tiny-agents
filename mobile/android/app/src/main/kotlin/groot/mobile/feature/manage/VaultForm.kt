@@ -26,6 +26,7 @@ import groot.mobile.data.api.BotListEntry
 import groot.mobile.data.vault.VaultApprovals
 import groot.mobile.data.vault.VaultKinds
 import groot.mobile.data.vault.VaultPolicyDraft
+import groot.mobile.data.vault.isValidHandle
 import groot.mobile.data.vault.splitLines
 import groot.mobile.ui.brand.AppIcons
 import groot.mobile.ui.components.Chip
@@ -97,6 +98,7 @@ fun VaultPolicyForm(
             placeholder = "github",
             monospace = true,
             supporting = "The only name bots see. Lowercase letters, digits and dashes.",
+            isError = value.handle.isNotEmpty() && !isValidHandle(value.handle),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
         )
         if (VaultKinds.usesWebsite(kind)) {

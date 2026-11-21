@@ -218,6 +218,8 @@ describe("S11: every read checks the authoritative policy", () => {
         policy: {
           handle: "bank",
           origins: ["https://bank.example.com"],
+          hosts: ["api.bank.example.com"],
+          whenToUse: "the work account",
           tools: ["fill_login"],
           bots: ["helper"],
           approval: "allowed",
@@ -229,6 +231,8 @@ describe("S11: every read checks the authoritative policy", () => {
     expect(item).toMatchObject({
       disabled: true,
       origins: ["https://bank.example.com"],
+      hosts: ["api.bank.example.com"],
+      whenToUse: "the work account",
       tools: ["fill_login"],
       bots: ["helper"],
       approval: "allowed",
