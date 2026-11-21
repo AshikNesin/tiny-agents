@@ -29,6 +29,7 @@ import {
   editText,
   emptyDraft,
   insertMention as draftInsertMention,
+  isNewChatCommand,
   outgoing,
   restoreRefused,
   startMention as draftStartMention,
@@ -78,6 +79,7 @@ interface ChatComposerProps {
   onSend: (submission: OwnerSubmission) => Promise<OwnerSendOutcome>;
   onStop: () => Promise<void>;
   onEditBot: () => void;
+  onNewChat?: () => void;
 }
 
 function formatContext(tokens: number): string {
@@ -145,7 +147,7 @@ function ModelChip({
 }
 
 export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function ChatComposer(
-  { bot, model, models = [], onModelChange, canAnswer, busy, onSend, onStop, onEditBot },
+  { bot, model, models = [], onModelChange, canAnswer, busy, onSend, onStop, onEditBot, onNewChat },
   ref,
 ) {
   const [draft, setDraft] = useState<ComposerDraft<AttachmentRef>>(() =>
@@ -222,6 +224,12 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
 
   const send = async (whenBusy: "steer" | "followUp" = "steer") => {
     if (!canSend) return;
+    if (onNewChat && isNewChatCommand(draft)) {
+      setDraft(emptyDraft());
+      setMentionHint(null);
+      onNewChat();
+      return;
+    }
     const sent = outgoing(draft);
     const mentions = resolveMentions(sent.body, mentionCandidates, bot.id, sent.picked);
     if (mentions.ambiguous.length > 0) {

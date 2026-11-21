@@ -60,6 +60,10 @@ export function hasContent<Ref>(draft: ComposerDraft<Ref>): boolean {
   return draft.text.trim().length > 0 || readyRefs(draft.staged).length > 0;
 }
 
+export function isNewChatCommand<Ref>(draft: ComposerDraft<Ref>): boolean {
+  return draft.staged.length === 0 && draft.text.trim() === "/new";
+}
+
 export function canSend<Ref>(draft: ComposerDraft<Ref>): boolean {
   return hasContent(draft) && !isUploading(draft.staged);
 }

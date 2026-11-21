@@ -141,6 +141,7 @@ function ChatPaneBody({ bot, models, canAnswer, onEditBot }: ChatPaneProps) {
           onSend={send}
           onStop={chat.stop}
           onEditBot={onEditBot}
+          onNewChat={guest ? undefined : () => void (canReset && doReset())}
         />
       </div>
       {live.showBrowser && (

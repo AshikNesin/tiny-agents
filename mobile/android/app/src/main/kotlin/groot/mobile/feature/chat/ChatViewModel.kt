@@ -26,6 +26,8 @@ import kotlinx.coroutines.launch
 import java.util.TimeZone
 import java.util.UUID
 
+internal fun isNewChatCommand(text: String, attachments: Int): Boolean = attachments == 0 && text.trim() == "/new"
+
 data class StagedUpload(val id: String, val file: PickedFile, val ref: AttachmentRef? = null, val error: String? = null) {
     val uploading: Boolean get() = ref == null && error == null
 }
@@ -97,6 +99,11 @@ class ChatViewModel(private val container: AppContainer, val botId: String) : Vi
         }
         val attachments = staged.mapNotNull { it.ref }
         if (text.isEmpty() && attachments.isEmpty()) return
+        if (isNewChatCommand(text, staged.size) && !container.bots.state.value.guest) {
+            _draft.value = ""
+            newChat()
+            return
+        }
         _draft.value = ""
         _staged.value = emptyList()
         container.scope.launch {

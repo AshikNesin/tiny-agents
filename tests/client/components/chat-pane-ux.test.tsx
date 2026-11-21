@@ -3,7 +3,7 @@
  *
  * Chat composer/UX: mobile Enter inserts a newline instead of sending
  * (issue #1), one Stop/Send action button, Escape stops, per-bot drafts,
- * and the header's New chat. The transcript renders the chat view: the
+ * and the header's New chat and /new. The transcript renders the chat view: the
  * "New messages" divider (issue #3), the empty state, the typing dots,
  * Echoes and held messages; what the view says when is tested on the pure
  * session (chat-session.test.ts). The bot stream is a fake (fakes/sse.ts),
@@ -365,6 +365,19 @@ describe("ChatPane header", () => {
     expect(screen.queryByText("the old conversation")).toBeNull();
     snapshot([]);
     expect(await screen.findByText(/say hi/i)).toBeInTheDocument();
+  });
+
+  it("/new in the composer starts a new chat without the confirm and sends nothing", async () => {
+    seedStore();
+    resetMock.mockResolvedValueOnce({ ...HOST, conversationId: "c2" });
+    const composer = renderPane();
+    snapshot([done("u1", "user", "the old conversation", 1_000)]);
+
+    await user.type(composer, " /new {Enter}");
+    await waitFor(() => expect(resetMock).toHaveBeenCalledWith("host"));
+    expect(sendMock).not.toHaveBeenCalled();
+    expect(composer.value).toBe("");
+    expect(screen.queryByRole("dialog", { name: "Start a new chat?" })).toBeNull();
   });
 
   it("lists past chats on the bot menu's Chat history page", async () => {
