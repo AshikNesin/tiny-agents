@@ -1,5 +1,37 @@
 # tiny-agents
 
+## 1.6.0
+
+### Minor Changes
+
+- [#491](https://github.com/AshikNesin/tiny-agents/pull/491) [`2cfe9ce`](https://github.com/AshikNesin/tiny-agents/commit/2cfe9cea9d1ec59222b9213a50fcf3f386934444) Thanks [@AshikNesin](https://github.com/AshikNesin)! - A Chat / Code switch sits at the top of the sidebar, and each side returns to the page it was last on. Search is now a row in the chat sidebar. The Code sidebar shares the app sidebar's look and top row: New thread, Search, Threads and Reviews, the threads under a Projects heading with its options menu, and Settings at the foot. A new thread opens with a larger heading and its project and folder pickers under the composer.
+
+- [#484](https://github.com/AshikNesin/tiny-agents/pull/484) [`3d1ef2a`](https://github.com/AshikNesin/tiny-agents/commit/3d1ef2ab9328b48c7b60ac2c5019a53c586fda64) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Type /new in a bot chat's composer and send it to start a new chat, the same as the New chat button. Anything more than /new on its own is sent as a normal message.
+
+### Patch Changes
+
+- [#489](https://github.com/AshikNesin/tiny-agents/pull/489) [`c341801`](https://github.com/AshikNesin/tiny-agents/commit/c341801dc6a04579e30cec364f8b608e6552c507) Thanks [@AshikNesin](https://github.com/AshikNesin)! - The sandbox browser sends all of its traffic through a proxy that resolves each name once, refuses private and local answers, and connects to the address it checked, so DNS rebinding can't reach a private host. It runs in the server for the local browser and next to Chrome on the sandbox VM, and covers a page's own requests too. In the live view, a private or tailnet address now opens only when it is in `BROWSER_ALLOWED_PRIVATE_HOSTS`.
+
+- [#478](https://github.com/AshikNesin/tiny-agents/pull/478) [`2870261`](https://github.com/AshikNesin/tiny-agents/commit/2870261fd61ba1910258bc72144a0aa24f8155c1) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Drops leftovers of finished migrations: the `shelley_seen` and `shelley_handoffs` tables and their copy at boot (copied into the Code tables on every boot since ADR 0011), the unused `memories.confidence` column, the old `tiny-agents:shelley-*` composer settings, and the text-and-clock match that let a chat message without a request id confirm a just-sent message.
+
+- [#480](https://github.com/AshikNesin/tiny-agents/pull/480) [`feab2c2`](https://github.com/AshikNesin/tiny-agents/commit/feab2c2102bcc0022e5ff24cbcb6bd09f43bc6c7) Thanks [@AshikNesin](https://github.com/AshikNesin)! - The local browser's navigation guard refuses a name whose DNS lookup fails or times out, instead of leaving it to the browser, so a name that can't be checked can't reach a private address. An exempt name still goes through.
+
+- [#480](https://github.com/AshikNesin/tiny-agents/pull/480) [`feab2c2`](https://github.com/AshikNesin/tiny-agents/commit/feab2c2102bcc0022e5ff24cbcb6bd09f43bc6c7) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Notification settings no longer keep a stale copy when they are reloaded while an older read is still in flight.
+
+- [#488](https://github.com/AshikNesin/tiny-agents/pull/488) [`e041808`](https://github.com/AshikNesin/tiny-agents/commit/e041808c22c965d9fd8c0a0a12ff56079168a1c3) Thanks [@AshikNesin](https://github.com/AshikNesin)! - A tool call waiting on you (an approval card, questions, a sign-in or code sheet) now parks instead of holding a process wait: your answer wakes it through a durable signal, and an expiring card wakes at its deadline. After a restart the waiting counts, badges and pushes are right at once, without re-running the waiting calls.
+
+- [#483](https://github.com/AshikNesin/tiny-agents/pull/483) [`20f32d8`](https://github.com/AshikNesin/tiny-agents/commit/20f32d8bc1f3b1c3f4cf6fd4899ce6f9092b2cc8) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Runs on pi-durable, pi-ai and chord 1.6.0. Chat streams render from the conversation view instead of the removed event stream, and a reply that a crash or the restart limit cut off says so in words.
+
+- [#492](https://github.com/AshikNesin/tiny-agents/pull/492) [`266441a`](https://github.com/AshikNesin/tiny-agents/commit/266441a896f9356a558917db3454209c8f38f615) Thanks [@AshikNesin](https://github.com/AshikNesin)! - The sidebar's collapse button moves out of the top row to the foot of the sidebar, beside your account (or Settings in Code), and shows only while the pointer is over the sidebar. ⌘B now folds the chat sidebar to its rail too, as it already did in Code.
+
+- [#478](https://github.com/AshikNesin/tiny-agents/pull/478) [`2870261`](https://github.com/AshikNesin/tiny-agents/commit/2870261fd61ba1910258bc72144a0aa24f8155c1) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Client and server now share one copy of the rules they used to mirror: the question answer limit and the skip-reply marker (`@tiny-agents/agent/wire`), the routine schedule math (`apps/web/src/shared/routines-schedule.ts`) and the login and setup form schemas. Storage folders report `lastModified: null` instead of a 1970 date. `Layout` takes `chrome={false}` to drop its sidebar and mobile bar, and `Form` and `FormField` type their resolver and bound input without casts.
+
+- [#493](https://github.com/AshikNesin/tiny-agents/pull/493) [`cc8583a`](https://github.com/AshikNesin/tiny-agents/commit/cc8583acb071d87dd556ddc882810894d5324795) Thanks [@AshikNesin](https://github.com/AshikNesin)! - The sidebar has no collapse, expand, hide or show buttons any more. Fold it with ⌘B or **Toggle sidebar** in the command palette, in chat and in Code. The sidebar Search row no longer shows the ⌘K hint.
+
+- [#478](https://github.com/AshikNesin/tiny-agents/pull/478) [`2870261`](https://github.com/AshikNesin/tiny-agents/commit/2870261fd61ba1910258bc72144a0aa24f8155c1) Thanks [@AshikNesin](https://github.com/AshikNesin)! - The live browser and computer routes look the target up before reading the body, so a request bad on both counts is always 404. Upload extraction no longer reads `VITEST`: the runner is a port (`setExtractRunner`) the server test setup sets to in-process. `scripts/` is under the server typecheck and the typecheck coverage guard. The test SSH server types its SFTP stream with ssh2's `SFTPWrapper`, and now sends real SFTP attributes and REALPATH names. The agent's browser-safe `wire` subpath has a path alias like `peer-envelope`'s.
+
+- [#487](https://github.com/AshikNesin/tiny-agents/pull/487) [`2fda929`](https://github.com/AshikNesin/tiny-agents/commit/2fda929cd453e451ceed0acbc3eab6d2461207f9) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Updating a vault item's policy with only some fields (such as just `disabled`) keeps the rest of its policy instead of resetting its sites, hosts, tools, bots and approval to defaults.
+
 ## 1.5.0
 
 ### Minor Changes

@@ -1,5 +1,18 @@
 # @groot/web
 
+## 0.5.5
+
+### Patch Changes
+
+- Updated dependencies [[`c341801`](https://github.com/AshikNesin/tiny-agents/commit/c341801dc6a04579e30cec364f8b608e6552c507), [`e385623`](https://github.com/AshikNesin/tiny-agents/commit/e38562379b141964dcc0dded4c9cfb318de69ff2), [`feab2c2`](https://github.com/AshikNesin/tiny-agents/commit/feab2c2102bcc0022e5ff24cbcb6bd09f43bc6c7), [`2a6e3be`](https://github.com/AshikNesin/tiny-agents/commit/2a6e3bee57de3ce4edda6600220d12c9fb47c223), [`feab2c2`](https://github.com/AshikNesin/tiny-agents/commit/feab2c2102bcc0022e5ff24cbcb6bd09f43bc6c7), [`e041808`](https://github.com/AshikNesin/tiny-agents/commit/e041808c22c965d9fd8c0a0a12ff56079168a1c3), [`6ca8b3d`](https://github.com/AshikNesin/tiny-agents/commit/6ca8b3d22e898b5f4370c6bc73ad4d5d7b57fcf3), [`20f32d8`](https://github.com/AshikNesin/tiny-agents/commit/20f32d8bc1f3b1c3f4cf6fd4899ce6f9092b2cc8), [`2870261`](https://github.com/AshikNesin/tiny-agents/commit/2870261fd61ba1910258bc72144a0aa24f8155c1), [`2870261`](https://github.com/AshikNesin/tiny-agents/commit/2870261fd61ba1910258bc72144a0aa24f8155c1)]:
+  - @tiny-agents/sandbox@0.1.2
+  - @tiny-agents/agent@1.2.1
+  - @groot/core@2.4.1
+  - @tiny-agents/models@0.1.2
+  - @groot/shell@3.2.1
+  - @groot/ui@1.3.2
+  - @groot/jobs@3.0.4
+
 ## 0.5.4
 
 ### Patch Changes

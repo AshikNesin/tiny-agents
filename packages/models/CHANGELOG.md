@@ -1,5 +1,11 @@
 # @tiny-agents/models
 
+## 0.1.2
+
+### Patch Changes
+
+- [#483](https://github.com/AshikNesin/tiny-agents/pull/483) [`20f32d8`](https://github.com/AshikNesin/tiny-agents/commit/20f32d8bc1f3b1c3f4cf6fd4899ce6f9092b2cc8) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Runs on pi-durable, pi-ai and chord 1.6.0. Chat streams render from the conversation view instead of the removed event stream, and a reply that a crash or the restart limit cut off says so in words.
+
 ## 0.1.1
 
 ### Patch Changes
