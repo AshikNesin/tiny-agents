@@ -1,4 +1,8 @@
-# tiny-agents
+<p align="center">
+  <img src="apps/web/public/favicon.svg" alt="tiny-agents logo" width="96" height="96">
+</p>
+
+<h1 align="center">tiny-agents</h1>
 
 Your own AI assistant, on your own server. tiny-agents is a messenger where
 each contact is a bot that can browse the web, run commands, work on a

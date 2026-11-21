@@ -13,7 +13,7 @@ messenger-style app where every contact in the bot list is an AI bot you chat wi
   React 19 + Drizzle/SQLite + JWT/passkey auth), kept in sync with it via groot's sync tooling.
 - **Inference:** all LLM calls go through **Cloudflare AI Gateway**; provider keys live only in the gateway
   (since changed: models are owner data — provider accounts of several kinds, configured in
-  Settings → Models; §7.3 and [ADR 0016](docs/adr/0016-models-are-owner-data.md)).
+  Settings → Models; §7.3 and [ADR 0016](adr/0016-models-are-owner-data.md)).
 - **UI:** React + shadcn/ui + shadcn [AI Elements](https://ui.shadcn.com/docs/ai-elements). Visual and layout
   reference: [Talorys](https://rociiu.github.io/talorys/#demo) (calm three-column workspace, light + dark);
   product/feature reference: [OpenMausBot](https://github.com/milind-soni/OpenMausBot) and Grok Bot.
@@ -60,7 +60,7 @@ Explicitly out of scope (see §15 Roadmap):
 
 - **Single owner.** Personal app; one human user.
 - **Auth = groot's auth, unchanged in behaviour:** email + password (bcrypt) and passkeys (WebAuthn), JWT in an
-  HttpOnly `token` cookie (expiry from `config.yml` `auth.jwtExpiresIn`, default 30d).
+  HttpOnly `token` cookie (expiry from `auth.jwtExpiresIn` in `packages/core/src/config.ts`, default 30d).
 - **No signup.** The owner creates their account manually via groot's admin endpoint
   (`POST /api/v1/auth/users` with `X-Admin-Auth-Key: $ADMIN_AUTH_KEY`). No seeding from env.
 - Additional users can be created the same way, but **bots and conversations are not user-scoped** — every
@@ -171,7 +171,7 @@ packages/agent  (only module that touches pi-durable)
 ### 7.1 Foundation: groot child project
 
 - **Bootstrap:** copy groot's working tree from `~/Code/groot` HEAD into this repo as a single commit (no groot
-  git history), keeping this repo's `PRD.md`/`README.md`. Run `pnpm groot:setup` (app name `tiny-agents`). Set
+  git history), keeping this repo's `docs/PRD.md`/`README.md`. Run `pnpm groot:setup` (app name `tiny-agents`). Set
   `.groot/boilerplate-sync.json` `last_sync` to the copied groot commit/version, and add `"packages/agent/**"`
   to `additional_exclusions`.
 - **Syncing:** `pnpm groot:check` / `pnpm groot:sync` / `pnpm groot:resolve` pull groot updates;
@@ -188,7 +188,7 @@ packages/agent  (only module that touches pi-durable)
   - `apps/web/src/server/db/schema.ts` (the app tables, starting with `bots`) and the migrations
     `pnpm db:generate` writes to `apps/web/drizzle/`
   - `packages/agent/**` — new workspace package, child-only
-  - `config.yml`, `README.md`, `tests/server/{app,routes}/**`, `tests/e2e/**`
+  - `README.md`, `tests/server/{app,routes}/**`, `tests/e2e/**`
 
 ### 7.2 Agent core: `packages/agent` (pi-durable)
 
@@ -283,7 +283,7 @@ Request bodies validated with zod (groot `parseBody`).
 ## 10. Configuration
 
 Env vars are validated with Zod at boot: groot's in `packages/core/src/env.ts`, tiny-agents' own in
-`apps/web/src/server/env.ts` (`appEnv()`). No new keys in the synced `config.yml` schema.
+`apps/web/src/server/env.ts` (`appEnv()`). No new keys in the synced config schema (`packages/core/src/config.ts`).
 
 | Variable                                                                          | Source                   | Notes                                            |
 | --------------------------------------------------------------------------------- | ------------------------ | ------------------------------------------------ |
@@ -356,7 +356,7 @@ Uses groot's existing Vitest (server: supertest; client: jsdom) and Playwright s
 - **Tools** via pi-durable `defineTool` (durable tool calls, replay-safe tools), approvals UI
   (AI Elements `Tool`, `Confirmation`). Tool activity shown inline as compact status chips above the reply
   (Talorys: "✓ Adding task …"). _(shipped: toolkits, the Tool gate and approvals; see
-  [ADR 0004](docs/adr/0004-every-bot-has-every-toolkit.md), [ADR 0014](docs/adr/0014-tool-gate-and-engine-seam.md))_
+  [ADR 0004](adr/0004-every-bot-has-every-toolkit.md), [ADR 0014](adr/0014-tool-gate-and-engine-seam.md))_
 - Message edit / regenerate and conversation **fork**; multiple threads per bot (then a per-bot history list
   with "Search history", as in Talorys' conversation column). _(shipped in the Code page's threads, which
   fork; bot chats still have one thread plus past chats)_
@@ -364,7 +364,7 @@ Uses groot's existing Vitest (server: supertest; client: jsdom) and Playwright s
   providers, issue #216)_
 - **Memory** page (Talorys "Memories"): what bots know about you, grouped by category (Preferences, Facts,
   Goals, Habits) with counts, searchable, add/edit/delete, source line ("Added manually" / "From chat").
-  _(shipped: issue #22, [docs/features/memory.md](docs/features/memory.md))_
+  _(shipped: issue #22, [docs/features/memory.md](features/memory.md))_
 - **Routines** page (Talorys "Automations"): reminders and AI routines on groot jobs — "Upcoming" cards,
   "Active schedules" list with enable toggle + delete + next run, "Recent executions". _(shipped: issue #18)_
 - Skills; notifications (bell in the nav header, web push); mobile bottom tab bar once there are several
