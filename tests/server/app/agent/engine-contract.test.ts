@@ -275,6 +275,7 @@ describe.each(ENGINES)("AgentEngine contract on %s", (kind) => {
 
     await send(ref, { requestId: "r4", text: "four" });
     const state = await replied("four");
+    expect(state.messages.find((m) => m.requestId === "r2")?.status).toBe("done");
     expect(finishedReplyTo(state, "r2").status).toBe("answered");
     expect(state.messages.some((m) => m.requestId === "r3" && m.status !== "unanswered")).toBe(
       false,
