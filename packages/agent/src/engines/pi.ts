@@ -12,9 +12,6 @@ import {
   type LiveState,
   type ToolRegistration,
 } from "@earendil-works/pi-durable";
-import type { ImageContent, TextContent } from "@earendil-works/pi-ai";
-import { fitImages } from "@earendil-works/pi-durable/images/fit";
-import { DEFAULT_IMAGE_LIMITS, type ImageProcessor } from "@earendil-works/pi-durable/tools";
 import { gateHooksOf } from "../approvals";
 import { loadHistory, type ConversationStore } from "../conversation-store";
 import type { AgentEngine, EngineSubmission } from "../engine";
@@ -40,12 +37,10 @@ export class PiEngine implements AgentEngine {
   readonly #store: ConversationStore;
   readonly #harness: Harness;
   readonly #chats = new Set<ChatSubscription>();
-  readonly #images: ImageProcessor;
 
-  constructor(store: ConversationStore, images: ImageProcessor) {
+  constructor(store: ConversationStore) {
     this.#store = store;
     this.#harness = store.harness;
-    this.#images = images;
   }
 
   async start(): Promise<void> {}
@@ -63,14 +58,14 @@ export class PiEngine implements AgentEngine {
   async submit(ref: ConversationRef, input: EngineSubmission): Promise<"accepted"> {
     const conversation = await this.#conversation(ref);
     const content = input.images?.length
-      ? await this.#fitted([
+      ? [
           ...(input.text ? [{ type: "text" as const, text: input.text }] : []),
           ...input.images.map((image) => ({
             type: "image" as const,
             data: image.data,
             mimeType: image.mimeType,
           })),
-        ])
+        ]
       : input.text;
     await conversation.submit(
       {
@@ -242,14 +237,6 @@ export class PiEngine implements AgentEngine {
           : queuedOf(items, new Map(records.map((record) => [String(record.id), record]))),
       unanswered: unansweredOf(records),
     };
-  }
-
-  async #fitted(content: (TextContent | ImageContent)[]): Promise<(TextContent | ImageContent)[]> {
-    const fitted = await fitImages(content, DEFAULT_IMAGE_LIMITS, this.#images);
-    if (fitted.kind === "unchanged") return content;
-    return fitted.notes.length > 0
-      ? [...fitted.content, { type: "text", text: fitted.notes.join("\n") }]
-      : fitted.content;
   }
 
   async #unanswered(ref: ConversationRef): Promise<Map<number, string>> {
