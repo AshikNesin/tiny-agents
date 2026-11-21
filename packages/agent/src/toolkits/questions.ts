@@ -1,6 +1,11 @@
 import type { JsonValue } from "@earendil-works/chord/json";
 import { Type } from "typebox";
-import { defineDoc, type TaskId, type ToolExecutionResult } from "@earendil-works/pi-durable";
+import {
+  defineDoc,
+  type TaskId,
+  type ToolExecutionResult,
+  type ToolPark,
+} from "@earendil-works/pi-durable";
 import { z } from "zod";
 import { innerDetails } from "../approvals";
 import type { Capability } from "../capabilities";
@@ -10,11 +15,13 @@ import { messageOwnerTool } from "./message-owner";
 import type { ChatToolCall, OwnerAnswer, OwnerQuestion } from "../types";
 import { MAX_ANSWER_TEXT } from "../wire";
 import {
+  isParked,
+  parkForOwner,
   pendingToolTask,
   refuseUnattended,
   sealedAsNotPending,
   unattendedOnce,
-  waitForOwner,
+  wakeOwnerWait,
   type HostTx,
   type WaitTracker,
 } from "../waiting";
@@ -98,6 +105,7 @@ export async function recordAnswers(
   await pendingToolTask(tx, id, conversation, notPending);
   const doc = await tx.doc(QuestionsDoc, id);
   if (doc.status !== "pending" || doc.questions.length === 0) throw notPending();
+  await wakeOwnerWait(tx, id);
   if (answers) {
     doc.answers = checkAnswers(storedQuestions(doc), answers).map(toJson);
     doc.status = "answered";
@@ -214,12 +222,12 @@ export function createQuestionsCapability(tracker: WaitTracker): Capability {
       questions: Type.Array(questionSchema, { minItems: 1, maxItems: MAX_QUESTIONS }),
     }),
     replay: "safe",
-    execute: async (args, api, context): Promise<ToolExecutionResult> => {
+    execute: async (args, api, context): Promise<ToolExecutionResult | ToolPark> => {
       if (await unattendedOnce(api, context, "questions:unattended")) {
         return refuseUnattended(UNATTENDED);
       }
       const asked = normalizeQuestions(args.questions);
-      const doc = await waitForOwner(
+      const doc = await parkForOwner(
         api,
         tracker,
         QuestionsDoc,
@@ -230,6 +238,7 @@ export function createQuestionsCapability(tracker: WaitTracker): Capability {
         },
         { tool: ASK_OWNER, preview: asked[0]?.question },
       );
+      if (isParked(doc)) return doc;
       const questions = storedQuestions(doc);
       if (doc.status === "dismissed") {
         return {
@@ -242,6 +251,9 @@ export function createQuestionsCapability(tracker: WaitTracker): Capability {
         output: [{ type: "text", text: formatAnswers(questions, answers) }],
         details: { question: "answered", questions: toJson(questions), answers: toJson(answers) },
       };
+    },
+    cancel: async (_args, api) => {
+      tracker.remove(Number(api.conversationId), Number(api.taskId));
     },
   });
 

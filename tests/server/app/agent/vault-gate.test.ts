@@ -3,7 +3,7 @@ import { until } from "../../fixtures/until";
 import { Type } from "typebox";
 import { type Context as PiContext, type JsonObject, type JsonValue } from "@earendil-works/pi-ai";
 import { defineExtension, defineTool, type ToolExecutionApi } from "@earendil-works/pi-durable";
-import { afterEach, describe, expect, it } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import type { Capability } from "../../../../packages/agent/src/capabilities";
 import { secretRedactor } from "../../../../packages/agent/src/redact";
 import type { AgentRuntime } from "../../../../packages/agent/src/runtime";
@@ -367,6 +367,8 @@ describe("expiring approvals", () => {
       callThenReport("pay", {}),
     );
     await runtime.submit(ref, { requestId: "r1", text: "buy it" });
+    await until(() => runtime.pendingApprovals(ref) === 1, "card");
+    vi.setSystemTime(Date.now() + 301);
     await until(() => results(events).length === 1, "expired result", 5_000);
     expect(results(events)[0]).toMatch(/Nobody answered/);
     expect(lastCall(events, "pay")?.status).toBe("expired");

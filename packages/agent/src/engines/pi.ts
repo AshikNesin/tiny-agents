@@ -16,7 +16,7 @@ import { gateHooksOf } from "../approvals";
 import { loadHistory, type ConversationStore } from "../conversation-store";
 import type { AgentEngine, EngineSubmission } from "../engine";
 import { toJson } from "../durable-json";
-import { ranToResult, type ToolGate } from "../gate";
+import type { ToolGate } from "../gate";
 import type { GateUserMessage } from "../policy";
 import { ChatProjection, unansweredOf, type ProjectionSnapshot } from "../projection";
 import { REVIEW_ENTRY_LOOKBACK } from "../reviewer";
@@ -311,7 +311,11 @@ function gateTool(
           },
           instructions: async () => (await api.agent(context)).instructions,
         },
-        async () => ranToResult(await tool.execute(args, api, context)),
+        (inner) => tool.execute(args, inner, context),
       ),
+    cancel: async (args, api, context) => {
+      gate.release(api);
+      await tool.cancel?.(args, api, context);
+    },
   };
 }

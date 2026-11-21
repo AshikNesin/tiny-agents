@@ -36,6 +36,7 @@ interface ToolDeclaration<TParameters extends TSchema> {
   parameters: TParameters;
   gate?: GateHooks<Static<TParameters>>;
   execute: ToolRegistration<TParameters>["execute"];
+  cancel?: ToolRegistration<TParameters>["cancel"];
 }
 
 interface DeclaredTool {
@@ -52,7 +53,7 @@ export function tool<TParameters extends TSchema>(
     if (policy[key] !== undefined) info[key] = policy[key];
   }
   if (vault !== undefined) info.vault = vault;
-  const { replay, parameters, gate, execute } = declaration;
+  const { replay, parameters, gate, execute, cancel } = declaration;
   return {
     info,
     registration: defineTool({
@@ -61,6 +62,7 @@ export function tool<TParameters extends TSchema>(
       parameters,
       ...(replay ? { replay } : {}),
       execute,
+      ...(cancel ? { cancel } : {}),
       ...(gate ? { gate } : {}),
     }),
   };

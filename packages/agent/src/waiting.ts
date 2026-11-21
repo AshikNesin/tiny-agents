@@ -1,13 +1,19 @@
 import type { Context } from "@earendil-works/chord/context";
 import type { JsonValue } from "@earendil-works/chord/json";
-import type {
-  Harness,
-  JsonObject,
-  TaskDocToken,
-  TaskId,
-  ToolExecutionApi,
-  ToolExecutionResult,
+import {
+  defineDoc,
+  defineSignal,
+  type Harness,
+  type JsonObject,
+  type TaskDocToken,
+  type TaskId,
+  type ToolExecutionApi,
+  type ToolExecutionResult,
+  type ToolPark,
 } from "@earendil-works/pi-durable";
+import { Type } from "typebox";
+import { z } from "zod";
+import { parseStored, toJson } from "./durable-json";
 import { isUnattendedConversation } from "./policy";
 
 export function refuseUnattended(message: string): ToolExecutionResult {
@@ -67,6 +73,8 @@ export interface WaitTransition extends WaitInfo {
 }
 
 export class WaitTracker {
+  constructor(readonly channel: WaitChannel = "approval") {}
+
   readonly #pending = new Map<number, Set<number>>();
   readonly #listeners = new Set<(conversation: number, count: number) => void>();
   readonly #transitionListeners = new Set<(transition: WaitTransition) => void>();
@@ -123,7 +131,56 @@ export class WaitTracker {
   }
 }
 
-export async function waitForOwner<T extends JsonObject & { status: string }>(
+const OwnerAnswered = defineSignal({
+  name: "tiny.owner-answered",
+  version: 1,
+  schema: Type.Object({}),
+});
+
+const ANSWER = "answer";
+
+export async function wakeOwnerWait(tx: Pick<HostTx, "signal">, id: TaskId): Promise<void> {
+  await tx.signal(id, OwnerAnswered, ANSWER, {});
+}
+
+export type WaitChannel = "approval" | "question";
+
+const WaitDoc = defineDoc<{ channel: WaitChannel | null; info: JsonValue }>({
+  kind: "tiny.wait",
+  version: 1,
+  scope: "task",
+  initial: () => ({ channel: null, info: null }),
+  checkpointWhen: () => false,
+});
+
+const waitInfo: z.ZodType<WaitInfo> = z.object({
+  tool: z.string().optional(),
+  preview: z.string().optional(),
+  subject: z.string().optional(),
+  expiresAt: z.number().optional(),
+  vault: z.object({ grantable: z.boolean() }).optional(),
+});
+
+export async function restoreParkedWaits(
+  harness: Pick<Harness, "inspect" | "snapshot">,
+  trackers: readonly WaitTracker[],
+  context: Context,
+): Promise<void> {
+  const inspection = await harness.inspect(context);
+  for (const { record, state } of inspection.tasks) {
+    if (record.kind !== "pi.tool" || state.kind !== "sleeping") continue;
+    const wait = await harness.snapshot(WaitDoc, record.id, context);
+    const tracker = trackers.find((candidate) => candidate.channel === wait?.channel);
+    if (!wait || !tracker) continue;
+    let info: WaitInfo = {};
+    try {
+      info = parseStored("tiny.wait.info", wait.info ?? {}, waitInfo);
+    } catch {}
+    tracker.add(Number(record.conversationId), Number(record.id), info);
+  }
+}
+
+export async function parkForOwner<T extends JsonObject & { status: string }>(
   api: ToolExecutionApi,
   tracker: WaitTracker,
   doc: TaskDocToken<T>,
@@ -131,56 +188,46 @@ export async function waitForOwner<T extends JsonObject & { status: string }>(
   context: Context,
   init?: (value: T) => void,
   info?: WaitInfo,
-): Promise<T> {
+): Promise<T | ToolPark> {
   const conversation = Number(api.conversationId);
   const task = Number(api.taskId);
   await api.commit(async (tx) => {
-    const value = (await tx.doc(doc, api.taskId)) as T;
-    init?.(value);
+    const current = (await tx.doc(doc, api.taskId)) as T;
+    init?.(current);
+    const deadline = deadlineOf(current);
+    if (current.status !== "pending") return;
+    if (deadline !== undefined && deadline <= Date.now()) {
+      (current as { status: string }).status = "expired";
+      return;
+    }
+    const wait = await tx.doc(WaitDoc, api.taskId);
+    wait.channel = tracker.channel;
+    wait.info = toJson({ ...info, ...(deadline !== undefined ? { expiresAt: deadline } : {}) });
   }, context);
-  const watch = await api.watchDoc(doc, api.taskId, context);
-  if (!watch) throw new Error("owner response document missing");
-  const settled = (value: T | null) => (value && value.status !== "pending" ? value : undefined);
-  const already = settled(watch.value);
-  if (already) {
-    await watch.stop();
-    return already;
+  const value = (await api.snapshot(doc, api.taskId, context)) as T;
+  if (value.status !== "pending") {
+    tracker.remove(conversation, task);
+    return value;
   }
-  const expiresAt = (watch.value as { expiresAt?: unknown } | null)?.expiresAt;
-  const expire = async () => {
-    await api.commit(async (tx) => {
-      const value = (await tx.doc(doc, api.taskId)) as T;
-      if (value.status === "pending") (value as { status: string }).status = "expired";
-    }, context);
-  };
-  if (typeof expiresAt === "number" && expiresAt <= Date.now()) {
-    await watch.stop();
-    await expire();
-    const value = await api.snapshot(doc, api.taskId, context);
-    return value as T;
-  }
+  const deadline = deadlineOf(value);
+  await api.details(typeof details === "function" ? details(value) : details, context);
   tracker.add(conversation, task, {
     ...info,
-    ...(typeof expiresAt === "number" ? { expiresAt } : {}),
+    ...(deadline !== undefined ? { expiresAt: deadline } : {}),
   });
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    await api.details(typeof details === "function" ? details(watch.value as T) : details, context);
-    return await new Promise<T>((resolve, reject) => {
-      watch.start(async (call) => {
-        if (call.kind !== "value" || call.retired) return;
-        const response = settled(call.value as T);
-        if (response) resolve(response);
-      });
-      void watch.closed.then((end) => reject(new Error(`owner wait ended: ${end.kind}`)));
-      if (typeof expiresAt === "number") {
-        timer = setTimeout(() => void expire().catch(reject), expiresAt - Date.now());
-        timer.unref?.();
-      }
-    });
-  } finally {
-    clearTimeout(timer);
-    tracker.remove(conversation, task);
-    await watch.stop();
-  }
+  return {
+    sleep: {
+      signals: [OwnerAnswered.key(ANSWER)],
+      ...(deadline !== undefined ? { until: deadline } : {}),
+    },
+  };
+}
+
+function deadlineOf(value: object): number | undefined {
+  const expiresAt = (value as { expiresAt?: unknown }).expiresAt;
+  return typeof expiresAt === "number" && expiresAt > 0 ? expiresAt : undefined;
+}
+
+export function isParked<T extends object>(value: T | ToolPark): value is ToolPark {
+  return "sleep" in value || "wait" in value;
 }

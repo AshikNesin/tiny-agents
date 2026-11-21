@@ -1,4 +1,5 @@
 import type { Context } from "@earendil-works/chord/context";
+import type { JsonValue } from "@earendil-works/chord/json";
 import type {
   JsonObject,
   ToolExecutionApi,
@@ -26,7 +27,13 @@ import {
 } from "./policy";
 import { secretRedactor } from "./redact";
 import { ownerMessages, type Reviewer, type ReviewVerdict } from "./reviewer";
-import { refuseUnattended, unattendedOnce, type WaitInfo, type WaitTracker } from "./waiting";
+import {
+  isParked,
+  refuseUnattended,
+  unattendedOnce,
+  type WaitInfo,
+  type WaitTracker,
+} from "./waiting";
 
 export interface GateCall {
   readonly name: string;
@@ -126,9 +133,10 @@ export class ToolGate {
 
   async run(
     call: GateCall,
-    execute: () => Promise<ToolExecutionResult>,
-  ): Promise<ToolExecutionResult> {
+    execute: (api: ToolExecutionApi) => Promise<ToolExecutionResult | ToolPark>,
+  ): Promise<ToolExecutionResult | ToolPark> {
     const { name, args, api, context, hooks } = call;
+    const resumed = resumedInner(api.checkpoint);
     const overBudget = await this.#overBudget(call);
     if (overBudget) {
       return {
@@ -167,8 +175,9 @@ export class ToolGate {
     const auto = yoloed || verdict?.approve === true;
     let waitedMs: number | undefined;
     if (ask && !auto) {
-      const waitStarted = Date.now();
+      const waitStarted = await api.memo("gate:wait-started", Date.now(), context);
       const decision = await this.#waitForOwner(call, plan);
+      if (typeof decision !== "string") return decision;
       waitedMs = await api.memo("gate:waited", Date.now() - waitStarted, context);
       if (decision !== "approved") {
         await hooks?.settled?.(args, api, context, decision).catch(() => undefined);
@@ -177,8 +186,9 @@ export class ToolGate {
       await api.memo("gate:approved", true, context);
     }
     const replaySafe = call.replaySafe || hooks?.replaySafe?.(args) === true;
+    const effect = resumed ? `gate:effect:${resumed.parks}` : "gate:effect";
     if (!replaySafe) {
-      if (await api.memo<boolean>("gate:effect", context)) {
+      if (await api.memo<boolean>(effect, context)) {
         return {
           output: text(`Tool ${name} was interrupted by a restart and may have partially run.`),
           isError: true,
@@ -189,9 +199,11 @@ export class ToolGate {
           },
         };
       }
-      await api.memo("gate:effect", true, context);
+      await api.memo(effect, true, context);
     }
-    const result = scrubResult(await execute());
+    const ran = await execute(resumed ? { ...api, checkpoint: resumed.inner } : api);
+    if (isParked(ran)) return parkInner(ran, (resumed?.parks ?? 0) + 1);
+    const result = scrubResult(ran);
     if (!ask) return result;
     return {
       ...result,
@@ -288,7 +300,10 @@ export class ToolGate {
     }
   }
 
-  #waitForOwner(call: GateCall, plan: GatePlan | undefined): Promise<ApprovalDecision | "expired"> {
+  #waitForOwner(
+    call: GateCall,
+    plan: GatePlan | undefined,
+  ): Promise<ApprovalDecision | "expired" | ToolPark> {
     if (call.answers === "document") {
       return waitForApproval(call.api, this.#approvals, call.name, call.context, plan);
     }
@@ -343,11 +358,36 @@ export class ToolGate {
       this.#approvals.remove(conversation, taskId);
     }
   }
+
+  release(api: Pick<ToolExecutionApi, "conversationId" | "taskId">): void {
+    this.#approvals.remove(Number(api.conversationId), Number(api.taskId));
+  }
 }
 
 export function ranToResult(result: ToolExecutionResult | ToolPark): ToolExecutionResult {
-  if ("sleep" in result || "wait" in result) throw new Error("tool parked outside the gate");
+  if (isParked(result)) throw new Error("tool parked outside the gate");
   return result;
+}
+
+const innerPark = z.object({ gate: z.literal("inner"), parks: z.number(), inner: z.json() });
+
+function resumedInner(
+  checkpoint: unknown,
+): { parks: number; inner: JsonValue | undefined } | undefined {
+  const parsed = innerPark.safeParse(checkpoint);
+  if (!parsed.success) return undefined;
+  return { parks: parsed.data.parks, inner: parsed.data.inner ?? undefined };
+}
+
+function parkInner(park: ToolPark, parks: number): ToolPark {
+  const wrap = (inner: JsonValue | undefined): JsonValue => ({
+    gate: "inner",
+    parks,
+    inner: inner ?? null,
+  });
+  return park.sleep
+    ? { sleep: { ...park.sleep, checkpoint: wrap(park.sleep.checkpoint) } }
+    : { wait: { ...park.wait, checkpoint: wrap(park.wait.checkpoint) } };
 }
 
 function scrubResult(result: ToolExecutionResult): ToolExecutionResult {

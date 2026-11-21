@@ -435,6 +435,7 @@ describe("approvals across restarts", () => {
     runtimes.splice(runtimes.indexOf(first), 1);
 
     const second = await open(mailer, respond, storePath);
+    expect(second.pendingApprovals(ref)).toBe(1);
     const after: ChatEvent[] = [];
     await second.watchChat(ref, (batch) => {
       after.push(...batch);
@@ -446,7 +447,6 @@ describe("approvals across restarts", () => {
           : undefined,
       "card after restart",
     );
-    await until(() => second.pendingApprovals(ref) === 1, "gate re-run");
     await second.decideApproval(ref, waiting.taskId!, "approved");
     expect(await until(() => finalText(after), "reply")).toBe("Sent to di@x.dev");
     expect(mailer.sent).toEqual(["di@x.dev"]);

@@ -4,7 +4,7 @@ import { z } from "zod";
 import { innerDetails } from "./approvals";
 import { parseStored, toJson } from "./durable-json";
 import type { ChatCredentialRequest } from "./types";
-import { pendingToolTask, sealedAsNotPending, type HostTx } from "./waiting";
+import { pendingToolTask, sealedAsNotPending, wakeOwnerWait, type HostTx } from "./waiting";
 
 const CREDENTIAL_FIELD_TYPES = [
   "text",
@@ -138,6 +138,7 @@ export async function settleRequest(
   await pendingToolTask(tx, id, undefined, notPending);
   const doc = await tx.doc(CredentialRequestDoc, id);
   if (doc.status !== "pending" || !doc.request) throw notPending();
+  await wakeOwnerWait(tx, id);
   doc.status = outcome.status;
   if (outcome.status === "filled") {
     doc.filled = [...outcome.filled];
