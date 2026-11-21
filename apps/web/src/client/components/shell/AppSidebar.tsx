@@ -28,22 +28,17 @@ import { BrandMark } from "./BrandMark";
 import { ModeSwitch, SIDEBAR_ROW, useCodeAvailable } from "./ModeSwitch";
 import { openFeedback } from "../../lib/feedback";
 
-const SEARCH_SHORTCUT =
-  typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘K" : "Ctrl+K";
-
 function NavRow({
   icon: Icon,
   label,
   rail,
   active,
-  hint,
   ...rest
 }: {
   icon: LucideIcon;
   label: string;
   rail: boolean;
   active?: boolean;
-  hint?: string;
 } & ({ to: string; onClick?: () => void } | { onClick: () => void; to?: undefined })) {
   const className = cn(
     SIDEBAR_ROW,
@@ -54,14 +49,6 @@ function NavRow({
     <>
       <Icon className="text-muted-foreground size-4 shrink-0" />
       <span className={cn("truncate", rail && "md:hidden")}>{label}</span>
-      {hint ? (
-        <span
-          aria-hidden="true"
-          className={cn("text-muted-foreground ml-auto text-xs max-md:hidden", rail && "md:hidden")}
-        >
-          {hint}
-        </span>
-      ) : null}
     </>
   );
   if (rest.to !== undefined) {
@@ -171,7 +158,6 @@ export function AppSidebar() {
             icon={Search}
             label="Search"
             rail={rail}
-            hint={SEARCH_SHORTCUT}
             onClick={() => {
               closeDrawer();
               toggleCommandPalette();

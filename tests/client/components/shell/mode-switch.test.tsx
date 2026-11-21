@@ -106,6 +106,7 @@ describe("the Chat/Code mode switch", () => {
     useCommandPaletteStore.setState({ open: false });
     renderAt("/chats");
     const nav = within(screen.getByRole("navigation", { name: "Primary" }));
+    expect(nav.getByRole("button", { name: "Search" })).toHaveTextContent(/^Search$/);
     await userEvent.click(nav.getByRole("button", { name: "Search" }));
     expect(useCommandPaletteStore.getState().open).toBe(true);
   });
