@@ -73,6 +73,7 @@ export class PiEngine implements AgentEngine {
         content,
         requestId: input.requestId,
         ...(input.whenBusy ? { whenBusy: input.whenBusy } : {}),
+        ...(input.peer ? { onAbort: "keep" as const } : {}),
         entry: {
           kind: CHAT_USER_ENTRY,
           data: toJson({
