@@ -369,7 +369,8 @@ class TinyAgentsApi(private val client: ApiClient) {
         client.patch("/connections/${enc(id)}/tools/${enc(serverName)}", jsonOf("enabled" to enabled))
     }
 
-    suspend fun vaultItems(): List<VaultItem> = client.getObject("/vault").arr("items").mapObjects(VaultItem::from)
+    suspend fun vaultOverview(refresh: Boolean = false): VaultOverview =
+        VaultOverview.from(client.getObject("/vault", if (refresh) mapOf("refresh" to "1") else emptyMap()))
 
     suspend fun vaultItem(handle: String): VaultItemDetail = VaultItemDetail.from(client.getObject("/vault/items/${enc(handle)}"))
 
@@ -381,12 +382,20 @@ class TinyAgentsApi(private val client: ApiClient) {
     suspend fun revealVaultValue(handle: String, field: String, stepUp: String, purpose: String = "reveal"): String =
         client.postObject("/vault/items/${enc(handle)}/reveal", jsonOf("field" to field, "purpose" to purpose), stepUpHeader(stepUp)).string("value")
 
-    suspend fun setVaultItemDisabled(handle: String, disabled: Boolean, stepUp: String) {
-        client.put("/vault/items/${enc(handle)}", jsonOf("policy" to jsonOf("disabled" to disabled)), stepUpHeader(stepUp))
-    }
+    suspend fun createVaultItem(body: JSONObject, stepUp: String): VaultItem =
+        VaultItem.from(client.postObject("/vault/items", body, stepUpHeader(stepUp)))
 
-    suspend fun deleteVaultItem(handle: String, stepUp: String) {
-        client.delete("/vault/items/${enc(handle)}", headers = stepUpHeader(stepUp))
+    suspend fun linkVaultItem(backend: String, externalId: String, policy: JSONObject, stepUp: String): VaultItem =
+        VaultItem.from(client.postObject("/vault/links", jsonOf("backend" to backend, "externalId" to externalId, "policy" to policy), stepUpHeader(stepUp)))
+
+    suspend fun moveVaultToOnePassword(stepUp: String): VaultMoveResult =
+        VaultMoveResult.from(client.postObject("/vault/move-to-1password", JSONObject(), stepUpHeader(stepUp)))
+
+    suspend fun updateVaultItem(handle: String, body: JSONObject, stepUp: String): VaultItem =
+        VaultItem.from(client.put("/vault/items/${enc(handle)}", body, stepUpHeader(stepUp)) as? JSONObject ?: JSONObject())
+
+    suspend fun deleteVaultItem(handle: String, purge: Boolean, stepUp: String) {
+        client.delete("/vault/items/${enc(handle)}", mapOf("purge" to purge.toString()), stepUpHeader(stepUp))
     }
 
     suspend fun credentialRequest(taskId: Int): CredentialRequestView =

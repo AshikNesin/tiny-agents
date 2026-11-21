@@ -531,57 +531,205 @@ data class Connection(
 }
 
 data class VaultItem(
+    val id: String,
     val handle: String,
     val kind: String,
+    val backend: String,
     val audience: String,
     val label: String,
     val username: String?,
     val origins: List<String>,
     val hosts: List<String>,
+    val injectName: String?,
+    val injectFormat: String?,
+    val tools: List<String>,
+    val effectiveTools: List<String>,
+    val bots: List<String>?,
+    val policyApproval: String,
     val approval: String,
+    val allowUnattended: Boolean,
+    val whenToUse: String?,
     val cardBrand: String?,
     val cardLast4: String?,
+    val cardExpiry: String?,
     val hasTotp: Boolean,
     val disabled: Boolean,
+    val field: String?,
     val lastUsedAt: Long?,
     val lastUsedBy: String?,
+    val updatedAt: Long,
 ) {
     companion object {
         fun from(json: JSONObject): VaultItem {
             val card = json.objOrNull("card")
+            val inject = json.objOrNull("inject")
+            val policyApproval = json.string("approval", "every_use")
             return VaultItem(
+                id = json.string("id"),
                 handle = json.string("handle"),
                 kind = json.string("kind"),
+                backend = json.string("backend", "local"),
                 audience = json.string("audience", "bots"),
                 label = json.string("label"),
                 username = json.stringOrNull("username"),
                 origins = json.arr("origins").strings(),
                 hosts = json.arr("hosts").strings(),
-                approval = json.string("effectiveApproval", json.string("approval", "every_use")),
+                injectName = inject?.stringOrNull("name"),
+                injectFormat = inject?.stringOrNull("format"),
+                tools = json.arr("tools").strings(),
+                effectiveTools = json.arr("effectiveTools").strings(),
+                bots = if (json.isNull("bots")) null else json.arr("bots").strings(),
+                policyApproval = policyApproval,
+                approval = json.string("effectiveApproval", policyApproval),
+                allowUnattended = json.bool("allowUnattended"),
+                whenToUse = json.stringOrNull("whenToUse"),
                 cardBrand = card?.stringOrNull("brand"),
                 cardLast4 = card?.stringOrNull("last4"),
+                cardExpiry = card?.stringOrNull("expiry")?.takeIf { it.isNotEmpty() },
                 hasTotp = json.bool("hasTotp"),
                 disabled = json.bool("disabled"),
+                field = json.stringOrNull("field"),
                 lastUsedAt = json.instantOrNull("lastUsedAt"),
                 lastUsedBy = json.stringOrNull("lastUsedBy"),
+                updatedAt = json.instant("updatedAt"),
             )
         }
     }
 }
 
-data class VaultAuditEvent(val at: Long, val tool: String, val target: String, val outcome: String, val reason: String?)
+data class VaultBackendStatus(val state: String, val code: String?, val detail: String?) {
+    val ready: Boolean get() = state == "ready"
 
-data class VaultItemDetail(val item: VaultItem, val title: String, val fields: List<String>, val canReveal: Boolean, val events: List<VaultAuditEvent>) {
     companion object {
-        fun from(json: JSONObject) = VaultItemDetail(
-            item = VaultItem.from(json.objOrNull("item") ?: JSONObject()),
-            title = json.string("title"),
-            fields = json.arr("fields").strings(),
-            canReveal = json.objOrNull("capabilities")?.bool("reveal") ?: false,
-            events = json.arr("events").mapObjects {
-                VaultAuditEvent(it.instant("at"), it.string("tool"), it.string("target"), it.string("outcome"), it.stringOrNull("reason"))
-            },
+        fun from(json: JSONObject?) = json?.let { VaultBackendStatus(it.string("state", "error"), it.stringOrNull("code"), it.stringOrNull("detail")) }
+    }
+}
+
+data class VaultBackend(
+    val name: String,
+    val configured: Boolean,
+    val read: VaultBackendStatus,
+    val write: VaultBackendStatus?,
+    val canCreate: Boolean,
+) {
+    val problem: VaultBackendStatus? get() = listOfNotNull(read, write).firstOrNull { !it.ready }
+
+    companion object {
+        fun from(json: JSONObject) = VaultBackend(
+            name = json.string("name"),
+            configured = json.bool("configured"),
+            read = VaultBackendStatus.from(json.objOrNull("read")) ?: VaultBackendStatus("error", null, null),
+            write = VaultBackendStatus.from(json.objOrNull("write")),
+            canCreate = json.objOrNull("capabilities")?.bool("create") ?: false,
         )
+    }
+}
+
+data class UnlinkedVaultItem(
+    val backend: String,
+    val externalId: String,
+    val title: String,
+    val kind: String,
+    val urls: List<String>,
+    val username: String?,
+    val cardBrand: String?,
+    val cardLast4: String?,
+) {
+    companion object {
+        fun from(json: JSONObject): UnlinkedVaultItem {
+            val card = json.objOrNull("card")
+            return UnlinkedVaultItem(
+                backend = json.string("backend"),
+                externalId = json.string("externalId"),
+                title = json.string("title"),
+                kind = json.string("kind", "other"),
+                urls = json.arr("urls").strings(),
+                username = json.stringOrNull("username"),
+                cardBrand = card?.stringOrNull("brand"),
+                cardLast4 = card?.stringOrNull("last4"),
+            )
+        }
+    }
+}
+
+data class VaultOverview(
+    val backends: List<VaultBackend>,
+    val primaryBackend: String,
+    val items: List<VaultItem>,
+    val unlinked: List<UnlinkedVaultItem>,
+    val kindDefaults: Map<String, List<String>>,
+    val movableToOnePassword: Int,
+) {
+    val primary: VaultBackend? get() = backends.firstOrNull { it.name == primaryBackend }
+
+    val canCreate: Boolean get() = primary?.let { it.canCreate && it.problem == null } ?: false
+
+    val createBlockedWhy: String?
+        get() = if (canCreate) null else primary?.problem?.detail ?: "The vault backend isn't ready."
+
+    companion object {
+        fun from(json: JSONObject): VaultOverview {
+            val defaults = json.objOrNull("kindDefaults")
+            return VaultOverview(
+                backends = json.arr("backends").mapObjects(VaultBackend::from),
+                primaryBackend = json.string("primaryBackend", "local"),
+                items = json.arr("items").mapObjects(VaultItem::from),
+                unlinked = json.arr("unlinked").mapObjects(UnlinkedVaultItem::from),
+                kindDefaults = defaults?.keys()?.asSequence()?.associateWith { defaults.arr(it).strings() }.orEmpty(),
+                movableToOnePassword = json.int("movableToOnePassword"),
+            )
+        }
+    }
+}
+
+data class VaultMoveResult(val moved: List<String>, val failed: List<Pair<String, String>>) {
+    companion object {
+        fun from(json: JSONObject) = VaultMoveResult(
+            moved = json.arr("moved").strings(),
+            failed = json.arr("failed").mapObjects { it.string("handle") to it.string("reason") },
+        )
+    }
+}
+
+data class VaultAuditEvent(
+    val at: Long,
+    val tool: String,
+    val target: String,
+    val outcome: String,
+    val reason: String?,
+    val unattended: Boolean = false,
+)
+
+data class VaultItemDetail(
+    val item: VaultItem,
+    val title: String,
+    val urls: List<String>,
+    val fields: List<String>,
+    val stale: Boolean,
+    val backendError: String?,
+    val canReveal: Boolean,
+    val canUpdate: Boolean,
+    val canDelete: Boolean,
+    val events: List<VaultAuditEvent>,
+) {
+    companion object {
+        fun from(json: JSONObject): VaultItemDetail {
+            val capabilities = json.objOrNull("capabilities")
+            return VaultItemDetail(
+                item = VaultItem.from(json.objOrNull("item") ?: JSONObject()),
+                title = json.string("title"),
+                urls = json.arr("urls").strings(),
+                fields = json.arr("fields").strings(),
+                stale = json.bool("stale"),
+                backendError = json.stringOrNull("backendError"),
+                canReveal = capabilities?.bool("reveal") ?: false,
+                canUpdate = capabilities?.bool("update") ?: false,
+                canDelete = capabilities?.bool("delete") ?: false,
+                events = json.arr("events").mapObjects {
+                    VaultAuditEvent(it.instant("at"), it.string("tool"), it.string("target"), it.string("outcome"), it.stringOrNull("reason"), it.bool("unattended"))
+                },
+            )
+        }
     }
 }
 

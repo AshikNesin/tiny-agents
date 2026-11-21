@@ -22,6 +22,8 @@ import groot.mobile.feature.manage.PeopleRoute
 import groot.mobile.feature.manage.RoutinesRoute
 import groot.mobile.feature.manage.SkillsRoute
 import groot.mobile.feature.manage.TasksRoute
+import groot.mobile.feature.manage.VaultItemRoute
+import groot.mobile.feature.manage.VaultNewItemRoute
 import groot.mobile.feature.manage.VaultRoute
 import groot.mobile.feature.terminal.TerminalRoute
 import kotlinx.coroutines.launch
@@ -71,7 +73,25 @@ internal fun NavGraphBuilder.featureScreens(container: AppContainer, navigate: (
         ScreenContainer { MemoryRoute(container, initialBotId = entry.arguments?.getString("botId"), onBack = back) }
     }
     composable(Routes.CONNECTIONS) { ScreenContainer { ConnectionsRoute(container, back) } }
-    composable(Routes.VAULT) { ScreenContainer { VaultRoute(container, back) } }
+    composable(Routes.VAULT) {
+        ScreenContainer { VaultRoute(container, onOpen = { navigate(Routes.vaultItem(it)) }, onNew = { navigate(Routes.vaultNew(it)) }, onBack = back) }
+    }
+    composable(Routes.VAULT_NEW) { entry ->
+        ScreenContainer {
+            VaultNewItemRoute(container, entry.arguments?.getString("kind").orEmpty(), onSaved = { handle ->
+                back()
+                navigate(Routes.vaultItem(handle))
+            }, onBack = back)
+        }
+    }
+    composable(Routes.VAULT_ITEM) { entry ->
+        ScreenContainer {
+            VaultItemRoute(container, entry.arguments?.getString("handle").orEmpty(), onRenamed = { handle ->
+                back()
+                navigate(Routes.vaultItem(handle))
+            }, onGone = back, onBack = back)
+        }
+    }
     composable(Routes.PEOPLE) { ScreenContainer { PeopleRoute(container, back) } }
     codeScreens(container, navigate, back)
 }

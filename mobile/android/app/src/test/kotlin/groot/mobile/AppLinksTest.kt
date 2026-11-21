@@ -41,6 +41,7 @@ class AppLinksTest {
     fun `sign-in requests and the other screens`() {
         assertEquals(AppLink.CredentialRequest(63), parseAppLink("$server/vault/requests/63", server))
         assertEquals(AppLink.Screen(Routes.VAULT), parseAppLink("$server/vault", server))
+        assertEquals(AppLink.Screen("vault/items/github-work"), parseAppLink("$server/vault/items/github-work", server))
         assertEquals(AppLink.Screen(Routes.ROUTINES), parseAppLink("$server/routines", server))
         assertEquals(AppLink.Screen(Routes.TASKS), parseAppLink("$server/tasks", server))
         assertEquals(AppLink.Screen(Routes.HOME), parseAppLink("$server/", server))
