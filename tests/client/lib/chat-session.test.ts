@@ -120,6 +120,9 @@ describe("chat session: Echoes (GLOSSARY: Echo)", () => {
     const session = play(snapshot([]), echo("req-new", "ok", { createdAt: 60_000 }));
     const sameText = user("e2", "ok", { createdAt: 61_000 });
     expect(outbox(then(session, snapshot([sameText])))).toEqual(["req-new:sending"]);
+    expect(outbox(then(session, { type: "upsert", message: sameText }))).toEqual([
+      "req-new:sending",
+    ]);
   });
 
   it("confirms a file send by request id although the server annotated its text", () => {
