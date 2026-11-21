@@ -26,6 +26,7 @@
     "docs/guides/deploy-cloudflare.md",
     "docs/features/ai-inference.md",
     "scripts/db-generate.ts",
-    ".agents/skills/verify-groot/**"
+    ".agents/skills/verify-groot/**",
+    "docs/PRD.md"
   ]
 }
