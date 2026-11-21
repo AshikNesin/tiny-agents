@@ -19,6 +19,7 @@ import groot.kit.settings.SettingsSection
 import groot.kit.theme.ThemeMode
 import groot.mobile.R
 import groot.mobile.data.Session
+import groot.mobile.data.ViewerRole
 import groot.mobile.push.PushStatus
 import groot.mobile.ui.brand.AppIcons
 import groot.mobile.ui.makerUrl
@@ -34,13 +35,14 @@ fun SettingsRoute(
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
     val session by viewModel.session.collectAsStateWithLifecycle()
     val push by viewModel.push.collectAsStateWithLifecycle()
+    val bots by viewModel.bots.collectAsStateWithLifecycle()
     val testNote by viewModel.testNote.collectAsStateWithLifecycle()
     val context = LocalContext.current
     SettingsScreen(
         themeMode = themeMode,
         onThemeModeChange = viewModel::setThemeMode,
         session = session,
-        guest = viewModel.guest,
+        guest = bots.role != ViewerRole.Owner,
         onSignOut = viewModel::signOut,
         onOpenPeople = onOpenPeople,
         onResetData = viewModel::resetAll,

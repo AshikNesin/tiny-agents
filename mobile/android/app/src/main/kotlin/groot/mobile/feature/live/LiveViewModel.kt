@@ -3,6 +3,7 @@ package groot.mobile.feature.live
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import groot.mobile.AppContainer
+import groot.mobile.data.ViewerRole
 import groot.mobile.data.api.ApiException
 import groot.mobile.data.api.DesktopApp
 import groot.mobile.data.api.LiveStatus
@@ -14,7 +15,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -46,7 +49,7 @@ data class LiveState(
     val status: LiveStatus? = null,
     val link: LiveLink = LiveLink.Idle,
     val loadError: String? = null,
-    val guest: Boolean = false,
+    val guest: Boolean = true,
     val apps: List<DesktopApp>? = null,
 ) {
     val driving: Boolean get() = status?.driver == "human"
@@ -61,8 +64,17 @@ class LiveViewModel(private val container: AppContainer, val target: LiveTarget)
     private val api = container.api
     val vnc = VncViewState()
 
-    private val _state = MutableStateFlow(LiveState(guest = container.bots.state.value.guest))
+    private val _state = MutableStateFlow(LiveState())
     val state: StateFlow<LiveState> = _state.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            container.bots.state.map { it.role != ViewerRole.Owner }.distinctUntilChanged().collect { guest ->
+                _state.update { it.copy(guest = guest) }
+                vnc.client?.viewOnly = !_state.value.driving || guest
+            }
+        }
+    }
 
     private var watching: Job? = null
     private var socket: WebSocket? = null

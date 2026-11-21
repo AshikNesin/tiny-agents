@@ -63,6 +63,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import groot.kit.theme.S
 import groot.mobile.AppContainer
 import groot.mobile.data.BotsState
+import groot.mobile.data.ViewerRole
 import groot.mobile.data.api.BotListEntry
 import groot.mobile.feature.chat.StagedUpload
 import groot.mobile.ui.brand.AppIcons
@@ -175,8 +176,8 @@ fun ShareSheet(
                     modifier = Modifier.weight(1f),
                 )
                 bots.bots.isEmpty() -> EmptyState(
-                    title = if (bots.guest) "Nothing shared with you yet" else "No bots yet",
-                    body = if (bots.guest) "When the owner shares a bot with you, you can share to it here." else "Create a bot in Tiny Agents, then share to it.",
+                    title = if (bots.role == ViewerRole.Guest) "Nothing shared with you yet" else "No bots yet",
+                    body = if (bots.role == ViewerRole.Guest) "When the owner shares a bot with you, you can share to it here." else "Create a bot in Tiny Agents, then share to it.",
                     icon = AppIcons.Brand,
                     actionLabel = "Open Tiny Agents",
                     onAction = onOpenApp,

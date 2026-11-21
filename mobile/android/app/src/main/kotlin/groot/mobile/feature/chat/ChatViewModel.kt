@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import groot.mobile.AppContainer
 import groot.mobile.data.FileActions
 import groot.mobile.data.PickedFile
+import groot.mobile.data.ViewerRole
 import groot.mobile.data.api.AttachmentRef
 import groot.mobile.data.api.OwnerAnswer
 import groot.mobile.data.chat.ChatHealth
@@ -29,9 +30,9 @@ import java.util.UUID
 
 internal enum class NewChatCommand { Send, Wait, Clear, Reset }
 
-internal fun newChatCommand(text: String, attachments: Int, guest: Boolean?, health: ChatHealth, empty: Boolean): NewChatCommand = when {
-    attachments > 0 || text.trim() != "/new" || guest == true -> NewChatCommand.Send
-    guest == null || health == ChatHealth.Loading -> NewChatCommand.Wait
+internal fun newChatCommand(text: String, attachments: Int, role: ViewerRole?, health: ChatHealth, empty: Boolean): NewChatCommand = when {
+    attachments > 0 || text.trim() != "/new" || role == ViewerRole.Guest -> NewChatCommand.Send
+    role == null || health == ChatHealth.Loading -> NewChatCommand.Wait
     empty -> NewChatCommand.Clear
     else -> NewChatCommand.Reset
 }
@@ -112,7 +113,7 @@ class ChatViewModel(private val container: AppContainer, val botId: String) : Vi
         val command = newChatCommand(
             text,
             staged.size,
-            guest = if (bots.guestKnown) bots.guest else null,
+            role = bots.role,
             health = current.health,
             empty = current.timeline.isEmpty() && current.held.isEmpty(),
         )
