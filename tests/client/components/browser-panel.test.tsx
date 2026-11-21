@@ -136,6 +136,7 @@ describe("BrowserPanel", () => {
     fakes.rfbs.length = 0;
     vi.mocked(createRfb).mockClear();
     window.localStorage.clear();
+    usePeopleStore.setState({ role: "owner" });
   });
   afterEach(() => {
     vi.restoreAllMocks();
@@ -165,8 +166,8 @@ describe("BrowserPanel", () => {
   });
 
   it("lets a guest watch only: no take control, paste, reset, open or window fit (S2)", async () => {
-    usePeopleStore.setState({ guest: true });
-    onTestFinished(() => usePeopleStore.setState({ guest: null }));
+    usePeopleStore.setState({ role: "guest" });
+    onTestFinished(() => usePeopleStore.setState({ role: null }));
     const api = mockApi(vncStatus());
     render(<BrowserPanel bot={bot} onClose={vi.fn()} />);
     await connected();
@@ -180,8 +181,8 @@ describe("BrowserPanel", () => {
   });
 
   it("offers a guest no way to open a closed browser (S2)", async () => {
-    usePeopleStore.setState({ guest: true });
-    onTestFinished(() => usePeopleStore.setState({ guest: null }));
+    usePeopleStore.setState({ role: "guest" });
+    onTestFinished(() => usePeopleStore.setState({ role: null }));
     mockApi(vncStatus({ active: false, mode: null, driver: null, url: null }));
     render(<BrowserPanel bot={bot} onClose={vi.fn()} />);
     expect(await screen.findByText("No browser is open.")).toBeInTheDocument();

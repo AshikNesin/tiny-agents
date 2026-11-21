@@ -1,23 +1,25 @@
 import { create } from "zustand";
 import { peopleApi } from "../lib/people-api";
 
+type ViewerRole = "owner" | "guest";
+
 interface PeopleState {
-  guest: boolean | null;
+  role: ViewerRole | null;
   load: () => Promise<void>;
 }
 
 export const usePeopleStore = create<PeopleState>((set) => ({
-  guest: null,
+  role: null,
   async load() {
     try {
       const { guest } = await peopleApi.me();
-      set({ guest });
+      set({ role: guest ? "guest" : "owner" });
     } catch {
-      set({ guest: false });
+      set({ role: "owner" });
     }
   },
 }));
 
-export function useIsGuest(): boolean {
-  return usePeopleStore((s) => s.guest === true);
+export function useViewerRole(): ViewerRole | null {
+  return usePeopleStore((s) => s.role);
 }

@@ -12,7 +12,7 @@ import type { BotListEntry } from "../../../shared/api/bots";
 import { groupBots, previewLine, relativeTime, visibleRecent } from "../../lib/bot-groups";
 import { attentionOf, railBots, stateLabel, waitingLabel } from "../../lib/attention";
 import { useBotsStore } from "../../store/bots";
-import { useIsGuest } from "../../store/people";
+import { useViewerRole } from "../../store/people";
 import { useUiStore } from "../../store/ui";
 import { BotAvatar } from "../BotAvatar";
 
@@ -59,7 +59,7 @@ function BotRow({
   const togglePin = useBotsStore((s) => s.togglePin);
   const openEditBot = useUiStore((s) => s.openEditBot);
   const navigate = useNavigate();
-  const guest = useIsGuest();
+  const owner = useViewerRole() === "owner";
   const pinned = bot.pinnedAt !== null;
   const preview = bot.lastMessagePreview ? previewLine(bot.lastMessagePreview) : "";
   const previewId = `bot-preview-${bot.id}`;
@@ -98,7 +98,7 @@ function BotRow({
           <RowStatus bot={bot} active={active} />
         </span>
       </Link>
-      {!guest && (
+      {owner && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
@@ -144,7 +144,7 @@ interface BotsSectionProps {
 
 export function BotsSection({ bots, activeId, onNavigate = () => {} }: BotsSectionProps) {
   const openCreateBot = useUiStore((s) => s.openCreateBot);
-  const guest = useIsGuest();
+  const role = useViewerRole();
   const [expanded, setExpanded] = useState(false);
   const { pinned, recent } = useMemo(() => groupBots(bots), [bots]);
   const shown = visibleRecent(recent, expanded, activeId);
@@ -155,7 +155,7 @@ export function BotsSection({ bots, activeId, onNavigate = () => {} }: BotsSecti
     <section aria-label="Bots" className="px-2.5">
       <div className="flex h-8 items-center justify-between px-1.5">
         <h2 className="text-fg-tertiary text-sm font-medium select-none">Bots</h2>
-        {!guest && (
+        {role === "owner" && (
           <button
             type="button"
             onClick={openCreateBot}
@@ -169,7 +169,7 @@ export function BotsSection({ bots, activeId, onNavigate = () => {} }: BotsSecti
 
       {bots.length === 0 && (
         <p className="text-fg-tertiary px-1.5 py-2 text-sm">
-          {guest ? "Nothing shared with you yet." : "No bots yet."}
+          {role === "guest" ? "Nothing shared with you yet." : "No bots yet."}
         </p>
       )}
 

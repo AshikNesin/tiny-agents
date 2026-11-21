@@ -4,7 +4,7 @@ import { cn } from "@groot/ui/lib/utils";
 import type { Bot } from "../../../shared/api/bots";
 import type { LiveLayout } from "../../lib/browser-panel";
 import { connectionOf, useLiveView, usePanelWidth, usePipPosition } from "../../lib/live-view";
-import { useIsGuest } from "../../store/people";
+import { useViewerRole } from "../../store/people";
 import { VncView, type VncState } from "../browser/VncView";
 import { ConnectingOverlay, DrivingFrame, TakeControlLayer, TakeoverBanner } from "./live-parts";
 import { LivePanelHeader } from "./LivePanelHeader";
@@ -68,7 +68,7 @@ export function LivePanel<S extends PanelStatus, L, I extends PageItem>({
   onLayout,
 }: LivePanelProps & { surface: LiveSurface<S, L, I> }) {
   const { kind, panel } = surface;
-  const guest = useIsGuest();
+  const guest = useViewerRole() !== "owner";
   const { width, startResize } = usePanelWidth(panel.width.key, panel.width.initial);
   const view = useLiveView<S, S>({
     kind,

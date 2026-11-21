@@ -22,7 +22,7 @@ import { useCommandPaletteStore } from "@groot/shell/store/command-palette";
 import { useBotsStore } from "../../store/bots";
 import { useUiStore } from "../../store/ui";
 import { PRIMARY_NAV, SECONDARY_NAV, guestNav } from "./nav";
-import { useIsGuest } from "../../store/people";
+import { useViewerRole } from "../../store/people";
 import { BotRail, BotsSection } from "./BotsSection";
 import { BrandMark } from "./BrandMark";
 import { ModeSwitch, SIDEBAR_ROW, useCodeAvailable } from "./ModeSwitch";
@@ -88,9 +88,9 @@ export function AppSidebar() {
   const toggleCommandPalette = useCommandPaletteStore((s) => s.toggle);
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
-  const guest = useIsGuest();
-  const primaryNav = guest ? guestNav(PRIMARY_NAV) : PRIMARY_NAV;
-  const secondaryNav = guest ? [] : SECONDARY_NAV;
+  const restricted = useViewerRole() !== "owner";
+  const primaryNav = restricted ? guestNav(PRIMARY_NAV) : PRIMARY_NAV;
+  const secondaryNav = restricted ? [] : SECONDARY_NAV;
 
   const feedbackRequested = useRef(false);
   useEffect(() => {

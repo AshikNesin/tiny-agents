@@ -22,7 +22,7 @@ import { errorMessage } from "../../lib/errors";
 import { projectsApi } from "../../lib/code/projects";
 import { RESOURCE_QUERY, useResource } from "../../queries/resource";
 import type { HarnessInfo, ModelOption } from "../../lib/code/api";
-import { useIsGuest } from "../../store/people";
+import { useViewerRole } from "../../store/people";
 import type { GitHubStatus, ProjectUpdateBody, ProjectView } from "../../../shared/api/code";
 import { loadModels } from "./controls";
 
@@ -237,8 +237,15 @@ function SettingsBody({
   projects: ProjectView[] | null;
   onChange(): void;
 }) {
-  const guest = useIsGuest();
-  if (guest) {
+  const role = useViewerRole();
+  if (role === null) {
+    return (
+      <div className="flex justify-center p-6">
+        <Spinner />
+      </div>
+    );
+  }
+  if (role === "guest") {
     return (
       <EmptyState
         icon={FolderGit2}

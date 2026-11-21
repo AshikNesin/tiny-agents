@@ -124,7 +124,7 @@ function mount(which: "browser" | "computer", withTabs = false) {
   );
 }
 
-const asGuest = () => usePeopleStore.setState({ guest: true });
+const asGuest = () => usePeopleStore.setState({ role: "guest" });
 
 const viewerCreated = () =>
   waitFor(() => expect(fakes.rfbs.length).toBeGreaterThan(0), { timeout: 4000 });
@@ -148,10 +148,11 @@ beforeEach(() => {
   vi.mocked(toast.error).mockClear();
   vi.mocked(toast.success).mockClear();
   window.localStorage.clear();
+  usePeopleStore.setState({ role: "owner" });
 });
 afterEach(() => {
   vi.restoreAllMocks();
-  usePeopleStore.setState({ guest: null });
+  usePeopleStore.setState({ role: null });
 });
 
 describe("BrowserPanel states", () => {

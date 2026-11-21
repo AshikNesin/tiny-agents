@@ -6,6 +6,7 @@ import { ConfirmProvider } from "@groot/ui/primitives";
 import { MemoryRouter } from "react-router-dom";
 import { CodeSettings } from "@/pages/code/CodeSettings";
 import type { HarnessInfo } from "@/lib/code/api";
+import { usePeopleStore } from "@/store/people";
 import { AppQueryProvider } from "../query-provider";
 
 const render = (ui: Parameters<typeof renderBare>[0]) =>
@@ -59,6 +60,7 @@ function open() {
 }
 
 beforeEach(() => {
+  usePeopleStore.setState({ role: "owner" });
   appRepositories.mockResolvedValue([
     { fullName: "AshikNesin/30DaysOfWebDev", installationId: 1, private: false },
     { fullName: "AshikNesin/tiny-agents", installationId: 1, private: false },

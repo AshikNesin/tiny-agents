@@ -10,7 +10,7 @@ vi.mock("@groot/shell/pages/settings/Settings", () => ({
     return <p data-testid="at">{location.pathname + location.search}</p>;
   },
 }));
-vi.mock("@/store/people", () => ({ useIsGuest: () => false }));
+vi.mock("@/store/people", () => ({ useViewerRole: () => "owner" }));
 
 function at(entry: string) {
   render(

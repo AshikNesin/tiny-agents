@@ -8,10 +8,11 @@
  */
 import { render as renderBare, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { MemoryRouter } from "react-router-dom";
 import { ConfirmProvider } from "@groot/ui/primitives";
 import { PullReview } from "@/pages/code/PullReview";
+import { usePeopleStore } from "@/store/people";
 import type { PullReviewView } from "../../../apps/web/src/shared/api/code";
 import { clickLine, line } from "../diff-dom";
 import { AppQueryProvider } from "../query-provider";
@@ -95,6 +96,7 @@ function showReview() {
   );
 }
 
+beforeEach(() => usePeopleStore.setState({ role: "owner" }));
 afterEach(() => vi.unstubAllGlobals());
 
 describe("a PR review's layout", () => {

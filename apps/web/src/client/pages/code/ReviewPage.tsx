@@ -4,7 +4,7 @@ import { ArrowLeft, GitBranch, GitPullRequest } from "lucide-react";
 import { Button } from "@groot/ui";
 import { cn } from "@groot/ui/lib/utils";
 import { threadPath } from "../../lib/code/api";
-import { useIsGuest } from "../../store/people";
+import { useViewerRole } from "../../store/people";
 import { PendingComments } from "./PendingComments";
 import { pullState } from "./controls";
 
@@ -27,7 +27,7 @@ export function ReviewPage({
   changes: ReactNode;
   pull: ReactNode;
 }) {
-  const guest = useIsGuest();
+  const owner = useViewerRole() === "owner";
   const state = pr ? pullState(pr.loop) : null;
   const tabs: Array<{ id: ReviewTab; label: string; icon: typeof GitBranch; hint?: string }> = [];
   if (changes) tabs.push({ id: "changes", label: "Source control", icon: GitBranch });
@@ -87,7 +87,7 @@ export function ReviewPage({
         {shown === "pr" ? pull : changes}
       </div>
       <div className="mx-auto w-full max-w-3xl px-3 empty:hidden sm:px-5 [&:has(section)]:py-2">
-        <PendingComments threadId={threadId} enabled={!guest} />
+        <PendingComments threadId={threadId} enabled={owner} />
       </div>
     </div>
   );

@@ -26,7 +26,7 @@ import { AppSidebar } from "./AppSidebar";
 import { APP_NAV, guestNav } from "./nav";
 import { settingsCommandGroup } from "./settings-commands";
 import { sidebarCommand } from "./sidebar-command";
-import { useIsGuest, usePeopleStore } from "../../store/people";
+import { useViewerRole, usePeopleStore } from "../../store/people";
 import { BADGED_FAVICON, documentTitle, waitingCount } from "../../lib/attention";
 
 export function AppShell() {
@@ -57,7 +57,7 @@ export function AppShell() {
   }, [connectCode, disconnectCode]);
 
   const loadPeople = usePeopleStore((s) => s.load);
-  const guest = useIsGuest();
+  const restricted = useViewerRole() !== "owner";
   useEffect(() => {
     void loadPeople();
     void loadBots();
@@ -115,7 +115,7 @@ export function AppShell() {
             },
           ]
         : [];
-    const navItems = (guest ? guestNav(APP_NAV) : APP_NAV).filter(
+    const navItems = (restricted ? guestNav(APP_NAV) : APP_NAV).filter(
       (item) => item.to !== "/code" || codeConfigured,
     );
     return [
@@ -123,7 +123,7 @@ export function AppShell() {
         heading: "Actions",
         items: [
           sidebarCommand(modeOf(pathname)),
-          ...(guest ? [] : [{ label: "New bot", icon: Plus, onSelect: openCreateBot }]),
+          ...(restricted ? [] : [{ label: "New bot", icon: Plus, onSelect: openCreateBot }]),
           ...(codeConfigured
             ? [
                 {
@@ -149,7 +149,7 @@ export function AppShell() {
           { label: "Settings", icon: Settings, onSelect: () => navigate("/settings") },
         ],
       },
-      settingsCommandGroup(guest, navigate),
+      settingsCommandGroup(restricted, navigate),
       {
         heading: "Theme",
         items: [
@@ -195,7 +195,7 @@ export function AppShell() {
     logout,
     codeThreads,
     codeConfigured,
-    guest,
+    restricted,
     pathname,
   ]);
 
