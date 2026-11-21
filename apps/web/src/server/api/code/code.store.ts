@@ -13,8 +13,6 @@ import {
   codeReviews,
   codeThreads,
   db,
-  shelleyHandoffs,
-  shelleySeen,
   type CodeHandoff,
   type CodeThreadRow,
 } from "../../db";
@@ -406,45 +404,4 @@ export async function markFinishDelivered(id: string): Promise<void> {
     .update(codeHandoffFinishes)
     .set({ deliveredAt: new Date() })
     .where(eq(codeHandoffFinishes.id, id));
-}
-
-export async function copyShelleyTables(instanceId = "shelley"): Promise<number> {
-  const seen = await db.select().from(shelleySeen);
-  const handoffs = await db.select().from(shelleyHandoffs);
-  let copied = 0;
-  for (const row of seen) {
-    const result = await db
-      .insert(codeThreads)
-      .values({
-        id: threadIdOf(instanceId, row.conversationId),
-        instanceId,
-        nativeId: row.conversationId,
-        followed: true,
-        seenCursor: row.lastSeenSequenceId,
-        updatedAt: row.updatedAt,
-      })
-      .onConflictDoNothing()
-      .returning({ id: codeThreads.id });
-    copied += result.length;
-  }
-  for (const row of handoffs) {
-    const result = await db
-      .insert(codeHandoffs)
-      .values({
-        id: row.id,
-        botId: row.botId,
-        threadId: threadIdOf(instanceId, row.shelleyConversationId),
-        title: row.slug,
-        task: row.task,
-        cwd: row.cwd,
-        idempotencyKey: row.idempotencyKey,
-        status: handoffMachine.is(row.status) ? row.status : "finished",
-        createdAt: row.createdAt,
-        finishedAt: row.finishedAt,
-      })
-      .onConflictDoNothing()
-      .returning({ id: codeHandoffs.id });
-    copied += result.length;
-  }
-  return copied;
 }

@@ -26,8 +26,6 @@ import {
   codeReviews,
   codeReviewViewed,
   codeThreads,
-  shelleyHandoffs,
-  shelleySeen,
   skills,
   tasks,
   uploads,
@@ -78,8 +76,6 @@ export async function resetAppTables(): Promise<void> {
   await db.delete(codePullRequests);
   await db.delete(codeThreads);
   await db.delete(codeProjects);
-  await db.delete(shelleyHandoffs);
-  await db.delete(shelleySeen);
   await db.delete(routineRuns);
   await db.delete(routines);
   await db.delete(botMessages);

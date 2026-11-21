@@ -7,12 +7,7 @@ import { defaultPermission, effectivePermission } from "../../../packages/agent/
 import { db, bots, codeHandoffs } from "../../../apps/web/src/server/db";
 import { codeStore } from "../../../apps/web/src/server/api/code/code.bots";
 import { createCodeHub, setCodeHub } from "../../../apps/web/src/server/api/code/code.hub";
-import {
-  copyShelleyTables,
-  finishHandoffOnce,
-  isFollowed,
-} from "../../../apps/web/src/server/api/code/code.store";
-import { shelleyHandoffs, shelleySeen } from "../../../apps/web/src/server/db";
+import { finishHandoffOnce, isFollowed } from "../../../apps/web/src/server/api/code/code.store";
 import { installAppForTests } from "../../../apps/web/src/server/app-root";
 import { eventually, resetAppTables, TEST_MODEL } from "../fixtures";
 import { startFakeShelley, type FakeShelley } from "./shelley/fake-shelley";
@@ -205,23 +200,6 @@ describe("code hand-off store", () => {
     expect(status?.changedFiles).toEqual([
       { path: "math.js", status: "modified", additions: 4, deletions: 0 },
     ]);
-  });
-
-  it("copies the Shelley-only tables once", async () => {
-    await db.insert(shelleySeen).values({ conversationId: "cOld", lastSeenSequenceId: 7 });
-    await db.insert(shelleyHandoffs).values({
-      botId: (await db.select().from(bots))[0]!.id,
-      shelleyConversationId: "cOld",
-      slug: "old",
-      task: "t",
-      idempotencyKey: "legacy-1",
-      status: "running",
-    });
-    expect(await copyShelleyTables()).toBe(2);
-    expect(await copyShelleyTables()).toBe(0);
-    expect(await isFollowed("shelley:cOld")).toBe(true);
-    const [copied] = await db.select().from(codeHandoffs);
-    expect(copied).toMatchObject({ threadId: "shelley:cOld", title: "old", status: "running" });
   });
 });
 

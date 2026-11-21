@@ -142,36 +142,6 @@ export const botMessages = sqliteTable(
   ],
 );
 
-export const shelleyHandoffs = sqliteTable(
-  "shelley_handoffs",
-  {
-    id: id(),
-    botId: text("bot_id")
-      .notNull()
-      .references(() => bots.id, { onDelete: "cascade" }),
-    shelleyConversationId: text("shelley_conversation_id").notNull(),
-    slug: text("slug"),
-    task: text("task").notNull(),
-    cwd: text("cwd"),
-    idempotencyKey: text("idempotency_key").notNull().unique(),
-    status: text("status").notNull(),
-    createdAt: createdAt(),
-    finishedAt: ms("finished_at"),
-  },
-  (t) => [
-    index("shelley_handoffs_conversation_idx").on(t.shelleyConversationId),
-    index("shelley_handoffs_bot_idx").on(t.botId, t.createdAt),
-  ],
-);
-
-export const shelleySeen = sqliteTable("shelley_seen", {
-  conversationId: text("conversation_id").primaryKey(),
-  lastSeenSequenceId: integer("last_seen_sequence_id").notNull().default(0),
-  updatedAt: ms("updated_at")
-    .notNull()
-    .$defaultFn(() => new Date()),
-});
-
 export const codeThreads = sqliteTable(
   "code_threads",
   {
@@ -639,7 +609,6 @@ export const memories = sqliteTable(
     category: text("category").notNull(),
     status: text("status").$type<MemoryStatus>().notNull().default("active"),
     source: text("source").notNull().default("capture"),
-    confidence: real("confidence"),
     until: ms("until"),
     conversationId: text("conversation_id"),
     supersededById: text("superseded_by_id"),
@@ -870,7 +839,6 @@ export type Routine = typeof routines.$inferSelect;
 export type Memory = typeof memories.$inferSelect;
 export type RoutineRun = typeof routineRuns.$inferSelect;
 export type LlmCall = typeof llmCalls.$inferSelect;
-export type ShelleyHandoff = typeof shelleyHandoffs.$inferSelect;
 export type CodeThreadRow = typeof codeThreads.$inferSelect;
 export type CodeHandoff = typeof codeHandoffs.$inferSelect;
 export type CodeProjectRow = typeof codeProjects.$inferSelect;

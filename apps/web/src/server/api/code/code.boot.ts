@@ -5,7 +5,6 @@ import type { DeliveryRuntime } from "../bots/bots.delivery";
 import { deliverHandoffFinish } from "./code.bots";
 import { createCodeHub, setCodeHub } from "./code.hub";
 import { buildHarnesses } from "./code.registry";
-import { copyShelleyTables } from "./code.store";
 import { onTurnEnded, rearmReconcilers } from "./code.pulls";
 import { startCodeWatcher } from "./code.watcher";
 
@@ -15,9 +14,6 @@ export function startCode(
 ): () => void {
   const instances = buildHarnesses({ extra: options.extra });
   const hub = setCodeHub(createCodeHub({ instances }))!;
-  void copyShelleyTables()
-    .then((copied) => copied && logger.info(`Code: copied ${copied} Shelley row(s)`))
-    .catch((error: unknown) => logger.warn({ error }, "Code: could not copy the Shelley tables"));
   const stopWatcher = startCodeWatcher({
     hub,
     deliver: (finish) => deliverHandoffFinish(runtime, finish),

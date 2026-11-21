@@ -57,9 +57,6 @@ const echo = (requestId: string, text: string, extra: Partial<Echo> = {}): ChatA
 const outbox = (session: ChatSession) =>
   chatView(session).outbox.map((entry) => `${entry.requestId}:${entry.state}`);
 
-const image = (uploadId: string): AttachmentRef[] => [
-  { uploadId, kind: "image", name: "shot.png", mimeType: "image/png", size: 10 },
-];
 const file = (uploadId: string): AttachmentRef[] => [
   { uploadId, kind: "file", name: "notes.txt", mimeType: "text/plain", size: 5 },
 ];
@@ -119,29 +116,10 @@ describe("chat session: Echoes (GLOSSARY: Echo)", () => {
     expect(outbox(confirmed)).toEqual([]);
   });
 
-  it("matches a legacy message (no request id) by text only when it is not older than the Echo", () => {
-    const legacy = user("e1", "ok", { createdAt: 1_000 });
-    const session = play(snapshot([legacy]), echo("req-new", "ok", { createdAt: 60_000 }));
-    expect(outbox(then(session, snapshot([legacy])))).toEqual(["req-new:sending"]);
-    const answered = user("e2", "ok", { createdAt: 59_000 });
-    expect(outbox(then(session, snapshot([legacy, answered])))).toEqual([]);
-  });
-
-  it("matches a legacy message by its attachments too, so image-only sends stay apart", () => {
-    const session = play(
-      snapshot([]),
-      echo("echo-a", "", { attachments: image("aaa") }),
-      echo("echo-b", "", { createdAt: 2, attachments: image("bbb") }),
-      { type: "upsert", message: user("e1", "", { attachments: image("aaa") }) },
-    );
-    expect(outbox(session)).toEqual(["echo-b:sending"]);
-
-    const withFile = play(
-      snapshot([]),
-      echo("echo-c", "see this", { attachments: file("zzz") }),
-      snapshot([user("e2", "see this", { attachments: file("zzz") })], { busy: true }),
-    );
-    expect(outbox(withFile)).toEqual([]);
+  it("never confirms an Echo with a message that has no request id", () => {
+    const session = play(snapshot([]), echo("req-new", "ok", { createdAt: 60_000 }));
+    const sameText = user("e2", "ok", { createdAt: 61_000 });
+    expect(outbox(then(session, snapshot([sameText])))).toEqual(["req-new:sending"]);
   });
 
   it("confirms a file send by request id although the server annotated its text", () => {

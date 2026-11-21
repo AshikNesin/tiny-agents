@@ -681,8 +681,6 @@ Known limits (register row C7):
     comments); `code_review_viewed` and `code_review_drafts`;
     `code_checkpoints`; `code_pr_events` (webhook deliveries, by id);
     `code_reviews` (PR reviews: the PR, its worktree and assistant).
-  - The old `shelley_seen` and `shelley_handoffs` rows are copied in at
-    boot.
 - **Client:**
   - `lib/code/`: API, live thread hook, list tree, tool folding.
   - `store/code.ts`: the app-wide list stream.
