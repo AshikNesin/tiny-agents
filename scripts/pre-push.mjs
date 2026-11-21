@@ -70,7 +70,7 @@ async function main() {
   const { files, removed } = changedFiles(refLines);
   if (files.length === 0 && removed.length === 0) return;
   const plan = prePushPlan(files, removed);
-  const checks = [];
+  const checks = [run("Merges with main", "node", ["scripts/check-merge-main.mjs"])];
   if (plan.fmt.length > 0) {
     checks.push(run(`Format (${plan.fmt.length} files)`, "vp", ["fmt", "--check", ...plan.fmt]));
   }

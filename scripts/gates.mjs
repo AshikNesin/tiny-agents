@@ -54,6 +54,11 @@ export const gates = [
     job: "gates",
     run: "pnpm check:changesets --base origin/${GITHUB_BASE_REF:-main}",
   },
+  {
+    name: "Merges with main",
+    job: "gates",
+    run: "pnpm check:merge-main --base origin/${GITHUB_BASE_REF:-main}",
+  },
   { name: "Checks coverage", job: "gates", run: "pnpm check:coverage" },
   { name: "Doc references", job: "gates", run: "pnpm check:doc-refs" },
   { name: "Rule table", job: "gates", run: "pnpm exec tsx scripts/check-rule-table.ts" },
