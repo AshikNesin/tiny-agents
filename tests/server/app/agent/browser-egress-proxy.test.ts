@@ -111,6 +111,29 @@ describe("the browser's egress proxy", () => {
   });
 });
 
+describe("the browser's egress proxy, with more than one checked address", () => {
+  it("falls back to the next checked address when the first doesn't answer", async () => {
+    const target = await serve(() => "inside");
+    const proxy = await startEgressProxy({
+      exempt: new Set(["localhost"]),
+      resolveHost: async () => ["::1", "127.0.0.1"],
+    });
+    cleanups.push(() => proxy.close());
+
+    const plain = await rawProxy(
+      proxy.url,
+      `GET http://localhost:${target.port}/plain HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n`,
+    );
+    expect(plain).toMatch(/^HTTP\/1\.1 200 OK\r\n/);
+    const tunnel = await rawProxy(
+      proxy.url,
+      `CONNECT localhost:${target.port} HTTP/1.1\r\n\r\nGET /tunnel HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n`,
+    );
+    expect(tunnel).toMatch(/^HTTP\/1\.1 200 Connection Established\r\n\r\nHTTP\/1\.1 200 OK/);
+    expect(target.hits).toEqual(["/plain", "/tunnel"]);
+  });
+});
+
 describe.skipIf(!chromiumPath)("DNS rebinding in real Chromium (local transport)", () => {
   async function openBrowser(resolveHost: (host: string) => Promise<string[]>, rules: string) {
     const profile = mkdtempSync(join(tmpdir(), "ta-egress-"));

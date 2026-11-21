@@ -78,7 +78,7 @@ async def decide(host, port):
         return None, FAILED
     if not exempt_name and any(private(a) and a not in EXEMPT and "[" + a + "]" not in EXEMPT for a in addresses):
         return None, REFUSED
-    return addresses[0], None
+    return addresses, None
 
 
 async def pipe(reader, writer):
@@ -132,15 +132,20 @@ async def handle(reader, writer):
         await writer.drain()
         writer.close()
         return
-    address, refusal = await decide(host, port)
+    addresses, refusal = await decide(host, port)
     if refusal is not None:
         writer.write(refusal)
         await writer.drain()
         writer.close()
         return
-    try:
-        up_reader, up_writer = await asyncio.wait_for(asyncio.open_connection(address, port), 15)
-    except Exception:
+    up_reader = up_writer = None
+    for address in addresses:
+        try:
+            up_reader, up_writer = await asyncio.wait_for(asyncio.open_connection(address, port), 15)
+            break
+        except Exception:
+            continue
+    if up_writer is None:
         writer.write(FAILED)
         await writer.drain()
         writer.close()

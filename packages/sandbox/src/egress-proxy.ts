@@ -29,7 +29,7 @@ export interface EgressProxy {
   close(): Promise<void>;
 }
 
-type Verdict = { address: string } | { refused: true } | { failed: string };
+type Verdict = { addresses: string[] } | { refused: true } | { failed: string };
 
 const resolveAll: ResolveHost = async (hostname) =>
   (await lookup(hostname, { all: true, verbatim: true })).map((entry) => entry.address);
@@ -60,7 +60,7 @@ function decideEgress(
       if (list.length === 0) return { failed: `${name} did not resolve` };
       const refused =
         !exemptName && list.some((address) => isPrivateAddress(address) && !exemptAddress(address));
-      return refused ? { refused: true } : { address: list[0]! };
+      return refused ? { refused: true } : { addresses: [...new Set(list)] };
     },
     (): Verdict => ({ failed: `${name} did not resolve` }),
   );
@@ -76,6 +76,18 @@ function splitAuthority(authority: string): { host: string; port: number } | nul
 function refuseTunnel(socket: Duplex, status: string, refused: boolean) {
   const header = refused ? `${REFUSED_HEADER}: private-address\r\n` : "";
   socket.end(`HTTP/1.1 ${status}\r\n${header}Content-Length: 0\r\nConnection: close\r\n\r\n`);
+}
+
+async function dialAny(addresses: readonly string[], port: number): Promise<Socket> {
+  let last: unknown;
+  for (const address of addresses) {
+    try {
+      return await dial(address, port);
+    } catch (error) {
+      last = error;
+    }
+  }
+  throw last;
 }
 
 function dial(address: string, port: number): Promise<Socket> {
@@ -123,19 +135,25 @@ export async function startEgressProxy(options: EgressProxyOptions): Promise<Egr
     const headers = { ...req.headers };
     delete headers["proxy-connection"];
     delete headers["proxy-authorization"];
+    let socket: Socket;
+    try {
+      socket = await dialAny(verdict.addresses, Number(target.port) || 80);
+    } catch {
+      res.writeHead(502).end();
+      return;
+    }
+    track(socket);
     const upstream = httpRequest({
-      host: verdict.address,
-      port: Number(target.port) || 80,
+      createConnection: () => socket,
       method: req.method,
       path: `${target.pathname}${target.search}`,
       headers,
       setHost: false,
-      agent: false,
       timeout: DIAL_TIMEOUT_MS,
     });
-    upstream.once("socket", track);
     upstream.once("timeout", () => upstream.destroy(new Error("upstream timed out")));
     upstream.once("response", (reply) => {
+      reply.once("end", () => socket.destroy());
       res.writeHead(reply.statusCode ?? 502, reply.rawHeaders);
       reply.pipe(res);
     });
@@ -156,7 +174,7 @@ export async function startEgressProxy(options: EgressProxyOptions): Promise<Egr
     if ("failed" in verdict) return refuseTunnel(client, "502 Bad Gateway", false);
     let upstream: Socket;
     try {
-      upstream = await dial(verdict.address, authority.port);
+      upstream = await dialAny(verdict.addresses, authority.port);
     } catch {
       return refuseTunnel(client, "502 Bad Gateway", false);
     }
