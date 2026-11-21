@@ -63,12 +63,32 @@ const isRedirect = (status: number) => status >= 300 && status < 400;
 const isTunnelRefusal = (error: unknown) =>
   error instanceof Error && error.message.includes("net::ERR_TUNNEL_CONNECTION_FAILED");
 
-async function personUserAgent(executable: string): Promise<string | undefined> {
-  const { stdout } = await promisify(execFile)(executable, ["--version"], { timeout: 5_000 }).catch(
-    () => ({ stdout: "" }),
-  );
+const userAgents = new Map<string, Promise<string>>();
+
+function personUserAgent(executable: string): Promise<string> {
+  let userAgent = userAgents.get(executable);
+  if (!userAgent) {
+    userAgent = readUserAgent(executable).catch((error: unknown) => {
+      userAgents.delete(executable);
+      throw error;
+    });
+    userAgents.set(executable, userAgent);
+  }
+  return userAgent;
+}
+
+async function readUserAgent(executable: string): Promise<string> {
+  const cannotRead = (reason: unknown) =>
+    new Error(
+      `Could not read the version of ${executable}, so the browser would announce itself as HeadlessChrome: ${String(reason)}`,
+    );
+  const { stdout } = await promisify(execFile)(executable, ["--version"], {
+    timeout: 30_000,
+  }).catch((error: unknown) => {
+    throw cannotRead(error instanceof Error ? error.message : error);
+  });
   const major = /(\d+)\.\d+\.\d+\.\d+/.exec(stdout)?.[1];
-  if (!major) return undefined;
+  if (!major) throw cannotRead(`no version in "${stdout.trim()}"`);
   const platform =
     process.platform === "darwin"
       ? "Macintosh; Intel Mac OS X 10_15_7"
@@ -111,7 +131,7 @@ export function createChromiumTransport(options: ChromiumTransportOptions = {}) 
           PROXY_BYPASS_FLAG,
           ...(options.args ?? []),
         ],
-        ...(userAgent ? { userAgent } : {}),
+        userAgent,
         ...(options.locale ? { locale: options.locale } : {}),
         ...(options.timezone ? { timezoneId: options.timezone } : {}),
       });

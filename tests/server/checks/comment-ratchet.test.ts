@@ -32,7 +32,7 @@ describe("comment ratchet", () => {
     expect(
       ratchetProblems({ "a.ts": 1, "b.ts": 1 }, { "a.ts": 1, "b.ts": 1 }, { "a.ts": 1 }),
     ).toEqual([
-      "scripts/lint/comment-baseline.json gives new paths 1 comments but frees only 0. A rename may carry its count; a new file starts at 0.",
+      "scripts/lint/comment-baseline.json gives new paths 1 but frees only 0. A rename may carry its count; a new file starts at 0.",
     ]);
   });
 
