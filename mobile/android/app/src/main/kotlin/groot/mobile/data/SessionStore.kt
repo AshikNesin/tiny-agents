@@ -65,7 +65,6 @@ class KeystoreTokenCipher : TokenCipher {
     }
 
     override fun open(sealed: String): String? {
-        if (sealed.startsWith(PLAIN)) return sealed.removePrefix(PLAIN)
         if (!sealed.startsWith(SEALED)) return null
         val key = key() ?: return null
         return runCatching {
@@ -82,7 +81,6 @@ class KeystoreTokenCipher : TokenCipher {
         const val IV_BYTES = 12
         const val TAG_BITS = 128
         const val SEALED = "v1:"
-        const val PLAIN = "p:"
     }
 }
 
@@ -103,7 +101,11 @@ class SessionStore(
 
     suspend fun load() {
         val prefs = dataStore.data.first()
-        val token = prefs[TOKEN]?.let(cipher::open)
+        val stored = prefs[TOKEN]
+        val opened = stored?.let(cipher::open)
+        if (stored != null && opened == null) dataStore.edit { it.remove(TOKEN) }
+        val held = _state.value.takeIf { it.serverUrl == prefs[SERVER] }?.token
+        val token = opened ?: held
         val userId = prefs[USER_ID]
         _selectedBot.value = prefs[LAST_BOT]
         _state.value = Session(

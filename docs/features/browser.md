@@ -357,8 +357,8 @@ another bot) and `url` is the bot's own tab, `null` until it has one.
   that resolves to a private address on the VM is not caught; on the local
   transport Chrome resolves the name again after the guard did, so DNS
   rebinding between the two lookups is not caught (only `http_request` pins
-  its connection); a name that does not resolve on the server, or not within
-  3 seconds, is left to Chrome. Guarding a tab asks the browser process for
+  its connection). A name that does not resolve on the server, or not within
+  3 seconds, is refused. Guarding a tab asks the browser process for
   the tab's id; when it doesn't answer within 5 seconds, the agent's action
   fails with "The browser tab is not responding" rather than hanging.
 - Every main-frame document load in the browser pauses for one DevTools round

@@ -1,7 +1,7 @@
 # Git hooks & secret detection
 
 Every commit runs secret detection (gitleaks) and staged lint/format (Vite+),
-and every branch push checks the files it changes, typechecking when TypeScript or its config changed. CI also scans every PR and push for
+and every branch push checks the files it changes, typechecking when TypeScript, a tsconfig or a `package.json` changed. CI also scans every PR and push for
 secrets, so a commit made without gitleaks still gets a scan.
 
 ## What Gets Checked

@@ -108,11 +108,30 @@ class AppLogicTest {
         store.signedIn("jwt-token", SessionUser(7, "a@example.com", "Ashik"))
         assertEquals("jwt-token", store.token)
         assertFalse(disk.updateData { it }.asMap().values.any { it == "jwt-token" })
+        store.load()
+        assertEquals("jwt-token", store.token)
 
         val restarted = SessionStore(disk, cipher, CoroutineScope(Dispatchers.Unconfined))
         restarted.load()
         assertNull(restarted.token)
         assertFalse(restarted.state.value.signedIn)
+    }
+
+    @Test
+    fun `a stored token that can't be opened is dropped from disk`() = runTest {
+        val disk = FakePreferencesDataStore()
+        val sealing = object : TokenCipher {
+            override fun seal(plain: String): String? = "p:$plain"
+            override fun open(sealed: String): String? = null
+        }
+        SessionStore(disk, sealing, CoroutineScope(Dispatchers.Unconfined)).apply {
+            setServer("https://agents.example.com")
+            signedIn("jwt-token", SessionUser(7, "a@example.com", "Ashik"))
+        }
+        val restarted = SessionStore(disk, sealing, CoroutineScope(Dispatchers.Unconfined))
+        restarted.load()
+        assertNull(restarted.token)
+        assertFalse(disk.updateData { it }.asMap().values.any { it == "p:jwt-token" })
     }
 
     @Test

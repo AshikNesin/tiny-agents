@@ -102,6 +102,8 @@ async function stopAppServices(): Promise<void> {
     await import("../../../packages/sandbox/src/browser-sessions");
   const { closeAllComputerSessions } =
     await import("../../../packages/sandbox/src/computer-sessions");
+  const { jobRunner } = await import("@groot/jobs/server");
+  await jobRunner.stop();
   const root = app();
   const slot = currentRuntimeSlot();
   setCurrentRuntimeSlot(undefined);
@@ -120,8 +122,6 @@ async function stopAppServices(): Promise<void> {
   if (typeof root.codeHub?.stop === "function") root.codeHub.stop();
   const { notificationService } = await import("@groot/core/notification/notification.service");
   notificationService.forgetSettings();
-  const { jobRunner } = await import("@groot/jobs/server");
-  await jobRunner.stop();
   jobRunner.reset();
 }
 
