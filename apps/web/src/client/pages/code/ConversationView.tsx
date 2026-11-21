@@ -175,7 +175,6 @@ export function ConversationView({
   inProject = false,
   projectName,
   pr = null,
-  sidebarHidden = false,
   pane = false,
 }: {
   id: string;
@@ -190,7 +189,6 @@ export function ConversationView({
   inProject?: boolean;
   projectName?: string;
   pr?: { number: number; loop: string; url: string } | null;
-  sidebarHidden?: boolean;
   pane?: boolean;
 }) {
   const navigate = useNavigate();
@@ -319,7 +317,6 @@ export function ConversationView({
         <header
           className={cn(
             "border-border flex h-13 shrink-0 items-center gap-1 border-b px-2 sm:px-3",
-            sidebarHidden && "md:pl-12",
           )}
         >
           <Button

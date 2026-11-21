@@ -360,7 +360,7 @@ function OpenHere({
   );
 }
 
-export function ReviewsScreen({ sidebarHidden = false }: { sidebarHidden?: boolean }) {
+export function ReviewsScreen() {
   const navigate = useNavigate();
   const reviewsKey = ["code", "reviews", "list"];
   const reviewList = useResource(
@@ -447,10 +447,7 @@ export function ReviewsScreen({ sidebarHidden = false }: { sidebarHidden?: boole
   return (
     <div className="flex h-full min-h-0 flex-col">
       <header
-        className={cn(
-          "border-border flex h-13 shrink-0 items-center gap-2 border-b px-3 sm:px-4",
-          sidebarHidden && "md:pl-12",
-        )}
+        className={cn("border-border flex h-13 shrink-0 items-center gap-2 border-b px-3 sm:px-4")}
       >
         <Button asChild variant="ghost" size="icon-sm" className="text-muted-foreground md:hidden">
           <Link to="/code" aria-label="Back" title="Back">

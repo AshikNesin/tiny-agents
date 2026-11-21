@@ -133,11 +133,9 @@ function Section({
 export function ThreadsScreen({
   threads,
   projects,
-  sidebarHidden = false,
 }: {
   threads: ThreadSummary[] | null;
   projects: ProjectView[] | null;
-  sidebarHidden?: boolean;
 }) {
   const [params, setParams] = useSearchParams();
   const projectId = params.get("project");
@@ -179,10 +177,7 @@ export function ThreadsScreen({
   return (
     <div className="flex h-full min-h-0 flex-col">
       <header
-        className={cn(
-          "border-border flex h-13 shrink-0 items-center gap-2 border-b px-3 sm:px-4",
-          sidebarHidden && "md:pl-12",
-        )}
+        className={cn("border-border flex h-13 shrink-0 items-center gap-2 border-b px-3 sm:px-4")}
       >
         <Button asChild variant="ghost" size="icon-sm" className="text-muted-foreground md:hidden">
           <Link to="/code" aria-label="Back" title="Back">

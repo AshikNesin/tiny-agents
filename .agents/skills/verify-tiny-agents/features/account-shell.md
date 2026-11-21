@@ -8,7 +8,7 @@ The frame around every signed-in page: a sidebar with the account button (initia
 - `shell-feedback` opens the FeedbackBee panel `Tell us more` (or toasts `Feedback isn't available right now` when the embed did not load).
 - `shell-palette` opens with Ctrl/⌘+K or `Search`, filters, navigates and closes.
 - `shell-theme` switches Light/Dark/System from Settings → Appearance (`/settings/appearance`, `aria-pressed`) or the palette's Theme group (`Dark ✓`); persists across reload (`localStorage["groot.theme"]`, `dark` class on `<html>`).
-- `shell-collapse` collapses the sidebar to a rail (`Collapse sidebar` / `Expand sidebar`), persisted across reload.
+- `shell-collapse` collapses the sidebar to a rail (palette `Toggle sidebar` or Ctrl+B; no button), persisted across reload.
 - `shell-settings-sections` lists the Settings sections (navigation `Settings sections`); there is no Claude plan section, and an old `/settings?tab=claude` link lands on `/settings/models`.
 - `shell-people` adds a guest (Settings → People) and removes it after confirming.
 - `shell-phone` at 390x844: sidebar off-canvas, `Open menu` opens the drawer (the same primary pages and bots as the desktop sidebar; the set-up pages stay in the account menu, #234), a drawer link navigates and closes it, detail pages show `Back`, the Settings sections strip scrolls.
@@ -30,10 +30,10 @@ Preconditions:
 - **Feedback.** Menu → `Send feedback` → dialog `Tell us more` with textbox `Your feedback`; `Close` (never send). Without the embed: the toast.
 - **Palette.** Ctrl+K → dialog `Command menu`; type `Tasks`; option `Tasks` → `/tasks`, palette closed. Expected exactly one `Tasks` option.
 - **Theme.** `/settings/appearance`, group `Theme` → `Light`: `aria-pressed=true`, no `dark` class, stored `light`; reload keeps it. `Search` → option `Dark` → `dark` class, stored `dark`, Settings shows `Dark` pressed; reopen palette: option `Dark ✓`.
-- **Collapse.** Back on `/tasks` (Settings has no app sidebar): `Collapse sidebar` → `Expand sidebar` shown, `Demo User` hidden, link `Tasks` has `title="Tasks"`; reload: still collapsed; `Expand sidebar` restores.
+- **Collapse.** Back on `/tasks` (Settings has no app sidebar): palette `Toggle sidebar` → `Demo User` hidden, link `Tasks` has `title="Tasks"`; reload: still collapsed; Ctrl+B restores.
 - **Settings sections.** `/settings` → `/settings/account`; navigation `Settings sections` links are exactly the eight above; `/settings?tab=claude` → `/settings/models`, link `Models` has `aria-current="page"`.
 - **People.** Link `People` → `/settings/people`: `Name`, `Email`, `Password` (exact; the feedback embed has its own `Email (optional)`) → `Add guest`; toast `Guest added`; `guest-row` with the email and `No bots shared`. `Remove <name>` → alertdialog `Remove` → row gone; `GET /api/v1/people` no longer has it.
-- **Phone.** Viewport 390x844, `/tasks`: complementary `Sidebar` out of viewport; `Open menu` → in viewport with links Tasks, Terminal, Computer, Browser and no `Routines`, no `Collapse sidebar`. Link `Terminal` → `/terminal`, drawer closed. `Open menu` → account button → menuitem `Routines` → `/routines`, drawer closed. `/vault/new/login`: no `Open menu`; `Back` (exact) → `/vault`, `Open menu` back. `/settings`: section links `People` and `Account` both open their page (level-1 heading).
+- **Phone.** Viewport 390x844, `/tasks`: complementary `Sidebar` out of viewport; `Open menu` → in viewport with links Tasks, Terminal, Computer, Browser and no `Routines`. Link `Terminal` → `/terminal`, drawer closed. `Open menu` → account button → menuitem `Routines` → `/routines`, drawer closed. `/vault/new/login`: no `Open menu`; `Back` (exact) → `/vault`, `Open menu` back. `/settings`: section links `People` and `Account` both open their page (level-1 heading).
 - **Proof.** `ta-verify drive $S/journeys/account-shell.mjs` → `account-shell/account-menu`, `feedback-panel`, `theme-light`, `theme-dark`, `sidebar-rail`, `settings-sections`, `guest-added`, `phone-drawer`, `phone-back`, `phone-settings`.
 
 ## Gotchas

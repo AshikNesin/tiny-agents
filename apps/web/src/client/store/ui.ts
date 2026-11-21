@@ -6,6 +6,16 @@ import { useBotsStore } from "./bots";
 
 const SIDEBAR_COLLAPSED_KEY = "tiny-agents.sidebar.collapsed";
 
+const CODE_SIDEBAR_KEY = "tiny-agents:code-sidebar";
+
+function readCodeSidebar(): boolean {
+  try {
+    return localStorage.getItem(CODE_SIDEBAR_KEY) !== "closed";
+  } catch {
+    return true;
+  }
+}
+
 function readCollapsed(): boolean {
   try {
     return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "true";
@@ -25,6 +35,8 @@ interface UiState {
   rememberPath: (pathname: string, search?: string) => void;
   collapsed: boolean;
   setCollapsed: (collapsed: boolean) => void;
+  codeSidebarOpen: boolean;
+  toggleSidebar: (mode: AppMode) => void;
   mobileOpen: boolean;
   setMobileOpen: (open: boolean) => void;
 
@@ -52,6 +64,18 @@ export const useUiStore = create<UiState>((set) => ({
       localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(collapsed));
     } catch {}
     set({ collapsed });
+  },
+  codeSidebarOpen: readCodeSidebar(),
+  toggleSidebar: (mode) => {
+    if (mode === "chat") {
+      useUiStore.getState().setCollapsed(!useUiStore.getState().collapsed);
+      return;
+    }
+    const open = !useUiStore.getState().codeSidebarOpen;
+    try {
+      localStorage.setItem(CODE_SIDEBAR_KEY, open ? "open" : "closed");
+    } catch {}
+    set({ codeSidebarOpen: open });
   },
   mobileOpen: false,
   setMobileOpen: (mobileOpen) => set({ mobileOpen }),

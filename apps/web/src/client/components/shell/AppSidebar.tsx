@@ -4,7 +4,6 @@ import {
   ChevronsUpDown,
   LogOut,
   MessageSquareHeart,
-  PanelLeftOpen,
   Search,
   Settings as SettingsIcon,
   type LucideIcon,
@@ -26,7 +25,7 @@ import { PRIMARY_NAV, SECONDARY_NAV, guestNav } from "./nav";
 import { useIsGuest } from "../../store/people";
 import { BotRail, BotsSection } from "./BotsSection";
 import { BrandMark } from "./BrandMark";
-import { ModeSwitch, SIDEBAR_ICON, SIDEBAR_ROW, SidebarFold, useCodeAvailable } from "./ModeSwitch";
+import { ModeSwitch, SIDEBAR_ROW, useCodeAvailable } from "./ModeSwitch";
 import { openFeedback } from "../../lib/feedback";
 
 const SEARCH_SHORTCUT =
@@ -97,7 +96,6 @@ export function AppSidebar() {
   const navigate = useNavigate();
   const bots = useBotsStore((s) => s.bots);
   const collapsed = useUiStore((s) => s.collapsed);
-  const setCollapsed = useUiStore((s) => s.setCollapsed);
   const mobileOpen = useUiStore((s) => s.mobileOpen);
   const setMobileOpen = useUiStore((s) => s.setMobileOpen);
   const toggleCommandPalette = useCommandPaletteStore((s) => s.toggle);
@@ -113,11 +111,11 @@ export function AppSidebar() {
       if (!(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey) return;
       if (event.key.toLowerCase() !== "b") return;
       event.preventDefault();
-      setCollapsed(!useUiStore.getState().collapsed);
+      useUiStore.getState().toggleSidebar("chat");
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [setCollapsed]);
+  }, []);
   const isActive = (to: string) => pathname === to || pathname.startsWith(`${to}/`);
   const codeAvailable = useCodeAvailable();
   const inMenuPage = [...SECONDARY_NAV.map((item) => item.to), "/settings"].some(isActive);
@@ -163,17 +161,6 @@ export function AppSidebar() {
             <BrandMark className="size-5" />
           </Link>
           {codeAvailable && <ModeSwitch vertical={rail} onNavigate={closeDrawer} />}
-          {rail && (
-            <button
-              type="button"
-              onClick={() => setCollapsed(false)}
-              aria-label="Expand sidebar"
-              title="Expand sidebar (⌘B)"
-              className={cn(SIDEBAR_ICON, "hidden md:flex")}
-            >
-              <PanelLeftOpen className="size-4" />
-            </button>
-          )}
         </div>
 
         <nav
@@ -283,7 +270,6 @@ export function AppSidebar() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          {!rail && <SidebarFold label="Collapse sidebar" onClick={() => setCollapsed(true)} />}
         </div>
       </aside>
     </>
