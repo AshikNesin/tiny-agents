@@ -1,15 +1,8 @@
 #!/usr/bin/env tsx
-/**
- * Local development: seed the SQLite database (which also applies migrations),
- * then run the Node entry under tsx watch. Vite serves the client with HMR on
- * the same port.
- */
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync } from "node:fs";
 import { parseEnv } from "@groot/core/env";
 
-// Load .env before resolving DATABASE_URL: the seed step and the server inherit
-// this process.env, and loadEnvFile never overrides a variable already set.
 if (existsSync(".env")) process.loadEnvFile(".env");
 
 let devServer: ChildProcess | null = null;
@@ -37,9 +30,6 @@ async function main() {
   console.log("\n🚀 Starting dev server...\n");
   devServer = spawn(
     "node_modules/.bin/tsx",
-    // The tiny-agents server (Chromium, ssh2, pi-durable) needs ~600MB of
-    // heap while booting; 512 (groot's default) OOM-crashed on startup
-    // (issue #121).
     ["watch", "--max-old-space-size=1024", "apps/web/src/server/entry.node.ts"],
     {
       stdio: "inherit",

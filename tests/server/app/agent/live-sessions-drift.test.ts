@@ -1,11 +1,3 @@
-/**
- * Where the browser and computer session managers differ (the drift kept by
- * `LiveSessions` options, docs/rewrite/README.md §4.2). Each test pins one
- * difference that no other suite pinned, recorded on the two separate
- * managers before they became instances of one generic. The last block pins
- * microtask order too (where the driver is checked, when each call settles):
- * the rewrite keeps today's behavior, races included.
- */
 import { describe, expect, it } from "vite-plus/test";
 import {
   createBrowserSessions,
@@ -24,7 +16,6 @@ import { fakeComputer } from "./computer-fakes";
 const TARGET = { profile: "p1", tab: "t1" };
 const PROFILES = "/tmp/ta-live-drift";
 
-/** A clock moved by hand; `sweep` runs the idle sweep (the only interval). */
 function manualClock() {
   let now = 0;
   let seq = 0;
@@ -114,7 +105,6 @@ describe("live sessions drift: opening", () => {
     expect(order).toEqual(["open 1", "close", "open 2"]);
     finishClose();
     await closing;
-    // The wipe lands after the fresh desktop launched.
     expect(order).toEqual(["open 1", "close", "open 2", "closed", "wipe"]);
     expect(sessions.profiles()).toEqual(["shared"]);
     await sessions.closeAll();
@@ -304,7 +294,6 @@ describe("live sessions drift: the driver", () => {
     computerTime.set(5 * 60_000 + 1);
     computerTime.sweep();
     expect(computers.profiles()).toEqual(["shared"]);
-    // Setting the driver it already has counts as activity too.
     computerTime.set(5 * 60_000 + 50_000);
     await computers.setDriver("shared", "agent");
     computerTime.set(5 * 60_000 + 100_000);
@@ -409,7 +398,6 @@ describe("live sessions drift: the driver", () => {
   });
 });
 
-/** Runs `fn` after `n` microtask hops, so a test can land a call between a manager's awaits. */
 async function afterTicks(n: number, fn: () => unknown): Promise<void> {
   for (let i = 0; i < n; i++) await Promise.resolve();
   fn();
@@ -472,7 +460,6 @@ describe("live sessions drift: where the driver is checked", () => {
       acts.push(acted ? "ran" : "waited");
       await sessions.closeAll();
     }
-    // A takeover in the same tick as the call (n = 0) beats the check; one hop later does not.
     expect({ reads, acts }).toEqual({
       reads: ["refused", "ok", "ok", "ok", "ok", "ok", "ok", "ok"],
       acts: ["waited", "ran", "ran", "ran", "ran", "ran", "ran", "ran"],
@@ -509,7 +496,6 @@ describe("live sessions drift: where the driver is checked", () => {
       await act;
       await sessions.closeAll();
     }
-    // The browser checks after the open and the agent's tab: three hops in.
     expect({ reads, acts }).toEqual({
       reads: ["none", "none", "none", "t2", "t2", "t2", "t2", "t2"],
       acts: [
@@ -526,7 +512,6 @@ describe("live sessions drift: where the driver is checked", () => {
   });
 
   it("each call settles at the same microtask as before", async () => {
-    /** Microtask hops until `promise` settles. */
     const hops = async (promise: Promise<unknown>): Promise<number> => {
       let settled = false;
       promise.then(
@@ -568,7 +553,6 @@ describe("live sessions drift: where the driver is checked", () => {
     const one = { profile: "p1", tab: "t1" };
     const two = { profile: "p1", tab: "t2" };
     const browser: Record<string, number> = {};
-    // A fresh open is left out: its hops include the dynamic `import()` of node:fs.
     await browsers.acquire(one);
     browser.acquireLive = await hops(browsers.acquire(one));
     browser.acquireTab = await hops(browsers.acquire(two));
@@ -639,13 +623,12 @@ describe("live sessions drift: where the driver is checked", () => {
     await tick();
     time.set(5 * 60_000);
     const handBack = sessions.setDriver(a, "agent").then(() => void log.push("handback resolved"));
-    time.sweep(); // the browser idled out while the owner drove; the hand-back is still adopting
+    time.sweep();
     await tick();
     log.push("adopt done");
     finishAdopt();
     await handBack;
     await act;
-    // The sweep closed the browser, but the action still woke only with the hand-back.
     expect(log).toEqual([
       "t1:adopt",
       "t1:close",
@@ -658,7 +641,6 @@ describe("live sessions drift: where the driver is checked", () => {
   });
 });
 
-/** A desktop that answers every call with nothing. */
 function fakeDesktop(): ComputerDesktop {
   const none = async () => {};
   return {

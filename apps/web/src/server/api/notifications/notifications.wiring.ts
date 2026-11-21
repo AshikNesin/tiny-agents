@@ -1,18 +1,3 @@
-/**
- * Where tiny-agents tells the owner things (issue #57). Emit points hand
- * notifications to `notificationService.notify`, which never blocks them:
- *
- * - Needs input: each approval or `ask_owner` call that starts waiting
- *   (`runtime.onWait`) pushes once, deduped per task so a re-run after a
- *   restart stays quiet; answering it before the coalescing window ends
- *   cancels the push, and one reminder follows if it is still waiting.
- * - Runs: a reply that ends in a model error, or one that ran for at least
- *   `longRunMinutes`, pushes when nobody has that chat open. Routine runs
- *   (their own conversations, issue #63) are left to the routine events.
- *   This is a step of the settled pipeline (`runNotificationsStep`).
- * - Routines: `notifyRoutineRun` (watcher and fire job). A blocked run
- *   (issue #87) stays quiet; the run that pauses the routine pushes once.
- */
 import { logger } from "@groot/core/logger";
 import type { Notification } from "@groot/core/notification/notifier";
 import { notificationService } from "@groot/core/notification/notification.service";
@@ -48,7 +33,6 @@ import {
   vaultAlert,
 } from "./notifications.events";
 
-/** The service surface emit points use (tests pass a fake). */
 export type Notifier = Pick<
   typeof notificationService,
   "notify" | "cancel" | "getSettings" | "defineEvents"
@@ -60,11 +44,6 @@ export interface NotificationsWiring {
   stop(): void;
 }
 
-/**
- * The bot behind a chat conversation (titles and links). A routine's
- * conversation has none: its runs push through the routine events, and it
- * never waits on the owner (issue #63).
- */
 async function botFor(conversation: number): Promise<BotRef | undefined> {
   const bot = await chatOwner(conversation);
   return bot ? { id: bot.id, name: bot.name, conversationId: conversation } : undefined;
@@ -75,7 +54,6 @@ export function startNotifications(
   notifier: Notifier = notificationService,
 ): NotificationsWiring {
   notifier.defineEvents(NOTIFICATION_EVENTS);
-  // Vault values this process resolved never reach a push either.
   const offRedactor = registerRedactor((text) => secretRedactor.scrub(text));
   const reminders = new Map<string, ReturnType<typeof setTimeout>>();
 
@@ -84,7 +62,6 @@ export function startNotifications(
   async function onAdded(event: WaitEvent): Promise<void> {
     const bot = await botFor(event.conversation);
     if (!bot) return;
-    // A plain approval can be answered from the phone; takeovers and sign-ins need the app.
     const plainApproval =
       event.kind === "approval" &&
       event.tool !== undefined &&
@@ -105,7 +82,6 @@ export function startNotifications(
     const { reminderMinutes } = await notifier.getSettings();
     const key = waitKey(event.kind, event.conversation, event.task);
     if (reminderMinutes <= 0 || reminders.has(key)) return;
-    // A request that expires first needs no reminder.
     if (event.expiresAt !== undefined && event.expiresAt <= Date.now() + reminderMinutes * 60_000) {
       return;
     }
@@ -145,25 +121,10 @@ export function startNotifications(
   };
 }
 
-/**
- * The settled step: what a run sent the owner, a failed reply or a long one
- * reaches the owner's phone.
- * - `message_owner` texts sent in the run (issue #396) push from a bot's
- *   chat while nobody has it open, and always from a conversation answering
- *   another bot, which nobody can open.
- * - A failed or long reply pushes from a bot's chat while nobody watches.
- *   The reply is the Turn's last finished message; one from before this run
- *   (the conversation settled without a new Turn) is not news. A quiet turn's
- *   reply (a hand-off's finish, another bot's reply) is the bot's own
- *   working: it pushes only when it failed.
- * A routine's conversation pushes through its routine events, and a Past
- * chat's is nobody's.
- */
 export function runNotificationsStep(notifier: Notifier = notificationService): SettledStep {
   return {
     name: "run notifications",
     async run({ conversationId, chat, owner, startedAt }) {
-      // A run that was already going at boot has no start: nothing to measure against.
       if (startedAt === undefined) return;
       const behind = await owner();
       if (behind?.kind !== "chat" && behind?.kind !== "delivery") return;
@@ -173,7 +134,6 @@ export function runNotificationsStep(notifier: Notifier = notificationService): 
       const fresh = state.messages.filter(
         (message) => message.role === "assistant" && message.createdAt >= startedAt,
       );
-      // In a chat, only a quiet turn's sends are messages; an owner's turn shows its reply.
       const sent = fresh.flatMap((message) =>
         message.quiet || behind.kind === "delivery" ? (message.sent ?? []) : [],
       );
@@ -198,14 +158,11 @@ export function runNotificationsStep(notifier: Notifier = notificationService): 
   };
 }
 
-/** A routine run ended (watcher) or never started (fire job). */
 export function notifyRoutineRun(
   run: RoutineRunRef,
   outcome: RoutineOutcome,
   notifier: Pick<Notifier, "notify"> = notificationService,
 ): void {
-  // What a run sent with message_owner (issue #396) reaches the owner whatever
-  // the run came to; a succeeded run that sent nothing pushes nothing.
   const sent = "sent" in outcome ? outcome.sent : undefined;
   if (sent?.length) notifier.notify(routineSucceeded(run, sent.join("\n\n")));
   if (outcome.status === "blocked") {
@@ -216,17 +173,11 @@ export function notifyRoutineRun(
   notifier.notify(routineFailed(run, outcome.status, outcome.error));
 }
 
-/**
- * How a routine run ended, as its card and push see it. `blocked`: it
- * finished but could not do its job (issue #87); `pausedReason` is set on
- * the run that paused the routine.
- */
 export type RoutineOutcome =
   | { status: "succeeded"; output?: string | null; sent?: string[] }
   | { status: "blocked"; error: string; pausedReason?: string | null; sent?: string[] }
   | { status: RoutineFailure; error?: string | null; sent?: string[] };
 
-/** A vault security alert (reveal, delete, refused fill). Cannot be switched off. */
 export function notifyVaultAlert(
   kind: EventVaultAlertKind,
   title: string,

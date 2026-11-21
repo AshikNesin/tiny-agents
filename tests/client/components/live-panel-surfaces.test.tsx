@@ -126,7 +126,6 @@ function mount(which: "browser" | "computer", withTabs = false) {
 
 const asGuest = () => usePeopleStore.setState({ guest: true });
 
-/** The viewer exists (its ticket fetched, noVNC created) but has not connected. */
 const viewerCreated = () =>
   waitFor(() => expect(fakes.rfbs.length).toBeGreaterThan(0), { timeout: 4000 });
 
@@ -135,7 +134,6 @@ const connect = async () => {
   act(() => {
     fakes.rfbs[fakes.rfbs.length - 1]!.dispatchEvent(new Event("connect"));
   });
-  // Once live, the status chip says who drives.
   await screen.findByTestId(/-driver$/);
 };
 
@@ -443,7 +441,6 @@ describe("the panels' actions", () => {
 });
 
 describe("the panels' poll", () => {
-  /** The delays of the status polls set so far (the panels poll at 1.5s or 3s). */
   function polls() {
     const spy = vi.spyOn(window, "setInterval");
     return () => spy.mock.calls.map(([, ms]) => ms).filter((ms) => ms === 1500 || ms === 3000);

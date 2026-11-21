@@ -51,7 +51,6 @@ import groot.mobile.ui.components.Markdown
 import groot.mobile.ui.components.StatusDot
 import java.net.URI
 
-/** One transcript message, by role: the owner's bubble, the bot's reply, or a marker line. */
 @Composable
 fun MessageView(
     message: ChatMessage,
@@ -80,7 +79,6 @@ fun MessageView(
     }
 }
 
-/** The owner's message: a rounded bubble on the right, attachments above it. */
 @Composable
 fun UserBubble(
     text: String,
@@ -118,7 +116,6 @@ fun UserBubble(
     }
 }
 
-/** A message another bot delivered into this chat. */
 @Composable
 private fun PeerMessage(message: ChatMessage, modifier: Modifier) {
     val peer = message.peer ?: return
@@ -146,7 +143,6 @@ private fun PeerMessage(message: ChatMessage, modifier: Modifier) {
     }
 }
 
-/** The bot's reply: its thinking and tool steps as quiet lines, then the answer, full width. */
 @Composable
 private fun AssistantMessage(message: ChatMessage, actions: ChatActions, onCopy: (String) -> Unit, modifier: Modifier) {
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(S.sm)) {
@@ -197,7 +193,6 @@ private fun AssistantMessage(message: ChatMessage, actions: ChatActions, onCopy:
     }
 }
 
-/** The model's thinking, folded to one line unless it is all there is to show right now. */
 @Composable
 private fun Reasoning(text: String, live: Boolean) {
     var open by rememberSaveable { mutableStateOf(false) }
@@ -225,7 +220,6 @@ private fun Reasoning(text: String, live: Boolean) {
     }
 }
 
-/** An owner message the transcript does not hold yet: sending, or waiting for the network. */
 @Composable
 fun EchoBubble(echo: OutboxEntry, onOpenImage: (AttachmentRef) -> Unit, onSaveFile: (AttachmentRef) -> Unit) {
     UserBubble(
@@ -239,7 +233,6 @@ fun EchoBubble(echo: OutboxEntry, onOpenImage: (AttachmentRef) -> Unit, onSaveFi
     )
 }
 
-/** A centred, muted line between messages: a marker, the "New messages" divider. */
 @Composable
 fun QuietLine(text: String, modifier: Modifier = Modifier) {
     Text(
@@ -251,7 +244,6 @@ fun QuietLine(text: String, modifier: Modifier = Modifier) {
     )
 }
 
-/** Three dots pulsing in turn: the bot is working with nothing on screen to show it. */
 @Composable
 fun TypingDots(modifier: Modifier = Modifier) {
     val transition = rememberInfiniteTransition(label = "typing")
@@ -276,7 +268,6 @@ fun TypingDots(modifier: Modifier = Modifier) {
     }
 }
 
-/** A small round badge with a count (approvals waiting). */
 @Composable
 fun CountBadge(count: Int, modifier: Modifier = Modifier) {
     Box(

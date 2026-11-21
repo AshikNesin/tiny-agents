@@ -1,10 +1,3 @@
-/**
- * A minimal, non-validating XML tokenizer for reading OOXML and ODF parts
- * (issue #58). It never resolves DTDs or external entities — DOCTYPEs are
- * skipped and only the five predefined entities and numeric references are
- * decoded — so a hostile document can't expand or reach out.
- */
-
 export type XmlEvent =
   | { type: "open"; name: string; attrs: Record<string, string>; selfClosing: boolean }
   | { type: "close"; name: string }
@@ -30,7 +23,6 @@ function decodeEntities(text: string): string {
 }
 
 export function* xmlEvents(xml: string): Generator<XmlEvent> {
-  // A fresh regex per walk: readers nest walks (a sheet inside its workbook).
   const token = new RegExp(TOKEN.source, "g");
   const attrPattern = new RegExp(ATTR.source, "g");
   for (let match = token.exec(xml); match; match = token.exec(xml)) {
@@ -57,5 +49,4 @@ export function* xmlEvents(xml: string): Generator<XmlEvent> {
   }
 }
 
-/** The local part of a qualified name: `w:t` → `t`. */
 export const local = (name: string) => name.slice(name.indexOf(":") + 1);

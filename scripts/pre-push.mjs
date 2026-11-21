@@ -1,13 +1,3 @@
-// The pre-push hook (.vite-hooks/pre-push hands git's ref lines to this on
-// stdin): for a push that updates a branch, the format check and lint on the
-// files the pushed commits change, and the incremental typecheck when a
-// TypeScript file or a config the programs read changed, all at once. CI runs
-// every check on every file; this is the fast local pass.
-//
-// Files come from the pushed commits (against the remote's tip, or the merge
-// base with origin/main for a new branch); their contents and the typecheck
-// come from the working tree.
-
 import { execFileSync, spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import process from "node:process";
@@ -18,10 +8,8 @@ const FORMATTED = /\.(?:[cm]?[jt]sx?|json|jsonc|ya?ml|md|css|html)$/;
 const LINTED = /\.(?:[cm]?[jt]sx?)$/;
 const TYPED = /\.(?:[cm]?tsx?)$|(?:^|\/)(?:tsconfig[^/]*\.json|package\.json)$/;
 
-/** What the hook runs for these changed files: `{ fmt, lint, typecheck }`. */
 export function prePushPlan(files) {
   return {
-    // pnpm writes its lockfile; Oxfmt does not own it.
     fmt: files.filter((file) => FORMATTED.test(file) && file !== "pnpm-lock.yaml"),
     lint: files.filter((file) => LINTED.test(file)),
     typecheck: files.some((file) => TYPED.test(file)),
@@ -38,7 +26,6 @@ function quietly(...args) {
   }
 }
 
-/** Files the pushed commits change, that still exist in the working tree. */
 function changedFiles(refLines) {
   const files = new Set();
   for (const line of refLines) {

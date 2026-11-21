@@ -1,11 +1,5 @@
-/**
- * Code settings (`/code/settings`), inside the Code workspace the way
- * t3code keeps its settings beside the thread list: **Projects** (add one,
- * then a page per project with every rule the server takes) and **GitHub**
- * (which credential reaches GitHub, and the optional GitHub App). Owner-only:
- * a guest sees neither (issue #297 §6, §7.2).
- */
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -26,6 +20,7 @@ import { Spinner } from "../../components/ui/spinner";
 import { Switch } from "../../components/ui/switch";
 import { errorMessage } from "../../lib/errors";
 import { projectsApi } from "../../lib/code/projects";
+import { RESOURCE_QUERY, useResource } from "../../queries/resource";
 import type { HarnessInfo, ModelOption } from "../../lib/code/api";
 import { useIsGuest } from "../../store/people";
 import type { GitHubStatus, ProjectUpdateBody, ProjectView } from "../../../shared/api/code";
@@ -35,8 +30,6 @@ const SECTIONS = [
   { id: "projects", label: "Projects" },
   { id: "github", label: "GitHub" },
 ] as const;
-
-// --- layout: t3code-style groups of rows -------------------------------------------------
 
 function SettingsGroup({
   title,
@@ -67,10 +60,8 @@ function SettingsRow({
 }: {
   label: string;
   description?: ReactNode;
-  /** The control's id, so the label names it. */
   htmlFor?: string;
   children: ReactNode;
-  /** Put the control under the label (wide text fields). */
   stack?: boolean;
 }) {
   return (
@@ -116,21 +107,14 @@ function SwitchRow({
 interface TextFieldProps {
   id: string;
   value: string;
-  /** `false`: refused, the field goes back to the saved value. */
   onSave(next: string): false | void;
   placeholder?: string;
   mono?: boolean;
-  /** An empty value is not saved: the field goes back to what it was. */
   required?: boolean;
   inputMode?: "numeric";
   className?: string;
 }
 
-/**
- * A text field that saves when it loses focus (or on Enter), if it changed.
- * A new saved value starts a fresh draft (the key), instead of copying the
- * prop into state.
- */
 function TextField(props: TextFieldProps) {
   return <DraftField key={props.value} {...props} />;
 }
@@ -175,8 +159,6 @@ const list = (text: string) =>
     .map((item) => item.trim())
     .filter(Boolean);
 
-// --- the page ----------------------------------------------------------------------------
-
 export function CodeSettings({
   section,
   projectId,
@@ -190,7 +172,6 @@ export function CodeSettings({
   harnesses: HarnessInfo[];
   projects: ProjectView[] | null;
   onChange(): void;
-  /** The thread list is folded away: leave room for Show sidebar. */
   sidebarHidden?: boolean;
 }) {
   if (!section) return <Navigate to="/code/settings/projects" replace />;
@@ -301,8 +282,6 @@ function SettingsBody({
   );
 }
 
-// --- Projects ----------------------------------------------------------------------------
-
 function ProjectsSettings({
   harnesses,
   projects,
@@ -352,36 +331,30 @@ function ProjectsSettings({
 
 function AddProject({ harnesses, onChange }: { harnesses: HarnessInfo[]; onChange(): void }) {
   const navigate = useNavigate();
-  // `?repo=owner/name`: the Reviews screen's Add project for a PR outside any project.
   const [params] = useSearchParams();
   const prefill = params.get("repo") ?? "";
-  const [github, setGitHub] = useState<GitHubStatus | null>(null);
+  const github = useGitHubStatus().status;
   const [repo, setRepo] = useState(prefill);
   const [instanceId, setInstanceId] = useState(harnesses[0]?.id ?? "");
   const [viaApp, setViaApp] = useState(false);
-  const [appRepos, setAppRepos] = useState<Array<{ fullName: string }> | null>(null);
   const [busy, setBusy] = useState(false);
+  const hasApp = Boolean(github?.app);
   useEffect(() => {
-    projectsApi
-      .github()
-      .then((status) => {
-        setGitHub(status);
-        // With the App set up, new projects use it unless you say otherwise.
-        if (status.app) setViaApp(true);
-      })
-      .catch(() => setGitHub(null));
-  }, []);
+    if (hasApp) setViaApp(true);
+  }, [hasApp]);
+  useEffect(() => setRepo(prefill), [viaApp, prefill]);
+  const appRepoQuery = useQuery({
+    queryKey: ["code", "github", "app-repositories", prefill],
+    queryFn: () => projectsApi.appRepositories(),
+    enabled: viaApp,
+    ...RESOURCE_QUERY,
+  });
+  const appRepos = appRepoQuery.isError ? null : (appRepoQuery.data ?? null);
   useEffect(() => {
-    setRepo(prefill);
-    if (!viaApp) return;
-    projectsApi
-      .appRepositories()
-      .then(setAppRepos)
-      .catch((e: unknown) => {
-        toast.error(errorMessage(e, "Could not list the App's repositories."));
-        setAppRepos(null);
-      });
-  }, [viaApp, prefill]);
+    if (appRepoQuery.error) {
+      toast.error(errorMessage(appRepoQuery.error, "Could not list the App's repositories."));
+    }
+  }, [appRepoQuery.error]);
   const create = async () => {
     setBusy(true);
     try {
@@ -480,7 +453,6 @@ function AddProject({ harnesses, onChange }: { harnesses: HarnessInfo[]; onChang
   );
 }
 
-/** One project's settings, a group per concern; each change saves at once. */
 function ProjectSettings({
   project,
   harnesses,
@@ -509,7 +481,6 @@ function ProjectSettings({
 
 type Update = (body: ProjectUpdateBody) => void;
 
-/** The id of one of a project's fields, for its label. */
 const fieldId = (project: ProjectView, name: string) => `project-${project.id}-${name}`;
 
 function ProjectHeader({ project }: { project: ProjectView }) {
@@ -890,18 +861,22 @@ function DangerZone({ project, onChange }: { project: ProjectView; onChange(): v
   );
 }
 
-// --- GitHub ------------------------------------------------------------------------------
+const GITHUB_KEY = ["code", "github", "status"];
+
+function useGitHubStatus() {
+  const { data } = useResource(GITHUB_KEY, () => projectsApi.github().catch(() => null), "");
+  const client = useQueryClient();
+  const setStatus = useCallback(
+    (next: GitHubStatus) => client.setQueryData<GitHubStatus | null>(GITHUB_KEY, next),
+    [client],
+  );
+  return { status: data, setStatus };
+}
 
 function GitHubSettings() {
-  const [status, setStatus] = useState<GitHubStatus | null>(null);
+  const { status, setStatus } = useGitHubStatus();
   const [token, setToken] = useState("");
   const [busy, setBusy] = useState(false);
-  useEffect(() => {
-    projectsApi
-      .github()
-      .then(setStatus)
-      .catch(() => setStatus(null));
-  }, []);
   const save = async (value: string | null) => {
     setBusy(true);
     try {
@@ -976,7 +951,6 @@ function GitHubSettings() {
   );
 }
 
-/** Post the manifest to GitHub as a form: GitHub shows the owner the App to create. */
 function submitManifest(url: string, manifest: object) {
   const form = document.createElement("form");
   form.method = "post";
@@ -990,12 +964,6 @@ function submitManifest(url: string, manifest: object) {
   form.submit();
 }
 
-/**
- * The optional GitHub App, created in one click (GitHub's App Manifest flow,
- * as FeedbackBee does): GitHub creates it with the right permissions and
- * events and hands back its key and webhook secret, which go to the vault.
- * Then one more click installs it on repositories.
- */
 function GitHubApp({
   status,
   onSaved,

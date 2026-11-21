@@ -1,7 +1,3 @@
-/**
- * The remote Chrome window cannot be narrower than 500 CSS pixels, so a narrow
- * viewer asks for a wider window of its own shape and scales it down.
- */
 import { describe, expect, it } from "vite-plus/test";
 import { MIN_REMOTE_WIDTH, remoteWindowSize } from "@/lib/remote-window";
 

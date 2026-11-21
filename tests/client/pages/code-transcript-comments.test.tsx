@@ -1,9 +1,3 @@
-/**
- * Line comments that reached the agent read as comments in the thread: each
- * one names its file and lines, shows the lines it is about and what was
- * said, and the owner's own message follows, instead of the raw markdown the
- * agent was sent.
- */
 import React from "react";
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vite-plus/test";

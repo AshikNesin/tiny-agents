@@ -1,8 +1,3 @@
-/**
- * What the panel's viewport says while nothing streams: headless (the
- * browser's), not set up (the computer's), opening or first-run setup, a
- * failed open with Try again, or closed with its open button.
- */
 import { MonitorOff } from "lucide-react";
 import { Button, EmptyState, ErrorState, LoadingSpinner } from "@groot/ui";
 import { cn } from "@groot/ui/lib/utils";
@@ -10,7 +5,6 @@ import type { Bot } from "../../../shared/api/bots";
 import type { LiveViewKind } from "../../lib/live-view";
 import type { LivePanelSurface, PanelStatus } from "./surface";
 
-/** Keeps a state's explanation to a readable line length, even in full screen. */
 const noteClass = "mx-auto block max-w-sm";
 
 type OffProps<S extends PanelStatus> = {
@@ -35,7 +29,6 @@ export function LivePanelOffStates<S extends PanelStatus>(props: OffProps<S>) {
   );
 }
 
-/** Open without a display (the browser's headless), or no computer set up. */
 function NothingToStream<S extends PanelStatus>({
   kind,
   panel,
@@ -72,7 +65,6 @@ function NothingToStream<S extends PanelStatus>({
   );
 }
 
-/** Set up but not open: opening (or its first-run setup), a failed open, or closed. */
 function NotOpen<S extends PanelStatus>({
   kind,
   panel,

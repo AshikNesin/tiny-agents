@@ -1,17 +1,3 @@
-// Which tests a CI test job runs. Pull requests run only the test files the
-// diff can reach (Vitest's --changed: the changed files and every test that
-// imports them, directly or not); every other event (the merge queue, pushes
-// to main and next, a manual run) runs everything. Selection only narrows PR
-// feedback: the merge queue runs the full suite before anything reaches main.
-//
-// A change to anything the import graph cannot see runs everything on a PR
-// too: the test setups and clock, the Vitest and Vite configs, the migrations
-// and schemas, the package manifests and lockfile, the shared test fixtures
-// and the CI wiring itself.
-//
-// Prints the extra Vitest arguments (nothing for a full run) and says why on
-// stderr and in the job summary.
-
 import { execFileSync } from "node:child_process";
 import { appendFileSync } from "node:fs";
 import process from "node:process";
@@ -28,7 +14,6 @@ export const RUN_EVERYTHING = [
   /(^|\/)vite\.config[^/]*\.ts$/,
   /^apps\/web\/drizzle\//,
   /(^|\/)schema\.ts$/,
-  // Not mobile/: the Android app has its own tooling and no tests here.
   /^(?!mobile\/)(.*\/)?package\.json$/,
   /^pnpm-lock\.yaml$/,
   /^pnpm-workspace\.yaml$/,
@@ -38,10 +23,6 @@ export const RUN_EVERYTHING = [
   /^scripts\/test-selection\.mjs$/,
 ];
 
-/**
- * `{ args, reason }` for a CI event: `args` are what to add to the Vitest
- * command (empty for a full run).
- */
 export function selection({ event, mergeBase, changedFiles }) {
   if (event !== "pull_request") {
     return { args: [], reason: `Full run: a ${event} event runs every test.` };
@@ -54,7 +35,6 @@ export function selection({ event, mergeBase, changedFiles }) {
     };
   }
   return {
-    // A shard of a small selection may hold no file at all.
     args: [`--changed=${mergeBase}`, "--passWithNoTests"],
     reason: `Selected: test files the ${changedFiles.length} changed file(s) since ${mergeBase.slice(0, 7)} can reach. The merge queue runs everything.`,
   };

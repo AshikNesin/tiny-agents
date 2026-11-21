@@ -55,7 +55,6 @@ const CATEGORY_LABEL: Record<NotificationCategory, string> = {
   system: "System",
 };
 
-/** The chosen channel is Pushover: its status, setup hint and test. */
 function PushoverDetails() {
   const queryClient = useQueryClient();
   const { data: status, isLoading } = useQuery({
@@ -143,12 +142,9 @@ function PushoverDetails() {
   );
 }
 
-/** A place notifications can go, offered next to Pushover (the app adds its phone app). */
 export interface NotificationDestination {
-  /** The channel id `deliverTo` stores ("webpush" for the phone app). */
   id: string;
   label: string;
-  /** Shown under the choice while it is selected. */
   details: ReactNode;
 }
 
@@ -296,12 +292,10 @@ function PreferencesCard() {
   });
   const [draft, setDraft] = useState<Settings | null>(null);
   const [syncedFrom, setSyncedFrom] = useState<Settings | undefined>(undefined);
-  // Re-sync the draft whenever the server copy changes (load, save).
   if (data && data.settings !== syncedFrom) {
     setSyncedFrom(data.settings);
     setDraft(data.settings);
   }
-  // Where notifications go is chosen above; a save here never changes it.
   const save = useToastMutation(
     (value: Settings) =>
       notificationsService.saveSettings({ ...value, deliverTo: data!.settings.deliverTo }),
@@ -527,11 +521,6 @@ function LogCard() {
   );
 }
 
-/**
- * Settings → Notifications: one place notifications go (`destinations` the
- * app offers, Pushover, or off) with that channel's details, then what to
- * send, quiet hours and the log.
- */
 export function NotificationSettings({
   destinations = [],
 }: {

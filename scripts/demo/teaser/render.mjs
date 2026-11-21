@@ -1,29 +1,19 @@
-// Renders teaser.html frame by frame: render(t) for each frame, then a
-// screenshot. Deterministic, so any frame can be re-rendered on its own.
-//
-//   node scripts/demo/teaser/render.mjs                  # all frames, 60 fps
-//   STILLS=3.5,9.4,15.2 node scripts/demo/teaser/render.mjs   # review stills
 import { mkdirSync, rmSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
 const require = createRequire(import.meta.url);
-// The repo's playwright-core when installed, else a global playwright.
 const { chromium } = await import("playwright-core").catch(() => require("playwright"));
 
 const FPS = Number(process.env.FPS ?? 60);
 const OUT = process.env.FRAMES_DIR ?? "tmp/demo/teaser-frames";
 const STILLS = process.env.STILLS?.split(",").map(Number);
-// FROM=<seconds> re-renders only the frames from that time on, keeping the rest.
 const FROM = Number(process.env.FROM ?? 0);
 const html = fileURLToPath(new URL("./teaser.html", import.meta.url));
 
 if (!STILLS && !FROM) rmSync(OUT, { recursive: true, force: true });
 mkdirSync(OUT, { recursive: true });
 
-// Several workers render interleaved frames in parallel (WORKERS, default 4).
-// Each gets its own browser: Chromium throttles background tabs, so pages
-// sharing one browser stall each other.
 const WORKERS = Number(process.env.WORKERS ?? 4);
 const browsers = [];
 async function openPage() {

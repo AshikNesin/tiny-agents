@@ -1,8 +1,3 @@
-/**
- * The runtime a test opened or installed through `./runtime`. Kept in a
- * module with no imports, so the setup can read it without loading the agent
- * packages before a file's `vi.mock` calls run.
- */
 import type { AgentRuntime } from "../../../packages/agent/src/runtime";
 
 export type CurrentRuntime =

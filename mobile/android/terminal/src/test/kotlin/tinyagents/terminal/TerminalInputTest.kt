@@ -124,7 +124,6 @@ class TerminalInputTest {
         assertEquals(listOf(0x7F), ctrl("?"))
         assertEquals("anything else passes through", listOf('1'.code), ctrl("1"))
         assertEquals("including non-ASCII", "é".toByteArray(Charsets.UTF_8).map { it.toInt() and 0xFF }, ctrl("é"))
-        // The web key bar's control keys.
         assertEquals(listOf(0x04, 0x1A, 0x0C, 0x12), ctrl("dzlr"))
     }
 
@@ -185,7 +184,6 @@ class TerminalInputTest {
 
     @Test
     fun `the emulator understands its own mouse-free round trip`() {
-        // What the key encoder sends is what the web key bar sends for the same keys.
         val bar = mapOf(
             TerminalKey.ESCAPE to "\u001b", TerminalKey.TAB to "\t", TerminalKey.UP to "\u001b[A",
             TerminalKey.DOWN to "\u001b[B", TerminalKey.LEFT to "\u001b[D", TerminalKey.RIGHT to "\u001b[C",

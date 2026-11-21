@@ -1,22 +1,3 @@
-/**
- * Code (issue #143, ADR 0011): one workspace for the owner's coding agents
- * ("harnesses": Shelley, Claude Code). tiny-agents runs no agent loop; each
- * harness is driven through its adapter on the server — every thread and
- * subagent, live transcripts, steering, approvals and the diff of what
- * changed — and the page shows only what a thread's harness can do.
- *
- * Layout, after t3code: a sidebar of threads grouped by project (with the
- * way back to the app, ⌘K, Archived and Settings) | thread | changes on wide
- * screens (the list steps aside for Changes until 2xl, and Hide sidebar or ⌘B
- * folds it away, remembered in this browser; the divider before the right
- * panel resizes it, see ResizablePane); one column at a time
- * on phones (`/code` → `/code/new` or `/code/:id` → `/code/:id/changes`).
- * `/code/:id/review` shows the same Changes and Pull request at full width
- * (each side pane's Open as a page goes there).
- * Projects and GitHub are settings pages of their own (`/code/settings`).
- * `/code/reviews` lists PR reviews and opens one by link; a review
- * (`/code/reviews/:reviewId`) takes the whole screen (issue #345).
- */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Link,
@@ -28,6 +9,7 @@ import {
 } from "react-router-dom";
 import { ArrowLeft, Code2, PanelLeftClose, PanelLeftOpen, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Button, EmptyState, monoClass } from "@groot/ui";
 import { cn } from "@groot/ui/lib/utils";
 import { CommandPaletteTrigger } from "@groot/shell/components/CommandPalette";
@@ -43,6 +25,7 @@ import {
   type ThreadSummary,
 } from "../../lib/code/api";
 import { reviewPath, reviewsApi, useProjects } from "../../lib/code/projects";
+import { RESOURCE_MUTATION, RESOURCE_QUERY, useResource } from "../../queries/resource";
 import { harnessOf, useCodeStore } from "../../store/code";
 import { ChangesPanel } from "./ChangesPanel";
 import { CodeSettings } from "./CodeSettings";
@@ -80,21 +63,17 @@ function readSidebar(): boolean {
   }
 }
 
-/** The thread list on wide screens (phones show it as its own screen), remembered here. */
 function useSidebar(): [boolean, () => void] {
   const [open, setOpen] = useState(readSidebar);
   const toggle = useCallback(() => setOpen((shown) => !shown), []);
   useEffect(() => {
     try {
       window.localStorage.setItem(SIDEBAR_KEY, open ? "open" : "closed");
-    } catch {
-      // not remembered in private mode
-    }
+    } catch {}
   }, [open]);
   return [open, toggle];
 }
 
-/** Back from GitHub's App setup: say how it went and open GitHub settings for the next step. */
 function useGitHubSetupResult(result: string | null, reloadProjects: () => void) {
   const navigate = useNavigate();
   useEffect(() => {
@@ -111,12 +90,16 @@ function useGitHubSetupResult(result: string | null, reloadProjects: () => void)
   }, [result, reloadProjects, navigate]);
 }
 
-/** ⌘B folds the sidebar, ⌘. stops the agent, ⌘⇧D toggles Changes. */
 function useCodeShortcuts(
   threadId: string | undefined,
   toggleChanges: () => void,
   toggleSidebar: () => void,
 ) {
+  const { mutate: interrupt } = useMutation({
+    mutationFn: (id: string) => codeApi.interrupt(id),
+    ...RESOURCE_MUTATION,
+    onError: (error) => toast.error(errorMessage(error, "Could not stop it.")),
+  });
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (!(event.metaKey || event.ctrlKey)) return;
@@ -128,9 +111,7 @@ function useCodeShortcuts(
       if (!threadId) return;
       if (event.key === ".") {
         event.preventDefault();
-        codeApi
-          .interrupt(threadId)
-          .catch((error: unknown) => toast.error(errorMessage(error, "Could not stop it.")));
+        interrupt(threadId);
       } else if (event.shiftKey && event.key.toLowerCase() === "d") {
         event.preventDefault();
         toggleChanges();
@@ -138,45 +119,39 @@ function useCodeShortcuts(
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [threadId, toggleChanges, toggleSidebar]);
+  }, [threadId, toggleChanges, toggleSidebar, interrupt]);
 }
 
-/**
- * An open thread that is not in the active list (archived, say by a merge):
- * its row from the archived list, so the page still knows its project and PR.
- */
 function useArchivedRow(
   threadId: string | undefined,
   threads: ThreadSummary[] | null,
 ): ThreadSummary | undefined {
-  const [found, setFound] = useState<ThreadSummary | undefined>();
   const listed = threads === null || threads.some((t) => t.id === threadId);
-  useEffect(() => {
-    setFound(undefined);
-    if (!threadId || listed) return;
-    let cancelled = false;
-    codeApi
-      .list("archived")
-      .then((rows) => !cancelled && setFound(rows.find((r) => r.id === threadId)))
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [threadId, listed]);
-  return found;
+  const enabled = Boolean(threadId) && !listed;
+  const archived = useQuery({
+    queryKey: ["code", "threads", "archived", threadId],
+    queryFn: () => codeApi.list("archived"),
+    enabled,
+    ...RESOURCE_QUERY,
+  });
+  return enabled ? archived.data?.find((r) => r.id === threadId) : undefined;
 }
 
 function SlugRedirect({ slug }: { slug: string }) {
   const navigate = useNavigate();
+  const { data: thread, loadError } = useResource(
+    ["code", "threads", "by-title", slug],
+    () => codeApi.byTitle(slug),
+    "",
+  );
   useEffect(() => {
-    codeApi
-      .byTitle(slug)
-      .then((t) => navigate(threadPath(t.id), { replace: true }))
-      .catch(() => {
-        toast.error(`No thread “${slug}”.`);
-        navigate("/code", { replace: true });
-      });
-  }, [slug, navigate]);
+    if (thread) navigate(threadPath(thread.id), { replace: true });
+  }, [thread, navigate]);
+  useEffect(() => {
+    if (loadError === null) return;
+    toast.error(`No thread “${slug}”.`);
+    navigate("/code", { replace: true });
+  }, [loadError, slug, navigate]);
   return (
     <div className="flex h-full items-center justify-center">
       <Spinner />
@@ -200,8 +175,6 @@ export function CodePage() {
   const threads = useCodeStore((s) => s.threads);
   const [insert, setInsert] = useState<{ text: string; nonce: number } | null>(null);
   const [sidebarOpen, toggleSidebar] = useSidebar();
-  // The open thread's directory, for Changes even when it is not in the
-  // active list (archived, or not in the list yet).
   const [viewCwd, setViewCwd] = useState<string | null>(null);
   const threadId = rawId ? normalizeThreadId(decodeURIComponent(rawId)) : undefined;
   const changesOpen = Boolean(threadId) && pathname.endsWith("/changes");
@@ -212,25 +185,18 @@ export function CodePage() {
   const [searchParams] = useSearchParams();
   useGitHubSetupResult(searchParams.get("github"), reloadProjects);
   const reviewTab: ReviewTab = searchParams.get("tab") === "pr" ? "pr" : "changes";
-  // A project thread's Changes default to everything since its base branch.
   const [reviewScope, setReviewScope] = useState<"base" | "harness">("base");
-  // `/code/new` is the new-thread screen on phones (`/code` is the list there).
   const composing = pathname === "/code/new";
-  // `/code/threads`: every thread (or one project's) at full width, by status.
   const browsing = pathname === "/code/threads";
-  // `/code/reviews`: PR reviews (issue #345).
   const reviewing = pathname === "/code/reviews";
   const archivedRow = useArchivedRow(threadId, threads);
   const rows = useMemo(
     () => (archivedRow ? [...(threads ?? []), archivedRow] : (threads ?? [])),
     [threads, archivedRow],
   );
-  // A review's assistant lives on its review, not in the thread list.
   const listed = useMemo(() => threads?.filter((t) => !t.review) ?? null, [threads]);
   const row = rows.find((r) => r.id === threadId);
   const cwd = row?.cwd ?? viewCwd;
-  // While Changes is open the server pushes a version each time the files move;
-  // where it cannot watch them, the panels re-read on transcript activity.
   const changeVersion = useLiveChanges(
     threadId ?? null,
     cwd ?? null,
@@ -240,22 +206,18 @@ export function CodePage() {
     changeVersion === null
       ? `${row?.working}:${row?.cursor}`
       : `live:${changeVersion}:${row?.working}`;
-  // Live connection state over the static description.
   const harnesses = useMemo(
     () => (harnessList ?? []).map((h) => ({ ...h, status: statuses[h.id] ?? h.status })),
     [harnessList, statuses],
   );
   const harness = threadId ? harnessOf(harnesses, instanceOf(threadId)) : undefined;
 
-  // Line comments from the diff panels; a guest's go into the composer.
   const commenting = useThreadCommenting(threadId, (text) => {
     setInsert({ text, nonce: Date.now() });
-    // On phones the composer is on the thread screen.
     if (threadId && window.matchMedia("(max-width: 1023px)").matches)
       navigate(threadPath(threadId));
   });
 
-  // Links from before the harness layer (`/code/<shelley id>`) move to the new id.
   useEffect(() => {
     if (rawId && !decodeURIComponent(rawId).includes(":")) {
       navigate(threadPath(normalizeThreadId(rawId), changesOpen ? "/changes" : ""), {
@@ -265,7 +227,6 @@ export function CodePage() {
   }, [rawId, changesOpen, navigate]);
 
   const sideOpen = changesOpen || prOpen;
-  // The right panel's tab: Source control (`/changes`) or Pull request (`/pr`).
   const [lastTab, setLastTab] = useState<SideTab>(readSideTab);
   const showTab = useCallback(
     (tab: SideTab) => {
@@ -273,14 +234,11 @@ export function CodePage() {
       setLastTab(tab);
       try {
         window.localStorage.setItem(SIDE_TAB_KEY, tab);
-      } catch {
-        // not remembered in private mode
-      }
+      } catch {}
       navigate(threadPath(threadId, tab === "pr" ? "/pr" : "/changes"));
     },
     [threadId, navigate],
   );
-  // One toggle opens the panel where it was left (a thread outside a project has no PR tab).
   const togglePanel = useCallback(() => {
     if (!threadId) return;
     if (sideOpen) navigate(threadPath(threadId));
@@ -312,7 +270,6 @@ export function CodePage() {
     return <PullReview reviewId={reviewId} harnesses={harnesses} rows={rows} />;
   }
 
-  // The Changes and Pull request panels, for a side pane or the Review page.
   const openPage = (tab: ReviewTab) =>
     threadId && navigate(threadPath(threadId, `/review${tab === "pr" ? "?tab=pr" : ""}`));
   const pullPanel = (page: boolean) =>
@@ -322,7 +279,6 @@ export function CodePage() {
         refreshKey={`${row?.working}:${row?.cursor}:${row?.pr?.loop}`}
         onAttach={(text) => {
           setInsert({ text, nonce: Date.now() });
-          // The composer is on the thread screen (on phones, and from the Review page).
           if (page || window.matchMedia("(max-width: 1023px)").matches)
             navigate(threadPath(threadId));
         }}
@@ -373,7 +329,6 @@ export function CodePage() {
           className={cn(
             "border-border w-full shrink-0 flex-col border-r md:w-72 xl:w-80",
             threadId || composing || browsing || reviewing || inSettings ? "hidden" : "flex",
-            // With Changes open the list steps aside until there is room for all three.
             !sidebarOpen ? "md:hidden" : sideOpen ? "2xl:flex" : "md:flex",
           )}
         >
@@ -503,11 +458,6 @@ export function CodePage() {
   );
 }
 
-/**
- * The workspace owns the full column (the app sidebar stays away), so it
- * carries its own way back to the app, like the settings screen. The
- * not-configured state shows it too, or a direct link to `/code` is a dead end.
- */
 function BackToApp({ brand }: { brand: { to: string; label: string } }) {
   return (
     <Link
@@ -531,7 +481,6 @@ function CodeHeader({ brand }: { brand: { to: string; label: string } }) {
   );
 }
 
-/** No harness is configured: how to add one, with the way back to the app. */
 function NotConfigured({ brand }: { brand: { to: string; label: string } }) {
   return (
     <div className="flex h-dvh min-h-0 flex-col">
@@ -557,7 +506,6 @@ function NotConfigured({ brand }: { brand: { to: string; label: string } }) {
   );
 }
 
-/** A line per harness that is not connected, at the foot of the thread list. */
 function ConnectionNotices({ offline }: { offline: HarnessInfo[] }) {
   return (
     <>

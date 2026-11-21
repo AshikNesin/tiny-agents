@@ -1,11 +1,3 @@
-/**
- * Runtime-level proof (issue #22): the memory section reaches the model's
- * prompt through the real durable machinery. pi-durable renders extension
- * sections onto the system message's `sections` map (not `systemPrompt`), so
- * the proof captures that message — the exact surface the provider reads.
- * The bot row is keyed to the conversation the runtime created, so the store
- * lookup the capability performs actually finds it.
- */
 import { eq } from "drizzle-orm";
 import { afterAll, expect, it } from "vite-plus/test";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -38,7 +30,6 @@ it(
   { timeout: 20_000 },
   async () => {
     const text = "The owner prefers TypeScript, never JavaScript.";
-    // Chat writes read the turn's author from this runtime (isUnattended).
     let rt: AgentRuntime | undefined;
     const store = createMemoryStore(() => rt!);
     const capability = createMemoryCapability(store);
@@ -133,7 +124,6 @@ it(
       );
       expect(reply.text).toContain(text);
 
-      // "Forget …" in chat: the tool asks, tombstones, and the fact leaves the prompt.
       await rt.submit(fresh, { requestId: "forget", text: "Forget my TypeScript preference." });
       const forgetCall = await until(
         () =>
@@ -174,11 +164,6 @@ it(
   },
 );
 
-/**
- * The sections in effect for this request: pi-durable stores section changes
- * as positional system entries, so later entries override earlier ones and
- * `null` removes a section.
- */
 function systemSections(context: Context): Record<string, string> {
   const effective: Record<string, string> = {};
   for (const message of context.messages) {
@@ -243,7 +228,6 @@ it("memory section injects active memories and the gates hold", { timeout: 15_00
     capabilities: { enabled: ["memory"], permissions: {} },
   });
   await rt.submit(conv, { requestId: `v${Date.now()}`, text: "What do you remember about me?" });
-  // `captured` is set by the model's callback while this loop waits.
   // oxlint-disable-next-line no-unmodified-loop-condition
   for (let i = 0; i < 50 && !captured; i++) {
     await new Promise((resolve) => setTimeout(resolve, 100));

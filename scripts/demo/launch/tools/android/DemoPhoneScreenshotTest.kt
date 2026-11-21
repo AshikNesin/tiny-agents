@@ -72,19 +72,6 @@ import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
-/**
- * The launch film's phone scene, rendered by the app's own Compose code (Roborazzi on the
- * JVM, no emulator): Travel Planner's chat with the waiting vault approval card, then the
- * same chat after a tap on Approve. Sample data is `scripts/demo/launch/CAST.md`.
- *
- * This file lives in `scripts/demo/launch/tools/android/`, never in `mobile/`. `render.sh`
- * beside it copies it into the app's test source set, runs it and removes the copy.
- *
- * What the app draws: the top bar (`HomeTopBar`) and the chat (`ChatContent`), exactly as
- * `HomeScreen` stacks them. What this harness draws: the system status bar and the gesture
- * handle, in the space `statusBarsPadding()` and `navigationBarsPadding()` leave on a phone
- * (Robolectric reports no system bars). The `*-bare` shots leave both out.
- */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(qualifiers = "w412dp-h892dp-xxhdpi")
@@ -96,13 +83,11 @@ class DemoPhoneScreenshotTest {
 
     @Test fun travelPlannerApprovalBare() = film(bars = false, suffix = "-bare")
 
-    /** Both stills from one composition: the waiting card, a real tap on Approve, the settled chat. */
     private fun film(bars: Boolean, suffix: String) {
         val container = ApplicationProvider.getApplicationContext<GrootMobileApp>().container
         val avatars = fakeAvatarStore().also { store -> runBlocking { store.load(BOT) } }
         var session by mutableStateOf(waitingSession())
         var approvals by mutableStateOf(1)
-        // What the server does with the decision: the call runs, the stream upserts it as done.
         val actions = ChatActions(
             botName = BOT,
             labels = LABELS,
@@ -166,7 +151,6 @@ class DemoPhoneScreenshotTest {
         File("$OUT/positions$suffix.json").writeText(positions.toString())
     }
 
-    /** Capture the screen and list where its named parts are, in px and dp of the 412x892 dp screen. */
     private fun shot(name: String, nodes: List<Pair<String, SemanticsMatcher>>): String {
         compose.onRoot().captureRoboImage("$OUT/$name.png")
         val root = compose.onRoot().fetchSemanticsNode()
@@ -189,16 +173,13 @@ class DemoPhoneScreenshotTest {
         const val OUT = "build/outputs/roborazzi/demo-launch"
         const val BOT = "Travel Planner"
 
-        /** The status bar's clock, the lock screen's time. Another: DEMO_CLOCK=7:02 ./render.sh */
         val CLOCK: String = System.getenv("DEMO_CLOCK") ?: "6:42"
 
-        // 07:00:00 in Asia/Kolkata on FIXED_NOW's day: when the routine line says the run finished.
         const val RUN_FINISHED = FIXED_NOW + 103 * 60_000 + 20_000
         const val REPLY_AT = RUN_FINISHED + 20_000
         const val CARD_AT = RUN_FINISHED + 30_000
         const val NOW = CARD_AT + 20_000
 
-        /** The server's catalog labels for the vault fill (`packages/agent/src/toolkits/browser-vault.ts`). */
         val LABELS = ToolLabels(
             done = mapOf("browser_fill_secret" to "Filled a saved login"),
             ask = mapOf("browser_fill_secret" to "fill a saved login"),
@@ -222,7 +203,6 @@ class DemoPhoneScreenshotTest {
             "Goa fares dropped ₹4,200. The 6:15 AM nonstop on Friday is ₹5,840, under your ₹6,000 limit, so I'm booking two seats.",
         ).copy(createdAt = REPLY_AT)
 
-        /** The card fill: the vault broker allows no "for this chat" grant on a card (`grantable = false`). */
         val FILL = tool("browser_fill_secret", mapOf("handle" to "visa", "field" to "card"), status = ToolStatus.AwaitingApproval, taskId = 71, durationMs = null).copy(
             vault = VaultUse(
                 handle = "visa",
@@ -237,7 +217,6 @@ class DemoPhoneScreenshotTest {
                 env = emptyList(),
                 hosts = emptyList(),
             ),
-            // Vault approvals expire after ten minutes (VAULT_APPROVAL_TTL_MS).
             expiresAt = CARD_AT + 10 * 60_000,
         )
 
@@ -247,7 +226,6 @@ class DemoPhoneScreenshotTest {
             reduceChat(ChatSession(), ChatAction.Stream(BotStreamEvent.Snapshot(ChatState(listOf(REPLY, ASK), busy = true, queued = emptyList(), hasMore = false))))
                 .let { reduceChat(it, ChatAction.Stream(BotStreamEvent.RoutineRuns(listOf(RUN)))) }
 
-        /** The stream after Approve: the same call, done, approved by the owner; the reply is over. */
         fun approvedSession(session: ChatSession): ChatSession {
             val done = FILL.copy(status = ToolStatus.Done, approval = "approved", durationMs = 1_200, waitedMs = 9_000, expiresAt = null)
             return reduceChat(session, ChatAction.Stream(BotStreamEvent.Upsert(ASK.copy(toolCalls = listOf(done)))))
@@ -278,7 +256,6 @@ class DemoPhoneScreenshotTest {
         )
     }
 
-    /** A 412x892 dp phone screen: the app's page between the system bars a phone draws over it. */
     @Composable
     private fun PhoneScreen(bars: Boolean, app: @Composable () -> Unit) {
         Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
@@ -305,7 +282,6 @@ class DemoPhoneScreenshotTest {
         }
     }
 
-    /** A plain wedge, a plain triangle and a plain cell: generic shapes, nobody's icon set. */
     @Composable
     private fun WifiGlyph(ink: Color) = Canvas(Modifier.size(16.dp)) {
         val r = size.width * 0.72f

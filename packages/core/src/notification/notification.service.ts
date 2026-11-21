@@ -1,18 +1,3 @@
-/**
- * Push notifications (issue #57). `notify()` is the only call-site API: it
- * returns immediately, never throws and never makes the caller wait on the
- * provider. Behind it, each notification goes through
- *
- *   settings (per-event switch) → dedupe → channel state → quiet hours →
- *   coalescing → throttling → delivery queue (≤2 concurrent, retries)
- *
- * and lands in the notification log (metadata only). Without credentials the
- * whole pipeline is skipped: nothing is logged and nothing is sent.
- *
- * Delivery is in-process: a restart drops queued sends. Needs-input
- * notifications are re-derived on boot (waiting calls re-run), and the
- * log-backed dedupe keeps those replays from sending twice.
- */
 import { Boom } from "@groot/core/errors";
 import { env } from "@groot/core/env";
 import { logger } from "@groot/core/logger";
@@ -47,7 +32,6 @@ export type ChannelState =
 export interface NotificationStatus {
   channel: string;
   state: ChannelState;
-  /** Env vars the channel needs (shown when not configured). */
   requiredEnv: string[];
   devices: string[];
   quota?: { limit: number; remaining: number; reset: string };
@@ -63,16 +47,13 @@ export interface NotificationServiceOptions {
   channel: NotificationChannel;
   log: NotificationLogStore;
   settings: NotificationSettingsStore;
-  /** Base URL deep links start with (ORIGIN); no link without it. */
   origin: () => string | undefined;
   requiredEnv?: string[];
   now?: () => number;
-  /** Delays before each retry of a transient failure; its length + 1 is the attempt cap. */
   retryDelaysMs?: readonly number[];
   random?: () => number;
 }
 
-/** Events the core itself sends; apps add theirs with `defineEvents`. */
 export const CORE_EVENTS: NotificationEventDef[] = [
   {
     event: "system.started",
@@ -93,7 +74,6 @@ const PRUNE_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const URL_MAX = 512;
 const QUOTA_WARN_SHARE = 0.1;
 
-/** A notification accepted into the pipeline, with its log row. */
 interface Accepted {
   n: Notification;
   logId: string;
@@ -103,12 +83,10 @@ interface Accepted {
 
 interface Delivery {
   logIds: string[];
-  /** The tag of a single notification (cancel drops it while still queued). */
   tag?: string;
   message: OutgoingMessage;
   botId?: string;
   attempts: number;
-  /** Skip throttling (the suppression summary itself). */
   unthrottled?: boolean;
 }
 
@@ -123,7 +101,6 @@ const maxPriority = (items: readonly Accepted[]) =>
     -2,
   );
 
-/** The first of next month, 00:00 US Central (06:00 UTC), when Pushover resets. */
 function nextQuotaReset(now: number): Date {
   const at = new Date(now);
   return new Date(Date.UTC(at.getUTCFullYear(), at.getUTCMonth() + 1, 1, 6));
@@ -150,21 +127,16 @@ export class NotificationService {
   #settingsCache: { value: NotificationSettings; at: number } | undefined;
   #lastTestAt = 0;
   #warnedUnconfigured = false;
-  /** Whether this channel is the one that delivers (the hub decides; alone, always). */
   #delivers: (settings: NotificationSettings) => boolean = () => true;
 
-  /** Dedupe keys accepted by this process, with when. */
   readonly #recent = new Map<string, number>();
-  /** Keys cancelled while their notification may still be on its way in. */
   readonly #cancelled = new Map<string, number>();
-  /** Tags handed to the channel, with when: an answer takes them back (`dismiss`). */
   readonly #dispatched = new Map<string, number>();
   readonly #buckets = new Map<string, Bucket>();
   #held: Accepted[] = [];
   #heldTimer: ReturnType<typeof setTimeout> | undefined;
   readonly #queue: Delivery[] = [];
   #active = 0;
-  /** Recent sends, for throttling. */
   #sends: { at: number; botId?: string }[] = [];
   #suppressed = 0;
   #suppressedTimer: ReturnType<typeof setTimeout> | undefined;
@@ -184,9 +156,6 @@ export class NotificationService {
     this.defineEvents(CORE_EVENTS);
   }
 
-  // ── Events and settings ───────────────────────────────────────────────
-
-  /** Register events the owner can switch in Settings. */
   defineEvents(defs: readonly NotificationEventDef[]): void {
     for (const def of defs) this.#events.set(def.event, def);
   }
@@ -203,36 +172,26 @@ export class NotificationService {
     return value;
   }
 
-  /** Use settings another service saved to the same store (multi-channel fan-out). */
   primeSettings(value: NotificationSettings): void {
     this.#settingsCache = { value, at: this.#now() };
   }
 
-  /**
-   * Drop the cached settings, so the next read loads them from the store.
-   * For a store whose database was swapped under it (each server test file
-   * gets its own database; the clock is frozen, so the cache never expires).
-   */
   forgetSettings(): void {
     this.#settingsCache = undefined;
   }
 
-  /** The channel this service delivers through. */
   get channelId(): string {
     return this.#channel.id;
   }
 
-  /** Whether the channel can deliver now (credentials set, a device registered). */
   get configured(): boolean {
     return this.#channel.configured();
   }
 
-  /** Deliver only while `delivers` says so (the hub's one-channel choice). */
   routeBy(delivers: (settings: NotificationSettings) => boolean): void {
     this.#delivers = delivers;
   }
 
-  /** Validate and store the owner's settings (400 on invalid input). */
   async saveSettings(input: unknown): Promise<NotificationSettings> {
     const parsed = notificationSettingsSchema.safeParse(input);
     if (!parsed.success) {
@@ -245,9 +204,6 @@ export class NotificationService {
     return value;
   }
 
-  // ── Sending ───────────────────────────────────────────────────────────
-
-  /** Hand a notification to the pipeline. Returns at once; never throws. */
   notify(n: Notification): void {
     if (this.#stopped) return;
     try {
@@ -273,10 +229,6 @@ export class NotificationService {
     }
   }
 
-  /**
-   * Drop a notification that has not been sent yet (still coalescing, held
-   * for quiet hours or queued): the thing it announced was resolved.
-   */
   cancel(dedupeKey: string): void {
     if (this.#recent.has(dedupeKey)) this.#cancelled.set(dedupeKey, this.#now());
     const cancelled: string[] = [];
@@ -298,7 +250,6 @@ export class NotificationService {
       cancelled.push(item.logId);
       return false;
     });
-    // Still queued for delivery: drop it rather than send and take back.
     let dropped = false;
     for (let i = this.#queue.length - 1; i >= 0; i--) {
       const delivery = this.#queue[i]!;
@@ -312,7 +263,6 @@ export class NotificationService {
         .update(cancelled, { status: "cancelled" })
         .catch((error: unknown) => logger.warn({ error }, "notification log update failed"));
     }
-    // Already sent (or on its way): take it back from the device.
     if (this.#dispatched.delete(dedupeKey) && !dropped && this.#channel.dismiss) {
       void this.#channel
         .dismiss(dedupeKey)
@@ -322,7 +272,6 @@ export class NotificationService {
 
   async #accept(n: Notification, now: number, windowMs: number): Promise<void> {
     const settings = await this.getSettings();
-    // The owner chose another channel, or none: nothing to log, nothing to send.
     if (!this.#delivers(settings)) return;
     const def = this.#events.get(n.event);
     const enabled = def?.locked || (settings.events[n.event] ?? def?.defaultEnabled ?? true);
@@ -340,7 +289,6 @@ export class NotificationService {
       await this.#log.create({ ...row, status: "suppressed", reason: "disabled" });
       return;
     }
-    // Replays after a restart: the log remembers what this process forgot.
     if (await this.#log.hasRecent(n.dedupeKey, new Date(now - windowMs), this.#channel.id)) {
       return;
     }
@@ -371,7 +319,6 @@ export class NotificationService {
 
     const logId = await this.#log.create({ ...row, priority, status: "queued" });
     if (this.#cancelled.delete(n.dedupeKey)) {
-      // Resolved while it was being accepted.
       await this.#log.update([logId], { status: "cancelled" });
       return;
     }
@@ -441,7 +388,6 @@ export class NotificationService {
     });
   }
 
-  /** Throttle, then queue one push for `items` (several: a summary). */
   async #dispatch(
     items: readonly Accepted[],
     settings: NotificationSettings,
@@ -479,7 +425,6 @@ export class NotificationService {
     const ttlSeconds = ttls.every((ttl) => ttl !== undefined)
       ? Math.max(...(ttls as number[]))
       : undefined;
-    // One notification keeps its tag and buttons; a batch is a summary, tagged by its batch.
     const single = items.length === 1 && !summary;
     const tag = single
       ? (first.n.tag ?? first.n.dedupeKey)
@@ -517,10 +462,6 @@ export class NotificationService {
     return { url, urlTitle: urlTitle ? clamp(plainText(urlTitle), 100) : undefined };
   }
 
-  /**
-   * Count throttled notifications and send one "N suppressed" summary when
-   * the window that throttled them ends.
-   */
   #noteSuppressed(count: number, now: number, perBot: boolean): void {
     this.#suppressed += count;
     if (this.#suppressedTimer) return;
@@ -557,8 +498,6 @@ export class NotificationService {
       });
     });
   }
-
-  // ── Delivery ──────────────────────────────────────────────────────────
 
   #enqueue(delivery: Delivery): void {
     this.#queue.push(delivery);
@@ -602,7 +541,6 @@ export class NotificationService {
         reason: result.reason,
       });
       const base = this.#retryDelays[delivery.attempts - 1];
-      // ±20% jitter so retries of a burst spread out.
       const delay = Math.round(base * (0.8 + this.#random() * 0.4));
       this.#later(delay, async () => this.#enqueue(delivery));
       return;
@@ -664,8 +602,6 @@ export class NotificationService {
     }
   }
 
-  // ── Status, validation, test ──────────────────────────────────────────
-
   status(): NotificationStatus {
     const configured = this.#channel.configured();
     return {
@@ -687,7 +623,6 @@ export class NotificationService {
     };
   }
 
-  /** Check the credentials (and device) with the provider; refreshes the quota. */
   async validate(): Promise<NotificationStatus> {
     if (!this.#channel.configured()) {
       this.#state = "not_configured";
@@ -713,7 +648,6 @@ export class NotificationService {
     return this.status();
   }
 
-  /** Send a test notification now, bypassing settings and throttling. */
   async sendTest(): Promise<TestResult> {
     if (!this.#channel.configured()) {
       this.#state = "not_configured";
@@ -767,9 +701,6 @@ export class NotificationService {
     return this.#log.list(Math.min(Math.max(limit, 1), 200));
   }
 
-  // ── Lifecycle ─────────────────────────────────────────────────────────
-
-  /** Validate in the background and prune old log rows daily. */
   start(): void {
     this.#stopped = false;
     if (this.#channel.configured()) {
@@ -788,7 +719,6 @@ export class NotificationService {
     this.#pruneTimer.unref?.();
   }
 
-  /** Clear timers; pending sends are dropped. */
   stop(): void {
     this.#stopped = true;
     for (const timer of this.#timers) clearTimeout(timer);
@@ -825,12 +755,6 @@ export class NotificationService {
   }
 }
 
-/**
- * One channel at a time: every channel keeps its own pipeline (dedupe,
- * throttle, retries, log row) and one set of settings and events, but only
- * the channel `deliverTo` names sends. The first channel (Pushover) answers
- * the status, validate and test routes; other channels bring their own.
- */
 export class NotificationHub {
   readonly primary: NotificationService;
   readonly #services: NotificationService[];
@@ -841,24 +765,20 @@ export class NotificationHub {
     this.#route(primary);
   }
 
-  /**
-   * The channel that delivers under `settings`, or null when off. Before the
-   * owner chooses: the first added channel (the phone app) that can deliver,
-   * else the primary.
-   */
   deliveringTo(settings: NotificationSettings): string | null {
     const choice = settings.deliverTo;
     if (choice === "off") return null;
     if (choice !== "auto") return choice;
-    const ready = this.#services.slice(1).find((service) => service.configured);
-    return (ready ?? this.primary).channelId;
+    const others = this.#services.slice(1);
+    const ready = others.find((service) => service.configured);
+    if (ready) return ready.channelId;
+    return (this.primary.configured ? this.primary : (others[0] ?? this.primary)).channelId;
   }
 
   #route(service: NotificationService): void {
     service.routeBy((settings) => this.deliveringTo(settings) === service.channelId);
   }
 
-  /** Add a channel's pipeline; returns a function that removes it again. */
   add(service: NotificationService): () => void {
     for (const def of this.primary.events()) service.defineEvents([def]);
     this.#route(service);
@@ -869,7 +789,6 @@ export class NotificationHub {
     };
   }
 
-  /** The pipeline of channel `id`. */
   channel(id: string): NotificationService | undefined {
     return this.#services.find((service) => service.channelId === id);
   }
@@ -890,12 +809,10 @@ export class NotificationHub {
     return this.primary.events();
   }
 
-  /** `forgetSettings()` on every channel. */
   forgetSettings(): void {
     for (const service of this.#services) service.forgetSettings();
   }
 
-  /** The settings with "auto" read as the channel it stands for, so the page shows a real choice. */
   async getSettings(): Promise<NotificationSettings> {
     return this.#resolved(await this.primary.getSettings());
   }
@@ -938,10 +855,6 @@ export class NotificationHub {
   }
 }
 
-/**
- * The app's notifications: Pushover with credentials from the environment,
- * plus whatever channels the app adds (Web Push, issue #306).
- */
 export const notificationService = new NotificationHub(
   new NotificationService({
     channel: createPushoverChannel({

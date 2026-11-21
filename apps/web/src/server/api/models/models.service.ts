@@ -1,9 +1,3 @@
-/**
- * Settings → Models (issue #179): the owner's provider accounts, their models
- * and the model roles. Every write commits, then `reloadModels()` hands the
- * runtime the new snapshot and tells the pickers. No response carries a key:
- * keys go straight into an `app` vault item and come back as a hint.
- */
 import { randomBytes } from "node:crypto";
 import { and, count, eq, inArray, isNotNull } from "drizzle-orm";
 import { Boom, HttpError } from "@groot/core/errors";
@@ -67,10 +61,8 @@ import type {
 
 type Kind = Exclude<ProviderKind, "faux">;
 
-/** Workers AI's REST host: where a gateway account's classifier calls go. */
 const WORKERS_AI_HOST = "api.cloudflare.com";
 
-/** How each kind sends its key (the vault item's injection). */
 const INJECT: Record<Exclude<Kind, "claude-plan">, { name: string; format: string }> = {
   anthropic: { name: "x-api-key", format: "{value}" },
   "openai-chat": { name: "Authorization", format: "Bearer {value}" },
@@ -90,14 +82,12 @@ const parseObject = (raw: string | null | undefined): Record<string, unknown> =>
   }
 };
 
-/** "sk-…a1B2": enough to tell keys apart, never enough to use one. */
 function keyHint(key: string): string {
   const tail = key.slice(-4);
   const head = key.match(/^[A-Za-z]+[-_]/)?.[0] ?? "";
   return `${head}…${tail}`;
 }
 
-/** A Claude.ai OAuth token is never stored (ADR 0008): the Claude plan signs in on the sandbox. */
 function refuseClaudeToken(key: string | undefined): void {
   if (key?.includes("sk-ant-oat")) {
     throw Boom.badRequest(
@@ -114,14 +104,11 @@ function outbound(error: unknown): never {
   throw error;
 }
 
-// ── Reading ─────────────────────────────────────────────────────────────
-
 function modelView(row: ModelRowRecord, usedBy: number): AccountModel {
   return {
     id: row.id,
     upstreamId: row.upstreamId,
     name: row.name,
-    // Text columns only the schema's enums write.
     type: row.type as AccountModel["type"],
     source: row.source as AccountModel["source"],
     enabled: row.enabled,
@@ -153,7 +140,6 @@ async function accountView(row: ProviderRow, usage: Map<string, number>): Promis
     baseUrl: row.baseUrl,
     viaProviderId: row.viaProviderId,
     settings: parseObject(row.settingsJson),
-    // Text columns only the schema's enums and this module's literals write.
     discovery: row.discovery as AccountData["discovery"],
     allowPrivateNetwork: row.allowPrivateNetwork,
     enabled: row.enabled,
@@ -168,7 +154,6 @@ async function accountView(row: ProviderRow, usage: Map<string, number>): Promis
   };
 }
 
-/** Bots per model id. */
 async function botUsage(): Promise<Map<string, number>> {
   const rows = await db
     .select({ modelId: bots.modelId, n: count() })
@@ -203,15 +188,12 @@ async function modelOrThrow(id: string): Promise<ModelRowRecord> {
   return row;
 }
 
-// ── Discovery ───────────────────────────────────────────────────────────
-
 interface Endpoint {
   kind: Kind;
   baseUrl: string | null;
   apiKey?: string;
   allowPrivateNetwork: boolean;
   viaProviderId?: string | null;
-  /** A gateway's ids and custom providers; a gateway route's `upstream` and `basePath`. */
   settings?: {
     accountId?: string;
     gatewayId?: string;
@@ -221,7 +203,6 @@ interface Endpoint {
   };
 }
 
-/** The canonical endpoint of a new or edited account; throws 400 with what to fix. */
 function canonicalEndpoint(input: Endpoint): string | null {
   if (input.kind === "claude-plan" || input.viaProviderId) return null;
   if (input.kind === "cloudflare-ai-gateway") {
@@ -236,11 +217,6 @@ function canonicalEndpoint(input: Endpoint): string | null {
   }
 }
 
-/**
- * A gateway route's models: `GET <gateway>/v1/<account>/<gateway>/<upstream>[/<basePath>]/models`
- * on the gateway's token. Many upstreams list no models there; that is not
- * an error, the owner adds models by id instead.
- */
 async function discoverThroughGateway(input: Endpoint): Promise<DiscoveredModel[]> {
   const gateway = await accountOrThrow(input.viaProviderId!);
   const settings = parseObject(gateway.settingsJson);
@@ -274,11 +250,6 @@ async function discoverThroughGateway(input: Endpoint): Promise<DiscoveredModel[
   }
 }
 
-/**
- * The models of a gateway's custom providers, listed through the gateway
- * (`…/<slug>/<basePath>/models`) and named `<slug>/<model>`. A provider that
- * lists none still works: the owner adds its models by id.
- */
 async function discoverCustomProviders(input: Endpoint): Promise<DiscoveredModel[]> {
   const { accountId, gatewayId } = input.settings ?? {};
   const custom = input.settings?.customProviders ?? [];
@@ -299,7 +270,6 @@ async function discoverCustomProviders(input: Endpoint): Promise<DiscoveredModel
             input.baseUrl,
             `${provider.slug}/${model.upstreamId}`,
           );
-          // Unknown to pi-ai's catalogs, a model is named by its own id, not the prefixed one.
           const name = resolved.known ? resolved.name : model.name;
           return { ...resolved, name: `${name} (${provider.slug})` };
         });
@@ -323,18 +293,11 @@ async function discoverAt(input: Endpoint): Promise<DiscoveredModel[]> {
   return discoverDirect(input);
 }
 
-/** Ask Claude Code on the sandbox for the Claude plan's models; undefined without a sandbox. */
 function claudePlanLister(): (() => ReturnType<typeof listClaudeCodeModels>) | undefined {
   const locator = sharedClaudeWorkerLocator();
   return locator ? () => listClaudeCodeModels(() => locator.resolve()) : undefined;
 }
 
-/**
- * Discovery for a new account. Claude Code can only list a Claude plan's
- * models once it is installed and signed in, which the owner does from the
- * account's card after adding it: until then the account starts with no
- * models, and "Check again" adds what Claude Code lists. Nothing is assumed.
- */
 async function discoverNew(input: Endpoint): Promise<DiscoveredModel[]> {
   if (input.kind !== "claude-plan") return discoverAt(input);
   try {
@@ -361,16 +324,12 @@ async function discoverDirect(input: Endpoint): Promise<DiscoveredModel[]> {
   }
 }
 
-/** Discover without saving (the dialog's "Check models"). */
 export async function discover(input: DiscoverDTO): Promise<DiscoveredModels> {
   refuseClaudeToken(input.apiKey);
   const found = await discoverNew({ ...input, kind: input.kind, baseUrl: input.baseUrl ?? null });
   return { models: found };
 }
 
-// ── Accounts ────────────────────────────────────────────────────────────
-
-/** The `app` vault item holding an account's key, for its endpoint's hosts. */
 async function storeKey(kind: Kind, name: string, baseUrl: string | null, key: string) {
   if (kind === "claude-plan") throw Boom.badRequest("The Claude plan takes no key.");
   const host = providerHost({ kind, baseUrl });
@@ -479,7 +438,6 @@ export async function createAccount(input: CreateAccountDTO): Promise<AccountDat
   if (input.discovery === "manual" && !input.model && input.models.length === 0) {
     throw Boom.badRequest("Add a model.");
   }
-  // Discover again with what will be saved, so the stored models are real.
   const found =
     input.discovery === "auto"
       ? await discoverNew({ ...input, kind, baseUrl })
@@ -492,8 +450,7 @@ export async function createAccount(input: CreateAccountDTO): Promise<AccountDat
               input.model.name ?? input.model.upstreamId,
             ),
           ]
-        : // Model ids typed by hand (a gateway route whose upstream lists none).
-          input.models.map((upstreamId) => resolveCapabilities(kind, baseUrl, upstreamId));
+        : input.models.map((upstreamId) => resolveCapabilities(kind, baseUrl, upstreamId));
   const wanted = new Set(input.models);
   const chosen = input.discovery === "auto" ? found.filter((m) => wanted.has(m.upstreamId)) : found;
 
@@ -579,7 +536,6 @@ export async function patchAccount(
   return accountView(updated, await botUsage());
 }
 
-/** The stored key, for discovery and Test with the account as saved. */
 async function storedKey(row: ProviderRow): Promise<string | undefined> {
   if (!row.credentialItemId) return undefined;
   const key = await vaultCredentials.resolve(row.id);
@@ -587,11 +543,6 @@ async function storedKey(row: ProviderRow): Promise<string | undefined> {
   return key;
 }
 
-/**
- * Save the models a Claude plan's Claude Code lists that the account lacks:
- * the plan's models are whatever the subscription offers, so a new one shows
- * up on the next check without being added by hand.
- */
 async function addListed(providerId: string, found: readonly DiscoveredModel[]) {
   const have = await savedUpstreamIds(providerId);
   const fresh = found.filter((m) => !have.has(m.upstreamId));
@@ -599,9 +550,7 @@ async function addListed(providerId: string, found: readonly DiscoveredModel[]) 
   await db.insert(models).values(fresh.map((m) => modelValues(providerId, m, "discovered")));
 }
 
-/** Mark rows the endpoint no longer lists, and clear the mark on the ones it does. */
 async function markListed(providerId: string, found: readonly DiscoveredModel[]) {
-  // A row saved under an alias (`opus`) is listed while Claude Code still offers that alias.
   const listed = new Set(found.flatMap((m) => [m.upstreamId, ...(m.aliases ?? [])]));
   const rows = await db.select().from(models).where(eq(models.providerId, providerId));
   const now = new Date();
@@ -636,7 +585,6 @@ export async function updateConnection(
       : row.baseUrl;
   const before = providerHost(row);
   const after = providerHost({ kind, baseUrl });
-  // The key is bound to its host: a new origin needs a new key.
   if (before !== after && row.credentialItemId && !input.apiKey) {
     throw Boom.badRequest("The endpoint's host changed: enter the key for the new endpoint.");
   }
@@ -686,7 +634,6 @@ async function removeKey(itemId: string): Promise<void> {
   if (item) await deleteItemRow(item, { purge: true });
 }
 
-/** What a saved account's endpoint lists now, read with its stored key. */
 async function discoverSaved(row: ProviderRow): Promise<DiscoveredModel[]> {
   const key = await storedKey(row);
   return discoverAt({
@@ -699,7 +646,6 @@ async function discoverSaved(row: ProviderRow): Promise<DiscoveredModel[]> {
   });
 }
 
-/** The account's upstream ids already saved as models. */
 async function savedUpstreamIds(id: string): Promise<Set<string>> {
   const rows = await db
     .select({ upstreamId: models.upstreamId })
@@ -708,12 +654,6 @@ async function savedUpstreamIds(id: string): Promise<Set<string>> {
   return new Set(rows.map((m) => m.upstreamId));
 }
 
-/**
- * The models an account's endpoint lists that it doesn't have yet: the card's
- * add-a-model suggestions. Reads only: the account's status is left alone, and
- * a faux account (nothing to discover) lists none. A Claude plan account lists
- * what Claude Code offers on the sandbox.
- */
 export async function availableModels(id: string): Promise<DiscoveredModel[]> {
   const row = await accountOrThrow(id);
   if (row.kind === "faux") return [];
@@ -721,7 +661,6 @@ export async function availableModels(id: string): Promise<DiscoveredModel[]> {
   return found.filter((m) => !have.has(m.upstreamId));
 }
 
-/** Discover again with the stored key: marks models the endpoint stopped listing. */
 export async function refreshAccount(id: string): Promise<AccountRefreshData> {
   const row = await accountOrThrow(id);
   let found: DiscoveredModel[];
@@ -754,7 +693,6 @@ export async function refreshAccount(id: string): Promise<AccountRefreshData> {
   };
 }
 
-/** Who uses these models: bots, and roles (409 `in_use` unless they move). */
 async function usage(modelIds: readonly string[]) {
   if (modelIds.length === 0) return { bots: [], roles: [] };
   const [botRows, roleRows] = await Promise.all([
@@ -770,9 +708,7 @@ async function usage(modelIds: readonly string[]) {
   return { bots: botRows, roles: roleRows.map((r) => r.role) };
 }
 
-/** Move what uses `from` onto `moveTo`, or refuse with who uses it. */
 async function moveOrRefuse(from: readonly string[], moveTo: string | undefined) {
-  // Bots and roles, and the Claude plan's fallback, may point here.
   const [users, plan] = await Promise.all([
     usage(from),
     db.query.providers.findFirst({ where: eq(providers.kind, "claude-plan") }),
@@ -785,12 +721,10 @@ async function moveOrRefuse(from: readonly string[], moveTo: string | undefined)
   }
   if (from.includes(moveTo)) throw Boom.badRequest("Move them to another model.");
   const target = await modelOrThrow(moveTo);
-  // Each user moves only where it could have been set (putRoles, patchAccount).
   const classifierRole = users.roles.includes("classifier");
   const chatUsers =
     users.bots.length > 0 || users.roles.some((role) => role !== "classifier") || fallsBack;
   if (classifierRole && chatUsers) {
-    // Nothing is both: the account's classifier and chat models move apart.
     throw Boom.badRequest("Move the classifier role to another classifier model first.");
   }
   if (classifierRole && target.type !== "classifier") {
@@ -835,8 +769,6 @@ export async function deleteAccount(id: string, moveTo: string | undefined): Pro
   await reloadModels();
   return { deleted: true };
 }
-
-// ── Models ──────────────────────────────────────────────────────────────
 
 export async function addModel(
   providerId: string,
@@ -920,8 +852,6 @@ export async function deleteModel(id: string, moveTo: string | undefined): Promi
   return { deleted: true };
 }
 
-// ── Roles ───────────────────────────────────────────────────────────────
-
 export async function getRoles(): Promise<RolesResponse> {
   const catalog = getAgentRuntime().catalog;
   return {
@@ -936,7 +866,6 @@ export async function getRoles(): Promise<RolesResponse> {
           },
         ];
       }),
-      // One entry per role in ROLES: the record is complete.
     ) as Roles,
   };
 }
@@ -947,7 +876,6 @@ export async function putRoles(
   const entries = Object.entries(input);
   const cleared = entries.filter(([, modelId]) => !modelId).map(([role]) => role);
   const set = entries.filter((entry): entry is [string, string] => Boolean(entry[1]));
-  // Check every role before writing any, so a bad one changes nothing.
   const targets = await Promise.all(set.map(([, modelId]) => modelOrThrow(modelId)));
   set.forEach(([role], index) => {
     const wantsClassifier = role === "classifier";
@@ -970,9 +898,6 @@ export async function putRoles(
   return getRoles();
 }
 
-// ── Test ────────────────────────────────────────────────────────────────
-
-/** A provider's error, cut and with any key scrubbed, before it reaches the UI. */
 const redacted = (result: TestResult, upstreamId?: string): TestResult =>
   result.error
     ? {
@@ -981,13 +906,7 @@ const redacted = (result: TestResult, upstreamId?: string): TestResult =>
       }
     : result;
 
-/**
- * Cloudflare account limits read as JSON: say what they mean first. Neither
- * is a fault of the model or of tiny-agents.
- */
 function explained(error: string, upstreamId?: string): string {
-  // A custom provider's upstream answering 404 (often an HTML page): the
-  // gateway reached it on the wrong path, nearly always a missing base path.
   const slug = upstreamId?.startsWith("custom-") ? upstreamId.split("/")[0] : undefined;
   if (slug && /^404\b/.test(error)) {
     return `${slug} answered 404 Not Found: the gateway reached it on the wrong path. Set its base path in this card's Custom providers (for Z.AI's coding plan: api/coding/paas/v4).`;
@@ -1001,7 +920,6 @@ function explained(error: string, upstreamId?: string): string {
   return error;
 }
 
-/** One real, minimal completion: a saved model, or one of an unsaved account. */
 export async function testModel(input: TestDTO): Promise<TestResult> {
   if ("modelId" in input) {
     const rt = getAgentRuntime();

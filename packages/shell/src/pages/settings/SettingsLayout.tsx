@@ -11,7 +11,6 @@ import type { SettingsSection } from "./sections";
 interface SettingsLayoutProps {
   sections: SettingsSection[];
   active: SettingsSection;
-  /** The path the settings page is mounted at, e.g. `/settings` (`""` at the root). */
   basePath: string;
 }
 
@@ -23,11 +22,6 @@ function groupSections(sections: SettingsSection[]) {
   return [...groups];
 }
 
-/**
- * Full-page settings chrome: a slim top bar with a way back to the app, a
- * left sidebar (search + grouped sections) and the active section. Below
- * `lg` the sidebar becomes a search box over a scrolling row of sections.
- */
 export function SettingsLayout({ sections, active, basePath }: SettingsLayoutProps) {
   const { brand } = useShellConfig();
   const navigate = useNavigate();
@@ -49,7 +43,6 @@ export function SettingsLayout({ sections, active, basePath }: SettingsLayoutPro
       </header>
 
       <div className="flex flex-1 flex-col lg:flex-row">
-        {/* z-20: the search dropdown is wider than the sidebar and must stay above the content. */}
         <aside className="border-b border-border px-4 py-3 sm:px-6 lg:sticky lg:top-12 lg:z-20 lg:flex lg:h-[calc(100dvh-3rem)] lg:w-60 lg:shrink-0 lg:flex-col lg:border-b-0 lg:border-r lg:px-3 lg:py-4">
           <SettingsSearch sections={sections} onSelect={(id) => navigate(hrefFor(id))} />
           <nav
@@ -99,9 +92,7 @@ export function SettingsLayout({ sections, active, basePath }: SettingsLayoutPro
         </aside>
 
         <main className="min-w-0 flex-1 px-4 pb-16 pt-6 sm:px-6 lg:px-10 lg:pt-10">
-          {/* Left-aligned, so the title stays put when switching between narrow and wide sections. */}
           <div className={active.wide ? "max-w-5xl" : "max-w-3xl"}>
-            {/* Settings has its own way back and no app drawer: no menu button. */}
             <PageLayout
               title={active.label}
               description={active.description}

@@ -1,14 +1,3 @@
-/**
- * Upload service (issue #17): validate, prepare and store chat attachments.
- *
- * One row per attachment is the single validated metadata source; bytes live
- * in files storage under chat/<uploadId>/{original,model,extract.json}.
- * Images get a model-ready variant (EXIF-upright, resized, base64-bounded)
- * prepared at upload time so the send click never waits on Photon. Every
- * other file is sniffed (issue #58: the stored MIME is what the bytes are)
- * and handed to extraction (uploads.extraction.ts), which owns its state
- * from there.
- */
 import { createHash } from "node:crypto";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
@@ -28,11 +17,9 @@ import {
 import { sniffFile, SniffError, TEXT_EXTENSIONS } from "./uploads.sniff";
 import type { StoredUpload, UploadMeta, UploadStatus } from "../../../shared/api/uploads";
 
-/** Max original sizes (issue #17 limits table). */
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 const MAX_FILE_BYTES = 25 * 1024 * 1024;
 
-/** Extensions a chat attachment may carry (denylist: executables, scripts). */
 const ALLOWED_EXTENSIONS = new Set([
   "png",
   "jpg",
@@ -72,12 +59,10 @@ const ALLOWED_EXTENSIONS = new Set([
   "webm",
   "mov",
   "tsv",
-  // Code and plain text (issue #58): stored and read as text, never run.
   ...TEXT_EXTENSIONS,
 ]);
 
 function sanitizeName(name: string): string {
-  // Control characters are what it strips from a filename.
   // oxlint-disable-next-line no-control-regex
   const trimmed = name.replace(/[\r\n"\\/\x00-\x1f]/g, "_").trim();
   return trimmed.slice(0, 200) || "file";
@@ -88,7 +73,6 @@ function extensionOf(name: string): string {
   return dot === -1 ? "" : name.slice(dot + 1).toLowerCase();
 }
 
-/** Reject executables/scripts and unknown extensions at the boundary. */
 function checkExtension(name: string): void {
   const ext = extensionOf(name);
   if (!ext || !ALLOWED_EXTENSIONS.has(ext)) {
@@ -112,8 +96,6 @@ export async function createUpload(
   if (!isImage && input.bytes.length > MAX_FILE_BYTES) {
     throw Boom.badRequest("Files are limited to 25 MB.");
   }
-  // A name claiming image but bytes disagreeing (or the reverse) is rejected:
-  // the model path and the UI must agree on what this is.
   const claimsImage = ["png", "jpg", "jpeg", "webp", "gif"].includes(extensionOf(name));
   if (claimsImage !== isImage) {
     throw Boom.badRequest(
@@ -123,7 +105,6 @@ export async function createUpload(
     );
   }
 
-  // Non-images: the bytes must be what the name says (and never a binary).
   let sniffedFile: ReturnType<typeof sniffFile> | undefined;
   if (!isImage) {
     try {
@@ -142,8 +123,6 @@ export async function createUpload(
     .slice(0, 24);
   const originalKey = `chat/${uploadId}/original`;
   let modelKey: string | null = null;
-  // Dimensions come from the original bytes: Photon reports them only when
-  // it resized, and the UI shows the owner's image, not the variant.
   const size = imageSize(input.bytes, sniffed!);
   const width = size?.width;
   const height = size?.height;
@@ -206,7 +185,6 @@ function toRef(row: {
   };
 }
 
-/** An upload's live extraction state, for chips and the preview drawer. */
 export async function uploadStatus(id: string): Promise<UploadStatus> {
   const found = await findUpload(id);
   if (!found) throw Boom.notFound("Unknown upload");
@@ -229,7 +207,6 @@ function findUpload(id: string) {
   return db.query.uploads.findFirst({ where: eq(uploads.id, id) });
 }
 
-/** Mark uploads as sent in a bot's chat; one already sent elsewhere keeps its first bot. */
 export async function sentInBot(ids: string[], botId: string): Promise<void> {
   if (ids.length === 0) return;
   await db
@@ -238,7 +215,6 @@ export async function sentInBot(ids: string[], botId: string): Promise<void> {
     .where(and(inArray(uploads.id, ids), isNull(uploads.botId)));
 }
 
-/** Original bytes for the UI/download endpoint. */
 export async function originalBytes(
   id: string,
 ): Promise<{ bytes: Buffer<ArrayBuffer>; ref: AttachmentRef }> {
@@ -247,11 +223,9 @@ export async function originalBytes(
   return { bytes: asBuffer(file.bytes), ref };
 }
 
-/** Delete an upload: the row, the original and every derived artifact. */
 export async function deleteUpload(id: string): Promise<void> {
   const row = await findUpload(id);
   if (!row) throw Boom.notFound("Unknown upload");
-  // A job still running for it writes nothing more (no orphan extract.json).
   cancelExtraction(id);
   await db.delete(uploads).where(eq(uploads.id, id));
   forgetContent(id);
@@ -262,7 +236,5 @@ export async function deleteUpload(id: string): Promise<void> {
   ];
   try {
     await storageService.deleteFiles({ filePaths: keys });
-  } catch {
-    // The row is gone; leftover bytes are sweepable. Never block the delete.
-  }
+  } catch {}
 }

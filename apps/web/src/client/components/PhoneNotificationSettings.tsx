@@ -1,9 +1,3 @@
-/**
- * Settings → Notifications, "Phone app" (issue #306): shown while the phone
- * app is where notifications go, it lists the phones the Android app
- * registered, with a test send and remove each. The app registers itself
- * after sign-in; nothing is set up here.
- */
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Send, Smartphone, Trash2 } from "lucide-react";

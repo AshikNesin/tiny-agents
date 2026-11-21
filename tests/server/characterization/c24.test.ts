@@ -1,13 +1,3 @@
-/**
- * Characterization of behavior-register row C24: multi-step writes with no
- * commit seam can orphan rows: account → vault item, vault value → row,
- * upload original → row.
- * Preserve: this pins today's behavior, quirk included; change it only with
- * a signed-off register row.
- *
- * The second step is made to fail with a temporary SQLite trigger that
- * refuses the insert, as a constraint would.
- */
 import { createHash } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
@@ -25,7 +15,6 @@ import { createItemSchema } from "../../../apps/web/src/server/api/vault/vault.s
 import { createUpload } from "../../../apps/web/src/server/api/uploads/uploads.service";
 import { FAUX_PROVIDER_ID } from "../../../apps/web/src/server/api/models/models.config";
 
-/** Make every insert into `table` fail, as a constraint would. */
 function refuseInserts(table: string): void {
   db.run(
     sql.raw(
@@ -52,7 +41,6 @@ afterEach(async () => {
   await db.delete(vaultItems);
 });
 
-/** Vault values the backend holds that no `vault_items` row links. */
 async function unlinkedValues(): Promise<string[]> {
   const linked = new Set((await db.select().from(vaultItems)).map((row) => row.externalId));
   return (await local.listCandidates()).items
@@ -73,7 +61,6 @@ describe("C24: a failed second step", () => {
     });
     await expect(createAccount(input)).rejects.toThrow("c24: providers insert refused");
 
-    // No account, but its key's vault item (row and value) is left behind.
     const accounts = await db.select().from(providers);
     expect(accounts.map((row) => row.id)).toEqual([FAUX_PROVIDER_ID]);
     const items = await db.select().from(vaultItems);
@@ -124,7 +111,6 @@ describe("C24: a failed second step", () => {
 
   it("upload: an image that will not decode leaves its original with no row, no trigger needed", async () => {
     const before = await storageService.listFiles({ folder: "chat/" });
-    // A PNG signature over bytes Photon cannot decode.
     const bytes = Buffer.concat([
       Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
       Buffer.from("not really a png at all"),

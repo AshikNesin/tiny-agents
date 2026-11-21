@@ -9,7 +9,6 @@ import { createShellQueryClient, ShellQueryProvider } from "@groot/shell/lib/que
 import { AppSettings } from "@groot/shell/components/AppSettings";
 import type { AppSetting } from "@groot/shell/hooks/useAppSettingsData";
 
-// CodeMirror does not run in jsdom; a textarea stands in for the JSON editor.
 vi.mock("@groot/shell/components/CodeMirrorEditor", () => ({
   CodeMirrorEditor: ({ value, onChange }: { value: string; onChange: (v: string) => void }) => (
     <textarea aria-label="JSON value" value={value} onChange={(e) => onChange(e.target.value)} />
@@ -18,7 +17,6 @@ vi.mock("@groot/shell/components/CodeMirrorEditor", () => ({
 
 type Call = { method: string; path: string };
 
-/** A fake `/api/v1/settings` over `settings`, recording every call. */
 function serve(initial: AppSetting[]) {
   const server = { settings: [...initial], calls: [] as Call[] };
   vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
@@ -111,7 +109,6 @@ describe("AppSettings", () => {
     await user.clear(description);
     await user.type(description, "my edit");
 
-    // Someone else saves the setting; the page refetches.
     server.settings = [
       {
         ...THEME,

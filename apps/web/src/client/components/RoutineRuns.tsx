@@ -24,17 +24,9 @@ const timeOfDay = new Intl.DateTimeFormat("en-GB", {
 const blockedRun = (run: RoutineRunCard) => run.status === "blocked";
 const failedRun = (run: RoutineRunCard) => run.status !== "succeeded" && !blockedRun(run);
 
-/** Amber for a run that needs attention (issue #87), red for one that failed. */
 const statusClass = (run: RoutineRunCard) =>
   cn(blockedRun(run) && "text-warning", failedRun(run) && "text-destructive");
 
-/**
- * Routine results in the bot's chat (issue #63), kept quiet: one centered
- * line for a run, or for runs that finished back to back, styled like the
- * day divider. Clicking it shows each run's output and error. Rendered from
- * the run rows, never sent to the model. A blocked run (it could not do its
- * job, issue #87) reads "needs attention" in amber.
- */
 export function RoutineRuns({ runs }: { runs: RoutineRunCard[] }) {
   const [open, setOpen] = useState(false);
   const latest = runs[runs.length - 1];

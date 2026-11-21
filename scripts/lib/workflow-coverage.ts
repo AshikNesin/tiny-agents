@@ -1,21 +1,3 @@
-/**
- * What `pnpm check:coverage` holds the Tests workflow to, so it can neither
- * skip a check nor slow down unnoticed:
- *
- *  - each gate job of scripts/gates.mjs runs in exactly one step,
- *    `pnpm verify:static --job <job>`, and no other step runs a static check
- *    (a check that needs `pnpm build` first may follow the build step);
- *  - every job records its start and checks its setup budget, and every phase
- *    in scripts/ci-budget.mjs is checked exactly once, right after the step
- *    that does its work and under the same `if`;
- *  - a step that runs `--shard=${{ matrix.<key> }}/N` sits in a job whose
- *    matrix lists <key> 1 to N, so no shard (and none of its files) is
- *    dropped;
- *  - the workflow runs on `merge_group`, where the test jobs run everything
- *    (scripts/test-selection.mjs selects only on pull requests), so the full
- *    suite runs before anything reaches main.
- */
-
 export interface WorkflowStep {
   name?: string;
   if?: string;
@@ -38,7 +20,6 @@ export interface CoverageInputs {
   workflow: Workflow;
   gateJobs: readonly string[];
   runBudgets: Record<string, number>;
-  /** Package scripts a step may run after `pnpm build`. */
   postBuildChecks: readonly string[];
 }
 
@@ -58,7 +39,6 @@ export function workflowProblems({
   const problems: string[] = [];
   const jobs = Object.entries(workflow.jobs);
 
-  // Gates: each gate job in exactly one step, nothing static outside them.
   const ranJobs: string[] = [];
   for (const [id, job] of jobs) {
     const steps = (job.steps ?? []).filter(
@@ -103,9 +83,6 @@ export function workflowProblems({
     }
   }
 
-  // Budgets: every job records its start first and checks its setup budget,
-  // and every phase in RUN_BUDGETS is checked exactly once, right after the
-  // step that does that phase's work and under the same condition.
   const checked: string[] = [];
   for (const [id, job] of jobs) {
     const steps = job.steps ?? [];
@@ -148,7 +125,6 @@ export function workflowProblems({
     }
   }
 
-  // Shards: the matrix lists every shard the step splits into.
   for (const [id, job] of jobs) {
     for (const step of job.steps ?? []) {
       const shard = step.run ? SHARD.exec(step.run) : null;
@@ -165,7 +141,6 @@ export function workflowProblems({
     }
   }
 
-  // The merge queue runs the full suite.
   if (!workflow.on || !("merge_group" in workflow.on)) {
     problems.push(
       `${file} does not run on merge_group. The merge queue's full run is what keeps PR test selection honest.`,

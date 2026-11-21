@@ -1,11 +1,3 @@
-/**
- * The server's computer session manager (issue #108): one per process, built
- * from the SANDBOX_* and COMPUTER_* env, shared by the computer toolkit (tool
- * calls), the routes and the VNC bridge (owner actions). The computer is a
- * desktop on the sandbox VM, so without a sandbox there is none: the toolkit
- * offers no tools and the routes report it as not configured. Tests
- * substitute their own through `setComputerSessionsForTests()`.
- */
 import {
   createComputerSessions,
   createX11ComputerTransport,
@@ -19,7 +11,6 @@ import { sandboxConnection, sandboxEndpoint, unquoteEnv } from "./sandbox-host";
 import { appEnv, type AppEnv } from "../../env";
 import { app } from "../../app-root";
 
-/** Why the computer can't run, or undefined when it can. */
 export function computerSetupHint(env: AppEnv = appEnv()): string | undefined {
   if (!sandboxEndpoint(env)) return "Set SANDBOX_HOST to give bots a computer on the sandbox VM.";
   const size = parseDesktopSize(unquoteEnv(env.COMPUTER_DESKTOP_SIZE));
@@ -33,10 +24,6 @@ export function computerSetupHint(env: AppEnv = appEnv()): string | undefined {
   return undefined;
 }
 
-/**
- * The process's manager (`app().computerSessions`), created on first use;
- * null when no sandbox VM is configured.
- */
 export function getComputerSessions(env: AppEnv = appEnv()): ComputerSessions | null {
   const root = app();
   if (root.computerSessions !== undefined) return root.computerSessions;
@@ -48,8 +35,6 @@ export function getComputerSessions(env: AppEnv = appEnv()): ComputerSessions | 
     transport: createX11ComputerTransport({
       connection,
       extraPackages: parseExtraPackages(unquoteEnv(env.COMPUTER_EXTRA_PACKAGES)).packages,
-      // The desktop's Chrome shares the bot browser's profile, which lives on
-      // the VM too unless BROWSER_EXECUTABLE_PATH runs the browser here.
       browserProfilesDir: unquoteEnv(env.BROWSER_EXECUTABLE_PATH)
         ? undefined
         : (env.BROWSER_PROFILES_DIR ?? DEFAULT_BROWSER_PROFILES_DIR),
@@ -62,17 +47,14 @@ export function getComputerSessions(env: AppEnv = appEnv()): ComputerSessions | 
   return instance;
 }
 
-/** Route and toolkit tests inject their own; pass undefined to rebuild from the env. */
 export function setComputerSessionsForTests(fake: ComputerSessions | null | undefined): void {
   app().computerSessions = fake;
 }
 
-/** A bot's desktop: its browser profile's (`shared`, or `bot-<id>`). */
 export function computerProfileForBot(bot: { id: string; browserProfile: string }): string {
   return browserTargetForBot(bot).profile;
 }
 
-/** The toolkit's resolver: tool calls know their conversation, not their bot. */
 export async function computerProfileForConversation(conversationId: number): Promise<string> {
   return (await browserTargetForConversation(conversationId)).profile;
 }

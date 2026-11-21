@@ -15,8 +15,6 @@ router.post("/login", authRateLimiter, async (c) => {
   return ok(c, await startSession(c, await authService.authenticate(body)));
 });
 
-// First-run setup: open only while no account exists, so a fresh deploy can
-// create its first user from the browser instead of via the admin API.
 router.get("/setup", async (c) => {
   return ok(c, { needsSetup: !(await authService.hasAnyUser()) });
 });
@@ -36,7 +34,6 @@ router.get("/me", requireSession, async (c) => {
   return ok(c, await authService.getUserById({ userId }));
 });
 
-// Admin-only user management (X-Admin-Auth-Key header).
 router.post("/users", adminAuthMiddleware, async (c) => {
   const body = await parseBody(c, createUserSchema);
   return ok(c, await authService.createUser(body), 201);

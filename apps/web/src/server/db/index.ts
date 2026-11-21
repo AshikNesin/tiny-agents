@@ -7,37 +7,15 @@ import * as core from "@groot/core/database";
 import { resolveSqlitePath } from "@groot/core/database/node";
 import * as schema from "./schema";
 
-/**
- * tiny-agents runs on Node only, so the app works against better-sqlite3 with
- * the full schema attached: relational queries (`db.query.bots.findMany({
- * with: … })`) and synchronous transactions (`db.transaction((tx) => …)`) are
- * available, unlike core's driver-agnostic handle.
- *
- * `createAppDb()` opens the connection; the Node entry and the test setup pass
- * it to `bootstrap()`, so core and the app share one connection. `db` below is
- * the app's typed view of that same handle.
- */
 export type AppDatabase = BetterSQLite3Database<typeof schema>;
 
 export interface CreateAppDbOptions {
-  /** Apply pending Drizzle migrations from this folder on open. */
   migrationsFolder?: string;
-  /**
-   * Open an in-memory copy of this serialized database (`sqlite.serialize()`)
-   * instead of `url`. The server test setup migrates one database per worker
-   * and gives each test file a copy.
-   */
   image?: Buffer;
 }
 
-/** The better-sqlite3 connection behind each instance `createAppDb` made. */
 const connections = new WeakMap<AppDatabase, Database.Database>();
 
-/**
- * The raw connection behind an instance, for the few callers that must
- * checkpoint or close it (the legacy copy's staging file). Throws for an
- * instance this module did not open.
- */
 export function sqliteConnection(instance: AppDatabase): Database.Database {
   const sqlite = connections.get(instance);
   if (!sqlite) throw new Error("Not a database this module opened");
@@ -64,18 +42,10 @@ export function createAppDb(url: string, options: CreateAppDbOptions = {}): AppD
   return instance;
 }
 
-/**
- * The same connection as core's driver-agnostic `Database`, for `bootstrap()`.
- * The types differ only in the attached schema.
- */
 export function asCoreDatabase(instance: AppDatabase): core.Database {
   return instance as unknown as core.Database;
 }
 
-/**
- * The shared handle, typed with the app schema. A live view: it forwards to
- * whatever `bootstrap()` installed, so it is safe to import at module top level.
- */
 export const db: AppDatabase = new Proxy({} as AppDatabase, {
   get(_target, property) {
     const current = core.db as unknown as AppDatabase | undefined;

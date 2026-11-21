@@ -1,8 +1,3 @@
-/**
- * Questions for the owner (ask_owner): a bot asks clarifying questions
- * mid-reply and waits for the answers, durably — the same wait as approvals.
- * Real pi-durable turns on the faux model.
- */
 import { mkdtemp, rm } from "node:fs/promises";
 import { until } from "../../fixtures/until";
 import { tmpdir } from "node:os";
@@ -54,10 +49,6 @@ function textOf(message: Message | undefined): string {
   return message.content.map((b) => (b.type === "text" ? b.text : "")).join("");
 }
 
-/**
- * Faux model: asks `questions` once, then reports the tool result it got —
- * and the owner's message placed after it, if any.
- */
 function askThenReport(questions: JsonValue = QUESTIONS, tool = "ask_owner") {
   return (context: PiContext) => {
     const index = context.messages.findLastIndex((m) => m.role === "toolResult");
@@ -179,7 +170,6 @@ describe("ask_owner", () => {
 
     const waiting = await waitingCall(events);
     expect(waiting.taskId).toEqual(expect.any(Number));
-    // Trimmed, without the repeated option.
     expect(waiting.questions).toEqual([
       { question: "Which database?", options: [{ label: "Postgres" }, { label: "SQLite" }] },
       {
@@ -242,7 +232,6 @@ describe("ask_owner", () => {
   it("is not offered in an unattended conversation, where nobody can answer (issue #360)", async () => {
     const offered: string[][] = [];
     const runtime = await open((context: PiContext) => {
-      // pi-durable declares tools in system messages.
       const names = context.messages.flatMap((message) =>
         message.role === "system"
           ? ((message as { toolsAdded?: { name: string }[] }).toolsAdded ?? []).map((t) => t.name)
@@ -295,7 +284,6 @@ describe("ask_owner", () => {
     await expect(runtime.answerQuestions(ref, waiting.taskId!, null)).rejects.toThrow(
       QuestionNotPendingError,
     );
-    // The refused answer left the approval untouched.
     await runtime.decideApproval(ref, waiting.taskId!, "approved");
     expect(await until(() => finalText(events), "reply")).toBe("Sent to ana@x.dev");
     expect(sent).toEqual(["ana@x.dev"]);
@@ -359,9 +347,27 @@ describe("ask_owner", () => {
     const runtime = await open();
     const { ref, events } = await start(runtime);
     await waitingCall(events);
-    // What the app does for an owner send while questions wait.
     await runtime.submit(ref, { requestId: "r2", text: "Use SQLite", whenBusy: "steer" });
     await runtime.dismissQuestions(ref);
+    expect(await until(() => finalText(events), "reply")).toMatch(
+      /dismissed these questions[\s\S]*\|THEN:Use SQLite$/,
+    );
+    expect(runtime.pendingQuestions(ref)).toBe(0);
+  }, 15_000);
+
+  it("a message the owner sent before the questions came up dismisses them", async () => {
+    const runtime = await open();
+    const ref = await runtime.createConversation({
+      modelId: TEST_MODEL,
+      systemPrompt: "",
+      capabilities: { enabled: ["questions"], permissions: {} },
+    });
+    const events: ChatEvent[] = [];
+    await runtime.watchChat(ref, (batch) => {
+      events.push(...batch);
+    });
+    await runtime.submit(ref, { requestId: "r1", text: "set up the project" });
+    await runtime.submit(ref, { requestId: "r2", text: "Use SQLite", whenBusy: "steer" });
     expect(await until(() => finalText(events), "reply")).toMatch(
       /dismissed these questions[\s\S]*\|THEN:Use SQLite$/,
     );
@@ -391,7 +397,6 @@ describe("ask_owner across restarts", () => {
       after.push(...batch);
     });
     const waiting = await waitingCall(after);
-    // The call re-runs on resume and re-registers its wait.
     await until(() => second.pendingQuestions(ref) === 1, "wait re-registered");
     await second.answerQuestions(ref, waiting.taskId!, [
       { selected: ["Postgres"] },

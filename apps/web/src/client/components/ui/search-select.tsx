@@ -1,11 +1,3 @@
-/**
- * A searchable single-select (Fluid Functionalism's Dropdown with search,
- * https://www.fluidfunctionalism.com/docs/dropdown): a quiet trigger that
- * opens a popover holding a search line over the options, one gliding
- * highlight, and a check on the current value. Built on Radix Popover and
- * the cmdk `Command` from @groot/ui, so it filters as you type and is fully
- * keyboard-driven (↑ ↓ ↵ esc).
- */
 import * as React from "react";
 import { defaultFilter } from "cmdk";
 import { Popover as PopoverPrimitive } from "radix-ui";
@@ -24,11 +16,8 @@ import { cn } from "@groot/ui/lib/utils";
 export interface SearchSelectOption {
   value: string;
   label: string;
-  /** A second, muted line (or right-hand note with `inlineDescription`). */
   description?: string;
-  /** Heading of the group the option is listed under. */
   group?: string;
-  /** Extra words the search matches (ids, aliases). */
   keywords?: string[];
   icon?: React.ReactNode;
   disabled?: boolean;
@@ -45,36 +34,28 @@ export interface SearchSelectProps {
   value: string;
   onValueChange(value: string): void;
   options: SearchSelectOption[];
-  /** Trigger content; defaults to the selected option's label. */
   children?: React.ReactNode;
-  /** Trigger aria-label (and title). */
   label: string;
   placeholder?: string;
   searchPlaceholder?: string;
   emptyText?: string;
-  /** Rows after the options (e.g. "Browse folders…"); they receive the query. */
   actions?: SearchSelectAction[];
-  /** A row offered for the typed query when nothing matches it exactly. */
   createOption?: (query: string) => SearchSelectAction | null;
   align?: "start" | "center" | "end";
   side?: "top" | "bottom";
-  /** Popover width class. */
   contentClassName?: string;
   triggerClassName?: string;
   disabled?: boolean;
-  /** Hide the search line for short lists. */
   searchable?: boolean;
   "data-testid"?: string;
 }
 
-/** The typed-query row leads, action rows trail; options rank as cmdk ranks them. */
 function rankRows(value: string, search: string, keywords?: string[]): number {
   if (value.startsWith("__create__")) return 1;
   if (value.startsWith("__action__")) return 0.0001;
   return defaultFilter(value, search, keywords);
 }
 
-/** The chip-like trigger the Code page composer uses (ghost, compact). */
 export const searchSelectTriggerClass =
   "text-muted-foreground hover:text-foreground hover:bg-muted aria-expanded:bg-muted aria-expanded:text-foreground focus-visible:ring-ring/50 inline-flex h-7 min-w-0 shrink items-center gap-1 rounded-lg px-2 text-xs font-medium outline-none select-none focus-visible:ring-3 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5";
 
@@ -155,7 +136,6 @@ export function SearchSelect({
           collisionPadding={8}
           onOpenAutoFocus={(e) => {
             if (!searchable) return;
-            // cmdk's input takes focus itself; keep Radix from focusing the list first.
             e.preventDefault();
           }}
           className={cn(

@@ -80,7 +80,7 @@ describe("the Tests workflow", () => {
 
 describe("gate selection", () => {
   it("runs every gate without --job, and one job's gates with it", () => {
-    expect(selectGates([]).gates).toHaveLength(18);
+    expect(selectGates([]).gates).toHaveLength(19);
     expect(selectGates(["--job", "migrations"]).gates?.map((gate) => gate.name)).toEqual([
       "Migrations are up to date with the schema",
       "Applied migrations unchanged",

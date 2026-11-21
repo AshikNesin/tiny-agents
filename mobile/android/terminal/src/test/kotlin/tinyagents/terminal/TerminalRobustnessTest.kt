@@ -7,12 +7,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * Garbage in never throws and never corrupts the grid, and a stream means the same thing
- * however it is cut into `feed` calls.
- */
 class TerminalRobustnessTest {
-    /** Pieces that reach deep into the parser when shuffled together. */
     private val fragments: List<String> = listOf(
         ESC, ESC, CSI, CSI, CSI, "$ESC]", "${ESC}P", "${ESC}_", "$ESC\\", "\u0007", "\u0018", "\u001a",
         "0", "1", "2", "3", "5", "9", "10", "25", "38", "48", "255", "1049", "2004", "65535", "99999999",
@@ -106,7 +101,6 @@ class TerminalRobustnessTest {
         val emulator = TerminalEmulator(cols, rows, 200) { replies.write(it) }
     }
 
-    /** Feed `stream` whole, one byte at a time and in random chunks: all three must agree. */
     private fun assertSplitInvariant(label: String, stream: ByteArray, cols: Int, rows: Int, seed: Long) {
         val whole = Run(cols, rows)
         whole.emulator.feed(stream)
@@ -156,7 +150,6 @@ class TerminalRobustnessTest {
         assertSplitInvariant("session", stream, 80, 24, 1)
         assertSplitInvariant("session, narrow", stream, 23, 7, 2)
 
-        // And it did what it says: one cut at every byte boundary, checked against the whole.
         val whole = Run(80, 24)
         whole.emulator.feed(stream)
         val expected = whole.emulator.dump()

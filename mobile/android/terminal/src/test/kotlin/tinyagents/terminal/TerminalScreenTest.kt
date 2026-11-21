@@ -5,10 +5,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** Printing, wrapping, cursor movement, erasing, insert/delete, scrolling and the two screens. */
 class TerminalScreenTest {
-    // ------------------------------------------------------------ text and wrapping
-
     @Test
     fun `plain text lands at the cursor and CR LF start a new line`() {
         val t = TestTerminal(20, 5).feed("hello\r\nworld")
@@ -141,8 +138,6 @@ class TerminalScreenTest {
         assertEquals(listOf("───"), t.screen())
     }
 
-    // ------------------------------------------------------------ cursor movement
-
     @Test
     fun `relative moves default to one and clamp at the edges`() {
         val t = TestTerminal(10, 5)
@@ -205,7 +200,6 @@ class TerminalScreenTest {
         assertEquals(2 to 0, t.cursor)
         t.feed("${CSI}99B")
         assertEquals(5 to 0, t.cursor)
-        // Outside the region the screen edge is the limit.
         t.feed("${CSI}2;1H${CSI}99A")
         assertEquals(0 to 0, t.cursor)
         t.feed("${CSI}8;1H${CSI}99B")
@@ -236,7 +230,6 @@ class TerminalScreenTest {
         assertEquals(1 to 3, t.cursor)
         assertEquals(TerminalColor.indexed(1), t.fg(1, 2))
         assertEquals(TerminalAttribute.BOLD, t.attrs(1, 2))
-        // The CSI forms do the same.
         t.feed("${CSI}s${CSI}H${CSI}uY")
         assertEquals("  XY", t.row(1))
     }
@@ -250,8 +243,6 @@ class TerminalScreenTest {
         t.feed("${CSI}H${ESC}Me")
         assertEquals(listOf("e", " b", "c"), t.screen())
     }
-
-    // ------------------------------------------------------------ erasing
 
     private fun filled(): TestTerminal = TestTerminal(5, 3).feed("abcde\r\nfghij\r\nklmno")
 
@@ -328,8 +319,6 @@ class TerminalScreenTest {
         assertEquals(green, t.bg(0, 0))
     }
 
-    // ------------------------------------------------------------ insert and delete
-
     @Test
     fun `ICH inserts blanks and pushes the tail off the line`() {
         val t = filled().feed("${CSI}1;2H${CSI}2@")
@@ -355,15 +344,12 @@ class TerminalScreenTest {
         assertEquals(listOf("1", "2", "4", "", "", "6"), t.screen())
         t.feed("${CSI}99L")
         assertEquals(listOf("1", "2", "", "", "", "6"), t.screen())
-        // Outside the region they do nothing.
         t.feed("${CSI}6;1H${CSI}M${CSI}L")
         assertEquals(listOf("1", "2", "", "", "", "6"), t.screen())
         t.feed("${CSI}1;1H${CSI}M")
         assertEquals(listOf("1", "2", "", "", "", "6"), t.screen())
         assertEquals(0, t.emulator.scrollbackSize)
     }
-
-    // ------------------------------------------------------------ scroll regions and scrollback
 
     @Test
     fun `LF at the bottom margin scrolls only the region`() {
@@ -396,7 +382,6 @@ class TerminalScreenTest {
         assertEquals("an inverted region is rejected", 2 to 2, t.cursor)
         t.feed("${CSI}3;3r")
         assertEquals("a one-line region is rejected", 2 to 2, t.cursor)
-        // The 2..4 region is still in force.
         t.feed("${CSI}4;1H\n\n\nx")
         assertEquals(3 to 1, t.cursor)
         t.feed("${CSI}r${CSI}5;1H\n")
@@ -449,8 +434,6 @@ class TerminalScreenTest {
     fun `a line past the screen is out of bounds`() {
         TestTerminal(4, 2).emulator.line(2)
     }
-
-    // ------------------------------------------------------------ alternate screen
 
     @Test
     fun `1049 shows a cleared alternate screen and brings the main screen and cursor back`() {

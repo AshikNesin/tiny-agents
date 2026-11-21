@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { createNamespaceKv, kv, purgeExpiredKv } from "@groot/core/kv";
 import { useFreshTestDatabase } from "../fixtures/test-db";
 
-// Each test starts from the seeded database, as if it ran first.
 beforeEach(useFreshTestDatabase);
 describe("kv", () => {
   it("round-trips JSON values", async () => {
@@ -108,7 +107,6 @@ describe("kv", () => {
     expect(await kv.claim("slot", 10 * MINUTE)).toBe(true);
     expect(await kv.get("slot")).toBe(start + 10 * MINUTE);
 
-    // A shorter interval is measured from the same last claim.
     at(11);
     expect(await kv.claim("slot", 2 * MINUTE)).toBe(false);
     at(12);

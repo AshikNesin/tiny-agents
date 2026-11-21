@@ -9,11 +9,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.addPathNodes
 import androidx.compose.ui.unit.dp
 
-/*
- * The app's icons: 24dp line icons, 2dp round strokes, drawn here so the app ships no icon
- * library. An icon takes the tint of the `Icon` that draws it.
- */
-
 private fun circle(cx: Float, cy: Float, r: Float): String =
     "M${cx - r},${cy}a$r,$r 0 1,0 ${2 * r},0a$r,$r 0 1,0 ${-2 * r},0"
 
@@ -41,7 +36,6 @@ private const val BRAND_BUBBLE =
         "M15 7.5a1.5 1.5 0 0 1 1.5 1.5v3a1.5 1.5 0 0 1-3 0V9a1.5 1.5 0 0 1 1.5-1.5z"
 
 object AppIcons {
-    /** The Tiny Agents mark: a chat bubble with eyes and an always-on dot (the web app's favicon without its tile). */
     val Brand by lazy {
         ImageVector.Builder(name = "tiny-agents", defaultWidth = 24.dp, defaultHeight = 24.dp, viewportWidth = 24f, viewportHeight = 24f).apply {
             addPath(pathData = addPathNodes(BRAND_BUBBLE), fill = SolidColor(Color.Black), pathFillType = PathFillType.EvenOdd)
@@ -154,6 +148,7 @@ object AppIcons {
     val Maximize by lazy {
         icon("maximize", "M8 3H5a2 2 0 0 0-2 2v3", "M21 8V5a2 2 0 0 0-2-2h-3", "M3 16v3a2 2 0 0 0 2 2h3", "M16 21h3a2 2 0 0 0 2-2v-3")
     }
+    val PictureInPicture by lazy { icon("picture-in-picture", "M21 9V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4", rect(12f, 13f, 10f, 7f, 2f)) }
     val Grid by lazy { icon("grid", rect(3f, 3f, 7f, 7f, 1f), rect(14f, 3f, 7f, 7f, 1f), rect(14f, 14f, 7f, 7f, 1f), rect(3f, 14f, 7f, 7f, 1f)) }
     val Server by lazy { icon("server", rect(2f, 2f, 20f, 8f, 2f), rect(2f, 14f, 20f, 8f, 2f), "M6 6h.01", "M6 18h.01") }
     val Queue by lazy { icon("queue", "M15 10l5 5-5 5", "M4 4v7a4 4 0 0 0 4 4h12") }

@@ -1,9 +1,3 @@
-/**
- * The Vault routes and service end to end (issue #56) on the local backend:
- * step-up before writes and reveals, CRUD, policy decisions, the audit trail,
- * credential request submits, and the canary invariant — no value in the
- * database, in list/detail responses, or in the audit.
- */
 import bcrypt from "bcryptjs";
 import { asc, eq, ne, sql } from "drizzle-orm";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -38,6 +32,7 @@ import { clearStepUpsForTests } from "../../../apps/web/src/server/api/vault/vau
 import {
   submitRequest,
   cancelRequest,
+  requestView,
 } from "../../../apps/web/src/server/api/vault/vault.requests.service";
 import {
   createBrowserSessions,
@@ -45,7 +40,11 @@ import {
   type BrowserSessions,
 } from "../../../packages/agent/src/toolkits/browser";
 import { setBrowserSessionsForTests } from "../../../apps/web/src/server/api/bots/browser.sessions";
-import { OriginMismatchError, type SecretFill } from "../../../packages/sandbox/src/browser-fill";
+import {
+  FrameOriginError,
+  OriginMismatchError,
+  type SecretFill,
+} from "../../../packages/sandbox/src/browser-fill";
 import { WindowMismatchError } from "../../../packages/sandbox/src/computer-sessions";
 import { secretRedactor } from "../../../packages/agent/src/redact";
 import type { CredentialRequest } from "../../../packages/agent/src/credentials";
@@ -54,7 +53,6 @@ import { api, createTestApp, type TestApp } from "../helpers";
 const CANARY = "canary-pw-7Hq2Zx";
 const PASSWORD = "owner-password-123";
 
-/** The local backend's sealed rows, as stored. */
 async function dumpValues(): Promise<string> {
   return JSON.stringify(await db.select().from(vaultValues));
 }
@@ -92,7 +90,6 @@ afterEach(() => {
 // oxlint-disable-next-line typescript/no-explicit-any -- response data varies per route
 type Data = any;
 
-/** An authenticated vault request; `stepUp` sends the step-up header. */
 function vault(path: string, init: { method?: string; json?: unknown; stepUp?: string } = {}) {
   return api<Data>(app, `/api/v1/vault${path}`, {
     method: init.method ?? "GET",
@@ -122,7 +119,6 @@ async function createGithub(stepUpToken: string) {
   });
 }
 
-/** Everything a value could leak into: rows, audit, the list and detail responses. */
 async function assertNoCanary(): Promise<void> {
   const rows = JSON.stringify(await db.select().from(vaultItems));
   const events = JSON.stringify(await db.select().from(vaultAuditEvents));
@@ -130,7 +126,6 @@ async function assertNoCanary(): Promise<void> {
   expect(rows).not.toContain(CANARY);
   expect(events).not.toContain(CANARY);
   expect(overview).not.toContain(CANARY);
-  // The local backend keeps it encrypted, never in the clear.
   expect(await dumpValues()).not.toContain(CANARY);
 }
 
@@ -218,7 +213,6 @@ describe("vault routes", () => {
       json: { field: "password" },
     });
     expect(noStepUp.status).toBe(403);
-    // Errors are no-store too.
     expect(noStepUp.headers.get("cache-control")).toBe("no-store");
     const revealed = await vault("/items/github/reveal", {
       method: "POST",
@@ -331,8 +325,6 @@ describe("vault policy", () => {
   );
 
   it("resolves a connection's secret through the same policy, without a bot scope", async () => {
-    // An api_key allows mcp by default; scoping it to a bot does not shut
-    // the connection out, since the owner linked the item to the connection.
     const response = await vault("/items", {
       method: "POST",
       stepUp: await stepUp(),
@@ -354,7 +346,6 @@ describe("vault policy", () => {
     await expect(resolveConnectionSecret("nope", "github")).rejects.toThrow(
       'Vault item "nope": No vault item `nope`. Call vault_list.',
     );
-    // The same audit as a bot's use, with no bot, conversation or approval behind it.
     const audited = await db
       .select()
       .from(vaultAuditEvents)
@@ -415,7 +406,6 @@ describe("vault policy", () => {
   });
 });
 
-/** A full policy, as the route's schema would default it. */
 const policyOf = (policy: { handle: string; hosts?: string[]; tools?: string[] }) => ({
   origins: [],
   hosts: [],
@@ -454,7 +444,6 @@ describe("app credentials (audience app)", () => {
     ).map((e) => e.outcome);
     expect(outcomes).toEqual(["refused_origin"]);
     const [row] = await db.select().from(vaultItems);
-    // The Vault page says "used … by Anthropic", not the account's id.
     expect(row?.lastUsedBy).toBe("Anthropic");
     await assertNoCanary();
   });
@@ -588,7 +577,6 @@ describe("sandbox command policy", () => {
     });
     await createKey("gh-default", { hosts: ["api.github.com"] });
     await createKey("gh-nohosts", { tools: ["run_command"] });
-    // Even an "allowed" item, already granted for the chat, asks for a command.
     expect(await planUse(use("gh"), { unattended: false })).toMatchObject({
       approve: true,
       grantable: false,
@@ -638,10 +626,15 @@ describe("card fills", () => {
 describe("credential request submit", () => {
   const conversation = 4242;
   const target = { profile: "shared", tab: `conversation-${conversation}` };
-  const fills: { origin: string; steps?: boolean; fields: { key: string; value: string }[] }[] = [];
+  const fills: {
+    origin: string;
+    frameOrigins?: string[];
+    steps?: boolean;
+    fields: { key: string; value: string }[];
+  }[] = [];
   let origin = "https://hi.nesin.io";
-  /** The page navigates here as the fill starts (a redirect racing the submit). */
   let movesTo: string | undefined;
+  let framedBy: string | undefined;
 
   const session: BrowserSession = {
     url: () => `${origin}/login`,
@@ -649,8 +642,10 @@ describe("credential request submit", () => {
     fillSecret: async (fill: SecretFill) => {
       if (movesTo) origin = movesTo;
       if (fill.origin !== origin) throw new OriginMismatchError(origin);
+      if (framedBy) throw new FrameOriginError(framedBy);
       fills.push({
         origin: fill.origin,
+        ...(fill.frameOrigins ? { frameOrigins: fill.frameOrigins } : {}),
         ...(fill.steps !== undefined ? { steps: fill.steps } : {}),
         fields: fill.fields.map((f) => ({ key: f.key, value: f.value.reveal() })),
       });
@@ -696,6 +691,7 @@ describe("credential request submit", () => {
     fills.length = 0;
     origin = "https://hi.nesin.io";
     movesTo = undefined;
+    framedBy = undefined;
     sessions = createBrowserSessions({ transport: async () => session });
     setBrowserSessionsForTests(sessions);
     await sessions.start(target);
@@ -721,7 +717,6 @@ describe("credential request submit", () => {
     expect(fills).toEqual([
       {
         origin: "https://hi.nesin.io",
-        // An email page, then a password page (Amazon's sign-in): the fill moves through both.
         steps: true,
         fields: [
           { key: "email", value: "ana@example.com" },
@@ -740,6 +735,40 @@ describe("credential request submit", () => {
     });
     expect(saved).toMatchObject({ kind: "login", username: "ana@example.com" });
     await assertNoCanary();
+  });
+
+  it("fills a sign-in frame the card named, and the saved login fills there too (#302)", async () => {
+    origin = "https://www.thehindu.com";
+    const runtime = fakeRuntime({
+      origin: "https://www.thehindu.com",
+      frameOrigin: "https://id.tinypass.com",
+      title: "Sign in to The Hindu",
+      purpose: "Read the article",
+      fields: [
+        { key: "email", label: "Email", type: "email", required: true, autocomplete: "email" },
+      ],
+    });
+    const view = await requestView(7, runtime as never);
+    expect(view).toMatchObject({
+      origin: "https://www.thehindu.com",
+      frameOrigin: "https://id.tinypass.com",
+    });
+    await submitRequest(7, { values: { email: "ana@example.com" }, save: true }, runtime as never);
+    expect(fills).toEqual([
+      {
+        origin: "https://www.thehindu.com",
+        frameOrigins: ["https://id.tinypass.com"],
+        steps: true,
+        fields: [{ key: "email", value: "ana@example.com" }],
+      },
+    ]);
+    const saved = await db.query.vaultItems.findFirst({
+      where: eq(vaultItems.handle, "thehindu-com"),
+    });
+    expect(JSON.parse(saved!.originsJson)).toEqual([
+      "https://www.thehindu.com",
+      "https://id.tinypass.com",
+    ]);
   });
 
   it("refuses when the page moved to another origin", async () => {
@@ -770,6 +799,23 @@ describe("credential request submit", () => {
       message: "The page moved before the fill. Nothing was filled.",
     });
     expect(fills).toEqual([]);
+    expect(runtime.settleCredentialRequest).not.toHaveBeenCalled();
+  });
+
+  it("says the field is in another site's frame, not that the page moved (#302)", async () => {
+    framedBy = "https://id.tinypass.com";
+    const runtime = fakeRuntime();
+    await expect(
+      submitRequest(
+        7,
+        { values: { email: "a@b.c", password: CANARY }, save: false },
+        runtime as never,
+      ),
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      message:
+        "The sign-in field is in a frame from https://id.tinypass.com, not on https://hi.nesin.io. Nothing was filled.",
+    });
     expect(runtime.settleCredentialRequest).not.toHaveBeenCalled();
   });
 

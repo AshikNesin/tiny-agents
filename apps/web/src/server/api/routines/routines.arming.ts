@@ -1,31 +1,3 @@
-/**
- * A routine's armed state, and the only module that writes it: `enabled`,
- * `nextRunAt`, `pendingJobId` (the chain), `blockedStreak`, `pausedReason`,
- * `conversationId` and, at create, `sourceKey`. Every other routines file
- * asks for a transition here instead of writing those columns.
- *
- * An armed routine has exactly one queued routine-fire job for its next
- * occurrence (`pendingJobId`, `nextRunAt`). Each transition is one
- * compare-and-set statement, or one synchronous transaction where it must
- * read the handle it replaces; a queue job is added before the write that
- * points at it and cancelled when that write loses, and the handle a write
- * replaces is cancelled after it, so the row and the queue never keep two
- * chains:
- *
- *   createRoutine   one insert, already armed, carrying the sourceKey
- *   armRoutine      owner arms (create, resume, schedule edit): new chain,
- *                   blocked count starts over
- *   disarmRoutine   owner pauses, or a submit failed: no chain
- *   advanceRoutine  an occurrence fired: the next one, or a fired once ends;
- *                   only while the handle is still the one the fire loaded
- *   recordBlocked   a run ended blocked: count it, and pause in the same
- *                   write once BLOCKED_RUNS_BEFORE_PAUSE did in a row
- *   clearBlockedStreak  a run finished some other way
- *   setLatestConversation  each fire records its run's fresh conversation
- *   moveToBot       the routine's conversation is retired with its old bot
- *   removeRoutine   the row goes, and its queued job with it
- *   rearmRoutines   boot: an armed routine whose job is gone gets it back
- */
 import { and, eq, gt, inArray, isNotNull, isNull, type SQL } from "drizzle-orm";
 import { createId } from "@groot/core/utils/id.utils";
 import { logger } from "@groot/core/logger";
@@ -45,13 +17,11 @@ export const firePayloadSchema = z.object({
 
 export interface RoutineFirePayload extends z.infer<typeof firePayloadSchema> {}
 
-/** Blocked runs in a row that pause a routine (issue #87). */
 export const BLOCKED_RUNS_BEFORE_PAUSE = 3;
 const PAUSED_REASON_CHARS = 500;
 
 const DISARMED = { enabled: false, nextRunAt: null, pendingJobId: null } as const;
 
-/** Queue the fire job for one occurrence. Points nothing at it yet. */
 async function queueFireJob(routineId: string, scheduledFor: Date, now: Date): Promise<string> {
   const delaySeconds = Math.max(0, Math.ceil((scheduledFor.getTime() - now.getTime()) / 1000));
   const options: SendJobOptions = { delaySeconds };
@@ -63,14 +33,11 @@ async function queueFireJob(routineId: string, scheduledFor: Date, now: Date): P
   return addJob(ROUTINE_FIRE_JOB, payload, options);
 }
 
-/** Cancel a queued fire job. Advisory: it may already have fired or been purged. */
 export async function cancelFireJob(jobId: string | null | undefined): Promise<void> {
   if (!jobId) return;
   try {
     await cancelJob(jobId);
-  } catch {
-    // the job may already be gone; the row update is the durable part
-  }
+  } catch {}
 }
 
 const handleIs = (jobId: string | null): SQL =>
@@ -89,11 +56,6 @@ interface ArmedRow {
   blockedStreak: number;
 }
 
-/**
- * The owner-driven write: read the row and write `change(row)` in one
- * synchronous transaction, then cancel the handle the write replaced. Returns
- * the row as it was, or undefined when the routine is gone.
- */
 async function rewrite(
   id: string,
   change: (row: ArmedRow) => ArmedFields | undefined,
@@ -124,16 +86,9 @@ export interface NewRoutine {
   name: string;
   prompt: string;
   schedule: Schedule;
-  /** Durable tool-call id: a replayed create returns the routine it made. */
   sourceKey?: string;
 }
 
-/**
- * Create a routine, armed or paused, in one insert that carries its
- * `sourceKey`, so a replay of the same tool call (even one after a crash
- * mid-create) finds the routine instead of making a second. Returns its id
- * and whether this call made it.
- */
 export async function createRoutine(
   fields: NewRoutine,
   armed: boolean,
@@ -159,13 +114,6 @@ export async function createRoutine(
   return { id: existing.id, created: false };
 }
 
-/**
- * Arm a routine (create, resume, a schedule or bot edit): its next occurrence
- * from `from`, queued, any earlier chain cancelled. The queue is a table, so
- * arming always succeeds; the worker runs the job when it comes due. Arming
- * starts the blocked count over: the owner resumed it, presumably having
- * fixed what blocked it.
- */
 export async function armRoutine(
   id: string,
   schedule: Schedule,
@@ -184,16 +132,10 @@ export async function armRoutine(
   if (!before) await cancelFireJob(pendingJobId);
 }
 
-/** Disarm a routine: cancel its queued job, clear the materialized slot. */
 export async function disarmRoutine(id: string): Promise<void> {
   await rewrite(id, () => DISARMED);
 }
 
-/**
- * Point the chain at `scheduledFor` only while the routine is armed and its
- * handle is still `expected` (the one the caller loaded); otherwise the owner
- * re-armed or paused it meanwhile and the job just queued is cancelled.
- */
 async function moveChain(
   routineId: string,
   scheduledFor: Date,
@@ -211,20 +153,12 @@ async function moveChain(
   return false;
 }
 
-/** The routine as an occurrence's fire (or the boot re-arm) loaded it. */
 export interface ChainRoutine {
   id: string;
   schedule: unknown;
   pendingJobId: string | null;
 }
 
-/**
- * Advance a recurring routine after an occurrence fired, or end a fired once
- * routine. `from` is the occurrence just handled for cron/interval (the chain
- * keeps its phase); a missed occurrence collapses the backlog by scheduling
- * the next live slot from now instead. Compare-and-set on the handle the
- * caller loaded, so an edit or pause that landed meanwhile wins.
- */
 export async function advanceRoutine(routine: ChainRoutine, from: Date, now: Date): Promise<void> {
   const schedule = safeParseSchedule(routine.schedule);
   if (!schedule) return;
@@ -238,12 +172,6 @@ export async function advanceRoutine(routine: ChainRoutine, from: Date, now: Dat
   await moveChain(routine.id, nextOccurrence(schedule, from), now, routine.pendingJobId);
 }
 
-/**
- * A run ended blocked: count it, and pause the routine in the same write once
- * BLOCKED_RUNS_BEFORE_PAUSE runs in a row have. Returns the paused reason when
- * this run paused it, else null; a routine that is already paused (a manual
- * run) only counts.
- */
 export async function recordBlocked(id: string, reason: string): Promise<string | null> {
   let pausedReason: string | null = null;
   const before = await rewrite(id, (row) => {
@@ -259,7 +187,6 @@ export async function recordBlocked(id: string, reason: string): Promise<string 
   return pausedReason;
 }
 
-/** A run finished some other way: the blocked streak is broken. */
 export async function clearBlockedStreak(id: string): Promise<void> {
   await db
     .update(routines)
@@ -267,19 +194,10 @@ export async function clearBlockedStreak(id: string): Promise<void> {
     .where(and(eq(routines.id, id), gt(routines.blockedStreak, 0)));
 }
 
-/**
- * Record the conversation of the routine's newest run, the one a move or a
- * delete stops. Each run has a fresh one (stored on its run row too).
- */
 export async function setLatestConversation(id: string, conversationId: string): Promise<void> {
   await db.update(routines).set({ conversationId }).where(eq(routines.id, id));
 }
 
-/**
- * Move a routine to another bot. Its conversation runs with the old bot's
- * persona and tools, so it is retired in the same write and the next fire
- * starts a fresh one. Returns the retired conversation, if there was one.
- */
 export async function moveToBot(id: string, botId: string): Promise<string | null> {
   return db.transaction((tx) => {
     const row = tx
@@ -292,10 +210,6 @@ export async function moveToBot(id: string, botId: string): Promise<string | nul
   });
 }
 
-/**
- * Delete a routine and cancel its queued job. Returns its conversation, which
- * the caller retires, if it had one.
- */
 export async function removeRoutine(id: string): Promise<string | null> {
   const row = db.transaction((tx) => {
     const found = tx
@@ -310,21 +224,6 @@ export async function removeRoutine(id: string): Promise<string | null> {
   return row?.conversationId ?? null;
 }
 
-/**
- * Boot: give every armed routine whose fire job is gone its job back. An
- * enabled routine with a `nextRunAt` must have a live (created or active)
- * routine-fire job behind `pendingJobId`; after the move off the old queue
- * (`db/legacy-copy.ts` clears every handle) or a job that failed for good,
- * it has none and would never fire again.
- *
- * The occurrence it was waiting for is queued again as it stands: a future
- * one at its time, an overdue one at once, where `dispatchOccurrence`
- * applies the grace policy exactly as to a delivery delayed by downtime (a
- * late once still fires; a recurring slot past its grace is recorded missed
- * and the chain resumes from now). An occurrence that was already submitted
- * (a crash between its submit and the chain) is not fired twice: the chain
- * advances past it. Returns how many routines were re-armed.
- */
 export async function rearmRoutines(now: Date = new Date()): Promise<number> {
   const armed = await db
     .select({
@@ -387,10 +286,6 @@ export async function rearmRoutines(now: Date = new Date()): Promise<number> {
   return rearmed;
 }
 
-/**
- * Boot ("routine re-arm" in entry.node.ts): re-arm in the background, logging
- * a failure instead of failing the boot.
- */
 export function rearmRoutinesOnBoot(): Promise<void> {
   return rearmRoutines().then(
     () => undefined,

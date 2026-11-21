@@ -1,9 +1,3 @@
-/**
- * Type sniffing for every upload (issue #58 §9.1). The stored MIME is what
- * the bytes are, not what the browser claimed: the extension picks a family,
- * the magic bytes must agree with it, text must decode as text, and
- * executables are refused under any name.
- */
 import { unzipSync } from "fflate";
 import { sniffImage } from "./uploads.prepare";
 import { startsWith, type ExtractKind } from "./uploads.text";
@@ -13,17 +7,14 @@ export { decodeText } from "./uploads.text";
 export type { ExtractKind } from "./uploads.text";
 
 export interface SniffResult {
-  /** The authoritative MIME type. */
   mime: string;
   kind: ExtractKind;
 }
 
-/** A file whose bytes don't match its name, or that may never be stored. */
 export class SniffError extends Error {}
 
 const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "webp", "gif"];
 
-/** Code and plain-text extensions: stored and read as text, never executed. */
 export const TEXT_EXTENSIONS = new Set([
   "txt",
   "md",
@@ -101,14 +92,12 @@ const OLE: Record<string, string> = {
 const ascii = (bytes: Uint8Array, offset: number, length: number) =>
   String.fromCharCode(...bytes.subarray(offset, offset + length));
 
-/** "MZ" plus a PE header where the DOS stub points: a Windows binary, not a text starting "MZ". */
 function isPortableExecutable(bytes: Uint8Array): boolean {
   if (!startsWith(bytes, [0x4d, 0x5a]) || bytes.length < 0x40) return false;
   const offset = bytes[0x3c] | (bytes[0x3d] << 8) | (bytes[0x3e] << 16) | (bytes[0x3f] << 24);
   return offset > 0 && startsWith(bytes, [0x50, 0x45, 0x00, 0x00], offset);
 }
 
-/** ELF, PE, Mach-O and fat binaries: refused whatever the name says. */
 function isExecutable(bytes: Uint8Array): boolean {
   return (
     startsWith(bytes, [0x7f, 0x45, 0x4c, 0x46]) ||
@@ -124,7 +113,6 @@ function isExecutable(bytes: Uint8Array): boolean {
 const isZip = (bytes: Uint8Array) =>
   startsWith(bytes, [0x50, 0x4b, 0x03, 0x04]) || startsWith(bytes, [0x50, 0x4b, 0x05, 0x06]);
 
-/** Entry names of a zip, read from its central directory (nothing is inflated). */
 function zipEntryNames(bytes: Uint8Array): string[] {
   const names: string[] = [];
   try {
@@ -134,17 +122,10 @@ function zipEntryNames(bytes: Uint8Array): string[] {
         return false;
       },
     });
-  } catch {
-    // a corrupt directory lists as what was read
-  }
+  } catch {}
   return names;
 }
 
-/**
- * Text: no NUL in the first 8 KB, and valid UTF-8 (or UTF-16 with a BOM).
- * Anything else that has no NULs reads as Windows-1252, the usual legacy
- * encoding of CSVs and logs.
- */
 function looksLikeText(bytes: Uint8Array): boolean {
   if (startsWith(bytes, [0xff, 0xfe]) || startsWith(bytes, [0xfe, 0xff])) return true;
   const head = bytes.subarray(0, 8192);
@@ -182,10 +163,6 @@ function mediaMime(bytes: Uint8Array, ext: string): string | undefined {
 const mismatch = (ext: string) =>
   new SniffError(`This file's contents don't match its .${ext} extension.`);
 
-/**
- * Sniff a non-image upload against its extension. Throws `SniffError` for
- * executables and for bytes that disagree with the name.
- */
 export function sniffFile(bytes: Uint8Array, ext: string): SniffResult {
   if (isExecutable(bytes)) {
     throw new SniffError("Executable files can't be attached.");
@@ -196,7 +173,6 @@ export function sniffFile(bytes: Uint8Array, ext: string): SniffResult {
     return { mime: image, kind: "unsupported" };
   }
   if (ext === "pdf") {
-    // Some writers put a few junk bytes before the header; the spec allows 1 KB.
     const head = ascii(bytes, 0, Math.min(bytes.length, 1024));
     if (!head.includes("%PDF-")) throw mismatch(ext);
     return { mime: "application/pdf", kind: "pdf" };
@@ -242,7 +218,6 @@ export function sniffFile(bytes: Uint8Array, ext: string): SniffResult {
     if (!mime) throw mismatch(ext);
     return { mime, kind: "unsupported" };
   }
-  // Everything else on the allowlist is text.
   if (!looksLikeText(bytes)) throw mismatch(ext);
   const mime = TEXT_MIME[ext] ?? "text/plain";
   const kind: ExtractKind =

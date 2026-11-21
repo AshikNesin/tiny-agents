@@ -33,7 +33,6 @@ import { openFeedback } from "../../lib/feedback";
 const HEADER_ICON =
   "text-muted-foreground hover:bg-sidebar-accent hover:text-foreground flex size-8 items-center justify-center rounded-xl outline-none focus-visible:ring-1 focus-visible:ring-sidebar-ring";
 
-/** ⌘K on Apple keyboards, Ctrl+K elsewhere. */
 const SEARCH_SHORTCUT =
   typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘K" : "Ctrl+K";
 
@@ -52,7 +51,6 @@ function NavRow({
   label: string;
   rail: boolean;
   active?: boolean;
-  /** A count shown at the end of the row (e.g. unread Shelley conversations). */
   badge?: number;
 } & ({ to: string; onClick?: () => void } | { onClick: () => void; to?: undefined })) {
   const className = cn(
@@ -116,16 +114,6 @@ function NavRow({
   );
 }
 
-/**
- * Persistent left sidebar (Grok-style): search and collapse icons up top,
- * the everyday nav (Tasks, Terminal), the Bots section (the way into
- * chats; /chats itself opens the last bot), and the
- * account menu, which also holds the set-up-and-forget pages (Routines,
- * Skills, Memory, Connections, Settings) on desktop and in the mobile drawer
- * alike, so mobile does not list them all the time (issue #227).
- * Desktop collapses to an icon rail (persisted); on mobile it is an
- * off-canvas drawer driven by `mobileOpen`.
- */
 export function AppSidebar() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
@@ -137,19 +125,14 @@ export function AppSidebar() {
   const toggleCommandPalette = useCommandPaletteStore((s) => s.toggle);
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
-  // A guest (issue #145) sees their shared bots, Code and Settings only.
   const guest = useIsGuest();
   const primaryNav = guest ? guestNav(PRIMARY_NAV) : PRIMARY_NAV;
   const secondaryNav = guest ? [] : SECONDARY_NAV;
 
-  // "Send feedback" was chosen: open the panel once the menu has closed.
   const feedbackRequested = useRef(false);
   const isActive = (to: string) => pathname === to || pathname.startsWith(`${to}/`);
-  // Code (issue #143) shows only with a coding agent configured, with its unread count.
   const codeConfigured = useCodeStore((s) => (s.harnesses?.length ?? 0) > 0);
   const codeUnread = useCodeStore((s) => unreadCount(s.threads));
-  // A page that lives in the account menu still shows where you are: the
-  // account row reads as selected while one of them is open.
   const inMenuPage = [...SECONDARY_NAV.map((item) => item.to), "/settings"].some(isActive);
   const activeBotId = matchPath("/chats/:botId", pathname)?.params.botId ?? null;
   const rail = collapsed;
@@ -178,7 +161,6 @@ export function AppSidebar() {
         <div
           className={cn(
             "flex h-14 shrink-0 items-center gap-1 px-3",
-            // Rail: collapse above search, centered in the narrow column.
             rail && "md:h-auto md:flex-col-reverse md:gap-1 md:py-3",
           )}
         >
@@ -278,18 +260,12 @@ export function AppSidebar() {
               side="top"
               className="w-56"
               onCloseAutoFocus={(e) => {
-                // Open the feedback panel once the menu has closed, and keep
-                // the menu from pulling focus back to its trigger, so typing
-                // goes straight into the panel's note.
                 if (!feedbackRequested.current) return;
                 feedbackRequested.current = false;
                 e.preventDefault();
                 openFeedback();
               }}
             >
-              {/* Amp-style order (upstream): Log out on top — farthest from
-                  the trigger, safe to reach for — then the palette, the
-                  destinations and Settings last, next to the trigger. */}
               <DropdownMenuItem
                 onSelect={() => {
                   void logout();

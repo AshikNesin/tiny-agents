@@ -1,21 +1,14 @@
-/**
- * The page's tabs, in the bar over its view: one per browser or desktop (its
- * dot, label, users and a hand when a bot asked for the owner), and who
- * drives the selected one, for the bar's status chip.
- */
 import { Hand } from "lucide-react";
 import { cn } from "@groot/ui/lib/utils";
 import type { LiveViewKind } from "../../lib/live-view";
 import type { LivePageSurface, PageItem } from "./surface";
 
-/** Who uses one, for its tab: "3 bots", "Scout", "no bots yet". */
 function usersOf(item: PageItem, own: string): string {
   if (item.profile !== "shared") return own;
   const count = item.bots.length;
   return count === 0 ? "no bots yet" : count === 1 ? item.bots[0]!.name : `${count} bots`;
 }
 
-/** Who drives a live one, for the status chip. */
 export function driverOf(item: PageItem): string {
   if (item.driver === "human") return "You're driving";
   if (item.profile !== "shared") return `${item.label} is driving`;
@@ -32,7 +25,6 @@ export function LivePageTabs<L, I extends PageItem>({
   kind: LiveViewKind;
   page: LivePageSurface<L, I>;
   items: I[];
-  /** The selected tab's profile. */
   profile: string | undefined;
   onSelect: (profile: string) => void;
 }) {

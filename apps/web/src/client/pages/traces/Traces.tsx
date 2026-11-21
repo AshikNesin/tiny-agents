@@ -1,9 +1,3 @@
-/**
- * Traces (issue #363): every LLM call the bots make, newest first and grouped
- * by day. A row is a session (a chat, a Past chat, a routine run, a message
- * from another bot) with its model, tokens and cost; the Side-calls filter
- * lists the one-shot calls made outside any conversation. Read only.
- */
 import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Activity } from "lucide-react";
@@ -148,7 +142,6 @@ interface OlderPages {
   filter: TraceListFilter;
   sessions: TraceSession[];
   calls: SideCall[];
-  /** The next page's cursor; undefined until a page past the first loaded. */
   next: number | null | undefined;
 }
 
@@ -164,7 +157,6 @@ export function TracesPage() {
   const { data, loadError, refresh } = useTraceList(filter);
   const [older, setOlder] = useState<OlderPages>(() => emptyOlder(filter));
   const [loadingMore, setLoadingMore] = useState(false);
-  // Older pages belong to the filter they were loaded for; another starts at its first page.
   const more = older.filter === filter ? older : emptyOlder(filter);
   const setMore = (update: (pages: OlderPages) => OlderPages) =>
     setOlder((prev) => update(prev.filter === filter ? prev : emptyOlder(filter)));

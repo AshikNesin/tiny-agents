@@ -1,9 +1,3 @@
-/**
- * Writes that carry a secret (rewrite step 5.3: a vault value, a connection's
- * header secret, a provider key, a revealed value) leave nothing in React
- * Query once answered, and the vault overview reads the backends again only
- * when Refresh asks.
- */
 import React from "react";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";

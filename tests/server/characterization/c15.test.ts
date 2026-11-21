@@ -1,14 +1,3 @@
-/**
- * Characterization of behavior-register row C15: replay-safe tools with side
- * effects can apply twice on resume (`update_instructions` append and
- * `run_routine_now`), while `forget` has no replay mode.
- * Preserve: this pins today's behavior, quirk included; change it only with
- * a signed-off register row.
- *
- * Each case runs one tool call whose store performs its effect and then
- * "dies" (the runtime closes before the result commits), reopens the same
- * agent store, and reads what the resumed run fed the model.
- */
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -38,7 +27,6 @@ import { loaded } from "../fixtures/loaded-tools";
 beforeEach(resetAppTables);
 afterEach(resetAppTables);
 
-/** Release the first call's "death" only after close has reached the harness (as tasks-tools.test.ts). */
 function dieOnce() {
   let release!: () => void;
   const gate = new Promise<void>((resolve) => (release = resolve));
@@ -47,7 +35,6 @@ function dieOnce() {
   return {
     release,
     effects: () => effects,
-    /** Called after the store applied its effect. */
     async after(): Promise<void> {
       effects++;
       if (!armed) return;
@@ -58,19 +45,12 @@ function dieOnce() {
   };
 }
 
-/**
- * Run `tool` once with YOLO on (so an asking tool runs without a card),
- * close the runtime while its store call is mid-flight, reopen, and return
- * the tool result the resumed run gave the model.
- */
 async function interruptAndResume(options: {
   capability: () => Capability;
   tool: string;
   args: JsonObject;
   death: ReturnType<typeof dieOnce>;
-  /** Seed the app rows behind the new conversation. */
   conversationId?: (ref: number) => Promise<void>;
-  /** Between the death and the reopen (time passing across a restart). */
   beforeResume?: () => void;
 }): Promise<string> {
   const directory = await mkdtemp(join(tmpdir(), "tiny-agents-c15-"));
@@ -132,7 +112,6 @@ describe("C15: interrupted tool calls on resume", () => {
   it("re-runs update_instructions: an append applies twice", { timeout: 30_000 }, async () => {
     const death = dieOnce();
     const real = createInstructionsStore(() => ({
-      // The owner's own turn: what the store checks before it writes.
       readChat: async () => ({ messages: [{ role: "user", text: "do it" }] }) as never,
     }));
     const capability = () =>
@@ -176,7 +155,6 @@ describe("C15: interrupted tool calls on resume", () => {
     "re-runs run_routine_now: a second manual run is dispatched",
     { timeout: 30_000 },
     async () => {
-      // The routine's runs are submitted to the app runtime: a fake that accepts them.
       const app = installFakeRuntime();
       const death = dieOnce();
       const real = createRoutineStore();
@@ -208,7 +186,6 @@ describe("C15: interrupted tool calls on resume", () => {
             schedule: { kind: "cron", expr: "0 9 * * *" },
           });
         },
-        // A restart takes time: the resumed call runs at a later instant.
         beforeResume: () => vi.setSystemTime(Date.now() + 60_000),
       });
 

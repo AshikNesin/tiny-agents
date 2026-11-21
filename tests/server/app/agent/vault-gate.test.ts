@@ -1,11 +1,3 @@
-/**
- * Vault sinks behind the approval gate (issue #56), on real pi-durable turns:
- * item-level approval on top of tool permissions, "for this chat" grants,
- * refusals that never ask, expiring approvals, and the canary invariant —
- * a resolved value never reaches the model or the transcript. Then the use
- * sequence every sink follows (`vaultGatePlan`, `vaultUseFromSink`,
- * `vaultUseAllFromSink`) at its own interface, on a fake broker and tool API.
- */
 import type { Context } from "@earendil-works/chord";
 import { until } from "../../fixtures/until";
 import {
@@ -102,7 +94,6 @@ function fakeBroker(approval: VaultApproval) {
   return { broker, recorded };
 }
 
-/** A fake API that echoes the auth header it got — the page "leaking" the key. */
 function echoFetch(calls: { url: string; auth?: string }[]): typeof fetch {
   return (async (input: string | URL | Request, init?: RequestInit) => {
     const headers = new Headers(init?.headers);
@@ -177,7 +168,6 @@ async function openWith(capability: Capability, respondWith: ReturnType<typeof c
   return { runtime, ref, events };
 }
 
-/** An `http_request` hop sent through a stub fetch: these tests check headers, not the pin. */
 const viaFetch =
   (stub: typeof fetch): PinnedFetch =>
   (url, _addresses, init) =>
@@ -220,11 +210,9 @@ describe("vault sinks behind the gate", () => {
     await runtime.decideApproval(ref, waiting.taskId!, "approved", { grant: true });
     await until(() => results(events).length === 1, "first result");
     expect(calls).toEqual([{ url: request.url, auth: `Bearer ${CANARY}` }]);
-    // The API echoed the key back; neither the model nor the chat sees it.
     expect(results(events)[0]).toContain("[vault]");
     expect(JSON.stringify(reduce(events))).not.toContain(CANARY);
 
-    // Granted for this chat: the next use runs without a card.
     await runtime.submit(ref, { requestId: "r2", text: "again" });
     await until(() => results(events).length === 2, "second result");
     expect(calls).toHaveLength(2);
@@ -352,7 +340,6 @@ describe("vault sinks behind the gate", () => {
 
 describe("expiring approvals", () => {
   function expiringCapability(ran: string[]): Capability {
-    // A registration's gate plan is its `gate` field (what `tool()` sets).
     const tool = {
       ...defineTool({
         name: "pay",
@@ -392,11 +379,8 @@ describe("expiring approvals", () => {
   }, 20_000);
 });
 
-// ── The use sequence itself (vaultGatePlan, vaultUseFromSink, vaultUseAllFromSink) ──
-
 const context = {} as Context;
 
-/** The slice of a tool call's API the sequence reads: memos, the grants doc, the conversation. */
 function fakeApi(options: { grants?: string[]; approved?: boolean } = {}) {
   const memos = new Map<string, JsonValue>();
   if (options.approved !== undefined) memos.set("gate:approved", options.approved);
@@ -424,7 +408,6 @@ const keyItem = (handle: string, approval: VaultApproval = "every_use"): VaultIt
   tools: ["run_command"],
 });
 
-/** A broker over `items` that traces each step: plans, nested uses, records. */
 function sequenceBroker(items: VaultItemMeta[]) {
   const trace: string[] = [];
   const recorded: [string, VaultOutcome, string | undefined][] = [];
@@ -555,7 +538,6 @@ describe("the vault use sequence", () => {
     });
     const granted = fakeApi({ grants: ["vault:github"] });
     expect(await hooks.plan(undefined as never, granted, context, true)).toEqual({ ask: false });
-    // A sink that holds the value in model-written code asks anyway, with no grant.
     const everyUse = vaultGatePlan(broker, true, async () => ({
       uses: [commandUse("github")],
       everyUse: true,

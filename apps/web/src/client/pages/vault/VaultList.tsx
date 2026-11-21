@@ -28,7 +28,7 @@ import type {
   VaultKind,
   VaultPolicy,
 } from "../../../shared/api/vault";
-import { apiError, KIND_LABEL } from "../../lib/vault-api";
+import { apiError, BACKEND_LABEL, KIND_LABEL } from "../../lib/vault-api";
 import { useVaultMutations, useVaultOverview } from "../../queries/vault";
 import { defaultPolicy, PolicyForm, suggestHandle } from "../../components/vault/PolicyForm";
 import { useStepUp } from "../../components/vault/StepUp";
@@ -42,10 +42,6 @@ const SECTIONS: { kind: VaultKind; title: string }[] = [
 
 const KIND_ICON = { login: KeyRound, card: CreditCard, identity: User, api_key: ShieldCheck };
 
-const BACKEND_LABEL: Record<VaultBackendView["name"], string> = {
-  local: "Local",
-};
-
 function subtitle(item: VaultItem): string {
   if (item.card)
     return `${item.card.brand} ••${item.card.last4}${item.card.expiry ? ` · ${item.card.expiry}` : ""}`;
@@ -58,20 +54,76 @@ function lastUsed(item: VaultItem): string | undefined {
   return `used ${formatRelativeTime(item.lastUsedAt)}${item.lastUsedBy ? ` by ${item.lastUsedBy}` : ""}`;
 }
 
-function BackendCard({ backend }: { backend: VaultBackendView }) {
+function MoveLocalItems({ count, onMoved }: { count: number; onMoved: () => void }) {
+  const { run } = useStepUp();
+  const { moveToOnePassword } = useVaultMutations();
+  const move = async () => {
+    try {
+      const result = await run(() => moveToOnePassword.mutateAsync());
+      if (!result) return;
+      if (result.failed.length === 0) {
+        toast.success(
+          `Moved ${result.moved.length} item${result.moved.length === 1 ? "" : "s"} to 1Password`,
+        );
+      } else {
+        toast.error(
+          `Moved ${result.moved.length}; ${result.failed.length} stayed local: ${result.failed
+            .map((f) => `${f.handle} (${f.reason})`)
+            .join(", ")}`,
+        );
+      }
+      onMoved();
+    } catch (error) {
+      toast.error(apiError(error, "Couldn't move the items"));
+    }
+  };
+  return (
+    <Button size="sm" variant="outline" disabled={moveToOnePassword.isPending} onClick={move}>
+      {moveToOnePassword.isPending
+        ? "Moving…"
+        : `Move ${count} local item${count === 1 ? "" : "s"} here`}
+    </Button>
+  );
+}
+
+function BackendCard({
+  backend,
+  movable = 0,
+  onMoved,
+}: {
+  backend: VaultBackendView;
+  movable?: number;
+  onMoved?: () => void;
+}) {
   const states = [backend.read, backend.write].filter(Boolean);
   const problem = states.find((s) => s!.state !== "ready");
+  const starting = problem?.code === "starting";
   return (
     <Card size="sm">
       <CardContent className="space-y-1">
         <div className="flex items-center justify-between gap-2">
           <p className="text-sm font-medium text-foreground">{BACKEND_LABEL[backend.name]}</p>
-          <Badge variant={!backend.configured ? "outline" : problem ? "destructive" : "secondary"}>
-            {!backend.configured ? "Not set up" : problem ? "Error" : "Ready"}
+          <Badge
+            variant={
+              !backend.configured || starting ? "outline" : problem ? "destructive" : "secondary"
+            }
+          >
+            {!backend.configured
+              ? "Not set up"
+              : starting
+                ? "Starting"
+                : problem
+                  ? "Error"
+                  : "Ready"}
           </Badge>
         </div>
         {backend.configured && (
           <p className="text-xs text-muted-foreground">{problem?.detail ?? backend.read.detail}</p>
+        )}
+        {movable > 0 && !problem && onMoved && (
+          <div className="pt-2">
+            <MoveLocalItems count={movable} onMoved={onMoved} />
+          </div>
         )}
       </CardContent>
     </Card>
@@ -181,7 +233,6 @@ function LinkDialog({
   );
 }
 
-/** Keys the server uses itself (audience `app`): listed read-only, changed where they are used. */
 function AppItemsSection({ items }: { items: VaultItem[] }) {
   const appItems = items.filter((item) => item.audience === "app");
   if (appItems.length === 0) return null;
@@ -209,8 +260,6 @@ export function VaultList() {
     setRefreshing(false);
   };
 
-  // The primary backend must actually be able to create items (issue #124):
-  // the local backend is "configured" but unusable without SECRETS_KEY.
   const primary = overview?.backends.find((b) => b.name === overview.primaryBackend);
   const canCreate =
     !!overview &&
@@ -245,8 +294,6 @@ export function VaultList() {
             <RefreshCw className="size-4" />
             Refresh
           </Button>
-          {/* Wrapped so the reason still hovers while the button is disabled
-              (disabled buttons swallow pointer events). */}
           <span
             title={
               canCreate
@@ -281,7 +328,13 @@ export function VaultList() {
           <Section title="Backends">
             <div className="grid gap-3 sm:grid-cols-2">
               {overview.backends.map((backend) => (
-                <BackendCard key={backend.name} backend={backend} />
+                <BackendCard
+                  key={backend.name}
+                  backend={backend}
+                  {...(backend.name === "onepassword-connect"
+                    ? { movable: overview.movableToOnePassword, onMoved: () => void reload(true) }
+                    : {})}
+                />
               ))}
             </div>
           </Section>

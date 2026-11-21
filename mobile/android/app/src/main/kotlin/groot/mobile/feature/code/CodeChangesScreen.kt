@@ -58,16 +58,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/** What is being reviewed: everything since the base branch (a project thread), or the harness's own scope. */
 sealed interface ChangesScope {
     val key: String
 
-    /** A project thread's branch against its base branch, committed or not. */
     data object Branch : ChangesScope {
         override val key = "branch"
     }
 
-    /** The uncommitted changes (`working`) or one recent commit of the thread's directory. */
     data class Harness(val diff: GitDiff) : ChangesScope {
         override val key = "diff:${diff.id}"
     }
@@ -80,12 +77,10 @@ data class ChangesState(
     val scopes: List<ChangesScope> = emptyList(),
     val scope: ChangesScope? = null,
     val files: List<ChangedFile>? = null,
-    /** Path to what it shows, for the files open now (null while it loads). */
     val open: Map<String, FileDiffView?> = emptyMap(),
     val drafts: Int = 0,
 )
 
-/** The Changes screen of one thread: scopes, changed files, each file's diff, viewed marks and line comments. */
 class CodeChangesViewModel(private val container: AppContainer, private val threadId: String) : ViewModel() {
     private val api = container.code
     private val _state = MutableStateFlow(ChangesState())
@@ -129,7 +124,6 @@ class CodeChangesViewModel(private val container: AppContainer, private val thre
                     ChangesScope.Branch -> api.reviewFiles(threadId)
                     is ChangesScope.Harness -> api.diffFiles(instanceId, scope.diff.id, cwd.orEmpty())
                 }
-                // Generated files and lockfiles go last.
                 _state.update { if (it.scope == scope) it.copy(files = files.sortedBy { f -> f.generated }) else it }
             } catch (e: CancellationException) {
                 throw e
@@ -178,7 +172,6 @@ class CodeChangesViewModel(private val container: AppContainer, private val thre
         }
     }
 
-    /** Keep a comment on [line] as a draft; Send to agent posts them all at once. */
     fun comment(path: String, line: DiffLine, body: String) {
         val number = line.newLine ?: line.oldLine ?: return
         val side = if (line.newLine == null) "old" else "new"
@@ -287,7 +280,6 @@ private fun scopeLabel(scope: ChangesScope): String = when (scope) {
     is ChangesScope.Harness -> if (scope.diff.id == "working") "Uncommitted" else scope.diff.message.lineSequence().first().take(MAX_SCOPE_LABEL)
 }
 
-/** A changed file: its path and +/- counts; open, its diff. Branch review adds Viewed and line comments. */
 @Composable
 private fun FileCard(
     file: ChangedFile,

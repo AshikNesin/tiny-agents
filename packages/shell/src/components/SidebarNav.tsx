@@ -8,10 +8,8 @@ import { CommandPaletteTrigger } from "./CommandPalette";
 interface SidebarNavProps {
   items: NavDestination[];
   pathname: string;
-  /** Mobile drawer open state. */
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Desktop collapsed (icon-rail) state. */
   collapsed: boolean;
   onCollapsedChange: (collapsed: boolean) => void;
   footer?: ReactNode;
@@ -21,21 +19,9 @@ interface SidebarNavProps {
 const ICON_BTN =
   "inline-flex size-8 items-center justify-center rounded-xl text-muted-foreground outline-none hover:bg-sidebar-accent hover:text-foreground focus-visible:ring-1 focus-visible:ring-sidebar-ring";
 
-/** Nav row: quiet text, a faint tint for hover and the active page. */
 const NAV_ROW =
   "group flex items-center rounded-xl text-sm outline-none focus-visible:ring-1 focus-visible:ring-sidebar-ring";
 
-/**
- * Collapsible left sidebar.
- *
- * Two independent states:
- *  - `open` (mobile only): slides the drawer in/out as an overlay.
- *  - `collapsed` (desktop only): collapses to a minimal icon rail.
- *
- * Mobile and desktop render in separate containers so resizing from an open
- * mobile drawer to desktop never leaks the mobile drawer state into the
- * desktop layout.
- */
 export function SidebarNav({
   items,
   pathname,
@@ -103,7 +89,6 @@ export function SidebarNav({
 
   return (
     <>
-      {/* Mobile backdrop. */}
       {open && (
         <div
           className="fixed inset-0 z-40 bg-black/30 lg:hidden"
@@ -115,15 +100,12 @@ export function SidebarNav({
       <aside
         className={cn(
           "fixed inset-y-0 left-0 z-50 flex flex-col overflow-hidden border-r-[0.5px] border-sidebar-border bg-sidebar text-sidebar-foreground",
-          // Mobile: fixed width, slide via translate.
           "w-56 transition-transform duration-300 ease-in-out",
           open ? "translate-x-0" : "-translate-x-full",
-          // Desktop: always visible, animate width between rail and full.
           "lg:translate-x-0 lg:transition-[width] lg:duration-300 lg:ease-in-out",
           collapsed ? "lg:w-16" : "lg:w-56",
         )}
       >
-        {/* Mobile drawer — always expanded content. Hidden on desktop. */}
         <div className={cn("flex h-full flex-col", open ? "flex" : "hidden", "lg:hidden")}>
           <div className="flex h-14 shrink-0 items-center justify-between gap-1 px-3">
             <Link
@@ -155,7 +137,6 @@ export function SidebarNav({
           {footer && <div className="shrink-0 p-2.5">{footer}</div>}
         </div>
 
-        {/* Desktop collapsed rail — only on desktop when collapsed. */}
         <div className={cn("hidden h-full flex-col", collapsed ? "lg:flex" : "lg:hidden")}>
           <div className="flex shrink-0 flex-col items-center gap-1 px-3 py-3">
             <button
@@ -169,12 +150,9 @@ export function SidebarNav({
             <CommandPaletteTrigger />
           </div>
           <nav className="flex flex-1 flex-col items-center gap-0.5 px-2 py-2">{iconNavLinks}</nav>
-          {/* The account menu stays reachable on the rail (Layout's footer
-              collapses to the avatar when `collapsed`). */}
           {footer && <div className="flex shrink-0 justify-center p-2.5">{footer}</div>}
         </div>
 
-        {/* Desktop expanded — only on desktop when not collapsed. */}
         <div className={cn("hidden h-full flex-col", !collapsed ? "lg:flex" : "lg:hidden")}>
           <div className="flex h-14 shrink-0 items-center justify-between gap-1 px-3">
             <Link to={brandTo} className="flex min-w-0 items-center gap-2 text-sm font-semibold">

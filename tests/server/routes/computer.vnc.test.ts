@@ -1,9 +1,3 @@
-/**
- * The computer's VNC bridges: the Computer page's path (`/computer/:profile/vnc`)
- * relays a viewer to the desktop's RFB stream, and each path only accepts
- * tickets minted for it. The desktop is a fake whose `vnc.openStream` hands
- * out a duplex, so no SSH or X server is involved.
- */
 import { createServer, request, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { Duplex } from "node:stream";
@@ -22,7 +16,6 @@ import {
 import { fakeComputer } from "../app/agent/computer-fakes";
 import { authToken } from "../fixtures";
 
-// Tickets are held as live access, which needs their accounts to exist.
 await authToken("ticket-owner-1@example.com", 1);
 
 function fakeVm() {
@@ -37,7 +30,6 @@ function fakeVm() {
   return { stream, received: () => Buffer.concat(received).toString() };
 }
 
-/** A raw upgrade request: the HTTP status of a rejection, or 101. */
 function rawUpgrade(port: number, path: string) {
   return new Promise<number>((resolve, reject) => {
     const req = request({

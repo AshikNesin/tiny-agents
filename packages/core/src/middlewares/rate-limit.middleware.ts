@@ -7,36 +7,16 @@ import { rateLimitKey } from "../utils/client-address";
 import { clientIp } from "../utils/controller.utils";
 import type { AppContext, AppEnv } from "../types";
 
-/**
- * Fixed-window rate limiting keyed by client IP (`clientIp(c)`), or its /64
- * for IPv6. The counters live in the app's `RateLimitStore`, which the
- * runtime passes to `createApp({ rateLimitStore })`: memory on Node,
- * Cloudflare's Rate Limiting binding on Workers. An app given no store uses
- * a binding named by the limiter's `binding` when `c.env` has one, and its
- * own in-memory counters otherwise.
- *
- * Every response the store can describe carries `RateLimit-Limit`,
- * `RateLimit-Remaining` and `RateLimit-Reset` (seconds), and a 429 also
- * `Retry-After`. The Cloudflare binding answers only allowed or not, so its
- * responses carry none of them.
- */
 export interface RateLimitOptions {
-  /** Read lazily so app config overrides apply. */
   window: () => RateLimitWindow;
   message: string;
   code?: ErrorCodeValue;
-  /**
-   * Tells this limiter's counters apart in the app's store. Defaults to
-   * `binding`, else a name unique to this limiter.
-   */
   name?: string;
-  /** Name of the Workers Rate Limiting binding that counts this limiter. */
   binding?: string;
 }
 
 let unnamed = 0;
 
-/** The store `createApp()` gave this request, else bindings on `c.env`, else process memory. */
 let processStore: RateLimitStore | undefined;
 function storeFor(c: AppContext): RateLimitStore {
   const store = c.get("rateLimitStore");

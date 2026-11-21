@@ -11,6 +11,7 @@ import groot.mobile.data.AvatarStore
 import groot.mobile.data.BotsStore
 import groot.mobile.data.FileActions
 import groot.mobile.data.ImageStore
+import groot.mobile.data.LivePip
 import groot.mobile.data.Notices
 import groot.mobile.data.SessionStore
 import groot.mobile.data.ShareTarget
@@ -45,18 +46,15 @@ class GrootMobileApp : Application() {
     }
 }
 
-/** Manual dependency wiring; no DI framework (RFC 0001 §3). */
 class AppContainer(context: Context) {
     private val appContext = context.applicationContext
 
-    /** Lives as long as the process: the stores' streams and sends run on it. */
     val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     val themeModeStore: ThemeModeStore = ThemeModeStore.create(appContext)
 
     val appPreferences: AppPreferences = AppPreferences.create(appContext)
 
-    /** Lazy: the kit reads nothing but the theme key at startup. */
     val buildInfo: BuildInfo by lazy { BuildInfo.from(appContext, commit = BuildConfig.GIT_COMMIT) }
 
     val notices = Notices()
@@ -67,7 +65,6 @@ class AppContainer(context: Context) {
 
     val api = TinyAgentsApi(client)
 
-    /** The Code page's routes: coding agents, their threads, changes and pull requests. */
     val code = CodeApi(client)
 
     val bots = BotsStore(api, scope, notices)
@@ -76,34 +73,29 @@ class AppContainer(context: Context) {
 
     val images = ImageStore(api)
 
-    /** Bot faces; not tied to the session, so they stay across sign-outs. */
     val avatars = AvatarStore(appContext.cacheDir)
 
     val files = FileActions(appContext, api)
 
     val stepUp = StepUp(api)
 
-    /** Links the app was opened with (a push notification's), waiting for the signed-in screens. */
     val links = AppLinks()
 
-    /** The server's notifications on this phone (issue #306): showing them, and registering for them. */
+    val livePip = LivePip()
+
     val pushNotifier = PushNotifier(appContext)
 
     val push = PushRegistrar(appContext, api, session)
 
-    /** Approve, Deny and the rest from a notification's buttons. */
     val approvalAnswerer = ApprovalAnswerer(api, pushNotifier, session)
 
-    /** A push or a notification button can start the process: read the stored session first. */
     suspend fun ensureSessionLoaded() {
         if (!session.state.value.signedIn) session.load()
     }
 
-    /** The top bots, offered by name and face in Android's share sheet. */
     val shareTargets = ShareTargets(appContext, avatars)
 
     init {
-        // A session starting loads the bots and follows the feed; one ending forgets everything.
         scope.launch {
             session.state.map { it.signedIn to it.serverUrl }.distinctUntilChanged().collect { (signedIn, _) ->
                 bots.stop()
@@ -113,7 +105,6 @@ class AppContainer(context: Context) {
                 if (signedIn) bots.start()
             }
         }
-        // Signed in, the share sheet offers the top bots once their list is in; signed out, none.
         scope.launch {
             combine(session.state, bots.state) { session, bots ->
                 when {

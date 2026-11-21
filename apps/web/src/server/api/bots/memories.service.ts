@@ -1,9 +1,3 @@
-/**
- * The Memory page's API over the memory ledger (issue #22): list, add,
- * edit, delete-as-tombstone, restore. Every rule (dedupe, tombstones,
- * expiry, the budget) is the ledger's (memories.ledger.ts); this module
- * finds the bot or the row and shapes records for the page.
- */
 import { eq } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { bots, db, memories } from "../../db";
@@ -20,7 +14,6 @@ function toRecord(row: MemoryRow): MemoryRecord {
     category: row.category as MemoryCategory,
     status: row.status,
     source: row.source === "manual" ? "manual" : "capture",
-    confidence: row.confidence,
     until: row.until?.toISOString() ?? null,
     supersededById: row.supersededById,
     supersededAt: row.supersededAt?.toISOString() ?? null,
@@ -49,10 +42,6 @@ export async function list(id: string, includeArchived = false): Promise<MemoryR
   return (await memoryLedger(botId).history(statuses)).map(toRecord);
 }
 
-/**
- * The owner adds a memory. Text the bot already has active returns that
- * memory; text of a removed, archived or replaced one brings it back as new.
- */
 export async function create(id: string, data: CreateMemoryDTO): Promise<MemoryRecord> {
   const botId = await findBotId(id);
   const { rows } = await memoryLedger(botId).add(

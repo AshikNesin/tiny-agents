@@ -1,16 +1,3 @@
-/**
- * Golden traces (rewrite plan, Phase 0): a flow drives the real app in
- * process, on the faux model and the frozen clock, and records what an
- * outside observer sees: each HTTP response, the SSE frames, and the app's
- * tables. The trace is normalized (generated ids, Dates) and compared with the
- * one committed under `traces/`. A rewrite PR must leave every trace as it is;
- * a signed-off behavior change updates only its own (`pnpm golden:update`).
- *
- * Determinism comes from the test setup: a fresh in-memory database per file,
- * `FIXED_NOW` (tests/test-clock.ts), the faux model, and flows that run their
- * steps in a fixed order. Each flow file runs on its own database, so integer
- * ids and conversation refs are stable too.
- */
 import fs from "node:fs";
 import path from "node:path";
 import { getTableName, type Table } from "drizzle-orm";
@@ -34,44 +21,27 @@ interface RequestInit {
 }
 
 export interface Recorder {
-  /** One request through the app; records status and body, returns `data`. */
   // oxlint-disable-next-line typescript/no-explicit-any -- each route's data differs
   http(name: string, path: string, init?: RequestInit): Promise<any>;
-  /** Open an SSE route, read frames until `done` holds (or 50 reads), close it, record them. */
   sse(
     name: string,
     path: string,
     done: (frames: unknown[]) => boolean,
     token?: string,
   ): Promise<unknown[]>;
-  /** Record whole tables, minus `omit` columns (salted hashes, sealed blobs). */
   db(name: string, tables: Table[], omit?: string[]): Promise<void>;
-  /** Record a value the flow computed (a runtime read, a queue). */
   note(name: string, value: unknown): void;
 }
 
-/** Ids the app generates (cuid2, UUIDs, faux tool calls) become `<id1>`, `<id2>`… by first appearance. */
 const ID_PATTERNS = [
   /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/g,
   /\bc[a-z0-9]{23,31}\b/g,
-  // Upload ids: 24 random hex digits (a 64-digit sha256 stays as it is).
   /\b[0-9a-f]{24}\b/g,
-  // The faux model's tool-call ids: `tool:<time>:<random>`.
   /\btool:\d+:[a-z0-9]+\b/g,
 ];
 
-/**
- * Measured wall-clock spans (a tool call's run, an owner's wait): the field
- * stays, its number becomes `<ms>`, since the frozen Date doesn't freeze them.
- */
 const TIMING_KEYS = new Set(["durationMs", "waitedMs"]);
 
-/**
- * pi-durable entry ids (`e152`) count every entry in the store, so two
- * conversations writing at once (a bot and the bot it messages) interleave
- * them by timing. Like generated ids, they are numbered by first appearance
- * (`<e1>`), wherever an id, a cursor or a `before=` page cursor holds one.
- */
 const ENTRY_ID = /^e\d+$/;
 const ENTRY_CURSOR = /\b(before=)(e\d+)\b/g;
 
@@ -153,7 +123,6 @@ function createRecorder(
             buffer = buffer.slice(cut + 1);
             if (!line.startsWith("data:")) continue;
             const frame = JSON.parse(line.slice(5));
-            // Keep-alives say only that the stream is open.
             if ((frame as { type?: string }).type !== "ping") frames.push(frame);
           }
         }
@@ -179,16 +148,10 @@ function createRecorder(
   return { recorder, steps };
 }
 
-/** `traces/<name>.json`, as the committed baseline holds it. */
 function tracePath(name: string): string {
   return path.join(TRACES, `${name}.json`);
 }
 
-/**
- * Register one golden flow: run it, normalize the trace, and compare it with
- * the committed baseline. `GOLDEN_UPDATE=1` (`pnpm golden:update`) writes the
- * baseline instead; it is only for a new flow or a signed-off behavior change.
- */
 export function goldenFlow(
   name: string,
   setup: { app: TestApp; token: () => string },

@@ -1,14 +1,3 @@
-/**
- * Left column of the Code page (issue #143, ADR 0011). By default grouped
- * the way t3code's sidebar is: by project, then by repository or folder,
- * each group folding away and offering its own New thread (and, for a
- * project, its settings and Threads screen). "Group by repository" off
- * lists every thread flat, newest first, the way Hoplite does. Subagents nest under their
- * parent, with unread dots and search. Hovering a row offers Archive
- * (Restore in the archived view) when its harness archives, which moves the
- * thread together with its subagents, with Undo. **Select** (issue #148)
- * turns the rows into checkboxes to archive or restore many threads at once.
- */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -37,7 +26,9 @@ import {
 } from "@groot/ui/dropdown-menu";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@groot/ui/input-group";
 import { cn } from "@groot/ui/lib/utils";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Spinner } from "../../components/ui/spinner";
+import { RESOURCE_QUERY, wait } from "../../queries/resource";
 import { codeApi, threadPath, type HarnessInfo, type ThreadSummary } from "../../lib/code/api";
 import {
   buildGroups,
@@ -52,14 +43,12 @@ import { shortAgo } from "./NewConversation";
 
 const COLLAPSED_KEY = "tiny-agents:code-collapsed";
 
-/** A Hoplite-style row at the top of the list: New thread, Threads, Search. */
 const navRow =
   "text-muted-foreground hover:bg-muted hover:text-foreground flex h-8 items-center gap-2 rounded-lg px-2 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50 [&_svg]:size-4";
 const GROUPED_KEY = "tiny-agents:code-grouped";
 
 function readGrouped(): boolean {
   try {
-    // Grouped unless turned off in this browser.
     return window.localStorage.getItem(GROUPED_KEY) !== "0";
   } catch {
     return true;
@@ -70,11 +59,8 @@ function saveGrouped(grouped: boolean) {
   try {
     if (grouped) window.localStorage.removeItem(GROUPED_KEY);
     else window.localStorage.setItem(GROUPED_KEY, "0");
-  } catch {
-    // not remembered in private mode
-  }
+  } catch {}
 }
-/** Threads a group shows before "Show more". */
 const GROUP_LIMIT = 8;
 
 function readCollapsed(): Set<string> {
@@ -89,12 +75,9 @@ function readCollapsed(): Set<string> {
 function saveCollapsed(keys: Set<string>) {
   try {
     window.localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...keys]));
-  } catch {
-    // not remembered in private mode
-  }
+  } catch {}
 }
 
-/** Where a group's New thread goes: its project, its folder, or a blank start. */
 function newThreadPath(group: ListGroup): string {
   if (group.projectId) return `/code/new?project=${encodeURIComponent(group.projectId)}`;
   if (group.path) return `/code/new?cwd=${encodeURIComponent(group.path)}`;
@@ -109,10 +92,8 @@ function countDescendants(node: ListNode): number {
   return node.children.reduce((n, child) => n + 1 + countDescendants(child), 0);
 }
 
-/** The list's multi-selection (issue #148); absent outside Select mode. */
 interface Selection {
   selected: ReadonlySet<string>;
-  /** Ids an ancestor's selection already takes along. */
   covered: ReadonlySet<string>;
   toggle(row: ThreadSummary): void;
 }
@@ -122,7 +103,6 @@ interface RowProps {
   archivedView: boolean;
   onArchive(node: ListNode): void;
   canArchive(row: ThreadSummary): boolean;
-  /** The harness label, when several harnesses share the list. */
   labelOf(row: ThreadSummary): string | undefined;
   selection?: Selection;
 }
@@ -142,7 +122,6 @@ function Row({
   const label = depth === 0 ? labelOf(row) : undefined;
   const nested = countDescendants(node);
   const selectable = Boolean(selection) && canArchive(row);
-  // A subagent goes along with its selected parent: shown ticked, not its own pick.
   const inherited = Boolean(selection?.covered.has(row.id)) && !selection?.selected.has(row.id);
   const checked = Boolean(selection?.selected.has(row.id)) || inherited;
   return (
@@ -186,7 +165,6 @@ function Row({
           aria-current={isActive ? "page" : undefined}
           title={row.preview || row.cwd || undefined}
           onClick={(event) => {
-            // In Select mode a click on the row picks it instead of opening it.
             if (!selection) return;
             event.preventDefault();
             if (selectable && !inherited) selection.toggle(row);
@@ -206,9 +184,7 @@ function Row({
               {row.title}
             </span>
             {label && <span className={cn(metaLabelClass, "shrink-0")}>{label}</span>}
-            {/* The status / time slot makes room for the archive button on hover. */}
             <span className="flex shrink-0 items-center gap-1.5 pointer-fine:group-focus-within/row:invisible pointer-fine:group-hover/row:invisible">
-              {/* Only a PR that waits on you; the Threads screen shows them all. */}
               {row.pr?.loop === "needs_input" && <PullChip pr={row.pr} />}
               {row.working ? (
                 <Spinner className="size-3.5" aria-label="Working" />
@@ -280,12 +256,10 @@ function Group({
   group: ListGroup;
   collapsed: boolean;
   onToggle(): void;
-  /** New thread and settings links (not in the archived view). */
   offerNew: boolean;
 }) {
   const [all, setAll] = useState(false);
   const headingId = `code-group-${group.key}`;
-  // The open thread stays visible even past the limit.
   const shown = all
     ? group.nodes
     : group.nodes.filter(
@@ -380,6 +354,8 @@ function Group({
   );
 }
 
+const ARCHIVED_KEY = ["code", "threads", "archived"];
+
 export function ConversationList({
   threads,
   harnesses,
@@ -389,11 +365,9 @@ export function ConversationList({
   threads: ThreadSummary[] | null;
   harnesses: HarnessInfo[];
   activeId?: string;
-  /** The owner's projects, each a group even before its first thread (null: none, as for a guest). */
   projects?: ProjectView[] | null;
 }) {
   const [view, setView] = useState<"active" | "archived">("active");
-  const [archived, setArchived] = useState<ThreadSummary[] | null>(null);
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const toggleGroup = useCallback((key: string) => {
     setCollapsed((prev) => {
@@ -408,7 +382,6 @@ export function ConversationList({
   useEffect(() => saveGrouped(grouped), [grouped]);
   const [searching, setSearching] = useState(false);
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<ThreadSummary[] | null>(null);
   const caps = useMemo(() => new Map(harnesses.map((h) => [h.id, h.capabilities])), [harnesses]);
   const canArchive = useCallback(
     (row: ThreadSummary) => Boolean(caps.get(row.instanceId)?.threads.archive),
@@ -421,79 +394,72 @@ export function ConversationList({
   );
   const canSearch = harnesses.some((h) => h.capabilities.threads.search);
   const anyArchives = harnesses.some((h) => h.capabilities.threads.archive);
-  /** Select mode (issue #148): null when off, else the picked thread ids. */
   const [selected, setSelected] = useState<Set<string> | null>(null);
 
-  // A selection belongs to the view it was made in.
   useEffect(() => setSelected((prev) => (prev ? new Set() : prev)), [view]);
 
-  useEffect(() => {
-    if (view !== "archived") return;
-    let cancelled = false;
-    codeApi
-      .list("archived")
-      .then((rows) => !cancelled && setArchived(rows))
-      .catch(() => !cancelled && setArchived([]));
-    return () => {
-      cancelled = true;
-    };
-  }, [view]);
+  const archivedQuery = useQuery({
+    queryKey: ARCHIVED_KEY,
+    queryFn: () => codeApi.list("archived").catch((): ThreadSummary[] => []),
+    enabled: view === "archived",
+    ...RESOURCE_QUERY,
+  });
+  const archived = archivedQuery.data ?? null;
+  const queryClient = useQueryClient();
+  const setArchived = useCallback(
+    (update: (rows: ThreadSummary[] | undefined) => ThreadSummary[] | undefined) =>
+      queryClient.setQueryData<ThreadSummary[]>(ARCHIVED_KEY, update),
+    [queryClient],
+  );
 
-  useEffect(() => {
-    const q = query.trim();
-    if (q.length < 2) {
-      setResults(null);
-      return;
-    }
-    if (!canSearch) {
-      // No harness searches: filter the list by title.
-      const needle = q.toLowerCase();
-      const source = view === "archived" ? archived : threads;
-      setResults((source ?? []).filter((t) => t.title.toLowerCase().includes(needle)));
-      return;
-    }
-    let cancelled = false;
-    const timer = setTimeout(() => {
-      codeApi
-        .search(q, view === "archived")
-        .then((rows) => !cancelled && setResults(Array.isArray(rows) ? rows : []))
-        .catch(() => !cancelled && setResults([]));
-    }, 200);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [query, view, canSearch, threads, archived]);
+  const q = query.trim();
+  const inArchived = view === "archived";
+  const searched = useQuery({
+    queryKey: ["code", "threads", "search", q, inArchived],
+    queryFn: async ({ signal }) => {
+      await wait(200, signal);
+      return codeApi
+        .search(q, inArchived)
+        .then((rows) => (Array.isArray(rows) ? rows : []))
+        .catch((): ThreadSummary[] => []);
+    },
+    enabled: canSearch && q.length >= 2,
+    placeholderData: keepPreviousData,
+    ...RESOURCE_QUERY,
+  });
+  const results = useMemo(() => {
+    if (q.length < 2) return null;
+    if (canSearch) return searched.data ?? null;
+    const needle = q.toLowerCase();
+    const source = inArchived ? archived : threads;
+    return (source ?? []).filter((t) => t.title.toLowerCase().includes(needle));
+  }, [q, canSearch, searched.data, inArchived, archived, threads]);
 
   const archive = useArchive();
   const onArchive = useCallback(
     (node: ListNode) => {
       const restoring = view === "archived";
-      // Archiving what is on screen (or its parent) leaves it for the list.
       const leave = !restoring && Boolean(activeId) && contains(node, activeId!);
       void archive(node.row, !restoring, { leave }).then((done) => {
         if (!done || !restoring) return;
-        // The archived list is read on demand: drop what was restored.
         const gone = new Set<string>();
         const collect = (n: ListNode) => {
           gone.add(n.row.id);
           n.children.forEach(collect);
         };
         collect(node);
-        setArchived((prev) => prev?.filter((r) => !gone.has(r.id)) ?? prev);
+        setArchived((prev) => prev?.filter((r) => !gone.has(r.id)));
       });
     },
-    [archive, view, activeId],
+    [archive, view, activeId, setArchived],
   );
 
   const rows = view === "archived" ? archived : threads;
   const groups = useMemo(() => {
     const all = buildGroups(rows ?? [], projects ?? []);
-    // An empty project is there to start a thread in, which the archived view does not offer.
     return view === "archived" ? all.filter((g) => g.nodes.length > 0) : all;
   }, [rows, projects, view]);
   const searchTree = useMemo(() => (results ? buildTree(results) : null), [results]);
-  // The flat list: working threads first, then newest first.
   const flat = useMemo(
     () =>
       buildTree(rows ?? []).sort(
@@ -504,7 +470,6 @@ export function ConversationList({
     [rows],
   );
 
-  // Select mode works on what is on screen: the search results, the list, or the open groups.
   const visible = useMemo(
     () =>
       searchTree ??
@@ -556,20 +521,19 @@ export function ConversationList({
       );
       if (done.size === 0) return;
       if (restoring) {
-        // The archived list is read on demand: drop what was restored.
         const gone = new Set<string>();
         const collect = (n: ListNode) => {
           gone.add(n.row.id);
           n.children.forEach(collect);
         };
         picked.roots.filter((node) => done.has(node.row.id)).forEach(collect);
-        setArchived((prev) => prev?.filter((r) => !gone.has(r.id)) ?? prev);
+        setArchived((prev) => prev?.filter((r) => !gone.has(r.id)));
       }
       setSelected(null);
     } finally {
       setMoving(false);
     }
-  }, [picked, view, activeId, archiveMany]);
+  }, [picked, view, activeId, archiveMany, setArchived]);
 
   const listProps: RowProps = {
     activeId,

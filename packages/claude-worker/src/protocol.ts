@@ -1,39 +1,22 @@
-/**
- * Wire protocol between tiny-agents and the Claude Code worker (bot chats).
- * One WebSocket, per-session sequence numbers, tool results keyed by tool_use_id.
- * Welcome, ping/pong and replies are the socket's envelope (`envelope.ts`).
- * Neither side puts a Claude credential on this socket.
- */
 import { z } from "zod";
 import type { Sequenced } from "./session-log";
 
 export const DEFAULT_TIMINGS = {
-  /** Ping interval. An idle socket stays up for hours because each ping resets silence. */
   pingIntervalMs: 20_000,
-  /** Close when nothing (including pongs) arrives for this long. */
   silenceCloseMs: 60_000,
   reconnectMinMs: 1_000,
   reconnectMaxMs: 30_000,
-  /** Events retained per session so a reconnecting client can resume. */
   eventBuffer: 1_000,
   toolResultTimeoutMs: 120_000,
-  /** Evict an idle Claude process after this long. */
   idleEvictMs: 15 * 60_000,
-  /** Recycle a session process older than this; the Claude session id is kept for resume. */
   maxSessionAgeMs: 6 * 60 * 60_000,
   maxLiveProcesses: 2,
   maxRunningTurns: 1,
-  /**
-   * Claude Code `maxTurns` for one query() when the app sends none. Tools are
-   * proxied, so a turn can take several; a browser task can take dozens.
-   */
   maxTurns: 100,
 } as const;
 
-/** The most `maxTurns` a turn may ask for, short of `"unlimited"`. */
 const MAX_TURNS_LIMIT = 1_000;
 
-/** Claude Code `maxTurns` for a turn: a cap, or `"unlimited"` (opt-in) for none. */
 export type MaxTurns = number | "unlimited";
 
 export type Timings = {
@@ -73,7 +56,6 @@ export function reconnectDelayMs(
   return Math.min(timings.reconnectMaxMs, exp);
 }
 
-/** JSON Schema documents are open: extra keywords (items, additionalProperties) stay. */
 const jsonSchema: z.ZodType<JsonSchema> = z.lazy(() =>
   z.looseObject({
     type: z.string().optional(),
@@ -136,19 +118,12 @@ export const clientMessageSchema = z.discriminatedUnion("type", [
   z.strictObject({ type: z.literal("pong") }),
   z.strictObject({
     type: z.literal("resume"),
-    /** Answered with a `ResumeResult` reply before the replay. */
     requestId: z.string().min(1).max(100).optional(),
     sessionId: z.string().min(1),
     afterSeq: z.number().int().nonnegative(),
   }),
   z.strictObject({ type: z.literal("abort"), sessionId: z.string().min(1) }),
-  /** Claude Code's own model list for this login; answers `{ models: ClaudeCodeModel[] }`. */
   z.strictObject({ type: z.literal("models"), requestId: z.string().min(1).max(100) }),
-  /**
-   * A proxied call still waits on the owner (an approval, a Question, a
-   * credential request): its result timer starts over. The app sends it
-   * while the call waits, so the timeout only ends calls the app forgot.
-   */
   z.strictObject({
     type: z.literal("tool_waiting"),
     sessionId: z.string().min(1),
@@ -171,7 +146,6 @@ export const clientMessageSchema = z.discriminatedUnion("type", [
     resume: z.string().optional(),
     tools: z.array(toolSpecSchema).optional(),
     images: z.array(imagePartSchema).optional(),
-    /** Claude Code `maxTurns` (Settings → Models → Claude plan); the worker's default when absent. */
     maxTurns: z
       .union([z.number().int().positive().max(MAX_TURNS_LIMIT), z.literal("unlimited")])
       .optional(),
@@ -200,11 +174,6 @@ export type WorkerMessage = z.infer<typeof workerMessageSchema>;
 
 export type ToolResultPayload = { content: string; isError?: boolean };
 
-/**
- * One entry of Claude Code's model list (the SDK's `ModelInfo`). `value` is
- * what Claude Code takes (`opus`, `sonnet[1m]`, `default`); `resolvedModel`
- * is the model id that alias stands for today, when Claude Code says.
- */
 export const claudeCodeModelSchema = z.object({
   value: z.string().min(1),
   displayName: z.string(),
@@ -228,5 +197,4 @@ export function parseWorkerMessage(value: unknown): WorkerMessage | undefined {
   return parsed.success ? parsed.data : undefined;
 }
 
-/** Buffered event as the worker stores and replays it. */
 export type SequencedEvent = Sequenced<SessionEvent>;

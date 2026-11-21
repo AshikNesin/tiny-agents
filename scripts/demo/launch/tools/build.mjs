@@ -1,18 +1,3 @@
-// Assembles the film from its sources:
-//   src/scenes/<id>.html      a scene: <style>, markup, <script>
-//   snap/<mode>/<name>.html   real app states (tools/snaplib.mjs)
-//   src/cuts.mjs              which scenes each cut plays, and for how long
-// and writes what HyperFrames renders, one project folder per cut:
-//   .film/index/     the 16:9 film
-//   .film/vertical/  the 9:16 cut
-//   .film/teaser/    the 15-second cut
-// each with an index.html and one sub-composition per scene.
-//
-//   node tools/build.mjs
-//
-// In a scene, <div class="appwin" data-snap="desktop/side-researcher"> is
-// filled with that app state. data-fix="name:arg; name2" then runs the named
-// edits from src/fixes.mjs on it (swap in a sidebar, mark a row read).
 import {
   readFileSync,
   writeFileSync,
@@ -31,11 +16,6 @@ import * as fixes from "../src/fixes.mjs";
 import { repairSelectors } from "./snaplib.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
-// Each cut is its own HyperFrames project folder, .film/<cut>/, holding an
-// index.html, its compositions and links to the shared assets: HyperFrames
-// expects one root composition per folder. With SCENE set there is one cut,
-// and FILM_OUT=<dir> names its folder, so two people can work on different
-// scenes without overwriting each other.
 const cutDir = (name) =>
   process.env.SCENE
     ? path.resolve(ROOT, process.env.FILM_OUT ?? ".film/index")
@@ -47,12 +27,10 @@ const FILM_SIZE = { h: { w: 1920, h: 1080 }, v: { w: 1080, h: 1920 } };
 const dom = new JSDOM("<!doctype html><body></body>");
 const doc = dom.window.document;
 
-/** A snapshot's markup as an element, ready to edit. */
 export function loadSnap(name) {
   const file = `snap/${name}.html`;
   const box = doc.createElement("div");
   if (!existsSync(path.join(ROOT, file))) {
-    // A scene can be worked on before its app state is staged.
     console.warn(`  missing snapshot ${file}: placeholder used`);
     box.innerHTML = `<div class="appbody" style="background:#eee;font:20px sans-serif;padding:40px">${file}</div>`;
     return box.firstElementChild;
@@ -61,19 +39,9 @@ export function loadSnap(name) {
   return box.firstElementChild;
 }
 
-/**
- * The app's stylesheet as the film uses it: assets/.css/<mode>/ (what
- * tools/snaplib.mjs saved from the running app) without the parts a
- * frame-by-frame render must not have. Transitions and animations run on the
- * browser's clock, so they go; the film moves things itself. Font stacks lose
- * the system faces a render machine may not have.
- */
 function buildAppCss(mode) {
   const dir = path.join(ROOT, "assets/.css", mode);
   if (!existsSync(dir)) return;
-  // Each staging run saved the app's whole stylesheet again, so the parts are
-  // near copies of each other. Keep each rule once: a render restyles on every
-  // frame, and seventeen copies of the same sheet make that slow.
   const root = postcss.root();
   const seen = new Set();
   const layers = new Map();
@@ -113,7 +81,6 @@ function buildAppCss(mode) {
         .replace(/ui-monospace,\s*SFMono-Regular.*monospace/is, '"JetBrains Mono", monospace')
         .replace(/"?Cascadia Mono"?.*monospace/is, '"JetBrains Mono", monospace');
   });
-  // Selectors on the inline style attribute (the command menu's) restyle on every tween.
   root.walkRules((r) => {
     if (r.selector.includes("[style]")) r.remove();
   });
@@ -124,7 +91,6 @@ function buildAppCss(mode) {
 }
 
 let uid = 0;
-/** Ids from the app would collide across scenes: keep only the ones markup refers to. */
 function scopeIds(el, scope) {
   const html = el.innerHTML;
   const used = new Set(
@@ -168,7 +134,6 @@ function scopeIds(el, scope) {
           .replace(/^#(.+)$/, (m, id) => (used.has(id) ? `#${scope}-${n}-${id}` : m)),
       );
     }
-    // Links must not navigate if someone clicks in the preview.
     if (node.tagName === "A") node.removeAttribute("href");
   }
 }
@@ -186,8 +151,6 @@ function buildScene(file, id, fmt) {
 
   const box = doc.createElement("div");
   box.innerHTML = body;
-  // The app windows are layered and cropped by the camera on purpose: the
-  // layout audit is for the film's own captions and cards, not for them.
   for (const el of box.querySelectorAll(".vp, .appwin, .phone")) {
     el.setAttribute("data-layout-ignore", "");
     el.setAttribute("data-layout-allow-overflow", "");
@@ -208,7 +171,6 @@ function buildScene(file, id, fmt) {
       .map((s) => s.trim())
       .filter(Boolean)) {
       const [name, ...args] = call.split(":").map((s) => s.trim());
-      // Fixes are picked by name from the shot list.
       // oxlint-disable-next-line import/namespace
       if (!fixes[name]) throw new Error(`${file}: unknown fix "${name}"`);
       // oxlint-disable-next-line import/namespace
@@ -252,7 +214,6 @@ function buildCut(name, cut, durs) {
   let t = 0;
   const hosts = cut.scenes.map(([id, slot, a, b], i) => {
     const d = slot ?? durs[id];
-    // The scene reads these, not data-start and data-duration, which HyperFrames owns.
     const trim = ` data-film-start="${+t.toFixed(3)}" data-film-slot="${d}" data-film-in="${a ?? 0}" data-film-out="${b ?? durs[id]}"`;
     const host = `      <div
         id="${id}"
@@ -310,7 +271,6 @@ ${audio.join("\n")}
   return total;
 }
 
-// GSAP is fetched once and kept beside the film, so a render never waits on a CDN.
 const GSAP = "https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/gsap.min.js";
 const gsapFile = path.join(ROOT, "assets/vendor/gsap.min.js");
 if (!existsSync(gsapFile)) {

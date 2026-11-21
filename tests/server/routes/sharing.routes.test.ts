@@ -1,8 +1,3 @@
-/**
- * Shared bots (issue #145): the owner adds a guest and shares a bot with
- * them; both write in the same chat, the bot reads who said what, and the
- * guest reaches nothing but the bots shared with them and Code.
- */
 import { eq, sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { db, users } from "../../../apps/web/src/server/db";
@@ -38,7 +33,6 @@ function asOwner(path: string, init: { method?: string; json?: unknown } = {}) {
 
 let guestEmailSeq = 0;
 
-/** Add a guest through the owner's People API; returns their id and a token. */
 async function addGuest(name = "Priya") {
   guestEmailSeq += 1;
   const email = `guest-${guestEmailSeq}-${Date.now()}@example.com`;
@@ -150,7 +144,6 @@ describe("shared bots", () => {
     const list = await guest.asGuest("/api/v1/bots");
     expect(list.status).toBe(200);
     expect(list.body.data.map((bot: { id: string }) => bot.id)).toEqual([shared.id]);
-    // The owner still sees everything.
     expect((await asOwner("/api/v1/bots")).body.data).toHaveLength(2);
 
     expect((await guest.asGuest(`/api/v1/bots/${shared.id}`)).status).toBe(200);
@@ -166,7 +159,6 @@ describe("shared bots", () => {
       ).status,
     ).toBe(404);
 
-    // Owner pages and edits answer 403.
     for (const [method, path] of [
       ["GET", "/api/v1/tasks"],
       ["GET", "/api/v1/vault"],
@@ -295,7 +287,6 @@ describe("shared bots", () => {
     });
     expect(sent.status).toBe(200);
 
-    // The bot reads the sender's name; its prompt says who is in the chat.
     expect(submit).toHaveBeenCalledWith(
       Number(bot.conversationId),
       expect.objectContaining({
@@ -308,7 +299,6 @@ describe("shared bots", () => {
     expect(config?.systemPrompt).toContain("Priya");
     expect(config?.systemPrompt).toContain("[skip]");
 
-    // The transcript shows the words, attributed, without the prefix.
     const chat = await until(async () => {
       const state = await rt.readChat(Number(bot.conversationId));
       return state.messages.some((m) => m.role === "user") ? state : undefined;
@@ -319,7 +309,6 @@ describe("shared bots", () => {
       author: { id: guest.id, name: "Priya" },
     });
 
-    // The guest's read marker is their own: the owner's row is untouched.
     expect((await guest.asGuest(`/api/v1/bots/${bot.id}/read`, { method: "POST" })).status).toBe(
       200,
     );
@@ -372,7 +361,6 @@ describe("shared bots", () => {
     expect((await asOwner(`/api/v1/people/${guest.id}`, { method: "DELETE" })).status).toBe(200);
     expect((await asOwner("/api/v1/people")).body.data.guests).toEqual([]);
     expect((await asOwner(`/api/v1/bots/${bot.id}`)).body.data.guestIds).toEqual([]);
-    // An owner account is never removed through People.
     expect((await asOwner("/api/v1/people/990001", { method: "DELETE" })).status).toBe(404);
   });
 
@@ -389,7 +377,6 @@ describe("shared bots", () => {
     } finally {
       db.run(sql.raw("DROP TRIGGER IF EXISTS temp.s8_refuse_guests"));
     }
-    // The account went with the row: nobody to sign in as, so nobody taken for the owner.
     expect(await db.$count(users, eq(users.email, person.email))).toBe(0);
     const login = await api<Data>(app, "/api/v1/auth/login", {
       method: "POST",
@@ -397,7 +384,6 @@ describe("shared bots", () => {
     });
     expect(login.status).toBe(401);
 
-    // The email is free again, and the account it makes is a guest.
     const added = await asOwner("/api/v1/people", { method: "POST", json: person });
     expect(added.status).toBe(201);
     made.push(added.body.data.id);
@@ -405,7 +391,6 @@ describe("shared bots", () => {
     expect((await api<Data>(app, "/api/v1/people/me", { token })).body.data).toEqual({
       guest: true,
     });
-    // A taken email is still a 409 that writes nothing.
     const again = await asOwner("/api/v1/people", { method: "POST", json: person });
     expect(again.status).toBe(409);
     expect(await db.$count(users, eq(users.email, person.email))).toBe(1);
@@ -460,7 +445,6 @@ describe("matchGuestRoute", () => {
     });
 
     expect(matchGuestRoute("PATCH", "/bots/b1")).toBeUndefined();
-    // YOLO mode is the owner's switch (issue #151).
     expect(matchGuestRoute("PUT", "/bots/b1/yolo")).toBeUndefined();
     expect(matchGuestRoute("POST", "/bots")).toBeUndefined();
     expect(matchGuestRoute("DELETE", "/bots/b1/browser/profile")).toBeUndefined();

@@ -1,17 +1,3 @@
-/**
- * Skills (issue #1 D5–D7): Agent Skills (`SKILL.md`) from the app's shared
- * library, assigned per bot.
- *
- * The `skills` capability brings:
- * - a prompt section listing the bot's skills by name and description only
- *   (stable between turns, so the provider's prompt cache keeps working);
- * - `load_skill` / `read_skill_file`, which return a skill's instructions and
- *   bundled files only when the model decides it needs them;
- * - `save_skill`, so a bot can turn a workflow it was shown into a skill. It
- *   is `askOnly`: the owner always approves it.
- *
- * Skill scripts are stored as text and never executed.
- */
 import { Type } from "@earendil-works/pi-ai";
 import { section, type ToolExecutionResult } from "@earendil-works/pi-durable";
 import type { Capability } from "./capabilities";
@@ -27,22 +13,16 @@ interface SkillContent extends SkillSummary {
   files: string[];
 }
 
-/** The app's adapter over its skill library, scoped to the bot behind a conversation. */
 export interface SkillStore {
-  /** Skills assigned to the conversation's bot. */
   list(conversationId: number): Promise<SkillSummary[]>;
-  /** One assigned skill by name. */
   get(conversationId: number, name: string): Promise<SkillContent | undefined>;
-  /** A bundled file of an assigned skill. */
   readFile(conversationId: number, name: string, path: string): Promise<string | undefined>;
-  /** Create the skill (or update the bot's own skill of that name) and assign it to the bot. */
   save(
     conversationId: number,
     skill: { name: string; description: string; body: string },
   ): Promise<{ created: boolean }>;
 }
 
-/** Agent Skills naming: lowercase letters, digits and single hyphens, ≤ 64 chars. */
 export const SKILL_NAME = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
 const ok = (text: string): ToolExecutionResult => ({ output: [{ type: "text", text }] });
@@ -111,7 +91,6 @@ export function createSkillsCapability(store: SkillStore): Capability {
       }),
       body: Type.String({ minLength: 1, maxLength: 50_000, description: "Markdown instructions" }),
     }),
-    // Upserting by name is idempotent, so a rerun after a restart is harmless.
     replay: "safe",
     execute: async (args, api) => {
       const { created } = await store.save(Number(api.conversationId), args);

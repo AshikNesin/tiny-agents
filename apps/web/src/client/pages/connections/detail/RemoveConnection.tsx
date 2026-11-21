@@ -1,4 +1,3 @@
-/** Removing a connection: the danger zone's card, and the prompt it opens. */
 import { Trash2 } from "lucide-react";
 import { Button } from "@groot/ui/button";
 import { Card, CardContent } from "@groot/ui/card";

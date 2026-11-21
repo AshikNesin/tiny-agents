@@ -1,9 +1,7 @@
-/** The Traces page's resources (issue #363): the 7-day summary, a list's first page, one session. */
 import type { TraceSessionFilter } from "../../shared/api/traces";
 import { tracesApi } from "../lib/traces-api";
 import { useResource } from "./resource";
 
-/** What the list shows: sessions (all, or one kind) or side-calls. */
 export type TraceListFilter = TraceSessionFilter | "all" | "side";
 
 export const useTraceSummary = () =>

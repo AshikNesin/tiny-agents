@@ -1,8 +1,3 @@
-/**
- * The `attachments` toolkit (issue #58) over a fake store: listing, paged
- * reads, sheet ranges, archive listings, search, the per-conversation scope,
- * untrusted fencing that file text cannot close, and the sandbox copy.
- */
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { ToolExecutionApi, ToolExecutionResult } from "@earendil-works/pi-durable";
 import { describe, expect, it } from "vite-plus/test";
@@ -160,7 +155,6 @@ describe("attachments toolkit", () => {
     expect(range.text).toContain("--- page 2 ---");
     expect(range.text).toContain("--- page 3 ---");
     expect(range.text).not.toContain("Outline:");
-    // The file's own closing tag can't end the fence early.
     expect(range.text.match(/<\/attachment>/g)).toHaveLength(1);
   });
 
@@ -260,7 +254,6 @@ describe("copy_attachment_to_sandbox", () => {
       bytes: 3,
       sha256: "039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
     });
-    // The shared connection stays up for the next caller.
     expect(vm.closed).toBe(false);
   });
 

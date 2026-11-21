@@ -1,8 +1,3 @@
-/**
- * Shortcuts for the computer's XFCE desktop that the local browser would
- * keep for itself (Alt+Tab switches your apps, Ctrl+W closes your tab), sent
- * as X key strokes through the viewer instead.
- */
 import type { KeyStroke } from "./browser-keys";
 
 const KEY = {
@@ -20,7 +15,6 @@ const KEY = {
 
 type KeyName = keyof typeof KEY;
 
-/** Press the keys in order, then release them in reverse. */
 function chord(...keys: KeyName[]): KeyStroke[] {
   return [
     ...keys.map((key) => ({ ...KEY[key], down: true })),
@@ -34,7 +28,6 @@ export interface DesktopShortcut {
   strokes: KeyStroke[];
 }
 
-/** XFCE's default bindings for the things a desktop needs most. */
 export const DESKTOP_SHORTCUTS: DesktopShortcut[] = [
   { label: "Applications menu", keys: "Alt+F1", strokes: chord("Alt", "F1") },
   { label: "Run a program", keys: "Alt+F2", strokes: chord("Alt", "F2") },

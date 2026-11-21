@@ -14,6 +14,5 @@ export function ConnectionsPage() {
     ) : (
       <ConnectionsList />
     );
-  // Adding and removing a connection need step-up (S4).
   return <StepUpProvider>{page}</StepUpProvider>;
 }

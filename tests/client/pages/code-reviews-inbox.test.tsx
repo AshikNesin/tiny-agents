@@ -10,6 +10,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { ReviewsScreen } from "@/pages/code/ReviewsScreen";
+import { AppQueryProvider } from "../query-provider";
 import type { InboxPullView } from "../../../apps/web/src/shared/api/code";
 
 const pull = (number: number, over: Partial<InboxPullView> = {}): InboxPullView => ({
@@ -48,12 +49,14 @@ function stubFetch(inbox: InboxPullView[] | Response, open: unknown[] = []) {
 
 const show = () =>
   render(
-    <MemoryRouter initialEntries={["/code/reviews"]}>
-      <Routes>
-        <Route path="/code/reviews" element={<ReviewsScreen />} />
-        <Route path="/code/reviews/:id" element={<p>Review page</p>} />
-      </Routes>
-    </MemoryRouter>,
+    <AppQueryProvider>
+      <MemoryRouter initialEntries={["/code/reviews"]}>
+        <Routes>
+          <Route path="/code/reviews" element={<ReviewsScreen />} />
+          <Route path="/code/reviews/:id" element={<p>Review page</p>} />
+        </Routes>
+      </MemoryRouter>
+    </AppQueryProvider>,
   );
 
 afterEach(() => {
@@ -103,7 +106,6 @@ describe("the review inbox", () => {
       "href",
       "https://github.com/other/lib/pull/5",
     );
-    // Another repository's PR is reviewed here once it is a project: one step away (#386).
     expect(within(needs).queryByRole("button", { name: /#5/ })).toBeNull();
     expect(
       within(needs).getByRole("link", { name: "Add other/lib as a project to review #5 here" }),

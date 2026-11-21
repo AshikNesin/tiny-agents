@@ -7,16 +7,10 @@ import { pinClockWhileLoadingAndBeforeEachTest } from "../test-clock";
 
 pinClockWhileLoadingAndBeforeEachTest();
 
-// Extend Vitest's expect with jest-dom matchers
 expect.extend(matchers);
 
-// Motion animations (dialogs, tooltips, tabs, …) finish at once under test, so
-// assertions never catch a surface mid-fade or still mounted for its exit.
 MotionGlobalConfig.skipAnimations = true;
 
-// jsdom lacks the Pointer Capture, scroll-into-view and ResizeObserver APIs
-// Radix primitives (Select, Dropdown, Tooltip, …), cmdk and the command menu rely on. Minimal stubs — enough for the
-// interaction paths exercised by component tests; not a faithful polyfill.
 if (typeof window !== "undefined") {
   if (!Element.prototype.hasPointerCapture) {
     Element.prototype.hasPointerCapture = () => false;
@@ -52,9 +46,6 @@ if (typeof window !== "undefined") {
   }
 }
 
-// <html> and <body> attributes as the file found them. Overlays write to them
-// (Radix sets and then empties body's style), and a pinned snapshot of the body
-// would otherwise record what an earlier test left behind.
 const rootAttributes = (el: Element) =>
   new Map(Array.from(el.attributes, (a) => [a.name, a.value]));
 const initialAttributes =
@@ -62,14 +53,10 @@ const initialAttributes =
     ? []
     : [document.documentElement, document.body].map((el) => [el, rootAttributes(el)] as const);
 
-// Cleanup after each test
 afterEach(() => {
   cleanup();
-  // Sonner keeps toasts in module state and replays the active ones to the
-  // next Toaster that mounts, so a test would see the previous test's toasts.
   toast.dismiss();
   for (const [el, attributes] of initialAttributes) {
-    // A copy: removing from the live NamedNodeMap while walking it skips entries.
     for (const { name } of Array.from(el.attributes)) {
       if (!attributes.has(name)) el.removeAttribute(name);
     }

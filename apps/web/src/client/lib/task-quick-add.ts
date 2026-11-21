@@ -1,14 +1,7 @@
-/**
- * Quick-add shorthand for tasks (issue #97): "Call mom tomorrow 5pm !high"
- * becomes the title "Call mom", due tomorrow at 17:00, high priority. Only a
- * few unambiguous words are read, and only as whole words, so a title like
- * "Plan Monday meeting notes" keeps its words unless they parse as a date.
- */
 type QuickPriority = "low" | "medium" | "high";
 
 export interface QuickTask {
   title: string;
-  /** Local due instant, when a day or time was given. */
   due?: Date;
   priority?: QuickPriority;
 }
@@ -23,14 +16,13 @@ const PRIORITIES: Record<string, QuickPriority> = {
   "!l": "low",
 };
 
-/** "5pm", "5:30pm", "17:00", optionally after "at"; returns [hours, minutes]. */
 function parseTime(token: string): [number, number] | undefined {
   const m = /^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/i.exec(token);
   if (!m) return undefined;
   let hours = Number(m[1]);
   const minutes = m[2] ? Number(m[2]) : 0;
   const meridiem = m[3]?.toLowerCase();
-  if (!meridiem && !m[2]) return undefined; // a bare number is part of the title
+  if (!meridiem && !m[2]) return undefined;
   if (minutes > 59) return undefined;
   if (meridiem) {
     if (hours < 1 || hours > 12) return undefined;
@@ -85,14 +77,12 @@ export function parseQuickTask(input: string, now = new Date()): QuickTask {
   }
 
   const title = kept.join(" ");
-  // Nothing left for a title: the shorthand was the title after all.
   if (!title) return { title: input.trim() };
   if (!day && !time) return { title, ...(priority ? { priority } : {}) };
 
   const base = day ?? new Date(now);
   const [hours, minutes] = time ?? [23, 59];
   let due = new Date(base.getFullYear(), base.getMonth(), base.getDate(), hours, minutes);
-  // A time alone that has already passed today means tomorrow.
   if (!day && due.getTime() <= now.getTime()) {
     due = new Date(due.getFullYear(), due.getMonth(), due.getDate() + 1, hours, minutes);
   }

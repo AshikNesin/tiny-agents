@@ -1,8 +1,3 @@
-/**
- * `@tiny-agents/agent/claude-worker`: setting up and reaching the Claude
- * worker on the sandbox (ADR 0010), and the sign-in line the terminal types.
- * The Claude plan engine itself stays on the package root.
- */
 export {
   createSandboxClaudeWorker,
   type ClaudeAccountStatus,

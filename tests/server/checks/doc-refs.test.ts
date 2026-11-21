@@ -34,7 +34,6 @@ function runChecker(): { status: number | null; lines: string[] } {
   return { status: result.status, lines: result.stdout.trim().split("\n") };
 }
 
-// A tree per test: some tests edit it, and the next one must see the original.
 beforeEach(() => {
   root = mkdtempSync(path.join(tmpdir(), "doc-refs-"));
   for (const [file, body] of Object.entries(TREE)) {

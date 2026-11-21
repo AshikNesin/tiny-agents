@@ -7,19 +7,6 @@ import {
   type Bytes,
 } from "./encoding.utils";
 
-/**
- * Password hashing with PBKDF2-SHA256 through WebCrypto. Runs identically on
- * Node and Cloudflare Workers (which cap PBKDF2 at 100,000 iterations and
- * budget 10 ms of CPU per request on the free plan, so the count stays there).
- *
- * Stored format: `pbkdf2-sha256$<iterations>$<salt>$<hash>` (base64url).
- *
- * tiny-agents: users created before the move to groot 3.0 still have bcrypt
- * hashes (`$2a$` / `$2b$`). `verifyPassword` accepts them so those logins keep
- * working, and `needsRehash` reports them, so login replaces them with a
- * PBKDF2 hash the first time the password is used.
- */
-
 const ALGORITHM = "pbkdf2-sha256";
 const ITERATIONS = 100_000;
 const SALT_BYTES = 16;
@@ -47,7 +34,6 @@ export async function verifyPassword(password: string, stored: string): Promise<
   if (isLegacyBcrypt(stored)) return bcrypt.compare(password, stored);
   const [algorithm, iterations, salt, hash] = stored.split("$");
   if (algorithm !== ALGORITHM || !iterations || !salt || !hash) return false;
-  // a malformed stored hash (bad base64, zero/NaN iterations) is a failed match, not a 500
   try {
     const expected = fromBase64Url(hash);
     const actual = await derive(password, fromBase64Url(salt), Number(iterations));
@@ -57,7 +43,6 @@ export async function verifyPassword(password: string, stored: string): Promise<
   }
 }
 
-/** True when `stored` was produced with an older iteration count and should be re-hashed. */
 export function needsRehash(stored: string): boolean {
   const [algorithm, iterations] = stored.split("$");
   return algorithm !== ALGORITHM || Number(iterations) !== ITERATIONS;

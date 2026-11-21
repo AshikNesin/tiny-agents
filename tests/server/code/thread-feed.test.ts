@@ -1,9 +1,3 @@
-/**
- * The watch-thread protocol in one place: what each watcher of a
- * `ThreadFeed` is sent, and in what order, for whatever a driver reports.
- * Every scenario's output also passes the test kit's `threadEventProblems`,
- * the check any driver's watch can be run through.
- */
 import { describe, expect, it } from "vite-plus/test";
 import type { ThreadEvent, ThreadSnapshot, TranscriptItem } from "@tiny-agents/code/contracts";
 import { NO_PARTIAL, ThreadFeed } from "@tiny-agents/code/server";
@@ -94,7 +88,6 @@ describe("ThreadFeed", () => {
     const events = watched(feed);
     feed.snapshot(snapshot([user("u1", "hi")]));
     feed.items([user("u1", "hi"), answer("a1", "one")], 1);
-    // A reconnect: the harness's history is read again.
     feed.snapshot(snapshot([user("u1", "hi"), answer("a1", "one"), answer("a2", "two")]));
     feed.items([user("u1", "hi"), answer("a1", "one"), answer("a2", "two")], 2);
     expect(types(events)).toEqual(["snapshot", "items", "snapshot"]);
@@ -153,7 +146,6 @@ describe("ThreadFeed", () => {
       { type: "state", working: false, costUsd: 0.02 },
     ]);
     expect(feed.partialNow).toEqual(NO_PARTIAL);
-    // A turn that ended is not streaming: the next snapshot has no tail.
     feed.snapshot(snapshot([], true));
     expect(events.at(-1)?.type).toBe("snapshot");
     expect(threadEventProblems(events)).toEqual([]);

@@ -1,16 +1,3 @@
-/**
- * The Code page composer (issue #143, ADR 0011), the harness's composer
- * features through its API, each shown only when the harness has it: `@`
- * file and folder completion in the working directory, `/` command hints
- * (the harness interprets the commands), pasted or dropped attachments,
- * skills, and a draft kept per thread.
- *
- * Enter sends; while the agent works, Enter steers the running turn (when
- * the harness steers) and "Queue" (or Alt+Enter) holds the message for when
- * the turn ends; with an empty draft the send button becomes Stop. The
- * toolbar holds a "+" menu (files, skills) and the caller's chips (model,
- * reasoning, permissions, context).
- */
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
 import {
   ArrowUp,
@@ -36,9 +23,11 @@ import {
   DropdownMenuTrigger,
 } from "@groot/ui/dropdown-menu";
 import { cn } from "@groot/ui/lib/utils";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Spinner } from "../../components/ui/spinner";
 import { errorMessage } from "../../lib/errors";
 import { codeApi, type HarnessInfo, type Skill } from "../../lib/code/api";
+import { RESOURCE_QUERY, wait } from "../../queries/resource";
 import {
   canSend as draftCanSend,
   editText,
@@ -56,7 +45,6 @@ import {
 } from "../../lib/composer-browser";
 import { canStageMore, stageUploads, unstageUpload, type Staging } from "../../lib/staged-uploads";
 
-/** The `@token` (or `/command` at the start) around the cursor, if any. */
 function tokenAt(
   text: string,
   cursor: number,
@@ -74,25 +62,18 @@ function quoteRef(path: string): string {
 }
 
 export interface ComposerProps {
-  /** Draft key: the thread id, or "new:<harness>". */
   draftKey: string;
-  /** The harness the message goes to: its capabilities pick the features. */
   harness: HarnessInfo;
   cwd?: string | null;
   threadId?: string;
   working?: boolean;
   placeholder?: string;
   autoFocus?: boolean;
-  /** Text to add to the draft (a diff comment); consumed once. */
   insert?: { text: string; nonce: number } | null;
-  /** Chips in the toolbar: model, reasoning, context (or the new-thread options). */
   controls?: React.ReactNode;
-  /** Shown when the agent works and the draft is empty: the send button becomes Stop. */
   onStop?(): void;
-  /** A quiet line under the composer when idle (keyboard hints while working). */
   hint?: string;
   submitLabel?: string;
-  /** The likely next message: the empty composer's placeholder, Tab (or Use) fills it, Esc dismisses. */
   nextPrompt?: { text: string | null; dismiss(): void };
   onSend(
     message: string,
@@ -125,7 +106,6 @@ export function Composer({
   const steers = caps.turns.steer;
   const commands = harness.commands;
   const name = harness.label;
-  // The text and the staged attachments (lib/composer-draft.ts; no picks here).
   const [draft, setDraft] = useState<ComposerDraft<string>>(() =>
     emptyDraft(readStoredDraft(codeDraftKey(draftKey))),
   );
@@ -140,12 +120,10 @@ export function Composer({
   const [token, setToken] = useState<ReturnType<typeof tokenAt>>();
   const [dragging, setDragging] = useState(false);
   const area = useRef<HTMLTextAreaElement>(null);
-  // The blur that closes the mention list waits a beat for a click on it; cleared on unmount.
   const blurTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(blurTimer.current), []);
   const fileInput = useRef<HTMLInputElement>(null);
 
-  // A new conversation key loads its own draft.
   useEffect(() => {
     setDraft(emptyDraft(readStoredDraft(codeDraftKey(draftKey))));
     setSelectedSkills([]);
@@ -164,7 +142,6 @@ export function Composer({
     });
   }, [insert]);
 
-  // `@` completion: names first, as you type (debounced, cancelled by the next keystroke).
   useEffect(() => {
     if (!token) {
       setSuggestions([]);
@@ -187,25 +164,29 @@ export function Composer({
       setSuggestions([]);
       return;
     }
-    let cancelled = false;
-    const timer = setTimeout(() => {
-      codeApi
-        .findFiles(harness.id, cwd, token.query)
-        .then((matches) => {
-          if (cancelled) return;
-          // Paths are relative to the working directory.
-          setSuggestions(
-            matches.slice(0, 12).map((m) => ({ value: m.path, label: m.path, dir: m.isDir })),
-          );
-          setActive(0);
-        })
-        .catch(() => !cancelled && setSuggestions([]));
-    }, 120);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [token, cwd, canFind, commands, harness.id]);
+  }, [token, cwd, canFind, commands]);
+  const fileQuery = token && token.kind !== "/" && cwd && canFind ? token.query : null;
+  const files = useQuery({
+    queryKey: ["code", "find-files", harness.id, cwd, fileQuery],
+    queryFn: async ({ signal }) => {
+      await wait(120, signal);
+      return codeApi
+        .findFiles(harness.id, cwd!, fileQuery!)
+        .then((matches) =>
+          matches.slice(0, 12).map((m) => ({ value: m.path, label: m.path, dir: m.isDir })),
+        )
+        .catch(() => []);
+    },
+    enabled: fileQuery !== null,
+    placeholderData: keepPreviousData,
+    structuralSharing: false,
+    ...RESOURCE_QUERY,
+  });
+  useEffect(() => {
+    if (fileQuery === null || !files.data || files.isPlaceholderData) return;
+    setSuggestions(files.data);
+    setActive(0);
+  }, [fileQuery, files.data, files.isPlaceholderData]);
 
   const loadSkills = useCallback(() => {
     if (skills || !cwd || !canSkills) return;
@@ -215,9 +196,6 @@ export function Composer({
       .catch(() => setSkills([]));
   }, [skills, cwd, canSkills, harness.id, threadId]);
 
-  // Staging reads the list as it is when an upload lands: one removed (or
-  // dropped by a thread switch) meanwhile is not resurrected. Harnesses
-  // have no delete for uploads, so there is none to call.
   const stagedRef = useRef(attachments);
   useEffect(() => {
     stagedRef.current = attachments;
@@ -241,7 +219,6 @@ export function Composer({
     setSending(true);
     try {
       await onSend(sent.body || "(see the attached files)", {
-        // A harness that cannot steer holds a mid-turn message instead.
         queue: queue || (working && !steers && canQueue),
         skills: selectedSkills,
         attachments: sent.attachments,
@@ -272,7 +249,6 @@ export function Composer({
     });
   };
 
-  // Offered only where the default placeholder would show.
   const offered =
     !working && !dragging && !hasContent(draft) && nextPrompt?.text ? nextPrompt.text : null;
   const acceptOffered = () => {
@@ -416,9 +392,6 @@ export function Composer({
         </div>
       )}
 
-      {/* Fluid InputMessage frame, as the bot chat's composer: a hairline ring
-          that gains contrast on hover and focus; clicking the padding focuses
-          the field. */}
       <div
         data-slot="composer-frame"
         className={cn(
@@ -574,7 +547,6 @@ export function Composer({
             </Button>
           )}
           {offered && (
-            // Touch has no Tab key: one quiet tap fills the suggestion in.
             <Button
               variant="ghost"
               size="sm"

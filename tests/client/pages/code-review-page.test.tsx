@@ -1,10 +1,5 @@
-/**
- * A thread's Review page (`/code/<id>/review`): the thread's changes, and for
- * a project thread its pull request, each on a full-width tab instead of a
- * half-width side pane, with the way back to the thread.
- */
 import React from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render as renderBare, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
@@ -13,6 +8,10 @@ import { NO_CAPABILITIES } from "@tiny-agents/code/contracts";
 import { CodePage } from "@/pages/code/CodePage";
 import { useCodeStore } from "@/store/code";
 import type { HarnessInfo, ThreadSummary } from "@/lib/code/api";
+import { AppQueryProvider } from "../query-provider";
+
+const render = (ui: Parameters<typeof renderBare>[0]) =>
+  renderBare(ui, { wrapper: AppQueryProvider });
 
 vi.mock("sonner", () => ({
   toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), message: vi.fn() }),
@@ -107,13 +106,11 @@ describe("a thread's Review page", () => {
       "true",
     );
     expect(await screen.findByTestId("code-changes")).toBeInTheDocument();
-    // No project: no pull request to review.
     expect(screen.queryByRole("tab", { name: /Pull request/ })).toBeNull();
     expect(screen.getByRole("link", { name: "Back to the thread" })).toHaveAttribute(
       "href",
       "/code/shelley%3Ac1",
     );
-    // The thread itself is not on this page.
     expect(screen.queryByTestId("code-transcript")).toBeNull();
   });
 
@@ -163,7 +160,6 @@ describe("the right panel", () => {
     expect(await screen.findByTestId("code-pr")).toBeInTheDocument();
     expect(panel).toBeInTheDocument();
 
-    // The header's one toggle closes it, and opens it again on the tab it was left on.
     await user.click(screen.getByRole("button", { name: "Review panel" }));
     expect(screen.getByTestId("where")).toHaveTextContent(/^\/code\/shelley%3Ac1$/);
     expect(screen.queryByRole("region", { name: "Review panel" })).toBeNull();
@@ -180,7 +176,6 @@ describe("the right panel", () => {
     const link = await screen.findByRole("link", { name: "Open pull request #12 on GitHub" });
     expect(link).toHaveAttribute("href", url);
     expect(link).toHaveAttribute("target", "_blank");
-    // The panel toggle is still there beside it.
     expect(screen.getByRole("button", { name: "Review panel" })).toBeInTheDocument();
   });
 
@@ -190,8 +185,6 @@ describe("the right panel", () => {
     const panelWidth = () =>
       screen.getByRole("region", { name: "Review panel" }).style.getPropertyValue("--review-width");
 
-    // jsdom's window is 1024px wide and lays nothing out, so the panel may
-    // grow until the conversation keeps 360px (664px) and shrinks to 320px.
     it("resizes from the keyboard within its limits, and remembers the width", async () => {
       const { unmount } = renderAt("/code/shelley%3Ac1/changes");
       await screen.findByRole("region", { name: "Review panel" });

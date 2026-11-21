@@ -114,7 +114,6 @@ describe("ComputerPanel", () => {
     );
     await connected();
     expect(screen.getByTestId("computer-driver").textContent).toBe("Clicker is driving");
-    // The desktop's size is not something the owner acts on; the header leaves it out.
     expect(screen.queryByText("1280×800")).not.toBeInTheDocument();
     expect(fakes.rfbs[0]!.viewOnly).toBe(true);
     expect(resize).not.toHaveBeenCalled();

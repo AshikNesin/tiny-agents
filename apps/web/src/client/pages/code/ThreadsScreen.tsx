@@ -1,10 +1,5 @@
-/**
- * The Threads screen (`/code/threads`, `?project=<id>` for one project),
- * after Hoplite: a project's threads at full width by where they stand
- * (Working, Needs you, In review, Done), each row its status, title, pull
- * requests and date. Archived sits folded at the foot and loads on demand.
- */
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -28,6 +23,7 @@ import { Spinner } from "../../components/ui/spinner";
 import { codeApi, threadPath, type ThreadSummary } from "../../lib/code/api";
 import { buildTree, statusSections, type ListNode, type StatusSection } from "../../lib/code/list";
 import type { ProjectView } from "../../../shared/api/code";
+import { RESOURCE_QUERY } from "../../queries/resource";
 import { PullChip } from "./controls";
 
 const TONE: Record<StatusSection["key"] | "archived", string> = {
@@ -149,19 +145,14 @@ export function ThreadsScreen({
   const [query, setQuery] = useState("");
   const [closed, setClosed] = useState<Set<string>>(() => new Set());
   const [archivedOpen, setArchivedOpen] = useState(false);
-  const [archived, setArchived] = useState<ThreadSummary[] | null>(null);
-
-  useEffect(() => {
-    if (!archivedOpen || archived) return;
-    let cancelled = false;
-    codeApi
-      .list("archived")
-      .then((rows) => !cancelled && setArchived(rows))
-      .catch(() => !cancelled && setArchived([]));
-    return () => {
-      cancelled = true;
-    };
-  }, [archivedOpen, archived]);
+  const archived =
+    useQuery({
+      queryKey: ["code", "threads", "archived"],
+      queryFn: () => codeApi.list("archived").catch((): ThreadSummary[] => []),
+      enabled: archivedOpen,
+      ...RESOURCE_QUERY,
+      staleTime: Infinity,
+    }).data ?? null;
 
   const keep = useMemo(() => {
     const needle = query.trim().toLowerCase();

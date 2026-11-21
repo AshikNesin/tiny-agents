@@ -1,41 +1,4 @@
 #!/usr/bin/env node
-// Stages the film's Travel Planner states in a throwaway tiny-agents instance
-// and saves each with snaplib (desktop first, then mobile). Re-runnable: each
-// mode starts from empty databases, because the vault approval the states pass
-// through cannot be taken back.
-//
-//   node scripts/demo/launch/tools/stage-travel.mjs            # desktop, then mobile
-//   node scripts/demo/launch/tools/stage-travel.mjs desktop    # one mode
-//   node scripts/demo/launch/tools/stage-travel.mjs --seed     # seed to the waiting state, no snapshots
-//   node scripts/demo/launch/tools/stage-travel.mjs desktop --only travel-approved,travel-shared-ashik
-//                                                              # stage all, snapshot only these
-//   node scripts/demo/launch/tools/stage-travel.mjs --down     # stop the instance
-//
-// The instance is this script's own: port 3140 (3141 stays free for Vite's
-// HMR socket), data in data/verify/travel/. It is left running when the script
-// finishes, in the mobile run's end state.
-//
-// This machine stands in for the sandbox VM, the way scripts/demo/setup-vm.sh
-// does it: a local sshd on 127.0.0.1:2240 for the user `travelvm` (keys and
-// config in data/verify/travel-vm/), whose Chrome and XFCE desktop run on
-// Xtigervnc. That Chrome maps flights.example.com to travel-flights.mjs on
-// 127.0.0.1:3145 (a self-signed key it is told to trust). So the browser,
-// the live view, take-control and the computer are the app's real ones.
-//
-// Everything else is a real flow too:
-// - the account "Ashik" through first-run setup, the guest "Sonaal" through
-//   /people, the bot (CAST description, shared with Sonaal) and its vault card
-//   through the API;
-// - the server's clock runs about 4 hours ahead (travel-register.mjs), so the
-//   instance starts just before 7:00 AM IST and the daily "Morning fare check"
-//   routine fires on its own schedule; the browsers' clocks are set to match
-//   (page.clock) and their time zone is Asia/Kolkata;
-// - the fake model says the CAST lines (travel-director.mjs): the routine run
-//   opens the fares page, the chat turn asks to fill the card (the real vault
-//   approval card), the shared chat gets the CAST replies.
-// The chat turn is started by an owner message (BOOK_TRIGGER); CAST has no
-// owner line there, so its bubble is hidden (`hidden` attribute) before each
-// snapshot. That is the only DOM edit.
 import { spawn, execFileSync } from "node:child_process";
 import {
   existsSync,
@@ -54,7 +17,6 @@ const FLIGHTS_PORT = 3145;
 const SSH_PORT = 2240;
 const URL_BASE = `http://localhost:${PORT}`;
 process.env.TA_URL = URL_BASE;
-// The CAST is in India: the browsers show IST, like the routine's schedule.
 process.env.TZ = "Asia/Kolkata";
 const { open, api, dumpCss, snap, verify } = await import("./snaplib.mjs");
 const D = await import("./travel-director.mjs");
@@ -64,13 +26,11 @@ const STATE = path.join(REPO, "data/verify/travel");
 const VM = path.join(REPO, "data/verify/travel-vm");
 const RUN_FILE = path.join(STATE, "run.json");
 const VM_USER = "travelvm";
-const OWNER = { email: "demo@example.com", password: "demo@example.com" }; // gitleaks:allow (throwaway instance)
+const OWNER = { email: "demo@example.com", password: "demo@example.com" }; // gitleaks:allow
 const GUEST = { email: "sonaal@example.com", password: "sonaal@example.com", name: "Sonaal" }; // gitleaks:allow
 const IST = 5.5 * 3600_000;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const log = (...parts) => console.log("[stage-travel]", ...parts);
-
-// ── Processes ─────────────────────────────────────────────────────────────
 
 const alive = (pid) => {
   try {
@@ -103,7 +63,6 @@ async function stopGroup(pid) {
   }
 }
 
-/** Stops what this script started earlier (server, fares page, the VM user's browsers) and deletes the data. */
 async function down() {
   if (existsSync(RUN_FILE)) {
     const run = JSON.parse(readFileSync(RUN_FILE, "utf8"));
@@ -112,7 +71,6 @@ async function down() {
     await stopGroup(run.flightsPid);
     for (let i = 0; i < 50 && (await answers(PORT)); i++) await sleep(100);
   }
-  // Chrome, Xtigervnc and the desktop the server started on the stand-in VM.
   try {
     execFileSync("pkill", ["-KILL", "-u", VM_USER]);
   } catch {}
@@ -121,8 +79,6 @@ async function down() {
   rmSync(`/home/${VM_USER}/.config`, { recursive: true, force: true });
   rmSync(`/home/${VM_USER}/.cache`, { recursive: true, force: true });
 }
-
-// ── The stand-in sandbox VM (this machine, as root) ───────────────────────
 
 const sh = (cmd) =>
   execFileSync("bash", ["-c", cmd], { stdio: ["ignore", "pipe", "inherit"] }).toString();
@@ -145,7 +101,6 @@ function setupVm() {
   sh(
     `passwd -d ${VM_USER} >/dev/null; echo "${VM_USER} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/${VM_USER}; chmod 440 /etc/sudoers.d/${VM_USER}`,
   );
-  // Keys: the server's client key, sshd's host key, the fares page's certificate.
   if (!existsSync(path.join(VM, "id_ed25519")))
     sh(`ssh-keygen -q -t ed25519 -N "" -f ${VM}/id_ed25519`);
   if (!existsSync(path.join(VM, "ssh_host_ed25519_key")))
@@ -161,7 +116,6 @@ function setupVm() {
   const spki = sh(
     `openssl x509 -in ${VM}/flights.crt -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | base64`,
   ).trim();
-  // The VM user's Chrome: first on PATH, so the app's launch command runs it.
   const bin = `/home/${VM_USER}/bin`;
   mkdirSync(bin, { recursive: true });
   writeFileSync(
@@ -175,7 +129,6 @@ exec /usr/bin/google-chrome-stable --no-sandbox --test-type --no-first-run --dis
 `,
   );
   chmodSync(`${bin}/google-chrome-stable`, 0o755);
-  // The stacks are installed (the checks in browser-vm-setup.ts / computer-vm-setup.ts).
   const markers = `/home/${VM_USER}/.tiny-agents`;
   mkdirSync(markers, { recursive: true });
   const version = (file, name) =>
@@ -220,9 +173,6 @@ PidFile /run/sshd-travel.pid
   );
 }
 
-// ── The instance ──────────────────────────────────────────────────────────
-
-/** The offset that puts the server's clock at 6:59:20 AM IST, `lead` ms after now. */
 function clockOffset(lead) {
   const at = Date.now() + lead;
   const ist = new Date(at + IST);
@@ -249,7 +199,6 @@ async function up() {
   );
   flights.unref();
 
-  // As `ta-verify up --empty --sandbox` starts it, plus the preload.
   const env = Object.fromEntries(
     Object.entries(process.env).filter(([key]) =>
       /^(PATH|HOME|USER|LOGNAME|SHELL|LANG|LC_\w+|TMPDIR|TERM|NODE_EXTRA_CA_CERTS|SSL_CERT_FILE)$/.test(
@@ -264,7 +213,6 @@ async function up() {
       if (match) env[match[1]] = "";
     }
   }
-  // Boot takes ~20 s and seeding a few more: 7:00 AM IST comes ~60 s after the spawn.
   const offset = clockOffset(20_000);
   Object.assign(env, {
     TZ: "UTC",
@@ -333,8 +281,6 @@ async function up() {
   return offset;
 }
 
-// ── Seeding through the API ───────────────────────────────────────────────
-
 let token;
 async function call(method, url, body, headers = {}) {
   const res = await fetch(`${URL_BASE}/api/v1${url}`, {
@@ -364,7 +310,6 @@ async function until(what, check, timeout = 90_000) {
 
 const botEntry = async (id) => (await call("GET", "/bots")).find((bot) => bot.id === id);
 
-/** The waiting state: account, guest, bot, card, routine run, the vault card waiting. */
 async function seed() {
   token = (await call("POST", "/auth/setup", { ...OWNER, name: "Ashik" })).token;
   const guest = await call("POST", "/people", GUEST);
@@ -374,7 +319,6 @@ async function seed() {
     description: "Plans trips and watches fares",
     modelId: model,
     guestIds: [guest.id],
-    // The routine run opens the fares page on its own (routines can't ask).
     toolPermissions: { browser_navigate: "allow" },
   });
   const stepUp = (await call("POST", "/vault/step-up", { password: OWNER.password })).token;
@@ -385,7 +329,6 @@ async function seed() {
       kind: "card",
       title: "Visa",
       urls: ["https://flights.example.com"],
-      // Sample data: the Visa test number.
       values: {
         card_number: "4242424242424242",
         card_expiry: "12/29",
@@ -429,16 +372,6 @@ async function seed() {
   return { bot, guest, routine };
 }
 
-// ── The browser side ──────────────────────────────────────────────────────
-
-/**
- * A signed-in page whose clock matches the server's (offset from real time).
- * Vite's HMR socket (port + 1) is pointed at a closed port, so the Vite client
- * gives up quietly: other staging scripts write snapshot files into the repo,
- * and Vite's watcher would otherwise reload this page on each one, dropping
- * the panel state. (Playwright's routeWebSocket would do it too, but its
- * WebSocket shim breaks noVNC's stream.)
- */
 const sessions = [];
 async function openAt(mode, offset, login) {
   const session = await open(mode, login);
@@ -461,7 +394,6 @@ async function gotoChat({ page }, botId) {
   await page.getByText(D.FARE_LINE).first().waitFor();
 }
 
-/** The one DOM edit: hide the owner's message that started the booking turn (CAST has none). */
 async function hideTrigger(page) {
   const n = await page.evaluate((trigger) => {
     let hidden = 0;
@@ -497,19 +429,16 @@ async function stage(mode) {
   const owner = await openAt(mode, offset, OWNER);
   const { page } = owner;
   await gotoChat(owner, bot.id);
-  // The vault card: the waiting approval, found again by its title once approved.
   const card = page
     .locator("[data-slot=item]")
     .filter({ hasText: "Travel Planner wants to fill Visa ••4242" })
     .first();
   await card.waitFor();
-  // The browser panel opens itself while the bot uses the browser: close it for the chat view.
   const panel = page.getByTestId("browser-panel");
   if (await panel.isVisible().catch(() => false))
     await page.getByRole("button", { name: "Close browser panel" }).click();
   await shoot(owner, "travel-waiting");
 
-  // The live view, on the Browser tab, view-only.
   await page.getByTestId("live-view-toggle").click();
   await panel.waitFor();
   const take = page.getByTestId("browser-takeover");
@@ -518,7 +447,6 @@ async function stage(mode) {
   await page.waitForTimeout(600);
   await shoot(owner, "travel-live");
 
-  // Take control: the driving frame and Hand back.
   await take.click();
   await page.getByTestId("browser-driving-frame").waitFor();
   await page.mouse.move(0, 0);
@@ -527,7 +455,6 @@ async function stage(mode) {
   await page.getByRole("button", { name: "Hand back", exact: true }).click();
   await take.waitFor();
 
-  // The Computer tab.
   await page.getByTestId("live-view-tab-computer").click();
   const computer = page.getByTestId("computer-panel");
   await computer.waitFor();
@@ -541,7 +468,6 @@ async function stage(mode) {
   await shoot(owner, "travel-computer");
   await page.getByRole("button", { name: "Close computer panel" }).click();
 
-  // Approve the card.
   await card.getByRole("button", { name: "Approve once" }).click();
   await until(
     "the approval to settle",
@@ -552,7 +478,6 @@ async function stage(mode) {
   await page.waitForTimeout(800);
   await shoot(owner, "travel-approved");
 
-  // CAST step 4: the shared conversation.
   await api(page, "POST", `/bots/${bot.id}/messages`, {
     requestId: crypto.randomUUID(),
     text: D.ASHIK_SHARED,
@@ -575,7 +500,6 @@ async function stage(mode) {
 }
 
 const args = process.argv.slice(2);
-// --only a,b: stage everything but snapshot only these states.
 const onlyAt = args.indexOf("--only");
 const only = onlyAt >= 0 ? args.splice(onlyAt, 2)[1].split(",") : null;
 if (args.includes("--down")) {

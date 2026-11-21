@@ -1,21 +1,4 @@
 #!/usr/bin/env tsx
-/**
- * `pnpm local`: run tiny-agents on your own machine and keep it up to date
- * from git, the way Shelley updates itself (docs/guides/local-updates.md).
- *
- *   pnpm local                     follow origin/main, check every hour
- *   pnpm local --track release     follow the newest v* release tag instead
- *   pnpm local --auto              apply updates as soon as they are built
- *   pnpm local --check-every 15    minutes between checks (0: only on demand)
- *   pnpm local --remote upstream   fetch from another remote
- *
- * The server runs from a built release (a git worktree under
- * ~/.tiny-agents/releases, or TINY_AGENTS_RELEASES_DIR) with this checkout
- * as its working directory, so `.env` and `data/` are the ones here. New
- * commits build beside the running release; Settings → Updates shows them
- * and "Update & restart" swaps them in. A release that does not come up is
- * rolled back. A crashed server is restarted.
- */
 import path from "node:path";
 import { existsSync, readFileSync } from "node:fs";
 import { parseArgs, parseEnv } from "node:util";
@@ -60,7 +43,6 @@ if (!Number.isFinite(checkEveryMs) || checkEveryMs < 0) {
   process.exit(2);
 }
 
-/** The port the server listens on: PORT here or in `.env`, else the app's default. */
 function serverPort(): number {
   const envFile = path.join(root, ".env");
   const fromFile = existsSync(envFile) ? parseEnv(readFileSync(envFile, "utf8")).PORT : undefined;
@@ -99,7 +81,6 @@ const supervisor = new Supervisor(
   },
 );
 
-/** The release to start with: the last one run, else the tracked head, else this checkout's HEAD. */
 async function firstRelease(): Promise<string> {
   const current = store.readCurrent();
   if (current) return current;
@@ -131,7 +112,6 @@ try {
 }
 await store.prune([sha]).catch(() => undefined);
 
-// The timers also keep the supervisor alive between servers (a crash's restart delay).
 const check = () => void supervisor.check();
 setTimeout(check, 10_000);
 setInterval(check, checkEveryMs > 0 ? checkEveryMs : 2 ** 30);

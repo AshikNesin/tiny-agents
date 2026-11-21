@@ -19,18 +19,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/**
- * One Code thread on screen: its live stream, the draft, and everything the owner can do to it
- * (send, steer or queue, stop, answer, recover, change settings, rename, archive, delete). A
- * control is offered only when the thread's harness has the capability.
- */
 class CodeThreadViewModel(private val container: AppContainer, val threadId: String) : ViewModel() {
     private val api = container.code
 
     private val _state = MutableStateFlow(CodeThreadState())
     val state: StateFlow<CodeThreadState> = _state.asStateFlow()
 
-    /** Whether the stream is open now (false while it reconnects). */
     private val _connected = MutableStateFlow(false)
     val connected: StateFlow<Boolean> = _connected.asStateFlow()
 
@@ -43,7 +37,6 @@ class CodeThreadViewModel(private val container: AppContainer, val threadId: Str
     private val _draft = MutableStateFlow("")
     val draft: StateFlow<String> = _draft.asStateFlow()
 
-    /** The thread is gone (deleted here): the screen closes. */
     private val _closed = MutableStateFlow(false)
     val closed: StateFlow<Boolean> = _closed.asStateFlow()
 
@@ -83,7 +76,6 @@ class CodeThreadViewModel(private val container: AppContainer, val threadId: Str
         _connected.value = false
     }
 
-    /** Clear the unread mark once a turn ended with the thread on screen. */
     private fun markSeen() {
         val now = _state.value
         if (!now.loaded || now.working || now.cursor <= seenCursor) return
@@ -95,7 +87,6 @@ class CodeThreadViewModel(private val container: AppContainer, val threadId: Str
         _draft.value = text
     }
 
-    /** Send the draft. While a turn runs it steers that turn, or with [queue] waits for it to end. */
     fun send(queue: Boolean = false) {
         val text = _draft.value.trim()
         if (text.isEmpty()) return
@@ -118,7 +109,6 @@ class CodeThreadViewModel(private val container: AppContainer, val threadId: Str
 
     fun setModel(model: String) = changeSettings { api.settings(threadId, model = model) }
 
-    /** "default" goes back to the model's own reasoning level. */
     fun setEffort(effort: String) = changeSettings { api.setEffort(threadId, effort.takeIf { it != "default" }) }
 
     fun setPermissionMode(mode: String) = changeSettings { api.settings(threadId, permissionMode = mode) }
@@ -164,7 +154,6 @@ class CodeThreadViewModel(private val container: AppContainer, val threadId: Str
     }
 }
 
-/** The harness part of a thread id (`shelley:c1` gives `shelley`); a bare id from before ADR 0011 is Shelley's. */
 fun instanceOf(threadId: String): String {
     val at = threadId.indexOf(':')
     return if (at <= 0) "shelley" else threadId.substring(0, at)

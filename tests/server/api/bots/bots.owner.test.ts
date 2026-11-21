@@ -1,9 +1,3 @@
-/**
- * Who is behind a conversation (issue #63): a bot's chat or one of its
- * routines' own conversations. Every tool-side lookup resolves through this,
- * so a routine run gets its bot's skills and browser, and is never the
- * owner's turn. Real SQLite test DB.
- */
 import { randomUUID } from "node:crypto";
 import { inArray } from "drizzle-orm";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
@@ -49,7 +43,6 @@ async function seed() {
   return { bot: bot!, routine: routine!, chat, routineConversation: chat + 1 };
 }
 
-/** A chat whose latest user message is the given one. */
 const reader = (last: { text: string; peer?: unknown }) => ({
   readChat: vi.fn(async () => ({ messages: [{ role: "user", ...last }] }) as never),
 });
@@ -84,13 +77,10 @@ describe("isUnattended", () => {
     const { chat, routineConversation } = await seed();
     const owner = reader({ text: "Do it." });
     expect(await isUnattended(routineConversation, owner)).toBe(true);
-    // Decided by the conversation, not by reading it.
     expect(owner.readChat).not.toHaveBeenCalled();
     expect(await isUnattended(chat, owner)).toBe(false);
-    // A chat message that looks like a routine label is still the owner's.
     expect(await isUnattended(chat, reader({ text: '**Routine "digest":** hi' }))).toBe(false);
     expect(await isUnattended(chat, reader({ text: "hi", peer: { kind: "message" } }))).toBe(true);
-    // A caller that already looked the owner up passes it: no second lookup, same answer.
     const known = await conversationOwner(routineConversation);
     expect(await isUnattended(routineConversation, owner, known)).toBe(true);
   });

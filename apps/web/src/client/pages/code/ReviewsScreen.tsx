@@ -1,14 +1,3 @@
-/**
- * Reviews (`/code/reviews`, issue #345): open any pull request of a
- * project's repository by pasting its link (or `owner/name#123`), the
- * owner's own or someone else's. Above the reviews still open here, the
- * inbox from GitHub across every repository: what needs their review, what
- * changed since they reviewed, what waits on its author, and their own,
- * narrowed by filters (how recent, which repository, drafts) this browser
- * remembers. Each row reviews the PR here, and its own link opens it on GitHub.
- * `/code/review?pr=<link>` (or GitHub's own path after `/code/review/`)
- * opens one straight from a link, see `OpenReviewLink`.
- */
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ArrowLeft, ArrowRight, ExternalLink, GitPullRequest, Plus, X } from "lucide-react";
@@ -31,7 +20,9 @@ import {
 import { cn } from "@groot/ui/lib/utils";
 import { Spinner } from "../../components/ui/spinner";
 import { errorMessage } from "../../lib/errors";
-import { projectsApi, reviewPath, reviewsApi } from "../../lib/code/projects";
+import { reviewPath, reviewsApi, useProjects } from "../../lib/code/projects";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { RESOURCE_MUTATION, useResource } from "../../queries/resource";
 import type { InboxPullView, InboxQuery, PullReviewView } from "../../../shared/api/code";
 
 const dateOf = (iso: string) =>
@@ -53,10 +44,8 @@ const DECISION: Record<NonNullable<InboxPullView["decision"]>, string | null> = 
 const rowClass =
   "hover:bg-muted/60 flex h-10 min-w-0 flex-1 items-center gap-3 rounded-lg px-3 text-left text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50";
 
-/** Every row ends in the same slot (GitHub's link, then an open review's Close), so columns line up. */
 const trailClass = "flex shrink-0 items-center gap-0.5";
 
-/** The PR on GitHub: its own target beside the row, never the row itself. */
 function GitHubLink({ number, url }: { number: number; url: string }) {
   return (
     <a
@@ -73,7 +62,6 @@ function GitHubLink({ number, url }: { number: number; url: string }) {
   );
 }
 
-/** What the row does when clicked, shown while the pointer is on it. */
 const reviewHint = (
   <span className="text-muted-foreground hidden shrink-0 items-center gap-1 text-xs sm:group-hover:inline-flex">
     Review <ArrowRight className="size-3" aria-hidden />
@@ -113,12 +101,10 @@ function InboxRow({ pull, onOpen }: { pull: InboxPullView; onOpen(pull: InboxPul
           {inner}
         </button>
       ) : (
-        // Reviewing here needs a project (its checkout); GitHub still opens it.
         <div className={cn(rowClass, "hover:bg-transparent opacity-70")}>{inner}</div>
       )}
       <span className={trailClass}>
         {!pull.projectId && (
-          // Reviewing here needs the repository as a project (its checkout): one step away.
           <Link
             to={`/code/settings/projects?repo=${encodeURIComponent(pull.repo)}`}
             aria-label={`Add ${pull.repo} as a project to review #${pull.number} here`}
@@ -135,8 +121,6 @@ function InboxRow({ pull, onOpen }: { pull: InboxPullView; onOpen(pull: InboxPul
   );
 }
 
-// --- filters ---------------------------------------------------------------------------------
-
 const FILTER_KEY = "code.reviews.filter";
 
 const DAYS: Array<{ value: string; label: string }> = [
@@ -146,7 +130,6 @@ const DAYS: Array<{ value: string; label: string }> = [
   { value: "90", label: "Past 90 days" },
 ];
 
-/** The filter this browser last used; nothing kept, or unreadable, is no filter. */
 function storedFilter(): InboxQuery {
   try {
     const raw = JSON.parse(window.localStorage.getItem(FILTER_KEY) ?? "{}") as InboxQuery;
@@ -164,12 +147,9 @@ function storeFilter(filter: InboxQuery) {
   try {
     if (Object.keys(filter).length === 0) window.localStorage.removeItem(FILTER_KEY);
     else window.localStorage.setItem(FILTER_KEY, JSON.stringify(filter));
-  } catch {
-    // A private window: the filter holds for this visit.
-  }
+  } catch {}
 }
 
-/** The filter as the inbox route's query parameters. */
 const asParams = (filter: InboxQuery) => ({
   ...(filter.days ? { days: String(filter.days) } : {}),
   ...(filter.repo ? { repo: filter.repo } : {}),
@@ -179,7 +159,6 @@ const asParams = (filter: InboxQuery) => ({
 const chipClass =
   "h-7 w-auto gap-1 rounded-lg border-transparent bg-muted/50 px-2.5 text-xs dark:bg-muted/50";
 
-/** One quiet row of filters: how recent, which repository, drafts; Clear when any is set. */
 function Filters({
   filter,
   repos,
@@ -253,7 +232,6 @@ function Filters({
   );
 }
 
-/** The inbox from GitHub, by section; nothing while it reads, a line when it cannot. */
 function Inbox({
   pulls,
   error,
@@ -313,7 +291,6 @@ function Inbox({
   );
 }
 
-/** Reviews open here whose PR is not in the inbox; while they read, a spinner. */
 function OpenHere({
   reviews,
   others,
@@ -385,13 +362,17 @@ function OpenHere({
 
 export function ReviewsScreen({ sidebarHidden = false }: { sidebarHidden?: boolean }) {
   const navigate = useNavigate();
-  const [reviews, setReviews] = useState<PullReviewView[] | null>(null);
+  const reviewsKey = ["code", "reviews", "list"];
+  const reviewList = useResource(
+    reviewsKey,
+    () => reviewsApi.list().catch((): PullReviewView[] => []),
+    "",
+  );
+  const reviews = reviewList.data;
+  const queryClient = useQueryClient();
   const [link, setLink] = useState("");
   const [opening, setOpening] = useState(false);
-  const [pulls, setPulls] = useState<InboxPullView[] | null>(null);
-  const [inboxError, setInboxError] = useState<string | null>(null);
   const [filter, setFilter] = useState<InboxQuery>(storedFilter);
-  // Repositories to filter by: the projects', and every one the inbox has shown.
   const [repos, setRepos] = useState<string[]>([]);
   const addRepos = useCallback((more: string[]) => {
     setRepos((list) => {
@@ -399,47 +380,28 @@ export function ReviewsScreen({ sidebarHidden = false }: { sidebarHidden?: boole
       return all.size === list.length ? list : [...all].sort((a, b) => a.localeCompare(b));
     });
   }, []);
+  const { projects } = useProjects();
+  const inbox = useResource(
+    ["code", "reviews", "inbox", filter],
+    () => reviewsApi.inbox(asParams(filter)),
+    "Could not read your review requests.",
+  );
+  const pulls = inbox.data;
+  const inboxError = inbox.loadError;
   useEffect(() => {
-    projectsApi
-      .list()
-      .then((projects) => addRepos(projects.map((p) => `${p.repo.owner}/${p.repo.name}`)))
-      .catch(() => {});
-  }, [addRepos]);
+    addRepos((projects ?? []).map((p) => `${p.repo.owner}/${p.repo.name}`));
+  }, [projects, addRepos]);
   useEffect(() => {
-    let current = true;
-    setPulls(null);
-    setInboxError(null);
-    reviewsApi
-      .inbox(asParams(filter))
-      .then((list) => {
-        if (!current) return;
-        setPulls(list);
-        addRepos(list.map((p) => p.repo));
-      })
-      .catch((e: unknown) => {
-        if (current) setInboxError(errorMessage(e, "Could not read your review requests."));
-      });
-    return () => {
-      current = false;
-    };
-  }, [filter, addRepos]);
+    if (pulls) addRepos(pulls.map((p) => p.repo));
+  }, [pulls, addRepos]);
   const changeFilter = (next: InboxQuery) => {
     storeFilter(next);
     setFilter(next);
   };
   const filtered = Object.keys(filter).length > 0;
-  // A review whose PR is in the inbox is opened from there: each PR shows once.
   const inInbox = new Set(pulls?.map((p) => p.url));
   const others =
     reviews && (pulls || inboxError) ? reviews.filter((r) => !inInbox.has(r.url)) : null;
-
-  const load = useCallback(() => {
-    reviewsApi
-      .list()
-      .then(setReviews)
-      .catch(() => setReviews([]));
-  }, []);
-  useEffect(load, [load]);
 
   const open = async (event: FormEvent) => {
     event.preventDefault();
@@ -471,12 +433,14 @@ export function ReviewsScreen({ sidebarHidden = false }: { sidebarHidden?: boole
   };
 
   const close = async (review: PullReviewView) => {
-    setReviews((list) => list?.filter((r) => r.id !== review.id) ?? list);
+    queryClient.setQueryData<PullReviewView[]>(reviewsKey, (list) =>
+      list?.filter((r) => r.id !== review.id),
+    );
     try {
       await reviewsApi.archive(review.id);
     } catch (error) {
       toast.error(errorMessage(error, "Could not close the review."));
-      load();
+      void reviewList.refresh();
     }
   };
 
@@ -533,31 +497,28 @@ export function ReviewsScreen({ sidebarHidden = false }: { sidebarHidden?: boole
   );
 }
 
-/**
- * Open (or reopen) a PR's review and go there, from a link:
- * `/code/review?pr=<its GitHub link, or owner/name#123>`,
- * `/code/review/<owner>/<name>/<number>`, or GitHub's own path after
- * `/code/review/` (`…/<owner>/<name>/pull/<number>/files`), so swapping
- * github.com for this app's host opens it here.
- */
 export function OpenReviewLink() {
   const { owner, repo, number } = useParams();
   const [search] = useSearchParams();
   const navigate = useNavigate();
   const pr = owner && repo && number ? `${owner}/${repo}#${number}` : search.get("pr")?.trim();
+  const { mutate: openReview } = useMutation({
+    mutationFn: (link: string) => reviewsApi.open(link),
+    ...RESOURCE_MUTATION,
+  });
   useEffect(() => {
     if (!pr) {
       navigate("/code/reviews", { replace: true });
       return;
     }
-    reviewsApi
-      .open(pr)
-      .then((review) => navigate(reviewPath(review.id), { replace: true }))
-      .catch((error: unknown) => {
+    openReview(pr, {
+      onSuccess: (review) => navigate(reviewPath(review.id), { replace: true }),
+      onError: (error) => {
         toast.error(errorMessage(error, "Could not open that pull request."));
         navigate("/code/reviews", { replace: true });
-      });
-  }, [pr, navigate]);
+      },
+    });
+  }, [pr, navigate, openReview]);
   return (
     <div className="flex h-dvh items-center justify-center">
       <Spinner />

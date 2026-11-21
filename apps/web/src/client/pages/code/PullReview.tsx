@@ -1,17 +1,3 @@
-/**
- * A PR review (`/code/reviews/<id>`, issue #345), laid out like diffshub:
- * the changed files as a tree on the left and every diff in one scrolling
- * column beside it (`PullDiffs`). The assistant sits on the far left as a
- * thin rail, folded by default; opened, it is a resizable pane. A line
- * comment is for the PR's review on GitHub (sent with Submit review) or for
- * the assistant.
- *
- * The assistant starts on the first question (nothing calls a model until
- * then): its first message carries a short card of the PR, any line comments
- * waiting, and the question. After that it is the thread itself, shown
- * without its header. Phones show one side at a time, the file tree in a
- * drawer and the diffs unified.
- */
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -28,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button, EmptyState, Textarea, monoClass } from "@groot/ui";
 import { cn } from "@groot/ui/lib/utils";
 import {
@@ -45,6 +32,7 @@ import {
   type ThreadSummary,
 } from "../../lib/code/api";
 import { reviewsApi } from "../../lib/code/projects";
+import { useResource } from "../../queries/resource";
 import {
   githubCommentsKey,
   useCommentStore,
@@ -63,7 +51,6 @@ import { usePullConversations } from "./PullThreads";
 import { SubmitReviewButton } from "./SubmitReview";
 import { OpenInTerminal, useOpenInTerminal, YourChangesActions } from "./YourChanges";
 
-/** Questions a reviewer asks first, one tap each. */
 const STARTERS = ["Summarize this PR", "What could break?", "Is it tested well?"];
 
 export function PullReview({
@@ -76,31 +63,23 @@ export function PullReview({
   rows: ThreadSummary[];
 }) {
   const navigate = useNavigate();
-  const [review, setReview] = useState<PullReviewView | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const reviewKey = ["code", "reviews", "detail", reviewId];
+  const { data: review, loadError: error } = useResource(
+    reviewKey,
+    () => reviewsApi.get(reviewId),
+    "Could not open the review.",
+  );
+  const client = useQueryClient();
+  const setReview = (next: PullReviewView) => client.setQueryData(reviewKey, next);
   const [updating, setUpdating] = useState(false);
   const [reload, setReload] = useState(0);
-  // Phones: the diff or the assistant.
   const [side, setSide] = useState<"files" | "assistant">("files");
-  // Wide screens: the assistant folded to a rail (by default) or open beside the files.
   const [assistantOpen, setAssistantOpen] = useState(false);
   const view = useDiffView();
   const wide = view.wide;
 
-  useEffect(() => {
-    let cancelled = false;
-    reviewsApi
-      .get(reviewId)
-      .then((r) => !cancelled && setReview(r))
-      .catch((e: unknown) => !cancelled && setError(errorMessage(e, "Could not open the review.")));
-    return () => {
-      cancelled = true;
-    };
-  }, [reviewId]);
-
   const threadId = review?.threadId ?? null;
   const assistantRow = threadId ? rows.find((r) => r.id === threadId) : undefined;
-  // Comments wait under the review until the assistant exists, then under its thread.
   const commentKey = threadId ?? review?.key;
   const commenting = useThreadCommenting(commentKey, () => undefined);
   const github = useThreadCommenting(githubCommentsKey(reviewId), () => undefined);
@@ -192,7 +171,6 @@ export function PullReview({
           {side === "files" ? <MessageSquare /> : <FileDiff />}
           {side === "files" ? "Assistant" : "Files"}
         </Button>
-        {/* Phones keep the title readable: the checkout's tools fold into one menu. */}
         <div className="hidden items-center gap-1 sm:flex">
           <OpenInTerminal review={review} />
           <Button
@@ -296,7 +274,6 @@ export function PullReview({
   );
 }
 
-/** The folded assistant: a thin rail on the left, with how many comments wait for it. */
 function AssistantRail({ waiting, onOpen }: { waiting: number; onOpen(): void }) {
   return (
     <div className="border-border hidden w-11 shrink-0 flex-col items-center gap-1 border-r py-2 lg:flex">
@@ -328,7 +305,6 @@ function AssistantRail({ waiting, onOpen }: { waiting: number; onOpen(): void })
   );
 }
 
-/** Phones: the checkout's terminal, Update and Open on GitHub, in one menu. */
 function MoreActions({
   review,
   updating,
@@ -371,7 +347,6 @@ function MoreActions({
   );
 }
 
-/** The assistant's side: its thread once asked, the first-question box before. */
 function Assistant({
   review,
   harnesses,
@@ -409,7 +384,6 @@ function Assistant({
   );
 }
 
-/** Before the first question: what the assistant is, starter questions and a box. */
 function AskFirst({
   review,
   onStarted,
@@ -419,7 +393,6 @@ function AskFirst({
 }) {
   const [text, setText] = useState("");
   const [asking, setAsking] = useState(false);
-  // The model the assistant starts on; after that, its thread's composer picks.
   const [model, setModel] = useState(review.assistant?.model ?? DEFAULT);
   const [models, setModels] = useState<ModelOption[]>([]);
   const instanceId = review.assistant?.instanceId;

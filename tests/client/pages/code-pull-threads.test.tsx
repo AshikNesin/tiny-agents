@@ -6,7 +6,7 @@
  * when GitHub has them on a newer commit or the code moved on. The network
  * is the boundary: fetch is stubbed.
  */
-import { render, screen, within } from "@testing-library/react";
+import { render as renderBare, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { usePullConversations } from "@/pages/code/PullThreads";
@@ -17,6 +17,10 @@ import type {
   PullThreadView,
 } from "../../../apps/web/src/shared/api/code";
 import { diffRoot } from "../diff-dom";
+import { AppQueryProvider } from "../query-provider";
+
+const render = (ui: Parameters<typeof renderBare>[0]) =>
+  renderBare(ui, { wrapper: AppQueryProvider });
 
 const REVIEW = {
   id: "rv1",
@@ -43,7 +47,6 @@ const thread = (over: Partial<PullThreadView>): PullThreadView => ({
   ...over,
 });
 
-/** Answers the threads read with `data`; records every call. */
 function stubFetch(data: PullThreadsView) {
   const fetch = vi.fn(async (url: string, _init?: RequestInit) =>
     String(url).endsWith("/threads")
@@ -84,7 +87,6 @@ describe("a review's conversations from GitHub", () => {
 
     const card = await screen.findByRole("group", { name: "Conversation on line 2" });
     expect(card).toHaveTextContent("Why caps?");
-    // Slotted under its line.
     expect(card.closest("[slot]")?.getAttribute("slot")).toMatch(/additions-2/);
 
     await user.click(within(card).getByRole("button", { name: "Reply" }));

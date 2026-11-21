@@ -1,9 +1,3 @@
-/**
- * Typed client for the Vault routes (issue #56). Writes, reveals and copies
- * carry a step-up token: the owner confirms it's them (password or passkey)
- * and the token lives in this module's memory only — never storage — for
- * its five minutes.
- */
 import { startAuthentication } from "@simplewebauthn/browser";
 import type { PublicKeyCredentialRequestOptionsJSON } from "@simplewebauthn/browser";
 import { ApiError, apiClient } from "@groot/shell/lib/api";
@@ -16,19 +10,19 @@ import type {
   StepUpBody,
   StepUpToken,
   ValueField,
+  VaultBackendName,
   VaultItem,
   VaultItemCreateBody,
   VaultItemDetail,
   VaultItemUpdateBody,
   VaultKind,
   VaultLinkBody,
+  VaultMoveResult,
   VaultOverview,
   VaultRevealBody,
   VaultRevealed,
 } from "../../shared/api/vault";
 import { errorMessage } from "./errors";
-
-// ── Step-up ─────────────────────────────────────────────────────────────
 
 let stepUp: StepUpToken | undefined;
 
@@ -58,11 +52,6 @@ async function confirmWithPasskey() {
   setStepUp(await apiClient.post<StepUpToken>("/vault/step-up", { passkey: response }));
 }
 
-/**
- * A write or reveal carrying the step-up token, through the shared client:
- * same base path, cookie, 401 handling and `ApiError`. Like a DELETE, a
- * missing `data` comes back as `undefined` instead of throwing.
- */
 function requestWithStepUp<T>(
   method: "post" | "put" | "patch" | "delete",
   url: string,
@@ -76,7 +65,6 @@ function requestWithStepUp<T>(
   });
 }
 
-/** A request that needs a fresh step-up token. */
 export async function stepped<T>(
   method: "post" | "put" | "patch" | "delete",
   url: string,
@@ -104,6 +92,7 @@ export const vaultApi = {
   forgetStepUp: () => setStepUp(undefined),
   create: (input: VaultItemCreateBody) => stepped<VaultItem>("post", "/vault/items", input),
   link: (input: VaultLinkBody) => stepped<VaultItem>("post", "/vault/links", input),
+  moveToOnePassword: () => stepped<VaultMoveResult>("post", "/vault/move-to-1password", {}),
   update: (handle: string, input: VaultItemUpdateBody) =>
     stepped<VaultItem>("put", `/vault/items/${encodeURIComponent(handle)}`, input),
   remove: (handle: string, purge: boolean) =>
@@ -121,6 +110,11 @@ export const vaultApi = {
     } satisfies CredentialSubmitBody),
   cancelRequest: (taskId: number) =>
     apiClient.post<CredentialCancelled>(`/vault/requests/${taskId}/cancel`),
+};
+
+export const BACKEND_LABEL: Record<VaultBackendName, string> = {
+  "onepassword-connect": "1Password",
+  local: "Local",
 };
 
 export const KIND_LABEL: Record<VaultKind, string> = {
@@ -147,7 +141,6 @@ export const FIELD_LABEL: Record<ValueField, string> = {
   value: "Key",
 };
 
-/** Fields shown masked until revealed. */
 export const SECRET_FIELDS: ReadonlySet<ValueField> = new Set([
   "password",
   "totp",

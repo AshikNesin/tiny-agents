@@ -1,13 +1,5 @@
-/**
- * One Code thread (issue #143, ADR 0011): a one-line header (the title with
- * its menu, the project or folder, PR and Changes), the live transcript with finished tool runs folded
- * into one line each, what is running (background jobs, subagents), queued
- * messages, the diff's line comments waiting to go with the next message,
- * and the composer with the model, reasoning, permission and
- * context chips and Stop. Every control comes from the thread's harness's
- * capabilities: what the harness cannot do is not offered.
- */
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMutation } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Archive,
@@ -69,6 +61,7 @@ import {
   type ThreadSettings,
   type ThreadSummary,
 } from "../../lib/code/api";
+import { RESOURCE_MUTATION } from "../../queries/resource";
 import { ancestry } from "../../lib/code/list";
 import { foldTurns, lastErrorId } from "../../lib/code/transcript";
 import { useCodeThread } from "../../lib/code/use-thread";
@@ -161,7 +154,6 @@ const PULL_TEXT: Record<string, string> = {
   green: "text-success",
 };
 
-/** The PR's state at a glance: CI passing, failing on you, being fixed, or merged. */
 function PullIcon({ loop }: { loop?: string }) {
   if (loop === "merged") return <GitMerge className="size-3.5" />;
   if (loop === "green") return <CircleCheck className="text-success size-3.5" />;
@@ -189,23 +181,16 @@ export function ConversationView({
   id: string;
   harness: HarnessInfo;
   rows: ThreadSummary[];
-  /** "Open in <harness>", when it has its own UI (the list row's). */
   externalUrl?: string;
-  /** The right panel (Source control, Pull request) is open. */
   panelOpen: boolean;
   onTogglePanel(): void;
-  /** Open Source control (absent while it is on screen). */
   onShowChanges?: () => void;
   insert: { text: string; nonce: number } | null;
   onCwd?(cwd: string | null): void;
-  /** Started in a project (issue #297): Changes against its base branch, and the PR tab. */
   inProject?: boolean;
   projectName?: string;
-  /** Its open pull request, as the list knows it. */
   pr?: { number: number; loop: string; url: string } | null;
-  /** The thread list is folded away: leave room for Show sidebar. */
   sidebarHidden?: boolean;
-  /** Shown as a pane beside a page that has its own header (a PR review's assistant). */
   pane?: boolean;
 }) {
   const navigate = useNavigate();
@@ -230,14 +215,17 @@ export function ConversationView({
       .catch(() => setModels([]));
   }, [harness.id]);
 
-  // Unread: what is on screen while the tab is visible counts as seen.
   const cursor = state.cursor;
+  const { mutate: markSeen } = useMutation({
+    mutationFn: (seen: { id: string; cursor: number }) => codeApi.markSeen(seen.id, seen.cursor),
+    ...RESOURCE_MUTATION,
+  });
   useEffect(() => {
     if (!cursor) return;
     const mark = () => {
       if (document.visibilityState !== "visible") return;
       patchList(id, { unread: false, followed: true });
-      void codeApi.markSeen(id, cursor).catch(() => undefined);
+      markSeen({ id, cursor });
     };
     const timer = setTimeout(mark, 600);
     document.addEventListener("visibilitychange", mark);
@@ -245,7 +233,7 @@ export function ConversationView({
       clearTimeout(timer);
       document.removeEventListener("visibilitychange", mark);
     };
-  }, [id, cursor, patchList]);
+  }, [id, cursor, patchList, markSeen]);
 
   const run = useCallback(
     async (what: string, action: () => Promise<unknown>, after?: () => void) => {
@@ -299,7 +287,6 @@ export function ConversationView({
     });
 
   const stop = () => void run(`stop ${harness.label}`, () => codeApi.interrupt(id));
-  // The list knows first when a merge archives the thread under the open transcript.
   const archived = Boolean(row?.archived || listRow?.archived);
   const cwd = row?.cwd ?? null;
   useEffect(() => onCwd?.(cwd), [cwd, onCwd]);
@@ -448,7 +435,6 @@ export function ConversationView({
             </Button>
           )}
           {(inProject || caps.workspace.diffs) && (
-            // One toggle for the right panel; it shows the PR's state when there is one.
             <button
               type="button"
               onClick={onTogglePanel}
@@ -476,7 +462,6 @@ export function ConversationView({
             </button>
           )}
           {pr && (
-            // The PR on GitHub in one click; the toggle beside it opens the panel.
             <Button
               asChild
               variant="ghost"
@@ -544,7 +529,6 @@ export function ConversationView({
             </p>
           )}
           {archived && (
-            // Archived: one way back in instead of a banner over a composer (Amp).
             <Button
               variant="outline"
               className="text-muted-foreground h-11 w-full rounded-2xl"
@@ -708,7 +692,6 @@ export function ConversationView({
                   </>
                 }
                 onSend={async (message, options) => {
-                  // Waiting line comments go ahead of the message, in the same turn.
                   const withReview = comments.length > 0;
                   await codeApi.send(id, message, { ...options, withReview });
                   if (withReview) commentsSent(id);

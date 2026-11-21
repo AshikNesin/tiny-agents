@@ -1,13 +1,3 @@
-// The static gates: one list for `pnpm verify:static` (every gate) and for CI,
-// where each gate runs in the job its `job` names (`pnpm verify:static --job
-// <job>`, one workflow job each; `pnpm check:coverage` holds the workflow to
-// this list). A gate added here runs locally and in CI.
-//
-// Gates run in parallel, as many at once as the machine has cores, each with
-// its output held back and printed whole when it ends. An `exclusive` gate
-// runs alone, after the rest: the migration freshness gate rewrites
-// apps/web/drizzle while it runs.
-
 import { spawn, spawnSync } from "node:child_process";
 import { readFileSync, readdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { availableParallelism } from "node:os";
@@ -17,16 +7,9 @@ import { pathToFileURL } from "node:url";
 
 const MIGRATIONS_DIR = "apps/web/drizzle";
 
-/**
- * tsc keeps each program's state in node_modules/.cache/tsc (the same files
- * `pnpm typecheck` and the pre-push hook use), so a rerun checks only what
- * changed. CI restores that directory from the Actions cache. The state is
- * keyed by file content, so a fresh checkout reuses it.
- */
 const incremental = (program) =>
   `--incremental --tsBuildInfoFile node_modules/.cache/tsc/${program}.tsbuildinfo`;
 
-/** The CI jobs, in the order a summary lists them. */
 export const GATE_JOBS = ["typecheck", "lint", "gates", "migrations"];
 
 export const gates = [
@@ -50,7 +33,6 @@ export const gates = [
     job: "typecheck",
     run: `pnpm typecheck:kit ${incremental("kit")}`,
   },
-  // A child's own tsconfigs (e.g. a Workers test suite); groot defines none.
   {
     name: "Typecheck (app projects)",
     job: "typecheck",
@@ -79,6 +61,11 @@ export const gates = [
   { name: "Design tokens", job: "gates", run: "pnpm check:tokens" },
   { name: "pnpm policy", job: "gates", run: "pnpm check:pnpm-policy" },
   { name: "Old modules", job: "gates", run: "pnpm check:old-modules" },
+  {
+    name: "Comment ratchet",
+    job: "gates",
+    run: "pnpm check:comments --base origin/${GITHUB_BASE_REF:-main}",
+  },
   {
     name: "Migrations are up to date with the schema",
     job: "migrations",
@@ -133,7 +120,6 @@ function migrationsMatchSchema() {
   return false;
 }
 
-/** Run one gate, its output held back: resolves `{ passed, output, seconds }`. */
 function runGate(gate) {
   const started = performance.now();
   const done = (passed, output) => ({
@@ -142,7 +128,6 @@ function runGate(gate) {
     seconds: (performance.now() - started) / 1000,
   });
   if (typeof gate.run === "function") {
-    // In-process gates print as they go; they run alone (`exclusive`).
     return Promise.resolve(done(gate.run(), ""));
   }
   return new Promise((resolve) => {
@@ -154,7 +139,6 @@ function runGate(gate) {
   });
 }
 
-/** Run `list` with at most `limit` at once, in order of start; resolves results in list order. */
 async function pool(list, limit, run) {
   const results = Array.from({ length: list.length });
   let next = 0;
@@ -168,7 +152,6 @@ async function pool(list, limit, run) {
   return results;
 }
 
-/** The gates `pnpm verify:static [--job <job>]` runs, or a reason the job is unknown. */
 export function selectGates(argv) {
   const at = argv.indexOf("--job");
   if (at === -1) return { gates };

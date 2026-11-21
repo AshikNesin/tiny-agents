@@ -1,9 +1,4 @@
 /**
- * Attach-client behavior (issue #28): fresh single-use ticket per attempt,
- * pty bytes both ways, the resize control frame, the shared backoff
- * schedule, and a teardown that kills the socket and pending retries.
- * WebSocket is faked; no server is involved.
- *
  * @vitest-environment jsdom
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -58,7 +53,6 @@ class FakeWebSocket {
     this.readyState = 3;
   }
 
-  // Test-side drivers.
   open(): void {
     this.readyState = FakeWebSocket.OPEN;
     this.onopen?.();
@@ -112,7 +106,6 @@ function connect(signal?: AbortSignal) {
   );
 }
 
-/** Let the ticket promise and the socket constructor settle. */
 const settle = () => vi.advanceTimersByTimeAsync(0);
 
 describe("connectTerminal", () => {
@@ -186,7 +179,7 @@ describe("connectTerminal", () => {
     await vi.advanceTimersByTimeAsync(999);
     expect(ticketMock).toHaveBeenCalledTimes(3);
     await vi.advanceTimersByTimeAsync(1);
-    expect(ticketMock).toHaveBeenCalledTimes(4); // back on the 1s step
+    expect(ticketMock).toHaveBeenCalledTimes(4);
     expect(states).toContain("live");
   });
 
@@ -262,7 +255,6 @@ describe("connectTerminal", () => {
     for (let i = 0; i < chunks; i++) ws.deliver(chunk);
     expect(ws.sent).toEqual(['{"t":"pause"}']);
 
-    // xterm catches up: not yet below the low mark, then below it.
     connection.written(chunks * chunk.byteLength - LOW_WATERMARK);
     expect(ws.sent).toEqual(['{"t":"pause"}']);
     connection.written(1);
@@ -281,7 +273,6 @@ describe("connectTerminal", () => {
     await vi.advanceTimersByTimeAsync(1000);
     const second = FakeWebSocket.instances[1]!;
     second.open();
-    // Late acknowledgements for the old socket's bytes send nothing stray.
     connection.written(HIGH_WATERMARK + 1);
     second.deliver(new Uint8Array(10));
     expect(second.sent).toEqual([]);
@@ -299,7 +290,6 @@ describe("connectTerminal", () => {
 
     await vi.advanceTimersByTimeAsync(PING_INTERVAL_MS);
     expect(ws.sent).toEqual(['{"t":"ping"}', '{"t":"ping"}']);
-    // Half-open: nothing comes back.
     await vi.advanceTimersByTimeAsync(PONG_TIMEOUT_MS);
     expect(ws.closeCalled).toBe(true);
     expect(states.at(-1)).toBe("reconnecting");
@@ -316,7 +306,6 @@ describe("connectTerminal", () => {
     await vi.advanceTimersByTimeAsync(PING_INTERVAL_MS * 3);
     expect(ws.sent).toEqual([]);
 
-    // Coming back probes at once: a laptop that slept has a dead socket.
     visibility.mockReturnValue("visible");
     document.dispatchEvent(new Event("visibilitychange"));
     expect(ws.sent).toEqual(['{"t":"ping"}']);

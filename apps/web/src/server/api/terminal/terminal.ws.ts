@@ -1,28 +1,3 @@
-/**
- * Terminal WebSocket bridge (issue #28): pipes a browser xterm.js tab to a
- * tmux attach on the sandbox VM. The page first calls the JWT-protected
- * ticket route and presents the ticket here; tickets and the Origin check
- * are shared with the VNC bridge (../ws/upgrade.ts). Binary
- * frames are raw pty bytes both ways and are never logged — they are
- * everything the owner types.
- *
- * Close codes are a contract with the client's reconnect logic:
- *   1000 permanent — this tmux client was detached (Ctrl+B d), the session died, or
- *        it never existed (tmux's "can't find session" reaches the pane
- *        first); the client stops, the tab strip shows it.
- *   4000 idle      — ten minutes with no frames either way; the client
- *        reconnects with a fresh ticket when the user returns.
- *   1011 attach    — the SSH attach failed after the ticket was spent (the
- *        sandbox is unreachable); the client retries with backoff.
- *
- * Text frames are JSON control messages, client to server:
- *   {t:"resize",cols,rows}  the grid changed (tmux redraws at the new size)
- *   {t:"pause"} / {t:"resume"}  the browser's xterm is behind on rendering;
- *        stop reading the VM until it catches up (watermark flow control)
- *   {t:"ping"}  sent only while the page is visible: keeps the idle timer
- *        off a tab someone is reading, and is answered {t:"pong"} so the
- *        client can spot a half-open socket and reconnect on its own.
- */
 import type { IncomingMessage, Server } from "node:http";
 import { WebSocketServer, type WebSocket } from "ws";
 import { logger } from "@groot/core/logger";
@@ -32,14 +7,11 @@ import { getTerminalService } from "./terminal.instance";
 
 const PING_INTERVAL_MS = 30_000;
 const IDLE_TIMEOUT_MS = 10 * 60_000;
-/** Stop reading the VM while this much is queued for a slow client. */
 const MAX_BUFFERED_BYTES = 4 * 1024 * 1024;
-/** Ticket mints per user per minute; the answer to abuse is 429, never 409. */
 const TICKET_RATE_LIMIT = 30;
 
 const PATH = /^\/api\/v1\/terminal\/ws\/([^/]+)$/;
 
-/** Clamp bounds shared with the REST create route (the client mirrors them). */
 const clampCols = (n: number) => Math.min(500, Math.max(2, n));
 const clampRows = (n: number) => Math.min(300, Math.max(2, n));
 
@@ -50,7 +22,6 @@ interface Ticket {
 
 const tickets = createTicketStore<Ticket>({
   perUserLimit: TICKET_RATE_LIMIT,
-  // 429, not 409: the client reads ticket-409 as "tab gone, stop forever".
   limitMessage: "Too many terminal tickets requested. Wait a moment.",
 });
 
@@ -58,7 +29,6 @@ export function issueTerminalTicket(input: Ticket): string {
   return tickets.issue(input);
 }
 
-/** Single use: a redeemed (or expired) ticket is gone either way. */
 export function redeemTerminalTicket(ticket: string, name: SessionName): Ticket | undefined {
   return tickets.redeem(ticket, (found) => found.name === name);
 }
@@ -71,11 +41,6 @@ export interface TerminalWsOptions {
   isOriginAllowed?: (req: IncomingMessage) => boolean;
 }
 
-/**
- * Handle `upgrade` requests for the terminal path on the app's HTTP server
- * and leave every other upgrade (Vite HMR, the VNC bridge) to its own
- * listener. Returns a function that closes every attached tab.
- */
 export function attachTerminalWs(
   httpServer: Server,
   options: TerminalWsOptions = {},
@@ -118,9 +83,6 @@ async function bridge(ws: WebSocket, name: SessionName, cols: number, rows: numb
   await new Promise<void>((resolve) => {
     let alive = true;
     let idleTimer = armIdleTimer(ws);
-    // Two independent reasons to stop reading the pty: the socket's send
-    // buffer is full (a slow network) or the client asked (a slow renderer).
-    // Reading resumes only when neither holds.
     let socketFull = false;
     let clientPaused = false;
     const syncFlow = () => {
@@ -140,7 +102,6 @@ async function bridge(ws: WebSocket, name: SessionName, cols: number, rows: numb
       alive = true;
     });
 
-    // Any frame either direction proves someone is at the keyboard.
     const bumpIdle = () => {
       clearTimeout(idleTimer);
       idleTimer = armIdleTimer(ws);
@@ -174,8 +135,6 @@ async function bridge(ws: WebSocket, name: SessionName, cols: number, rows: numb
         }
         return;
       }
-      // Control frames. Malformed or unknown messages are ignored: a buggy
-      // client must not lose its terminal.
       const control = parseControl(String(data));
       if (!control) return;
       switch (control.t) {
@@ -199,9 +158,6 @@ async function bridge(ws: WebSocket, name: SessionName, cols: number, rows: numb
       stream.destroy();
       resolve();
     };
-    // The pty ended: the session was killed, or this client was detached
-    // (Ctrl+B d). Either way an automatic retry is wrong — close 1000 so the
-    // client stops; its overlay offers a manual Reconnect for the detach.
     stream.once("close", () => {
       if (ws.readyState === ws.OPEN) ws.close(1000, "Terminal session ended");
       finish();
@@ -221,7 +177,6 @@ type ControlFrame =
   | { t: "resume" }
   | { t: "ping" };
 
-/** A well-formed control frame, or undefined for anything else. */
 function parseControl(message: string): ControlFrame | undefined {
   let parsed: unknown;
   try {

@@ -8,7 +8,6 @@ import { SYSTEM_PROMPT_MAX, type BotDraft } from "../../lib/bot-draft";
 import { ModelSelector } from "../ai-elements/ModelSelector";
 import { BotAvatar } from "../BotAvatar";
 
-/** The bot's name, description, model and system prompt; on a phone, its delete. */
 export function ProfileSection({
   bot,
   draft,
@@ -75,8 +74,6 @@ export function ProfileSection({
           models={models}
           value={modelId}
           onChange={(next) => edit("modelId", next)}
-          // A bot on the default model sends `modelId: null` (README §4.5,
-          // wire mismatch W1); the selector's falsy check skips it.
           unknownValue={modelMissing ? (bot?.modelId as string | undefined) : undefined}
         />
       </div>
@@ -100,7 +97,6 @@ export function ProfileSection({
       </div>
 
       {bot && (
-        // On a phone the footer keeps only Cancel and Save; delete lives here.
         <div className="border-border/60 flex items-center gap-3 border-t pt-4 sm:hidden">
           <p className="text-muted-foreground min-w-0 flex-1 text-xs">
             Deletes the bot and its chat history.

@@ -14,11 +14,6 @@ import {
   type Fixture,
 } from "./fixture";
 
-/**
- * groot:resolve rebuilds conflict markers when sync ran with
- * --skip-conflicts (CI), reading the merge base through the same lookup sync
- * uses.
- */
 describe("groot resolve marker regeneration (integration)", () => {
   let fx: Fixture;
 

@@ -9,10 +9,8 @@ interface SearchEntry {
   key: string;
   sectionId: string;
   title: string;
-  /** "Group" for a section, "Group › Section" for an item. */
   trail: string;
   description?: string;
-  /** Lowercased label + keywords, matched by substring. */
   terms: string[];
 }
 
@@ -50,11 +48,6 @@ function Highlight({ text, query }: { text: string; query: string }) {
   );
 }
 
-/**
- * The settings sidebar search: matches section labels, keywords and item
- * labels, and lists them in a dropdown. `/` focuses it, ↑/↓ move, Enter
- * opens the highlighted section, Esc clears.
- */
 export function SettingsSearch({
   sections,
   onSelect,
@@ -74,8 +67,6 @@ export function SettingsSearch({
   const activeIndex = Math.min(active, results.length - 1);
   const showList = open && q.length > 0;
 
-  // A bare key, so it stays out of text fields; like every global hotkey it
-  // does nothing while a dialog is open.
   useHotkey("/", () => inputRef.current?.focus());
 
   const close = () => {
@@ -159,7 +150,6 @@ export function SettingsSearch({
                   id={optionId(i)}
                   role="option"
                   aria-selected={i === activeIndex}
-                  // Keep focus in the input so the blur doesn't close the list before the click.
                   onMouseDown={(e) => e.preventDefault()}
                   onMouseMove={() => setActive(i)}
                   onClick={() => pick(entry)}

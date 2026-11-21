@@ -19,7 +19,6 @@ type Props = {
   disabled?: boolean;
 };
 
-/** Searchable job-type picker used by the add-job and schedule dialogs. */
 export function JobTypeSelect({ id, value, onChange, disabled }: Props) {
   const availableJobs = useAvailableJobs();
   const [search, setSearch] = useState("");

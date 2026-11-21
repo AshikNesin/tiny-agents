@@ -1,9 +1,3 @@
-/**
- * Deliveries (issue #12): mention routing in the bots service, bot-to-bot
- * sends, and answers relayed back into the asking conversation. Routing uses
- * the route-test runtime fake; answering runs on the real faux-backed
- * runtime, so reply timing and turn boundaries are the real ones.
- */
 import { asc, eq } from "drizzle-orm";
 import { beforeEach, afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { api, createTestApp, type TestApp } from "../helpers";
@@ -30,12 +24,10 @@ import {
 
 const token = await authToken("relay-test@example.com");
 
-/** A bot with a conversation on whichever runtime is installed. */
 async function seedBot(name: string, conversationId?: string) {
   return seedBotRow({ name, ...(conversationId ? { conversationId } : {}) });
 }
 
-/** The ledger row for a delivery's requestId. */
 const ledgerRow = (requestId: string) =>
   db.query.botMessages.findFirst({ where: eq(botMessages.requestId, requestId) });
 
@@ -69,7 +61,6 @@ describe("mention delivery", () => {
       mentions: [guest.id, other.id],
     });
     expect(res.status).toBe(200);
-    // Host gets the raw text; guests get an attributed copy.
     expect(runtime.submit).toHaveBeenCalledWith(conv(host), {
       requestId: "mention-req-0001",
       text: "@Guest and @Other, thoughts?",
@@ -99,8 +90,6 @@ describe("mention delivery", () => {
   });
 
   it("reconciles the target's durable config before delivering a mention", async () => {
-    // The target's conversation may be staler than its row (e.g. its model
-    // gained vision): the mention must not submit under the stale selection.
     const host = await seedBot("Host");
     const guest = await seedBot("Guest");
     await send(host.id, {
@@ -120,7 +109,7 @@ describe("mention delivery", () => {
       mentions: [host.id, "does-not-exist"],
     });
     expect(res.status).toBe(200);
-    expect(runtime.submit).toHaveBeenCalledTimes(1); // host only
+    expect(runtime.submit).toHaveBeenCalledTimes(1);
     expect(await db.select().from(botMessages)).toHaveLength(0);
   });
 });
@@ -156,9 +145,6 @@ describe("messaging store (issues #13, #15, #16)", () => {
   });
 
   it("answers a bot-to-bot message in a fresh, budgeted conversation, not the target's chat", async () => {
-    // The target's chat history must not ride along with every message
-    // another bot sends it, and a routine messaging a bot must not escape
-    // its own token budget that way.
     await seedBot("Sender", "1");
     const target = await seedBot("Target", "2");
     const store = createBotMessagingStore(runtime);
@@ -186,7 +172,6 @@ describe("messaging store (issues #13, #15, #16)", () => {
       ownConversation: true,
     });
 
-    // A retried delivery of the same request reuses that conversation.
     await db
       .update(botMessages)
       .set({ deliveredAt: null })
@@ -267,7 +252,6 @@ describe("messaging store (issues #13, #15, #16)", () => {
       sourceKey: "sk-turn-5",
     });
     expect(fourth).toMatchObject({ delivered: false, reason: "budget" });
-    // A replay of an already-delivered requestId is free.
     const replay = await store.deliver({
       conversationId: 1,
       toName: "Target 2",
@@ -276,7 +260,6 @@ describe("messaging store (issues #13, #15, #16)", () => {
       sourceKey: "sk-turn-2",
     });
     expect(replay.delivered).toBe(true);
-    // The sender's conversation settling resets the budget.
     const stop = startSettledPipeline(runtime as unknown as AgentRuntime);
     runtime.emitActivity({ busy: false, conversation: 1 });
     stop();
@@ -348,7 +331,6 @@ describe("answering Deliveries (real runtime)", () => {
     await until(async () => !rt.isBusy(guest.ref), "the guest to finish both");
     await deliveries.answer(guest.ref);
     await until(async () => (await ledgerRow("q2"))?.answeredAt != null, "both answers");
-    // The second relay may wait behind the host's reply to the first.
     const relayedTexts = async () =>
       (await userTexts(host.ref)).filter((text) => text.startsWith("**Reply"));
     await until(async () => (await relayedTexts()).length === 2, "both relays to land");
@@ -363,7 +345,6 @@ describe("answering Deliveries (real runtime)", () => {
     const guest = await seedLiveBot("Guest");
     const deliveries = createDeliveries(rt);
     await deliveries.deliver(mention(host, guest.id, "pinned", "before the reset"));
-    // "New chat": the bot moves onto a fresh conversation before the relay ran.
     const fresh = await rt.createConversation({ modelId: TEST_MODEL, systemPrompt: "" });
     await db
       .update(bots)

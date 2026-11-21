@@ -23,11 +23,9 @@ const DATE_PRESETS: { value: JobsDatePreset; label: string }[] = [
 ];
 
 type Props = {
-  /** The jobs list filter (`useJobsFilter()`). */
   filter: JobsFilter;
 };
 
-/** State tabs + search + queue + date-preset filters for the jobs list. */
 export function JobsFilters({ filter }: Props) {
   const { activeSecondaryTab } = filter;
   const availableJobs = useAvailableJobs();
@@ -41,9 +39,6 @@ export function JobsFilters({ filter }: Props) {
           if (tab) filter.setState(tab.value);
         }}
       >
-        {/* These tabs filter one list (there are no tab panels to control),
-            and the overflow menu sits beside the tab list, not inside it:
-            a tablist may only hold tabs. */}
         <div className="bg-muted inline-flex h-9 items-center rounded-xl p-[3px]">
           <TabsList className="h-full bg-transparent p-0">
             {primaryOptions.map((option) => (

@@ -1,9 +1,3 @@
-/**
- * Submit a PR review (issue #345): the comments waiting for GitHub, a
- * summary, and the verdict, posted in one go. On the owner's own PR GitHub
- * allows only a comment; if a Code thread opened the PR, its comments can go
- * to that thread instead, for its agent to act on.
- */
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { SquareCheck, Trash2 } from "lucide-react";
@@ -194,7 +188,6 @@ function SubmitReview({
   );
 }
 
-/** The header's Submit review, with the count of pending comments, and its dialog. */
 export function SubmitReviewButton({
   review,
   github,

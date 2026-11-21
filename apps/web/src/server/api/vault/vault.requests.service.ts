@@ -1,14 +1,3 @@
-/**
- * Credential requests (issue #56): the owner types into a sheet, the server
- * fills the bot's browser, the model never sees it.
- *
- * The submit handler holds the typed values only for the length of the
- * request: it wraps them in `SecretValue`, registers them with the redactor,
- * re-checks that the bot's page is still on the request's origin, fills over
- * CDP, optionally saves a login or card to the vault (never a one-time code
- * or a CVC), audits the keys filled, and settles the request. Nothing typed
- * is stored outside the vault backend.
- */
 import { eq } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import {
@@ -19,7 +8,7 @@ import {
   type CredentialField,
   type CredentialRequest,
 } from "@tiny-agents/agent";
-import type { SecretFillField } from "@tiny-agents/sandbox/browser";
+import { FrameOriginError, type SecretFillField } from "@tiny-agents/sandbox/browser";
 import { logger } from "@groot/core/logger";
 import { db, vaultItems } from "../../db";
 import { getBrowserSessions } from "../bots/browser.sessions";
@@ -38,12 +27,10 @@ import type {
 
 type RequestRuntime = Pick<AgentRuntime, "credentialRequest" | "settleCredentialRequest">;
 
-/** The pending request; 404 once it was answered, cancelled or expired. */
 function pending(taskId: number, runtime: RequestRuntime) {
   return onOwnerWait(() => runtime.credentialRequest(taskId));
 }
 
-/** The sheet's content: metadata only. */
 export async function requestView(
   taskId: number,
   runtime: RequestRuntime = getAgentRuntime(),
@@ -58,6 +45,7 @@ export async function requestView(
     taskId,
     bot: bot ?? null,
     origin: request.origin,
+    frameOrigin: request.frameOrigin ?? null,
     title: request.title,
     purpose: request.purpose,
     fields: request.fields.map(({ ref: _ref, ...field }) => field),
@@ -108,7 +96,6 @@ async function freeHandle(base: string): Promise<string> {
   throw Boom.conflict("No free handle for the saved item");
 }
 
-/** Save what was typed as a LOGIN or CREDIT_CARD (never an OTP or CVC). */
 async function save(
   request: CredentialRequest,
   filled: { field: CredentialField; value: string }[],
@@ -116,7 +103,6 @@ async function save(
   const of = (match: (field: CredentialField) => boolean) =>
     filled.find((f) => match(f.field))?.value;
   const password = of((f) => f.type === "password");
-  // The sign-in's identifier: a username, an email or a mobile number (OTP sign-ins have no password).
   const username = of(
     (f) =>
       (f.type === "email" || f.type === "text") &&
@@ -124,6 +110,7 @@ async function save(
   );
   const number = of((f) => f.type === "card_number");
   const host = new URL(request.origin).host;
+  const origins = request.frameOrigin ? [request.origin, request.frameOrigin] : [request.origin];
   if (password || username) {
     const values = { ...(password ? { password } : {}), ...(username ? { username } : {}) };
     if (request.savedHandle) {
@@ -138,7 +125,7 @@ async function save(
         values,
         policy: {
           handle: await freeHandle(slug(host)),
-          origins: [request.origin],
+          origins,
           hosts: [],
           tools: [],
           bots: null,
@@ -166,7 +153,7 @@ async function save(
         },
         policy: {
           handle: await freeHandle(`card-${slug(host)}`),
-          origins: [request.origin],
+          origins,
           hosts: [],
           tools: [],
           bots: null,
@@ -182,10 +169,6 @@ async function save(
   return undefined;
 }
 
-/**
- * Fill a credential request. Requests a submit is filling right now
- * (`app().submittingRequests`): a second submit of one waits for nothing and is refused.
- */
 export async function submitRequest(
   taskId: number,
   input: { values: Record<string, string>; save: boolean },
@@ -237,13 +220,18 @@ async function fillRequest(
   }));
   let result: { filled: string[] };
   try {
-    // Sign-ins split over pages (Amazon's email, then password) are walked through.
     result = await getBrowserSessions().fillSecret(target, {
       origin: request.origin,
+      ...(request.frameOrigin ? { frameOrigins: [request.frameOrigin] } : {}),
       fields,
       steps: true,
     });
   } catch (error) {
+    if (error instanceof FrameOriginError) {
+      throw Boom.conflict(
+        `The sign-in field is in a frame from ${error.actual}, not on ${request.origin}. Nothing was filled.`,
+      );
+    }
     if (error instanceof VaultTargetMovedError) {
       throw Boom.conflict("The page moved before the fill. Nothing was filled.");
     }
@@ -254,7 +242,6 @@ async function fillRequest(
       "No matching fields were found on the page. The bot may not be on the sign-in form yet: try again in a moment.",
     );
   }
-  // The page is filled: from here the request settles whatever else fails.
   let savedHandle: string | undefined;
   let saveFailed = false;
   if (input.save) {

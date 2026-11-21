@@ -168,7 +168,6 @@ function open(messages: ChatMessage[], busy = false, queued: QueuedMessage[] = [
   botStream("host").send({ type: "snapshot", state: { messages, busy, queued } });
 }
 
-/** Lets the computer status and the panels' effects land. */
 const settle = () => act(async () => new Promise((resolve) => setTimeout(resolve, 20)));
 
 function pin(name?: string) {

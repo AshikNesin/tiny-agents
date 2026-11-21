@@ -1,9 +1,3 @@
-/**
- * The browser's vault tools (issue #56) on real pi-durable turns with a fake
- * page: `browser_fill_secret` binds to the page's origin and reports only
- * the keys filled, and `request_credentials` waits for the owner's sheet,
- * holds no value, and resumes with the outcome.
- */
 import type { Context as PiContext, JsonObject } from "@earendil-works/pi-ai";
 import { until } from "../../fixtures/until";
 import { loaded } from "../../fixtures/loaded-tools";
@@ -43,13 +37,14 @@ const CANARY = "canary-gh-Lr8x";
 function fakePage(start: string) {
   const state = {
     origin: start,
-    /** The page navigates here as the fill starts (a redirect racing the call). */
     movesTo: undefined as string | undefined,
+    framed: {} as Record<string, string>,
     fills: [] as { origin: string; values: Record<string, string> }[],
   };
   const session: BrowserSession = {
     url: () => `${state.origin}/`,
     origin: async () => state.origin,
+    refOrigin: async (ref: string) => state.framed[ref] ?? state.origin,
     fillSecret: async (fill: SecretFill) => {
       if (state.movesTo) state.origin = state.movesTo;
       if (fill.origin !== state.origin) throw new OriginMismatchError(state.origin);
@@ -60,7 +55,6 @@ function fakePage(start: string) {
       return { filled: fill.fields.map((f) => f.key) };
     },
     navigate: async (url) => ({ url, status: 200 }),
-    // The page echoes what was typed, as some do.
     snapshot: async () => `textbox "Password": ${state.fills.at(-1)?.values.password ?? ""}`,
     click: async () => ({ url: state.origin }),
     type: async () => ({ url: state.origin }),
@@ -121,7 +115,6 @@ function loginBroker(): VaultBroker & { uses: VaultUse[] } {
   };
 }
 
-/** Faux model: runs `steps` in order, one tool call per turn, then reports every result. */
 function script(steps: [string, JsonObject][]) {
   return (context: PiContext) => {
     const done = context.messages.filter((m) => m.role === "toolResult").length;
@@ -180,8 +173,6 @@ async function open(
 ) {
   const tracker = new WaitTracker();
   const broker = loginBroker();
-  // The page is already open in the bot's browser: planning a fill never
-  // launches one, so the test opens it the way an earlier navigate would.
   const sessions = createBrowserSessions({ transport: async () => page.session });
   const browser = createBrowserToolkit({ sessions, vault: broker, ownerWaits: tracker });
   const runtime = await openTestRuntime({
@@ -225,7 +216,6 @@ describe("browser_fill_secret", () => {
       tool: "browser_fill_secret",
     });
     expect(text).toContain('"filled":["password"]');
-    // The snapshot echoed the password; the gate scrubbed it.
     expect(text).toContain("[vault]");
     expect(JSON.stringify(reduce(events))).not.toContain(CANARY);
   }, 20_000);
@@ -310,6 +300,48 @@ describe("request_credentials", () => {
       status: "filled",
     });
     await expect(runtime.credentialRequest(waiting.taskId!)).rejects.toThrow(/not waiting/);
+  }, 20_000);
+
+  it("records the frame a sign-in field sits in, for the card to show (#302)", async () => {
+    const page = fakePage("https://www.thehindu.com");
+    page.state.framed = { f1e3: "https://id.tinypass.com" };
+    const framed: JsonObject = {
+      title: "Sign in to The Hindu",
+      purpose: "Read the article",
+      fields: [{ key: "email", label: "Email", type: "email", autocomplete: "email", ref: "f1e3" }],
+    };
+    const { runtime, ref, events } = await open(page, [["request_credentials", framed]]);
+    await runtime.submit(ref, { requestId: "r1", text: "sign in" });
+    const waiting = await until(
+      () =>
+        lastCall(events, "request_credentials")?.status === "awaiting_credentials"
+          ? lastCall(events, "request_credentials")
+          : undefined,
+      "credential request",
+    );
+    const pending = await runtime.credentialRequest(waiting.taskId!);
+    expect(pending.request).toMatchObject({
+      origin: "https://www.thehindu.com",
+      frameOrigin: "https://id.tinypass.com",
+    });
+  }, 20_000);
+
+  it("refuses fields in frames from two different sites (#302)", async () => {
+    const page = fakePage("https://www.thehindu.com");
+    page.state.framed = { f1e3: "https://id.tinypass.com", f2e3: "https://evil.example" };
+    const split: JsonObject = {
+      title: "Sign in",
+      purpose: "Read",
+      fields: [
+        { key: "email", label: "Email", type: "email", autocomplete: "email", ref: "f1e3" },
+        { key: "password", label: "Password", type: "password", ref: "f2e3" },
+      ],
+    };
+    const { runtime, ref, events } = await open(page, [["request_credentials", split]]);
+    await runtime.submit(ref, { requestId: "r1", text: "sign in" });
+    const text = await until(() => result(events), "result");
+    expect(text).toMatch(/frames from more than one site/);
+    expect(runtime.pendingApprovals(ref)).toBe(0);
   }, 20_000);
 
   it("tells the bot which fields the page never showed (a sign-in stopped between steps)", async () => {

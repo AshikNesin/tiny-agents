@@ -24,15 +24,8 @@ import { getContentType } from "./storage.utils";
 import { resolveSqlitePath } from "../database/node";
 import type { Env } from "../env";
 
-/** Default upload root for the Node runtime (git-ignored). */
 export const LOCAL_UPLOADS_ROOT = "./local/uploads";
 
-/**
- * Upload root for the Node entry. `UPLOADS_DIR` wins when set. In production the
- * default is `uploads/` next to the SQLite file (`file:/data/prod.db` →
- * `/data/uploads`), so the volume that keeps the database keeps the files too.
- * Elsewhere the default is LOCAL_UPLOADS_ROOT.
- */
 export function uploadsRoot(
   env: Pick<Env, "NODE_ENV" | "DATABASE_URL"> & { UPLOADS_DIR?: string },
 ): string {
@@ -42,12 +35,6 @@ export function uploadsRoot(
   return file === ":memory:" ? LOCAL_UPLOADS_ROOT : path.join(path.dirname(file), "uploads");
 }
 
-/**
- * Filesystem storage for Node. Objects are plain files under `root`; the
- * content type is derived from the extension. Directories left empty by a
- * delete are pruned so "folders" disappear like they do on object stores.
- * A key that resolves outside `root` is rejected.
- */
 export function localStorage(root: string = LOCAL_UPLOADS_ROOT): StorageAdapter {
   const absoluteRoot = path.resolve(root);
 
@@ -63,7 +50,7 @@ export function localStorage(root: string = LOCAL_UPLOADS_ROOT): StorageAdapter 
     let dir = path.dirname(file);
     while (dir.startsWith(absoluteRoot + path.sep)) {
       try {
-        await rmdir(dir); // ENOTEMPTY / ENOENT both mean "stop here"
+        await rmdir(dir);
       } catch {
         return;
       }
@@ -71,7 +58,6 @@ export function localStorage(root: string = LOCAL_UPLOADS_ROOT): StorageAdapter 
     }
   };
 
-  /** Every file key under `dir`, relative to the root. */
   const walk = async (dir: string): Promise<string[]> => {
     let entries: import("node:fs").Dirent[];
     try {
@@ -105,8 +91,6 @@ export function localStorage(root: string = LOCAL_UPLOADS_ROOT): StorageAdapter 
     async put(key: string, body: StorageBody) {
       const file = resolve(key);
       await mkdir(path.dirname(file), { recursive: true });
-      // write beside the target, then rename over it: an interrupted overwrite
-      // (full disk, crash) leaves the previous object intact
       const temp = `${file}.${randomUUID()}.tmp`;
       try {
         await writeFile(temp, await bodyToBytes(body));
@@ -143,7 +127,6 @@ export function localStorage(root: string = LOCAL_UPLOADS_ROOT): StorageAdapter 
 
     async list(options: ListOptions = {}): Promise<ListResult> {
       const prefix = options.prefix ?? "";
-      // Walk only the deepest directory that fully contains the prefix.
       const dirPart = prefix.slice(0, prefix.lastIndexOf("/") + 1);
       const page = listKeys(await walk(dirPart ? resolve(dirPart) : absoluteRoot), options);
       const objects = await Promise.all(page.keys.map(async (key) => (await headKey(key))!));

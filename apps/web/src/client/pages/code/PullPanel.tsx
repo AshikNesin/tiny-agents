@@ -1,16 +1,4 @@
-/**
- * The Pull request tab of the right panel (issue #297 §7.5), for a thread
- * started in a project. With no open PR it offers Publish (push the branch,
- * open a PR, a draft unless the project says ready) and Link. With one: its number, state, title and branch;
- * the checks (a failing one opens to its log excerpt, with Fix CI); Merge;
- * the Draft, Auto-fix and Auto-merge switches (and a spend limit where the
- * harness reports cost); the pass history; every comment as All, Humans or
- * Bots; the description (markdown, with Edit while it is open); and
- * earlier PRs. Opening the tab reconciles with GitHub, and so does each
- * re-read while it is on screen (every 15 seconds), so a project without
- * the App's webhooks (`gh` or a token) keeps up as fast as one with them.
- */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import {
   ExternalLink,
   GitMerge,
@@ -41,12 +29,11 @@ import { Switch } from "../../components/ui/switch";
 import { errorMessage } from "../../lib/errors";
 import { markdownComponents } from "../../lib/markdown";
 import { projectsApi } from "../../lib/code/projects";
+import { useRefreshOn, useResource } from "../../queries/resource";
 import { useThreadPulls } from "../../lib/code/use-thread-pulls";
 import type { MergeMethod, PullView, ThreadPullsView } from "../../../shared/api/code";
 import { PullChecks } from "./PullChecks";
 import { PullComments } from "./PullComments";
-
-/** How often the tab re-reads (and so reconciles) its PR while it is on screen. */
 
 const LOOP_LABEL: Record<PullView["loop"]["status"], string> = {
   watching: "Watching",
@@ -69,7 +56,6 @@ const OUTCOME_LABEL: Record<string, string> = {
   send_failed: "Could not start",
 };
 
-/** The unresolved review comments as one composer message. */
 function commentsText(view: PullView): string {
   const threads = (view.snapshot?.threads ?? []).filter(
     (t) => !t.resolved && !view.ignored.includes(t.id),
@@ -90,11 +76,8 @@ export function PullPanel({
   onReview,
 }: {
   threadId: string;
-  /** Changes when the thread's turn ends, to re-read. */
   refreshKey: unknown;
-  /** Put text in the composer. */
   onAttach(text: string): void;
-  /** Open this PR in review mode (issue #345). */
   onReview?: (url: string) => Promise<void>;
 }) {
   const { view, error, setView, reload } = useThreadPulls(threadId, {
@@ -121,7 +104,6 @@ export function PullPanel({
 
   const pr = view?.active ?? null;
   const snap = pr?.snapshot ?? null;
-  // The thread's last PR merged and nothing new to publish: that is the news, not Publish.
   const merged = !pr && view?.earlier[0]?.state === "merged" ? view.earlier[0] : null;
   const canPublish = !merged || (view?.ahead ?? 0) > 0;
   const earlier = merged ? (view?.earlier.slice(1) ?? []) : (view?.earlier ?? []);
@@ -331,10 +313,6 @@ export function PullPanel({
   );
 }
 
-/**
- * Nothing to publish yet, though the agent changed files: they are not
- * committed (Publish pushes commits only). Says so, with one way out.
- */
 function Uncommitted({
   threadId,
   refreshKey,
@@ -344,17 +322,13 @@ function Uncommitted({
   refreshKey: unknown;
   onAsk(): void;
 }) {
-  const [count, setCount] = useState(0);
-  useEffect(() => {
-    let cancelled = false;
-    projectsApi
-      .reviewFiles(threadId)
-      .then((files) => !cancelled && setCount(files.length))
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [threadId, refreshKey]);
+  const files = useResource(
+    ["code", "uncommitted", threadId],
+    () => projectsApi.reviewFiles(threadId),
+    "",
+  );
+  useRefreshOn(refreshKey, files.refresh);
+  const count = files.data?.length ?? 0;
   if (count === 0) return null;
   return (
     <div className="border-border flex items-center gap-3 rounded-xl border px-3 py-2.5">
@@ -416,7 +390,6 @@ function ActivePull({
   onAutofix(enabled: boolean): void;
   onFix(): void;
   onMerge(method: MergeMethod): void;
-  /** Draft ↔ ready for review (a draft cannot be merged). */
   onDraft(draft: boolean): void;
   onAttachAll(): void;
   onAttach(text: string): void;
@@ -429,7 +402,6 @@ function ActivePull({
   const failing = (snap?.checks ?? []).some((c) => c.state === "failure");
   const open = (snap?.threads ?? []).filter((t) => !t.resolved);
   const methods = snap?.mergeMethods ?? [];
-  // GitHub may still allow it (a check that is not required), but merging red is rarely meant.
   const conflicting = snap?.mergeable === "conflicting";
   const mergeBlocked =
     failing && conflicting
@@ -552,7 +524,6 @@ function ActivePull({
             data-testid="code-automerge"
           />
         </label>
-        {/* A limit only means something where the harness reports cost, and it limits Auto-fix. */}
         {spend.usd !== null && pr.autofix && (
           <form
             className="flex items-center gap-2 px-3 py-2"
@@ -610,19 +581,13 @@ function ActivePull({
         </section>
       )}
 
-      {/* Last: a PR's comments run long (bots), so the switches above stay in reach. */}
       <PullComments pr={pr} onAttach={onAttach} />
     </>
   );
 }
 
-/** HTML comments (a PR template's hints) are hidden on GitHub too. */
 const HTML_COMMENT = /<!--[\s\S]*?-->/g;
 
-/**
- * The pull request's description as GitHub shows it (markdown), and for an
- * open PR an Edit that saves it back to GitHub.
- */
 function Description({
   threadId,
   body,
@@ -727,7 +692,6 @@ function RefreshButton({ onClick }: { onClick(): void }) {
   );
 }
 
-/** Review the thread's own PR in review mode (issue #345), with a fresh assistant. */
 function ReviewButton({ onOpen }: { onOpen(): Promise<void> }) {
   const [opening, setOpening] = useState(false);
   return (

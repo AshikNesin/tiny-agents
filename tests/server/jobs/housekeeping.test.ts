@@ -16,8 +16,6 @@ import {
   runTick,
 } from "@groot/jobs/server";
 
-// Fresh runner state per test: no handlers, no housekeeping schedule left by
-// an earlier test.
 beforeEach(() => jobRunner.reset());
 
 describe("housekeeping", () => {
@@ -55,12 +53,10 @@ describe("housekeeping schedule", () => {
   const INTERVAL = 10 * MINUTE;
   const LAST_RUN_KEY = "jobs:housekeeping:lastRunAt";
 
-  /** An entry that will have expired by the next `at()`. */
   async function plantExpiringKv(): Promise<void> {
     await kv.set("hk-gate", 1, 1);
   }
 
-  /** True when the last tick swept the planted entry (nothing expired is left to purge). */
   async function swept(): Promise<boolean> {
     return (await purgeExpiredKv()) === 0;
   }
@@ -79,7 +75,6 @@ describe("housekeeping schedule", () => {
     await runTick();
     expect(await swept()).toBe(false);
 
-    // A second process (another Workers isolate) swept at minute 10.
     at(10);
     expect(await kv.claim(LAST_RUN_KEY, INTERVAL)).toBe(true);
 

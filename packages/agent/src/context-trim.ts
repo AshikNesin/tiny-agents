@@ -1,45 +1,14 @@
-/**
- * Context trim: what each model request leaves out of the stored
- * transcript, so a long conversation does not pay for the same bytes on
- * every request. The transcript itself is untouched (the chat still shows
- * every screenshot); only the copy sent to the model is trimmed.
- *
- * Old screenshots: a browser or computer session takes a screenshot on
- * almost every step, and each one would otherwise ride along on every later
- * request until compaction. Only the newest `KEEP_IMAGES` tool-result images
- * are sent; older ones become a one-line note. Images are dropped oldest
- * first in steps of `DROP_STEP`, so the request prefix changes once every
- * few screenshots instead of every step, and the provider's prompt cache
- * keeps working between drops. The approach of Anthropic's computer-use
- * reference loop (`only_n_most_recent_images`). Images the owner attached
- * to their own messages are never dropped.
- *
- * Old page reads: a browser snapshot is up to 20k characters (about 5k
- * tokens), and the agent takes one after nearly every action. Once the page
- * has been read again, the old one's refs are stale and its text rode along
- * on every request until compaction: 20 steps of browsing re-sent about
- * 100k tokens a request. Browser actions return the page after them too.
- * Only the newest `KEEP_PAGE_READS` long reads are sent; older ones become a
- * one-line note (after the action's own first line), dropped in steps like
- * images.
- */
 import type { ImageContent, Message, TextContent } from "@earendil-works/pi-ai";
 import { defineExtension, GenerationTask, hook, type Extension } from "@earendil-works/pi-durable";
 
-/** Tool-result images every request keeps, newest first. */
 const KEEP_IMAGES = 3;
-/** Older images are dropped in steps of this many, so the prefix stays put between drops. */
 const DROP_STEP = 10;
 
-/** Long page reads (`PAGE_READ_TOOLS`) every request keeps, newest first. */
 const KEEP_PAGE_READS = 2;
-/** Older page reads are dropped in steps of this many. */
 const PAGE_READ_STEP = 5;
-/** Tools whose result is a read of the page as it was, superseded by the next read. */
 const PAGE_READ_TOOLS = new Set([
   "browser_snapshot",
   "browser_read_text",
-  // Actions return the page after them (its first part, or what changed).
   "browser_navigate",
   "browser_back",
   "browser_click",
@@ -48,12 +17,9 @@ const PAGE_READ_TOOLS = new Set([
   "browser_wait_for",
   "browser_tabs",
 ]);
-/** Tools whose whole result is the page, with no line about an action to keep. */
 const SNAPSHOT_TOOLS = new Set(["browser_snapshot", "browser_read_text"]);
-/** A read shorter than this costs less than the cache miss its drop would cause. */
 const LONG_READ_CHARS = 2_000;
 
-/** The extension name conversations select it by. */
 export const CONTEXT_TRIM = "context-trim";
 
 const DROPPED_NOTE: TextContent = {
@@ -61,10 +27,6 @@ const DROPPED_NOTE: TextContent = {
   text: "[Older screenshot left out to save context. Take a new one if you need to see the screen.]",
 };
 
-/**
- * The request's messages with all but the newest tool-result images
- * replaced by a note. Returns the input itself when nothing is dropped.
- */
 function trimOldImages(
   messages: readonly Message[],
   keep: number = KEEP_IMAGES,
@@ -103,11 +65,6 @@ const isLongPageRead = (message: Message): boolean =>
   message.content.reduce((n, block) => n + (block.type === "text" ? block.text.length : 0), 0) >=
     LONG_READ_CHARS;
 
-/**
- * The request's messages with all but the newest long page reads replaced
- * by a note, dropped oldest first in steps of `step` so the prompt prefix
- * stays put between drops. Returns the input itself when nothing is dropped.
- */
 function trimOldPageReads(
   messages: readonly Message[],
   keep: number = KEEP_PAGE_READS,
@@ -120,7 +77,6 @@ function trimOldPageReads(
   return messages.map((message) => {
     if (drop === 0 || message.role !== "toolResult" || !isLongPageRead(message)) return message;
     drop--;
-    // An action's first line (what it did, where it landed) stays; its page goes.
     const text = message.content.find((block): block is TextContent => block.type === "text");
     const first = text?.text.split("\n")[0];
     const kept: TextContent[] =
@@ -129,7 +85,6 @@ function trimOldPageReads(
   });
 }
 
-/** The always-on extension that applies the trim before every model request. */
 export function createContextTrimExtension(): Extension {
   return defineExtension({
     name: CONTEXT_TRIM,

@@ -1,9 +1,3 @@
-/**
- * Characterization of behavior-register row C20: the `sandbox` toolkit
- * offers its tools even with no sandbox configured, contrary to ADR 0004.
- * Preserve: this pins today's behavior, quirk included; change it only with
- * a signed-off register row.
- */
 import type { Context as PiContext } from "@earendil-works/pi-ai";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import type { AgentRuntime } from "../../../packages/agent/src/runtime";
@@ -31,7 +25,6 @@ function toolResultText(context: PiContext): string | undefined {
   return last.content.map((b) => (b.type === "text" ? b.text : "")).join("");
 }
 
-/** The tool set the model sees: pi-durable announces it in system messages. */
 function toolsOffered(context: PiContext): string[] {
   const tools = new Set<string>();
   for (const message of context.messages) {
@@ -44,7 +37,6 @@ function toolsOffered(context: PiContext): string[] {
 
 describe("C20: the sandbox toolkit with no sandbox", () => {
   it("offers run_command, read_file and write_file to the model, which then fail", async () => {
-    // The app's own wiring with no SANDBOX_HOST: no connection at all.
     const connection = sandboxConnection(appEnv({}));
     expect(connection).toBeUndefined();
     const sandbox = createSandboxToolkit({ connection });
@@ -53,7 +45,6 @@ describe("C20: the sandbox toolkit with no sandbox", () => {
     const offered: string[][] = [];
     const runtime = await openTestRuntime({
       storePath: ":memory:",
-      // ADR 0004's rule, as web follows it: unconfigured, it offers nothing.
       capabilities: [sandbox, createWebToolkit({})],
       respondWith: (context) => {
         offered.push(toolsOffered(context));
@@ -78,11 +69,9 @@ describe("C20: the sandbox toolkit with no sandbox", () => {
       return !state.busy && last?.text.startsWith("RESULT:") ? last.text : undefined;
     }, "the reply after read_file");
 
-    // The quirk: every sandbox tool reaches the model although nothing backs it.
     expect(offered[0]).toEqual(expect.arrayContaining(["read_file", "run_command", "write_file"]));
     expect(offered[0]).not.toContain("web_search");
     expect(offered[0]).not.toContain("web_fetch");
-    // Calling one fails only at run time.
     expect(reply).toBe("RESULT:Sandbox is not configured: set SANDBOX_HOST on the server.");
   }, 15_000);
 });

@@ -1,12 +1,3 @@
-/**
- * Start a thread (issue #143, ADR 0011): one composer for the task, with
- * the harness's model, reasoning and permission chips inside it and, above
- * it, where it runs: a project (its own worktree and branch), or a working
- * directory (searchable: recent ones, a typed path, a folder browser,
- * validated by the harness) with an optional fresh git worktree, and the
- * harness when there are several. A sidebar group's New thread opens it
- * with its project (`?project=`) or folder (`?cwd=`) picked.
- */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
@@ -37,6 +28,7 @@ import {
   searchSelectTriggerClass,
   type SearchSelectOption,
 } from "../../components/ui/search-select";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Spinner } from "../../components/ui/spinner";
 import {
   codeApi,
@@ -49,6 +41,7 @@ import {
   type ThreadSummary,
 } from "../../lib/code/api";
 import type { ProjectView } from "../../../shared/api/code";
+import { RESOURCE_QUERY } from "../../queries/resource";
 import { Composer } from "./Composer";
 import {
   DEFAULT,
@@ -72,16 +65,12 @@ function read(name: string, fallback = ""): string {
   }
 }
 
-/** Remembered per browser: the last harness, and per harness the directory, model and effort. */
 function save(name: string, value: string) {
   try {
     window.localStorage.setItem(name, value);
-  } catch {
-    // not remembered in private mode
-  }
+  } catch {}
 }
 
-/** Shelley's settings from before the harness layer carry over once. */
 function readLegacy(harness: string, what: "cwd" | "model" | "effort"): string | undefined {
   if (harness !== "shelley") return undefined;
   const legacy = { cwd: "cwd", model: "model", effort: "thinking" }[what];
@@ -105,19 +94,21 @@ function DirectoryBrowser({
   onPick(path: string): void;
   onOpenChange(open: boolean): void;
 }) {
-  const [listing, setListing] = useState<DirectoryListing | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const go = (path?: string) => {
-    setError(null);
-    codeApi
-      .directories(harness.id, path)
-      .then(setListing)
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
-  };
-  useEffect(() => {
+  const [path, go] = useState<string | undefined>(() => start || undefined);
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
     if (open) go(start || undefined);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload only when opened
-  }, [open]);
+  }
+  const read = useQuery({
+    queryKey: ["code", "directories", harness.id, path],
+    queryFn: () => codeApi.directories(harness.id, path),
+    enabled: open,
+    placeholderData: keepPreviousData,
+    ...RESOURCE_QUERY,
+  });
+  const listing: DirectoryListing | null = read.data ?? null;
+  const error = read.error ? read.error.message : null;
   const dirs = (listing?.entries ?? []).filter((e) => e.isDir && !e.name.startsWith("."));
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -188,7 +179,6 @@ function DirectoryBrowser({
   );
 }
 
-/** "now", "4m", "5h", "3d" — how long ago, compactly. */
 export function shortAgo(iso: string): string {
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return "";
@@ -203,7 +193,6 @@ export function shortAgo(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-/** Which harness gets the new thread: the last one used, else the first. */
 function initialHarness(harnesses: HarnessInfo[]): string {
   const last = read(HARNESS_KEY);
   return harnesses.find((h) => h.id === last)?.id ?? harnesses[0]?.id ?? "";
@@ -216,16 +205,12 @@ export function NewConversation({
 }: {
   rows: ThreadSummary[];
   harnesses: HarnessInfo[];
-  /** The owner's projects (null: none to offer, as for a guest). */
   projects?: ProjectView[] | null;
 }) {
   const navigate = useNavigate();
-  // A sidebar group's New thread links here with its project or folder; the
-  // page remounts per link (CodePage keys it by the query), so this is read once.
   const [params] = useSearchParams();
   const linkProject = params.get("project");
   const [linkCwd] = useState(() => params.get("cwd"));
-  // The first harness effect starts in the link's folder; later ones in the remembered one.
   const linkCwdUsed = useRef(false);
   const [harnessId, setHarnessId] = useState(() => {
     const preferred = projects?.find((p) => p.id === linkProject)?.defaultInstanceId;
@@ -254,7 +239,6 @@ export function NewConversation({
   const [permission, setPermission] = useState<PermissionMode | null>(null);
   const [browsing, setBrowsing] = useState(false);
 
-  // Each harness remembers its own directory, model and effort.
   useEffect(() => {
     const remembered = read(key(harness.id, "cwd"), readLegacy(harness.id, "cwd") ?? "");
     setCwd(!linkCwdUsed.current && linkCwd ? linkCwd : remembered);
@@ -276,7 +260,6 @@ export function NewConversation({
       .catch(() => setModels([]));
   }, [harness, linkCwd]);
 
-  // Recent directories of this harness, most recent first: one click to reuse.
   const recent = useMemo(() => {
     const seen = new Set<string>();
     const list: string[] = [];
@@ -291,7 +274,6 @@ export function NewConversation({
     return list;
   }, [rows, harness.id]);
 
-  // Without worktrees, two threads in one directory share its files: say so.
   const sharing = useMemo(
     () =>
       cwd.trim() && !caps.workspace.worktrees
@@ -351,8 +333,6 @@ export function NewConversation({
     }
     save(HARNESS_KEY, harness.id);
     if (cwd.trim()) save(key(harness.id, "cwd"), cwd.trim());
-    save(key(harness.id, "model"), model);
-    save(key(harness.id, "effort"), effort);
     const { threadId } = await codeApi.create({
       instanceId: harness.id,
       message,
@@ -363,6 +343,15 @@ export function NewConversation({
       ...(attachments.length ? { attachments } : {}),
     });
     navigate(threadPath(threadId));
+  };
+
+  const pickModel = (value: string) => {
+    setModel(value);
+    save(key(harness.id, "model"), value);
+  };
+  const pickEffort = (value: string) => {
+    setEffort(value);
+    save(key(harness.id, "effort"), value);
   };
 
   const selectedModel = models.find((m) => m.id === model) ?? models.find((m) => m.isDefault);
@@ -538,12 +527,12 @@ export function NewConversation({
             submitLabel="Start"
             controls={
               <>
-                <ModelPicker models={models} value={model} onChange={setModel} withDefault />
+                <ModelPicker models={models} value={model} onChange={pickModel} withDefault />
                 {selectedModel?.supportsReasoning !== false && (
                   <ReasoningPicker
                     levels={caps.settings.effortLevels}
                     value={effort}
-                    onChange={setEffort}
+                    onChange={pickEffort}
                   />
                 )}
                 {permission && (

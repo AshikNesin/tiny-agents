@@ -28,7 +28,6 @@ function toolsEmptyDescription(connection: Connection): string {
   }
 }
 
-/** The server's tools, each a link to its page and a switch for every bot. */
 export function ConnectionToolsSection({
   id,
   connection,

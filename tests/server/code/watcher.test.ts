@@ -1,8 +1,3 @@
-/**
- * Turn ends for any harness (issue #143, ADR 0011): a bot's hand-off gets
- * its finish once — live, or reconciled after a reconnect — and followed
- * threads push only when nobody is looking.
- */
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import type { Notification } from "@groot/core/notification/notifier";
 import { db, bots } from "../../../apps/web/src/server/db";
@@ -75,7 +70,7 @@ describe("Code watcher", () => {
       failed: false,
       cursor: 1,
     });
-    hub.start(); // connected while still working: nothing to reconcile
+    hub.start();
     await settle();
     harness.outcomes.set("tH", {
       working: false,
@@ -88,7 +83,6 @@ describe("Code watcher", () => {
     });
     harness.endTurn("tH");
     harness.endTurn("tH");
-    // The event carries the outcome: the watcher does not read the thread again.
     harness.outcomes.set("tH", {
       working: true,
       title: "fix-login",
@@ -108,7 +102,6 @@ describe("Code watcher", () => {
     expect(delivered[0]!.text).toContain("(/code/fake%3AtH)");
     expect(delivered[0]!.text).toContain("All tests pass.");
     expect(await runningHandoffs()).toHaveLength(0);
-    // Handed off here (followed? no) — hand-offs alone do not push.
     expect(pushed).toHaveLength(0);
   });
 
@@ -174,7 +167,7 @@ describe("Code watcher", () => {
     hub.start();
     const viewing = hub.watch("fake:tF", () => {});
     harness.endTurn("tF");
-    harness.endTurn("tX"); // not followed
+    harness.endTurn("tX");
     await settle();
     expect(pushed).toHaveLength(0);
     viewing();

@@ -1,7 +1,3 @@
-/**
- * Golden flows: bots and their chats, as the owner sees them over HTTP and
- * the chat stream. See recorder.ts.
- */
 import { afterEach, beforeEach, describe } from "vite-plus/test";
 import { createTestApp } from "../helpers";
 import { botChats, botMessages, bots, promptRevisions } from "../../../apps/web/src/server/db";
@@ -21,8 +17,6 @@ const app = createTestApp();
 let token = "";
 let stopSettled = () => {};
 
-// Each flow starts as if it ran first: a new database copy and runtime, so
-// the ids it records do not depend on which flows ran before it.
 beforeEach(async () => {
   await useFreshTestDatabase();
   token = await authToken("golden-chats@example.com");
@@ -38,7 +32,6 @@ afterEach(async () => {
 const setup = { app, token: () => token };
 const BOT = { description: "Says it back", systemPrompt: "Be brief.", modelId: TEST_MODEL };
 
-/** Until the sidebar shows the bot idle again with a preview: the turn settled. */
 async function settled(r: Recorder, botId: string, preview: string) {
   await until(async () => {
     // oxlint-disable-next-line typescript/no-explicit-any -- list rows

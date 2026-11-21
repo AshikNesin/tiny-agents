@@ -1,6 +1,3 @@
-// Demo-only: wraps pi-ai's faux provider so the dev server's TINY_AGENTS_FAUX
-// runtime answers with scripted, realistic replies (and real tool calls)
-// instead of echoes, under real gateway catalog model names.
 import { execSync } from "node:child_process";
 import * as faux from "@earendil-works/pi-ai/providers/faux";
 
@@ -15,7 +12,6 @@ const DEMO_MODELS = [
   { id: "claude-haiku-5-5", name: "Claude Haiku 5.5", reasoning: true, contextWindow: 200_000 },
 ];
 
-/** Next Friday as YYYY-MM-DD (the flight search date). */
 export function fridayDate() {
   const d = new Date();
   d.setDate(d.getDate() + ((5 - d.getDay() + 7) % 7 || 7));
@@ -24,11 +20,6 @@ export function fridayDate() {
 export const FLIGHTS_URL = () =>
   `https://www.google.com/travel/flights?q=${encodeURIComponent(`Flights to BLR from MAA on ${fridayDate()} one way`)}&curr=INR&hl=en&gl=IN`;
 
-/**
- * The flights on the bot's live Google Flights tab, read from the result rows'
- * accessible labels over the VM Chrome's DevTools port: what the bot's
- * browser shows, so the reply quotes real fares, not invented ones.
- */
 async function liveFlights() {
   const port = execSync(
     "ps -u exedev -o args= | grep -o -- '--remote-debugging-port=[0-9]*' | head -1 | cut -d= -f2",
@@ -468,8 +459,6 @@ function director(context) {
   const messages = context.messages;
   const lastUser = messages.findLastIndex((m) => m.role === "user");
   const userText = textOf(messages[lastUser]);
-  // The scene's turn starts at its triggering message; later messages in the
-  // same turn (steers, tool results) advance it.
   const sceneIndex = messages.findLastIndex(
     (m) => m.role === "user" && SCENES.some((s) => s.match.test(textOf(m))),
   );
@@ -478,7 +467,6 @@ function director(context) {
   if (!scene) return fallback(userText);
   const results = messages.slice(sceneIndex + 1).filter((m) => m.role === "assistant").length;
   const step = scene.steps[Math.min(results, scene.steps.length - 1)];
-  // A finished scene answered once more (a new, unrelated message) falls back.
   if (results >= scene.steps.length && lastUser > sceneIndex) return fallback(userText);
   return step();
 }

@@ -15,11 +15,6 @@ const repoRoot = process.cwd();
 
 export type ScriptRun = { status: number | null; stdout: string; stderr: string };
 
-/**
- * Run a repo script with tsx from the repo root, without blocking the worker:
- * these suites run their cases at once (`describe.concurrent`), each in its
- * own copy of the repo.
- */
 export function runTsxScript(script: string, args: string[], timeout: number): Promise<ScriptRun> {
   return new Promise((resolve) => {
     const child = spawn("pnpm", ["exec", "tsx", script, ...args], { cwd: repoRoot, timeout });
@@ -31,7 +26,6 @@ export function runTsxScript(script: string, args: string[], timeout: number): P
   });
 }
 
-/** Run `use` on a scratch copy of the repo's sources, removed once `use` settles. */
 export async function withRepoCopy<T>(use: (root: string) => T | Promise<T>): Promise<T> {
   const root = mkdtempSync(path.join(tmpdir(), "repo-copy-"));
   try {

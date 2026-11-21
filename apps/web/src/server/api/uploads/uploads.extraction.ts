@@ -1,16 +1,3 @@
-/**
- * An upload's extraction (issue #58), from the moment its bytes are sniffed
- * to the text a bot reads. This module writes every move of the extraction
- * machine (`shared/machines/extraction.ts`, which draws the graph); a ready
- * row's extract.json is stored next to the original, and a row deleted
- * while its job runs keeps nothing. Each write is guarded by the states the
- * machine allows it from, so a stale worker never settles a row twice.
- *
- * Extraction runs in a worker (`uploads.extract-runner.ts`), two at a time,
- * and the result is stored as `chat/<id>/extract.json` while the row records
- * status and metadata. A send that needs the text waits on the job itself,
- * not on the table; rows still pending at boot are picked up by the sweep.
- */
 import { and, eq, inArray } from "drizzle-orm";
 import { storageService } from "@groot/core/storage";
 import { logger } from "@groot/core/logger";
@@ -29,7 +16,6 @@ export const extractKey = (uploadId: string) => `chat/${uploadId}/extract.json`;
 type UploadRow = Upload;
 
 interface Job {
-  /** The kind the upload was sniffed as, when the caller already knows it. */
   kind?: ExtractKind;
   done: Promise<void>;
   settle: () => void;
@@ -37,29 +23,20 @@ interface Job {
 
 let runner: ExtractRunner = defaultRunner;
 const queue: string[] = [];
-/** Queued and running jobs by upload id. */
 const jobs = new Map<string, Job>();
-/** Uploads deleted while their job was queued or running: the job writes nothing. */
 const cancelled = new Set<string>();
 let active = 0;
 let idle: Promise<void> = Promise.resolve();
 let markIdle: (() => void) | undefined;
 
-/** Tests: run extraction with a substitute (e.g. one that never finishes). */
 export function setExtractRunnerForTests(next: ExtractRunner | undefined): void {
   runner = next ?? defaultRunner;
 }
 
-/** Resolves once the queue has drained (tests and the boot sweep). */
 export function extractionIdle(): Promise<void> {
   return idle;
 }
 
-/**
- * The extraction columns a new upload row starts with: images have none;
- * a type nothing can read is settled now, with the reason; everything else
- * is pending and extracts in the background once the row exists.
- */
 export async function initialExtraction(
   sniffed: SniffResult | undefined,
   name: string,
@@ -77,7 +54,6 @@ export async function initialExtraction(
   return { extractStatus: "pending" };
 }
 
-/** A row just inserted: queue its extraction if it is pending. */
 export function startExtraction(
   row: Pick<UploadRow, "id" | "kind" | "extractStatus">,
   kind?: ExtractKind,
@@ -85,7 +61,6 @@ export function startExtraction(
   if (row.kind === "file" && row.extractStatus === "pending") void queueExtraction(row.id, kind);
 }
 
-/** Uploads from before extraction existed are queued the first time anyone asks. */
 export async function ensureExtracting<T extends UploadRow>(row: T): Promise<T> {
   if (row.kind !== "file" || row.extractStatus !== "none") return row;
   await db
@@ -101,11 +76,6 @@ export async function ensureExtracting<T extends UploadRow>(row: T): Promise<T> 
   return { ...row, extractStatus: "pending" };
 }
 
-/**
- * The rows as they stand once their extractions have settled, or after
- * `waitMs` for those still running: a send inlines small files that finish
- * in time and leaves the rest to the tools.
- */
 export async function waitUntilSettled(rows: UploadRow[], waitMs: number): Promise<UploadRow[]> {
   const pending = rows.filter((row) => row.kind === "file" && row.extractStatus === "pending");
   if (pending.length === 0) return rows;
@@ -124,11 +94,6 @@ export async function waitUntilSettled(rows: UploadRow[], waitMs: number): Promi
   return rows.map((row) => byId.get(row.id) ?? row);
 }
 
-/**
- * The upload is being deleted: a queued job is dropped, a running one
- * writes nothing more (and removes what it wrote). The row and its bytes
- * are the caller's to delete.
- */
 export function cancelExtraction(uploadId: string): void {
   const job = jobs.get(uploadId);
   if (!job) return;
@@ -140,7 +105,6 @@ export function cancelExtraction(uploadId: string): void {
   }
 }
 
-/** Queue an extraction (idempotent); resolves when its job has settled. */
 export function queueExtraction(uploadId: string, kind?: ExtractKind): Promise<void> {
   const existing = jobs.get(uploadId);
   if (existing) return existing.done;
@@ -228,7 +192,6 @@ async function extractOne(uploadId: string, kindHint: ExtractKind | undefined): 
     extractError: null,
     extractMeta: JSON.stringify(result.meta),
   });
-  // Sizes and counts only: never content.
   logger.info(
     {
       uploadId,
@@ -245,7 +208,6 @@ async function extractOne(uploadId: string, kindHint: ExtractKind | undefined): 
   );
 }
 
-/** Record a job's outcome. A row deleted meanwhile keeps nothing: the bytes written for it go too. */
 async function finish(
   uploadId: string,
   data: {
@@ -272,7 +234,6 @@ async function finish(
   }
 }
 
-/** Boot: rows left pending by a restart are extracted again. */
 export async function extractionSweep(): Promise<number> {
   const rows = await db
     .select({ id: uploads.id })
@@ -284,7 +245,6 @@ export async function extractionSweep(): Promise<number> {
 
 const cache = new Map<string, AttachmentContent>();
 
-/** The stored extraction of a ready upload (a small LRU in front of storage). */
 export async function loadContent(uploadId: string): Promise<AttachmentContent | undefined> {
   const hit = cache.get(uploadId);
   if (hit) {

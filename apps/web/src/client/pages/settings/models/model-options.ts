@@ -1,7 +1,6 @@
 import type { Account } from "../../../../shared/api/models";
 import type { ModelPickerOption } from "../../../components/ModelPicker";
 
-/** Every model the owner could pick, grouped by account. */
 export function modelOptions(
   accounts: Account[],
   type: "chat" | "classifier" = "chat",

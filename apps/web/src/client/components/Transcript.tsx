@@ -1,19 +1,3 @@
-/**
- * A bot conversation's transcript, for the live chat and for a Past chat:
- * messages and routine results on one timeline with day dividers, older
- * pages loading as the owner scrolls to the top (the view staying where it
- * was), and the cards acting through the `OwnerActions` given (none in a
- * Past chat, whose cards then render without actions).
- *
- * The transcript is fed a timeline (lib/chat-timeline.ts: the messages
- * loaded so far and the routine cards, plus the live chat's Echoes) and a
- * page source: whether older messages exist and how to load the page
- * above. Both come from the chat session's view, through
- * `ChatSessionTranscript`, which sets the rest by the session's mode.
- *
- * It must render inside a `MessageScrollerProvider` (the pane drives the
- * scroller too: send → scroll to the end).
- */
 import {
   Fragment,
   useEffect,
@@ -36,47 +20,28 @@ import {
   MessageScrollerViewport,
 } from "./ui/message-scroller";
 
-/** A transcript's pages: whether older ones exist, and how to load the page above. */
 export interface TranscriptPages {
-  /** Older messages exist above the oldest loaded one. */
   hasMore: boolean;
-  /** The page above is being fetched. */
   loadingOlder: boolean;
-  /** Fetch the page above the oldest loaded message. */
   loadOlder: () => unknown;
 }
 
 export interface TranscriptProps {
   botName: string;
-  /** What to show, in order: messages, routine cards and Echoes. */
   timeline: TimelineItem[];
   pages: TranscriptPages;
-  /** What the cards act through; leave out for a read-only transcript (a Past chat). */
   actions?: OwnerActions;
-  /** The message the "New messages" divider goes above. */
   unreadDividerId?: string | null;
-  /** Whether message `index` is a scroll anchor (the live chat opens on the newest read one). */
   scrollAnchor?: (index: number) => boolean;
-  /** Rendered instead of the timeline when there is nothing to show. */
   empty?: ReactNode;
-  /** Rows after the timeline (the typing indicator). */
   tail?: ReactNode;
   contentTestId?: string;
 }
 
-/**
- * Older pages load when the top of the transcript is in view after the
- * owner's own scrolling (issue #92): the scroller's jump to the latest
- * message on open must not fetch a page nobody asked for. What was on
- * screen stays where it was once the page lands.
- */
 function useOlderPages(pages: TranscriptPages, timeline: TimelineItem[]) {
   const sentinel = useRef<HTMLDivElement>(null);
   const keepFromBottom = useRef<{ el: HTMLElement; distance: number } | null>(null);
-  // Set at the call, before the source's own flag re-renders: one fetch at a time.
   const requested = useRef(false);
-  // The scroll listener reads the pages as they are now, not as they were
-  // when it was attached.
   const isLoadingOlder = useEffectEvent(() => pages.loadingOlder);
   const loadOlder = useEffectEvent(() => pages.loadOlder());
   const { hasMore, loadingOlder } = pages;
@@ -174,7 +139,6 @@ export function Transcript({
                 <DayDivider at={item.at} />
               );
               if (item.kind === "echo") {
-                // An owner send not yet confirmed: drawn as the bubble it will become.
                 const { echo } = item;
                 return (
                   <Fragment key={echo.requestId}>

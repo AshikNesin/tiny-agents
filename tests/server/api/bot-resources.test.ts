@@ -1,10 +1,3 @@
-/**
- * BOT_RESOURCES (bot-resources.ts) is the one list of what a bot owns. These
- * tests fail when something holding bot ids is missing from it (a schema
- * column, a `…ForBot` key function), and delete a bot that owns one of
- * every released and retained kind through the real route to see each go,
- * or stay, as its entry says.
- */
 import {
   existsSync,
   mkdirSync,
@@ -69,7 +62,6 @@ import {
 
 const RESOURCES = "BOT_RESOURCES (apps/web/src/server/api/bots/bot-resources.ts)";
 const BOT_ID_COLUMN = /(^|_)bots?_(id|json)$/;
-// Holds only ids of bots already deleted, so no entry can claim it.
 const OWED_RELEASES = "bot_releases.bot_id";
 
 type Kind = keyof typeof BOT_RESOURCES;
@@ -421,7 +413,6 @@ describe("deleting a bot", () => {
     return checks;
   }
 
-  // tests/ is outside every typecheck program, so the Record type alone would not fail CI.
   it("has a seed for every released and retained kind", () => {
     const missing = entries
       .filter(([kind, entry]) => entry.how !== "cascade" && !(kind in seeds))

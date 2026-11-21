@@ -1,9 +1,3 @@
-/**
- * Notification settings API without Pushover credentials (the test env sets
- * none): status says what to configure, the test send reports it instead of
- * calling out, settings round-trip with defaults and validation, and every
- * route needs a session.
- */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { createNamespaceKv } from "@groot/core/kv";
 import { createDbLogStore } from "@groot/core/notification/notification.log";
@@ -28,7 +22,6 @@ beforeAll(async () => {
   token = await authToken("notifications-test@example.com");
   notificationService.defineEvents(NOTIFICATION_EVENTS);
 });
-// Every test reads the defaults unless it saves its own.
 beforeEach(async () => {
   await kv.delete(NOTIFICATION_SETTINGS_KEY);
   notificationService.forgetSettings();
@@ -147,7 +140,6 @@ describe("notifications routes", () => {
 
     const since = new Date(Date.now() - 60_000);
     expect(await store.hasRecent("k1", since)).toBe(true);
-    // Suppressed rows never count as sent.
     expect(await store.hasRecent("k2", since)).toBe(false);
     expect(await store.hasRecent("k1", new Date(Date.now() + 60_000))).toBe(false);
 

@@ -1,10 +1,3 @@
-/**
- * The Vault routes (issue #56), owner-only. Writes, reveals and copies need a
- * fresh step-up token (`X-Vault-Step-Up`, which doubles as the CSRF guard).
- * Every response is `Cache-Control: no-store`; request bodies are never
- * logged (the request logger logs none) and are dropped from Sentry events.
- * None of this is reachable from an agent tool.
- */
 import { Hono } from "hono";
 import { Boom } from "@groot/core/errors";
 import { authRateLimiter } from "@groot/core/middlewares/rate-limit.middleware";
@@ -31,10 +24,8 @@ import {
 } from "./vault.schema";
 import { issueStepUp, requireStepUp, verifyPassword } from "./vault.stepup";
 
-/** `Cache-Control: no-store` on every vault response (mounted on `/vault/*` by `app.ts`). */
 export const vaultNoStore: Middleware = async (c, next) => {
   await next();
-  // After the handler, so error responses carry it too.
   c.header("Cache-Control", "no-store");
   c.header("Pragma", "no-cache");
 };
@@ -58,8 +49,6 @@ router.get("/vault/items/:handle", async (c) => {
   return ok(c, await admin.detail(handleParam(c)));
 });
 
-// ── Step-up ─────────────────────────────────────────────────────────────
-
 router.post("/vault/step-up/options", authRateLimiter, async (c) => {
   const { email } = requireUser(c);
   return ok(c, await passkeyService.generateAuthenticationOptions({ email }));
@@ -81,8 +70,6 @@ router.post("/vault/step-up", authRateLimiter, async (c) => {
   return ok(c, issueStepUp(userId));
 });
 
-// ── Items (step-up) ─────────────────────────────────────────────────────
-
 router.post("/vault/items", requireStepUp, async (c) => {
   const body = await parseBody(c, createItemSchema);
   return ok(c, await admin.createItem(body), 201);
@@ -91,6 +78,10 @@ router.post("/vault/items", requireStepUp, async (c) => {
 router.post("/vault/links", requireStepUp, async (c) => {
   const body = await parseBody(c, linkItemSchema);
   return ok(c, await admin.linkItem(body), 201);
+});
+
+router.post("/vault/move-to-1password", requireStepUp, async (c) => {
+  return ok(c, await admin.moveLocalItemsToOnePassword());
 });
 
 router.put("/vault/items/:handle", requireStepUp, async (c) => {
@@ -111,8 +102,6 @@ router.post("/vault/items/:handle/reveal", requireStepUp, async (c) => {
   const body = await parseBody(c, revealSchema);
   return ok(c, await admin.reveal(handleParam(c), body.field, body.purpose));
 });
-
-// ── Credential requests ─────────────────────────────────────────────────
 
 router.get("/vault/requests/:taskId", async (c) => {
   return ok(c, await requests.requestView(taskParam(c)));

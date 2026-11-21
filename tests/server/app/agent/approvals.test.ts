@@ -1,8 +1,3 @@
-/**
- * Capabilities and approvals (issue #1 D2–D4): per-bot tool selection and
- * `Allow · Ask · Off` permissions, enforced by the durable approval gate.
- * Real pi-durable turns on the faux model.
- */
 import { mkdtemp, rm } from "node:fs/promises";
 import { until } from "../../fixtures/until";
 import { tmpdir } from "node:os";
@@ -29,7 +24,6 @@ import type {
 
 interface Mailer {
   sent: string[];
-  /** Resolves the effect currently blocked in `send` (crash simulation). */
   hold?: Promise<void>;
 }
 
@@ -38,7 +32,6 @@ function mailCapability(mailer: Mailer): Capability {
     name: "send_email",
     description: "Send an email",
     parameters: Type.Object({ to: Type.String() }),
-    // Not replay-safe: a rerun would send twice.
     execute: async (args) => {
       mailer.sent.push(args.to);
       if (mailer.hold) {
@@ -68,7 +61,6 @@ function mailCapability(mailer: Mailer): Capability {
   };
 }
 
-/** Faux model: calls `tool` once, then answers with the tool result it got. */
 function callThenReport(tool: string, args: JsonObject) {
   return (context: PiContext) => {
     const last = context.messages.at(-1);
@@ -132,8 +124,6 @@ async function open(
 describe("capabilities and approvals", () => {
   it("lists installed capabilities without their extensions", async () => {
     const runtime = await open({ sent: [] }, callThenReport("read_inbox", {}));
-    // The runtime brings its own `questions` (ask_owner) and `tool-search`
-    // capabilities after the given ones.
     expect(runtime.listCapabilities()).toEqual([
       expect.objectContaining({ id: "mail", kind: "toolkit", name: "Mail" }),
       expect.objectContaining({ id: "questions", kind: "toolkit" }),
@@ -289,7 +279,6 @@ describe("capabilities and approvals", () => {
     expect(await until(() => finalText(events), "reply")).toBe("Sent to ed@x.dev");
     expect((await runtime.finishedReplies(ref)).some((reply) => reply.refused)).toBe(false);
 
-    // Reconfigured as a chat (attended), an `ask` call waits for the owner again.
     await runtime.configure(ref, {
       modelId: TEST_MODEL,
       systemPrompt: "",
@@ -405,7 +394,6 @@ describe("decisions for calls that are not waiting", () => {
       const call = toolCall(events, "slow_read");
       return call?.status === "running" && call.taskId !== undefined ? call : undefined;
     }, "the call to run");
-    // The call is a running pi.tool task, but no wait marked its approval document.
     await expect(runtime.decideApproval(ref, running.taskId!, "approved")).rejects.toThrow(
       ApprovalNotPendingError,
     );
@@ -457,7 +445,6 @@ describe("approvals across restarts", () => {
           : undefined,
       "card after restart",
     );
-    // The gate re-runs on resume and re-registers the wait.
     await until(() => second.pendingApprovals(ref) === 1, "gate re-run");
     await second.decideApproval(ref, waiting.taskId!, "approved");
     expect(await until(() => finalText(after), "reply")).toBe("Sent to di@x.dev");

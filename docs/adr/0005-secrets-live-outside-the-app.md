@@ -3,7 +3,9 @@
 - Status: accepted (amended by [0015](0015-one-secrets-subsystem.md): the vault also
   holds the app's own credentials, as `app` items; amended by
   [0017](0017-local-is-the-only-vault-backend.md): the 1Password Connect backend
-  is removed, `local` is the only backend)
+  is removed, `local` is the only backend; amended by
+  [0027](0027-1password-connect-runs-inside-the-app.md): the Connect backend is
+  back, and the app can run Connect inside its own container)
 - Date: 2026-10-29
 - Issue: #56
 

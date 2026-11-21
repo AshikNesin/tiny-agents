@@ -1,11 +1,3 @@
-/**
- * The Claude worker on the sandbox: the shell scripts the app runs over SSH
- * (sandbox-setup.ts) and the locator that runs them and tunnels to the
- * worker (sandbox-worker.ts). The scripts run for real here, in bash with
- * a temporary HOME standing in for the sandbox user's, through a fake SSH
- * client; the install's network steps are skipped by pre-creating what they
- * leave behind. Nothing here installs Claude Code or calls Anthropic.
- */
 import { spawn, spawnSync } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { connect, createServer } from "node:net";
@@ -31,7 +23,6 @@ import {
 } from "../../../../packages/claude-worker/src/index";
 import { fakeSandboxConnection } from "./sandbox-connection-fake";
 
-/** A fake worker: a TCP echo server that records the env it was started with. */
 const FAKE_WORKER = `
 import { createServer } from "node:net";
 import { writeFileSync } from "node:fs";
@@ -42,7 +33,6 @@ createServer((s) => s.pipe(s)).listen(Number(process.env.CLAUDE_WORKER_PORT), "1
 let home: string;
 let dir: string;
 
-/** Run a command the way sshd would, as the sandbox user in `home`. */
 function run(command: string, stdin?: string, env: Record<string, string> = {}) {
   return spawnSync("sh", ["-c", command], {
     input: stdin,
@@ -51,7 +41,6 @@ function run(command: string, stdin?: string, env: Record<string, string> = {}) 
   });
 }
 
-/** What the install leaves, without the network: the marker and a stub CLI. */
 function fakeInstall(
   authStatus = '{"loggedIn":true,"authMethod":"claude.ai","subscriptionType":"max"}',
 ) {
@@ -62,10 +51,6 @@ function fakeInstall(
   chmodSync(cli, 0o755);
 }
 
-/**
- * The sandbox as an in-memory connection: exec runs locally in sh as the
- * sandbox user in `home`, and a forward dials this machine's loopback.
- */
 function fakeSandbox(env: Record<string, string> = {}) {
   return fakeSandboxConnection({
     exec: (command, options) =>
@@ -75,8 +60,6 @@ function fakeSandbox(env: Record<string, string> = {}) {
         let stderr = "";
         child.stdout.on("data", (d: Buffer) => (stdout += d.toString("utf8")));
         child.stderr.on("data", (d: Buffer) => (stderr += d.toString("utf8")));
-        // The worker keeps the pipes open; settle shortly after exit, as the
-        // real connection does for these commands.
         child.on("exit", (code) =>
           setTimeout(() => resolve({ stdout, stderr, exitCode: code ?? 255 }), 50),
         );
@@ -171,7 +154,6 @@ describe("the sandbox worker scripts", () => {
     const pid = readFileSync(join(dir, "worker.pid"), "utf8");
     expect(parseEnsureOutput(run(ensureWorkerCommand("v1", port)).stdout)).toEqual(started);
     expect(readFileSync(join(dir, "worker.pid"), "utf8")).toBe(pid);
-    // A new app bundle asks for its own upload.
     expect(run(ensureWorkerCommand("v2", port)).stdout.trim()).toBe("upload");
   });
 
@@ -197,7 +179,6 @@ describe("the sandbox worker locator", () => {
       const local = Number(new URL(target.url).port);
       expect(await echo(local, "through the tunnel")).toBe("through the tunnel");
 
-      // The sandbox rebooted: the next socket brings the worker back.
       run(stopWorkerCommand());
       await new Promise((r) => setTimeout(r, 300));
       expect(await echo(local, "again")).toBe("again");

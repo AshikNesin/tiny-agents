@@ -1,10 +1,3 @@
-/**
- * The Code page transcript (issue #143, ADR 0011): one renderer per row
- * kind and tool kind of the harness contract, so a developer reads a turn
- * the same way whichever harness ran it — the command and its live output,
- * the diff an edit made, the subagent it started, the plan it keeps, and
- * the approvals it waits on.
- */
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Streamdown } from "streamdown";
@@ -85,18 +78,14 @@ import { formatDuration } from "../../lib/code/format";
 import { PatchView, diffStats } from "./UnifiedDiff";
 
 export interface TranscriptActions {
-  /** The harness's ways back from an error (capability `turns.recovery`). */
   recovery: RecoveryAction[];
   recover(action: RecoveryAction): void;
-  /** Absent when the harness cannot fork. */
   fork?: (at: string) => void;
   respond(requestId: string, answer: RequestAnswer): Promise<void>;
 }
 
-/** What rows need to know about where they are. */
 export interface TranscriptContext {
   instanceId: string;
-  /** Every thread in the list (subagent links show their state). */
   rows: ThreadSummary[];
 }
 
@@ -170,7 +159,6 @@ function Images({ assets, instanceId }: { assets: AssetRef[]; instanceId: string
   );
 }
 
-/** Uploaded files referenced in a message: images inline, others as links. */
 function Attachments({ assets, instanceId }: { assets: AssetRef[]; instanceId: string }) {
   if (assets.length === 0) return null;
   const images = assets.filter((a) => a.image);
@@ -202,7 +190,6 @@ function SubagentStatus({ working, failed }: { working: boolean; failed: boolean
   return <CircleCheck className="text-muted-foreground size-3.5 shrink-0" aria-label="Done" />;
 }
 
-/** What the subagent reported: markdown when done, raw text while live or failed. */
 function SubagentResult({
   result,
   live,
@@ -222,11 +209,6 @@ function SubagentResult({
   );
 }
 
-/**
- * A subagent the agent started. The row opens to show what the subagent was
- * asked and what it reported back; a harness that gives it its own thread
- * also links there.
- */
 function subagentPrompt(call: ToolItem): string {
   const input = call.input && typeof call.input === "object" ? call.input : undefined;
   return input && "prompt" in input ? String((input as { prompt?: unknown }).prompt ?? "") : "";
@@ -330,7 +312,6 @@ function SubagentRow({ call, ctx }: { call: ToolItem; ctx: TranscriptContext }) 
   );
 }
 
-/** A plan the agent keeps (Claude Code's TodoWrite). */
 function TodoRow({ call }: { call: ToolItem }) {
   const input = call.input && typeof call.input === "object" ? call.input : undefined;
   const todos = Array.isArray((input as { todos?: unknown } | undefined)?.todos)
@@ -438,7 +419,6 @@ function ToolRow({ call, ctx }: { call: ToolItem; ctx: TranscriptContext }) {
     <div className="space-y-2">
       <Trace className="gap-1">
         {hasDetail ? (
-          // Running commands open by default so their output streams in view.
           <TraceCollapsible defaultOpen={call.status === "running" && call.tool === "bash"}>
             <TraceCollapsibleTrigger>{line}</TraceCollapsibleTrigger>
             <TraceCollapsibleContent className="space-y-2">
@@ -469,13 +449,11 @@ function ToolRow({ call, ctx }: { call: ToolItem; ctx: TranscriptContext }) {
           line
         )}
       </Trace>
-      {/* Screenshots stay visible: they are the point of a browser step. */}
       <Images assets={call.images} instanceId={ctx.instanceId} />
     </div>
   );
 }
 
-/** Finished tool calls folded into one line ("Ran 3 commands, edited 2 files"). */
 function ToolGroupRow({ group, ctx }: { group: ToolGroup; ctx: TranscriptContext }) {
   const failed = group.tools.filter(failedTool).length;
   const duration = group.tools.reduce((sum, t) => sum + (t.durationMs ?? 0), 0);
@@ -510,7 +488,6 @@ function ToolGroupRow({ group, ctx }: { group: ToolGroup; ctx: TranscriptContext
   );
 }
 
-/** A finished turn's work behind one quiet "Worked for 3m 34s" row (Amp, Hoplite). */
 function WorkFoldRow({
   fold,
   ctx,
@@ -520,11 +497,9 @@ function WorkFoldRow({
   ctx: TranscriptContext;
   actions: TranscriptActions;
 }) {
-  // Without a turn duration, say what the work was ("Ran 2 commands, edited 1 file").
   const tools = fold.items.flatMap((item) =>
     item.kind === "tool" ? [item] : item.kind === "tool-group" ? item.tools : [],
   );
-  // A failure inside stays visible while folded, as a tool group's row says it.
   const failed = tools.filter(failedTool).length;
   const label = [
     fold.durationMs !== undefined
@@ -608,7 +583,6 @@ function Notice({
   );
 }
 
-/** An approval or a question the harness waits on (capability `approvals`). */
 function RequestRow({
   item,
   actions,
@@ -720,15 +694,8 @@ function RequestRow({
   );
 }
 
-/**
- * The owner's message. What the app added reads short: a project thread's
- * first line is its branch (the agent's instructions stay out of view), an
- * Auto-fix request is one card, and line comments sent with a message read
- * as comment cards above it.
- */
 function UserText({ text: sent }: { text: string }) {
   const project = splitProjectPreamble(sent);
-  // A PR review's assistant got the PR as a card: one line here, not the card.
   const review = project ? null : splitReviewCard(sent);
   const text = project ? project.message : review ? review.message : sent;
   return (
@@ -807,7 +774,6 @@ function MessageText({ text }: { text: string }) {
   );
 }
 
-/** An Auto-fix request the app sent: what it fixes, and the full request on demand. */
 function AutofixCard({
   kind,
   items,
@@ -1014,7 +980,6 @@ export function TranscriptRow({
   }
 }
 
-/** Text and thinking the model is streaming right now. */
 export function StreamingTail({ text, thinking }: { text: string; thinking: string }) {
   if (text) {
     return (

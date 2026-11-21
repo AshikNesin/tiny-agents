@@ -1,9 +1,3 @@
-/**
- * Memory capture: the prompt, the window, the parse and the debounce. What
- * lands is the ledger's (memories.ledger.test.ts) and how the model is
- * picked and called is the side-caller's (side-call.test.ts); here the
- * side-caller is one faked `complete`.
- */
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { and, eq } from "drizzle-orm";
 import {
@@ -44,7 +38,6 @@ function findBot(id: string) {
   return db.query.bots.findFirst({ where: eq(bots.id, id) });
 }
 
-/** The side-caller port, faked: one `complete` answering with `reply`. */
 function sideCaller(reply = "[]") {
   return { complete: vi.fn<SideCaller["complete"]>().mockResolvedValue(reply) };
 }
@@ -65,6 +58,7 @@ describe("buildCapturePrompt", () => {
     expect(prompt).toContain("third person");
     expect(prompt).toContain("Today is 2026-10-21");
     expect(prompt).toContain("even if reworded");
+    expect(prompt).not.toContain("confidence");
   });
 
   it("lists what the owner removed as never-re-add, and nothing when there is none", () => {
@@ -88,16 +82,14 @@ describe("buildCapturePrompt", () => {
 
 describe("parseExtraction", () => {
   it("parses a JSON array out of the reply text", () => {
-    const parsed = parseExtraction(
-      'Here: [{"text":"Likes tea","category":"preference","confidence":0.9}]',
-    );
+    const parsed = parseExtraction('Here: [{"text":"Likes tea","category":"preference"}]');
     expect(parsed).toHaveLength(1);
     expect(parsed?.[0]?.text).toBe("Likes tea");
   });
 
   it("returns null for malformed output so the watermark stays put", () => {
     expect(parseExtraction("not json")).toBeNull();
-    expect(parseExtraction('[{"text":"x","category":"vibe","confidence":0.5}]')).toBeNull();
+    expect(parseExtraction('[{"text":"x","category":"vibe"}]')).toBeNull();
   });
 
   it("returns null for a model that says nothing", () => {
@@ -171,12 +163,10 @@ describe("captureWindow", () => {
       "Scout",
     );
     expect(window.ownerBytes).toBe(6);
-    // Replies are only context for the owner's words: the first 500 characters.
     expect(window.lines).toEqual(["Owner: 你好", `Scout: ${"x".repeat(500)}`]);
   });
 
   it("caps a long window to its newest lines but still ends at the newest owner turn", () => {
-    // A never-captured bot (null watermark) with ~100k chars of history.
     const messages = Array.from({ length: 200 }, (_, i) => ({
       role: "user",
       text: `Turn ${String(i).padStart(3, "0")} ${"y".repeat(500)}`,
@@ -196,7 +186,7 @@ describe("captureConversation", () => {
   it("asks the side-caller on the bot's model and lands what it extracts", async () => {
     const { botId, conversationId } = await seedBot();
     const caller = sideCaller(
-      '[{"text":"The owner prefers TypeScript, never JavaScript.","category":"preference","confidence":0.9}]',
+      '[{"text":"The owner prefers TypeScript, never JavaScript.","category":"preference"}]',
     );
     const messages = [
       {
@@ -245,7 +235,7 @@ describe("captureConversation", () => {
       ])
       .returning();
     const caller = sideCaller(
-      '[{"text":"The owner lives in Berlin.","category":"fact","confidence":0.9,"supersedesIds":["m1"]}]',
+      '[{"text":"The owner lives in Berlin.","category":"fact","supersedesIds":["m1"]}]',
     );
     await captureConversation(conversationId, {
       sideCaller: caller,
@@ -275,7 +265,7 @@ describe("captureConversation", () => {
       .values({ botId, text: "The owner lives in Pune.", category: "fact" })
       .returning();
     const caller = sideCaller(
-      `[{"text":"The owner lives in Berlin.","category":"fact","confidence":0.9,"supersedesIds":["${old!.id}"]}]`,
+      `[{"text":"The owner lives in Berlin.","category":"fact","supersedesIds":["${old!.id}"]}]`,
     );
     await captureConversation(conversationId, {
       sideCaller: caller,
@@ -289,9 +279,7 @@ describe("captureConversation", () => {
   it("marks what it captured as learned in that conversation", async () => {
     const { conversationId } = await seedBot();
     await captureConversation(conversationId, {
-      sideCaller: sideCaller(
-        '[{"text":"The owner prefers TypeScript.","category":"preference","confidence":0.9}]',
-      ),
+      sideCaller: sideCaller('[{"text":"The owner prefers TypeScript.","category":"preference"}]'),
       readTranscript: ownerSays("I prefer TypeScript for everything."),
     });
     expect(await memoryStore.list(conversationId)).toMatchObject([
@@ -412,8 +400,6 @@ describe("captureConversation", () => {
       status: "deleted",
       updatedAt: new Date(Date.UTC(2026, 9, 2)),
     });
-    // A scripted extractor that, like a model following the prompt, drops a
-    // reworded fact the prompt lists as removed.
     const caller = sideCaller();
     caller.complete.mockImplementation(async ({ system }) =>
       JSON.stringify(
@@ -421,12 +407,10 @@ describe("captureConversation", () => {
           {
             text: "The owner likes tea.",
             category: "preference",
-            confidence: 0.9,
           },
           {
             text: "The owner lives in Chennai.",
             category: "fact",
-            confidence: 0.9,
           },
         ].filter((m) => !(m.text.includes("tea") && system.includes("Owner prefers tea"))),
       ),
@@ -449,7 +433,6 @@ describe("captureConversation", () => {
 
 const settledChat = async () => ({ messages: [], busy: false, queued: [] });
 
-/** A settled conversation of a bot's own chat, memory on unless said otherwise. */
 const settled = (conversationId: number, owner?: ConversationOwner) => ({
   conversationId,
   chat: settledChat,
@@ -477,9 +460,9 @@ describe("memory capture debounce (a settled step)", () => {
       quietMs: 100,
       turnLimit: 6,
     });
-    await capture.onSettled.run(settled(7)); // turn 1
+    await capture.onSettled.run(settled(7));
     vi.advanceTimersByTime(50);
-    await capture.onSettled.run(settled(7)); // turn 2 pushes the window back
+    await capture.onSettled.run(settled(7));
     vi.advanceTimersByTime(60);
     expect(captureNow).not.toHaveBeenCalled();
     vi.advanceTimersByTime(50);
@@ -535,7 +518,7 @@ describe("memory capture debounce (a settled step)", () => {
     expect(captureNow).toHaveBeenCalledTimes(1);
     await emit(4);
     await vi.advanceTimersByTimeAsync(0);
-    expect(captureNow).toHaveBeenCalledTimes(1); // still inflight
+    expect(captureNow).toHaveBeenCalledTimes(1);
     gates[0]!();
     await vi.advanceTimersByTimeAsync(0);
     await emit(3);
@@ -556,7 +539,7 @@ describe("memory capture debounce (a settled step)", () => {
     await capture.onSettled.run(settled(11));
     await vi.advanceTimersByTimeAsync(100);
     expect(captureNow).toHaveBeenCalledTimes(1);
-    await capture.onSettled.run(settled(11)); // settles while the capture runs: not lost
+    await capture.onSettled.run(settled(11));
     gates[0]!();
     await vi.advanceTimersByTimeAsync(0);
     expect(captureNow).toHaveBeenCalledTimes(1);

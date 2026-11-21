@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 import { parseQuickTask } from "@/lib/task-quick-add";
 
-// Friday 30 Oct 2026, 10:00 local.
 const now = new Date(2026, 9, 30, 10, 0);
 
 describe("parseQuickTask", () => {
@@ -13,7 +12,6 @@ describe("parseQuickTask", () => {
   });
 
   it("reads weekdays as the next such day, and 'at' times", () => {
-    // Today is Friday: "fri" means next week's.
     expect(parseQuickTask("Standup fri at 9:30am", now).due).toEqual(new Date(2026, 10, 6, 9, 30));
     expect(parseQuickTask("Gym monday", now).due).toEqual(new Date(2026, 10, 2, 23, 59));
   });

@@ -1,9 +1,3 @@
-/**
- * The server annotates a send that carries attachments for the model
- * (bots.conversation.ts resolveAttachments): reference lines, inline file
- * text fenced as <attachment … untrusted>, outlines and tool hints. The
- * owner's bubble shows what they typed; the chips show the files.
- */
 const FENCE = /<attachment id="[^"]*" name="[^"]*" untrusted>\n[\s\S]*?\n<\/attachment>/g;
 const NOTE_LINES = [
   /^\[(?:file|image) attached: .*\]$/,

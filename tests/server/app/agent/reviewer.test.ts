@@ -1,9 +1,3 @@
-/**
- * Auto-review (issue #65): the reviewer's decision rule and fallbacks, the
- * owner messages it reads, and the Clef wire format behind `createClassifier`.
- * The reviewer only ever sees the `Classifier` interface; these tests use a
- * fake one, and stub `fetch` for the real Workers AI adapter.
- */
 import type { EntryRecord } from "@earendil-works/pi-durable";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import {
@@ -25,7 +19,6 @@ import {
 } from "../../../../packages/agent/src/reviewer";
 import { userMessagesOf } from "../../../../packages/agent/src/transcript";
 
-/** The owner messages a review reads off pi entries (newest first); `ownerId` in a shared chat. */
 const owner = (newestFirst: EntryRecord[], ownerId?: number) =>
   ownerMessages(userMessagesOf(newestFirst), ownerId);
 
@@ -210,7 +203,6 @@ describe("ownerMessages", () => {
 describe("createClassifier (the classifier role, on Workers AI through the AI Gateway)", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  /** A gateway account with Clef and Jev classifier rows; `role` picks one. */
   function classifierFor(role: "clef" | "jev" | undefined) {
     const config: ModelConfig = {
       providers: [
@@ -299,11 +291,9 @@ describe("createClassifier (the classifier role, on Workers AI through the AI Ga
     });
     expect(requests).toHaveLength(1);
     expect(requests[0].url).toBe("https://api.cloudflare.com/client/v4/accounts/acct/ai/run");
-    // Workers AI needs the bearer token; the gateway id routes the call through the gateway.
     expect(requests[0].headers.get("authorization")).toBe("Bearer gateway-key");
     expect(requests[0].headers.get("cf-aig-authorization")).toBe("Bearer gateway-key");
     expect(requests[0].headers.get("cf-aig-gateway-id")).toBe("gw");
-    // The System One request goes in `input`; the model is named beside it.
     expect(requests[0].body).toEqual({
       model: "@cf/cloudflare/clef",
       input: {

@@ -54,7 +54,6 @@ describe("useLiveViews", () => {
     expect(result.current.showComputer).toBe(false);
     expect(result.current.liveBusy).toBe(true);
 
-    // The toggle opens what the bot is using.
     act(() => result.current.toggleLive());
     expect(result.current.showComputer).toBe(true);
   });

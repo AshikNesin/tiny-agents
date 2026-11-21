@@ -1,32 +1,11 @@
-// Time budgets for the Tests workflow's jobs, enforced by the jobs themselves:
-// a job that runs past its budget fails, even when everything in it passed,
-// so CI cannot slow down unnoticed. Raising a budget is a change to this
-// table, made in a PR that says why; a timeout-minutes someone bumps is not.
-//
-// Each job:
-//   1. records its start before anything else:
-//        echo "CI_STARTED_AT=$(date +%s)" >> "$GITHUB_ENV"
-//   2. after checkout and setup:     node scripts/ci-budget.mjs setup
-//   3. after each phase of its work: node scripts/ci-budget.mjs run <phase>
-// A phase is timed from the check before it. Each check prints the phase's
-// time against its budget, adds a line to the job summary, and fails the step
-// when the phase ran over.
-
 import { appendFileSync } from "node:fs";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
 
-/** Seconds from a job's first step to the end of `.github/actions/setup`. */
 export const SETUP_BUDGET = 30;
 
-/**
- * The same, when the setup action missed a cache (CI_SETUP_COLD=1) and
- * installed or downloaded cold: a lockfile change, or a run before main has
- * the caches. A warm setup is still held to SETUP_BUDGET.
- */
 export const COLD_SETUP_BUDGET = 120;
 
-/** Seconds each phase may take, by phase. */
 export const RUN_BUDGETS = {
   secrets: 10,
   lint: 5,
@@ -39,16 +18,10 @@ export const RUN_BUDGETS = {
   "repo-typecheck": 60,
 };
 
-/**
- * Budgets for a job whose own cache missed (CI_CACHE_COLD=1): the first run
- * before main has the cache. Only a job that restores a cache of its own work
- * has one; a warm run is still held to RUN_BUDGETS.
- */
 export const COLD_RUN_BUDGETS = {
   typecheck: 20,
 };
 
-/** The budget verdict for a phase that took `seconds`, as a line to print. */
 export function verdict(phase, seconds, budget) {
   const over = seconds > budget;
   return {

@@ -22,58 +22,41 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.UUID
 
-/** The share sheet as the owner fills it in: who it goes to, what goes, and a note. */
 data class ShareDraft(
     val botId: String? = null,
-    /** Typed into the To field: narrows the bot list. */
     val query: String = "",
     val note: String = "",
-    /** The text another app shared (a link, a selection); the owner can drop it. */
     val sharedText: String? = null,
     val staged: List<StagedUpload> = emptyList(),
     val sending: Boolean = false,
 ) {
-    /** The message text that goes: the note, then the shared text. */
     val message: String get() = shareMessage(note, sharedText)
 
-    /**
-     * A bot is chosen and something would go: text, or a file that uploaded or still uploads
-     * (sending waits for it). A failed upload does not count.
-     */
     val canSend: Boolean
         get() = botId != null && !sending && (message.isNotEmpty() || staged.any { it.error == null })
 }
 
-/** The bots whose name holds [query], in the drawer's order; all of them for a blank query. */
 fun filterBots(bots: List<BotListEntry>, query: String): List<BotListEntry> {
     val needle = query.trim()
     return if (needle.isEmpty()) bots else bots.filter { it.name.contains(needle, ignoreCase = true) }
 }
 
-/** How a send ended, for the toast the sheet closes with. */
 sealed interface ShareOutcome {
     data class Sent(val botName: String) : ShareOutcome
 
-    /** No answer yet (offline): the app keeps trying while it runs. */
     data class Pending(val botName: String) : ShareOutcome
 }
 
-/**
- * The share sheet: uploads what was shared as soon as it opens, so sending only waits for
- * what is still on its way, then sends one message to the chosen bot.
- */
 class ShareViewModel(private val container: AppContainer) : ViewModel() {
     private val _draft = MutableStateFlow(ShareDraft())
     val draft: StateFlow<ShareDraft> = _draft.asStateFlow()
 
     private val _outcome = MutableStateFlow<ShareOutcome?>(null)
 
-    /** Set once the share went (or waits to go): the sheet then closes. */
     val outcome: StateFlow<ShareOutcome?> = _outcome.asStateFlow()
 
     private var started = false
 
-    /** Take what was shared; once, so a configuration change does not upload it twice. */
     fun start(content: SharedContent) {
         if (started) return
         started = true
@@ -85,7 +68,6 @@ class ShareViewModel(private val container: AppContainer) : ViewModel() {
 
     fun setNote(note: String) = _draft.update { it.copy(note = note) }
 
-    /** Choose the bot; the search that found it is done. */
     fun select(botId: String) = _draft.update { it.copy(botId = botId, query = "") }
 
     fun clearBot() = _draft.update { it.copy(botId = null) }
@@ -120,10 +102,6 @@ class ShareViewModel(private val container: AppContainer) : ViewModel() {
         removed.ref?.let { ref -> container.scope.launch { runCatching { container.api.deleteUpload(ref.uploadId) } } }
     }
 
-    /**
-     * Wait for the uploads, then send. The send runs on the app's scope: when the server does
-     * not answer in a few seconds the sheet closes and the message keeps retrying.
-     */
     fun send(bot: BotListEntry) {
         if (!_draft.value.canSend) return
         _draft.update { it.copy(sending = true) }
@@ -139,7 +117,6 @@ class ShareViewModel(private val container: AppContainer) : ViewModel() {
             val submission = OwnerSubmission(text = text, attachments = attachments)
             val sending = container.scope.async { container.chats.send(bot.id, submission) }
             when (withTimeoutOrNull(SEND_WAIT_MS) { sending.await() }) {
-                // Refused: ChatStore posted why; the sheet stays open to try again.
                 false -> _draft.update { it.copy(sending = false) }
                 true -> finish(bot, ShareOutcome.Sent(bot.name))
                 null -> finish(bot, ShareOutcome.Pending(bot.name))
@@ -148,7 +125,6 @@ class ShareViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     private fun finish(bot: BotListEntry, outcome: ShareOutcome) {
-        // Opening the app next shows the chat the share went to.
         container.session.selectBot(bot.id)
         _outcome.value = outcome
     }
@@ -156,7 +132,6 @@ class ShareViewModel(private val container: AppContainer) : ViewModel() {
     private fun updateStaged(id: String, change: (StagedUpload) -> StagedUpload) =
         _draft.update { draft -> draft.copy(staged = draft.staged.map { if (it.id == id) change(it) else it }) }
 
-    /** Closed without sending: what uploaded is deleted on the server too. */
     override fun onCleared() {
         if (_outcome.value != null) return
         for (ref in _draft.value.staged.mapNotNull { it.ref }) {

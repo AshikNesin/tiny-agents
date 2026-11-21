@@ -1,11 +1,3 @@
-/**
- * The `vault` toolkit (issue #56): `vault_list` shows the bot which of the
- * owner's vault items it may use, by handle and metadata only. The sink tools
- * that actually use an item live with their sinks (`browser_fill_secret`,
- * `browser_enter_code` in the browser toolkit, `http_request` in web,
- * `computer_fill_secret`, `run_command` in the sandbox) and share the gate
- * plan and the use sequence below.
- */
 import type { Context } from "@earendil-works/chord";
 import { Type } from "@earendil-works/pi-ai";
 import type { JsonObject, ToolExecutionApi, ToolExecutionResult } from "@earendil-works/pi-durable";
@@ -30,11 +22,9 @@ import {
   type VaultUse,
 } from "../vault";
 
-/** A vault approval nobody answers fails closed after this long. */
 const VAULT_APPROVAL_TTL_MS = 10 * 60_000;
 
 export interface VaultToolkitOptions {
-  /** The app's broker. Without one the toolkit offers no tools. */
   broker?: VaultBroker;
 }
 
@@ -43,7 +33,6 @@ const fail = (text: string): ToolExecutionResult => ({
   isError: true,
 });
 
-/** One item as the model reads it. */
 function describeItem(item: VaultItemMeta): string {
   const lines = [`- ${item.handle} (${item.kind}): ${item.label}`];
   if (item.username) lines.push(`  username: ${item.username}`);
@@ -56,27 +45,15 @@ function describeItem(item: VaultItemMeta): string {
   return lines.join("\n");
 }
 
-/** The use a call was gated for: what its sink and a denial are audited against. */
 export type IntendedUse = Omit<VaultUse, "granted" | "conversation">;
 
-/**
- * Several items one call uses together, on one card: a command's env vars.
- * Each is planned, recorded and resolved on its own; one refusal refuses all.
- */
 export interface IntendedUses {
   uses: readonly IntendedUse[];
-  /** Ask every time, whatever the broker and grants say (model-written code holds the value). */
   everyUse?: boolean;
-  /**
-   * The sink's own rule, checked once policy allows every use and before
-   * asking: a refusal is audited against each use as `refused_policy`.
-   */
   confine?: () => { refuse: string; reason: string } | undefined;
-  /** Sink-specific card fields (the env vars a command gets, the hosts it may reach). */
   card?: JsonObject;
 }
 
-/** Where a card's target is cut: a command can be long. */
 const CARD_TARGET_CHARS = 2000;
 
 const vaultUse = z.object({
@@ -88,7 +65,6 @@ const vaultUse = z.object({
   granted: z.boolean(),
 });
 
-/** What a call's plan memoizes: one use, or `{ uses }` for several. */
 const plannedMemo = durableMemo<VaultUse | { uses: VaultUse[] }>(
   "vault:use",
   z.union([vaultUse, z.object({ uses: z.array(vaultUse) })]),
@@ -115,7 +91,6 @@ async function withGrants(
   return uses;
 }
 
-/** One card for a call: the item's own for one use, the items joined for several. */
 function cardOf(cards: readonly VaultCard[]): VaultCard {
   const [first] = cards;
   const card: VaultCard =
@@ -135,17 +110,9 @@ function cardOf(cards: readonly VaultCard[]): VaultCard {
   return card;
 }
 
-/**
- * The gate plan of a vault sink: the broker's policy decides refusals and
- * whether the owner must approve; a tool permission of `ask` asks too unless
- * the owner granted the handle for the conversation. A call using several
- * items (`IntendedUses`) plans each and asks once, on one card.
- */
 export function vaultGatePlan<TArgs>(
   broker: VaultBroker,
-  /** A call that names no item asks per the tool's permission (`false`: never). */
   askWithoutUse: boolean,
-  /** The use(s) this call intends, or a refusal; `undefined`: no vault item involved. */
   useOf: (
     args: TArgs,
     api: ToolExecutionApi,
@@ -161,8 +128,6 @@ export function vaultGatePlan<TArgs>(
         intended = !of || "refuse" in of || "uses" in of ? of : { uses: [of] };
         if (intended && "uses" in intended) uses = await withGrants(intended.uses, api, context);
       } catch (error) {
-        // Planning runs before any value is resolved: its errors (no page
-        // open, a browser that can't fill) are safe to show as they are.
         return {
           refuse: error instanceof Error ? error.message : safeMessage(error),
           ask: false,
@@ -170,7 +135,6 @@ export function vaultGatePlan<TArgs>(
       }
       if (intended && "refuse" in intended) return { refuse: intended.refuse, ask: false };
       if (!intended || uses.length === 0) return { ask: askWithoutUse && toolAsks };
-      // The uses this call was planned for: what a denial is audited against.
       await plannedMemo.keep(api, uses.length === 1 ? uses[0] : { uses }, context);
       const plans: Exclude<VaultPlan, { refused: string }>[] = [];
       for (const use of uses) {
@@ -188,7 +152,6 @@ export function vaultGatePlan<TArgs>(
         plans.some((plan) => plan.approve) ||
         (toolAsks && !uses.every((use) => use.granted));
       if (!ask) return { ask: false };
-      // A grant names one handle: a call using several items asks every time.
       const grantable = !intended.everyUse && plans.length === 1 && plans[0].grantable;
       return {
         ask: true,
@@ -208,14 +171,6 @@ export function vaultGatePlan<TArgs>(
 const MOVED = (actual: string) =>
   `The target is now ${actual}, not the one this call was approved for. Nothing was used.`;
 
-/**
- * Use an item from inside a gated sink tool: the one sequence every sink
- * follows, so none repeats it. Resolves the conversation's grant and the
- * gate's decision, refuses (and audits) a target that moved since the call
- * was planned, then hands the fields to the sink through the broker. Throws
- * `VaultError`; `moved` words the refusal for a target that changed, before
- * the use or inside the sink (`VaultTargetMovedError`).
- */
 export async function vaultUseFromSink<T>(
   broker: VaultBroker,
   api: ToolExecutionApi,
@@ -236,12 +191,6 @@ export async function vaultUseFromSink<T>(
   );
 }
 
-/**
- * The same sequence for a call using several items at once (a command's
- * env vars). Each item is resolved inside the previous one's sink, so no
- * value outlives the call or leaves the broker's audited scope; the sink
- * gets the values and items in `intended`'s order.
- */
 export async function vaultUseAllFromSink<T>(
   broker: VaultBroker,
   api: ToolExecutionApi,
@@ -270,7 +219,6 @@ export async function vaultUseAllFromSink<T>(
   try {
     return await step(0, [], []);
   } catch (error) {
-    // The broker audited the move; the model reads the sink's wording.
     if (error instanceof VaultTargetMovedError) {
       throw new VaultError("refused_origin", moved(error.actual));
     }
@@ -278,7 +226,6 @@ export async function vaultUseAllFromSink<T>(
   }
 }
 
-/** A fixed message for a failed vault use: never a raw backend or page error. */
 export function safeMessage(error: unknown): string {
   if (error instanceof VaultError) return error.message;
   return "The vault use failed.";
@@ -339,7 +286,6 @@ export function createVaultToolkit(options: VaultToolkitOptions = {}): Capabilit
 
   return defineToolkit({
     id: "vault",
-    // Used in few conversations: loaded with tool_search (issue #360).
     deferred: true,
     name: "Vault",
     description: "Uses your saved logins, cards and API keys without seeing them",

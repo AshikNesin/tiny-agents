@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.8.0
+
+### Minor Changes
+
+- Picture in picture for a bot's Browser and Computer: the new button in the live view shrinks it to a small
+  window over the chat that you drag to any corner. It only watches (the remote window keeps its size), a tap
+  expands it, and the app remembers the choice and the corner, so Watch opens it the same way next time.
+
+## 0.7.1
+
+### Patch Changes
+
+- Removed code comments; no behaviour change (ADR 0028).
+
 ## 0.7.0
 
 ### Minor Changes

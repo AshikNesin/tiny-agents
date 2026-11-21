@@ -1,8 +1,3 @@
-/**
- * The settings sections tiny-agents shows, without their bodies: the
- * Settings screen mounts one element per id, and the ⌘K palette lists one
- * entry per section, so both read this list and cannot drift apart.
- */
 import type { SettingsSection } from "@groot/shell/pages/settings/Settings";
 import {
   Bell,
@@ -17,7 +12,6 @@ import {
 
 export type SettingsSectionInfo = Omit<SettingsSection, "element" | "items">;
 
-/** The owner's sections, in sidebar order. */
 const OWNER_SECTIONS: SettingsSectionInfo[] = [
   {
     id: "account",
@@ -96,10 +90,8 @@ const OWNER_SECTIONS: SettingsSectionInfo[] = [
   },
 ];
 
-/** A guest sees only their own theme and sign-in (issue #145). */
 const GUEST_SECTION_IDS = new Set(["appearance", "security"]);
 
-/** The sections this viewer gets, in sidebar order. */
 export function settingsSectionsFor(guest: boolean): SettingsSectionInfo[] {
   return guest ? OWNER_SECTIONS.filter((s) => GUEST_SECTION_IDS.has(s.id)) : OWNER_SECTIONS;
 }

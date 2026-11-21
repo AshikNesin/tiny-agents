@@ -3,17 +3,6 @@ import path from "node:path";
 import { describe, expect, it } from "vite-plus/test";
 import { runTsxScript, withRepoCopy, type ScriptRun } from "./repo-copy";
 
-/**
- * Typecheck coverage guard (scripts/check-typecheck-coverage.ts).
- *
- * The script enumerates every .ts and .tsx file under apps/web/src and
- * packages/<name>/src and fails when one is a member of no checked project.
- * A file that no script or CI step reaches escapes silently, which is how
- * the never-exported @groot/ui tooltip component went unchecked. The guard
- * runs in CI as its own step, so a regression here reds the build, not just
- * a local run.
- */
-
 const repoRoot = process.cwd();
 const SCRIPT = path.join("scripts", "check-typecheck-coverage.ts");
 const TIMEOUT = 120_000;
@@ -22,17 +11,12 @@ function runCoverageScript(checkedRepo = repoRoot): Promise<ScriptRun> {
   return runTsxScript(path.join(checkedRepo, SCRIPT), [], TIMEOUT);
 }
 
-// Each case runs the guard (~10 s of single-threaded work) on its own copy,
-// so the cases run at once.
 describe.concurrent("typecheck coverage", () => {
   it(
     "owns every source file at head",
     async () => {
       const run = await runCoverageScript();
       expect(run.status).toBe(0);
-      // The count is a function of the tree, not a constant of the repo.
-      // Matching N/N keeps the assertion true for any file count while
-      // still requiring full coverage.
       expect(run.stdout).toMatch(/(\d+)\/\1 source files covered/);
     },
     TIMEOUT,

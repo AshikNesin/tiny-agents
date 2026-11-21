@@ -1,10 +1,3 @@
-/**
- * The emit points (issue #57) over the real test DB with a fake runtime and a
- * fake notifier: approvals and questions push once with the bot's name and
- * the tool (never arguments), resolving cancels and reminders follow; failed
- * or long runs push only when nobody watches the chat and the turn was not a
- * routine's; routine outcomes render their own events.
- */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import {
   DEFAULT_NOTIFICATION_SETTINGS,
@@ -29,10 +22,8 @@ import { createFakeRuntime, resetAppTables, seedBot, until } from "../../fixture
 
 const CONVERSATION = 4242;
 
-/** A finished reply, quiet when a turn the owner didn't start made it. */
 type Reply = FinishedReply & { quiet?: true };
 
-/** A finished reply as the transcript holds it. */
 const asMessage = (reply: Reply, index: number): ChatMessage => ({
   id: `a${index}`,
   role: "assistant",
@@ -44,11 +35,6 @@ const asMessage = (reply: Reply, index: number): ChatMessage => ({
   createdAt: reply.createdAt,
 });
 
-/**
- * The shared fake for the wait feed, plus `activity`: busy records the run's
- * start and idle runs the wiring's settled step the way bots.settled.ts
- * would, with the replies set so far as the transcript.
- */
 function fakeRuntime() {
   const fake = createFakeRuntime();
   const starts = new Map<number, number>();
@@ -76,7 +62,6 @@ function fakeRuntime() {
   });
 }
 
-/** The notifier the test made last: the run step pushes through it. */
 let lastNotifier: Notifier | undefined;
 
 function fakeNotifier(settings: Partial<NotificationSettings> = {}) {
@@ -310,7 +295,6 @@ describe("needs-input notifications", () => {
     runtime.wait(added);
     await until(() => notifier.sent.length === 1, "approval push");
     await settle();
-    // A re-run after a restart re-adds the call: still one reminder.
     runtime.wait(added);
     await settle();
     vi.advanceTimersByTime(15 * 60_000);
@@ -400,7 +384,6 @@ describe("run notifications", () => {
     await settle();
     expect(notifier.sent).toHaveLength(0);
 
-    // The owner's own failed reply still pushes while a routine run is working.
     runtime.activity(true);
     runtime.setReplies([{ text: "", createdAt: Date.now() + 1, error: "boom" }]);
     runtime.activity(false);

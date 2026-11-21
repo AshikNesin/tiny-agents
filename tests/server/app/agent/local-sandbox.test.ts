@@ -1,10 +1,3 @@
-/**
- * The local sandbox image (docker/sandbox/) preinstalls what the app would
- * install on the VM on first use, and leaves the same markers, so the first
- * bot call skips apt. If the installers change and the image doesn't, the
- * app still works (it installs the difference over SSH) but slowly; these
- * checks keep the two in step.
- */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vite-plus/test";
@@ -72,13 +65,11 @@ describe("the local sandbox image", () => {
     expect(install).toContain("releases/latest/download");
     expect(install).toContain("checksums.txt");
     const run = readFileSync(join(dir, "shelley-run.sh"), "utf8");
-    // An owner-installed copy on the home volume wins; a missing one is installed.
     expect(run).toContain('"$HOME/.local/bin/shelley" /usr/local/bin/shelley');
     expect(run).toContain('install-shelley "$HOME/.local/bin/shelley"');
     const entrypoint = readFileSync(join(dir, "entrypoint.sh"), "utf8");
     expect(entrypoint).toMatch(/SANDBOX_SHELLEY:-1\}" != 0/);
     expect(entrypoint).toContain("runuser -u exedev");
-    // Started before sshd, which must not inherit the provider keys.
     expect(entrypoint.indexOf("shelley-run")).toBeLessThan(
       entrypoint.indexOf("exec /usr/sbin/sshd"),
     );
@@ -91,13 +82,11 @@ describe("the local sandbox image", () => {
   it("installs gh and codex at build time and again on start when missing", () => {
     expect(dockerfile).toContain('/usr/local/lib/tiny-agents/install-clis "$CODEX_VERSION"');
     const install = readFileSync(join(dir, "install-clis.sh"), "utf8");
-    // Each tool is checked first and skipped when present.
     expect(install).toMatch(/for tool in gh codex; do\n\s+if have "\$tool"/);
     expect(install).toContain("https://cli.github.com/packages");
     expect(install).toContain("github.com/openai/codex/releases/latest/download");
     const entrypoint = readFileSync(join(dir, "entrypoint.sh"), "utf8");
     expect(entrypoint).toMatch(/SANDBOX_CLIS:-1\}" != 0/);
-    // In the background, before sshd, so SSH isn't held up by the install.
     expect(entrypoint).toMatch(/install-clis [^\n]*&$/m);
     expect(entrypoint.indexOf("install-clis")).toBeLessThan(
       entrypoint.indexOf("exec /usr/sbin/sshd"),
@@ -108,7 +97,6 @@ describe("the local sandbox image", () => {
     const sshd = readFileSync(join(dir, "sshd_config"), "utf8");
     expect(sshd).toMatch(/^AllowUsers exedev$/m);
     expect(sshd).toMatch(/^PasswordAuthentication no$/m);
-    // The browser and computer live views are direct-tcpip channels.
     expect(sshd).toMatch(/^AllowTcpForwarding (local|yes)$/m);
     const compose = readFileSync(join(dir, "compose.yml"), "utf8");
     expect(compose).toContain('"127.0.0.1:${SANDBOX_LOCAL_PORT:-2222}:22"');

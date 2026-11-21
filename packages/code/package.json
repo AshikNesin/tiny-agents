@@ -1,6 +1,6 @@
 {
   "name": "@tiny-agents/code",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "private": true,
   "description": "The Code page's harness adapters: one contract every coding agent (Shelley, Claude Code, …) plugs into, plus the built-in drivers.",
   "type": "module",

@@ -1,10 +1,3 @@
-/**
- * The PR tab's checks: one line of how they stand (with Fix CI when one
- * fails), then a row each, failing first. A row opens to when it ran and,
- * for an Actions job, the lines of its log around what went wrong, with a
- * link to the full log on GitHub. GitHub serves a job's log only once it
- * finishes, so a running job shows its steps until then.
- */
 import { useEffect, useMemo, useState } from "react";
 import {
   Check,
@@ -21,9 +14,9 @@ import { cn } from "@groot/ui/lib/utils";
 import { Spinner } from "../../components/ui/spinner";
 import { relativeTime } from "../../lib/bot-groups";
 import { copyText } from "../../lib/clipboard";
-import { errorMessage } from "../../lib/errors";
 import { formatDuration } from "../../lib/code/format";
 import { projectsApi } from "../../lib/code/projects";
+import { useRefreshOn, useResource } from "../../queries/resource";
 import type { CheckLogView, CheckStepView, PullView } from "../../../shared/api/code";
 
 type PullCheck = NonNullable<PullView["snapshot"]>["checks"][number];
@@ -34,7 +27,6 @@ const ORDER: Record<PullCheck["state"], number> = {
   success: 2,
   neutral: 3,
 };
-/** Past this many, passing checks fold behind one row. */
 const FOLD_AFTER = 6;
 
 function CheckIcon({ state, className }: { state: PullCheck["state"]; className?: string }) {
@@ -45,14 +37,12 @@ function CheckIcon({ state, className }: { state: PullCheck["state"]; className?
   return <CircleCheck className={cn("text-success size-3.5", className)} />;
 }
 
-/** How long it ran; nothing under a second (a commit status has no run time, so it reads 0ms). */
 function took(c: PullCheck): string | null {
   if (!c.startedAt || !c.completedAt) return null;
   const ms = Date.parse(c.completedAt) - Date.parse(c.startedAt);
   return ms >= 1000 ? formatDuration(ms) : null;
 }
 
-/** How often a running job's steps are read again. */
 const STEPS_EVERY_MS = 5000;
 
 const when = (iso: string | null) =>
@@ -60,7 +50,6 @@ const when = (iso: string | null) =>
     ? new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
     : "Not yet";
 
-/** Checks as one segmented bar: passed, failed, then pending (Hoplite). */
 function ChecksBar({
   passed,
   failed,
@@ -83,7 +72,6 @@ function ChecksBar({
   );
 }
 
-/** Failing first, then pending, then passing; and how many of each as one line. */
 function checksSummary(raw: PullCheck[]) {
   const checks = [...raw].sort(
     (a, b) => ORDER[a.state] - ORDER[b.state] || a.name.localeCompare(b.name),
@@ -280,34 +268,21 @@ function LogExcerpt({
   jobId: number;
   check: PullCheck;
 }) {
-  const [log, setLog] = useState<CheckLogView | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const read = useResource<CheckLogView>(
+    ["code", "check-log", threadId, jobId],
+    () => projectsApi.checkLog(threadId, jobId),
+    "Could not read the log.",
+    { structuralSharing: false },
+  );
+  const { data: log, loadError: error, refresh } = read;
 
-  const [reads, setReads] = useState(0);
-
-  // Read again when the check's state changes, and every few seconds while
-  // the job runs, so its steps move and the log replaces them once it ends.
-  useEffect(() => {
-    let cancelled = false;
-    projectsApi
-      .checkLog(threadId, jobId)
-      .then((l) => {
-        if (cancelled) return;
-        setLog(l);
-        setError(null);
-      })
-      .catch((e: unknown) => !cancelled && setError(errorMessage(e, "Could not read the log.")));
-    return () => {
-      cancelled = true;
-    };
-  }, [threadId, jobId, check.state, reads]);
-
+  useRefreshOn(check.state, refresh);
   useEffect(() => {
     if (!log?.running) return;
-    const timer = setTimeout(() => setReads((n) => n + 1), STEPS_EVERY_MS);
+    const timer = setTimeout(() => void refresh(), STEPS_EVERY_MS);
     return () => clearTimeout(timer);
-  }, [log]);
+  }, [log, refresh]);
 
   const running = log?.running != null;
 
@@ -351,7 +326,6 @@ function LogExcerpt({
   );
 }
 
-/** A finished job's excerpt: the line that says what went wrong, then the lines around it. */
 function FinishedLog({ log }: { log: CheckLogView }) {
   const marked = new Set(log.highlight);
   return (
@@ -372,7 +346,6 @@ function FinishedLog({ log }: { log: CheckLogView }) {
         >
           {log.lines.map((line, i) => (
             <div
-              // Lines repeat; their place in the excerpt is what tells them apart.
               // eslint-disable-next-line react/no-array-index-key
               key={i}
               className={cn(
@@ -396,7 +369,6 @@ function StepIcon({ state }: { state: CheckStepView["state"] }) {
   return <CircleDashed className="text-muted-foreground size-3.5" />;
 }
 
-/** A running job's steps: GitHub has no log to send until the job finishes. */
 function RunningSteps({ steps }: { steps: CheckStepView[] }) {
   return (
     <div className="space-y-1.5">

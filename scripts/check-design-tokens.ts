@@ -1,45 +1,13 @@
 #!/usr/bin/env tsx
-/**
- * Design-system enforcement check.
- *
- * Guards two classes of drift that a type-checker and a linter can't see:
- *
- *  1. **Token drift** — raw Tailwind palette colors (gray-*, red-*, blue-*, …)
- *     outside the token layer (packages/shell/src/index.css, Tailwind v4
- *     CSS-first `@theme inline` oklch variables). Colors must come from
- *     semantic classes: bg-primary, text-foreground, text-destructive,
- *     text-success, text-warning, text-info, text-muted-foreground,
- *     border-border, bg-muted, …
- *
- *  2. **Structural drift** — hand-rolling a surface/state that already exists
- *     as a shared primitive. This is what let the UI diverge in the first
- *     place: `Card`, `Table`, `EmptyState`, and the component `gap` were all
- *     available, but re-implementing them inline was easier than importing
- *     them, so each page grew its own variant.
- *
- * Oxlint has no built-in rule for banning string patterns inside className
- * attributes, so this script is the enforcement mechanism. It runs from the
- * pre-commit hook (`vp staged` → `npm run check:tokens`) and from CI
- * (.github/workflows/test.yml), which is the non-bypassable layer for
- * `--no-verify` commits.
- *
- * Usage:  tsx scripts/check-design-tokens.ts
- * Exit:   0 = clean, 1 = violations found.
- */
 import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 const ROOT = new URL("..", import.meta.url).pathname;
 
-/**
- * Directories that ship client-side UI. Globs, so a new package or app is
- * scanned without editing this list.
- */
 const UI_ROOTS = ["packages/*/src", "packages/*/vendor", "apps/*/src/client"];
 const SRC_DIRS = [...new Set(UI_ROOTS.flatMap((root) => expandRoot(root)))].sort();
 
-/** Expand a root pattern (may contain one `*` segment) to existing dirs. */
 function expandRoot(root: string): string[] {
   if (!root.includes("*")) return [`${ROOT}${root}`];
   const parts = root.split("/");
@@ -61,17 +29,9 @@ const PREFIX = "(text|bg|border|border-t|ring|ring-offset|divide|fill|stroke|fro
 
 interface Rule {
   name: string;
-  /** ripgrep pattern (Rust regex, or PCRE2 when `pcre2` is set). */
   pattern: string;
-  /** Explains the violation and names the fix. */
   message: string;
-  /**
-   * Absolute paths exempt from this rule. A single file (`…/card.tsx`), or a
-   * whole layer by prefix when the entry ends with `/` (e.g. `…/packages/ui/src/`
-   * — the primitive layer that defines the sanctioned treatment).
-   */
   allow?: string[];
-  /** Restrict the search to these dirs instead of all of SRC_DIRS. */
   dirs?: string[];
   pcre2?: boolean;
 }
@@ -83,15 +43,10 @@ const RULES: Rule[] = [
     message:
       "Raw Tailwind palette color outside the token layer.\n" +
       "   Use a semantic class (text-foreground, text-destructive, bg-muted, …) instead.",
-    // The token layer is the only place raw colors may appear.
     allow: [`${ROOT}packages/shell/src/index.css`],
   },
   {
     name: "hand-rolled-card",
-    // A *rounded* surface painting both a border and the card background is a
-    // Card by any other name. Order-independent via lookaheads. `rounded-` is
-    // the discriminator that keeps full-bleed app chrome (e.g. the sidebar
-    // panel, which is border-r + bg-card but square) out of the match.
     pattern: "(?=.*\\bbg-card\\b)(?=.*\\brounded-)(?=.*\\bborder\\b).*",
     message:
       "Hand-rolled card surface (rounded + border + bg-card).\n" +
@@ -110,8 +65,6 @@ const RULES: Rule[] = [
   },
   {
     name: "redundant-icon-margin",
-    // Button, DropdownMenuItem, Badge, and Alert all set their own `gap-*`, so a
-    // manual margin on a child icon double-spaces it.
     pattern: 'className="[^"]*\\bm[rl]-\\d[^"]*\\b(size-\\d|h-\\d w-\\d)',
     message:
       "Manual margin on an icon inside a gap-spaced component.\n" +
@@ -120,18 +73,12 @@ const RULES: Rule[] = [
   },
   {
     name: "legacy-icon-sizing",
-    // Square h-N w-N is icon sizing; rectangular pairs (skeleton bars) are fine.
-    // The trailing guard keeps fractional widths like `w-4/6` out of the match.
     pattern: "\\bh-([0-9.]+) w-\\1(?![/\\d])",
     message: "Legacy square icon sizing (h-N w-N).\n   Use the size-N shorthand instead.",
     pcre2: true,
   },
   {
     name: "tracking-modified",
-    // Kumo rule #3 (see docs/features/dls.md): never change the font's
-    // tracking. Mixed tracking is a top "feels inconsistent" contributor.
-    // `tracking-wider` for uppercase meta labels is sanctioned once, via
-    // metaLabelClass in typography.tsx.
     pattern: "\\btracking-(tight|tighter|wide|wider|widest)\\b",
     message:
       "Modified letter tracking (DLS rule: never change tracking).\n" +
@@ -141,8 +88,6 @@ const RULES: Rule[] = [
   },
   {
     name: "font-bold",
-    // Kumo rule #4: font-semibold is the heaviest weight; bold reads muddy
-    // against semibold everywhere else.
     pattern: "\\bfont-bold\\b",
     message:
       "font-bold is not part of the DLS.\n" +
@@ -150,10 +95,6 @@ const RULES: Rule[] = [
   },
   {
     name: "transition-colors-hover",
-    // Kumo rule #7: instant color hover. @groot/ui primitives own the motion
-    // language; pages never add transitions. If a primitive legitimately
-    // needs one it is added (and reviewed) there — allow-list is the whole
-    // packages/ui/src, pattern still applies to pages/shell/jobs/web.
     pattern: "\\btransition-(color|all)s?\\b",
     message:
       "transition-colors/transition-all (DLS rule: instant color hover).\n" +
@@ -163,8 +104,6 @@ const RULES: Rule[] = [
   },
   {
     name: "inline-mono-full-step",
-    // Kumo rule #11: mono glyphs are optically larger at the same size, so
-    // inline mono renders at ~0.9em to sit even with surrounding prose.
     pattern: "\\bfont-mono\\s+text-(sm|base|lg|xl)\\b",
     message:
       "Inline monospace at a full size step (DLS rule: mono at 0.9em).\n" +
@@ -208,26 +147,21 @@ function runRule(rule: Rule): { file: string; line: string }[] {
     );
     process.exit(1);
   }
-  // status 1 == no matches for this rule.
   if (status !== 0 || !result.stdout.trim()) return [];
 
-  return (
-    result.stdout
-      .trim()
-      .split("\n")
-      .map((line) => {
-        const [file, ...rest] = line.split(":");
-        return { file, line: rest.join(":").trim() };
-      })
-      // Comments may name a banned class to explain why it is avoided; only code counts.
-      .filter(({ line }) => !isCommentLine(line))
-      .filter(
-        ({ file }) => !rule.allow?.some((a) => (a.endsWith("/") ? file.startsWith(a) : file === a)),
-      )
-  );
+  return result.stdout
+    .trim()
+    .split("\n")
+    .map((line) => {
+      const [file, ...rest] = line.split(":");
+      return { file, line: rest.join(":").trim() };
+    })
+    .filter(({ line }) => !isCommentLine(line))
+    .filter(
+      ({ file }) => !rule.allow?.some((a) => (a.endsWith("/") ? file.startsWith(a) : file === a)),
+    );
 }
 
-/** A `rg -n` match body ("12:  // …") whose source line is a comment (`//`, `/*`, ` * `). */
 function isCommentLine(match: string): boolean {
   const source = match.replace(/^\d+:/, "").trimStart();
   return source.startsWith("//") || source.startsWith("/*") || source.startsWith("*");

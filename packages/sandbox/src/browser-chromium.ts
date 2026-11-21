@@ -1,85 +1,37 @@
-/**
- * The local `BrowserSession` transport: one headless Chromium persistent
- * context per profile directory, driven by Playwright. No remote-debugging
- * port is ever opened (CDP has no authentication; Playwright talks to the
- * browser over a pipe). It has no display, so the owner cannot watch it; the
- * live view needs the VM transport (`browser-remote-cdp.ts`).
- */
 import { execFile } from "node:child_process";
 import { statSync } from "node:fs";
 import { promisify } from "node:util";
 import { chromium } from "playwright-core";
 import type { Locator, Page, Response } from "playwright-core";
-import { fillSecretFields, pageOrigin } from "./browser-fill";
+import { fillSecretFields, pageOrigin, refOrigin } from "./browser-fill";
 import { assertRefShape, isBlockedPrivateUrl, parseExemptHosts } from "./browser-guard";
 import { compactSnapshot, tidyText } from "./browser-snapshot";
 import type { BrowserSession, BrowserVnc, OpenBrowserOptions } from "./browser-sessions";
 import { navigationGuard, type NavigationGuard } from "./navigation-guard";
 
 export interface ChromiumTransportOptions {
-  /** Overrides the browser binary; default: the VM's headless shell if
-   * present, else Playwright's bundled Chromium. */
   executablePath?: string;
-  /** Extra Chromium args (tests may need --no-sandbox on locked-down CI). */
   args?: string[];
-  /** The language the browser reports (`navigator.language`, Accept-Language), e.g. `en-IN`. */
   locale?: string;
-  /** The IANA time zone of the page's clock, e.g. `Asia/Kolkata`. */
   timezone?: string;
 }
 
-/** The exe.dev VM ships a dedicated headless-shell build (Chromium 151). */
 const VM_HEADLESS_SHELL = "/headless-shell/headless-shell";
-/** Debian's apt chromium (installed via railpack aptPackages on deploys). */
 const DEBIAN_CHROMIUM = "/usr/bin/chromium";
 
-/**
- * Bound for a snapshot, click, or fill. Playwright's own default is "wait
- * forever", so a missing ref would hang until the tool call itself was
- * killed. Long enough for a slow VM round trip and a few retries.
- */
 const ACTION_TIMEOUT_MS = 15_000;
 
-/**
- * How long a navigation waits past `domcontentloaded` for the `load` event.
- * A script-built page (most of the web) has nothing to read at
- * `domcontentloaded`; a page whose load never settles (a stuck ad, a
- * stream) is read as it is once this runs out.
- */
 const SETTLE_MS = 5_000;
 
-/**
- * How long after a click or Enter a navigation may take to start. A link's
- * navigation begins a moment after the click resolves; returning at once
- * gave the old URL and let the next snapshot read the page being left. A
- * click that navigates nowhere pays this once.
- */
 const NAVIGATION_START_MS = 500;
 
-/**
- * How long a bot check that solves itself may take to reload into the real
- * page. Amazon's (AWS WAF) runs a script for a second or few, sets a token
- * cookie and reloads; returning before that handed the agent an empty 202.
- */
 const CHALLENGE_MS = 15_000;
 
-/**
- * Whether a document is a CDN's automatic bot check, which reloads into the
- * real page once its script has run: AWS WAF (Amazon) and Cloudflare say so
- * in a header. A CAPTCHA (`x-amzn-waf-action: captcha`) waits for a person,
- * so it is returned as it is.
- */
 function isSelfSolvingChallenge(response: Response): boolean {
   const headers = response.headers();
   return headers["x-amzn-waf-action"] === "challenge" || headers["cf-mitigated"] === "challenge";
 }
 
-/**
- * The main-frame response the tab ends on once a self-solving bot check has
- * reloaded into the real page, or the last one seen when it has not within
- * `CHALLENGE_MS`. Each reload goes through the navigation guard like any
- * other main-frame request.
- */
 async function throughChallenges(page: Page, response: Response | null): Promise<Response | null> {
   const deadline = Date.now() + CHALLENGE_MS;
   let current = response;
@@ -87,8 +39,6 @@ async function throughChallenges(page: Page, response: Response | null): Promise
     const timeout = deadline - Date.now();
     if (timeout <= 0) break;
     const main = page.mainFrame();
-    // The response comes before its document replaces the challenge's, so
-    // wait for that commit too before waiting on the new document.
     const committed = page
       .waitForEvent("framenavigated", { predicate: (f) => f === main, timeout })
       .catch(() => undefined);
@@ -108,11 +58,6 @@ async function throughChallenges(page: Page, response: Response | null): Promise
 
 const isRedirect = (status: number) => status >= 300 && status < 400;
 
-/**
- * The user agent of a person's Chrome of this binary's version. Headless
- * Chromium says `HeadlessChrome`, which sites read as a bot. Undefined when
- * the binary does not say its version.
- */
 async function personUserAgent(executable: string): Promise<string | undefined> {
   const { stdout } = await promisify(execFile)(executable, ["--version"], { timeout: 5_000 }).catch(
     () => ({ stdout: "" }),
@@ -125,23 +70,18 @@ async function personUserAgent(executable: string): Promise<string | undefined> 
       : process.platform === "win32"
         ? "Windows NT 10.0; Win64; x64"
         : "X11; Linux x86_64";
-  // Chrome reports only its major version (user agent reduction).
   return `Mozilla/5.0 (${platform}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${major}.0.0.0 Safari/537.36`;
 }
 
 function resolveExecutable(explicit?: string): string | undefined {
   if (explicit) return explicit;
-  // Prefer pre-provisioned system binaries: no download needed, and
-  // `pnpm exec playwright install` never has to run on the host.
   for (const candidate of [VM_HEADLESS_SHELL, DEBIAN_CHROMIUM]) {
     try {
       statSync(candidate);
       return candidate;
-    } catch {
-      // keep looking
-    }
+    } catch {}
   }
-  return undefined; // Playwright's bundled Chromium
+  return undefined;
 }
 
 export function createChromiumTransport(options: ChromiumTransportOptions = {}) {
@@ -150,14 +90,8 @@ export function createChromiumTransport(options: ChromiumTransportOptions = {}) 
     const userAgent = await personUserAgent(executablePath ?? chromium.executablePath());
     const context = await chromium.launchPersistentContext(profileDir, {
       headless: true,
-      // The new headless renderer. Only for Playwright's own browser — an
-      // explicit executable (VM headless shell) brings its own channel and
-      // must not be overridden.
       ...(executablePath ? { executablePath } : { channel: "chromium" as const }),
       viewport: { width: open.viewportWidth, height: open.viewportHeight },
-      // Bot checks (Amazon's among them) turn away a browser that says it is
-      // automated: `navigator.webdriver`, a HeadlessChrome user agent, or a
-      // UTC clock and en-US on an IP that is somewhere else.
       ignoreDefaultArgs: ["--enable-automation"],
       args: ["--disable-blink-features=AutomationControlled", ...(options.args ?? [])],
       ...(userAgent ? { userAgent } : {}),
@@ -177,49 +111,23 @@ export function createChromiumTransport(options: ChromiumTransportOptions = {}) 
   };
 }
 
-/**
- * The page-level session every chromium transport shares: navigation
- * behind the browser's navigation guard (every main-frame request of the
- * tab checked before it is sent) and ref snapshot/click/type.
- * `teardown.close` disposes the transport-specific resources around the
- * page (local context vs a remote chromium + tunnel). `openTab` gives
- * another agent a tab of its own in the same browser; `claimed` is the set
- * of tabs agents hold, shared by every tab session of one browser.
- */
 export function pageSession(
   initialPage: Page,
   open: OpenBrowserOptions,
   teardown: {
-    /** Gets the tab the session holds at close (it follows the owner's tabs). */
     close: (current: Page) => Promise<void>;
-    /** Subscribe to the browser dying; see `BrowserSession.onDisconnect`. */
     onDisconnect?: (listener: () => void) => void;
     vnc?: BrowserVnc;
-    /**
-     * The browser's navigation guard (`navigationGuard`): every tab the
-     * session drives is watched while the session holds it. Without one
-     * (stub pages in tests) `navigate` refuses to run.
-     */
     guard?: NavigationGuard;
   },
   claimed: Set<Page> = new Set(),
 ): BrowserSession {
   const exempt = parseExemptHosts(open.allowedPrivateHosts);
   const guard = teardown.guard;
-  // The tab the agent drives. With a streamed desktop the owner can open
-  // and close tabs, so this follows them (see `follow`).
   let page = initialPage;
   let closing = false;
-  /**
-   * The agent's tabs, oldest first: the one it started in, the ones its
-   * clicks opened, and the ones it was handed. All are held and guarded
-   * while open, so another agent never takes one and none loads a private
-   * address in the background.
-   */
   const mine: Page[] = [];
-  /** Guard the tab before the agent acts on it (once while held). */
   const watch = (target: Page) => guard?.watch(target, exempt);
-  /** Hold a tab as the agent's. Never waits on it: `guarded` does, before acting. */
   const hold = (target: Page) => {
     if (mine.includes(target)) return;
     mine.push(target);
@@ -227,7 +135,6 @@ export function pageSession(
     follow(target);
     void watch(target)?.catch(() => undefined);
   };
-  /** Let go of a tab that stays open (`release`) or has closed. */
   const letGo = (target: Page) => {
     const at = mine.indexOf(target);
     if (at >= 0) mine.splice(at, 1);
@@ -235,21 +142,16 @@ export function pageSession(
     guard?.unwatch(target);
   };
 
-  // Never waits on the tab: a hand-back must not hang on a busy page. The
-  // next action waits for the guard instead (`guarded`). The tab it leaves
-  // stays the agent's, one `browser_tabs` can switch back to.
   const switchTo = async (next: Page) => {
     if (next === page) return;
     hold(next);
     page = next;
   };
-  /** Run an action on the current tab once it is guarded. */
   const guarded = async <T>(action: (current: Page) => Promise<T>): Promise<T> => {
     const current = page;
     await watch(current);
     return action(current);
   };
-  /** The agent's open tab at `index` (0-based, oldest first). */
   const tabAt = (index: number) => {
     const target = mine[index];
     if (!target || target.isClosed?.()) {
@@ -258,9 +160,6 @@ export function pageSession(
     return target;
   };
 
-  // When the agent's current tab closes, move to its newest other tab, else
-  // the most recent tab no other agent holds; with none left the agent gets
-  // a fresh blank one, so it never holds a dead page.
   function follow(target: Page) {
     target.once("close", () => {
       letGo(target);
@@ -282,7 +181,6 @@ export function pageSession(
         if (!closing) listener();
       }),
     adoptActiveTab: async () => {
-      // Another agent's tab stays theirs, even if the owner left it in front.
       const visible = await visiblePage(page.context().pages());
       if (visible && (visible === page || !claimed.has(visible))) await switchTo(visible);
     },
@@ -298,11 +196,6 @@ export function pageSession(
     focus: () => page.bringToFront(),
     url: () => page.url(),
     navigate: async (url) => {
-      // The guard (S7, `navigation-guard.ts`) fails every main-frame request
-      // of this tab to a private target before it is sent: the URL itself
-      // (a name that resolves privately), each redirect hop, and whatever
-      // the page does next. The response's request chain is checked again
-      // after the load, as before. A refused load bails to about:blank.
       if (!guard) throw new Error("This browser has no navigation guard.");
       const current = page;
       const frameId = await guard.watch(current, exempt);
@@ -312,7 +205,6 @@ export function pageSession(
         response = await current.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 });
         response = await throughChallenges(current, response);
       } catch (error) {
-        // The refused hop fails the load; say why rather than the net error.
         if (!guard.refusedSince(frameId, mark)) throw error;
       }
       const hops: string[] = [];
@@ -337,11 +229,9 @@ export function pageSession(
     },
     back: () =>
       guarded(async (current) => {
-        // The guard watches every main-frame request of a held tab, so a
-        // history entry on a private address is refused like a navigation.
         const before = current.url();
         const response = await current.goBack({ waitUntil: "domcontentloaded", timeout: 30_000 });
-        if (!response && current.url() === before) return null; // no history to go back to
+        if (!response && current.url() === before) return null;
         await settle(current);
         return { url: current.url(), title: await titleOf(current) };
       }),
@@ -349,17 +239,16 @@ export function pageSession(
     text: (scope) => textOf(page, scope),
     waitFor: (wait) => waitForText(page, wait),
     origin: () => pageOrigin(page),
+    refOrigin: (ref) => refOrigin(page, ref),
     fillSecret: (fill) => guarded((current) => fillSecretFields(current, fill)),
     click: (ref) =>
       guarded(async (current) => {
-        // A link with target=_blank or a window.open: the agent goes on in
-        // the tab it opened, which the guard already watches (its opener's).
         const popup = current
           .waitForEvent("popup", { timeout: NAVIGATION_START_MS })
           .catch(() => null);
         await settleAfter(current, () => clickRef(current, ref));
         const opened = await popup;
-        if (!opened) return { url: current.url() }; // where the click led, once it settled
+        if (!opened) return { url: current.url() };
         await opened
           .waitForLoadState("domcontentloaded", { timeout: SETTLE_MS })
           .catch(() => undefined);
@@ -376,7 +265,6 @@ export function pageSession(
       ),
     switchTab: async (index) => {
       await switchTo(tabAt(index));
-      // In front, where the live view (and the owner) sees it.
       await page.bringToFront().catch(() => undefined);
       await watch(page);
       return { url: page.url(), title: await titleOf(page) };
@@ -394,7 +282,6 @@ export function pageSession(
     type: (ref, text) => guarded((current) => typeRef(current, ref, text)),
     press: (key) =>
       guarded((current) =>
-        // Enter submits forms; the other keys move within the page.
         key === "Enter"
           ? settleAfter(current, () => current.keyboard.press(key))
           : current.keyboard.press(key),
@@ -403,8 +290,6 @@ export function pageSession(
       guarded((current) => scrollPage(current, open, direction, amount)),
     screenshot: async (options) => {
       const current = page;
-      // CSS scale: on a 2x desktop the default would double both dimensions
-      // and the model would pay for pixels it cannot use.
       const capture = async () =>
         (await current.screenshot({ type: "jpeg", quality: 60, scale: "css" })).toString("base64");
       if (!options?.labels) return { data: await capture() };
@@ -418,7 +303,6 @@ export function pageSession(
       }
     },
     release: () => {
-      // The first tab stays open, unguarded; the tabs the agent opened go.
       for (const tab of mine.filter((t) => t !== page)) {
         letGo(tab);
         void tab.close().catch(() => {});
@@ -436,19 +320,8 @@ export function pageSession(
   return session;
 }
 
-/** Most labels one screenshot draws, and how many boxes are looked up at a time. */
 const MAX_LABELS = 150;
 
-/**
- * Draw each in-view control's ref on it (OpenClaw's labeled refs), so a
- * screenshot can be acted on without a separate snapshot. The refs come
- * from a fresh snapshot, so they are the ones the next click resolves. The
- * boxes are looked up a batch at a time, one round trip's wait each on the
- * VM link, until the view has its labels or the refs run out (a page
- * scrolled far down has its first hundreds above the view). They are drawn
- * in one fixed overlay that takes no clicks, under an id of this capture's
- * own. Returns that id and how many it drew.
- */
 async function drawRefLabels(page: Page): Promise<{ id: string; count: number }> {
   const tree = await snapshotOf(page);
   const refs = [...new Set(Array.from(tree.matchAll(/\[ref=(f?\d*e\d+)\]/g), (m) => m[1]!))];
@@ -499,11 +372,6 @@ async function drawRefLabels(page: Page): Promise<{ id: string; count: number }>
   return { id, count: inView.length };
 }
 
-/**
- * Leave a refused load for about:blank. The refusal fails `goto` before
- * Chrome commits its error page, and that commit interrupts a navigation
- * started meanwhile, so try once more after it.
- */
 async function leaveForBlank(page: Page): Promise<void> {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
@@ -515,11 +383,9 @@ async function leaveForBlank(page: Page): Promise<void> {
   }
 }
 
-/** The tab Chrome is showing: the one whose document reports itself visible. */
 function visiblePage(pages: Page[]): Promise<Page | undefined> {
   return new Promise((resolve) => {
     let pending = pages.length;
-    // A hidden tab can be slow to answer; settle on the first visible one.
     const timer = setTimeout(() => resolve(undefined), 1500);
     const settle = (found?: Page) => {
       if (found || --pending <= 0) {
@@ -537,34 +403,16 @@ function visiblePage(pages: Page[]): Promise<Page | undefined> {
   });
 }
 
-/**
- * Playwright's AI accessibility snapshot, made compact (`compactSnapshot`).
- * Each control is labeled `[ref=e12]` (or `[ref=f1e12]` inside a frame).
- * `getByRef` resolves those refs against the latest snapshot, which is how
- * Playwright MCP clicks and types. Refs stay the same across snapshots of
- * one page, so a snapshot scoped to a region (`scope`) keeps the refs the
- * whole-page one gave.
- */
 async function snapshotOf(page: Page, scope?: string): Promise<string> {
   const root = scope ? (assertRefShape(scope), page.getByRef(scope)) : page.locator("body");
   return compactSnapshot(await root.ariaSnapshot({ mode: "ai", timeout: ACTION_TIMEOUT_MS }));
 }
 
-/**
- * The text a reader sees (`innerText`: hidden elements left out, blocks on
- * lines of their own), of the page or of one element. On an article it is a
- * fifth of the snapshot or less, because it carries no roles, refs or URLs.
- */
 async function textOf(page: Page, scope?: string): Promise<string> {
   const root = scope ? (assertRefShape(scope), page.getByRef(scope)) : page.locator("body");
   return tidyText(await root.innerText({ timeout: ACTION_TIMEOUT_MS }));
 }
 
-/**
- * Run a click or key press, then, if it started a navigation of the tab
- * (a new document, or a script-driven route change), wait for that page to
- * settle so the result's URL and the next read are of the page it led to.
- */
 async function settleAfter<T>(page: Page, action: () => Promise<T>): Promise<T> {
   const main = page.mainFrame();
   const window = { timeout: NAVIGATION_START_MS };
@@ -583,11 +431,6 @@ async function settleAfter<T>(page: Page, action: () => Promise<T>): Promise<T> 
   return result;
 }
 
-/**
- * Wait for text to show (a result, a confirmation) or to go (a spinner,
- * "Loading…"), checked by Playwright against what is rendered, in any frame
- * of the page's main document. Without text, a plain pause.
- */
 async function waitForText(
   page: Page,
   wait: { text?: string; gone?: boolean; timeoutMs: number },
@@ -607,15 +450,12 @@ async function waitForText(
     );
 }
 
-/** Wait for `load`, up to `SETTLE_MS`; a page that never settles is used as it is. */
 async function settle(page: Page): Promise<void> {
   await page.waitForLoadState("load", { timeout: SETTLE_MS }).catch(() => undefined);
 }
 
-/** How long the title may take: the renderer answers it, and a busy page never does. */
 const TITLE_MS = 1_000;
 
-/** The page's title, or undefined when it has none or cannot say in time. */
 async function titleOf(page: Page): Promise<string | undefined> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const late = new Promise<string>((resolve) => {
@@ -628,19 +468,10 @@ async function titleOf(page: Page): Promise<string | undefined> {
 
 async function clickRef(page: Page, ref: string) {
   assertRefShape(ref);
-  // Scrolls into view and retries until this element is the one under the cursor.
   await page.getByRef(ref).click({ timeout: ACTION_TIMEOUT_MS });
   return { url: page.url() };
 }
 
-/**
- * `fill` sets date, color, range and other value inputs itself, and
- * `selectOption` picks a dropdown's option by label or value (`fill` throws
- * on a <select>). A click on those opens the native picker, so they are
- * never clicked. Text fields go through CDP insertion, which on headful
- * Chrome lands on whichever surface has browser focus — often the address
- * bar — so those are clicked first.
- */
 async function fieldKind(locator: Locator, ref: string): Promise<"text" | "set" | "select"> {
   const kind = await locator.evaluate((el) => {
     const tag = el.tagName;
@@ -675,13 +506,10 @@ async function typeRef(page: Page, ref: string, text: string) {
   const locator = page.getByRef(ref);
   const kind = await fieldKind(locator, ref);
   if (kind === "select") {
-    // Matches an option's value or its label; throws when none matches.
     await locator.selectOption(text, { timeout: ACTION_TIMEOUT_MS });
     return { url: page.url() };
   }
   if (kind === "text") await locator.click({ timeout: ACTION_TIMEOUT_MS });
-  // One fill replaces the value. A key per character is a round trip each
-  // on the VM link and timed out on anything longer than a short phrase.
   await locator.fill(text, { timeout: ACTION_TIMEOUT_MS });
   return { url: page.url() };
 }
@@ -696,9 +524,6 @@ async function scrollPage(
     width: open.viewportWidth,
     height: open.viewportHeight,
   };
-  // A wheel event hits whatever is under the cursor. On the VM that cursor
-  // is often the address bar or a point left over from the last action, so
-  // park it in the page first.
   await page.mouse.move(Math.floor(viewport.width / 2), Math.floor(viewport.height / 2));
   await page.mouse.wheel(0, direction === "down" ? amount : -amount);
 }

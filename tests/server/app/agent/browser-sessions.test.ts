@@ -1,9 +1,3 @@
-/**
- * The browser session manager's lifecycle rules, with a fake transport and
- * a fake clock: a close during an open never resurrects the browser, the
- * idle sweep closes only idle browsers, planning never launches, and an
- * action tool waits on the owner's hand-back rather than polling.
- */
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -17,7 +11,6 @@ import {
 
 const TARGET = { profile: "p1", tab: "t1" };
 
-/** A controllable clock: timers fire only when the test advances it. */
 function fakeClock() {
   let now = 1_000_000;
   const timers = new Map<number, { at: number; fn: () => void; every?: number }>();
@@ -121,9 +114,7 @@ describe("browser sessions", () => {
 
     expect(sessions.get(TARGET)).toBeUndefined();
     expect(fake.log).toEqual(["close", "wipe /tmp/ta-bs/p1"]);
-    // Not an open failure the status route should report.
     expect(sessions.openState(TARGET)).toEqual({ opening: false, error: undefined });
-    // The next call opens fresh.
     await sessions.acquire(TARGET);
     expect(sessions.get(TARGET)).toBeDefined();
     expect(fake.dials).toBe(2);
@@ -204,7 +195,7 @@ describe("browser sessions", () => {
 
     advance(30_000);
     expect(sessions.profiles().sort()).toEqual(["p1", "p2"]);
-    advance(60_000); // past the minute: the sweep runs
+    advance(60_000);
     expect(sessions.profiles()).toEqual(["p2"]);
     expect(fake.log).toEqual(["close"]);
     await sessions.closeAll();
@@ -232,10 +223,8 @@ describe("browser sessions", () => {
     await sessions.setDriver(TARGET, "agent");
     await waiting;
     expect(done).toBe(true);
-    // The wait's timer went with the hand-back; no polling timer is left behind.
     expect(pending()).toBe(timersWhileWaiting - 1);
 
-    // Nobody hands back: the bound ends the wait with the takeover message.
     await sessions.setDriver(TARGET, "human");
     const timedOut = sessions.actionTurn(TARGET);
     await new Promise((r) => setTimeout(r, 10));
@@ -255,7 +244,7 @@ describe("browser sessions", () => {
       clock,
     });
     const opening = sessions.acquire(TARGET);
-    expect(pending()).toBe(1); // the sweep
+    expect(pending()).toBe(1);
     const closing = sessions.closeAll();
     release();
     await expect(opening).rejects.toThrow("closed while it was opening");

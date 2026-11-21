@@ -27,7 +27,6 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 
-/** Sharing from another app: what the share intent carries, and what the sheet sends. */
 @RunWith(AndroidJUnit4::class)
 class ShareTest {
     private val csv = Uri.parse("content://files/artha-net-worth.csv")
@@ -86,7 +85,6 @@ class ShareTest {
         assertEquals("Cheap flights\nhttps://example.com/f", sharedText(SharedContent(text = "https://example.com/f", subject = "Cheap flights")))
         assertEquals("Cheap flights https://example.com/f", sharedText(SharedContent(text = "Cheap flights https://example.com/f", subject = "Cheap flights")))
         assertEquals("Just text", sharedText(SharedContent(text = "Just text")))
-        // A file's subject (an email's) says nothing the bot needs.
         assertNull(sharedText(SharedContent(uris = listOf(csv), subject = "Fwd: statement")))
         assertNull(sharedText(SharedContent(uris = listOf(csv))))
     }
@@ -111,7 +109,6 @@ class ShareTest {
         assertFalse("already sending", ShareDraft(botId = "b1", note = "hi", sending = true).canSend)
 
         assertTrue(ShareDraft(botId = "b1", staged = listOf(uploaded)).canSend)
-        // Sending waits for an upload still on its way.
         assertTrue(ShareDraft(botId = "b1", staged = listOf(uploading)).canSend)
         assertTrue(ShareDraft(botId = "b1", sharedText = "https://example.com").canSend)
         assertTrue(ShareDraft(botId = "b1", note = "Look at this").canSend)

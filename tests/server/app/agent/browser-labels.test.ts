@@ -1,13 +1,8 @@
-/**
- * Screenshots labeled with refs, in real Chromium: each control in view gets
- * its ref drawn on it for that one capture, and the page is left as it was.
- */
 import { existsSync } from "node:fs";
 import { chromium } from "playwright-core";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { pageSession } from "../../../../packages/sandbox/src/browser-chromium";
 
-/** A Chromium this machine has, if any (CI may have none). */
 const chromiumPath = [
   chromium.executablePath(),
   "/usr/bin/chromium",
@@ -36,7 +31,6 @@ describe.skipIf(!chromiumPath)("labeled screenshots in real Chromium", () => {
     const plain = await session.screenshot();
 
     const labeled = await session.screenshot({ labels: true });
-    // The button and the link are in view; the one 2000px down is not.
     expect(labeled.labeled).toBe(2);
     expect(labeled.data).not.toBe(plain.data);
 

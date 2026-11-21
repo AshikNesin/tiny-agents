@@ -9,7 +9,6 @@ import { openTestRuntime } from "../../../packages/agent/src/testing";
 import { applyChatEvents, until } from "../fixtures";
 
 const TIMEOUT_MS = 15_000;
-/** The fixture's poll with this suite's longer patience (restarts are slow). */
 const untilReady = <T>(
   check: () => T | false | undefined | Promise<T | false | undefined>,
   what: string,
@@ -52,9 +51,7 @@ async function waitForChildMessage(
             finish(() => resolveMessage(message as Record<string, unknown>));
             return;
           }
-        } catch {
-          // The child only emits JSON protocol messages on stdout.
-        }
+        } catch {}
       }
     });
     child.stderr?.on("data", (chunk: string) => {

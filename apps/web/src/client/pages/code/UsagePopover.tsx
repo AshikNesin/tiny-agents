@@ -1,18 +1,12 @@
-/**
- * The context usage popup (issue #143), opened from the composer's context
- * ring: the harness's usage report (ADR 0011) as a table — total and
- * subtotal, one row group per model with its token bands (cache
- * read/write, input, output), "Other (indirect)" rows for usage a thread
- * incurs outside its own turns, a subagent column when children exist, and
- * "Compact in place" when the harness can compact.
- */
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Popover as PopoverPrimitive } from "radix-ui";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@groot/ui/table";
 import { cn } from "@groot/ui/lib/utils";
 import { Spinner } from "../../components/ui/spinner";
 import { codeApi, type UsageBand, type UsageReport, type UsageRow } from "../../lib/code/api";
 import { formatTokenCount, formatUnitPrice, formatUsd } from "../../lib/code/format";
+import { RESOURCE_QUERY } from "../../queries/resource";
 
 function TokenBandCell({ band }: { band: UsageBand }) {
   if (!band.tokens) {
@@ -38,7 +32,6 @@ function TokenBandCell({ band }: { band: UsageBand }) {
   );
 }
 
-/** One model's row group: the model name over its token bands. */
 function ModelRows({
   model,
   showSubagents,
@@ -50,7 +43,6 @@ function ModelRows({
 }) {
   const bands = model.bands
     .map((band, i) => ({ band, sub: subagent?.bands[i] }))
-    // A zero cache-write band is noise for providers that never write it.
     .filter(({ band, sub }) => !(band.label === "Cache write" && !band.tokens && !sub?.tokens));
   return (
     <TableBody className="border-border/60">
@@ -94,11 +86,8 @@ export interface UsagePopoverProps {
   used: number;
   max?: number;
   threadId: string;
-  /** Subagents of this thread (the column appears when non-empty). */
   hasSubagents: boolean;
-  /** Children: the ring trigger itself. */
   children: React.ReactNode;
-  /** Runs /compact; the popup shows it as "Compact in place". */
   onCompact?: () => void;
 }
 
@@ -111,25 +100,14 @@ export function UsagePopover({
   onCompact,
 }: UsagePopoverProps) {
   const [open, setOpen] = useState(false);
-  const [report, setReport] = useState<UsageReport | null>(null);
-  const [state, setState] = useState<"idle" | "loading" | "error">("idle");
-
-  useEffect(() => {
-    if (!open) return;
-    let live = true;
-    setState("loading");
-    codeApi
-      .usage(threadId)
-      .then((r) => {
-        if (!live) return;
-        setReport(r);
-        setState("idle");
-      })
-      .catch(() => live && setState("error"));
-    return () => {
-      live = false;
-    };
-  }, [open, threadId]);
+  const usage = useQuery({
+    queryKey: ["code", "usage", threadId],
+    queryFn: () => codeApi.usage(threadId),
+    enabled: open,
+    ...RESOURCE_QUERY,
+  });
+  const report: UsageReport | null = usage.data ?? null;
+  const failed = usage.isError && !usage.isFetching;
 
   const showSubagents = hasSubagents && (report?.subagents.length ?? 0) > 0;
   const pct = max && used ? Math.min(100, Math.round((used / max) * 100)) : null;
@@ -159,7 +137,7 @@ export function UsagePopover({
             </div>
 
             {!report ? (
-              state === "error" ? (
+              failed ? (
                 <p className="text-muted-foreground py-3">Usage is not available right now.</p>
               ) : (
                 <p className="text-muted-foreground flex items-center gap-1.5 py-3">

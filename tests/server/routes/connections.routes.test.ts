@@ -1,9 +1,3 @@
-/**
- * MCP connections end to end (issue #1 M3): a real Streamable HTTP MCP server
- * on localhost with header auth, CRUD through the API, the manager's live
- * state and re-install on tool changes, and the OAuth flow against a fake
- * authorization server.
- */
 import { createServer, type IncomingMessage, type RequestListener, type Server } from "node:http";
 import { fakeCatalog, useTestRuntime } from "../fixtures";
 import type { AddressInfo } from "node:net";
@@ -40,14 +34,12 @@ const buildApp = (): TestApp => createTestApp();
 // oxlint-disable-next-line typescript/no-explicit-any -- response data varies per route
 type Data = any;
 
-/** An authenticated JSON request that must answer `status`; returns the envelope. */
 async function call(
   app: TestApp,
   path: string,
   status: number,
   init: { method?: string; json?: unknown; stepUp?: false } = {},
 ) {
-  // The owner has stepped up (S4) unless a test says otherwise.
   const headers: Record<string, string> =
     init.stepUp === false ? {} : { "X-Vault-Step-Up": issueStepUp(1).token };
   const response = await api<Data>(app, path, {
@@ -79,7 +71,6 @@ interface TestMcpServer {
   url: string;
   server: Server;
   tokens: Set<string>;
-  /** Hold every request this long first (a slow server, for race tests). */
   delayMs: number;
 }
 
@@ -105,7 +96,6 @@ function buildMcp(name: string, extraTools = 0) {
   return mcp;
 }
 
-/** Stateless Streamable HTTP MCP server requiring `x-api-key: secret123`. */
 async function startMcpServer(extraTools = 0): Promise<TestMcpServer> {
   const tokens = new Set<string>(["secret123"]);
   const state = { delayMs: 0 };
@@ -130,7 +120,6 @@ async function startMcpServer(extraTools = 0): Promise<TestMcpServer> {
       );
       return;
     }
-    // Stateless: one server+transport per request, closed with the response.
     const mcp = buildMcp("demo-mcp", extraTools);
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
@@ -198,7 +187,6 @@ describe("MCP connections (header auth, streamable http)", () => {
     await db.delete(botConnections);
     await db.delete(connections);
     await db.delete(bots);
-    // Connections deleted above leave their own header-value items (Q4).
     await db.delete(vaultAuditEvents);
     await db.delete(vaultItems);
     await db.delete(vaultValues);
@@ -255,10 +243,8 @@ describe("MCP connections (header auth, streamable http)", () => {
     const elsewhere = mcpServer.url.replace("127.0.0.1", "localhost");
     const moved = await call(app, path, 200, { method: "PATCH", json: { url: elsewhere } });
     expect(moved.data.hasSecret).toBe(false);
-    // The old host's value is gone, its own vault item with it (Q4).
     expect((await db.query.connections.findFirst())?.secretItemId).toBeNull();
     expect(await db.select().from(vaultItems)).toEqual([]);
-    // Moving with a new secret keeps that one.
     const back = await call(app, path, 200, {
       method: "PATCH",
       json: { url: mcpServer.url, secret: "fresh" },
@@ -362,7 +348,6 @@ describe("MCP connections (header auth, streamable http)", () => {
     });
     expect(JSON.stringify(await db.select().from(vaultValues))).not.toContain("secret123");
 
-    // A new value replaces the item's in place, and connects with it.
     const path = `/api/v1/connections/${data.id}`;
     mcpServer.tokens.add("secret456");
     mcpServer.tokens.delete("secret123");
@@ -370,13 +355,11 @@ describe("MCP connections (header auth, streamable http)", () => {
     expect(changed.data.status).toBe("connected");
     expect((await db.select().from(vaultItems)).map((i) => i.id)).toEqual([item!.id]);
 
-    // Pointing at another item and back (null) returns to its own.
     const shared = await call(app, path, 200, { method: "PATCH", json: { secretRef: "mcp-own" } });
     expect(shared.data).toMatchObject({ secretRef: "mcp-own", status: "connected" });
     const own = await call(app, path, 200, { method: "PATCH", json: { secretRef: null } });
     expect(own.data).toMatchObject({ secretRef: null, hasSecret: true, status: "connected" });
 
-    // Removing the connection removes its item and value; the audit says so.
     await call(app, path, 200, { method: "DELETE" });
     expect(await db.select().from(vaultItems)).toEqual([]);
     expect(await db.select().from(vaultValues)).toEqual([]);
@@ -462,7 +445,6 @@ describe("MCP connections (header auth, streamable http)", () => {
     expect(runtimeCalls.install).toContain("mcp:demo");
     expect(created.data).not.toHaveProperty("secret");
 
-    // A bad secret is reported, not thrown away silently.
     const bad = await call(app, "/api/v1/connections", 201, {
       method: "POST",
       json: {
@@ -560,7 +542,6 @@ describe("MCP connections (header auth, streamable http)", () => {
       ["reset", true],
     ]);
 
-    // Reconnecting (a fresh tool listing) keeps it off.
     await call(app, `/api/v1/connections/${id}/reconnect`, 200, { method: "POST" });
     expect(installed.get("mcp:demo")!.tools.map((t) => t.name)).toEqual(["mcp__demo__reset"]);
 
@@ -615,7 +596,6 @@ describe("MCP connections (header auth, streamable http)", () => {
         secret: "secret123",
       },
     });
-    // A second manager, like a fresh boot: connects from rows alone.
     const fresh = new ConnectionManager();
     const installed: string[] = [];
     await fresh.start({
@@ -702,7 +682,6 @@ describe("MCP connection lifecycle (the manager owns it)", () => {
     await db.delete(botConnections);
     await db.delete(connections);
     await db.delete(bots);
-    // Connections deleted above leave their own header-value items (Q4).
     await db.delete(vaultAuditEvents);
     await db.delete(vaultItems);
     await db.delete(vaultValues);
@@ -720,9 +699,6 @@ describe("MCP connection lifecycle (the manager owns it)", () => {
     const id = created.data.id;
     expect(created.data.status).toBe("connected");
 
-    // Attempt 1 would succeed (right secret) but is slow; attempt 2 (wrong
-    // secret) starts meanwhile and fails at once. The slow success must not
-    // overwrite the newer failure.
     mcpServer.delayMs = 800;
     void manager.rowChanged(id, 0);
     await sleep(20);
@@ -750,7 +726,6 @@ describe("MCP connection lifecycle (the manager owns it)", () => {
     changes = [];
     mcpServer.delayMs = 0;
     await sleep(1_200);
-    // No state, no capability, no announcement from the attempt that outlived the row.
     expect(manager.status(id)).toEqual({ status: "connecting" });
     expect(runtimeCalls.install.length).toBe(installsBefore);
     expect(changes).toEqual([]);
@@ -769,7 +744,6 @@ describe("MCP connection lifecycle (the manager owns it)", () => {
   it("leaves tool_search to the runtime, however large its connections are", async () => {
     await new Promise<void>((resolve) => mcpServer.server.close(() => resolve()));
     await manager.close();
-    // 300 small tools pass MCP_DEFER_CHARS.
     await startManager(await startMcpServer(300));
     const app = buildApp();
     const big = await createDemo(app, { name: "Big one" });
@@ -779,12 +753,7 @@ describe("MCP connection lifecycle (the manager owns it)", () => {
   }, 30_000);
 });
 
-/**
- * A fake OAuth authorization server (discovery, registration, token) and an
- * MCP URL that always answers 401 pointing at it.
- */
 async function startFakeOAuth() {
-  // Minimal OAuth pieces: discovery, registration, token.
   const authApp = new Hono();
   authApp.get("/.well-known/oauth-authorization-server", (c) =>
     c.json({
@@ -834,8 +803,6 @@ async function startFakeOAuth() {
   const { server: authServer, port: authPort } = await listen(getRequestListener(authApp.fetch));
   expect(authPort).toBeGreaterThan(0);
 
-  // A server URL whose discovery points at the fake AS and always 401s
-  // without a token; accept-token requests hit the AS's token endpoint only.
   const resourceApp = new Hono();
   resourceApp.get("/.well-known/oauth-protected-resource", (c) =>
     c.json({
@@ -866,7 +833,6 @@ async function startFakeOAuth() {
   };
 }
 
-/** A started manager whose runtime records the capabilities it uninstalls. */
 async function startOAuthManager() {
   const manager = new ConnectionManager();
   setConnectionManagerForTests(manager);
@@ -898,10 +864,8 @@ describe("MCP OAuth (fake authorization server)", () => {
           .values({ name: "Locked", slug: "locked", url, authType: "oauth" })
           .returning()
       )[0]!;
-      // authorize() runs discovery + registration and captures the consent URL.
       const consent = await manager.authorize(row.id);
       expect(consent).toContain("authorize");
-      // The connection itself reports needs_auth until the code comes back.
       await manager.connect(row.id);
       expect(manager.status(row.id).status).toBe("needs_auth");
       expect(uninstalled).toContain("mcp:locked");
@@ -911,11 +875,6 @@ describe("MCP OAuth (fake authorization server)", () => {
       expect(id).toBe(row.id);
       expect(await manager.hasTokens(row.id)).toBe(true);
 
-      // The browser returns from the authorization server as a cross-site
-      // redirect: no session cookie, no Authorization header. The callback
-      // route must still complete the exchange (regression: it used to sit
-      // behind jwtAuthMiddleware and failed with UNAUTHORIZED "No token
-      // provided").
       const second = (
         await db
           .insert(connections)
@@ -952,7 +911,6 @@ describe("MCP OAuth (fake authorization server)", () => {
     const fake = await startFakeOAuth();
     const { manager, uninstalled } = await startOAuthManager();
     try {
-      // What every OAuth connection held after the v2 secret format (#213) shipped.
       const row = (
         await db
           .insert(connections)

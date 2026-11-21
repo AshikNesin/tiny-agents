@@ -1,8 +1,3 @@
-/**
- * Computer routes (issue #108): status, start, VNC ticket, driver (and the
- * takeover hand-back) and reset, against the app's Hono stack with a fake
- * desktop manager injected through the same seam the toolkit uses.
- */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { fakeCatalog, fakeModel, useTestRuntime } from "../fixtures";
 import { api, createTestApp } from "../helpers";

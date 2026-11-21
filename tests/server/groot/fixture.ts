@@ -5,12 +5,6 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { randomBytes } from "node:crypto";
 
-/**
- * Fixture git repos for the groot tooling suites: a throwaway "boilerplate"
- * repo and a "child" clone in a temp dir. The tools acquire the boilerplate
- * over file:// exactly like production.
- */
-
 const exec = promisify(execFile);
 export const TIMEOUT = 60_000;
 
@@ -20,7 +14,6 @@ const GIT_ENV = {
   GIT_AUTHOR_EMAIL: "test@localhost",
   GIT_COMMITTER_NAME: "test",
   GIT_COMMITTER_EMAIL: "test@localhost",
-  // Ignore the developer's global/system config so tests are hermetic.
   GIT_CONFIG_GLOBAL: "/dev/null",
   GIT_CONFIG_SYSTEM: "/dev/null",
 };
@@ -55,10 +48,6 @@ export const CORE_FILE = "packages/core/src/util.ts";
 export const DOC_FILE = "docs/guide.md";
 export const APP_FILE = "apps/web/src/server/api/todo.ts";
 
-/**
- * Core fixture file with the two editable lines far apart, so single-line
- * edits on different lines land in separate diff3 hunks and merge cleanly.
- */
 export const coreContent = (a: string, b: string): string =>
   [
     `export const a = ${a};`,
@@ -76,11 +65,9 @@ export interface Fixture {
   bp: string;
   child: string;
   baseCommit: string;
-  /** Unique boilerplate name so acquireBoilerplate never reuses ~/Code/<name>. */
   name: string;
 }
 
-/** Boilerplate at commit1 + child cloned from it with sync config committed. */
 export async function createFixture(): Promise<Fixture> {
   const root = await mkdtemp(join(tmpdir(), "groot-sync-test-"));
   const bp = join(root, "boilerplate");

@@ -1,15 +1,3 @@
-/**
- * The vault's policy, audit and read path (issue #56).
- *
- * `VaultItem` rows hold references and policy; values stay in the backend
- * and are fetched per use. Every attempted use by a bot or connection —
- * refusals and denials included — writes a `VaultAuditEvent` without any
- * value. An `app` item (a model provider's key, issue #179) audits refusals
- * and failures only, and its value is cached in memory for a few minutes, so
- * every model call neither writes a row nor reaches the backend. This module
- * resolves with the read-only backends only; writes live in
- * `vault.admin.service.ts`.
- */
 import { and, asc, eq } from "drizzle-orm";
 import { logger } from "@groot/core/logger";
 import {
@@ -61,7 +49,6 @@ const parseJson = <T>(raw: string | null | undefined): T | undefined => {
   }
 };
 
-/** Cards always ask, every time; no setting lowers that. */
 export function effectiveApproval(row: Pick<VaultItemRow, "kind" | "approval">): VaultApproval {
   if (row.kind === "card") return "every_use";
   return (["every_use", "per_conversation", "allowed"] as const).includes(
@@ -100,7 +87,6 @@ function botAllowed(row: VaultItemRow, botId: string | undefined): boolean {
   return botId !== undefined && parseList(row.botsJson).includes(botId);
 }
 
-/** Exact `scheme://host[:port]`, lowercased; `undefined` when not an http(s) origin. */
 export function normalizeOrigin(raw: string): string | undefined {
   try {
     const url = new URL(raw.trim());
@@ -110,8 +96,6 @@ export function normalizeOrigin(raw: string): string | undefined {
     return undefined;
   }
 }
-
-// ── Backend status ──────────────────────────────────────────────────────
 
 const STATUS_TTL_MS = 60_000;
 
@@ -131,8 +115,6 @@ export async function backendStatus(name: BackendName, force = false): Promise<B
 export function clearStatusCache(): void {
   app().vault.backendStatus.clear();
 }
-
-// ── Audit ───────────────────────────────────────────────────────────────
 
 export interface AuditInput {
   item?: Pick<VaultItemRow, "id" | "handle">;
@@ -178,14 +160,10 @@ export async function audit(input: AuditInput): Promise<void> {
   }
 }
 
-// ── Policy ──────────────────────────────────────────────────────────────
-
-/** Who is asking: resolved by the broker from the conversation. */
 export interface UseContext {
   botId?: string;
   botName?: string;
   unattended: boolean;
-  /** A shared bot's chat (issue #145): guests are in it, so every use asks the owner. */
   shared?: boolean;
 }
 
@@ -193,7 +171,6 @@ export async function findItem(handle: string): Promise<VaultItemRow | null> {
   return (await db.query.vaultItems.findFirst({ where: eq(vaultItems.handle, handle) })) ?? null;
 }
 
-/** Items the bot may use, narrowed by tool and origin. */
 export async function listFor(scope: {
   botId?: string;
   tool?: string;
@@ -218,7 +195,6 @@ function hostAllowed(row: VaultItemRow, host: string): boolean {
     .includes(host.toLowerCase());
 }
 
-/** Whether the item's policy lets a value go to this target, read by the target's kind. */
 function targetAllowed(row: VaultItemRow, kind: VaultTargetKind, target: string): boolean {
   switch (kind) {
     case "origin": {
@@ -227,23 +203,17 @@ function targetAllowed(row: VaultItemRow, kind: VaultTargetKind, target: string)
     }
     case "host":
       return hostAllowed(row, target);
-    // A model provider's requests: only an app item, and only to its hosts.
     case "provider":
       return row.audience === "app" && hostAllowed(row, target);
-    // Code's GitHub calls and pushes: only an app item that names GitHub.
     case "github":
       return (
         row.audience === "app" &&
         (hostAllowed(row, "github.com") || hostAllowed(row, "api.github.com"))
       );
-    // Commands run confined to the item's hosts, so it must name some.
     case "command":
       return parseList(row.hostsJson).length > 0;
-    // The owner linked the item to the connection itself.
     case "connection":
       return true;
-    // A desktop window: the sink checks the bound window right before typing,
-    // and every use asks, showing the owner which window.
     case "window":
       return true;
     default:
@@ -264,22 +234,14 @@ function targetRefusal(row: VaultItemRow, use: Pick<VaultUse, "handle" | "target
 
 type Refusal = Extract<VaultPlan, { refused: string }>;
 
-/** What a policy check is about: the use, minus the conversation a connection's use has none of. */
 type PolicyUse = Pick<VaultUse, "handle" | "tool" | "targetKind" | "target">;
 
-/**
- * The one policy check: why this row may not be used this way, or nothing.
- * `botScoped` is false for a use with no bot behind it (a connection the
- * owner linked the item to). Checks the backend last, so a refusal never
- * costs a backend round-trip.
- */
 async function policyRefusal(
   row: VaultItemRow | null,
   use: PolicyUse,
   who: UseContext,
   botScoped = true,
 ): Promise<{ refused: Refusal["refused"]; message: string; reason?: string } | undefined> {
-  // A bot that may not see an item learns nothing about it; app items are never a bot's.
   if (!row || (botScoped && (row.audience !== "bots" || !botAllowed(row, who.botId)))) {
     return { refused: "unknown_handle", message: UNKNOWN_HANDLE(use.handle) };
   }
@@ -312,7 +274,6 @@ async function policyRefusal(
   return undefined;
 }
 
-/** The policy decision for a use; audits refusals. Resolves no value. */
 export async function planUse(use: VaultUse, who: UseContext): Promise<VaultPlan> {
   const row = await findItem(use.handle);
   const refusal = await policyRefusal(row, use, who);
@@ -345,15 +306,12 @@ export async function planUse(use: VaultUse, who: UseContext): Promise<VaultPlan
   return { ...approvalOf(item, use, who), unattended: who.unattended, card };
 }
 
-/** Whether a bot's use of an allowed item asks the owner, and may be granted for the chat. */
 function approvalOf(
   item: VaultItemRow,
   use: Pick<VaultUse, "targetKind"> & { granted?: boolean },
   who: UseContext,
 ): { approve: boolean; grantable: boolean } {
   const approval = effectiveApproval(item);
-  // A command is code the model wrote holding the secret, and a window is
-  // one the model named: every use asks.
   const everyUse =
     approval === "every_use" ||
     use.targetKind === "command" ||
@@ -376,18 +334,12 @@ const VALUE_FIELD: Record<SecretField, ValueField> = {
   value: "value",
 };
 
-/** The value field an api_key item keeps its key in (`VaultItem.field`, else the credential). */
 function backendField(row: VaultItemRow, field: SecretField): ValueField {
   if (field === "value" && row.field) return row.field as ValueField;
   if (field === "value" && row.kind === "login") return "password";
   return VALUE_FIELD[field];
 }
 
-/**
- * Re-check policy, resolve the fields, register them with the redactor and
- * hand them to `sink`. Audited either way; values never leave this call
- * except into the sink.
- */
 export async function runItemUse<T>(
   use: VaultUse & { approved: boolean },
   who: UseContext & { taskId?: number },
@@ -397,12 +349,6 @@ export async function runItemUse<T>(
   return runUse(use, who, { botScoped: true, usedBy: who.botName ?? null }, fields, sink);
 }
 
-/**
- * The one use path every sink's value takes: policy (a refusal audited),
- * the owner's approval, resolve, the sink, then the outcome's audit and the
- * item's last use. A bot's use is scoped to the item's bots and asks per the
- * item; a linked one (`botScoped: false`, an MCP connection) is neither.
- */
 async function runUse<T>(
   use: PolicyUse & { conversation?: number; granted?: boolean; approved: boolean },
   who: UseContext & { taskId?: number },
@@ -438,8 +384,6 @@ async function runUse<T>(
   try {
     result = await sink(values, meta);
   } catch (error) {
-    // The audit says what happened, not what was meant: a sink that threw
-    // used nothing it can vouch for, and one whose target moved refused.
     const moved = error instanceof VaultTargetMovedError;
     await audit({
       ...base,
@@ -457,12 +401,6 @@ async function runUse<T>(
   return result;
 }
 
-/**
- * Resolve the wanted fields from the item's backend, registering each with
- * the redactor. A field the item has no value for is left out (a card
- * without a saved security code); none at all, or a backend failure, is
- * audited and thrown as a `VaultError`.
- */
 async function resolveValues(
   row: VaultItemRow,
   wanted: readonly SecretField[],
@@ -509,15 +447,6 @@ async function markUsed(itemId: string, by: string | null): Promise<void> {
     .catch(() => undefined);
 }
 
-/**
- * A connection's header value from its vault item (`Connection.secretRef`):
- * resolved at connect time through the same use path as a bot's sink, so it
- * is registered with the redactor and audited. The owner linked the item to
- * the connection, so there is no bot scope, no per-use approval and nobody
- * "present" for the unattended rule; the item must still allow `mcp` and be
- * enabled. With `host` (the connection's own item), the item must also list
- * that host. Throws a message the connection's status shows.
- */
 export async function resolveConnectionSecret(
   handle: string,
   slug: string,
@@ -526,8 +455,6 @@ export async function resolveConnectionSecret(
   const target = `mcp:${slug}`;
   try {
     return await runUse(
-      // The connection's own item goes only to the hosts it lists (S4): the
-      // use is checked as one to the connection's host.
       host === undefined
         ? { handle, tool: "mcp", targetKind: "connection", target, approved: false }
         : { handle, tool: "mcp", targetKind: "host", target: host, approved: false },
@@ -538,7 +465,6 @@ export async function resolveConnectionSecret(
     );
   } catch (error) {
     if (!(error instanceof VaultError)) throw error;
-    // A backend failure's message stands alone; a refusal names the item.
     throw new Error(
       error.code === "backend_error" || error.code === "missing_field"
         ? error.message
@@ -548,12 +474,49 @@ export async function resolveConnectionSecret(
   }
 }
 
-// ── App credentials ─────────────────────────────────────────────────────
-
-/** How long a resolved app credential is kept in memory. */
 const APP_VALUE_TTL_MS = 5 * 60_000;
 
-/** Drop a cached app credential (its item was edited, rotated or deleted). */
+const APP_RETRY_DELAYS_MS = [500, 1000, 2000, 4000];
+
+async function remoteItem(handle: string): Promise<boolean> {
+  const row = await db.query.vaultItems.findFirst({
+    where: eq(vaultItems.handle, handle),
+    columns: { backend: true },
+  });
+  return row !== undefined && row.backend !== "local";
+}
+
+async function appValue(
+  handle: string,
+  key: string,
+  resolve: () => Promise<string>,
+): Promise<string> {
+  const cached = app().vault.appValues.get(key);
+  if (cached && Date.now() - cached.at < APP_VALUE_TTL_MS) return cached.value;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const value = await resolve();
+      app().vault.appValues.set(key, { at: Date.now(), value });
+      return value;
+    } catch (error) {
+      const passing =
+        error instanceof VaultError &&
+        (error.code === "backend_error" || error.code === "vault_locked");
+      if (!passing || !(await remoteItem(handle))) throw error;
+      if (cached) {
+        logger.warn({ item: handle }, "Vault backend failed; using the last value");
+        return cached.value;
+      }
+      const delay = APP_RETRY_DELAYS_MS[attempt];
+      if (delay === undefined) throw error;
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      for (const [name, entry] of app().vault.backendStatus) {
+        if (entry.status.state !== "ready") app().vault.backendStatus.delete(name);
+      }
+    }
+  }
+}
+
 export function forgetAppCredential(handle?: string): void {
   if (handle === undefined) return app().vault.appValues.clear();
   for (const key of app().vault.appValues.keys()) {
@@ -561,54 +524,29 @@ export function forgetAppCredential(handle?: string): void {
   }
 }
 
-/**
- * A model provider account's key from its `app` vault item, for a request
- * to `host`. The owner configured the provider, so there is no bot scope,
- * no approval and nobody "present" for the unattended rule; the item must be
- * an app item that lists `host`, and be enabled. Refusals and backend
- * failures are audited; successful uses are not (one row per model call
- * would bury the log), and the value is cached for a few minutes, keyed by
- * item and host. Throws a `VaultError` whose message the provider's status
- * shows.
- */
 export async function resolveProviderSecret(
   handle: string,
   input: { providerName: string; host: string },
 ): Promise<string> {
-  const key = `${handle}\0${input.host.toLowerCase()}`;
-  const cached = app().vault.appValues.get(key);
-  if (cached && Date.now() - cached.at < APP_VALUE_TTL_MS) return cached.value;
-  const value = await runUse(
-    { handle, tool: "model", targetKind: "provider", target: input.host, approved: false },
-    { unattended: false },
-    // The account's name, as the Vault page shows it ("used … by Anthropic").
-    { botScoped: false, usedBy: input.providerName, auditUse: false },
-    ["value"],
-    async (values) => values.value!.reveal(),
+  return appValue(handle, `${handle}\0${input.host.toLowerCase()}`, () =>
+    runUse(
+      { handle, tool: "model", targetKind: "provider", target: input.host, approved: false },
+      { unattended: false },
+      { botScoped: false, usedBy: input.providerName, auditUse: false },
+      ["value"],
+      async (values) => values.value!.reveal(),
+    ),
   );
-  app().vault.appValues.set(key, { at: Date.now(), value });
-  return value;
 }
 
-/**
- * Code's GitHub token from its `app` vault item (issue #297 §7.2, ADR 0022):
- * the API calls the app server makes, and the one `git push` it hands the
- * token to on stdin. The owner set it in Settings → GitHub, so there is no
- * bot scope and no approval; the item must be an app item that lists
- * `github.com` or `api.github.com`, and be enabled. Cached like a provider
- * key; refusals are audited.
- */
 export async function resolveGitHubToken(handle: string): Promise<string> {
-  const key = `${handle}\0github`;
-  const cached = app().vault.appValues.get(key);
-  if (cached && Date.now() - cached.at < APP_VALUE_TTL_MS) return cached.value;
-  const value = await runUse(
-    { handle, tool: "github", targetKind: "github", target: "api.github.com", approved: false },
-    { unattended: false },
-    { botScoped: false, usedBy: "code:github", auditUse: false },
-    ["value"],
-    async (values) => values.value!.reveal(),
+  return appValue(handle, `${handle}\0github`, () =>
+    runUse(
+      { handle, tool: "github", targetKind: "github", target: "api.github.com", approved: false },
+      { unattended: false },
+      { botScoped: false, usedBy: "code:github", auditUse: false },
+      ["value"],
+      async (values) => values.value!.reveal(),
+    ),
   );
-  app().vault.appValues.set(key, { at: Date.now(), value });
-  return value;
 }

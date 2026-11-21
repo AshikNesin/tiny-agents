@@ -6,7 +6,6 @@ const THEME_STORAGE_KEY = "groot.theme";
 export type Theme = "light" | "dark" | "system";
 export type ResolvedTheme = Exclude<Theme, "system">;
 
-/** The theme choices every picker offers (account menu, ⌘K, settings). */
 export const THEME_OPTIONS: ReadonlyArray<{ value: Theme; label: string; icon: LucideIcon }> = [
   { value: "light", label: "Light", icon: Sun },
   { value: "dark", label: "Dark", icon: Moon },
@@ -38,9 +37,7 @@ function writeStoredTheme(theme: Theme): void {
 
   try {
     window.localStorage.setItem(THEME_STORAGE_KEY, theme);
-  } catch {
-    // Theme selection still applies when storage is unavailable.
-  }
+  } catch {}
 }
 
 function notifyListeners(): void {
@@ -104,12 +101,6 @@ export function resolveTheme(theme: Theme): ResolvedTheme {
     : "light";
 }
 
-/**
- * Apply the persisted theme before the first React render.
- *
- * Apps may call `setDefaultTheme()` before this to override the shell's dark
- * default while retaining each user's stored preference.
- */
 export function initTheme(): Theme {
   const theme = getTheme();
   applyTheme(theme);

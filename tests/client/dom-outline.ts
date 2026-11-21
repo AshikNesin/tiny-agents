@@ -1,14 +1,5 @@
-/**
- * A rendered surface as text, for snapshots that pin what a user and a
- * screen reader get: `outline` is the element tree with roles, names, test
- * ids, titles and states, in document order, with its text; `markup` is the
- * whole DOM (classes included), with React's generated ids numbered and each
- * icon's drawing left out (its `lucide-*` class names it). Adjacent text
- * nodes are merged first, so `{a}×{b}` and `${a}×${b}` read the same.
- */
 import { getRoles, prettyDOM } from "@testing-library/react";
 
-/** Roles that take their name from their content when nothing labels them. */
 const NAMED_BY_CONTENT = new Set(["button", "link", "heading", "tab", "menuitem", "option"]);
 const UNINTERESTING_ROLES = new Set(["generic", "presentation", "none", "paragraph"]);
 const STATES = [
@@ -28,13 +19,9 @@ function normalized(root: Element): Element {
   const clone = root.cloneNode(true) as Element;
   clone.normalize();
   for (const svg of clone.querySelectorAll("svg")) svg.replaceChildren();
-  // Motion sets `opacity` and `transform` inline frame by frame; which frame a
-  // pin catches depends on load, not on the code, so they are left out.
   for (const el of clone.querySelectorAll<HTMLElement>("[style]")) {
     el.style.removeProperty("opacity");
     el.style.removeProperty("transform");
-    // Radix Presence sets these for a frame on mount, by timing too, and
-    // Radix Collapsible zeroes transition-duration until its first frame.
     el.style.removeProperty("animation-duration");
     el.style.removeProperty("animation-name");
     el.style.removeProperty("transition-duration");
@@ -43,7 +30,6 @@ function normalized(root: Element): Element {
   return clone;
 }
 
-/** Generated ids (React's `useId`, Radix's) by first appearance. */
 function numberIds(text: string): string {
   const ids = new Map<string, string>();
   return text.replace(/«[^»]*»|_[rR]_[0-9a-zA-Z]+_|:r[0-9a-z]+:/g, (id) => {
@@ -58,7 +44,6 @@ function iconName(svg: Element): string {
   return names.join(" ") || "svg";
 }
 
-/** `getRoles`, with the `hidden` option its types leave out: every element, hidden or not. */
 const rolesOf = getRoles as (
   container: HTMLElement,
   options: { hidden: boolean },

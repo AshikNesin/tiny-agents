@@ -1,9 +1,3 @@
-/**
- * The code tools' store (issue #143, ADR 0011): starts are idempotent per
- * durable tool task and go to Shelley unless the bot names a harness,
- * everything is scoped to the bot that owns the asking conversation, a
- * follow-up re-arms the finish delivery, and an existing thread is adopted.
- */
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { eq } from "drizzle-orm";
 import { createShelleyHarness } from "@tiny-agents/code/server";
@@ -27,8 +21,6 @@ import { fakeHarness, type FakeHarness } from "./fake-harness";
 let shelley: FakeShelley;
 let fake: FakeHarness;
 
-// A fake Shelley per test: it numbers the conversations it creates, so a
-// shared one would hand each test ids that depend on the tests before it.
 afterEach(async () => {
   setCodeHub(undefined);
   await shelley.close();
@@ -248,7 +240,6 @@ describe("code toolkit", () => {
       "shelley_start",
       "shelley_send",
     ]);
-    // Handing work to a coding agent is the bot's job: allowed by default.
     expect(on.tools.map((t) => [t.name, defaultPermission(t)])).toEqual([
       ["code_start", "allow"],
       ["code_send", "allow"],

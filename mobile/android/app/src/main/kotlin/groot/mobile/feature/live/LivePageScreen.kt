@@ -27,12 +27,10 @@ import groot.mobile.ui.components.StatusDot
 import groot.mobile.ui.components.rememberResource
 import kotlinx.coroutines.delay
 
-/** The Browser or Computer page: every browser (or desktop) the bots have, by profile. Tap one to watch it. */
 @Composable
 fun LivePageRoute(container: AppContainer, surface: String, onOpen: (profile: String) -> Unit, onBack: () -> Unit) {
     val browser = surface == "browser"
     val resource = rememberResource("live-page:$surface") { container.api.liveProfiles(surface) }
-    // Sessions open and close on their own (a bot starts browsing): keep the list current while it is on screen.
     LaunchedEffect(resource) {
         while (true) {
             delay(REFRESH_MS)

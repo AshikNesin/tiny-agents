@@ -1,13 +1,3 @@
-/**
- * The light editor: one file of the worktree (a coding thread's, or a PR
- * review's checkout), for a typo or a rename. It is @pierre/diffs' own editor
- * on its `File` view (diffs.com), so the code keeps its syntax colors, line
- * numbers, bracket matching and undo while you type. No completion or
- * language server. Where the browser gives no canvas (the editor measures
- * text with one), it falls back to a plain text box. Saving writes the file in
- * the worktree; in a PR review it then shows under Your changes, ready to push
- * or suggest.
- */
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button, Textarea, monoClass } from "@groot/ui";
@@ -21,7 +11,6 @@ import { useBaseOptions } from "./UnifiedDiff";
 const createEditor: EditorFactory<undefined, undefined> = (type, options, key) =>
   new Editor(type, options, key);
 
-/** The code editor measures text on a canvas: without one, a plain text box. */
 function canMeasureText(): boolean {
   try {
     return document.createElement("canvas").getContext("2d") != null;
@@ -37,7 +26,6 @@ export function LightEditor({
   onCancel,
 }: {
   path: string;
-  /** The file as it is in the checkout now. */
   content: string;
   onSave(text: string): Promise<void>;
   onCancel(): void;
@@ -47,7 +35,6 @@ export function LightEditor({
   const changed = text !== content;
   const [highlighted] = useState(canMeasureText);
   const base = useBaseOptions();
-  // The file is handed over once: the editor owns the document after that.
   const file = useMemo(() => ({ name: path, contents: content }), [path, content]);
   const options = useMemo(
     () => ({
@@ -115,7 +102,6 @@ export function LightEditor({
               options={options}
               editorOptions={editorOptions}
               onEditChange={(event) => setText(event.file.contents)}
-              // Leaving the editor never writes back into the view: Save does.
               onEditComplete={() => "reject"}
             />
           </EditProvider>

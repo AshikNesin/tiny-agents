@@ -1,8 +1,3 @@
-/**
- * Edit a gateway account's custom providers (issue #216), then pick which of
- * their models to add. Saving changes the account's connection, so it asks
- * for step-up; the models each provider lists come back to choose from.
- */
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@groot/ui/button";
@@ -27,10 +22,6 @@ import {
   type CustomProvider,
 } from "./CustomProvidersEditor";
 
-/**
- * What is saved, plus a row for each `custom-…` slug the account's models
- * name that isn't saved yet (a model added by id): only its base path to fill.
- */
 function savedProviders(account: Account): CustomProvider[] {
   const list = account.settings.customProviders;
   const saved = Array.isArray(list) ? (list as CustomProvider[]) : [];
@@ -45,7 +36,6 @@ function savedProviders(account: Account): CustomProvider[] {
   return [...saved, ...[...unsaved].map((slug) => ({ slug, basePath: "" }))];
 }
 
-/** Mounted per open, so it starts from what is saved. */
 export function GatewayCustomProvidersDialog({
   account,
   onClose,
@@ -81,7 +71,6 @@ export function GatewayCustomProvidersDialog({
       );
       if (!saved) return;
       onChanged();
-      // What the custom providers list that the account doesn't have yet.
       const { available } = await refresh.mutateAsync(account.id);
       const slugs = customProviders.map((p) => `${p.slug}/`);
       const custom = available.filter((m) => slugs.some((slug) => m.upstreamId.startsWith(slug)));

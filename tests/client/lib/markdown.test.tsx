@@ -3,7 +3,6 @@ import { render } from "@testing-library/react";
 import { markdownComponents } from "@/lib/markdown";
 
 const P = markdownComponents.p;
-/** A child as Streamdown renders it: the hast node rides along as a prop. */
 const Img = ({ node }: { node: { tagName: string } }) => (
   <span data-streamdown="image-wrapper" data-tag={node.tagName} />
 );

@@ -1,23 +1,3 @@
-/**
- * The `sandbox` toolkit (issue #19): a keyless shell on the shared sandbox
- * VM over Tailscale SSH. The tailnet is the authentication (no keys, no
- * passwords — the tagged node identity is what the ACL accepts). The
- * toolkit takes the app's one `SandboxConnection` (`ssh/sandbox-connection`),
- * which owns the dial, the pool, the retry rule and host keys; tests
- * substitute an in-memory one.
- *
- * Replay: `read_file` is pure (`safe`); `run_command` and `write_file`
- * have side effects and stay `unsafe` — the approval gate's start-marked
- * memo (`approvals.ts`) then reports "interrupted" on a crash instead of
- * re-running a command or a write.
- *
- * Vault secrets (issue #56): `run_command` can take `secrets: [{handle,
- * env}]`. Every such call is approved on its own card showing the full
- * command, the items must list `run_command` and name the hosts the key may
- * reach, the values travel over stdin into env vars, and the command runs
- * confined to those hosts (`sandbox-egress.ts`). With an egress allowlist
- * configured, every command runs confined to it.
- */
 import { Type } from "@earendil-works/pi-ai";
 import type { ToolExecutionResult } from "@earendil-works/pi-durable";
 import type { GateHooks } from "../approvals";
@@ -48,24 +28,15 @@ import {
   type IntendedUses,
 } from "./vault";
 
-/** One command's outcome as the tool reports it: combined output plus exit status. */
 interface CommandResult {
   output: string;
   exitCode: number;
 }
 
 export interface SandboxToolkitOptions {
-  /** The app's connection to the sandbox VM; unset = no sandbox configured. */
   connection?: SandboxConnection;
-  /** Command timeout in seconds (default 120). */
   defaultTimeoutSecs?: number;
-  /** The vault broker: enables `secrets` on `run_command` (issue #56). */
   vault?: VaultBroker;
-  /**
-   * Outbound allowlist (hostnames, IPs or CIDRs). When set, every
-   * `run_command` runs confined to it; commands with secrets may also reach
-   * their items' hosts. Unset, only commands with secrets are confined.
-   */
   egressAllowlist?: string;
 }
 
@@ -76,11 +47,9 @@ const fail = (text: string): ToolExecutionResult => ({
 
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
-/** Bytes of each stream kept before the character cap trims; the rest is dropped live. */
 const OUTPUT_BYTES = 60_000;
 const OUTPUT_CHARS = 30_000;
 
-/** stdout, then stderr on its own line, capped for the model. */
 function combined(result: SandboxExecResult): CommandResult {
   const text = (
     result.stdout.toString("utf8") + (result.stderr ? `\n${result.stderr}` : "")
@@ -94,10 +63,6 @@ function combined(result: SandboxExecResult): CommandResult {
 export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capability {
   const connection = options.connection;
 
-  /**
-   * The connection, or why there is none. Never fall through to a default
-   * host: an unset one would dial localhost — the app server itself.
-   */
   const sandbox = (): SandboxConnection => {
     if (!connection) throw new Error("Sandbox is not configured: set SANDBOX_HOST on the server.");
     return connection;
@@ -139,7 +104,6 @@ export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capab
     secrets?: { handle: string; env: string }[];
   };
 
-  /** Why a call's secrets can't be passed, read from its arguments alone. */
   const secretsProblem = (args: RunArgs): string | undefined => {
     const secrets = args.secrets ?? [];
     if (!broker) return "The vault is not configured.";
@@ -157,7 +121,6 @@ export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capab
     return undefined;
   };
 
-  /** One vault use per secret: the target is the whole command. */
   const usesOf = (args: RunArgs): IntendedUse[] =>
     (args.secrets ?? []).map((secret) => ({
       handle: secret.handle,
@@ -166,7 +129,6 @@ export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capab
       target: args.command,
     }));
 
-  /** Where a command may connect: the allowlist, plus its secrets' hosts. */
   const allowedFor = (items: readonly VaultItemMeta[]): EgressEntry[] => [
     ...egress.entries,
     ...parseEgressList(items.flatMap((item) => item.allowedHosts)).entries,
@@ -177,11 +139,6 @@ export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capab
 
   const shown = (allow: EgressEntry[]) => allow.map((e) => ("host" in e ? e.host : e.cidr));
 
-  /**
-   * What a call with secrets intends: a use per secret, refused when the
-   * command names a host they may not reach, asked on one card that shows
-   * the env vars and the hosts.
-   */
   const intendedUses = async (
     args: RunArgs,
     conversation: number,
@@ -190,17 +147,13 @@ export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capab
     const problem = secretsProblem(args);
     if (problem) return { refuse: problem };
     const listed = await broker!.list({ conversation, tool: "run_command" });
-    // Unknown or not allowed for run_command: the broker's plan refuses
-    // with the precise reason (and audits it).
     const items = args.secrets.flatMap(
       (secret) => listed.find((item) => item.handle === secret.handle) ?? [],
     );
     const allow = allowedFor(items);
     return {
       uses: usesOf(args),
-      // Env injection asks every time: the model wrote the code holding the secret.
       everyUse: true,
-      // A heuristic early refusal; the confinement below is the real control.
       confine: () => {
         const stray = commandHosts(args.command).filter((host) => !hostAllowed(host, allow));
         if (stray.length === 0) return undefined;
@@ -213,7 +166,6 @@ export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capab
     };
   };
 
-  /** run_command's gate: a call with secrets plans and asks through the vault's shared plan. */
   const runGate: GateHooks<RunArgs> = broker
     ? vaultGatePlan(broker, true, async (args: RunArgs, api) =>
         intendedUses(args, Number(api.conversationId)),
@@ -258,14 +210,11 @@ export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capab
         : {}),
     }),
     replay: "unsafe",
-    // The schema's args type `secrets` loosely (it exists only with a broker).
     gate: runGate as GateHooks<never>,
     execute: async (raw, api, context) => {
       const args = raw as RunArgs;
       const timeoutSecs = args.timeout_secs ?? options.defaultTimeoutSecs ?? 120;
       const timeoutMs = timeoutSecs * 1000;
-      // The whole command runs as one sh -c argument, so chains (&&, ;) stay
-      // inside the detached session and the redirect covers every step.
       const detach = (command: string) =>
         `setsid nohup sh -c ${shQuote(command)} > /tmp/ta-detached-$$.log 2>&1 < /dev/null & printf '%s' "$!"`;
       const shaped = args.detached ? detach(args.command) : args.command;
@@ -297,8 +246,6 @@ export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capab
         } else {
           result = await run(egress.entries.length > 0 ? egress.entries : undefined);
         }
-        // Read whether or not the command was confined: an unconfined command
-        // that exits 97 reads as a VM that cannot confine.
         const exit = exitSentinel(result.exitCode, CONFINED_EXITS);
         if (exit === "confineUnavailable") {
           return fail(
@@ -369,7 +316,7 @@ export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capab
       "then renamed, so a crash mid-write never leaves a half file.",
     parameters: Type.Object({
       path: Type.String({ minLength: 1, maxLength: 4096 }),
-      content: Type.String({ maxLength: 500_000 }), // empty = create/truncate
+      content: Type.String({ maxLength: 500_000 }),
     }),
     replay: "unsafe",
     execute: async (args) => {
@@ -387,7 +334,6 @@ export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capab
     name: "Sandbox",
     description: "Keyless shell and files on the sandbox VM over Tailscale SSH",
     tools: [runCommand, readFile, writeFile],
-    // A bad allowlist outranks a missing host: it must be fixed either way.
     setupHint:
       egress.invalid.length > 0
         ? `SANDBOX_EGRESS_ALLOWLIST has entries that aren't hosts, IPs or CIDRs: ${egress.invalid.join(", ")}`
@@ -397,7 +343,6 @@ export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capab
   });
 }
 
-/** Drop a trailing partial UTF-8 rune so a capped slice still validates as text. */
 function trimPartialRune(buffer: Buffer): Buffer {
   for (let drop = 0; drop < 4 && buffer.length - drop > 0; drop++) {
     const last = buffer[buffer.length - 1 - drop];
@@ -410,7 +355,5 @@ function trimPartialRune(buffer: Buffer): Buffer {
 }
 
 function looksUtf8(buffer: Buffer): boolean {
-  // Buffer.toString("utf8") replaces invalid sequences with U+FFFD; a clean
-  // round-trip means the bytes are valid UTF-8.
   return !buffer.toString("utf8").includes("\uFFFD");
 }

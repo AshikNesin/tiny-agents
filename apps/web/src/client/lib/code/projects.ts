@@ -1,10 +1,5 @@
-/**
- * Code projects, pull requests and review on the client (issue #297): the
- * calls to `server/api/code/code.projects.routes.ts`. Wire types live in
- * `shared/api/code.ts`.
- */
-import { useCallback, useEffect, useState } from "react";
 import { apiClient } from "@groot/shell/lib/api";
+import { useResource } from "../../queries/resource";
 import type {
   CheckLogView,
   CheckpointView,
@@ -32,14 +27,12 @@ import type {
 const base = "/code";
 const thread = (id: string) => `${base}/threads/${encodeURIComponent(id)}`;
 
-/** The base scope is the server's default, so it is left off the query. */
 const scoped = (scope: string) => (scope === "base" ? undefined : { scope });
 const targeted = (target?: "github") => (target ? `?target=${target}` : "");
 
 export const projectsApi = {
   github: () => apiClient.get<GitHubStatus>(`${base}/github`),
   setToken: (token: string | null) => apiClient.put<GitHubStatus>(`${base}/github`, { token }),
-  /** Start the one-click App setup: the page posts `manifest` to `url` (GitHub). */
   createApp: (organization?: string) =>
     apiClient.post<{ url: string; manifest: object; webhooks: boolean }>(
       `${base}/github/app/manifest`,
@@ -84,27 +77,19 @@ export const projectsApi = {
     ),
   editPull: (id: string, change: { title?: string; body?: string }) =>
     apiClient.patch<ThreadPullsView>(`${thread(id)}/pr`, change),
-  /** Draft ↔ ready for review. */
   setDraft: (id: string, draft: boolean) =>
     apiClient.post<ThreadPullsView>(`${thread(id)}/pr/draft`, { draft }),
   merge: (id: string, method: MergeMethod) =>
     apiClient.post<ThreadPullsView>(`${thread(id)}/pr/merge`, { method }),
 
-  /**
-   * What a Review panel reads: `base` (the default) since the merge base;
-   * for a PR review `review` (since the owner's last review) or `mine` (the
-   * owner's changes on its head); or a checkpoint id, what that turn changed.
-   */
   reviewFiles: (id: string, scope = "base") =>
     apiClient.get<ReviewFile[]>(`${thread(id)}/review/files`, scoped(scope)),
   reviewFile: (id: string, path: string, scope = "base") =>
     apiClient.get<ReviewFileDiff>(`${thread(id)}/review/file`, { path, ...scoped(scope) }),
-  /** The light editor's save: the file's new content, and what it was opened with. */
   editFile: (id: string, body: EditReviewFileBody) =>
     apiClient.put(`${thread(id)}/review/file`, body),
   setViewed: (id: string, path: string, hash: string, viewed: boolean) =>
     apiClient.post(`${thread(id)}/review/viewed`, { path, hash, viewed }),
-  /** Line comments waiting for the agent, or (`github`, a PR review's) for GitHub. */
   drafts: (id: string, target?: "github") =>
     apiClient.get<ReviewDraft[]>(`${thread(id)}/review/drafts${targeted(target)}`),
   addDraft: (id: string, body: ReviewDraftBody, target?: "github") =>
@@ -116,26 +101,20 @@ export const projectsApi = {
   sendDrafts: (id: string) => apiClient.post<{ sent: number }>(`${thread(id)}/review/send`),
 };
 
-/** PR reviews (issue #345): any PR of a project's repository, with an assistant scoped to it. */
 export const reviewsApi = {
   list: () => apiClient.get<PullReviewView[]>(`${base}/reviews`),
-  /** The owner's review inbox from GitHub, across every repository, narrowed by `filter`. */
   inbox: (filter: Record<string, string> = {}) =>
     apiClient.get<InboxPullView[]>(`${base}/reviews/inbox`, filter),
-  /** Open (or reopen) a review: `pr` is the PR's URL or `owner/name#123`. */
   open: (pr: string) => apiClient.post<PullReviewView>(`${base}/reviews`, { pr }),
   get: (id: string) => apiClient.get<PullReviewView>(`${base}/reviews/${encodeURIComponent(id)}`),
-  /** A question for the assistant: the first starts it, with the PR card and waiting comments. */
   ask: (id: string, body: AskReviewBody) =>
     apiClient.post<{ threadId: string }>(`${base}/reviews/${encodeURIComponent(id)}/ask`, body),
   archive: (id: string) => apiClient.post(`${base}/reviews/${encodeURIComponent(id)}/archive`),
-  /** Post the review on GitHub with every waiting comment. */
   submit: (id: string, body: SubmitReviewBody) =>
     apiClient.post<{ url: string; comments: number }>(
       `${base}/reviews/${encodeURIComponent(id)}/submit`,
       body,
     ),
-  /** The PR's line conversations on GitHub. */
   threads: (id: string) =>
     apiClient.get<PullThreadsView>(`${base}/reviews/${encodeURIComponent(id)}/threads`),
   reply: (id: string, threadId: string, body: string) =>
@@ -147,38 +126,29 @@ export const reviewsApi = {
     apiClient.post(
       `${base}/reviews/${encodeURIComponent(id)}/threads/${encodeURIComponent(threadId)}/resolve`,
     ),
-  /** Hand the waiting comments to the Code thread that opened the PR. */
   toThread: (id: string) =>
     apiClient.post<{ threadId: string; sent: number }>(
       `${base}/reviews/${encodeURIComponent(id)}/comments/to-thread`,
     ),
-  /** Commit your changes in the review's checkout and push them to the PR's branch. */
   push: (id: string, message: string) =>
     apiClient.post<PushedReview>(`${base}/reviews/${encodeURIComponent(id)}/push`, { message }),
-  /** Your changes as pending suggestion comments. */
   suggest: (id: string) =>
     apiClient.post<SuggestedChanges>(`${base}/reviews/${encodeURIComponent(id)}/suggestions`),
   discard: (id: string) => apiClient.post(`${base}/reviews/${encodeURIComponent(id)}/discard`),
-  /** A Terminal tab in the review's checkout. */
   terminal: (id: string) =>
     apiClient.post<ReviewTerminal>(`${base}/reviews/${encodeURIComponent(id)}/terminal`),
 };
 
-/** The page of a review. */
 export const reviewPath = (id: string) => `/code/reviews/${encodeURIComponent(id)}`;
 
-/** The owner's projects; `null` while loading or when they are not the owner's to see. */
 export function useProjects(): {
   projects: ProjectView[] | null;
   reload(): void;
 } {
-  const [projects, setProjects] = useState<ProjectView[] | null>(null);
-  const reload = useCallback(() => {
-    projectsApi
-      .list()
-      .then(setProjects)
-      .catch(() => setProjects(null));
-  }, []);
-  useEffect(reload, [reload]);
-  return { projects, reload };
+  const { data, refresh } = useResource(
+    ["code", "projects"],
+    () => projectsApi.list().catch(() => null),
+    "",
+  );
+  return { projects: data, reload: refresh };
 }

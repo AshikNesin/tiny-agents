@@ -4,7 +4,6 @@ import { useFreshTestDatabase } from "../fixtures/test-db";
 
 const app = createTestApp();
 
-// Each test starts from the seeded database, as if it ran first.
 beforeEach(useFreshTestDatabase);
 describe("settings API", () => {
   it("upserts, lists, reads and deletes settings", async () => {
@@ -59,7 +58,6 @@ describe("settings API", () => {
     const kept = await api(app, "/api/v1/settings/flags", { token });
     expect(kept.body.data).toMatchObject({ value: { beta: true } });
 
-    // PUT keeps its upsert semantics for saving.
     const saved = await api(app, "/api/v1/settings/flags", {
       method: "PUT",
       json: { value: { beta: false } },

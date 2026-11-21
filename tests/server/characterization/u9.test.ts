@@ -1,9 +1,3 @@
-/**
- * Characterization of behavior-register row U9: continuing a past chat
- * restores `chatStartedAt`, so interim routine cards show in both chats.
- * Preserve: this pins today's behavior, quirk included; change it only with
- * a signed-off register row.
- */
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { chatCards } from "../../../apps/web/src/server/api/routines/routines.cards";
@@ -30,14 +24,12 @@ describe("U9: continuing a past chat", () => {
     const chatA = bot.conversationId;
     fake.script.say(Number(chatA), "hello from chat A", "hi");
 
-    // New chat B at +10 min.
     vi.setSystemTime(start + 10 * MINUTE);
     await resetConversation(bot.id);
     const chatB = (await botRow(bot.id)).conversationId;
     expect((await botRow(bot.id)).chatStartedAt).toEqual(new Date(start + 10 * MINUTE));
     fake.script.say(Number(chatB), "hello from chat B", "hi");
 
-    // A routine run finishes at +20 min, while B is the bot's chat.
     const [routine] = await db
       .insert(routines)
       .values({
@@ -63,7 +55,6 @@ describe("U9: continuing a past chat", () => {
       (await chatCards(bot.id, (await botRow(bot.id)).chatStartedAt)).map((c) => c.id),
     ).toEqual([run!.id]);
 
-    // Continue A at +30 min: its original start comes back.
     vi.setSystemTime(start + 30 * MINUTE);
     const pastA = (await listPastChats(bot.id)).find((chat) => chat.startedAt.getTime() === start);
     await continuePastChat(bot.id, pastA!.id);
@@ -71,11 +62,9 @@ describe("U9: continuing a past chat", () => {
     expect(continued.conversationId).toBe(chatA);
     expect(continued.chatStartedAt).toEqual(new Date(start));
 
-    // The live chat (A) shows B's run, because A's thread "started" before it.
     const live = await chatCards(bot.id, continued.chatStartedAt);
     expect(live.map((card) => card.id)).toEqual([run!.id]);
 
-    // And so does B, now a past chat bounded to [+10, +30) min.
     const pastB = (await listPastChats(bot.id)).find(
       (chat) => chat.startedAt.getTime() === start + 10 * MINUTE,
     );

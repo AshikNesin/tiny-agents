@@ -1,12 +1,3 @@
-/**
- * Every guest and owner check the server makes, pinned before they moved
- * into the access module (rewrite step 4.2): each refusal's status and text,
- * and which check wins when two fail. The guard's table and the S-rows have
- * their own suites (guest-access.routes, sharing.routes, live-access,
- * live-routes-drift, code/routes); this file pins what those leave open.
- * Recorded on today's code; the inventory in docs/rewrite/README.md (§4.4
- * `access`) names the test for each row.
- */
 import { and, eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import type { AgentRuntime } from "../../../packages/agent/src/index";
@@ -43,7 +34,6 @@ const asOwner = (path: string, init: Init = {}) =>
 const asGuest = (path: string, init: Init = {}) =>
   api<Data>(app, path, { ...init, token: guestToken });
 
-/** The error envelope every refusal answers with. */
 const refused = (code: string, message: string) => ({
   success: false,
   error: expect.objectContaining({ code, message }),
@@ -55,7 +45,6 @@ const share = (botId: string) => db.insert(botGuests).values({ botId, userId: GU
 
 let uploadSeq = 0;
 
-/** An upload row, made by `uploadedBy`, first sent in `botId`'s chat. */
 async function seedUpload(uploadedBy: number, botId: string | null): Promise<string> {
   uploadSeq += 1;
   const [row] = await db
@@ -107,14 +96,12 @@ describe("the guard: table, then the bot's share, then the upload", () => {
     ] as const) {
       expect((await asGuest(path, { method })).body, `${method} ${path}`).toEqual(forbidden);
     }
-    // The owner gets the router's own answer.
     expect((await asOwner("/api/v1/no-such-route")).status).toBe(404);
   });
 
   it("answers 404 'Bot not found' for an unshared or unknown bot before the route reads anything", async () => {
     const other = await seedBot();
     for (const id of [other.id, "no-such-bot"]) {
-      // An invalid body would be a 400 for the owner: the guard answers first.
       const sent = await asGuest(`/api/v1/bots/${id}/messages`, { method: "POST", json: {} });
       expect(sent.body, id).toEqual(botNotFound);
       const approval = await asGuest(`/api/v1/bots/${id}/approvals/0`, {
@@ -122,7 +109,6 @@ describe("the guard: table, then the bot's share, then the upload", () => {
         json: {},
       });
       expect(approval.body, id).toEqual(botNotFound);
-      // A task id the table's pattern does not admit is the table's 403.
       const malformed = await asGuest(`/api/v1/bots/${id}/approvals/x`, { method: "POST" });
       expect(malformed.body, id).toEqual(forbidden);
     }
@@ -139,14 +125,12 @@ describe("the guard: table, then the bot's share, then the upload", () => {
     const ownerPrivate = await seedUpload(OWNER_ID, other.id);
     const ownerInShared = await seedUpload(OWNER_ID, shared.id);
     const unknown = refused("NOT_FOUND", "Unknown upload");
-    // A malformed id is the route's 400 for the owner; the guard's 404 for a guest.
     expect((await asGuest("/api/v1/uploads/not-hex")).body).toEqual(unknown);
     expect((await asOwner("/api/v1/uploads/not-hex")).body).toEqual(
       refused("BAD_REQUEST", "Invalid upload id"),
     );
     expect((await asGuest(`/api/v1/uploads/${ownerPrivate}`)).body).toEqual(unknown);
     expect((await asGuest(`/api/v1/uploads/${ownerPrivate}/text`)).body).toEqual(unknown);
-    // Reading reaches the shared chat's uploads; deleting only the guest's own.
     expect((await asGuest(`/api/v1/uploads/${ownerInShared}`)).status).toBe(200);
     expect((await asGuest(`/api/v1/uploads/${ownerInShared}`, { method: "DELETE" })).body).toEqual(
       unknown,
@@ -180,7 +164,6 @@ describe("a guest's send: attachments after the body, before the send", () => {
 });
 
 describe("a guest's approval answers (decideApproval)", () => {
-  /** Stand in for one call waiting on a card in the bot's chat. */
   const waitingCard = (name: string, extra: Record<string, unknown> = {}) =>
     spied.readChat.mockResolvedValueOnce({
       messages: [
@@ -211,13 +194,11 @@ describe("a guest's approval answers (decideApproval)", () => {
     expect((await decide({ decision: "approved", alwaysAllow: "run_command" })).body).toEqual(
       forbidden,
     );
-    // Nothing is waiting: still the guest's 403, not the 409.
     expect((await decide({ decision: "approved", alwaysAllow: "send_email" })).body).toEqual(
       forbidden,
     );
     expect((await decide({ decision: "denied", grant: true })).body).toEqual(forbidden);
     expect(spied.decideApproval).not.toHaveBeenCalled();
-    // The owner gets S5's 400 for the same mismatch.
     waitingCard("send_email");
     expect(
       (await decide({ decision: "approved", alwaysAllow: "run_command" }, asOwner)).body,
@@ -247,7 +228,6 @@ describe("a guest's approval answers (decideApproval)", () => {
       data: { decided: "approved" },
     });
     expect(spied.decideApproval).toHaveBeenCalledWith(Number(await conv(botId)), 7, "approved");
-    // Nothing waiting: the runtime's 409, as for the owner.
     expect((await decide({ decision: "denied" })).status).toBe(409);
     expect((await decide({ decision: "approved", alwaysAllow: "x" }, asGuest, "0")).body).toEqual(
       refused("BAD_REQUEST", "Invalid taskId"),
@@ -313,7 +293,6 @@ describe("read markers: the owner's on the bot row, a guest's on their share", (
 describe("live follows", () => {
   type ActivityChange = Parameters<Parameters<AgentRuntime["onActivity"]>[0]>[0];
 
-  /** Read `path` as `token` until `until` shows, running `onFirstEvent` once the first event arrives. */
   async function readSse(
     path: string,
     token: string,
@@ -368,7 +347,6 @@ describe("live follows", () => {
       "/api/v1/events",
       guestToken,
       () => {
-        // Swap the shares while the stream is open, then report both bots.
         db.insert(botGuests).values({ botId: after.id, userId: GUEST_ID }).run();
         db.delete(botGuests).where(eq(botGuests.botId, before.id)).run();
         emit(before.conversationId);
@@ -442,7 +420,6 @@ describe("people: who can be removed or shared with", () => {
       refused("BAD_REQUEST", "Unknown guest"),
     );
     expect((await patch({ name: bot.name, guestIds: [OWNER_ID] })).status).toBe(409);
-    // A create with an unknown guest answers 400 but leaves the bot made.
     const created = await asOwner("/api/v1/bots", {
       method: "POST",
       json: { name: "Half made", modelId: TEST_MODEL, systemPrompt: "x", guestIds: [OWNER_ID] },

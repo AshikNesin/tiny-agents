@@ -1,5 +1,3 @@
-// APP-owned module: the terminal emulator and view behind the Terminal screen.
-// No networking and no app code in here: the app hands it bytes and gets bytes back.
 plugins {
     alias(libs.plugins.groot.android.library)
     alias(libs.plugins.groot.compose)
@@ -10,10 +8,6 @@ android {
     namespace = "tinyagents.terminal"
 
     lint {
-        // The Compose libraries pull in androidx.lifecycle:lifecycle-runtime 2.9.4 here (kit and app
-        // resolve newer). That third-party AAR bundles a lint.jar built against a Kotlin PSI API the
-        // current lint no longer has, so lint skips its two checks and warns about the jar. Fixing it
-        // would mean adding a dependency only to bump lifecycle; this module uses no lifecycle APIs.
         disable += "ObsoleteLintCustomCheck"
     }
 }
@@ -24,8 +18,6 @@ dependencies {
     implementation(libs.androidx.compose.material3)
 }
 
-// The tmux differential test runs only with TERMINAL_TMUX_TEST=1: make the variable an input so
-// flipping it reruns the tests instead of reusing an up-to-date result.
 tasks.withType<Test>().configureEach {
     inputs.property("terminalTmuxTest", providers.environmentVariable("TERMINAL_TMUX_TEST").orElse(""))
 }

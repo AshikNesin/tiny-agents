@@ -1,12 +1,3 @@
-/**
- * Which harnesses this server runs (ADR 0011). Adding a harness is one
- * driver in `@tiny-agents/code` and one entry here, read from config:
- *
- * - `shelley`: the owner's Shelley, when `SHELLEY_URL` is set (ADR 0009).
- * - `claude-code`: Claude Code on the sandbox, through the Claude worker's
- *   coding mode, when the owner's Claude plan account is on (Settings →
- *   Models) and a sandbox is configured (ADR 0010, ADR 0012).
- */
 import { logger } from "@groot/core/logger";
 import {
   createClaudeCodeHarness,
@@ -34,7 +25,6 @@ function harnessHost(): HarnessHost {
   };
 }
 
-/** Shelley's base URL, or undefined when `SHELLEY_URL` is not set. */
 function shelleyUrl(env: AppEnv = appEnv()): string | undefined {
   return shelley.trimUrl(env.SHELLEY_URL);
 }
@@ -42,15 +32,9 @@ function shelleyUrl(env: AppEnv = appEnv()): string | undefined {
 export interface RegistryOptions {
   env?: AppEnv;
   host?: HarnessHost;
-  /** Extra instances (tests). */
   extra?: HarnessInstance[];
 }
 
-/**
- * Claude Code on the sandbox, when the Claude plan is on and a sandbox is
- * configured. The worker locator is the one bot chats use; the login state
- * (read in the background) explains a harness that cannot run yet.
- */
 function claudeCodeHarness(env: AppEnv, host: HarnessHost): HarnessInstance | undefined {
   if (!agentRuntimeReady() || !getAgentRuntime().catalog.claudePlan()?.enabled) return undefined;
   const locator = sharedClaudeWorkerLocator(env);
@@ -83,11 +67,6 @@ function claudeCodeHarness(env: AppEnv, host: HarnessHost): HarnessInstance | un
   });
 }
 
-/**
- * The Claude plan account's models that can run now, as the Code page's
- * picker offers them: what Claude Code lists for the subscription (Settings →
- * Models → Claude plan), under the ids Claude Code takes.
- */
 function claudePlanModels(): ModelOption[] {
   if (!agentRuntimeReady()) return [];
   return getAgentRuntime()

@@ -1,25 +1,3 @@
-/**
- * ConnectionManager (issue #1 M3): owns the whole life of every remote MCP
- * connection, from its row to the live client and the capability bots see.
- *
- * - At boot each connection's capability is installed from its cached tool
- *   list right away (so interrupted calls can resume and bots keep their
- *   tools), then connected in the background — `/health` never waits on it.
- * - A row change (created, url or secret edited) starts a fresh connect
- *   attempt that supersedes any in flight: every attempt carries the entry's
- *   generation and discards its own result once a newer one has started or
- *   the connection was removed. Dropped connections reconnect with backoff.
- * - A tool-list change re-installs the capability and Reconciles the bots
- *   that use it (their permissions are per tool). Bots linked or unlinked by
- *   the owner are Reconciled here too, each bot once per change, however
- *   many steps of the change asked for it.
- * - A large connection's tools are deferred (`MCP_DEFER_CHARS`: the size of their names, descriptions and schemas); the
- *   runtime's own `tool_search` loads them.
- * - A server that needs (re)authorization marks the connection
- *   "needs_auth" and withdraws its tools until the owner signs in (D11).
- * - Tools the owner turned off on the connection are never installed, so no
- *   bot sees them; the dashboard playground still calls them directly.
- */
 import { eq } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { logger } from "@groot/core/logger";
@@ -61,7 +39,6 @@ type ManagedRuntime = Pick<
 interface Live extends ConnectionLiveState {
   connection?: McpConnection;
   connecting?: Promise<void>;
-  /** Bumped by every fresh attempt and by removal; an attempt that sees another value is stale. */
   generation: number;
   retry?: ReturnType<typeof setTimeout>;
   attempt: number;
@@ -69,9 +46,7 @@ interface Live extends ConnectionLiveState {
 }
 
 const MAX_BACKOFF_MS = 5 * 60_000;
-/** How long a row change waits for its connect attempt before answering. */
 const CONNECT_WAIT_MS = 15_000;
-/** How long a tool call waits for a (re)connect. */
 const CALL_WAIT_MS = 30_000;
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms).unref?.());
@@ -79,13 +54,11 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 export class ConnectionManager {
   readonly #live = new Map<string, Live>();
   readonly #listeners = new Set<(id: string, state: ConnectionLiveState) => void>();
-  /** Bots waiting for one Reconcile; flushed together on the next tick. */
   readonly #reconcilePending = new Set<string>();
   #reconcileFlush: Promise<void> | undefined;
   #runtime: ManagedRuntime | undefined;
   #closed = false;
 
-  /** Install cached capabilities and start connecting everything (non-blocking). */
   async start(runtime: ManagedRuntime): Promise<void> {
     this.#runtime = runtime;
     const rows = await db.select().from(connections);
@@ -108,23 +81,16 @@ export class ConnectionManager {
     return () => this.#listeners.delete(listener);
   }
 
-  /** Connect unless an attempt is already running; resolves when that attempt settles. */
   connect(id: string): Promise<void> {
     const live = this.#entry(id);
     return live.connecting ?? this.#begin(id, live);
   }
 
-  /**
-   * The row changed (created, or its url, auth or secret edited): connect
-   * afresh, superseding any attempt in flight, and wait for the result up to
-   * `waitMs` so the caller can report the live state.
-   */
   async rowChanged(id: string, waitMs = CONNECT_WAIT_MS): Promise<void> {
     const live = this.#entry(id);
     await Promise.race([this.#begin(id, live), sleep(waitMs)]);
   }
 
-  /** Links between bots and connections changed: Reconcile each bot once. */
   botsChanged(botIds: Iterable<string>): Promise<void> {
     return this.#reconcile(botIds);
   }
@@ -140,8 +106,6 @@ export class ConnectionManager {
   }
 
   async #connect(id: string, live: Live, generation: number): Promise<void> {
-    // Superseded by a newer attempt, removed, or shutting down: this attempt
-    // owns nothing any more and must not write state or install anything.
     const stale = () =>
       this.#closed || live.generation !== generation || this.#live.get(id) !== live;
     const row = await findConnection(id);
@@ -188,8 +152,6 @@ export class ConnectionManager {
     } catch (error) {
       if (stale()) return;
       if (error instanceof SecretLockedError) {
-        // A sign-in the app can no longer open (an old format, another
-        // SECRETS_KEY) is fixed by signing in again, which replaces it.
         if (row.authType === "oauth" && error.reason !== "no_key") {
           this.#withdraw(row.slug);
           this.#set(id, {
@@ -214,8 +176,6 @@ export class ConnectionManager {
   }
 
   async #auth(row: ConnectionRow, live: Live) {
-    // The header value is a vault item (Q4): the one the owner picked, else the connection's own.
-    // The connection's own item is checked against the host it goes to (S4).
     const handle =
       row.authType !== "header"
         ? undefined
@@ -227,16 +187,12 @@ export class ConnectionManager {
       };
     }
     if (row.authType === "header" && row.secretEnc) {
-      // A pre-Q4 value the startup import could not move yet (it says why in the log).
       throw new SecretLockedError(
         "unreadable",
         "This connection's header value hasn't moved into the vault yet: check SECRETS_KEY and restart, or enter it again.",
       );
     }
     if (row.authType === "oauth") {
-      // No tokens yet: connect without the provider so a 401 surfaces as
-      // needs_auth instead of racing the sign-in's state/verifier pair.
-      // (With tokens, the SDK refreshes them transparently.)
       if (!(await readOAuthState(row.id)).tokens) return {};
       return {
         authProvider: createOAuthProvider(row.id, (url) => {
@@ -256,7 +212,6 @@ export class ConnectionManager {
     live.retry.unref?.();
   }
 
-  /** Persist a new tool list, re-install the capability and Reconcile the bots using it. */
   async #toolsChanged(id: string, tools: McpToolInfo[]): Promise<void> {
     const row = await findConnection(id);
     if (!row || !this.#live.has(id)) return;
@@ -288,11 +243,6 @@ export class ConnectionManager {
     this.#runtime?.uninstallCapability(connectionCapabilityId(slug));
   }
 
-  /**
-   * Re-install from the cached tool list after the owner turned tools on or
-   * off, then Reconcile the bots that use the connection. A connection
-   * waiting for sign-in stays withdrawn.
-   */
   async reinstall(id: string): Promise<void> {
     const row = await findConnection(id);
     if (!row) return;
@@ -300,7 +250,6 @@ export class ConnectionManager {
     await this.#reconcileLinked(id);
   }
 
-  /** Reconcile every bot linked to the connection. */
   async #reconcileLinked(id: string): Promise<void> {
     const links = await db
       .select({ botId: botConnections.botId })
@@ -309,10 +258,6 @@ export class ConnectionManager {
     await this.#reconcile(links.map((link) => link.botId));
   }
 
-  /**
-   * Reconcile each bot once, however many steps of one change asked: the
-   * requests of a tick are flushed together on the next one.
-   */
   #reconcile(botIds: Iterable<string>): Promise<void> {
     for (const botId of botIds) this.#reconcilePending.add(botId);
     if (this.#reconcilePending.size === 0) return Promise.resolve();
@@ -331,7 +276,6 @@ export class ConnectionManager {
     return this.#reconcileFlush;
   }
 
-  /** Call a tool, waiting briefly for a (re)connect. */
   async call(id: string, tool: string, args: Record<string, unknown>, signal?: AbortSignal) {
     let live = this.#entry(id);
     if (!live.connection) {
@@ -344,7 +288,6 @@ export class ConnectionManager {
     return live.connection.call(tool, args, signal);
   }
 
-  /** Start an OAuth sign-in; returns the consent URL to open. */
   async authorize(id: string): Promise<string | undefined> {
     const row = await findConnection(id);
     if (!row || row.authType !== "oauth") return undefined;
@@ -361,12 +304,10 @@ export class ConnectionManager {
     return live.authorizationUrl;
   }
 
-  /** The OAuth callback: exchange the code, then connect. Returns the connection id. */
   async finishAuthorization(state: string, code: string): Promise<string> {
     const id = await connectionForState(state);
     if (!id) throw new Error("Unknown or expired sign-in");
     const row = await findConnection(id);
-    // Prisma's findUniqueOrThrow (P2025 → 404).
     if (!row) throw Boom.notFound("Record not found");
     const provider = createOAuthProvider(id, () => undefined);
     await mcpAuth(provider, { serverUrl: row.url, authorizationCode: code });
@@ -378,11 +319,6 @@ export class ConnectionManager {
     return Boolean((await readOAuthState(id)).tokens);
   }
 
-  /**
-   * The connection was deleted: cancel any attempt in flight, close the
-   * client, withdraw its tools and Reconcile the bots that used it. The
-   * entry is gone for good; a stale attempt never brings it back.
-   */
   async remove(id: string, slug: string, botIds: Iterable<string> = []): Promise<void> {
     const live = this.#live.get(id);
     this.#live.delete(id);
@@ -417,7 +353,6 @@ export class ConnectionManager {
     return live;
   }
 
-  /** Record and announce a state; a removed connection has none to record. */
   #set(id: string, state: ConnectionLiveState): void {
     const live = this.#live.get(id);
     if (!live) return;
@@ -426,19 +361,15 @@ export class ConnectionManager {
     for (const listener of this.#listeners) {
       try {
         listener(id, state);
-      } catch {
-        // listeners must not break connections
-      }
+      } catch {}
     }
   }
 }
 
-/** The process's manager (`app().connectionManager`), made on first use. */
 export function getConnectionManager(): ConnectionManager {
   return (app().connectionManager ??= new ConnectionManager());
 }
 
-/** Test seam. */
 export function setConnectionManagerForTests(instance: ConnectionManager | undefined): void {
   app().connectionManager = instance;
 }

@@ -1,10 +1,4 @@
 #!/usr/bin/env tsx
-/**
- * Apply pending Drizzle migrations to the local SQLite database. The Node
- * server also does this on boot; this script is for CI, scripts and one-off
- * runs. A database still in the pre-Drizzle (Prisma) layout is copied into the
- * new layout first, exactly as the server would on boot.
- */
 import { existsSync } from "node:fs";
 import { bootstrap } from "@groot/core/bootstrap";
 import { env } from "@groot/core/env";

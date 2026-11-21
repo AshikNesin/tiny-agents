@@ -1,8 +1,3 @@
-/**
- * Golden flows: Settings and owner tools (models, the vault with step-up,
- * attachments, notification settings) and the Code page on a fake harness.
- * See recorder.ts.
- */
 import { afterEach, beforeEach, describe } from "vite-plus/test";
 import { createTestApp } from "../helpers";
 import { createNamespaceKv } from "@groot/core/kv";
@@ -28,8 +23,6 @@ import { useFreshTestDatabase } from "../fixtures/test-db";
 const app = createTestApp();
 let token = "";
 
-// Each flow starts as if it ran first: a new database copy and runtime, so
-// the ids it records do not depend on which flows ran before it.
 beforeEach(async () => {
   await useFreshTestDatabase();
   token = await authToken("golden-settings@example.com");
@@ -39,7 +32,6 @@ beforeEach(async () => {
 afterEach(() => closeAppRuntime());
 
 const setup = { app, token: () => token };
-/** The owner confirmed it's them: a fresh step-up token on every call that needs one. */
 const steppedUp = () => ({ "X-Vault-Step-Up": issueStepUp(1).token });
 
 const PNG = Buffer.from(
@@ -114,8 +106,6 @@ describe("golden: settings and owner tools", () => {
     await r.http("overview at the end", "/api/v1/vault");
   });
 
-  // Q4: an install the pre-Q4 code wrote (vault values in KV, a connection's
-  // header value on its row) after the startup import. The rows it migrated.
   goldenFlow("vault-import", setup, async (r) => {
     const clear = async () => {
       await db.delete(connections);

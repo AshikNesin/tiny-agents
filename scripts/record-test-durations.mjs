@@ -1,8 +1,3 @@
-// `pnpm test:durations`: run the server and client suites once, unsharded,
-// and write how long each test file took to tests/durations.json, which
-// `--shard` splits by (tests/sequencer.ts). Run it on a quiet machine when the
-// suites' shape changes: a file that moved, a suite that grew.
-
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";

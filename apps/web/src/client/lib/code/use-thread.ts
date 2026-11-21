@@ -1,9 +1,3 @@
-/**
- * One Code thread, live (ADR 0011). The thread's stream starts with a full
- * snapshot (the harness reads the history after its live feed is open, so
- * nothing falls between) and then upserts rows by id; every reconnect starts
- * from a fresh snapshot.
- */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { subscribeSse } from "../sse";
 import {
@@ -29,12 +23,10 @@ export interface ThreadState {
   working: boolean;
   context: { used: number; max?: number };
   costUsd: number;
-  /** Text the model is streaming right now (not yet a row). */
   partialText: string;
   partialThinking: string;
   cursor: number;
   reload(): Promise<void>;
-  /** Apply a settings change the server confirmed. */
   setSettings(settings: ThreadSettings): void;
 }
 
@@ -88,7 +80,6 @@ function fromSnapshot(snapshot: ThreadSnapshot): Data {
   };
 }
 
-/** Apply one thread event (pure, for tests). */
 export function applyThreadEvent(data: Data, event: CodeThreadEvent): Data {
   switch (event.type) {
     case "snapshot":
@@ -100,7 +91,6 @@ export function applyThreadEvent(data: Data, event: CodeThreadEvent): Data {
         if (!byId.has(item.id)) order.push(item.id);
         byId.set(item.id, item);
       }
-      // A finished message replaces the streaming tail.
       const done = event.items.some((i) => i.kind === "assistant" || i.kind === "turn");
       return {
         ...data,

@@ -1,16 +1,3 @@
-/**
- * The `CodeStore` the bots' code tools run against (packages/agent
- * toolkits/code.ts): start and steer threads in any configured harness and
- * record hand-offs, always scoped to the bot that owns the asking
- * conversation (its chat, a routine run's or a bot message's). Shelley is
- * the default harness for hand-offs (owner decision, issue #157).
- *
- * A finish goes back to the conversation that last asked
- * (`deliverHandoffFinish`), never from an unattended one into the bot's
- * chat: a routine run's finish lands in that run's conversation, on its
- * budget, and one asked for by another bot is answered in the conversation
- * that bot's message started, so the answer is relayed back to it.
- */
 import { eq } from "drizzle-orm";
 import type { CodeHandoffRecord, CodeStore } from "@tiny-agents/agent";
 import { Boom } from "@groot/core/errors";
@@ -44,7 +31,6 @@ import {
   type ThreadHandoff,
 } from "./code.store";
 
-/** The harness bots hand work to when they name none. */
 const DEFAULT_HANDOFF_HARNESS = "shelley";
 
 const codePath = (threadId: string) => `/code/${encodeURIComponent(threadId)}`;
@@ -78,7 +64,6 @@ async function botOf(conversationId: number): Promise<string> {
   return owner.bot.id;
 }
 
-/** The named harness, else the default, else the only one. */
 function pickHarness(name?: string): HarnessInstance | { error: string } {
   const all = instances();
   const available = all.map((i) => i.id).join(", ") || "none";
@@ -108,7 +93,6 @@ async function outcomeOf(threadId: string): Promise<{
 type StartInput = Parameters<CodeStore["start"]>[0];
 type SendInput = Parameters<CodeStore["send"]>[0];
 
-/** What a start whose key was already claimed returns: its hand-off, if it got a thread. */
 function claimedBefore(row: CodeHandoff): CodeHandoffRecord | { error: string } {
   if (row.threadId !== null) return toRecord({ ...row, threadId: row.threadId });
   return {
@@ -117,12 +101,6 @@ function claimedBefore(row: CodeHandoff): CodeHandoffRecord | { error: string } 
   };
 }
 
-/**
- * Start a hand-off once per idempotency key: the row is claimed before the
- * harness makes the thread, so a replay never makes a second one. A claim
- * left `starting` by a run that died before recording its thread is not
- * repeated: the harness may have made the thread already.
- */
 async function startOnce(
   botId: string,
   input: StartInput,
@@ -149,32 +127,23 @@ async function startOnce(
       message: input.task,
       ...(input.cwd ? { cwd: input.cwd } : {}),
       ...(input.model ? { model: input.model } : {}),
-      // Hand-offs edit without asking, like owner-started threads (issue #157).
       ...(caps.settings.defaultPermissionMode
         ? { permissionMode: caps.settings.defaultPermissionMode }
         : {}),
     }));
   } catch (error) {
-    // The harness made nothing: the call may be tried again.
     await dropHandoffClaim(input.idempotencyKey);
     throw error;
   }
   const row = await startedHandoff(input.idempotencyKey, threadIdOf(instance.id, nativeId));
-  // A short title, as a thread the owner starts gets (a bot's task is long).
   titleLater(instance, nativeId, input.task);
   await follow(instance.id, nativeId);
   const hub = codeHub();
   void hub?.refresh(instance.id);
-  // A turn that ended before the row was running found nothing to report to.
   hub?.handedOff(row.threadId);
   return toRecord(row);
 }
 
-/**
- * Send on a thread with its hand-off armed first: adopt a thread this bot
- * has no hand-off for, or reopen a finished one. If the harness refuses the
- * message, the hand-off goes back to how it was.
- */
 async function sendArmed(
   botId: string,
   target: { instance: HarnessInstance; nativeId: string },
@@ -186,8 +155,6 @@ async function sendArmed(
   let undo: (() => Promise<unknown>) | undefined;
   let adopted = false;
   if (!handoff) {
-    // An existing thread (started earlier, in the harness or on the Code
-    // page): check the harness has it, then adopt it so its finish comes back.
     const found = await outcomeOf(threadId);
     if (!found) return { error: "not_found" };
     const row = await recordHandoff({
@@ -202,13 +169,11 @@ async function sendArmed(
     undo = () => forgetHandoff(row.id);
     adopted = true;
   } else {
-    // The follow-up's finish goes to the conversation that sent it.
     const before = await askedFrom(handoff.id, conversationId);
     const restore = async () => {
       if (before !== null) await askedFrom(handoff.id, before);
     };
     if (handoff.status === "finished") {
-      // The follow-up's turn ends with a finish the bot should hear about too.
       await reopenHandoff(handoff.id);
       undo = async () => {
         await finishHandoffOnce(handoff.id);
@@ -246,8 +211,6 @@ export const codeStore: CodeStore = {
   async start(input) {
     const botId = await botOf(input.conversationId);
     const work = () => startOnce(botId, input);
-    // A replayed call (pi-durable re-ran the tool task) waits for the first
-    // run in this process, then returns what it started.
     return codeHub()?.serial(`start:${input.idempotencyKey}`, work) ?? work();
   },
 
@@ -257,8 +220,6 @@ export const codeStore: CodeStore = {
     const target = hub?.resolve(input.threadId);
     if (!hub || !target) return { error: "not_found" };
     const threadId = threadIdOf(target.instance.id, target.nativeId);
-    // One send at a time per thread, each arming the hand-off before the
-    // harness hears the message: a turn that ends at once still finds it running.
     return hub.serial(`send:${threadId}`, () => sendArmed(botId, target, threadId, input));
   },
 
@@ -310,28 +271,14 @@ export const codeStore: CodeStore = {
   },
 };
 
-/** A hand-off's finish, owed to the bot that asked (`OwedFinish`). */
 export interface HandoffFinish {
   botId: string;
-  /** The conversation that last asked; null (older rows): the bot's chat. */
   conversationId: string | null;
-  /** Idempotency key of the submit. */
   requestId: string;
-  /** The framed, sanitized text (`handoffFinishText`). */
   text: string;
-  /** The harness's label: who the reply is from. */
   from: string;
 }
 
-/**
- * Put a finish in front of the bot, in the conversation that asked:
- * - a routine run's: that run's conversation, unattended, on its budget;
- * - a bot message's: a Delivery pinned to that conversation, so the bot
- *   answers there and its answer is relayed to the bot that wrote, as the
- *   first answer was;
- * - its chat, a retired chat or an older row: the bot's chat.
- * Idempotent by request id, like every submit.
- */
 export async function deliverHandoffFinish(
   rt: DeliveryRuntime,
   finish: HandoffFinish,

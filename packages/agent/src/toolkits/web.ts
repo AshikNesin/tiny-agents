@@ -1,14 +1,3 @@
-/**
- * The `web` toolkit: search and read public pages through TinyFish.
- * Search (`GET https://api.search.tinyfish.ai`) and Fetch
- * (`POST https://api.fetch.tinyfish.ai`) are free; a key is still required
- * (`TINYFISH_API_KEY`, sent as `X-API-Key`). Until it is set, search and
- * fetch stay hidden.
- *
- * `http_request` (issue #56) is a request this server makes itself, never
- * through TinyFish, so a vault API key (`auth: <handle>`) only ever reaches
- * the hosts its item allows. Offered once the app gives the toolkit a vault.
- */
 import { lookup } from "node:dns/promises";
 import { isIP, type LookupFunction } from "node:net";
 import { Agent, fetch as undiciFetch } from "undici";
@@ -21,35 +10,21 @@ import { checkPublicUrl, isPrivateAddress } from "@tiny-agents/sandbox";
 import { safeMessage, vaultUseFromSink, vaultGatePlan } from "./vault";
 
 export interface WebToolkitOptions {
-  /** TinyFish API key. Search and Fetch stay hidden without it. */
   apiKey?: string;
-  /** TinyFish's fetch (tests). Never used by `http_request`, which connects through `sendPinned`. */
   fetch?: typeof fetch;
-  /** Alternate Search API origin. */
   searchBase?: string;
-  /** Alternate Fetch API origin. */
   fetchBase?: string;
-  /** The vault broker: enables `http_request` and its `auth` handles. */
   vault?: VaultBroker;
-  /** Resolve a hostname for the private-address check (tests). */
   resolveHost?: (hostname: string) => Promise<string[]>;
-  /**
-   * Send one `http_request` hop (tests). It must connect only to
-   * `addresses`, the ones `resolveHost` gave and the check passed. Default:
-   * `pinnedFetch`, a connection pinned to those addresses; nothing else
-   * sends an `http_request`.
-   */
   sendPinned?: PinnedFetch;
 }
 
-/** One request to `url`, connecting only to the already-checked `addresses`. */
 export type PinnedFetch = (
   url: URL,
   addresses: readonly string[],
   init: RequestInit,
 ) => Promise<HopResponse>;
 
-/** What `http_request` reads of a hop's response: the global or undici's `Response`. */
 interface HopResponse {
   readonly status: number;
   readonly statusText: string;
@@ -64,10 +39,8 @@ interface HopResponse {
   } | null;
 }
 
-/** Longest page text handed to the model. */
 const MAX_PAGE_CHARS = 20_000;
 const SEARCH_TIMEOUT_MS = 30_000;
-/** Fetch's CDN ceiling is 120s; wait long enough to receive that error. */
 const FETCH_TIMEOUT_MS = 150_000;
 
 type WebSource = { url: string; title: string };
@@ -80,11 +53,9 @@ const fail = (text: string): ToolExecutionResult => ({
 const defaultResolve = async (hostname: string) =>
   (await lookup(hostname, { all: true })).map((entry) => entry.address);
 
-/** Longest response body read, and the part handed to the model. */
 const MAX_HTTP_BYTES = 1_000_000;
 const HTTP_TIMEOUT_MS = 30_000;
 const MAX_REDIRECTS = 5;
-/** Headers the model may not set: the vault and the server own them. */
 const RESERVED_HEADERS = new Set([
   "authorization",
   "cookie",
@@ -195,7 +166,6 @@ export function createWebToolkit(options: WebToolkitOptions): Capability {
       try {
         const result = (await tinyfish(fetchBase, {
           method: "POST",
-          // ttl 0 skips TinyFish's cache so the page is the one live now.
           body: JSON.stringify({ urls: [url.href], format: "markdown", ttl: 0 }),
           timeoutMs: FETCH_TIMEOUT_MS,
         })) as {
@@ -234,11 +204,6 @@ export function createWebToolkit(options: WebToolkitOptions): Capability {
 
   const resolveHost = options.resolveHost ?? defaultResolve;
   const sendPinned: PinnedFetch = options.sendPinned ?? pinnedFetch;
-  /**
-   * The URL, checked again after DNS: a public name must not resolve to a
-   * private address. Resolved once: the request connects to these addresses
-   * (`sendPinned`), so a second lookup can't swap in a private one (S7).
-   */
   async function publicTarget(raw: string): Promise<{ url: URL; addresses: string[] }> {
     const url = checkPublicUrl(raw);
     const host = url.hostname.replace(/^\[|\]$/g, "");
@@ -347,12 +312,6 @@ export function createWebToolkit(options: WebToolkitOptions): Capability {
       })
     : undefined;
 
-  /**
-   * One request with manual redirects: every hop is re-checked against the
-   * private-address rules and connects only to the addresses it was checked
-   * with, and the vault header is dropped on any hop that leaves the
-   * original host.
-   */
   async function requestFollowingRedirects(
     start: { url: URL; addresses: string[] },
     method: string,
@@ -374,7 +333,6 @@ export function createWebToolkit(options: WebToolkitOptions): Capability {
       });
       const location = response.headers.get("location");
       if (response.status >= 300 && response.status < 400 && location) {
-        // Not read: let the connection go before the next hop (or the error).
         await response.body?.cancel().catch(() => undefined);
         if (hop >= MAX_REDIRECTS) throw httpError("Too many redirects.");
         try {
@@ -410,8 +368,6 @@ export function createWebToolkit(options: WebToolkitOptions): Capability {
     }
   }
 
-  // Every bot has the web toolkit; until it is configured it offers the
-  // model nothing rather than tools that can only fail.
   return defineToolkit({
     id: "web",
     name: "Web",
@@ -422,10 +378,6 @@ export function createWebToolkit(options: WebToolkitOptions): Capability {
   });
 }
 
-/**
- * A lookup that answers only with the addresses already checked, whatever
- * the name: the connection can't be steered to an address DNS gives later.
- */
 function pinnedLookup(addresses: readonly string[]): LookupFunction {
   const entries = addresses.map((address) => ({ address, family: isIP(address) }));
   return (hostname, options, callback) => {
@@ -446,10 +398,6 @@ function pinnedLookup(addresses: readonly string[]): LookupFunction {
   };
 }
 
-/**
- * `fetch` over a connection pinned to `addresses`: TLS still verifies the
- * URL's hostname, but no new DNS lookup chooses where to connect.
- */
 export const pinnedFetch: PinnedFetch = async (url, addresses, init) => {
   const dispatcher = new Agent({ connect: { lookup: pinnedLookup(addresses) } });
   try {
@@ -459,7 +407,6 @@ export const pinnedFetch: PinnedFetch = async (url, addresses, init) => {
     });
     return response;
   } finally {
-    // Graceful: the body still streams, and the agent closes once it is read or cancelled.
     dispatcher.close().catch(() => undefined);
   }
 };
@@ -474,7 +421,6 @@ function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-/** The response body as text, reading at most MAX_HTTP_BYTES. */
 async function readCapped(response: HopResponse): Promise<string> {
   if (!response.body) return "";
   const reader = response.body.getReader();

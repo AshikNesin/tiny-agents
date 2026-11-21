@@ -1,10 +1,3 @@
-/**
- * Attachments as a bot's model meets them: what a send's upload ids turn
- * into before it reaches the conversation. Images become inline blocks for a
- * vision model or notes for `see_image`; files become a reference line each
- * and, when small, their text inline, fenced as untrusted. The refs ride
- * the transcript entry so the chat can show what was attached.
- */
 import { inArray } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { fenceAttachment, UNTRUSTED_RULE, type AttachmentRef } from "@tiny-agents/agent";
@@ -12,27 +5,18 @@ import { db, uploads, type Upload } from "../../db";
 import { loadContent, waitUntilSettled } from "./uploads.extraction";
 import { modelImage, summarize } from "./uploads.store";
 
-/** One send's resolved content: blocks for the model, refs for the entry. */
 export interface ResolvedSend {
   text: string;
   images?: { data: string; mimeType: string }[];
   attachments?: AttachmentRef[];
 }
 
-/** Inline a file's text when it is at most this long (≈8k tokens)… */
 const INLINE_FILE_CHARS = 32_000;
-/** …and while the send's inlined text stays under this (≈24k tokens). */
 const INLINE_SEND_CHARS = 96_000;
-/** How long a send waits for extractions still running (small files finish first). */
 const EXTRACT_WAIT_MS = 5_000;
 
 type UploadRow = Upload;
 
-/**
- * One file as the model meets it (issue #58): a reference line with its id
- * and state, plus its whole text, fenced as untrusted, when it is small and
- * the send's budget allows; otherwise the outline only, for the tools.
- */
 async function fileNote(row: UploadRow, budget: { left: number }): Promise<string> {
   const summary = summarize(row);
   const facts = [summary.mimeType, `${Math.max(1, Math.round(summary.size / 1024))} KB`];
@@ -67,14 +51,6 @@ async function fileNote(row: UploadRow, budget: { left: number }): Promise<strin
   return outline ? `${line}\n  Outline: ${outline.slice(0, 400)}` : line;
 }
 
-/**
- * Resolve a send's attachments (issue #17). Vision models get inline image
- * blocks; text-only models get a see_image note per image. Files get a
- * reference line each (issue #58) and, when small, their text inline, so
- * every model can work with what arrived. Files still extracting get up to
- * `waitMs` to finish. Throws 400 for a duplicate id and 404 for an unknown
- * one, before anything durable happens.
- */
 export async function resolveAttachments(
   input: { text: string; attachments?: string[] },
   seesImages: boolean,
@@ -118,7 +94,6 @@ export async function resolveAttachments(
       : "";
   const join = (...parts: string[]) => parts.filter(Boolean).join("\n\n");
 
-  // Vision path: inline image blocks, the refs ride the entry.
   if (images.length > 0 && seesImages) {
     const blocks: { data: string; mimeType: string }[] = [];
     for (const image of images) {
@@ -128,10 +103,8 @@ export async function resolveAttachments(
     if (blocks.length > 0) {
       return { text: join(text, fileNotes), images: blocks, attachments };
     }
-    // Preparation failed for every image (swept storage): fall through to notes.
   }
 
-  // Text-model path (or storage loss): describe images as text lines.
   const imageLines = images.map((image) => {
     const size = image.width && image.height ? `, ${image.width}x${image.height}` : "";
     return `[image attached: ${image.name}${size} (${image.uploadId})]`;

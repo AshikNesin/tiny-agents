@@ -1,8 +1,3 @@
-/**
- * `pnpm local`'s git side (scripts/lib/local-releases.ts) against a real
- * repository and its clone: following a branch or the newest release tag,
- * describing a commit, and listing what an update brings.
- */
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
@@ -34,8 +29,6 @@ function commit(version: string, message: string, file = "app.txt"): string {
 
 let first: string;
 
-// A repository and clone per test: each test commits, and a later one must
-// not see what an earlier one added.
 beforeEach(() => {
   base = mkdtempSync(path.join(os.tmpdir(), "local-releases-"));
   upstream = path.join(base, "upstream");
@@ -103,7 +96,6 @@ describe("local releases", () => {
     const store = releaseStore(clone, path.join(base, "releases"));
     expect(store.readCurrent()).toBeUndefined();
     store.saveCurrent(first);
-    // Saved, but there is no built worktree for it.
     expect(store.readCurrent()).toBeUndefined();
     mkdirSync(store.releaseDir(first), { recursive: true });
     writeFileSync(path.join(store.releaseDir(first), ".tiny-agents-built"), "");

@@ -9,22 +9,8 @@ import { useModalPresence } from "./motion";
 import { Button } from "./button";
 import { XIcon } from "lucide-react";
 
-/**
- * Modal dialog with Fluid Functionalism's motion
- * (https://www.fluidfunctionalism.com/docs/dialog): the overlay fades and the
- * panel springs in from 97% scale, then leaves on a quicker exit while it
- * stays mounted, so closing animates instead of vanishing. Radix still owns
- * focus trapping, scroll lock, dismissal and the ARIA wiring.
- */
-
-/** The dimmed backdrop behind a modal panel. */
 const overlayClass = "fixed inset-0 isolate z-50 bg-black/40 dark:bg-black/70";
 
-/**
- * Panel widths (each capped at the viewport less a 1rem gutter per side):
- * `sm` 400px, the default; `md` 480px; `lg` 540px; `xl` 880px, the canvas for
- * composed layouts. A `sm:max-w-*` class still overrides it from 640px up.
- */
 const dialogSizes = {
   sm: "max-w-[400px]",
   md: "max-w-[480px]",
@@ -32,7 +18,6 @@ const dialogSizes = {
   xl: "max-w-[880px]",
 } as const;
 
-/** Base panel classes, shared by the dialog and the alert dialog. */
 const dialogPanelClass =
   "fixed left-1/2 z-50 flex w-[calc(100%-2rem)] flex-col gap-5 rounded-3xl bg-popover p-6 text-sm text-popover-foreground shadow-2xl shadow-black/10 ring-1 ring-foreground/10 outline-none";
 
@@ -42,7 +27,6 @@ function panelPlacement(position: "center" | "top") {
     : "top-1/2 max-h-[calc(100dvh-2rem)]";
 }
 
-/** Motion targets for the panel: centered panels translate by half their height. */
 function panelMotion(open: boolean, position: "center" | "top") {
   const y = position === "top" ? 0 : "-50%";
   return {
@@ -51,7 +35,6 @@ function panelMotion(open: boolean, position: "center" | "top") {
   };
 }
 
-/** Whether the enclosing Dialog is open: the content keeps itself mounted through the exit. */
 const DialogOpenContext = React.createContext(false);
 
 function Dialog({
@@ -60,9 +43,6 @@ function Dialog({
   onOpenChange,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Root>) {
-  // The Root is always controlled so the content can follow `open` through
-  // its exit; an uncontrolled dialog keeps its state here, and the caller's
-  // onOpenChange is told alongside.
   const [uncontrolledOpen, setUncontrolledOpen] = React.useState(defaultOpen ?? false);
   const open = controlledOpen ?? uncontrolledOpen;
   const handleOpenChange = (next: boolean) => {
@@ -116,13 +96,6 @@ function DialogContent({
   showCloseButton = true,
   size = "sm",
   position = "center",
-  /**
-   * Whether clicking outside the dialog (overlay / pointer-down) dismisses
-   * it. Defaults to `true`, matching platform modal conventions. Set to
-   * `false` for dialogs whose input is expensive to re-enter and would be
-   * lost to a stray click; the dialog still closes via the X button, the
-   * Escape key, or an explicit `DialogClose`.
-   */
   dismissOnOutsideClick = true,
   onPointerDownOutside,
   onInteractOutside,
@@ -130,12 +103,7 @@ function DialogContent({
 }: Omit<React.ComponentProps<typeof DialogPrimitive.Content>, "asChild" | "forceMount"> & {
   showCloseButton?: boolean;
   dismissOnOutsideClick?: boolean;
-  /** Panel width: sm 400px, md 480px, lg 540px, xl 880px (viewport-capped). A `sm:max-w-*` class still overrides it from 640px up. @default "sm" */
   size?: keyof typeof dialogSizes;
-  /**
-   * `center` (default), or `top`: anchored 12dvh from the top so a panel whose
-   * height follows its content (a command menu) keeps its top edge still.
-   */
   position?: "center" | "top";
 }) {
   const open = React.useContext(DialogOpenContext);
@@ -196,11 +164,6 @@ function DialogContent({
   );
 }
 
-/**
- * Scrollable middle of a tall dialog: header and footer stay pinned while
- * this region scrolls. The negative margins let the scrollbar sit at the
- * dialog edge and keep focus rings from being clipped.
- */
 function DialogBody({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div

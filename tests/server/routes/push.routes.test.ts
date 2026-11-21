@@ -1,10 +1,3 @@
-/**
- * Phone push devices (issue #306) through the real routes and database, with
- * only DNS and the push service faked: the owner registers, lists, tests and
- * removes devices; endpoints that would reach the server's own network are
- * refused; guests get nothing; and an answered approval is taken back from
- * the phone.
- */
 import { createDecipheriv, createECDH, hkdfSync } from "node:crypto";
 import {
   afterAll,

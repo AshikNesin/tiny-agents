@@ -1,26 +1,16 @@
-/**
- * The Code page's thread list: every harness's flat list (subagents
- * included) as a tree, grouped the way t3code's sidebar is: by project,
- * then by repository or folder for threads outside a project.
- */
 import type { ThreadSummary } from "./api";
 
 export interface ListNode {
   row: ThreadSummary;
   children: ListNode[];
-  /** It or a descendant is working. */
   busy: boolean;
-  /** It or a descendant is unread. */
   unread: boolean;
 }
 
-/** One sidebar group: a project, a repository or folder, or threads with neither. */
 export interface ListGroup {
-  /** `project:<id>`, `folder:<path>` or `none`. */
   key: string;
   label: string;
   projectId?: string;
-  /** The folder a `folder:` group stands for. */
   path?: string;
   nodes: ListNode[];
 }
@@ -29,7 +19,6 @@ function repoOf(row: Pick<ThreadSummary, "repoRoot" | "cwd">): string | null {
   return row.repoRoot || row.cwd || null;
 }
 
-/** Newest activity in a node's subtree. */
 function lastActive(node: ListNode): string {
   return node.children.reduce((latest, child) => {
     const at = lastActive(child);
@@ -39,7 +28,6 @@ function lastActive(node: ListNode): string {
 
 const newestFirst = (a: ListNode, b: ListNode) => b.row.updatedAt.localeCompare(a.row.updatedAt);
 
-/** Parent → children tree; a subagent whose parent is not listed stands on its own. */
 export function buildTree(rows: ThreadSummary[]): ListNode[] {
   const nodes = new Map<string, ListNode>();
   for (const row of rows) {
@@ -57,7 +45,7 @@ export function buildTree(rows: ThreadSummary[]): ListNode[] {
     else roots.push(node);
   }
   const settle = (node: ListNode, depth: number): void => {
-    if (depth > 20) return; // a cycle in bad data must not hang the page
+    if (depth > 20) return;
     node.children.sort(newestFirst);
     for (const child of node.children) {
       settle(child, depth + 1);
@@ -69,12 +57,6 @@ export function buildTree(rows: ThreadSummary[]): ListNode[] {
   return roots.sort(newestFirst);
 }
 
-/**
- * The sidebar's groups. Subagents stay under their parent wherever they
- * work, so the tree is built first and only its roots are grouped. Inside a
- * group anything working comes first, then the newest; groups come most
- * recently active first, and a project with no thread yet comes last.
- */
 export function buildGroups(
   rows: ThreadSummary[],
   projects: ReadonlyArray<{ id: string; name: string }>,
@@ -114,7 +96,6 @@ export function buildGroups(
   );
 }
 
-/** The ancestry of a thread (root first), for the header breadcrumb. */
 export function ancestry(rows: ThreadSummary[], id: string): ThreadSummary[] {
   const byId = new Map(rows.map((r) => [r.id, r]));
   const chain: ThreadSummary[] = [];
@@ -126,12 +107,6 @@ export function ancestry(rows: ThreadSummary[], id: string): ThreadSummary[] {
   return chain;
 }
 
-/**
- * A multi-selection over the list (issue #148), as the archive acts on it:
- * `roots` are the selected nodes without a selected ancestor, in list order
- * (archiving one moves its subagents too, so they are not sent again), and
- * `covered` is every id they take along, selected or not.
- */
 export function selectionRoots(
   trees: readonly ListNode[],
   selected: ReadonlySet<string>,
@@ -156,7 +131,6 @@ export function selectionRoots(
   return { roots, covered };
 }
 
-/** One status section of the Threads screen (Hoplite's Done / Archived list). */
 export interface StatusSection {
   key: "working" | "needs-you" | "review" | "done";
   label: string;
@@ -178,11 +152,6 @@ function sectionOf(node: ListNode): StatusSection["key"] {
   return "done";
 }
 
-/**
- * A list of threads by where they stand: working, waiting on you (its PR
- * needs input), in review (an open PR), or done; newest first, empty
- * sections left out. Subagents stay under their parent.
- */
 export function statusSections(rows: ThreadSummary[]): StatusSection[] {
   const nodes = buildTree(rows);
   return SECTIONS.map((section) => ({

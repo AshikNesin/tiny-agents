@@ -11,13 +11,10 @@ type Props = {
   file: StorageFile;
   selected: boolean;
   onToggle: (key: string) => void;
-  /** Open a folder. */
   onNavigate: (key: string) => void;
-  /** The card's actions, from `useStorageBrowser().fileActions(file)`. */
   actions: FileAction[];
 };
 
-/** Mobile card view for a single file/folder: a row of labelled buttons for `actions`. */
 export function MobileFileCard({ file, selected, onToggle, onNavigate, actions }: Props) {
   return (
     <Card className={cn("gap-3 p-4", selected && "bg-muted")}>
@@ -59,8 +56,6 @@ export function MobileFileCard({ file, selected, onToggle, onNavigate, actions }
         <div>
           <span className="block">Modified</span>
           <span className="font-medium text-foreground">
-            {/* Folders: "-" — the epoch sentinel isn't a date (see
-                DesktopFileRow). */}
             {file.isDirectory ? "-" : formatDate(file.lastModified)}
           </span>
         </div>

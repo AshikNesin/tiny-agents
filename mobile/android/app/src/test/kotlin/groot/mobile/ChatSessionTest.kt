@@ -23,7 +23,6 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** The chat reducer and its view: the rules ported from the web client's lib/chat-session.ts. */
 class ChatSessionTest {
     private fun stream(state: ChatSession, event: BotStreamEvent) = reduceChat(state, ChatAction.Stream(event))
 
@@ -48,7 +47,6 @@ class ChatSessionTest {
     fun `an echo is confirmed by request id, not by text`() {
         var state = stream(ChatSession(), snapshot())
         state = reduceChat(state, ChatAction.AddEcho(Echo("req-1", "ok", FIXED_NOW)))
-        // An earlier message with the same text is not this echo's confirmation.
         state = stream(state, BotStreamEvent.Upsert(message("e1", MessageRole.User, "ok").copy(requestId = "other")))
         assertEquals(1, state.echoes.size)
         state = stream(state, BotStreamEvent.Upsert(message("e2", MessageRole.User, "ok (annotated by the server)").copy(requestId = "req-1")))
@@ -86,7 +84,6 @@ class ChatSessionTest {
         assertFalse(state.hasMore)
         state = stream(state, snapshot("e11", "e12", hasMore = true))
         assertEquals(listOf("e8", "e9", "e10", "e11", "e12"), state.messages.map { it.id })
-        // A snapshot that starts at the beginning (a new chat) replaces everything.
         state = stream(state, snapshot("e20"))
         assertEquals(listOf("e20"), state.messages.map { it.id })
     }
@@ -94,7 +91,6 @@ class ChatSessionTest {
     @Test
     fun `a stale page of older messages is dropped`() {
         var state = stream(ChatSession(), snapshot("e10", hasMore = true))
-        // A new chat started meanwhile: its snapshot begins at the beginning and replaces the old one.
         state = stream(state, snapshot("e30"))
         state = reduceChat(state, ChatAction.OlderPage("e10", ChatPage(listOf(message("e9", MessageRole.User, "old")), hasMore = false)))
         assertEquals(listOf("e30"), state.messages.map { it.id })
@@ -110,10 +106,8 @@ class ChatSessionTest {
         var state = reduceChat(ChatSession(unreadFrom = FIXED_NOW - 10 * 60_000), ChatAction.Opened)
         state = stream(state, BotStreamEvent.Snapshot(ChatState(messages, false, emptyList(), false)))
         assertEquals("e3", chatView(state).unreadDividerId)
-        // A reply that streams in while the chat is open does not move it.
         state = stream(state, BotStreamEvent.Upsert(message("e4", MessageRole.Assistant, "newer", minutesAgo = 0)))
         assertEquals("e3", chatView(state).unreadDividerId)
-        // A chat never read before has no divider.
         val fresh = stream(reduceChat(ChatSession(), ChatAction.Opened), BotStreamEvent.Snapshot(ChatState(messages, false, emptyList(), false)))
         assertNull(chatView(fresh).unreadDividerId)
     }

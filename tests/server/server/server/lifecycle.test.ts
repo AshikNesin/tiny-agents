@@ -1,8 +1,3 @@
-/**
- * The server lifecycle (apps/web/src/server/lifecycle.ts): parts start in
- * order and stop in reverse, a failing stop never blocks the next, the whole
- * stop has a deadline, and a second signal exits at once.
- */
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { createLifecycle, type LifecyclePart } from "../../../../apps/web/src/server/lifecycle";
 

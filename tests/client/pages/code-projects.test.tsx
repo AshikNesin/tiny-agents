@@ -1,17 +1,15 @@
-/**
- * Code settings, Add a project (issue #297): with the GitHub App set up, the
- * repository picker is the searchable SearchSelect the composer's model
- * picker uses, not a plain select; typing filters the App's repositories and
- * Enter picks one, and a repo can't be typed in by hand.
- */
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { render as renderBare, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { ConfirmProvider } from "@groot/ui/primitives";
 import { MemoryRouter } from "react-router-dom";
 import { CodeSettings } from "@/pages/code/CodeSettings";
 import type { HarnessInfo } from "@/lib/code/api";
+import { AppQueryProvider } from "../query-provider";
+
+const render = (ui: Parameters<typeof renderBare>[0]) =>
+  renderBare(ui, { wrapper: AppQueryProvider });
 
 const toastError = vi.fn();
 const appRepositories = vi.fn();

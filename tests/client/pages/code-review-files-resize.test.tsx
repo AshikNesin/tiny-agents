@@ -6,7 +6,7 @@
  * keys, remembered in this browser. The network is the boundary: fetch is
  * stubbed.
  */
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render as renderBare, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { ConfirmProvider } from "@groot/ui/primitives";
@@ -16,6 +16,10 @@ import type {
   ReviewFile,
   ReviewFileDiff,
 } from "../../../apps/web/src/shared/api/code";
+import { AppQueryProvider } from "../query-provider";
+
+const render = (ui: Parameters<typeof renderBare>[0]) =>
+  renderBare(ui, { wrapper: AppQueryProvider });
 
 const REVIEW: PullReviewView = {
   id: "rv1",
@@ -99,8 +103,6 @@ afterEach(() => {
 });
 
 describe("a PR review's file list", () => {
-  // jsdom's window is 1024px wide and lays nothing out, so the list may grow
-  // to 640px (the diff keeps at least 360px) and shrink to 200px.
   it("resizes from the keyboard within its limits, and remembers the width", async () => {
     stubFetch();
     const { unmount } = renderReview();

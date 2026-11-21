@@ -1,9 +1,3 @@
-/**
- * Claude plan engine and worker: the bot protocol. No network except a
- * localhost WebSocket with an injected SDK. Nothing here calls Anthropic.
- * The socket policy under it (heartbeat, reconnect, resume, reboot) is
- * tested once, in claude-worker-connection.test.ts.
- */
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { until } from "../../fixtures/until";
 import { WebSocket } from "ws";
@@ -67,7 +61,6 @@ function subscribed() {
   });
 }
 
-/** The bot protocol on a real socket to `url`, keeping each socket so a test can drop one. */
 function botClient(
   url: string,
   handlers: Pick<ConstructorParameters<typeof ClaudeWorkerClient>[0], "onTool">,
@@ -181,7 +174,6 @@ describe("tool proxy, caps, eviction", () => {
     expect(proxy.settle("toolu_1", { content: "late" })).toBe(false);
   });
 
-  // Register C3: a call waiting on the owner outlives the 120s timer while the app says so.
   it("starts a waiting call's timer over when the app says it still waits", async () => {
     const timers: { ms: number; cleared: boolean }[] = [];
     const proxy = new ToolProxy(120_000, (_fn, ms) => {
@@ -206,7 +198,6 @@ describe("tool proxy, caps, eviction", () => {
     expect(proxy.extend("toolu_unknown")).toBe(false);
   });
 
-  // Register C23: Stop ends the turn and the Claude process with it.
   it("stops the query when a turn is aborted, so nothing of it runs later", async () => {
     const signals: AbortSignal[] = [];
     const factory: QueryFactory = async (ctx) => {
@@ -216,7 +207,6 @@ describe("tool proxy, caps, eviction", () => {
         await new Promise<void>((resolve) =>
           ctx.signal.addEventListener("abort", () => resolve(), { once: true }),
         );
-        // A query that kept going would say more and end the turn itself.
         ctx.publish({ type: "text", turnId: turn.turnId, text: "still going" });
         ctx.publish({ type: "turn_end", turnId: turn.turnId, stopReason: "end_turn" });
       }
@@ -238,7 +228,6 @@ describe("tool proxy, caps, eviction", () => {
       { type: "turn_end", turnId: "t1", stopReason: "aborted" },
     ]);
 
-    // The next turn starts a new process that resumes the session.
     const next = book.runTurn(open, { turnId: "t2", text: "again" }, 1);
     await until(() => signals.length === 2, "a new process");
     expect(signals[1]?.aborted).toBe(false);
@@ -286,12 +275,10 @@ describe("tool proxy, caps, eviction", () => {
     expect(closed).toBe(1);
   });
 
-  // Register C23: a usage pause ends the turn for the worker too.
   it("resolves the turn on a usage pause, so the next turn is not refused as busy", async () => {
     const factory: QueryFactory = async (ctx) => {
       for await (const turn of ctx.turns) {
         ctx.publish({ type: "usage_pause", turnId: turn.turnId, reason: "rejected" });
-        // Claude Code goes quiet; the process does not end by itself.
         await new Promise(() => undefined);
       }
     };
@@ -356,7 +343,6 @@ describe("tool proxy, caps, eviction", () => {
     await book.runTurn(open(250), { turnId: "4", text: "d" }, 3);
     await book.runTurn(open("unlimited"), { turnId: "5", text: "e" }, 4);
     expect(DEFAULT_TIMINGS.maxTurns).toBe(100);
-    // "unlimited" starts Claude with no maxTurns at all.
     expect(limits).toEqual([100, 250, undefined]);
   });
 
@@ -402,9 +388,7 @@ describe("SDK lockdown", () => {
     const sdk: ClaudeSdkModule = {
       query: (args) => {
         seen.push(args.options);
-        return (async function* () {
-          /* the worker must not need a live Claude process in CI */
-        })();
+        return (async function* () {})();
       },
       tool: (name) => ({ name }),
       createSdkMcpServer: (opts) => ({ name: opts.name, toolCount: opts.tools.length }),
@@ -437,7 +421,6 @@ describe("SDK lockdown", () => {
     const sdk: ClaudeSdkModule = {
       query: (args) =>
         (async function* () {
-          // Read the user's message first, as Claude Code does.
           for await (const _ of args.prompt) break;
           yield {
             type: "result",
@@ -748,7 +731,6 @@ describe("bot engine while a call waits on the owner", () => {
     await Promise.allSettled(runtimes.splice(0).map((runtime) => runtime.close()));
   });
 
-  // Register C3: the app keeps the worker's tool timer from ending an Owner wait.
   it("tells the worker the call still waits, well inside its tool timeout", async () => {
     expect(OWNER_WAIT_KEEPALIVE_MS * 3).toBeLessThan(DEFAULT_TIMINGS.toolResultTimeoutMs);
     const engine = await openEngine("claude-code", { capabilities: [mailCapability([])] });
@@ -796,7 +778,6 @@ describe("bot engine on a worker restart", () => {
     expect(engine.runtime.isBusy(running)).toBe(true);
 
     engine.worker.restart();
-    // Sent while the socket is down: it waits for the next worker.
     await engine.send(waiting, { requestId: "r2", text: "still there?" });
 
     const cut = await until(async () => {
@@ -812,7 +793,6 @@ describe("bot engine on a worker restart", () => {
     expect(answered.text).toBe("Echo: still there?");
     expect(answered.error).toBeUndefined();
 
-    // The conversation that was cut off carries on with the new worker.
     await engine.send(running, { requestId: "r3", text: "again" });
     const again = await until(async () => {
       const message = await last(running);

@@ -4,16 +4,6 @@ import path from "node:path";
 import { describe, expect, it } from "vite-plus/test";
 import { runTsxScript, withRepoCopy, type ScriptRun } from "./repo-copy";
 
-/**
- * Kit export guard (scripts/check-kit-exports.ts).
- *
- * The script keeps the explicit exports maps of @groot/ui and @groot/jobs in
- * agreement with their source files and with the imports of the compiled
- * consumer fixture. A new module, a removed subpath, or a fixture that stops
- * exercising a subpath must fail a check, because the fixture is what forces
- * the removal deliberation recorded in AGENTS.md.
- */
-
 const repoRoot = process.cwd();
 const SCRIPT = path.join("scripts", "check-kit-exports.ts");
 const TIMEOUT = 60_000;
@@ -28,7 +18,6 @@ function runGuard(checkedRepo = repoRoot, args: string[] = []): Promise<ScriptRu
   return runTsxScript(path.join(checkedRepo, SCRIPT), args, TIMEOUT);
 }
 
-// Each case runs the guard on its own copy, so the cases run at once.
 describe.concurrent("kit exports guard", () => {
   it(
     "agrees with the fixture at head",
@@ -47,7 +36,6 @@ describe.concurrent("kit exports guard", () => {
       withRepoCopy(async (root) => {
         const fixture = path.join(root, "tests/kit-consumers/consumer.tsx");
         const original = fs.readFileSync(fixture, "utf8");
-        // Drop one barrel import so the "." entry stops being exercised.
         const withoutBarrelImport = original.replace(
           /import \{ Button as ButtonFromBarrel[^\n]*\n/,
           "",

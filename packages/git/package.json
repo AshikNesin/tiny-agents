@@ -1,6 +1,6 @@
 {
   "name": "@tiny-agents/git",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Reading a repository's changes for the Code page, for every harness: changed files, both sides of a file, and a change stamp, safe to run while an agent commits. No dependencies: it runs over a port, in the app over SSH and bundled into the Claude worker on the sandbox.",
   "type": "module",

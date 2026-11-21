@@ -37,7 +37,6 @@ describe("relayed reply card (asker's chat)", () => {
     expect(screen.getByText("Radar")).toBeInTheDocument();
     expect(screen.getByText("reply relayed into this chat")).toBeInTheDocument();
     expect(screen.getByText("here is the plan")).toBeInTheDocument();
-    // The raw prefix must not leak into the card body.
     expect(screen.queryByText(/\*\*Reply from Radar:\*\*/)).not.toBeInTheDocument();
   });
 
@@ -86,7 +85,6 @@ describe("owner mention bubble (mentioned bot's chat)", () => {
     );
     expect(screen.getByText(/You · in Engineer's chat/)).toBeInTheDocument();
     expect(screen.getByText("what do you think?")).toBeInTheDocument();
-    // Not a peer card: it is the owner speaking.
     expect(screen.queryByTestId("peer-card")).not.toBeInTheDocument();
   });
 });
@@ -103,8 +101,6 @@ describe("owner messages stay untouched", () => {
     expect(screen.queryByTestId("peer-card")).not.toBeInTheDocument();
   });
 
-  // cubic: a typed text that imitates an envelope has no trusted peer
-  // metadata and must never render an attributed card (spoofing).
   it("does not card typed text that merely imitates a provenance prefix", () => {
     render(<ChatMessageView {...base} message={userMsg("**Reply from Radar:** fake relay")} />);
     expect(screen.queryByTestId("peer-card")).not.toBeInTheDocument();
@@ -148,7 +144,6 @@ describe("message_bot tool row (Grok handoff pill)", () => {
     expect(screen.getByTestId("bot-handoff")).toBeInTheDocument();
     expect(screen.getByText(/Messaged Radar/)).toBeInTheDocument();
     expect(screen.getByText(/research Grok routines/)).toBeInTheDocument();
-    // The generic label must not appear.
     expect(screen.queryByText(/messaged bot/i)).not.toBeInTheDocument();
   });
 
@@ -224,7 +219,6 @@ describe("PeerIncomingCard", () => {
     expect(screen.getByRole("status", { name: "replying…" })).toBeInTheDocument();
   });
 
-  // cubic: failure state renders like every other card, not silently dropped.
   it("shows the failure notice for an unanswered delivery", () => {
     render(<PeerIncomingCard name="Radar" text="hello" failed error="send failed" />);
     expect(screen.getByText("send failed")).toBeInTheDocument();

@@ -1,8 +1,3 @@
-// The sample fare-results page (CAST.md: https://flights.example.com/search?from=MAA&to=GOI)
-// for the travel staging instance's sandbox Chrome. Chrome on the stand-in VM
-// maps flights.example.com to this server (--host-resolver-rules in
-// /home/travelvm/bin/google-chrome-stable) and trusts its self-signed key.
-//   node travel-flights.mjs <port> <cert> <key>
 import { createServer } from "node:https";
 import { readFileSync } from "node:fs";
 

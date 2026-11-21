@@ -38,19 +38,13 @@ import groot.mobile.ui.components.rememberResource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
-/** What the New thread screen picks from: the harnesses, the projects and the directories used lately. */
 data class NewThreadOptions(val harnesses: List<CodeHarness>, val projects: List<CodeProject>, val recent: List<String>)
 
-/**
- * Start a thread: pick the harness, a project (its own worktree on a new branch) or a working
- * directory, the model and permissions, and write the first message.
- */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun NewCodeThreadRoute(container: AppContainer, onStarted: (String) -> Unit, onBack: () -> Unit) {
     val options = rememberResource("code-new") {
         val harnesses = container.code.harnesses()
-        // Projects need GitHub and a sandbox; without them Code still works by directory.
         val projects = runCatching { container.code.projects() }.getOrDefault(emptyList())
         val recent = runCatching { recentDirectories(container.code.threads()) }.getOrDefault(emptyList())
         NewThreadOptions(harnesses, projects, recent)

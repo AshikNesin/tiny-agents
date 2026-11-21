@@ -1,38 +1,9 @@
-/**
- * How a tool call is shown, in one pure table. The agent reports twelve
- * tool statuses; the chat only ever asks a few questions of them: is the
- * bot still at it, is it waiting on the owner (and for what), did it fail,
- * which card or row draws it, what note goes beside it, and may it fold
- * into a run of finished steps. Every component that shows a call asks
- * `viewOf` instead of sorting statuses itself, so a new status or Owner
- * wait kind is one edit here.
- */
 import type { ChatToolCall, ChatToolStatus } from "./chat-types";
 
-/**
- * Where a call is in its life.
- * - `pending`: announced, not started yet.
- * - `running`: the tool is working.
- * - `waiting`: paused on the owner (GLOSSARY: Owner wait).
- * - `done`: finished with a result.
- * - `failed`: finished without one: an error, or refused, expired, stopped or
- *   interrupted before it could run.
- */
 export type ToolPhase = "pending" | "running" | "waiting" | "done" | "failed";
 
-/** The Owner wait a `waiting` call is paused on. */
 type WaitingOn = "approval" | "answer" | "credentials" | "takeover";
 
-/**
- * What draws the call when it is not a plain trace line.
- * - `approval` / `vault-approval`: the owner's approval card (issue #56 for vault uses).
- * - `credentials`: the sign-in sheet's card.
- * - `takeover`: the "take over the computer" card (issue #108).
- * - `question`: the questionnaire, while it waits.
- * - `asked-questions`: the questions and answers, once it no longer waits.
- * - `bot-handoff`: a `message_bot` call's hand-off line.
- * - `code-handoff`: a coding hand-off's card (issue #143).
- */
 type ToolCard =
   | "approval"
   | "vault-approval"
@@ -45,22 +16,12 @@ type ToolCard =
 
 export interface ToolCallView {
   phase: ToolPhase;
-  /** `waiting` calls: what the owner is asked for. */
   waitingOn?: WaitingOn;
-  /** The card that draws the call; none: a trace line. */
   card?: ToolCard;
-  /** How the call ended or what it waits on, beside its line ("denied by you"). */
   note?: string;
-  /** Finished and drawn as a plain trace line: runs of these fold into one step. */
   foldable: boolean;
-  /** The trace line's status: spinning, a clock (waiting on you), or red. */
   trace?: "running" | "pending" | "error";
-  /** The trace line's icon: a clock while waiting, a ban when it never ran. */
   icon?: "clock" | "ban";
-  /**
-   * What a notification's `?focus=` link scrolls to (focus-param.ts), on a
-   * card the owner can answer.
-   */
   anchor?: string;
 }
 
@@ -95,6 +56,7 @@ const NOTE: Partial<Record<ChatToolStatus, string>> = {
   interrupted: "interrupted by a restart",
   aborted: "stopped",
   denied: "denied by you",
+  error: "failed",
 };
 
 const TRACE: Record<ToolPhase, ToolCallView["trace"]> = {
@@ -105,7 +67,6 @@ const TRACE: Record<ToolPhase, ToolCallView["trace"]> = {
   failed: "error",
 };
 
-/** The card a call gets, if any; `readOnly` (a Past chat) answers nothing. */
 function cardOf(call: ChatToolCall, readOnly: boolean): ToolCard | undefined {
   const askable = !readOnly && call.taskId !== undefined;
   if (askable && call.status === "awaiting_approval") {
@@ -130,17 +91,12 @@ function anchorOf(card: ToolCard | undefined, taskId: number | undefined): strin
   return undefined;
 }
 
-/**
- * How `call` is shown. `readOnly`: in a transcript whose cards cannot act
- * (a Past chat), what still waits is shown as not answered, without a card.
- */
 export function viewOf(call: ChatToolCall, { readOnly = false } = {}): ToolCallView {
   const phase = PHASE[call.status];
   const card = cardOf(call, readOnly);
   const waitingOn = WAITING_ON[call.status];
   const anchor = anchorOf(card, call.taskId);
   let note = readOnly && phase === "waiting" ? "not answered" : NOTE[call.status];
-  // Questions that ended without answers were dismissed (the owner wrote in the chat instead).
   if (card === "asked-questions" && note === undefined && !call.answers) note = "dismissed by you";
   const icon =
     phase === "waiting"
@@ -160,7 +116,6 @@ export function viewOf(call: ChatToolCall, { readOnly = false } = {}): ToolCallV
   };
 }
 
-/** The bot is visibly at it: the call is pending, running or waiting on the owner. */
 export function isActive(call: ChatToolCall): boolean {
   const { phase } = viewOf(call);
   return phase === "pending" || phase === "running" || phase === "waiting";

@@ -85,7 +85,6 @@ describe("SecretBox", () => {
 });
 
 describe("secrets:rotate", () => {
-  // Each test counts every sealed row, so it starts from the seeded database.
   beforeEach(useFreshTestDatabase);
 
   it("re-seals local vault items and connection secrets under the new key", async () => {

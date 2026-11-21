@@ -25,7 +25,6 @@ function uploadForm(files: File[], folder?: string): FormData {
   return form;
 }
 
-// Each test starts from the seeded database, as if it ran first.
 beforeEach(useFreshTestDatabase);
 describe("storage API", () => {
   it("uploads, lists, downloads, renames and deletes files", async () => {
@@ -54,7 +53,6 @@ describe("storage API", () => {
     });
     expect(download.status).toBe(200);
     expect(download.headers.get("content-type")).toContain("text/plain");
-    // Inline text says its charset, or browsers decode UTF-8 as windows-1252.
     expect(download.headers.get("content-type")).toMatch(/charset=utf-8/i);
     expect(download.headers.get("content-disposition")).toContain('filename="hello.txt"');
     expect(await download.text()).toBe("hello groot");

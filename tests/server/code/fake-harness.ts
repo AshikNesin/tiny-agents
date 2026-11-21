@@ -1,9 +1,3 @@
-/**
- * An in-memory harness for app-layer tests: the hub, the watcher and the
- * routes must work with any `HarnessInstance`, so they are tested against
- * one that is neither Shelley nor Claude Code. Tests drive its events and
- * outcome directly.
- */
 import {
   NO_CAPABILITIES,
   threadIdOf,
@@ -19,17 +13,13 @@ import {
 export interface FakeHarness extends HarnessInstance {
   threads: ThreadSummary[];
   outcomes: Map<string, TurnOutcome>;
-  /** Each thread's rows (`getThread`); none by default. */
   items: Map<string, TranscriptItem[]>;
   sent: Array<{ nativeId: string; message: string; queue?: boolean }>;
   created: Array<Record<string, unknown>>;
-  /** Titles the app gave threads (`rename`), in order. */
   renamed: Array<{ nativeId: string; title: string }>;
   emit(event: InstanceEvent): void;
-  /** Report a turn end with the thread's outcome now (`outcomes`, else a finished "Done."). */
   endTurn(nativeId: string): void;
   push(nativeId: string, event: ThreadEvent): void;
-  /** Each directory's change stamp (`changeStamp`); a directory without one fails the read. */
   stamps: Map<string, string>;
 }
 

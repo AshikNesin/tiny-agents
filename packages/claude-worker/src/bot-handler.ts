@@ -1,8 +1,3 @@
-/**
- * The bot protocol (`protocol.ts`) on the worker socket: turns, tool results,
- * aborts and resumes for the Claude plan bot engine. Every socket follows
- * every bot session. A failed turn answers an `error` frame.
- */
 import { assertSessionMayStart, type ClaudeAuthStatus } from "./auth";
 import { parseClientMessage, type ClientMessage, type SessionEvent } from "./protocol";
 import type { ModelLister } from "./sdk";
@@ -19,12 +14,10 @@ const botEvent: EventFrame<SessionEvent> = (event) => ({
 
 export function createBotHandler(deps: {
   book: SessionBook;
-  /** Every socket on the worker. */
   everyone: Audience;
   env: Record<string, string | undefined>;
   authStatus: () => Promise<ClaudeAuthStatus>;
   now: () => number;
-  /** Claude Code's model list. Absent: a `models` request answers `unavailable`. */
   listModels?: ModelLister;
 }): ProtocolHandler {
   const { book, everyone } = deps;
@@ -80,7 +73,6 @@ export function createBotHandler(deps: {
   }
 
   return {
-    // The bot protocol predates the others: it answers whatever they do not claim.
     claims: () => true,
     async handle(raw, peer) {
       const message = parseClientMessage(raw);
@@ -95,7 +87,6 @@ export function createBotHandler(deps: {
       switch (message.type) {
         case "ping":
         case "pong":
-          // The server answers the heartbeat before any protocol sees it.
           return;
         case "resume": {
           const log = book.get(message.sessionId)?.log;

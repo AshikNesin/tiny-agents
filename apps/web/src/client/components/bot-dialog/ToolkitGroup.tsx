@@ -1,8 +1,3 @@
-/**
- * One toolkit on the Tools tab: its header (open or close, its tools' count
- * and permissions, a control for all of them) and, open, a row per tool with
- * its Allow / Ask / Off control; the Browser toolkit adds its profile.
- */
 import { ChevronRight, Wrench } from "lucide-react";
 import type { CapabilityInfo, ToolPermission } from "../../../shared/api/bots";
 import type { BrowserProfile } from "../../../shared/api/live";
@@ -36,7 +31,7 @@ function PermissionToggle({
       type="single"
       value={value}
       onValueChange={(next: string) => {
-        if (next) onChange(next as ToolPermission); // clicking the active item must not clear it
+        if (next) onChange(next as ToolPermission);
       }}
       spacing={0}
       size="sm"
@@ -86,7 +81,6 @@ function ToolPermissionRow({
   );
 }
 
-/** Bots share one browser (and its sign-ins) unless one needs its own. */
 function BrowserProfileRow({
   browserProfile,
   onChange,
@@ -137,7 +131,6 @@ export function ToolkitGroup({
   onBrowserProfileChange,
 }: {
   toolkit: CapabilityInfo;
-  /** The toolkit's tools the search matches (all of them when not searching). */
   shown: ToolInfo[];
   searching: boolean;
   expanded: Record<string, boolean>;
@@ -148,10 +141,8 @@ export function ToolkitGroup({
   onBrowserProfileChange: (next: BrowserProfile) => void;
 }) {
   const setUp = !toolkit.setupHint;
-  // Searching opens every group with a match; otherwise big groups start closed.
   const isOpen =
     setUp && (searching || (expanded[toolkit.id] ?? toolkit.tools.length <= COLLAPSE_OVER));
-  // While searching, the group control and counts cover only the matches.
   const value = groupValue(toolPermissions, shown);
   const bodyId = `toolkit-${toolkit.id}-tools`;
   return (

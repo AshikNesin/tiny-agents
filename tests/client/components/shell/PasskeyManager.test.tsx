@@ -32,7 +32,6 @@ afterEach(() => {
 
 describe("PasskeyManager feedback", () => {
   it("words a cancelled passkey prompt from the shell's table", async () => {
-    // How @simplewebauthn/browser rethrows the browser's NotAllowedError.
     vi.mocked(startRegistration).mockRejectedValue(
       Object.assign(new Error("The operation either timed out or was not allowed."), {
         name: "NotAllowedError",

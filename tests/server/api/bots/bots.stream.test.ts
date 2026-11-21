@@ -1,8 +1,3 @@
-/**
- * Following a bot's chat (bots.stream.ts): every source of the bot stream,
- * in order, into a fake sink. The runtime is the typed fake; routine cards
- * come from the real SQLite test DB.
- */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { CHAT_WINDOW } from "../../../../packages/agent/src/transcript";
 import type { ChatEvent } from "../../../../packages/agent/src/index";
@@ -14,7 +9,6 @@ import type { BotStreamEvent, RoutineRunCard } from "../../../../apps/web/src/sh
 import type { RoutineRunStatus } from "../../../../apps/web/src/shared/machines/routine-run";
 import { createFakeRuntime, resetAppTables, seedBot, type SeededBot } from "../../fixtures";
 
-/** A sink that records what the follow wrote, and whether it ended the stream. */
 function recorder() {
   const events: BotStreamEvent[] = [];
   const sink = { write: (event: BotStreamEvent) => events.push(event), end: vi.fn() };
@@ -72,7 +66,6 @@ describe("followBotChat", () => {
 
   it("sends the transcript window, then the thread's routine cards, then YOLO mode", async () => {
     const bot = await seedBot({ conversationId: "601" });
-    // Finished in this thread; one still running; one from before "New chat".
     await seedRun(bot, new Date(Date.now() + 1000));
     await seedRun(bot, null, "awaiting");
     await seedRun(bot, new Date(bot.chatStartedAt.getTime() - 60_000));
@@ -136,18 +129,15 @@ describe("followBotChat", () => {
 
     const following = followBotChat(bot, sink, rt);
     await vi.waitFor(() => expect(rt.yolo).toHaveBeenCalled());
-    // Both land after the reads started: the read results are older.
     publishBotChatEvent(bot.id, { type: "routine-run", run: card("late-run") });
     publishBotChatEvent(bot.id, { type: "yolo", on: true });
     expect(types()).toEqual(["snapshot"]);
     read.resolve(false);
     const stop = await following;
 
-    // The late events follow the first state, so they win on the client.
     expect(types()).toEqual(["snapshot", "routine-runs", "yolo", "routine-run", "yolo"]);
     expect(events.at(-1)).toEqual({ type: "yolo", on: true });
 
-    // Once started, events go straight through; another bot's never do.
     publishBotChatEvent(bot.id, { type: "yolo", on: false });
     publishBotChatEvent("someone-else", { type: "yolo", on: true });
     expect(events.at(-1)).toEqual({ type: "yolo", on: false });

@@ -133,6 +133,17 @@ jobs:
               done
               echo "server still up after 15s of TERM"
               exit 1
+            fi
+            if ! kill -0 "$server_pid" 2>/dev/null; then
+              echo "server exited before answering /health"
+              cat boot.log
+              exit 1
+            fi
+            sleep 1
+          done
+          echo "server did not answer /health within 60s"
+          cat boot.log
+          exit 1
       - if: matrix.part == 2
         run: node scripts/ci-budget.mjs run build
 

@@ -1,10 +1,3 @@
-/**
- * Models are owner data (issue #179, ADR 0016): provider accounts, model rows
- * and role assignments live in the database. This module reads them into the
- * plain `ModelConfig` snapshot the runtime projects onto pi-ai, resolves an
- * account's key through the vault (`app` items, the `provider` sink), and
- * pushes every committed change to the runtime and to `/events`.
- */
 import { asc, eq } from "drizzle-orm";
 import { logger } from "@groot/core/logger";
 import { VaultError, type AgentRuntime } from "@tiny-agents/agent";
@@ -48,7 +41,6 @@ function toAccount(row: ProviderRow): ProviderAccount {
   };
 }
 
-/** The owner's model configuration, as the runtime takes it. */
 export async function loadModelConfig(): Promise<ModelConfig> {
   const [providerRows, modelRows, roleRows] = await Promise.all([
     db.select().from(providers).orderBy(asc(providers.name)),
@@ -80,7 +72,6 @@ export async function loadModelConfig(): Promise<ModelConfig> {
   };
 }
 
-/** The host a provider account's requests go to (what its key's vault item must list). */
 export function providerHost(row: Pick<ProviderRow, "kind" | "baseUrl">): string | undefined {
   const base = row.baseUrl ?? PROVIDER_KINDS[row.kind as ProviderKind]?.defaultBaseUrl;
   if (!base) return undefined;
@@ -91,7 +82,6 @@ export function providerHost(row: Pick<ProviderRow, "kind" | "baseUrl">): string
   }
 }
 
-/** Mark an account's status (a key the vault can't open is `locked`). */
 async function setStatus(id: string, status: ProviderStatus, detail: string | null) {
   await db
     .update(providers)
@@ -99,11 +89,6 @@ async function setStatus(id: string, status: ProviderStatus, detail: string | nu
     .where(eq(providers.id, id));
 }
 
-/**
- * Account keys from the vault: the account's `app` item, for the account's
- * own host. A refusal or an unreadable value leaves the account `locked` with
- * the reason, and the request goes out unauthenticated (the provider says no).
- */
 export const vaultCredentials: CredentialResolver = {
   async resolve(providerId) {
     const row = await db.query.providers.findFirst({ where: eq(providers.id, providerId) });
@@ -133,43 +118,28 @@ export const vaultCredentials: CredentialResolver = {
   },
 };
 
-// ── Live updates ────────────────────────────────────────────────────────
-
-/** Bind the runtime that `reloadModels` updates (`app().modelRuntime`; boot, tests). */
 export function bindModelRuntime(runtime: Pick<AgentRuntime, "applyModelConfig"> | undefined) {
   app().modelRuntime = runtime;
 }
 
-/** Listen for committed model changes (`app().modelListeners`; `/events` sends `models.changed`). */
 export function onModelsChanged(listener: () => void): () => void {
   const listeners = app().modelListeners;
   listeners.add(listener);
   return () => listeners.delete(listener);
 }
 
-/** After a commit: hand the runtime the new snapshot and tell the pickers. */
 export async function reloadModels(): Promise<void> {
   const target = app().modelRuntime;
   if (target) target.applyModelConfig(await loadModelConfig());
   for (const listener of app().modelListeners) {
     try {
       listener();
-    } catch {
-      // a listener must not break the others
-    }
+    } catch {}
   }
 }
 
-// ── Faux (dev, e2e, tests) ──────────────────────────────────────────────
-
-/** The faux account's id: also the pi-ai provider id the host's faux provider uses. */
 export const FAUX_PROVIDER_ID = "faux";
 
-/**
- * Make sure the faux account and the given models exist (TINY_AGENTS_FAUX
- * boots and tests). Each model's row id is its upstream id, so a faux bot
- * names its model `test-model` everywhere. Existing rows are left as they are.
- */
 export async function seedFauxModels(
   rows: readonly { id: string; name: string; imageInput?: boolean; reasoning?: boolean }[] = [
     { id: "test-model", name: "Test Model (faux)", reasoning: true },

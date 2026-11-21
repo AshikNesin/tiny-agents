@@ -17,20 +17,13 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.UUID
 
-/** What the owner sends: the text, its attachments, and where it goes while a reply runs. */
 data class OwnerSubmission(
     val text: String,
     val attachments: List<AttachmentRef> = emptyList(),
     val mentions: List<String> = emptyList(),
-    /** "steer" joins the running reply; "followUp" is answered by the next one. */
     val whenBusy: String = "followUp",
 )
 
-/**
- * Every open chat: runs each bot's stream into its [ChatSession] through [reduceChat], and
- * the owner's sends through their Echo. A session is keyed by bot id; a past chat by
- * [pastChatKey].
- */
 class ChatStore(
     private val api: TinyAgentsApi,
     private val scope: CoroutineScope,
@@ -52,7 +45,6 @@ class ChatStore(
         }
     }
 
-    /** Show a bot's chat: opens its stream, which starts with a snapshot. */
     fun open(botId: String, unreadFrom: Long?) {
         if (streams.containsKey(botId)) return
         _sessions.update { it + (botId to reduceChat(it[botId] ?: ChatSession(unreadFrom = unreadFrom), ChatAction.Opened)) }
@@ -67,13 +59,11 @@ class ChatStore(
         }
     }
 
-    /** The chat left the screen: stop its stream; the cache stays for the next visit. */
     fun close(botId: String) {
         streams.remove(botId)?.cancel()
         dispatch(botId, ChatAction.Closed)
     }
 
-    /** Drop every chat; call on sign-out. */
     fun clear() {
         streams.values.forEach { it.cancel() }
         streams.clear()
@@ -81,7 +71,6 @@ class ChatStore(
         _sessions.value = emptyMap()
     }
 
-    /** Read a past chat once, as a read-only session under [pastChatKey]. */
     fun openPast(botId: String, chatId: String) {
         val key = pastChatKey(botId, chatId)
         pastChats[key] = botId to chatId
@@ -103,10 +92,6 @@ class ChatStore(
         _sessions.update { it - key }
     }
 
-    /**
-     * Send an owner message: its Echo shows at once. Returns true when the server took it,
-     * false when it refused (the caller puts the draft back in the composer).
-     */
     suspend fun send(botId: String, submission: OwnerSubmission): Boolean {
         val echo = Echo(requestId = newId(), text = submission.text, createdAt = now(), attachments = submission.attachments)
         dispatch(botId, ChatAction.AddEcho(echo))
@@ -129,7 +114,6 @@ class ChatStore(
                 notices.showError(e, "Could not send the message.")
                 return false
             } catch (e: Exception) {
-                // No answer: the message waits and goes again with the same id, which the server dedupes.
                 dispatch(botId, ChatAction.EchoOffline(echo.requestId))
                 delay(retryMs)
                 retryMs = (retryMs * 2).coerceAtMost(MAX_RETRY_MS)
@@ -140,7 +124,6 @@ class ChatStore(
 
     fun stop(botId: String) = act("Could not stop the reply.") { api.abort(botId) }
 
-    /** Withdraw a message the server still holds queued. */
     fun withdraw(botId: String, requestId: String) = act("Could not cancel the message.") { api.withdrawMessage(botId, requestId) }
 
     fun setYolo(botId: String, on: Boolean) = act("Could not change YOLO mode.") {
@@ -151,7 +134,6 @@ class ChatStore(
     fun decideApproval(botId: String, taskId: Int, approved: Boolean, alwaysAllow: String? = null, grant: Boolean = false) =
         act("Could not send your decision.") { api.decideApproval(botId, taskId, approved, alwaysAllow, grant) }
 
-    /** Load the page of older messages above what is loaded. */
     fun loadOlder(key: String) {
         val session = _sessions.value[key] ?: return
         val before = oldestEntryId(session.messages) ?: return

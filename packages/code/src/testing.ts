@@ -1,11 +1,3 @@
-/**
- * `@tiny-agents/code/testing`: what driver tests share — an in-memory
- * thread index, a quiet host, and the contract checks every driver must
- * pass: a capability is on exactly when its method exists
- * (`capabilityProblems`), a watch keeps the event order
- * (`threadEventProblems`), and a turn's outcome keeps the one rule
- * (`turnOutcomeProblems`).
- */
 import type {
   Capabilities,
   HarnessHost,
@@ -71,7 +63,6 @@ export function testHost(overrides: Partial<HarnessHost> = {}): HarnessHost & {
   };
 }
 
-/** Optional methods each capability needs. */
 const REQUIRED: Array<[(c: Capabilities) => boolean, Array<keyof HarnessInstance>]> = [
   [(c) => c.turns.manageQueue, ["queued"]],
   [(c) => c.turns.recovery.length > 0, ["recover"]],
@@ -94,10 +85,6 @@ const REQUIRED: Array<[(c: Capabilities) => boolean, Array<keyof HarnessInstance
   [(c) => c.extras.commands, ["commands"]],
 ];
 
-/**
- * Problems with a driver's honesty: a capability on without its method.
- * Empty when the driver is consistent.
- */
 export function capabilityProblems(instance: HarnessInstance): string[] {
   const caps = instance.capabilities();
   const problems: string[] = [];
@@ -118,16 +105,6 @@ export function capabilityProblems(instance: HarnessInstance): string[] {
   return problems;
 }
 
-/**
- * Problems with a watch's event order (`contracts/events.ts`), read off what
- * one listener received. Empty when the driver kept the protocol:
- *
- * - nothing but `error` comes before the first `snapshot`;
- * - `items` carry at least one row, each new or changed for this watcher
- *   (rows are diffed against the last snapshot and what came since);
- * - a snapshot of a working thread is followed at once by the streaming
- *   text, when the stream showed some that nothing has ended since.
- */
 export function threadEventProblems(events: readonly ThreadEvent[]): string[] {
   const problems: string[] = [];
   const at = (i: number, event: ThreadEvent) => `event ${i} (${event.type})`;
@@ -224,19 +201,6 @@ const OUTCOME_FIELDS: {
   },
 };
 
-/**
- * Problems with what a driver says a thread's turn came to, read against the
- * thread it shows (`getThread`) with nothing changing in between. Empty when
- * the driver keeps the turn-outcome rule (`turnOutcome`):
- *
- * - `working`, `title`, `cwd` and `cursor` are the thread's;
- * - `text` and `failed` are the rule's answer over the thread's rows
- *   (`turnAnswer`), so chat-sized and the same for every harness;
- * - `endedAt` is a time, absent while the thread works and present once an
- *   idle thread has an answer;
- * - it has no other field;
- * - a `turn_ended` event's outcome (`ended`) is what `outcome()` answers.
- */
 export function turnOutcomeProblems(
   snapshot: Pick<ThreadSnapshot, "thread" | "items">,
   outcome: TurnOutcome,
@@ -265,7 +229,6 @@ export function turnOutcomeProblems(
   return problems;
 }
 
-/** Collect a watcher's events; `next()` waits for the next one. */
 export function collect(): {
   events: ThreadEvent[];
   listener: (event: ThreadEvent) => void;
@@ -281,7 +244,6 @@ export function collect(): {
     events,
     listener(event) {
       events.push(event);
-      // A copy: matching waiters are removed while iterating.
       // eslint-disable-next-line unicorn/no-useless-spread
       for (const waiter of [...waiters]) {
         if (waiter.predicate(event)) {

@@ -1,10 +1,3 @@
-/**
- * Vault secrets for sandbox commands and the VM egress allowlist (issue #56,
- * phase 3): the confinement script (run for real against stub `sudo` and
- * `systemd-run`), and `run_command` on real pi-durable turns — every use on
- * its own card, refusals that never ask, values only on stdin, output
- * scrubbed.
- */
 import { execFileSync, spawnSync } from "node:child_process";
 import { until } from "../../fixtures/until";
 import { chmodSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
@@ -78,7 +71,6 @@ describe("the confinement script", () => {
   let bin: string;
   let argsFile: string;
 
-  /** A PATH with stub sudo/systemd-run and only the real tools the script needs. */
   beforeAll(() => {
     bin = mkdtempSync(join(tmpdir(), "ta-egress-bin-"));
     argsFile = join(bin, "systemd-run.args");
@@ -101,7 +93,6 @@ describe("the confinement script", () => {
       if (real.startsWith("/")) symlinkSync(real, join(bin, tool));
     }
     writeFileSync(join(bin, "sudo"), '#!/bin/sh\n[ "$1" = -n ] && shift\nexec "$@"\n');
-    // Records its arguments, then runs what follows `--` with the unit's env.
     writeFileSync(
       join(bin, "systemd-run"),
       [
@@ -180,8 +171,6 @@ describe("the confinement script", () => {
   });
 });
 
-// ── run_command on real turns ─────────────────────────────────────────────
-
 function fakeBroker() {
   const recorded: { use: VaultUse; outcome: VaultOutcome }[] = [];
   const item: VaultItemMeta = {
@@ -233,7 +222,6 @@ function fakeBroker() {
   return { broker, recorded };
 }
 
-/** The sandbox VM as an in-memory connection: what each command prints and exits with. */
 function fakeVm(reply: (command: string, stdin?: string) => { output: string; exitCode: number }) {
   const connection = fakeSandboxConnection({
     exec: (command, options) => {
@@ -308,7 +296,6 @@ async function open(
   const ref = await runtime.createConversation({
     modelId: TEST_MODEL,
     systemPrompt: "",
-    // Even with run_command allowed, a command with secrets asks.
     capabilities: { enabled: ["sandbox"], permissions: { run_command: "allow" } },
   });
   const events: ChatEvent[] = [];
@@ -322,7 +309,6 @@ async function open(
 describe("run_command with vault secrets", () => {
   it("asks every time, then runs confined with the value only on stdin", async () => {
     const { broker, recorded } = fakeBroker();
-    // The VM echoes the token back, as a careless command would.
     const vm = fakeVm((_command, stdin) => ({ output: `token=${stdin?.trim()}`, exitCode: 0 }));
     const command = 'gh api user -H "Authorization: token $GITHUB_TOKEN"';
     const { runtime, ref, events } = await open(

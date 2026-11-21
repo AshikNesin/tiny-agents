@@ -5,15 +5,6 @@ import { readFileSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 
-/**
- * Bundle the Node server entry to dist/server/bundle.js. Workspace packages
- * are inlined; npm dependencies stay external and are installed on the host
- * (`pnpm install --prod`). `pnpm check:closure` verifies every external import
- * is a declared root dependency. The client is built separately by Vite into
- * dist/client.
- */
-
-/** Never bundled, whatever the manifest says. */
 export const externalPackages = [
   "better-sqlite3",
   "vite",
@@ -23,11 +14,6 @@ export const externalPackages = [
   "fsevents",
 ];
 
-/**
- * The Claude plan worker, uploaded to the sandbox by the app
- * (apps/web/src/server/api/bots/claude-worker.ts). It runs there under its
- * own Node, so it is one file; the SDK, ws and zod are installed beside it.
- */
 export function workerBuildOptions() {
   return {
     entryPoints: ["packages/claude-worker/src/bin.ts"],
@@ -43,8 +29,6 @@ export function workerBuildOptions() {
 
 export function esbuildOptions({ externals, plugins }) {
   return {
-    // The upload extraction worker (issue #58) runs in its own thread, so it
-    // ships as its own file next to the bundle (uploads.extract-runner.ts).
     entryPoints: {
       bundle: "apps/web/src/server/entry.node.ts",
       "uploads-extract-worker": "apps/web/src/server/api/uploads/uploads.extract.worker.ts",
@@ -101,7 +85,6 @@ async function build() {
       : [];
 
   const options = esbuildOptions({ externals, plugins });
-  // Bake the release into the bundle so Sentry events match the uploaded maps.
   if (release) options.define = { "process.env.SENTRY_RELEASE": JSON.stringify(release) };
   const result = await esbuild.build(options);
   await esbuild.build(workerBuildOptions());
@@ -109,8 +92,6 @@ async function build() {
   await fs.mkdir("tmp", { recursive: true });
   await fs.writeFile("tmp/metafile.json", JSON.stringify(result.metafile));
 
-  // Migrations travel with the server bundle so `node dist/server/bundle.js`
-  // can migrate on boot without the source tree.
   await fs.rm("dist/server/drizzle", { recursive: true, force: true });
   await fs.cp("apps/web/drizzle", "dist/server/drizzle", { recursive: true });
   console.log(

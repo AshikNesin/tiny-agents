@@ -1,10 +1,3 @@
-/**
- * The rows behind PR links and Auto-fix (issue #297 §10): `code_pull_requests`
- * (a cache of GitHub plus the loop), `code_autofix_passes`, and the ids of
- * comments the app posted. Every loop and pass move is a compare-and-set
- * from the states its machine allows, so a racing reconcile or a late turn
- * end can never move a row along an edge the graph does not have.
- */
 import { and, desc, eq, inArray, isNull, ne } from "drizzle-orm";
 import type { PullSnapshot } from "@tiny-agents/github";
 import {
@@ -20,21 +13,18 @@ import { autofixPassMachine, type AutofixPassStatus } from "../../../shared/mach
 import type { PassRecord } from "./code.autofix";
 import { codeHub } from "./code.hub";
 
-/** The thread list shows each thread's open PR and its loop: open Code pages read it again. */
 const listChanged = () => codeHub()?.listChanged();
 
 export async function getPull(id: string): Promise<CodePullRow | undefined> {
   return db.query.codePullRequests.findFirst({ where: eq(codePullRequests.id, id) });
 }
 
-/** The thread's open PR (its active one), if it has one. */
 export async function openPullOf(threadId: string): Promise<CodePullRow | undefined> {
   return db.query.codePullRequests.findFirst({
     where: and(eq(codePullRequests.threadId, threadId), eq(codePullRequests.state, "open")),
   });
 }
 
-/** Every PR the thread has had, newest first. */
 export async function pullsOf(threadId: string): Promise<CodePullRow[]> {
   return db
     .select()
@@ -65,11 +55,9 @@ export interface LinkInput {
   headRef: string;
   baseRef: string;
   autofix: boolean;
-  /** Start with GitHub's auto-merge wanted (the project's default). */
   autoMerge?: boolean;
 }
 
-/** Record a link; the open-PR-per-thread index refuses a second open one. */
 export async function insertPull(input: LinkInput): Promise<CodePullRow> {
   const [row] = await db
     .insert(codePullRequests)
@@ -90,7 +78,6 @@ export async function deletePull(id: string): Promise<void> {
   listChanged();
 }
 
-/** Store a fresh snapshot (GitHub is the source of truth; this is its cache). */
 export async function cacheSnapshot(id: string, snapshot: PullSnapshot): Promise<CodePullRow> {
   const [before] = await db
     .select({ state: codePullRequests.state })
@@ -124,7 +111,6 @@ export function cachedSnapshot(row: CodePullRow): PullSnapshot | null {
   }
 }
 
-/** Move the loop, compare-and-set; true when this caller moved it. */
 export async function moveLoop(
   id: string,
   to: AutofixStatus,
@@ -132,7 +118,6 @@ export async function moveLoop(
     reason?: string | null;
     headSha?: string | null;
     autofix?: boolean;
-    /** Narrow the states it may move from (still within the machine's). */
     from?: AutofixStatus[];
   } = {},
 ): Promise<boolean> {
@@ -172,11 +157,6 @@ export async function updatePull(
   await db.update(codePullRequests).set(set).where(eq(codePullRequests.id, id));
 }
 
-/**
- * Point the PR's reconcile chain at job `to`: only from the job that is its
- * current link (`expected`), so a duplicate run never forks the chain, or
- * unconditionally (`expected` undefined) when arming a fresh chain.
- */
 export async function setPendingJob(
   id: string,
   to: string | null,
@@ -198,8 +178,6 @@ export async function setPendingJob(
     .returning({ id: codePullRequests.id });
   return moved.length > 0;
 }
-
-// --- passes --------------------------------------------------------------------------
 
 export async function passesOf(pullId: string): Promise<CodeAutofixPass[]> {
   return db
@@ -227,7 +205,6 @@ export function passRecord(row: CodeAutofixPass): PassRecord {
   };
 }
 
-/** Claim a pass for one state of the PR: the loser of a race for the same hash gets undefined. */
 export async function claimPass(input: {
   pullId: string;
   trigger: string;
@@ -278,14 +255,11 @@ export async function movePass(
   return moved.length > 0;
 }
 
-/** The running pass of a PR, if any. */
 export async function runningPass(pullId: string): Promise<CodeAutofixPass | undefined> {
   return db.query.codeAutofixPasses.findFirst({
     where: and(eq(codeAutofixPasses.pullId, pullId), ne(codeAutofixPasses.status, "finished")),
   });
 }
-
-// --- the app's comments -------------------------------------------------------------------
 
 export async function recordAppComment(pullId: string, githubId: number, passId?: string) {
   await db

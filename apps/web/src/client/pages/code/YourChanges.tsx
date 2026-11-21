@@ -1,11 +1,3 @@
-/**
- * Changing a PR's code from its review (issue #345): what the owner or the
- * assistant changed in the review's checkout, on top of the PR's head, goes
- * to the PR's branch (Push to PR, after a confirm that names it, never
- * forced), becomes suggestion comments in the pending review (when pushing
- * is not possible or not wanted), or is discarded. Open in terminal starts a
- * Terminal tab in the checkout, for changes by hand.
- */
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowUpRight, FilePen, SquareTerminal, Trash2, Upload } from "lucide-react";
@@ -100,12 +92,6 @@ function PushDialog({
   );
 }
 
-/**
- * Over the "Your changes" scope: Push to PR, Post as suggestions, Discard.
- * When the review shows a coding thread's worktree, those changes are that
- * thread's: Push and Discard give way to a link to it.
- * `onChanged` re-reads the changes (with the new head after a push).
- */
 export function YourChangesActions({
   review,
   onChanged,
@@ -215,8 +201,6 @@ export function YourChangesActions({
   );
 }
 
-/** The header's Open in terminal: a Terminal tab that starts in the review's checkout. */
-/** Opens a terminal tab in the PR's checkout on the sandbox. */
 export function useOpenInTerminal(review: PullReviewView) {
   const navigate = useNavigate();
   const [opening, setOpening] = useState(false);

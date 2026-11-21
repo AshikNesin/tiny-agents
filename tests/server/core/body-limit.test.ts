@@ -6,7 +6,6 @@ import { routeBodyLimit } from "@groot/core/middlewares/body-limit.middleware";
 import { Boom } from "@groot/core/errors";
 import type { AppEnv } from "@groot/core/types";
 
-/** A router that takes bodies up to 64 bytes on `/upload` and keeps the app's limit elsewhere. */
 function mediaRouter() {
   const router = new Hono<AppEnv>();
   const echo = async (c: { req: { text(): Promise<string> }; json(v: unknown): Response }) =>
@@ -32,7 +31,6 @@ function buildApp() {
       app.route("/api/v1/media", mediaRouter());
       const nested = new Hono<AppEnv>();
       nested.route("/files", mediaRouter());
-      // A sub-app with its own onError: app.route() wraps its handlers.
       nested.onError((error, c) =>
         error instanceof HTTPException ? error.getResponse() : c.json({ error: "oops" }, 500),
       );
@@ -48,7 +46,6 @@ const post = (path: string, size: number) =>
     body: "x".repeat(size),
   });
 
-/** A body with no Content-Length, sent in chunks, as a streamed upload arrives. */
 const postStream = (path: string, size: number) =>
   new Request(`http://localhost${path}`, {
     method: "POST",

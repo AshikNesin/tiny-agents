@@ -1,8 +1,3 @@
-/**
- * Deferred toolkits (issue #360, after pi's `deferred` exposure): a toolkit's
- * tools are not sent until the model loads them with `tool_search`, and a
- * stable prompt section names what can be loaded.
- */
 import { Type, type Context as PiContext } from "@earendil-works/pi-ai";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { until } from "../../fixtures/until";
@@ -88,7 +83,6 @@ function notesToolkit() {
   });
 }
 
-// pi-durable declares tools in system messages; replay them as the provider sees them.
 const offered = (context: PiContext) => {
   const names = new Set<string>();
   for (const message of context.messages as {
@@ -140,7 +134,6 @@ describe("deferred toolkits", () => {
 
     const prompt = JSON.stringify(requests[0]!.messages);
     expect(prompt).toContain("- desk (2 tools): Desk. Read and tidy the desk");
-    // The section lists what can be loaded, so loading changes nothing in it.
     const shown = JSON.stringify(requests[2]!.messages);
     expect(shown.split("- desk (2 tools)")).toHaveLength(2);
 
@@ -150,7 +143,6 @@ describe("deferred toolkits", () => {
 
   it("lists a deferred connection's tool names in the prompt, so the model knows what to search for", async () => {
     const requests: PiContext[] = [];
-    // Two tools with large schemas: deferred by size, not count.
     const schema = {
       type: "object",
       properties: { q: { type: "string", description: "x".repeat(5_000) } },
@@ -235,7 +227,6 @@ describe("deferred toolkits", () => {
     const ref = await runtime.createConversation({
       modelId: TEST_MODEL,
       systemPrompt: "",
-      // The desk's tools are Off: nothing is left to load.
       capabilities: {
         enabled: ["desk", "notes", "tool-search"],
         permissions: { desk_read: "off", desk_tidy: "off" },
@@ -284,7 +275,6 @@ describe("deferred toolkits", () => {
   });
 
   it("keeps the tools every request carries under 10,500 characters", () => {
-    // Issue #360: what a request re-sends, measured as the provider gets it.
     const stub = {} as never;
     const direct = [
       createTasksToolkit(stub),

@@ -1,8 +1,3 @@
-/**
- * The Pushover channel against a stubbed fetch: status mapping (200, 4xx
- * with errors[], 429, 5xx, timeout), validation, quota, and that missing
- * credentials never reach the network.
- */
 import { describe, expect, it, vi } from "vite-plus/test";
 import { createPushoverChannel, PUSHOVER_API } from "@groot/core/notification/pushover";
 
@@ -75,7 +70,6 @@ describe("Pushover channel", () => {
       ttl: "600",
       device: "phone",
     });
-    // Plain text only: never html=1.
     expect(form.has("html")).toBe(false);
   });
 

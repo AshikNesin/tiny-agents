@@ -90,8 +90,6 @@ describe("renderMemoryBlock", () => {
   });
 
   it("keeps the newest memories across categories, rendered in category order", () => {
-    // Old preferences (rendered first) and new habits (rendered last): the
-    // cap must drop the old preferences, not the newest habits.
     const memories = [
       ...Array.from({ length: 60 }, (_, i) => ({
         ...base,
@@ -114,14 +112,12 @@ describe("renderMemoryBlock", () => {
     expect(kept.filter((l) => l.includes("New habit"))).toHaveLength(60);
     expect(block).not.toContain("Old preference 00");
     expect(lines.at(-1)).toBe(`- …${120 - kept.length} older memories omitted`);
-    // Kept preferences still render before habits.
     const firstHabit = kept.findIndex((l) => l.includes("New habit"));
     expect(kept.slice(0, firstHabit).every((l) => l.includes("Old preference"))).toBe(true);
     expect(block.length).toBeLessThanOrEqual(MEMORY_RENDER_CHAR_CAP + 60);
   });
 
   it("renders the until date as a suffix", () => {
-    // A fixed clock: against the real one this memory expires and renders nothing.
     const now = new Date("2026-10-20T00:00:00.000Z");
     const block = renderMemoryBlock(
       [{ ...base, text: "Is in Goa until Friday", until: "2026-10-23T18:00:00.000Z" }],
@@ -143,7 +139,7 @@ describe("isExpired", () => {
 describe("extractionResultSchema", () => {
   it("accepts date-only until values from the model", () => {
     const parsed = extractionResultSchema.parse([
-      { text: "Is in Goa until Friday", category: "fact", confidence: 0.8, until: "2026-10-23" },
+      { text: "Is in Goa until Friday", category: "fact", until: "2026-10-23" },
     ]);
     expect(parsed[0].until).toBe("2026-10-23");
   });
@@ -154,8 +150,8 @@ describe("extractionResultSchema", () => {
 
   it("drops an array with one invalid item wholesale via safeParse", () => {
     const bad = [
-      { text: "Valid fact", category: "fact", confidence: 0.9 },
-      { text: "", category: "fact", confidence: 0.9 },
+      { text: "Valid fact", category: "fact" },
+      { text: "", category: "fact" },
     ];
     expect(extractionResultSchema.safeParse(bad).success).toBe(false);
   });
@@ -165,7 +161,6 @@ describe("extractionResultSchema", () => {
       {
         text: "Prefers TypeScript",
         category: "preference",
-        confidence: 0.8,
         until: null,
         supersedesIds: ["m1"],
       },
@@ -174,8 +169,17 @@ describe("extractionResultSchema", () => {
   });
 });
 
-describe("budget constants", () => {
-  it("keeps the active budget at the PRD value", () => {
-    expect(MEMORY_MAX_ACTIVE).toBe(100);
+describe("active budget", () => {
+  it("fits a full budget of typical memories in the prompt, none omitted", () => {
+    const memories = Array.from({ length: MEMORY_MAX_ACTIVE }, (_, i) => ({
+      ...base,
+      id: `m${i}`,
+      text: `The owner keeps a typical fact of about eighty characters long, numbered ${String(i).padStart(3, "0")} now`,
+      createdAt: new Date(Date.UTC(2026, 9, 1, 0, i)).toISOString(),
+    }));
+    expect(memories[0]!.text).toHaveLength(80);
+    const block = renderMemoryBlock(memories)!;
+    expect(block).not.toContain("omitted");
+    expect(block.split("\n").filter((line) => line.startsWith("- The owner"))).toHaveLength(60);
   });
 });

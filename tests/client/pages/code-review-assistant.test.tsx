@@ -5,13 +5,17 @@
  * model it starts on is picked beside the box, the project's default
  * first. The network is the boundary: fetch is stubbed.
  */
-import { render, screen } from "@testing-library/react";
+import { render as renderBare, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { MemoryRouter } from "react-router-dom";
 import { ConfirmProvider } from "@groot/ui/primitives";
 import { PullReview } from "@/pages/code/PullReview";
 import type { PullReviewView } from "../../../apps/web/src/shared/api/code";
+import { AppQueryProvider } from "../query-provider";
+
+const render = (ui: Parameters<typeof renderBare>[0]) =>
+  renderBare(ui, { wrapper: AppQueryProvider });
 
 const REVIEW = {
   id: "rv1",
@@ -74,7 +78,6 @@ describe("the review assistant's model", () => {
       </MemoryRouter>,
     );
 
-    // The assistant starts folded to a rail.
     await user.click(await screen.findByRole("button", { name: "Open assistant" }));
     const picker = await screen.findByRole("button", { name: "Model" });
     expect(picker).toHaveTextContent("Sonnet");

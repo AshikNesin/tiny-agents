@@ -1,8 +1,3 @@
-/**
- * The Code page's client (ADR 0011): one API for every harness, through
- * this app's `/code` routes (apps/web/src/server/api/code/code.routes.ts).
- * Types are the harness contracts (`@tiny-agents/code/contracts`).
- */
 import { apiClient } from "@groot/shell/lib/api";
 import { LEGACY_INSTANCE_ID, parseThreadId, threadIdOf } from "@tiny-agents/code/contracts";
 import type {
@@ -32,7 +27,6 @@ import type { NextPrompt } from "../../../shared/api/code";
 export type * from "@tiny-agents/code/contracts";
 export type { CodeListEvent, CodeThreadEvent };
 
-/** One configured harness as the page sees it. */
 export interface HarnessInfo {
   id: string;
   kind: string;
@@ -48,11 +42,8 @@ const harness = (instanceId: string) => `${base}/harnesses/${encodeURIComponent(
 
 export const codeApi = {
   status: () => apiClient.get<{ harnesses: HarnessInfo[] }>(`${base}/status`),
-  /** The app-wide stream (status and the merged list). */
   eventsPath: () => `/api/v1${base}/events`,
-  /** One thread, live: a snapshot, then changes. */
   threadEventsPath: (id: string) => `/api/v1${thread(id)}/events`,
-  /** The thread's change versions (live Changes and Review panels). */
   threadChangesPath: (id: string, cwd: string | null) =>
     `/api/v1${thread(id)}/changes${cwd ? `?cwd=${encodeURIComponent(cwd)}` : ""}`,
 
@@ -71,7 +62,6 @@ export const codeApi = {
   create: (input: {
     instanceId: string;
     message: string;
-    /** Start in a project: its own worktree on a new branch (issue #297). */
     projectId?: string;
     cwd?: string;
     model?: string;
@@ -86,7 +76,6 @@ export const codeApi = {
       queue?: boolean;
       skills?: string[];
       attachments?: string[];
-      /** Send the thread's unsent line comments ahead of the message. */
       withReview?: boolean;
     } = {},
   ) =>
@@ -105,7 +94,6 @@ export const codeApi = {
     apiClient.post(`${thread(id)}/jobs/${encodeURIComponent(jobId)}/kill`),
   settings: (id: string, change: Partial<ThreadSettings>) =>
     apiClient.post<ThreadSettings>(`${thread(id)}/settings`, change),
-  /** Archive (with subagents) or restore; answers the subagents that moved too. */
   archive: (id: string, archived: boolean) =>
     apiClient.post<{ moved: string[] }>(`${thread(id)}/archive`, { archived }),
   remove: (id: string) => apiClient.delete(thread(id)),
@@ -114,7 +102,6 @@ export const codeApi = {
   fork: (id: string, at: string) =>
     apiClient.post<{ threadId: string }>(`${thread(id)}/fork`, { at }),
   usage: (id: string) => apiClient.get<UsageReport>(`${thread(id)}/usage`),
-  /** The likely next message once the turn whose newest row is `after` ended (one model call per turn). */
   nextPrompt: (id: string, after: string) =>
     apiClient.get<NextPrompt>(`${thread(id)}/next-prompt`, { after }),
 
@@ -149,11 +136,9 @@ export const codeApi = {
       path,
     }),
 
-  /** An image or file a harness serves (screenshots, uploads). */
   assetUrl: (instanceId: string, ref: string) =>
     `/api/v1${harness(instanceId)}/asset?ref=${encodeURIComponent(ref)}`,
 
-  /** Raw upload; answers the ref to pass as an attachment. */
   async upload(instanceId: string, file: File): Promise<string> {
     const response = await fetch(
       `/api/v1${base}/uploads/${encodeURIComponent(instanceId)}?filename=${encodeURIComponent(file.name || "pasted")}`,
@@ -175,23 +160,19 @@ export const codeApi = {
   },
 };
 
-/** The instance part of a thread id (`shelley:c1` → `shelley`); legacy bare ids are Shelley's. */
 export function instanceOf(threadId: string): string {
   return parseThreadId(threadId, LEGACY_INSTANCE_ID)?.instanceId ?? LEGACY_INSTANCE_ID;
 }
 
-/** A thread id for links: legacy bare ids (from old chats and pushes) become Shelley's. */
 export function normalizeThreadId(id: string): string {
   const parsed = parseThreadId(id, LEGACY_INSTANCE_ID);
   return parsed ? threadIdOf(parsed.instanceId, parsed.nativeId) : id;
 }
 
-/** The thread's page. */
 export function threadPath(id: string, suffix = ""): string {
   return `/code/${encodeURIComponent(id)}${suffix}`;
 }
 
-/** "~/app" style label: the last two path segments. */
 export function shortPath(path: string | null | undefined): string {
   if (!path) return "";
   const parts = path.split("/").filter(Boolean);

@@ -1,10 +1,3 @@
-/**
- * Memory page (issue #22 phase C, PRD 5.6): what every bot knows about the
- * owner, grouped by category, searchable across bots. Per-bot sections carry
- * the memory on/off switch; rows show their source ("From chat · 2 days ago"
- * vs "Added manually"), supersession, and expiry. Deleted rows never come
- * back (the server tombstones the text), so the page's delete is final.
- */
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -54,7 +47,6 @@ interface MemoryGroup {
   rows: MemoryRecord[];
 }
 
-/** Rows grouped under category headers in display order, archived last. */
 function groupMemories(rows: MemoryRecord[]): MemoryGroup[] {
   const groups: MemoryGroup[] = CATEGORY_ORDER.map((category) => ({ category, rows: [] }));
   const archived: MemoryGroup = { category: "archived", rows: [] };
@@ -68,7 +60,6 @@ function groupMemories(rows: MemoryRecord[]): MemoryGroup[] {
   ];
 }
 
-/** Each bot's rows matching `query` (all of them, and every bot, when not searching). */
 function filterMemories(
   memories: Record<string, MemoryRecord[]>,
   query: string,
@@ -77,17 +68,11 @@ function filterMemories(
   const byBot = new Map<string, MemoryRecord[]>();
   for (const [botId, rows] of Object.entries(memories)) {
     const hits = q ? rows.filter((row) => row.text.toLowerCase().includes(q)) : rows;
-    // Not searching: every bot keeps its section, even with zero rows, so
-    // an empty bot still offers its switch and Add button.
     if (hits.length > 0 || !q) byBot.set(botId, hits);
   }
   return byBot;
 }
 
-/**
- * Bots with memories come first, most first; bots without any fold into one
- * compact list at the end instead of a "Nothing yet" section each (#95).
- */
 function splitBots(
   bots: BotListEntry[],
   filtered: Map<string, MemoryRecord[]>,
@@ -107,7 +92,6 @@ function splitBots(
   return { withMemories, withoutMemories };
 }
 
-/** The bots with no memories yet, one compact row each: Add, and the switch. */
 function BotsWithoutMemories({
   bots,
   memoryEnabled,
@@ -484,8 +468,6 @@ function MemoryEditor({
   const [saving, setSaving] = useState(false);
   const { create, update } = useMemoryMutations();
 
-  // The form resets per dialog open so a create never inherits the
-  // previously edited memory's values.
   useEffect(() => {
     if (!editor) {
       setLoadedKey(null);
@@ -505,8 +487,6 @@ function MemoryEditor({
     const trimmed = text.trim();
     try {
       if (editor.memory) {
-        // Restored memories must not immediately expire again. Ordinary edits
-        // leave any automatically captured expiry unchanged.
         const clearExpiry =
           restore && editor.memory.until !== null && new Date(editor.memory.until) <= new Date();
         await update.mutateAsync({
@@ -594,7 +574,6 @@ function MemoryEditor({
   );
 }
 
-/** Whether a bot learns from chats; the visible label says what it controls (#95). */
 function MemorySwitch({
   botName,
   memoryEnabled,

@@ -8,11 +8,6 @@ import { connectionsApi } from "../../lib/connections-api";
 import { peopleApi } from "../../lib/people-api";
 import { skillsApi } from "../../lib/skills-api";
 
-/**
- * What the bot dialog offers, read each time it opens: the toolkits, the
- * connections, the skill library and the guests. A failed read leaves its
- * list as it was.
- */
 export function useBotDialogLists(open: boolean) {
   const [capabilities, setCapabilities] = useState<CapabilityInfo[]>([]);
   const [connections, setConnections] = useState<ConnectionSummary[]>([]);
@@ -48,8 +43,6 @@ export function useBotDialogLists(open: boolean) {
       .catch(() => undefined);
   }, [open]);
 
-  // Every bot has every toolkit; the app switches the automatic ones (vision,
-  // tool search, today's date) on its own, so they are not shown.
   const toolkitsList = useMemo(
     () =>
       capabilities.filter(

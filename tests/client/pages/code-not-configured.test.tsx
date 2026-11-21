@@ -1,14 +1,13 @@
-/**
- * The Code page with no coding agent (issue #242): the app sidebar stays away
- * from `/code`, so the empty state carries the workspace header's way back to
- * the app and links Settings → Models, or a direct link to `/code` is a dead end.
- */
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { render as renderBare, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { CodePage } from "@/pages/code/CodePage";
 import { useCodeStore } from "@/store/code";
+import { AppQueryProvider } from "../query-provider";
+
+const render = (ui: Parameters<typeof renderBare>[0]) =>
+  renderBare(ui, { wrapper: AppQueryProvider });
 
 vi.mock("@/lib/code/api", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/lib/code/api")>();

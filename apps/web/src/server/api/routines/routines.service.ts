@@ -1,10 +1,3 @@
-/**
- * Routine CRUD + lifecycle over Drizzle. Thin: schedule math lives in
- * routines.schedule.ts, dispatch in routines.jobs.ts, and a routine's armed
- * state (its queued job, slot, blocked count and conversation) in
- * routines.arming.ts: every mutation that can move nextRunAt asks it to arm
- * or disarm, so the queue and the row never disagree.
- */
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { logger } from "@groot/core/logger";
@@ -65,12 +58,10 @@ function toApi(row: RoutineRow): RoutineData {
     botName: row.bot.name,
     name: row.name,
     prompt: row.prompt,
-    // Sent as stored, unparsed: every write parses it with `scheduleSchema` first.
     schedule: row.schedule as WireSchedule,
     scheduleDescription: schedule ? describeSchedule(schedule) : "Unknown schedule",
     enabled: row.enabled,
     nextRunAt: row.nextRunAt,
-    // A one-time routine past its instant is finished, not paused.
     done: !row.enabled && schedule !== undefined && isSpentOnce(schedule, new Date()),
     blockedStreak: row.blockedStreak,
     pausedReason: row.pausedReason,
@@ -88,11 +79,6 @@ async function findRoutine(id: string): Promise<RoutineRow> {
   return row;
 }
 
-/**
- * Stop a routine's conversation the app no longer uses (the routine moved to
- * another bot, or is gone). Its history stays in agent.db, like a chat's after
- * "New chat"; a run still going there must not keep calling tools. Best effort.
- */
 async function retireConversation(conversationId: string | null): Promise<void> {
   if (!conversationId) return;
   try {
@@ -122,25 +108,18 @@ export async function get(id: string): Promise<ReturnType<typeof toApi>> {
   return toApi(await findRoutine(id));
 }
 
-/** A one-time routine must point at the future when it is created or rescheduled. */
 function assertFutureOnce(schedule: Schedule): void {
   if (isSpentOnce(schedule, new Date())) {
     throw Boom.badRequest("Pick a time in the future for a one-time routine");
   }
 }
 
-/** Re-enabling a one-time routine whose time has passed would arm a slot that already ran. */
 function assertCanArm(schedule: Schedule): void {
   if (isSpentOnce(schedule, new Date())) {
     throw Boom.badRequest("This one-time routine already ran. Pick a new time to run it again.");
   }
 }
 
-/**
- * Create a routine, armed unless `enabled` is false. `sourceKey` (the agent
- * toolkit's durable tool-call id) makes a replayed create return the routine
- * the first call made.
- */
 export async function create(
   input: CreateRoutineDTO & { sourceKey?: string },
 ): Promise<ReturnType<typeof toApi>> {
@@ -177,15 +156,11 @@ export async function update(
       ...(input.name !== undefined ? { name: input.name } : {}),
       ...(input.prompt !== undefined ? { prompt: input.prompt } : {}),
       ...(input.schedule !== undefined ? { schedule: input.schedule } : {}),
-      // An `enabled`-only edit sets no field here; the row is still touched.
       updatedAt: new Date(),
     })
     .where(eq(routines.id, id));
   if (botChanged) {
-    // The conversation runs with the old bot's persona and tools: the next
-    // fire starts a fresh one for the new bot.
     await retireConversation(await moveToBot(id, input.botId!));
-    // A run still awaiting its reply there never gets one now.
     await db
       .update(routineRuns)
       .set({ status: "cancelled", finishedAt: new Date(), error: "Moved to another bot" })
@@ -198,9 +173,6 @@ export async function update(
   }
   const scheduleChanged = input.schedule !== undefined;
   if (scheduleChanged || botChanged) {
-    // Any schedule-affecting edit re-arms from now; the old pending job dies.
-    // `enabled` rides along so a schedule edit cannot silently re-enable a
-    // paused routine.
     const schedule =
       input.schedule !== undefined ? input.schedule : safeParseSchedule(row.schedule);
     if (!schedule) throw Boom.badRequest("Routine has an invalid schedule");
@@ -242,11 +214,6 @@ export async function resume(id: string): Promise<ReturnType<typeof toApi>> {
   return get(id);
 }
 
-/**
- * Run now: a manual occurrence distinct from the scheduled chain (PRD 5.5).
- * Its slot is the click's instant to the millisecond, so two clicks are two
- * runs.
- */
 export async function runNow(id: string): Promise<{ runId: string }> {
   const row = await findRoutine(id);
   const now = new Date();
@@ -289,7 +256,6 @@ export async function recentRuns(limit: number): Promise<RecentRoutineRunData[]>
     .slice(0, limit);
 }
 
-/** The next N fire times of a schedule from now, for previews and echoes (PRD 5.2). */
 export function previewFireTimes(schedule: Schedule, from: Date, count = 3): Date[] {
   if (schedule.kind === "once") return [nextOccurrence(schedule, from)];
   const times: Date[] = [];

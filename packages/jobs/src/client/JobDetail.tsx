@@ -36,7 +36,6 @@ export function JobDetail() {
     );
   }
 
-  // a failed background poll keeps showing the job it already loaded
   if (!job) {
     return (
       <PageContainer maxWidth="5xl">
@@ -75,7 +74,6 @@ export function JobDetail() {
 
       {job.output != null && <JobJsonBlock label="Output" value={job.output} />}
 
-      {/* Error Details */}
       {job.error && (
         <Card>
           <CardHeader>
@@ -89,7 +87,6 @@ export function JobDetail() {
         </Card>
       )}
 
-      {/* Singleton Info */}
       {job.singletonKey && (
         <Card>
           <CardHeader>

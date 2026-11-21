@@ -1,11 +1,3 @@
-/**
- * S7 (behavior register): the SSRF guards. `checkPublicUrl` classifies IP
- * literals as addresses (CGNAT and every IPv6 form that embeds an IPv4
- * included) and names as names; the browser checks every main-frame request
- * of an agent's tab and its popups before it is sent, for the tab's whole
- * life, and resolves names; `http_request` resolves a host once and
- * connects only to the addresses it checked.
- */
 import { existsSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -31,10 +23,6 @@ afterEach(async () => {
   await Promise.all(servers.splice(0).map((s) => new Promise((r) => s.close(r))));
 });
 
-/**
- * A server on 127.0.0.1 that records the pages it was asked for (not the
- * favicon a browser fetches on its own after a page loads).
- */
 async function serve(
   handler: (path: string) => { status?: number; headers?: Record<string, string>; body?: string },
 ) {
@@ -66,9 +54,9 @@ describe("checkPublicUrl and isPrivateAddress (S7a)", () => {
     refused("http://[::ffff:127.0.0.1]/");
     refused("http://[::ffff:10.0.0.1]/");
     refused("http://[::ffff:7f00:1]/");
-    refused("http://[::ffff:a9fe:a9fe]/latest/meta-data/"); // 169.254.169.254
-    refused("http://[0:0:0:0:0:ffff:6440:1]/"); // 100.64.0.1
-    allowed("http://[::ffff:5db8:d822]/"); // 93.184.216.34
+    refused("http://[::ffff:a9fe:a9fe]/latest/meta-data/");
+    refused("http://[0:0:0:0:0:ffff:6440:1]/");
+    allowed("http://[::ffff:5db8:d822]/");
     expect(isPrivateAddress("::ffff:192.168.1.1")).toBe(true);
     expect(isPrivateAddress("::ffff:c0a8:101")).toBe(true);
     expect(isPrivateAddress("::ffff:8.8.8.8")).toBe(false);
@@ -102,18 +90,18 @@ describe("checkPublicUrl and isPrivateAddress (S7a)", () => {
   });
 
   it("refuses IPv6 forms that embed a private IPv4, and site-local and multicast IPv6", () => {
-    refused("http://[::127.0.0.1]/"); // IPv4-compatible, parsed to [::7f00:1]
+    refused("http://[::127.0.0.1]/");
     refused("http://[::7f00:1]/");
-    refused("http://[64:ff9b::7f00:1]/"); // NAT64
+    refused("http://[64:ff9b::7f00:1]/");
     refused("http://[64:ff9b::a9fe:a9fe]/");
-    refused("http://[64:ff9b:1::a00:1]/"); // local-use NAT64
-    refused("http://[2002:7f00:1::]/"); // 6to4
+    refused("http://[64:ff9b:1::a00:1]/");
+    refused("http://[2002:7f00:1::]/");
     refused("http://[2002:a9fe:a9fe::1]/");
-    refused("http://[::ffff:0:7f00:1]/"); // SIIT
-    refused("http://[fec0::1]/"); // site-local
-    refused("http://[ff02::1]/"); // multicast
-    allowed("http://[64:ff9b::808:808]/"); // NAT64 of 8.8.8.8
-    allowed("http://[2002:808:808::1]/"); // 6to4 of 8.8.8.8
+    refused("http://[::ffff:0:7f00:1]/");
+    refused("http://[fec0::1]/");
+    refused("http://[ff02::1]/");
+    allowed("http://[64:ff9b::808:808]/");
+    allowed("http://[2002:808:808::1]/");
     expect(isPrivateAddress("::ffff:0:10.0.0.1")).toBe(true);
     expect(isPrivateAddress("fe80::1%eth0")).toBe(true);
     expect(isPrivateAddress("2002:c0a8:101::")).toBe(true);
@@ -138,15 +126,8 @@ describe("checkPublicUrl and isPrivateAddress (S7a)", () => {
   });
 });
 
-// ── The browser's navigation guard (S7b) ────────────────────────────────
-
 const open = { viewportWidth: 1280, viewportHeight: 800 };
 
-/**
- * A browser as the guard sees it: one browser-level DevTools session whose
- * `Fetch` pauses each tab's main-frame document requests (a request only
- * goes out once it is continued) and whose `Target` events name popups.
- */
 function fakeChrome() {
   const sent: string[] = [];
   const listeners = new Map<string, (event: unknown) => void>();
@@ -161,7 +142,6 @@ function fakeChrome() {
   };
   const browser = { newBrowserCDPSession: async () => cdp } as unknown as Browser;
 
-  /** Tab `frameId` asks for `url`: whether the request went out. */
   async function request(frameId: string, url: string): Promise<boolean> {
     const requestId = `r${++id}`;
     const answer = new Promise<string>((resolve) => answers.set(requestId, resolve));
@@ -176,11 +156,6 @@ function fakeChrome() {
     return went;
   }
 
-  /**
-   * A tab whose `goto` follows `redirects`, each hop asked of the guard. Its
-   * DevTools methods in `silent` never answer (a busy renderer answers no
-   * `Page.*` call; the browser process answers `Target.*`).
-   */
   function tab(
     frameId: string,
     redirects: Record<string, string> = {},
@@ -205,7 +180,6 @@ function fakeChrome() {
       url: () => current,
       waitForLoadState: async () => undefined,
       title: async () => "",
-      // Enter starts no navigation here: the waits for one time out at once.
       mainFrame: () => ({}),
       waitForRequest: () => Promise.reject(new Error("Timeout")),
       waitForEvent: () => Promise.reject(new Error("Timeout")),
@@ -226,7 +200,6 @@ function fakeChrome() {
     return page as unknown as Page;
   }
 
-  /** Tab `openerId` opened a popup, `targetId`. */
   const popup = (openerId: string, targetId: string) =>
     listeners.get("Target.targetCreated")?.({
       targetInfo: { targetId, openerId, type: "page", url: "" },
@@ -234,7 +207,6 @@ function fakeChrome() {
   return { browser, tab, request, popup, sent };
 }
 
-/** Names the fake DNS knows: nip.io-style names answer the address they spell. */
 const fakeDns = async (host: string) =>
   host.endsWith(".nip.io")
     ? [host.slice(0, -".nip.io".length)]
@@ -325,15 +297,12 @@ describe("browser navigation guard (S7b)", () => {
     const guard = await navigationGuard(chrome.browser, { resolveHost: fakeDns });
     const session = pageSession(chrome.tab("tab-1"), open, { close: async () => {}, guard });
     await session.navigate("https://public.example/");
-    // A meta refresh, `location = …` or a click later: a main-frame request of the tab.
     expect(await chrome.request("tab-1", "http://127.0.0.1:8080/admin")).toBe(false);
     expect(await chrome.request("tab-1", "https://public.example/next")).toBe(true);
-    // `window.open` from the tab: the popup inherits the guard.
     chrome.popup("tab-1", "popup-1");
     expect(await chrome.request("popup-1", "http://169.254.169.254/latest/meta-data/")).toBe(false);
     chrome.popup("popup-1", "popup-2");
     expect(await chrome.request("popup-2", "http://10.0.0.1/")).toBe(false);
-    // A tab no agent holds (the owner's own) is not guarded.
     expect(await chrome.request("owner-tab", "http://127.0.0.1:8080/router")).toBe(true);
   });
 
@@ -344,12 +313,10 @@ describe("browser navigation guard (S7b)", () => {
     await session.navigate("https://public.example/");
     chrome.popup("tab-1", "popup-1");
     expect(await chrome.request("tab-1", "http://192.168.1.1/")).toBe(false);
-    // Let go of (closeTab blanks the browser's first tab and releases it): the owner's LAN pages load.
     session.release?.();
     await settle(0);
     expect(await chrome.request("tab-1", "http://192.168.1.1/")).toBe(true);
     expect(await chrome.request("popup-1", "http://192.168.1.1/")).toBe(true);
-    // An agent acts on it again: guarded again.
     await session.press("Enter");
     expect(await chrome.request("tab-1", "http://192.168.1.1/")).toBe(false);
   });
@@ -357,7 +324,6 @@ describe("browser navigation guard (S7b)", () => {
   it("asks the browser process, not the renderer, for the tab's frame (a busy page can't hang it)", async () => {
     const chrome = fakeChrome();
     const guard = await navigationGuard(chrome.browser, { resolveHost: fakeDns });
-    // `Page.getFrameTree` never answers, as on a renderer stuck in a loop.
     const session = pageSession(chrome.tab("busy-1"), open, { close: async () => {}, guard });
     expect(await session.navigate("https://public.example/")).toMatchObject({ status: 200 });
     expect(await chrome.request("busy-1", "http://127.0.0.1/")).toBe(false);
@@ -382,18 +348,12 @@ describe("browser navigation guard (S7b)", () => {
     expect(chrome.sent).toEqual([]);
   });
 
-  /** A Chromium this machine has, if any (CI may have none). */
   const chromiumPath = [
     chromium.executablePath(),
     "/usr/bin/chromium",
     "/usr/bin/google-chrome",
   ].find((path) => path && existsSync(path));
 
-  /**
-   * A private target on 127.0.0.1 and a site on `localhost` (standing in
-   * for a public one: exempt, while 127.0.0.1 is not) whose pages try to
-   * reach it.
-   */
   async function realChrome() {
     const target = await serve(() => ({ body: "secret" }));
     const T = `http://127.0.0.1:${target.port}`;
@@ -438,7 +398,7 @@ describe("browser navigation guard (S7b)", () => {
         await session.navigate(`${S}/spin`);
         const page = await browser.newPage();
         await page.goto(`${S}/spin`);
-        await settle(300); // the loop has started
+        await settle(300);
         const guard = await navigationGuard(browser);
         const started = Date.now();
         expect(await guard.watch(page, new Set(["localhost"]))).toEqual(expect.any(String));
@@ -457,7 +417,6 @@ describe("browser navigation guard (S7b)", () => {
       try {
         const started = performance.now();
         const result = await session.navigate(`${S}/spin-on-load`);
-        // No title (the renderer never answers), after the 5 s wait for load at most.
         expect(result).toEqual({ url: `${S}/spin-on-load`, status: 200 });
         expect(performance.now() - started).toBeLessThan(10_000);
       } finally {
@@ -496,7 +455,6 @@ describe("browser navigation guard (S7b)", () => {
         expect(site.hits).toEqual(["/go", "/hop"]);
         expect(target.hits).toEqual([]);
         expect(page.url()).toBe("about:blank");
-        // An exempt page still loads.
         expect(await session.navigate(`${S}/`)).toEqual({ url: `${S}/`, status: 200 });
       } finally {
         await browser.close();
@@ -515,9 +473,7 @@ describe("browser navigation guard (S7b)", () => {
           await settle(1_000);
         }
         expect(target.hits).toEqual([]);
-        // The agent's own tab is not on the private page either.
         expect(page.url()).not.toContain(`127.0.0.1:${target.port}`);
-        // The owner's own tab, which no agent holds, is not guarded.
         const owner = await browser.newPage();
         await owner.goto(`http://127.0.0.1:${target.port}/owner`);
         expect(target.hits).toEqual(["/owner"]);
@@ -528,8 +484,6 @@ describe("browser navigation guard (S7b)", () => {
     40_000,
   );
 });
-
-// ── http_request: one lookup, a pinned connection (S7c) ─────────────────
 
 async function run(web: ReturnType<typeof createWebToolkit>, args: Record<string, unknown>) {
   const tool = web.extension.tools!.find((t) => t.name === "http_request")!;
@@ -542,7 +496,6 @@ async function run(web: ReturnType<typeof createWebToolkit>, args: Record<string
   return { ...result, text };
 }
 
-/** A resolver that answers public the first time and private after: DNS rebinding. */
 function rebindingResolver() {
   const lookups: string[] = [];
   return {
@@ -626,9 +579,8 @@ describe("http_request against DNS rebinding (S7c)", () => {
   });
 
   it("connects to the pinned address, never to what DNS says for the name", async () => {
-    const body = "pinned ".repeat(50_000); // streams on after the response's headers
+    const body = "pinned ".repeat(50_000);
     const server = await serve(() => ({ body }));
-    // `rebind.invalid` resolves nowhere: only the pin can reach the server.
     const response = await pinnedFetch(
       new URL(`http://rebind.invalid:${server.port}/x`),
       ["127.0.0.1"],
@@ -646,7 +598,6 @@ describe("http_request against DNS rebinding (S7c)", () => {
     expect(text).toBe(body);
     expect(server.hits).toEqual(["/x"]);
 
-    // `localhost` resolves to the server, but the pin (another loopback address) wins.
     await expect(
       pinnedFetch(new URL(`http://localhost:${server.port}/y`), ["127.0.0.3"], { method: "GET" }),
     ).rejects.toThrow();

@@ -1,8 +1,3 @@
-/**
- * Claude Code messages → transcript rows, on fixtures shaped after the
- * Agent SDK 0.3.x types (live `SDKMessage`s) and `getSessionMessages`
- * entries (history). The same function handles both and gives the same ids.
- */
 import { describe, expect, it } from "vite-plus/test";
 import {
   diffFromInput,
@@ -17,7 +12,6 @@ import { ATTACHMENTS_HEADER } from "../../../../packages/claude-worker/src/index
 
 const SESSION = "6f1c2a0e-9b7d-4f7e-8a51-2d3c4b5a6f70";
 
-/** One turn as the SDK streams it: prompt echo, thinking + text + Edit, result, answer, result. */
 const LIVE: ClaudeEntry[] = [
   {
     type: "user",
@@ -144,13 +138,11 @@ describe("normalizeEntries", () => {
       output: "The file /repo/src/a.ts has been updated.",
     });
     if (tool.kind !== "tool") throw new Error("not a tool");
-    // structuredPatch wins over the input-derived diff when the SDK sent it.
     expect(tool.diff?.diff).toContain("@@ -1,1 +1,1 @@\n-const foo = 1;\n+const bar = 1;");
     expect(items.at(-1)).toEqual({ kind: "turn", id: "r-1", durationMs: 4200, costUsd: 0.012 });
   });
 
   it("gives history entries the same ids as the live stream", () => {
-    // getSessionMessages: no results, no tool_use_result, plain API messages.
     const history: ClaudeEntry[] = LIVE.filter((entry) => entry.type !== "result").map(
       ({ tool_use_result: _drop, ...entry }) => entry,
     );
@@ -253,7 +245,6 @@ describe("normalizeEntries", () => {
       resetsAt: new Date(1762365600 * 1000).toISOString(),
       text: "Claude AI usage limit reached",
     });
-    // One notice per turn: the result's error repeats it.
     expect(live.filter((item) => item.kind === "notice")).toHaveLength(1);
 
     const fromWorker = normalizeEntries([

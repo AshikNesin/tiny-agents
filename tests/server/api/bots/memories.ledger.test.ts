@@ -15,7 +15,6 @@ async function newLedger() {
 const fact = (text: string, extra: Record<string, unknown> = {}) => ({
   text,
   category: "fact" as const,
-  confidence: 0.9,
   ...extra,
 });
 
@@ -81,10 +80,8 @@ describe("memoryLedger.add: dedupe", () => {
       category: "preference",
       status: "active",
       source: "manual",
-      confidence: null,
     });
     expect(added.rows[0]!.createdAt.getTime()).toBeGreaterThanOrEqual(rows[0]!.createdAt.getTime());
-    // An active match is returned as it is.
     const twice = await ledger.add([{ text: "Prefers pnpm", category: "fact" }], {
       source: "manual",
     });
@@ -140,7 +137,7 @@ describe("memoryLedger.add: budget and expiry", () => {
   it("archives the oldest active rows past the budget, never the new ones", async () => {
     const { botId, ledger } = await newLedger();
     await db.insert(memories).values(
-      Array.from({ length: 100 }, (_, i) => ({
+      Array.from({ length: 60 }, (_, i) => ({
         botId,
         text: `Old fact ${i}`,
         category: "fact",
@@ -150,7 +147,7 @@ describe("memoryLedger.add: budget and expiry", () => {
     const { rows } = await ledger.add([fact("New fact"), fact("Newer fact")], {
       source: "manual",
     });
-    expect(await count(botId, "active")).toBe(100);
+    expect(await count(botId, "active")).toBe(60);
     const archived = await db.query.memories.findMany({
       where: and(eq(memories.botId, botId), eq(memories.status, "archived")),
     });
@@ -161,17 +158,17 @@ describe("memoryLedger.add: budget and expiry", () => {
   it("archives within one large capture, oldest first", async () => {
     const { botId, ledger } = await newLedger();
     await ledger.add(
-      Array.from({ length: 105 }, (_, i) => fact(`Fact ${i}`)),
+      Array.from({ length: 65 }, (_, i) => fact(`Fact ${i}`)),
       { source: "capture" },
     );
-    expect(await count(botId, "active")).toBe(100);
+    expect(await count(botId, "active")).toBe(60);
     expect(await count(botId, "archived")).toBe(5);
   });
 
   it("expires rows past their date: they leave the active set and free budget", async () => {
     const { botId, ledger } = await newLedger();
     await db.insert(memories).values([
-      ...Array.from({ length: 99 }, (_, i) => ({
+      ...Array.from({ length: 59 }, (_, i) => ({
         botId,
         text: `Old fact ${i}`,
         category: "fact",
@@ -187,7 +184,7 @@ describe("memoryLedger.add: budget and expiry", () => {
     ]);
     expect((await ledger.active()).map((m) => m.text)).not.toContain("Is traveling this week");
     await ledger.add([fact("New fact")], { source: "capture" });
-    expect(await count(botId, "active")).toBe(100);
+    expect(await count(botId, "active")).toBe(60);
     expect(await count(botId, "expired")).toBe(1);
     expect(await count(botId, "archived")).toBe(0);
   });
@@ -236,7 +233,7 @@ describe("memoryLedger.restore", () => {
       where: eq(memories.botId, botId),
     });
     await db.insert(memories).values(
-      Array.from({ length: 100 }, (_, i) => ({
+      Array.from({ length: 60 }, (_, i) => ({
         botId,
         text: `Fact ${i}`,
         category: "fact",
@@ -246,7 +243,7 @@ describe("memoryLedger.restore", () => {
     expect(await ledger.restore(archived!.id)).toMatchObject({
       status: "active",
     });
-    expect(await count(botId, "active")).toBe(100);
+    expect(await count(botId, "active")).toBe(60);
     const nowArchived = await db.query.memories.findFirst({
       where: and(eq(memories.botId, botId), eq(memories.status, "archived")),
     });
@@ -272,7 +269,6 @@ describe("memoryLedger.promptContext", () => {
     );
     await ledger.tombstone([rows[2]!.id]);
     const context = await ledger.promptContext();
-    // Short refs, not 36-character row ids: fewer tokens, nothing to misspell.
     expect(context.current).toBe("- m1 — Prefers pnpm\n- m2 — Is in Goa (until 2999-01-01)");
     expect(context.refs).toEqual({ m1: rows[0]!.id, m2: rows[1]!.id });
     expect(context.removed).toBe("- Likes tea");

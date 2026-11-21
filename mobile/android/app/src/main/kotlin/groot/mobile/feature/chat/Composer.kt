@@ -32,11 +32,6 @@ import groot.mobile.ui.components.AppIcon
 import groot.mobile.ui.components.DISABLED_ALPHA
 import groot.mobile.ui.components.IconBtn
 
-/**
- * The composer: a rounded pill with an attach button, the draft, and one round button that
- * is Stop while the bot replies with nothing typed and Send otherwise. While a reply runs,
- * Send steers it and the queue button holds the message for after it.
- */
 @Composable
 fun Composer(
     draft: String,
@@ -114,7 +109,6 @@ fun Composer(
     }
 }
 
-/** A message the server holds behind (or steering into) the running reply, with a way to take it back. */
 @Composable
 private fun HeldRow(entry: OutboxEntry, onWithdraw: (String) -> Unit) {
     Row(

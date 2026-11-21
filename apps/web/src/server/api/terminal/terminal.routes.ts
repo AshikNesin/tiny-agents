@@ -1,9 +1,3 @@
-/**
- * Terminal REST routes (issue #28): tab lifecycle over the TerminalService.
- * All JWT-protected, mounted under /api/v1/terminal. Bytes never appear
- * here — attach traffic goes through the ticketed WebSocket bridge in
- * `terminal.ws.ts`.
- */
 import { Hono } from "hono";
 import { z } from "zod";
 import { Boom } from "@groot/core/errors";
@@ -35,15 +29,12 @@ import type {
 
 const router = new Hono<AppEnv>();
 
-// xterm.js is legible from 2x2 up; the ceilings bound a hostile client.
 const createSchema: z.ZodType<TerminalCreateBody> = z.object({
   cols: z.number().int().min(2).max(500).optional(),
   rows: z.number().int().min(2).max(300).optional(),
-  /** A fixed command the tab starts typing; never free text from the client. */
   run: z.enum(["claude-login"]).optional(),
 });
 
-/** What each `run` preset types into the new tab. */
 const RUN_LINES: Record<"claude-login", string> = {
   "claude-login": claudeLoginShellLine(),
 };
@@ -57,7 +48,6 @@ const nameParam = (raw: string): SessionName => {
   return parsed;
 };
 
-/** One tab as the client sees it (the frozen wire DTO). */
 function sessionDto(row: TerminalSessionRow): TerminalSession {
   return {
     name: row.name,
@@ -102,16 +92,12 @@ router.delete("/terminal/sessions/:name", async (c) => {
   } catch (error) {
     if (error instanceof SessionNotFoundError) throw Boom.notFound(error.message);
     if (error instanceof SessionBusyError) {
-      // The confirm dialog reads the process name from error.details.process.
       throw Boom.conflict(error.message, { process: error.foreground });
     }
     throw mapServiceError(error);
   }
 });
 
-// No has-session pre-check: it cost a full SSH round trip before the socket
-// could open (issue #84). Attaching to a missing tab ends the pty at once,
-// tmux prints why, and the bridge closes 1000, so the client stops.
 router.post("/terminal/sessions/:name/ticket", async (c) => {
   const name = nameParam(parseStringParam(c.req.param("name"), "name"));
   return ok<TerminalTicket>(c, {

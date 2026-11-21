@@ -1,10 +1,5 @@
-/**
- * The Code page's thread list folds away on wide screens, as in other coding
- * workspaces: Hide sidebar (or ⌘B) gives the thread the room, Show sidebar
- * brings the list back, and the choice is remembered in this browser.
- */
 import React from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render as renderBare, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -13,6 +8,10 @@ import { NO_CAPABILITIES } from "@tiny-agents/code/contracts";
 import { CodePage } from "@/pages/code/CodePage";
 import { useCodeStore } from "@/store/code";
 import type { HarnessInfo } from "@/lib/code/api";
+import { AppQueryProvider } from "../query-provider";
+
+const render = (ui: Parameters<typeof renderBare>[0]) =>
+  renderBare(ui, { wrapper: AppQueryProvider });
 
 vi.mock("sonner", () => ({
   toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), message: vi.fn() }),

@@ -1,8 +1,3 @@
-/**
- * The tasks module (task.service.ts) behind both adapters: the page's HTTP
- * surface and the agent's TaskStore share one create, one update rule and one
- * row mapping.
- */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import * as service from "../../../../apps/web/src/server/api/tasks/task.service";
 import { taskStore } from "../../../../apps/web/src/server/api/tasks/task.store";
@@ -17,7 +12,6 @@ describe("tasks module", () => {
     const again = await taskStore.create({ title: "Ship it", idempotencyKey: "tool-call-1" });
     expect(again.id).toBe(first.id);
     expect(await service.listTasks()).toHaveLength(1);
-    // Both views read the same row.
     expect((await service.findTask(first.id))?.title).toBe("Ship it");
   });
 
@@ -30,13 +24,11 @@ describe("tasks module", () => {
     });
     const done = await taskStore.update(task.id, { status: "done" });
     expect(done?.completedAt).toEqual(expect.any(String));
-    // Completing it again keeps the first completion time.
     vi.setSystemTime(Date.now() + 60_000);
     const again = await taskStore.update(task.id, { status: "done" });
     expect(again?.completedAt).toBe(done?.completedAt);
     const reopened = await service.update(task.id, { status: "todo" });
     expect(reopened.completedAt).toBeNull();
-    // A create as done is completed at once.
     const created = await service.create({
       title: "Already",
       description: "",

@@ -1,13 +1,3 @@
-// Writes each cut's cue sheet for tools/music.py:
-//   assets/audio/cues.<cut>.json  { length, sections, cues }
-//
-// The cues are the ones the scenes themselves declare (S.sfx, cursor clicks,
-// typing), so the sound follows the picture by construction. To read them this
-// script mounts each cut's scenes in a page the way HyperFrames does, runs the
-// scene scripts, and maps every cue from scene time to film time, through the
-// trims in src/cuts.mjs.
-//
-//   node tools/build.mjs && node tools/cues.mjs
 import { createRequire } from "node:module";
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import path from "node:path";

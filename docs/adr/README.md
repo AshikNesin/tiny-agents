@@ -36,7 +36,7 @@ phases 0 and 1), which follows the PR loop.
 | 0014 | [One Tool gate for both engines, behind a real AgentEngine seam](0014-tool-gate-and-engine-seam.md)                  | accepted (amends 0008; amended by 0016, 0018)       |
 | 0015 | [One secrets subsystem: the vault holds the app's own credentials too](0015-one-secrets-subsystem.md)                | accepted (amends 0005; amended by 0019)             |
 | 0016 | [Models are owner data](0016-models-are-owner-data.md)                                                               | accepted (amends 0008, 0014)                        |
-| 0017 | [Local is the only vault backend](0017-local-is-the-only-vault-backend.md)                                           | accepted (amends 0005; amended by 0019)             |
+| 0017 | [Local is the only vault backend](0017-local-is-the-only-vault-backend.md)                                           | accepted (amends 0005; amended by 0019, 0027)       |
 | 0018 | [Claude plan transcripts are durable entries](0018-claude-plan-transcripts-are-durable-entries.md)                   | accepted (amends 0008, 0014)                        |
 | 0019 | [Vault values live in a table, opened under their row's policy](0019-vault-values-table.md)                          | accepted (amends 0015, 0017)                        |
 | 0021 | [Code projects: a repository on the sandbox, a worktree per thread](0021-code-projects-and-worktrees.md)             | accepted (amends 0012; amended by 0025)             |
@@ -45,6 +45,15 @@ phases 0 and 1), which follows the PR loop.
 | 0024 | [The GitHub App transport, auto-merge, checkpoints and the rest of phase 6](0024-code-github-app-and-checkpoints.md) | accepted (amends 0021, 0022, 0023; amended by 0025) |
 | 0025 | [Steady diffs: one git reader, plumbing reads, pushed change versions](0025-steady-code-diffs.md)                    | accepted (amends 0021, 0024)                        |
 | 0026 | [Web Push is the push transport; the server holds no provider credentials](0026-web-push-transport.md)               | accepted                                            |
+| 0027 | [1Password Connect comes back, and runs inside the app's container](0027-1password-connect-runs-inside-the-app.md)   | accepted (amends 0005, 0017)                        |
+| 0028 | [Code carries no comments; decisions live in ADRs](0028-code-carries-no-comments.md)                                 | accepted                                            |
+| 0029 | [Decisions recorded from code comments: client components](0029-decisions-from-comments-client-components.md)        | accepted                                            |
+| 0030 | [Decisions recorded from code comments: web client](0030-decisions-from-comments-client.md)                          | accepted                                            |
+| 0031 | [Decisions recorded from code comments: server API](0031-decisions-from-comments-server-api.md)                      | accepted                                            |
+| 0032 | [Decisions recorded from code comments: server and scripts](0032-decisions-from-comments-server-and-scripts.md)      | accepted                                            |
+| 0033 | [Decisions recorded from code comments: agent packages](0033-decisions-from-comments-agent.md)                       | accepted                                            |
+| 0034 | [Decisions recorded from code comments: other packages](0034-decisions-from-comments-packages.md)                    | accepted                                            |
+| 0036 | [Decisions recorded from code comments: Android app](0036-decisions-from-comments-android.md)                        | accepted                                            |
 | G4   | [Hono + Drizzle on SQLite, for Node and Cloudflare Workers](0004-hono-drizzle-sqlite-workers.md)                     | accepted (groot)                                    |
 
 `G4` is groot's ADR 0004, synced from the boilerplate; tiny-agents' own 0004

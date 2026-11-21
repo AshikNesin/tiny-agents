@@ -8,7 +8,6 @@ describe("openFeedback", () => {
 
   it("opens the headless embed's panel through its API, with no launcher on the page", () => {
     const opened: unknown[] = [];
-    // The embed is third-party: fake its API the way it exposes it once loaded.
     window.FeedbackBee = {
       version: "2.0.0",
       open: (options) => {

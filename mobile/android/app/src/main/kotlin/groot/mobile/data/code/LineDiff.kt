@@ -2,20 +2,10 @@ package groot.mobile.data.code
 
 import groot.mobile.data.api.FileContents
 
-/** One line of a diff: unchanged, added or removed, with its line numbers on each side. */
 data class DiffLine(val kind: Kind, val text: String, val oldLine: Int?, val newLine: Int?) {
     enum class Kind { Same, Added, Removed, Gap }
 }
 
-/**
- * A line diff of two file versions, as the Changes screen draws it: changed lines with
- * [context] unchanged lines around them, and a [DiffLine.Kind.Gap] row (its text says how many
- * lines) where unchanged lines are left out. The server sends both versions; the web client
- * diffs them the same way.
- *
- * Common lines at the start and end are matched first; the rest by longest common
- * subsequence, unless it is too large, when it reads as all removed then all added.
- */
 fun lineDiff(old: String, new: String, context: Int = 3): List<DiffLine> {
     val a = splitLines(old)
     val b = splitLines(new)
@@ -48,7 +38,6 @@ private fun middle(a: List<String>, b: List<String>, a0: Int, a1: Int, b0: Int, 
         for (j in b0 until b1) out.add(DiffLine(DiffLine.Kind.Added, b[j], null, j + 1))
         return
     }
-    // lcs[i][j]: the longest common subsequence of a[a0+i until a1] and b[b0+j until b1].
     val lcs = Array(n + 1) { IntArray(m + 1) }
     for (i in n - 1 downTo 0) {
         for (j in m - 1 downTo 0) {
@@ -64,7 +53,6 @@ private fun middle(a: List<String>, b: List<String>, a0: Int, a1: Int, b0: Int, 
                 i++
                 j++
             }
-            // Removed lines before added ones, as a unified diff reads.
             i < n && (j == m || lcs[i + 1][j] >= lcs[i][j + 1]) -> {
                 out.add(DiffLine(DiffLine.Kind.Removed, a[a0 + i], a0 + i + 1, null))
                 i++
@@ -100,10 +88,6 @@ private fun withContext(lines: List<DiffLine>, context: Int): List<DiffLine> {
 
 private fun gap(lines: Int) = DiffLine(DiffLine.Kind.Gap, "$lines unchanged ${if (lines == 1) "line" else "lines"}", null, null)
 
-/**
- * The lines of a unified diff (a tool call's `diff`), each with its kind, for drawing. Headers
- * (`---`, `+++`, `@@`) become gaps that show the hunk header.
- */
 fun parseUnifiedDiff(diff: String): List<DiffLine> = splitLines(diff).mapNotNull { line ->
     when {
         line.startsWith("+++") || line.startsWith("---") || line.startsWith("diff ") || line.startsWith("index ") -> null
@@ -117,13 +101,8 @@ fun parseUnifiedDiff(diff: String): List<DiffLine> = splitLines(diff).mapNotNull
 
 private const val MAX_CELLS = 4_000_000L
 
-/** What the Changes screen shows for one open file: its diff lines, or a [notice] saying why not. */
 data class FileDiffView(val lines: List<DiffLine>, val notice: String?)
 
-/**
- * The open file as the server sent it: a file it cannot show as text (binary, or over 2 MB)
- * says so, as the web client's `FileDiff` does; anything else is its [lineDiff].
- */
 fun fileDiffView(contents: FileContents): FileDiffView = when (contents.unshowable) {
     "binary" -> FileDiffView(emptyList(), "Binary file. Its contents are not shown.")
     "tooLarge" -> FileDiffView(emptyList(), "This file is too large to show here (over 2 MB).")

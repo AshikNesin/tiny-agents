@@ -1,10 +1,3 @@
-/**
- * Characterization of behavior-register row U12: a guest briefly renders
- * owner pages until `/people/me` answers, and a failed `/people/me` means
- * owner.
- * Preserve: this pins today's behavior, quirk included; change it only with
- * a signed-off register row.
- */
 import React from "react";
 import { act, render, renderHook, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
@@ -13,7 +6,6 @@ import { appRoutes } from "@/App";
 import { peopleApi } from "@/lib/people-api";
 import { useIsGuest, usePeopleStore } from "@/store/people";
 
-/** The app's own guest gate (route id `guest-gate`), around stand-in pages. */
 function gateElement(routes: RouteObject[]): React.ReactNode {
   for (const route of routes) {
     if (route.id === "guest-gate") return route.element;
@@ -53,7 +45,6 @@ describe("U12: who the shell thinks is signed in", () => {
     const router = renderAt("/vault");
     const loading = usePeopleStore.getState().load();
 
-    // Not answered yet: the guest sees the owner-only page.
     expect(screen.getByText("Vault page (owner only)")).toBeInTheDocument();
     expect(renderHook(() => useIsGuest()).result.current).toBe(false);
 

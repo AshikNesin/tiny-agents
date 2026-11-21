@@ -1,11 +1,5 @@
-/**
- * The Changes and Review panels while an agent works. A re-read keeps the
- * file list on screen (no spinner, no reset of what was folded), the open
- * file's diff follows its content, and a file that cannot be shown as text
- * says so instead of drawing a whole-file change or freezing the tab.
- */
 import React from "react";
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render as renderBare, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { ConfirmProvider } from "@groot/ui/primitives";
 import { ChangesPanel } from "@/pages/code/ChangesPanel";
@@ -15,8 +9,14 @@ import type { PullReviewView } from "../../../apps/web/src/shared/api/code";
 import { FileDiff } from "@/pages/code/UnifiedDiff";
 import { clickLine, diffText, line } from "../diff-dom";
 import type { DiffView } from "@/pages/code/DiffWorkspace";
+import { notifyManager } from "@tanstack/react-query";
+import { AppQueryProvider } from "../query-provider";
 
-/** Unified diffs, nothing folded, the file drawer shut. */
+notifyManager.setScheduler(queueMicrotask);
+
+const render = (ui: Parameters<typeof renderBare>[0]) =>
+  renderBare(ui, { wrapper: AppQueryProvider });
+
 const STILL_VIEW: DiffView = {
   style: "unified",
   setStyle: () => undefined,
@@ -26,9 +26,7 @@ const STILL_VIEW: DiffView = {
   drawer: { open: false, onOpenChange: () => undefined },
 };
 
-/** The drawn diff's shadow root (the renderer draws it there). */
 const drawn = () => document.querySelector("diffs-container")?.shadowRoot ?? null;
-/** The drawn diff's lines as text; none until a diff is drawn. */
 const shown = () => {
   const root = drawn();
   return root ? diffText(root) : [];
@@ -38,7 +36,6 @@ vi.mock("sonner", () => ({
   toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), message: vi.fn() }),
 }));
 
-/** The network: each GET path answers from this table (a function may hold the answer back). */
 let routes: Record<string, () => unknown> = {};
 
 vi.mock("@groot/shell/lib/api", async (importOriginal) => {
@@ -110,7 +107,6 @@ describe("Changes panel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Fold src/a.ts" }));
     expect(screen.getByRole("button", { name: "Unfold src/a.ts" })).toBeInTheDocument();
 
-    // The agent writes again: the next list read is held back.
     let release: () => void = () => {};
     files = [file("src/a.ts", 3), file("src/b.ts", 1)];
     routes[`${harness}/diffs/working/files`] = () =>
@@ -181,7 +177,6 @@ describe("re-reading while the agent writes non-stop", () => {
     const { rerender } = render(panel("0"));
     await wait(0);
     const first = reads;
-    // A new key every 300 ms for 3 s: the agent never pauses.
     for (let i = 1; i <= 10; i++) {
       rerender(panel(String(i)));
       await wait(300);
@@ -218,7 +213,6 @@ describe("Review panel", () => {
     await wait(0);
     expect(screen.getByText("ta/fix-login")).toBeInTheDocument();
     expect(screen.getByText("2 ahead")).toBeInTheDocument();
-    // Both files in the column at once, folders first, no file to pick.
     expect(screen.getAllByTestId("code-file").map((b) => b.getAttribute("aria-label"))).toEqual([
       "Fold src/auth/login.ts",
       "Fold README.md",
@@ -227,7 +221,6 @@ describe("Review panel", () => {
     expect(shown()).toContain("export const login = 1;");
     expect(screen.getByText("0/2 viewed")).toBeInTheDocument();
 
-    // The tree waits in a drawer.
     expect(screen.queryByRole("navigation", { name: "Changed files" })).toBeNull();
     act(() => screen.getByRole("button", { name: "Files" }).click());
     expect(screen.getByRole("navigation", { name: "Changed files" })).toBeInTheDocument();
@@ -259,7 +252,7 @@ describe("Review panel", () => {
     );
     await wait(0);
     expect(screen.getByRole("navigation", { name: "Changed files" })).toBeInTheDocument();
-    act(() => screen.getByRole("checkbox", { name: "Viewed src/b.ts" }).click());
+    await act(async () => screen.getByRole("checkbox", { name: "Viewed src/b.ts" }).click());
     expect(screen.getByRole("button", { name: "Unfold src/b.ts" })).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Diff stats" })).toHaveTextContent("1 of 2");
   });

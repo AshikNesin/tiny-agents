@@ -1,16 +1,15 @@
-/**
- * The Code Threads screen (after Hoplite): a project's threads at full width,
- * by where they stand (Working, Needs you, In review, Done), each with its
- * pull requests and date; Archived loads when opened.
- */
 import React from "react";
-import { render, screen, within } from "@testing-library/react";
+import { render as renderBare, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { MemoryRouter } from "react-router-dom";
 import { ThreadsScreen } from "@/pages/code/ThreadsScreen";
 import type { ThreadSummary } from "@/lib/code/api";
 import type { ProjectView } from "../../../apps/web/src/shared/api/code";
+import { AppQueryProvider } from "../query-provider";
+
+const render = (ui: Parameters<typeof renderBare>[0]) =>
+  renderBare(ui, { wrapper: AppQueryProvider });
 
 const listMock = vi.fn();
 vi.mock("@/lib/code/api", async (importOriginal) => {
@@ -73,7 +72,6 @@ describe("the Code Threads screen", () => {
         name: /Fix CI/,
       }),
     ).toBeInTheDocument();
-    // Another project's (or no project's) thread is not on this screen.
     expect(screen.queryByText("elsewhere")).toBeNull();
 
     await userEvent.click(screen.getByRole("button", { name: /Archived/ }));

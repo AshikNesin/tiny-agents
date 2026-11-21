@@ -1,8 +1,3 @@
-/**
- * BotMessagingStore adapter: the agent's `bots` toolkit sends messages
- * between bots as Deliveries (bots.delivery.ts). This adapter adds the
- * sender's guards: the per-turn budget and the loop guard.
- */
 import { and, asc, eq, gte, ne } from "drizzle-orm";
 import { sanitizePeerText, type BotMessagingStore } from "@tiny-agents/agent";
 import { db, botMessages, bots } from "../../db";
@@ -10,27 +5,18 @@ import { createDeliveries, type DeliveryRuntime } from "./bots.delivery";
 import { conversationOwner } from "./bots.owner";
 import { app } from "../../app-root";
 
-/** Why a delivery was refused (the bots toolkit's reasons). */
 type DeliverReason = "unknown_bot" | "self" | "loop" | "budget";
 
-/** Loop guard: more than this many sends from one bot to one target in the window is a runaway loop. */
 const LOOP_WINDOW_MS = 10 * 60 * 1000;
 const LOOP_LIMIT = 8;
-/** Per-turn budget (issue #16): a single reply may not message more than this many bots. */
 const TURN_LIMIT = 3;
 
-/**
- * Sends per conversation in the current reply. Charged only on first-time
- * deliveries (a replayed requestId returns early), and reset when the
- * conversation settles (the settled pipeline calls `reset`, bots.settled.ts).
- */
 export interface TurnBudget {
   count(conversationId: number): number;
   charge(conversationId: number): void;
   reset(conversationId: number): void;
 }
 
-/** One budget per runtime (`app().turnBudgets`): the messaging store charges it, the settled pipeline resets it. */
 export function turnBudgetOf(rt: object): TurnBudget {
   const turnBudgets = app().turnBudgets;
   let budget = turnBudgets.get(rt);
@@ -47,19 +33,13 @@ export function turnBudgetOf(rt: object): TurnBudget {
   return budget;
 }
 
-/** The message a bot sees when another bot writes to it. */
 function botToBotText(fromName: string, text: string): string {
   return `**Message from ${fromName} (bot):** ${text}`;
 }
 
-/** What the store needs from the runtime: Deliveries. */
 export type BotMessagingRuntime = DeliveryRuntime;
 
 export function createBotMessagingStore(rt: BotMessagingRuntime): BotMessagingStore {
-  /**
-   * The sending bot; `unattended` when the send comes from a conversation
-   * of its own (a routine run, or its answer to another bot), not its chat.
-   */
   async function senderOf(conversationId: number) {
     const owner = await conversationOwner(conversationId);
     if (!owner) return null;
@@ -79,18 +59,12 @@ export function createBotMessagingStore(rt: BotMessagingRuntime): BotMessagingSt
       if (!target) return { delivered: false, reason: "unknown_bot" };
       if (target.id === sender.id) return { delivered: false, reason: "self" };
 
-      // Exactly-once across pi-durable replays: a rerun of the tool task
-      // recomputes the same requestId, so a replay returns early, uncharged
-      // and unguarded; the guards below run for first-time deliveries only.
       const outcome = await deliveries.deliver<DeliverReason>(
         {
           requestId: input.requestId,
           kind: "send",
           toBotId: target.id,
           fromBotId: sender.id,
-          // A message sent from a routine run, or from a bot answering
-          // another bot, gets no relayed answer: it would land in the bot's
-          // chat, which those conversations never write to (issue #63).
           replyToBotId: sender.unattended ? null : sender.id,
           text: input.text,
           prompt: botToBotText(sender.name, sanitizePeerText(input.text)),
@@ -98,7 +72,6 @@ export function createBotMessagingStore(rt: BotMessagingRuntime): BotMessagingSt
           sourceKey: input.sourceKey,
         },
         async () => {
-          // Per-turn budget (issue #16), then the loop guard.
           if (turnBudget.count(input.conversationId) >= TURN_LIMIT) return "budget";
           const since = new Date(Date.now() - LOOP_WINDOW_MS);
           const recent = await db.$count(

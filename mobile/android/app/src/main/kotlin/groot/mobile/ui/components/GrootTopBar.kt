@@ -15,7 +15,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import groot.mobile.R
 
-/** Large collapsing title, matching the kit's settings screen. Pass [onNavigateUp] for a back button. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GrootTopBar(

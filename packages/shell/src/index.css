@@ -1,53 +1,36 @@
-/* Scan from the repo root: @tailwindcss/vite otherwise scans only Vite's root
-   (apps/web) and misses classes used in packages/*. */
 @import "tailwindcss" source("../../..");
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
 @custom-variant dark (&:is(.dark *));
 
-/*
- * Warm monochrome palette: off-white and near-black surfaces with a faint warm
- * cast, hairline borders drawn from the foreground, and an achromatic primary.
- * Raw colour values live only in this file (pnpm check:tokens).
- */
 :root {
-  /* Native controls (scrollbars, form widgets) follow the theme. */
   color-scheme: light;
 
-  /* Base colors */
   --background: oklch(0.98 0.0017 67.8);
   --foreground: oklch(0.115 0 0);
 
-  /* Card */
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.115 0 0);
 
-  /* Popover */
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.115 0 0);
 
-  /* Primary */
   --primary: oklch(0.115 0 0);
   --primary-foreground: oklch(0.991 0 0);
 
-  /* Secondary */
   --secondary: oklch(0.952 0.0029 84.6);
   --secondary-foreground: oklch(0.115 0 0);
 
-  /* Muted */
   --muted: oklch(0.952 0.0029 84.6);
   --muted-foreground: oklch(0.5 0 0);
 
-  /* Accent */
   --accent: oklch(0.952 0.0029 84.6);
   --accent-foreground: oklch(0.115 0 0);
 
-  /* Destructive */
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: hsl(0 0% 98%);
 
-  /* Semantic colors (project-specific, kept for status-badge / loading-spinner) */
   --success: hsl(142 76% 36%);
   --success-foreground: hsl(0 0% 98%);
 
@@ -57,22 +40,18 @@
   --info: hsl(217 91% 60%);
   --info-foreground: hsl(0 0% 98%);
 
-  /* Border & Input */
   --border: oklch(0.16 0.007 78.1 / 8%);
   --input: oklch(0.922 0.0029 84.6);
   --ring: oklch(0.115 0 0 / 30%);
 
-  /* Radius */
   --radius: 0.75rem;
 
-  /* Charts */
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
 
-  /* Sidebar */
   --sidebar: oklch(0.965 0.0025 48.7);
   --sidebar-foreground: oklch(0.115 0 0);
   --sidebar-primary: oklch(0.115 0 0);
@@ -126,9 +105,6 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
-  /* Chat surface tokens: the app defines the values (apps/web app.css); the
-     mappings live here because Tailwind only generates utilities from this
-     stylesheet. */
   --color-bubble: var(--bubble);
   --color-bubble-user: var(--bubble-user);
   --color-bubble-user-foreground: var(--bubble-user-foreground);
@@ -147,8 +123,6 @@
 
 .dark {
   color-scheme: dark;
-  /* Muted and secondary sit one step above the card so hover and selected
-     fills stay visible on cards, not only on the page background. */
   --background: oklch(0.183 0.0026 67.7);
   --foreground: oklch(0.991 0 0);
   --card: oklch(0.24 0.004 84.6);
@@ -182,12 +156,6 @@
   --sidebar-ring: oklch(0.991 0 0 / 30%);
 }
 
-/*
- * Fluid Functionalism tokens — read by the command menu (@groot/ui/command-menu)
- * and its vendored helpers in packages/ui/src/fluid/. Surfaces, fills and the
- * focus ring derive from the groot palette above so the menu stays warm
- * monochrome; only the layered shadows carry raw values.
- */
 :root {
   --surface-1: var(--background);
   --surface-2: var(--popover);
@@ -312,7 +280,6 @@
   --shadow-surface-8: var(--shadow-8);
 }
 
-/* Fluid scroll-area */
 @property --sf-start {
   syntax: "<number>";
   inherits: false;
@@ -479,7 +446,6 @@
     background-color: rgb(var(--overlay) / 0.16);
   }
 }
-/* Fluid tabs */
 .scrollbar-hide {
   -ms-overflow-style: none;
   scrollbar-width: none;
@@ -487,7 +453,6 @@
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
-/* Fluid button */
 @keyframes spinner-move {
   to {
     stroke-dashoffset: -100;
@@ -503,9 +468,6 @@
   }
 }
 
-/* CodeMirror chrome follows the theme tokens; syntax colours stay
-   CodeMirror's. The wrapper class (from @uiw/react-codemirror) adds the
-   specificity needed to beat its injected light / One Dark theme. */
 :is(.cm-theme-light, .cm-theme-dark) .cm-editor {
   background-color: transparent;
   color: var(--foreground);
@@ -533,14 +495,11 @@
   }
   body {
     @apply bg-background text-foreground;
-    /* dvh, not vh: on mobile the URL bar eats into 100vh. */
     min-height: 100dvh;
-    /* A quiet thumb on no track; inherited by every scroll container. */
     scrollbar-color: color-mix(in oklch, var(--muted-foreground) 45%, transparent) transparent;
   }
   html {
     @apply font-sans;
-    /* The page's own scrollbar takes its color from the root element, not body. */
     scrollbar-color: color-mix(in oklch, var(--muted-foreground) 45%, transparent) transparent;
   }
 }

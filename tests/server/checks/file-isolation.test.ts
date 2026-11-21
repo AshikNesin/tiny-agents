@@ -1,9 +1,3 @@
-/**
- * The `server` project shares modules between files (isolate: false), so the
- * setup must fail a file that leaves something behind. This runs the probes
- * in tests/server/checks/isolation-probes through the real setup and reads
- * which files failed and why.
- */
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";

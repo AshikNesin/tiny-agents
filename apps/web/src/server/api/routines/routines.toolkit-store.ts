@@ -1,18 +1,3 @@
-/**
- * RoutineStore adapter: the agent's `routines` toolkit (issue #18 phase C)
- * talks to the real routines service through this bridge. Dependency
- * direction stays one-way: `@tiny-agents/agent` defines the port, apps/web
- * implements it.
- *
- * Two things live here that the toolkit must not know:
- * - Rendering: the service parses and validates the schedule union, renders
- *   the cronstrue sentence, and pre-formats the next 3 fire times in IST, so
- *   the agent package carries no cron libraries.
- * - The recursion guard (PRD 5.6): a routine-fired turn must not manage
- *   routines. Every mutating method rejects when the calling conversation
- *   is a routine's own (issue #63); list stays open. The owner's chat is
- *   never one, so the owner can manage routines while a run is working.
- */
 import { eq } from "drizzle-orm";
 import type {
   RoutineRecord,
@@ -26,7 +11,6 @@ import { conversationOwner, isRoutineConversation } from "../bots/bots.owner";
 import { describeSchedule, formatIst, parseSchedule, scheduleSchema } from "./routines.schedule";
 import * as service from "./routines.service";
 
-/** All times render in IST; the app is single-owner (issue #18). */
 const FIRE_TIMES = 3;
 
 function toRecord(routine: Awaited<ReturnType<typeof service.get>>): RoutineRecord {
@@ -50,7 +34,6 @@ function reasonOf(error: unknown): string {
   throw error;
 }
 
-/** Validate a model-supplied schedule exactly as the API does, with readable reasons. */
 function checkedSchedule(schedule: RoutineSchedule): RoutineSchedule {
   const result = scheduleSchema.safeParse(schedule);
   if (result.success) return result.data;
@@ -66,8 +49,6 @@ export function createRoutineStore(): RoutineStore {
       const owner = await conversationOwner(conversationId);
       if (owner?.kind === "routine") throw new Error(RECURSION_MSG);
       if (!owner) throw new Error("No bot owns this conversation.");
-      // Exactly-once across pi-durable replays: the key is the durable tool
-      // task's identity (unique per agent store, stable when the call reruns).
       const existing = input.idempotencyKey
         ? await db.query.routines.findFirst({
             where: eq(routines.sourceKey, input.idempotencyKey),
@@ -77,8 +58,6 @@ export function createRoutineStore(): RoutineStore {
       if (existing) return toRecord(await service.get(existing.id));
       const schedule = checkedSchedule(input.schedule);
       try {
-        // The key rides on the insert itself, so a replay racing (or
-        // following a crash in) this create still finds the one routine.
         const routine = await service.create({
           botId: owner.bot.id,
           name: input.name,

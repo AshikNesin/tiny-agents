@@ -16,7 +16,6 @@ import { useIsGuest } from "../../store/people";
 import { useUiStore } from "../../store/ui";
 import { BotAvatar } from "../BotAvatar";
 
-/** Trailing state of a row: waiting on the owner (approvals, questions) > replying > unread. */
 function RowStatus({ bot, active }: { bot: BotListEntry; active: boolean }) {
   const { waiting, replying, unread } = attentionOf(bot);
   if (waiting > 0) {
@@ -84,7 +83,6 @@ function BotRow({
           <span className="flex items-baseline gap-2">
             <span className="min-w-0 flex-1 truncate">{bot.name}</span>
             {preview && (
-              // The row's menu button takes this spot on hover, focus, and while its menu is open.
               <span className="text-muted-foreground shrink-0 text-[11px] group-focus-within/row:invisible group-hover/row:invisible group-has-[[data-state=open]]/row:invisible">
                 {relativeTime(bot.lastActivityAt)}
               </span>
@@ -100,7 +98,6 @@ function BotRow({
           <RowStatus bot={bot} active={active} />
         </span>
       </Link>
-      {/* Pin, edit and chat history are the owner's (issue #145). */}
       {!guest && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -145,7 +142,6 @@ interface BotsSectionProps {
   onNavigate?: () => void;
 }
 
-/** The "Bots" block: pinned group, recent group, fold, and the + button. */
 export function BotsSection({ bots, activeId, onNavigate = () => {} }: BotsSectionProps) {
   const openCreateBot = useUiStore((s) => s.openCreateBot);
   const guest = useIsGuest();
@@ -211,11 +207,6 @@ export function BotsSection({ bots, activeId, onNavigate = () => {} }: BotsSecti
   );
 }
 
-/**
- * The collapsed sidebar's bots (issue #90): the open one, pinned ones and any
- * that needs attention, as avatars with their state on top, so a bot waiting
- * on you never disappears when the sidebar is folded.
- */
 export function BotRail({ bots, activeId }: { bots: BotListEntry[]; activeId: string | null }) {
   const setCollapsed = useUiStore((s) => s.setCollapsed);
   const { shown, hiddenWaiting } = useMemo(() => railBots(bots, activeId), [bots, activeId]);

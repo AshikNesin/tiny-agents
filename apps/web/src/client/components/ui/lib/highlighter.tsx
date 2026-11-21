@@ -2,16 +2,6 @@ import * as React from "react";
 import { createHighlighterCore, type GrammarState, type HighlighterCore } from "shiki/core";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 
-/**
- * Lazy shiki highlighter for `@groot/ui/code-block` (JS regex engine — no
- * WASM). Languages and the two github themes load on first use, so nothing
- * from shiki enters a bundle until a code block actually renders.
- *
- * Token colors come from shiki as `--shiki-light` / `--shiki-dark` CSS
- * variables and switch with the `.dark` class, same as every other token.
- */
-
-// Each language loads the first time it is used.
 const languages = {
   bash: () => import("shiki/langs/shellscript.mjs"),
   css: () => import("shiki/langs/css.mjs"),
@@ -69,20 +59,12 @@ function getLanguage(language: string): HighlighterLanguage | "ansi" | null {
 }
 
 export interface LoadedHighlighter {
-  /**
-   * Returns one React node per line, and the grammar state after the last
-   * line. Pass that state back to continue where the code left off.
-   */
   highlight(
     code: string,
     state?: GrammarState,
   ): { lines: React.ReactNode[]; state: GrammarState | undefined };
 }
 
-/**
- * Loads a language and returns a highlighter for it, or null for a language
- * that is not listed.
- */
 export async function loadHighlighter(language: string): Promise<LoadedHighlighter | null> {
   const lang = getLanguage(language);
 
@@ -106,8 +88,6 @@ export async function loadHighlighter(language: string): Promise<LoadedHighlight
           grammarState: state,
         }).tokens;
 
-      // ANSI has no grammar state, so each line is tokenized on its own and
-      // gets the same colors whether it arrives in one piece or streams.
       const tokens =
         lang === "ansi" ? code.split("\n").flatMap((line) => tokenize(line)) : tokenize(code);
 

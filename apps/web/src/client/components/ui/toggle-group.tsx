@@ -19,11 +19,6 @@ const ToggleGroupContext = /* @__PURE__ */ React.createContext<ToggleGroupContex
   orientation: "horizontal",
 });
 
-/**
- * Radix ToggleGroup (`type="single" | "multiple"`) with the Toggle look.
- * `variant`/`size` cascade to every item; `spacing` is the gap in spacing
- * units (`0` joins the items into one segmented control).
- */
 function ToggleGroup({
   className,
   variant,

@@ -1,5 +1,15 @@
 # @groot/jobs
 
+## 3.0.3
+
+### Patch Changes
+
+- [#460](https://github.com/AshikNesin/tiny-agents/pull/460) [`190dede`](https://github.com/AshikNesin/tiny-agents/commit/190dedebb005421039ab584d3dc44e630ae44990) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Remove code comments (ADR 0028)
+- Updated dependencies [[`3c1db08`](https://github.com/AshikNesin/tiny-agents/commit/3c1db0887d400997468b07e9b6eaf16680310cb7), [`db00ff3`](https://github.com/AshikNesin/tiny-agents/commit/db00ff3423d5d4e3ded1897ca4617d32d45aea4a), [`43b23c7`](https://github.com/AshikNesin/tiny-agents/commit/43b23c796fd28c56d5fd4543cd362c757d8e8b81), [`5eab443`](https://github.com/AshikNesin/tiny-agents/commit/5eab443f183191bd98717246038c2712c482faeb), [`190dede`](https://github.com/AshikNesin/tiny-agents/commit/190dedebb005421039ab584d3dc44e630ae44990)]:
+  - @groot/core@2.4.0
+  - @groot/ui@1.3.1
+  - @groot/shell@3.2.0
+
 ## 3.0.2
 
 ### Patch Changes

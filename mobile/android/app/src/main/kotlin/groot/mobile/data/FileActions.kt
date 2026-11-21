@@ -13,12 +13,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.IOException
 
-/** A file the owner picked: what the composer shows before and while it uploads. */
 data class PickedFile(val uri: Uri, val name: String, val mimeType: String, val size: Long)
 
-/** Moves files between the device and the server: picked documents up, attachments down. */
 class FileActions(private val context: Context, private val api: TinyAgentsApi) {
-    /** Name, type and size of a picked document. */
     suspend fun describe(uri: Uri): PickedFile = withContext(Dispatchers.IO) {
         val resolver = context.contentResolver
         var name = uri.lastPathSegment ?: "file"
@@ -41,10 +38,8 @@ class FileActions(private val context: Context, private val api: TinyAgentsApi) 
         PickedFile(uri, name, mimeType, size)
     }
 
-    /** Upload a picked file; the server caps a file at 25 MB. */
     suspend fun upload(file: PickedFile): AttachmentRef {
         if (file.size > MAX_UPLOAD_BYTES) throw IOException("Files can be up to 25 MB.")
-        // A provider that does not report a size is read once to learn it: the server needs the length up front.
         val length = if (file.size >= 0) {
             file.size
         } else {
@@ -56,7 +51,6 @@ class FileActions(private val context: Context, private val api: TinyAgentsApi) 
         }
     }
 
-    /** Save an attachment to the device's Downloads folder; returns its content Uri, to open or share. */
     suspend fun saveToDownloads(ref: AttachmentRef): Uri = withContext(Dispatchers.IO) {
         val resolver = context.contentResolver
         val values = ContentValues().apply {

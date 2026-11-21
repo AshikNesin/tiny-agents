@@ -1,36 +1,17 @@
-/**
- * The test sequencer for both suites: files run in a random order picked by
- * the run's seed (`sequence.shuffle`), and `--shard=i/n` splits files by how
- * long each took on a real run (tests/durations.json), not by count, so every
- * CI shard finishes at about the same time. Vitest still finds the files: a
- * shard is always a subset of what the config includes, and the shards of a
- * run together hold every file exactly once.
- *
- * Refresh the durations with `pnpm test:durations` when a suite's shape
- * changes; a file missing from them counts as the median.
- */
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { BaseSequencer, type TestSpecification } from "vite-plus/test/node";
 
-/** Durations are keyed from the repo root; the client config's root is apps/web. */
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DURATIONS_FILE = path.join(REPO_ROOT, "tests/durations.json");
 
-/** File (repo-relative, POSIX) → milliseconds it took on the recorded run. */
 export type Durations = Record<string, number>;
 
 function readDurations(file = DURATIONS_FILE): Durations {
   return JSON.parse(readFileSync(file, "utf8")) as Durations;
 }
 
-/**
- * Split `files` into `count` shards of about equal recorded time: longest
- * file first, each onto the shard with the least so far (ties to the lower
- * shard, then by path, so every shard computes the same split). Returns the
- * files of shard `index` (1-based).
- */
 export function shardByDuration(
   files: readonly string[],
   durations: Durations,
@@ -54,7 +35,6 @@ export function shardByDuration(
   return shards[index - 1] ?? [];
 }
 
-/** A seeded Fisher-Yates shuffle (mulberry32), so a seed replays an order. */
 export function shuffled<T>(list: readonly T[], seed: number): T[] {
   let state = seed >>> 0;
   const random = () => {

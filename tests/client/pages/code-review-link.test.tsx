@@ -9,6 +9,7 @@ import { render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { MemoryRouter, Route, Routes, matchRoutes } from "react-router-dom";
 import { appRoutes } from "../../../apps/web/src/client/App";
+import { AppQueryProvider } from "../query-provider";
 
 const answer = (data: unknown) =>
   new Response(JSON.stringify({ success: true, data }), {
@@ -22,17 +23,18 @@ function stubFetch() {
   return fetch;
 }
 
-/** Render the page the app's routes choose for `url`, beside a stand-in review page. */
 function visit(url: string) {
   const leaf = matchRoutes(appRoutes, url)?.at(-1)?.route;
   if (!leaf?.path) throw new Error(`no route for ${url}`);
   render(
-    <MemoryRouter initialEntries={[url]}>
-      <Routes>
-        <Route path={leaf.path} element={leaf.element} />
-        <Route path="/code/reviews/:id" element={<p>Review page</p>} />
-      </Routes>
-    </MemoryRouter>,
+    <AppQueryProvider>
+      <MemoryRouter initialEntries={[url]}>
+        <Routes>
+          <Route path={leaf.path} element={leaf.element} />
+          <Route path="/code/reviews/:id" element={<p>Review page</p>} />
+        </Routes>
+      </MemoryRouter>
+    </AppQueryProvider>,
   );
 }
 

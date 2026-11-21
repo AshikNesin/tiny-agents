@@ -11,7 +11,6 @@ test("command palette closes on outside click", async ({ page }) => {
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
 
-  // Real pointer click on the overlay (viewport corner).
   await page.mouse.click(8, 300);
   await expect(dialog).not.toBeVisible();
 });

@@ -24,11 +24,6 @@ import groot.mobile.ui.components.LocalAvatars
 import groot.mobile.ui.components.LocalContainer
 import kotlinx.coroutines.runBlocking
 
-/**
- * The target of Android's share sheet: files, links and text shared from another app open
- * a sheet over that app to pick a bot, add a note and send. A Direct Share target opens it
- * with its bot already chosen.
- */
 class ShareActivity : ComponentActivity() {
     private val viewModel: ShareViewModel by viewModels {
         viewModelFactory { initializer { ShareViewModel((application as GrootMobileApp).container) } }
@@ -43,7 +38,6 @@ class ShareActivity : ComponentActivity() {
             finish()
             return
         }
-        // A share can start the process: read the stored session (it starts the bot list) first.
         if (!container.session.state.value.signedIn) runBlocking { container.session.load() }
         val initialMode = runBlocking { container.themeModeStore.current() }
         viewModel.start(content)

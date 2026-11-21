@@ -1,7 +1,3 @@
-/**
- * The connection's Status card offers only Sign in when the connection needs
- * a sign-in: Reconnect would fail the same way.
- */
 import React from "react";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vite-plus/test";

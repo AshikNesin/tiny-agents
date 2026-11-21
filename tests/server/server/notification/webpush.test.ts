@@ -1,8 +1,3 @@
-/**
- * The Web Push channel with only the network faked: each device gets an
- * encrypted POST it can decrypt, with the push headers the design names, and
- * the push service's answer decides what happens to the device and the send.
- */
 import { createDecipheriv, createECDH, hkdfSync } from "node:crypto";
 import { describe, expect, it, vi } from "vite-plus/test";
 import {

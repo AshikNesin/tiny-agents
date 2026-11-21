@@ -40,7 +40,6 @@ import groot.mobile.ui.components.rememberResource
 
 private val SKILL_NAME = Regex("^[a-z0-9]+(-[a-z0-9]+)*$")
 
-/** Skills: instructions a bot loads when a task calls for them. Write one, edit it, give it to bots. */
 @Composable
 fun SkillsRoute(container: AppContainer, onBack: () -> Unit) {
     val resource = rememberResource("skills") { container.api.skills() }

@@ -17,104 +17,57 @@ import type { CodeChanges } from "./api/code/code.changes";
 import type { ConnectionManager } from "./api/connections/connections.manager";
 import type { HeldLiveAccess } from "./api/people/live-access";
 import type { VaultAlertSink } from "./api/vault/vault.alerts";
+import type { BundledConnect } from "./api/vault/connect/bundled-connect";
 import type { SupervisorChannel } from "./api/system/updates.service";
 import type { VapidKeys } from "@groot/core/notification/webpush.crypto";
 import type { BackendItemSummary, BackendName } from "./api/vault/backends/types";
 import type { BackendStatus } from "../shared/api/vault";
 
-/**
- * The composition root (docs/rewrite/DECISIONS.md, D8): the app's long-lived
- * services in one object, filled once by the entry at boot (`entry.node.ts`)
- * or by a test, and read through `app()`. Phase 1 of docs/rewrite/PLAN.md
- * moves each module-level singleton here, one kind at a time, so boot,
- * shutdown and test resets each touch one place.
- */
 export interface App {
-  /** The open agent runtime; undefined until boot opened it (or a test installed one). */
   runtime: AgentRuntime | undefined;
-  /** Boot finished opening the runtime: `/ready` and the Code registry wait on it. */
   runtimeReady: boolean;
-  /** The bots' browsers, made from the env on first use (`getBrowserSessions`). */
   browserSessions?: BrowserSessions;
-  /** The bots' desktops: null when no sandbox VM is set up (`getComputerSessions`). */
   computerSessions?: ComputerSessions | null;
-  /** MCP connections (`getConnectionManager`). */
   connectionManager?: ConnectionManager;
-  /** The Code page's harnesses (`codeHub`); unset until boot, or with none configured. */
   codeHub?: CodeHub;
-  /** Polls for the open Changes and Review panels, one per directory (`codeChanges`); made on first use. */
   codeChanges?: CodeChanges;
-  /** Code projects' GitHub client and sandbox git (`codeGitHub`); unset builds them from Settings → GitHub. */
   codeGitHub?: CodeGitHub;
-  /** The GitHub App's token source for the configured app id and key (`gitHubApp`), so installation tokens are reused. */
   codeGitHubApp?: { key: string; auth: AppAuth };
-  /** Past-chat titles' side-caller (`setChatTitler`); unset in tests and faux mode. */
   chatTitler?: ChatTitler;
-  /** Names a project thread's branch from its task (`setCodeBranchNamer`); unset in tests and faux mode. */
   codeBranchNamer?: CodeBranchNamer;
-  /** Next-prompt suggestions by thread and newest row, in flight too (`nextPrompt`); made on first use. */
   codeNextPrompts?: Map<string, Promise<string | null>>;
-  /** The sandbox's SSH connections, one per endpoint (`sandboxConnection`, ADR 0013). */
   sandboxConnections: Map<string, SandboxConnection>;
-  /** The sandbox's pinned host keys, kept in KV (`sandbox-host.ts`). */
   sandboxHostKeys?: HostKeyStore;
-  /** The Claude worker on the sandbox, for the connection it was set up on (`claude-worker.ts`). */
   claudeWorker?: { connection: SandboxConnection; locator: ClaudeWorkerLocator };
-  /** The terminal's tmux service (`getTerminalService`). */
   terminalService?: TerminalService;
-  /** Calls waiting on the owner, shared by the approval gate and the browser and computer toolkits (`bots.runtime.ts`). */
   ownerWaits: WaitTracker;
-  /** One bot messaging store per runtime, so a reopened runtime gets its own (`botsCapability`). */
   botMessagingStores: WeakMap<AgentRuntime, BotMessagingStore>;
-  /** One bot-to-bot send budget per runtime (`turnBudgetOf`, bots.messaging.ts). */
   turnBudgets: WeakMap<object, TurnBudget>;
-  /** Open chat streams per bot id (`watchBot`, bots.viewers.ts). */
   botViewers: Map<string, number>;
-  /** Each bot's chat-event listeners (`onBotChatEvent`, bots.events.ts). */
   botChatListeners: Map<string, Set<(event: BotChatEvent) => void>>;
-  /** Every SSE response still open, so shutdown can end them (`openSse`, bots.sse.ts). */
   openSseStreams: Set<SseStream<never>>;
-  /** A deleted bot's releases still running in the background (`releaseBot`, bot-resources.ts). */
   backgroundBotReleases: Set<Promise<void>>;
-  /** Live connections held under a grant, closed when it is revoked (`holdLiveAccess`). */
   liveAccess: Set<HeldLiveAccess>;
-  /** The Vault's step-up tokens and whose they are (`issueStepUp`, vault.stepup.ts). */
   vaultStepUps: Map<string, { userId: number; expiresAt: number }>;
-  /** Where vault alerts go (`setVaultAlertSink`); unset drops them. */
   vaultAlertSink?: VaultAlertSink;
-  /**
-   * What the Vault read from its backends, each kept a short while and read
-   * again on a miss: each backend's health (`backendStatus`), resolved app
-   * credentials (`appCredential`) and the item listing (`candidates`).
-   */
   vault: {
     backendStatus: Map<BackendName, { at: number; status: BackendStatus }>;
     appValues: Map<string, { at: number; value: string }>;
     candidates?: { at: number; items: (BackendItemSummary & { backend: BackendName })[] };
   };
-  /** Credential requests a submit is filling right now (`submitRequest`, vault.requests.service.ts). */
+  bundledConnect?: BundledConnect;
   submittingRequests: Set<number>;
-  /** The runtime `reloadModels` hands new model config to (`bindModelRuntime`). */
   modelRuntime?: Pick<AgentRuntime, "applyModelConfig">;
-  /** Listeners for committed model changes (`onModelsChanged`). */
   modelListeners: Set<() => void>;
-  /** The IPC channel to the `pnpm local` supervisor (`startUpdates`); unset when not supervised. */
   updatesChannel?: SupervisorChannel;
-  /** The supervisor's last update status, null before it sent one (`updateView`). */
   updateStatus: UpdateStatus | null;
-  /** Stops listening to the supervisor channel (`startUpdates`). */
   updatesUnlisten: () => void;
-  /**
-   * Web Push (issue #306): the VAPID keys once read (`vapidKeys`) and how
-   * many devices can receive (the channel's synchronous `configured()`).
-   */
   webPush: {
     keys?: VapidKeys;
     activeDevices: number;
   };
 }
 
-/** An App with no services: what the process starts with, and what each server test file starts with. */
 function emptyApp(): App {
   return {
     runtime: undefined,
@@ -140,22 +93,14 @@ function emptyApp(): App {
 
 const current: App = emptyApp();
 
-/** The app's services, as boot (or a test) set them. */
 export function app(): App {
   return current;
 }
 
-/** Test seam: install services (a fake runtime, say) without booting. */
 export function installAppForTests(services: Partial<App>): void {
   Object.assign(current, services);
 }
 
-/**
- * Test seam: put every service back to `emptyApp()`, so the next test file
- * starts from nothing. The server test setup calls it after each file; it
- * drops references and closes nothing, so a file closes what it opened first
- * (the setup checks that it did).
- */
 export function resetAppForTests(): void {
   for (const key of Object.keys(current) as (keyof App)[]) delete current[key];
   Object.assign(current, emptyApp());

@@ -110,7 +110,6 @@ describe("BotDialog tool permissions", () => {
     const off = within(group).getByRole("radio", { name: "Off" });
     const ask = within(group).getByRole("radio", { name: "Ask" });
 
-    // A writable tool defaults to Ask.
     expect(ask).toHaveAttribute("data-state", "on");
 
     await user.click(off);
@@ -130,7 +129,6 @@ describe("BotDialog tools list", () => {
     expect(screen.queryByRole("switch", { name: /^Enable / })).toBeNull();
     expect(screen.queryByText("Vision")).toBeNull();
     expect(screen.queryByText("Today")).toBeNull();
-    // A toolkit that still needs setup says how, and offers no tools yet.
     expect(screen.getByText("Set CLOUDFLARE_API_KEY to enable web search.")).toBeInTheDocument();
     expect(screen.queryByText("Searched the web")).toBeNull();
   });
@@ -188,7 +186,6 @@ describe("BotDialog tools at scale (issue #91)", () => {
     expect(header).toHaveAttribute("aria-expanded", "false");
     expect(screen.getByText("12 tools · 6 allow · 6 ask")).toBeInTheDocument();
     expect(screen.queryByText("Delete a Notion page")).toBeNull();
-    // A small toolkit starts open, titled by what each tool does.
     expect(screen.getByText("Added task")).toBeInTheDocument();
 
     const all = screen.getByRole("radiogroup", { name: "All Notion tools" });

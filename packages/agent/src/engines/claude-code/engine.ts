@@ -1,17 +1,3 @@
-/**
- * Claude plan engine (ADR 0008, ADR 0014, ADR 0018). Turns go to the worker
- * over the Worker connection (`client.ts` puts the bot protocol on it). The
- * kill switch is the Claude plan account, read on each turn: turning it off
- * does not redeploy or stop the worker.
- *
- * The transcript is durable: each message is admitted as a `claude.user`
- * entry in the conversation's own pi-durable conversation, and each turn's
- * reply is written as `claude.assistant` entries (`transcript.ts`). Turns
- * run one at a time per conversation; a message sent while one runs waits
- * for the next. Which conversations run here (and which left for pi, and
- * their Claude session ids) is the `tiny.claude-plan` document. Tool calls
- * go through the runtime's Tool gate; their Owner waits stay in memory.
- */
 import { readFile, rename } from "node:fs/promises";
 import type { Context } from "@earendil-works/chord";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
@@ -70,32 +56,17 @@ import {
 
 const ctx: Context = BACKGROUND_CONTEXT;
 
-/** How a turn the worker was running when it restarted ends. */
 export const WORKER_RESTARTED =
   "The Claude worker restarted and this reply was cut off. Send your message again to continue.";
 
-/** How a turn ends when the conversation's bot settings were never applied in this process. */
 const NOT_CONFIGURED = "This bot's settings are not loaded yet. Send your message again.";
 
-/** Claude plan calls are numbered from here per conversation, apart from pi's task ids. */
 const TASK_ID_BASE = 2_000_000_000;
 
-/** Newest entries an admit searches for its request id, inside the admitting commit. */
 const ADMIT_LOOKBACK = 200;
 
-/**
- * How often a call waiting on the owner tells the worker so (register C3):
- * well inside the worker's tool result timeout (120s by default), so a wait
- * of any length never times out while the app is there to answer it.
- */
 export const OWNER_WAIT_KEEPALIVE_MS = 30_000;
 
-/**
- * The Claude plan conversations of this store: each one's Claude session id
- * (the next turn resumes it), and `left` once it moved onto pi for good (a
- * gateway fallback, or its bot left the Claude plan model; register C6).
- * `imported`: the old `.claude.json` file's transcripts are already entries.
- */
 const ClaudePlanDoc = defineDoc<{
   conversations: Record<string, { left?: boolean; claudeSessionId?: string }>;
   imported?: boolean;
@@ -111,33 +82,19 @@ export interface ClaudeSessionSync {
   model: string;
   system: string;
   tools: ToolSpec[];
-  /** Every enabled tool's permission; the gate reads the stored ones, this says which are off. */
   permissions: Record<string, ToolPermission>;
-  /** What runs once the Tool gate lets a call through, by tool name. */
   runners?: ReadonlyMap<string, ToolRegistration>;
 }
 
 export interface ClaudeCodeEngineOptions {
-  /** The durable store: transcripts are entries of its conversations. Required to run or read one. */
   harness?: Harness;
-  /** The Claude plan account's switch and fallback, read on each turn. Default: off, pause. */
   plan?: () => ClaudePlanState;
-  /** The old engine's JSON file, imported once at `start()` and then renamed `.imported`. */
   legacyPath?: string;
   onBusy?: (ref: ConversationRef, busy: boolean) => void;
-  /**
-   * A queued turn found the worker unreachable (or the plan off) and the
-   * fallback is the gateway: the conversation left the Claude plan, and this
-   * hands the message to pi.
-   */
   fallback?: (ref: ConversationRef, input: EngineSubmission) => Promise<void>;
-  /** Non-fatal errors (a write that failed, an import that could not be read). */
   onReport?: (error: unknown) => void;
-  /** Every tool call Claude asks for goes through it. Default: a gate of its own (tests). */
   gate?: ToolGate;
-  /** When set, tests skip the real socket. */
   connect?: (url: string, token: string) => WebSocketLike;
-  /** The worker on the sandbox, set up over SSH on first use. */
   worker?: ClaudeWorkerLocator;
 }
 
@@ -147,21 +104,15 @@ interface Listener {
   window?: number;
 }
 
-/** The turn running now: its reply streams here and is written when it ends. */
 interface LiveTurn {
   turnId: string;
   reply: ClaudeReply;
-  /** Handed to the connection (it may wait there for the socket). */
   sent: boolean;
-  /** The turn went out on an open socket (false: it waits in the connection's queue). */
   dispatched: boolean;
-  /** Ended: later worker events and tool rows for it are ignored (register C2). */
   closed: boolean;
-  /** Calls waiting on the owner, with the timer that tells the worker so. */
   waits: Map<string, ReturnType<typeof setInterval>>;
 }
 
-/** What the store says about a conversation (the `tiny.claude-plan` entry). */
 interface Stored {
   left: boolean;
   claudeSessionId?: string;
@@ -173,23 +124,16 @@ interface ClaudeSession {
   tools: ToolSpec[];
   permissions: Record<string, ToolPermission>;
   runners: ReadonlyMap<string, ToolRegistration>;
-  /** A configure ran in this process (after a restart, only reads may come first). */
   configured: boolean;
   claudeSessionId?: string;
-  /** `pi` once the conversation left the Claude plan (`leave()`): later turns run on pi. */
   surface: "claude" | "pi";
-  /** What the store holds for it; undefined until written. */
   stored?: Stored;
-  /** The `claude.*` records, loaded once, then kept as this engine writes them. */
   records?: Promise<ClaudeRecord[]>;
-  /** Admitted messages waiting for their turn, in order. */
   queue: EngineSubmission[];
-  /** Messages taken off the queue whose `claude.withdrawn` entry is not written yet. */
   withdrawing: Set<string>;
   live?: LiveTurn;
   nextTask: number;
   busy: boolean;
-  /** Every write of this conversation, in order. */
   writes: Promise<unknown>;
 }
 
@@ -200,7 +144,6 @@ export class ClaudeCodeEngine implements AgentEngine {
   private client: ClaudeWorkerClient | undefined;
   private readonly plan: () => ClaudePlanState;
   private readonly gate: ToolGate;
-  /** Writes to the `tiny.claude-plan` document, in order. */
   private docWrites: Promise<unknown> = Promise.resolve();
 
   constructor(private readonly options: ClaudeCodeEngineOptions) {
@@ -208,11 +151,6 @@ export class ClaudeCodeEngine implements AgentEngine {
     this.gate = options.gate ?? new ToolGate({ approvals: new WaitTracker() });
   }
 
-  /**
-   * Learn which conversations run here from the store, after importing the
-   * old JSON file once. Before the first read: reads after a restart go to
-   * the Claude plan transcript, not pi's (register C4).
-   */
   async start(): Promise<void> {
     if (!this.options.harness) return;
     await this.importLegacy();
@@ -236,11 +174,6 @@ export class ClaudeCodeEngine implements AgentEngine {
     return this.sessions.get(ref)?.surface === "claude";
   }
 
-  /**
-   * Take the Claude plan part of the conversation's config. Without one the
-   * bot left the Claude plan model, and later turns run on pi. A
-   * conversation that left (or fell back to the gateway) stays left.
-   */
   async configure(
     ref: ConversationRef,
     compiled: Pick<CompiledConversation, "claude">,
@@ -260,7 +193,6 @@ export class ClaudeCodeEngine implements AgentEngine {
     await this.remember(ref, session);
   }
 
-  /** The conversation leaves the Claude plan for good: its turns run on pi from now on. */
   private async leave(ref: ConversationRef): Promise<void> {
     const session = this.sessions.get(ref);
     if (!session || session.surface === "pi") return;
@@ -272,15 +204,6 @@ export class ClaudeCodeEngine implements AgentEngine {
     return this.sessions.get(ref)?.busy === true;
   }
 
-  /**
-   * Durably admit a message and return; its turn runs after the ones before
-   * it. Retrying a request id never admits it twice. A steer cannot join a
-   * running Claude Code turn (the worker runs one turn at a time), so it
-   * waits like a follow-up. `unavailable`: the plan is off and the fallback
-   * is the gateway, so the conversation leaves the Claude plan for good and
-   * the runtime hands the message to pi. With the `pause` fallback the
-   * message is admitted and answered with a pause.
-   */
   async submit(ref: ConversationRef, input: EngineSubmission): Promise<"accepted" | "unavailable"> {
     const session = this.sessions.get(ref);
     if (!session || session.surface !== "claude") return "unavailable";
@@ -339,7 +262,6 @@ export class ClaudeCodeEngine implements AgentEngine {
     });
   }
 
-  /** Stop the running turn and withdraw the messages waiting for one. */
   async abort(ref: ConversationRef): Promise<void> {
     const session = this.sessions.get(ref);
     if (!session) return;
@@ -363,11 +285,6 @@ export class ClaudeCodeEngine implements AgentEngine {
     }
   }
 
-  /**
-   * Withdraw a message by its request id: one still waiting for its turn
-   * leaves the queue (and the transcript); the running one is already
-   * placed; one answered is settled.
-   */
   async withdraw(ref: ConversationRef, requestId: string): Promise<WithdrawOutcome> {
     const session = this.sessions.get(ref);
     if (!session) return "not_found";
@@ -387,7 +304,6 @@ export class ClaudeCodeEngine implements AgentEngine {
       : "not_found";
   }
 
-  /** The conversation's user messages, newest first, as the Tool gate reads them. */
   async userMessages(ref: ConversationRef) {
     const session = this.sessions.get(ref);
     if (!session) return [];
@@ -399,10 +315,6 @@ export class ClaudeCodeEngine implements AgentEngine {
     return this.state(session, await this.messages(ref, session));
   }
 
-  /**
-   * Unlike pi's stream, each change is a whole snapshot, windowed afresh to
-   * the newest messages (the window's start does not stay put).
-   */
   async watch(
     ref: ConversationRef,
     listener: (events: ChatEvent[]) => void | Promise<void>,
@@ -421,12 +333,10 @@ export class ClaudeCodeEngine implements AgentEngine {
     };
   }
 
-  /** The sandbox worker, or none when no sandbox is configured. */
   private locator(): ClaudeWorkerLocator {
     return this.options.worker ?? noWorkerLocator;
   }
 
-  /** Stop the socket and the keepalives, and let the writes already started land. */
   async close(): Promise<void> {
     for (const session of this.sessions.values()) {
       if (session.live) this.stopWaits(session.live);
@@ -439,9 +349,6 @@ export class ClaudeCodeEngine implements AgentEngine {
     ]);
   }
 
-  // ── Turns ─────────────────────────────────────────────────────────────
-
-  /** Start the next waiting turn, unless one runs; idle once none waits. */
   private pump(ref: ConversationRef, session: ClaudeSession): void {
     if (session.live) return;
     const next = session.queue.shift();
@@ -498,7 +405,6 @@ export class ClaudeCodeEngine implements AgentEngine {
       return;
     }
     try {
-      // Sets the worker up when needed; the connection resolves it again on every reconnect.
       await this.locator().resolve();
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
@@ -523,7 +429,6 @@ export class ClaudeCodeEngine implements AgentEngine {
     });
   }
 
-  /** The turn cannot run on the Claude plan: pause it, or hand it to pi (gateway fallback). */
   private async unavailable(
     ref: ConversationRef,
     session: ClaudeSession,
@@ -540,7 +445,6 @@ export class ClaudeCodeEngine implements AgentEngine {
     await this.finish(ref, session, live.turnId, "error", pauseMessage(detail));
   }
 
-  /** The conversation left the Claude plan: this message (and every one after it) goes to pi. */
   private async handOff(
     ref: ConversationRef,
     session: ClaudeSession,
@@ -558,16 +462,10 @@ export class ClaudeCodeEngine implements AgentEngine {
         this.report(error);
       }
     }
-    // pi has them now: the Claude plan's part of the conversation is idle.
     this.setBusy(ref, session, false);
     this.emit(ref);
   }
 
-  /**
-   * End the running turn once: its reply is written with its final status,
-   * and anything the worker sends for it later is ignored. Then the next
-   * waiting turn starts, or the conversation goes idle.
-   */
   private async finish(
     ref: ConversationRef,
     session: ClaudeSession,
@@ -594,14 +492,12 @@ export class ClaudeCodeEngine implements AgentEngine {
     session.live = undefined;
     const more = session.queue.length > 0;
     if (!more) session.busy = false;
-    // A call still waiting on the owner belongs to the turn that ended.
     this.gate.abandon(ref);
     if (!more) this.options.onBusy?.(ref, false);
     this.emit(ref);
     this.pump(ref, session);
   }
 
-  /** Write a reply (a turn's end, or mid-turn once a tool call finished). */
   private async appendReply(
     ref: ConversationRef,
     session: ClaudeSession,
@@ -617,14 +513,12 @@ export class ClaudeCodeEngine implements AgentEngine {
         const record = this.recordOf(entry);
         if (record) records.push(record);
       } catch (error) {
-        // The chat still shows it until a restart; the store failing is the host's to handle.
         records.push({ kind: "reply", data: snapshot });
         this.report(error);
       }
     });
   }
 
-  /** Record queued messages withdrawn before their turn ran (already off the queue). */
   private async withdrawn(
     ref: ConversationRef,
     session: ClaudeSession,
@@ -641,7 +535,6 @@ export class ClaudeCodeEngine implements AgentEngine {
         if (record) records.push(record);
       });
     } catch (error) {
-      // Withdrawn all the same in this process; a restart shows them unanswered.
       this.report(error);
       return;
     }
@@ -649,7 +542,6 @@ export class ClaudeCodeEngine implements AgentEngine {
     this.emit(ref);
   }
 
-  /** One connection for the engine's life; it finds the worker again on every reconnect. */
   private worker(): ClaudeWorkerClient {
     this.client ??= new ClaudeWorkerClient({
       resolveTarget: () => this.locator().resolve(),
@@ -661,13 +553,6 @@ export class ClaudeCodeEngine implements AgentEngine {
     return this.client;
   }
 
-  /**
-   * After every (re)connect, before queued turns go out. A worker that
-   * restarted lost the turns it was running: they end now, with an error the
-   * owner can see, instead of waiting forever. The conversation keeps its
-   * Claude session id, so the next turn resumes it. Turns still queued go to
-   * the new worker.
-   */
   private onConnected(rebooted: boolean): void {
     for (const [ref, session] of this.sessions) {
       const live = session.live;
@@ -680,13 +565,6 @@ export class ClaudeCodeEngine implements AgentEngine {
     }
   }
 
-  /**
-   * Claude asks for a tool: the call goes through the Tool gate like a pi
-   * call, with its answer held by the gate (a Claude call does not survive
-   * a restart). Its row in the chat is the one a pi call gets: projected
-   * from the details it publishes while it runs (any Owner wait's card),
-   * then from its result. A call of a turn that already ended does not run.
-   */
   private async onTool(call: ToolUseCall): Promise<ToolResultPayload> {
     const ref = Number(call.sessionId);
     const session = this.sessions.get(ref);
@@ -705,7 +583,6 @@ export class ClaudeCodeEngine implements AgentEngine {
     };
     const finished = (fields: ToolCallRow) => {
       row(fields);
-      // A tool round finished: what the turn has so far survives a restart.
       if (!live.closed) void this.appendReply(ref, session, live.reply);
     };
     const failed = (content: string): ToolResultPayload => {
@@ -717,7 +594,6 @@ export class ClaudeCodeEngine implements AgentEngine {
       return failed(`${call.name} is off for this bot.`);
     session.nextTask += 1;
     const taskId = session.nextTask;
-    // As on pi, a result without details keeps the last ones the call published.
     let published: unknown;
     const api = claudeToolApi({
       name: call.name,
@@ -750,7 +626,6 @@ export class ClaudeCodeEngine implements AgentEngine {
         },
       );
       const content = resultText(result);
-      // The Claude plan does not time its calls: the row has no duration.
       finished(
         finishedToolRow({
           output: content,
@@ -765,11 +640,6 @@ export class ClaudeCodeEngine implements AgentEngine {
     }
   }
 
-  /**
-   * While a call waits on the owner, tell the worker now and then, so its
-   * tool result timeout does not end a wait the owner may still answer
-   * (register C3). Stops when the call moves on or the turn ends.
-   */
   private ownerWait(
     ref: ConversationRef,
     live: LiveTurn,
@@ -818,7 +688,6 @@ export class ClaudeCodeEngine implements AgentEngine {
       void this.remember(ref, session);
       return;
     }
-    // Only the running turn's events count: a stopped turn stays stopped.
     const live = session.live;
     if (!live || live.closed || !("turnId" in event) || event.turnId !== live.turnId) return;
     if (event.type === "text") {
@@ -847,8 +716,6 @@ export class ClaudeCodeEngine implements AgentEngine {
     }
   }
 
-  // ── Transcript ────────────────────────────────────────────────────────
-
   private async messages(ref: ConversationRef, session: ClaudeSession): Promise<ChatMessage[]> {
     const records = await this.records(ref, session);
     return claudeMessages(records, {
@@ -857,13 +724,11 @@ export class ClaudeCodeEngine implements AgentEngine {
     });
   }
 
-  /** A transcript that fits its window is sent whole, with no `hasMore` or `cursor`. */
   private state(session: ClaudeSession, messages: ChatMessage[], window?: number): ChatState {
     const state = { messages, busy: session.busy, queued: this.queued(session) };
     return window && messages.length > window ? windowChat(state, window)! : state;
   }
 
-  /** Messages waiting for their turn, as the owner's held messages (a peer delivery is not one). */
   private queued(session: ClaudeSession): QueuedMessage[] {
     return session.queue
       .filter((input) => !input.peer)
@@ -890,7 +755,6 @@ export class ClaudeCodeEngine implements AgentEngine {
       .catch((error: unknown) => this.report(error));
   }
 
-  /** The conversation's `claude.*` records, loaded from the store once. */
   private records(ref: ConversationRef, session: ClaudeSession): Promise<ClaudeRecord[]> {
     session.records ??= this.load(ref);
     return session.records;
@@ -902,7 +766,6 @@ export class ClaudeCodeEngine implements AgentEngine {
     return (await loadHistory(conversation)).flatMap((entry) => this.recordOf(entry) ?? []);
   }
 
-  /** A stored entry as a record; one that does not fit its shape is reported and skipped. */
   private recordOf(entry: Pick<EntryRecord, "kind" | "data">): ClaudeRecord | undefined {
     try {
       return claudeRecordOf(entry);
@@ -912,10 +775,6 @@ export class ClaudeCodeEngine implements AgentEngine {
     }
   }
 
-  /**
-   * Run a change of the conversation's transcript after the ones before it,
-   * with its records loaded first (so a load never misses or doubles a write).
-   */
   private write<T>(
     ref: ConversationRef,
     session: ClaudeSession,
@@ -926,7 +785,6 @@ export class ClaudeCodeEngine implements AgentEngine {
     return run;
   }
 
-  /** Keep the `tiny.claude-plan` entry in step with the session (left, Claude session id). */
   private async remember(ref: ConversationRef, session: ClaudeSession): Promise<void> {
     const next: Stored = {
       left: session.surface === "pi",
@@ -955,12 +813,6 @@ export class ClaudeCodeEngine implements AgentEngine {
     }
   }
 
-  /**
-   * Import the old engine's JSON file once: every conversation's messages
-   * become entries, and its session id and surface the document's entry, in
-   * one commit; then the file is renamed `<path>.imported`. A file that
-   * cannot be read or parsed is left as it is and reported, never deleted.
-   */
   private async importLegacy(): Promise<void> {
     const path = this.options.legacyPath;
     if (!path) return;
@@ -987,8 +839,6 @@ export class ClaudeCodeEngine implements AgentEngine {
       try {
         await this.harness.commit(async (tx) => {
           const state = await tx.doc(ClaudePlanDoc);
-          // A transaction reads its tables before its first write: find the
-          // conversations the store still has, then write.
           const sessions: [string, LegacySession][] = [];
           for (const [key, session] of Object.entries(parsed.sessions ?? {})) {
             const ref = Number(key);
@@ -1024,9 +874,6 @@ export class ClaudeCodeEngine implements AgentEngine {
     }
   }
 
-  // ── Sessions ──────────────────────────────────────────────────────────
-
-  /** The durable store (only status checks run without one). */
   private get harness(): Harness {
     const { harness } = this.options;
     if (!harness) throw new Error("The Claude plan engine has no store.");
@@ -1079,7 +926,6 @@ export class ClaudeCodeEngine implements AgentEngine {
 function upsertTool(reply: ClaudeReply, tool: ChatToolCall): void {
   const tools = reply.toolCalls ? [...reply.toolCalls] : [];
   const index = tools.findIndex((item) => item.id === tool.id);
-  // Each update is the whole row: a finished call keeps nothing of its wait.
   if (index >= 0) tools[index] = tool;
   else tools.push(tool);
   reply.toolCalls = tools;
@@ -1101,7 +947,6 @@ function unavailable(name: string): ToolExecutionResult {
   };
 }
 
-/** The text Claude reads back from a tool's result. */
 function resultText(result: ToolExecutionResult): string {
   return (result.output ?? [])
     .map((block) => (block.type === "text" ? block.text : ""))

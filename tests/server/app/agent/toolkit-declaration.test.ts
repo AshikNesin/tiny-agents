@@ -1,11 +1,3 @@
-/**
- * Rewrite step 3.1: a toolkit declares each tool once (`tool()` and
- * `defineToolkit()`), and that one declaration yields both the Capability
- * the app shows and the pi-durable extension the model runs. The toolkits
- * migrated so far must produce exactly what they produced when each tool
- * was declared twice: the inline snapshots were recorded from the old
- * declarations, before the migration, and must not change.
- */
 import type { Extension } from "@earendil-works/pi-durable";
 import { describe, expect, it } from "vite-plus/test";
 import { gateHooksOf } from "../../../../packages/agent/src/approvals";
@@ -29,17 +21,14 @@ import { createVisionToolkit } from "../../../../packages/agent/src/toolkits/vis
 import { createWebToolkit } from "../../../../packages/agent/src/toolkits/web";
 
 const stub = {} as never;
-// A store method (memory binds the ones it has).
 const method = (() => undefined) as never;
 
-/** What pi-durable and the model see of an extension, plus which tools carry a gate plan. */
 function extensionShape(extension: Extension) {
   return {
     name: extension.name,
     tools: (extension.tools ?? []).map((tool) => ({
       name: tool.name,
       description: tool.description,
-      // The JSON schema the model is offered.
       parameters: JSON.parse(JSON.stringify(tool.parameters)) as unknown,
       replay: tool.replay,
       gated: gateHooksOf(tool) !== undefined,
@@ -61,7 +50,6 @@ const shape = (capability: Capability) => {
   const info = capabilityInfo(capability);
   return {
     info,
-    // Snapshots sort keys; the order the app and its tests see is kept here.
     keyOrder: [Object.keys(info).join(), ...info.tools.map((tool) => Object.keys(tool).join())],
     extension: extensionShape(capability.extension),
   };
@@ -762,11 +750,6 @@ describe("one declaration per tool (3.1)", () => {
   });
 });
 
-/**
- * Rewrite step 3.2: the remaining toolkits, recorded the same way before
- * their migration, in every configuration that changes what they declare.
- * `full` adds the extension's own keys and each gated tool's hook names.
- */
 const full = (capability: Capability) => ({
   ...shape(capability),
   extensionKeys: Object.keys(capability.extension).join(),
@@ -2777,7 +2760,7 @@ describe("one declaration per tool (3.2)", () => {
               "replay": "safe",
             },
             {
-              "description": "Ask the owner to type credentials for the current page into a secure sheet: a sign-in, a one-time code or a card. The server fills them into the page (current origin only); you learn only which fields were filled. Text, email and select fields need an identifier autocomplete; select also needs options. Call vault_list first and prefer browser_fill_secret when a handle exists. Waits up to 10 minutes for the owner. Never type, ask for or repeat a password, card number, security code or one-time code yourself.",
+              "description": "Ask the owner to type credentials for the current page into a secure sheet: a sign-in, a one-time code or a card. The server fills them into the page (current origin only; for a sign-in frame from another site, pass the fields' refs); you learn only which fields were filled. Text, email and select fields need an identifier autocomplete; select also needs options. Call vault_list first and prefer browser_fill_secret when a handle exists. Waits up to 10 minutes for the owner. Never type, ask for or repeat a password, card number, security code or one-time code yourself.",
               "fields": [
                 "deferred",
                 "description",
@@ -3479,7 +3462,7 @@ describe("one declaration per tool (3.2)", () => {
                 "replay": "unsafe",
               },
               {
-                "description": "Ask the owner to type credentials for the current page into a secure sheet: a sign-in, a one-time code or a card. The server fills them into the page (current origin only); you learn only which fields were filled. Text, email and select fields need an identifier autocomplete; select also needs options. Call vault_list first and prefer browser_fill_secret when a handle exists. Waits up to 10 minutes for the owner. Never type, ask for or repeat a password, card number, security code or one-time code yourself.",
+                "description": "Ask the owner to type credentials for the current page into a secure sheet: a sign-in, a one-time code or a card. The server fills them into the page (current origin only; for a sign-in frame from another site, pass the fields' refs); you learn only which fields were filled. Text, email and select fields need an identifier autocomplete; select also needs options. Call vault_list first and prefer browser_fill_secret when a handle exists. Waits up to 10 minutes for the owner. Never type, ask for or repeat a password, card number, security code or one-time code yourself.",
                 "fields": [
                   "deferred",
                   "description",

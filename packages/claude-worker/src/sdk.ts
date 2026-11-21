@@ -1,8 +1,3 @@
-/**
- * Agent SDK adapter. `query` is injected so tests never load the real SDK
- * and CI never calls Anthropic. The options are the lockdown: no built-in
- * tools, no settings, no request relay, retries off.
- */
 import { z } from "zod";
 import { workerProcessEnv } from "./guards";
 import { newToolUseId, type QueryContext, type QueryFactory } from "./sessions";
@@ -20,7 +15,6 @@ interface SdkToolResult {
 }
 
 export interface ClaudeSdkModule {
-  /** `close()` ends the Claude Code process (older SDKs lack it: the loop stops reading instead). */
   query: (args: {
     prompt: AsyncIterable<SdkUserMessage>;
     options: SdkQueryOptions;
@@ -34,7 +28,6 @@ export interface ClaudeSdkModule {
   createSdkMcpServer: (opts: { name: string; version?: string; tools: unknown[] }) => unknown;
 }
 
-/** The slice of SDK options this worker is willing to set. No base URL. */
 export interface SdkQueryOptions {
   model: string;
   resume?: string;
@@ -42,7 +35,6 @@ export interface SdkQueryOptions {
   tools: readonly string[];
   strictMcpConfig: true;
   settingSources: readonly string[];
-  /** Absent: Claude Code runs without a turn limit (opt-in "unlimited"). */
   maxTurns?: number;
   permissionMode: "dontAsk";
   allowedTools: string[];
@@ -79,10 +71,6 @@ interface SdkMessage {
 
 const MCP_PREFIX = "mcp__tiny-agents__";
 
-/**
- * Options passed to `query`. Built-in tools are empty. Settings are empty.
- * `ANTHROPIC_BASE_URL` is not a field and is stripped from `env`.
- */
 export function buildSdkOptions(input: {
   model: string;
   system?: string;
@@ -124,7 +112,6 @@ function zodShape(schema: JsonSchema): Record<string, z.ZodType> {
       description?: unknown;
     };
     const type = "type" in property ? String(property.type) : "string";
-    // A string enum, or TypeBox's union of string literals (`anyOf` of `const`s).
     const choices = Array.isArray(property.enum)
       ? property.enum
       : Array.isArray(property.anyOf)
@@ -146,7 +133,6 @@ function zodShape(schema: JsonSchema): Record<string, z.ZodType> {
               : type === "object"
                 ? z.record(z.string(), z.unknown())
                 : z.string();
-    // The parameter's own description is most of what the model knows of it.
     if (typeof property.description === "string") field = field.describe(property.description);
     if (!required.has(key)) field = field.optional();
     shape[key] = field;
@@ -168,14 +154,12 @@ function userContent(
   ];
 }
 
-/** The `Query` methods the model list reads. Older SDKs lack some. */
 interface ModelListingQuery {
   initializationResult?(): Promise<{ models?: unknown }>;
   supportedModels?(): Promise<unknown>;
   close?(): void;
 }
 
-/** Claude Code's model list for the signed-in account. */
 export type ModelLister = () => Promise<ClaudeCodeModel[]>;
 
 const MODEL_LIST_TIMEOUT_MS = 45_000;
@@ -197,12 +181,6 @@ function asModels(value: unknown): ClaudeCodeModel[] {
   });
 }
 
-/**
- * Ask Claude Code which models this login can use: start a query that never
- * sends a prompt, read its initialization (the `ModelInfo` list, with each
- * alias's resolved model), then close it. No tools, no settings, no turn:
- * nothing is sent to the model. Concurrent calls share one query.
- */
 export function createSdkModelLister(
   sdk: ClaudeSdkModule,
   env: Record<string, string | undefined>,
@@ -214,7 +192,6 @@ export function createSdkModelLister(
     if ("ANTHROPIC_BASE_URL" in workerEnv) throw new Error("Refusing to set ANTHROPIC_BASE_URL.");
     let release: () => void = () => {};
     const closed = new Promise<void>((resolve) => (release = resolve));
-    // Yields nothing: it holds the SDK's input stream open until `closed`.
     // oxlint-disable-next-line require-yield
     const prompt = (async function* (): AsyncIterable<SdkUserMessage> {
       await closed;
@@ -297,7 +274,6 @@ export function createSdkQueryFactory(
       mcpServer,
       toolNames: ctx.tools.map((spec) => spec.name),
     });
-    // Yields nothing: it holds the SDK's input stream open until `closed`.
     // oxlint-disable-next-line require-yield
     const prompt = (async function* (): AsyncIterable<SdkUserMessage> {
       for await (const turn of ctx.turns) {
@@ -312,8 +288,6 @@ export function createSdkQueryFactory(
       }
     })();
     const stream = sdk.query({ prompt, options });
-    // A stop (or a recycle) ends the Claude Code process itself, not only
-    // this loop: the turn must not go on running tools nobody reads.
     const stop = () => stream.close?.();
     if (ctx.signal.aborted) stop();
     else ctx.signal.addEventListener("abort", stop, { once: true });
@@ -353,7 +327,6 @@ export function createSdkQueryFactory(
   };
 }
 
-/** A failed result's message; running out of turns says where to raise the limit. */
 function resultError(message: SdkMessage): string {
   const text = message.errors?.join("\n") || message.result || "Claude Code returned an error";
   return message.subtype === "error_max_turns"

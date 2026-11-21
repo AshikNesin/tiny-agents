@@ -5,8 +5,6 @@ import type { AppSetting, CreateAppSettingDTO, UpsertAppSettingDTO } from "./app
 
 const appSettingsKv = createNamespaceKv("APP_SETTING");
 
-// Declared in the schema module (zod-only) so the client can import the wire
-// type without dragging the service's server graph along.
 export type { AppSetting, AppSettingMetadata } from "./app-settings.schema";
 
 export async function get<T = unknown>({ key }: { key: string }): Promise<AppSetting<T>> {
@@ -22,7 +20,6 @@ export async function getAll(): Promise<AppSetting[]> {
   return entries.map(({ key, value }) => ({ ...value, key }));
 }
 
-/** Create a setting. A key that already exists is a 409; `upsert` overwrites instead. */
 export async function create<T = unknown>({
   data,
 }: {

@@ -17,7 +17,6 @@ class ByteQueueInputStreamTest {
 
     private fun bytes(vararg values: Int) = ByteArray(values.size) { values[it].toByte() }
 
-    /** Runs [block] on another thread and returns its result once [trigger] made it finish. */
     private fun <T> blocked(block: () -> T, trigger: () -> Unit): T {
         val started = CountDownLatch(1)
         val result = AtomicReference<Result<T>>()
@@ -26,7 +25,6 @@ class ByteQueueInputStreamTest {
             result.set(runCatching(block))
         }.apply { start() }
         started.await()
-        // Let the reader reach its wait; a read that returned early fails the assertion below.
         Thread.sleep(100)
         assertTrue("the read returned before anything was offered", result.get() == null)
         trigger()

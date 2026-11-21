@@ -1,12 +1,3 @@
-/**
- * Boot re-arm (the move off the old job queue): every enabled routine with a
- * `nextRunAt` but no live routine-fire job gets its occurrence queued again.
- * The first boot after the database copy has every handle cleared
- * (db/legacy-copy.ts); a job that failed for good leaves one pointing at a
- * dead job. An overdue occurrence meets the grace policy when the tick runs
- * it, as a delivery delayed by downtime did. Real SQLite test DB and queue
- * table; the tests drive the queue with `runTick()` (no worker runs).
- */
 import { eq, sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { addJob } from "@groot/jobs/server/queue";
@@ -33,7 +24,6 @@ import {
 const MINUTE = 60_000;
 let botId = "";
 
-/** A routine as the database copy leaves it: armed, slot set, no live job. */
 async function seedArmed(
   schedule: unknown,
   nextRunAt: Date | null,
@@ -72,7 +62,6 @@ async function jobById(id: string) {
 
 const clearTables = resetAppTables;
 
-/** The conversation a routine runs in, once its first fire created it. */
 async function routineConversation(id: string): Promise<number> {
   return Number((await routineRow(id)).conversationId);
 }
@@ -111,13 +100,11 @@ describe("re-arming routines on boot", () => {
       scheduledFor: slot.toISOString(),
       trigger: "schedule",
     });
-    // Due at the slot (rounded up to the second), not before.
     expect(job!.runAt.getTime()).toBeGreaterThanOrEqual(slot.getTime());
     expect(job!.runAt.getTime()).toBeLessThan(slot.getTime() + 2_000);
     const row = await routineRow(routine.id);
     expect(row.pendingJobId).toBe(job!.id);
     expect(row.nextRunAt?.toISOString()).toBe(slot.toISOString());
-    // Not due yet: a tick leaves it waiting and submits nothing.
     await runTick();
     expect((await jobById(job!.id))?.state).toBe("created");
     expect(runtime.submit).not.toHaveBeenCalled();
@@ -152,14 +139,12 @@ describe("re-arming routines on boot", () => {
     expect(await routineRow(paused.id)).toMatchObject({ pendingJobId: null, nextRunAt: null });
     expect(await routineRow(unslotted.id)).toMatchObject({ pendingJobId: null, nextRunAt: null });
 
-    // Idempotent: a second boot finds every armed routine with a live job.
     const count = (await fireJobs()).length;
     expect(await rearmRoutines()).toBe(0);
     expect(await fireJobs()).toHaveLength(count);
   });
 
   it("an occurrence missed during the downtime but within grace fires late", async () => {
-    // Hourly: grace is 30 minutes, the slot was 10 minutes ago.
     const slot = new Date(Date.now() - 10 * MINUTE);
     const routine = await seedArmed({ kind: "interval", minutes: 60 }, slot);
 
@@ -177,7 +162,6 @@ describe("re-arming routines on boot", () => {
     expect(submits).toHaveLength(1);
     expect(submits[0]![0]).toBe(await routineConversation(routine.id));
     expect(submits[0]![1].text).toContain("(late by 10m)");
-    // The chain keeps its phase: the next slot is an hour after the late one.
     const row = await routineRow(routine.id);
     expect(row.nextRunAt?.toISOString()).toBe(new Date(slot.getTime() + 60 * MINUTE).toISOString());
     expect((await jobById(row.pendingJobId!))?.state).toBe("created");
@@ -210,7 +194,6 @@ describe("re-arming routines on boot", () => {
 
     expect(runtime.submit).toHaveBeenCalledTimes(1);
     expect(runtime.submit.mock.calls[0]![1].text).toContain("(late by 3h)");
-    // Fired once: archived.
     expect(await routineRow(routine.id)).toMatchObject({
       enabled: false,
       nextRunAt: null,

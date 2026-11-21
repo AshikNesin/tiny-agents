@@ -1,10 +1,3 @@
-/**
- * The Tool gate (ADR 0014), on both engines: every case runs once on pi
- * (the faux model) and once on the Claude plan engine (a fake worker
- * socket), with the same toolkit and script (`engine-harness.ts`).
- * Permissions, gate plans, YOLO mode (issue #151), auto-review (issue #65),
- * the Owner wait's bookkeeping and result redaction must not differ.
- */
 import { mkdtemp, rm } from "node:fs/promises";
 import { until } from "../../fixtures/until";
 import { tmpdir } from "node:os";
@@ -218,7 +211,6 @@ describe.each(ENGINES)("Tool gate on %s", (kind) => {
       expect(sent).toEqual(["ana@x.dev"]);
       expect(chat.toolCall("send_email")).toMatchObject({ status: "done", approval: "auto" });
       expect(runtime.pendingApprovals(ref)).toBe(0);
-      // read_inbox is allowed (read-only): only send_email was reviewed.
       expect(reviewer.inputs).toEqual([
         {
           tool: "send_email",
@@ -496,7 +488,6 @@ describe("Tool gate token budget (pi)", () => {
   }, 15_000);
 });
 
-/** pi keeps an Owner wait in a task document, so it outlives the process. */
 describe("Tool gate across restarts (pi)", () => {
   let directory: string | undefined;
   afterEach(async () => {

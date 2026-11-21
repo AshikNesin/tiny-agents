@@ -66,6 +66,7 @@ import groot.mobile.data.chat.ChatView
 import groot.mobile.data.chat.TimelineItem
 import groot.mobile.data.chat.ToolPhase
 import groot.mobile.data.chat.viewOf
+import groot.mobile.feature.live.LivePipWindow
 import groot.mobile.ui.brand.Accents
 import groot.mobile.ui.brand.AppIcons
 import groot.mobile.ui.brand.Dims
@@ -77,19 +78,16 @@ import groot.mobile.ui.components.StatusDot
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 
-/** The bot is running a browser tool right now. */
 fun browserInUse(messages: List<ChatMessage>): Boolean = messages.any { message ->
     message.role == MessageRole.Assistant && message.toolCalls.any { it.name.startsWith("browser_") && viewOf(it).phase == ToolPhase.Running }
 }
 
-/** The bot is running a computer tool right now, or waits for the owner to take over. */
 fun computerInUse(messages: List<ChatMessage>): Boolean = messages.any { message ->
     message.role == MessageRole.Assistant && message.toolCalls.any {
         it.name.startsWith("computer_") && (viewOf(it).phase == ToolPhase.Running || it.status == ToolStatus.AwaitingTakeover)
     }
 }
 
-/** One bot's live chat: its transcript, what waits on the owner, and the composer. */
 @Composable
 fun ChatPane(
     container: AppContainer,
@@ -117,14 +115,11 @@ fun ChatPane(
     var credentials by remember { mutableStateOf<ToolCall?>(null) }
     var attachMenu by remember { mutableStateOf(false) }
 
-    // Opened from a push notification's link: scroll to the card it is about once the chat
-    // shows it, as the web client's `?focus=` does. Gives up after a while (the card may be gone).
     val focus by container.links.focus.collectAsStateWithLifecycle()
     val focusTask = focus?.takeIf { it.botId == bot.id }?.taskId
     LaunchedEffect(focusTask, view.timeline, view.typing) {
         val task = focusTask ?: return@LaunchedEffect
         val index = transcriptIndexOfTask(view, task) ?: return@LaunchedEffect
-        // After the transcript's own first scroll to the newest message, not under it.
         delay(FOCUS_SETTLE_MS)
         listState.animateScrollToItem(index)
         container.links.clearFocus()
@@ -137,6 +132,10 @@ fun ChatPane(
 
     val pickPhotos = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(MAX_PICK)) { viewModel.attach(it) }
     val pickFiles = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { viewModel.attach(it) }
+
+    val pip by container.livePip.current.collectAsStateWithLifecycle()
+    val pipChosen by container.appPreferences.livePip.collectAsStateWithLifecycle(false)
+    val watch: (String) -> Unit = { surface -> if (pipChosen) container.livePip.open(surface, bot.id) else onOpenLive(surface) }
 
     val actions = remember(bot.name, bots.labels, bots.capabilities) {
         ChatActions(
@@ -154,6 +153,7 @@ fun ChatPane(
         )
     }
 
+    Box(modifier.fillMaxSize()) {
     ChatContent(
         bot = bot,
         view = view,
@@ -176,10 +176,23 @@ fun ChatPane(
         onOpenImage = { viewer = it },
         onSaveFile = { ref -> viewModel.save(ref) { uri -> openFile(context, uri, ref.mimeType) } },
         onCopy = { copyText(context, it) },
-        onOpenLive = onOpenLive,
+        onOpenLive = watch,
         onYoloOff = { viewModel.setYolo(false) },
-        modifier = modifier,
     )
+    pip?.takeIf { it.botId == bot.id }?.let { target ->
+        LivePipWindow(
+            container = container,
+            target = target,
+            onExpand = {
+                container.livePip.close()
+                container.scope.launch { container.appPreferences.setLivePip(false) }
+                onOpenLive(target.surface)
+            },
+            onClose = container.livePip::close,
+            modifier = Modifier.imePadding().padding(start = S.sm, top = S.sm, end = S.sm, bottom = Dims.composerMinHeight + S.lg),
+        )
+    }
+    }
 
     if (attachMenu) {
         Sheet(onDismiss = { attachMenu = false }) {
@@ -206,7 +219,6 @@ fun ChatPane(
     }
 }
 
-/** The chat as it is drawn, with no state of its own: the transcript (or its empty and loading states) over the composer. */
 @Composable
 fun ChatContent(
     bot: BotListEntry,
@@ -280,7 +292,6 @@ fun ChatContent(
     }
 }
 
-/** The lines above the composer: connection health, missing model, YOLO mode, a live browser or computer. */
 @Composable
 private fun ChatNotices(view: ChatView, canAnswer: Boolean, guest: Boolean, onOpenLive: (String) -> Unit, onYoloOff: () -> Unit) {
     if (view.health == ChatHealth.Reconnecting) NoticePill(text = "Reconnecting", dot = Accents.warning)
@@ -320,7 +331,6 @@ private fun NoticePill(
     }
 }
 
-/** A chat with nothing in it yet: who the bot is, and an invitation to start. */
 @Composable
 private fun ChatEmpty(bot: BotListEntry, modifier: Modifier = Modifier) {
     Column(
@@ -339,10 +349,6 @@ private fun ChatEmpty(bot: BotListEntry, modifier: Modifier = Modifier) {
     }
 }
 
-/**
- * The transcript, newest at the bottom. The list is laid out in reverse so a streaming reply
- * grows upward from the composer and stays in view; older pages load when the top is reached.
- */
 @Composable
 fun Transcript(
     view: ChatView,
@@ -357,7 +363,6 @@ fun Transcript(
     val items = remember(view.timeline) { view.timeline.asReversed() }
     val atBottom by remember { derivedStateOf { listState.firstVisibleItemIndex <= 1 } }
     val newestKey = items.firstOrNull()?.key
-    // A new message while the owner reads the latest keeps the latest in view.
     LaunchedEffect(newestKey, view.typing) {
         if (atBottom) listState.animateScrollToItem(0)
     }
@@ -411,11 +416,6 @@ private fun copyText(context: Context, text: String) {
     context.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText("Tiny Agents", text))
 }
 
-/** Open a link; a path from the server (a Code thread) is opened on the server's origin. */
-/**
- * Open a link a card carries: one of this server's pages the app has a screen for (a Code
- * thread, a chat) opens in the app, anything else in the browser.
- */
 internal fun openCardLink(container: groot.mobile.AppContainer, context: Context, link: String) {
     val serverUrl = container.session.serverUrl
     val url = if (link.startsWith("/") && serverUrl != null) serverUrl + link else link
@@ -428,7 +428,6 @@ internal fun openLink(context: Context, serverUrl: String?, link: String) {
     try {
         context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     } catch (_: ActivityNotFoundException) {
-        // No browser installed: nothing to open it with.
     }
 }
 
@@ -440,14 +439,9 @@ private fun openFile(context: Context, uri: Uri, mimeType: String) {
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK),
         )
     } catch (_: ActivityNotFoundException) {
-        // Saved to Downloads either way; no app on the device opens this type.
     }
 }
 
-/**
- * The transcript row holding the card waiting on [taskId], as the reversed list lays it out
- * (the typing dots first, then newest to oldest); null while the chat does not show it.
- */
 fun transcriptIndexOfTask(view: ChatView, taskId: Int): Int? {
     val reversed = view.timeline.asReversed()
     val at = reversed.indexOfFirst { item -> item is TimelineItem.Message && item.message.toolCalls.any { it.taskId == taskId } }

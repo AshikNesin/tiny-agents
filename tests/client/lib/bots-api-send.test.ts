@@ -1,8 +1,3 @@
-/**
- * Wire shape for mentioned sends (issue #12): the server resolves
- * `mentions` ids from the request body, so the POST must carry them
- * alongside requestId and text.
- */
 import { describe, expect, it, vi } from "vite-plus/test";
 
 const postMock = vi.fn().mockResolvedValue(undefined);

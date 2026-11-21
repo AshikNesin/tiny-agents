@@ -25,7 +25,8 @@ new rows, so a crash before commit re-runs the window harmlessly (exact-text
 dedupe absorbs the repeat). Turning memory back on moves the watermark to
 that moment, so nothing said while memory was off is ever captured.
 
-Constants live in `memories.domain.ts`: 100 active rows, 300 chars per row,
+Constants live in `memories.domain.ts`: 60 active rows (so a bot's memories of
+typical length all fit the render cap), 300 chars per row,
 a 6 000-char render cap on the injected block, a 24 000-char capture window,
 the 30 newest deleted memories in the capture prompt, 2-minute quiet window,
 6-turn trigger, 24-byte owner-text trivial threshold (UTF-8 bytes, excluding

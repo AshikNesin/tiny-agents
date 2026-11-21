@@ -1,13 +1,3 @@
-/**
- * Shelley messages → transcript rows.
- *
- * Wire facts (verified against Shelley 6c48a83): `llm_data` is a JSON string
- * `{Role, Content[], EndOfTurn, ErrorType, ErrorRetryable}`; a content
- * block's `Type` is a number (2 text, 3 thinking, 4 redacted thinking, 5 tool
- * use, 6 tool result, 7 server tool use); tool results arrive in `user`-typed
- * messages, and so do messages the harness injects (a subagent reporting
- * back, a background job finishing), told apart by `user_data`.
- */
 import {
   threadIdOf,
   type AssetRef,
@@ -50,7 +40,6 @@ interface LlmData {
 }
 
 export interface LiveState {
-  /** Live output tails of running tools, by tool_use_id. */
   progress?: Record<string, string>;
 }
 
@@ -63,10 +52,6 @@ function parse<T>(raw: string | null | undefined): T | undefined {
   }
 }
 
-/**
- * Shelley's `<worktree path> (<branch>) now at <sha> "<subject>"` → `<branch> now
- * at …`: the path is long and the thread already says where it works.
- */
 function shortGitInfo(text: string): string {
   const match = /^.+? \(([^()\s]+)\) (now at .*)$/s.exec(text);
   return match ? `${match[1]} ${match[2]}` : text;
@@ -91,7 +76,6 @@ function toolKind(name: string): ToolKind {
   return "other";
 }
 
-/** The one-line gist of a tool call's input. */
 export function summarizeInput(name: string, input: unknown): string {
   const args = record(input);
   if (!args) return "";
@@ -120,12 +104,10 @@ function basename(path: string): string {
   return path.split("/").findLast(Boolean) ?? path;
 }
 
-/** A file on Shelley's machine as an asset. */
 function fileAsset(path: string): AssetRef {
   return { ref: `file:${path}`, name: basename(path), image: isImageFile(path) };
 }
 
-/** Shelley serves images at /api/message/<id>/image/<c>/<t> and files at /api/read?path=. */
 export function assetFromUrl(url: string): AssetRef | undefined {
   const image = /\/api\/message\/([A-Za-z0-9_-]+)\/image\/(-?\d+)\/(-?\d+)/.exec(url);
   if (image) {
@@ -139,7 +121,6 @@ export function assetFromUrl(url: string): AssetRef | undefined {
   return undefined;
 }
 
-/** The Shelley API path that serves an asset ref, or undefined for a ref this driver did not make. */
 export function assetPath(ref: string): string | undefined {
   const image = /^img:([A-Za-z0-9_-]+):(-?\d{1,4}):(-?\d{1,4})$/.exec(ref);
   if (image) return `/message/${image[1]}/image/${image[2]}/${image[3]}`;
@@ -151,7 +132,6 @@ export function assetPath(ref: string): string | undefined {
   return undefined;
 }
 
-/** `[path]` tokens the composer appends for uploads; returns text without them and the paths. */
 export function splitAttachments(text: string): { text: string; attachments: string[] } {
   const attachments: string[] = [];
   const stripped = text.replace(/\[(\/[^\]\n]+)\]/g, (whole, path: string) => {
@@ -167,11 +147,6 @@ interface DisplayEntry {
   display: unknown;
 }
 
-/**
- * Fold messages (any order; duplicates are fine) into rows. Tool results
- * attach to their call; running calls show the live tail from `live`.
- * `instanceId` names subagent threads.
- */
 export function buildTranscript(
   messages: Iterable<ShelleyMessage>,
   instanceId: string,
@@ -226,9 +201,6 @@ export function buildTranscript(
             forkAt: message.message_id,
           });
         }
-        // Tool results (and their display data) for calls made earlier.
-        // display_data is a list of {tool_use_id, display} on tool results
-        // (an object on other rows, e.g. the system prompt's skills).
         const rawDisplays = parse<unknown>(message.display_data);
         const displays = new Map(
           (Array.isArray(rawDisplays) ? (rawDisplays as DisplayEntry[]) : [])
@@ -279,7 +251,6 @@ export function buildTranscript(
           items.push({
             kind: "turn",
             id: `turn:${message.message_id}`,
-            // Shelley's timestamps have second precision: shorter turns show no duration.
             ...(turnStart !== undefined && Number.isFinite(at) && at - turnStart >= 1000
               ? { durationMs: at - turnStart }
               : {}),
@@ -321,7 +292,6 @@ export function buildTranscript(
         break;
       }
       default:
-        // system, slug, profileturn, live transcripts: not shown.
         break;
     }
   }
@@ -358,14 +328,12 @@ function attachResult(call: ToolItem, block: Block, display: unknown, instanceId
   }
 }
 
-/** The newest `sequence_id` in a set of messages. */
 export function maxSequence(messages: Iterable<ShelleyMessage>): number {
   let max = 0;
   for (const m of messages) max = Math.max(max, m.sequence_id);
   return max;
 }
 
-/** Total cost of agent messages (USD). */
 export function totalCost(messages: Iterable<ShelleyMessage>): number {
   let sum = 0;
   for (const m of messages) {
@@ -375,7 +343,6 @@ export function totalCost(messages: Iterable<ShelleyMessage>): number {
   return sum;
 }
 
-/** Queued messages from a conversation row (`queued_messages` is a JSON string). */
 export function queuedMessages(
   row: Pick<ShelleyRow, "queued_messages"> | undefined,
 ): QueuedMessage[] {
@@ -402,7 +369,6 @@ export function queuedMessages(
   }
 }
 
-/** The `text` of a `message_user` tool call in an agent message's llm_data. */
 export function messageUserText(llmData: string): string | undefined {
   const parsed = parse<LlmData>(llmData);
   const call = (parsed?.Content ?? []).find(
@@ -414,11 +380,6 @@ export function messageUserText(llmData: string): string | undefined {
   return call ? String(record(call.ToolInput)?.text) : undefined;
 }
 
-/**
- * When Shelley last wrote to the conversation (ms): its newest agent or error
- * message, on Shelley's clock. The turn outcome's `endedAt`
- * (`server/outcome.ts`); undefined before Shelley answered anything.
- */
 export function lastWriteAt(messages: Iterable<ShelleyMessage>): number | undefined {
   let newest: ShelleyMessage | undefined;
   for (const m of messages) {

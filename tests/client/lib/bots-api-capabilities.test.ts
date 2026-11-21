@@ -1,12 +1,3 @@
-/**
- * Regression: /api/v1/capabilities returns `{ capabilities: [...] }`, but the
- * api unwraps `data`; so botsApi.capabilities() must unwrap the wrapper too.
- * In the wild this surfaced as "capabilities.filter is not a function"
- * crashing the whole React tree when the New bot dialog opened.
- *
- * capabilities() is memoized per session (issue #7), so each test imports a
- * fresh module to start with an empty cache.
- */
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const getMock = vi.fn();

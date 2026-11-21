@@ -1,9 +1,3 @@
-/**
- * The parts of the browser transports that need neither a browser nor a VM:
- * the local forwarder that carries CDP over SSH, the remote transport's setup
- * over an in-memory sandbox connection, how a page session reports its
- * browser dying, and how the remote window is fitted to the viewer.
- */
 import { Server as HttpServer } from "node:http";
 import net from "node:net";
 import type { BrowserContext, Page } from "playwright-core";
@@ -33,7 +27,6 @@ describe("CDP forwarder", () => {
     return (server.address() as net.AddressInfo).port;
   };
 
-  /** An echo service standing in for Chrome on the VM, behind a channel that takes `dialMs` to open. */
   async function forwarderToEcho(dialMs: number) {
     const vmSide: net.Socket[] = [];
     const echo = net.createServer((socket) => {
@@ -57,14 +50,12 @@ describe("CDP forwarder", () => {
   const nextData = (socket: net.Socket) =>
     new Promise<string>((resolve) => socket.once("data", (data) => resolve(data.toString())));
 
-  /** Resolves on close; a reset on the way (an `error` event) is part of closing, not a failure. */
   const closed = (socket: net.Socket) =>
     new Promise<void>((resolve) => {
       if (socket.destroyed) resolve();
       else socket.once("close", () => resolve());
     });
 
-  /** A client; resets from the far side are part of the scenario, not failures. */
   const connect = (port: number) => {
     const socket = net.connect(port, "127.0.0.1").on("error", () => {});
     cleanups.push(() => socket.destroy());
@@ -75,7 +66,7 @@ describe("CDP forwarder", () => {
     const { port } = await forwarderToEcho(60);
     const client = connect(port);
 
-    client.write("GET /json/version HTTP/1.1\r\n\r\n"); // the dial is still in flight
+    client.write("GET /json/version HTTP/1.1\r\n\r\n");
     expect(await nextData(client)).toBe("GET /json/version HTTP/1.1\r\n\r\n");
     client.write("later");
     expect(await nextData(client)).toBe("later");
@@ -109,10 +100,6 @@ describe("CDP forwarder", () => {
   });
 
   it("is a plain TCP server: an HTTP server would cut idle CDP websockets after 60 s", () => {
-    // Playwright holds one CDP websocket for the whole session. An
-    // `http.Server` applies headersTimeout to every connection that has not
-    // finished a request header, and destroyed it after about a minute of
-    // quiet, leaving a "live" session whose window could no longer resize.
     const forwarder = createForwardingServer(async () => {
       throw new Error("not dialed by this test");
     });
@@ -130,7 +117,7 @@ describe("remote CDP transport setup", () => {
         if (command === stackReadyCommand()) return { stdout: "missing\n" };
         if (command === installStackCommand()) return {};
         if (command === teardownStackCommand("profiles/bot-1")) return {};
-        return { stderr: "Xtigervnc did not start\n", exitCode: 1 }; // the launch
+        return { stderr: "Xtigervnc did not start\n", exitCode: 1 };
       },
     });
     const phases: string[] = [];
@@ -142,7 +129,6 @@ describe("remote CDP transport setup", () => {
     ).rejects.toThrow("VM exec failed (1): start the browser\nXtigervnc did not start");
     expect(phases).toEqual(["installing", "starting"]);
     expect(connection.execs.at(-1)!.command).toBe(teardownStackCommand("profiles/bot-1"));
-    // Launch scripts background Chrome and Xtigervnc: every exec settles on exit.
     expect(connection.execs.every((e) => e.options.settleOnExit)).toBe(true);
   });
 
@@ -188,7 +174,7 @@ describe("page session disconnects", () => {
     const listener = vi.fn();
     session.onDisconnect?.(listener);
     await session.close();
-    die(); // closing the browser fires the transport's own disconnect event
+    die();
     expect(listener).not.toHaveBeenCalled();
   });
 
@@ -203,10 +189,6 @@ describe("page session disconnects", () => {
 describe("window resizer", () => {
   const tab = (name: string) => ({ name }) as unknown as Page;
 
-  /**
-   * A browser context whose DevTools sessions are numbered in the order they
-   * open; `calls` is the whole conversation, `detached` the sessions let go.
-   */
   function fakeChrome(
     pages: Page[],
     onSend: (session: number, method: string, params: unknown) => Promise<unknown> = async (
@@ -237,8 +219,6 @@ describe("window resizer", () => {
   }
 
   it("keeps the window's DevTools session between resizes: one round trip each", async () => {
-    // Over a slow link every round trip is felt in the viewer, so a resize
-    // must not attach, look the window up and detach again each time.
     const sent: unknown[] = [];
     const { context, calls, detached } = fakeChrome(
       [tab("a")],
@@ -274,7 +254,7 @@ describe("window resizer", () => {
     const resize = createWindowResizer(context);
 
     await resize(800, 600);
-    pages.splice(0, 1, tab("b")); // the owner closed the first tab
+    pages.splice(0, 1, tab("b"));
     await resize(900, 700);
 
     expect(calls).toEqual([
@@ -320,7 +300,7 @@ describe("window resizer", () => {
     const resize = createWindowResizer(context);
 
     await expect(resize(800, 600)).rejects.toThrow("link is down");
-    expect(detached).toEqual([1, 2]); // no session is left attached
+    expect(detached).toEqual([1, 2]);
 
     broken = false;
     await resize(800, 600);
@@ -334,7 +314,7 @@ describe("window resizer", () => {
     const { context } = fakeChrome([tab("a")], async (_session, method, params) => {
       if (method === "Browser.setWindowBounds") {
         const { width } = (params as { bounds: { width: number } }).bounds;
-        if (width === 1440) await gate; // the first one is slow
+        if (width === 1440) await gate;
         applied.push(width);
       }
       return { windowId: 7 };
@@ -344,11 +324,11 @@ describe("window resizer", () => {
     const first = resize(1440, 844);
     const second = resize(632, 828);
     await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(applied).toEqual([]); // the second waits for the first, not past it
+    expect(applied).toEqual([]);
 
     open();
     await Promise.all([first, second]);
-    expect(applied).toEqual([1440, 632]); // the last request wins
+    expect(applied).toEqual([1440, 632]);
   });
 
   it("keeps working after a resize failed", async () => {
@@ -375,7 +355,6 @@ describe("window resizer", () => {
 describe("page session tabs (shared profiles)", () => {
   const open = { viewportWidth: 1280, viewportHeight: 800 };
 
-  /** A browser context of stub tabs named p0, p1, ...; `visible` is the tab in front. */
   function fakeContext() {
     const pages: { name: string; closed: boolean }[] = [];
     let visible = "";
@@ -408,14 +387,14 @@ describe("page session tabs (shared profiles)", () => {
   it("moves an agent whose tab closed to a tab no other agent holds", async () => {
     const chrome = fakeContext();
     const first = pageSession(chrome.make(), open, { close: async () => {} });
-    const second = await first.openTab!(); // p1, another agent's
-    const spare = chrome.make(); // p2, a tab the owner opened
+    const second = await first.openTab!();
+    const spare = chrome.make();
     await (chrome.context.pages()[0] as unknown as Page).close();
     await settle();
     expect(first.url()).toBe("p2");
     expect(second.url()).toBe("p1");
 
-    await spare.close(); // nothing unclaimed is left: a fresh tab
+    await spare.close();
     await settle();
     expect(first.url()).toBe("p3");
   });
@@ -450,7 +429,6 @@ describe("page session tabs (shared profiles)", () => {
 });
 
 describe("page snapshot", () => {
-  /** A page whose snapshot is one button in a layout wrapper; records where it was taken. */
   function snapshotPage() {
     const seen: { root?: string; mode?: string }[] = [];
     const root = (name: string) => ({
@@ -492,10 +470,8 @@ describe("page snapshot", () => {
 describe("page interaction", () => {
   const open = { viewportWidth: 1280, viewportHeight: 800 };
 
-  /** Records the Playwright calls click and type make against a stub element. */
   function harness(element: Record<string, unknown>) {
     const calls: string[] = [];
-    // Nothing here navigates: the waits for a navigation to start time out at once.
     const noNavigation = () => Promise.reject(new Error("Timeout"));
     const page = {
       once: () => undefined,
@@ -515,7 +491,6 @@ describe("page interaction", () => {
             calls.push("click");
           },
           fill: async (text: string) => {
-            // Playwright's fill throws on a <select>, as the real one does.
             if (element.tagName === "SELECT") throw new Error("Element is not an <input>");
             calls.push(`fill:${text}`);
           },

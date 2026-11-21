@@ -1,15 +1,3 @@
-/**
- * Something new a bot owns gets an entry in BOT_RESOURCES:
- * tests/server/api/bot-resources.test.ts fails for a column holding bot ids
- * or an exported `…ForBot` function that no entry claims. `capture` runs
- * before the bot row is deleted because the cascade erases what it reads.
- *
- * Every `release` must be safe to run twice: one cut off by a crash or failed
- * by a sandbox outage runs again at the next boot (`sweepBotReleases`). What
- * `capture` read is stored as JSON and parsed by `capture.shape` when the
- * release runs, possibly by a later build; a record that no longer parses
- * is dropped.
- */
 import { and, eq } from "drizzle-orm";
 import type { AnySQLiteColumn } from "drizzle-orm/sqlite-core";
 import { Boom } from "@groot/core/errors";
@@ -70,11 +58,8 @@ interface Released {
   how: "release";
   columns?: Columns;
   keyedBy?: (...args: never[]) => unknown;
-  /** Waits on the sandbox VM, so the delete answers without it. */
   background?: true;
-  /** What the release needs, as stored JSON. */
   capture(bot: BotRow): Promise<string>;
-  /** Throws when `stored` no longer fits the entry's shape. */
   prepare(botId: string, stored: string): Release;
 }
 
@@ -154,7 +139,6 @@ export const BOT_RESOURCES = {
       );
     },
   }),
-  // By bot id, not browserProfile: a bot switched to the shared browser left its own behind.
   browser: released({
     keyedBy: browserTargetForBot,
     background: true,
@@ -174,7 +158,6 @@ export const BOT_RESOURCES = {
     release: async (botId) => {
       const computer = getComputerSessions();
       if (computer) return computer.close(ownBrowserProfile(botId), { wipe: true });
-      // No SANDBOX_HOST means no VM, so no desktop. A wrong desktop config keeps the row until it is fixed.
       if (sandboxEndpoint()) throw new Error(`Desktop not wiped: ${computerSetupHint()}`);
     },
   }),
@@ -199,7 +182,6 @@ export const BOT_RESOURCES = {
 
 type Owed = typeof botReleases.$inferSelect;
 
-/** Resolves once every background release started so far (`app().backgroundBotReleases`) has settled. */
 export async function settleBotReleases(): Promise<void> {
   await Promise.all(app().backgroundBotReleases);
 }
@@ -237,10 +219,6 @@ async function runRelease(owed: Owed, rt: ReleaseContext["rt"]): Promise<void> {
 
 const isBackground = ({ resource }: Owed) => releasedEntry(resource)?.background === true;
 
-/**
- * The loser of two concurrent deletes gets the 404 and releases nothing.
- * Background releases are still running when this returns.
- */
 export async function releaseBot(id: string, rt: ReleaseContext["rt"]): Promise<BotRow> {
   const bot = await findBotRow(id);
   const entries: [string, BotResource][] = Object.entries(BOT_RESOURCES);
@@ -265,10 +243,6 @@ export async function releaseBot(id: string, rt: ReleaseContext["rt"]): Promise<
   return deleted;
 }
 
-/**
- * Boot: run again every release a crash or a sandbox outage left owed.
- * Resolves once each has run; what fails again stays for the next boot.
- */
 export async function sweepBotReleases(rt: ReleaseContext["rt"]): Promise<void> {
   const owed = await db.select().from(botReleases);
   await Promise.all(owed.map((row) => runRelease(row, rt)));

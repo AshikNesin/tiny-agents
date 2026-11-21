@@ -38,12 +38,12 @@ const REQUEST: CredentialRequestView = {
       autocomplete: "current-password",
     },
   ],
+  frameOrigin: null,
   savedHandle: null,
   expiresAt,
   liveOrigin: "https://www.amazon.in",
 };
 
-// The network boundary: the request's route and its submit route.
 const api = vi.hoisted(() => ({
   request: vi.fn(),
   submitRequest: vi.fn(),
@@ -137,5 +137,28 @@ describe("credential request in the chat", () => {
     );
     expect(await screen.findByLabelText("Mobile number*")).toBeTruthy();
     expect(screen.getByRole("switch", { name: "Save to vault" })).toBeTruthy();
+  });
+
+  it("names the other site's sign-in frame it fills in (#302)", async () => {
+    api.request.mockResolvedValue({
+      ...REQUEST,
+      origin: "https://www.thehindu.com",
+      frameOrigin: "https://id.tinypass.com",
+      liveOrigin: "https://www.thehindu.com",
+    });
+    render(
+      <AppQueryProvider>
+        <MemoryRouter>
+          <OwnerActionsProvider actions={actions}>
+            <ChatMessageView message={chat()} botName="Chief" />
+          </OwnerActionsProvider>
+        </MemoryRouter>
+      </AppQueryProvider>,
+    );
+    expect(
+      await screen.findByText(
+        /Only filled on www\.thehindu\.com, in its sign-in frame from id\.tinypass\.com\./,
+      ),
+    ).toBeTruthy();
   });
 });

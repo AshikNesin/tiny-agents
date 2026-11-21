@@ -1,12 +1,3 @@
-/**
- * Types for the optional Agent SDK. The package is installed on the worker
- * VM only. `bin.ts` loads it with `import()` and exits if it is missing, so
- * CI typechecks without the dependency and never calls Anthropic.
- *
- * `query()` is one function: the bot engine calls it locked down, the coding
- * mode with Claude Code's own tools. Older SDKs lack the session helpers,
- * which leaves the coding mode off.
- */
 declare module "@anthropic-ai/claude-agent-sdk" {
   export const query: import("./sdk").ClaudeSdkModule["query"] &
     import("./coding-sdk").CodingSdk["query"];

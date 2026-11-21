@@ -1,9 +1,3 @@
-/**
- * Past-chat titles (issue #101): after "New chat", one short side-call names
- * the chat that ended. Off the reset path: the row is recorded with the
- * first owner message as its title, and a model title replaces it when it
- * arrives. Every failure keeps that provisional title.
- */
 import { eq } from "drizzle-orm";
 import { logger } from "@groot/core/logger";
 import { stripAttachmentNotes } from "@tiny-agents/agent";
@@ -12,10 +6,8 @@ import { db, botChats } from "../../db";
 import type { SideCaller } from "./side-call";
 import { app } from "../../app-root";
 
-/** Longest stored title; also the provisional (first message) title's cap. */
 export const CHAT_TITLE_MAX = 80;
 
-/** Transcript excerpt the title call reads: the start of the chat says what it is about. */
 const EXCERPT_CHARS = 4_000;
 const TITLE_TIMEOUT_MS = 30_000;
 
@@ -25,15 +17,10 @@ export interface TitleMessage {
   status?: string;
 }
 
-/** What naming a chat needs: the side-caller (on the `chat_title` model role). */
 export interface ChatTitler {
   sideCaller: SideCaller;
 }
 
-/**
- * Boot wiring (entry.node.ts), so the Past-chat recorder can name chats
- * without carrying the port. Unset (tests, faux mode) means no title calls.
- */
 export function setChatTitler(next: ChatTitler | undefined): void {
   app().chatTitler = next;
 }
@@ -42,7 +29,6 @@ function oneLine(text: string): string {
   return text.replace(/\s+/g, " ").trim();
 }
 
-/** The provisional title: the first owner message, on one line. */
 export function firstMessageTitle(messages: ReadonlyArray<TitleMessage>): string | null {
   for (const m of messages) {
     if (m.role !== "user") continue;
@@ -52,7 +38,6 @@ export function firstMessageTitle(messages: ReadonlyArray<TitleMessage>): string
   return null;
 }
 
-/** "Owner: …" / "Bot: …" lines from the start of the chat, capped. */
 export function titleExcerpt(messages: ReadonlyArray<TitleMessage>, botName: string): string {
   const lines: string[] = [];
   let size = 0;
@@ -71,7 +56,6 @@ export function titleExcerpt(messages: ReadonlyArray<TitleMessage>, botName: str
   return lines.join("\n");
 }
 
-/** The model's answer as a title: one line, no quotes, label or trailing period. */
 export function cleanTitle(raw: string): string | null {
   const firstLine = raw
     .replace(/<think>[\s\S]*?<\/think>/gi, "")
@@ -88,10 +72,6 @@ export function cleanTitle(raw: string): string | null {
   return title ? title.slice(0, CHAT_TITLE_MAX) : null;
 }
 
-/**
- * Name a past chat with the title model and store it. Best effort: never
- * throws, and leaves the provisional title in place on any failure.
- */
 export async function titlePastChat(
   chatId: string,
   input: {
@@ -118,11 +98,9 @@ export async function titlePastChat(
       ...(input.botId ? { botId: input.botId } : {}),
       context: { chatId },
     });
-    // No title (no model, a failed call): the first message stays.
     if (text === undefined) return;
     const title = cleanTitle(text);
     if (!title) return;
-    // The chat may have been continued or deleted meanwhile: then nothing to name.
     await db.update(botChats).set({ title }).where(eq(botChats.id, chatId));
   } catch (error) {
     logger.warn({ error, chatId }, "Chat title skipped after error");

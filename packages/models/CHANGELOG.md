@@ -1,5 +1,12 @@
 # @tiny-agents/models
 
+## 0.1.1
+
+### Patch Changes
+
+- Updated dependencies [[`371f074`](https://github.com/AshikNesin/tiny-agents/commit/371f074ef88bdc69d67e8ba9de5472643b6583ac)]:
+  - @tiny-agents/claude-worker@0.4.4
+
 ## 0.1.0
 
 ### Minor Changes

@@ -1,5 +1,21 @@
 # @groot/web
 
+## 0.5.4
+
+### Patch Changes
+
+- Updated dependencies [[`3c1db08`](https://github.com/AshikNesin/tiny-agents/commit/3c1db0887d400997468b07e9b6eaf16680310cb7), [`e45ffb6`](https://github.com/AshikNesin/tiny-agents/commit/e45ffb6924bc46ada05a30c1ed97dbc28fa4c47d), [`f4e501c`](https://github.com/AshikNesin/tiny-agents/commit/f4e501ce10c165f019ac62c9255c027ebfcd2aa9), [`9f9fe11`](https://github.com/AshikNesin/tiny-agents/commit/9f9fe114e906608d1219a6d4fb0770680055c453), [`b266c64`](https://github.com/AshikNesin/tiny-agents/commit/b266c649b0b4aa2beda65de72c57db9dc8134099), [`371f074`](https://github.com/AshikNesin/tiny-agents/commit/371f074ef88bdc69d67e8ba9de5472643b6583ac), [`db00ff3`](https://github.com/AshikNesin/tiny-agents/commit/db00ff3423d5d4e3ded1897ca4617d32d45aea4a), [`1ee7dc6`](https://github.com/AshikNesin/tiny-agents/commit/1ee7dc6c5eb2bafb0a0ad331f7009c41729616fa), [`1356b41`](https://github.com/AshikNesin/tiny-agents/commit/1356b41e299fa1966ea36231134c380d58b53dbd), [`43b23c7`](https://github.com/AshikNesin/tiny-agents/commit/43b23c796fd28c56d5fd4543cd362c757d8e8b81), [`5eab443`](https://github.com/AshikNesin/tiny-agents/commit/5eab443f183191bd98717246038c2712c482faeb), [`8d04d53`](https://github.com/AshikNesin/tiny-agents/commit/8d04d532d4813ae936a0880b26e68776d6bb06f4), [`0be5adf`](https://github.com/AshikNesin/tiny-agents/commit/0be5adf079db95fc0d1f2a5f868e21cf115467be), [`524e964`](https://github.com/AshikNesin/tiny-agents/commit/524e96409f3d9b49b3ca105ff62cdee31919e978), [`c69d75a`](https://github.com/AshikNesin/tiny-agents/commit/c69d75a6dca03ec2f8123a75bc217e5d897baa3f), [`190dede`](https://github.com/AshikNesin/tiny-agents/commit/190dedebb005421039ab584d3dc44e630ae44990)]:
+  - @tiny-agents/agent@1.2.0
+  - @groot/core@2.4.0
+  - @tiny-agents/github@0.1.1
+  - @tiny-agents/code@0.2.5
+  - @tiny-agents/git@0.1.1
+  - @groot/ui@1.3.1
+  - @groot/shell@3.2.0
+  - @groot/jobs@3.0.3
+  - @tiny-agents/sandbox@0.1.1
+  - @tiny-agents/models@0.1.1
+
 ## 0.5.3
 
 ### Patch Changes

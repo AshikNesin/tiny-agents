@@ -1,29 +1,8 @@
-/**
- * Shell builders for the Claude Code worker on the sandbox VM (or the local
- * sandbox container). They follow the browser stack's pattern
- * (`browser-vm-setup.ts`): pure string builders, unit-tested without a VM,
- * run over SSH by `sandbox-worker.ts`.
- *
- * What lands on the sandbox, all under one directory:
- *
- * - Node (the VM's own when it is new enough, else an official build
- *   unpacked into `node/`),
- * - the pinned Agent SDK, Claude Code, `ws` and `zod` (`node_modules/`),
- * - `worker.mjs`, the bundled `@tiny-agents/claude-worker`, uploaded by the
- *   app, plus its pid, log and bearer token.
- *
- * The directory is `/opt/tiny-agents/claude-worker` when the image baked it
- * in (`docker/sandbox/Dockerfile`), else `~/.tiny-agents/claude-worker`. The
- * Claude login stays wherever Claude Code keeps it (`~/.claude`); nothing
- * here reads it.
- */
 import { FORBIDDEN_BACKEND_FLAGS, FORBIDDEN_OVERRIDE_KEYS } from "@tiny-agents/claude-worker";
 import { bashScript, shQuote } from "@tiny-agents/sandbox";
 
-/** Bump when the install steps or the pins change so existing sandboxes re-run them. */
 export const CLAUDE_WORKER_STACK_VERSION = "v1";
 
-/** Pinned npm packages installed next to the worker. */
 export const CLAUDE_WORKER_PACKAGES: Readonly<Record<string, string>> = {
   "@anthropic-ai/claude-agent-sdk": "0.3.318",
   "@anthropic-ai/claude-code": "2.1.318",
@@ -31,23 +10,15 @@ export const CLAUDE_WORKER_PACKAGES: Readonly<Record<string, string>> = {
   zod: "4.6.7",
 };
 
-/** Official Node build fetched when the sandbox has no Node 20+ with npm. */
 export const CLAUDE_WORKER_NODE_VERSION = "24.22.2";
 
-/** Loopback port the worker listens on, inside the sandbox. */
 export const DEFAULT_SANDBOX_WORKER_PORT = 8765;
 
-/** Directory the Docker image pre-provisions. */
 const BAKED_WORKER_DIR = "/opt/tiny-agents/claude-worker";
 
 const MARKER = `.stack-${CLAUDE_WORKER_STACK_VERSION}`;
 const START_WAIT_SECONDS = 20;
 
-/**
- * Shared prelude: picks `DIR`, `NODE` (empty when none is usable) and
- * `CLAUDE` (the pinned CLI). A system Node counts only at 20+ with npm
- * beside it, so the install never has to touch apt.
- */
 const PRELUDE = [
   `if [ -d ${BAKED_WORKER_DIR} ] && [ -w ${BAKED_WORKER_DIR} ]; then DIR=${BAKED_WORKER_DIR}; else DIR="$HOME/.tiny-agents/claude-worker"; fi`,
   'NODE=""',
@@ -59,14 +30,12 @@ const PRELUDE = [
   'CLAUDE="$DIR/node_modules/.bin/claude"',
 ];
 
-/** `env -u …` for every variable that would move Claude Code off the subscription login. */
 function stripOverrides(): string {
   return ["env", ...[...FORBIDDEN_OVERRIDE_KEYS, ...FORBIDDEN_BACKEND_FLAGS].map((k) => `-u ${k}`)]
     .join(" ")
     .trim();
 }
 
-/** The `package.json` written next to the worker: the pins, nothing else. */
 export function workerPackageJson(): string {
   return JSON.stringify({
     name: "tiny-agents-claude-worker",
@@ -76,11 +45,6 @@ export function workerPackageJson(): string {
   });
 }
 
-/**
- * Idempotent install: Node when the sandbox lacks a usable one, then the
- * pinned packages. Serialized with flock so two callers install once.
- * Prints `ready` (already installed) or `installed`.
- */
 export function installWorkerCommand(): string {
   const node = CLAUDE_WORKER_NODE_VERSION;
   return bashScript(
@@ -114,10 +78,6 @@ export function installWorkerCommand(): string {
   );
 }
 
-/**
- * Write the bundled worker from stdin. `sha` names the bundle so a running
- * worker from an older app is noticed and restarted.
- */
 export function uploadWorkerCommand(sha: string): string {
   return bashScript(
     [
@@ -132,19 +92,6 @@ export function uploadWorkerCommand(sha: string): string {
   );
 }
 
-/**
- * Make sure the worker for bundle `sha` is listening on `port`. Prints one of:
- *
- * - `missing`: Node or the packages are not installed (run the install),
- * - `upload`: this bundle is not on the sandbox yet (run the upload),
- * - `ok <token>`: the worker is up; `<token>` is its bearer token, created
- *   once (0600) and kept, so a restarted app reconnects with the same one.
- *
- * A worker started from another bundle is stopped and replaced. Overrides
- * that would move Claude Code off the subscription login are unset before
- * the worker starts, so a stray `ANTHROPIC_API_KEY` in the sandbox's shell
- * cannot change who it signs in as.
- */
 export function ensureWorkerCommand(sha: string, port: number): string {
   const expected = shQuote(sha);
   return bashScript(
@@ -156,7 +103,6 @@ export function ensureWorkerCommand(sha: string, port: number): string {
       'exec 9>"$DIR/start.lock"',
       `flock -w ${START_WAIT_SECONDS} 9`,
       '[ -s "$DIR/token" ] || ( umask 077; head -c 32 /dev/urandom | base64 | tr -d "\\n" > "$DIR/token" )',
-      // A terminal's `claude` finds the same CLI the worker checks.
       'mkdir -p "$HOME/.local/bin"',
       'command -v claude >/dev/null 2>&1 || [ -e "$HOME/.local/bin/claude" ] || ln -s "$CLAUDE" "$HOME/.local/bin/claude"',
       'PID="$(cat "$DIR/worker.pid" 2>/dev/null || true)"',
@@ -204,10 +150,6 @@ export function parseEnsureOutput(output: string): EnsureResult {
   );
 }
 
-/**
- * `claude auth status` with the pinned CLI. Prints its JSON, or nothing when
- * Claude Code is not installed yet. Reads only what the CLI reports.
- */
 export function authStatusCommand(): string {
   return bashScript(
     [
@@ -218,7 +160,6 @@ export function authStatusCommand(): string {
   );
 }
 
-/** Stop the worker (tests and the reset path). */
 export function stopWorkerCommand(): string {
   return bashScript(
     [
@@ -230,10 +171,6 @@ export function stopWorkerCommand(): string {
   );
 }
 
-/**
- * The line a terminal tab types to sign Claude Code in. The owner finishes
- * the login in Claude Code's own prompt; tiny-agents only opens the tab.
- */
 export function claudeLoginShellLine(): string {
   return 'export PATH="$HOME/.local/bin:$PATH"; claude auth login';
 }

@@ -7,7 +7,6 @@ describe("shardByDuration", () => {
   it("puts every file in exactly one shard, longest first onto the lightest shard", () => {
     const files = ["a", "b", "c", "d", "e"];
     const shards = [1, 2].map((i) => shardByDuration(files, durations, i, 2));
-    // a(50) → 1; b(40) → 2; c(30) → 2 (40 < 50); d(20) → 1 (50 < 70); e(10) → 1 (70 = 70, lower shard).
     expect(shards).toEqual([
       ["a", "d", "e"],
       ["b", "c"],
@@ -15,8 +14,6 @@ describe("shardByDuration", () => {
   });
 
   it("counts a file without a recorded duration as the median", () => {
-    // Recorded: 10, 30, 50 → median 30, so "new" weighs 30: x(50) → 1, new(30) → 2,
-    // y(30) → 2 (30 < 50), z(10) → 1 (50 < 60).
     expect(shardByDuration(["x", "y", "z", "new"], { x: 50, y: 30, z: 10 }, 2, 2)).toEqual([
       "new",
       "y",

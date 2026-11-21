@@ -12,8 +12,6 @@ import { useShellConfig } from "@groot/shell/lib/shell-config";
 import { useSetupStatus } from "@groot/shell/hooks/useSetupStatus";
 import { loginErrorDescription, useAuthStore } from "@groot/shell/store/auth";
 
-// Mirrors the server's createUserSchema (packages/core/src/auth/auth.schema.ts),
-// plus a confirmation field that never leaves the browser.
 const setupSchema = z
   .object({
     name: z.string(),
@@ -27,11 +25,6 @@ const setupSchema = z
   });
 type SetupValues = z.infer<typeof setupSchema>;
 
-/**
- * First-run setup at `/setup`: create the first account and sign in as it.
- * Open only while the database has no users; afterwards it sends people to
- * `/login`.
- */
 export function Setup() {
   const needsSetup = useSetupStatus();
   const setup = useAuthStore((state) => state.setup);

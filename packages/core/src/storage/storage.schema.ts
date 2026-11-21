@@ -1,27 +1,18 @@
 import { z } from "zod";
 
-/**
- * One entry of `GET /storage/files`, typed as it arrives over JSON:
- * `lastModified` is an ISO string, not a `Date`. Declared in this zod-only
- * module so the client can import it (type-only) without pulling in the
- * service's server graph.
- */
 export interface FileInfo {
   key: string;
   name: string;
   size: number;
-  /** ISO string (JSON has no `Date`). */
   lastModified: string;
   isDirectory: boolean;
 }
 
-/** Result of `POST /storage/files/upload`: one failure does not fail the rest. */
 export interface UploadFilesResult {
   uploadedFiles: string[];
   failedFiles: Array<{ filePath: string; error: string }>;
 }
 
-/** Most files one upload request accepts. */
 export const MAX_UPLOAD_FILES = 50;
 
 const isSegment = (segment: string) =>
@@ -29,20 +20,13 @@ const isSegment = (segment: string) =>
 
 const isKey = (path: string) => path.split("/").every(isSegment);
 
-/** An uploaded file's name: exactly one key segment (no `/`, `.`, `..` or `\\`). */
 const isFileName = (name: string) => !name.includes("/") && isSegment(name);
 
-/** An object key such as `docs/report.pdf`: no leading, trailing or doubled `/`, no `.` or `..`. */
 export const filePathSchema = z
   .string()
   .min(1, "File path is required")
   .refine(isKey, "Invalid file path");
 
-/**
- * A folder prefix, normalised once here so every route and service sees the
- * same shape: `""` for the root, otherwise `a/b/`. Surrounding slashes are
- * optional on input.
- */
 export const folderPathSchema = z
   .string()
   .transform((value) => value.replace(/^\/+|\/+$/g, ""))

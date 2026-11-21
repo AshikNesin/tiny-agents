@@ -1,13 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { login } from "./helpers/login";
 
-/**
- * The Browser panel on a phone: it never opens on its own. The bot browsing
- * lights the header toggle, which opens it; picture in picture floats it
- * small over the chat, and the toggle reopens it that way after a reload.
- * On the faux model, "/browse N" reads the page N times (browser_snapshot).
- */
-
 const PHONE = { width: 390, height: 844 };
 
 async function createBot(page: Page, name: string) {
@@ -29,13 +22,11 @@ async function browse(page: Page, name: string, rounds: number) {
   await composer.press("Enter");
 }
 
-/** Every reply so far has finished: each ends by echoing its last snapshot. */
 async function settled(page: Page, replies: number) {
   await expect(page.getByText(/^Echo:/)).toHaveCount(replies, { timeout: 60_000 });
 }
 
 test.describe("Browser panel on mobile", () => {
-  // Each reply streams slowly and drives a real (headless) browser.
   test.setTimeout(240_000);
 
   test("browsing never opens it; picture in picture is remembered", async ({ page }) => {
@@ -48,12 +39,10 @@ test.describe("Browser panel on mobile", () => {
     const toggle = page.getByTestId("live-view-toggle");
     await expect(toggle).toBeVisible();
 
-    // The bot browsing leaves the chat in view.
     await browse(page, name, 2);
     await settled(page, 1);
     await expect(panel).not.toBeVisible();
 
-    // The owner opens it from the header, and shrinks it.
     await toggle.click();
     await expect(panel).toBeVisible();
     await panel.getByRole("button", { name: "Picture in picture" }).click();
@@ -61,8 +50,6 @@ test.describe("Browser panel on mobile", () => {
     const box = await panel.boundingBox();
     expect(box?.width ?? PHONE.width).toBeLessThan(PHONE.width - 50);
 
-    // After a reload, browsing still leaves it closed, and the toggle
-    // brings back the picture in picture.
     await page.reload();
     await settled(page, 1);
     await browse(page, name, 1);

@@ -1,8 +1,3 @@
-/**
- * The routine editor's form, without React: a form starts from a routine
- * (or from the defaults) and compiles into the wire schedule, or says why
- * it cannot. Times are IST wall times.
- */
 import type { Routine, Schedule } from "../../../shared/api/routines";
 import {
   MAX_INTERVAL_MINUTES,
@@ -17,10 +12,8 @@ export type ScheduleKind = "once" | "daily" | "weekly" | "interval" | "cron";
 
 const TZ = TZ_IST;
 
-/** Default time-of-day for a new daily/weekly preset. */
 const DEFAULT_IST_TIME = "09:00";
 
-/** datetime-local default for a new once schedule: tomorrow 09:00 IST. */
 function defaultOnceInput(now = new Date()): string {
   const date = new Intl.DateTimeFormat("en-CA", {
     timeZone: TZ,
@@ -60,8 +53,6 @@ export function formFromRoutine(routine: Routine): EditorForm {
     kind = "interval";
     intervalMinutes = String(schedule.minutes);
   } else if (schedule.kind === "cron") {
-    // Presets are a create-time convenience: an existing cron stays on the
-    // Custom tab rather than being guessed apart.
     kind = "cron";
     cronExpr = schedule.expr;
     const daily = schedule.expr.match(/^(\d+) (\d+) \* \* \*$/);
@@ -90,7 +81,6 @@ export function formFromRoutine(routine: Routine): EditorForm {
   };
 }
 
-/** Compile the editor form into the wire schedule, or an error message. */
 export function compileSchedule(
   form: EditorForm,
 ): { schedule: Schedule; error?: undefined } | { schedule?: undefined; error: string } {
@@ -140,7 +130,6 @@ export function defaultForm(): EditorForm {
     botId: "",
     name: "",
     prompt: "",
-    // Daily is the common case; an interval re-runs the bot all day long.
     kind: "daily",
     onceAt: defaultOnceInput(),
     dailyTime: DEFAULT_IST_TIME,
@@ -151,7 +140,6 @@ export function defaultForm(): EditorForm {
   };
 }
 
-/** A routine's default name: the prompt's first line, cut at a word. */
 export function nameFromPrompt(prompt: string): string {
   const line = prompt.trim().split("\n")[0] ?? "";
   if (line.length <= 40) return line;

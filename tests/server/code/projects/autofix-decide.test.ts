@@ -1,10 +1,3 @@
-/**
- * Auto-fix's pure decision (issue #297 §9): table tests with literal
- * expected actions, including the cases revision 3 names: a comment the app
- * posted as the owner starts no pass; mergeability `unknown` decides
- * nothing; a check pending for seven hours is stalled, not a pass; an item
- * younger than the quiet period waits.
- */
 import { describe, expect, it } from "vite-plus/test";
 import type { Check, PullSnapshot, ReviewThread } from "@tiny-agents/github";
 import {
@@ -147,7 +140,6 @@ describe("decide", () => {
       input({ snap: { threads: [thread(owner, "Fixed in abc.")] }, appCommentIds: new Set([100]) }),
     );
     expect(recorded.kind).not.toBe("pass");
-    // The same words from the owner, not recorded as the app's, do count.
     expect(decide(input({ snap: { threads: [thread(owner, "Fixed in abc.")] } })).kind).toBe(
       "pass",
     );
@@ -194,7 +186,6 @@ describe("decide", () => {
     const snap = { checks: [check("test", "success"), stuck] };
     expect(decide(input({ snap }))).toEqual({ kind: "green" });
     expect(stalledChecks(snapshot(snap), NOW, 6).map((c) => c.name)).toEqual(["deploy"]);
-    // A check pending for an hour is still running: not green yet.
     expect(
       decide(input({ snap: { checks: [check("deploy", "pending", { startedAt: ago(60) })] } })),
     ).toEqual({
@@ -305,7 +296,6 @@ describe("decide, phase 6", () => {
     ).toEqual({
       kind: "green",
     });
-    // Without the setting, green at once.
     expect(decide(input())).toEqual({ kind: "green" });
   });
 
@@ -319,7 +309,6 @@ describe("decide, phase 6", () => {
     expect(decision.kind === "pass" && [decision.trigger, decision.items.map((i) => i.id)]).toEqual(
       ["queue", ["queue:Q1"]],
     );
-    // Back in the queue: the removal is history.
     expect(decide(input({ snap: { ...removed, inMergeQueue: true } })).kind).not.toBe("pass");
     const off = {
       ...DEFAULT_AUTOFIX,

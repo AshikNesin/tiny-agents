@@ -1,13 +1,3 @@
-/**
- * System One classifiers on Workers AI's REST API, routed through the
- * Cloudflare AI Gateway (issue #65): `POST /accounts/{account}/ai/run` with
- * `{ model, input }` and the `cf-aig-gateway-id` header (Cloudflare's
- * recommended gateway route; it serves `@cf/…` and third-party models such as
- * `typesafe/jev` alike, where the gateway's provider-native
- * `/workers-ai/{model}` route answered 402 for `typesafe/jev`). The answer
- * comes in Workers AI's envelope: `{ success, result }`, where `result` is the
- * output (Clef) or a completed run wrapping it (Jev).
- */
 import type { SystemOneTransport } from "@earendil-works/pi-ai/api/system-one-shared";
 
 const LABEL = "Cloudflare AI Gateway (Workers AI)";

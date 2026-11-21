@@ -1,8 +1,3 @@
-/**
- * Claude Code worker. Loopback only. Claude Code owns the subscription login.
- * This process does not read, store, or refresh it, and it does not set
- * ANTHROPIC_BASE_URL.
- */
 import { assertNoOverrides } from "./guards";
 import { requireSubscriptionLogin } from "./auth";
 import { createClaudeWorkerServer } from "./server";
@@ -18,7 +13,6 @@ type AgentSdk = typeof import("@anthropic-ai/claude-agent-sdk");
 
 async function loadSdk(): Promise<AgentSdk> {
   try {
-    // Optional: installed on the worker VM, not in CI. A missing package throws here.
     const sdk = await import("@anthropic-ai/claude-agent-sdk");
     if (typeof sdk.query !== "function" || typeof sdk.tool !== "function") {
       throw new Error("SDK module is missing query() or tool().");
@@ -36,13 +30,10 @@ async function loadSdk(): Promise<AgentSdk> {
 
 async function main(): Promise<void> {
   assertNoOverrides(process.env);
-  // Listen even before Claude Code is signed in: the app sets the worker up
-  // ahead of the login, and every session re-checks it before it starts.
   await requireSubscriptionLogin(process.env).catch((error: unknown) => {
     console.warn(error instanceof Error ? error.message : error);
   });
   const sdk = await loadSdk();
-  // Coding mode (the Code page) also needs the session helpers.
   const coding = codingSdkOf(sdk);
   if (!coding) console.warn("This Agent SDK has no getSessionMessages/forkSession: coding is off.");
   const server = await createClaudeWorkerServer({

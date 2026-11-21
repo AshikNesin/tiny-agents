@@ -1,10 +1,3 @@
-/**
- * Terminal WebSocket bridge (issue #28): ticket guards and the byte/control
- * relay, against a real HTTP server with a fake TerminalService injected
- * through the instance seam. The pty side is an in-memory Duplex, so no SSH
- * is involved; the close-code contract (1000 permanent / 4000 idle / 1011
- * attach failure) is asserted end to end.
- */
 import { open } from "node:fs";
 import { createServer, request, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -20,16 +13,13 @@ import { setTerminalServiceForTests } from "../../../apps/web/src/server/api/ter
 import type { PtyStream, TerminalService } from "../../../packages/sandbox/src/terminal/terminal";
 import { authToken } from "../fixtures";
 
-// Tickets are held as live access, which needs their accounts to exist.
 await authToken("ticket-owner-1@example.com", 1);
 
-/** An in-memory pty: records writes, echoes on demand, resizable. */
 function fakePtyStream() {
   const received: Buffer[] = [];
   const resizes: Array<{ cols: number; rows: number }> = [];
   let destroyed = false;
   const stream = new Duplex({
-    // As the ssh2 binding's ChannelDuplex: a remote end closes the stream.
     allowHalfOpen: false,
     read() {},
     write(chunk, _encoding, callback) {
@@ -71,7 +61,6 @@ function serviceRecording(streams: () => PtyStream | Promise<PtyStream>) {
   return { svc, attached };
 }
 
-/** A real macrotask turn fake timers cannot intercept, so queued socket I/O runs. */
 const realTick = () => new Promise<void>((resolve) => open("/dev/null", "r", () => resolve()));
 
 describe("terminal WS bridge", () => {
@@ -99,7 +88,6 @@ describe("terminal WS bridge", () => {
     vi.restoreAllMocks();
   });
 
-  /** A raw upgrade request: reports the HTTP status of a rejection, or 101. */
   function rawUpgrade(port: number, path: string, headers: Record<string, string> = {}) {
     return new Promise<{ status: number }>((resolve, reject) => {
       const req = request({
@@ -168,7 +156,7 @@ describe("terminal WS bridge", () => {
 
     const ws = connect(ticketPath(issueTerminalTicket({ userId: 1, name: "ta-term-1" as never })));
     await opened(ws);
-    expect(attached).toEqual([{ cols: 120, rows: 34 }]); // defaults ride the query
+    expect(attached).toEqual([{ cols: 120, rows: 34 }]);
 
     const reply = nextMessage(ws);
     pty.stream.push(Buffer.from("prompt$ "));
@@ -208,13 +196,13 @@ describe("terminal WS bridge", () => {
     ws.send("not json at all");
     ws.send(JSON.stringify({ t: "resize", cols: "wide", rows: "tall" }));
     ws.send(JSON.stringify({ t: "unknown", cols: 1, rows: 1 }));
-    ws.send(JSON.stringify({ t: "resize", cols: 9999, rows: 9999 })); // clamped
+    ws.send(JSON.stringify({ t: "resize", cols: 9999, rows: 9999 }));
     await new Promise((r) => setTimeout(r, 100));
     expect(pty.resizes).toEqual([
       { cols: 100, rows: 40 },
       { cols: 500, rows: 300 },
     ]);
-    expect(ws.readyState).toBe(ws.OPEN); // still open: ignored, not fatal
+    expect(ws.readyState).toBe(ws.OPEN);
   });
 
   it("stops reading the pty on {t:pause} and resumes on {t:resume}", async () => {
@@ -231,7 +219,6 @@ describe("terminal WS bridge", () => {
     ws.send(JSON.stringify({ t: "resume" }));
     await vi.waitFor(() => expect(pty.stream.isPaused()).toBe(false));
 
-    // Bytes still flow after the round trip.
     const reply = nextMessage(ws);
     pty.stream.push(Buffer.from("after"));
     expect(await reply).toBe("after");
@@ -248,7 +235,7 @@ describe("terminal WS bridge", () => {
     const reply = nextMessage(ws);
     ws.send(JSON.stringify({ t: "ping" }));
     expect(await reply).toBe('{"t":"pong"}');
-    expect(pty.received()).toBe(""); // control, never typed into the shell
+    expect(pty.received()).toBe("");
   });
 
   it("closes 1000 when the pty ends (session killed or client detached)", async () => {
@@ -259,14 +246,12 @@ describe("terminal WS bridge", () => {
     const ws = connect(ticketPath(issueTerminalTicket({ userId: 1, name: "ta-term-1" as never })));
     await opened(ws);
     const gone = closed(ws);
-    pty.stream.destroy(); // remote end gone
+    pty.stream.destroy();
     expect((await gone).code).toBe(1000);
     await vi.waitFor(() => expect(pty.destroyed).toBe(true));
   });
 
   it("closes 1000 after tmux's error when the session does not exist", async () => {
-    // The ticket route no longer checks has-session (issue #84): a missing
-    // tab is found by the attach itself, which prints why and exits.
     const pty = fakePtyStream();
     const { svc } = serviceRecording(async () => {
       setImmediate(() => {
@@ -308,9 +293,6 @@ describe("terminal WS bridge", () => {
     const ws = connect(ticketPath(issueTerminalTicket({ userId: 1, name: "ta-term-1" as never })));
     await opened(ws);
 
-    // Fake time for the idle window, advanced in steps with a real I/O tick
-    // between them: the bridge's ping/pong rides the real socket, and a
-    // step without a tick would read as a dead client and terminate.
     vi.useFakeTimers();
     const step = async (ms: number) => {
       for (let t = 0; t < ms; t += 5_000) {
@@ -321,10 +303,10 @@ describe("terminal WS bridge", () => {
     try {
       const gone = closed(ws);
       await step(9.5 * 60_000);
-      expect(ws.readyState).toBe(ws.OPEN); // 9.5 quiet minutes: not yet
+      expect(ws.readyState).toBe(ws.OPEN);
       ws.send(Buffer.from("x"));
       await step(9.5 * 60_000);
-      expect(ws.readyState).toBe(ws.OPEN); // the keystroke reset the window
+      expect(ws.readyState).toBe(ws.OPEN);
       await step(10.5 * 60_000);
       vi.useRealTimers();
       expect((await gone).code).toBe(4000);
@@ -344,7 +326,6 @@ describe("terminal WS bridge", () => {
 
     const ticket = issueTerminalTicket({ userId: 1, name: "ta-term-1" as never });
     expect((await rawUpgrade(port, ticketPath(ticket, "ta-term-2"))).status).toBe(401);
-    // The wrong-name attempt already spent it.
     expect((await rawUpgrade(port, ticketPath(ticket))).status).toBe(401);
   });
 

@@ -1,14 +1,3 @@
-/**
- * Loopback WebSocket server. Bind address is fixed at 127.0.0.1.
- * The app starts it on the sandbox and reaches it through an SSH tunnel;
- * it is never published on a public port.
- * The bearer token is checked before the upgrade completes.
- *
- * This file owns the sockets: the bearer check, `welcome`, the heartbeat,
- * the silence close and the framing (`socket-handler.ts`). The protocols on
- * a socket are handlers (`bot-handler.ts`, `coding-handler.ts`) that answer
- * their own messages and subscribe their sockets to their sessions' logs.
- */
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage } from "node:http";
 import { WebSocketServer, type WebSocket } from "ws";
@@ -28,28 +17,18 @@ import type { ArmTimer } from "./tool-proxy";
 export interface ClaudeWorkerServerOptions {
   token: string;
   query: QueryFactory;
-  /** Claude Code's model list for the login (the `models` request). */
   listModels?: ModelLister;
-  /** Checked before a session process starts. Startup also checks in the bin. */
   authStatus: () => Promise<ClaudeAuthStatus>;
   env?: Record<string, string | undefined>;
   timings: Timings;
-  /** Port 0 picks a free port (tests). */
   port?: number;
   now?: () => number;
   arm?: ArmTimer;
-  /** Override the sweep interval. Default: once a minute. */
   sweepMs?: number;
-  /**
-   * Coding mode (the Code page's Claude Code threads), with its own caps.
-   * Absent: `coding.*` requests answer `unavailable`.
-   */
   coding?: {
     sdk: CodingSdk;
     limits?: CodingLimits;
-    /** Default `~/.tiny-agents/uploads`. */
     uploadsDir?: string;
-    /** Default the worker user's home (the directory browser starts here). */
     home?: string;
     schedule?: (fn: () => void, ms: number) => () => void;
   };
@@ -71,7 +50,6 @@ export function assertWorkerToken(token: string): void {
   }
 }
 
-/** True for 32 raw bytes or a base64 encoding of exactly 32 bytes. */
 export function is32ByteSecret(token: string): boolean {
   if (Buffer.byteLength(token) === 32) return true;
   if (!/^[A-Za-z0-9+/]+={0,2}$/.test(token)) return false;
@@ -106,7 +84,6 @@ export async function createClaudeWorkerServer(
   const everyone = new Audience();
   const codingPeers = new Audience();
   const codingLimits = options.coding?.limits ?? DEFAULT_CODING_LIMITS;
-  // The coding protocol claims `coding.*`; the bot protocol answers the rest.
   const handlers: ProtocolHandler[] = [
     createCodingHandler({
       book: options.coding
@@ -185,7 +162,6 @@ export async function createClaudeWorkerServer(
     });
   });
 
-  /** The envelope: JSON, then the heartbeat, then the protocol that claims the message. */
   async function dispatch(raw: string, peer: Peer): Promise<void> {
     let message: unknown;
     try {

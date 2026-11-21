@@ -5,17 +5,7 @@ import { loadHighlighter } from "../lib/highlighter";
 type Highlighter = NonNullable<Awaited<ReturnType<typeof loadHighlighter>>>;
 type GrammarState = Parameters<Highlighter["highlight"]>[1];
 
-/**
- * Highlights `value` as `language` and returns one React node per line —
- * render each inside a `CodeBlockLine`. Until the language has loaded (or for
- * an unknown language) the lines come back as plain strings.
- *
- * Streaming-safe: while `value` grows (an LLM writing code), only the newly
- * completed lines are tokenized, resuming from the last line's grammar state;
- * the in-progress tail line is re-tokenized on every render.
- */
 export function useHighlightedCode(value: string, language: string): React.ReactNode[] {
-  // A trailing newline would render as an extra empty line.
   const code = value.endsWith("\n") ? value.slice(0, -1) : value;
   const [loaded, setLoaded] = React.useState<{
     language: string;
@@ -39,8 +29,6 @@ export function useHighlightedCode(value: string, language: string): React.React
     };
   }, [language]);
 
-  // The complete lines, highlighted. While the code streams, only the new
-  // lines are tokenized, starting from the grammar state of the last one.
   const [done, setDone] = React.useState<{
     highlighter: Highlighter | null;
     text: string;
@@ -68,12 +56,9 @@ export function useHighlightedCode(value: string, language: string): React.React
   }
 
   if (next !== done) {
-    // Derived-state update during render (React bails out and re-renders
-    // before committing), so streamed lines are never tokenized twice.
     setDone(next);
   }
 
-  // The last line is still being written, so it is tokenized on every render.
   const tail = code.slice(end);
 
   return React.useMemo(() => {

@@ -1,4 +1,3 @@
-/** Attachment UI (issue #17): composer staging chips and transcript rendering. */
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { Download, FileText, Loader2, X } from "lucide-react";
@@ -8,10 +7,8 @@ import { botsApi } from "../lib/bots-api";
 import { humanSize, type StagedUpload } from "../lib/staged-uploads";
 import { FilePreviewDialog, statusLabel, useUploadStatus } from "./FilePreview";
 
-/** Placeholder until an upload has a ref: an image ref is never polled. */
 const NO_FILE: AttachmentRef = { uploadId: "", kind: "image", name: "", mimeType: "", size: 0 };
 
-/** One staged item in the composer: thumbnail (image) or chip (file). */
 export function StagedAttachment({
   attachment,
   onRemove,
@@ -21,7 +18,6 @@ export function StagedAttachment({
 }) {
   const uploading = attachment.status === "uploading";
   const failed = attachment.status === "error";
-  // Once uploaded, a file shows its extraction state (issue #58).
   const live = useUploadStatus(attachment.ref ?? NO_FILE);
   const label = statusLabel(live);
   return (
@@ -80,13 +76,8 @@ export function StagedAttachment({
   );
 }
 
-/** A bot chat attachment staged in the composer (lib/staged-uploads.ts). */
 export type StagedItem = StagedUpload<AttachmentRef>;
 
-/**
- * A sent file: name, size and its live extraction state (issue #58). The
- * chip opens the text-only preview; the icon downloads the original.
- */
 function FileChip({ file, onOpen }: { file: AttachmentRef; onOpen: () => void }) {
   const status = useUploadStatus(file);
   const label = statusLabel(status);
@@ -118,7 +109,6 @@ function FileChip({ file, onOpen }: { file: AttachmentRef; onOpen: () => void })
   );
 }
 
-/** Attachments on a transcript user message: thumbnails and file chips. */
 export function MessageAttachments({ attachments }: { attachments: AttachmentRef[] }) {
   const [enlarged, setEnlarged] = useState<AttachmentRef | null>(null);
   const [preview, setPreview] = useState<AttachmentRef | null>(null);
@@ -154,9 +144,6 @@ export function MessageAttachments({ attachments }: { attachments: AttachmentRef
         </div>
       )}
       <FilePreviewDialog file={preview} onClose={() => setPreview(null)} />
-      {/* Portalled: a message row has content-visibility:auto, which makes it the
-          containing block for position:fixed, so an inline overlay was clipped
-          to the row (#165). */}
       {enlarged &&
         createPortal(
           <div
