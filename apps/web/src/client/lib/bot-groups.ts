@@ -48,7 +48,7 @@ export function relativeTime(iso: string, now = Date.now()): string {
 export function previewLine(text: string): string {
   return text
     .replace(/[*`#>]+/g, "")
-    .replace(/(?<![\p{L}\p{N}])_+|_+(?![\p{L}\p{N}])/gu, "")
+    .replace(/(?<![\p{L}\p{N}_])(_{1,2})(?=[^\s_])(.+?)(?<=[^\s_])\1(?![\p{L}\p{N}_])/gu, "$2")
     .replace(/\s+/g, " ")
     .trim();
 }

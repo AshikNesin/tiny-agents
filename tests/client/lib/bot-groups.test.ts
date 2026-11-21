@@ -84,5 +84,8 @@ describe("bot row helpers", () => {
     expect(previewLine("Ran update_instructions on _notes_ and my_file.py")).toBe(
       "Ran update_instructions on notes and my_file.py",
     );
+    expect(previewLine("Calls foo__bar, _private and __bold__")).toBe(
+      "Calls foo__bar, _private and bold",
+    );
   });
 });

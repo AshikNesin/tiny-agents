@@ -210,7 +210,9 @@ export class AgentRuntime {
     approvals.onChange((conversation) => this.#emitActivity(this.#activity(conversation)));
     questions.onChange((conversation) => this.#emitActivity(this.#activity(conversation)));
     questions.onTransition((transition) => {
-      if (transition.change === "added") void this.#dismissIfOwnerWrote(transition).catch(() => {});
+      if (transition.change === "added") {
+        void this.#dismissIfOwnerWrote(transition).catch((error: unknown) => onReport?.(error));
+      }
     });
   }
 

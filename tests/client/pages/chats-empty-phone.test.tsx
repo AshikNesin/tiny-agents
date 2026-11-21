@@ -11,7 +11,7 @@ import { useBotsStore } from "@/store/bots";
 import { useUiStore } from "@/store/ui";
 
 describe("Chats with no bots yet", () => {
-  it("still offers the menu on a phone, so the rest of the app is reachable", async () => {
+  it("still offers the menu button, so the rest of the app is reachable", async () => {
     useBotsStore.setState({ bots: [], loading: false });
     useUiStore.setState({ mobileOpen: false });
     render(
