@@ -118,11 +118,11 @@ class AppLogicTest {
     }
 
     @Test
-    fun `a stored token that can't be opened is dropped from disk`() = runTest {
+    fun `a token an older version stored unsealed is dropped from disk`() = runTest {
         val disk = FakePreferencesDataStore()
         val sealing = object : TokenCipher {
             override fun seal(plain: String): String? = "p:$plain"
-            override fun open(sealed: String): String? = null
+            override fun open(sealed: String): String? = sealed.removePrefix("p:")
         }
         SessionStore(disk, sealing, CoroutineScope(Dispatchers.Unconfined)).apply {
             setServer("https://agents.example.com")

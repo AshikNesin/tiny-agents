@@ -102,8 +102,8 @@ class SessionStore(
     suspend fun load() {
         val prefs = dataStore.data.first()
         val stored = prefs[TOKEN]
-        val opened = stored?.let(cipher::open)
-        if (stored != null && opened == null) dataStore.edit { it.remove(TOKEN) }
+        val opened = stored?.takeUnless { it.startsWith(LEGACY_UNSEALED) }?.let(cipher::open)
+        if (stored != null && stored.startsWith(LEGACY_UNSEALED)) dataStore.edit { it.remove(TOKEN) }
         val held = _state.value.takeIf { it.serverUrl == prefs[SERVER] }?.token
         val token = opened ?: held
         val userId = prefs[USER_ID]
@@ -165,6 +165,7 @@ class SessionStore(
     companion object {
         private val SERVER = stringPreferencesKey("server_url")
         private val TOKEN = stringPreferencesKey("token")
+        private const val LEGACY_UNSEALED = "p:"
         private val USER_ID = intPreferencesKey("user_id")
         private val USER_EMAIL = stringPreferencesKey("user_email")
         private val USER_NAME = stringPreferencesKey("user_name")
