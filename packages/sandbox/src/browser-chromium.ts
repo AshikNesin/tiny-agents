@@ -2,18 +2,20 @@ import { execFile } from "node:child_process";
 import { statSync } from "node:fs";
 import { promisify } from "node:util";
 import { chromium } from "playwright-core";
-import type { Locator, Page, Response } from "playwright-core";
+import type { BrowserContext, Locator, Page, Response } from "playwright-core";
 import { fillSecretFields, pageOrigin, refOrigin } from "./browser-fill";
 import { assertRefShape, isBlockedPrivateUrl, parseExemptHosts } from "./browser-guard";
 import { compactSnapshot, tidyText } from "./browser-snapshot";
+import { PROXY_BYPASS_FLAG, REFUSED_HEADER, startEgressProxy } from "./egress-proxy";
 import type { BrowserSession, BrowserVnc, OpenBrowserOptions } from "./browser-sessions";
-import { navigationGuard, type NavigationGuard } from "./navigation-guard";
+import { navigationGuard, type NavigationGuard, type ResolveHost } from "./navigation-guard";
 
 export interface ChromiumTransportOptions {
   executablePath?: string;
   args?: string[];
   locale?: string;
   timezone?: string;
+  resolveHost?: ResolveHost;
 }
 
 const VM_HEADLESS_SHELL = "/headless-shell/headless-shell";
@@ -58,6 +60,9 @@ async function throughChallenges(page: Page, response: Response | null): Promise
 
 const isRedirect = (status: number) => status >= 300 && status < 400;
 
+const isTunnelRefusal = (error: unknown) =>
+  error instanceof Error && error.message.includes("net::ERR_TUNNEL_CONNECTION_FAILED");
+
 async function personUserAgent(executable: string): Promise<string | undefined> {
   const { stdout } = await promisify(execFile)(executable, ["--version"], { timeout: 5_000 }).catch(
     () => ({ stdout: "" }),
@@ -88,24 +93,42 @@ export function createChromiumTransport(options: ChromiumTransportOptions = {}) 
   return async (profileDir: string, open: OpenBrowserOptions): Promise<BrowserSession> => {
     const executablePath = resolveExecutable(options.executablePath);
     const userAgent = await personUserAgent(executablePath ?? chromium.executablePath());
-    const context = await chromium.launchPersistentContext(profileDir, {
-      headless: true,
-      ...(executablePath ? { executablePath } : { channel: "chromium" as const }),
-      viewport: { width: open.viewportWidth, height: open.viewportHeight },
-      ignoreDefaultArgs: ["--enable-automation"],
-      args: ["--disable-blink-features=AutomationControlled", ...(options.args ?? [])],
-      ...(userAgent ? { userAgent } : {}),
-      ...(options.locale ? { locale: options.locale } : {}),
-      ...(options.timezone ? { timezoneId: options.timezone } : {}),
+    const resolveHost = options.resolveHost ? { resolveHost: options.resolveHost } : {};
+    const proxy = await startEgressProxy({
+      exempt: parseExemptHosts(open.allowedPrivateHosts),
+      ...resolveHost,
     });
+    let context: BrowserContext;
+    try {
+      context = await chromium.launchPersistentContext(profileDir, {
+        headless: true,
+        ...(executablePath ? { executablePath } : { channel: "chromium" as const }),
+        viewport: { width: open.viewportWidth, height: open.viewportHeight },
+        ignoreDefaultArgs: ["--enable-automation"],
+        args: [
+          "--disable-blink-features=AutomationControlled",
+          `--proxy-server=${proxy.url}`,
+          PROXY_BYPASS_FLAG,
+          ...(options.args ?? []),
+        ],
+        ...(userAgent ? { userAgent } : {}),
+        ...(options.locale ? { locale: options.locale } : {}),
+        ...(options.timezone ? { timezoneId: options.timezone } : {}),
+      });
+    } catch (error) {
+      await proxy.close();
+      throw error;
+    }
+    context.once("close", () => void proxy.close());
     const page: Page = context.pages()[0] ?? (await context.newPage());
     const browser = context.browser();
     if (!browser) throw new Error("Chromium started without a browser to guard.");
     return pageSession(page, open, {
-      guard: await navigationGuard(browser),
+      guard: await navigationGuard(browser, resolveHost),
       onDisconnect: (listener) => context.once("close", listener),
       close: async () => {
         await context.close().catch(() => {});
+        await proxy.close();
       },
     });
   };
@@ -205,12 +228,21 @@ export function pageSession(
         response = await current.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 });
         response = await throughChallenges(current, response);
       } catch (error) {
-        if (!guard.refusedSince(frameId, mark)) throw error;
+        if (!guard.refusedSince(frameId, mark)) {
+          if (!isTunnelRefusal(error)) throw error;
+          await leaveForBlank(current);
+          throw new Error(
+            "The browser's proxy refused or couldn't reach that site. Private and local addresses can't be fetched.",
+            { cause: error },
+          );
+        }
       }
       const hops: string[] = [];
       for (let r = response?.request() ?? null; r; r = r.redirectedFrom()) hops.push(r.url());
       const bad =
-        guard.refusedSince(frameId, mark) ?? hops.find((hop) => isBlockedPrivateUrl(hop, exempt));
+        guard.refusedSince(frameId, mark) ??
+        hops.find((hop) => isBlockedPrivateUrl(hop, exempt)) ??
+        (response?.headers()[REFUSED_HEADER] ? response.url() : undefined);
       if (bad) {
         await leaveForBlank(current);
         if (bad === url || bad === new URL(url).href) {

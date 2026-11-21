@@ -1,6 +1,8 @@
 import { execFileSync, spawn, type ChildProcess } from "node:child_process";
 import { until } from "../../fixtures/until";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createServer, type Server } from "node:http";
+import { connect, type AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vite-plus/test";
@@ -112,6 +114,21 @@ function stackPids(profile: string): number[] {
   }
 }
 
+function rawProxy(port: number, request: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const socket = connect({ host: "127.0.0.1", port });
+    let reply = "";
+    const timer = setTimeout(() => socket.end(), 3_000);
+    socket.on("data", (chunk) => (reply += chunk.toString("latin1")));
+    socket.once("error", reject);
+    socket.once("close", () => {
+      clearTimeout(timer);
+      resolve(reply);
+    });
+    socket.once("connect", () => socket.write(request));
+  });
+}
+
 interface Run {
   code: number | null;
   stdout: string;
@@ -197,11 +214,16 @@ runIfPython("browser stack launch script", () => {
 
   async function launch(
     name: string,
-    options: { lockWaitSeconds?: number; locale?: string; timezone?: string } = {},
+    options: {
+      lockWaitSeconds?: number;
+      locale?: string;
+      timezone?: string;
+      allowedPrivateHosts?: string;
+    } = {},
   ) {
     const profile = join(root, "profiles", name);
     profiles.push(profile);
-    const { locale, timezone } = options;
+    const { locale, timezone, allowedPrivateHosts } = options;
     let command = launchStackCommand({
       profileDir: profile,
       width: 1280,
@@ -209,6 +231,7 @@ runIfPython("browser stack launch script", () => {
       scale: 2,
       ...(locale ? { locale } : {}),
       ...(timezone ? { timezone } : {}),
+      ...(allowedPrivateHosts ? { allowedPrivateHosts } : {}),
     });
     expect(command).toContain("/tmp/.X11-unix");
     command = command
@@ -263,7 +286,7 @@ runIfPython("browser stack launch script", () => {
     expect(a.code).toBe(0);
     parseLaunchOutput(a.stdout);
     const pids = stackPids(a.profile);
-    expect(pids).toHaveLength(3);
+    expect(pids).toHaveLength(4);
     expect(pids.every(alive)).toBe(true);
     expect(lockHeld()).toBe(false);
   }, 60_000);
@@ -278,6 +301,50 @@ runIfPython("browser stack launch script", () => {
     expect(chrome.tz).toBe("Asia/Kolkata");
     expect(chrome.args).toContain("--lang=en-IN");
     expect(chrome.args).toContain("--accept-lang=en-IN,en");
+  }, 60_000);
+
+  it("sends all of Chrome's traffic through a proxy that refuses private addresses", async () => {
+    const hits: string[] = [];
+    const target: Server = createServer((req, res) => {
+      hits.push(req.url ?? "");
+      res.end("inside");
+    });
+    await new Promise<void>((resolve) => target.listen(0, "127.0.0.1", resolve));
+    const port = (target.address() as AddressInfo).port;
+    try {
+      const strict = await launch("strict");
+      const open = await launch("open", { allowedPrivateHosts: "localhost" });
+      expect([strict.code, open.code]).toEqual([0, 0]);
+      const proxyOf = (profile: string) => {
+        const { args } = JSON.parse(readFileSync(join(profile, ".fake-chrome.json"), "utf8")) as {
+          args: string[];
+        };
+        expect(args).toContain("--proxy-bypass-list=<-loopback>");
+        const flag = args.find((arg) => arg.startsWith("--proxy-server=http://127.0.0.1:"));
+        return Number(flag?.split(":").pop());
+      };
+      const get = (path: string) =>
+        `GET http://localhost:${port}${path} HTTP/1.1\r\nHost: localhost:${port}\r\n\r\n`;
+
+      const byName = await rawProxy(proxyOf(strict.profile), get("/by-name"));
+      expect(byName).toMatch(/^HTTP\/1\.1 403 Forbidden\r\nx-tiny-agents-refused: private-address/);
+      const tunnel = await rawProxy(
+        proxyOf(strict.profile),
+        `CONNECT [::ffff:127.0.0.1]:${port} HTTP/1.1\r\n\r\n`,
+      );
+      expect(tunnel).toMatch(/^HTTP\/1\.1 403 Forbidden\r\n/);
+      expect(hits).toEqual([]);
+
+      const exempt = await rawProxy(proxyOf(open.profile), get("/exempt"));
+      expect(exempt).toMatch(/^HTTP\/1\.1 200 OK\r\n/);
+      expect(exempt).toMatch(/inside$/);
+      expect(hits).toEqual(["/exempt"]);
+    } finally {
+      await new Promise((resolve) => {
+        target.close(resolve);
+        target.closeAllConnections();
+      });
+    }
   }, 60_000);
 
   it("starts a second bot's browser while the first is still running", async () => {
@@ -352,11 +419,11 @@ runIfPython("browser stack launch script", () => {
     const b = await launch("b");
     expect([a.code, b.code]).toEqual([0, 0]);
     const pidsA = stackPids(a.profile);
-    expect(pidsA).toHaveLength(3);
+    expect(pidsA).toHaveLength(4);
     execFileSync("sh", ["-c", teardownStackCommand(a.profile)], { env });
     await until(() => pidsA.every((pid) => !alive(pid)), "profile a's stack to exit", 5_000);
     expect(pidsA.some(alive)).toBe(false);
-    expect(stackPids(b.profile)).toHaveLength(3);
+    expect(stackPids(b.profile)).toHaveLength(4);
     expect(stackPids(b.profile).every(alive)).toBe(true);
   }, 60_000);
 });

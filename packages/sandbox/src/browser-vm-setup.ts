@@ -1,3 +1,6 @@
+import { parseExemptHosts } from "./browser-guard";
+import { PROXY_BYPASS_FLAG } from "./egress-proxy";
+import { VM_EGRESS_PROXY } from "./egress-proxy-vm";
 import { shQuote } from "./shell";
 import {
   createVmStack,
@@ -26,6 +29,7 @@ export interface LaunchStackOptions {
   scale: number;
   locale?: string;
   timezone?: string;
+  allowedPrivateHosts?: string;
 }
 
 export interface LaunchedStack {
@@ -37,6 +41,7 @@ export interface LaunchedStack {
 const PID_FILE = ".stack-pids";
 
 const CDP_WAIT_SECONDS = 30;
+const PROXY_WAIT_SECONDS = 5;
 const STOP_WAIT_SECONDS = 10;
 
 function stopProfileChromeLines(): string[] {
@@ -90,21 +95,20 @@ const BROWSER_STACK: VmStackSpec<LaunchStackOptions> = {
     ],
     ports: [
       `PORTS="$(python3 -c 'import socket
-def free():
-    s = socket.socket()
+held = [socket.socket() for _ in range(3)]
+for s in held:
     s.bind(("127.0.0.1", 0))
-    p = s.getsockname()[1]
-    s.close()
-    return p
-print(free(), free())')"`,
+print(*(s.getsockname()[1] for s in held))')"`,
       "set -- $PORTS",
       "VNC=$1",
       "CDP=$2",
+      "PROXY=$3",
     ],
     prepare: () => [
       'XLOG="$PROFILE/.xvnc.log"',
       'CLOG="$PROFILE/.chrome.log"',
       `rm -f "$PROFILE/${PID_FILE}"`,
+      `cat > "$PROFILE/.egress-proxy.py" <<'TA_PROXY'\n${VM_EGRESS_PROXY}TA_PROXY`,
     ],
     geometry: (options) => sizeOf(options).px,
     desktopName: "tiny-agents",
@@ -113,11 +117,20 @@ print(free(), free())')"`,
     start: (options) => {
       const { scale, cssW, cssH } = sizeOf(options);
       const region = regionOf(options);
+      const exempt = [...parseExemptHosts(options.allowedPrivateHosts)].join(",");
       return [
+        `setsid nohup python3 "$PROFILE/.egress-proxy.py" "$PROXY" ${shQuote(exempt)} </dev/null >"$PROFILE/.egress-proxy.log" 2>&1 ${RELEASE_LOCK} &`,
+        `echo "$!" >> "$PROFILE/${PID_FILE}"`,
+        `PROXYWAIT=$((SECONDS + ${PROXY_WAIT_SECONDS}))`,
+        'until (exec 3<>"/dev/tcp/127.0.0.1/$PROXY") 2>/dev/null; do',
+        `  [ "$SECONDS" -lt "$PROXYWAIT" ] || { echo "The browser's proxy did not start on the VM within ${PROXY_WAIT_SECONDS}s" >&2; tail -n 20 "$PROFILE/.egress-proxy.log" >&2 || true; exit 1; }`,
+        "  sleep 0.1",
+        "done",
         `DISPLAY=":$DISP" ${region.tz}setsid nohup google-chrome-stable ` +
           '--user-data-dir="$PROFILE" ' +
           region.flags +
           '--remote-debugging-port="$CDP" --remote-debugging-address=127.0.0.1 ' +
+          `--proxy-server="http://127.0.0.1:$PROXY" ${shQuote(PROXY_BYPASS_FLAG)} ` +
           `--window-position=0,0 --window-size=${cssW},${cssH} --force-device-scale-factor=${scale} ` +
           "--no-first-run --no-default-browser-check --password-store=basic --use-mock-keychain " +
           "--disable-features=Translate,MediaRouter --disable-session-crashed-bubble --hide-crash-restore-bubble " +

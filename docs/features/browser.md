@@ -341,26 +341,28 @@ another bot) and `url` is the bot's own tab, `null` until it has one.
   script setting `location`, a click). Popups such a tab opens are guarded the
   same way. A refused request never leaves the browser. Once no agent holds a
   tab (it switched away, handed back, or `closeTab` blanked the first tab),
-  the tab and its popups are let through again; the next agent action on it
-  guards it again. The owner can browse anywhere in tabs no agent holds, like
-  any browser; in a tab an agent holds, the owner's navigations pass the
-  guard too.
-- On the local transport, where Chrome uses the server's resolver, the guard
-  also refuses a name that resolves to a private address, unless the name or
-  that address is exempt. On the VM transport it checks literals and local
-  names only: Chrome resolves names on the VM, so the server's answers are
-  the wrong oracle both ways (VM-only names such as `http://router/` don't
-  resolve on the server, and split-horizon or Docker-only names resolve
-  privately only there).
-- Known limits of the guard: subframes (iframes) and subresources (images,
-  scripts, `fetch` from the page) are not checked; on the VM transport a name
-  that resolves to a private address on the VM is not caught; on the local
-  transport Chrome resolves the name again after the guard did, so DNS
-  rebinding between the two lookups is not caught (only `http_request` pins
-  its connection). A name that does not resolve on the server, or not within
-  3 seconds, is refused. Guarding a tab asks the browser process for
+  the guard lets the tab and its popups through again; the next agent action
+  on it guards it again.
+- Behind the guard, all of Chrome's traffic goes through a proxy on its own
+  loopback (ADR 0038): `egress-proxy.ts` in the server for the local
+  transport, `egress-proxy-vm.ts` started next to Chrome on the VM. It
+  resolves each name once, refuses any private, loopback, link-local or
+  metadata answer that is not exempt, and connects to the exact address it
+  checked, so DNS rebinding has no second lookup to fool. It covers
+  subframes, subresources, `fetch` and WebSockets, and the owner's tabs too:
+  in the live view a private or tailnet address opens only when it is in
+  `BROWSER_ALLOWED_PRIVATE_HOSTS`.
+- On the local transport, where Chrome's proxy uses the server's resolver,
+  the guard also refuses a name that resolves to a private address, unless
+  the name or that address is exempt. On the VM transport the guard checks
+  literals and local names only, and the VM-side proxy checks what names
+  resolve to there (VM-only names such as `http://router/`, split-horizon or
+  Docker-only names). A name that does not resolve on the server, or not
+  within 3 seconds, is refused. Guarding a tab asks the browser process for
   the tab's id; when it doesn't answer within 5 seconds, the agent's action
   fails with "The browser tab is not responding" rather than hanging.
+- On the VM, a refused tunnel and an unreachable site look the same to
+  Chrome, so `navigate` says the proxy "refused or couldn't reach" the site.
 - Every main-frame document load in the browser pauses for one DevTools round
   trip while the guard decides, in the owner's tabs too (they are continued
   at once). On the VM transport that round trip crosses the SSH tunnel.
