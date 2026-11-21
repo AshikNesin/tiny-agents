@@ -16,10 +16,11 @@ def free():
     p = s.getsockname()[1]
     s.close()
     return p
-print(free(), free())'\'')"
+print(free(), free(), free())'\'')"
 set -- $PORTS
 VNC=$1
 CDP=$2
+PROXY=$3
 DISP=""
 for n in $(seq 90 189); do
   [ -e "/tmp/.X11-unix/X$n" ] && continue
@@ -30,6 +31,136 @@ done
 XLOG="$PROFILE/.xvnc.log"
 CLOG="$PROFILE/.chrome.log"
 rm -f "$PROFILE/.stack-pids"
+cat > "$PROFILE/.egress-proxy.py" <<'\''TA_PROXY'\''
+import asyncio, ipaddress, socket, sys
+from urllib.parse import urlsplit
+
+PORT = int(sys.argv[1])
+EXEMPT = {h.strip().lower() for h in (sys.argv[2] if len(sys.argv) > 2 else "").split(",") if h.strip()}
+BODY = b"Private and local addresses can'\''t be fetched."
+REFUSED = (
+    b"HTTP/1.1 403 Forbidden\r\nx-tiny-agents-refused: private-address\r\n"
+    b"Content-Type: text/plain\r\nContent-Length: " + str(len(BODY)).encode() + b"\r\nConnection: close\r\n\r\n" + BODY
+)
+BAD = b"HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+FAILED = b"HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+NAT64 = bytes([0, 0x64, 0xFF, 0x9B]) + bytes(8)
+
+
+def private(address):
+    ip = ipaddress.ip_address(address.split("%")[0])
+    if ip.version == 6:
+        raw = ip.packed
+        v4 = ip.ipv4_mapped or ip.sixtofour
+        if v4 is None and (raw[:12] == bytes(12) or raw[:12] == NAT64 or raw[:12] == bytes(8) + b"\xff\xff\x00\x00"):
+            v4 = ipaddress.IPv4Address(raw[12:])
+        if v4 is not None:
+            return private(str(v4))
+    return not ip.is_global or ip.is_multicast
+
+
+async def decide(host, port):
+    bare = host.lower().strip("[]")
+    name = bare.rstrip(".")
+    exempt_name = bool({host.lower(), bare, name, "[" + bare + "]"} & EXEMPT)
+    try:
+        ipaddress.ip_address(bare.split("%")[0])
+        addresses = [bare]
+    except ValueError:
+        try:
+            infos = await asyncio.wait_for(
+                asyncio.get_running_loop().getaddrinfo(name, port, type=socket.SOCK_STREAM), 5
+            )
+        except Exception:
+            return None, FAILED
+        addresses = list(dict.fromkeys(info[4][0] for info in infos))
+    if not addresses:
+        return None, FAILED
+    if not exempt_name and any(private(a) and a not in EXEMPT and "[" + a + "]" not in EXEMPT for a in addresses):
+        return None, REFUSED
+    return addresses[0], None
+
+
+async def pipe(reader, writer):
+    try:
+        while True:
+            data = await reader.read(65536)
+            if not data:
+                break
+            writer.write(data)
+            await writer.drain()
+    except Exception:
+        pass
+    finally:
+        try:
+            writer.close()
+        except Exception:
+            pass
+
+
+def authority(text, default):
+    if text.startswith("["):
+        end = text.find("]")
+        host, rest = text[: end + 1], text[end + 1 :]
+    else:
+        host, _, rest = text.partition(":")
+        rest = ":" + rest if rest else ""
+    port = int(rest[1:]) if rest.startswith(":") and rest[1:].isdigit() else default
+    if not host or not 0 < port < 65536:
+        raise ValueError(text)
+    return host, port
+
+
+async def handle(reader, writer):
+    try:
+        head = await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), 30)
+        line, _, rest = head.partition(b"\r\n")
+        method, target, version = line.decode("latin-1").split(" ")
+        if method == "CONNECT":
+            host, port = authority(target, 0)
+            request = None
+        else:
+            url = urlsplit(target)
+            if url.scheme != "http":
+                raise ValueError(target)
+            host, port = authority(url.netloc.rpartition("@")[2], 80)
+            path = (url.path or "/") + ("?" + url.query if url.query else "")
+            kept = [h for h in rest.split(b"\r\n") if h and not h.lower().startswith((b"proxy-connection:", b"proxy-authorization:", b"connection:"))]
+            request = (method + " " + path + " " + version).encode("latin-1") + b"\r\n" + b"\r\n".join(kept + [b"Connection: close"]) + b"\r\n\r\n"
+    except Exception:
+        writer.write(BAD)
+        await writer.drain()
+        writer.close()
+        return
+    address, refusal = await decide(host, port)
+    if refusal is not None:
+        writer.write(refusal)
+        await writer.drain()
+        writer.close()
+        return
+    try:
+        up_reader, up_writer = await asyncio.wait_for(asyncio.open_connection(address, port), 15)
+    except Exception:
+        writer.write(FAILED)
+        await writer.drain()
+        writer.close()
+        return
+    if request is None:
+        writer.write(b"HTTP/1.1 200 Connection Established\r\n\r\n")
+        await writer.drain()
+    else:
+        up_writer.write(request)
+    await asyncio.gather(pipe(reader, up_writer), pipe(up_reader, writer))
+
+
+async def main():
+    server = await asyncio.start_server(handle, "127.0.0.1", PORT)
+    async with server:
+        await server.serve_forever()
+
+
+asyncio.run(main())
+TA_PROXY
 setsid nohup Xtigervnc ":$DISP" -geometry 2560x1600 -depth 24 -rfbport "$VNC" -localhost -nolisten tcp -SecurityTypes None -AlwaysShared -desktop tiny-agents </dev/null >"$XLOG" 2>&1 8>&- &
 XPID=$!
 echo "$XPID" > "$PROFILE/.stack-pids"
@@ -37,7 +168,14 @@ XWAIT=$((SECONDS + 10))
 while [ ! -S "/tmp/.X11-unix/X$DISP" ] && [ "$SECONDS" -lt "$XWAIT" ]; do sleep 0.1; done
 DISPLAY=":$DISP" setsid nohup vncconfig -nowin </dev/null >"$PROFILE/.vncconfig.log" 2>&1 8>&- &
 echo "$!" >> "$PROFILE/.stack-pids"
-DISPLAY=":$DISP" setsid nohup google-chrome-stable --user-data-dir="$PROFILE" --remote-debugging-port="$CDP" --remote-debugging-address=127.0.0.1 --window-position=0,0 --window-size=1280,800 --force-device-scale-factor=2 --no-first-run --no-default-browser-check --password-store=basic --use-mock-keychain --disable-features=Translate,MediaRouter --disable-session-crashed-bubble --hide-crash-restore-bubble about:blank </dev/null >"$CLOG" 2>&1 8>&- &
+setsid nohup python3 "$PROFILE/.egress-proxy.py" "$PROXY" '\'''\'' </dev/null >"$PROFILE/.egress-proxy.log" 2>&1 8>&- &
+echo "$!" >> "$PROFILE/.stack-pids"
+PROXYWAIT=$((SECONDS + 5))
+until (exec 3<>"/dev/tcp/127.0.0.1/$PROXY") 2>/dev/null; do
+  [ "$SECONDS" -lt "$PROXYWAIT" ] || { echo "The browser'\''s proxy did not start on the VM within 5s" >&2; tail -n 20 "$PROFILE/.egress-proxy.log" >&2 || true; exit 1; }
+  sleep 0.1
+done
+DISPLAY=":$DISP" setsid nohup google-chrome-stable --user-data-dir="$PROFILE" --remote-debugging-port="$CDP" --remote-debugging-address=127.0.0.1 --proxy-server="http://127.0.0.1:$PROXY" '\''--proxy-bypass-list=<-loopback>'\'' --window-position=0,0 --window-size=1280,800 --force-device-scale-factor=2 --no-first-run --no-default-browser-check --password-store=basic --use-mock-keychain --disable-features=Translate,MediaRouter --disable-session-crashed-bubble --hide-crash-restore-bubble about:blank </dev/null >"$CLOG" 2>&1 8>&- &
 CPID=$!
 echo "$CPID" >> "$PROFILE/.stack-pids"
 UP=0

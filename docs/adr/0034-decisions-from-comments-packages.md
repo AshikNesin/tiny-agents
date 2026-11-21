@@ -212,7 +212,8 @@ session, so two never land swapped and a resize is one round trip.
 `connectOverCDP` uses `webSocketDebuggerUrl` verbatim and that names the
 VM-side port, so it is fetched through the tunnel and rewritten. Chrome
 resolves names on the VM, so the navigation guard there checks literals and
-local names only (`resolveHost: null`). Closing a CDP-attached browser does
+local names only (`resolveHost: null`); the VM-side proxy of ADR 0038 checks
+what names resolve to. Closing a CDP-attached browser does
 not end it, so the recorded pids are killed.
 
 ## Browser and computer sessions (sandbox)

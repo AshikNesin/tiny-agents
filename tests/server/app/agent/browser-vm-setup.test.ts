@@ -88,7 +88,7 @@ describe("browser VM setup commands", () => {
       scale: 2,
     });
     const background = script.split("\n").filter((line) => line.endsWith(" &"));
-    expect(background).toHaveLength(3);
+    expect(background).toHaveLength(4);
     for (const line of background) expect(line).toContain("8>&-");
   });
 

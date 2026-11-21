@@ -153,6 +153,7 @@ export function createRemoteCdpTransport(options: RemoteCdpTransportOptions): Br
         scale,
         ...(options.locale ? { locale: options.locale } : {}),
         ...(options.timezone ? { timezone: options.timezone } : {}),
+        ...(open.allowedPrivateHosts ? { allowedPrivateHosts: open.allowedPrivateHosts } : {}),
       }),
     );
 
