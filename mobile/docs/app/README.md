@@ -99,6 +99,8 @@ paths are under `/api/v1`. `{surface}` is `browser` or `computer`.
 | Code thread | `code/thread/{threadId}` | `GET /code/status`, `GET /code/threads/:id/events`, `POST /code/threads/:id/seen`, `POST /code/threads/:id/messages`, `POST /code/threads/:id/interrupt`, `POST /code/threads/:id/requests/:rid`, `POST /code/threads/:id/recover`, `POST /code/threads/:id/queued/:qid/:action`, `POST /code/threads/:id/settings`, `POST /code/threads/:id/rename`, `POST /code/threads/:id/archive`, `DELETE /code/threads/:id` |
 | Code changes | `code/thread/{threadId}/changes` | `GET /code/threads/:id`, `GET /code/harnesses/:instance/diffs`, `GET /code/harnesses/:instance/diffs/:diff/files`, `GET /code/harnesses/:instance/diffs/:diff/file`, `GET /code/threads/:id/review/files`, `GET /code/threads/:id/review/file`, `POST /code/threads/:id/review/viewed`, `GET` and `POST /code/threads/:id/review/drafts`, `POST /code/threads/:id/review/send` |
 | Code pull request | `code/thread/{threadId}/pr` | `GET /code/threads/:id/pr`, `POST /code/threads/:id/publish`, `POST /code/threads/:id/pr/link`, `POST /code/threads/:id/pr/unlink`, `POST /code/threads/:id/pr/autofix`, `POST /code/threads/:id/pr/automerge`, `POST /code/threads/:id/pr/fix`, `POST /code/threads/:id/pr/merge` |
+| Code reviews | `code/reviews` | `GET /code/reviews`, `GET /code/reviews/inbox`, `POST /code/reviews`, `POST /code/reviews/:id/archive` |
+| Code review | `code/reviews/{reviewId}` | `GET /code/reviews/:id`, `POST /code/reviews` (update), `GET /code/threads/:key/review/files`, `GET /code/threads/:key/review/file`, `POST /code/threads/:key/review/viewed`, `GET`, `POST` and `DELETE /code/threads/:key/review/drafts?target=github`, `GET /code/reviews/:id/threads`, `POST /code/reviews/:id/threads/:thread/reply`, `POST /code/reviews/:id/threads/:thread/resolve`, `POST /code/reviews/:id/submit`, `POST /code/reviews/:id/archive` |
 | People | `people` | `GET /people`, `POST /people`, `DELETE /people/:id` |
 | Settings | `settings` | `POST /auth/logout` |
 | Notification preferences | `settings/notifications` | `GET` and `PUT /notifications/settings`, `GET /notifications/status`, `POST /notifications/validate`, `POST /notifications/test` |
@@ -131,6 +133,11 @@ now, recent, subagents nested). Change both clients together.
   Viewed marks and line comments kept as drafts until Send to the agent.
 - **Pull request.** For a project thread: Publish draft PR (or push new commits), link or unlink one, checks,
   reviews and unresolved comments, Fix now, the Auto-fix and Auto-merge switches with the loop's state, and Merge.
+
+- **Reviews.** The Reviews screen lists GitHub's review requests by section and your open reviews, and opens any
+  PR by link. A review shows the files (whole PR or since your review), Viewed marks, line comments kept as drafts
+  for GitHub, the PR's comment threads (Reply, Resolve) and Submit review (Comment, Approve, Request changes). The
+  review assistant, editing and pushing from a review stay in the web app.
 
 Every control shows only when the thread's harness has the capability, as on the web. Not on the phone yet:
 attachments, `@` file and `/` command completion, skills, fork, changing the directory, the usage report, per-turn

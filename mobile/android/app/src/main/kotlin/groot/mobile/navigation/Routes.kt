@@ -33,6 +33,8 @@ object Routes {
     const val CODE_THREAD = "code/thread/{threadId}"
     const val CODE_CHANGES = "code/thread/{threadId}/changes"
     const val CODE_PR = "code/thread/{threadId}/pr"
+    const val CODE_REVIEWS = "code/reviews"
+    const val CODE_REVIEW = "code/reviews/{reviewId}"
 
     fun botEdit(botId: String) = "bot/${Uri.encode(botId)}/edit"
     fun history(botId: String) = "bot/${Uri.encode(botId)}/history"
@@ -43,6 +45,7 @@ object Routes {
     fun codeThread(threadId: String) = "code/thread/${Uri.encode(threadId)}"
     fun codeChanges(threadId: String) = "code/thread/${Uri.encode(threadId)}/changes"
     fun codePr(threadId: String) = "code/thread/${Uri.encode(threadId)}/pr"
+    fun codeReview(reviewId: String) = "code/reviews/${Uri.encode(reviewId)}"
     fun vaultNew(kind: String) = "vault/new/${Uri.encode(kind)}"
     fun vaultItem(handle: String) = "vault/items/${Uri.encode(handle)}"
     fun memory(botId: String?) = if (botId == null) "memory" else "memory?botId=${Uri.encode(botId)}"
