@@ -28,11 +28,12 @@ the same port). Nothing to configure: every environment variable has a
 development default. Copy `.env.example` to `.env` only when you want to
 override something.
 
-The app is served at **`https://tiny-agents.localhost`** via portless, which must be
-installed globally (`https://tiny-agents.localhost:8888` when no portless proxy is
-already running; first run asks to trust a local certificate, see
-[Portless & HTTPS](./guides/portless-https.md)). Bypass its proxy with
-`PORTLESS=0 pnpm dev` → `http://localhost:3000`.
+The app is served at **`http://localhost:3000`**. If
+[portless](./guides/portless-https.md) is installed globally, `pnpm dev` runs
+through it instead and serves **`https://tiny-agents.localhost`**
+(`https://tiny-agents.localhost:8888` when no portless proxy is already
+running; first run asks to trust a local certificate). `PORTLESS=0 pnpm dev`
+skips it even when it is installed.
 
 Optional: `pnpm groot:setup` renames the app (package name, `app.name`,
 `RP_NAME`) and offers to install portless.
