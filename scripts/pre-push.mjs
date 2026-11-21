@@ -72,7 +72,14 @@ async function main() {
   const plan = prePushPlan(files, removed);
   const checks = [run("Merges with main", "node", ["scripts/check-merge-main.mjs"])];
   if (plan.fmt.length > 0) {
-    checks.push(run(`Format (${plan.fmt.length} files)`, "vp", ["fmt", "--check", ...plan.fmt]));
+    checks.push(
+      run(`Format (${plan.fmt.length} files)`, "vp", [
+        "fmt",
+        "--check",
+        "--no-error-on-unmatched-pattern",
+        ...plan.fmt,
+      ]),
+    );
   }
   if (plan.lint.length > 0) {
     checks.push(run(`Lint (${plan.lint.length} files)`, "vp", ["lint", ...plan.lint]));
