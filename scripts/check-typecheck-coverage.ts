@@ -60,7 +60,7 @@ function sourceRoots(): string[] {
     .filter((entry) => entry.isDirectory())
     .map((entry) => `packages/${entry.name}/src`)
     .filter((root) => fs.existsSync(path.join(repoRoot, root)));
-  return ["apps/web/src", ...packages, "tests"];
+  return ["apps/web/src", ...packages, "tests", "scripts"];
 }
 
 function listSourceFiles(): { sources: string[]; declarations: string[] } {

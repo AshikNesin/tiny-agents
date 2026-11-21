@@ -21,6 +21,7 @@
       "@groot/jobs/client": ["../../packages/jobs/src/client/index.ts"],
       "@groot/jobs/client/*": ["../../packages/jobs/src/client/*"],
       "@tiny-agents/agent/peer-envelope": ["../../packages/agent/src/toolkits/peer-envelope.ts"],
+      "@tiny-agents/agent/wire": ["../../packages/agent/src/wire.ts"],
       "@tiny-agents/code/contracts": ["../../packages/code/src/contracts/index.ts"]
     },
     "types": ["vite/client", "@testing-library/jest-dom/vitest"]

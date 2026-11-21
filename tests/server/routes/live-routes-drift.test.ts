@@ -511,7 +511,7 @@ describe("computer, by bot", () => {
     expect((await post(`/api/v1/bots/${id}/computer/driver`, { driver: "nobody" })).status).toBe(
       400,
     );
-    expect([400, 404]).toContain((await post(bot, { driver: "nobody" })).status);
+    expect((await post(bot, { driver: "nobody" })).status).toBe(404);
   });
 
   it("says why a reset failed", async () => {
@@ -605,8 +605,8 @@ describe("browser, by profile", () => {
       const size = { width: 800, height: 600 };
       expect((await post(`${base}/resize`, size)).status, profile).toBe(404);
       expect((await post(`${base}/driver`, { driver: "human" })).status, profile).toBe(404);
-      expect([400, 404], profile).toContain((await post(`${base}/resize`, { width: 1 })).status);
-      expect([400, 404], profile).toContain((await post(`${base}/driver`, { driver: "x" })).status);
+      expect((await post(`${base}/resize`, { width: 1 })).status, profile).toBe(404);
+      expect((await post(`${base}/driver`, { driver: "x" })).status, profile).toBe(404);
     }
     expect((await post("/api/v1/browser/shared/resize", { width: 1 })).status).toBe(400);
     expect((await post("/api/v1/browser/shared/driver", { driver: "x" })).status).toBe(400);
@@ -796,8 +796,8 @@ describe("computer, by profile", () => {
       const base = `/api/v1/computer/${profile}`;
       expect((await post(`${base}/driver`, { driver: "human" })).status, profile).toBe(404);
       expect((await post(`${base}/apps`, { id: "x" })).status, profile).toBe(404);
-      expect([400, 404], profile).toContain((await post(`${base}/driver`, { driver: "x" })).status);
-      expect([400, 404], profile).toContain((await post(`${base}/apps`, { id: "" })).status);
+      expect((await post(`${base}/driver`, { driver: "x" })).status, profile).toBe(404);
+      expect((await post(`${base}/apps`, { id: "" })).status, profile).toBe(404);
     }
     expect((await post("/api/v1/computer/shared/driver", { driver: "x" })).status).toBe(400);
     expect((await post("/api/v1/computer/shared/apps", { id: "" })).status).toBe(400);

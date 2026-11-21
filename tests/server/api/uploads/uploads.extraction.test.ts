@@ -8,12 +8,13 @@ import {
   extractionIdle,
   extractKey,
   queueExtraction,
-  setExtractRunnerForTests,
+  setExtractRunner,
   waitUntilSettled,
 } from "../../../../apps/web/src/server/api/uploads/uploads.extraction";
 import { deleteUpload } from "../../../../apps/web/src/server/api/uploads/uploads.service";
 import {
   createWorkerRunner,
+  inProcessRunner,
   type WorkerLike,
 } from "../../../../apps/web/src/server/api/uploads/uploads.extract-runner";
 import type { ExtractResult } from "../../../../apps/web/src/server/api/uploads/uploads.extract";
@@ -64,14 +65,14 @@ describe("extraction owns extractStatus", () => {
     await db.delete(uploads);
   });
   afterEach(async () => {
-    setExtractRunnerForTests(undefined);
+    setExtractRunner(inProcessRunner);
     await extractionIdle();
     await db.delete(uploads);
   });
 
   it("waitUntilSettled waits on the job, gives up after the wait, and sees the result once it lands", async () => {
     const g = gate();
-    setExtractRunnerForTests(g.runner);
+    setExtractRunner(g.runner);
     const row = await seedFile("pending");
     void queueExtraction(row.id);
 
@@ -86,7 +87,7 @@ describe("extraction owns extractStatus", () => {
 
   it("a delete during extraction cancels the job: no row, no extract.json, no orphan bytes", async () => {
     const g = gate();
-    setExtractRunnerForTests(g.runner);
+    setExtractRunner(g.runner);
     const row = await seedFile("pending");
     const job = queueExtraction(row.id);
     await new Promise((r) => setTimeout(r, 10));
@@ -103,7 +104,7 @@ describe("extraction owns extractStatus", () => {
   it("cancelling a job still in the queue drops it without running", async () => {
     const g = gate();
     let runs = 0;
-    setExtractRunnerForTests(() => {
+    setExtractRunner(() => {
       runs += 1;
       return g.runner();
     });

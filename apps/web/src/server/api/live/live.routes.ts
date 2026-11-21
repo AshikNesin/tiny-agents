@@ -55,7 +55,6 @@ const browser: LiveSurface<LiveBrowser> = {
   resize: { cannot: "This browser cannot be resized.", failed: "Could not resize the browser." },
   profiles: {
     notFound: "No such browser.",
-    lookupInWrapper: true,
     notRunning: "This browser is not running.",
     issueTicket: ({ userId, at }) =>
       issueBrowserPageVncTicket({ userId, profile: at.profile, target: at }),
@@ -129,7 +128,6 @@ const computer: LiveSurface<LiveComputer> = {
   },
   profiles: {
     notFound: "No such desktop.",
-    lookupInWrapper: false,
     notRunning: "This desktop is not running.",
     issueTicket: ({ userId, at }) => issueDesktopVncTicket({ userId, profile: at.profile }),
     async list(): Promise<DesktopList> {

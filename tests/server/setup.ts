@@ -41,4 +41,10 @@ await freshTestDatabase(
   seedModels,
 );
 
+const { setExtractRunner } =
+  await import("../../apps/web/src/server/api/uploads/uploads.extraction");
+const { inProcessRunner } =
+  await import("../../apps/web/src/server/api/uploads/uploads.extract-runner");
+setExtractRunner(inProcessRunner);
+
 guardFileIsolation(closeTestDatabase);

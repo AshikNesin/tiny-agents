@@ -29,8 +29,8 @@ let active = 0;
 let idle: Promise<void> = Promise.resolve();
 let markIdle: (() => void) | undefined;
 
-export function setExtractRunnerForTests(next: ExtractRunner | undefined): void {
-  runner = next ?? defaultRunner;
+export function setExtractRunner(next: ExtractRunner): void {
+  runner = next;
 }
 
 export function extractionIdle(): Promise<void> {

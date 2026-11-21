@@ -65,7 +65,6 @@ export interface LiveSurface<L extends LiveEntry> {
   };
   profiles: Addressed & {
     notFound: string;
-    lookupInWrapper: boolean;
     list(): Promise<unknown>;
   };
   bots: Addressed & {
@@ -111,16 +110,10 @@ function byProfile(surface: LiveSurface<LiveEntry>): Addressing {
     base: `/${name}/:profile`,
     reset: `/${name}/:profile`,
     resolve,
-    withBody: profiles.lookupInWrapper
-      ? (c, schema) => Promise.all([resolve(c), parseBody(c, schema)])
-      : (c, schema) =>
-          Promise.all([
-            knownProfile(c.req.param("profile"), profiles.notFound),
-            parseBody(c, schema),
-          ]).then(([profile, body]): [Resolved, z.output<typeof schema>] => [
-            { at: { profile, tab: OWNER_TAB }, scope: profile },
-            body,
-          ]),
+    withBody: async (c, schema) => {
+      const resolved = await resolve(c);
+      return [resolved, await parseBody(c, schema)];
+    },
     vncPath: (profile) => `/api/v1/${name}/${encodeURIComponent(profile)}/vnc`,
     opensTabForTicket: false,
     noViewIsNotRunning: false,
@@ -144,8 +137,8 @@ function byBot(surface: LiveSurface<LiveEntry>): Addressing {
           return [await resolve(c), body];
         }
       : async (c, schema) => {
-          const [body, resolved] = await Promise.all([parseBody(c, schema), resolve(c)]);
-          return [resolved, body];
+          const resolved = await resolve(c);
+          return [resolved, await parseBody(c, schema)];
         },
     vncPath: (id) => `/api/v1/bots/${encodeURIComponent(id)}/${name}/vnc`,
   };
