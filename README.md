@@ -173,4 +173,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-ISC, as declared in [`package.json`](package.json).
+MIT. See [LICENSE](LICENSE).
