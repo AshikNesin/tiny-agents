@@ -1,5 +1,5 @@
 import React from "react";
-import { render as renderBare, screen, within } from "@testing-library/react";
+import { fireEvent, render as renderBare, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -107,5 +107,15 @@ describe("the Chat/Code mode switch", () => {
     const nav = within(screen.getByRole("navigation", { name: "Primary" }));
     await userEvent.click(nav.getByRole("button", { name: "Search" }));
     expect(useCommandPaletteStore.getState().open).toBe(true);
+  });
+
+  it("folds the chat sidebar to its rail with ⌘B, like the Code sidebar", () => {
+    useUiStore.setState({ collapsed: false });
+    renderAt("/chats");
+    fireEvent.keyDown(window, { key: "b", metaKey: true });
+    expect(useUiStore.getState().collapsed).toBe(true);
+    expect(screen.getByRole("button", { name: "Expand sidebar" })).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: "b", ctrlKey: true });
+    expect(useUiStore.getState().collapsed).toBe(false);
   });
 });

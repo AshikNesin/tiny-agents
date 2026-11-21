@@ -1,10 +1,9 @@
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { Link, matchPath, useLocation, useNavigate } from "react-router-dom";
 import {
   ChevronsUpDown,
   LogOut,
   MessageSquareHeart,
-  PanelLeftClose,
   PanelLeftOpen,
   Search,
   Settings as SettingsIcon,
@@ -27,7 +26,7 @@ import { PRIMARY_NAV, SECONDARY_NAV, guestNav } from "./nav";
 import { useIsGuest } from "../../store/people";
 import { BotRail, BotsSection } from "./BotsSection";
 import { BrandMark } from "./BrandMark";
-import { ModeSwitch, SIDEBAR_ICON, SIDEBAR_ROW, useCodeAvailable } from "./ModeSwitch";
+import { ModeSwitch, SIDEBAR_ICON, SIDEBAR_ROW, SidebarFold, useCodeAvailable } from "./ModeSwitch";
 import { openFeedback } from "../../lib/feedback";
 
 const SEARCH_SHORTCUT =
@@ -109,6 +108,16 @@ export function AppSidebar() {
   const secondaryNav = guest ? [] : SECONDARY_NAV;
 
   const feedbackRequested = useRef(false);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey) return;
+      if (event.key.toLowerCase() !== "b") return;
+      event.preventDefault();
+      setCollapsed(!useUiStore.getState().collapsed);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [setCollapsed]);
   const isActive = (to: string) => pathname === to || pathname.startsWith(`${to}/`);
   const codeAvailable = useCodeAvailable();
   const inMenuPage = [...SECONDARY_NAV.map((item) => item.to), "/settings"].some(isActive);
@@ -130,7 +139,7 @@ export function AppSidebar() {
       <aside
         aria-label="Sidebar"
         className={cn(
-          "bg-sidebar text-sidebar-foreground border-sidebar-border fixed inset-y-0 left-0 z-50 flex w-64 shrink-0 flex-col border-r-[0.5px] transition-transform duration-200 ease-out",
+          "group/sidebar bg-sidebar text-sidebar-foreground border-sidebar-border fixed inset-y-0 left-0 z-50 flex w-64 shrink-0 flex-col border-r-[0.5px] transition-transform duration-200 ease-out",
           mobileOpen ? "translate-x-0" : "-translate-x-full",
           "md:static md:z-auto md:translate-x-0 md:transition-none",
           rail ? "md:w-16" : "md:w-68",
@@ -154,19 +163,17 @@ export function AppSidebar() {
             <BrandMark className="size-5" />
           </Link>
           {codeAvailable && <ModeSwitch vertical={rail} onNavigate={closeDrawer} />}
-          <button
-            type="button"
-            onClick={() => setCollapsed(!collapsed)}
-            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            className={cn(SIDEBAR_ICON, "hidden md:flex")}
-          >
-            {collapsed ? (
+          {rail && (
+            <button
+              type="button"
+              onClick={() => setCollapsed(false)}
+              aria-label="Expand sidebar"
+              title="Expand sidebar (⌘B)"
+              className={cn(SIDEBAR_ICON, "hidden md:flex")}
+            >
               <PanelLeftOpen className="size-4" />
-            ) : (
-              <PanelLeftClose className="size-4" />
-            )}
-          </button>
+            </button>
+          )}
         </div>
 
         <nav
@@ -205,7 +212,7 @@ export function AppSidebar() {
           </div>
         )}
 
-        <div className={cn("shrink-0 p-2.5", rail && "md:flex md:justify-center")}>
+        <div className={cn("flex shrink-0 items-center gap-1 p-2.5", rail && "md:justify-center")}>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
@@ -213,9 +220,9 @@ export function AppSidebar() {
                 aria-label="Account and navigation"
                 title={rail ? accountName : undefined}
                 className={cn(
-                  "flex h-10 w-full items-center gap-2 rounded-xl px-1.5 text-left text-sm outline-none focus-visible:ring-1 focus-visible:ring-sidebar-ring",
+                  "flex h-10 min-w-0 flex-1 items-center gap-2 rounded-xl px-1.5 text-left text-sm outline-none focus-visible:ring-1 focus-visible:ring-sidebar-ring",
                   inMenuPage ? "bg-sidebar-accent" : "hover:bg-sidebar-accent",
-                  rail && "md:size-10 md:justify-center md:px-0",
+                  rail && "md:size-10 md:flex-none md:justify-center md:px-0",
                 )}
               >
                 <span className="bg-muted text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold">
@@ -276,6 +283,7 @@ export function AppSidebar() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          {!rail && <SidebarFold label="Collapse sidebar" onClick={() => setCollapsed(true)} />}
         </div>
       </aside>
     </>

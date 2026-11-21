@@ -103,17 +103,38 @@ export function ModeSwitch({
   );
 }
 
+export function SidebarFold({
+  label,
+  onClick,
+  controls,
+}: {
+  label: string;
+  onClick: () => void;
+  controls?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      aria-controls={controls}
+      aria-expanded
+      title={`${label} (⌘B)`}
+      className={cn(
+        SIDEBAR_ICON,
+        "hidden md:flex md:opacity-0 md:group-hover/sidebar:opacity-100 md:focus-visible:opacity-100 pointer-coarse:opacity-100",
+      )}
+    >
+      <PanelLeftClose className="size-4" />
+    </button>
+  );
+}
+
 export function SidebarTop({
   onNavigate,
-  onHide,
-  hideLabel = "Hide sidebar",
-  hideControls,
   children,
 }: {
   onNavigate?: () => void;
-  onHide?: () => void;
-  hideLabel?: string;
-  hideControls?: string;
   children?: ReactNode;
 }) {
   const codeAvailable = useCodeAvailable();
@@ -130,19 +151,6 @@ export function SidebarTop({
       <span className="flex-1" />
       {codeAvailable && <ModeSwitch onNavigate={onNavigate} />}
       {children}
-      {onHide && (
-        <button
-          type="button"
-          onClick={onHide}
-          aria-label={hideLabel}
-          aria-controls={hideControls}
-          aria-expanded
-          title={`${hideLabel} (⌘B)`}
-          className={cn(SIDEBAR_ICON, "hidden md:flex")}
-        >
-          <PanelLeftClose className="size-4" />
-        </button>
-      )}
     </div>
   );
 }

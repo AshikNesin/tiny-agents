@@ -194,7 +194,7 @@ lines, unchanged runs folded behind expanders, and long lines wrapped.
   **Pull request** (`?tab=pr`), each a tab at full width. Comments work there
   as in the pane and wait in a tray at the bottom (**Send now**); **Back to
   the thread** returns to the composer, where they go with the next message.
-- **Hide sidebar** (top of the thread list) or ⌘B folds the list away on
+- **Hide sidebar** (beside Settings at the foot of the list, shown on hover) or ⌘B folds the list away on
   wide screens so the thread and Changes get the room; **Show sidebar** at
   the top left brings it back. The choice is remembered in this browser.
 - Drag the divider between the thread and its right panel to resize them
