@@ -6,7 +6,7 @@
     <title>Tiny Agents: your own AI assistant, on your own server</title>
     <meta
       name="description"
-      content="Your own AI assistant, on your own server. Tiny Agents is a messenger where each contact is a bot that can browse the web, run commands, work on a schedule and remember you, and it asks before it does anything you haven't allowed. Open source, MIT."
+      content="Your own AI assistant, on your own server. Bots that browse, run commands, work on a schedule and ask before acting. Open source, MIT."
     />
     <meta name="theme-color" content="#ffffff" />
     <meta name="color-scheme" content="light" />
@@ -305,11 +305,6 @@
         gap: 10px;
         margin-top: 6px;
       }
-      .note {
-        font-size: 14px;
-        color: var(--muted);
-        text-wrap: balance;
-      }
 
       /* ── Demo ────────────────────────────────────────── */
       .player {
@@ -433,8 +428,7 @@
       .section {
         padding: clamp(72px, 9vw, 104px) 0;
       }
-      .section,
-      .cta {
+      .section {
         scroll-margin-top: 64px;
       }
       .section + .section {
@@ -923,26 +917,6 @@
         color: var(--muted);
       }
 
-      /* Closing call to action */
-      .cta {
-        padding: clamp(72px, 9vw, 112px) 0;
-        border-top: 1px solid var(--line2);
-        background: var(--bg2);
-        text-align: center;
-      }
-      .cta .container {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 18px;
-      }
-      .cta .lead {
-        max-width: 520px;
-      }
-      .cta .ctas {
-        margin-top: 10px;
-      }
-
       footer {
         border-top: 1px solid var(--line2);
       }
@@ -1095,12 +1069,6 @@
             d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.7 5.4-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"
           />
         </symbol>
-        <symbol id="x" viewBox="0 0 24 24">
-          <path
-            fill="currentColor"
-            d="M18.24 2.25h3.31l-7.23 8.26 8.5 11.24h-6.66l-5.21-6.82-5.97 6.82H1.67l7.73-8.84L1.25 2.25h6.83l4.71 6.23zm-1.16 17.52h1.83L7.08 4.13H5.12z"
-          />
-        </symbol>
       </defs>
     </svg>
 
@@ -1148,14 +1116,7 @@
               <svg aria-hidden="true"><use href="#gh" /></svg>
               Get it on GitHub
             </a>
-            <a class="btn btn-secondary" href="#demo" data-play>
-              <svg viewBox="0 0 16 16" aria-hidden="true">
-                <path d="M4 2.5v11l9-5.5z" fill="currentColor" />
-              </svg>
-              Watch the demo
-            </a>
           </div>
-          <p class="note">Your data. Your models. Your server.</p>
         </div>
       </section>
 
@@ -1204,7 +1165,6 @@
         <div class="container">
           <div class="section-head">
             <h2>What it looks like</h2>
-            <p>The app, as it runs on your server.</p>
           </div>
           <figure class="shot shot-lead">
             <img
@@ -1512,8 +1472,7 @@
             <p class="lead">
               No account with us and no hosted tier. You need Node.js 24 and pnpm 10.
             </p>
-            <pre class="quick"><code>npm install -g portless
-git clone https://github.com/AshikNesin/tiny-agents.git
+            <pre class="quick"><code>git clone https://github.com/AshikNesin/tiny-agents.git
 cd tiny-agents
 pnpm install
 TINY_AGENTS_FAUX=1 pnpm dev</code></pre>
@@ -1551,33 +1510,10 @@ TINY_AGENTS_FAUX=1 pnpm dev</code></pre>
           <div class="section-head"><h2>Questions</h2></div>
           <div class="faq">
             <details>
-              <summary>How do I try it?</summary>
-              <div class="a">
-                Clone it from
-                <a href="https://github.com/AshikNesin/tiny-agents" rel="noopener"><u>GitHub</u></a>
-                and run it with the built-in test model, as above. Add a real model in Settings when
-                you're ready.
-              </div>
-            </details>
-            <details>
-              <summary>Is there a hosted version?</summary>
-              <div class="a">
-                No. You run it yourself, on a small server or your own machine, so your chats,
-                memories and secrets stay with you.
-              </div>
-            </details>
-            <details>
               <summary>Is it one assistant or several?</summary>
               <div class="a">
                 Start with one. If you want, add specialists like a travel planner or a code helper,
                 each with its own personality, model and tools. They can hand work to each other.
-              </div>
-            </details>
-            <details>
-              <summary>Which models does it use?</summary>
-              <div class="a">
-                The ones you already pay for: Anthropic, OpenAI, Gemini, any OpenAI-compatible host,
-                Cloudflare AI Gateway or your Claude plan.
               </div>
             </details>
             <details>
@@ -1587,44 +1523,6 @@ TINY_AGENTS_FAUX=1 pnpm dev</code></pre>
                 number.
               </div>
             </details>
-            <details>
-              <summary>Is there a phone app?</summary>
-              <div class="a">
-                Yes, for Android. It does what the web app does, with push notifications you can
-                approve from. It's coming to the Play Store soon; until then,
-                <a
-                  href="https://release-hub.nesin.io/apps/tiny-agents/download?channel=direct"
-                  rel="noopener"
-                  ><u>download the APK</u></a
-                >.
-              </div>
-            </details>
-            <details>
-              <summary>What's the license?</summary>
-              <div class="a">MIT. Use it, change it, run it wherever you like.</div>
-            </details>
-          </div>
-        </div>
-      </section>
-
-      <section class="cta" id="open-source">
-        <div class="container">
-          <span class="eyebrow"><span class="dot" aria-hidden="true"></span>MIT licensed</span>
-          <h2>Tiny Agents is open source.</h2>
-          <p class="lead">Clone it, run it on your own server, and make it yours.</p>
-          <div class="ctas">
-            <a
-              class="btn btn-primary"
-              href="https://github.com/AshikNesin/tiny-agents"
-              rel="noopener"
-            >
-              <svg aria-hidden="true"><use href="#gh" /></svg>
-              Get it on GitHub
-            </a>
-            <a class="btn btn-secondary" href="https://x.com/AshikNesin" rel="noopener">
-              <svg aria-hidden="true"><use href="#x" /></svg>
-              Follow @AshikNesin
-            </a>
           </div>
         </div>
       </section>
@@ -1734,18 +1632,6 @@ TINY_AGENTS_FAUX=1 pnpm dev</code></pre>
           if (section) spy.observe(section);
         });
       }
-
-      // Every "Watch the demo" link scrolls to the demo and starts it.
-      document.querySelectorAll("[data-play]").forEach((a) =>
-        a.addEventListener("click", (e) => {
-          e.preventDefault();
-          player.scrollIntoView({
-            behavior: reduce ? "auto" : "smooth",
-            block: "center",
-          });
-          play();
-        }),
-      );
     </script>
   </body>
 </html>
