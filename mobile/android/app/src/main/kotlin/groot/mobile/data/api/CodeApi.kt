@@ -10,6 +10,8 @@ class CodeApi(private val client: ApiClient) {
 
     private fun thread(id: String) = "/code/threads/${enc(id)}"
 
+    private fun reviewPath(id: String) = "/code/reviews/${enc(id)}"
+
     private fun harness(instanceId: String) = "/code/harnesses/${enc(instanceId)}"
 
     private fun list(data: Any?): JSONArray = data as? JSONArray ?: JSONArray()
@@ -117,11 +119,11 @@ class CodeApi(private val client: ApiClient) {
     suspend fun diffFile(instanceId: String, diffId: String, cwd: String, path: String): FileContents =
         FileContents.from(client.getObject("${harness(instanceId)}/diffs/${enc(diffId)}/file", mapOf("cwd" to cwd, "path" to path)))
 
-    suspend fun reviewFiles(id: String): List<ChangedFile> =
-        list(client.get("${thread(id)}/review/files")).mapObjects(ChangedFile::from)
+    suspend fun reviewFiles(id: String, scope: String? = null): List<ChangedFile> =
+        list(client.get("${thread(id)}/review/files", mapOf("scope" to scope))).mapObjects(ChangedFile::from)
 
-    suspend fun reviewFile(id: String, path: String): FileContents =
-        FileContents.from(client.getObject("${thread(id)}/review/file", mapOf("path" to path)))
+    suspend fun reviewFile(id: String, path: String, scope: String? = null): FileContents =
+        FileContents.from(client.getObject("${thread(id)}/review/file", mapOf("path" to path, "scope" to scope)))
 
     suspend fun markViewed(id: String, path: String, hash: String, viewed: Boolean) {
         client.post("${thread(id)}/review/viewed", jsonOf("path" to path, "hash" to hash, "viewed" to viewed))
@@ -159,4 +161,46 @@ class CodeApi(private val client: ApiClient) {
 
     suspend fun merge(id: String, method: String): ThreadPulls =
         ThreadPulls.from(client.postObject("${thread(id)}/pr/merge", jsonOf("method" to method)))
+
+    suspend fun reviews(): List<CodeReview> = list(client.get("/code/reviews")).mapObjects(CodeReview::from)
+
+    suspend fun reviewInbox(): List<InboxPull> = list(client.get("/code/reviews/inbox")).mapObjects(InboxPull::from)
+
+    suspend fun openReview(pr: String): CodeReview = CodeReview.from(client.postObject("/code/reviews", jsonOf("pr" to pr)))
+
+    suspend fun review(id: String): CodeReview = CodeReview.from(client.getObject(reviewPath(id)))
+
+    suspend fun archiveReview(id: String) {
+        client.post("${reviewPath(id)}/archive")
+    }
+
+    suspend fun submitReview(id: String, verdict: ReviewVerdict, body: String): String =
+        client.postObject("${reviewPath(id)}/submit", jsonOfNotNull("event" to verdict.wire, "body" to body.ifBlank { null })).string("url")
+
+    suspend fun reviewConversations(id: String): List<PullConversation> =
+        client.getObject("${reviewPath(id)}/threads").arr("threads").mapObjects(PullConversation::from)
+
+    suspend fun replyToConversation(id: String, conversationId: String, body: String) {
+        client.post("${reviewPath(id)}/threads/${enc(conversationId)}/reply", jsonOf("body" to body))
+    }
+
+    suspend fun resolveConversation(id: String, conversationId: String) {
+        client.post("${reviewPath(id)}/threads/${enc(conversationId)}/resolve")
+    }
+
+    suspend fun githubDrafts(key: String): List<ReviewDraft> =
+        list(client.get("${thread(key)}/review/drafts", mapOf("target" to "github"))).mapObjects(ReviewDraft::from)
+
+    suspend fun addGithubDraft(key: String, path: String, line: Int, quote: String, body: String, side: String) {
+        client.post(
+            "${thread(key)}/review/drafts$GITHUB_TARGET",
+            jsonOf("path" to path, "side" to side, "startLine" to line, "endLine" to line, "quote" to quote, "body" to body),
+        )
+    }
+
+    suspend fun removeGithubDraft(key: String, draftId: String) {
+        client.delete("${thread(key)}/review/drafts/${enc(draftId)}", mapOf("target" to "github"))
+    }
 }
+
+private const val GITHUB_TARGET = "?target=github"

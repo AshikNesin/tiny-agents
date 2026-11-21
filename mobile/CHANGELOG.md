@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.12.0
+
+### Minor Changes
+
+- Code, Reviews (the eye at the top of Code): the pull requests waiting on you from GitHub (needs your review,
+  updated since your review, waiting on author, yours), your open reviews, and a field to open any PR by link. A
+  review shows the PR's files and diffs (all of it, or only what changed since your review), Viewed marks, line
+  comments kept until you submit, the PR's comment threads with Reply and Resolve, and Submit review with Comment,
+  Approve or Request changes. `/code/reviews` links open in the app. The review assistant stays in the web app.
+
 ## 0.11.0
 
 ### Minor Changes

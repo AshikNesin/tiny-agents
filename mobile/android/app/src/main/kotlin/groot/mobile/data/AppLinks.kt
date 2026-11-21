@@ -45,6 +45,8 @@ fun parseAppLink(url: String, serverUrl: String?): AppLink? {
         segments == listOf("tasks") -> AppLink.Screen(Routes.TASKS)
         segments == listOf("code") -> AppLink.Screen(Routes.CODE)
         segments == listOf("code", "new") -> AppLink.Screen(Routes.CODE_NEW)
+        segments == listOf("code", "reviews") -> AppLink.Screen(Routes.CODE_REVIEWS)
+        segments.size == 3 && segments[0] == "code" && segments[1] == "reviews" -> AppLink.Screen(Routes.codeReview(segments[2]))
         segments.size == 2 && segments[0] == "code" -> AppLink.Screen(Routes.codeThread(segments[1]))
         else -> null
     }

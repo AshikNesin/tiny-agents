@@ -281,7 +281,7 @@ private fun scopeLabel(scope: ChangesScope): String = when (scope) {
 }
 
 @Composable
-private fun FileCard(
+internal fun FileCard(
     file: ChangedFile,
     view: FileDiffView?,
     open: Boolean,
@@ -326,5 +326,5 @@ private fun FileCard(
     }
 }
 
-private const val MAX_DIFF_LINES = 1500
+internal const val MAX_DIFF_LINES = 1500
 private const val MAX_SCOPE_LABEL = 40

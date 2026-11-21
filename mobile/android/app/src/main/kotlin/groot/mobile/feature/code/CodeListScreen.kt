@@ -153,7 +153,7 @@ class CodeListViewModel(private val container: AppContainer) : ViewModel() {
 }
 
 @Composable
-fun CodeListRoute(container: AppContainer, onOpen: (String) -> Unit, onNew: () -> Unit, onBack: () -> Unit) {
+fun CodeListRoute(container: AppContainer, onOpen: (String) -> Unit, onNew: () -> Unit, onReviews: () -> Unit, onBack: () -> Unit) {
     val viewModel: CodeListViewModel = viewModel(factory = CodeListViewModel.factory(container))
     DisposableEffect(viewModel) {
         viewModel.show()
@@ -164,6 +164,7 @@ fun CodeListRoute(container: AppContainer, onOpen: (String) -> Unit, onNew: () -
         state = state,
         onOpen = onOpen,
         onNew = onNew,
+        onReviews = onReviews,
         onFilter = viewModel::setHarnessFilter,
         onShowArchived = viewModel::setShowArchived,
         onRetry = viewModel::retry,
@@ -177,6 +178,7 @@ fun CodeListScreen(
     onOpen: (String) -> Unit,
     onNew: () -> Unit,
     onFilter: (String?) -> Unit,
+    onReviews: () -> Unit = {},
     onShowArchived: (Boolean) -> Unit,
     onRetry: () -> Unit,
     onBack: () -> Unit,
@@ -187,7 +189,10 @@ fun CodeListScreen(
         title = "Code",
         onBack = onBack,
         subtitle = if (!state.connected && !state.loading && state.harnesses.isNotEmpty()) "Reconnecting" else null,
-        actions = { if (state.harnesses.isNotEmpty()) IconBtn(AppIcons.Compose, "New thread", onNew) },
+        actions = {
+            IconBtn(AppIcons.Eye, "Reviews", onReviews)
+            if (state.harnesses.isNotEmpty()) IconBtn(AppIcons.Compose, "New thread", onNew)
+        },
     ) {
         when {
             state.error != null && state.harnesses.isEmpty() -> EmptyState(

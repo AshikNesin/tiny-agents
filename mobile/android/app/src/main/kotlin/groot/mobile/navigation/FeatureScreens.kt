@@ -19,6 +19,8 @@ import groot.mobile.feature.live.LiveTarget
 import groot.mobile.feature.manage.ConnectionsRoute
 import groot.mobile.feature.manage.MemoryRoute
 import groot.mobile.feature.manage.PeopleRoute
+import groot.mobile.feature.code.ReviewRoute
+import groot.mobile.feature.code.ReviewsRoute
 import groot.mobile.feature.settings.NotificationPrefsRoute
 import groot.mobile.feature.manage.RoutinesRoute
 import groot.mobile.feature.manage.SkillsRoute
@@ -100,7 +102,7 @@ internal fun NavGraphBuilder.featureScreens(container: AppContainer, navigate: (
 
 private fun NavGraphBuilder.codeScreens(container: AppContainer, navigate: (String) -> Unit, back: () -> Unit) {
     composable(Routes.CODE) {
-        ScreenContainer { CodeListRoute(container, onOpen = { navigate(Routes.codeThread(it)) }, onNew = { navigate(Routes.CODE_NEW) }, onBack = back) }
+        ScreenContainer { CodeListRoute(container, onOpen = { navigate(Routes.codeThread(it)) }, onNew = { navigate(Routes.CODE_NEW) }, onReviews = { navigate(Routes.CODE_REVIEWS) }, onBack = back) }
     }
     composable(Routes.CODE_NEW) {
         ScreenContainer {
@@ -125,6 +127,12 @@ private fun NavGraphBuilder.codeScreens(container: AppContainer, navigate: (Stri
     }
     composable(Routes.CODE_CHANGES) { entry ->
         ScreenContainer { CodeChangesRoute(container, entry.arguments?.getString("threadId").orEmpty(), onBack = back) }
+    }
+    composable(Routes.CODE_REVIEWS) {
+        ScreenContainer { ReviewsRoute(container, onOpen = { navigate(Routes.codeReview(it)) }, onBack = back) }
+    }
+    composable(Routes.CODE_REVIEW) { entry ->
+        ScreenContainer { ReviewRoute(container, entry.arguments?.getString("reviewId").orEmpty(), onBack = back) }
     }
     composable(Routes.CODE_PR) { entry ->
         ScreenContainer { CodePullRoute(container, entry.arguments?.getString("threadId").orEmpty(), onBack = back) }
