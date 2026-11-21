@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.13.0
+
+### Minor Changes
+
+- Type @ in a chat's composer to mention another bot: the app lists the bots whose names start with what you type,
+  and picking one writes its name. Mentioned bots now get the message, as on the web (before, a typed @name reached
+  no one). If two bots share a name, the app asks you to pick from the list.
+- A Code thread suggests what to say next after the agent finishes a reply. Tap it to put it in the composer, or
+  dismiss it.
+
 ## 0.12.0
 
 ### Minor Changes

@@ -1,6 +1,8 @@
 package groot.mobile.feature.code
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -94,6 +96,7 @@ fun CodeThreadRoute(
     val harness by viewModel.harness.collectAsStateWithLifecycle()
     val models by viewModel.models.collectAsStateWithLifecycle()
     val draft by viewModel.draft.collectAsStateWithLifecycle()
+    val suggestion by viewModel.suggestion.collectAsStateWithLifecycle()
     val closed by viewModel.closed.collectAsStateWithLifecycle()
     LaunchedEffect(closed) { if (closed) onBack() }
     LaunchedEffect(state.movedTo) { state.movedTo?.let(onOpenThread) }
@@ -107,6 +110,9 @@ fun CodeThreadRoute(
         models = models,
         draft = draft,
         onDraftChange = viewModel::setDraft,
+        suggestion = suggestion,
+        onUseSuggestion = viewModel::useSuggestion,
+        onDismissSuggestion = viewModel::dismissSuggestion,
         onSend = viewModel::send,
         onStop = viewModel::stop,
         onQueued = viewModel::queued,
@@ -241,6 +247,9 @@ fun CodeThreadScreen(
     onChanges: () -> Unit,
     onPullRequest: () -> Unit,
     onBack: () -> Unit,
+    suggestion: String? = null,
+    onUseSuggestion: () -> Unit = {},
+    onDismissSuggestion: () -> Unit = {},
 ) {
     val thread = state.thread
     val caps = harness?.capabilities ?: CodeCapabilities()
@@ -276,6 +285,9 @@ fun CodeThreadScreen(
                 ) {
                     for (queued in state.queued) QueuedRow(queued, caps.manageQueue && !actions.readOnly, onQueued)
                     if (!actions.readOnly) {
+                        if (suggestion != null && draft.isEmpty() && !state.working) {
+                            NextPrompt(suggestion, onUseSuggestion, onDismissSuggestion, Modifier.widthIn(max = Dims.contentMaxWidth))
+                        }
                         SettingChips(state, caps, models, onSheet)
                         CodeComposer(
                             draft = draft,
@@ -389,6 +401,30 @@ internal fun effortLabel(level: String): String = when (level) {
     "xhigh" -> "Extra high"
     "max" -> "Max"
     else -> level
+}
+
+@Composable
+private fun NextPrompt(text: String, onUse: () -> Unit, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
+    Row(
+        modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(Dims.composerRadius))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .clickable(role = Role.Button, onClickLabel = "Use this reply", onClick = onUse)
+            .padding(start = S.lg),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        AppIcon(AppIcons.Sparkle, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, size = Dims.iconSmall)
+        Text(
+            text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f).padding(horizontal = S.sm, vertical = S.sm),
+        )
+        IconBtn(AppIcons.Close, "Dismiss suggestion", onDismiss, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
 }
 
 @Composable

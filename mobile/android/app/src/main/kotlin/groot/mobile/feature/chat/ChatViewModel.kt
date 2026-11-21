@@ -1,5 +1,12 @@
 package groot.mobile.feature.chat
 
+import groot.mobile.data.chat.MentionCandidate
+import groot.mobile.data.chat.MentionInsert
+import groot.mobile.data.chat.MentionToken
+import groot.mobile.data.chat.PickedMention
+import groot.mobile.data.chat.insertMention as insertMentionInto
+import groot.mobile.data.chat.resolveMentions
+import groot.mobile.data.chat.trackPickedMentions
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -57,8 +64,21 @@ class ChatViewModel(private val container: AppContainer, val botId: String) : Vi
     private val _staged = MutableStateFlow<List<StagedUpload>>(emptyList())
     val staged: StateFlow<List<StagedUpload>> = _staged.asStateFlow()
 
+    private var picked: List<PickedMention> = emptyList()
+
+    val mentionCandidates: List<MentionCandidate>
+        get() = container.bots.state.value.bots.filter { it.id != botId }.map { MentionCandidate(it.id, it.name) }
+
     fun setDraft(text: String) {
+        picked = trackPickedMentions(_draft.value, text, picked)
         _draft.value = text
+    }
+
+    fun insertMention(token: MentionToken, caret: Int, chosen: MentionCandidate): MentionInsert {
+        val result = insertMentionInto(_draft.value, token, caret, chosen, picked)
+        picked = result.picked
+        _draft.value = result.text
+        return result
     }
 
     fun show() {
@@ -130,10 +150,19 @@ class ChatViewModel(private val container: AppContainer, val botId: String) : Vi
                 return
             }
         }
+        val mentions = resolveMentions(_draft.value, mentionCandidates, botId, picked)
+        if (mentions.ambiguous.isNotEmpty()) {
+            container.notices.show(ambiguousMentionHint(mentions.ambiguous))
+            return
+        }
         _draft.value = ""
+        picked = emptyList()
         _staged.value = emptyList()
         container.scope.launch {
-            val sent = container.chats.send(botId, OwnerSubmission(text = text, attachments = attachments, whenBusy = whenBusy))
+            val sent = container.chats.send(
+                botId,
+                OwnerSubmission(text = text, attachments = attachments, mentions = mentions.ids, whenBusy = whenBusy),
+            )
             if (!sent) {
                 if (_draft.value.isEmpty()) _draft.value = text
                 if (_staged.value.isEmpty()) _staged.value = staged
@@ -193,3 +222,6 @@ class ChatViewModel(private val container: AppContainer, val botId: String) : Vi
         }
     }
 }
+
+internal fun ambiguousMentionHint(names: List<String>): String =
+    "More than one bot is named ${names.joinToString(", ") { "\"$it\"" }}. Type @ and pick the one you mean from the list."

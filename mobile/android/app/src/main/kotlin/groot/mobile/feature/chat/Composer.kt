@@ -1,6 +1,7 @@
 package groot.mobile.feature.chat
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -18,6 +19,13 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -25,7 +33,13 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextOverflow
 import groot.kit.theme.S
+import groot.mobile.data.chat.MentionCandidate
+import groot.mobile.data.chat.MentionInsert
+import groot.mobile.data.chat.MentionToken
 import groot.mobile.data.chat.OutboxEntry
+import groot.mobile.data.chat.activeMentionToken
+import groot.mobile.data.chat.mentionMatches
+import groot.mobile.ui.components.BotAvatar
 import groot.mobile.ui.brand.AppIcons
 import groot.mobile.ui.brand.Dims
 import groot.mobile.ui.components.AppIcon
@@ -47,11 +61,24 @@ fun Composer(
     onStop: () -> Unit,
     onWithdraw: (String) -> Unit,
     modifier: Modifier = Modifier,
+    mentionCandidates: List<MentionCandidate> = emptyList(),
+    onInsertMention: ((MentionToken, Int, MentionCandidate) -> MentionInsert)? = null,
 ) {
+    var field by remember { mutableStateOf(TextFieldValue(draft, TextRange(draft.length))) }
+    val value = if (field.text == draft) field else TextFieldValue(draft, TextRange(draft.length))
+    var dismissedAt by remember { mutableStateOf<Int?>(null) }
+    val token = if (onInsertMention != null && value.selection.collapsed) activeMentionToken(value.text, value.selection.start) else null
+    val matches = token?.takeIf { it.start != dismissedAt }?.let { mentionMatches(mentionCandidates, it.query).take(MAX_MENTIONS) }.orEmpty()
     val canSend = enabled && (draft.isNotBlank() || staged.any { it.ref != null }) && staged.none { it.uploading }
     val showStop = busy && draft.isBlank() && staged.isEmpty()
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(S.sm)) {
         for (entry in held) HeldRow(entry, onWithdraw)
+        if (token != null && matches.isNotEmpty() && onInsertMention != null) {
+            MentionList(matches, onPick = { chosen ->
+                val result = onInsertMention(token, value.selection.start, chosen)
+                field = TextFieldValue(result.text, TextRange(result.caret))
+            }, onDismiss = { dismissedAt = token.start })
+        }
         Column(
             Modifier
                 .fillMaxWidth()
@@ -74,8 +101,11 @@ fun Composer(
                 IconBtn(AppIcons.Paperclip, "Attach a file", onAttach, enabled = enabled, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 val style = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface)
                 BasicTextField(
-                    value = draft,
-                    onValueChange = onDraftChange,
+                    value = value,
+                    onValueChange = { next ->
+                        field = next
+                        if (next.text != draft) onDraftChange(next.text)
+                    },
                     enabled = enabled,
                     textStyle = style,
                     maxLines = MAX_LINES,
@@ -104,6 +134,31 @@ fun Composer(
                     background = MaterialTheme.colorScheme.primary.copy(alpha = if (active) 1f else DISABLED_ALPHA),
                     modifier = Modifier.padding(S.xxs).size(Dims.sendButton),
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MentionList(matches: List<MentionCandidate>, onPick: (MentionCandidate) -> Unit, onDismiss: () -> Unit) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(Dims.cardRadius))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+    ) {
+        Row(Modifier.fillMaxWidth().padding(start = S.md), verticalAlignment = Alignment.CenterVertically) {
+            Text("Mention a bot", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+            IconBtn(AppIcons.Close, "Close suggestions", onDismiss, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        for (bot in matches) {
+            Row(
+                Modifier.fillMaxWidth().clickable(role = Role.Button) { onPick(bot) }.padding(horizontal = S.md, vertical = S.sm),
+                horizontalArrangement = Arrangement.spacedBy(S.md),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                BotAvatar(bot.name)
+                Text(bot.name, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
     }
@@ -139,3 +194,4 @@ private fun HeldRow(entry: OutboxEntry, onWithdraw: (String) -> Unit) {
 }
 
 private const val MAX_LINES = 6
+private const val MAX_MENTIONS = 5

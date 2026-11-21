@@ -1,5 +1,8 @@
 package groot.mobile.feature.chat
 
+import groot.mobile.data.chat.MentionCandidate
+import groot.mobile.data.chat.MentionInsert
+import groot.mobile.data.chat.MentionToken
 import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -165,6 +168,8 @@ fun ChatPane(
         staged = staged,
         listState = listState,
         onDraftChange = viewModel::setDraft,
+        mentionCandidates = remember(bots.bots, bot.id) { viewModel.mentionCandidates },
+        onInsertMention = viewModel::insertMention,
         onAttach = { attachMenu = true },
         onRemoveStaged = viewModel::removeStaged,
         onSend = { whenBusy ->
@@ -243,6 +248,8 @@ fun ChatContent(
     onOpenLive: (String) -> Unit,
     onYoloOff: () -> Unit,
     modifier: Modifier = Modifier,
+    mentionCandidates: List<MentionCandidate> = emptyList(),
+    onInsertMention: ((MentionToken, Int, MentionCandidate) -> MentionInsert)? = null,
 ) {
     Column(modifier.fillMaxSize().imePadding()) {
         Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -288,6 +295,8 @@ fun ChatContent(
                 onStop = onStop,
                 onWithdraw = onWithdraw,
                 modifier = Modifier.widthIn(max = Dims.contentMaxWidth),
+                mentionCandidates = mentionCandidates,
+                onInsertMention = onInsertMention,
             )
         }
     }
