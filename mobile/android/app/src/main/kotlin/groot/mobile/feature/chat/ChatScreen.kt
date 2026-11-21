@@ -66,6 +66,7 @@ import groot.mobile.data.chat.ChatView
 import groot.mobile.data.chat.TimelineItem
 import groot.mobile.data.chat.ToolPhase
 import groot.mobile.data.chat.viewOf
+import groot.mobile.feature.live.LivePipWindow
 import groot.mobile.ui.brand.Accents
 import groot.mobile.ui.brand.AppIcons
 import groot.mobile.ui.brand.Dims
@@ -132,6 +133,10 @@ fun ChatPane(
     val pickPhotos = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(MAX_PICK)) { viewModel.attach(it) }
     val pickFiles = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { viewModel.attach(it) }
 
+    val pip by container.livePip.current.collectAsStateWithLifecycle()
+    val pipChosen by container.appPreferences.livePip.collectAsStateWithLifecycle(false)
+    val watch: (String) -> Unit = { surface -> if (pipChosen) container.livePip.open(surface, bot.id) else onOpenLive(surface) }
+
     val actions = remember(bot.name, bots.labels, bots.capabilities) {
         ChatActions(
             botName = bot.name,
@@ -148,6 +153,7 @@ fun ChatPane(
         )
     }
 
+    Box(modifier.fillMaxSize()) {
     ChatContent(
         bot = bot,
         view = view,
@@ -170,10 +176,23 @@ fun ChatPane(
         onOpenImage = { viewer = it },
         onSaveFile = { ref -> viewModel.save(ref) { uri -> openFile(context, uri, ref.mimeType) } },
         onCopy = { copyText(context, it) },
-        onOpenLive = onOpenLive,
+        onOpenLive = watch,
         onYoloOff = { viewModel.setYolo(false) },
-        modifier = modifier,
     )
+    pip?.takeIf { it.botId == bot.id }?.let { target ->
+        LivePipWindow(
+            container = container,
+            target = target,
+            onExpand = {
+                container.livePip.close()
+                container.scope.launch { container.appPreferences.setLivePip(false) }
+                onOpenLive(target.surface)
+            },
+            onClose = container.livePip::close,
+            modifier = Modifier.imePadding().padding(start = S.sm, top = S.sm, end = S.sm, bottom = Dims.composerMinHeight + S.lg),
+        )
+    }
+    }
 
     if (attachMenu) {
         Sheet(onDismiss = { attachMenu = false }) {

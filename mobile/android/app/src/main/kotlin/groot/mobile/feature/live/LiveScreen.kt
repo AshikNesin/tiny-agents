@@ -82,7 +82,7 @@ internal val LIVE_KEYS = listOf(
 )
 
 @Composable
-fun LiveRoute(container: AppContainer, target: LiveTarget, title: String, onBack: () -> Unit) {
+fun LiveRoute(container: AppContainer, target: LiveTarget, title: String, onBack: () -> Unit, onPip: (() -> Unit)? = null) {
     val viewModel: LiveViewModel = viewModel(
         key = "live:${target.surface}:${target.botId}:${target.profile}",
         factory = viewModelFactory { initializer { LiveViewModel(container, target) } },
@@ -112,6 +112,7 @@ fun LiveRoute(container: AppContainer, target: LiveTarget, title: String, onBack
         subtitle = linkLabel(status, state.link),
         onBack = onBack,
         actions = {
+            if (onPip != null && status?.configured == true) IconBtn(AppIcons.PictureInPicture, "Picture in picture", onClick = onPip)
             if (interactive) IconBtn(AppIcons.Keyboard, if (keyboard) "Hide the keyboard" else "Show the keyboard", onClick = { keyboard = !keyboard })
             if (!state.guest && status != null && status.configured) IconBtn(AppIcons.More, "More", onClick = { menu = true })
         },

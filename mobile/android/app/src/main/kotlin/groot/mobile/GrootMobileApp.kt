@@ -11,6 +11,7 @@ import groot.mobile.data.AvatarStore
 import groot.mobile.data.BotsStore
 import groot.mobile.data.FileActions
 import groot.mobile.data.ImageStore
+import groot.mobile.data.LivePip
 import groot.mobile.data.Notices
 import groot.mobile.data.SessionStore
 import groot.mobile.data.ShareTarget
@@ -79,6 +80,8 @@ class AppContainer(context: Context) {
     val stepUp = StepUp(api)
 
     val links = AppLinks()
+
+    val livePip = LivePip()
 
     val pushNotifier = PushNotifier(appContext)
 
