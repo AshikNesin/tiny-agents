@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 import type { Context as PiContext } from "@earendil-works/pi-ai";
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import { defineExtension, defineTool } from "@earendil-works/pi-durable";
 import { until } from "../../fixtures/until";
 import {

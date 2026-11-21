@@ -273,7 +273,7 @@
             "output": "Echo: **Routine \"Morning check\" (scheduled Fri, 06 Nov 2026, 12:00 IST):** Check the weather",
             "error": null,
             "conversationId": "9",
-            "tokens": 4671
+            "tokens": 2347
           }
         ]
       }
@@ -340,7 +340,7 @@
             "output": "Echo: **Routine \"Soon\" (scheduled Fri, 06 Nov 2026, 12:01 IST) (late by 1m):** Say good morning",
             "error": null,
             "conversationId": "21",
-            "tokens": 4674
+            "tokens": 2349
           }
         ]
       }
@@ -368,7 +368,7 @@
             "output": "Echo: **Routine \"Soon\" (scheduled Fri, 06 Nov 2026, 12:01 IST) (late by 1m):** Say good morning",
             "error": null,
             "conversationId": "21",
-            "tokens": 4674,
+            "tokens": 2349,
             "routineName": "Soon",
             "botName": "Routiner"
           },
@@ -385,7 +385,7 @@
             "output": "Echo: **Routine \"Morning check\" (scheduled Fri, 06 Nov 2026, 12:00 IST):** Check the weather",
             "error": null,
             "conversationId": "9",
-            "tokens": 4671,
+            "tokens": 2347,
             "routineName": "Morning check",
             "botName": "Routiner"
           }
@@ -499,7 +499,7 @@
           "output": "Echo: **Routine \"Morning check\" (scheduled Fri, 06 Nov 2026, 12:00 IST):** Check the weather",
           "error": null,
           "conversationId": "9",
-          "tokens": 4671
+          "tokens": 2347
         },
         {
           "id": "<id5>",
@@ -514,7 +514,7 @@
           "output": "Echo: **Routine \"Soon\" (scheduled Fri, 06 Nov 2026, 12:01 IST) (late by 1m):** Say good morning",
           "error": null,
           "conversationId": "21",
-          "tokens": 4674
+          "tokens": 2349
         }
       ]
     }

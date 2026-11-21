@@ -62,7 +62,7 @@ describe("Traces API", () => {
       harness: "pi",
       usage: { models: [TEST_MODEL] },
     });
-    expect(sessions[0]!.usage!.input).toBeGreaterThan(0);
+    expect(sessions[0]!.usage!.cacheWrite).toBeGreaterThan(0);
 
     const chatsOnly = await api<TraceSessionList>(app, "/api/v1/traces/sessions?kind=chats", {
       token,

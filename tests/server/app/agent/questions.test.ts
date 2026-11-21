@@ -2,8 +2,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { until } from "../../fixtures/until";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { Type } from "typebox";
 import {
-  Type,
   type Context as PiContext,
   type JsonObject,
   type JsonValue,

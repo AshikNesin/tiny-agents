@@ -1,5 +1,5 @@
-import type { Context } from "@earendil-works/chord";
-import { Type } from "@earendil-works/pi-ai";
+import type { Context } from "@earendil-works/chord/context";
+import { Type } from "typebox";
 import type { JsonObject, ToolExecutionApi, ToolExecutionResult } from "@earendil-works/pi-durable";
 import { z } from "zod";
 import { gateApproved, type GateHooks, type GatePlan } from "../approvals";

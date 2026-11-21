@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 import type { Context as PiContext } from "@earendil-works/pi-ai";
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import { until } from "../../fixtures/until";
 import { finishedReplyTo } from "../../../../packages/agent/src/replies";
 import { defineToolkit, tool } from "../../../../packages/agent/src/toolkit";

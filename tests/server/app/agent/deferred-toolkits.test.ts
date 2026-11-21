@@ -1,4 +1,5 @@
-import { Type, type Context as PiContext } from "@earendil-works/pi-ai";
+import type { Context as PiContext } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { until } from "../../fixtures/until";
 import type { AgentRuntime } from "../../../../packages/agent/src/runtime";

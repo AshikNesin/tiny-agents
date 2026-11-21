@@ -1,4 +1,5 @@
-import type { Context, JsonValue } from "@earendil-works/chord";
+import type { Context } from "@earendil-works/chord/context";
+import type { JsonValue } from "@earendil-works/chord/json";
 import type {
   Harness,
   JsonObject,
@@ -166,11 +167,12 @@ export async function waitForOwner<T extends JsonObject & { status: string }>(
   try {
     await api.details(typeof details === "function" ? details(watch.value as T) : details, context);
     return await new Promise<T>((resolve, reject) => {
-      watch.start(async (value) => {
-        const response = settled(value);
+      watch.start(async (call) => {
+        if (call.kind !== "value" || call.retired) return;
+        const response = settled(call.value as T);
         if (response) resolve(response);
       });
-      void watch.closed.then((end) => reject(new Error(`owner wait ended: ${end.reason}`)));
+      void watch.closed.then((end) => reject(new Error(`owner wait ended: ${end.kind}`)));
       if (typeof expiresAt === "number") {
         timer = setTimeout(() => void expire().catch(reject), expiresAt - Date.now());
         timer.unref?.();

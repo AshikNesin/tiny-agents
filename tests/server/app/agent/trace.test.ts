@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 import type { Context as PiContext } from "@earendil-works/pi-ai";
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import { until } from "../../fixtures/until";
 import { finishedReplyTo } from "../../../../packages/agent/src/replies";
 import { defineToolkit, tool } from "../../../../packages/agent/src/toolkit";
@@ -91,16 +91,16 @@ describe("conversation trace", () => {
       expect(ping).toMatchObject({ type: "tool", name: "ping", error: false });
       expect(last).toMatchObject({ type: "llm", stopReason: "stop", toolCalls: [] });
       if (first.type !== "llm") throw new Error("not a model call");
-      expect(first.usage?.input).toBeGreaterThan(0);
+      expect(first.usage?.cacheWrite).toBeGreaterThan(0);
       expect(trace.usage.models).toEqual([TEST_MODEL]);
 
       const usage = await runtime.usage(ref);
       expect(trace.usage).toEqual(usage);
-      const callInput = turn.steps.reduce(
-        (sum, step) => sum + (step.type === "llm" ? (step.usage?.input ?? 0) : 0),
+      const callPrompt = turn.steps.reduce(
+        (sum, step) => sum + (step.type === "llm" ? (step.usage?.cacheWrite ?? 0) : 0),
         0,
       );
-      expect(usage.input).toBe(callInput);
+      expect(usage.cacheWrite).toBe(callPrompt);
     } finally {
       await runtime.close();
     }

@@ -1,4 +1,5 @@
-import { copyJson, type Context, type JsonValue } from "@earendil-works/chord";
+import type { Context } from "@earendil-works/chord/context";
+import { copyJson, type JsonValue } from "@earendil-works/chord/json";
 import type { ToolExecutionApi } from "@earendil-works/pi-durable";
 import { z } from "zod";
 

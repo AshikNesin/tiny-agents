@@ -1,4 +1,4 @@
-import type { Context } from "@earendil-works/chord";
+import type { Context } from "@earendil-works/chord/context";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { createModels, type MutableModels } from "@earendil-works/pi-ai/models";
 import {
@@ -10,6 +10,7 @@ import {
   type ConversationId,
   type HarnessSettings,
   type Registry,
+  type Report,
   type Storage,
 } from "@earendil-works/pi-durable";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
@@ -297,7 +298,9 @@ export class AgentRuntime {
               ...options.settings?.compaction,
             }),
           },
-          onReport: options.onReport,
+          ...(options.onReport
+            ? { onReport: (report: Report) => options.onReport?.(report.error) }
+            : {}),
         },
         ctx,
       );
@@ -320,7 +323,7 @@ export class AgentRuntime {
       runtime = opened;
       pi = opened.#pi;
       harness.closed.then((end) => {
-        if (end.reason === "failed" && !opened.#closed) options.onFatal?.(end.error);
+        if (end.kind === "failed" && !opened.#closed) options.onFatal?.(end.error);
       });
       await opened.#store.start();
       for (const engine of opened.#engines) await engine.start();

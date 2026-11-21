@@ -35,6 +35,8 @@ const UNANSWERED_REASONS: Record<string, string> = {
   no_model: "This bot's model is not available. Pick another model.",
   aborted: "Stopped before a reply started.",
   model_error: "The model returned an error.",
+  interrupted: "The app restarted while the model was answering. Send it again.",
+  restart_limit: "This kept failing after restarts, so it was stopped. Send it again.",
 };
 
 function textOf(content: unknown): string {

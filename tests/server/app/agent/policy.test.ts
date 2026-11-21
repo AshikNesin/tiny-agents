@@ -1,5 +1,5 @@
 import { defineExtension, defineTool } from "@earendil-works/pi-durable";
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
 import { applyPermissions, compilePolicy } from "../../../../packages/agent/src/policy";
 import type { Capability, CapabilitySelection } from "../../../../packages/agent/src/capabilities";
