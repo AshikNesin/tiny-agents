@@ -39,7 +39,7 @@ describe("viewOf: plain trace lines by status", () => {
     ["pending", { phase: "pending", trace: "running" }, false],
     ["running", { phase: "running", trace: "running" }, false],
     ["done", { phase: "done" }, true],
-    ["error", { phase: "failed", trace: "error" }, true],
+    ["error", { phase: "failed", trace: "error", note: "failed" }, true],
     ["denied", { phase: "failed", trace: "error", icon: "ban", note: "denied by you" }, true],
     [
       "expired",

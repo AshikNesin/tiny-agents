@@ -530,6 +530,12 @@ describe("NotificationHub", () => {
     expect(noPhone.pushover.channel.sent).toHaveLength(1);
   });
 
+  it("before a choice, with neither set up, shows the phone app rather than an unset Pushover", async () => {
+    const fresh = hubOf({}, false);
+    fresh.pushover.channel.configuredFlag = false;
+    expect((await fresh.hub.getSettings()).deliverTo).toBe("webpush");
+  });
+
   it("switches every channel at once when the choice is saved", async () => {
     const { hub, pushover, webpush } = hubOf({ deliverTo: "pushover" });
     await webpush.service.getSettings();

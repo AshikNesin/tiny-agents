@@ -56,6 +56,7 @@ const NOTE: Partial<Record<ChatToolStatus, string>> = {
   interrupted: "interrupted by a restart",
   aborted: "stopped",
   denied: "denied by you",
+  error: "failed",
 };
 
 const TRACE: Record<ToolPhase, ToolCallView["trace"]> = {

@@ -354,6 +354,25 @@ describe("ask_owner", () => {
     );
     expect(runtime.pendingQuestions(ref)).toBe(0);
   }, 15_000);
+
+  it("a message the owner sent before the questions came up dismisses them", async () => {
+    const runtime = await open();
+    const ref = await runtime.createConversation({
+      modelId: TEST_MODEL,
+      systemPrompt: "",
+      capabilities: { enabled: ["questions"], permissions: {} },
+    });
+    const events: ChatEvent[] = [];
+    await runtime.watchChat(ref, (batch) => {
+      events.push(...batch);
+    });
+    await runtime.submit(ref, { requestId: "r1", text: "set up the project" });
+    await runtime.submit(ref, { requestId: "r2", text: "Use SQLite", whenBusy: "steer" });
+    expect(await until(() => finalText(events), "reply")).toMatch(
+      /dismissed these questions[\s\S]*\|THEN:Use SQLite$/,
+    );
+    expect(runtime.pendingQuestions(ref)).toBe(0);
+  }, 15_000);
 });
 
 describe("ask_owner across restarts", () => {
