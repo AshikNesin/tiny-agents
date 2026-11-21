@@ -64,10 +64,8 @@ await journey(
 
     await step("/code offers no Claude Code harness", async () => {
       if (!caps.has("shelley")) {
-        // Neither harness configured: the sidebar has no Code at all.
-        await expect(
-          page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Code" }),
-        ).toHaveCount(0);
+        // Neither harness configured: the sidebar has no Chat/Code switch at all.
+        await expect(page.getByRole("navigation", { name: "Mode" })).toHaveCount(0);
         return;
       }
       await page.goto("/code/new", LOADED);

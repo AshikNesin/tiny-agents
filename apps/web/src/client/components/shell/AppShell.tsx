@@ -29,7 +29,7 @@ import { useIsGuest, usePeopleStore } from "../../store/people";
 import { BADGED_FAVICON, documentTitle, waitingCount } from "../../lib/attention";
 
 export function AppShell() {
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   const navigate = useNavigate();
   const loadBots = useBotsStore((s) => s.loadBots);
   const loadModels = useBotsStore((s) => s.loadModels);
@@ -78,6 +78,8 @@ export function AppShell() {
   }, [waiting]);
 
   useEffect(() => setMobileOpen(false), [pathname, setMobileOpen]);
+  const rememberPath = useUiStore((s) => s.rememberPath);
+  useEffect(() => rememberPath(pathname, search), [pathname, search, rememberPath]);
 
   const commandGroups = useMemo<CommandGroupEntry[]>(() => {
     const botGroup: CommandGroupEntry[] =

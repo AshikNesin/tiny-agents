@@ -15,7 +15,7 @@
 - `code-list` navigation `Code threads`: by default one region per group (`Group by repository` in the footer's `List options` menu, a checked menu item, remembered in the browser; off, one flat list, working threads first, then newest first) (`code-group`, a `<section>` named by its heading: a project's name, a repository's or folder's basename, or `No folder`); the heading is a button (`aria-expanded`) that folds the group; links `New thread in <label>` (`/code/new?project=<id>` or `/code/new?cwd=<path>`) and, for a project, `<label> settings`; a group shows 8 threads, then `Show N more`. Rows: `Working` status (working threads float to the top of their group), `Unread` dot, `Archive <title>`; a PR chip only when it needs you. The `Search threads` row opens the search box (`Search threads`); Escape closes it.
 - `code-archived` footer button `Archived` (`code-archived-toggle`, `aria-pressed`) lists archived threads (no New thread links), row `Restore <title>`; `Archived threads` (`code-archived-back`) goes back.
 - `code-settings` footer link `Settings` (`code-settings`) → `/code/settings`, which opens its `Projects` section (heading `Projects`, region `Add a project`, `Your projects`); navigation `Settings sections` with `Projects` / `GitHub`. A project's page and the GitHub credential/App section are not driven (they need GitHub).
-- `code-shell` no top bar on `/code`: the sidebar's top row holds `Back to <brand>` and the ⌘K trigger.
+- `code-shell` no top bar on `/code`: the sidebar's top row holds the brand mark, the `Mode` switch (`Chat` / `Code`, Code current) and `Hide sidebar`.
 - `code-handoff` a bot's `/code cwd=<dir> <task>` (faux trigger) starts a Shelley thread: hand-off card with `Open in Code`, then `Shelley reply relayed into this chat` with the outcome.
 - Covered by [Code extras](./code-extras.md): change directory, fork, attachments, `@` file completion, `/` commands, skills, usage popover, new worktree, repository groups, chips, queued Send now/Cancel, recover. Not driven anywhere: delete and archive from the title menu (cleanup uses the API; the row's Archive is driven), the thread cost in that menu (`code-cost`, Shelley reports none), `Show N more`, Open in Shelley, subagents (`subagent:` prompts), push notifications (off in verify runs).
 - The suggested next message: [`journeys/code-next-prompt.mjs`](../journeys/code-next-prompt.mjs) (a Shelley turn ends, the composer asks once; faux mode has no side-call model, so the journey answers that ask through `page.route`; Tab, Esc and the phone Use button).
@@ -24,7 +24,7 @@
 
 ## How to get to it (user POV)
 
-- Sidebar navigation `Primary` → `Code` (present only when a harness is configured); `Back to <brand>` at the top of the thread list returns.
+- Sidebar `Mode` switch → `Code` (present only when a harness is configured); `Chat` in the same switch at the top of the thread list returns to the last chat page.
 - From a chat hand-off card: `Open in Code`.
 
 ## Driving it with ta-verify
@@ -46,7 +46,7 @@ Preconditions:
 - **Group.** The group's heading button `work-<stamp>` (`aria-expanded` true) folds it: the rows go; again to unfold. `New thread in work-<stamp>` has href `/code/new?cwd=<encoded dir>` and opens `What should we build?` with `Working directory` reading `…/<run>/work-<stamp>`.
 - **Search.** `Search threads` button, then the `Search threads` box = `verify-<stamp>`: only that row; Escape closes the box.
 - **Archive.** Row `Archive verify-<stamp>`: gone from Active, in `?view=archived`; footer `Archived` (pressed) lists it, with no `New thread in …` links; `Restore verify-<stamp>`; `Archived threads` → back in Active.
-- **Settings.** Footer `Settings` → the Projects section of `/code/settings` (URL ends `projects`), heading `Projects`, region `Add a project`, `Settings sections` with `Projects` current and `GitHub`; `Back to <brand>` in the list.
+- **Settings.** Footer `Settings` → the Projects section of `/code/settings` (URL ends `projects`), heading `Projects`, region `Add a project`, `Settings sections` with `Projects` current and `GitHub`; `Mode` switch with `Code` current in the list.
 - **Hand-off.** `setup:` faux bot; in its chat send `/code cwd=<dir> echo: handoff-<stamp>`: link `Open in Code`, `Shelley started a thread`, then `reply relayed into this chat` and `handoff-<stamp>`. `Open in Code` lands on a thread whose transcript shows `handoff-<stamp>`.
 - **Proof.** `ta-verify drive $S/journeys/code.mjs` → `code/cwd-invalid`, `working-steer-queue`, `turn-done`, `stopped`, `changes`, `unread`, `group-folded`, `archived`, `settings`, `handoff`.
 

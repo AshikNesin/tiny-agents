@@ -69,10 +69,10 @@ await journey(
     });
 
     await step(
-      "open Code from the sidebar: Shelley composer with the predictable model",
+      "open Code from the sidebar's mode switch: Shelley composer with the predictable model",
       async () => {
         await page
-          .getByRole("navigation", { name: "Primary" })
+          .getByRole("navigation", { name: "Mode" })
           .getByRole("link", { name: "Code" })
           .click();
         await expect(page).toHaveURL(/\/code(\/new)?$/);
@@ -321,8 +321,10 @@ await journey(
       await expect(sections.getByRole("link", { name: "GitHub" })).toBeVisible();
       await expect(page.getByRole("region", { name: "Add a project" })).toBeVisible();
       await proof("settings");
-      // The way back to the app sits at the top of the thread list.
-      await expect(page.getByRole("link", { name: /^Back to / })).toBeVisible();
+      // The way back to chat is the mode switch at the top of the thread list.
+      await expect(
+        page.getByRole("navigation", { name: "Mode" }).getByRole("link", { name: "Chat" }),
+      ).toBeVisible();
     });
 
     // ---- bot hand-off --------------------------------------------------------

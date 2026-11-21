@@ -20,9 +20,10 @@ export interface AppNavItem {
   to: string;
 }
 
+const CODE_NAV: AppNavItem = { label: "Code", icon: Code2, to: "/code" };
+
 export const PRIMARY_NAV: AppNavItem[] = [
   { label: "Tasks", icon: ListTodo, to: "/tasks" },
-  { label: "Code", icon: Code2, to: "/code" },
   { label: "Terminal", icon: SquareTerminal, to: "/terminal" },
   { label: "Computer", icon: Monitor, to: "/computer" },
   { label: "Browser", icon: Globe, to: "/browser" },
@@ -37,7 +38,7 @@ export const SECONDARY_NAV: AppNavItem[] = [
   { label: "Vault", icon: KeyRound, to: "/vault" },
 ];
 
-export const APP_NAV: AppNavItem[] = [...PRIMARY_NAV, ...SECONDARY_NAV];
+export const APP_NAV: AppNavItem[] = [CODE_NAV, ...PRIMARY_NAV, ...SECONDARY_NAV];
 
 export function guestNav(items: readonly AppNavItem[]): AppNavItem[] {
   return items.filter((item) => isGuestPage(item.to));
