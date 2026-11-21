@@ -20,4 +20,12 @@ describe("the pre-push plan", () => {
     });
     expect(prePushPlan(["apps/web/tsconfig.json"]).typecheck).toBe(true);
   });
+
+  it("typechecks when a TypeScript file was deleted or renamed away, without formatting it", () => {
+    expect(prePushPlan(["docs/old.md"], ["apps/web/src/server/gone.ts"])).toEqual({
+      fmt: ["docs/old.md"],
+      lint: [],
+      typecheck: true,
+    });
+  });
 });

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.1
+
+### Patch Changes
+
+- The sign-in token is never written to disk unsealed. On a phone whose Keystore can't seal it, the app keeps you
+  signed in until it closes, and asks you to sign in again next time.
+  A token an older version stored unsealed is removed, so you sign in once more.
+
 ## 0.8.0
 
 ### Minor Changes

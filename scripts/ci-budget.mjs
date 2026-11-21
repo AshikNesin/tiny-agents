@@ -42,9 +42,9 @@ function main() {
     const cold = env.CI_SETUP_COLD === "1";
     budget = cold ? COLD_SETUP_BUDGET : SETUP_BUDGET;
     label = cold ? "setup (cold cache)" : "setup";
-  } else if (phase === "run" && job in RUN_BUDGETS) {
+  } else if (phase === "run" && Object.hasOwn(RUN_BUDGETS, job)) {
     started = Number(env.CI_PHASE_AT);
-    const cold = env.CI_CACHE_COLD === "1" && job in COLD_RUN_BUDGETS;
+    const cold = env.CI_CACHE_COLD === "1" && Object.hasOwn(COLD_RUN_BUDGETS, job);
     budget = cold ? COLD_RUN_BUDGETS[job] : RUN_BUDGETS[job];
     label = cold ? `${job} (cold cache)` : job;
   } else {
@@ -71,4 +71,4 @@ function main() {
   }
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) main();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();

@@ -125,6 +125,7 @@ export class NotificationService {
   #lastError: NotificationStatus["lastError"];
   #checkedAt: Date | undefined;
   #settingsCache: { value: NotificationSettings; at: number } | undefined;
+  #settingsGeneration = 0;
   #lastTestAt = 0;
   #warnedUnconfigured = false;
   #delivers: (settings: NotificationSettings) => boolean = () => true;
@@ -167,16 +168,19 @@ export class NotificationService {
   async getSettings(): Promise<NotificationSettings> {
     const cached = this.#settingsCache;
     if (cached && this.#now() - cached.at < SETTINGS_CACHE_MS) return cached.value;
+    const generation = this.#settingsGeneration;
     const value = await this.#settingsStore.load();
-    this.#settingsCache = { value, at: this.#now() };
+    if (generation === this.#settingsGeneration) this.#settingsCache = { value, at: this.#now() };
     return value;
   }
 
   primeSettings(value: NotificationSettings): void {
+    this.#settingsGeneration += 1;
     this.#settingsCache = { value, at: this.#now() };
   }
 
   forgetSettings(): void {
+    this.#settingsGeneration += 1;
     this.#settingsCache = undefined;
   }
 
@@ -200,6 +204,7 @@ export class NotificationService {
     const value = parsed.data;
     for (const def of this.#events.values()) if (def.locked) delete value.events[def.event];
     await this.#settingsStore.save(value);
+    this.#settingsGeneration += 1;
     this.#settingsCache = { value, at: this.#now() };
     return value;
   }

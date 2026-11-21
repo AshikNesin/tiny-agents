@@ -97,6 +97,44 @@ class AppLogicTest {
     }
 
     @Test
+    fun `a token the Keystore can't seal stays in memory and is never written`() = runTest {
+        val disk = FakePreferencesDataStore()
+        val cipher = object : TokenCipher {
+            override fun seal(plain: String): String? = null
+            override fun open(sealed: String): String? = sealed
+        }
+        val store = SessionStore(disk, cipher, CoroutineScope(Dispatchers.Unconfined))
+        store.setServer("https://agents.example.com")
+        store.signedIn("jwt-token", SessionUser(7, "a@example.com", "Ashik"))
+        assertEquals("jwt-token", store.token)
+        assertFalse(disk.updateData { it }.asMap().values.any { it == "jwt-token" })
+        store.load()
+        assertEquals("jwt-token", store.token)
+
+        val restarted = SessionStore(disk, cipher, CoroutineScope(Dispatchers.Unconfined))
+        restarted.load()
+        assertNull(restarted.token)
+        assertFalse(restarted.state.value.signedIn)
+    }
+
+    @Test
+    fun `a token an older version stored unsealed is dropped from disk`() = runTest {
+        val disk = FakePreferencesDataStore()
+        val sealing = object : TokenCipher {
+            override fun seal(plain: String): String? = "p:$plain"
+            override fun open(sealed: String): String? = sealed.removePrefix("p:")
+        }
+        SessionStore(disk, sealing, CoroutineScope(Dispatchers.Unconfined)).apply {
+            setServer("https://agents.example.com")
+            signedIn("jwt-token", SessionUser(7, "a@example.com", "Ashik"))
+        }
+        val restarted = SessionStore(disk, sealing, CoroutineScope(Dispatchers.Unconfined))
+        restarted.load()
+        assertNull(restarted.token)
+        assertFalse(disk.updateData { it }.asMap().values.any { it == "p:jwt-token" })
+    }
+
+    @Test
     fun `schedule presets become cron, interval or once, in IST`() {
         assertEquals(Schedule.Cron("30 7 * * *"), ScheduleForm(time = "07:30").toSchedule())
         assertEquals(Schedule.Cron("0 9 * * 1-5"), ScheduleForm(kind = ScheduleForm.Kind.Weekdays).toSchedule())

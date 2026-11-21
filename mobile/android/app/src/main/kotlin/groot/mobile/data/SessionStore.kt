@@ -36,7 +36,7 @@ data class Session(
 }
 
 interface TokenCipher {
-    fun seal(plain: String): String
+    fun seal(plain: String): String?
 
     fun open(sealed: String): String?
 }
@@ -55,17 +55,16 @@ class KeystoreTokenCipher : TokenCipher {
         }
     }.getOrNull()
 
-    override fun seal(plain: String): String {
-        val key = key() ?: return PLAIN + plain
+    override fun seal(plain: String): String? {
+        val key = key() ?: return null
         return runCatching {
             val cipher = Cipher.getInstance(TRANSFORM).apply { init(Cipher.ENCRYPT_MODE, key) }
             val sealed = cipher.iv + cipher.doFinal(plain.toByteArray(Charsets.UTF_8))
             SEALED + Base64.encodeToString(sealed, Base64.NO_WRAP)
-        }.getOrElse { PLAIN + plain }
+        }.getOrNull()
     }
 
     override fun open(sealed: String): String? {
-        if (sealed.startsWith(PLAIN)) return sealed.removePrefix(PLAIN)
         if (!sealed.startsWith(SEALED)) return null
         val key = key() ?: return null
         return runCatching {
@@ -82,7 +81,6 @@ class KeystoreTokenCipher : TokenCipher {
         const val IV_BYTES = 12
         const val TAG_BITS = 128
         const val SEALED = "v1:"
-        const val PLAIN = "p:"
     }
 }
 
@@ -103,7 +101,11 @@ class SessionStore(
 
     suspend fun load() {
         val prefs = dataStore.data.first()
-        val token = prefs[TOKEN]?.let(cipher::open)
+        val stored = prefs[TOKEN]
+        val opened = stored?.takeUnless { it.startsWith(LEGACY_UNSEALED) }?.let(cipher::open)
+        if (stored != null && stored.startsWith(LEGACY_UNSEALED)) dataStore.edit { it.remove(TOKEN) }
+        val held = _state.value.takeIf { it.serverUrl == prefs[SERVER] }?.token
+        val token = opened ?: held
         val userId = prefs[USER_ID]
         _selectedBot.value = prefs[LAST_BOT]
         _state.value = Session(
@@ -124,7 +126,8 @@ class SessionStore(
     suspend fun signedIn(token: String, user: SessionUser) {
         _state.update { it.copy(token = token, user = user) }
         dataStore.edit {
-            it[TOKEN] = cipher.seal(token)
+            val sealed = cipher.seal(token)
+            if (sealed != null) it[TOKEN] = sealed else it.remove(TOKEN)
             it[USER_ID] = user.id
             it[USER_EMAIL] = user.email
             if (user.name != null) it[USER_NAME] = user.name else it.remove(USER_NAME)
@@ -162,6 +165,7 @@ class SessionStore(
     companion object {
         private val SERVER = stringPreferencesKey("server_url")
         private val TOKEN = stringPreferencesKey("token")
+        private const val LEGACY_UNSEALED = "p:"
         private val USER_ID = intPreferencesKey("user_id")
         private val USER_EMAIL = stringPreferencesKey("user_email")
         private val USER_NAME = stringPreferencesKey("user_name")

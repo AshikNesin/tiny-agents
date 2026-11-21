@@ -24,7 +24,7 @@ export interface CoverageInputs {
 }
 
 const STATIC_CHECK =
-  /\btsc\b|scripts\/check-[\w-]+|db:generate|\bpnpm ((?:check|typecheck)[\w:-]*)/g;
+  /\btsc\b|scripts\/check-[\w-]+|db:generate|\bpnpm (?:run )?((?:check|typecheck)[\w:-]*)/g;
 const GATE_STEP = /^pnpm verify:static(?: --job (\S+))?$/;
 const START_STEP = 'echo "CI_STARTED_AT=$(date +%s)" >> "$GITHUB_ENV"';
 const SHARD = /--shard=\$\{\{ matrix\.(\w+) \}\}\/(\d+)/;

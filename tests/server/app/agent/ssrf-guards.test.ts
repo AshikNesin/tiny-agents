@@ -235,12 +235,18 @@ describe("refusesNavigation's name checks (S7b)", () => {
     expect(await refusesNavigation("http://localhost/", exempt(), null)).toBe(true);
   });
 
-  it("leaves a name whose lookup takes too long to the browser", async () => {
-    const started = Date.now();
+  it("refuses a name whose lookup takes too long", async () => {
     const stuck = () => new Promise<string[]>(() => undefined);
-    expect(await refusesNavigation("http://slow.example/", exempt(), stuck)).toBe(false);
-    expect(Date.now() - started).toBeLessThan(10_000);
+    expect(await refusesNavigation("http://slow.example/", exempt(), stuck)).toBe(true);
   }, 15_000);
+
+  it("refuses a name whose lookup fails, unless the name is exempt", async () => {
+    const failing = () => Promise.reject(new Error("ENOTFOUND"));
+    expect(await refusesNavigation("http://gone.example/", exempt(), failing)).toBe(true);
+    expect(await refusesNavigation("http://gone.example/", exempt("gone.example"), failing)).toBe(
+      false,
+    );
+  });
 });
 
 describe("browser navigation guard (S7b)", () => {
