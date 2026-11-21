@@ -7,7 +7,7 @@ import {
   useParams,
   useSearchParams,
 } from "react-router-dom";
-import { ArrowLeft, Code2, PanelLeftClose, PanelLeftOpen, TriangleAlert } from "lucide-react";
+import { ArrowLeft, Code2, PanelLeftOpen, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Button, EmptyState, monoClass } from "@groot/ui";
@@ -48,6 +48,7 @@ function readSideTab(): SideTab {
     return "source";
   }
 }
+import { SidebarTop } from "../../components/shell/ModeSwitch";
 import { ConversationList } from "./ConversationList";
 import { ConversationView } from "./ConversationView";
 import { NewConversation } from "./NewConversation";
@@ -327,27 +328,12 @@ export function CodePage() {
           aria-label="Threads"
           data-state={sidebarOpen ? "open" : "closed"}
           className={cn(
-            "border-border w-full shrink-0 flex-col border-r md:w-72 xl:w-80",
+            "bg-sidebar text-sidebar-foreground border-sidebar-border w-full shrink-0 flex-col md:w-68 md:border-r-[0.5px]",
             threadId || composing || browsing || reviewing || inSettings ? "hidden" : "flex",
             !sidebarOpen ? "md:hidden" : sideOpen ? "2xl:flex" : "md:flex",
           )}
         >
-          <div className="flex h-12 shrink-0 items-center gap-1 px-2">
-            <BackToApp brand={brand} />
-            <span className="flex-1" />
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={toggleSidebar}
-              aria-label="Hide sidebar"
-              aria-controls="code-sidebar"
-              aria-expanded
-              title="Hide sidebar (⌘B)"
-              className="text-muted-foreground hidden md:inline-flex"
-            >
-              <PanelLeftClose />
-            </Button>
-          </div>
+          <SidebarTop onHide={toggleSidebar} hideControls="code-sidebar" />
           <ConversationList
             threads={listed}
             harnesses={harnesses}

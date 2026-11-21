@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import {
   Archive,
   ArchiveRestore,
@@ -38,13 +38,14 @@ import {
   type ListNode,
 } from "../../lib/code/list";
 import type { ProjectView } from "../../../shared/api/code";
+import { SIDEBAR_ROW } from "../../components/shell/ModeSwitch";
 import { PullChip, useArchive, useArchiveMany } from "./controls";
 import { shortAgo } from "./NewConversation";
 
 const COLLAPSED_KEY = "tiny-agents:code-collapsed";
 
-const navRow =
-  "text-muted-foreground hover:bg-muted hover:text-foreground flex h-8 items-center gap-2 rounded-lg px-2 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50 [&_svg]:size-4";
+const navRow = (active: boolean) =>
+  cn(SIDEBAR_ROW, active ? "bg-sidebar-accent" : "hover:bg-sidebar-accent");
 const GROUPED_KEY = "tiny-agents:code-grouped";
 
 function readGrouped(): boolean {
@@ -128,8 +129,8 @@ function Row({
     <li>
       <div
         className={cn(
-          "group/row relative flex items-stretch rounded-lg",
-          isActive || (selection && checked) ? "bg-muted" : "hover:bg-muted",
+          "group/row relative flex items-stretch rounded-xl",
+          isActive || (selection && checked) ? "bg-sidebar-accent" : "hover:bg-sidebar-accent",
         )}
         style={{ paddingLeft: depth * 12 }}
       >
@@ -169,7 +170,7 @@ function Row({
             event.preventDefault();
             if (selectable && !inherited) selection.toggle(row);
           }}
-          className="flex h-8 min-w-0 flex-1 items-center rounded-lg pr-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          className="flex h-8 min-w-0 flex-1 items-center rounded-xl pr-2 outline-none focus-visible:ring-1 focus-visible:ring-sidebar-ring"
           data-testid="code-conversation-row"
         >
           <span className="flex min-w-0 flex-1 items-center gap-1.5">
@@ -207,7 +208,7 @@ function Row({
               (archivedView ? "Restore" : "Archive") +
               (nested ? ` with ${nested} ${nested === 1 ? "subagent" : "subagents"}` : "")
             }
-            className="text-muted-foreground hover:text-foreground hover:bg-background absolute top-1 right-1 opacity-0 group-focus-within/row:opacity-100 group-hover/row:opacity-100 focus-visible:opacity-100 pointer-coarse:hidden"
+            className="text-muted-foreground hover:text-foreground hover:bg-sidebar absolute top-1 right-1 opacity-0 group-focus-within/row:opacity-100 group-hover/row:opacity-100 focus-visible:opacity-100 pointer-coarse:hidden"
             data-testid="code-row-archive"
           >
             {archivedView ? <ArchiveRestore /> : <Archive />}
@@ -226,17 +227,14 @@ function Row({
 }
 
 function Section({
-  title,
   nodes,
   ...rest
 }: RowProps & {
-  title: string;
   nodes: ListNode[];
 }) {
   if (nodes.length === 0) return null;
   return (
-    <section className="pb-2">
-      <h2 className={cn(metaLabelClass, "px-3 pt-2 pb-1")}>{title}</h2>
+    <section aria-label="Search results" className="pb-2">
       <ul className="space-y-px">
         {nodes.map((node) => (
           <Row key={node.row.id} node={node} depth={0} {...rest} />
@@ -269,14 +267,14 @@ function Group({
   const hidden = group.nodes.length - shown.length;
   return (
     <section aria-labelledby={headingId} className="pb-1.5" data-testid="code-group">
-      <div className="group/head flex h-8 items-center gap-0.5 rounded-lg pr-1 hover:bg-muted/60">
+      <div className="group/head flex h-8 items-center gap-0.5 rounded-xl pr-1">
         <h2 id={headingId} className="min-w-0 flex-1">
           <button
             type="button"
             onClick={onToggle}
             aria-expanded={!collapsed}
             title={group.path ?? group.label}
-            className="text-muted-foreground hover:text-foreground flex h-8 w-full min-w-0 items-center gap-1.5 rounded-lg px-1 text-left text-xs font-medium outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+            className="text-muted-foreground hover:text-foreground flex h-8 w-full min-w-0 items-center gap-1.5 rounded-xl px-1 text-left text-xs font-medium outline-none focus-visible:ring-1 focus-visible:ring-sidebar-ring"
           >
             <ChevronRight
               aria-hidden
@@ -345,7 +343,7 @@ function Group({
         <button
           type="button"
           onClick={() => setAll(true)}
-          className="text-muted-foreground hover:text-foreground h-7 w-full rounded-lg pl-6 text-left text-xs"
+          className="text-muted-foreground hover:text-foreground h-7 w-full rounded-xl pl-6 text-left text-xs"
         >
           Show {hidden} more
         </button>
@@ -367,6 +365,8 @@ export function ConversationList({
   activeId?: string;
   projects?: ProjectView[] | null;
 }) {
+  const { pathname } = useLocation();
+  const at = (path: string) => pathname === path || pathname.startsWith(`${path}/`);
   const [view, setView] = useState<"active" | "archived">("active");
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const toggleGroup = useCallback((key: string) => {
@@ -546,23 +546,21 @@ export function ConversationList({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <nav aria-label="Code" className="shrink-0 space-y-px px-2 pb-2">
-        <Link to="/code/new" data-testid="code-new" aria-label="New thread" className={navRow}>
+      <nav aria-label="Code" className="shrink-0 space-y-0.5 px-2.5 pb-2">
+        <Link
+          to="/code/new"
+          data-testid="code-new"
+          aria-label="New thread"
+          aria-current={at("/code/new") ? "page" : undefined}
+          className={navRow(at("/code/new"))}
+        >
           <SquarePen />
           New thread
-        </Link>
-        <Link to="/code/threads" data-testid="code-threads" className={navRow}>
-          <Rows3 />
-          Threads
-        </Link>
-        <Link to="/code/reviews" data-testid="code-reviews" className={navRow}>
-          <GitPullRequest />
-          Reviews
         </Link>
         {!searching && (
           <button
             type="button"
-            className={cn(navRow, "w-full")}
+            className={navRow(false)}
             aria-label="Search threads"
             onClick={() => {
               setSearching(true);
@@ -573,10 +571,8 @@ export function ConversationList({
             Search
           </button>
         )}
-      </nav>
-      {searching && (
-        <div className="shrink-0 px-2 pb-2">
-          <InputGroup>
+        {searching && (
+          <InputGroup className="h-9 rounded-xl">
             <InputGroupAddon>
               <Search />
             </InputGroupAddon>
@@ -594,26 +590,84 @@ export function ConversationList({
               aria-label="Search threads"
             />
           </InputGroup>
-        </div>
-      )}
-      {view === "archived" && (
-        <div className="flex items-center gap-1 px-2 pb-1">
-          <Button
-            variant="ghost"
-            size="sm"
+        )}
+        <Link
+          to="/code/threads"
+          data-testid="code-threads"
+          aria-current={at("/code/threads") ? "page" : undefined}
+          className={navRow(at("/code/threads"))}
+        >
+          <Rows3 />
+          Threads
+        </Link>
+        <Link
+          to="/code/reviews"
+          data-testid="code-reviews"
+          aria-current={at("/code/reviews") ? "page" : undefined}
+          className={navRow(at("/code/reviews"))}
+        >
+          <GitPullRequest />
+          Reviews
+        </Link>
+      </nav>
+      <div className="flex h-8 shrink-0 items-center gap-1 px-4 pt-2">
+        {view === "archived" ? (
+          <button
+            type="button"
             onClick={() => setView("active")}
-            className="text-muted-foreground"
+            className="text-fg-tertiary hover:text-foreground flex min-w-0 items-center gap-1 text-sm font-medium"
             data-testid="code-archived-back"
           >
-            <ArrowLeft />
+            <ArrowLeft className="size-3.5" />
             Archived threads
-          </Button>
-        </div>
-      )}
-      <nav aria-label="Code threads" className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+          </button>
+        ) : (
+          <h2 className="text-fg-tertiary text-sm font-medium select-none">
+            {searchTree ? "Search results" : grouped ? "Projects" : "Recent"}
+          </h2>
+        )}
+        <span className="flex-1" />
+        {!selected && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="text-muted-foreground hover:bg-sidebar-accent hover:text-foreground flex size-6 items-center justify-center rounded-lg"
+                aria-label="List options"
+                title="List options"
+              >
+                <MoreHorizontal className="size-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuCheckboxItem
+                checked={grouped}
+                onCheckedChange={(on) => setGrouped(on === true)}
+              >
+                Group by repository
+              </DropdownMenuCheckboxItem>
+              {anyArchives && (
+                <DropdownMenuCheckboxItem
+                  checked={view === "archived"}
+                  onCheckedChange={(on) => setView(on === true ? "archived" : "active")}
+                  data-testid="code-archived-toggle"
+                >
+                  Show archived
+                </DropdownMenuCheckboxItem>
+              )}
+              {anyArchives && (
+                <DropdownMenuItem onSelect={() => setSelected(new Set())} data-testid="code-select">
+                  Select threads
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+      </div>
+      <nav aria-label="Code threads" className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-3">
         {searchTree ? (
           searchTree.length ? (
-            <Section title="Search results" nodes={searchTree} {...listProps} />
+            <Section nodes={searchTree} {...listProps} />
           ) : (
             <p className="text-muted-foreground p-3 text-sm">Nothing matches “{query.trim()}”.</p>
           )
@@ -690,52 +744,17 @@ export function ConversationList({
           </Button>
         </div>
       )}
-      {!selected && (
-        <div className="flex shrink-0 items-center gap-0.5 px-2 py-1.5">
-          {projects && (
-            <Button asChild variant="ghost" size="sm" className="text-muted-foreground">
-              <Link to="/code/settings" data-testid="code-settings">
-                <Settings2 />
-                Settings
-              </Link>
-            </Button>
-          )}
-          <span className="flex-1" />
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className="text-muted-foreground"
-                aria-label="List options"
-                title="List options"
-              >
-                <MoreHorizontal />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" side="top" className="w-56">
-              <DropdownMenuCheckboxItem
-                checked={grouped}
-                onCheckedChange={(on) => setGrouped(on === true)}
-              >
-                Group by repository
-              </DropdownMenuCheckboxItem>
-              {anyArchives && (
-                <DropdownMenuCheckboxItem
-                  checked={view === "archived"}
-                  onCheckedChange={(on) => setView(on === true ? "archived" : "active")}
-                  data-testid="code-archived-toggle"
-                >
-                  Show archived
-                </DropdownMenuCheckboxItem>
-              )}
-              {anyArchives && (
-                <DropdownMenuItem onSelect={() => setSelected(new Set())} data-testid="code-select">
-                  Select threads
-                </DropdownMenuItem>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+      {!selected && projects && (
+        <div className="shrink-0 p-2.5">
+          <Link
+            to="/code/settings"
+            data-testid="code-settings"
+            aria-current={at("/code/settings") ? "page" : undefined}
+            className={navRow(at("/code/settings"))}
+          >
+            <Settings2 />
+            Settings
+          </Link>
         </div>
       )}
     </div>

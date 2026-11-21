@@ -32,7 +32,7 @@ Why: [ADR 0009](../adr/0009-shelley-is-the-coding-agent.md),
   from Settings → Models → Claude plan. The app sets up the worker on the sandbox
   ([Claude subscription](../claude-subscription.md)).
 
-With neither configured, the sidebar has no **Code** and bots have no
+With neither configured, the sidebar has no **Chat / Code** switch and bots have no
 `code_*` tools. With both, each thread in the list names its harness, and
 **New thread** offers a harness picker.
 
@@ -41,9 +41,10 @@ With neither configured, the sidebar has no **Code** and bots have no
 The layout follows [t3code](https://github.com/pingdotgg/t3code) (see
 [CREDITS](../../CREDITS.md)): minimal, with threads grouped by project.
 
-- a sidebar with the way back to the app, the ⌘K trigger, search, and the
-  threads grouped by project (the workspace owns the full column; no app
-  sidebar here), with **Archived** and **Settings** at its foot;
+- a sidebar that shares the app sidebar's top row: the brand mark and a
+  **Chat / Code** switch (each side returns to the page it was last on), then
+  the threads grouped by project (the workspace owns the full column; no app
+  sidebar here), with **Settings** at its foot;
 - one line per thread in the list;
 - a one-line header: the title (its menu holds the actions and the cost),
   the project or folder, and one Review panel toggle;
@@ -63,15 +64,16 @@ has no background jobs, so its threads show no job chips.
   row with its status, title, PR chips and date, then **Archived**, folded,
   loaded when opened. The project menu switches project, and the search box
   filters by title.
-- The sidebar is a short column, like Hoplite: **New thread**, **Threads**,
-  **Reviews** and **Search** rows on top, the threads, then **Settings** and one **…**
-  menu (Group by repository, Show archived, Select threads). A row shows its
-  PR only when the PR needs you.
+- The sidebar is a short column, like Hoplite: **New thread**, **Search**,
+  **Threads** and **Reviews** rows on top, then the threads under a
+  **Projects** (or **Recent**, ungrouped) heading whose **…** menu holds
+  Group by repository, Show archived and Select threads, and **Settings** at
+  the foot. A row shows its PR only when the PR needs you.
 - By default (**Group by repository** in that menu, on)
   threads are grouped by project, then by repository or folder for threads
   outside a project. Turned off (remembered), the list is one flat list,
-  working threads first, then newest first, like Hoplite. Search sits behind
-  its icon (Escape closes it). With grouping on, the most recently active group comes first, and a
+  working threads first, then newest first, like Hoplite. **Search** turns
+  into a search box in place (Escape closes it). With grouping on, the most recently active group comes first, and a
   project with no thread yet comes last. A group folds away (remembered),
   shows its newest 8 threads with **Show more**, and offers **New thread**
   in it (and, for a project, its settings) on hover. Inside a group,
@@ -154,8 +156,8 @@ folder):
 - Stop, Resume, rename, change directory, fork from a message, delete,
   Open in Shelley — each where the harness has it.
 - **Archive** moves a thread **with its subagents**, with Undo.
-- **Select** (**Select threads** in the list options menu, **…** at the
-  foot of the sidebar) turns the list into
+- **Select** (**Select threads** in the list options menu, **…** beside the
+  list's heading) turns the list into
   checkboxes: pick threads (a click on a row picks it; a picked thread's
   subagents go along), or **Select all**, then **Archive** (or **Restore** in
   the archived view) moves them all, with one Undo.

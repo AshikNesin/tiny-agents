@@ -378,16 +378,44 @@ export function NewConversation({
       </div>
       <div className="mx-auto flex min-h-0 w-full max-w-2xl flex-1 flex-col justify-center overflow-y-auto px-4 pt-6 pb-[12vh]">
         <div className="space-y-3">
-          <h1 className="text-muted-foreground px-1.5 text-center text-lg">
+          <h1 className="text-muted-foreground px-1.5 pb-3 text-center text-2xl font-medium">
             {project ? (
               <>
-                What should we build in{" "}
-                <span className="text-foreground font-medium">{project.name}</span>?
+                What should we build in <span className="text-foreground">{project.name}</span>?
               </>
             ) : (
-              "What should we build?"
+              <span className="text-foreground">What should we build?</span>
             )}
           </h1>
+          <Composer
+            key={harness.id}
+            draftKey={`new:${harness.id}`}
+            harness={harness}
+            cwd={project ? null : cwd.trim() || null}
+            autoFocus
+            placeholder={`Ask ${harness.label} to build, fix bugs, explore…${caps.workspace.findFiles ? " (@ for files)" : ""}`}
+            submitLabel="Start"
+            controls={
+              <>
+                <ModelPicker models={models} value={model} onChange={pickModel} withDefault />
+                {selectedModel?.supportsReasoning !== false && (
+                  <ReasoningPicker
+                    levels={caps.settings.effortLevels}
+                    value={effort}
+                    onChange={pickEffort}
+                  />
+                )}
+                {permission && (
+                  <PermissionPicker
+                    modes={caps.settings.permissionModes}
+                    value={permission}
+                    onChange={setPermission}
+                  />
+                )}
+              </>
+            }
+            onSend={(message, { attachments }) => start(message, attachments)}
+          />
           <div className="flex flex-wrap items-center gap-1 px-1.5" data-testid="code-new-options">
             {projects && (
               <SearchSelect
@@ -507,35 +535,6 @@ export function NewConversation({
               </button>
             )}
           </div>
-          <Composer
-            key={harness.id}
-            draftKey={`new:${harness.id}`}
-            harness={harness}
-            cwd={project ? null : cwd.trim() || null}
-            autoFocus
-            placeholder={`Ask ${harness.label} to build, fix bugs, explore…${caps.workspace.findFiles ? " (@ for files)" : ""}`}
-            submitLabel="Start"
-            controls={
-              <>
-                <ModelPicker models={models} value={model} onChange={pickModel} withDefault />
-                {selectedModel?.supportsReasoning !== false && (
-                  <ReasoningPicker
-                    levels={caps.settings.effortLevels}
-                    value={effort}
-                    onChange={pickEffort}
-                  />
-                )}
-                {permission && (
-                  <PermissionPicker
-                    modes={caps.settings.permissionModes}
-                    value={permission}
-                    onChange={setPermission}
-                  />
-                )}
-              </>
-            }
-            onSend={(message, { attachments }) => start(message, attachments)}
-          />
           {cwdError && (
             <p className="text-destructive px-3 text-xs" role="alert">
               {cwdError}

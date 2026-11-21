@@ -14,7 +14,15 @@ function readCollapsed(): boolean {
   }
 }
 
+export type AppMode = "chat" | "code";
+
+export function modeOf(pathname: string): AppMode {
+  return pathname === "/code" || pathname.startsWith("/code/") ? "code" : "chat";
+}
+
 interface UiState {
+  lastPath: Record<AppMode, string>;
+  rememberPath: (pathname: string, search?: string) => void;
   collapsed: boolean;
   setCollapsed: (collapsed: boolean) => void;
   mobileOpen: boolean;
@@ -28,6 +36,16 @@ interface UiState {
 }
 
 export const useUiStore = create<UiState>((set) => ({
+  lastPath: { chat: "/chats", code: "/code" },
+  rememberPath: (pathname, search = "") => {
+    if (pathname === "/settings" || pathname.startsWith("/settings/")) return;
+    const mode = modeOf(pathname);
+    set((state) =>
+      state.lastPath[mode] === pathname + search
+        ? state
+        : { lastPath: { ...state.lastPath, [mode]: pathname + search } },
+    );
+  },
   collapsed: readCollapsed(),
   setCollapsed: (collapsed) => {
     try {
