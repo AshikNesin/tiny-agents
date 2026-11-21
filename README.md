@@ -91,6 +91,12 @@ The terminal, the desktop and the live browser view need a sandbox VM; you
 can [run one in Docker](docs/guides/local-sandbox.md). Every setting is in
 [`.env.example`](.env.example) and the [setup guide](docs/setup-guide.md).
 
+## Android app
+
+The Android app approves requests and chats with your bots from your phone.
+It is coming to the Play Store soon; until then,
+[download the APK directly](https://release-hub.nesin.io/apps/tiny-agents/download?channel=direct).
+
 ## Develop
 
 ```sh
