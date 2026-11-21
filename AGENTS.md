@@ -7,7 +7,7 @@ and `pnpm verify:static` runs the gates CI runs. Guides start at
 
 ## Rules and their enforcers
 
-R1 to R16 are lint rules in `scripts/lint/boundaries.ts`, run by `pnpm check`.
+R1 to R17 are lint rules in `scripts/lint/boundaries.ts`, run by `pnpm check`.
 
 | Rule                                                                                                                                                                           | Enforcer                                                                         |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
@@ -41,6 +41,7 @@ R1 to R16 are lint rules in `scripts/lint/boundaries.ts`, run by `pnpm check`.
 | Server module state lives in the App root.                                                                                                                                     | R12                                                                              |
 | Client request/response data loads through `useResource` (`apps/web/src/client/queries/resource.ts`), never a fetch in `useEffect`.                                            | R15                                                                              |
 | Code carries no comments; a decision goes in an ADR. Old comments stay in `scripts/lint/comment-baseline.json` until deleted, and it only shrinks.                             | R16, `pnpm check:comments`                                                       |
+| Handle, rethrow, or catch into a function named for why; never `catch {}` or `.catch(() => x)`. `scripts/lint/silent-fallback-baseline.json` only shrinks.                     | R17, `scripts/check-fallback-ratchet.ts`                                         |
 | A doc, comment or changeset names the code that owns a list or number, never a copy of it.                                                                                     | Judgment                                                                         |
 | API wire types live in `apps/web/src/shared/api/`; a client `*-api.ts` declares none.                                                                                          | R13                                                                              |
 | A status column is a typed machine; its writes guard on it.                                                                                                                    | `tests/server/api/state-machines.test.ts`                                        |

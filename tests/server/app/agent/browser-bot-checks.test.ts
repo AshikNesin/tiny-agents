@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type IncomingHttpHeaders, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
@@ -106,4 +106,19 @@ describe.skipIf(!chromiumPath)("bot checks in real Chromium", () => {
     expect(request?.["sec-ch-ua"] ?? "").not.toContain("Headless");
     expect(request?.["accept-language"]).toMatch(/^en-IN/);
   }, 30_000);
+});
+
+describe("the browser's user agent", () => {
+  it("refuses to open a browser whose version it cannot read, instead of sending HeadlessChrome", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "ta-no-version-"));
+    cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
+    const executablePath = join(dir, "chromium");
+    writeFileSync(executablePath, "#!/bin/sh\nexit 1\n");
+    chmodSync(executablePath, 0o755);
+    const transport = createChromiumTransport({ executablePath });
+
+    await expect(transport(join(dir, "profile"), open)).rejects.toThrow(
+      `Could not read the version of ${executablePath}`,
+    );
+  });
 });

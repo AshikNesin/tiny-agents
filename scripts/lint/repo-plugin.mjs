@@ -139,12 +139,43 @@ const NO_COMMENTS_MESSAGE =
 
 const baselines = new Map();
 
-const allowedComments = (cwd, file) => {
-  if (!baselines.has(cwd)) {
-    const baseline = path.join(cwd, BASELINE_PATH);
-    baselines.set(cwd, existsSync(baseline) ? JSON.parse(readFileSync(baseline, "utf8")) : {});
+const allowedBy = (baselinePath) => (cwd, file) => {
+  const key = `${cwd}\0${baselinePath}`;
+  if (!baselines.has(key)) {
+    const baseline = path.join(cwd, baselinePath);
+    baselines.set(key, existsSync(baseline) ? JSON.parse(readFileSync(baseline, "utf8")) : {});
   }
-  return baselines.get(cwd)[path.relative(cwd, file).replaceAll("\\", "/")] ?? 0;
+  return baselines.get(key)[path.relative(cwd, file).replaceAll("\\", "/")] ?? 0;
+};
+
+const allowedComments = allowedBy(BASELINE_PATH);
+
+export const SILENT_FALLBACK_BASELINE = "scripts/lint/silent-fallback-baseline.json";
+
+const allowedSilentFallbacks = allowedBy(SILENT_FALLBACK_BASELINE);
+
+const SILENT_FALLBACK_MESSAGE =
+  "R17: this drops the error and carries on as if the call worked. Agents shipped this three times: a DNS lookup failure let the browser through (#445), an auto-dismiss failure left a question pending (#469), and a slow `chromium --version` sent a HeadlessChrome user agent (#494). Handle the failure, rethrow it, or catch into a function whose name says why ignoring it is safe (`.catch(ignoreClosedSocket)`).";
+
+const isFunction = (node) =>
+  node?.type === "ArrowFunctionExpression" || node?.type === "FunctionExpression";
+
+const ignoresError = (handler) =>
+  isFunction(handler) &&
+  handler.params.every((param) => param.type === "Identifier" && param.name.startsWith("_"));
+
+const calledMethod = (node) =>
+  node.callee.type === "MemberExpression" && !node.callee.computed
+    ? node.callee.property.name
+    : null;
+
+const silentFallbacks = (node) => {
+  if (node.type === "CatchClause") return node.body.body.length === 0 ? [node] : [];
+  if (node.type !== "CallExpression") return [];
+  const method = calledMethod(node);
+  const handler =
+    method === "catch" ? node.arguments[0] : method === "then" ? node.arguments[1] : undefined;
+  return ignoresError(handler) ? [handler] : [];
 };
 
 const MODULE_SCOPES = new Set(["module", "global"]);
@@ -258,6 +289,28 @@ export default {
             const allowed = allowedComments(context.cwd ?? process.cwd(), context.filename);
             for (const comment of comments.slice(allowed)) {
               context.report({ loc: comment.loc, message: NO_COMMENTS_MESSAGE });
+            }
+          },
+        };
+      },
+    },
+    "no-silent-fallback": {
+      create(context) {
+        const found = [];
+        const collect = (node) => found.push(...silentFallbacks(node));
+        return {
+          CatchClause: collect,
+          CallExpression: collect,
+          "Program:exit"(program) {
+            const allowed = allowedSilentFallbacks(context.cwd ?? process.cwd(), context.filename);
+            for (const node of found.slice(allowed)) {
+              context.report({ node, message: SILENT_FALLBACK_MESSAGE });
+            }
+            if (found.length < allowed) {
+              context.report({
+                node: program,
+                message: `R17: ${SILENT_FALLBACK_BASELINE} allows ${allowed} silent fallbacks here but the file has ${found.length}. Lower its count to ${found.length} to lock in the cut; the baseline only shrinks.`,
+              });
             }
           },
         };

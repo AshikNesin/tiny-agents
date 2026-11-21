@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { load } from "js-yaml";
 import { describe, expect, it } from "vite-plus/test";
-import { GATE_JOBS, selectGates } from "../../../scripts/gates.mjs";
+import { GATE_JOBS, gates, selectGates } from "../../../scripts/gates.mjs";
 import { RUN_BUDGETS, verdict } from "../../../scripts/ci-budget.mjs";
 import { workflowProblems, type Workflow } from "../../../scripts/lib/workflow-coverage";
 
@@ -80,7 +80,7 @@ describe("the Tests workflow", () => {
 
 describe("gate selection", () => {
   it("runs every gate without --job, and one job's gates with it", () => {
-    expect(selectGates([]).gates).toHaveLength(19);
+    expect(selectGates([]).gates).toEqual(gates);
     expect(selectGates(["--job", "migrations"]).gates?.map((gate) => gate.name)).toEqual([
       "Migrations are up to date with the schema",
       "Applied migrations unchanged",

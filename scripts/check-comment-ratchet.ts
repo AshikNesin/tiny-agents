@@ -7,7 +7,12 @@ import { BASELINE_PATH, countComments, inScope, readBaseline } from "./lint/comm
 
 type Baseline = Record<string, number>;
 
-export function ratchetProblems(actual: Baseline, baseline: Baseline, base: Baseline | null) {
+export function ratchetProblems(
+  actual: Baseline,
+  baseline: Baseline,
+  base: Baseline | null,
+  baselinePath = BASELINE_PATH,
+) {
   const problems: string[] = [];
   for (const [file, count] of Object.entries(actual)) {
     const allowed = baseline[file] ?? 0;
@@ -39,7 +44,7 @@ export function ratchetProblems(actual: Baseline, baseline: Baseline, base: Base
     for (const [file, allowed] of Object.entries(base)) if (!(file in baseline)) freed += allowed;
     if (added > freed) {
       problems.push(
-        `${BASELINE_PATH} gives new paths ${added} comments but frees only ${freed}. A rename may carry its count; a new file starts at 0.`,
+        `${baselinePath} gives new paths ${added} but frees only ${freed}. A rename may carry its count; a new file starts at 0.`,
       );
     }
   }

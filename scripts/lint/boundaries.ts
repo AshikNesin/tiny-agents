@@ -369,6 +369,14 @@ const BOUNDARY_RULES: BoundaryRule[] = [
     enabled: true,
   },
   {
+    id: "R17",
+    kind: "plugin",
+    scope: "**",
+    rule: "repo/no-silent-fallback",
+    except: [...OUT_OF_SCOPE, "tests/**", "**/*.test.ts", "**/*.test.tsx"],
+    enabled: true,
+  },
+  {
     id: "R13",
     kind: "plugin",
     scope: "apps/web/src/client/lib/*-api.ts",

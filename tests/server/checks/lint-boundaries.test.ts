@@ -576,6 +576,27 @@ const FIXTURES: Record<string, Fixture> = {
     source: 'export const toModel = "clicked \u2014 now on the page";\n',
     rules: [],
   },
+  "packages/agent/src/r17-catch-fail.ts": {
+    source:
+      "export class Runtime {\n  async dismiss(): Promise<void> {}\n  watch(): void {\n    void this.dismiss().catch(() => {});\n  }\n}\n",
+    rules: ["R17"],
+    mentions: "carries on as if the call worked",
+  },
+  "packages/sandbox/src/r17-then-default-fail.ts": {
+    source:
+      'import { lookup } from "node:dns/promises";\nexport const addresses = (host: string) =>\n  lookup(host, { all: true }).then(\n    (found) => found.map((a) => a.address),\n    () => [],\n  );\n',
+    rules: ["R17"],
+  },
+  "scripts/r17-empty-catch-fail.mjs": {
+    source:
+      'import { statSync } from "node:fs";\nexport function exists(file) {\n  try {\n    statSync(file);\n    return true;\n  } catch {}\n  return false;\n}\n',
+    rules: ["R17"],
+  },
+  "packages/sandbox/src/r17-pass.ts": {
+    source:
+      'const ignoreClosedSocket = (error: unknown) => {\n  if (!(error instanceof Error && error.message.includes("closed"))) throw error;\n};\nexport async function close(socket: { end(): Promise<void> }) {\n  await socket.end().catch(ignoreClosedSocket);\n  try {\n    await socket.end();\n  } catch (error) {\n    throw new Error("Could not close the socket.", { cause: error });\n  }\n  return socket.end().then(\n    () => true,\n    (error: unknown) => {\n      throw error;\n    },\n  );\n}\n',
+    rules: [],
+  },
   "apps/web/src/server/r8b-pass.ts": {
     source: 'import { db } from "@groot/core/database";\nexport const d = db;\n',
     rules: [],
