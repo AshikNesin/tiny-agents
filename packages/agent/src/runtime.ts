@@ -13,6 +13,9 @@ import {
   type Report,
   type Storage,
 } from "@earendil-works/pi-durable";
+import { DEFAULT_IMAGE_LIMITS, type ImageProcessor } from "@earendil-works/pi-durable/tools";
+import { createFitImagesExtension, fitImage } from "@earendil-works/pi-durable/images/fit";
+import { createNodePhotonImages } from "@earendil-works/pi-durable/images/node";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
 import {
   ApprovalNotPendingError,
@@ -120,6 +123,7 @@ export interface AgentRuntimeOptions {
   onFatal?: (error: unknown) => void;
   claudeWorker?: ClaudeWorkerLocator;
   claudeConnect?: (url: string, token: string) => WebSocketLike;
+  images?: ImageProcessor;
 }
 
 export class AgentRuntime {
@@ -128,6 +132,7 @@ export class AgentRuntime {
   readonly #claude: AgentEngine;
   readonly #engines: readonly AgentEngine[];
   readonly #gate: ToolGate;
+  readonly #images: ImageProcessor;
   readonly #models: MutableModels;
   #catalog: ModelCatalog;
   #credentials: CredentialResolver;
@@ -172,6 +177,7 @@ export class AgentRuntime {
     approvals: WaitTracker,
     questions: WaitTracker,
     capabilities: readonly Capability[],
+    images: ImageProcessor,
     legacyPath?: string,
     claudeWorker?: ClaudeWorkerLocator,
     claudeConnect?: (url: string, token: string) => WebSocketLike,
@@ -182,6 +188,7 @@ export class AgentRuntime {
     });
     this.#gate = gate;
     this.#pi = new PiEngine(this.#store);
+    this.#images = images;
     this.claudePlan = new ClaudePlan({
       state: () => claudePlanState(this.#catalog),
       ...(claudeWorker ? { worker: claudeWorker } : {}),
@@ -249,6 +256,8 @@ export class AgentRuntime {
         createQuestionsCapability(questions),
         createToolSearchCapability((id) => runtime?.capabilityInfo(id)),
       ];
+      const images = options.images ?? (await createNodePhotonImages());
+      registry.install(createFitImagesExtension(images));
       registry.install(createContextTrimExtension());
       for (const extension of options.extensions ?? []) registry.install(extension);
       const gate = new ToolGate({
@@ -314,6 +323,7 @@ export class AgentRuntime {
         approvals,
         questions,
         capabilities,
+        images,
         inMemory ? undefined : `${options.storePath}.claude.json`,
         options.claudeWorker,
         options.claudeConnect,
@@ -539,9 +549,27 @@ export class AgentRuntime {
   }
 
   async submit(ref: ConversationRef, input: EngineSubmission): Promise<void> {
+    const fitted = await this.#fitImages(input);
     const engine = this.#engineFor(ref);
-    if ((await engine.submit(ref, input)) === "accepted") return;
-    await this.#pi.submit(ref, input);
+    if ((await engine.submit(ref, fitted)) === "accepted") return;
+    await this.#pi.submit(ref, fitted);
+  }
+
+  async #fitImages(input: EngineSubmission): Promise<EngineSubmission> {
+    if (!input.images?.length) return input;
+    const images: { data: string; mimeType: string }[] = [];
+    const omitted: string[] = [];
+    for (const image of input.images) {
+      const bytes = new Uint8Array(Buffer.from(image.data, "base64"));
+      const fitted = await fitImage(bytes, image.mimeType, DEFAULT_IMAGE_LIMITS, this.#images);
+      if (fitted.kind === "fitted") {
+        images.push({ data: fitted.image.data, mimeType: fitted.image.mimeType });
+      } else {
+        omitted.push(fitted.note);
+      }
+    }
+    const text = [input.text, ...omitted].filter(Boolean).join("\n\n");
+    return { ...input, images, ...(text ? { text } : {}) };
   }
 
   async abort(ref: ConversationRef): Promise<void> {
