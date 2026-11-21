@@ -25,8 +25,8 @@ film into `docs/demo/` (see [the film's README](../scripts/demo/launch/README.md
 
 The copy follows the repo's README: the tagline, the "Why", the screenshots
 and the quick start. When the README changes, update the page to match. The
-main call to action is the GitHub repo; the Android APK link is in "Run it"
-and the FAQ.
+only call to action is the GitHub repo; the Android APK link is in "Run it".
+Anything the README or another section already says stays out.
 
 The video's start button is a `<button>` laid over the poster. It hides by a
 `.playing` class on the player, not the `hidden` attribute: the button's own

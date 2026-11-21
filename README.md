@@ -5,8 +5,6 @@ each contact is a bot that can browse the web, run commands, work on a
 schedule and remember you, and it asks before it does anything you haven't
 allowed.
 
-[![Tests](https://github.com/AshikNesin/tiny-agents/actions/workflows/test.yml/badge.svg)](https://github.com/AshikNesin/tiny-agents/actions/workflows/test.yml)
-
 https://github.com/user-attachments/assets/906ab28e-d438-4205-a03a-6e501a60b9eb
 
 ## Why
@@ -96,17 +94,10 @@ The Android app approves requests and chats with your bots from your phone.
 It is coming to the Play Store soon; until then,
 [download the APK directly](https://release-hub.nesin.io/apps/tiny-agents/download?channel=direct).
 
-## Develop
+## Contribute
 
-```sh
-pnpm dev              # dev server with hot reload
-pnpm test             # server tests
-pnpm test:client      # client tests
-pnpm verify:static    # the checks CI runs
-```
-
-Guides start at [docs/README.md](docs/README.md). To contribute, see
-[CONTRIBUTING.md](CONTRIBUTING.md). Projects that shaped tiny-agents are in
+See [CONTRIBUTING.md](CONTRIBUTING.md); guides start at
+[docs/README.md](docs/README.md). Projects that shaped tiny-agents are in
 [CREDITS.md](CREDITS.md).
 
 ## License
