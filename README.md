@@ -7,10 +7,7 @@ themselves.
 
 [![Tests](https://github.com/AshikNesin/tiny-agents/actions/workflows/test.yml/badge.svg)](https://github.com/AshikNesin/tiny-agents/actions/workflows/test.yml)
 
-[![Watch the Tiny Agents film (1:16)](docs/demo/launch-poster.jpg)](docs/demo/tiny-agents-launch.mp4)
-
-A 76-second film of the app's own UI. More films and what each one shows are
-in [docs/demo](docs/demo/README.md).
+![A bot's tool settings: each tool is set to Allow, Ask or Off](docs/screenshots/tool-permissions.png)
 
 ## Why it exists
 
@@ -20,6 +17,17 @@ fully control. It runs on your server with your data in SQLite files, works
 with the model provider you choose, and lets you set each tool a bot has to
 Allow, Ask or Off. Conversations are durable: a reply survives a page refresh,
 a crash or a redeploy.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/questions.png" alt="A bot asks you questions when it needs your input"></td>
+    <td width="50%"><img src="docs/screenshots/routines.png" alt="Routines run a bot on a schedule"></td>
+  </tr>
+  <tr>
+    <td>A bot asks when it needs your input.</td>
+    <td>Routines run a bot on a schedule.</td>
+  </tr>
+</table>
 
 ## Quick start
 
