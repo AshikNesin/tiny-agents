@@ -259,6 +259,29 @@ describe.each(ENGINES)("AgentEngine contract on %s", (kind) => {
     await chat.stop();
   }, 15_000);
 
+  it("keeps a bot's queued message through a Stop and answers it, and drops the owner's", async () => {
+    const { runtime, ref, send, replied } = await setup(kind);
+    const chat = await watch(runtime, ref);
+    await send(ref, { requestId: "r1", text: "send_email ana@x.dev" });
+    await awaitingApproval(chat, "send_email");
+    await send(ref, {
+      requestId: "r2",
+      text: "Scout says hi",
+      peer: { kind: "message", name: "Scout" },
+    });
+    await send(ref, { requestId: "r3", text: "three" });
+    await runtime.abort(ref);
+    await until(() => !runtime.isBusy(ref), "the stop to settle");
+
+    await send(ref, { requestId: "r4", text: "four" });
+    const state = await replied("four");
+    expect(finishedReplyTo(state, "r2").status).toBe("answered");
+    expect(state.messages.some((m) => m.requestId === "r3" && m.status !== "unanswered")).toBe(
+      false,
+    );
+    await chat.stop();
+  }, 15_000);
+
   it("keeps a stopped reply as it stopped, whatever arrives for it later", async () => {
     const { runtime, worker, ref, send } = await setup(kind);
     const chat = await watch(runtime, ref);

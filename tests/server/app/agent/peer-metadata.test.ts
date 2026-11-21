@@ -125,8 +125,9 @@ describe("peer metadata on chat.user entries", () => {
 
       await rt.submit(ref, { requestId: "owner-2", text: "ok" });
       const messages = await afterReplies(rt, ref, 1);
-      const users = messages.filter((m) => m.role === "user").map((m) => m.requestId);
-      expect(users).toEqual(["owner-1", "finish-1", "owner-2"]);
+      const users = messages.filter((m) => m.role === "user");
+      expect(users.map((m) => m.requestId)).toEqual(["owner-1", "finish-1", "owner-2"]);
+      expect(users.find((m) => m.requestId === "finish-1")?.status).toBe("done");
     } finally {
       await rt.close();
     }
