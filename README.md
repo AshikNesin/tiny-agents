@@ -1,153 +1,176 @@
 # tiny-agents
 
-A messenger-style app where every contact is an AI bot you chat with — built
-on [pi-durable](https://earendil.com/posts/pi-durable/) for durable
-conversations (survive refreshes, crashes, redeploys) and the
-[groot](https://github.com/AshikNesin/groot) boilerplate (Hono + React 19 +
-Drizzle/SQLite + JWT/passkey auth, Node only). Models are set up in the app
-(Settings → Models): Anthropic, OpenAI, Gemini, any OpenAI-compatible host,
-Cloudflare AI Gateway or your Claude plan, with keys kept in the vault.
+A self-hosted personal assistant: a messenger where each contact is an AI bot
+that can browse the web, run commands on a sandbox and work on a schedule, and
+asks you before it acts. For people who want an assistant they run and control
+themselves.
 
-See `PRD.md` for the full spec. Phase 1: create bots, chat with streamed
-replies, durability as a first-class property.
-
-## Demo
+[![Tests](https://github.com/AshikNesin/tiny-agents/actions/workflows/test.yml/badge.svg)](https://github.com/AshikNesin/tiny-agents/actions/workflows/test.yml)
 
 [![Watch the Tiny Agents film (1:16)](docs/demo/launch-poster.jpg)](docs/demo/tiny-agents-launch.mp4)
 
-**In 76 seconds:** an evening of catching up. Code Buddy handed a flaky test to
-Claude Code and reports back with the fix and its cost; Travel Planner's 7 AM
-routine found a fare in its own browser (click the stream to take control) and
-asks before paying, approved from the Android app with the card filled from the
-Vault; Chief of Staff makes a new bot on request; a friend joins a shared chat;
-then memory, a real terminal, MCP connections, any model, YOLO mode and
-one-click updates. Also cut as a [vertical video](docs/demo/tiny-agents-launch-vertical.mp4)
-and a [15-second teaser](docs/demo/tiny-agents-launch-teaser.mp4). Every screen
-is the app's own UI; see [`scripts/demo/launch/`](scripts/demo/launch/README.md)
-for how it was made and what is staged.
+A 76-second film of the app's own UI. More films and what each one shows are
+in [docs/demo](docs/demo/README.md).
 
-### Earlier films
+## Why it exists
 
-[![Watch the 50-second Tiny Agents teaser](docs/demo/teaser-poster.jpg)](docs/demo/tiny-agents-teaser.mp4)
+tiny-agents is Ashik's own personal assistant, built to solve his own
+problems, on the belief that everyone should have a personal assistant they
+fully control. It runs on your server with your data in SQLite files, works
+with the model provider you choose, and lets you set each tool a bot has to
+Allow, Ask or Off. Conversations are durable: a reply survives a page refresh,
+a crash or a redeploy.
 
-**In 50 seconds:** a trip to Japan from Chennai, planned by a bot that
-remembers you, browses and uses its own computer, and pays only after you
-approve (card filled from the Vault). You set each tool to Allow, Ask or Off,
-open a real shell on the sandbox, connect your tools over MCP, get alerts when
-a bot needs you, watch bots hand work to each other, and see a reply survive a
-server restart. See [`scripts/demo/teaser/`](scripts/demo/teaser/README.md) to
-re-render it. A one-page marketing site lives in [`site/`](site/README.md).
+## Quick start
 
-[![Watch the tiny-agents demo (1:39)](docs/demo/poster.jpg)](docs/demo/tiny-agents-demo.mp4)
+Prerequisites: Node.js 24, pnpm 10 (`corepack enable` gives you the pinned
+version), git, and [portless](docs/guides/portless-https.md), which `pnpm dev`
+runs through.
 
-A 1:39 tour: bots that ask before they act, a live browser (Google Flights,
-Chennai → Bangalore), a real terminal on the sandbox VM, routines, and
-conversations that survive a refresh. Recorded from the real app with scripted
-chat replies; see [`scripts/demo/`](scripts/demo/README.md) to re-record it.
+1. Install portless:
+
+   ```sh
+   npm install -g portless
+   ```
+
+2. Clone and install:
+
+   ```sh
+   git clone https://github.com/AshikNesin/tiny-agents.git
+   cd tiny-agents
+   pnpm install
+   ```
+
+3. Start the app with the built-in test model (no keys, no network):
+
+   ```sh
+   TINY_AGENTS_FAUX=1 pnpm dev
+   ```
+
+4. Open the URL it prints (`https://tiny-agents.localhost`, or
+   `https://tiny-agents.localhost:8888` when no portless proxy was already
+   running) and sign in with `demo@example.com` / `demo@example.com`.
+5. Click **New bot**, type a name and click **Create bot** (the model is
+   already **Test Model (faux)**). Send `Hello`; the bot replies
+   `Echo: Hello`.
+
+The first run creates `data/dev.db`, applies migrations and seeds the demo
+user. No `.env` is needed; [`.env.example`](.env.example) lists every
+variable. `PORTLESS=0` serves `http://localhost:3000` instead of the HTTPS
+URL, but the `portless` command must still be installed.
+
+## Usage
+
+### Use a real model
+
+Model keys are kept in the vault, so set `SECRETS_KEY` first, then restart
+without `TINY_AGENTS_FAUX`:
+
+```sh
+echo "SECRETS_KEY=$(openssl rand -base64 32)" >> .env
+pnpm dev
+```
+
+Add a provider account in **Settings → Models**: Anthropic, OpenAI, Gemini,
+any OpenAI-compatible host, Cloudflare AI Gateway or your Claude plan. No
+restart is needed. See [docs/features/models.md](docs/features/models.md).
+Using a Claude Pro or Max plan is experimental and can put the Claude account
+at risk; read [docs/claude-subscription.md](docs/claude-subscription.md)
+before you turn it on.
+
+### Create a bot and chat over the API
+
+Everything the web app does goes through the same HTTP API. With
+`PORTLESS=0 TINY_AGENTS_FAUX=1 pnpm dev` running:
+
+```sh
+B=http://localhost:3000/api/v1
+T=$(curl -s -X POST $B/auth/login -H 'content-type: application/json' \
+  -d '{"email":"demo@example.com","password":"demo@example.com"}' \
+  | node -pe 'JSON.parse(require("fs").readFileSync(0)).data.token')
+ID=$(curl -s -X POST $B/bots -H "authorization: Bearer $T" -H 'content-type: application/json' \
+  -d '{"name":"Helper","modelId":"test-model"}' \
+  | node -pe 'JSON.parse(require("fs").readFileSync(0)).data.id')
+curl -s -X POST $B/bots/$ID/messages -H "authorization: Bearer $T" -H 'content-type: application/json' \
+  -d '{"requestId":"first-message-1","text":"Hello"}'; echo
+sleep 2
+curl -s $B/bots/$ID -H "authorization: Bearer $T" | grep -o '"lastMessagePreview":"[^"]*"'
+```
+
+The last line prints `"lastMessagePreview":"Echo: Hello"`. More recipes are in
+[docs/reference/api-requests.md](docs/reference/api-requests.md).
+
+### Run a bot on a schedule
+
+Open **Routines** and click **New routine** to have a bot run a prompt on a
+schedule. Each run starts with fresh context and reports back to you. See
+[docs/features/routines.md](docs/features/routines.md).
+
+### Connect your tools over MCP
+
+Open **Connections** and click **Add connection** to add a remote MCP server.
+Its tools become available to the bots you turn it on for, and each tool can
+be switched off. See [docs/features/connections.md](docs/features/connections.md).
+
+### Run it for real
+
+- On your own machine, `pnpm local` builds and runs the production server and
+  lets you update from **Settings → Updates**. See
+  [docs/guides/local-updates.md](docs/guides/local-updates.md).
+- On a server, deploy with Railpack on Coolify or Railway. Run exactly one
+  replica with a persistent volume. See [docs/guides/deploy.md](docs/guides/deploy.md).
+
+The browser, computer and terminal tools need a sandbox VM (`SANDBOX_HOST`);
+[docs/guides/local-sandbox.md](docs/guides/local-sandbox.md) runs one as a
+Docker container. The Android app is in [`mobile/`](docs/features/mobile-app.md).
+
+## Configuration
+
+Settings live in environment variables. Every variable has a development
+default, so a fresh checkout needs none. Copy `.env.example` to `.env` to
+override. The most common ones:
+
+| Variable           | Type         | Default (development)                | Description                                                                                         |
+| ------------------ | ------------ | ------------------------------------ | --------------------------------------------------------------------------------------------------- |
+| `PORT`             | number       | `3000`                               | HTTP port                                                                                           |
+| `DATABASE_URL`     | string       | `file:./data/dev.db`                 | App SQLite file. Production default is `app.db` under `DATA_DIR` (`/data`)                          |
+| `AGENT_DB_PATH`    | string       | `./data/agent.db`                    | pi-durable agent store. Production default `/data/agent.db`                                         |
+| `SECRETS_KEY`      | string       | unset                                | Encrypts vault items and connection secrets. Required before adding a model key                     |
+| `JWT_SECRET_KEY`   | string       | a development key                    | Signs sessions. At least 32 characters; required in production                                      |
+| `ADMIN_AUTH_KEY`   | string       | `dev-only-admin-key`                 | `X-Admin-Auth-Key` header value for admin endpoints; required in production                         |
+| `ORIGIN`, `RP_ID`  | string       | `http://localhost:3000`, `localhost` | Public URL and passkey domain; required in production                                               |
+| `SANDBOX_HOST`     | string       | unset (no sandbox)                   | Sandbox VM for commands, browser, computer and terminal. Production default `tiny-agents-vm`        |
+| `TINYFISH_API_KEY` | string       | unset                                | Turns on web search and page reading (free key from [agent.tinyfish.ai](https://agent.tinyfish.ai)) |
+| `TINY_AGENTS_FAUX` | `1` or unset | unset                                | Development and e2e only: use a scripted echo model instead of a provider                           |
+| `LOG_LEVEL`        | enum         | `debug` (`info` in production)       | `trace`, `debug`, `info`, `warn`, `error`, `fatal` or `silent`                                      |
+
+The full list, with production rules, is in the
+[setup guide](docs/setup-guide.md#environment-variables). Models are not
+configured with variables; add them in **Settings → Models**.
 
 ## Development
 
 ```sh
-pnpm install
-pnpm dev          # https://tiny-agents.localhost (demo@example.com / demo@example.com)
+git clone https://github.com/AshikNesin/tiny-agents.git
+cd tiny-agents
+pnpm install          # also installs the git hooks
+pnpm dev              # dev server with hot reload
+pnpm test             # server tests
+pnpm test:client      # client tests
+pnpm lint             # lint
+pnpm verify:static    # the static gates CI runs (lint, types, doc refs, ...)
 ```
 
-No `.env` is needed for development; `.env.example` lists every variable. The
-dev server runs under [portless](docs/guides/portless-https.md);
-`PORTLESS=0 pnpm dev` serves `http://localhost:3000` instead.
+Use pnpm, not npm or yarn. Start with [docs/README.md](docs/README.md) for
+guides, [docs/guides/testing.md](docs/guides/testing.md) for how tests are
+written, and [docs/reference/workspace-layout.md](docs/reference/workspace-layout.md)
+for what each package holds. Projects whose ideas shaped tiny-agents are in
+[CREDITS.md](CREDITS.md).
 
-For real inference, sign in and add a provider in **Settings → Models**
-(set `SECRETS_KEY` first: keys are kept in the vault). No restart; see
-[`docs/features/models.md`](docs/features/models.md). With no model set up
-the app runs but shows a banner and disables sending. For UI/flow work
-without a provider: `TINY_AGENTS_FAUX=1 pnpm dev` uses a scripted echo model
-(send `/ask` to see a bot's questions for you).
+## Contributing
 
-Web search and page reading use
-[TinyFish](https://www.tinyfish.ai/blog/search-and-fetch-are-now-free-for-every-agent-everywhere)
-(`TINYFISH_API_KEY`, from [agent.tinyfish.ai](https://agent.tinyfish.ai)).
-Search and Fetch are free; without the key those tools stay hidden.
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## Use your Claude subscription (experimental)
+## License
 
-A bot can answer on a Claude Pro or Max plan. tiny-agents installs and
-runs Claude Code on your sandbox; you add the Claude plan account in
-Settings → Models and sign in once from Settings → Models → Claude plan. Claude Code holds the
-login on the sandbox. tiny-agents does not: it will not read, store, or
-refresh that credential, and it will not proxy Anthropic.
-
-This is easy to get wrong in a way that risks the Claude account.
-Anthropic has restricted third-party use of subscription access. Read
-[docs/claude-subscription.md](docs/claude-subscription.md) before enabling
-it. Short version:
-
-- Don't add the Claude plan account until you have read that page.
-- Do not paste an `sk-ant-oat` token anywhere in this app. It is refused.
-- The worker listens on the sandbox's `127.0.0.1` and the app reaches it
-  through its SSH tunnel; nothing is published.
-- Pick a model labelled "uses your Claude plan", or keep using API-key providers.
-- To spend Max-plan API credits without this engine, put a normal console
-  API key in Cloudflare AI Gateway BYOK only. See
-  [docs/features/models.md](docs/features/models.md).
-
-## Layout
-
-- `packages/agent` — the only module that touches pi-durable (excluded from
-  groot sync; app-shaped API so pi-durable churn stays contained). The
-  Claude plan client lives under `src/engines/claude-code/`. The Claude
-  worker, which does not use pi-durable, is a subpath
-  (`@tiny-agents/agent/claude-worker`; see
-  [docs/README.md](docs/README.md#tiny-agentsagent-entry-points))
-- `packages/models` — provider kinds and templates, discovery, test calls,
-  `buildProviders` and the Model catalog, on pi-ai only (it imports neither
-  pi-durable nor `packages/agent`, lint R11; excluded from groot sync)
-- `packages/sandbox` — the sandbox VM layer: SSH connection, terminal tabs,
-  browser and computer sessions and transports, their VM setup scripts and
-  the forwarding server (it imports neither pi-durable nor `packages/agent`,
-  lint R11; excluded from groot sync). The toolkits that drive it stay in
-  `packages/agent`
-- `packages/claude-worker` — loopback daemon that drives Claude Code. It
-  does not run inside the tiny-agents process
-- `packages/code` — the Code page's harness adapters: one contract every
-  coding agent plugs into (Shelley, Claude Code), with the built-in drivers
-- `apps/web` — app code (bots API + SSE under `src/server/api/bots`, chat UI
-  under `src/client`); everything else is the groot boilerplate, synced via
-  `pnpm groot:sync` and never edited here
-- `mobile`: the Android app (Kotlin and Jetpack Compose), a client of the
-  same server. A child of groot-mobile-app with its own tooling, checks and
-  sync, run from inside `mobile/`; see
-  [docs/features/mobile-app.md](docs/features/mobile-app.md)
-- `app.db` (Drizzle, schema in `apps/web/src/server/db/schema.ts`) and
-  `agent.db` (pi-durable) are separate SQLite files; the link is
-  `bots.conversationId`
-
-## Testing
-
-```sh
-pnpm test         # server (incl. agent runtime + SIGKILL durability suite)
-pnpm test:client  # client unit tests
-pnpm test:e2e     # Playwright (runs on the faux provider)
-```
-
-## Deployment
-
-Coolify (Railpack, health check `/health`, one volume at `/app/data`, SQLite
-`DATABASE_URL=file:/app/data/app.db`, `AGENT_DB_PATH=/app/data/agent.db`).
-**Disable rolling updates** (consistent container naming) — pi-durable allows
-only one process per agent store. In-flight replies resume after boot.
-
-Migrations apply on boot. Uploads live next to the database
-(`/app/data/uploads`) unless `UPLOADS_DIR` is set. Production requires
-`JWT_SECRET_KEY` (≥ 32 chars), `ADMIN_AUTH_KEY`, `ORIGIN` and `RP_ID`; the
-server refuses the development defaults.
-
-**Upgrading from the Prisma build:** the first boot finds the old database,
-renames it to `app.db.prisma-backup-<time>` and copies every row into the new
-layout (bots, chats, vault items, routines, memories, users, passkeys,
-settings). Routines re-arm their next run. Passwords keep working: the first
-sign-in replaces the old bcrypt hash. Keep the backup until you have checked
-the app, then delete it.
-
-## Credits
-
-Projects whose ideas shaped tiny-agents are in [CREDITS.md](./CREDITS.md).
+ISC, as declared in [`package.json`](package.json).

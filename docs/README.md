@@ -3,8 +3,8 @@
 The documentation hub for tiny-agents and the groot boilerplate it is built
 on (Hono + React + Drizzle on SQLite; tiny-agents runs on Node only). Start
 with the quick start, then read the guides and feature docs as you need
-them. The tech stack and workspace layout are in the
-[root README](../README.md).
+them. The tech stack and workspace layout are in
+[`reference/workspace-layout.md`](./reference/workspace-layout.md).
 
 ## Getting started
 
@@ -70,13 +70,15 @@ What ships in the box and how to use or extend it.
 
 Lookup material.
 
-| Document                                                       | What it covers                                        |
-| -------------------------------------------------------------- | ----------------------------------------------------- |
-| [`reference/config.md`](./reference/config.md)                 | `AppConfig` defaults and `defineConfig()` overrides   |
-| [`reference/api-requests.md`](./reference/api-requests.md)     | Copy-ready `curl` recipes with expected status codes  |
-| [`reference/state-machines.md`](./reference/state-machines.md) | Every stored lifecycle: states, moves, guarded writes |
-| [`adr/`](./adr/README.md)                                      | Architecture decision records (the _why_)             |
-| [`../scripts/demo/README.md`](../scripts/demo/README.md)       | tiny-agents: the demo video and how to re-record it   |
+| Document                                                           | What it covers                                        |
+| ------------------------------------------------------------------ | ----------------------------------------------------- |
+| [`reference/config.md`](./reference/config.md)                     | `AppConfig` defaults and `defineConfig()` overrides   |
+| [`reference/api-requests.md`](./reference/api-requests.md)         | Copy-ready `curl` recipes with expected status codes  |
+| [`reference/state-machines.md`](./reference/state-machines.md)     | Every stored lifecycle: states, moves, guarded writes |
+| [`reference/workspace-layout.md`](./reference/workspace-layout.md) | What each package and app in the workspace holds      |
+| [`adr/`](./adr/README.md)                                          | Architecture decision records (the _why_)             |
+| [`../scripts/demo/README.md`](../scripts/demo/README.md)           | tiny-agents: the demo video and how to re-record it   |
+| [`demo/README.md`](./demo/README.md)                               | tiny-agents: the demo films, with what each one shows |
 
 ## `@tiny-agents/agent` entry points
 
