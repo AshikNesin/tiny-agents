@@ -4,7 +4,7 @@ tiny-agents is a personal project, but fixes and ideas are welcome.
 
 1. Open an issue first for anything larger than a small fix, so we can agree
    on the approach.
-2. Set up the repo with the [Development](README.md#development) steps. Use
+2. Set up the repo with the [Try it](README.md#try-it-in-two-minutes) steps. Use
    pnpm, and run `pnpm install` so the git hooks (secret scan, staged lint)
    are installed.
 3. Follow the rules in [AGENTS.md](AGENTS.md). Most are enforced by lint and
