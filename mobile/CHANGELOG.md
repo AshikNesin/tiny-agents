@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.0
+
+### Minor Changes
+
+- Type /new in a chat's composer and send it to start a new chat, the same as the New chat button. The current
+  chat moves to Chat history. Anything more than /new on its own is sent as a normal message.
+
 ## 0.8.1
 
 ### Patch Changes

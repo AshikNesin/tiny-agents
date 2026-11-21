@@ -25,6 +25,7 @@ data class BotsState(
     val capabilities: List<Capability> = emptyList(),
     val labels: ToolLabels = ToolLabels(),
     val guest: Boolean = false,
+    val guestKnown: Boolean = false,
     val connectionStatus: Map<String, String> = emptyMap(),
 ) {
     val sorted: List<BotListEntry>
@@ -75,6 +76,7 @@ class BotsStore(
 
     private suspend fun loadStatic() {
         runQuietly { _state.update { it.copy(guest = api.isGuest()) } }
+        _state.update { it.copy(guestKnown = true) }
         runQuietly { val models = api.models(); _state.update { it.copy(models = models) } }
         runQuietly {
             val capabilities = api.capabilities()
