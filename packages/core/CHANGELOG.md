@@ -1,5 +1,29 @@
 # @groot/core
 
+## 2.4.0
+
+### Minor Changes
+
+- [#327](https://github.com/AshikNesin/tiny-agents/pull/327) [`43b23c7`](https://github.com/AshikNesin/tiny-agents/commit/43b23c796fd28c56d5fd4543cd362c757d8e8b81) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Notifications go to one place at a time.
+  
+  - **One choice.** A new `deliverTo` setting (`webpush` for the phone app, `pushover`, `off`, or `auto`) replaces the per-channel `channels` switches. Only the chosen channel sends; `auto`, the default, is the phone app once a phone is registered, else Pushover.
+  - **A simpler Settings → Notifications.** One "Phone app / Pushover / Off" picker shows only the chosen channel's details (its phones, or Pushover's status and test), then what to send and the log. `NotificationSettings` takes the app's extra `destinations`.
+
+- [#322](https://github.com/AshikNesin/tiny-agents/pull/322) [`5eab443`](https://github.com/AshikNesin/tiny-agents/commit/5eab443f183191bd98717246038c2712c482faeb) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Phone notifications over Web Push (issue [#306](https://github.com/AshikNesin/tiny-agents/issues/306)), with no setup on the server.
+  
+  - **A Web Push channel beside Pushover.** The server makes its own VAPID key on first use and sends each registered device an end-to-end encrypted push (RFC 8291, RFC 8292) through Google's FCM on phones with Play services. No Firebase account, relay or env var.
+  - **Devices.** `GET /notifications/vapid-key` and `/notifications/devices` (register, list, test, remove; owner only). Endpoints must be https and public. A device the push service forgot is revoked; one that keeps failing shows as failing.
+  - **Approve from the notification.** Approval pushes carry the chat card's buttons for the app to show: Approve, Deny and Always allow for a tool, Approve, Deny and For this chat (when grantable) for a vault use.
+  - **Taken back when answered.** Answering an approval or question anywhere takes its push off the phone; a reminder replaces the first push instead of stacking.
+  - **Settings → Notifications** lists the phones with a test and remove each, and a switch for the whole channel.
+  - `@groot/core`: `NotificationHub` fans each notification out to every channel, each with its own pipeline and log row; channels get the tag, event, path and buttons of what they send and an optional `dismiss(tag)`.
+
+### Patch Changes
+
+- [#469](https://github.com/AshikNesin/tiny-agents/pull/469) [`3c1db08`](https://github.com/AshikNesin/tiny-agents/commit/3c1db0887d400997468b07e9b6eaf16680310cb7) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Chat: a message sent just before a bot asks questions now dismisses them, instead of waiting as "Steering" until the questions are answered. A failed tool call says "failed" beside its label. Chat previews keep underscores inside names. On a phone, Chats with no bots yet shows the menu button. Notifications on a fresh server show the phone app, not an unset Pushover.
+
+- [#460](https://github.com/AshikNesin/tiny-agents/pull/460) [`190dede`](https://github.com/AshikNesin/tiny-agents/commit/190dedebb005421039ab584d3dc44e630ae44990) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Remove code comments (ADR 0028)
+
 ## 2.3.1
 
 ### Patch Changes

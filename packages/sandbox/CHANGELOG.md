@@ -1,5 +1,11 @@
 # @tiny-agents/sandbox
 
+## 0.1.1
+
+### Patch Changes
+
+- [#460](https://github.com/AshikNesin/tiny-agents/pull/460) [`190dede`](https://github.com/AshikNesin/tiny-agents/commit/190dedebb005421039ab584d3dc44e630ae44990) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Remove code comments (ADR 0028)
+
 ## 0.1.0
 
 ### Minor Changes

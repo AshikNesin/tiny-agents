@@ -1,5 +1,13 @@
 # @groot/ui
 
+## 1.3.1
+
+### Patch Changes
+
+- [#315](https://github.com/AshikNesin/tiny-agents/pull/315) [`db00ff3`](https://github.com/AshikNesin/tiny-agents/commit/db00ff3423d5d4e3ded1897ca4617d32d45aea4a) Thanks [@AshikNesin](https://github.com/AshikNesin)! - The FeedbackBee feedback widget now loads from `feedbackbee.nesin.io` (was `feedbackbee.nesin.workers.dev`) in headless mode: no floating button in the bottom-right corner on any page. "Send feedback" in the sidebar's account menu opens it as the embed's own centered modal, replacing the app's CSS that hid the launcher and restyled the panel. Hotkeys no longer treat an inert `aria-modal` element (a closed modal kept in the page, like the headless panel) as an open dialog, so ⌘K and other shortcuts keep working after the feedback panel closes.
+
+- [#460](https://github.com/AshikNesin/tiny-agents/pull/460) [`190dede`](https://github.com/AshikNesin/tiny-agents/commit/190dedebb005421039ab584d3dc44e630ae44990) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Remove code comments (ADR 0028)
+
 ## 1.3.0
 
 ### Minor Changes

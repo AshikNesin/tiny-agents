@@ -1,6 +1,6 @@
 {
   "name": "@tiny-agents/github",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "One GitHub client for Code (projects, PR links, Auto-fix) over two transports: the gh CLI on the sandbox, or HTTPS from the app server with a token. Imports neither pi-durable, @tiny-agents/agent nor @tiny-agents/sandbox: the gh transport takes an exec port.",
   "type": "module",
