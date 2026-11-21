@@ -32,12 +32,20 @@ without asking.
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/screenshots/questions.png" alt="A bot asks you questions when it needs your input"></td>
+    <td width="50%"><img src="docs/screenshots/browser.png" alt="Browser: a bot's Chrome, live"></td>
+    <td width="50%"><img src="docs/screenshots/computer.png" alt="Computer: a bot's desktop, live"></td>
+  </tr>
+  <tr>
+    <td>Browser: watch a bot's Chrome live, or take over.</td>
+    <td>Computer: a full desktop the bots share with you.</td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/terminal.png" alt="Terminal: shells on the sandbox VM"></td>
     <td width="50%"><img src="docs/screenshots/routines.png" alt="Routines run a bot on a schedule"></td>
   </tr>
   <tr>
-    <td>A bot asks when it needs your input.</td>
-    <td>Routines run a bot on a schedule.</td>
+    <td>Terminal: shells on the sandbox that keep running.</td>
+    <td>Routines: run a bot on a schedule.</td>
   </tr>
 </table>
 
