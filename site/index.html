@@ -6,7 +6,7 @@
     <title>Tiny Agents: your own AI assistant, on your own server</title>
     <meta
       name="description"
-      content="Your own AI assistant, on your own server. Tiny Agents is a messenger where each contact is a bot that can browse the web, run commands, work on a schedule and remember you, and it asks before it does anything you haven't allowed. Open source, MIT."
+      content="Your own AI assistant, on your own server. Bots that browse, run commands, work on a schedule and ask before acting. Open source, MIT."
     />
     <meta name="theme-color" content="#ffffff" />
     <meta name="color-scheme" content="light" />
@@ -1148,12 +1148,6 @@
               <svg aria-hidden="true"><use href="#gh" /></svg>
               Get it on GitHub
             </a>
-            <a class="btn btn-secondary" href="#demo" data-play>
-              <svg viewBox="0 0 16 16" aria-hidden="true">
-                <path d="M4 2.5v11l9-5.5z" fill="currentColor" />
-              </svg>
-              Watch the demo
-            </a>
           </div>
           <p class="note">Your data. Your models. Your server.</p>
         </div>
@@ -1733,18 +1727,6 @@ TINY_AGENTS_FAUX=1 pnpm dev</code></pre>
           if (section) spy.observe(section);
         });
       }
-
-      // Every "Watch the demo" link scrolls to the demo and starts it.
-      document.querySelectorAll("[data-play]").forEach((a) =>
-        a.addEventListener("click", (e) => {
-          e.preventDefault();
-          player.scrollIntoView({
-            behavior: reduce ? "auto" : "smooth",
-            block: "center",
-          });
-          play();
-        }),
-      );
     </script>
   </body>
 </html>

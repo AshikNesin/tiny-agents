@@ -16,7 +16,7 @@ Pages). Nothing in it depends on the app.
 | `media/tiny-agents-demo.mp4` | Web encode of `docs/demo/tiny-agents-launch.mp4` (7.7 MB)         |
 | `media/demo-poster.jpg`      | Poster frame from the film (2.4 s, the bot list)                  |
 | `media/og.png`               | Link preview image, 1200x630 (`scripts/demo/launch/tools/og.mjs`) |
-| `media/*.webp`               | App screenshots, 1600px webp encodes of `docs/screenshots/`       |
+| `media/*.webp`               | App screenshots as webp (`docs/screenshots/`, plus PR 471)        |
 | `assets/demos.{js,css}`      | Built "How it works" demos (from `demos/`, committed)             |
 | `demos/`                     | Source of those demos: React + the Stageshow kit                  |
 
