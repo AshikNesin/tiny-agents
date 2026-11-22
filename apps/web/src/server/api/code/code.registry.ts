@@ -1,16 +1,31 @@
 import { logger } from "@groot/core/logger";
 import {
+  ApprovalNotPendingError,
+  codingSelection,
+  ForkPointNotFoundError,
+  InvalidAnswersError,
+  ModelUnavailableError,
+  QuestionNotPendingError,
+  type AgentRuntime,
+  type BotAgentConfig,
+} from "@tiny-agents/agent";
+import {
   createClaudeCodeHarness,
+  createPiHarness,
   createShelleyHarness,
+  HarnessError,
   shelley,
   type HarnessHost,
   type HarnessInstance,
   type InstanceStatus,
+  type PiPort,
+  type PiThreadConfig,
 } from "@tiny-agents/code/server";
 import type { ModelOption } from "@tiny-agents/code/contracts";
 import { appEnv, type AppEnv } from "../../env";
 import { sharedClaudeWorkerLocator } from "../bots/claude-worker";
 import { agentRuntimeReady, getAgentRuntime } from "../bots/bots.runtime";
+import { sandboxConnection } from "../bots/sandbox-host";
 import { threadIndex } from "./code.store";
 
 function harnessHost(): HarnessHost {
@@ -81,6 +96,75 @@ function claudePlanModels(): ModelOption[] {
     }));
 }
 
+function nativeModels(runtime: AgentRuntime): ModelOption[] {
+  const { catalog } = runtime;
+  const start = catalog.forRole("code_default")?.id;
+  return catalog
+    .list({ type: "chat", enabledOnly: true })
+    .filter((model) => model.engine === "pi" && model.available)
+    .map((model) => ({
+      id: model.id,
+      label: model.name,
+      ...(model.id === start ? { isDefault: true } : {}),
+      contextWindow: model.contextWindow,
+      supportsReasoning: model.reasoning,
+      supportsImages: model.vision,
+    }))
+    .sort((a, b) => Number(b.isDefault ?? false) - Number(a.isDefault ?? false));
+}
+
+function nativeConfig(config: PiThreadConfig): BotAgentConfig {
+  return {
+    systemPrompt: "",
+    modelId: config.modelId,
+    cwd: config.cwd,
+    capabilities: codingSelection(config.permissionMode),
+  };
+}
+
+function asHarnessError(error: unknown): never {
+  if (
+    error instanceof ModelUnavailableError ||
+    error instanceof ForkPointNotFoundError ||
+    error instanceof InvalidAnswersError
+  ) {
+    throw new HarnessError(400, error.message);
+  }
+  if (error instanceof ApprovalNotPendingError || error instanceof QuestionNotPendingError) {
+    throw new HarnessError(409, "That request is no longer waiting for an answer.");
+  }
+  throw error;
+}
+
+export function agentRuntimePort(runtime: () => AgentRuntime): PiPort {
+  return {
+    models: () => nativeModels(runtime()),
+    create: (config) => runtime().createConversation(nativeConfig(config)).catch(asHarnessError),
+    configure: (ref, config) =>
+      runtime().configure(ref, nativeConfig(config)).catch(asHarnessError),
+    submit: (ref, input) => runtime().submit(ref, input),
+    abort: (ref) => runtime().abort(ref),
+    withdraw: (ref, requestId) => runtime().withdraw(ref, requestId),
+    fork: (ref, atMessageId) => runtime().fork(ref, atMessageId).catch(asHarnessError),
+    compact: (ref, instructions) => runtime().compact(ref, instructions),
+    continueReply: (ref) => runtime().continueReply(ref),
+    decideApproval: (ref, taskId, decision) =>
+      runtime().decideApproval(ref, taskId, decision).catch(asHarnessError),
+    answerQuestions: (ref, taskId, answers) =>
+      runtime().answerQuestions(ref, taskId, answers).catch(asHarnessError),
+    isBusy: (ref) => runtime().isBusy(ref),
+    costUsd: async (ref) => (await runtime().usage(ref)).costUsd,
+    read: (ref) => runtime().readChat(ref),
+    watch: (ref, listener) => runtime().watchChat(ref, listener),
+    onActivity: (listener) => runtime().onActivity(listener),
+  };
+}
+
+function nativeHarness(env: AppEnv, host: HarnessHost): HarnessInstance | undefined {
+  if (!agentRuntimeReady() || !sandboxConnection(env)) return undefined;
+  return createPiHarness({ host, port: agentRuntimePort(getAgentRuntime) });
+}
+
 export function buildHarnesses(options: RegistryOptions = {}): HarnessInstance[] {
   const env = options.env ?? appEnv();
   const host = options.host ?? harnessHost();
@@ -89,6 +173,8 @@ export function buildHarnesses(options: RegistryOptions = {}): HarnessInstance[]
   if (url) instances.push(createShelleyHarness({ url, host }));
   const claude = claudeCodeHarness(env, host);
   if (claude) instances.push(claude);
+  const native = nativeHarness(env, host);
+  if (native) instances.push(native);
   instances.push(...(options.extra ?? []));
   return instances;
 }

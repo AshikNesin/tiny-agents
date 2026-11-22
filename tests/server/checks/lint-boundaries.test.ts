@@ -640,6 +640,22 @@ const FIXTURES: Record<string, Fixture> = {
     rules: ["R11"],
     mentions: "Move the pi-durable-free code it needs into packages/sandbox",
   },
+  "packages/code/src/drivers/pi/r11-durable-fail.ts": {
+    source:
+      'import type { Conversation } from "@earendil-works/pi-durable";\nexport type C = Conversation;\n',
+    rules: ["R11"],
+    mentions: "The native driver takes the runtime through its port",
+  },
+  "packages/code/src/drivers/pi/r11-agent-fail.ts": {
+    source:
+      'import type { AgentRuntime } from "@tiny-agents/agent";\nexport type R = AgentRuntime;\n',
+    rules: ["R11"],
+  },
+  "packages/code/src/drivers/pi/r11-pass.ts": {
+    source:
+      'import type { HarnessInstance } from "../../contracts";\nexport type H = HarnessInstance;\n',
+    rules: [],
+  },
   "packages/sandbox/src/r11-durable-subpath-fail.ts": {
     source: 'export { DEFAULT_IMAGE_LIMITS } from "@earendil-works/pi-durable/tools";\n',
     rules: ["R11"],
