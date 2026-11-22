@@ -297,7 +297,7 @@ describe("ChatPane composer — one action button", () => {
 });
 
 describe("ChatPane header", () => {
-  it("keeps the header to the bot menu and two quiet icons: live view and New chat", () => {
+  it("keeps the header to the bot menu and three quiet icons: live view, Past chats and New chat", () => {
     seedStore();
     renderPane({ ...HOST, description: "Plans trips" });
     const header = screen.getByRole("banner");
@@ -306,7 +306,7 @@ describe("ChatPane header", () => {
       within(header)
         .getAllByRole("button")
         .map((b) => b.getAttribute("aria-label")),
-    ).toEqual(["Open menu", "Host Bot menu", "Open live view", "Start a new chat"]);
+    ).toEqual(["Open menu", "Host Bot menu", "Open live view", "Past chats", "Start a new chat"]);
     expect(within(header).queryByText("Test Model")).toBeNull();
     expect(within(header).queryByText("Plans trips")).toBeNull();
   });
