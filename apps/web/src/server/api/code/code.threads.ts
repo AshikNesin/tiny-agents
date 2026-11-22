@@ -198,7 +198,7 @@ export async function listProjectThreads(lists: HarnessLists): Promise<ThreadSum
     if (kind === undefined) continue;
     const active = lists.active(row.instanceId);
     const live = active?.find((thread) => thread.nativeId === row.nativeId);
-    if (active ? !live : row.archived) continue;
+    if (row.archived || (active && !live)) continue;
     out.push(summaryOf(row, live, kind, extras.get(row.id)));
   }
   return out;

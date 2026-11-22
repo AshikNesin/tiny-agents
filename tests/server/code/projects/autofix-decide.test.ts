@@ -51,7 +51,6 @@ function snapshot(extra: Partial<PullSnapshot> = {}): PullSnapshot {
     reviews: [],
     threads: [],
     comments: [],
-    autoMerge: false,
     inMergeQueue: false,
     queueRemovals: [],
     ...extra,

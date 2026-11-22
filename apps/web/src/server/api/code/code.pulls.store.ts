@@ -55,7 +55,6 @@ export interface LinkInput {
   headRef: string;
   baseRef: string;
   autofix: boolean;
-  autoMerge?: boolean;
 }
 
 export async function insertPull(input: LinkInput): Promise<CodePullRow> {
@@ -145,12 +144,7 @@ export async function updatePull(
   set: Partial<
     Pick<
       CodePullRow,
-      | "autofix"
-      | "autoMerge"
-      | "passesWithoutOwner"
-      | "ownerInputAt"
-      | "pendingJobId"
-      | "stalledNotifiedSha"
+      "autofix" | "passesWithoutOwner" | "ownerInputAt" | "pendingJobId" | "stalledNotifiedSha"
     >
   >,
 ): Promise<void> {

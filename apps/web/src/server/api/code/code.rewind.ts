@@ -105,6 +105,7 @@ export async function rewindThread(
       .where(eq(codeThreads.id, threadId))
       .run();
   });
+  if (instance.capabilities().threads.archive) await instance.archive?.(nativeId, true);
   await instance.send(forked.nativeId, { message: input.text });
   await startRun(threadId, { trigger: "owner" });
   await hub.refresh(instance.id);
@@ -142,5 +143,6 @@ export async function undoRewind(hub: CodeHub, threadId: string, replaced: strin
       .where(eq(codeThreads.id, threadId))
       .run();
   });
+  if (instance.capabilities().threads.archive) await instance.archive?.(kept.nativeId, false);
   await hub.refresh(instance.id);
 }

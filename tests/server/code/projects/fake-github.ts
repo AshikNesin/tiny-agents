@@ -27,7 +27,6 @@ interface FakePull {
   threads: ReviewThread[];
   fromFork: boolean;
   maintainerCanModify?: boolean;
-  autoMerge: boolean;
   inMergeQueue: boolean;
   queueRemovals: Array<{ id: string; at: string; reason: string }>;
 }
@@ -98,7 +97,6 @@ export function fakeGitHub(local: LocalExec, bare: string, login = "ashik"): Fak
         reviews: [],
         threads: [],
         fromFork: false,
-        autoMerge: false,
         inMergeQueue: false,
         queueRemovals: [],
       });
@@ -127,7 +125,6 @@ export function fakeGitHub(local: LocalExec, bare: string, login = "ashik"): Fak
         mergeable: pr.mergeable,
         mergeMethods: ["squash", "merge"],
         author: pr.author ?? login,
-        autoMerge: pr.autoMerge,
         inMergeQueue: pr.inMergeQueue,
         queueRemovals: pr.queueRemovals,
         checks: pr.checks,
@@ -169,14 +166,6 @@ export function fakeGitHub(local: LocalExec, bare: string, login = "ashik"): Fak
       return {
         url: `https://github.com/acme/web/pull/${number}#pullrequestreview-${gh.submitted.length}`,
       };
-    },
-    async enableAutoMerge(pullId, method) {
-      gh.autoMergeCalls.push({ pullId, action: "enable", method });
-      gh.pull(Number(pullId.replace("PR_", ""))).autoMerge = true;
-    },
-    async disableAutoMerge(pullId) {
-      gh.autoMergeCalls.push({ pullId, action: "disable" });
-      gh.pull(Number(pullId.replace("PR_", ""))).autoMerge = false;
     },
     async markReady(pullId) {
       gh.autoMergeCalls.push({ pullId, action: "ready" });

@@ -232,6 +232,13 @@
       "when": 1795362384290,
       "tag": "0032_code_review_findings",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "6",
+      "when": 1795364413335,
+      "tag": "0033_code_drop_unused_columns",
+      "breakpoints": true
     }
   ]
 }

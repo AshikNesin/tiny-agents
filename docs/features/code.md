@@ -1,18 +1,29 @@
 # Code
 
-`/code` is one workspace for the owner's coding agents. Each agent is a
-**harness** (issue #143, issue #157): tiny-agents drives it but runs no
-coding loop of its own. Every harness plugs in through one adapter contract,
-and the page, the bots and the notifications only ever see that contract.
-Why: [ADR 0009](../adr/0009-shelley-is-the-coding-agent.md),
-[ADR 0011](../adr/0011-code-harness-adapters.md),
-[ADR 0012](../adr/0012-claude-code-coding-mode.md).
+`/code` is one workspace for coding in the cloud with the owner's coding
+agents. It is built for four jobs: code with an agent in a thread, review
+pull requests, steer a running agent, and run workflows that report back.
+Each agent is a **harness**: tiny-agents drives it through one adapter
+contract, and the page, the bots and the notifications only see that
+contract. Code is for the owner only.
 
-| Harness         | Instance id   | Runs on                                | Reached through                                         | Owns the transcript                        |
-| --------------- | ------------- | -------------------------------------- | ------------------------------------------------------- | ------------------------------------------ |
-| **Shelley**     | `shelley`     | the owner's Shelley server             | Shelley's official HTTP/SSE API (`SHELLEY_URL`)         | Shelley's database                         |
-| **Claude Code** | `claude-code` | the sandbox (VM or container)          | the Claude worker's coding mode, through its SSH tunnel | Claude Code's session files on the sandbox |
-| **Native**      | `pi`          | the app, with its tools on the sandbox | the bots' agent runtime, in process                     | the agent store                            |
+Why it is shaped this way:
+[ADR 0011](../adr/0011-code-harness-adapters.md) (harness adapters),
+[ADR 0020](../adr/0020-native-code-harness.md) (the native harness),
+[ADR 0021](../adr/0021-code-projects-and-worktrees.md) (projects and
+worktrees), [ADR 0023](../adr/0023-auto-fix.md) (Auto-fix) and
+[ADR 0039](../adr/0039-code-threads-and-runs.md) (threads, runs, status and
+rewind).
+
+| Harness         | Instance id   | Runs on                                | Reached through                                         | Owns the transcript                        | Edit and retry a turn |
+| --------------- | ------------- | -------------------------------------- | ------------------------------------------------------- | ------------------------------------------ | --------------------- |
+| **Shelley**     | `shelley`     | the owner's Shelley server             | Shelley's official HTTP/SSE API (`SHELLEY_URL`)         | Shelley's database                         | no                    |
+| **Claude Code** | `claude-code` | the sandbox (VM or container)          | the Claude worker's coding mode, through its SSH tunnel | Claude Code's session files on the sandbox | no                    |
+| **Native**      | `pi`          | the app, with its tools on the sandbox | the bots' agent runtime, in process                     | the agent store                            | yes                   |
+
+A control appears only when the thread's harness has its capability
+(`Capabilities` in `packages/code/src/contracts`). Shelley has no
+approvals, so its threads show no permission chip.
 
 ## Setup
 
@@ -21,229 +32,198 @@ Why: [ADR 0009](../adr/0009-shelley-is-the-coding-agent.md),
   - Shelley has no auth of its own, so never expose it publicly.
   - Every request sends `X-Exedev-Userid`: exe.dev's `-require-header`
     guard needs it when you reach Shelley directly over Tailscale.
-  - "Open in Shelley" links to the same address.
   - Every conversation tiny-agents starts or forks is tagged `tiny-agents`,
-    and the Code list, archive and search show only those and their
-    subagents. Conversations started in Shelley's own UI stay there. On its
-    first connection the app tags the untagged conversations it already
-    tracks (started, opened or handed off here before tagging), so they keep
-    their place in the list.
+    and Code shows only those and their subagents. Conversations started in
+    Shelley's own UI stay there.
 - **Claude Code:** add the Claude plan account in Settings → Models, with a
-  sandbox (`SANDBOX_HOST` or `pnpm sandbox:up`), then sign in once
-  from Settings → Models → Claude plan. The app sets up the worker on the sandbox
+  sandbox (`SANDBOX_HOST` or `pnpm sandbox:up`), then sign in once from
+  Settings → Models → Claude plan. The app sets up the worker on the sandbox
   ([Claude subscription](../claude-subscription.md)).
-
 - **Native:** a sandbox (`SANDBOX_HOST` or `pnpm sandbox:up`) and one model
   that runs on pi. Settings → Models → Default models → **New Code threads**
   picks the model a thread starts on; unset, it is the New bots model.
+- **A project.** Every thread belongs to a project, so add one repository
+  before the first thread (Projects, below).
 
-With none configured, the sidebar has no **Chat / Code** switch and bots have no
-`code_*` tools. With both, each thread in the list names its harness, and
-**New thread** offers a harness picker.
+With no harness configured, the sidebar has no **Chat / Code** switch and
+bots have no `code_*` tools.
 
-## What a developer can do
+## The workspace
 
-The layout follows [t3code](https://github.com/pingdotgg/t3code) (see
-[CREDITS](../../CREDITS.md)): minimal, with threads grouped by project.
+Three columns: the thread list, the open thread, and a work pane. A terminal
+opens as a drawer under the thread. `Workspace.tsx` owns the layout.
 
-- a sidebar that shares the app sidebar's top row: the brand mark and a
-  **Chat / Code** switch (each side returns to the page it was last on), then
-  the threads grouped by project (the workspace owns the full column; no app
-  sidebar here), with **Settings** at its foot;
-- one line per thread in the list;
-- a one-line header: the title (its menu holds the actions and the cost),
-  the project or folder, and one Review panel toggle;
-- every setting a turn needs (model, reasoning, permissions, context) as a
-  chip inside the composer.
+Every action has a key. `?` lists them, and the command palette (⌘K) runs
+the same commands by name. Plain letters act in the app; Shift letters post
+to GitHub. The list of keys is the `commands` array in
+`apps/web/src/client/pages/code/Workspace.tsx` (the workspace) and in
+`PullReview.tsx` (a PR review); `keys.tsx` binds them. The ones used most:
 
-**A control appears only when the thread's harness has its capability.**
-Shelley has no approvals, so its threads show no permission chip. Claude Code
-has no background jobs, so its threads show no job chips.
+| Key             | What it does                                          |
+| --------------- | ----------------------------------------------------- |
+| `j` `k` `u`     | Next thread, previous thread, next one that needs you |
+| `n` `v`         | New thread, review a pull request                     |
+| `c` `Esc`       | Write to the agent; leave the composer, then stop     |
+| `e` `t`         | Edit the last turn and run it again; run it again     |
+| `1` `2` `3`     | Changes, Pull request, Files                          |
+| `` ` `` `\` `[` | Terminal, work pane, thread list                      |
+| `f` `a`         | Fix CI, Address comments                              |
+| `P` `M`         | Publish (or push to) the pull request, merge it       |
 
-**Find.**
+### The thread list
 
-- **Threads** (below New thread, `/code/threads`; a project group's list
-  icon opens `/code/threads?project=<id>`) shows every thread, or one
-  project's, at full width, after Hoplite: sections **Working**, **Needs
-  you** (its PR needs input), **In review** (an open PR) and **Done**, each
-  row with its status, title, PR chips and date, then **Archived**, folded,
-  loaded when opened. The project menu switches project, and the search box
-  filters by title.
-- The sidebar is a short column, like Hoplite: **New thread**, **Search**,
-  **Threads** and **Reviews** rows on top, then the threads under a
-  **Projects** (or **Recent**, ungrouped) heading whose **…** menu holds
-  Group by repository, Show archived and Select threads, and **Settings** at
-  the foot. A row shows its PR only when the PR needs you.
-- By default (**Group by repository** in that menu, on)
-  threads are grouped by project, then by repository or folder for threads
-  outside a project. Turned off (remembered), the list is one flat list,
-  working threads first, then newest first, like Hoplite. **Search** turns
-  into a search box in place (Escape closes it). With grouping on, the most recently active group comes first, and a
-  project with no thread yet comes last. A group folds away (remembered),
-  shows its newest 8 threads with **Show more**, and offers **New thread**
-  in it (and, for a project, its settings) on hover. Inside a group,
-  working threads come first, with subagents nested under their parent.
-- **Show archived** in the same menu lists archived threads, listed the
-  same way, with **Restore**.
-- Search: full-text where the harness searches; a title filter otherwise.
-  Several harnesses: each row names its harness.
-- Unread dots for turns that ended since you last looked, and ⌘K to jump to
-  any thread.
-- `/code/s/<title>` opens a thread by title. Links from before the harness
-  layer (`/code/<shelley id>`) still open.
+`ThreadList.tsx`. One line per thread, grouped by status, the ones that
+need you first:
 
-**Start.** `/code` (`/code/new` on phones), or a group's **New thread**
-(`/code/new?project=<id>` or `?cwd=<path>`, which picks that project or
-folder):
+- **Needs you:** the agent asks something, a turn finished or failed and
+  you have not read it, or its pull request waits for you. The row says
+  which.
+- **Working:** a turn is running. A workflow's name shows beside it.
+- **In review:** it has an open pull request.
+- **Done:** everything else, a merged pull request included.
 
-- Pick a project, or the working directory (recent ones, a typed path, a
-  folder browser, checked by the harness) and, where the harness makes
-  them, a new worktree; and the harness (remembered) when there are several.
-- The model, reasoning and permission chips sit in the composer. Claude Code
-  needs a working directory. A new thread starts in **Bypass** (YOLO, no
-  permission prompts) wherever the harness offers it; a guest, who has no
-  Bypass, starts in **Accept edits**. The chip changes it per thread.
-- If another thread is working in the same directory, a warning says both
-  threads will edit the same files.
+The status is worked out from facts, never stored: `threadStatus` in
+`apps/web/src/shared/code-status.ts`. Reading a finished thread moves it on.
+With several projects, a row without a pull request names its project.
+
+Below the threads:
+
+- **Reviews:** pull requests that wait for your review (below).
+- **Archived:** folded, loaded when opened.
+
+A harness that is not connected says so at the foot of the list, above
+**Settings**.
+
+### A thread
+
+`ThreadView.tsx`, `Composer.tsx`, `Transcript.tsx`. The header shows the
+project, the title, the branch and the pull request.
+
+**Start.** `n` (or `/code/new`) opens the new thread dialog: the project
+(the last one used is remembered), the agent when there are several, the
+model and the permission mode, and the task. Enter starts it. The thread
+gets its own worktree on a new branch from the freshly fetched base branch,
+and its first message starts with one line naming the branch and telling the
+agent to commit but not push.
 
 **Write.**
 
-- Enter sends. While the agent works, Enter **steers** (the message goes into
-  the running turn) and the queue button (or Alt+Enter) holds it for when the
-  turn ends. With an empty draft, the send button is **Stop** (⌘.).
-- Queued messages can be sent now or cancelled.
-- `@` completes files and folders in the working directory, and `/` hints the
-  harness's commands.
-- **+** attaches files (or paste or drop them) and picks skills. Drafts are
-  kept per thread.
+- Enter sends. While the agent works, Enter **steers** (the message goes
+  into the running turn) and Alt+Enter **queues** it for when the turn ends.
+- A queued message can be edited, sent now or cancelled.
+- `Esc` leaves the composer; `Esc` again stops the agent.
+- `@` completes files and folders in the working directory where the harness
+  can find files, and `/` hints the harness's commands.
+- **+** attaches files and picks skills, where the harness takes them.
+- The model, reasoning and permission chips sit in the composer.
 
 **Watch.**
 
-- Streaming text and thinking, and every tool call as a row. A run of
-  finished calls folds into one line ("Ran 3 commands, edited 2 files ·
-  1 failed").
-- Per tool:
-  - bash: its command, live output and exit code;
-  - edits: the diff, with +/−;
-  - subagents: a live status and **Open**;
-  - plans: a checklist (Claude Code's TodoWrite);
-  - screenshots: shown inline.
+- Streaming text and thinking, and every tool call as a row: a command with
+  its output and exit code, an edit with its diff, a subagent with its
+  status, a plan as a checklist.
 - **Approval and question cards:** Allow / Deny, or pick answers. They show
   only for a harness that asks.
 - Errors come with **Retry** or **Try another model** where the harness
-  offers them; usage limits say when they reset.
-- A finished turn folds its work (thinking, progress notes, tools) behind one
-  quiet "Worked for 12s · $0.04" row (or "Ran 2 commands · $0.04" when the
-  harness reports no duration), leaving the first message and the answer in
-  view, as Amp and Hoplite read. A running turn stays fully in view. A failed tool
-  call inside still shows on the folded row ("· 1 failed").
-- What the app wrote for you reads short: a project thread's first message
-  shows its branch (and a failed setup script) above your words instead of
-  the agent's instructions, and an Auto-fix request is one card listing what
-  it fixes, with **Show the full request**.
-- Inline code is neutral gray mono, and the composer shows one
-  "Model · Reasoning" label.
-- An archived thread offers one **Unarchive to continue** in place of the
-  composer.
-- The context ring opens the usage report: per-model token bands and cost,
-  indirect usage, subagents, and **Compact in place**.
+  offers them.
+- A finished turn folds its work behind one "Worked for…" row, leaving your
+  message and the answer in view. A running turn stays fully in view.
+- What the app wrote for you reads short: a thread's first message shows its
+  branch above your words instead of the agent's instructions, and a
+  workflow request is one card, with **Show the full request**.
+- Running background jobs and subagents show above the composer, each with a
+  stop button, where the harness has them.
 
-**Control.**
+**Edit or retry a turn.** `e` edits the last turn and runs it again; `t`
+runs it again as it was. Both are a **rewind** (`code.rewind.ts`):
 
-- Stop, Resume, rename, change directory, fork from a message, delete,
-  Open in Shelley — each where the harness has it.
-- **Archive** moves a thread **with its subagents**, with Undo.
-- **Select** (**Select threads** in the list options menu, **…** beside the
-  list's heading) turns the list into
-  checkboxes: pick threads (a click on a row picks it; a picked thread's
-  subagents go along), or **Select all**, then **Archive** (or **Restore** in
-  the archived view) moves them all, with one Undo.
+1. The worktree goes back to the checkpoint taken before that turn. The
+   state it replaces is checkpointed first.
+2. The harness forks the conversation before that message, and the thread
+   now points at the fork. The thread keeps its id, branch and pull request.
+3. The conversation as it was is kept as an archived thread, "(before the
+   edit)".
+4. **Undo** in the toast puts the files and the conversation back.
 
-**Review.** **Review panel** in the thread header (⌘⇧D) opens one panel on
-the right with tabs: **Source control** and, for a project thread, **Pull
-request #N**. It opens on the tab it was left on; **Close panel** and **Open
-as a page** sit at the end of its tab strip. Outside a project, Source
-control shows the uncommitted changes (new files included), or a recent
-commit, of the thread's directory. Both kinds of Source control, like a PR
-review, lay the changes out as diffshub does: every changed file in one
-scrolling column, each under a sticky header with its fold and +/−, and the
-files as a tree (Files and Comments tabs, search, a filter by status, diff
-stats). In the panel the tree is a drawer behind **Files**; on the Review
-page it sits beside the column, with split or unified view and **Fold all
-files** (a drawer again on phones). Generated files start folded. Every diff in the app (these panels and the transcript's patches) is
-drawn by @pierre/diffs (diffs.com): syntax colors, one gutter numbering the
-lines, unchanged runs folded behind expanders, and long lines wrapped.
+Only a harness with the `threads.rewind` capability offers this: Native
+today. The agent must be stopped first.
 
-- **Comments.** Click a line number to open a composer right under that
-  line. Drag down the numbers (mouse or finger) or shift-click another
-  number to take a range; the composer moves under its last line and keeps
-  what you typed. ⌘↵ saves.
-  The comment stays under its line and waits above the thread's composer
-  ("N comments go with your next message"), where each can be removed. The
-  next message you send takes them along in the same turn, ahead of your
-  words; **Send now** sends them on their own. The agent gets each with its
-  file, lines and the quoted lines; the thread shows them as comment cards.
-  Comments are kept per thread on the server, so they survive a reload, and
-  work for every harness. A guest's comment, which cannot be saved, goes into
-  the composer as `` `path:lines` `` and its text.
-- **Review page.** The panel's **Open as a page** opens the thread's
-  Review page (`/code/<id>/review`): **Source control** and, for a project thread,
-  **Pull request** (`?tab=pr`), each a tab at full width. Comments work there
-  as in the pane and wait in a tray at the bottom (**Send now**); **Back to
-  the thread** returns to the composer, where they go with the next message.
-- ⌘B, or **Toggle sidebar** in the command palette, folds the list away on
-  wide screens so the thread and Changes get the room, and brings it back.
-  There is no button for it. The choice is remembered in this browser.
-- Drag the divider between the thread and its right panel to resize them
-  (or focus it: arrow keys, Shift for bigger steps, Home/End, Enter to
-  reset). The width is remembered in this browser; a double-click goes back
-  to the default split. Phones show one column, as before.
-- The thread's header reads `folder / title` (the project's name for a
-  project thread), and each row in the list shows its pull request (`#12`,
-  toned when it needs you, is fixing, passes or merged).
+**Archive.** The command palette archives or restores the open thread. An
+archived thread offers **Unarchive to continue** in place of the composer.
 
-- While it is open it stays live: the server watches the directory and the
-  panel re-reads when the files move, in place (the list, what you folded
-  and the scroll stay). This works for every harness that serves diffs: the
-  app reads a cheap change stamp where it can (project worktrees, Claude
-  Code) and otherwise the harness's own file list (Shelley).
-- A binary file, or one over 2 MB, says so instead of showing its bytes,
-  whichever harness served it. A very long diff draws its first 4,000 lines.
+### The work pane
 
-**Away.** A followed thread (started, opened or handed off here) sends a push
-(Settings → Notifications → _Code updates_) when it finishes, fails or asks
-for you while no tab shows it. That covers Shelley's `message_user` and
-Claude Code's approval requests.
+Three tabs beside the thread, drawn by `ReviewPanel.tsx`, `PullPanel.tsx`
+and `FilesPane.tsx`. `\` hides and shows the pane. Drag the divider to
+resize it.
 
-## Projects, pull requests and Auto-fix
+**Changes (`1`).** The branch, its base and how many commits it is ahead,
+then everything since the merge base with the base branch, committed or not,
+new files included. Every changed file sits in one scrolling column, drawn
+by @pierre/diffs, with a file tree behind **Files**.
 
-Issue #297 (ADR 0021, ADR 0022, ADR 0023). Everything here sits above the
-harness contract, so it works for every harness whose `cwd` is on the
-sandbox. Owner-only: guests see none of it.
+- It stays live while open: the server watches the worktree and the pane
+  re-reads in place when files move (ADR 0025).
+- **Viewed** folds a file; the mark comes off when the agent changes the
+  file again. **Edit** opens the light editor.
+- The scope picker shows what any one turn changed. **Revert to here** puts
+  the files back as they were after that turn, as uncommitted changes.
+  Commits, and anything pushed, stay.
+- **Comments.** Click a line number, or drag a range, to comment. Comments
+  wait above the composer and go with your next message, ahead of your
+  words; **Send now** sends them on their own. They are kept per thread on
+  the server.
 
-**Set up.** Projects are settings pages of their own, under **Settings**
-at the foot of the Code sidebar (`/code/settings`):
+**Pull request (`2`).** See Pull requests below.
+
+**Files (`3`).** The worktree's files. `p` opens a file by name and `s`
+searches the text. A file opens in the light editor (@pierre/diffs' code
+editor, `LightEditor.tsx`); ⌘S saves. A save is refused when the file
+changed since it was opened, and for anything that is not a regular file
+inside the worktree.
+
+### The terminal
+
+`` ` `` opens a terminal drawer under the thread, a shell on the sandbox
+that starts in the thread's worktree (`TerminalDrawer.tsx`, on the same
+terminal service as the Terminal page).
+
+### On a phone
+
+One column at a time: the list, then the thread. A thread opens on the
+conversation, and the work pane covers it only when asked for; its close
+button returns to the thread.
+
+### Away
+
+A followed thread sends a push (Settings → Notifications → _Code updates_)
+when it finishes, fails or asks for you while no tab shows it. Pull request
+pushes are listed under Auto-fix.
+
+## Projects and GitHub
+
+A project is a GitHub repository cloned on the sandbox
+([ADR 0021](../adr/0021-code-projects-and-worktrees.md),
+[ADR 0022](../adr/0022-github-through-gh-or-a-token.md)). **Settings** at
+the foot of the list opens `/code/settings` (`CodeSettings.tsx`):
 
 - **GitHub** (`/code/settings/github`). Either save a fine-grained token
-  for the project's repositories (recommended: it is kept as an `app` vault
-  item for the `github` sink; API calls go from this server, and only
-  `git push` runs on the sandbox, with the token on that command's stdin),
-  or sign `gh` in with `gh auth login` from the Terminal page (every process
-  on the sandbox can then use that login). The page says which is active and
+  for the project's repositories (kept as an `app` vault item for the
+  `github` sink; API calls go from this server, and only `git push` runs on
+  the sandbox, with the token on that command's stdin), or sign `gh` in with
+  `gh auth login` from the Terminal page. The page says which is active and
   whom it acts as, and sets up the optional GitHub App (below).
 - **Projects** (`/code/settings/projects`). **Add a project:** `owner/name`
-  or a GitHub URL, or, with the GitHub App, a searchable list of the
-  repositories it is installed on. The app checks the sandbox has `git`
-  (and `gh` without a token) and that the credential reaches the
-  repository, then clones it to
-  `~/tiny-agents-code/<owner>--<name>/checkout` and opens its page.
-- **A project's page** (`/code/settings/projects/<id>`, or the gear on its
-  sidebar group): its name, base branch, default agent and model; the
-  `setup`, `check` and `archive` script overrides; archive the thread when
-  its PR merges (on by default) and auto-merge new PRs; Auto-fix new PRs
-  (off by default), each Auto-fix trigger (failed checks, review comments,
-  merge conflicts, removed from the merge queue), the final check, trusted
-  review bots and protected paths; the Auto-fix limits; and **Remove**.
+  or a GitHub URL, or, with the GitHub App, a list of the repositories it is
+  installed on. The app checks the sandbox has `git` (and `gh` without a
+  token) and that the credential reaches the repository, then clones it.
+- **A project's page** (`/code/settings/projects/<id>`): its name, base
+  branch, branch prefix, default agent and model; the script overrides; the
+  pull request switches; Auto-fix with its triggers, **Instructions for
+  every workflow**, trusted review bots and protected paths; the Auto-fix
+  limits; and **Remove**. The settings and their defaults are
+  `ProjectSettings` in `apps/web/src/shared/api/code.ts` and
+  `DEFAULT_PROJECT_SETTINGS` in `code.projects.ts`.
 
 **Scripts** are read from a checked-in `.tiny-agents/code.json`:
 
@@ -255,139 +235,19 @@ at the foot of the Code sidebar (`/code/settings`):
 }
 ```
 
-`setup` runs in a new worktree before the first turn and after unarchive (a
-failure is reported to the agent; the turn still starts). The agent is told
-to run `check` before it reports done. `archive` runs before a worktree is
-removed.
+`setup` runs in a new worktree before the first turn (a failure is reported
+to the agent; the turn still starts). The agent is told to run `check`
+before it reports done. `archive` runs before a worktree is removed.
 
-**Start.** Pick the project on the New thread screen. The thread gets its
-own worktree on a new branch from the freshly fetched base branch, and its
-first message starts with one line naming the branch and telling the agent
-to commit but not push.
+**Branch names.** The branch is named for what the task does, short:
+`ta/fix-google-callback`. One side-call on the `chat_title` model role reads
+the task and answers the thread's short title and the branch
+(`code.naming.ts`). With no model, a failed call or an unusable answer, the
+branch is the task's first words without the filler. A name already taken
+gets `-2`, `-3`, …. The `ta/` before it is the project's **Branch prefix**.
 
-The branch is named for what the task does, short: `ta/fix-google-callback`,
-not the prompt's opening words. One side-call on the `chat_title` model role
-(Settings → Models) reads the task (its first 1,500 characters, nothing else)
-and answers two lines: the thread's short title ("Fix Google sign-in
-callback", 3 to 6 words, shown in the thread list) and the branch (2 to 4
-words naming the outcome, so "figure out why the export fails" is
-`debug-export-failure`), with an 8-second limit. Threads outside a project
-get the same short title, named after they start. With no model, a failed
-call or an unusable answer, the harness keeps its own title and the branch
-is the task's first words without the filler ("Can you please fix the login
-flow when…" is `ta/fix-login-flow-users`). Shelley stores titles as slugs,
-so there it reads `fix-google-sign-in-callback`. A name an
-earlier thread took, here or on the remote, gets `-2`, `-3`, ….
-The `ta/` before it is the project's **Branch prefix** (Code settings →
-the project → General): a bare word gets a `/` (`ashik` is `ashik/`),
-empty means none, and a prefix git cannot use is refused.
-
-**Review.** In a project thread, Source control (⌘⇧D) shows the branch, its
-base and how many commits it is ahead, then everything since the merge base
-with the base branch, committed or not (new files included), live as above,
-in the same column and tree. **Viewed** in a file's header folds it, and the
-mark comes back unmarked when the agent changes the file again; **Edit**
-opens the light editor; and
-line comments as above. **Uncommitted or a commit** switches to the
-harness's own changes.
-
-**Publish.** The panel's **Pull request** tab (the header's toggle shows
-`#N` and its state once there is one) offers Publish.
-**Publish draft PR** pushes the branch (never forced, hooks off) and opens a
-draft PR (**Publish PR**, ready for review, when the project's **Open new PRs
-as drafts** is off) with the commits as its body and a short title (one `chat_title`
-call over the thread's title and the commit subjects: imperative, under 60
-characters, no `feat:` prefix; the thread's title when there is no model); with a PR open, Publish pushes new
-commits. **Link pull request** links an existing one, and a PR the agent
-opened for the branch is linked on its own. When nothing is ahead but the
-agent changed files, the tab says they are not committed yet, and **Ask to
-commit** puts that request in the composer. The **Draft** switch flips
-the open PR between draft and ready for review on GitHub, either way, any time
-(`POST /code/threads/:id/pr/draft`); **Merge** runs once it is off. After a PR merges, the next
-Publish opens a new one; earlier PRs are listed.
-
-**The PR tab.** The PR's number, state (open, draft, queued, merged or
-closed), title and `branch → base`. **Checks**: `N passing · N failing ·
-N pending` over a bar, **N failing checks** with **Fix CI** when one fails,
-then a row per check (its latest run: a workflow re-run on every PR event
-shows once), failing first (duration, age, a link to GitHub; past
-six, the passing ones fold behind **Show N passing**; a check pending for 6
-hours is **Stalled** and no longer blocks green). A row opens to its status,
-start and end and, for an Actions job, its **Log excerpt**: the lines around
-the first failure (GitHub's timestamps and color codes taken out, error
-lines marked, the error itself on top), **Copy**, and **View full log**.
-**Comments**: every conversation comment, review and line thread, newest
-first, under **All**, **Humans** or **Bots** (a GitHub App, a `[bot]` login
-or a known review service such as CodeRabbit or Greptile), each with its
-author, age and markdown body; a line thread names `path:line`, shows its
-replies and Resolved or Outdated, and an open one can be added to the
-message. Authors Auto-fix does not trust are labelled **Ignored**. Then
-**Attach all comments** into the composer, the description
-(rendered as markdown, template comments hidden; **Edit** saves it to GitHub
-while the PR is open),
-**Fix** (one pass now, when no check fails), **Merge** with the repository's methods, the
-**Auto-fix** switch with its state, the pass history, and **Unlink**.
-Opening the tab reconciles with GitHub, and while it is on screen it
-re-reads (and so reconciles) every 15 seconds, so a project on `gh` or a
-token, with no webhooks, shows a finished check within seconds. A hidden
-page stops reading and catches up when shown again; in the background the
-server's own poll (below) carries on.
-The actions sit in one row; the switches (Draft, Auto-fix, Auto-merge) are
-plain rows right under them, above the comments, so a long run of bot comments
-never pushes them out of reach; the spend limit shows only where the harness
-reports cost.
-
-**Auto-fix.** While on, the app watches the PR (every minute while checks
-move, every 5 minutes idle) and starts a pass for a failed check, a trusted
-review or comment, or a merge conflict, after a 60-second quiet period:
-
-- The pass is sent to the thread (queued behind a running turn) with the
-  log tails and comments inside a block marked untrusted, and fixed
-  instructions: fix root causes, never weaken a test, do not edit CI
-  workflow files, run `check`, commit, end with an `autofix-report` block.
-- When the turn ends, the app pushes. It does not push a pass with no new
-  commit, one that touches a protected path (`.github/workflows/**` by
-  default), or one GitHub rejects; the loop then waits for you. It replies
-  to each fixed thread with the commit and resolves it; without a report it
-  posts one summary comment and resolves nothing.
-- Trusted: you, the repository's owners, members and collaborators, and the
-  review bots you list. The app's own comments never start a pass. PRs from
-  forks are never fixed. Approvals never start a pass.
-- Limits: 6 passes in an hour pauses until someone pushes, reviews or
-  writes; 10 passes in a row without you switches Auto-fix off; a pass past
-  20 minutes is stopped. Writing in the thread moves a waiting loop on.
-- A pass runs in the thread's own permission mode, never with YOLO's trust:
-  anything the harness asks waits for you.
-- Pushes (Settings → Notifications): **Auto-fix needs you** (it stopped for
-  you, switched itself off, or a check stalled) and **Pull request updates**
-  (checks green, merged, or failed with Auto-fix off). None while the
-  thread is on screen.
-
-**Each thread's commits** carry `Thread-Id: <thread id>`, so `git log`
-leads back to the conversation. The worktree's own hooks directory adds it,
-then runs the repository's hooks as usual.
-
-**Turns and revert.** Every turn that changed something is checkpointed:
-the worktree, uncommitted files included, under a hidden ref in the
-project's clone. In Source control, the scope picker shows what any one turn
-changed, and **Revert to here** puts the files back as they were after that
-turn, as uncommitted changes (commits, and anything pushed, stay; the state
-it replaces is checkpointed first). Not while the agent works.
-
-**More in the PR tab:**
-
-- **Auto-merge** (off by default, or on for new PRs per project): with no
-  pass running, the app turns on GitHub's auto-merge, marking a draft ready
-  first; GitHub's branch protection decides when it merges. Switching it off
-  turns GitHub's off too.
-- **Spend limit:** where the harness reports cost, the thread's spend and a
-  limit; at the limit Auto-fix pauses instead of starting a pass. Each pass
-  shows what it cost.
-- **Final check when green** (per project, off by default): one more pass
-  that reviews the whole change when checks go green. If it changes nothing
-  the PR settles green.
-- **Merge queue:** a PR the merge queue removed gets a pass (per project,
-  on by default); a queued PR shows **queued**.
+**Each thread's commits** carry `Thread-Id: <thread id>`, so `git log` leads
+back to the conversation.
 
 **GitHub App (optional).** Settings → GitHub → **Create GitHub App**
 (optionally under an organization). GitHub's App Manifest flow does the
@@ -405,206 +265,233 @@ webhook and Code polls. The setup's two redirects are bound to the browser
 that started it (a 10-minute, single-use state plus an httpOnly cookie).
 **Disconnect** forgets the App; delete it on GitHub yourself.
 
-Not built yet: re-running a
-flaky check before spending a pass, mention commands from PR comments,
-threads started from issues, a preview script, and matching Shelley threads
-to projects by remote.
+## Pull requests
+
+The **Pull request** tab (`PullPanel.tsx`, `PullChecks.tsx`,
+`PullComments.tsx`).
+
+**Publish (`P`).** Pushes the branch (never forced, hooks off) and opens a
+draft PR, or a ready one when the project's **Open new PRs as drafts** is
+off, with the commits as its body and a short title. With a PR open, it
+pushes new commits. **Link pull request** links an existing one, and a PR
+the agent opened for the branch is linked on its own. When nothing is ahead
+but the agent changed files, the tab says they are not committed yet, and
+**Ask to commit** puts that request in the composer.
+
+**The tab.** The PR's number, state, title and `branch → base`, then:
+
+- **Checks:** counts over a bar, then a row per check, failing first. A row
+  opens to its **Log excerpt** for an Actions job. **Fix CI** shows when one
+  fails.
+- **Comments:** every conversation comment, review and line thread, newest
+  first, under **All**, **Humans** or **Bots**. An open line thread can be
+  added to the message; **Attach all comments** puts them all in the
+  composer. **Address comments** hands them to the agent.
+- **Merge (`M`)** with the repository's methods, once checks pass and there
+  is no conflict. **Resolve conflicts** shows when the branch no longer
+  merges.
+- The **Auto-fix** and **Draft** switches, the pass history, the
+  description (**Edit** saves it to GitHub), **Review** (opens a PR review
+  of it) and **Unlink**. After a PR merges, the next Publish opens a new
+  one; earlier PRs are listed.
+
+While the tab is on screen it re-reads and reconciles with GitHub, so a
+project with no webhooks shows a finished check quickly.
+
+## Workflows
+
+A workflow is work the agent does in a thread without you writing the
+request. Each one is a run with trigger `workflow` (`code_runs`,
+`code.runs.ts`), and the thread list shows its name while it works. The
+names are `WORKFLOW_LABEL` in `apps/web/src/shared/code-status.ts`.
+
+| Workflow              | Starts from                                                            |
+| --------------------- | ---------------------------------------------------------------------- |
+| **Fix CI**            | `f`, the button on a failing check, or Auto-fix                        |
+| **Address comments**  | `a`, the button on the Pull request tab, or Auto-fix                   |
+| **Resolve conflicts** | the button on the Pull request tab, or Auto-fix                        |
+| **Fix issue**         | a new thread whose task contains a link to one of the project's issues |
+| **Review PR**         | `r` in a PR review                                                     |
+
+- **Fix issue.** Paste the issue's link into the new thread dialog. The app
+  reads the issue from GitHub and adds its title and text to the first
+  message (`issueFor` in `code.routes.ts`).
+- **By hand.** `POST /code/threads/:id/workflows/:name` starts one pass now.
+  When there is nothing to do it says why instead of starting.
+- **Instructions for every workflow** (project settings) are added to the
+  end of each workflow's request (`withWorkflowInstructions` in
+  `code.projects.ts`).
+
+### Auto-fix
+
+[ADR 0023](../adr/0023-auto-fix.md). While a PR's **Auto-fix** switch is on,
+the app watches the PR and starts a pass for a failed check, a trusted
+review or comment, or a merge conflict, after a quiet period:
+
+- The pass is sent to the thread (queued behind a running turn) with the
+  log tails and comments inside a block marked untrusted, and fixed
+  instructions: fix root causes, never weaken a test, do not edit CI
+  workflow files, run `check`, commit, end with an `autofix-report` block.
+- When the turn ends, the app pushes. It does not push a pass with no new
+  commit, one that touches a protected path, or one GitHub rejects; the
+  loop then waits for you. It replies to each fixed thread with the commit
+  and resolves it; without a report it posts one summary comment and
+  resolves nothing.
+- Trusted: you, the repository's owners, members and collaborators, and the
+  review bots you list. The app's own comments never start a pass. PRs from
+  forks are never fixed. Approvals never start a pass.
+- Limits: passes in an hour, passes in a row without you, and minutes a
+  pass may run. The defaults are `DEFAULT_AUTOFIX` in `code.autofix.ts`;
+  each project can change them. Writing in the thread moves a waiting loop
+  on.
+- A pass runs in the thread's own permission mode: anything the harness
+  asks waits for you.
+- Pushes (Settings → Notifications): **Auto-fix needs you** and **Pull
+  request updates**. None while the thread is on screen.
+
+The pure decision is `decide` in `code.autofix.ts`; `code.passes.ts` runs a
+pass. Both the loop and the pass are typed machines
+([State machines](../reference/state-machines.md)).
 
 ## PR reviews
 
-Issue #345. Review any pull request of a project's repository, your own or
-someone else's, in focus mode, with an AI assistant scoped to that PR.
-Owner-only, like projects.
+Review any pull request of a project's repository, your own or someone
+else's, with the agent's help. Nothing is posted until you submit.
 
-**Open one.** **Reviews** in the sidebar (`/code/reviews`) takes a PR's
-link (any tab of it) or `owner/name#123`, and lists the reviews open here.
-Above them is the inbox from GitHub, across every repository the GitHub
-credential (Settings → GitHub) sees, read in one query when the screen
-opens: **Needs your review** (review requested), **Updated since your
-review** (commits after your last review), **Waiting on author** (none
-since) and **Your pull requests**, with draft and approval state. Filters
-above it narrow GitHub's searches themselves (`GET /code/reviews/inbox?days=30&repo=owner/name&drafts=hide`,
-or `repo=projects`), so they reach past the first 50 of each, and the
-browser remembers them. A click on a project's PR opens its review here;
-every row also has its own **GitHub** link. A repository that is not a
-project yet says so, and opens only on GitHub. A link opens one straight into review:
-`/code/review?pr=<its GitHub link, or owner/name#123>`,
-`/code/review/<owner>/<name>/<number>`, or GitHub's own path after
-`/code/review/` (swap `https://github.com` for the app's address, any tab of
-the PR), and a coding thread's **Pull request** tab offers
-**Review** for its own PR. Opening the same PR again reuses its review.
+**Open one.**
+
+- **Reviews** in the thread list (`ReviewList.tsx`) shows the pull requests
+  that wait for you: review requested, or updated since your last review,
+  read from GitHub across every repository the credential sees. A click
+  checks the PR out and opens its review. A PR of a repository that is not a
+  project opens on GitHub instead. Reviews already open here are listed
+  too, each with **Close review**.
+- `v`, or the **+** beside Reviews, takes a PR's link or `owner/name#123`.
+- A link opens one straight into review: `/code/review?pr=<link or
+  owner/name#123>`, `/code/review/<owner>/<name>/<number>`, or GitHub's own
+  path after `/code/review/`.
+- A thread's Pull request tab offers **Review** for its own PR.
+
+Opening the same PR again reuses its review.
 
 **What opening does.** The app fetches the PR's head (`refs/pull/N/head`,
-so a PR from a fork works) and its base into the project's clone (never a
-new clone). When a Code thread opened the PR and its worktree is at that
-head (on the PR's branch, nothing unpushed, nothing newer on GitHub), the
-review shows that worktree as it is, uncommitted work included; there,
-**Push to PR** and **Discard** give way to **Push from the thread**, and
-archiving the thread takes the worktree from the review (opening the PR
-again checks it out). Otherwise the app checks the head out in a detached
-worktree of the review's own
-(`~/tiny-agents-code/<owner>--<name>/reviews/pr-N`). The page reads files
-and diffs from git there, against the PR's base. Nothing calls a model.
-**Update** (the header's refresh) moves the review to the PR's latest
-commit, unless its own worktree has changes. **Close review** removes the
-review's own worktree (never a thread's) and archives the assistant.
+so a PR from a fork works) and its base into the project's clone. When a
+Code thread opened the PR and its worktree is at that head, the review
+shows that worktree as it is. Otherwise the app checks the head out in a
+detached worktree of the review's own. The page reads files and diffs from
+git there, against the PR's base. **Update** (the header's refresh) moves
+the review to the PR's latest commit. **Close review** removes the review's
+own worktree (never a thread's).
 
-**The page** (`/code/reviews/<id>`) takes the whole screen, laid out like
-[diffshub](https://diffshub.com) (see `CREDITS.md`). The header shows the
-number, title, repository and author, a split or unified view toggle (the
-choice is remembered) and **Fold all files**. On the left, a resizable
-sidebar holds the changed files as a tree (@pierre/trees: status letters,
-a check on viewed files, search, a filter by status) or, on its
-**Comments** tab, the comments waiting to be sent and GitHub's
-conversations, each a jump to its line; under them, the diff stats. Every
-changed file then sits in one scrolling column (@pierre/diffs `CodeView`,
-which draws only what is in view), each under a sticky header with its
-fold, +/−, **Edit** and **Viewed**. A file's two sides are read as it is
-unfolded, four at a time; generated and viewed files start folded, and
-marking a file viewed folds it. Select line numbers, or the + beside a
-line, to comment.
+**The page** (`/code/reviews/<id>`, `PullReview.tsx`) takes the whole
+screen, laid out like [diffshub](https://diffshub.com) (see
+[CREDITS](../../CREDITS.md)): the agent's column, a file tree with a
+**Comments** tab and the diff stats, and every changed file in one scrolling
+column with **Edit** and **Viewed**. Select line numbers to comment.
 
-The assistant sits on the far left as a thin rail, folded by default (a
-badge counts the comments waiting for it). **Open assistant** opens it as a
-resizable pane, **Collapse assistant** folds it again, and a comment sent
-with **Ask assistant** opens it. Phones show one side at a time
-(**Assistant** / **Files** in the header), the diffs unified and the file
-tree in a drawer.
+**The agent's review (`r`).** **Review with the agent** asks a thread of
+the project's default harness, in the review's worktree, to read the change
+and report (`code.findings.ts`, `shared/review-report.ts`). It does not
+change files. When its turn ends the column shows:
 
-**The assistant** is a thread of the project's default harness, started in
-the review's worktree on your first question, in the harness's asking
-permission mode where it has one, so an edit waits for your yes. Until then
-the pane offers a few starter questions and a box with a **Model** picker
-(the project's default model first; the pick goes with the first question
-as `model`), and line comments wait under the review (`review:<id>`). After
-that the thread's own composer picks the model, as in any thread. The first message is:
+- a **brief**: what the change does, what the agent ran, what to read
+  first;
+- **findings**, each with a severity, a title, a file and a line.
 
-- a short card of the PR (`reviewCard` in `shared/code-messages.ts`):
-  the repository, number, head and base, what the assistant is for, the
-  title, author, the description (template comments taken out, cut at 1,500
-  characters) and the changed files with their +/− (at most 150 named;
-  generated files and lockfiles only counted). Never the diff: the
-  assistant reads what it needs with its own tools. The card says the PR's
-  text is data, not instructions;
-- any line comments waiting, as in a thread;
-- your question.
+`n` and `p` move between findings. `y` adds the finding to your review as a
+pending comment on its line; `d` dismisses it. **Review again** replaces the
+open findings after the PR moves. Below the findings the column is the
+assistant's thread: ask it anything about the PR. Its first message carries
+a short card of the PR (`reviewCard` in `shared/code-messages.ts`), never
+the diff, and says the PR's text is data, not instructions.
 
-The transcript shows the card as one "Reviewing owner/name#N" line. After
-that the pane is the thread itself, without its header. Line comments go
-to it with your next message, as in any thread. The assistant's thread is
-titled `Review #N: <title>` and stays off the thread list.
+**Review comments.** The composer under selected lines has two ways out.
+**Comment** adds a pending comment to your review. **Ask assistant** makes
+it a comment for the assistant, which goes with your next question.
+**Suggest change** (on new lines only) puts a GitHub suggestion block with
+the selected lines into the comment.
 
-**Review comments.** In a review, the composer under selected lines has
-two ways out. **Comment** (⌘↵) adds the comment to your review on GitHub:
-it waits as **Pending** under its lines, apart from the assistant's
-comments (`code_review_drafts.target` is `github`). **Ask assistant** makes
-it a comment for the assistant, tagged **For the assistant**, which goes
-with your next question. **Suggest change** (on new lines only) puts a
-GitHub suggestion block with the selected lines into the comment, to edit
-in place.
+**Submit.** **Submit review** lists the pending comments, takes a summary
+(drafted from them) and the verdict, and posts them in one call, pinned to
+the head the review shows. `Shift+A` opens it on **Approve** and `Shift+X`
+on **Request changes**, which needs a summary. On your own PR GitHub allows
+only a comment, so the dialog offers only **Comment**. When a Code thread
+opened the PR, **Send to coding thread** hands the pending comments to that
+thread instead.
 
-**Submit review** in the header (with the count of pending comments) lists
-them, takes a summary and the verdict (**Comment**, **Approve**, **Request
-changes**, which needs a summary) and posts them in one REST call
-(`POST /pulls/N/reviews`), pinned to the head the review shows, so each
-comment lands on the lines you read. A comment on removed lines goes on
-GitHub's left side; a range as its first and last line. On your own PR
-(the PR's author is the GitHub account Code uses) GitHub allows only a
-comment, so the server refuses the others and the dialog offers only
-**Comment**. When a Code thread opened the PR, **Send to coding thread**
-hands the pending comments to that thread as one message instead, for its
-agent to act on.
+**Conversations from GitHub.** The page shows the PR's line conversations
+under their lines, with **Reply** and **Resolve**.
 
-**Conversations from GitHub.** The page reads the PR's line conversations
-when it opens (in the one GitHub query that reads the PR, no model) and
-shows each under the lines it is on, with its comments, **Reply** and
-**Resolve** (both as the GitHub account Code uses). A resolved one starts
-folded. GitHub places them at the PR's current head: when the review shows
-an older commit, or the code moved on (outdated), the **Comments** tab
-lists them under their file instead, the first with a hint to **Update**.
-
-**Since your review.** Opening a review reads which commit your last
-GitHub review of the PR was on (from the same query), and submitting one
-here records its head. When the PR has moved on since, the diff opens on
-**Since your review**: the changes from that commit to the head, fetched
-by sha if the worktree lacks it (a force-pushed commit GitHub no longer
-has says so). **Since <base>** still shows the whole PR. Viewed marks hold
-in both.
+**Since your review.** When the PR has moved on since your last review, the
+diff opens on **Since your review**: the changes from that commit to the
+head. **Since <base>** still shows the whole PR.
 
 **Changing the code.** What you or the assistant change in the review's
-checkout shows under **Your changes** (the diff from the PR's head to the
-worktree, commits made there included), with three ways on:
-
-- **Push to PR** commits it (with your message, as the sandbox's git
-  identity or else your GitHub login's noreply address, hooks off) and
-  pushes it to the PR's branch, after a confirm that names the branch and
-  its author. Never forced: GitHub refuses the push when the branch moved.
-  A fork's branch takes it only when its author allows edits from
-  maintainers; otherwise the server says to post suggestions instead.
-- **Post as suggestions** turns each hunk into a pending GitHub suggestion
-  on the head lines it replaces (an added line is suggested with the line it
-  follows). GitHub takes comments only on lines of the PR's own diff, so a
-  hunk outside it, or in a file you added or deleted, is skipped and counted.
-- **Discard** (after a confirm) puts the checkout back at the PR's head.
-
-**Open in terminal** in the header opens a Terminal tab that starts in the
-review's checkout, for changes by hand; they show under **Your changes** too.
-For a typo or a rename, **Edit** (the pencil over a file's diff) opens the
-file in @pierre/diffs' code editor (diffs.com): syntax colors, line numbers,
-bracket matching and undo while you type, but no completion (a plain text box
-where the browser gives no canvas). **Save** (⌘S) writes it in
-the checkout (`PUT /code/threads/:id/review/file`, the same save a coding
-thread's Review panel uses for its worktree). The save is refused when the
-file changed since it was opened (the agent may have edited it), and for
-anything that is not a regular file inside the checkout (a symlink out, or
-git's own files).
+checkout shows under **Your changes**, with three ways on: **Push to PR**
+(commits and pushes to the PR's branch after a confirm, never forced),
+**Post as suggestions** (each hunk becomes a pending GitHub suggestion), and
+**Discard**. When the review shows a thread's worktree, these give way to
+**Push from the thread**. **Open in terminal** opens a Terminal tab in the
+review's checkout.
 
 ## Bots hand off coding
 
-Every bot has the `code` toolkit. Shelley is the default harness; a bot names
-another with `harness` (the bot's prompt lists the configured ones).
+Every bot has the `code` toolkit (`packages/agent/src/toolkits/code.ts`).
+The bot's prompt lists the configured harnesses and the projects.
 
-| Tool            | Permission | What it does                                                       |
-| --------------- | ---------- | ------------------------------------------------------------------ |
-| `code_start`    | allow      | Start a thread (`harness`, `task`, `cwd`, `model`); returns a link |
-| `code_send`     | allow      | Steer or follow up any thread by id (adopts one started elsewhere) |
-| `code_status`   | allow      | Working or idle, the last answer, and uncommitted changed files    |
-| `code_list`     | allow      | This bot's hand-offs                                               |
-| `code_models`   | allow      | A harness's ready models, its default first                        |
-| `shelley_start` | allow      | Alias of `code_start` with `harness: shelley` (older prompts)      |
-| `shelley_send`  | allow      | Alias of `code_send` for Shelley ids                               |
+| Tool            | Permission | What it does                                                           |
+| --------------- | ---------- | ---------------------------------------------------------------------- |
+| `code_start`    | allow      | Start a thread (`task`, `project`, `harness`, `model`); returns a link |
+| `code_send`     | allow      | Steer or follow up any thread by id (adopts one started elsewhere)     |
+| `code_status`   | allow      | Working or idle, the last answer, and uncommitted changed files        |
+| `code_list`     | allow      | This bot's hand-offs                                                   |
+| `code_models`   | allow      | A harness's ready models, its default first                            |
+| `shelley_start` | allow      | Alias of `code_start` with `harness: shelley` (older prompts)          |
+| `shelley_send`  | allow      | Alias of `code_send` for Shelley ids                                   |
 
-The chat shows a hand-off as a card with the live state and **Open in Code**,
-and the thread gets a short title like one the owner starts. When the turn
-ends, the outcome arrives once as "Reply from <harness>" (untrusted peer
-text), in the conversation that last asked; nothing polls:
+`code_start` starts a thread of a project, exactly as the owner's new
+thread does: its own worktree and branch, recorded as a run with trigger
+`bot` (`startOnce` in `code.bots.ts`). `project` is the project's name or
+`owner/name`. It may be left out when there is one project; with several,
+the tool answers with their names. With none, it says to add a repository
+first. The harness is the one named, else the project's default agent, else
+Shelley.
+
+The chat shows a hand-off as a card with the live state and **Open in
+Code**. When the turn ends, the outcome arrives once as "Reply from
+<harness>" (untrusted peer text), in the conversation that last asked;
+nothing polls:
 
 - from the bot's chat: that chat;
 - from a routine run: that run's conversation, unattended and on its token
   budget, never the bot's chat;
 - from the bot's answer to another bot: that answer's conversation, and what
-  the bot says there is relayed back to the bot that asked, like its first
-  answer.
+  the bot says there is relayed back to the bot that asked.
 
 A follow-up (`code_send`) moves the hand-off to the conversation that sent
-it. A finish missed while a
-harness was unreachable is delivered when it reconnects. A finish is
-recorded as owed before it is sent, so one cut off by a restart or a failed
-send is sent again (at boot, on reconnect, and every 30 seconds) until it
-lands; the chat takes it once. A replayed `code_start` makes one thread, and
-a follow-up is armed to report back before the harness hears it. Claude Code
-hand-offs start in Accept edits; anything else they ask (commands, questions)
-waits for the owner on the Code page.
+it. A finish is recorded as owed before it is sent, so one cut off by a
+restart or a failed send is sent again until it lands; the chat takes it
+once. A replayed `code_start` makes one thread, and a follow-up is armed to
+report back before the harness hears it.
 
 Known limits (register row C7):
 
-- A start whose `createThread` call fails after the harness already made the
+- A start whose thread creation fails after the harness already made the
   thread (a client timeout, say) drops its claim, so a replay of that tool
-  call can make a second thread. Harnesses take no idempotency key to prevent
-  it.
+  call can make a second thread. Harnesses take no idempotency key to
+  prevent it.
 - A finish that can never be delivered (its bot's chat keeps refusing the
-  submit) is retried, and logged, every 30 seconds for as long as the app
-  runs. Deleting the bot removes it.
+  submit) is retried, and logged, for as long as the app runs. Deleting the
+  bot removes it.
+
+## Known gaps
+
+- Shelley and Claude Code threads cannot edit or retry a turn.
+- A review is its own screen, not a thread; the agent does not review a PR
+  on its own when a review is requested.
+- The Android app's Code screens predate this workspace.
+- Not built: re-running a flaky check before spending a pass, mention
+  commands from PR comments, and a preview script.
 
 ## How it works
 
@@ -644,8 +531,7 @@ Known limits (register row C7):
 
   `turn_ended` fires once the harness is idle (a steer Claude Code runs as
   its own SDK turn is part of the turn it went into) and carries the outcome;
-  the watcher only reads it. Thread ids are split only by `parseThreadId`
-  (bare ids from before ADR 0011 belong to `shelley`).
+  the watcher only reads it.
 
 - **App:** `apps/web/src/server/api/code/`:
   - `code.registry.ts`: which harnesses run, from env.
@@ -653,6 +539,12 @@ Known limits (register row C7):
     viewers.
   - `code.watcher.ts`: delivers hand-off finishes and sends pushes.
   - `code.routes.ts`: `/api/v1/code/*`.
+  - `code.threads.ts`: a thread's own id and its harness address
+    (`threadRef`, `threadKey`), attention, and the decorated list.
+  - `code.runs.ts`: runs (`code_runs`), one per turn the owner, a workflow
+    or a bot started.
+  - `code.rewind.ts`: edit and retry a turn, and Undo.
+  - `code.findings.ts`: the agent's review of a PR and its findings.
   - `code.bots.ts`: the bots' `CodeStore`.
   - `code.store.ts`: the tables.
   - `code.projects.ts`, `code.workspace.ts`: projects, and git on the
@@ -664,17 +556,21 @@ Known limits (register row C7):
   - `code.checks.ts`: a check's log excerpt for the PR tab (`GET
     /code/threads/:id/pr/checks/:job/log`, only for the open PR's checks).
   - `code.checkpoints.ts`: per-turn checkpoints and revert.
-  - `code.changes.ts`: live Changes and Review panels (ADR 0025): while one
+  - `code.review.ts`: line comments, viewed marks and file saves for the
+    Changes pane and a PR review.
+  - `code.changes.ts`: the live Changes pane (ADR 0025): while one
     is open, one poll per directory reads its change stamp and
     `GET /code/threads/:id/changes` pushes a version when it moves.
   - `code.webhook.ts`: the GitHub App's signed webhook (public).
   - `code.reviews.ts`: PR reviews (open, the assistant's first question,
     pending GitHub comments, submit, the PR's conversations, close), with `/code/reviews` routes in `code.projects.routes.ts`.
-  - `code.projects.routes.ts`: `/api/v1/code/{projects,github}` and a
-    thread's `pr`, `publish` and `review` routes.
+  - `code.projects.routes.ts`: `/api/v1/code/{projects,github,reviews}` and
+    a thread's `pr`, `publish`, `review`, `files`, `terminal` and
+    `workflows` routes. `rewind` is in `code.routes.ts`.
 - **Tables:**
-  - `code_threads`: the index. Followed threads and how far you have read
-    them, plus the rows of harnesses without their own list.
+  - `code_threads`: every thread, under its own id, with its project,
+    branch, worktree, harness address and how far you have read it.
+  - `code_runs`: the runs of a thread, with their trigger and workflow.
   - `code_handoffs`: the hand-offs, `starting → running → finished`
     compare-and-set, each with the conversation that last asked.
   - `code_handoff_finishes`: finishes owed to bots, until delivered.
@@ -682,11 +578,14 @@ Known limits (register row C7):
     Auto-fix loop); `code_autofix_passes`; `code_pr_comments` (the app's own
     comments); `code_review_viewed` and `code_review_drafts`;
     `code_checkpoints`; `code_pr_events` (webhook deliveries, by id);
-    `code_reviews` (PR reviews: the PR, its worktree and assistant).
+    `code_reviews` (PR reviews: the PR, its worktree, assistant and brief);
+    `code_findings` (the agent's findings in a review).
 - **Client:**
-  - `lib/code/`: API, live thread hook, list tree, tool folding.
+  - `lib/code/`: API, live thread hook, the status-grouped list, tool
+    folding.
   - `store/code.ts`: the app-wide list stream.
-  - `pages/code/`: the page; `CodeSettings.tsx` is `/code/settings`.
+  - `pages/code/`: the workspace (`Workspace.tsx`); `CodeSettings.tsx` is
+    `/code/settings`.
 
 - **Git reads:** `@tiny-agents/git` (`packages/git`), one module for both
   panels and every harness (ADR 0025): the project workspace runs it over
@@ -704,7 +603,7 @@ streaming text if a turn is still running.
 
 ## The native harness
 
-ADR 0020. A Native thread is a conversation in the same agent runtime the
+[ADR 0020](../adr/0020-native-code-harness.md). A Native thread is a conversation in the same agent runtime the
 chat bots use, with a working directory and five coding tools.
 
 - **Tools** (`packages/agent/src/toolkits/coding.ts`): `read`, `write`,
@@ -722,13 +621,12 @@ chat bots use, with a working directory and five coding tools.
   button. A held message can be sent now, which makes it a steer, or
   cancelled. Stop ends the turn, stops waiting for a running command and
   withdraws what is queued.
-- **After it stops:** an error or a message left unanswered shows
-  **Continue**. `/compact` (with optional instructions) summarizes the
-  conversation. Fork copies the thread up to and including the message.
-- **Not served:** deleting a thread, attachments, effort levels, a usage
-  report, and the workspace calls (diffs, file search, folder browser). The
-  context ring shows the model's window and the thread's cost, not tokens
-  in use.
+- **After it stops:** `/compact` (with optional instructions) summarizes
+  the conversation. Edit and retry fork the conversation before the message
+  (`forkBefore`).
+- **Not served:** deleting a thread, attachments, effort levels, and the
+  harness's own workspace calls (diffs, file search, folder browser). The
+  app reads a project thread's changes and files itself.
 - **Without a model key:** with `TINY_AGENTS_FAUX=1` the faux model runs the
   tools on `/bash <command>`, `/read <path>`, `/write <path> <text>`,
   `/edit <path> <old> => <new>`, `/find <query>` and `/sleep <seconds>`.

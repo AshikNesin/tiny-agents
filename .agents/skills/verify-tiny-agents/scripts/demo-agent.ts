@@ -142,7 +142,8 @@ export function createDemoAgent(): HarnessInstance {
     const turn = ++thread.turn;
     const started = Date.now();
     const live = () => thread.turn === turn && thread.summary.working;
-    const step = /\bslow\b/i.test(message) ? 3000 : 600;
+    const cue = message.replace(/----- BEGIN[\s\S]*----- END[^\n]*/, "");
+    const step = /\bslow\b/i.test(cue) ? 3000 : 600;
     put(thread, { kind: "user", id: `u-${++row}`, text: message, attachments: [] });
     setWorking(thread, true);
 
@@ -185,7 +186,7 @@ export function createDemoAgent(): HarnessInstance {
       images: [],
     });
 
-    if (/\bask\b/i.test(message)) {
+    if (/\bask\b/i.test(cue)) {
       const id = `req-${++row}`;
       const request = {
         kind: "tool" as const,
@@ -251,7 +252,7 @@ export function createDemoAgent(): HarnessInstance {
     await wait(thread, step);
     if (!live()) return;
 
-    if (/\bfail\b/i.test(message)) {
+    if (/\bfail\b/i.test(cue)) {
       put(thread, {
         kind: "notice",
         id: `n-${++row}`,

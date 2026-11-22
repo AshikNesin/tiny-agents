@@ -146,7 +146,6 @@ function view(state: CheckState): ThreadPullsView {
             maintainerCanModify: false,
             mergeable: "mergeable",
             mergeMethods: ["squash"],
-            autoMerge: false,
             inMergeQueue: false,
             queueRemovals: [],
             author: "AshikNesin",

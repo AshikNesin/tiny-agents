@@ -79,7 +79,6 @@ export interface PullSnapshot {
   maintainerCanModify: boolean;
   mergeable: "mergeable" | "conflicting" | "unknown";
   mergeMethods: MergeMethod[];
-  autoMerge: boolean;
   inMergeQueue: boolean;
   queueRemovals: Array<{ id: string; at: string; reason: string }>;
   author: string | null;
@@ -235,8 +234,6 @@ export interface GitHubClient {
     number: number,
     change: { title?: string; body?: string },
   ): Promise<void>;
-  enableAutoMerge(pullId: string, method: MergeMethod): Promise<void>;
-  disableAutoMerge(pullId: string): Promise<void>;
   markReady(pullId: string): Promise<void>;
   convertToDraft(pullId: string): Promise<void>;
 }
@@ -265,7 +262,6 @@ const SNAPSHOT_QUERY = `query PullSnapshot($owner: String!, $name: String!, $num
       id number url title body state isDraft merged mergeable
       headRefName headRefOid baseRefName isCrossRepository isInMergeQueue
       maintainerCanModify headRepository { name owner { login } }
-      autoMergeRequest { enabledAt }
       timelineItems(last: 5, itemTypes: [REMOVED_FROM_MERGE_QUEUE_EVENT]) {
         nodes { ... on RemovedFromMergeQueueEvent { id createdAt reason } }
       }
@@ -340,7 +336,6 @@ interface RawSnapshot {
       maintainerCanModify?: boolean;
       headRepository?: { name: string; owner: { login: string } } | null;
       isInMergeQueue?: boolean;
-      autoMergeRequest?: { enabledAt: string } | null;
       timelineItems?: { nodes: Array<{ id?: string; createdAt?: string; reason?: string | null }> };
       author: RawAuthor | null;
       reviews: {
@@ -505,7 +500,6 @@ export function toSnapshot(raw: RawSnapshot): PullSnapshot {
       comments: t.comments.nodes.map(comment),
     })),
     comments: pr.comments.nodes.map(comment),
-    autoMerge: Boolean(pr.autoMergeRequest),
     inMergeQueue: Boolean(pr.isInMergeQueue),
     queueRemovals: (pr.timelineItems?.nodes ?? [])
       .filter((n) => n.id && n.createdAt)
@@ -690,18 +684,6 @@ export function createGitHubClient(api: GitHubApi): GitHubClient {
     },
     async updatePull(repo, number, change) {
       await api.rest("PATCH", `${repoPath(repo)}/pulls/${number}`, { body: change });
-    },
-    async enableAutoMerge(pullId, method) {
-      await api.graphql(
-        `mutation($pr: ID!, $method: PullRequestMergeMethod!) { enablePullRequestAutoMerge(input: { pullRequestId: $pr, mergeMethod: $method }) { clientMutationId } }`,
-        { pr: pullId, method: method.toUpperCase() },
-      );
-    },
-    async disableAutoMerge(pullId) {
-      await api.graphql(
-        `mutation($pr: ID!) { disablePullRequestAutoMerge(input: { pullRequestId: $pr }) { clientMutationId } }`,
-        { pr: pullId },
-      );
     },
     async markReady(pullId) {
       await api.graphql(

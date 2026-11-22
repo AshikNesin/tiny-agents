@@ -110,7 +110,6 @@ async function forkPull(lines: string[], author = "maria"): Promise<string> {
       reviews: [],
       threads: [],
       fromFork: true,
-      autoMerge: false,
       inMergeQueue: false,
       queueRemovals: [],
     });
@@ -319,7 +318,6 @@ describe("reviewing a Code thread's own PR", () => {
       reviews: [],
       threads: [],
       fromFork: false,
-      autoMerge: false,
       inMergeQueue: false,
       queueRemovals: [],
     });

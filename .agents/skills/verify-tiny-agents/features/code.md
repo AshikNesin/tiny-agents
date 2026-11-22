@@ -15,7 +15,9 @@ The owner's coding workspace at `/code`: threads grouped by status on the left, 
 - `code-terminal` `` ` `` opens a terminal in the thread's worktree, under the thread.
 - `code-keys` `?` lists every key; the command palette's `Code actions` group runs them.
 - `code-legacy-links` a link from before the rebuild (`/code/<thread id>`, with `/changes` or `/pr`) lands on `/code/t/<thread id>` with that pane.
-- Not driven here: reviews of other people's pull requests and Code settings, which are still the old screens until their own steps of the rebuild.
+- `code-review-row` a pull request that waits for your review is a row under `Reviews` in the list; a click checks it out and opens `/code/reviews/<id>`. `v` takes a pasted link.
+- `code-agent-review` `r` has the agent review the pull request: a brief and findings. `y` adds a finding to your review as a pending comment, `d` dismisses it. `Shift+A` and `Shift+X` open Submit review on Approve or Request changes.
+- Not driven here: Code settings (`/code/settings`), which `tests/client/pages/code-settings.test.tsx` covers.
 
 ## How to get to it (user POV)
 
@@ -26,7 +28,7 @@ The owner's coding workspace at `/code`: threads grouped by status on the left, 
 
 Preconditions:
 
-- `ta-verify up --demo-agent --fake-github --local-sandbox`, doctor OK. The journey requires all three and reports UNREACHABLE without them. The demo agent stands in for a model: it lists the directory, appends a line to `NOTES.md` and answers; `slow` in a message stretches the turn, `commit` commits the edit.
+- `ta-verify up --demo-agent --fake-github --local-sandbox`, doctor OK. The journey requires all three and reports UNREACHABLE without them. The demo agent stands in for a model: it lists the directory, appends a line to `NOTES.md` and answers; `slow` in a message stretches the turn, `commit` commits the edit, `fail` ends it with an error, and a review request gets a fixed brief with two findings.
 
 - **Setup.** `POST /api/v1/code/projects` (`acme/web`), then three threads through `POST /api/v1/code/threads`: two that finish, one `slow`.
 - **List.** `/code`: the two finished threads sit under `Needs you`, the slow one under `Working`.
@@ -35,4 +37,7 @@ Preconditions:
 - **Stop.** Cancel the queued message, `Escape` (leaves the composer), `Escape` again: `GET /api/v1/code/threads` reports the thread idle and the transcript ends with `Stopped.`.
 - **Panes.** `1`: the Changes tab is selected and shows `NOTES.md` with the committed line. `2`: `is 1 commit ahead of main` and a Publish button. `\` and `[` hide and restore the pane and the list.
 - **Keys.** `?` lists the keys; ⌘K → `Changes` selects the Changes tab.
-- **Proof.** `ta-verify drive $S/journeys/code.mjs` → `code/list`, `steer-and-queue`, `stopped`, `changes`, `files`, `terminal`, `pane-and-keys`, `rewound`, `new-thread`.
+- **Files and terminal.** `p`, type `notes`, wait for the list, `Enter`: the editor opens `NOTES.md`. `s` searches the worktree. `` ` `` opens the terminal; wait for the prompt before typing.
+- **Rewind.** `n` starts a thread from the dialog; `t` runs its last turn again from the files as they were. A message with `fail` ends the turn with an error and the row reads `failed`.
+- **Review.** Publish the first thread, set the fake pull request's author through the fake GitHub's control server (the app's port + 3: `POST /pulls/<n>`, `POST /inbox`), then `/code`: the row under `Reviews` opens the review. `r`: the brief reads `Adds NOTES.md` and two findings show. `y`, then `d`: none stay open. `Shift+X`: the dialog is on `Request changes` with a summary; Submit, and `GET /state` on the control server lists the review under `submitted` with the added finding as its comment.
+- **Proof.** `ta-verify drive $S/journeys/code.mjs` → `code/list`, `steer-and-queue`, `stopped`, `changes`, `files`, `terminal`, `pane-and-keys`, `rewound`, `new-thread`, `review`.

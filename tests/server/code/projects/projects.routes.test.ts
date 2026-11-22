@@ -1015,6 +1015,13 @@ describe("editing an earlier turn", () => {
       where: eq(codeThreads.id, rewound.body.data!.replaced),
     }))!;
     expect([kept.nativeId, kept.archived]).toEqual([thread.nativeId, true]);
+    harness.threads = [
+      { ...harness.threads[0]!, nativeId: thread.nativeId },
+      { ...harness.threads[0]!, nativeId: `${thread.nativeId}-before-u2` },
+    ];
+    await codeHub()!.refresh("fake");
+    const listed = await call<Array<{ id: string }>>("GET", "/threads");
+    expect(listed.body.data!.map((row) => row.id)).toEqual([thread.id]);
   });
 
   it("undoes the edit: the old conversation and the files it had come back", async () => {

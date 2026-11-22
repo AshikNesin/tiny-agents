@@ -68,6 +68,12 @@ on the edges:
   the harness hears anything, so a second claim for the same state loses.
   `running → finished` happens once, whichever of the turn end and the next
   reconcile gets there first.
+- **Code run.** One turn of a Code thread that the owner, a workflow or a
+  bot started (ADR 0039). A run opens as `running`, and the hub closes it
+  when the harness reports the turn ended. `stopping` is a stop the owner
+  asked for that the harness has not confirmed yet. A thread's place in the
+  list is not a machine: `threadStatus` in `shared/code-status.ts` derives
+  it.
 - **Push device.** A phone's Web Push registration. Five failed sends in a
   row move it to `failing`, a delivery moves it back, and a 404 or 410 from
   its push service revokes it. Registering the same endpoint again brings a
