@@ -90,6 +90,7 @@ documented fallback when it is unset (`ModelCatalog.forRole`):
 | Role             | Used by                                                             | Unset                                                                 |
 | ---------------- | ------------------------------------------------------------------- | --------------------------------------------------------------------- |
 | `bot_default`    | New bot; bots without a model                                       | The first available chat model                                        |
+| `code_default`   | New [Code](./code.md) threads of the native harness                 | `bot_default`, else the first model, each on pi                       |
 | `memory_capture` | [Memory](./memory.md) capture                                       | The bot's model, else `bot_default`, else the first model, each on pi |
 | `chat_title`     | [Past chat](./past-chats.md) titles; [Code](./code.md) branch names | The bot's model, else `bot_default`, else the first model, each on pi |
 | `vision`         | [Image transcription](./chat-attachments.md)                        | The first available model that sees images                            |

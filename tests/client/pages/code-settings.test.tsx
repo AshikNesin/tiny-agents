@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { ConfirmProvider } from "@groot/ui/primitives";
 import { NO_CAPABILITIES } from "@tiny-agents/code/contracts";
-import { CodePage } from "@/pages/code/CodePage";
+import { CodeWorkspace } from "@/pages/code/Workspace";
 import { useCodeStore } from "@/store/code";
 import { usePeopleStore } from "@/store/people";
 import type { HarnessInfo } from "@/lib/code/api";
@@ -58,10 +58,9 @@ const project: ProjectView = {
     draftPulls: true,
     branchPrefix: "ta/",
     protectedPaths: [".github/workflows/**"],
+    workflowInstructions: "",
     autofix: {
-      triggers: { checks: true, reviews: true, conflicts: true, mergeQueue: true },
-      finalCheck: false,
-      autoMergeByDefault: false,
+      triggers: { checks: true, reviews: true, conflicts: true },
       trustedBots: ["coderabbitai[bot]"],
       hourlyLimit: 6,
       noOwnerLimit: 10,
@@ -109,7 +108,7 @@ function renderAt(path: string) {
             "/code/settings/projects/:projectId",
             "/code/:conversationId",
           ].map((p) => (
-            <Route key={p} path={p} element={<CodePage />} />
+            <Route key={p} path={p} element={<CodeWorkspace />} />
           ))}
         </Routes>
         <Where />
@@ -171,11 +170,22 @@ describe("Code settings", () => {
         { settings: { scripts: { setup: "pnpm install" } } },
       ]),
     );
-    await userEvent.click(screen.getByRole("switch", { name: "Fix merge conflicts" }));
+    await userEvent.click(screen.getByRole("switch", { name: "Resolve conflicts" }));
     await waitFor(() =>
       expect(patches.at(-1)).toEqual([
         "/code/projects/p1",
         { settings: { autofix: { triggers: { conflicts: false } } } },
+      ]),
+    );
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "Instructions for every workflow" }),
+      "Run the tests first",
+    );
+    await userEvent.tab();
+    await waitFor(() =>
+      expect(patches.at(-1)).toEqual([
+        "/code/projects/p1",
+        { settings: { workflowInstructions: "Run the tests first" } },
       ]),
     );
     const drafts = screen.getByRole("switch", { name: "Open new PRs as drafts" });

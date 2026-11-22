@@ -2,17 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { subscribeSse } from "../sse";
 import { codeApi } from "./api";
 
-export function useLiveChanges(
-  threadId: string | null,
-  cwd: string | null,
-  enabled: boolean,
-): number | null {
+export function useLiveChanges(threadId: string | null, enabled: boolean): number | null {
   const [version, setVersion] = useState<number | null>(null);
   useEffect(() => {
     setVersion(null);
     if (!enabled || !threadId) return;
     const connection = subscribeSse(
-      codeApi.threadChangesPath(threadId, cwd),
+      codeApi.threadChangesPath(threadId),
       (raw) => {
         const event = raw as { type?: string; version?: unknown };
         if (event.type === "changes" && typeof event.version === "number") {
@@ -24,7 +20,7 @@ export function useLiveChanges(
       { onDrop: () => setVersion(null) },
     );
     return () => connection.close();
-  }, [threadId, cwd, enabled]);
+  }, [threadId, enabled]);
   return version;
 }
 

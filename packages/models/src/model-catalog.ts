@@ -97,6 +97,7 @@ export function createModelCatalog(config: ModelConfig, registry: CatalogModels)
     const model = id ? byId.get(id) : undefined;
     return model?.available && model.type === type ? model : undefined;
   };
+  const onPi = (model: CatalogModel | undefined) => (model?.engine === "pi" ? model : undefined);
   const firstChat = (predicate: (model: CatalogModel) => boolean = () => true) =>
     all.find((m) => m.type === "chat" && m.enabled && m.available && predicate(m));
 
@@ -128,25 +129,30 @@ export function createModelCatalog(config: ModelConfig, registry: CatalogModels)
       switch (role) {
         case "bot_default":
           return usable(set) ?? firstChat();
-        case "memory_capture":
-        case "chat_title": {
-          const pi = (model: CatalogModel | undefined) =>
-            model?.engine === "pi" ? model : undefined;
+        case "code_default":
           return (
-            usable(set) ??
-            pi(usable(options.bot)) ??
-            pi(catalog.forRole("bot_default")) ??
+            onPi(usable(set)) ??
+            onPi(catalog.forRole("bot_default")) ??
             firstChat((m) => m.engine === "pi")
           );
-        }
+        case "memory_capture":
+        case "chat_title":
+          return (
+            usable(set) ??
+            onPi(usable(options.bot)) ??
+            onPi(catalog.forRole("bot_default")) ??
+            firstChat((m) => m.engine === "pi")
+          );
         case "vision":
           return usable(set) ?? firstChat((m) => m.vision && m.engine === "pi");
         case "classifier":
           return usable(set, "classifier");
       }
     },
-    roleIsSet: (role) =>
-      usable(config.roles[role], role === "classifier" ? "classifier" : "chat") !== undefined,
+    roleIsSet: (role) => {
+      const set = usable(config.roles[role], role === "classifier" ? "classifier" : "chat");
+      return (role === "code_default" ? onPi(set) : set) !== undefined;
+    },
     providers() {
       return sortedAccounts.map((account) => ({
         id: account.id,

@@ -99,7 +99,7 @@ describe("Code watcher", () => {
       requestId: expect.stringMatching(/^code-/),
     });
     expect(delivered[0]!.text).toMatch(/^\*\*Reply from Fake:\*\* Fake finished \*\*fix-login\*\*/);
-    expect(delivered[0]!.text).toContain("(/code/fake%3AtH)");
+    expect(delivered[0]!.text).toContain("(/code/t/fake%3AtH)");
     expect(delivered[0]!.text).toContain("All tests pass.");
     expect(await runningHandoffs()).toHaveLength(0);
     expect(pushed).toHaveLength(0);
@@ -163,7 +163,7 @@ describe("Code watcher", () => {
   });
 
   it("pushes for followed threads only, and not while a tab shows them", async () => {
-    await follow("fake", "tF");
+    const followed = await follow("fake", "tF");
     hub.start();
     const viewing = hub.watch("fake:tF", () => {});
     harness.endTurn("tF");
@@ -182,7 +182,7 @@ describe("Code watcher", () => {
     });
     harness.endTurn("tF");
     await eventually(() => expect(pushed).toHaveLength(1));
-    expect(pushed[0]).toMatchObject({ event: "shelley.update", path: "/code/fake%3AtF" });
+    expect(pushed[0]).toMatchObject({ event: "shelley.update", path: `/code/t/${followed}` });
     expect(pushed[0]!.title).toBe("⚠️ Fake hit an error in fix");
   });
 

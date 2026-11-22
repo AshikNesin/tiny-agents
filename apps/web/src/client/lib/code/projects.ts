@@ -1,3 +1,4 @@
+import type { WorkflowName } from "../../../shared/code-status";
 import { apiClient } from "@groot/shell/lib/api";
 import { useResource } from "../../queries/resource";
 import type {
@@ -15,6 +16,9 @@ import type {
   EditReviewFileBody,
   PushedReview,
   ReviewTerminal,
+  WorktreeFile,
+  FindingView,
+  FileHit,
   SuggestedChanges,
   ReviewDraft,
   ReviewDraftBody,
@@ -62,14 +66,10 @@ export const projectsApi = {
   unlink: (id: string) => apiClient.post<ThreadPullsView>(`${thread(id)}/pr/unlink`),
   autofix: (id: string, enabled: boolean) =>
     apiClient.post<ThreadPullsView>(`${thread(id)}/pr/autofix`, { enabled }),
-  fix: (id: string) =>
+  runWorkflow: (id: string, name: WorkflowName) =>
     apiClient.post<{ started: boolean; reason?: string; view: ThreadPullsView }>(
-      `${thread(id)}/pr/fix`,
+      `${thread(id)}/workflows/${name}`,
     ),
-  autoMerge: (id: string, enabled: boolean) =>
-    apiClient.post<ThreadPullsView>(`${thread(id)}/pr/automerge`, { enabled }),
-  spendLimit: (id: string, limitUsd: number | null) =>
-    apiClient.post<ThreadPullsView>(`${thread(id)}/spend-limit`, { limitUsd }),
   checkpoints: (id: string) => apiClient.get<CheckpointView[]>(`${thread(id)}/checkpoints`),
   revert: (id: string, cp: string) =>
     apiClient.post<{ reverted: boolean }>(
@@ -88,6 +88,12 @@ export const projectsApi = {
     apiClient.get<ReviewFileDiff>(`${thread(id)}/review/file`, { path, ...scoped(scope) }),
   editFile: (id: string, body: EditReviewFileBody) =>
     apiClient.put(`${thread(id)}/review/file`, body),
+  files: (id: string) => apiClient.get<string[]>(`${thread(id)}/files`),
+  fileContent: (id: string, path: string) =>
+    apiClient.get<WorktreeFile>(`${thread(id)}/files/content`, { path }),
+  searchFiles: (id: string, q: string) =>
+    apiClient.get<FileHit[]>(`${thread(id)}/files/search`, { q }),
+  terminal: (id: string) => apiClient.post<ReviewTerminal>(`${thread(id)}/terminal`),
   setViewed: (id: string, path: string, hash: string, viewed: boolean) =>
     apiClient.post(`${thread(id)}/review/viewed`, { path, hash, viewed }),
   drafts: (id: string, target?: "github") =>
@@ -110,6 +116,17 @@ export const reviewsApi = {
   ask: (id: string, body: AskReviewBody) =>
     apiClient.post<{ threadId: string }>(`${base}/reviews/${encodeURIComponent(id)}/ask`, body),
   archive: (id: string) => apiClient.post(`${base}/reviews/${encodeURIComponent(id)}/archive`),
+  agentReview: (id: string) =>
+    apiClient.post<{ threadId: string }>(`${base}/reviews/${encodeURIComponent(id)}/agent-review`),
+  decideFinding: (
+    id: string,
+    findingId: string,
+    decision: { action: "add"; body?: string } | { action: "dismiss" },
+  ) =>
+    apiClient.post<FindingView[]>(
+      `${base}/reviews/${encodeURIComponent(id)}/findings/${encodeURIComponent(findingId)}`,
+      decision,
+    ),
   submit: (id: string, body: SubmitReviewBody) =>
     apiClient.post<{ url: string; comments: number }>(
       `${base}/reviews/${encodeURIComponent(id)}/submit`,

@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { useBotsStore } from "../../store/bots";
 import { modeOf, useUiStore } from "../../store/ui";
 import { useCodeStore } from "../../store/code";
+import { useCodeCommands } from "../../pages/code/keys";
 import { threadPath } from "../../lib/code/api";
 import type { Bot as BotRow } from "../../../shared/api/bots";
 import { BotDialog } from "../BotDialog";
@@ -50,6 +51,7 @@ export function AppShell() {
   const connectCode = useCodeStore((s) => s.connect);
   const disconnectCode = useCodeStore((s) => s.disconnect);
   const codeThreads = useCodeStore((s) => s.threads);
+  const codeCommands = useCodeCommands((s) => s.commands);
   const codeConfigured = useCodeStore((s) => (s.harnesses?.length ?? 0) > 0);
   useEffect(() => {
     connectCode();
@@ -115,6 +117,23 @@ export function AppShell() {
             },
           ]
         : [];
+    const codeActions: CommandGroupEntry[] =
+      codeCommands.length > 0
+        ? [
+            {
+              heading: "Code actions",
+              items: codeCommands
+                .filter((command) => command.enabled !== false)
+                .map((command) => ({
+                  id: `code-command-${command.id}`,
+                  label: command.label,
+                  icon: Code2,
+                  shortcut: command.keys,
+                  onSelect: command.run,
+                })),
+            },
+          ]
+        : [];
     const navItems = (restricted ? guestNav(APP_NAV) : APP_NAV).filter(
       (item) => item.to !== "/code" || codeConfigured,
     );
@@ -135,6 +154,7 @@ export function AppShell() {
             : []),
         ],
       },
+      ...codeActions,
       ...botGroup,
       ...codeGroup,
       {
@@ -194,6 +214,7 @@ export function AppShell() {
     setTheme,
     logout,
     codeThreads,
+    codeCommands,
     codeConfigured,
     restricted,
     pathname,

@@ -35,6 +35,7 @@ lost.
 | Hand-off      | [`handoff.ts`](../../apps/web/src/shared/machines/handoff.ts)                             | `code_handoffs.status`           | `code.store.ts`               |
 | Auto-fix      | [`autofix.ts`](../../apps/web/src/shared/machines/autofix.ts)                             | `code_pull_requests.loop_status` | `code.pulls.store.ts`         |
 | Auto-fix pass | [`autofix-pass.ts`](../../apps/web/src/shared/machines/autofix-pass.ts)                   | `code_autofix_passes.status`     | `code.pulls.store.ts`         |
+| Code run      | [`run.ts`](../../apps/web/src/shared/machines/run.ts)                                     | `code_runs.status`               | `code.runs.ts`                |
 | Push device   | [`push-subscription.ts`](../../apps/web/src/shared/machines/push-subscription.ts)         | `push_subscriptions.status`      | `push.store.ts`               |
 | Job           | [`packages/jobs/src/lifecycle.ts`](../../packages/jobs/src/lifecycle.ts)                  | `jobs.state`                     | `packages/jobs` (groot-owned) |
 | Routine       | [`routine.ts`](../../apps/web/src/shared/machines/routine.ts) (derived, `routineState()`) | `enabled`, `paused_reason`, …    | `routines.arming.ts`          |
@@ -67,6 +68,12 @@ on the edges:
   the harness hears anything, so a second claim for the same state loses.
   `running → finished` happens once, whichever of the turn end and the next
   reconcile gets there first.
+- **Code run.** One turn of a Code thread that the owner, a workflow or a
+  bot started (ADR 0039). A run opens as `running`, and the hub closes it
+  when the harness reports the turn ended. `stopping` is a stop the owner
+  asked for that the harness has not confirmed yet. A thread's place in the
+  list is not a machine: `threadStatus` in `shared/code-status.ts` derives
+  it.
 - **Push device.** A phone's Web Push registration. Five failed sends in a
   row move it to `failing`, a delivery moves it back, and a 404 or 410 from
   its push service revokes it. Registering the same endpoint again brings a

@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { logger } from "@groot/core/logger";
 import {
@@ -10,7 +10,6 @@ import {
   type ReviewCommentInput,
 } from "@tiny-agents/github";
 import type { Hunk } from "@tiny-agents/git";
-import { threadIdOf } from "@tiny-agents/code/server";
 import {
   codeProjects,
   codePullRequests,
@@ -18,6 +17,7 @@ import {
   codeThreads,
   db,
   type CodeProjectRow,
+  codeFindings,
 } from "../../db";
 import { shQuote } from "@tiny-agents/sandbox";
 import {
@@ -141,6 +141,23 @@ async function reviewView(row: CodeReviewRow, project: CodeProjectRow): Promise<
     })(),
     archived: row.archivedAt !== null,
     updatedAt: row.updatedAt.toISOString(),
+    brief: row.brief,
+    reviewing: row.reviewingSince !== null,
+    findings: (
+      await db
+        .select()
+        .from(codeFindings)
+        .where(eq(codeFindings.reviewId, row.id))
+        .orderBy(asc(codeFindings.createdAt))
+    ).map(({ id, severity, title, body, path, line, state }) => ({
+      id,
+      severity,
+      title,
+      body,
+      path,
+      line,
+      state,
+    })),
   };
 }
 
@@ -307,9 +324,8 @@ async function startAssistant(
     model: model ?? project.defaultModel ?? undefined,
     ...(permissionMode ? { permissionMode } : {}),
   });
-  const threadId = threadIdOf(instance.id, nativeId);
+  const threadId = await follow(instance.id, nativeId);
   await applyTitle(instance, nativeId, `Review #${row.number}: ${row.title}`.slice(0, 80));
-  await follow(instance.id, nativeId);
   await db.update(codeThreads).set({ cwd: worktree }).where(eq(codeThreads.id, threadId));
   await db
     .update(codeReviews)
@@ -621,6 +637,10 @@ function suggestionsFor(path: string, mine: Hunk[], pull: Hunk[], headLines: str
 
 export async function reviewTerminal(id: string): Promise<ReviewTerminal> {
   const { worktree } = await reviewWorktree(id);
+  return terminalIn(worktree);
+}
+
+export async function terminalIn(worktree: string): Promise<ReviewTerminal> {
   try {
     const tab = await getTerminalService().create(120, 34, {
       typeLine: `cd ${shQuote(worktree)}`,

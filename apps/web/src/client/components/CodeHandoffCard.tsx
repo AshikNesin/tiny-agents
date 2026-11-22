@@ -2,13 +2,13 @@ import { Link } from "react-router-dom";
 import { ArrowUpRight, CircleCheck, Code2 } from "lucide-react";
 import { Button, monoClass } from "@groot/ui";
 import { cn } from "@groot/ui/lib/utils";
-import { normalizeThreadId, shortPath, threadPath } from "../lib/code/api";
+import { shortPath, threadPath } from "../lib/code/api";
 import type { ChatToolCall } from "../lib/chat-types";
 import { useCodeStore } from "../store/code";
 import { Spinner } from "./ui/spinner";
 
 export function CodeHandoffCard({ handoff }: { handoff: NonNullable<ChatToolCall["code"]> }) {
-  const threadId = normalizeThreadId(handoff.threadId);
+  const threadId = handoff.threadId;
   const row = useCodeStore((s) => s.threads?.find((t) => t.id === threadId));
   const title = row?.title || handoff.title || threadId;
   const working = row?.working;

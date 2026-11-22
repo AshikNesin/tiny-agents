@@ -32,7 +32,6 @@ let ahead: number | null = 1;
 let changed: string[] = [];
 let earlier: ThreadPullsView["earlier"] = [];
 let autofix = false;
-let spendUsd: number | null = null;
 let ignored: string[] = [];
 
 vi.mock("@groot/shell/lib/api", async (importOriginal) => {
@@ -95,10 +94,9 @@ const project: NonNullable<ThreadPullsView["project"]> = {
     draftPulls: true,
     branchPrefix: "ta/",
     protectedPaths: [],
+    workflowInstructions: "",
     autofix: {
-      triggers: { checks: true, reviews: true, conflicts: true, mergeQueue: true },
-      finalCheck: false,
-      autoMergeByDefault: false,
+      triggers: { checks: true, reviews: true, conflicts: true },
       trustedBots: [],
       hourlyLimit: 6,
       noOwnerLimit: 10,
@@ -114,7 +112,6 @@ function view(state: CheckState): ThreadPullsView {
     project,
     branch: "ta/fix-1a2b",
     ahead,
-    spend: { usd: spendUsd, limitUsd: null },
     earlier,
     active: noPull
       ? null
@@ -129,7 +126,6 @@ function view(state: CheckState): ThreadPullsView {
           baseRef: "main",
           syncedAt: null,
           autofix,
-          autoMerge: false,
           loop: { status: autofix ? "watching" : "off", reason: null },
           stalled: [],
           ignored,
@@ -150,7 +146,6 @@ function view(state: CheckState): ThreadPullsView {
             maintainerCanModify: false,
             mergeable: "mergeable",
             mergeMethods: ["squash"],
-            autoMerge: false,
             inMergeQueue: false,
             queueRemovals: [],
             author: "AshikNesin",
@@ -190,7 +185,6 @@ beforeEach(() => {
   changed = [];
   earlier = [];
   autofix = false;
-  spendUsd = null;
   ignored = [];
   visibility = "visible";
   vi.spyOn(document, "visibilityState", "get").mockImplementation(() => visibility);
@@ -342,9 +336,8 @@ describe("getting it merged", () => {
 });
 
 describe("only what can act shows (#384)", () => {
-  it("a new PR: no Fix, no empty Comments, no Auto-fix status or spend limit while it is off", async () => {
+  it("a new PR: no Fix, no empty Comments, no Auto-fix status while it is off", async () => {
     checkState = "success";
-    spendUsd = 0.02;
     panel();
     await wait(0);
     expect(screen.getByRole("switch", { name: "Auto-fix" })).not.toBeChecked();
@@ -352,7 +345,6 @@ describe("only what can act shows (#384)", () => {
     expect(screen.queryByRole("region", { name: "Comments" })).toBeNull();
     expect(screen.queryByText("No comments yet.")).toBeNull();
     expect(screen.queryByText("Off")).toBeNull();
-    expect(screen.queryByLabelText("Spend limit")).toBeNull();
   });
 
   it("no PR yet: the branch line leads, without a header repeating the tab's name", async () => {
@@ -508,7 +500,7 @@ describe("the pull request's comments", () => {
     expect(screen.getByRole("button", { name: /Cloudflare Pages/ })).not.toHaveTextContent("0ms");
   });
 
-  it("keeps the Auto-fix and Auto-merge switches above a long comment list", async () => {
+  it("keeps the Auto-fix switch above a long comment list", async () => {
     extra = {
       comments: Array.from({ length: 8 }, (_, i) => ({
         id: `c${i}`,
@@ -521,12 +513,10 @@ describe("the pull request's comments", () => {
     panel();
     await wait(0);
     const comments = screen.getByRole("region", { name: "Comments" });
-    for (const name of ["Auto-fix", "Auto-merge"]) {
-      const toggle = screen.getByRole("switch", { name });
-      expect(toggle.compareDocumentPosition(comments) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
-        Node.DOCUMENT_POSITION_FOLLOWING,
-      );
-    }
+    const toggle = screen.getByRole("switch", { name: "Auto-fix" });
+    expect(toggle.compareDocumentPosition(comments) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
   });
 
   it("sorts every comment into All, Humans and Bots", async () => {

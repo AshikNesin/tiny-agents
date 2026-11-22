@@ -80,6 +80,7 @@ const CAPABILITIES: Capabilities = {
   },
   threads: {
     fork: true,
+    rewind: false,
     archive: true,
     delete: false,
     rename: true,

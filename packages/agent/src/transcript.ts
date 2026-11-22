@@ -177,6 +177,7 @@ export function queuedOf(
       requestId: records.get(String(item.id))?.requestId ?? String(item.id),
       mode: item.mode,
       text: withoutAuthor(textOf(item.content), author),
+      ...(typeof data?.sentAt === "number" ? { createdAt: data.sentAt } : {}),
       ...(attachments ? { attachments } : {}),
       ...(author ? { author } : {}),
     });

@@ -40,6 +40,9 @@ const REVIEW = {
   worktreeThreadId: null,
   assistant: null,
   archived: false,
+  brief: null,
+  reviewing: false,
+  findings: [],
   updatedAt: "2026-11-17T00:00:00.000Z",
 } satisfies PullReviewView;
 
@@ -100,17 +103,20 @@ beforeEach(() => usePeopleStore.setState({ role: "owner" }));
 afterEach(() => vi.unstubAllGlobals());
 
 describe("a PR review's layout", () => {
-  it("starts with the assistant folded to a rail, and opens and folds it", async () => {
+  it("starts with the agent's column open, offering its review, and folds it to a rail", async () => {
     const user = userEvent.setup();
     stubFetch();
     showReview();
 
-    await user.click(await screen.findByRole("button", { name: "Open assistant" }));
+    expect(
+      await screen.findByRole("button", { name: /Review with the agent/ }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Ask the assistant" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Collapse assistant" }));
 
     expect(screen.queryByRole("textbox", { name: "Ask the assistant" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Open assistant" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Open assistant" }));
+    expect(screen.getByRole("textbox", { name: "Ask the assistant" })).toBeInTheDocument();
   });
 
   it("shows every file in one column, and folds one when marked viewed", async () => {

@@ -24,6 +24,7 @@ export interface SandboxExecOptions {
   timeoutMs?: number;
   maxBytes?: number;
   settleOnExit?: boolean;
+  signal?: AbortSignal;
 }
 
 export interface SandboxExecResult {
@@ -318,6 +319,7 @@ function collect(
       settled = true;
       clearTimeout(timer);
       clearTimeout(grace);
+      options.signal?.removeEventListener("abort", stopped);
       finish();
     };
     const closeChannel = () => {
@@ -333,6 +335,13 @@ function collect(
         }),
       timeoutMs,
     );
+    const stopped = () =>
+      settle(() => {
+        closeChannel();
+        reject(new Error("Stopped before the command finished."));
+      });
+    if (options.signal?.aborted) stopped();
+    else options.signal?.addEventListener("abort", stopped, { once: true });
     channel.on("data", (chunk: Buffer) => stdout.push(chunk));
     channel.stderr.on("data", (chunk: Buffer) => stderr.push(chunk));
     channel.on("exit", (code: number | null) => {

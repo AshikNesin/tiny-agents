@@ -15,7 +15,7 @@ export function isProjectHeaderTitle(title: string): boolean {
 }
 
 export const PASS_HEAD = "Auto-fix pass.";
-export const FINAL_HEAD = "Auto-fix final check.";
+const FINAL_HEAD = "Auto-fix final check.";
 
 const PREAMBLE = new RegExp(
   "^\\[Project (\\S+) · branch (\\S+) · base (\\S+)\\]\\n" +

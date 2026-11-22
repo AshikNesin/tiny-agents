@@ -58,7 +58,7 @@ The capability ids a bot's conversation selects (`botToolkits`, `bot-toolkits.ts
 _Avoid_: toolset, capabilities (for harnesses that word means something else)
 
 **Harness**:
-A coding agent tiny-agents drives but does not implement — Shelley, Claude Code — plugged into the Code page through one adapter contract (`HarnessInstance`, `packages/code`). An instance is one configured harness (`shelley`, `claude-code`); a thread is addressed `<instance>:<native id>`. The harness owns the transcript; tiny-agents keeps only the thread index (ADR 0011).
+A coding agent tiny-agents drives but does not implement — Shelley, Claude Code, Native (ADR 0020) — plugged into the Code page through one adapter contract (`HarnessInstance`, `packages/code`). An instance is one configured harness (`shelley`, `claude-code`, `pi`). The harness owns the transcript; tiny-agents keeps the thread under its own id (`code_threads`, ADR 0039) with the harness's address beside it.
 _Avoid_: provider (model providers), backend, engine (bot engines)
 
 **Capability**:
@@ -82,11 +82,11 @@ Claude Code on the sandbox, driven through the Claude worker's coding mode (ADR 
 _Avoid_: Claude engine (that is the bot engine)
 
 **Hand-off**:
-A bot giving coding work to a harness with `code_start` (or `shelley_start`): a `code_handoffs` row whose finish is delivered once into the bot's chat as a reply from that harness.
+A bot giving coding work to a harness with `code_start` (or `shelley_start`), which starts a thread of a project: a `code_handoffs` row whose finish is delivered once into the bot's chat as a reply from that harness.
 _Avoid_: job, delegation
 
 **Project**:
-A GitHub repository bound to a checkout on the sandbox, with a base branch, defaults, scripts and Auto-fix rules (`code_projects`, ADR 0021). A thread started in a project gets its own worktree on a new branch; a thread without one works in any directory, as before.
+A GitHub repository bound to a checkout on the sandbox, with a base branch, defaults, scripts and Auto-fix rules (`code_projects`, ADR 0021). Every thread belongs to a project and gets its own worktree on a new branch (ADR 0039).
 _Avoid_: repo (the GitHub side only), workspace
 
 **PR link**:
@@ -100,6 +100,18 @@ _Avoid_: fix run, attempt (a conflict's "attempts" are passes)
 **Checkpoint**:
 A project thread's worktree at its start or at the end of a turn, uncommitted files included, kept as a commit under a hidden ref (`code_checkpoints`, ADR 0024). Revert to a checkpoint restores its files as uncommitted changes; it never rewrites the branch.
 _Avoid_: snapshot (a PR snapshot is GitHub's state), save point
+
+**Run**:
+One turn of a Code thread and who started it (`code_runs`, ADR 0039): the owner, a workflow (Fix CI, Address comments, Resolve conflicts, Fix issue, Review PR) or a bot. A thread's place in the list is derived from its last run and other facts (`threadStatus`), never stored.
+_Avoid_: job, task (a bot's tasks), pass (an Auto-fix pass also records a run)
+
+**Rewind**:
+Editing or retrying an earlier turn of a Code thread (`code.rewind.ts`, ADR 0039): the worktree goes back to the checkpoint before that turn, the harness forks the conversation before the message, and the thread points at the fork. The conversation as it was is kept archived, so Undo restores it.
+_Avoid_: revert (Revert to here restores files only), fork (the harness's part of it)
+
+**Finding**:
+One thing the agent would raise in a PR review (`code_findings`): a severity, a title, a file and a line. The owner adds it to the review as a pending comment or dismisses it; nothing reaches GitHub before Submit review.
+_Avoid_: comment (what a finding becomes once added), issue
 
 **Steer**:
 A message sent to a harness while its turn runs: it goes into that turn. Queue holds a message for when the turn ends instead.
@@ -222,7 +234,7 @@ A bot conversation retired by "New chat", recorded as a `BotChat` row. Read-only
 _Avoid_: archive, old thread, history (for the record itself)
 
 **Guest**:
-Someone the owner added (Settings → People) to chat with the bots shared with them and to use Code: an account with a `guests` row. Every other account is the owner. A guest reaches only the routes `guest.guard.ts` lists.
+Someone the owner added (Settings → People) to chat with the bots shared with them: an account with a `guests` row. Every other account is the owner. A guest reaches only the routes `guest.guard.ts` lists.
 _Avoid_: member, collaborator, user (for the role)
 
 **Shared bot**:

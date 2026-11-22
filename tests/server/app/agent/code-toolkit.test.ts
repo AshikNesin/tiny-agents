@@ -43,6 +43,7 @@ function fakeStore() {
       { id: "shelley", label: "Shelley", isDefault: true },
       { id: "claude-code", label: "Claude Code", isDefault: false },
     ],
+    projects: async () => [{ name: "web", repo: "acme/web" }],
     start: async (input) => {
       calls.push({ method: "start", input });
       if (input.harness === "nope") return { error: 'No harness "nope".' };
@@ -51,7 +52,7 @@ function fakeStore() {
         harness: input.harness === "claude-code" ? "Claude Code" : "Shelley",
         title: "fix-login",
         task: input.task,
-        cwd: input.cwd ?? null,
+        cwd: input.project ?? null,
         status: "running",
         url: "/code/shelley%3AcH",
         createdAt: "2026-11-03T00:00:00Z",
@@ -82,11 +83,11 @@ function fakeStore() {
 describe("code toolkit", () => {
   it("starts a hand-off in the default harness and returns at once with the card", async () => {
     const { store, calls } = fakeStore();
-    const result = await run(store, "code_start", { task: "fix the login test", cwd: "/repo" });
+    const result = await run(store, "code_start", { task: "fix the login test", project: "web" });
     expect(calls[0]!.input).toEqual({
       conversationId: 7,
       task: "fix the login test",
-      cwd: "/repo",
+      project: "web",
       idempotencyKey: "pi:session-1:3",
     });
     expect(result?.text).toMatch(/Link: \/code\/shelley%3AcH/);
@@ -96,7 +97,7 @@ describe("code toolkit", () => {
         threadId: "shelley:cH",
         harness: "Shelley",
         title: "fix-login",
-        cwd: "/repo",
+        cwd: "web",
         url: "/code/shelley%3AcH",
       },
     });

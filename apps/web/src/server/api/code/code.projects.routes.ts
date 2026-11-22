@@ -1,3 +1,4 @@
+import { decideFinding, startAgentReview } from "./code.findings";
 import { createHash } from "node:crypto";
 import { Hono, type Context } from "hono";
 import { z } from "zod";
@@ -17,6 +18,9 @@ import type {
   PullThreadsView,
   PushedReview,
   ReviewTerminal,
+  WorktreeFile,
+  FindingView,
+  FileHit,
   SuggestedChanges,
   ReviewDraft,
   ReviewFile,
@@ -55,6 +59,7 @@ import {
   sendCommentsToThread,
   submitReview,
   suggestReviewChanges,
+  terminalIn,
 } from "./code.reviews";
 import {
   createProject,
@@ -71,9 +76,7 @@ import {
   mergePull,
   setPullDraft,
   publish,
-  setAutoMerge,
   setAutofix,
-  setSpendLimit,
   threadPulls,
   unlinkPull,
 } from "./code.pulls";
@@ -188,6 +191,7 @@ const updateSchema = z.strictObject({
         })
         .optional(),
       protectedPaths: z.array(z.string().trim().min(1).max(300)).max(50).optional(),
+      workflowInstructions: z.string().trim().max(4000).optional(),
       autofix: z
         .strictObject({
           triggers: z
@@ -195,7 +199,6 @@ const updateSchema = z.strictObject({
               checks: z.boolean().optional(),
               reviews: z.boolean().optional(),
               conflicts: z.boolean().optional(),
-              mergeQueue: z.boolean().optional(),
             })
             .optional(),
           trustedBots: z.array(z.string().trim().min(1).max(100)).max(30).optional(),
@@ -203,8 +206,6 @@ const updateSchema = z.strictObject({
           noOwnerLimit: z.number().int().min(1).max(50).optional(),
           passMinutes: z.number().int().min(5).max(120).optional(),
           onByDefault: z.boolean().optional(),
-          finalCheck: z.boolean().optional(),
-          autoMergeByDefault: z.boolean().optional(),
         })
         .optional(),
     })
@@ -265,27 +266,14 @@ router.post("/code/threads/:id/pr/autofix", async (c) => {
   return ok<ThreadPullsView>(c, await threadPulls(id, false));
 });
 
-router.post("/code/threads/:id/pr/fix", async (c) => {
+const workflowName = z.enum(["fix_ci", "address_comments", "resolve_conflicts"]);
+
+router.post("/code/threads/:id/workflows/:name", async (c) => {
   const id = threadParam(c.req.param("id"));
-  const result = await manualPass(id);
+  const name = workflowName.safeParse(c.req.param("name"));
+  if (!name.success) throw Boom.notFound("No such workflow");
+  const result = await manualPass(id, name.data);
   return ok(c, { ...result, view: await threadPulls(id, false) });
-});
-
-router.post("/code/threads/:id/pr/automerge", async (c) => {
-  const id = threadParam(c.req.param("id"));
-  const { enabled } = await parseBody(c, z.object({ enabled: z.boolean() }));
-  await setAutoMerge(id, enabled);
-  return ok<ThreadPullsView>(c, await threadPulls(id, false));
-});
-
-router.post("/code/threads/:id/spend-limit", async (c) => {
-  const id = threadParam(c.req.param("id"));
-  const { limitUsd } = await parseBody(
-    c,
-    z.object({ limitUsd: z.number().min(0.01).max(10_000).nullable() }),
-  );
-  await setSpendLimit(id, limitUsd);
-  return ok<ThreadPullsView>(c, await threadPulls(id, false));
 });
 
 const checkpointView = (row: CodeCheckpoint): CheckpointView => ({
@@ -410,6 +398,35 @@ router.put("/code/threads/:id/review/file", async (c) => {
   return ok(c, { saved: true });
 });
 
+router.get("/code/threads/:id/files", async (c) => {
+  const { worktree, ws } = await threadWorktree(threadParam(c.req.param("id")));
+  return ok<string[]>(c, await ws.listFiles(worktree).catch(saying));
+});
+
+router.get("/code/threads/:id/files/content", async (c) => {
+  const path = safePath(c.req.query("path"));
+  const { worktree, ws } = await threadWorktree(threadParam(c.req.param("id")));
+  const read = await ws.readText(worktree, path).catch(saying);
+  if (read === "outside") throw Boom.notFound(`No file ${path} in this worktree.`);
+  return ok<WorktreeFile>(
+    c,
+    read === "unshowable" ? { path, content: null } : { path, content: read.content },
+  );
+});
+
+router.get("/code/threads/:id/files/search", async (c) => {
+  const query = (c.req.query("q") ?? "").trim();
+  if (query.length < 2 || query.length > 200)
+    throw Boom.badRequest("Search for 2 to 200 characters.");
+  const { worktree, ws } = await threadWorktree(threadParam(c.req.param("id")));
+  return ok<FileHit[]>(c, await ws.search(worktree, query).catch(saying));
+});
+
+router.post("/code/threads/:id/terminal", async (c) => {
+  const { worktree } = await threadWorktree(threadParam(c.req.param("id")));
+  return ok<ReviewTerminal>(c, await terminalIn(worktree));
+});
+
 router.post("/code/threads/:id/review/viewed", async (c) => {
   const id = threadParam(c.req.param("id"));
   const body = await parseBody(
@@ -500,6 +517,24 @@ router.post("/code/reviews/:review/ask", async (c) => {
     }),
   );
   return ok(c, await askReview(c.req.param("review"), message, model));
+});
+
+router.post("/code/reviews/:review/agent-review", async (c) =>
+  ok(c, await startAgentReview(c.req.param("review"))),
+);
+
+router.post("/code/reviews/:review/findings/:finding", async (c) => {
+  const decision = await parseBody(
+    c,
+    z.union([
+      z.object({ action: z.literal("add"), body: z.string().max(10_000).optional() }),
+      z.object({ action: z.literal("dismiss") }),
+    ]),
+  );
+  return ok<FindingView[]>(
+    c,
+    await decideFinding(c.req.param("review"), c.req.param("finding"), decision),
+  );
 });
 
 router.post("/code/reviews/:review/comments/to-thread", async (c) =>

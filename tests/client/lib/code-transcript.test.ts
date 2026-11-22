@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vite-plus/test";
 import type { ThreadSnapshot, ToolItem, TranscriptItem } from "@/lib/code/api";
-import { describeTools, foldTurns, groupTools, lastErrorId } from "@/lib/code/transcript";
+import {
+  describeTools,
+  foldTurns,
+  groupTools,
+  lastErrorId,
+  turnStarts,
+} from "@/lib/code/transcript";
 import { applyThreadEvent } from "@/lib/code/use-thread";
 
 const tool = (id: string, extra: Partial<ToolItem> = {}): ToolItem => ({
@@ -189,5 +195,30 @@ describe("applyThreadEvent", () => {
     const idle = applyThreadEvent(updated, { type: "state", working: false, costUsd: 0.5 });
     expect(idle).toMatchObject({ working: false, costUsd: 0.5 });
     expect(idle.thread?.working).toBe(false);
+  });
+});
+
+describe("turnStarts", () => {
+  it("names the message that began each turn, never a steer sent while it ran", () => {
+    const user = (id: string, text: string, forkAt?: string): TranscriptItem => ({
+      kind: "user",
+      id,
+      text,
+      attachments: [],
+      ...(forkAt ? { forkAt } : {}),
+    });
+    expect(
+      turnStarts([
+        user("u1", "fix it", "m1"),
+        { kind: "assistant", id: "a1", text: "On it." },
+        user("u2", "use pnpm"),
+        { kind: "turn", id: "t1" },
+        user("u3", "now the docs"),
+        { kind: "notice", id: "n1", level: "error", text: "failed" },
+      ]),
+    ).toEqual([
+      { id: "u1", at: "m1", text: "fix it" },
+      { id: "u3", at: "u3", text: "now the docs" },
+    ]);
   });
 });

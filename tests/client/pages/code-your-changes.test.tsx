@@ -105,7 +105,7 @@ function showPanel(answers: Record<string, unknown>, review: PullReviewView = RE
             </ConfirmProvider>
           }
         />
-        <Route path="/code/:id" element={<p>Thread page</p>} />
+        <Route path="/code/t/:id" element={<p>Thread page</p>} />
       </Routes>
     </MemoryRouter>,
   );

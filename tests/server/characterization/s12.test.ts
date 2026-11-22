@@ -5,20 +5,25 @@ import { codeStore } from "../../../apps/web/src/server/api/code/code.bots";
 import { createCodeHub, setCodeHub } from "../../../apps/web/src/server/api/code/code.hub";
 import { resetAppTables, seedBot } from "../fixtures";
 import { fakeHarness, type FakeHarness } from "../code/fake-harness";
+import { seedProject, type ProjectFixture } from "../code/projects/project-fixture";
 
 const OWNER_CHAT = 9301;
 const INTRUDER_CHAT = 9302;
 
 let harness: FakeHarness;
+let fixture: ProjectFixture | undefined;
 
 beforeEach(async () => {
   await resetAppTables();
   harness = fakeHarness("fake");
   setCodeHub(createCodeHub({ instances: [harness] }));
+  fixture?.cleanup();
+  fixture = await seedProject("fake");
 });
 
 afterAll(async () => {
   setCodeHub(undefined);
+  fixture?.cleanup();
   await resetAppTables();
 });
 
@@ -36,14 +41,12 @@ describe("S12: Code threads are not scoped to the bot that started them", () => 
         conversationId: OWNER_CHAT,
         idempotencyKey: "s12-start",
         task: "fix the build",
-        cwd: "/repo",
       }),
     );
-    expect(started.threadId).toBe("fake:t1");
 
     expect(
       await codeStore.status({ conversationId: INTRUDER_CHAT, threadId: started.threadId }),
-    ).toMatchObject({ harness: "Fake", text: "Done.", url: "/code/fake%3At1" });
+    ).toMatchObject({ harness: "Fake", text: "Done.", url: `/code/t/${started.threadId}` });
 
     expect(
       await codeStore.send({

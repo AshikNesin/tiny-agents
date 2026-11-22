@@ -35,37 +35,37 @@ How to work on and ship the app.
 
 What ships in the box and how to use or extend it.
 
-| Document                                                                     | What it covers                                                                    |
-| ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| [`features/jobs.md`](./features/jobs.md)                                     | Table-backed job queue: handlers, `runTick()`, HTTP API, UI                       |
-| [`features/storage.md`](./features/storage.md)                               | File browser over a storage adapter: local disk, memory                           |
-| [`features/kv.md`](./features/kv.md)                                         | Key-value store on the `kv` table                                                 |
-| [`features/passkey-authentication.md`](./features/passkey-authentication.md) | WebAuthn passkeys                                                                 |
-| [`claude-subscription.md`](./claude-subscription.md)                         | Claude Pro/Max through Claude Code: enable, sign in, use                          |
-| [`features/models.md`](./features/models.md)                                 | tiny-agents: provider accounts, model rows, model roles                           |
-| [`features/client.md`](./features/client.md)                                 | Client routing, auth guard, data fetching, API client                             |
-| [`features/dls.md`](./features/dls.md)                                       | Design language system and its enforcement                                        |
-| [`features/connections.md`](./features/connections.md)                       | tiny-agents: MCP servers, per-tool switches, tool page                            |
-| [`features/chat-attachments.md`](./features/chat-attachments.md)             | tiny-agents: attachments, vision, bots reading files                              |
-| [`features/message-steering.md`](./features/message-steering.md)             | tiny-agents: steering a running reply; queued follow-ups                          |
-| [`features/memory.md`](./features/memory.md)                                 | tiny-agents: per-bot long-term memory, capture off the reply path                 |
-| [`features/traces.md`](./features/traces.md)                                 | tiny-agents: every LLM call with tokens, cost and timing, read-only               |
-| [`features/questions.md`](./features/questions.md)                           | tiny-agents: bots ask the owner clarifying questions                              |
-| [`features/self-improve.md`](./features/self-improve.md)                     | tiny-agents: bots edit their own instructions, owner-gated                        |
-| [`features/bot-builder.md`](./features/bot-builder.md)                       | tiny-agents: a bot creates a new bot when asked, owner-gated                      |
-| [`features/routines.md`](./features/routines.md)                             | tiny-agents: the reference feature module; where routine runs happen              |
-| [`features/past-chats.md`](./features/past-chats.md)                         | tiny-agents: read, continue or delete earlier chats                               |
-| [`features/notifications.md`](./features/notifications.md)                   | tiny-agents: Pushover pushes when a bot needs you                                 |
-| [`features/auto-review.md`](./features/auto-review.md)                       | tiny-agents: a classifier approves low-risk asks                                  |
-| [`features/yolo-mode.md`](./features/yolo-mode.md)                           | tiny-agents: a chat runs its tools without asking (not vault)                     |
-| [`features/browser.md`](./features/browser.md)                               | tiny-agents: a real Chrome per bot, live view and takeover                        |
-| [`features/terminal.md`](./features/terminal.md)                             | tiny-agents: xterm tabs on the sandbox VM                                         |
-| [`features/computer.md`](./features/computer.md)                             | tiny-agents: a desktop per bot on the sandbox VM, live view                       |
-| [`features/code.md`](./features/code.md)                                     | tiny-agents: coding agents (Shelley, Claude Code), harness adapters, bot hand-off |
-| [`bot-to-bot-contract.md`](./bot-to-bot-contract.md)                         | tiny-agents: cross-bot delivery over the `BotMessage` ledger                      |
-| [`features/vault.md`](./features/vault.md)                                   | tiny-agents: logins, cards, 2FA and API keys for bots                             |
-| [`features/shared-bots.md`](./features/shared-bots.md)                       | tiny-agents: chat with a guest and a bot together                                 |
-| [`features/mobile-app.md`](./features/mobile-app.md)                         | tiny-agents: the Android app in `mobile/`, a second client of the same server     |
+| Document                                                                     | What it covers                                                                  |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| [`features/jobs.md`](./features/jobs.md)                                     | Table-backed job queue: handlers, `runTick()`, HTTP API, UI                     |
+| [`features/storage.md`](./features/storage.md)                               | File browser over a storage adapter: local disk, memory                         |
+| [`features/kv.md`](./features/kv.md)                                         | Key-value store on the `kv` table                                               |
+| [`features/passkey-authentication.md`](./features/passkey-authentication.md) | WebAuthn passkeys                                                               |
+| [`claude-subscription.md`](./claude-subscription.md)                         | Claude Pro/Max through Claude Code: enable, sign in, use                        |
+| [`features/models.md`](./features/models.md)                                 | tiny-agents: provider accounts, model rows, model roles                         |
+| [`features/client.md`](./features/client.md)                                 | Client routing, auth guard, data fetching, API client                           |
+| [`features/dls.md`](./features/dls.md)                                       | Design language system and its enforcement                                      |
+| [`features/connections.md`](./features/connections.md)                       | tiny-agents: MCP servers, per-tool switches, tool page                          |
+| [`features/chat-attachments.md`](./features/chat-attachments.md)             | tiny-agents: attachments, vision, bots reading files                            |
+| [`features/message-steering.md`](./features/message-steering.md)             | tiny-agents: steering a running reply; queued follow-ups                        |
+| [`features/memory.md`](./features/memory.md)                                 | tiny-agents: per-bot long-term memory, capture off the reply path               |
+| [`features/traces.md`](./features/traces.md)                                 | tiny-agents: every LLM call with tokens, cost and timing, read-only             |
+| [`features/questions.md`](./features/questions.md)                           | tiny-agents: bots ask the owner clarifying questions                            |
+| [`features/self-improve.md`](./features/self-improve.md)                     | tiny-agents: bots edit their own instructions, owner-gated                      |
+| [`features/bot-builder.md`](./features/bot-builder.md)                       | tiny-agents: a bot creates a new bot when asked, owner-gated                    |
+| [`features/routines.md`](./features/routines.md)                             | tiny-agents: the reference feature module; where routine runs happen            |
+| [`features/past-chats.md`](./features/past-chats.md)                         | tiny-agents: read, continue or delete earlier chats                             |
+| [`features/notifications.md`](./features/notifications.md)                   | tiny-agents: Pushover pushes when a bot needs you                               |
+| [`features/auto-review.md`](./features/auto-review.md)                       | tiny-agents: a classifier approves low-risk asks                                |
+| [`features/yolo-mode.md`](./features/yolo-mode.md)                           | tiny-agents: a chat runs its tools without asking (not vault)                   |
+| [`features/browser.md`](./features/browser.md)                               | tiny-agents: a real Chrome per bot, live view and takeover                      |
+| [`features/terminal.md`](./features/terminal.md)                             | tiny-agents: xterm tabs on the sandbox VM                                       |
+| [`features/computer.md`](./features/computer.md)                             | tiny-agents: a desktop per bot on the sandbox VM, live view                     |
+| [`features/code.md`](./features/code.md)                                     | tiny-agents: the Code workspace, harnesses, PR reviews, workflows, bot hand-off |
+| [`bot-to-bot-contract.md`](./bot-to-bot-contract.md)                         | tiny-agents: cross-bot delivery over the `BotMessage` ledger                    |
+| [`features/vault.md`](./features/vault.md)                                   | tiny-agents: logins, cards, 2FA and API keys for bots                           |
+| [`features/shared-bots.md`](./features/shared-bots.md)                       | tiny-agents: chat with a guest and a bot together                               |
+| [`features/mobile-app.md`](./features/mobile-app.md)                         | tiny-agents: the Android app in `mobile/`, a second client of the same server   |
 
 ## Reference
 

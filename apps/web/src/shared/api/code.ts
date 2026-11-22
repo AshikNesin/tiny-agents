@@ -11,9 +11,7 @@ interface ProjectScripts {
 }
 
 interface AutofixProjectSettings {
-  triggers: { checks: boolean; reviews: boolean; conflicts: boolean; mergeQueue: boolean };
-  finalCheck: boolean;
-  autoMergeByDefault: boolean;
+  triggers: { checks: boolean; reviews: boolean; conflicts: boolean };
   trustedBots: string[];
   hourlyLimit: number;
   noOwnerLimit: number;
@@ -27,7 +25,19 @@ export interface ProjectSettings {
   draftPulls: boolean;
   branchPrefix: string;
   protectedPaths: string[];
+  workflowInstructions: string;
   autofix: AutofixProjectSettings;
+}
+
+export interface WorktreeFile {
+  path: string;
+  content: string | null;
+}
+
+export interface FileHit {
+  path: string;
+  line: number;
+  text: string;
 }
 
 export interface ProjectView {
@@ -98,7 +108,6 @@ export interface PullView {
   baseRef: string;
   syncedAt: string | null;
   autofix: boolean;
-  autoMerge: boolean;
   loop: { status: AutofixStatus; reason: string | null };
   snapshot: PullSnapshot | null;
   stalled: string[];
@@ -127,7 +136,6 @@ export interface ThreadPullsView {
   active: PullView | null;
   earlier: Array<{ number: number; url: string; title: string; state: PullView["state"] }>;
   ahead: number | null;
-  spend: { usd: number | null; limitUsd: number | null };
 }
 
 export interface ReviewFile {
@@ -176,10 +184,6 @@ export interface CheckpointView {
   createdAt: string;
 }
 
-export interface NextPrompt {
-  text: string | null;
-}
-
 export interface PullReviewView {
   id: string;
   key: string;
@@ -201,6 +205,19 @@ export interface PullReviewView {
   assistant: { instanceId: string; model: string | null } | null;
   archived: boolean;
   updatedAt: string;
+  brief: string | null;
+  reviewing: boolean;
+  findings: FindingView[];
+}
+
+export interface FindingView {
+  id: string;
+  severity: "bug" | "test" | "nit" | "question";
+  title: string;
+  body: string;
+  path: string;
+  line: number;
+  state: "open" | "added" | "dismissed";
 }
 
 export interface PullThreadView {

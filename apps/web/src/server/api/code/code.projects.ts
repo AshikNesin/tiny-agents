@@ -3,7 +3,8 @@ import { and, desc, eq } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { logger } from "@groot/core/logger";
 import { parseRepo, repoSlug, type RepoRef } from "@tiny-agents/github";
-import { threadIdOf, type CreateThreadInput, type HarnessInstance } from "@tiny-agents/code/server";
+import type { CreateThreadInput, HarnessInstance } from "@tiny-agents/code/server";
+import { ensureThread } from "./code.threads";
 import {
   codeCheckpoints,
   codeProjects,
@@ -38,6 +39,7 @@ const DEFAULT_PROJECT_SETTINGS: ProjectSettings = {
   draftPulls: true,
   branchPrefix: DEFAULT_BRANCH_PREFIX,
   protectedPaths: [".github/workflows/**"],
+  workflowInstructions: "",
   autofix: {
     triggers: { ...DEFAULT_AUTOFIX.triggers },
     trustedBots: [],
@@ -45,8 +47,6 @@ const DEFAULT_PROJECT_SETTINGS: ProjectSettings = {
     noOwnerLimit: DEFAULT_AUTOFIX.noOwnerLimit,
     passMinutes: DEFAULT_AUTOFIX.passMinutes,
     onByDefault: false,
-    finalCheck: false,
-    autoMergeByDefault: false,
   },
 };
 
@@ -65,12 +65,26 @@ export function projectSettings(raw: string): ProjectSettings {
       (typeof value.branchPrefix === "string" ? cleanBranchPrefix(value.branchPrefix) : null) ??
       d.branchPrefix,
     protectedPaths: Array.isArray(value.protectedPaths) ? value.protectedPaths : d.protectedPaths,
+    workflowInstructions:
+      typeof value.workflowInstructions === "string"
+        ? value.workflowInstructions
+        : d.workflowInstructions,
     autofix: {
       ...d.autofix,
       ...value.autofix,
       triggers: { ...d.autofix.triggers, ...value.autofix?.triggers },
     },
   };
+}
+
+export function withWorkflowInstructions(
+  message: string,
+  project: Pick<CodeProjectRow, "settings">,
+): string {
+  const instructions = projectSettings(project.settings).workflowInstructions.trim();
+  return instructions
+    ? `${message}\n\nThe project's instructions for this work:\n${instructions}`
+    : message;
 }
 
 export const repoOf = (project: Pick<CodeProjectRow, "repoOwner" | "repoName">): RepoRef => ({
@@ -279,7 +293,7 @@ export async function startProjectThread(
   project: CodeProjectRow,
   instance: HarnessInstance,
   input: ProjectThreadInput,
-): Promise<{ nativeId: string; branch: string; worktree: string }> {
+): Promise<{ threadId: string; nativeId: string; branch: string; worktree: string }> {
   const ws = await codeGitHub().workspace(project);
   const names = input.branch ? null : await threadNames(input.message);
   const prefix = projectSettings(project.settings).branchPrefix;
@@ -311,12 +325,16 @@ export async function startProjectThread(
     throw error;
   }
   await applyTitle(instance, created.nativeId, names?.title ?? branchTitle(branch));
-  const id = threadIdOf(instance.id, created.nativeId);
-  const set = { projectId: project.id, branch, baseSha, worktree: path, cwd: path };
-  await db
-    .insert(codeThreads)
-    .values({ id, instanceId: instance.id, nativeId: created.nativeId, ...set })
-    .onConflictDoUpdate({ target: codeThreads.id, set });
+  const title = names?.title ?? branchTitle(branch) ?? "";
+  const id = await ensureThread(instance.id, created.nativeId, {
+    projectId: project.id,
+    branch,
+    baseSha,
+    worktree: path,
+    cwd: path,
+    title,
+    followed: true,
+  });
   if (startCheckpoint) {
     await db
       .insert(codeCheckpoints)
@@ -324,7 +342,7 @@ export async function startProjectThread(
       .onConflictDoNothing();
   }
   await installThreadTrailer(ws, project, branch, path, id);
-  return { nativeId: created.nativeId, branch, worktree: path };
+  return { threadId: id, nativeId: created.nativeId, branch, worktree: path };
 }
 
 async function installThreadTrailer(

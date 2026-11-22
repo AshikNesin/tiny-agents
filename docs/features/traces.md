@@ -30,7 +30,7 @@ Claude plan turns keep only their model in their entries, so they list with
 ## Side-calls
 
 One-shot model calls made outside any conversation (memory capture, Past
-chat titles, Code thread and PR names, next-prompt suggestions, the
+chat titles, Code thread and PR names, the
 auto-review classifier) leave one row each in `llm_calls`: purpose, bot,
 model, tokens, cost, duration, outcome and a short error. Never the prompt or
 the answer. `side-call.ts` and the classifier wrapper in `bots.runtime.ts`

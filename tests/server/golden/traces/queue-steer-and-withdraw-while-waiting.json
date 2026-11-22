@@ -123,17 +123,20 @@
             {
               "requestId": "golden-busy-0002",
               "mode": "followUp",
-              "text": "after that, thanks"
+              "text": "after that, thanks",
+              "createdAt": 1793946600000
             },
             {
               "requestId": "golden-busy-0003",
               "mode": "followUp",
-              "text": "never mind this"
+              "text": "never mind this",
+              "createdAt": 1793946600000
             },
             {
               "requestId": "golden-busy-0004",
               "mode": "steer",
-              "text": "also make it weekly"
+              "text": "also make it weekly",
+              "createdAt": 1793946600000
             }
           ],
           "hasMore": false,

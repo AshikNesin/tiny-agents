@@ -105,6 +105,16 @@ export class ModelUnavailableError extends Error {
   }
 }
 
+export class ForkPointNotFoundError extends Error {
+  constructor(
+    readonly conversation: ConversationRef,
+    readonly messageId: string,
+  ) {
+    super(`Conversation ${conversation} has no message ${messageId} to fork at`);
+    this.name = "ForkPointNotFoundError";
+  }
+}
+
 const noCredentials: CredentialResolver = { resolve: async () => undefined };
 
 export interface AgentRuntimeOptions {
@@ -378,6 +388,23 @@ export class AgentRuntime {
     await this.#configureEngines(ref, compiled);
   }
 
+  async fork(ref: ConversationRef, atMessageId: string): Promise<ConversationRef> {
+    const entry = /^e(\d+)$/.exec(atMessageId);
+    const { messages } = await this.readChat(ref);
+    if (!entry || !messages.some((message) => message.id === atMessageId)) {
+      throw new ForkPointNotFoundError(ref, atMessageId);
+    }
+    return this.#store.fork(ref, Number(entry[1]));
+  }
+
+  compact(ref: ConversationRef, instructions?: string): Promise<void> {
+    return this.#store.compact(ref, instructions);
+  }
+
+  continueReply(ref: ConversationRef): Promise<void> {
+    return this.#store.continueReply(ref);
+  }
+
   usedTokens(ref: ConversationRef): Promise<number> {
     return this.#store.usedTokens(ref);
   }
@@ -415,6 +442,7 @@ export class AgentRuntime {
       );
     }
     const instructions = config.systemPrompt.trim() ? config.systemPrompt : null;
+    const cwd = config.cwd === undefined ? {} : { cwd: config.cwd };
     if (route.engine === "claude-code") {
       const fallbackId = this.#catalog.claudePlan()?.fallbackModelId;
       const fallback = (fallbackId && this.#catalog.route(fallbackId)) || undefined;
@@ -426,6 +454,7 @@ export class AgentRuntime {
       const change: AgentChange = {
         model: { provider: standIn.providerId, modelId: standIn.upstreamId },
         instructions,
+        ...cwd,
       };
       const claude: CompiledConversation["claude"] = {
         model: route.upstreamId,
@@ -449,6 +478,7 @@ export class AgentRuntime {
     const change: AgentChange = {
       model: { provider: route.providerId, modelId: route.upstreamId },
       instructions,
+      ...cwd,
     };
     if (!config.capabilities) return { change };
     const policy = compilePolicy(

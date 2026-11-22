@@ -1084,6 +1084,56 @@ exports[`Settings → Models, pinned > deleting a model in use asks which takes 
               <span
                 class="text-foreground text-sm block font-medium"
               >
+                New Code threads
+              </span>
+              <span
+                class="text-xs text-muted-foreground block"
+              >
+                Where the native coding agent starts. Unset: the New bots model on pi.
+              </span>
+            </div>
+            <div
+              class="flex min-w-0 items-center gap-2"
+            >
+              <button
+                aria-expanded="false"
+                aria-haspopup="dialog"
+                aria-label="New Code threads"
+                class="hover:text-foreground aria-expanded:text-foreground focus-visible:ring-ring/50 inline-flex items-center outline-none select-none focus-visible:ring-3 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 h-9 w-full justify-between gap-1.5 rounded-xl border border-input bg-transparent px-3 text-sm font-normal text-foreground hover:bg-transparent dark:bg-input/30 dark:hover:bg-input/50 aria-expanded:bg-transparent [&_svg:not([class*='size-'])]:size-4 min-w-0 flex-1"
+                data-state="closed"
+                title="New Code threads"
+                type="button"
+              >
+                <span
+                  class="truncate text-muted-foreground"
+                >
+                  None
+                </span>
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-chevrons-up-down text-muted-foreground"
+                  fill="none"
+                  height="24"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="24"
+                  xmlns="http://www.w3.org/2000/svg"
+                />
+              </button>
+            </div>
+          </div>
+          <div
+            class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] sm:items-center"
+          >
+            <div
+              class="min-w-0"
+            >
+              <span
+                class="text-foreground text-sm block font-medium"
+              >
                 Memory capture
               </span>
               <span
@@ -1493,6 +1543,11 @@ div [aria-hidden=true]
   "New bots"
   "Pre-selected in New bot, and used by bots without a model."
   button "New bots" [title="New bots", aria-expanded=false, aria-haspopup=dialog]
+    "None"
+    icon lucide-chevrons-up-down
+  "New Code threads"
+  "Where the native coding agent starts. Unset: the New bots model on pi."
+  button "New Code threads" [title="New Code threads", aria-expanded=false, aria-haspopup=dialog]
     "None"
     icon lucide-chevrons-up-down
   "Memory capture"
@@ -2612,6 +2667,56 @@ exports[`Settings → Models, pinned > deleting a model in use asks which takes 
               <span
                 class="text-foreground text-sm block font-medium"
               >
+                New Code threads
+              </span>
+              <span
+                class="text-xs text-muted-foreground block"
+              >
+                Where the native coding agent starts. Unset: the New bots model on pi.
+              </span>
+            </div>
+            <div
+              class="flex min-w-0 items-center gap-2"
+            >
+              <button
+                aria-expanded="false"
+                aria-haspopup="dialog"
+                aria-label="New Code threads"
+                class="hover:text-foreground aria-expanded:text-foreground focus-visible:ring-ring/50 inline-flex items-center outline-none select-none focus-visible:ring-3 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 h-9 w-full justify-between gap-1.5 rounded-xl border border-input bg-transparent px-3 text-sm font-normal text-foreground hover:bg-transparent dark:bg-input/30 dark:hover:bg-input/50 aria-expanded:bg-transparent [&_svg:not([class*='size-'])]:size-4 min-w-0 flex-1"
+                data-state="closed"
+                title="New Code threads"
+                type="button"
+              >
+                <span
+                  class="truncate text-muted-foreground"
+                >
+                  None
+                </span>
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-chevrons-up-down text-muted-foreground"
+                  fill="none"
+                  height="24"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="24"
+                  xmlns="http://www.w3.org/2000/svg"
+                />
+              </button>
+            </div>
+          </div>
+          <div
+            class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] sm:items-center"
+          >
+            <div
+              class="min-w-0"
+            >
+              <span
+                class="text-foreground text-sm block font-medium"
+              >
                 Memory capture
               </span>
               <span
@@ -3076,6 +3181,11 @@ div [aria-hidden=true]
   "New bots"
   "Pre-selected in New bot, and used by bots without a model."
   button "New bots" [title="New bots", aria-expanded=false, aria-haspopup=dialog]
+    "None"
+    icon lucide-chevrons-up-down
+  "New Code threads"
+  "Where the native coding agent starts. Unset: the New bots model on pi."
+  button "New Code threads" [title="New Code threads", aria-expanded=false, aria-haspopup=dialog]
     "None"
     icon lucide-chevrons-up-down
   "Memory capture"
@@ -4145,6 +4255,56 @@ exports[`Settings → Models, pinned > max turns: invalid, then no limit > inval
               <span
                 class="text-foreground text-sm block font-medium"
               >
+                New Code threads
+              </span>
+              <span
+                class="text-xs text-muted-foreground block"
+              >
+                Where the native coding agent starts. Unset: the New bots model on pi.
+              </span>
+            </div>
+            <div
+              class="flex min-w-0 items-center gap-2"
+            >
+              <button
+                aria-expanded="false"
+                aria-haspopup="dialog"
+                aria-label="New Code threads"
+                class="hover:text-foreground aria-expanded:text-foreground focus-visible:ring-ring/50 inline-flex items-center outline-none select-none focus-visible:ring-3 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 h-9 w-full justify-between gap-1.5 rounded-xl border border-input bg-transparent px-3 text-sm font-normal text-foreground hover:bg-transparent dark:bg-input/30 dark:hover:bg-input/50 aria-expanded:bg-transparent [&_svg:not([class*='size-'])]:size-4 min-w-0 flex-1"
+                data-state="closed"
+                title="New Code threads"
+                type="button"
+              >
+                <span
+                  class="truncate text-muted-foreground"
+                >
+                  None
+                </span>
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-chevrons-up-down text-muted-foreground"
+                  fill="none"
+                  height="24"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="24"
+                  xmlns="http://www.w3.org/2000/svg"
+                />
+              </button>
+            </div>
+          </div>
+          <div
+            class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] sm:items-center"
+          >
+            <div
+              class="min-w-0"
+            >
+              <span
+                class="text-foreground text-sm block font-medium"
+              >
                 Memory capture
               </span>
               <span
@@ -4461,6 +4621,11 @@ heading "Default models"
 "New bots"
 "Pre-selected in New bot, and used by bots without a model."
 button "New bots" [title="New bots", aria-expanded=false, aria-haspopup=dialog]
+  "None"
+  icon lucide-chevrons-up-down
+"New Code threads"
+"Where the native coding agent starts. Unset: the New bots model on pi."
+button "New Code threads" [title="New Code threads", aria-expanded=false, aria-haspopup=dialog]
   "None"
   icon lucide-chevrons-up-down
 "Memory capture"
@@ -5531,6 +5696,56 @@ exports[`Settings → Models, pinned > max turns: invalid, then no limit > unlim
               <span
                 class="text-foreground text-sm block font-medium"
               >
+                New Code threads
+              </span>
+              <span
+                class="text-xs text-muted-foreground block"
+              >
+                Where the native coding agent starts. Unset: the New bots model on pi.
+              </span>
+            </div>
+            <div
+              class="flex min-w-0 items-center gap-2"
+            >
+              <button
+                aria-expanded="false"
+                aria-haspopup="dialog"
+                aria-label="New Code threads"
+                class="hover:text-foreground aria-expanded:text-foreground focus-visible:ring-ring/50 inline-flex items-center outline-none select-none focus-visible:ring-3 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 h-9 w-full justify-between gap-1.5 rounded-xl border border-input bg-transparent px-3 text-sm font-normal text-foreground hover:bg-transparent dark:bg-input/30 dark:hover:bg-input/50 aria-expanded:bg-transparent [&_svg:not([class*='size-'])]:size-4 min-w-0 flex-1"
+                data-state="closed"
+                title="New Code threads"
+                type="button"
+              >
+                <span
+                  class="truncate text-muted-foreground"
+                >
+                  None
+                </span>
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-chevrons-up-down text-muted-foreground"
+                  fill="none"
+                  height="24"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="24"
+                  xmlns="http://www.w3.org/2000/svg"
+                />
+              </button>
+            </div>
+          </div>
+          <div
+            class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] sm:items-center"
+          >
+            <div
+              class="min-w-0"
+            >
+              <span
+                class="text-foreground text-sm block font-medium"
+              >
                 Memory capture
               </span>
               <span
@@ -5848,6 +6063,11 @@ heading "Default models"
 "New bots"
 "Pre-selected in New bot, and used by bots without a model."
 button "New bots" [title="New bots", aria-expanded=false, aria-haspopup=dialog]
+  "None"
+  icon lucide-chevrons-up-down
+"New Code threads"
+"Where the native coding agent starts. Unset: the New bots model on pi."
+button "New Code threads" [title="New Code threads", aria-expanded=false, aria-haspopup=dialog]
   "None"
   icon lucide-chevrons-up-down
 "Memory capture"
@@ -6943,6 +7163,56 @@ exports[`Settings → Models, pinned > the Anthropic card open > markup 1`] = `
               <span
                 class="text-foreground text-sm block font-medium"
               >
+                New Code threads
+              </span>
+              <span
+                class="text-xs text-muted-foreground block"
+              >
+                Where the native coding agent starts. Unset: the New bots model on pi.
+              </span>
+            </div>
+            <div
+              class="flex min-w-0 items-center gap-2"
+            >
+              <button
+                aria-expanded="false"
+                aria-haspopup="dialog"
+                aria-label="New Code threads"
+                class="hover:text-foreground aria-expanded:text-foreground focus-visible:ring-ring/50 inline-flex items-center outline-none select-none focus-visible:ring-3 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 h-9 w-full justify-between gap-1.5 rounded-xl border border-input bg-transparent px-3 text-sm font-normal text-foreground hover:bg-transparent dark:bg-input/30 dark:hover:bg-input/50 aria-expanded:bg-transparent [&_svg:not([class*='size-'])]:size-4 min-w-0 flex-1"
+                data-state="closed"
+                title="New Code threads"
+                type="button"
+              >
+                <span
+                  class="truncate text-muted-foreground"
+                >
+                  None
+                </span>
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-chevrons-up-down text-muted-foreground"
+                  fill="none"
+                  height="24"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="24"
+                  xmlns="http://www.w3.org/2000/svg"
+                />
+              </button>
+            </div>
+          </div>
+          <div
+            class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] sm:items-center"
+          >
+            <div
+              class="min-w-0"
+            >
+              <span
+                class="text-foreground text-sm block font-medium"
+              >
                 Memory capture
               </span>
               <span
@@ -7268,6 +7538,11 @@ heading "Default models"
 "New bots"
 "Pre-selected in New bot, and used by bots without a model."
 button "New bots" [title="New bots", aria-expanded=false, aria-haspopup=dialog]
+  "None"
+  icon lucide-chevrons-up-down
+"New Code threads"
+"Where the native coding agent starts. Unset: the New bots model on pi."
+button "New Code threads" [title="New Code threads", aria-expanded=false, aria-haspopup=dialog]
   "None"
   icon lucide-chevrons-up-down
 "Memory capture"
@@ -8316,6 +8591,56 @@ exports[`Settings → Models, pinned > the Claude plan card open > markup 1`] = 
               <span
                 class="text-foreground text-sm block font-medium"
               >
+                New Code threads
+              </span>
+              <span
+                class="text-xs text-muted-foreground block"
+              >
+                Where the native coding agent starts. Unset: the New bots model on pi.
+              </span>
+            </div>
+            <div
+              class="flex min-w-0 items-center gap-2"
+            >
+              <button
+                aria-expanded="false"
+                aria-haspopup="dialog"
+                aria-label="New Code threads"
+                class="hover:text-foreground aria-expanded:text-foreground focus-visible:ring-ring/50 inline-flex items-center outline-none select-none focus-visible:ring-3 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 h-9 w-full justify-between gap-1.5 rounded-xl border border-input bg-transparent px-3 text-sm font-normal text-foreground hover:bg-transparent dark:bg-input/30 dark:hover:bg-input/50 aria-expanded:bg-transparent [&_svg:not([class*='size-'])]:size-4 min-w-0 flex-1"
+                data-state="closed"
+                title="New Code threads"
+                type="button"
+              >
+                <span
+                  class="truncate text-muted-foreground"
+                >
+                  None
+                </span>
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-chevrons-up-down text-muted-foreground"
+                  fill="none"
+                  height="24"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="24"
+                  xmlns="http://www.w3.org/2000/svg"
+                />
+              </button>
+            </div>
+          </div>
+          <div
+            class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] sm:items-center"
+          >
+            <div
+              class="min-w-0"
+            >
+              <span
+                class="text-foreground text-sm block font-medium"
+              >
                 Memory capture
               </span>
               <span
@@ -8632,6 +8957,11 @@ heading "Default models"
 "New bots"
 "Pre-selected in New bot, and used by bots without a model."
 button "New bots" [title="New bots", aria-expanded=false, aria-haspopup=dialog]
+  "None"
+  icon lucide-chevrons-up-down
+"New Code threads"
+"Where the native coding agent starts. Unset: the New bots model on pi."
+button "New Code threads" [title="New Code threads", aria-expanded=false, aria-haspopup=dialog]
   "None"
   icon lucide-chevrons-up-down
 "Memory capture"
@@ -9508,6 +9838,56 @@ exports[`Settings → Models, pinned > the Faux card open > markup 1`] = `
               <span
                 class="text-foreground text-sm block font-medium"
               >
+                New Code threads
+              </span>
+              <span
+                class="text-xs text-muted-foreground block"
+              >
+                Where the native coding agent starts. Unset: the New bots model on pi.
+              </span>
+            </div>
+            <div
+              class="flex min-w-0 items-center gap-2"
+            >
+              <button
+                aria-expanded="false"
+                aria-haspopup="dialog"
+                aria-label="New Code threads"
+                class="hover:text-foreground aria-expanded:text-foreground focus-visible:ring-ring/50 inline-flex items-center outline-none select-none focus-visible:ring-3 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 h-9 w-full justify-between gap-1.5 rounded-xl border border-input bg-transparent px-3 text-sm font-normal text-foreground hover:bg-transparent dark:bg-input/30 dark:hover:bg-input/50 aria-expanded:bg-transparent [&_svg:not([class*='size-'])]:size-4 min-w-0 flex-1"
+                data-state="closed"
+                title="New Code threads"
+                type="button"
+              >
+                <span
+                  class="truncate text-muted-foreground"
+                >
+                  None
+                </span>
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-chevrons-up-down text-muted-foreground"
+                  fill="none"
+                  height="24"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="24"
+                  xmlns="http://www.w3.org/2000/svg"
+                />
+              </button>
+            </div>
+          </div>
+          <div
+            class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] sm:items-center"
+          >
+            <div
+              class="min-w-0"
+            >
+              <span
+                class="text-foreground text-sm block font-medium"
+              >
                 Memory capture
               </span>
               <span
@@ -9806,6 +10186,11 @@ heading "Default models"
 "New bots"
 "Pre-selected in New bot, and used by bots without a model."
 button "New bots" [title="New bots", aria-expanded=false, aria-haspopup=dialog]
+  "None"
+  icon lucide-chevrons-up-down
+"New Code threads"
+"Where the native coding agent starts. Unset: the New bots model on pi."
+button "New Code threads" [title="New Code threads", aria-expanded=false, aria-haspopup=dialog]
   "None"
   icon lucide-chevrons-up-down
 "Memory capture"
@@ -10932,6 +11317,56 @@ exports[`Settings → Models, pinned > the Gateway card open > markup 1`] = `
               <span
                 class="text-foreground text-sm block font-medium"
               >
+                New Code threads
+              </span>
+              <span
+                class="text-xs text-muted-foreground block"
+              >
+                Where the native coding agent starts. Unset: the New bots model on pi.
+              </span>
+            </div>
+            <div
+              class="flex min-w-0 items-center gap-2"
+            >
+              <button
+                aria-expanded="false"
+                aria-haspopup="dialog"
+                aria-label="New Code threads"
+                class="hover:text-foreground aria-expanded:text-foreground focus-visible:ring-ring/50 inline-flex items-center outline-none select-none focus-visible:ring-3 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 h-9 w-full justify-between gap-1.5 rounded-xl border border-input bg-transparent px-3 text-sm font-normal text-foreground hover:bg-transparent dark:bg-input/30 dark:hover:bg-input/50 aria-expanded:bg-transparent [&_svg:not([class*='size-'])]:size-4 min-w-0 flex-1"
+                data-state="closed"
+                title="New Code threads"
+                type="button"
+              >
+                <span
+                  class="truncate text-muted-foreground"
+                >
+                  None
+                </span>
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-chevrons-up-down text-muted-foreground"
+                  fill="none"
+                  height="24"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="24"
+                  xmlns="http://www.w3.org/2000/svg"
+                />
+              </button>
+            </div>
+          </div>
+          <div
+            class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] sm:items-center"
+          >
+            <div
+              class="min-w-0"
+            >
+              <span
+                class="text-foreground text-sm block font-medium"
+              >
                 Memory capture
               </span>
               <span
@@ -11260,6 +11695,11 @@ heading "Default models"
 "New bots"
 "Pre-selected in New bot, and used by bots without a model."
 button "New bots" [title="New bots", aria-expanded=false, aria-haspopup=dialog]
+  "None"
+  icon lucide-chevrons-up-down
+"New Code threads"
+"Where the native coding agent starts. Unset: the New bots model on pi."
+button "New Code threads" [title="New Code threads", aria-expanded=false, aria-haspopup=dialog]
   "None"
   icon lucide-chevrons-up-down
 "Memory capture"
@@ -12210,6 +12650,56 @@ exports[`Settings → Models, pinned > the Local card open > markup 1`] = `
               <span
                 class="text-foreground text-sm block font-medium"
               >
+                New Code threads
+              </span>
+              <span
+                class="text-xs text-muted-foreground block"
+              >
+                Where the native coding agent starts. Unset: the New bots model on pi.
+              </span>
+            </div>
+            <div
+              class="flex min-w-0 items-center gap-2"
+            >
+              <button
+                aria-expanded="false"
+                aria-haspopup="dialog"
+                aria-label="New Code threads"
+                class="hover:text-foreground aria-expanded:text-foreground focus-visible:ring-ring/50 inline-flex items-center outline-none select-none focus-visible:ring-3 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 h-9 w-full justify-between gap-1.5 rounded-xl border border-input bg-transparent px-3 text-sm font-normal text-foreground hover:bg-transparent dark:bg-input/30 dark:hover:bg-input/50 aria-expanded:bg-transparent [&_svg:not([class*='size-'])]:size-4 min-w-0 flex-1"
+                data-state="closed"
+                title="New Code threads"
+                type="button"
+              >
+                <span
+                  class="truncate text-muted-foreground"
+                >
+                  None
+                </span>
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-chevrons-up-down text-muted-foreground"
+                  fill="none"
+                  height="24"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="24"
+                  xmlns="http://www.w3.org/2000/svg"
+                />
+              </button>
+            </div>
+          </div>
+          <div
+            class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] sm:items-center"
+          >
+            <div
+              class="min-w-0"
+            >
+              <span
+                class="text-foreground text-sm block font-medium"
+              >
                 Memory capture
               </span>
               <span
@@ -12516,6 +13006,11 @@ heading "Default models"
 "New bots"
 "Pre-selected in New bot, and used by bots without a model."
 button "New bots" [title="New bots", aria-expanded=false, aria-haspopup=dialog]
+  "None"
+  icon lucide-chevrons-up-down
+"New Code threads"
+"Where the native coding agent starts. Unset: the New bots model on pi."
+button "New Code threads" [title="New Code threads", aria-expanded=false, aria-haspopup=dialog]
   "None"
   icon lucide-chevrons-up-down
 "Memory capture"
@@ -13392,6 +13887,56 @@ exports[`Settings → Models, pinned > the Through gateway card open > markup 1`
               <span
                 class="text-foreground text-sm block font-medium"
               >
+                New Code threads
+              </span>
+              <span
+                class="text-xs text-muted-foreground block"
+              >
+                Where the native coding agent starts. Unset: the New bots model on pi.
+              </span>
+            </div>
+            <div
+              class="flex min-w-0 items-center gap-2"
+            >
+              <button
+                aria-expanded="false"
+                aria-haspopup="dialog"
+                aria-label="New Code threads"
+                class="hover:text-foreground aria-expanded:text-foreground focus-visible:ring-ring/50 inline-flex items-center outline-none select-none focus-visible:ring-3 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 h-9 w-full justify-between gap-1.5 rounded-xl border border-input bg-transparent px-3 text-sm font-normal text-foreground hover:bg-transparent dark:bg-input/30 dark:hover:bg-input/50 aria-expanded:bg-transparent [&_svg:not([class*='size-'])]:size-4 min-w-0 flex-1"
+                data-state="closed"
+                title="New Code threads"
+                type="button"
+              >
+                <span
+                  class="truncate text-muted-foreground"
+                >
+                  None
+                </span>
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-chevrons-up-down text-muted-foreground"
+                  fill="none"
+                  height="24"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="24"
+                  xmlns="http://www.w3.org/2000/svg"
+                />
+              </button>
+            </div>
+          </div>
+          <div
+            class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] sm:items-center"
+          >
+            <div
+              class="min-w-0"
+            >
+              <span
+                class="text-foreground text-sm block font-medium"
+              >
                 Memory capture
               </span>
               <span
@@ -13690,6 +14235,11 @@ heading "Default models"
 "New bots"
 "Pre-selected in New bot, and used by bots without a model."
 button "New bots" [title="New bots", aria-expanded=false, aria-haspopup=dialog]
+  "None"
+  icon lucide-chevrons-up-down
+"New Code threads"
+"Where the native coding agent starts. Unset: the New bots model on pi."
+button "New Code threads" [title="New Code threads", aria-expanded=false, aria-haspopup=dialog]
   "None"
   icon lucide-chevrons-up-down
 "Memory capture"
@@ -14533,6 +15083,56 @@ exports[`Settings → Models, pinned > the edit dialog for Anthropic > markup 1`
               <span
                 class="text-foreground text-sm block font-medium"
               >
+                New Code threads
+              </span>
+              <span
+                class="text-xs text-muted-foreground block"
+              >
+                Where the native coding agent starts. Unset: the New bots model on pi.
+              </span>
+            </div>
+            <div
+              class="flex min-w-0 items-center gap-2"
+            >
+              <button
+                aria-expanded="false"
+                aria-haspopup="dialog"
+                aria-label="New Code threads"
+                class="hover:text-foreground aria-expanded:text-foreground focus-visible:ring-ring/50 inline-flex items-center outline-none select-none focus-visible:ring-3 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 h-9 w-full justify-between gap-1.5 rounded-xl border border-input bg-transparent px-3 text-sm font-normal text-foreground hover:bg-transparent dark:bg-input/30 dark:hover:bg-input/50 aria-expanded:bg-transparent [&_svg:not([class*='size-'])]:size-4 min-w-0 flex-1"
+                data-state="closed"
+                title="New Code threads"
+                type="button"
+              >
+                <span
+                  class="truncate text-muted-foreground"
+                >
+                  None
+                </span>
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-chevrons-up-down text-muted-foreground"
+                  fill="none"
+                  height="24"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="24"
+                  xmlns="http://www.w3.org/2000/svg"
+                />
+              </button>
+            </div>
+          </div>
+          <div
+            class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] sm:items-center"
+          >
+            <div
+              class="min-w-0"
+            >
+              <span
+                class="text-foreground text-sm block font-medium"
+              >
                 Memory capture
               </span>
               <span
@@ -14987,6 +15587,11 @@ div [aria-hidden=true]
   "New bots"
   "Pre-selected in New bot, and used by bots without a model."
   button "New bots" [title="New bots", aria-expanded=false, aria-haspopup=dialog]
+    "None"
+    icon lucide-chevrons-up-down
+  "New Code threads"
+  "Where the native coding agent starts. Unset: the New bots model on pi."
+  button "New Code threads" [title="New Code threads", aria-expanded=false, aria-haspopup=dialog]
     "None"
     icon lucide-chevrons-up-down
   "Memory capture"
@@ -15849,6 +16454,56 @@ exports[`Settings → Models, pinned > the edit dialog for Gateway > markup 1`] 
               <span
                 class="text-foreground text-sm block font-medium"
               >
+                New Code threads
+              </span>
+              <span
+                class="text-xs text-muted-foreground block"
+              >
+                Where the native coding agent starts. Unset: the New bots model on pi.
+              </span>
+            </div>
+            <div
+              class="flex min-w-0 items-center gap-2"
+            >
+              <button
+                aria-expanded="false"
+                aria-haspopup="dialog"
+                aria-label="New Code threads"
+                class="hover:text-foreground aria-expanded:text-foreground focus-visible:ring-ring/50 inline-flex items-center outline-none select-none focus-visible:ring-3 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 h-9 w-full justify-between gap-1.5 rounded-xl border border-input bg-transparent px-3 text-sm font-normal text-foreground hover:bg-transparent dark:bg-input/30 dark:hover:bg-input/50 aria-expanded:bg-transparent [&_svg:not([class*='size-'])]:size-4 min-w-0 flex-1"
+                data-state="closed"
+                title="New Code threads"
+                type="button"
+              >
+                <span
+                  class="truncate text-muted-foreground"
+                >
+                  None
+                </span>
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-chevrons-up-down text-muted-foreground"
+                  fill="none"
+                  height="24"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="24"
+                  xmlns="http://www.w3.org/2000/svg"
+                />
+              </button>
+            </div>
+          </div>
+          <div
+            class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] sm:items-center"
+          >
+            <div
+              class="min-w-0"
+            >
+              <span
+                class="text-foreground text-sm block font-medium"
+              >
                 Memory capture
               </span>
               <span
@@ -16265,6 +16920,11 @@ div [aria-hidden=true]
   "New bots"
   "Pre-selected in New bot, and used by bots without a model."
   button "New bots" [title="New bots", aria-expanded=false, aria-haspopup=dialog]
+    "None"
+    icon lucide-chevrons-up-down
+  "New Code threads"
+  "Where the native coding agent starts. Unset: the New bots model on pi."
+  button "New Code threads" [title="New Code threads", aria-expanded=false, aria-haspopup=dialog]
     "None"
     icon lucide-chevrons-up-down
   "Memory capture"
@@ -17123,6 +17783,56 @@ exports[`Settings → Models, pinned > the edit dialog for Local > markup 1`] = 
               <span
                 class="text-foreground text-sm block font-medium"
               >
+                New Code threads
+              </span>
+              <span
+                class="text-xs text-muted-foreground block"
+              >
+                Where the native coding agent starts. Unset: the New bots model on pi.
+              </span>
+            </div>
+            <div
+              class="flex min-w-0 items-center gap-2"
+            >
+              <button
+                aria-expanded="false"
+                aria-haspopup="dialog"
+                aria-label="New Code threads"
+                class="hover:text-foreground aria-expanded:text-foreground focus-visible:ring-ring/50 inline-flex items-center outline-none select-none focus-visible:ring-3 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 h-9 w-full justify-between gap-1.5 rounded-xl border border-input bg-transparent px-3 text-sm font-normal text-foreground hover:bg-transparent dark:bg-input/30 dark:hover:bg-input/50 aria-expanded:bg-transparent [&_svg:not([class*='size-'])]:size-4 min-w-0 flex-1"
+                data-state="closed"
+                title="New Code threads"
+                type="button"
+              >
+                <span
+                  class="truncate text-muted-foreground"
+                >
+                  None
+                </span>
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-chevrons-up-down text-muted-foreground"
+                  fill="none"
+                  height="24"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="24"
+                  xmlns="http://www.w3.org/2000/svg"
+                />
+              </button>
+            </div>
+          </div>
+          <div
+            class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] sm:items-center"
+          >
+            <div
+              class="min-w-0"
+            >
+              <span
+                class="text-foreground text-sm block font-medium"
+              >
                 Memory capture
               </span>
               <span
@@ -17598,6 +18308,11 @@ div [aria-hidden=true]
   "New bots"
   "Pre-selected in New bot, and used by bots without a model."
   button "New bots" [title="New bots", aria-expanded=false, aria-haspopup=dialog]
+    "None"
+    icon lucide-chevrons-up-down
+  "New Code threads"
+  "Where the native coding agent starts. Unset: the New bots model on pi."
+  button "New Code threads" [title="New Code threads", aria-expanded=false, aria-haspopup=dialog]
     "None"
     icon lucide-chevrons-up-down
   "Memory capture"
@@ -18461,6 +19176,56 @@ exports[`Settings → Models, pinned > the edit dialog for Through gateway > mar
               <span
                 class="text-foreground text-sm block font-medium"
               >
+                New Code threads
+              </span>
+              <span
+                class="text-xs text-muted-foreground block"
+              >
+                Where the native coding agent starts. Unset: the New bots model on pi.
+              </span>
+            </div>
+            <div
+              class="flex min-w-0 items-center gap-2"
+            >
+              <button
+                aria-expanded="false"
+                aria-haspopup="dialog"
+                aria-label="New Code threads"
+                class="hover:text-foreground aria-expanded:text-foreground focus-visible:ring-ring/50 inline-flex items-center outline-none select-none focus-visible:ring-3 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 h-9 w-full justify-between gap-1.5 rounded-xl border border-input bg-transparent px-3 text-sm font-normal text-foreground hover:bg-transparent dark:bg-input/30 dark:hover:bg-input/50 aria-expanded:bg-transparent [&_svg:not([class*='size-'])]:size-4 min-w-0 flex-1"
+                data-state="closed"
+                title="New Code threads"
+                type="button"
+              >
+                <span
+                  class="truncate text-muted-foreground"
+                >
+                  None
+                </span>
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-chevrons-up-down text-muted-foreground"
+                  fill="none"
+                  height="24"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="24"
+                  xmlns="http://www.w3.org/2000/svg"
+                />
+              </button>
+            </div>
+          </div>
+          <div
+            class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] sm:items-center"
+          >
+            <div
+              class="min-w-0"
+            >
+              <span
+                class="text-foreground text-sm block font-medium"
+              >
                 Memory capture
               </span>
               <span
@@ -18874,6 +19639,11 @@ div [aria-hidden=true]
   "New bots"
   "Pre-selected in New bot, and used by bots without a model."
   button "New bots" [title="New bots", aria-expanded=false, aria-haspopup=dialog]
+    "None"
+    icon lucide-chevrons-up-down
+  "New Code threads"
+  "Where the native coding agent starts. Unset: the New bots model on pi."
+  button "New Code threads" [title="New Code threads", aria-expanded=false, aria-haspopup=dialog]
     "None"
     icon lucide-chevrons-up-down
   "Memory capture"
@@ -19796,6 +20566,56 @@ exports[`Settings → Models, pinned > with accounts of each kind, folded, and d
               <span
                 class="text-foreground text-sm block font-medium"
               >
+                New Code threads
+              </span>
+              <span
+                class="text-xs text-muted-foreground block"
+              >
+                Where the native coding agent starts. Unset: the New bots model on pi.
+              </span>
+            </div>
+            <div
+              class="flex min-w-0 items-center gap-2"
+            >
+              <button
+                aria-expanded="false"
+                aria-haspopup="dialog"
+                aria-label="New Code threads"
+                class="hover:text-foreground aria-expanded:text-foreground focus-visible:ring-ring/50 inline-flex items-center outline-none select-none focus-visible:ring-3 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 h-9 w-full justify-between gap-1.5 rounded-xl border border-input bg-transparent px-3 text-sm font-normal text-foreground hover:bg-transparent dark:bg-input/30 dark:hover:bg-input/50 aria-expanded:bg-transparent [&_svg:not([class*='size-'])]:size-4 min-w-0 flex-1"
+                data-state="closed"
+                title="New Code threads"
+                type="button"
+              >
+                <span
+                  class="truncate text-muted-foreground"
+                >
+                  None
+                </span>
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-chevrons-up-down text-muted-foreground"
+                  fill="none"
+                  height="24"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="24"
+                  xmlns="http://www.w3.org/2000/svg"
+                />
+              </button>
+            </div>
+          </div>
+          <div
+            class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] sm:items-center"
+          >
+            <div
+              class="min-w-0"
+            >
+              <span
+                class="text-foreground text-sm block font-medium"
+              >
                 Memory capture
               </span>
               <span
@@ -20100,6 +20920,11 @@ button "New bots" [title="New bots", aria-expanded=false, aria-haspopup=dialog]
   icon lucide-chevrons-up-down
 button "Reset"
   "Reset"
+"New Code threads"
+"Where the native coding agent starts. Unset: the New bots model on pi."
+button "New Code threads" [title="New Code threads", aria-expanded=false, aria-haspopup=dialog]
+  "None"
+  icon lucide-chevrons-up-down
 "Memory capture"
 "Unset: the bot's own model on pi, else the default."
 button "Memory capture" [title="Memory capture", aria-expanded=false, aria-haspopup=dialog]
@@ -20538,6 +21363,56 @@ exports[`Settings → Models, pinned > with only the faux account > markup 1`] =
               <span
                 class="text-foreground text-sm block font-medium"
               >
+                New Code threads
+              </span>
+              <span
+                class="text-xs text-muted-foreground block"
+              >
+                Where the native coding agent starts. Unset: the New bots model on pi.
+              </span>
+            </div>
+            <div
+              class="flex min-w-0 items-center gap-2"
+            >
+              <button
+                aria-expanded="false"
+                aria-haspopup="dialog"
+                aria-label="New Code threads"
+                class="hover:text-foreground aria-expanded:text-foreground focus-visible:ring-ring/50 inline-flex items-center outline-none select-none focus-visible:ring-3 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 h-9 w-full justify-between gap-1.5 rounded-xl border border-input bg-transparent px-3 text-sm font-normal text-foreground hover:bg-transparent dark:bg-input/30 dark:hover:bg-input/50 aria-expanded:bg-transparent [&_svg:not([class*='size-'])]:size-4 min-w-0 flex-1"
+                data-state="closed"
+                title="New Code threads"
+                type="button"
+              >
+                <span
+                  class="truncate text-muted-foreground"
+                >
+                  None
+                </span>
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-chevrons-up-down text-muted-foreground"
+                  fill="none"
+                  height="24"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="24"
+                  xmlns="http://www.w3.org/2000/svg"
+                />
+              </button>
+            </div>
+          </div>
+          <div
+            class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] sm:items-center"
+          >
+            <div
+              class="min-w-0"
+            >
+              <span
+                class="text-foreground text-sm block font-medium"
+              >
                 Memory capture
               </span>
               <span
@@ -20766,6 +21641,11 @@ heading "Default models"
 "New bots"
 "Pre-selected in New bot, and used by bots without a model."
 button "New bots" [title="New bots", aria-expanded=false, aria-haspopup=dialog]
+  "None"
+  icon lucide-chevrons-up-down
+"New Code threads"
+"Where the native coding agent starts. Unset: the New bots model on pi."
+button "New Code threads" [title="New Code threads", aria-expanded=false, aria-haspopup=dialog]
   "None"
   icon lucide-chevrons-up-down
 "Memory capture"

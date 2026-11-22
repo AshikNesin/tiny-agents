@@ -694,17 +694,11 @@ function PullRequestGroups({ project, update }: { project: ProjectView; update: 
           checked={settings.archiveOnMerge}
           onChange={(archiveOnMerge) => update({ settings: { archiveOnMerge } })}
         />
-        <SwitchRow
-          label="Auto-merge new PRs"
-          description="GitHub merges once branch protection allows it."
-          checked={autofix.autoMergeByDefault}
-          onChange={(v) => update({ settings: { autofix: { autoMergeByDefault: v } } })}
-        />
       </SettingsGroup>
 
       <SettingsGroup
         title="Auto-fix"
-        description="Fixes a PR while you are away, in the thread's own permission mode."
+        description="Workflows the agent runs on a PR while you are away, in the thread's own permission mode. Each also runs by hand from its thread."
       >
         <SwitchRow
           label="Auto-fix new PRs"
@@ -712,32 +706,37 @@ function PullRequestGroups({ project, update }: { project: ProjectView; update: 
           onChange={(v) => update({ settings: { autofix: { onByDefault: v } } })}
         />
         <SwitchRow
-          label="Fix failed checks"
+          label="Fix CI"
+          description="When a check fails."
           checked={autofix.triggers.checks}
           onChange={(checks) => update({ settings: { autofix: { triggers: { checks } } } })}
         />
         <SwitchRow
-          label="Fix review comments"
+          label="Address review comments"
           description="From trusted reviewers only."
           checked={autofix.triggers.reviews}
           onChange={(reviews) => update({ settings: { autofix: { triggers: { reviews } } } })}
         />
         <SwitchRow
-          label="Fix merge conflicts"
+          label="Resolve conflicts"
+          description="When the branch no longer merges."
           checked={autofix.triggers.conflicts}
           onChange={(conflicts) => update({ settings: { autofix: { triggers: { conflicts } } } })}
         />
-        <SwitchRow
-          label="Fix when removed from the merge queue"
-          checked={autofix.triggers.mergeQueue}
-          onChange={(mergeQueue) => update({ settings: { autofix: { triggers: { mergeQueue } } } })}
-        />
-        <SwitchRow
-          label="A final check when checks go green"
-          description="One more pass that reviews the whole change."
-          checked={autofix.finalCheck}
-          onChange={(finalCheck) => update({ settings: { autofix: { finalCheck } } })}
-        />
+        <SettingsRow
+          label="Instructions for every workflow"
+          description="Added to what the agent is asked, for the workflows above, Fix issue and Review PR."
+          htmlFor={field("instructions")}
+          stack
+        >
+          <TextField
+            id={field("instructions")}
+            value={settings.workflowInstructions}
+            placeholder="Run the tests before you commit. Keep changes small."
+            className="sm:w-full"
+            onSave={(workflowInstructions) => update({ settings: { workflowInstructions } })}
+          />
+        </SettingsRow>
         <SettingsRow
           label="Trusted review bots"
           description="Their comments become instructions. Owners, members and collaborators always count."

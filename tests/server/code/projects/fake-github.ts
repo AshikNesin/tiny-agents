@@ -27,7 +27,6 @@ interface FakePull {
   threads: ReviewThread[];
   fromFork: boolean;
   maintainerCanModify?: boolean;
-  autoMerge: boolean;
   inMergeQueue: boolean;
   queueRemovals: Array<{ id: string; at: string; reason: string }>;
 }
@@ -38,6 +37,7 @@ export interface FakeGitHub extends GitHubClient {
   resolved: string[];
   comments: Array<{ number: number; body: string }>;
   inbox: InboxPull[];
+  issues: Map<number, { title: string; body: string; author: string }>;
   inboxFilter: InboxFilter | undefined;
   submitted: Array<{ number: number } & Parameters<GitHubClient["submitReview"]>[2]>;
   merged: Array<{ number: number; method: string }>;
@@ -63,6 +63,7 @@ export function fakeGitHub(local: LocalExec, bare: string, login = "ashik"): Fak
     comments: [],
     submitted: [],
     inbox: [],
+    issues: new Map(),
     inboxFilter: undefined,
     merged: [],
     logs: new Map(),
@@ -96,7 +97,6 @@ export function fakeGitHub(local: LocalExec, bare: string, login = "ashik"): Fak
         reviews: [],
         threads: [],
         fromFork: false,
-        autoMerge: false,
         inMergeQueue: false,
         queueRemovals: [],
       });
@@ -125,7 +125,6 @@ export function fakeGitHub(local: LocalExec, bare: string, login = "ashik"): Fak
         mergeable: pr.mergeable,
         mergeMethods: ["squash", "merge"],
         author: pr.author ?? login,
-        autoMerge: pr.autoMerge,
         inMergeQueue: pr.inMergeQueue,
         queueRemovals: pr.queueRemovals,
         checks: pr.checks,
@@ -149,6 +148,11 @@ export function fakeGitHub(local: LocalExec, bare: string, login = "ashik"): Fak
     async resolveThread(threadId) {
       gh.resolved.push(threadId);
     },
+    async issue(_repo, number) {
+      const found = gh.issues.get(number);
+      if (!found) throw new GitHubError(`Issue #${number} not found`, 404);
+      return found;
+    },
     async comment(_repo, number, body) {
       gh.comments.push({ number, body });
       return { databaseId: (nextComment += 1) };
@@ -162,14 +166,6 @@ export function fakeGitHub(local: LocalExec, bare: string, login = "ashik"): Fak
       return {
         url: `https://github.com/acme/web/pull/${number}#pullrequestreview-${gh.submitted.length}`,
       };
-    },
-    async enableAutoMerge(pullId, method) {
-      gh.autoMergeCalls.push({ pullId, action: "enable", method });
-      gh.pull(Number(pullId.replace("PR_", ""))).autoMerge = true;
-    },
-    async disableAutoMerge(pullId) {
-      gh.autoMergeCalls.push({ pullId, action: "disable" });
-      gh.pull(Number(pullId.replace("PR_", ""))).autoMerge = false;
     },
     async markReady(pullId) {
       gh.autoMergeCalls.push({ pullId, action: "ready" });

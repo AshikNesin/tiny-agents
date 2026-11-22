@@ -428,14 +428,15 @@ describe("shared bots", () => {
 });
 
 describe("matchGuestRoute", () => {
-  it("allows a guest's chat, live views, uploads and Code, and nothing else", () => {
+  it("allows a guest's chat, live views and uploads, and nothing else, Code included", () => {
     expect(matchGuestRoute("GET", "/bots")).toEqual({});
     expect(matchGuestRoute("GET", "/bots/b1")).toEqual({ botId: "b1" });
     expect(matchGuestRoute("POST", "/bots/b1/messages")).toEqual({ botId: "b1" });
     expect(matchGuestRoute("DELETE", "/bots/b1/messages/req-1")).toEqual({ botId: "b1" });
     expect(matchGuestRoute("POST", "/bots/b1/approvals/12")).toEqual({ botId: "b1" });
     expect(matchGuestRoute("POST", "/bots/b1/browser/vnc-ticket")).toEqual({ botId: "b1" });
-    expect(matchGuestRoute("POST", "/code/threads")).toEqual({});
+    expect(matchGuestRoute("POST", "/code/threads")).toBeUndefined();
+    expect(matchGuestRoute("GET", "/code/status")).toBeUndefined();
     expect(matchGuestRoute("POST", "/uploads")).toEqual({});
     expect(matchGuestRoute("GET", "/uploads/u1/content")).toEqual({
       upload: { id: "u1", reach: "uploadedOrShared" },

@@ -4,7 +4,6 @@ import type { AgentRuntime } from "../../../packages/agent/src/index";
 import { app as appRoot } from "../../../apps/web/src/server/app-root";
 import { db, botGuests, bots, guests, uploads } from "../../../apps/web/src/server/db";
 import { isBotWatched } from "../../../apps/web/src/server/api/bots/bots.viewers";
-import { createCodeHub, setCodeHub } from "../../../apps/web/src/server/api/code/code.hub";
 import { api, createTestApp } from "../helpers";
 import {
   authToken,
@@ -16,7 +15,6 @@ import {
   TEST_MODEL,
   type SpiedRuntime,
 } from "../fixtures";
-import { fakeHarness } from "../code/fake-harness";
 
 const OWNER_ID = 990_701;
 const GUEST_ID = 990_702;
@@ -426,65 +424,5 @@ describe("people: who can be removed or shared with", () => {
     });
     expect(created.body).toEqual(refused("BAD_REQUEST", "Unknown guest"));
     expect(await db.$count(bots, eq(bots.name, "Half made"))).toBe(1);
-  });
-});
-
-describe("Code: the guest's limits, after the route's own reads (S3)", () => {
-  const code = (path: string, init: Init = {}, as = asGuest) => as(`/api/v1/code${path}`, init);
-
-  beforeEach(() => {
-    setCodeHub(createCodeHub({ instances: [fakeHarness()], listDebounceMs: 5 }))!.start();
-  });
-  afterEach(() => setCodeHub(undefined));
-
-  it("refuses bypass before a chosen directory, after the body and before the harness lookup", async () => {
-    const start = (json: Record<string, unknown>, as = asGuest) =>
-      code("/threads", { method: "POST", json: { message: "hi", ...json } }, as);
-    const bypass = refused("FORBIDDEN", "Only the owner can turn off permission prompts.");
-    const cwd = refused("FORBIDDEN", "Only the owner can choose a working directory.");
-    expect(
-      (await start({ instanceId: "fake", permissionMode: "bypassPermissions", cwd: "/etc" })).body,
-    ).toEqual(bypass);
-    expect((await start({ instanceId: "fake", cwd: "/etc" })).body).toEqual(cwd);
-    expect((await start({ instanceId: "nope", cwd: "/etc" })).body).toEqual(cwd);
-    expect((await start({ instanceId: "nope", cwd: "/etc" }, asOwner)).body).toEqual(
-      refused("NOT_FOUND", "No such harness"),
-    );
-    expect(
-      (await start({ instanceId: "fake", permissionMode: "bypassPermissions", message: "" }))
-        .status,
-    ).toBe(400);
-  });
-
-  it("refuses bypass in settings after the thread and the body, before the mode check", async () => {
-    const settings = (id: string, json: unknown, as = asGuest) =>
-      code(`/threads/${id}/settings`, { method: "POST", json }, as);
-    const mode = { permissionMode: "bypassPermissions" };
-    expect((await settings("nope:t1", mode)).body).toEqual(
-      refused("NOT_FOUND", "No harness serves this thread"),
-    );
-    expect((await settings("fake:t1", { ...mode, cwd: "/etc" })).status).toBe(400);
-    expect((await settings("fake:t1", mode)).body).toEqual(
-      refused("FORBIDDEN", "Only the owner can turn off permission prompts."),
-    );
-    expect((await settings("fake:t1", mode, asOwner)).body).toEqual(
-      refused("BAD_REQUEST", "This harness does not offer that permission mode."),
-    );
-  });
-
-  it("refuses a file asset after the harness and the ref, before the capability", async () => {
-    const asset = (instance: string, query: string, as = asGuest) =>
-      code(`/harnesses/${instance}/asset${query}`, {}, as);
-    expect((await asset("nope", "?ref=%2Fetc%2Fpasswd")).body).toEqual(
-      refused("NOT_FOUND", "No such harness"),
-    );
-    expect((await asset("fake", "")).body).toEqual(refused("BAD_REQUEST", "ref is required"));
-    expect((await asset("fake", "?ref=%2Fetc%2Fpasswd")).body).toEqual(
-      refused("FORBIDDEN", "Only the owner can open files from the harness host."),
-    );
-    const image = await asset("fake", "?ref=img%3Aabc");
-    const owners = await asset("fake", "?ref=%2Fetc%2Fpasswd", asOwner);
-    expect(image.status).toBe(404);
-    expect(image.body).toEqual(owners.body);
   });
 });

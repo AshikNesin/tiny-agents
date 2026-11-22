@@ -6,6 +6,7 @@ export interface BotAgentConfig {
   systemPrompt: string;
   modelId: string;
   capabilities?: CapabilitySelection;
+  cwd?: string | null;
 }
 
 export type ChatMessageStatus = "done" | "streaming" | "stopped" | "error" | "unanswered";
@@ -35,6 +36,8 @@ export interface ChatToolCall {
   taskId?: number;
   approval?: "approved" | "denied" | "auto" | "yolo" | "refused";
   limit?: RunLimit;
+  exitCode?: number;
+  diff?: { path: string; diff: string };
   expiresAt?: number;
   vault?: ChatVaultUse;
   credentials?: ChatCredentialRequest;
@@ -129,6 +132,7 @@ export interface QueuedMessage {
   requestId: string;
   mode: "steer" | "followUp";
   text: string;
+  createdAt?: number;
   attachments?: AttachmentRef[];
   author?: ChatAuthor;
 }

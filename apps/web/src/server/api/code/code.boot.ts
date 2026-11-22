@@ -1,18 +1,20 @@
 import { logger } from "@groot/core/logger";
 import { notificationService } from "@groot/core/notification/notification.service";
-import { threadIdOf, type HarnessInstance } from "@tiny-agents/code/server";
+import type { HarnessInstance } from "@tiny-agents/code/server";
+import { app } from "../../app-root";
 import type { DeliveryRuntime } from "../bots/bots.delivery";
 import { deliverHandoffFinish } from "./code.bots";
 import { createCodeHub, setCodeHub } from "./code.hub";
 import { buildHarnesses } from "./code.registry";
 import { onTurnEnded, rearmReconcilers } from "./code.pulls";
 import { startCodeWatcher } from "./code.watcher";
+import { threadKey } from "./code.threads";
 
 export function startCode(
   runtime: DeliveryRuntime,
   options: { extra?: HarnessInstance[] } = {},
 ): () => void {
-  const instances = buildHarnesses({ extra: options.extra });
+  const instances = buildHarnesses({ extra: options.extra ?? app().codeHarnesses });
   const hub = setCodeHub(createCodeHub({ instances }))!;
   const stopWatcher = startCodeWatcher({
     hub,
@@ -21,7 +23,7 @@ export function startCode(
   });
   const offPulls = hub.onEvent(({ instance, event }) => {
     if (event.type !== "turn_ended") return;
-    const id = threadIdOf(instance.id, event.nativeId);
+    const id = threadKey(instance.id, event.nativeId);
     void onTurnEnded(id, event.outcome).catch((error: unknown) =>
       logger.warn({ error, threadId: id }, "Code: a pass's turn end failed"),
     );

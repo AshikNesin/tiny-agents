@@ -5,7 +5,7 @@ This directory is the maintained source for verifying the user-facing behavior o
 ## Baseline preconditions
 
 - A run started with `ta-verify up` (default `http://localhost:3100`), seeded with only the demo user `demo@example.com` / `demo@example.com`.
-- Faux model on (`TINY_AGENTS_FAUX=1`): bots reply `Echo: <message>`, the model picker offers `Test Model (faux)`. Scripted triggers: `/ask` (question cards), `/browse N` (browser tool rounds), `/code [cwd=PATH] task` (coding hand-off), `/improve` and `/improve long` (instruction-change approval), `/newbot NAME` (bot-creation approval).
+- Faux model on (`TINY_AGENTS_FAUX=1`): bots reply `Echo: <message>`, the model picker offers `Test Model (faux)`. Scripted triggers: `/ask` (question cards), `/browse N` (browser tool rounds), `/code [project=NAME] task` (coding hand-off), `/improve` and `/improve long` (instruction-change approval), `/newbot NAME` (bot-creation approval).
 - A random per-run `SECRETS_KEY` and `ADMIN_AUTH_KEY`; no AI provider keys, no Pushover (doctor fails unless push is `not_configured`), nothing from the shell or `.env`.
 - No sandbox unless `--sandbox`, no coding agent unless `--shelley`, demo user present unless `--empty`.
 - `ta-verify doctor --run <id>` exits 0 before the first drive and after any failed drive.
@@ -83,11 +83,7 @@ Sandbox and code
 - [Terminal](./terminal.md) [`--sandbox`]: tabs, typing, re-attach, keys panel, full screen, close.
 - [Computer](./computer.md) [`--sandbox`]: desktop, VNC live view, control, Apps menu, reset.
 - [Browser](./browser.md) [`--sandbox`]: `/browser` page and the chat panel from `/browse N`, desktop and phone.
-- [Code](./code.md) [`--shelley`]: Shelley threads: start, steer, queue, stop, changes, the grouped thread list (fold, New thread per group, Archived footer view), Code settings, bot hand-off.
-- [Code pull requests](./code-pr.md) [`--shelley --fake-github`]: a project thread from start to merge against an in-memory GitHub: Publish, checks, Draft, Auto-merge, review mode, Reviews inbox Add project, Merge and the archived thread after it.
-- [Code multi-select archive](./code-select.md) [`--shelley`]: Select threads, archive or restore many at once, one Undo.
-- [Code extras](./code-extras.md) [`--shelley`]: fork, change directory, worktree, repository groups, chips, completions, uploads, usage, queued actions, recover.
-- [Code comments](./code-comments.md) [`--shelley`]: folded diff context, a line comment under its line, waiting above the composer, sent with the next message.
+- [Code](./code.md) [`--demo-agent --fake-github --local-sandbox`]: the Code workspace: status-grouped list, moving by key, a streamed turn, steer, queue, stop, the Changes and Pull request panes, the key list.
 - [A bot's own browser and computer](./bot-profiles.md) [`--sandbox`]: own profile, start, stream, reset, release on delete.
 - [Claude plan](./claude-plan.md): the engine-off state.
 

@@ -5,11 +5,11 @@ import { streamAt } from "../fakes/sse";
 
 vi.mock("@/lib/sse", async () => (await import("../fakes/sse")).sseModule);
 
-const path = "/api/v1/code/threads/claude-code%3At1/changes?cwd=%2Fr";
+const path = "/api/v1/code/threads/t1/changes";
 
 describe("useLiveChanges", () => {
   it("follows pushed versions and falls back when it cannot watch", () => {
-    const { result } = renderHook(() => useLiveChanges("claude-code:t1", "/r", true));
+    const { result } = renderHook(() => useLiveChanges("t1", true));
     expect(result.current).toBeNull();
 
     streamAt(path).send({ type: "changes", version: 0 }, { type: "changes", version: 3 });
@@ -24,7 +24,7 @@ describe("useLiveChanges", () => {
   });
 
   it("opens no stream while the panel is closed, and closes it when the panel closes", () => {
-    const { rerender } = renderHook(({ open }) => useLiveChanges("claude-code:t1", "/r", open), {
+    const { rerender } = renderHook(({ open }) => useLiveChanges("t1", open), {
       initialProps: { open: false },
     });
     expect(streamAt(path).isOpen).toBe(false);

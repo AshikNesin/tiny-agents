@@ -1,16 +1,8 @@
 import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
-import {
-  LEGACY_INSTANCE_ID,
-  parseThreadId,
-  threadIdOf,
-  type IndexedThread,
-  type ThreadIndex,
-} from "@tiny-agents/code/server";
+import type { IndexedThread, ThreadIndex } from "@tiny-agents/code/server";
 import {
   codeHandoffFinishes,
   codeHandoffs,
-  codePullRequests,
-  codeReviews,
   codeThreads,
   db,
   type CodeHandoff,
@@ -18,6 +10,7 @@ import {
 } from "../../db";
 import { branchTitle, isProjectHeaderTitle } from "../../../shared/code-messages";
 import { handoffMachine } from "../../../shared/machines/handoff";
+import { ensureThread, threadRef } from "./code.threads";
 
 function parseData(raw: string): Record<string, unknown> {
   try {
@@ -47,6 +40,9 @@ function toIndexed(row: CodeThreadRow): IndexedThread {
   };
 }
 
+const native = (instanceId: string, nativeId: string) =>
+  and(eq(codeThreads.instanceId, instanceId), eq(codeThreads.nativeId, nativeId));
+
 export const threadIndex: ThreadIndex = {
   async list(instanceId) {
     const rows = await db
@@ -57,14 +53,10 @@ export const threadIndex: ThreadIndex = {
     return rows.map(toIndexed);
   },
   async get(instanceId, nativeId) {
-    const [row] = await db
-      .select()
-      .from(codeThreads)
-      .where(eq(codeThreads.id, threadIdOf(instanceId, nativeId)));
+    const [row] = await db.select().from(codeThreads).where(native(instanceId, nativeId));
     return row ? toIndexed(row) : undefined;
   },
   async upsert(input) {
-    const id = threadIdOf(input.instanceId, input.nativeId);
     const set: Partial<typeof codeThreads.$inferInsert> = {
       ...(input.title !== undefined ? { title: input.title } : {}),
       ...(input.cwd !== undefined ? { cwd: input.cwd } : {}),
@@ -76,94 +68,30 @@ export const threadIndex: ThreadIndex = {
       ...(input.data !== undefined ? { data: JSON.stringify(input.data) } : {}),
       updatedAt: input.updatedAt ?? new Date(),
     };
-    await db
-      .insert(codeThreads)
-      .values({
-        id,
-        instanceId: input.instanceId,
-        nativeId: input.nativeId,
-        ...(input.createdAt ? { createdAt: input.createdAt } : {}),
-        ...set,
-      })
-      .onConflictDoUpdate({ target: codeThreads.id, set });
-    const [row] = await db.select().from(codeThreads).where(eq(codeThreads.id, id));
+    await ensureThread(input.instanceId, input.nativeId, {
+      ...(input.createdAt ? { createdAt: input.createdAt } : {}),
+      ...set,
+    });
+    const [row] = await db
+      .select()
+      .from(codeThreads)
+      .where(native(input.instanceId, input.nativeId));
     return toIndexed(row!);
   },
   async remove(instanceId, nativeId) {
-    await db.delete(codeThreads).where(eq(codeThreads.id, threadIdOf(instanceId, nativeId)));
+    await db.delete(codeThreads).where(native(instanceId, nativeId));
   },
 };
 
-export async function follow(instanceId: string, nativeId: string): Promise<void> {
-  const id = threadIdOf(instanceId, nativeId);
+export async function follow(instanceId: string, nativeId: string): Promise<string> {
+  return ensureThread(instanceId, nativeId, { followed: true });
+}
+
+export async function markSeen(threadId: string, cursor: number): Promise<void> {
   await db
-    .insert(codeThreads)
-    .values({ id, instanceId, nativeId, followed: true })
-    .onConflictDoUpdate({ target: codeThreads.id, set: { followed: true } });
-}
-
-export async function markSeen(
-  instanceId: string,
-  nativeId: string,
-  cursor: number,
-): Promise<void> {
-  const id = threadIdOf(instanceId, nativeId);
-  await db
-    .insert(codeThreads)
-    .values({ id, instanceId, nativeId, followed: true, seenCursor: cursor })
-    .onConflictDoUpdate({
-      target: codeThreads.id,
-      set: {
-        followed: true,
-        seenCursor: sql`max(${codeThreads.seenCursor}, ${cursor})`,
-      },
-    });
-}
-
-export async function seenMap(): Promise<Map<string, number>> {
-  const rows = await db
-    .select({ id: codeThreads.id, cursor: codeThreads.seenCursor })
-    .from(codeThreads)
-    .where(eq(codeThreads.followed, true));
-  return new Map(rows.map((r) => [r.id, r.cursor]));
-}
-
-export interface ThreadDecoration {
-  projectId: string | null;
-  pr: { number: number; loop: string; url: string } | null;
-  review: { id: string; number: number } | null;
-}
-
-export async function threadDecorations(): Promise<Map<string, ThreadDecoration>> {
-  const [threads, pulls, reviews] = await Promise.all([
-    db
-      .select({ id: codeThreads.id, projectId: codeThreads.projectId })
-      .from(codeThreads)
-      .where(isNotNull(codeThreads.projectId)),
-    db
-      .select({
-        threadId: codePullRequests.threadId,
-        number: codePullRequests.number,
-        url: codePullRequests.url,
-        loop: codePullRequests.loopStatus,
-      })
-      .from(codePullRequests)
-      .where(eq(codePullRequests.state, "open")),
-    db
-      .select({ id: codeReviews.id, number: codeReviews.number, threadId: codeReviews.threadId })
-      .from(codeReviews)
-      .where(isNotNull(codeReviews.threadId)),
-  ]);
-  const out = new Map<string, ThreadDecoration>();
-  const entry = (id: string) => {
-    const found = out.get(id) ?? { projectId: null, pr: null, review: null };
-    out.set(id, found);
-    return found;
-  };
-  for (const t of threads) entry(t.id).projectId = t.projectId;
-  for (const p of pulls) entry(p.threadId).pr = { number: p.number, loop: p.loop, url: p.url };
-  for (const r of reviews) entry(r.threadId!).review = { id: r.id, number: r.number };
-  return out;
+    .update(codeThreads)
+    .set({ followed: true, seenCursor: sql`max(${codeThreads.seenCursor}, ${cursor})` })
+    .where(eq(codeThreads.id, threadId));
 }
 
 export async function isFollowed(threadId: string): Promise<boolean> {
@@ -266,9 +194,7 @@ export async function listHandoffs(
       .limit(options.instanceId ? 200 : (options.limit ?? 20))
   ).filter(hasThread);
   const filtered = options.instanceId
-    ? rows.filter(
-        (r) => parseThreadId(r.threadId, LEGACY_INSTANCE_ID)?.instanceId === options.instanceId,
-      )
+    ? rows.filter((r) => threadRef(r.threadId)?.instanceId === options.instanceId)
     : rows;
   return filtered.slice(0, options.limit ?? 20);
 }

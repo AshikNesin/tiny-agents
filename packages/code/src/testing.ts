@@ -67,6 +67,7 @@ const REQUIRED: Array<[(c: Capabilities) => boolean, Array<keyof HarnessInstance
   [(c) => c.turns.manageQueue, ["queued"]],
   [(c) => c.turns.recovery.length > 0, ["recover"]],
   [(c) => c.threads.fork, ["fork"]],
+  [(c) => c.threads.rewind, ["forkBefore"]],
   [(c) => c.threads.archive, ["archive"]],
   [(c) => c.threads.delete, ["remove"]],
   [(c) => c.threads.rename, ["rename"]],

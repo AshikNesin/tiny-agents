@@ -1,2 +1,2 @@
-export { CodePage } from "./CodePage";
-export { OpenReviewLink } from "./ReviewsScreen";
+export { CodeWorkspace, LegacyThreadRedirect } from "./Workspace";
+export { OpenReviewLink } from "./ReviewList";

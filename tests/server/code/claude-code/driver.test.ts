@@ -14,6 +14,7 @@ import {
 } from "../../../../packages/claude-worker/src/index";
 import { createClaudeCodeHarness, HarnessError } from "../../../../packages/code/src/server/index";
 import { createCodeHub, setCodeHub } from "../../../../apps/web/src/server/api/code/code.hub";
+import { follow } from "../../../../apps/web/src/server/api/code/code.store";
 import { api, createTestApp } from "../../helpers";
 import { authToken } from "../../fixtures";
 import type { ClaudeCodeHarness } from "../../../../packages/code/src/drivers/claude-code";
@@ -759,32 +760,12 @@ describe("Claude Code harness", () => {
     const message = (response: { body: unknown }) =>
       (response.body as { error?: { message?: string } }).error?.message;
 
-    const missingCwd = await call("/threads", {
-      instanceId: "claude-code",
-      message: "x",
-      cwd: path.join(dir, "not-here"),
-    });
-    expect(missingCwd.status).toBe(400);
-    expect(message(missingCwd)).toMatch(/does not exist/);
-
-    const badEffort = await call("/threads", {
-      instanceId: "claude-code",
-      message: "x",
-      cwd: dir,
-      effort: "extreme",
-    });
-    expect(badEffort.status).toBe(400);
-    expect(message(badEffort)).toBe(
-      'Unknown effort "extreme". Use one of: low, medium, high, xhigh, max.',
-    );
-
     const unknown = await call(`/threads/${encodeURIComponent("claude-code:nope")}`);
     expect(unknown.status).toBe(404);
     expect(message(unknown)).toBe("No Claude Code thread nope.");
 
-    const created = await call("/threads", { instanceId: "claude-code", message: "hi", cwd: dir });
-    expect(created.status).toBe(201);
-    const { threadId } = (created.body as { data: { threadId: string } }).data;
+    const { nativeId } = await harness.createThread({ message: "hi", cwd: dir });
+    const threadId = await follow("claude-code", nativeId);
     await waitTurnEnds(events, 1);
     const badSetting = await call(`/threads/${encodeURIComponent(threadId)}/settings`, {
       effort: "extreme",
@@ -793,10 +774,8 @@ describe("Claude Code harness", () => {
     expect(message(badSetting)).toMatch(/^Unknown effort "extreme"/);
 
     harness.stop();
-    const unreachable = await call("/threads", {
-      instanceId: "claude-code",
+    const unreachable = await call(`/threads/${encodeURIComponent(threadId)}/messages`, {
       message: "x",
-      cwd: dir,
     });
     expect(unreachable.status).toBe(500);
   });

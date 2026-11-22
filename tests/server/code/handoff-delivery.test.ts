@@ -11,6 +11,7 @@ import { startSettledPipeline } from "../../../apps/web/src/server/api/bots/bots
 import type { AgentRuntime } from "../../../packages/agent/src/index";
 import type { TurnOutcome } from "@tiny-agents/code/contracts";
 import { codeStore, deliverHandoffFinish } from "../../../apps/web/src/server/api/code/code.bots";
+import { threadRef } from "../../../apps/web/src/server/api/code/code.threads";
 import {
   createCodeHub,
   setCodeHub,
@@ -37,10 +38,12 @@ import {
   type SeededBot,
 } from "../fixtures";
 import { fakeHarness, type FakeHarness } from "./fake-harness";
+import { seedProject, type ProjectFixture } from "./projects/project-fixture";
 
 let runtime: AgentRuntime;
 let harness: FakeHarness;
 let hub: CodeHub;
+let fixture: ProjectFixture;
 const stops: Array<() => void> = [];
 
 beforeEach(async () => {
@@ -48,11 +51,13 @@ beforeEach(async () => {
   runtime = await openAppRuntime();
   harness = fakeHarness();
   hub = setCodeHub(createCodeHub({ instances: [harness], listDebounceMs: 5 }))!;
+  fixture = await seedProject("fake");
 });
 
 afterEach(async () => {
   for (const stop of stops.splice(0)) stop();
   setCodeHub(undefined);
+  fixture.cleanup();
   await closeAppRuntime();
   await resetAppTables();
 });
@@ -195,7 +200,7 @@ describe("hand-off starts (C7b: one thread per tool call)", () => {
     release();
     const [a, b] = await Promise.all([first, replay]);
     expect(b).toEqual(a);
-    expect(ok(a).threadId).toBe("fake:t1");
+    expect(threadRef(ok(a).threadId)).toEqual({ instanceId: "fake", nativeId: "t1" });
     expect(await codeStore.start(startInput(bot, "start-1"))).toEqual(a);
     expect(harness.created).toHaveLength(1);
   });
@@ -226,7 +231,9 @@ describe("hand-off starts (C7b: one thread per tool call)", () => {
       "the harness is down",
     );
     harness.createThread = create;
-    expect(ok(await codeStore.start(startInput(bot, "start-3"))).threadId).toBe("fake:t1");
+    expect(
+      threadRef(ok(await codeStore.start(startInput(bot, "start-3"))).threadId)?.nativeId,
+    ).toBe("t1");
   });
 
   it("delivers the finish of a start whose turn ends before its thread is recorded", async () => {
@@ -256,11 +263,10 @@ describe("hand-off follow-ups (C7c: sends wait for their reopen)", () => {
         conversationId: Number(bot.conversationId),
         idempotencyKey: "s1",
         task: "fix login",
-        cwd: "/repo",
         harness: "fake",
       }),
     );
-    return { threadId: handoff.threadId, nativeId: handoff.threadId.slice("fake:".length) };
+    return { threadId: handoff.threadId, nativeId: threadRef(handoff.threadId)!.nativeId };
   }
 
   it("delivers a follow-up whose turn ends before the send returns", async () => {
@@ -400,11 +406,10 @@ describe("hand-off finishes go back to the conversation that asked", () => {
         conversationId: ref,
         idempotencyKey: key,
         task: "fix the flaky test",
-        cwd: "/repo",
         harness: "fake",
       }),
     );
-    return handoff.threadId.slice("fake:".length);
+    return threadRef(handoff.threadId)!.nativeId;
   }
 
   it("delivers a routine run's hand-off into that run's conversation, not the bot's chat", async () => {

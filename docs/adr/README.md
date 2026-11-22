@@ -15,9 +15,6 @@ that the code alone cannot show.
 
 ## Index
 
-0020 is reserved for the native Code harness on pi-durable (issue #297,
-phases 0 and 1), which follows the PR loop.
-
 | #    | Title                                                                                                                | Status                                              |
 | ---- | -------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
 | 0001 | [Own the DLS on the shadcn stack, Kumo as reference](0001-own-dls-on-shadcn-stack.md)                                | accepted (reinstated by 0003)                       |
@@ -39,6 +36,7 @@ phases 0 and 1), which follows the PR loop.
 | 0017 | [Local is the only vault backend](0017-local-is-the-only-vault-backend.md)                                           | accepted (amends 0005; amended by 0019, 0027)       |
 | 0018 | [Claude plan transcripts are durable entries](0018-claude-plan-transcripts-are-durable-entries.md)                   | accepted (amends 0008, 0014)                        |
 | 0019 | [Vault values live in a table, opened under their row's policy](0019-vault-values-table.md)                          | accepted (amends 0015, 0017)                        |
+| 0020 | [A native Code harness on the agent runtime](0020-native-code-harness.md)                                            | accepted                                            |
 | 0021 | [Code projects: a repository on the sandbox, a worktree per thread](0021-code-projects-and-worktrees.md)             | accepted (amends 0012; amended by 0025)             |
 | 0022 | [GitHub through `gh` or a vault token; the app publishes](0022-github-through-gh-or-a-token.md)                      | accepted (amends 0015)                              |
 | 0023 | [Auto-fix: a pure decision, claimed passes, explicit trust and limits](0023-auto-fix.md)                             | accepted                                            |
@@ -56,6 +54,7 @@ phases 0 and 1), which follows the PR loop.
 | 0036 | [Decisions recorded from code comments: Android app](0036-decisions-from-comments-android.md)                        | accepted                                            |
 | 0037 | [Owner waits park the tool call](0037-owner-waits-park-the-tool-call.md)                                             | accepted                                            |
 | 0038 | [Browser traffic goes through a pinning proxy](0038-browser-traffic-goes-through-a-pinning-proxy.md)                 | accepted (amends 0034)                              |
+| 0039 | [Code threads own their id, belong to a project, and record runs](0039-code-threads-and-runs.md)                     | accepted                                            |
 | G4   | [Hono + Drizzle on SQLite, for Node and Cloudflare Workers](0004-hono-drizzle-sqlite-workers.md)                     | accepted (groot)                                    |
 
 `G4` is groot's ADR 0004, synced from the boilerplate; tiny-agents' own 0004

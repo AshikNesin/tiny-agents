@@ -13,6 +13,7 @@ export interface Capabilities {
   };
   threads: {
     fork: boolean;
+    rewind: boolean;
     archive: boolean;
     delete: boolean;
     rename: boolean;
@@ -55,6 +56,7 @@ export const NO_CAPABILITIES: Capabilities = {
   },
   threads: {
     fork: false,
+    rewind: false,
     archive: false,
     delete: false,
     rename: false,

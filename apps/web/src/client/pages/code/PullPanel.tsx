@@ -1,3 +1,5 @@
+import type { WorkflowName } from "../../../shared/code-status";
+import { Kbd } from "./keys";
 import { useCallback, useState } from "react";
 import {
   ExternalLink,
@@ -257,9 +259,9 @@ export function PullPanel({
             onAutofix={(enabled) =>
               void act("switch Auto-fix", () => projectsApi.autofix(threadId, enabled))
             }
-            onFix={() =>
+            onFix={(workflow) =>
               void act("start a pass", async () => {
-                const result = await projectsApi.fix(threadId);
+                const result = await projectsApi.runWorkflow(threadId, workflow);
                 if (!result.started) toast.message(result.reason ?? "Nothing to fix.");
                 return result.view;
               })
@@ -276,13 +278,6 @@ export function PullPanel({
               else toast.message("No open review comments.");
             }}
             onAttach={onAttach}
-            onAutoMerge={(enabled) =>
-              void act("switch auto-merge", () => projectsApi.autoMerge(threadId, enabled))
-            }
-            spend={view.spend}
-            onSpendLimit={(limit) =>
-              void act("set the spend limit", () => projectsApi.spendLimit(threadId, limit))
-            }
           />
         )}
         {snap && pr && (
@@ -380,24 +375,17 @@ function ActivePull({
   onDraft,
   onAttachAll,
   onAttach,
-  onAutoMerge,
-  spend,
-  onSpendLimit,
 }: {
   threadId: string;
   pr: PullView;
   busy: string | null;
   onAutofix(enabled: boolean): void;
-  onFix(): void;
+  onFix(workflow: WorkflowName): void;
   onMerge(method: MergeMethod): void;
   onDraft(draft: boolean): void;
   onAttachAll(): void;
   onAttach(text: string): void;
-  onAutoMerge(enabled: boolean): void;
-  spend: { usd: number | null; limitUsd: number | null };
-  onSpendLimit(limitUsd: number | null): void;
 }) {
-  const [limit, setLimit] = useState(spend.limitUsd === null ? "" : String(spend.limitUsd));
   const snap = pr.snapshot;
   const failing = (snap?.checks ?? []).some((c) => c.state === "failure");
   const open = (snap?.threads ?? []).filter((t) => !t.resolved);
@@ -414,7 +402,7 @@ function ActivePull({
 
   return (
     <>
-      <PullChecks threadId={threadId} pr={pr} busy={busy} onFix={onFix} />
+      <PullChecks threadId={threadId} pr={pr} busy={busy} onFix={() => onFix("fix_ci")} />
 
       <div className="flex flex-wrap gap-2">
         {pr.state === "open" && methods.length > 0 && (
@@ -445,16 +433,29 @@ function ActivePull({
         {pr.state === "open" && !pr.draft && mergeBlocked && (
           <span className="text-muted-foreground self-center text-xs">{mergeBlocked}</span>
         )}
-        {!failing && (open.length > 0 || snap?.mergeable === "conflicting") && (
+        {open.length > 0 && (
           <Button
             size="sm"
             variant="outline"
-            onClick={onFix}
+            onClick={() => onFix("address_comments")}
             disabled={busy !== null || pr.state !== "open"}
-            title="One Auto-fix pass on what is open now: comments, conflicts"
+            title="The agent answers the open review comments in this thread"
+            data-testid="code-address-comments"
           >
             {busy === "start a pass" ? <Spinner /> : <Wrench />}
-            Fix
+            Address comments
+            <Kbd keys="a" />
+          </Button>
+        )}
+        {snap?.mergeable === "conflicting" && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => onFix("resolve_conflicts")}
+            disabled={busy !== null || pr.state !== "open"}
+          >
+            <Wrench />
+            Resolve conflicts
           </Button>
         )}
         {open.length > 0 && (
@@ -512,46 +513,6 @@ function ActivePull({
               data-testid="code-draft"
             />
           </label>
-        )}
-        <label className="flex items-center gap-3 px-3 py-2.5">
-          <span className="min-w-0 flex-1">Auto-merge when GitHub allows it</span>
-          {snap?.autoMerge && <span className="text-muted-foreground text-xs">On at GitHub</span>}
-          <Switch
-            checked={pr.autoMerge}
-            onCheckedChange={onAutoMerge}
-            disabled={busy !== null || pr.state !== "open"}
-            aria-label="Auto-merge"
-            data-testid="code-automerge"
-          />
-        </label>
-        {spend.usd !== null && pr.autofix && (
-          <form
-            className="flex items-center gap-2 px-3 py-2"
-            onSubmit={(e) => {
-              e.preventDefault();
-              const value = limit.trim() === "" ? null : Number(limit);
-              if (value !== null && !(value > 0)) return;
-              onSpendLimit(value);
-            }}
-          >
-            <label htmlFor="code-spend-limit" className="min-w-0 flex-1">
-              Spend limit
-              <span className="text-muted-foreground ml-2 text-xs tabular-nums">
-                ${spend.usd.toFixed(2)} spent
-              </span>
-            </label>
-            <Input
-              id="code-spend-limit"
-              value={limit}
-              onChange={(e) => setLimit(e.target.value)}
-              inputMode="decimal"
-              placeholder="No limit"
-              className="h-7 w-24"
-            />
-            <Button type="submit" size="xs" variant="ghost" disabled={busy !== null}>
-              Set
-            </Button>
-          </form>
         )}
       </section>
 

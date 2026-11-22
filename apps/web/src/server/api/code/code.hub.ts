@@ -1,15 +1,19 @@
 import { logger } from "@groot/core/logger";
 import {
-  LEGACY_INSTANCE_ID,
-  parseThreadId,
-  threadIdOf,
   type HarnessInstance,
   type InstanceEvent,
   type InstanceStatus,
   type ThreadEvent,
   type ThreadSummary,
 } from "@tiny-agents/code/server";
-import { seenMap, threadDecorations } from "./code.store";
+import { onReviewTurnEnded } from "./code.findings";
+import {
+  eventWithThreadKeys,
+  listProjectThreads,
+  recordThreadEvent,
+  threadKey,
+  threadRef,
+} from "./code.threads";
 import { app } from "../../app-root";
 
 type HubChange = "list" | "status";
@@ -41,13 +45,11 @@ export interface CodeHub {
 export interface HubOptions {
   instances: HarnessInstance[];
   listDebounceMs?: number;
-  legacyInstanceId?: string;
 }
 
 export function createCodeHub(options: HubOptions): CodeHub {
   const byId = new Map(options.instances.map((i) => [i.id, i]));
   const debounceMs = options.listDebounceMs ?? 300;
-  const legacy = options.legacyInstanceId ?? LEGACY_INSTANCE_ID;
   const lists = new Map<string, ThreadSummary[]>();
   const timers = new Map<string, ReturnType<typeof setTimeout>>();
   const viewerCounts = new Map<string, number>();
@@ -88,7 +90,7 @@ export function createCodeHub(options: HubOptions): CodeHub {
     );
   }
 
-  return {
+  const hub: CodeHub = {
     start() {
       if (running) return;
       running = true;
@@ -98,7 +100,17 @@ export function createCodeHub(options: HubOptions): CodeHub {
             if (event.type === "threads") scheduleList(instance);
             if (event.type === "status") emit(changeListeners, "status");
             if (event.type === "connected") scheduleList(instance);
-            emit(eventListeners, { instance, event });
+            void recordThreadEvent(instance.id, event)
+              .then((changed) => changed && emit(changeListeners, "list"))
+              .then(() =>
+                event.type === "turn_ended" && !event.outcome.working
+                  ? onReviewTurnEnded(hub, threadKey(instance.id, event.nativeId))
+                  : false,
+              )
+              .catch((error: unknown) =>
+                logger.warn({ error, instance: instance.id }, "A thread event was not recorded"),
+              )
+              .finally(() => emit(eventListeners, { instance, event }));
           }),
         );
         try {
@@ -119,31 +131,20 @@ export function createCodeHub(options: HubOptions): CodeHub {
     instances: () => [...byId.values()],
     instance: (instanceId) => byId.get(instanceId),
     resolve(threadId) {
-      const parsed = parseThreadId(threadId, legacy);
-      const instance = parsed && byId.get(parsed.instanceId);
-      return instance ? { instance, nativeId: parsed.nativeId } : undefined;
+      const ref = threadRef(threadId);
+      const instance = ref && byId.get(ref.instanceId);
+      return instance ? { instance, nativeId: ref.nativeId } : undefined;
     },
     statuses() {
       const out: Record<string, InstanceStatus> = {};
       for (const instance of byId.values()) out[instance.id] = instance.status();
       return out;
     },
-    async list() {
-      const [seen, decorations] = await Promise.all([seenMap(), threadDecorations()]);
-      const out: ThreadSummary[] = [];
-      for (const instance of byId.values()) {
-        for (const thread of lists.get(instance.id) ?? []) {
-          const last = seen.get(thread.id);
-          const extra = decorations.get(thread.id);
-          out.push({
-            ...thread,
-            followed: last !== undefined,
-            unread: last !== undefined && !thread.working && thread.cursor > last,
-            ...(extra ? { projectId: extra.projectId, pr: extra.pr, review: extra.review } : {}),
-          });
-        }
-      }
-      return out;
+    list() {
+      return listProjectThreads({
+        kindOf: (instanceId) => byId.get(instanceId)?.kind,
+        active: (instanceId) => lists.get(instanceId),
+      });
     },
     async refresh(instanceId) {
       const instance = byId.get(instanceId);
@@ -155,9 +156,11 @@ export function createCodeHub(options: HubOptions): CodeHub {
         listener({ type: "error", message: "No harness serves this thread." });
         return () => {};
       }
-      const id = threadIdOf(target.instance.id, target.nativeId);
+      const id = threadKey(target.instance.id, target.nativeId);
       viewerCounts.set(id, (viewerCounts.get(id) ?? 0) + 1);
-      const stop = target.instance.watchThread(target.nativeId, listener);
+      const stop = target.instance.watchThread(target.nativeId, (event) =>
+        listener(eventWithThreadKeys(event)),
+      );
       let stopped = false;
       return () => {
         if (stopped) return;
@@ -200,6 +203,7 @@ export function createCodeHub(options: HubOptions): CodeHub {
       return () => handoffListeners.delete(listener);
     },
   };
+  return hub;
 }
 
 export function codeHub(): CodeHub | undefined {

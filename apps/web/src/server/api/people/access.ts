@@ -1,6 +1,5 @@
 import { and, eq } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
-import type { Capabilities } from "@tiny-agents/code/contracts";
 import type { UploadReach } from "../../../shared/guest-access";
 import { db, botGuests, bots, guests, uploads } from "../../db";
 
@@ -84,41 +83,4 @@ export function countsAsWatching(viewer: Viewer): boolean {
 
 export function watchOnly(viewer: Viewer): boolean {
   return viewer.kind === "guest";
-}
-
-export function codeCapabilities(viewer: Viewer, caps: Capabilities): Capabilities {
-  if (viewer.kind === "owner") return caps;
-  return {
-    ...caps,
-    threads: { ...caps.threads, changeCwd: false },
-    settings: {
-      ...caps.settings,
-      permissionModes: caps.settings.permissionModes.filter((m) => m !== "bypassPermissions"),
-    },
-    workspace: {
-      ...caps.workspace,
-      findFiles: false,
-      uploads: false,
-      browse: false,
-      worktrees: false,
-    },
-  };
-}
-
-export function requireCodeChange(
-  viewer: Viewer,
-  change: { cwd?: string | null; permissionMode?: string | null; projectId?: string | null },
-): void {
-  if (viewer.kind === "owner") return;
-  if (change.projectId) throw Boom.forbidden("Only the owner can start a thread in a project.");
-  if (change.permissionMode === "bypassPermissions") {
-    throw Boom.forbidden("Only the owner can turn off permission prompts.");
-  }
-  if (change.cwd) throw Boom.forbidden("Only the owner can choose a working directory.");
-}
-
-export function requireCodeAsset(viewer: Viewer, ref: string): void {
-  if (viewer.kind === "guest" && !ref.startsWith("img:")) {
-    throw Boom.forbidden("Only the owner can open files from the harness host.");
-  }
 }

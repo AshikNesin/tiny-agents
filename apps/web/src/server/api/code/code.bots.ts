@@ -1,20 +1,15 @@
 import { eq } from "drizzle-orm";
 import type { CodeHandoffRecord, CodeStore } from "@tiny-agents/agent";
 import { Boom } from "@groot/core/errors";
-import {
-  HarnessError,
-  LEGACY_INSTANCE_ID,
-  parseThreadId,
-  threadIdOf,
-  type HarnessInstance,
-  type TurnOutcome,
-} from "@tiny-agents/code/server";
-import { botMessages, db, type CodeHandoff } from "../../db";
+import { HarnessError, type HarnessInstance, type TurnOutcome } from "@tiny-agents/code/server";
+import { threadKey, threadRef } from "./code.threads";
+import { botMessages, db, type CodeHandoff, type CodeProjectRow } from "../../db";
 import { submitToBot } from "../bots/bots.conversation";
 import { createDeliveries, type DeliveryRuntime } from "../bots/bots.delivery";
 import { conversationOwner } from "../bots/bots.owner";
 import { codeHub } from "./code.hub";
-import { titleLater } from "./code.naming";
+import { listProjects, startProjectThread } from "./code.projects";
+import { startRun } from "./code.runs";
 import {
   askedFrom,
   claimHandoff,
@@ -33,7 +28,7 @@ import {
 
 const DEFAULT_HANDOFF_HARNESS = "shelley";
 
-const codePath = (threadId: string) => `/code/${encodeURIComponent(threadId)}`;
+const codePath = (threadId: string) => `/code/t/${encodeURIComponent(threadId)}`;
 
 function instances(): HarnessInstance[] {
   return codeHub()?.instances() ?? [];
@@ -42,7 +37,7 @@ function instances(): HarnessInstance[] {
 function labelOf(threadId: string): string {
   const target = codeHub()?.resolve(threadId);
   if (target) return target.instance.label;
-  return parseThreadId(threadId, LEGACY_INSTANCE_ID)?.instanceId ?? threadId;
+  return threadRef(threadId)?.instanceId ?? threadId;
 }
 
 function toRecord(row: ThreadHandoff): CodeHandoffRecord {
@@ -90,6 +85,35 @@ async function outcomeOf(threadId: string): Promise<{
   }
 }
 
+const slugOf = (project: CodeProjectRow) => `${project.repoOwner}/${project.repoName}`;
+
+async function pickProject(name?: string): Promise<CodeProjectRow | { error: string }> {
+  const all = await listProjects();
+  if (all.length === 0) {
+    return {
+      error:
+        "There is no project to work in. Ask the owner to add the repository under Code, Settings, Projects.",
+    };
+  }
+  const wanted = name?.trim().toLowerCase();
+  if (!wanted) {
+    if (all.length === 1) return all[0]!;
+    return { error: `Say which project: ${all.map((p) => p.name).join(", ")}.` };
+  }
+  const found = all.find(
+    (p) => p.name.toLowerCase() === wanted || slugOf(p).toLowerCase() === wanted,
+  );
+  return (
+    found ?? { error: `No project "${name}". Projects: ${all.map((p) => p.name).join(", ")}.` }
+  );
+}
+
+function harnessFor(project: CodeProjectRow, name?: string): HarnessInstance | { error: string } {
+  if (name) return pickHarness(name);
+  const preferred = instances().find((i) => i.id === project.defaultInstanceId);
+  return preferred ?? pickHarness();
+}
+
 type StartInput = Parameters<CodeStore["start"]>[0];
 type SendInput = Parameters<CodeStore["send"]>[0];
 
@@ -107,25 +131,23 @@ async function startOnce(
 ): Promise<CodeHandoffRecord | { error: string }> {
   const existing = await findHandoffByKey(input.idempotencyKey);
   if (existing) return claimedBefore(existing);
-  const instance = pickHarness(input.harness);
+  const project = await pickProject(input.project);
+  if ("error" in project) return project;
+  const instance = harnessFor(project, input.harness);
   if ("error" in instance) return instance;
   const caps = instance.capabilities();
-  if (caps.workspace.requiresCwd && !input.cwd) {
-    return { error: `${instance.label} needs a working directory: pass cwd (the repo's path).` };
-  }
   const claimed = await claimHandoff({
     botId,
     conversationId: String(input.conversationId),
     idempotencyKey: input.idempotencyKey,
     task: input.task,
-    cwd: input.cwd,
+    cwd: slugOf(project),
   });
   if (!claimed) return claimedBefore((await findHandoffByKey(input.idempotencyKey))!);
-  let nativeId: string;
+  let threadId: string;
   try {
-    ({ nativeId } = await instance.createThread({
+    ({ threadId } = await startProjectThread(project, instance, {
       message: input.task,
-      ...(input.cwd ? { cwd: input.cwd } : {}),
       ...(input.model ? { model: input.model } : {}),
       ...(caps.settings.defaultPermissionMode
         ? { permissionMode: caps.settings.defaultPermissionMode }
@@ -135,9 +157,8 @@ async function startOnce(
     await dropHandoffClaim(input.idempotencyKey);
     throw error;
   }
-  const row = await startedHandoff(input.idempotencyKey, threadIdOf(instance.id, nativeId));
-  titleLater(instance, nativeId, input.task);
-  await follow(instance.id, nativeId);
+  await startRun(threadId, { trigger: "bot" });
+  const row = await startedHandoff(input.idempotencyKey, threadId);
   const hub = codeHub();
   void hub?.refresh(instance.id);
   hub?.handedOff(row.threadId);
@@ -208,6 +229,10 @@ export const codeStore: CodeStore = {
     }));
   },
 
+  async projects() {
+    return (await listProjects()).map((p) => ({ name: p.name, repo: slugOf(p) }));
+  },
+
   async start(input) {
     const botId = await botOf(input.conversationId);
     const work = () => startOnce(botId, input);
@@ -219,7 +244,7 @@ export const codeStore: CodeStore = {
     const hub = codeHub();
     const target = hub?.resolve(input.threadId);
     if (!hub || !target) return { error: "not_found" };
-    const threadId = threadIdOf(target.instance.id, target.nativeId);
+    const threadId = threadKey(target.instance.id, target.nativeId);
     return hub.serial(`send:${threadId}`, () => sendArmed(botId, target, threadId, input));
   },
 
@@ -249,7 +274,7 @@ export const codeStore: CodeStore = {
       text: outcome.text,
       failed: outcome.failed,
       ...(changedFiles ? { changedFiles } : {}),
-      url: codePath(threadIdOf(instance.id, nativeId)),
+      url: codePath(threadKey(instance.id, nativeId)),
     };
   },
 

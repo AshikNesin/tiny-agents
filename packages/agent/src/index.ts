@@ -2,6 +2,7 @@ export {
   AgentRuntime,
   ApprovalNotPendingError,
   CredentialRequestNotPendingError,
+  ForkPointNotFoundError,
   ModelUnavailableError,
   QuestionNotPendingError,
 } from "./runtime";
@@ -44,6 +45,7 @@ export { createTasksToolkit, type TaskRecord, type TaskStore } from "./toolkits/
 export { createCodeToolkit, type CodeHandoffRecord, type CodeStore } from "./toolkits/code";
 export { createTodayCapability } from "./toolkits/today";
 export { createSandboxToolkit } from "./toolkits/sandbox";
+export { codingSelection, createCodingToolkit, type CodingPermissionMode } from "./toolkits/coding";
 export { createBotsToolkit, type BotMessagingStore } from "./toolkits/bots";
 export {
   createAttachmentsToolkit,

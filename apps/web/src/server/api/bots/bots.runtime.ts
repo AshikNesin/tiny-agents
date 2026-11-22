@@ -5,6 +5,7 @@ import {
   createBotsToolkit,
   createBrowserToolkit,
   createClassifier,
+  createCodingToolkit,
   createComputerToolkit,
   createMemoryCapability,
   createReviewer,
@@ -104,6 +105,7 @@ function builtinCapabilities(env: AppEnv, config: ModelConfig): Capability[] {
       vault,
       egressAllowlist: unquote(env.SANDBOX_EGRESS_ALLOWLIST),
     }),
+    createCodingToolkit({ connection: sandboxConnection(env) }),
     createAttachmentsToolkit(
       createAttachmentStore({ attachmentIds: (id) => getAgentRuntime().attachmentIds(id) }),
       { sandbox: sandboxConnection(env) },
@@ -272,6 +274,32 @@ const FAUX_ASK: ToolCall["arguments"] = {
   ],
 };
 
+function fauxCodingCall(text: string): ToolCall | undefined {
+  const [, command = "", rest = ""] =
+    /^\/(bash|sleep|read|find|write|edit)\s+([\s\S]+)/m.exec(text) ?? [];
+  const [path = "", body = ""] = rest.split(/\s+([\s\S]*)/);
+  switch (command) {
+    case "bash":
+      return fauxToolCall("bash", { command: rest });
+    case "sleep":
+      return fauxToolCall("bash", {
+        command: `sleep ${Number.parseFloat(rest) >= 0 ? Number.parseFloat(rest) : 1}`,
+      });
+    case "read":
+      return fauxToolCall("read", { path: rest.trim() });
+    case "find":
+      return fauxToolCall("find", { query: rest.trim() });
+    case "write":
+      return fauxToolCall("write", { path, content: body });
+    case "edit": {
+      const [oldText = "", newText = ""] = body.split(" => ");
+      return fauxToolCall("edit", { path, old_text: oldText, new_text: newText });
+    }
+    default:
+      return undefined;
+  }
+}
+
 export async function openFauxAgentRuntime(
   storePath: string,
   options: Pick<RuntimeOptions, "onFatal" | "onReport"> & { env: RuntimeEnv },
@@ -329,10 +357,12 @@ export async function openFauxAgentRuntime(
       const ask = fauxAssistantMessage(fauxToolCall("ask_owner", FAUX_ASK));
       return { ...ask, stopReason: "toolUse" as const };
     }
-    const code = /^\/code\s+(?:cwd=(\S+)\s+)?([\s\S]+)/.exec(text);
+    const coding = toolResults === 0 ? fauxCodingCall(text) : undefined;
+    if (coding) return { ...fauxAssistantMessage(coding), stopReason: "toolUse" as const };
+    const code = /^\/code\s+(?:project=(\S+)\s+)?([\s\S]+)/.exec(text);
     if (code && toolResults === 0) {
       const call = fauxAssistantMessage(
-        fauxToolCall("code_start", { task: code[2], ...(code[1] ? { cwd: code[1] } : {}) }),
+        fauxToolCall("code_start", { task: code[2], ...(code[1] ? { project: code[1] } : {}) }),
       );
       return { ...call, stopReason: "toolUse" as const };
     }

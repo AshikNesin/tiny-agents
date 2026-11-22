@@ -269,6 +269,21 @@ const BOUNDARY_RULES: BoundaryRule[] = [
   {
     id: "R11",
     kind: "import",
+    scope: "packages/code/**",
+    enabled: true,
+    restrict: {
+      patterns: [
+        {
+          regex: "^@earendil-works/pi-durable(/|$)|^@tiny-agents/agent(/|$)|(^|/)agent/src(/|$)",
+          message:
+            "R11: @tiny-agents/code imports neither pi-durable nor @tiny-agents/agent (ADR 0020). The native driver takes the runtime through its port (drivers/pi/port.ts); the app adapts AgentRuntime to it in code.registry.ts.",
+        },
+      ],
+    },
+  },
+  {
+    id: "R11",
+    kind: "import",
     scope: "packages/sandbox/**",
     enabled: true,
     restrict: {

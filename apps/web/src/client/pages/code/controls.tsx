@@ -16,7 +16,6 @@ import {
   type PermissionMode,
   type ThreadSummary,
 } from "../../lib/code/api";
-import { UsagePopover } from "./UsagePopover";
 
 const modelsByHarness = new Map<string, Promise<ModelOption[]>>();
 export function loadModels(instanceId: string): Promise<ModelOption[]> {
@@ -225,32 +224,16 @@ export function PermissionPicker({
   );
 }
 
-export function ContextRing({
-  used,
-  max,
-  onCompact,
-  threadId,
-  usage,
-  hasSubagents,
-}: {
-  used: number;
-  max?: number;
-  onCompact?: () => void;
-  threadId?: string;
-  usage: boolean;
-  hasSubagents?: boolean;
-}) {
+export function ContextRing({ used, max }: { used: number; max?: number }) {
   if (!max || !used) return null;
   const ratio = Math.min(1, used / max);
   const pct = Math.round(ratio * 100);
   const r = 6;
   const circumference = 2 * Math.PI * r;
-  const ring = (
-    <button
-      type="button"
-      title={`Context ${used.toLocaleString()} of ${max.toLocaleString()} tokens (${pct}%).${usage ? " Click for usage." : ""}`}
-      aria-label={`Context ${pct}% full${usage ? ". Usage" : ""}`}
-      aria-haspopup={usage ? "dialog" : undefined}
+  return (
+    <span
+      title={`Context ${used.toLocaleString()} of ${max.toLocaleString()} tokens (${pct}%).`}
+      aria-label={`Context ${pct}% full`}
       className={cn(searchSelectTriggerClass, "tabular-nums")}
       data-testid="code-context"
     >
@@ -271,64 +254,7 @@ export function ContextRing({
         />
       </svg>
       <span className="hidden @[20rem]:inline">{pct}%</span>
-    </button>
-  );
-  if (!usage || !threadId) return ring;
-  return (
-    <UsagePopover
-      used={used}
-      max={max}
-      threadId={threadId}
-      hasSubagents={Boolean(hasSubagents)}
-      onCompact={onCompact}
-    >
-      {ring}
-    </UsagePopover>
-  );
-}
-
-const plural = (n: number, one: string) => `${n} ${n === 1 ? one : `${one}s`}`;
-
-export function useArchiveMany() {
-  const navigate = useNavigate();
-  return useCallback(
-    async (
-      rows: Pick<ThreadSummary, "id" | "title">[],
-      archive: boolean,
-      options: { leave?: boolean } = {},
-    ): Promise<string[]> => {
-      if (rows.length === 0) return [];
-      const settled = await Promise.allSettled(rows.map((row) => codeApi.archive(row.id, archive)));
-      const done: string[] = [];
-      let subagents = 0;
-      settled.forEach((result, i) => {
-        if (result.status !== "fulfilled") return;
-        done.push(rows[i]!.id);
-        subagents += result.value?.moved?.length ?? 0;
-      });
-      const failed = rows.length - done.length;
-      if (failed > 0) {
-        const first = settled.find((r): r is PromiseRejectedResult => r.status === "rejected");
-        toast.error(`Could not ${archive ? "archive" : "restore"} ${plural(failed, "thread")}.`, {
-          description: errorMessage(first?.reason, "Try again."),
-        });
-      }
-      if (done.length === 0) return [];
-      if (archive && options.leave) navigate("/code");
-      const what =
-        plural(done.length, "thread") + (subagents ? ` and ${plural(subagents, "subagent")}` : "");
-      toast.success(archive ? `Archived ${what}` : `Restored ${what}`, {
-        action: {
-          label: "Undo",
-          onClick: () =>
-            void Promise.all(done.map((id) => codeApi.archive(id, !archive))).catch(
-              (error: unknown) => toast.error(errorMessage(error, "Could not undo.")),
-            ),
-        },
-      });
-      return done;
-    },
-    [navigate],
+    </span>
   );
 }
 
@@ -368,7 +294,7 @@ export function useArchive() {
   );
 }
 
-export function pullState(loop: string): string | null {
+function pullState(loop: string): string | null {
   switch (loop) {
     case "needs_input":
       return "needs you";

@@ -5,13 +5,14 @@
  * the verdict go to the server in one call; on the owner's own PR only a
  * comment is offered. The network is the boundary: fetch is stubbed.
  */
+import { useState } from "react";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { MemoryRouter } from "react-router-dom";
 import { SubmitReviewButton } from "@/pages/code/SubmitReview";
 import type { ThreadCommenting } from "@/lib/code/comments";
-import type { PullReviewView } from "../../../apps/web/src/shared/api/code";
+import type { PullReviewView, ReviewVerdict } from "../../../apps/web/src/shared/api/code";
 
 const REVIEW: PullReviewView = {
   id: "rv1",
@@ -33,6 +34,9 @@ const REVIEW: PullReviewView = {
   worktreeThreadId: null,
   assistant: null,
   archived: false,
+  brief: null,
+  reviewing: false,
+  findings: [],
   updatedAt: "2026-11-17T00:00:00.000Z",
 };
 
@@ -63,10 +67,31 @@ function stubFetch() {
   return fetch;
 }
 
-async function show(review: PullReviewView, comments: ThreadCommenting) {
+function Harness({
+  review,
+  comments,
+  verdict = "COMMENT",
+}: {
+  review: PullReviewView;
+  comments: ThreadCommenting;
+  verdict?: ReviewVerdict;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <SubmitReviewButton
+      review={review}
+      github={comments}
+      open={open}
+      verdict={verdict}
+      onOpenChange={setOpen}
+    />
+  );
+}
+
+async function show(review: PullReviewView, comments: ThreadCommenting, verdict?: ReviewVerdict) {
   const view = render(
     <MemoryRouter>
-      <SubmitReviewButton review={review} github={comments} />
+      <Harness review={review} comments={comments} verdict={verdict} />
     </MemoryRouter>,
   );
   await userEvent.click(screen.getByRole("button", { name: "Submit review" }));
@@ -84,11 +109,14 @@ describe("Submit review", () => {
     expect(screen.getByRole("list", { name: "Review comments" })).toHaveTextContent(
       "src/retry.ts:12Cap the delay",
     );
+    const summary = screen.getByRole("textbox", { name: "Review summary" });
+    expect(summary).toHaveValue("I left one comment inline, in retry.ts.");
     await user.click(screen.getByRole("button", { name: "Request changes" }));
+    await user.clear(summary);
     expect(
       within(screen.getByRole("dialog")).getByRole("button", { name: "Submit review" }),
     ).toBeDisabled();
-    await user.type(screen.getByRole("textbox", { name: "Review summary" }), "One thing");
+    await user.type(summary, "One thing");
     const dialog = screen.getByRole("dialog", { name: "Submit review" });
     await user.click(within(dialog).getByRole("button", { name: "Submit review" }));
 
@@ -97,6 +125,11 @@ describe("Submit review", () => {
       event: "REQUEST_CHANGES",
       body: "One thing",
     });
+  });
+
+  it("opens on the verdict its key asked for", async () => {
+    await show(REVIEW, github([]), "APPROVE");
+    expect(screen.getByRole("button", { name: "Approve" })).toHaveAttribute("aria-pressed", "true");
   });
 
   it("on the owner's own PR offers only a comment", async () => {
