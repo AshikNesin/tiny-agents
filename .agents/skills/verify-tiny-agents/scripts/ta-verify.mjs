@@ -3,7 +3,12 @@
  * ta-verify: launch, health-check, drive and tear down one isolated
  * tiny-agents instance for verification.
  *
- *   ta-verify up [--port 3100] [--run <id>] [--sandbox] [--shelley] [--fake-github] [--empty]
+ *   ta-verify up [--port 3100] [--run <id>] [--sandbox] [--local-sandbox] [--shelley]
+ *                [--demo-agent] [--fake-github] [--empty]
+ *       --local-sandbox  a sandbox with no Docker: an SSH server on port + 4 that runs
+ *                  commands, ptys and file transfers on this machine (local-sandbox.mjs).
+ *                  Terminal and the sandbox toolkit work; browser and computer do not.
+ *       --demo-agent  a model-free coding agent for /code (demo-agent.ts)
  *                                             start a fresh instance (own DBs, faux model)
  *       --sandbox  point it at the local sandbox container (`pnpm sandbox:up`):
  *                  terminal, computer, browser and bot sandbox tools become reachable
@@ -61,6 +66,8 @@ const BOOLEAN_FLAGS = new Set([
   "prod",
   "fixed-clock",
   "fake-github",
+  "local-sandbox",
+  "demo-agent",
 ]);
 /** The instant `--fixed-clock` freezes at: the server tests' FIXED_NOW (tests/test-clock.ts). */
 const FIXED_NOW = "2026-11-06T06:30:00.000Z";
@@ -282,6 +289,12 @@ async function stopGroup(pgid, label) {
 }
 
 function sandboxEnv(run) {
+  if (run.localSandboxPort)
+    return {
+      SANDBOX_HOST: "127.0.0.1",
+      SANDBOX_PORT: String(run.localSandboxPort),
+      SANDBOX_USER: "verify",
+    };
   if (!run.sandbox) return { SANDBOX_HOST: "" };
   return {
     SANDBOX_HOST: "127.0.0.1",
@@ -371,6 +384,8 @@ function serverEnv(run) {
     // Without --sandbox: no sandbox, so terminal/computer/browser are unreachable.
     ...sandboxEnv(run),
     ...(run.shelleyUrl ? { SHELLEY_URL: run.shelleyUrl } : {}),
+    ...(run.fakeGithub ? { TA_VERIFY_FAKE_GITHUB: "1" } : {}),
+    ...(run.demoAgent ? { TA_VERIFY_DEMO_AGENT: "1" } : {}),
     PORTLESS: "0",
     NODE_OPTIONS: "--max-old-space-size=1024",
   };
@@ -428,6 +443,8 @@ async function up() {
     empty: !!flags.empty,
     prod: !!flags.prod,
     fakeGithub: !!flags["fake-github"],
+    demoAgent: !!flags["demo-agent"],
+    localSandboxPort: flags["local-sandbox"] ? port + 4 : undefined,
     fixedNow: flags["fixed-clock"] ? FIXED_NOW : undefined,
     jwtKey: flags.prod ? randomBytes(32).toString("hex") : undefined,
     shelleyPort: flags.shelley ? port + 1000 : undefined,
@@ -450,6 +467,28 @@ async function up() {
     writeFileSync(path.join(stateDir, "run.json"), JSON.stringify(run, null, 2));
     await startShelley(run);
   }
+  if (run.localSandboxPort) {
+    if (flags.sandbox) fail("--sandbox and --local-sandbox are two sandboxes: pick one");
+    const sandboxOut = openSync(path.join(stateDir, "local-sandbox.log"), "a");
+    const sandbox = spawn(
+      process.execPath,
+      [
+        ".agents/skills/verify-tiny-agents/scripts/local-sandbox.mjs",
+        String(run.localSandboxPort),
+        path.join(stateDir, "sandbox-home"),
+      ],
+      { cwd: REPO, env: baseEnv(), detached: true, stdio: ["ignore", sandboxOut, sandboxOut] },
+    );
+    sandbox.unref();
+    run.localSandboxPid = sandbox.pid;
+    writeFileSync(path.join(stateDir, "run.json"), JSON.stringify(run, null, 2));
+    const sandboxDeadline = Date.now() + 15_000;
+    while (!(await tcpOpen(run.localSandboxPort))) {
+      if (Date.now() > sandboxDeadline) fail("--local-sandbox: the SSH server did not start");
+      await sleep(200);
+    }
+    log(`local sandbox on 127.0.0.1:${run.localSandboxPort}, pid ${sandbox.pid}`);
+  }
   const logFile = path.join(stateDir, "server.log");
   const out = openSync(logFile, "a");
   // detached = own process group, so `down` kills exactly this tree.
@@ -464,8 +503,8 @@ async function up() {
   }
   const [command, args] = run.prod
     ? [process.execPath, ["dist/server/bundle.js"]]
-    : run.fakeGithub
-      ? [tsx, [".agents/skills/verify-tiny-agents/scripts/fake-github-entry.ts"]]
+    : run.fakeGithub || run.demoAgent
+      ? [tsx, [".agents/skills/verify-tiny-agents/scripts/verify-entry.ts"]]
       : [tsx, ["apps/web/src/server/entry.node.ts"]];
   const child = spawn(command, args, {
     cwd: REPO,
@@ -547,6 +586,13 @@ async function doctor(run = readRun(runId()), { quiet = false } = {}) {
   if (run.sandbox) {
     check("sandbox SSH answers", await tcpOpen(run.sandboxPort), `127.0.0.1:${run.sandboxPort}`);
   }
+  if (run.localSandboxPort) {
+    check(
+      "local sandbox SSH answers",
+      await tcpOpen(run.localSandboxPort),
+      `127.0.0.1:${run.localSandboxPort}`,
+    );
+  }
   if (run.empty) {
     // No demo user by design; once /setup has created the first account, needsSetup is false.
     const setup = await getJson(`${run.url}/api/v1/auth/setup`);
@@ -624,6 +670,8 @@ async function drive() {
             run.shelleyUrl && "shelley",
             run.prod && "prod",
             run.fakeGithub && "fake-github",
+            run.localSandboxPort && "local-sandbox",
+            run.demoAgent && "demo-agent",
           ]
             .filter(Boolean)
             .join(","),
@@ -647,7 +695,16 @@ async function down() {
   const run = readRun(id);
   await stopGroup(alive(run.pid) ? run.pgid : undefined, "server");
   await stopGroup(run.shelleyPid, "shelley");
-  for (const name of ["shelley.log"]) {
+  if (run.localSandboxPort) {
+    try {
+      execFileSync("tmux", ["-L", "ta-terminal", "kill-server"], {
+        env: { ...baseEnv(), TMUX_TMPDIR: path.join(run.stateDir, "sandbox-home") },
+        stdio: "ignore",
+      });
+    } catch {}
+  }
+  await stopGroup(run.localSandboxPid, "local sandbox");
+  for (const name of ["shelley.log", "local-sandbox.log"]) {
     const file = path.join(run.stateDir, name);
     if (existsSync(file)) writeFileSync(path.join(run.evidenceDir, name), readFileSync(file));
   }

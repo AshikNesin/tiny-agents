@@ -1,5 +1,5 @@
 /**
- * `ta-verify up --fake-github`: the dev server with Code's GitHub and git
+ * `ta-verify up --fake-github` (loaded by verify-entry.ts): Code's GitHub and git
  * replaced by the server tests' fakes, so a verify run can drive projects and
  * pull requests end to end with no sandbox and no GitHub. The workspace runs
  * real git in a local bash against a local bare repository (`acme/web`); the
@@ -78,5 +78,3 @@ http
   })
   .listen(port, "127.0.0.1");
 process.on("exit", () => local.cleanup());
-
-await import("../../../../apps/web/src/server/entry.node.ts");

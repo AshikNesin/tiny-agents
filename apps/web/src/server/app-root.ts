@@ -14,6 +14,7 @@ import type { AppAuth } from "@tiny-agents/github";
 import type { CodeGitHub } from "./api/code/code.github";
 import type { CodeBranchNamer } from "./api/code/code.naming";
 import type { CodeHub } from "./api/code/code.hub";
+import type { HarnessInstance } from "@tiny-agents/code/server";
 import type { CodeChanges } from "./api/code/code.changes";
 import type { ConnectionManager } from "./api/connections/connections.manager";
 import type { HeldLiveAccess } from "./api/people/live-access";
@@ -31,6 +32,7 @@ export interface App {
   computerSessions?: ComputerSessions | null;
   connectionManager?: ConnectionManager;
   codeHub?: CodeHub;
+  codeHarnesses?: HarnessInstance[];
   codeChanges?: CodeChanges;
   codeGitHub?: CodeGitHub;
   codeGitHubApp?: { key: string; auth: AppAuth };
