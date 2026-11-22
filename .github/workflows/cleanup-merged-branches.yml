@@ -37,7 +37,7 @@ jobs:
           echo "Default branch: $DEFAULT_BRANCH"
 
           # Protected branches that should never be deleted
-          PROTECTED_BRANCHES=("main" "master" "develop" "development" "staging" "production")
+          PROTECTED_BRANCHES=("main" "master" "develop" "development" "staging" "production" "next")
 
           DEFAULT_SHA=$(git rev-parse "origin/$DEFAULT_BRANCH")
           deleted=0
