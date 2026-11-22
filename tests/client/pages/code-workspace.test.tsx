@@ -322,8 +322,8 @@ describe("the Code workspace", () => {
     expect(keys).toHaveTextContent("Stop the agent");
   });
 
-  it("an old thread link lands on the thread with its pane", () => {
-    renderAt("/code/demo%3Adddd/pr");
+  it("a thread link with a pane lands on the thread with that pane", () => {
+    renderAt("/code/t/demo%3Adddd?pane=pr");
     expect(where()).toBe("/code/t/demo%3Adddd");
     expect(useUiStore.getState().codePane).toBe("pr");
   });

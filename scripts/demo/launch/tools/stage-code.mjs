@@ -351,7 +351,7 @@ async function stageMode(mode) {
     await page.waitForLoadState("networkidle").catch(() => {});
     await shoot(session, "codebuddy-handoff", { css: true });
 
-    await page.goto(`/code/${encodeURIComponent(thread.id)}`);
+    await page.goto(`/code/t/${encodeURIComponent(thread.id)}`);
     const transcript = page.getByRole("region", { name: "Messages" });
     await transcript.getByText(ASK, { exact: true }).waitFor();
 
@@ -406,7 +406,7 @@ async function stageMode(mode) {
     await scrollToEnd(page, transcript.getByText(FOOTER));
     await shoot(session, "code-done-open");
 
-    await page.goto(mode === "mobile" ? "/code" : `/code/${encodeURIComponent(thread.id)}`);
+    await page.goto(mode === "mobile" ? "/code" : `/code/t/${encodeURIComponent(thread.id)}`);
     const list = page.getByRole("navigation", { name: "Code threads" });
     await list.getByRole("link", { name: new RegExp(`^${TITLE}`) }).waitFor();
     await page.waitForLoadState("networkidle").catch(() => {});

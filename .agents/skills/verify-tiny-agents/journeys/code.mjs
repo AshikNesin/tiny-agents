@@ -342,8 +342,8 @@ await journey(
       );
     });
 
-    await step("an old thread link still opens the thread", async () => {
-      await page.goto(`/code/${encodeURIComponent(ids.second)}/pr`, LOADED);
+    await step("a thread link with a pane opens on that pane", async () => {
+      await page.goto(`/code/t/${encodeURIComponent(ids.second)}?pane=pr`, LOADED);
       await on(ids.second);
       await expect(page.getByRole("tab", { name: /^Pull request/ })).toHaveAttribute(
         "aria-selected",
