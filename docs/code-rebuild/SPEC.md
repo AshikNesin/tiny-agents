@@ -60,8 +60,8 @@ A screen that serves none of the four is removed.
 - **Status**, derived, never set by hand: Needs you, Working, In review,
   Done. Needs you covers an open approval or question, a failed turn, a
   failing check or unanswered review comment with the unattended loop off, a
-  loop that stopped itself, and a pull request waiting for the owner's
-  review.
+  loop that stopped itself, a pull request waiting for the owner's review,
+  and one its author pushed to since that review.
 
 ## Workspace
 
@@ -90,10 +90,21 @@ A screen that serves none of the four is removed.
   comment goes to the agent with the next message.
 - **Pull request**: checks with the failing log excerpt, comments, and the
   actions Fix CI, Address comments, Merge and the unattended-loop switch.
-- **Review thread**: opening it calls no model. Asking the agent to review
-  is one key. A line comment goes to the owner's GitHub review by default,
-  and to the agent with a modifier. Approve and Request changes are one key
-  each.
+- **Review thread**: the same three columns, split for reading: the diff
+  wide, the agent narrow, the thread list hidden until asked for. The agent
+  prepares and the owner decides. It writes a short brief, runs the tests in
+  the pull request's checkout, suggests a reading order, and lists findings
+  by severity, each shown under the line it is about. One key steps through
+  findings, one adds a finding to the owner's review as a comment, one edits
+  it first, one dismisses it. A line comment of the owner's goes to the
+  review by default, and to the agent with a modifier. Approve and Request
+  changes are one key each and open a summary the agent drafted from the
+  pending comments, for the owner to edit.
+- **Who speaks on GitHub**: only the owner. The agent never posts a review
+  or comment on its own; nothing reaches GitHub until the owner submits.
+- **Re-review**: when the author pushes after the owner's review, the thread
+  returns to Needs you and opens on what changed since that review, and the
+  agent marks each earlier comment as addressed or not.
 - **Files**: a file tree and open-by-name on the worktree, text search
   across it, and a light editor with syntax colors, find, and a save that is
   refused when the file changed since it was opened. Edits show in Changes
@@ -105,8 +116,12 @@ A screen that serves none of the four is removed.
 
 ## Workflows
 
-- Four built in, no general builder: Fix CI, Address comments, Resolve
-  conflicts, Fix issue (from a GitHub issue link or pasted text).
+- Five built in, no general builder: Fix CI, Address comments, Resolve
+  conflicts, Fix issue (from a GitHub issue link or pasted text) and Review
+  PR.
+- Review PR runs on demand with one key. A per-project switch, off by
+  default, runs it as soon as a pull request asks for the owner's review, so
+  the brief and findings are ready when the thread is opened.
 - A run is an ordinary turn in the thread, labelled with its trigger, so it
   can be watched and steered.
 - Triggers: one key on a pull request, or the unattended loop, which is off
@@ -122,8 +137,7 @@ A screen that serves none of the four is removed.
 The final check when green, the merge-queue trigger, the spend limit and
 auto-merge. The next-message suggestion. The detailed usage report (one
 context and cost figure stays). Bulk select, grouping toggles, links by
-thread title, change directory and Open in Shelley. "Post as suggestions"
-and "Since your review". Threads outside a project leave the list and stay
+thread title, change directory and Open in Shelley. "Post as suggestions". Threads outside a project leave the list and stay
 in their agent's own storage.
 
 GitHub stays reachable three ways, as today: a token, `gh`, or the GitHub
