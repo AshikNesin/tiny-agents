@@ -1,13 +1,15 @@
-import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vite-plus/test";
 import { createHmac } from "node:crypto";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { eq } from "drizzle-orm";
+import { hashPassword } from "@groot/core/utils/password.utils";
 import { createNamespaceKv } from "@groot/core/kv";
 import { FIXED_NOW } from "../../../test-clock";
 import { api, createTestApp } from "../../helpers";
 import { authToken, eventually, resetAppTables } from "../../fixtures";
 import { codeAutofixPasses, codeThreads, db, jobs } from "../../../../apps/web/src/server/db";
+import { users } from "@groot/core/database/schema";
 import { installAppForTests } from "../../../../apps/web/src/server/app-root";
 import {
   codeHub,
@@ -37,6 +39,26 @@ const token = await authToken("code-projects@example.com");
 const app = createTestApp();
 const NOW = Date.parse(FIXED_NOW);
 const minutesAgo = (m: number) => new Date(NOW - m * 60_000).toISOString();
+
+let stepUpToken: () => Promise<string>;
+
+beforeAll(async () => {
+  const [row] = await db
+    .update(users)
+    .set({ password: await hashPassword("code-projects-step-up") })
+    .where(eq(users.email, "code-projects@example.com"))
+    .returning();
+  expect(row?.id).toBeDefined();
+  stepUpToken = async () => {
+    const response = await api<{ token: string }>(app, "/api/v1/vault/step-up", {
+      method: "POST",
+      token,
+      json: { password: "code-projects-step-up" },
+    });
+    expect(response.status).toBe(200);
+    return response.body.data!.token;
+  };
+});
 
 let local: LocalExec;
 let bare: string;
@@ -1147,6 +1169,27 @@ describe("the Thread-Id trailer and per-turn checkpoints", () => {
   });
 });
 
+describe("GitHub credential changes", () => {
+  it("requires step-up to set a PAT, start App setup, or disconnect the App", async () => {
+    const step = await stepUpToken();
+    const denied = await Promise.all([
+      call("PUT", "/github", { token: "ghp_notasteup1234567890" }),
+      call("POST", "/github/app/manifest", {}),
+      call("POST", "/github/app/install", undefined),
+      call("DELETE", "/github/app", undefined),
+    ]);
+    expect(denied.map((r) => r.status)).toEqual([403, 403, 403, 403]);
+
+    const granted = await api<GitHubStatus>(app, "/api/v1/code/github", {
+      method: "PUT",
+      token,
+      stepUp: step,
+      json: { token: "ghp_withasteup1234567890" },
+    });
+    expect(granted.status).toBe(200);
+  });
+});
+
 describe("the GitHub App", () => {
   const sign = (body: string) =>
     `sha256=${createHmac("sha256", SECRET).update(body).digest("hex")}`;
@@ -1156,12 +1199,16 @@ describe("the GitHub App", () => {
       body,
       headers: { "content-type": "application/json", ...headers },
     });
-  const browser = (path: string, init: { method?: string; json?: unknown; cookie?: string } = {}) =>
+  const browser = (
+    path: string,
+    init: { method?: string; json?: unknown; cookie?: string; stepUp?: string } = {},
+  ) =>
     app.request(path, {
       method: init.method ?? "GET",
       headers: {
         authorization: `Bearer ${token}`,
         "content-type": "application/json",
+        ...(init.stepUp ? { "x-vault-step-up": init.stepUp } : {}),
         ...(init.cookie ? { cookie: init.cookie } : {}),
       },
       ...(init.json !== undefined ? { body: JSON.stringify(init.json) } : {}),
@@ -1173,6 +1220,7 @@ describe("the GitHub App", () => {
     const started = await browser("/api/v1/code/github/app/manifest", {
       method: "POST",
       json: {},
+      stepUp: await stepUpToken(),
     });
     const body = (await started.json()) as {
       data: {
@@ -1226,6 +1274,7 @@ describe("the GitHub App", () => {
     const started = await browser("/api/v1/code/github/app/manifest", {
       method: "POST",
       json: {},
+      stepUp: await stepUpToken(),
     });
     const { data } = (await started.json()) as { data: { url: string } };
     const state = new URL(data.url).searchParams.get("state")!;
@@ -1242,6 +1291,8 @@ describe("the GitHub App", () => {
     const install = async (id: number) => {
       const started = await browser("/api/v1/code/github/app/install", {
         method: "POST",
+        json: {},
+        stepUp: await stepUpToken(),
       });
       const { data } = (await started.json()) as { data: { url: string } };
       expect(

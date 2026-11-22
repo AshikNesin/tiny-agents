@@ -45,11 +45,12 @@ export interface JsonResponse<T = unknown> {
 export async function api<T = unknown>(
   app: TestApp,
   path: string,
-  init: RequestInit & { json?: unknown; token?: string } = {},
+  init: RequestInit & { json?: unknown; token?: string; stepUp?: string } = {},
 ): Promise<JsonResponse<T>> {
   const headers = new Headers(init.headers);
   if (init.json !== undefined) headers.set("content-type", "application/json");
   if (init.token) headers.set("authorization", `Bearer ${init.token}`);
+  if (init.stepUp) headers.set("x-vault-step-up", init.stepUp);
   const response = await app.request(path, {
     ...init,
     headers,
