@@ -11,6 +11,7 @@ const KINDS = [
 
 export const ROLES = [
   "bot_default",
+  "code_default",
   "memory_capture",
   "chat_title",
   "vision",

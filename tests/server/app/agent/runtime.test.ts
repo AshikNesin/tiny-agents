@@ -1,6 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { until } from "../../fixtures/until";
 import { applyChatEvents } from "../../fixtures/chat-events";
+import { FIXED_NOW } from "../../../test-clock";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vite-plus/test";
@@ -174,12 +175,22 @@ describe("AgentRuntime", () => {
           "the steer to appear in the queue",
         );
         expect(chat.state().queued).toEqual([
-          { requestId: "steer-2", mode: "steer", text: "steer me" },
+          {
+            requestId: "steer-2",
+            mode: "steer",
+            text: "steer me",
+            createdAt: Date.parse(FIXED_NOW),
+          },
         ]);
 
         const lateChat = await observeChat(runtime, ref);
         expect(lateChat.state().queued).toEqual([
-          { requestId: "steer-2", mode: "steer", text: "steer me" },
+          {
+            requestId: "steer-2",
+            mode: "steer",
+            text: "steer me",
+            createdAt: Date.parse(FIXED_NOW),
+          },
         ]);
 
         await until(

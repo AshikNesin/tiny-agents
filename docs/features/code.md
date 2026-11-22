@@ -8,10 +8,11 @@ Why: [ADR 0009](../adr/0009-shelley-is-the-coding-agent.md),
 [ADR 0011](../adr/0011-code-harness-adapters.md),
 [ADR 0012](../adr/0012-claude-code-coding-mode.md).
 
-| Harness         | Instance id   | Runs on                       | Reached through                                         | Owns the transcript                        |
-| --------------- | ------------- | ----------------------------- | ------------------------------------------------------- | ------------------------------------------ |
-| **Shelley**     | `shelley`     | the owner's Shelley server    | Shelley's official HTTP/SSE API (`SHELLEY_URL`)         | Shelley's database                         |
-| **Claude Code** | `claude-code` | the sandbox (VM or container) | the Claude worker's coding mode, through its SSH tunnel | Claude Code's session files on the sandbox |
+| Harness         | Instance id   | Runs on                                | Reached through                                         | Owns the transcript                        |
+| --------------- | ------------- | -------------------------------------- | ------------------------------------------------------- | ------------------------------------------ |
+| **Shelley**     | `shelley`     | the owner's Shelley server             | Shelley's official HTTP/SSE API (`SHELLEY_URL`)         | Shelley's database                         |
+| **Claude Code** | `claude-code` | the sandbox (VM or container)          | the Claude worker's coding mode, through its SSH tunnel | Claude Code's session files on the sandbox |
+| **Native**      | `pi`          | the app, with its tools on the sandbox | the bots' agent runtime, in process                     | the agent store                            |
 
 ## Setup
 
@@ -32,7 +33,11 @@ Why: [ADR 0009](../adr/0009-shelley-is-the-coding-agent.md),
   from Settings → Models → Claude plan. The app sets up the worker on the sandbox
   ([Claude subscription](../claude-subscription.md)).
 
-With neither configured, the sidebar has no **Chat / Code** switch and bots have no
+- **Native:** a sandbox (`SANDBOX_HOST` or `pnpm sandbox:up`) and one model
+  that runs on pi. Settings → Models → Default models → **New Code threads**
+  picks the model a thread starts on; unset, it is the New bots model.
+
+With none configured, the sidebar has no **Chat / Code** switch and bots have no
 `code_*` tools. With both, each thread in the list names its harness, and
 **New thread** offers a harness picker.
 
@@ -400,7 +405,7 @@ webhook and Code polls. The setup's two redirects are bound to the browser
 that started it (a 10-minute, single-use state plus an httpOnly cookie).
 **Disconnect** forgets the App; delete it on GitHub yourself.
 
-Not built yet: the native pi-durable harness (phases 0 and 1), re-running a
+Not built yet: re-running a
 flaky check before spending a pass, mention commands from PR comments,
 threads started from issues, a preview script, and matching Shelley threads
 to projects by remote.
@@ -616,6 +621,9 @@ Known limits (register row C7):
     connection (`@tiny-agents/claude-worker/client`, shared with the bot
     engine: heartbeat, reconnect, resume, restart detection), SDK messages
     and session history normalized.
+  - `pi`: the native harness (below). It takes the agent runtime through
+    `PiPort` (`port.ts`), normalizes its chat state, and keeps its threads in
+    the app's thread index.
 - **Thread feed:** `packages/code/src/server/feed.ts`. Drivers hand their
   `ThreadFeed` the whole thread (a snapshot, the full row list, the streaming
   text, state); the feed keeps the event order for every watcher, so no
@@ -694,6 +702,37 @@ missed events (Shelley's stream reconnects, the Claude worker restarts or
 skips ahead), its watchers start over from a fresh snapshot, followed by the
 streaming text if a turn is still running.
 
+## The native harness
+
+ADR 0020. A Native thread is a conversation in the same agent runtime the
+chat bots use, with a working directory and five coding tools.
+
+- **Tools** (`packages/agent/src/toolkits/coding.ts`): `read`, `write`,
+  `edit` (exact text, answers with the diff), `bash` and `find` (file
+  names). Each runs on the sandbox through the one sandbox connection, never
+  on the app's host. A relative path is under the thread's working
+  directory, and commands start there.
+- **Permission modes** are the Tool gate's per-tool permissions
+  (`codingSelection`): Default asks before `write`, `edit` and `bash`;
+  Accept edits asks before `bash` only; Plan takes the three away and tells
+  the agent to plan; Bypass asks for nothing. A call that asks is an
+  approval card, and the agent's own question is a question card.
+- **While it works:** a message steers (it joins after the running tool
+  round, and waits in the queue until then) or is held with the queue
+  button. A held message can be sent now, which makes it a steer, or
+  cancelled. Stop ends the turn, stops waiting for a running command and
+  withdraws what is queued.
+- **After it stops:** an error or a message left unanswered shows
+  **Continue**. `/compact` (with optional instructions) summarizes the
+  conversation. Fork copies the thread up to and including the message.
+- **Not served:** deleting a thread, attachments, effort levels, a usage
+  report, and the workspace calls (diffs, file search, folder browser). The
+  context ring shows the model's window and the thread's cost, not tokens
+  in use.
+- **Without a model key:** with `TINY_AGENTS_FAUX=1` the faux model runs the
+  tools on `/bash <command>`, `/read <path>`, `/write <path> <text>`,
+  `/edit <path> <old> => <new>`, `/find <query>` and `/sleep <seconds>`.
+
 ## Adding a harness
 
 1. Add a driver folder `packages/code/src/drivers/<kind>/`:
@@ -721,6 +760,9 @@ streaming text if a turn is still running.
   particular harness.
 - **Claude Code:** driven through the worker with a fake SDK. CI never
   calls Anthropic.
+- **Native:** the driver runs on the real agent runtime with a scripted
+  model (`tests/server/code/pi/`), and the tools against the fake sandbox
+  SSH server (`tests/server/app/agent/coding-toolkit.test.ts`).
 - **Shelley by hand:** run Shelley with its keyless test model:
 
 ```bash

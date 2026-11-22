@@ -150,6 +150,25 @@ describe("Model catalog", () => {
     expect(planOnly.forRole("chat_title")).toBeUndefined();
   });
 
+  it("starts a native Code thread on its own role, else the bot default, always on pi", () => {
+    expect(catalogOf(base).catalog.forRole("code_default")?.id).toBe("sonnet");
+
+    const followsBots = catalogOf({ ...base, roles: { bot_default: "gpt" } }).catalog;
+    expect(followsBots.forRole("code_default")?.id).toBe("gpt");
+    expect(followsBots.roleIsSet("code_default")).toBe(false);
+
+    const own = catalogOf({ ...base, roles: { bot_default: "gpt", code_default: "sonnet" } });
+    expect(own.catalog.forRole("code_default")?.id).toBe("sonnet");
+    expect(own.catalog.roleIsSet("code_default")).toBe(true);
+
+    const plan = catalogOf({
+      ...base,
+      roles: { bot_default: "plan-sonnet", code_default: "plan-sonnet" },
+    }).catalog;
+    expect(plan.forRole("code_default")?.id).toBe("sonnet");
+    expect(plan.roleIsSet("code_default")).toBe(false);
+  });
+
   it("skips a role whose model can't run", () => {
     const { catalog } = catalogOf({ ...base, roles: { bot_default: "gpt-old" } });
     expect(catalog.forRole("bot_default")?.id).toBe("sonnet");

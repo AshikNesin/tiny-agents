@@ -17,7 +17,13 @@ export interface ModelsResponse {
   providers: ProviderSummary[];
 }
 
-export type ModelRole = "bot_default" | "memory_capture" | "chat_title" | "vision" | "classifier";
+export type ModelRole =
+  | "bot_default"
+  | "code_default"
+  | "memory_capture"
+  | "chat_title"
+  | "vision"
+  | "classifier";
 
 export interface Overrides {
   contextWindow?: number;

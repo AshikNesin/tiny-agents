@@ -19,3 +19,10 @@ export {
 export * as shelley from "../drivers/shelley";
 export { createShelleyHarness, type ShelleyHarness } from "../drivers/shelley";
 export { createClaudeCodeHarness } from "../drivers/claude-code";
+export {
+  createPiHarness,
+  type PiChatEvent,
+  type PiChatState,
+  type PiPort,
+  type PiThreadConfig,
+} from "../drivers/pi";

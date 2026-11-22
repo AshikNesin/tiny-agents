@@ -40,7 +40,13 @@ export interface ProviderSummary {
   modelCount: number;
 }
 
-export type ModelRole = "bot_default" | "memory_capture" | "chat_title" | "vision" | "classifier";
+export type ModelRole =
+  | "bot_default"
+  | "code_default"
+  | "memory_capture"
+  | "chat_title"
+  | "vision"
+  | "classifier";
 
 export interface ModelRoute {
   engine: AgentEngineKind;
