@@ -1,0 +1,47 @@
+# Chats
+
+A bot's chat at `/chats/:botId` is one column: the transcript, the composer,
+and a header with the bot menu, live view, **Past chats** and **New chat**.
+
+## Sidebar
+
+The bots list groups bots by what they need (`groupBots` in
+`apps/web/src/client/lib/bot-groups.ts`):
+
+- **Needs you**: a bot waiting on your approval or your answer to its
+  questions.
+- **Working**: a bot replying now.
+- **Pinned**, then **Recent**, newest first; Recent folds after a few rows.
+
+Tasks, Terminal, Computer and Browser sit in one row of icons above the bots.
+
+## Keys
+
+The chat page uses the same single-letter keys as the Code workspace, from
+`components/keys.tsx`. The list lives in `ChatPane.tsx`; `?` shows it, and the
+command palette runs the same commands under **Chat actions**. Letters typed
+in the composer are text; Escape outside it stops a reply.
+
+## Long replies
+
+Runs of finished tool calls fold into one row (`toolSteps`). When a reply has
+finished and its work is more than one row, the tool calls and reasoning above
+the answer fold into one **Worked: ...** line with what failed and how long it
+took (`workFold` in `lib/tool-call-text.ts`). It stays open while the bot
+works, and around a card you act on, such as an approval or a question.
+
+## Edit and Run again
+
+Your last message has **Edit** and **Run again** (keys `e` and `t`) while the
+bot is idle (`lastTurn` in `lib/last-turn.ts`).
+
+- **Run again** goes back to before that message and sends it again.
+- **Edit** puts it in the composer; sending goes back to before it and sends
+  the edited text. Cancel leaves the chat as it is.
+
+Going back is `POST /api/v1/bots/:id/rewind` with the message id
+(`rewindChat` in `bots/chats.service.ts`). It forks the conversation just
+before that message and moves the bot onto the fork. The chat as it was
+becomes a past chat, so continuing it from **Past chats** undoes the edit. The
+server refuses while a reply is running (409). Editing the first message
+starts an empty chat. Attachments on the message are not sent again.
