@@ -15,6 +15,7 @@ import { errorMessage } from "../../lib/errors";
 import { RoutineCard } from "./RoutineCard";
 import { RoutineEditor } from "./RoutineEditor";
 import { RecentRuns, UpcomingRuns } from "./RoutineRunLists";
+import { HookUrlDialog } from "./HookUrlDialog";
 
 const AWAITING_POLL_MS = 4_000;
 
@@ -26,6 +27,7 @@ export function Routines() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<Routine | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [hook, setHook] = useState<{ name: string; url: string } | null>(null);
   const confirm = useConfirm();
   const navigate = useNavigate();
 
@@ -72,6 +74,26 @@ export function Routines() {
     }
   };
 
+  const showHook = async (routine: Routine) => {
+    if (routine.hasHook) {
+      const confirmed = await confirm({
+        title: "Make a new webhook URL?",
+        description: "The URL is shown only once. A new one stops the old one from working.",
+        confirmLabel: "Make new URL",
+      });
+      if (!confirmed) return;
+    }
+    let url: string | undefined;
+    const done = await act(
+      routine.id,
+      async () => {
+        url = (await mutations.rotateHook.mutateAsync(routine.id)).url;
+      },
+      "hook",
+    );
+    if (done && url) setHook({ name: routine.name, url });
+  };
+
   const runNow = (routine: Routine) =>
     act(routine.id, () => mutations.runNow.mutateAsync(routine.id), "run").then((ok) => {
       if (!ok) return;
@@ -84,7 +106,7 @@ export function Routines() {
   return (
     <PageLayout
       title="Routines"
-      description="Run any bot on a schedule: once, daily, weekly, or on an interval. Times are in IST."
+      description="Run any bot on a schedule (once, daily, weekly, on an interval) or when a webhook is called. Times are in IST."
       maxWidth="4xl"
       actions={
         <Button
@@ -134,13 +156,15 @@ export function Routines() {
                     (busyId === routine.id + "run" ||
                       busyId === routine.id + "remove" ||
                       busyId === routine.id + "toggle" ||
-                      busyId === routine.id + "resume")
+                      busyId === routine.id + "resume" ||
+                      busyId === routine.id + "hook")
                   }
                   onEdit={() => {
                     setEditing(routine);
                     setEditorOpen(true);
                   }}
                   onDelete={() => void remove(routine)}
+                  onHook={() => void showHook(routine)}
                   onRunNow={() => void runNow(routine)}
                   onResume={() =>
                     void act(routine.id, () => mutations.resume.mutateAsync(routine.id), "resume")
@@ -162,6 +186,14 @@ export function Routines() {
           {runs !== null && runs.length > 0 && <RecentRuns runs={runs} />}
         </>
       )}
+
+      <HookUrlDialog
+        url={hook?.url ?? null}
+        routineName={hook?.name ?? ""}
+        onOpenChange={(open) => {
+          if (!open) setHook(null);
+        }}
+      />
 
       <RoutineEditor
         open={editorOpen}

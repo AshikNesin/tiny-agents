@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { logger } from "@groot/core/logger";
 import { registerJobHandler } from "@groot/jobs/server/worker";
 import type { JobHandler } from "@groot/jobs/server/types";
@@ -27,6 +27,13 @@ import {
   runRequestId,
 } from "./routines.runs";
 import { composeRoutinePrompt, safeParseSchedule, withinGrace } from "./routines.schedule";
+import {
+  bindEvents,
+  composeEventsSection,
+  hasPendingEvents,
+  hookCapFreesAt,
+  queueHookFire,
+} from "./routines.hooks";
 
 export async function dispatchOccurrence(
   payload: RoutineFirePayload,
@@ -45,6 +52,7 @@ export async function dispatchOccurrence(
     return undefined;
   }
   if (!routine.enabled && payload.trigger === "schedule") return undefined;
+  if (payload.trigger === "webhook") return dispatchWebhook(routine, scheduledFor, now);
 
   const existing = await db.query.routineRuns.findFirst({
     where: and(eq(routineRuns.routineId, routine.id), eq(routineRuns.scheduledFor, scheduledFor)),
@@ -104,6 +112,80 @@ export async function dispatchOccurrence(
     await advanceRoutine(routine, scheduledFor, now);
   }
   return runId;
+}
+
+type DispatchRoutine = {
+  id: string;
+  botId: string;
+  name: string;
+  prompt: string;
+  enabled: boolean;
+  bot: { id: string; name: string };
+};
+
+async function dispatchWebhook(
+  routine: DispatchRoutine,
+  firedAt: Date,
+  now: Date,
+): Promise<string | undefined> {
+  if (!routine.enabled) return undefined;
+  const reserved = await db.query.routineRuns.findFirst({
+    where: and(
+      eq(routineRuns.routineId, routine.id),
+      eq(routineRuns.trigger, "webhook"),
+      eq(routineRuns.status, "awaiting"),
+      isNull(routineRuns.submittedAt),
+    ),
+  });
+  const runtime = getAgentRuntime();
+  let scheduledFor = reserved?.scheduledFor ?? firedAt;
+  if (!reserved) {
+    if (await hasRunningRun(routine.id, runtime)) return undefined;
+    const freesAt = await hookCapFreesAt(routine.id, now);
+    if (freesAt) {
+      await queueHookFire(routine.id, freesAt, now);
+      return undefined;
+    }
+    if (!(await hasPendingEvents(routine.id))) return undefined;
+    const latest = await db.query.routineRuns.findFirst({
+      where: eq(routineRuns.routineId, routine.id),
+      orderBy: desc(routineRuns.scheduledFor),
+      columns: { scheduledFor: true },
+    });
+    if (latest && latest.scheduledFor.getTime() >= scheduledFor.getTime()) {
+      scheduledFor = new Date(latest.scheduledFor.getTime() + 1);
+    }
+  }
+  try {
+    const conversationId = await runConversation(routine, scheduledFor, "webhook", runtime, {
+      reserved: reserved?.conversationId ?? null,
+    });
+    const run = await db.query.routineRuns.findFirst({
+      where: and(eq(routineRuns.routineId, routine.id), eq(routineRuns.scheduledFor, scheduledFor)),
+      columns: { id: true },
+    });
+    if (!run) throw new Error("The webhook run could not be stored");
+    const events = await bindEvents(routine.id, run.id);
+    await submitToBot(
+      routine.bot.id,
+      {
+        requestId: runRequestId(routine.id, scheduledFor),
+        text:
+          composeRoutinePrompt(
+            routine.name,
+            routine.prompt,
+            scheduledFor,
+            undefined,
+            await recentResults(routine.id, scheduledFor),
+          ) + composeEventsSection(events),
+      },
+      runtime,
+      { unattendedConversationId: conversationId, unattended: "routine" },
+    );
+  } catch (error) {
+    return recordSubmitFailed(routine, scheduledFor, "webhook", now, error);
+  }
+  return recordAwaiting(routine, scheduledFor, "webhook", now);
 }
 
 async function runConversation(

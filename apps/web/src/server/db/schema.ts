@@ -20,6 +20,7 @@ import type { MemoryStatus } from "../../shared/machines/memory";
 import type { PushSubscriptionStatus } from "../../shared/machines/push-subscription";
 import type { RoutineRunStatus } from "../../shared/machines/routine-run";
 import type { TaskStatus } from "../../shared/machines/task";
+import type { RoutineTrigger } from "../../shared/api/routines";
 
 const id = () =>
   text("id")
@@ -593,6 +594,7 @@ export const routines = sqliteTable(
     conversationId: text("conversation_id").unique(),
     blockedStreak: integer("blocked_streak").notNull().default(0),
     pausedReason: text("paused_reason"),
+    hookTokenHash: text("hook_token_hash").unique(),
     ...timestamps,
   },
   (t) => [index("routines_enabled_next_run_at_idx").on(t.enabled, t.nextRunAt)],
@@ -641,7 +643,7 @@ export const routineRuns = sqliteTable(
       .references(() => routines.id, { onDelete: "cascade" }),
     scheduledFor: ms("scheduled_for").notNull(),
     status: text("status").$type<RoutineRunStatus>().notNull(),
-    trigger: text("trigger").$type<"schedule" | "manual">().notNull().default("schedule"),
+    trigger: text("trigger").$type<RoutineTrigger>().notNull().default("schedule"),
     requestId: text("request_id").notNull().unique(),
     submittedAt: ms("submitted_at"),
     startedAt: ms("started_at"),
@@ -655,6 +657,24 @@ export const routineRuns = sqliteTable(
     unique("routine_runs_routine_id_scheduled_for_unique").on(t.routineId, t.scheduledFor),
     index("routine_runs_status_idx").on(t.status),
     index("routine_runs_conversation_id_idx").on(t.conversationId),
+  ],
+);
+
+export const routineEvents = sqliteTable(
+  "routine_events",
+  {
+    id: id(),
+    routineId: text("routine_id")
+      .notNull()
+      .references(() => routines.id, { onDelete: "cascade" }),
+    deliveryId: text("delivery_id").notNull(),
+    payload: text("payload").notNull(),
+    receivedAt: ms("received_at").notNull(),
+    runId: text("run_id"),
+  },
+  (t) => [
+    unique("routine_events_routine_id_delivery_id_unique").on(t.routineId, t.deliveryId),
+    index("routine_events_routine_id_run_id_idx").on(t.routineId, t.runId),
   ],
 );
 

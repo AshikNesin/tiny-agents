@@ -20,6 +20,7 @@ const createMock = vi.fn();
 const updateMock = vi.fn();
 const runNowMock = vi.fn();
 const removeMock = vi.fn();
+const rotateHookMock = vi.fn();
 
 vi.mock("@/lib/routines-api", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/lib/routines-api")>();
@@ -34,6 +35,7 @@ vi.mock("@/lib/routines-api", async (importOriginal) => {
       pause: vi.fn(),
       resume: vi.fn(),
       remove: (...args: unknown[]) => removeMock(...args),
+      rotateHook: (...args: unknown[]) => rotateHookMock(...args),
     },
   };
 });
@@ -51,6 +53,7 @@ const routine: Routine = {
   done: false,
   blockedStreak: 0,
   pausedReason: null,
+  hasHook: false,
   createdAt: "2026-10-01T00:00:00.000Z",
   updatedAt: "2026-10-01T00:00:00.000Z",
 };
@@ -124,6 +127,44 @@ describe("Routines page", { timeout: 15_000 }, () => {
     expect(screen.getByText(/took 1m 4s/)).toBeTruthy();
     expect(screen.getByText("succeeded")).toBeTruthy();
     expect(screen.getByText("manual")).toBeTruthy();
+  });
+
+  it("a webhook routine shows its new URL once, after confirming a replacement", async () => {
+    const webhook: Routine = {
+      ...routine,
+      id: "r9",
+      name: "inbox",
+      schedule: { kind: "webhook" },
+      scheduleDescription: "When its webhook URL is called",
+      nextRunAt: null,
+      hasHook: true,
+    };
+    loadPage([webhook], []);
+    rotateHookMock.mockResolvedValue({ url: "https://app.test/api/v1/routines/hooks/tok123" });
+    const user = userEvent.setup();
+    mount();
+
+    expect(await screen.findByText("Runs when its webhook URL is called")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Webhook URL" }));
+    expect(rotateHookMock).not.toHaveBeenCalled();
+    await user.click(await screen.findByRole("button", { name: "Make new URL" }));
+
+    const field = await screen.findByLabelText("Webhook URL");
+    expect((field as HTMLInputElement).value).toBe("https://app.test/api/v1/routines/hooks/tok123");
+    expect(rotateHookMock).toHaveBeenCalledWith("r9");
+  });
+
+  it("creates a webhook routine from the Webhook schedule tab", async () => {
+    loadPage([], []);
+    const user = userEvent.setup();
+    mount();
+    await user.click(await screen.findByRole("button", { name: /New routine/ }));
+    await fillBasics(user);
+    await user.click(screen.getByRole("tab", { name: "Webhook" }));
+    expect(screen.getByText("When its webhook URL is called")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Create" }));
+    await waitFor(() => expect(createMock).toHaveBeenCalled());
+    expect(createMock.mock.calls[0]![0]).toMatchObject({ schedule: { kind: "webhook" } });
   });
 
   it("shows what a run spent in tokens beside how long it took", async () => {

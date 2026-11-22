@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
+import type { ClockSchedule } from "../../../../apps/web/src/shared/api/routines";
 import {
   TZ_IST,
   composeRoutineLabel,
@@ -15,27 +16,29 @@ import {
 
 const FROM = new Date("2026-10-20T10:00:00.000Z");
 
+const clockSchedule = (value: unknown) => parseSchedule(value) as ClockSchedule;
+
 describe("nextOccurrence (cron, IST)", () => {
   it("fires 00:30 IST on the previous UTC day (19:00 UTC)", () => {
-    const schedule = parseSchedule({ kind: "cron", expr: "30 0 * * *" });
+    const schedule = clockSchedule({ kind: "cron", expr: "30 0 * * *" });
     const next = nextOccurrence(schedule, FROM);
     expect(next.toISOString()).toBe("2026-10-20T19:00:00.000Z");
   });
 
   it("computes weekday 09:00 IST from an afternoon-IST moment", () => {
-    const schedule = parseSchedule({ kind: "cron", expr: "0 9 * * 1-5" });
+    const schedule = clockSchedule({ kind: "cron", expr: "0 9 * * 1-5" });
     const next = nextOccurrence(schedule, FROM);
     expect(next.toISOString()).toBe("2026-10-21T03:30:00.000Z");
   });
 
   it("treats an exact-slot `from` as already fired and returns the following slot", () => {
-    const schedule = parseSchedule({ kind: "cron", expr: "0 9 * * 1-5" });
+    const schedule = clockSchedule({ kind: "cron", expr: "0 9 * * 1-5" });
     const at = new Date("2026-10-21T03:30:00.000Z");
     expect(nextOccurrence(schedule, at).toISOString()).toBe("2026-10-22T03:30:00.000Z");
   });
 
   it("crosses the month boundary in IST", () => {
-    const schedule = parseSchedule({ kind: "cron", expr: "0 20 1 * *" });
+    const schedule = clockSchedule({ kind: "cron", expr: "0 20 1 * *" });
     const from = new Date("2026-11-01T14:30:00.000Z");
     expect(nextOccurrence(schedule, from).toISOString()).toBe("2026-12-01T14:30:00.000Z");
   });
@@ -43,17 +46,17 @@ describe("nextOccurrence (cron, IST)", () => {
 
 describe("nextOccurrence (once, interval)", () => {
   it("once returns the instant itself, even when in the past", () => {
-    const schedule = parseSchedule({ kind: "once", at: "2026-01-01T09:00:00+05:30" });
+    const schedule = clockSchedule({ kind: "once", at: "2026-01-01T09:00:00+05:30" });
     expect(nextOccurrence(schedule, FROM).toISOString()).toBe("2026-01-01T03:30:00.000Z");
   });
 
   it("interval adds minutes to `from` (the chain's anchor carries the phase)", () => {
-    const schedule = parseSchedule({ kind: "interval", minutes: 30 });
+    const schedule = clockSchedule({ kind: "interval", minutes: 30 });
     expect(nextOccurrence(schedule, FROM).toISOString()).toBe("2026-10-20T10:30:00.000Z");
   });
 
   it("chains without drift by advancing from the fired occurrence", () => {
-    const schedule = parseSchedule({ kind: "interval", minutes: 90 });
+    const schedule = clockSchedule({ kind: "interval", minutes: 90 });
     const first = nextOccurrence(schedule, FROM);
     const second = nextOccurrence(schedule, first);
     expect(second.toISOString()).toBe("2026-10-20T13:00:00.000Z");

@@ -45,5 +45,9 @@ export function useRoutineMutations() {
     mutationFn: (id: string) => routinesApi.runNow(id),
     ...RESOURCE_MUTATION,
   });
-  return { create, update, remove, resume, runNow };
+  const rotateHook = useMutation({
+    mutationFn: (id: string) => routinesApi.rotateHook(id),
+    ...RESOURCE_MUTATION,
+  });
+  return { create, update, remove, resume, runNow, rotateHook };
 }

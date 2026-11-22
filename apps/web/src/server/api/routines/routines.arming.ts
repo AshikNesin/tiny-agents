@@ -5,14 +5,19 @@ import { addJob, cancelJob } from "@groot/jobs/server/queue";
 import type { SendJobOptions } from "@groot/jobs/server/types";
 import { z } from "zod";
 import { db, jobs, routineRuns, routines } from "../../db";
-import { nextOccurrence, safeParseSchedule, type Schedule } from "./routines.schedule";
+import {
+  isClockSchedule,
+  nextOccurrence,
+  safeParseSchedule,
+  type Schedule,
+} from "./routines.schedule";
 
 export const ROUTINE_FIRE_JOB = "routine-fire";
 
 export const firePayloadSchema = z.object({
   routineId: z.string().min(1),
   scheduledFor: z.iso.datetime(),
-  trigger: z.enum(["schedule", "manual"]).default("schedule"),
+  trigger: z.enum(["schedule", "manual", "webhook"]).default("schedule"),
 });
 
 export interface RoutineFirePayload extends z.infer<typeof firePayloadSchema> {}
@@ -95,7 +100,8 @@ export async function createRoutine(
   now: Date = new Date(),
 ): Promise<{ id: string; created: boolean }> {
   const id = createId();
-  const nextRunAt = armed ? nextOccurrence(fields.schedule, now) : null;
+  const nextRunAt =
+    armed && isClockSchedule(fields.schedule) ? nextOccurrence(fields.schedule, now) : null;
   const pendingJobId = nextRunAt ? await queueFireJob(id, nextRunAt, now) : null;
   const [row] = await db
     .insert(routines)
@@ -120,8 +126,8 @@ export async function armRoutine(
   from: Date,
   now: Date = new Date(),
 ): Promise<void> {
-  const nextRunAt = nextOccurrence(schedule, from);
-  const pendingJobId = await queueFireJob(id, nextRunAt, now);
+  const nextRunAt = isClockSchedule(schedule) ? nextOccurrence(schedule, from) : null;
+  const pendingJobId = nextRunAt ? await queueFireJob(id, nextRunAt, now) : null;
   const before = await rewrite(id, () => ({
     enabled: true,
     nextRunAt,
@@ -161,7 +167,7 @@ export interface ChainRoutine {
 
 export async function advanceRoutine(routine: ChainRoutine, from: Date, now: Date): Promise<void> {
   const schedule = safeParseSchedule(routine.schedule);
-  if (!schedule) return;
+  if (!schedule || schedule.kind === "webhook") return;
   if (schedule.kind === "once") {
     await db
       .update(routines)

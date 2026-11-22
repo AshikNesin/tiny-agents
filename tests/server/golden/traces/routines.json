@@ -72,6 +72,7 @@
         "done": false,
         "blockedStreak": 0,
         "pausedReason": null,
+        "hasHook": false,
         "createdAt": "2026-11-06T06:30:00.000Z",
         "updatedAt": "2026-11-06T06:30:00.000Z",
         "nextFireTimes": [
@@ -106,6 +107,7 @@
           "done": false,
           "blockedStreak": 0,
           "pausedReason": null,
+          "hasHook": false,
           "createdAt": "2026-11-06T06:30:00.000Z",
           "updatedAt": "2026-11-06T06:30:00.000Z"
         }
@@ -135,6 +137,7 @@
         "done": false,
         "blockedStreak": 0,
         "pausedReason": null,
+        "hasHook": false,
         "createdAt": "2026-11-06T06:30:00.000Z",
         "updatedAt": "2026-11-06T06:30:00.000Z"
       }
@@ -163,6 +166,7 @@
         "done": false,
         "blockedStreak": 0,
         "pausedReason": null,
+        "hasHook": false,
         "createdAt": "2026-11-06T06:30:00.000Z",
         "updatedAt": "2026-11-06T06:30:00.000Z"
       }
@@ -191,6 +195,7 @@
         "done": false,
         "blockedStreak": 0,
         "pausedReason": null,
+        "hasHook": false,
         "createdAt": "2026-11-06T06:30:00.000Z",
         "updatedAt": "2026-11-06T06:30:00.000Z"
       }
@@ -219,6 +224,7 @@
         "done": false,
         "blockedStreak": 0,
         "pausedReason": null,
+        "hasHook": false,
         "createdAt": "2026-11-06T06:30:00.000Z",
         "updatedAt": "2026-11-06T06:30:00.000Z",
         "nextFireTimes": [
@@ -302,6 +308,7 @@
         "done": false,
         "blockedStreak": 0,
         "pausedReason": null,
+        "hasHook": false,
         "createdAt": "2026-11-06T06:30:00.000Z",
         "updatedAt": "2026-11-06T06:30:00.000Z",
         "nextFireTimes": ["Fri, 06 Nov 2026, 12:01 IST"]
@@ -417,6 +424,7 @@
           "done": false,
           "blockedStreak": 0,
           "pausedReason": null,
+          "hasHook": false,
           "createdAt": "2026-11-06T06:30:00.000Z",
           "updatedAt": "2026-11-06T06:30:00.000Z"
         },
@@ -436,6 +444,7 @@
           "done": false,
           "blockedStreak": 0,
           "pausedReason": null,
+          "hasHook": false,
           "createdAt": "2026-11-06T06:30:00.000Z",
           "updatedAt": "2026-11-06T06:32:00.000Z"
         }
@@ -462,6 +471,7 @@
           "conversationId": "9",
           "blockedStreak": 0,
           "pausedReason": null,
+          "hookTokenHash": null,
           "createdAt": "2026-11-06T06:30:00.000Z",
           "updatedAt": "2026-11-06T06:30:00.000Z"
         },
@@ -481,6 +491,7 @@
           "conversationId": "21",
           "blockedStreak": 0,
           "pausedReason": null,
+          "hookTokenHash": null,
           "createdAt": "2026-11-06T06:30:00.000Z",
           "updatedAt": "2026-11-06T06:32:00.000Z"
         }
