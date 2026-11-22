@@ -1,9 +1,11 @@
 package groot.mobile.data.api
 
+import groot.mobile.data.code.RewindPoint
 import kotlinx.coroutines.flow.Flow
 import org.json.JSONArray
-import org.json.JSONObject
 import java.net.URLEncoder
+
+data class WorkflowStart(val started: Boolean, val reason: String?, val view: ThreadPulls?)
 
 class CodeApi(private val client: ApiClient) {
     private fun enc(value: String): String = URLEncoder.encode(value, "UTF-8").replace("+", "%20")
@@ -32,16 +34,10 @@ class CodeApi(private val client: ApiClient) {
 
     suspend fun projects(): List<CodeProject> = list(client.get("/code/projects")).mapObjects(CodeProject::from)
 
-    suspend fun checkCwd(instanceId: String, path: String): String? {
-        val result = client.getObject("${harness(instanceId)}/validate-cwd", mapOf("path" to path))
-        return if (result.bool("valid")) null else result.string("error", "That directory cannot be used.")
-    }
-
     suspend fun create(
+        projectId: String,
         instanceId: String?,
         message: String,
-        projectId: String? = null,
-        cwd: String? = null,
         model: String? = null,
         effort: String? = null,
         permissionMode: String? = null,
@@ -51,7 +47,6 @@ class CodeApi(private val client: ApiClient) {
             "instanceId" to instanceId,
             "projectId" to projectId,
             "message" to message,
-            "cwd" to cwd,
             "model" to model,
             "effort" to effort,
             "permissionMode" to permissionMode,
@@ -110,15 +105,6 @@ class CodeApi(private val client: ApiClient) {
         client.delete(thread(id))
     }
 
-    suspend fun diffs(instanceId: String, cwd: String): List<GitDiff> =
-        client.getObject("${harness(instanceId)}/diffs", mapOf("cwd" to cwd)).arr("diffs").mapObjects(GitDiff::from)
-
-    suspend fun diffFiles(instanceId: String, diffId: String, cwd: String): List<ChangedFile> =
-        list(client.get("${harness(instanceId)}/diffs/${enc(diffId)}/files", mapOf("cwd" to cwd))).mapObjects(ChangedFile::from)
-
-    suspend fun diffFile(instanceId: String, diffId: String, cwd: String, path: String): FileContents =
-        FileContents.from(client.getObject("${harness(instanceId)}/diffs/${enc(diffId)}/file", mapOf("cwd" to cwd, "path" to path)))
-
     suspend fun reviewFiles(id: String, scope: String? = null): List<ChangedFile> =
         list(client.get("${thread(id)}/review/files", mapOf("scope" to scope))).mapObjects(ChangedFile::from)
 
@@ -153,17 +139,19 @@ class CodeApi(private val client: ApiClient) {
     suspend fun setAutofix(id: String, enabled: Boolean): ThreadPulls =
         ThreadPulls.from(client.postObject("${thread(id)}/pr/autofix", jsonOf("enabled" to enabled)))
 
-    suspend fun setAutoMerge(id: String, enabled: Boolean): ThreadPulls =
-        ThreadPulls.from(client.postObject("${thread(id)}/pr/automerge", jsonOf("enabled" to enabled)))
+    suspend fun runWorkflow(id: String, workflow: String): WorkflowStart {
+        val result = client.postObject("${thread(id)}/workflows/${enc(workflow)}")
+        return WorkflowStart(result.bool("started"), result.stringOrNull("reason"), result.objOrNull("view")?.let(ThreadPulls::from))
+    }
 
-    suspend fun fixNow(id: String): ThreadPulls =
-        ThreadPulls.from(client.postObject("${thread(id)}/pr/fix").objOrNull("view") ?: JSONObject())
+    suspend fun rewind(id: String, point: RewindPoint): Boolean =
+        client.postObject(
+            "${thread(id)}/rewind",
+            jsonOf("at" to point.at, "turn" to point.turn, "turns" to point.turns, "text" to point.text),
+        ).bool("filesRestored")
 
     suspend fun merge(id: String, method: String): ThreadPulls =
         ThreadPulls.from(client.postObject("${thread(id)}/pr/merge", jsonOf("method" to method)))
-
-    suspend fun nextPrompt(id: String, after: String): String? =
-        client.getObject("${thread(id)}/next-prompt", mapOf("after" to after)).stringOrNull("text")?.ifBlank { null }
 
     suspend fun reviews(): List<CodeReview> = list(client.get("/code/reviews")).mapObjects(CodeReview::from)
 
@@ -172,6 +160,14 @@ class CodeApi(private val client: ApiClient) {
     suspend fun openReview(pr: String): CodeReview = CodeReview.from(client.postObject("/code/reviews", jsonOf("pr" to pr)))
 
     suspend fun review(id: String): CodeReview = CodeReview.from(client.getObject(reviewPath(id)))
+
+    suspend fun agentReview(id: String) {
+        client.post("${reviewPath(id)}/agent-review")
+    }
+
+    suspend fun decideFinding(id: String, findingId: String, add: Boolean): List<ReviewFinding> =
+        list(client.post("${reviewPath(id)}/findings/${enc(findingId)}", jsonOf("action" to if (add) "add" else "dismiss")))
+            .mapObjects(ReviewFinding::from)
 
     suspend fun archiveReview(id: String) {
         client.post("${reviewPath(id)}/archive")

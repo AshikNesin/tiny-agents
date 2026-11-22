@@ -9,7 +9,11 @@ import groot.mobile.data.api.TranscriptItem
 import groot.mobile.data.code.CodeDisplayItem
 import groot.mobile.data.code.CodeThreadState
 import groot.mobile.data.code.DiffLine
-import groot.mobile.data.code.buildCodeSections
+import groot.mobile.data.code.CodeWorkflow
+import groot.mobile.data.code.RewindPoint
+import groot.mobile.data.code.codeStatusSections
+import groot.mobile.data.code.codeWorkflows
+import groot.mobile.data.code.lastTurn
 import groot.mobile.data.code.describeTools
 import groot.mobile.data.code.groupTools
 import groot.mobile.data.code.lastErrorId
@@ -149,21 +153,29 @@ class CodeThreadTest {
     }
 
     @Test
-    fun `the list puts working threads on top with their subagents nested`() {
+    fun `the list groups threads by what they need, newest first, without review assistants`() {
+        fun row(id: String, group: String?, updated: String, extra: String = "") =
+            thread(id, updated = updated).replace("\"unread\":false", "\"unread\":false$extra" +
+                (group?.let { ",\"status\":{\"group\":\"$it\",\"reason\":${if (it == "needs-you") "\"finished\"" else "null"}}" } ?: ""))
         val list = CodeListEvent.from(
             JSONObject(
                 """{"type":"list","threads":[
-                ${thread("claude-code:old", updated = "2026-11-16T08:00:00Z")},
-                ${thread("claude-code:parent", updated = "2026-11-16T09:00:00Z")},
-                ${thread("claude-code:sub", working = true, parent = "claude-code:parent", updated = "2026-11-16T09:30:00Z")},
-                ${thread("claude-code:new", updated = "2026-11-16T11:00:00Z", unread = true)}]}""",
+                ${row("t-done", "done", "2026-11-16T08:00:00Z")},
+                ${row("t-asks", "needs-you", "2026-11-16T09:00:00Z")},
+                ${row("t-review", "review", "2026-11-16T09:30:00Z", ",\"branch\":\"ta/fix-build\"")},
+                ${row("t-asks-newer", "needs-you", "2026-11-16T10:00:00Z")},
+                ${row("t-assistant", "needs-you", "2026-11-16T11:00:00Z", ",\"review\":{\"id\":\"rv1\",\"number\":7}")},
+                ${row("t-old-server", null, "2026-11-16T07:00:00Z")}]}""",
             ),
         ) as CodeListEvent.Threads
-        val sections = buildCodeSections(list.threads)
-        assertEquals(listOf("claude-code:parent"), sections.working.map { it.row.id })
-        assertEquals(listOf("claude-code:sub"), sections.working.single().children.map { it.row.id })
-        assertEquals(listOf("claude-code:new", "claude-code:old"), sections.recent.map { it.row.id })
-        assertTrue(sections.recent.first().unread)
+
+        val sections = codeStatusSections(list.threads)
+
+        assertEquals(listOf("Needs you", "In review", "Done"), sections.map { it.label })
+        assertEquals(listOf("t-asks-newer", "t-asks"), sections[0].rows.map { it.id })
+        assertEquals("finished", sections[0].rows.first().statusReason)
+        assertEquals("ta/fix-build", sections[1].rows.single().branch)
+        assertEquals(listOf("t-done", "t-old-server"), sections[2].rows.map { it.id })
     }
 
     @Test
@@ -214,9 +226,9 @@ class CodeThreadTest {
         val pulls = ThreadPulls.from(
             JSONObject(
                 """{"project":{"id":"p1","name":"app","repo":{"owner":"me","name":"app"},"baseBranch":"main","defaultInstanceId":"claude-code"},
-                "branch":"ta/fix-build-1a2b","ahead":2,"earlier":[],"spend":{"usd":0.5,"limitUsd":null},
+                "branch":"ta/fix-build-1a2b","ahead":2,"earlier":[],
                 "active":{"number":42,"url":"https://github.com/me/app/pull/42","title":"Fix the build","state":"open","draft":true,
-                  "headRef":"ta/fix-build-1a2b","baseRef":"main","autofix":true,"autoMerge":false,
+                  "headRef":"ta/fix-build-1a2b","baseRef":"main","autofix":true,
                   "loop":{"status":"needs_input","reason":"The pass made no commit"},"stalled":[],"ignored":["c2"],"passes":[],
                   "snapshot":{"mergeable":"mergeable","mergeMethods":["squash"],"inMergeQueue":false,
                     "checks":[{"name":"test","state":"failure","url":"https://ci/1"},{"name":"lint","state":"success","url":null}],
@@ -232,5 +244,40 @@ class CodeThreadTest {
         assertEquals(listOf("Rename this"), pr.threads.map { it.body })
         assertEquals("needs_input", pr.loopStatus)
         assertEquals(listOf("squash"), pr.mergeMethods)
+        assertEquals(listOf(CodeWorkflow.FixCi, CodeWorkflow.AddressComments), codeWorkflows(pr))
+    }
+
+    @Test
+    fun `a conflicting branch offers to resolve it, and a green PR offers nothing`() {
+        fun pull(snapshot: String) = ThreadPulls.from(
+            JSONObject(
+                """{"project":null,"branch":"b","ahead":0,"earlier":[],"active":{"number":1,"url":"u","title":"t","state":"open",
+                "draft":false,"headRef":"b","baseRef":"main","autofix":false,"loop":{"status":"off","reason":null},
+                "stalled":[],"ignored":[],"passes":[],"snapshot":$snapshot}}""",
+            ),
+        ).active!!
+        val conflicting = pull("""{"mergeable":"conflicting","mergeMethods":["merge"],"checks":[],"reviews":[],"threads":[]}""")
+        assertEquals(listOf(CodeWorkflow.ResolveConflicts), codeWorkflows(conflicting))
+        assertEquals("resolve_conflicts", CodeWorkflow.ResolveConflicts.wire)
+        val green = pull("""{"mergeable":"mergeable","mergeMethods":["merge"],"checks":[{"name":"ci","state":"success"}],"reviews":[],"threads":[]}""")
+        assertTrue(codeWorkflows(green).isEmpty())
+    }
+
+    @Test
+    fun `the last turn runs again from where it started, counting every turn before it`() {
+        val items = listOf(
+            TranscriptItem.User("u1", "Fix the build", emptyList()),
+            TranscriptItem.Assistant("a1", "Done."),
+            TranscriptItem.Turn("turn1", 1000, null),
+            TranscriptItem.User("u2", "Now add a test", emptyList(), forkAt = "msg-7"),
+            TranscriptItem.User("u3", "and run it", emptyList()),
+            TranscriptItem.Assistant("a2", "Added."),
+            TranscriptItem.Turn("turn2", 1000, null),
+        )
+
+        assertEquals(RewindPoint(at = "msg-7", turn = 1, turns = 2, text = "Now add a test"), lastTurn(items))
+        val parsed = TranscriptItem.from(JSONObject("""{"kind":"user","id":"u9","text":"hi","attachments":[],"forkAt":"msg-9"}"""))
+        assertEquals("msg-9", (parsed as TranscriptItem.User).forkAt)
+        assertNull(lastTurn(listOf(TranscriptItem.Assistant("a", "hi"))))
     }
 }

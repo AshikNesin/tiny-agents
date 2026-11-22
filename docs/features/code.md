@@ -489,7 +489,9 @@ Known limits (register row C7):
 - Shelley and Claude Code threads cannot edit or retry a turn.
 - A review is its own screen, not a thread; the agent does not review a PR
   on its own when a review is requested.
-- The Android app's Code screens predate this workspace.
+- The Android app has no terminal or file editor; it lists, steers,
+  edits and retries threads, shows Changes and the pull request, runs
+  workflows, and reviews PRs with the agent's brief and findings.
 - Not built: re-running a flaky check before spending a pass, mention
   commands from PR comments, and a preview script.
 

@@ -5,6 +5,7 @@ import groot.mobile.data.api.CodeQueuedMessage
 import groot.mobile.data.api.CodeThreadEvent
 import groot.mobile.data.api.CodeThreadSnapshot
 import groot.mobile.data.api.CodeThreadSummary
+import groot.mobile.data.api.PullView
 import groot.mobile.data.api.ThreadSettings
 import groot.mobile.data.api.TranscriptItem
 
@@ -188,31 +189,47 @@ fun shortPath(path: String?): String {
     return if (parts.size <= 2) path else "…/" + parts.takeLast(2).joinToString("/")
 }
 
-data class CodeListNode(val row: CodeThreadSummary, val children: List<CodeListNode>, val busy: Boolean, val unread: Boolean)
+data class CodeStatusSection(val group: String, val label: String, val rows: List<CodeThreadSummary>)
 
-data class CodeListSections(val working: List<CodeListNode>, val recent: List<CodeListNode>)
+private val STATUS_SECTIONS = listOf(
+    "needs-you" to "Needs you",
+    "working" to "Working",
+    "review" to "In review",
+    "done" to "Done",
+)
 
-fun buildCodeTree(rows: List<CodeThreadSummary>): List<CodeListNode> {
-    val ids = rows.map { it.id }.toSet()
-    val byParent = rows.filter { it.parentId != null && it.parentId in ids && it.parentId != it.id }.groupBy { it.parentId!! }
-    fun node(row: CodeThreadSummary, depth: Int): CodeListNode {
-        val children = if (depth > MAX_DEPTH) emptyList() else byParent[row.id].orEmpty().map { node(it, depth + 1) }.sortedByDescending { it.row.updatedAt }
-        return CodeListNode(row, children, row.working || children.any { it.busy }, row.unread || children.any { it.unread })
+private fun groupOf(row: CodeThreadSummary): String = row.statusGroup ?: if (row.working) "working" else "done"
+
+fun codeStatusSections(rows: List<CodeThreadSummary>): List<CodeStatusSection> {
+    val newestFirst = rows.filter { it.reviewId == null }.sortedByDescending { it.updatedAt }
+    return STATUS_SECTIONS
+        .map { (group, label) -> CodeStatusSection(group, label, newestFirst.filter { groupOf(it) == group }) }
+        .filter { it.rows.isNotEmpty() }
+}
+
+data class RewindPoint(val at: String, val turn: Int, val turns: Int, val text: String)
+
+fun lastTurn(items: List<TranscriptItem>): RewindPoint? {
+    val starts = mutableListOf<TranscriptItem.User>()
+    var open = false
+    for (item in items) {
+        if (item is TranscriptItem.Turn) open = false
+        if (item !is TranscriptItem.User || open) continue
+        open = true
+        starts += item
     }
-    return rows.filter { it.parentId == null || it.parentId !in ids || it.parentId == it.id }
-        .map { node(it, 0) }
-        .sortedByDescending { it.row.updatedAt }
+    val last = starts.lastOrNull() ?: return null
+    return RewindPoint(last.forkAt ?: last.id, starts.size - 1, starts.size, last.text)
 }
 
-fun buildCodeSections(rows: List<CodeThreadSummary>, instanceId: String? = null): CodeListSections {
-    val tree = buildCodeTree(rows.filter { instanceId == null || it.instanceId == instanceId })
-    return CodeListSections(tree.filter { it.busy }, tree.filter { !it.busy })
+enum class CodeWorkflow(val wire: String, val label: String) {
+    FixCi("fix_ci", "Fix CI"),
+    AddressComments("address_comments", "Address comments"),
+    ResolveConflicts("resolve_conflicts", "Resolve conflicts"),
 }
 
-fun recentDirectories(rows: List<CodeThreadSummary>, limit: Int = 6): List<String> =
-    rows.sortedByDescending { it.updatedAt }.mapNotNull { it.cwd?.takeIf(String::isNotBlank) }.distinct().take(limit)
-
-private const val MAX_DEPTH = 20
-
-fun answeredRow(items: List<TranscriptItem>): String? =
-    items.lastOrNull()?.takeIf { it is TranscriptItem.Turn || it is TranscriptItem.Assistant }?.id
+fun codeWorkflows(pr: PullView): List<CodeWorkflow> = listOfNotNull(
+    CodeWorkflow.FixCi.takeIf { pr.checks.any { it.state == "failure" } },
+    CodeWorkflow.AddressComments.takeIf { pr.threads.any { it.id !in pr.ignored } },
+    CodeWorkflow.ResolveConflicts.takeIf { pr.mergeable == "conflicting" },
+)

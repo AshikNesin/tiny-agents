@@ -35,21 +35,17 @@ data class CodeCapabilities(
     val delete: Boolean = false,
     val rename: Boolean = false,
     val fork: Boolean = false,
+    val rewind: Boolean = false,
     val modelSwitch: Boolean = false,
     val effortLevels: List<String> = emptyList(),
     val permissionModes: List<String> = emptyList(),
     val defaultPermissionMode: String? = null,
-    val diffs: Boolean = false,
-    val requiresCwd: Boolean = false,
-    val usageReport: Boolean = false,
 ) {
     companion object {
         fun from(json: JSONObject): CodeCapabilities {
             val turns = json.objOrNull("turns") ?: JSONObject()
             val threads = json.objOrNull("threads") ?: JSONObject()
             val settings = json.objOrNull("settings") ?: JSONObject()
-            val workspace = json.objOrNull("workspace") ?: JSONObject()
-            val extras = json.objOrNull("extras") ?: JSONObject()
             return CodeCapabilities(
                 interrupt = turns.bool("interrupt"),
                 steer = turns.bool("steer"),
@@ -60,13 +56,11 @@ data class CodeCapabilities(
                 delete = threads.bool("delete"),
                 rename = threads.bool("rename"),
                 fork = threads.bool("fork"),
+                rewind = threads.bool("rewind"),
                 modelSwitch = settings.bool("modelSwitch"),
                 effortLevels = settings.arr("effortLevels").strings(),
                 permissionModes = settings.arr("permissionModes").strings(),
                 defaultPermissionMode = settings.stringOrNull("defaultPermissionMode"),
-                diffs = workspace.bool("diffs"),
-                requiresCwd = workspace.bool("requiresCwd"),
-                usageReport = extras.bool("usageReport"),
             )
         }
     }
@@ -121,6 +115,10 @@ data class CodeThreadSummary(
     val unread: Boolean = false,
     val projectId: String? = null,
     val pr: ThreadPr? = null,
+    val branch: String? = null,
+    val reviewId: String? = null,
+    val statusGroup: String? = null,
+    val statusReason: String? = null,
 ) {
     companion object {
         fun from(json: JSONObject) = CodeThreadSummary(
@@ -145,6 +143,10 @@ data class CodeThreadSummary(
             unread = json.bool("unread"),
             projectId = json.stringOrNull("projectId"),
             pr = json.objOrNull("pr")?.let { ThreadPr(it.int("number"), it.string("loop")) },
+            branch = json.stringOrNull("branch"),
+            reviewId = json.objOrNull("review")?.stringOrNull("id"),
+            statusGroup = json.objOrNull("status")?.stringOrNull("group"),
+            statusReason = json.objOrNull("status")?.stringOrNull("reason"),
         )
     }
 }
@@ -211,7 +213,7 @@ data class CodeAsset(val ref: String, val name: String, val image: Boolean)
 sealed interface TranscriptItem {
     val id: String
 
-    data class User(override val id: String, val text: String, val attachments: List<CodeAsset>) : TranscriptItem
+    data class User(override val id: String, val text: String, val attachments: List<CodeAsset>, val forkAt: String? = null) : TranscriptItem
     data class Assistant(override val id: String, val text: String) : TranscriptItem
     data class Thinking(override val id: String, val text: String) : TranscriptItem
     data class Report(override val id: String, val from: String, val text: String) : TranscriptItem
@@ -252,7 +254,7 @@ sealed interface TranscriptItem {
         fun from(json: JSONObject): TranscriptItem? {
             val id = json.string("id")
             return when (json.string("kind")) {
-                "user" -> User(id, json.string("text"), assets(json))
+                "user" -> User(id, json.string("text"), assets(json), json.stringOrNull("forkAt"))
                 "assistant" -> Assistant(id, json.string("text"))
                 "thinking" -> Thinking(id, json.string("text"))
                 "report" -> Report(id, json.string("from"), json.string("text"))
@@ -417,18 +419,6 @@ data class CodeProject(
     }
 }
 
-data class GitDiff(val id: String, val message: String, val filesCount: Int, val additions: Int, val deletions: Int) {
-    companion object {
-        fun from(json: JSONObject) = GitDiff(
-            json.string("id"),
-            json.string("message"),
-            json.int("filesCount"),
-            json.int("additions"),
-            json.int("deletions"),
-        )
-    }
-}
-
 data class ChangedFile(
     val path: String,
     val status: String,
@@ -486,7 +476,6 @@ data class PullView(
     val headRef: String,
     val baseRef: String,
     val autofix: Boolean,
-    val autoMerge: Boolean,
     val loopStatus: String,
     val loopReason: String?,
     val mergeable: String?,
@@ -512,7 +501,6 @@ data class PullView(
                 headRef = json.string("headRef"),
                 baseRef = json.string("baseRef"),
                 autofix = json.bool("autofix"),
-                autoMerge = json.bool("autoMerge"),
                 loopStatus = loop.string("status", "off"),
                 loopReason = loop.stringOrNull("reason"),
                 mergeable = snapshot?.stringOrNull("mergeable"),
@@ -556,20 +544,15 @@ data class ThreadPulls(
     val active: PullView?,
     val earlier: List<Pair<Int, String>>,
     val ahead: Int?,
-    val spendUsd: Double?,
-    val limitUsd: Double?,
 ) {
     companion object {
         fun from(json: JSONObject): ThreadPulls {
-            val spend = json.objOrNull("spend") ?: JSONObject()
             return ThreadPulls(
                 project = json.objOrNull("project")?.let(CodeProject::from),
                 branch = json.stringOrNull("branch"),
                 active = json.objOrNull("active")?.let(PullView::from),
                 earlier = json.arr("earlier").mapObjects { it.int("number") to it.string("title") },
                 ahead = json.intOrNull("ahead"),
-                spendUsd = spend.doubleOrNull("usd"),
-                limitUsd = spend.doubleOrNull("limitUsd"),
             )
         }
     }

@@ -1,8 +1,6 @@
 package groot.mobile.feature.code
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -57,7 +55,6 @@ import groot.mobile.data.code.formatTokens
 import groot.mobile.data.code.formatUsd
 import groot.mobile.data.code.groupTools
 import groot.mobile.data.code.lastErrorId
-import groot.mobile.data.code.shortPath
 import groot.mobile.feature.chat.TypingDots
 import groot.mobile.feature.chat.openLink
 import groot.mobile.ui.brand.AppIcons
@@ -96,7 +93,7 @@ fun CodeThreadRoute(
     val harness by viewModel.harness.collectAsStateWithLifecycle()
     val models by viewModel.models.collectAsStateWithLifecycle()
     val draft by viewModel.draft.collectAsStateWithLifecycle()
-    val suggestion by viewModel.suggestion.collectAsStateWithLifecycle()
+    val editing by viewModel.editing.collectAsStateWithLifecycle()
     val closed by viewModel.closed.collectAsStateWithLifecycle()
     LaunchedEffect(closed) { if (closed) onBack() }
     LaunchedEffect(state.movedTo) { state.movedTo?.let(onOpenThread) }
@@ -110,9 +107,8 @@ fun CodeThreadRoute(
         models = models,
         draft = draft,
         onDraftChange = viewModel::setDraft,
-        suggestion = suggestion,
-        onUseSuggestion = viewModel::useSuggestion,
-        onDismissSuggestion = viewModel::dismissSuggestion,
+        editing = editing != null,
+        onCancelEdit = viewModel::cancelEdit,
         onSend = viewModel::send,
         onStop = viewModel::stop,
         onQueued = viewModel::queued,
@@ -179,16 +175,26 @@ fun CodeThreadRoute(
         CodeSheet.More -> Sheet(onDismiss = { sheet = null }, title = state.thread?.title) {
             val thread = state.thread
             if (caps.rename) MenuRow(AppIcons.Pencil, "Rename", onClick = { sheet = CodeSheet.Rename })
-            if (caps.diffs && thread?.cwd != null) MenuRow(AppIcons.File, "Changes", summary = "What the agent changed in ${shortPath(thread.cwd)}", onClick = {
+            if (thread?.projectId != null) MenuRow(AppIcons.File, "Changes", summary = "What the agent changed on ${thread.branch ?: "its branch"}", onClick = {
                 sheet = null
                 onChanges()
             })
+            if (viewModel.lastTurn != null && !state.working && thread?.archived != true) {
+                MenuRow(AppIcons.Pencil, "Edit the last turn", summary = "Change your message and run it again from before that turn", onClick = {
+                    sheet = null
+                    viewModel.editLast()
+                })
+                MenuRow(AppIcons.Refresh, "Run the last turn again", summary = "From the files as they were before it", onClick = {
+                    sheet = null
+                    viewModel.retryLast()
+                })
+            }
             if (thread?.projectId != null) MenuRow(AppIcons.Share, "Pull request", onClick = {
                 sheet = null
                 onPullRequest()
             })
             if (caps.archive && thread != null) {
-                MenuRow(AppIcons.Download, if (thread.archived) "Restore" else "Archive", summary = "With its subagents", onClick = {
+                MenuRow(AppIcons.Download, if (thread.archived) "Restore" else "Archive", onClick = {
                     sheet = null
                     viewModel.archive(!thread.archived) { if (!thread.archived) onBack() }
                 })
@@ -201,7 +207,7 @@ fun CodeThreadRoute(
             }
             MenuRow(AppIcons.Globe, "Open in the web app", onClick = {
                 sheet = null
-                openLink(context, container.session.serverUrl, "/code/${android.net.Uri.encode(threadId)}")
+                openLink(context, container.session.serverUrl, "/code/t/${android.net.Uri.encode(threadId)}")
             })
             if (caps.delete) MenuRow(AppIcons.Trash, "Delete", destructive = true, onClick = { sheet = CodeSheet.Delete })
         }
@@ -247,15 +253,14 @@ fun CodeThreadScreen(
     onChanges: () -> Unit,
     onPullRequest: () -> Unit,
     onBack: () -> Unit,
-    suggestion: String? = null,
-    onUseSuggestion: () -> Unit = {},
-    onDismissSuggestion: () -> Unit = {},
+    editing: Boolean = false,
+    onCancelEdit: () -> Unit = {},
 ) {
     val thread = state.thread
     val caps = harness?.capabilities ?: CodeCapabilities()
     val subtitle = listOfNotNull(
         harness?.label,
-        shortPath(thread?.cwd).takeIf { it.isNotEmpty() },
+        thread?.branch,
         when {
             state.loaded && !connected -> "Reconnecting"
             thread?.archived == true -> "Archived"
@@ -269,7 +274,7 @@ fun CodeThreadScreen(
         onBack = onBack,
         actions = {
             if (thread?.projectId != null) IconBtn(AppIcons.Share, "Pull request", onPullRequest)
-            if (caps.diffs && thread?.cwd != null) IconBtn(AppIcons.File, "Changes", onChanges)
+            if (thread?.projectId != null) IconBtn(AppIcons.File, "Changes", onChanges)
             IconBtn(AppIcons.More, "More", { onSheet(CodeSheet.More) })
         },
     ) {
@@ -285,9 +290,7 @@ fun CodeThreadScreen(
                 ) {
                     for (queued in state.queued) QueuedRow(queued, caps.manageQueue && !actions.readOnly, onQueued)
                     if (!actions.readOnly) {
-                        if (suggestion != null && draft.isEmpty() && !state.working) {
-                            NextPrompt(suggestion, onUseSuggestion, onDismissSuggestion, Modifier.widthIn(max = Dims.contentMaxWidth))
-                        }
+                        if (editing) EditingBanner(onCancelEdit, Modifier.widthIn(max = Dims.contentMaxWidth))
                         SettingChips(state, caps, models, onSheet)
                         CodeComposer(
                             draft = draft,
@@ -404,26 +407,25 @@ internal fun effortLabel(level: String): String = when (level) {
 }
 
 @Composable
-private fun NextPrompt(text: String, onUse: () -> Unit, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
+private fun EditingBanner(onCancel: () -> Unit, modifier: Modifier = Modifier) {
     Row(
         modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(Dims.composerRadius))
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .clickable(role = Role.Button, onClickLabel = "Use this reply", onClick = onUse)
             .padding(start = S.lg),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        AppIcon(AppIcons.Sparkle, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, size = Dims.iconSmall)
+        AppIcon(AppIcons.Pencil, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, size = Dims.iconSmall)
         Text(
-            text,
+            "Editing the last turn. Sending runs it again from before that turn.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f).padding(horizontal = S.sm, vertical = S.sm),
         )
-        IconBtn(AppIcons.Close, "Dismiss suggestion", onDismiss, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        IconBtn(AppIcons.Close, "Cancel the edit", onCancel, tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 

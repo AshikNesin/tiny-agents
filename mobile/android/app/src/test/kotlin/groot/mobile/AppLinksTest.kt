@@ -55,6 +55,12 @@ class AppLinksTest {
     }
 
     @Test
+    fun `a Code link in the workspace's form opens that thread`() {
+        assertEquals(AppLink.Screen("code/thread/c0mwz1abc"), parseAppLink("$server/code/t/c0mwz1abc", server))
+        assertEquals(AppLink.Screen("code/thread/c0mwz1abc"), parseAppLink("$server/code/t/c0mwz1abc?pane=pr", server))
+    }
+
+    @Test
     fun `another server's links and unknown paths open nothing in particular`() {
         assertNull(parseAppLink("https://evil.example.net/chats/c0abc?focus=approval:1", server))
         assertNull(parseAppLink("$server/code/a/b/c", server))

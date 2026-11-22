@@ -82,4 +82,5 @@ only (`ios/` is excluded from sync). The app guide is `docs/app/README.md`.
   `.agents/skills/verify-tiny-agents/scripts/ta-verify.mjs up` (add `--sandbox` with a sandbox), then in
   `android/`:
   `TINY_AGENTS_URL=http://localhost:3100 ./gradlew :app:testDebugUnitTest --tests groot.mobile.LiveServerTest --rerun`.
-  `SandboxLiveTest` also needs `TINY_AGENTS_SANDBOX=1`. Without these variables both tests are skipped.
+  `SandboxLiveTest` also needs `TINY_AGENTS_SANDBOX=1`. Without these variables both tests are skipped. The Code
+  test in `LiveServerTest` needs `up --fake-github --demo-agent --local-sandbox` and `TINY_AGENTS_CODE=1`.

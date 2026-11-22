@@ -35,7 +35,6 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import groot.kit.theme.S
 import groot.mobile.AppContainer
 import groot.mobile.data.api.ChangedFile
-import groot.mobile.data.api.GitDiff
 import groot.mobile.data.code.DiffLine
 import groot.mobile.data.code.FileDiffView
 import groot.mobile.data.code.fileDiffView
@@ -64,10 +63,6 @@ sealed interface ChangesScope {
     data object Branch : ChangesScope {
         override val key = "branch"
     }
-
-    data class Harness(val diff: GitDiff) : ChangesScope {
-        override val key = "diff:${diff.id}"
-    }
 }
 
 data class ChangesState(
@@ -85,8 +80,6 @@ class CodeChangesViewModel(private val container: AppContainer, private val thre
     private val api = container.code
     private val _state = MutableStateFlow(ChangesState())
     val state: StateFlow<ChangesState> = _state.asStateFlow()
-    private var instanceId = instanceOf(threadId)
-    private var cwd: String? = null
 
     init {
         refresh()
@@ -95,15 +88,8 @@ class CodeChangesViewModel(private val container: AppContainer, private val thre
     fun refresh() {
         viewModelScope.launch {
             try {
-                val thread = api.snapshot(threadId).thread
-                instanceId = thread.instanceId.ifEmpty { instanceId }
-                cwd = thread.cwd
-                val project = thread.projectId != null
-                val diffs = thread.cwd?.let { dir -> runCatching { api.diffs(instanceId, dir) }.getOrDefault(emptyList()) }.orEmpty()
-                val scopes = buildList {
-                    if (project) add(ChangesScope.Branch)
-                    for (diff in diffs) if (diff.id != "working" || diff.filesCount > 0) add(ChangesScope.Harness(diff))
-                }
+                val project = api.snapshot(threadId).thread.projectId != null
+                val scopes = if (project) listOf(ChangesScope.Branch) else emptyList()
                 val drafts = if (project) runCatching { api.reviewDraftCount(threadId) }.getOrDefault(0) else 0
                 _state.update { it.copy(loading = false, error = null, project = project, scopes = scopes, drafts = drafts) }
                 select(_state.value.scope?.let { current -> scopes.firstOrNull { it.key == current.key } } ?: scopes.firstOrNull())
@@ -120,10 +106,7 @@ class CodeChangesViewModel(private val container: AppContainer, private val thre
         scope ?: return
         viewModelScope.launch {
             try {
-                val files = when (scope) {
-                    ChangesScope.Branch -> api.reviewFiles(threadId)
-                    is ChangesScope.Harness -> api.diffFiles(instanceId, scope.diff.id, cwd.orEmpty())
-                }
+                val files = api.reviewFiles(threadId)
                 _state.update { if (it.scope == scope) it.copy(files = files.sortedBy { f -> f.generated }) else it }
             } catch (e: CancellationException) {
                 throw e
@@ -143,10 +126,7 @@ class CodeChangesViewModel(private val container: AppContainer, private val thre
         _state.update { it.copy(open = it.open + (file.path to null)) }
         viewModelScope.launch {
             try {
-                val contents = when (scope) {
-                    ChangesScope.Branch -> api.reviewFile(threadId, file.path)
-                    is ChangesScope.Harness -> api.diffFile(instanceId, scope.diff.id, cwd.orEmpty(), file.path)
-                }
+                val contents = api.reviewFile(threadId, file.path)
                 val view = fileDiffView(contents)
                 _state.update { if (it.open.containsKey(file.path)) it.copy(open = it.open + (file.path to view)) else it }
             } catch (e: CancellationException) {
@@ -277,7 +257,6 @@ fun CodeChangesRoute(container: AppContainer, threadId: String, onBack: () -> Un
 
 private fun scopeLabel(scope: ChangesScope): String = when (scope) {
     ChangesScope.Branch -> "Branch"
-    is ChangesScope.Harness -> if (scope.diff.id == "working") "Uncommitted" else scope.diff.message.lineSequence().first().take(MAX_SCOPE_LABEL)
 }
 
 @Composable
@@ -327,4 +306,3 @@ internal fun FileCard(
 }
 
 internal const val MAX_DIFF_LINES = 1500
-private const val MAX_SCOPE_LABEL = 40

@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.14.0
+
+### Minor Changes
+
+- Code works with the new workspace. The list groups threads the way the web does: Needs you, Working, In review and
+  Done, each with why it is there (finished, asks you, Fix CI, checks pass) and its branch. Review assistant threads no
+  longer show as ordinary threads.
+- Code push notifications open their thread again (they now link to `/code/t/<id>`).
+- A new thread is always in a project, on its own branch; the working directory field is gone. With no project yet,
+  the screen says where to add one.
+- A thread's agent is read from the thread, so Native and Claude Code threads get their own Stop, model and permission
+  controls (before, the app guessed Shelley from the thread id).
+- Edit the last turn, or run it again, from a thread's menu, for an agent that can go back. The files go back to how
+  they were before that turn.
+- The pull request screen offers the workflow the PR needs (Fix CI, Address comments, Resolve conflicts) instead of
+  Fix now. Auto-merge and the spend line are gone, as on the web.
+- Changes shows what the thread's branch changed.
+- The next-prompt suggestion is gone, as on the web.
+- Reviews, Agent tab: Review with the agent writes a brief and findings for the pull request. Add a finding to your
+  review as a comment, or dismiss it; nothing is posted until you submit.
+
 ## 0.13.0
 
 ### Minor Changes
