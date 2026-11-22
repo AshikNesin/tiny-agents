@@ -51,11 +51,11 @@ function getLanguage(language: string): HighlighterLanguage | "ansi" | null {
     return name;
   }
 
-  if (name in languages) {
+  if (Object.hasOwn(languages, name)) {
     return name as HighlighterLanguage;
   }
 
-  return aliases[name] ?? null;
+  return Object.hasOwn(aliases, name) ? (aliases[name] ?? null) : null;
 }
 
 export interface LoadedHighlighter {

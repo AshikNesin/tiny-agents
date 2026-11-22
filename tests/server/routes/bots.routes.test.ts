@@ -374,6 +374,26 @@ describe("Bots API routes", () => {
     expect(agentRuntime.abort).not.toHaveBeenCalledWith(Number(fresh));
   });
 
+  it("caps concurrent streams per user at twenty", async () => {
+    const bot = await createBot();
+    const statuses: number[] = [];
+    for (let i = 0; i < 21; i += 1) {
+      const response = await app.request(`/api/v1/bots/${bot.id}/stream`, {
+        headers: authorization,
+      });
+      statuses.push(response.status);
+    }
+    expect(statuses.filter((status) => status === 200)).toHaveLength(20);
+    expect(statuses[20]).toBe(429);
+
+    endAllSse();
+    const afterClose = await app.request(`/api/v1/bots/${bot.id}/stream`, {
+      headers: authorization,
+    });
+    expect(afterClose.status).toBe(200);
+    void afterClose.body!.cancel().catch(() => {});
+  });
+
   it("ends open chat and activity streams on shutdown and stops their watches", async () => {
     const bot = await createBot();
     const stop = vi.fn(async () => undefined);
