@@ -1,3 +1,6 @@
+import { CodeKeys, useCodeCommands, type CodeCommand } from "./keys";
+import { ReviewFindings, openFindings } from "./ReviewFindings";
+import type { FindingView, ReviewVerdict } from "../../../shared/api/code";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -69,7 +72,14 @@ export function PullReview({
   const [updating, setUpdating] = useState(false);
   const [reload, setReload] = useState(0);
   const [side, setSide] = useState<"files" | "assistant">("files");
-  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [assistantOpen, setAssistantOpen] = useState(true);
+  const [submit, setSubmit] = useState<{ open: boolean; verdict: ReviewVerdict }>({
+    open: false,
+    verdict: "COMMENT",
+  });
+  const [focused, setFocused] = useState<string | null>(null);
+  const [deciding, setDeciding] = useState(false);
+  const loadComments = useCommentStore((s) => s.load);
   const view = useDiffView();
   const wide = view.wide;
 
@@ -80,6 +90,123 @@ export function PullReview({
   const github = useThreadCommenting(githubCommentsKey(reviewId), () => undefined);
   const conversations = usePullConversations(review, `${review?.headSha}:${reload}`);
   const waiting = useThreadComments(review?.key).length;
+
+  const reviewing = review?.reviewing ?? false;
+  const refreshReview = useCallback(
+    () => client.invalidateQueries({ queryKey: ["code", "reviews", "detail", reviewId] }),
+    [client, reviewId],
+  );
+  useEffect(() => {
+    if (!reviewing) return;
+    const timer = setInterval(() => void refreshReview(), 3000);
+    return () => clearInterval(timer);
+  }, [reviewing, refreshReview]);
+
+  const open = useMemo(() => (review ? openFindings(review) : []), [review]);
+  const current = open.find((finding) => finding.id === focused) ?? open[0];
+  const stepFinding = useCallback(
+    (step: 1 | -1) => {
+      if (open.length === 0) return;
+      const at = current ? open.indexOf(current) : -1;
+      setFocused(open[(at + step + open.length) % open.length]!.id);
+      setAssistantOpen(true);
+    },
+    [open, current],
+  );
+  const runAgentReview = useCallback(() => {
+    if (!review || review.reviewing) return;
+    setDeciding(true);
+    void reviewsApi
+      .agentReview(review.id)
+      .then(() => refreshReview())
+      .catch((e: unknown) => toast.error(errorMessage(e, "Could not start the review.")))
+      .finally(() => setDeciding(false));
+  }, [review, refreshReview]);
+  const decide = useCallback(
+    (finding: FindingView | undefined, action: "add" | "dismiss") => {
+      if (!review || !finding) return;
+      setDeciding(true);
+      void reviewsApi
+        .decideFinding(review.id, finding.id, { action })
+        .then(async () => {
+          await Promise.all([refreshReview(), loadComments(githubCommentsKey(review.id))]);
+          if (action === "add") toast.success("Added to your review. It is not posted yet.");
+        })
+        .catch((e: unknown) => toast.error(errorMessage(e, "Could not do that.")))
+        .finally(() => setDeciding(false));
+    },
+    [review, refreshReview, loadComments],
+  );
+  const setHelp = useCodeCommands((s) => s.setHelp);
+  const commands = useMemo<CodeCommand[]>(
+    () => [
+      {
+        id: "agent-review",
+        group: "Thread",
+        keys: "r",
+        label: "Review with the agent",
+        enabled: Boolean(review) && !reviewing,
+        run: runAgentReview,
+      },
+      {
+        id: "next-finding",
+        group: "Pane",
+        keys: "n",
+        label: "Next finding",
+        enabled: open.length > 0,
+        run: () => stepFinding(1),
+      },
+      {
+        id: "previous-finding",
+        group: "Pane",
+        keys: "p",
+        label: "Previous finding",
+        enabled: open.length > 0,
+        run: () => stepFinding(-1),
+      },
+      {
+        id: "add-finding",
+        group: "Pane",
+        keys: "y",
+        label: "Add the finding to my review",
+        enabled: Boolean(current),
+        run: () => decide(current, "add"),
+      },
+      {
+        id: "dismiss-finding",
+        group: "Pane",
+        keys: "d",
+        label: "Dismiss the finding",
+        enabled: Boolean(current),
+        run: () => decide(current, "dismiss"),
+      },
+      {
+        id: "approve",
+        group: "Thread",
+        keys: "A",
+        label: "Approve the pull request",
+        enabled: Boolean(review) && !review?.mine,
+        run: () => setSubmit({ open: true, verdict: "APPROVE" }),
+      },
+      {
+        id: "request-changes",
+        group: "Thread",
+        keys: "X",
+        label: "Request changes",
+        enabled: Boolean(review) && !review?.mine,
+        run: () => setSubmit({ open: true, verdict: "REQUEST_CHANGES" }),
+      },
+      {
+        id: "back",
+        group: "Go to",
+        keys: "[",
+        label: "Back to the thread list",
+        run: () => navigate("/code"),
+      },
+      { id: "keys", group: "Go to", keys: "?", label: "Show the keys", run: () => setHelp(true) },
+    ],
+    [review, reviewing, open, current, runAgentReview, stepFinding, decide, navigate, setHelp],
+  );
 
   const update = async () => {
     if (!review) return;
@@ -100,7 +227,7 @@ export function PullReview({
     if (!review) return;
     try {
       await reviewsApi.archive(review.id);
-      navigate("/code/reviews");
+      navigate("/code");
     } catch (e) {
       toast.error(errorMessage(e, "Could not close the review."));
     }
@@ -112,7 +239,7 @@ export function PullReview({
         <EmptyState icon={FileDiff} title="This review is not available" description={error} />
         <div className="flex justify-center">
           <Button asChild variant="outline">
-            <Link to="/code/reviews">All reviews</Link>
+            <Link to="/code">Back to Code</Link>
           </Button>
         </div>
       </div>
@@ -130,9 +257,10 @@ export function PullReview({
 
   return (
     <div className="flex h-dvh min-h-0 flex-col" data-testid="code-pull-review">
+      <CodeKeys commands={commands} />
       <header className="border-border flex h-12 shrink-0 items-center gap-1 border-b px-2 sm:px-3">
         <Button asChild variant="ghost" size="icon-sm" className="shrink-0">
-          <Link to="/code/reviews" aria-label="All reviews" title="All reviews">
+          <Link to="/code" aria-label="Back to the thread list" title="Back to the thread list">
             <ArrowLeft />
           </Link>
         </Button>
@@ -155,7 +283,15 @@ export function PullReview({
           <DiffViewButtons view={view} />
           <span className="bg-border mx-1 h-4 w-px" aria-hidden />
         </div>
-        {github && <SubmitReviewButton review={review} github={github} />}
+        {github && (
+          <SubmitReviewButton
+            review={review}
+            github={github}
+            open={submit.open}
+            verdict={submit.verdict}
+            onOpenChange={(next) => setSubmit((was) => ({ ...was, open: next }))}
+          />
+        )}
         <Button
           variant="ghost"
           size="sm"
@@ -230,6 +366,15 @@ export function PullReview({
                 <PanelLeftClose />
               </Button>
             </div>
+            <ReviewFindings
+              review={review}
+              focused={current?.id ?? null}
+              busy={deciding}
+              onFocus={setFocused}
+              onRun={runAgentReview}
+              onAdd={(finding) => decide(finding, "add")}
+              onDismiss={(finding) => decide(finding, "dismiss")}
+            />
             <div className="flex min-h-0 flex-1 flex-col">
               <Assistant
                 review={review}

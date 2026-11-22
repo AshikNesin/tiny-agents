@@ -263,7 +263,32 @@ export function createDemoAgent(): HarnessInstance {
       return finish(thread, started);
     }
 
-    const answer = `Done. I noted "${lastLine(message).slice(0, 60)}" in NOTES.md.`;
+    const answer = message.includes("```review-report")
+      ? [
+          "I read the change against main and ran nothing: it only adds a note.",
+          "```review-report",
+          JSON.stringify({
+            brief: "Adds NOTES.md with one release note. Read NOTES.md first.",
+            findings: [
+              {
+                severity: "nit",
+                title: "The note has no date",
+                body: "Say when the release happened, so the note still reads right next month.",
+                path: "NOTES.md",
+                line: 1,
+              },
+              {
+                severity: "question",
+                title: "Should this live in the changelog?",
+                body: "CHANGELOG.md is where releases are recorded. Is NOTES.md meant to replace it?",
+                path: "NOTES.md",
+                line: 1,
+              },
+            ],
+          }),
+          "```",
+        ].join("\n")
+      : `Done. I noted "${lastLine(message).slice(0, 60)}" in NOTES.md.`;
     for (let at = 12; at < answer.length + 12; at += 12) {
       thread.feed.partial({ text: answer.slice(0, at), thinking: "" });
       await wait(thread, step / 6);

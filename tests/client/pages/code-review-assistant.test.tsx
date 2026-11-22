@@ -37,6 +37,9 @@ const REVIEW = {
   worktreeThreadId: null,
   assistant: { instanceId: "claude-code", model: "sonnet" },
   archived: false,
+  brief: null,
+  reviewing: false,
+  findings: [],
   updatedAt: "2026-11-17T00:00:00.000Z",
 } satisfies PullReviewView;
 
@@ -78,7 +81,6 @@ describe("the review assistant's model", () => {
       </MemoryRouter>,
     );
 
-    await user.click(await screen.findByRole("button", { name: "Open assistant" }));
     const picker = await screen.findByRole("button", { name: "Model" });
     expect(picker).toHaveTextContent("Sonnet");
     await user.click(picker);

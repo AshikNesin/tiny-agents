@@ -60,7 +60,13 @@ http
       try {
         const pull = /^\/pulls\/(\d+)$/.exec(req.url ?? "");
         if (req.method === "GET" && req.url === "/state") {
-          return send(200, { bare, home: local.home, pulls: github.pulls, merged: github.merged });
+          return send(200, {
+            bare,
+            home: local.home,
+            pulls: github.pulls,
+            merged: github.merged,
+            submitted: github.submitted,
+          });
         }
         if (req.method === "POST" && pull) {
           Object.assign(github.pull(Number(pull[1])), JSON.parse(raw || "{}"));

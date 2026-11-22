@@ -17,7 +17,7 @@ import { errorMessage } from "../../lib/errors";
 import { threadPath } from "../../lib/code/api";
 import { reviewsApi } from "../../lib/code/projects";
 import { githubCommentsKey, useCommentStore, type ThreadCommenting } from "../../lib/code/comments";
-import type { PullReviewView, ReviewVerdict } from "../../../shared/api/code";
+import type { PullReviewView, ReviewDraft, ReviewVerdict } from "../../../shared/api/code";
 
 const VERDICTS: Array<{ value: ReviewVerdict; label: string }> = [
   { value: "COMMENT", label: "Comment" },
@@ -31,18 +31,20 @@ const lines = (c: { startLine: number; endLine: number }) =>
 function SubmitReview({
   review,
   github,
+  initialVerdict,
   open,
   onOpenChange,
 }: {
   review: PullReviewView;
   github: ThreadCommenting;
+  initialVerdict: ReviewVerdict;
   open: boolean;
   onOpenChange(open: boolean): void;
 }) {
   const navigate = useNavigate();
   const sent = useCommentStore((s) => s.sent);
-  const [body, setBody] = useState("");
-  const [verdict, setVerdict] = useState<ReviewVerdict>("COMMENT");
+  const [body, setBody] = useState(() => draftSummary(github.comments));
+  const [verdict, setVerdict] = useState<ReviewVerdict>(review.mine ? "COMMENT" : initialVerdict);
   const [busy, setBusy] = useState<"submit" | "thread" | null>(null);
   const { comments } = github;
   const needsBody = verdict === "REQUEST_CHANGES" && !body.trim();
@@ -188,21 +190,33 @@ function SubmitReview({
   );
 }
 
+function draftSummary(comments: ReviewDraft[]): string {
+  if (comments.length === 0) return "";
+  const files = [...new Set(comments.map((comment) => comment.path.split("/").at(-1)))];
+  const where = files.length > 3 ? `${files.slice(0, 3).join(", ")} and others` : files.join(", ");
+  return `I left ${comments.length === 1 ? "one comment" : `${comments.length} comments`} inline, in ${where}.`;
+}
+
 export function SubmitReviewButton({
   review,
   github,
+  open,
+  verdict,
+  onOpenChange,
 }: {
   review: PullReviewView;
   github: ThreadCommenting;
+  open: boolean;
+  verdict: ReviewVerdict;
+  onOpenChange(open: boolean): void;
 }) {
-  const [open, setOpen] = useState(false);
   return (
     <>
       <Button
         variant="outline"
         size="sm"
         className="shrink-0"
-        onClick={() => setOpen(true)}
+        onClick={() => onOpenChange(true)}
         aria-label="Submit review"
         title="Submit your review on GitHub"
       >
@@ -214,7 +228,15 @@ export function SubmitReviewButton({
           </span>
         )}
       </Button>
-      <SubmitReview review={review} github={github} open={open} onOpenChange={setOpen} />
+      {open && (
+        <SubmitReview
+          review={review}
+          github={github}
+          initialVerdict={verdict}
+          open
+          onOpenChange={onOpenChange}
+        />
+      )}
     </>
   );
 }

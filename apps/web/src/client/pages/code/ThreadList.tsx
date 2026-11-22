@@ -10,6 +10,7 @@ import type { ProjectView } from "../../../shared/api/code";
 import { useResource } from "../../queries/resource";
 import { PullChip } from "./controls";
 import { Kbd } from "./keys";
+import { ReviewList } from "./ReviewList";
 
 const DOT: Record<StatusSection["key"], string> = {
   "needs-you": "bg-warning",
@@ -110,12 +111,16 @@ export function ThreadList({
   projects,
   activeId,
   onNew,
+  addingReview,
+  onAddingReview,
 }: {
   threads: ThreadSummary[] | null;
   harnesses: HarnessInfo[];
   projects?: ProjectView[] | null;
   activeId?: string;
   onNew(): void;
+  addingReview: boolean;
+  onAddingReview(open: boolean): void;
 }) {
   const sections = useMemo(() => statusSections(threads ?? []), [threads]);
   const projectName = (id?: string | null) =>
@@ -161,6 +166,7 @@ export function ThreadList({
             </section>
           ))
         )}
+        <ReviewList activeId={activeId} adding={addingReview} onAdding={onAddingReview} />
         <Archived activeId={activeId} />
       </nav>
       {offline.map((h) => (

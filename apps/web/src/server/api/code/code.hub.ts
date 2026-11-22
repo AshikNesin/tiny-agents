@@ -6,6 +6,7 @@ import {
   type ThreadEvent,
   type ThreadSummary,
 } from "@tiny-agents/code/server";
+import { onReviewTurnEnded } from "./code.findings";
 import {
   eventWithThreadKeys,
   listProjectThreads,
@@ -89,7 +90,7 @@ export function createCodeHub(options: HubOptions): CodeHub {
     );
   }
 
-  return {
+  const hub: CodeHub = {
     start() {
       if (running) return;
       running = true;
@@ -101,6 +102,11 @@ export function createCodeHub(options: HubOptions): CodeHub {
             if (event.type === "connected") scheduleList(instance);
             void recordThreadEvent(instance.id, event)
               .then((changed) => changed && emit(changeListeners, "list"))
+              .then(() =>
+                event.type === "turn_ended" && !event.outcome.working
+                  ? onReviewTurnEnded(hub, threadKey(instance.id, event.nativeId))
+                  : false,
+              )
               .catch((error: unknown) =>
                 logger.warn({ error, instance: instance.id }, "A thread event was not recorded"),
               )
@@ -197,6 +203,7 @@ export function createCodeHub(options: HubOptions): CodeHub {
       return () => handoffListeners.delete(listener);
     },
   };
+  return hub;
 }
 
 export function codeHub(): CodeHub | undefined {

@@ -19,6 +19,14 @@ await journey(
     const transcript = page.getByTestId("code-transcript");
     const working = (id) => threads().then((all) => all.find((t) => t.id === id)?.working);
     const on = (id) => expect(page).toHaveURL(new RegExp(`/code/t/${encodeURIComponent(id)}$`));
+    const github = async (path, body) => {
+      const control = `http://127.0.0.1:${Number(new URL(process.env.TA_VERIFY_URL).port) + 3}`;
+      const res = await fetch(control + path, {
+        method: body === undefined ? "GET" : "POST",
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+      return res.json();
+    };
     const reason = (id) => threads().then((all) => all.find((t) => t.id === id)?.status?.reason);
 
     await step("setup: a project and three threads, one of them slow", async () => {
@@ -151,6 +159,9 @@ await journey(
         const files = page.getByTestId("code-files");
         await expect(files.getByRole("textbox", { name: "Open a file by name" })).toBeFocused();
         await page.keyboard.type("notes");
+        await expect(files.getByTestId("code-files-list")).toContainText("NOTES.md", {
+          timeout: 20_000,
+        });
         await page.keyboard.press("Enter");
         await expect(files.getByText("Editing NOTES.md, saved to the worktree")).toBeVisible({
           timeout: 20_000,
@@ -188,6 +199,7 @@ await journey(
       await page.keyboard.press("`");
       const terminal = page.getByTestId("code-terminal");
       await expect(terminal).toHaveAttribute("data-state", "live", { timeout: 30_000 });
+      await expect.poll(() => frames.join(""), { timeout: 20_000 }).toContain("worktrees/");
       await terminal.click();
       await page.keyboard.type(`echo "t$((6*7))-${stamp}" && git branch --show-current`);
       await page.keyboard.press("Enter");
@@ -264,6 +276,68 @@ await journey(
       await expect.poll(() => reason(ids.dialog), { timeout: 20_000 }).toBe("failed");
     });
     await proof("new-thread");
+
+    await step("a pull request that waits for your review is a row in the list", async () => {
+      await api.post(`/code/threads/${encodeURIComponent(ids.first)}/publish`, {});
+      const pull = (await threads()).find((t) => t.id === ids.first).pr;
+      await github(`/pulls/${pull.number}`, { author: "maria" });
+      await github("/inbox", [
+        {
+          reason: "requested",
+          repo: { owner: "acme", name: "web" },
+          number: pull.number,
+          title: `Note the release ${stamp}`,
+          url: pull.url,
+          author: "maria",
+          draft: false,
+          updatedAt: new Date().toISOString(),
+          headSha: "",
+          decision: "review_required",
+          lastReview: null,
+        },
+      ]);
+      cleanup(() => github("/inbox", []));
+      await page.goto("/code", LOADED);
+      const asked = page.getByRole("region", { name: "Reviews" }).getByTestId("code-review-row");
+      await expect(asked).toContainText(`Note the release ${stamp}`, { timeout: 20_000 });
+      await asked.click();
+      await expect(page.getByTestId("code-pull-review")).toBeVisible({ timeout: 30_000 });
+      await expect(page).toHaveURL(/\/code\/reviews\//);
+    });
+
+    await step("r has the agent review it: a brief and findings, nothing posted", async () => {
+      await page.keyboard.press("r");
+      await expect(page.getByTestId("code-review-brief")).toContainText("Adds NOTES.md", {
+        timeout: 40_000,
+      });
+      await expect(page.getByTestId("code-finding")).toHaveCount(2);
+    });
+    await proof("review");
+
+    await step("y adds a finding to your review, d dismisses the next", async () => {
+      await page.keyboard.press("y");
+      await expect(page.getByTestId("code-finding")).toHaveCount(1, { timeout: 20_000 });
+      await page.keyboard.press("d");
+      await expect(page.getByTestId("code-finding")).toHaveCount(0, { timeout: 20_000 });
+      await expect(page.getByText("in your review")).toBeVisible();
+    });
+
+    await step("Shift+X opens the review set to request changes, with a summary", async () => {
+      await page.keyboard.press("Shift+X");
+      const dialog = page.getByRole("dialog");
+      await expect(dialog.getByRole("button", { name: "Request changes" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+      await expect(dialog.getByRole("textbox", { name: "Review summary" })).not.toHaveValue("");
+      await dialog.getByRole("button", { name: "Submit review" }).click();
+      await expect(dialog).toHaveCount(0, { timeout: 20_000 });
+      const state = await github("/state");
+      expect(state.submitted.at(-1).event).toBe("REQUEST_CHANGES");
+      expect(JSON.stringify(state.submitted.at(-1).comments)).toContain(
+        "Say when the release happened",
+      );
+    });
 
     await step("an old thread link still opens the thread", async () => {
       await page.goto(`/code/${encodeURIComponent(ids.second)}/pr`, LOADED);

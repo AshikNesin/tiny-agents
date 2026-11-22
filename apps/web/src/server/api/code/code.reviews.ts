@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { logger } from "@groot/core/logger";
 import {
@@ -17,6 +17,7 @@ import {
   codeThreads,
   db,
   type CodeProjectRow,
+  codeFindings,
 } from "../../db";
 import { shQuote } from "@tiny-agents/sandbox";
 import {
@@ -140,6 +141,23 @@ async function reviewView(row: CodeReviewRow, project: CodeProjectRow): Promise<
     })(),
     archived: row.archivedAt !== null,
     updatedAt: row.updatedAt.toISOString(),
+    brief: row.brief,
+    reviewing: row.reviewingSince !== null,
+    findings: (
+      await db
+        .select()
+        .from(codeFindings)
+        .where(eq(codeFindings.reviewId, row.id))
+        .orderBy(asc(codeFindings.createdAt))
+    ).map(({ id, severity, title, body, path, line, state }) => ({
+      id,
+      severity,
+      title,
+      body,
+      path,
+      line,
+      state,
+    })),
   };
 }
 

@@ -37,6 +37,9 @@ const REVIEW: PullReviewView = {
   worktreeThreadId: null,
   assistant: null,
   archived: false,
+  brief: null,
+  reviewing: false,
+  findings: [],
   updatedAt: "2026-11-17T00:00:00.000Z",
 };
 

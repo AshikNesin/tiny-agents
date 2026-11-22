@@ -17,6 +17,7 @@ import type {
   PushedReview,
   ReviewTerminal,
   WorktreeFile,
+  FindingView,
   FileHit,
   SuggestedChanges,
   ReviewDraft,
@@ -115,6 +116,17 @@ export const reviewsApi = {
   ask: (id: string, body: AskReviewBody) =>
     apiClient.post<{ threadId: string }>(`${base}/reviews/${encodeURIComponent(id)}/ask`, body),
   archive: (id: string) => apiClient.post(`${base}/reviews/${encodeURIComponent(id)}/archive`),
+  agentReview: (id: string) =>
+    apiClient.post<{ threadId: string }>(`${base}/reviews/${encodeURIComponent(id)}/agent-review`),
+  decideFinding: (
+    id: string,
+    findingId: string,
+    decision: { action: "add"; body?: string } | { action: "dismiss" },
+  ) =>
+    apiClient.post<FindingView[]>(
+      `${base}/reviews/${encodeURIComponent(id)}/findings/${encodeURIComponent(findingId)}`,
+      decision,
+    ),
   submit: (id: string, body: SubmitReviewBody) =>
     apiClient.post<{ url: string; comments: number }>(
       `${base}/reviews/${encodeURIComponent(id)}/submit`,

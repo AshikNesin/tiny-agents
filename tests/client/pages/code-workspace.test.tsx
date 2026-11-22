@@ -15,19 +15,35 @@ const render = (ui: Parameters<typeof renderBare>[0]) =>
   renderBare(ui, { wrapper: AppQueryProvider });
 
 vi.mock("sonner", () => ({
-  toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), message: vi.fn() }),
+  toast: Object.assign(vi.fn(), {
+    success: vi.fn(),
+    error: vi.fn(),
+    message: vi.fn(),
+    loading: vi.fn(),
+    dismiss: vi.fn(),
+  }),
 }));
 vi.mock("@/lib/sse", async () => (await import("../fakes/sse")).sseModule);
 
 const posts = vi.hoisted(() => [] as Array<{ path: string; body: unknown }>);
+const asked = vi.hoisted(() => [] as unknown[]);
+const openReviews = vi.hoisted(() => [] as unknown[]);
 vi.mock("@groot/shell/lib/api", async (importOriginal) => {
   const original = await importOriginal<typeof import("@groot/shell/lib/api")>();
   return {
     ...original,
     apiClient: Object.assign(Object.create(original.apiClient) as typeof original.apiClient, {
-      get: async (path: string) => (path === "/code/projects" ? [project] : []),
+      get: async (path: string) =>
+        path === "/code/projects"
+          ? [project]
+          : path === "/code/reviews/inbox"
+            ? asked
+            : path === "/code/reviews"
+              ? openReviews
+              : [],
       post: async (path: string, body: unknown) => {
         posts.push({ path, body });
+        if (path === "/code/reviews") return { id: "rv9" };
         return path === "/code/threads" ? { threadId: "new1" } : { status: "accepted" };
       },
     }),
@@ -89,6 +105,7 @@ const renderAt = (path: string) =>
           <Route path="/code" element={<CodeWorkspace />} />
           <Route path="/code/new" element={<CodeWorkspace />} />
           <Route path="/code/t/:threadId" element={<CodeWorkspace />} />
+          <Route path="/code/reviews/:id" element={<p>Review page</p>} />
           <Route path="/code/:conversationId" element={<LegacyThreadRedirect />} />
           <Route path="/code/:conversationId/pr" element={<LegacyThreadRedirect />} />
         </Routes>
@@ -130,8 +147,26 @@ const project = {
   createdAt: "2026-11-05T00:00:00Z",
 };
 
+const pull = (number: number, over: Record<string, unknown> = {}) => ({
+  section: "needs",
+  repo: "acme/web",
+  number,
+  title: `PR ${number}`,
+  url: `https://github.com/acme/web/pull/${number}`,
+  author: "maria",
+  draft: false,
+  updatedAt: "2026-11-17T09:00:00Z",
+  decision: null,
+  lastReviewAt: null,
+  projectId: "p1",
+  reviewId: null,
+  ...over,
+});
+
 beforeEach(() => {
   posts.length = 0;
+  asked.length = 0;
+  openReviews.length = 0;
   useUiStore.setState({ codeSidebarOpen: true, codePane: null, lastCodePane: "changes" });
   useCodeStore.setState({
     harnesses: [agent],
@@ -264,5 +299,69 @@ describe("the Code workspace", () => {
     renderAt("/code/demo%3Adddd/pr");
     expect(where()).toBe("/code/t/demo%3Adddd");
     expect(useUiStore.getState().codePane).toBe("pr");
+  });
+});
+
+describe("reviews in the thread list", () => {
+  it("lists the pull requests that wait for your review, once each, and opens one", async () => {
+    asked.push(
+      pull(1, { reviewId: "rv1" }),
+      pull(2, { section: "updated" }),
+      pull(3, { section: "waiting" }),
+      pull(4, { section: "mine" }),
+      pull(5, { repo: "other/lib", url: "https://github.com/other/lib/pull/5", projectId: null }),
+    );
+    openReviews.push(
+      {
+        id: "rv1",
+        number: 1,
+        title: "PR 1",
+        repo: "acme/web",
+        author: "maria",
+        url: "https://github.com/acme/web/pull/1",
+      },
+      {
+        id: "rv8",
+        number: 8,
+        title: "PR 8",
+        repo: "acme/api",
+        author: "li",
+        url: "https://github.com/acme/api/pull/8",
+      },
+    );
+    renderAt("/code");
+
+    const reviews = await screen.findByRole("region", { name: "Reviews" });
+    await waitFor(() =>
+      expect(
+        [...reviews.querySelectorAll("[data-testid=code-review-row]")].map((row) =>
+          row.textContent?.replace(/\s+/g, " ").trim(),
+        ),
+      ).toEqual(["#1PR 1", "#2PR 2updated", "#5PR 5", "#8PR 8"]),
+    );
+    expect(screen.getByRole("link", { name: "Open #5 PR 5 on GitHub" })).toHaveAttribute(
+      "href",
+      "https://github.com/other/lib/pull/5",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Review #2 PR 2" }));
+
+    expect(await screen.findByText("Review page")).toBeInTheDocument();
+    expect(posts).toEqual([
+      { path: "/code/reviews", body: { pr: "https://github.com/acme/web/pull/2" } },
+    ]);
+  });
+
+  it("opens a pasted pull request with the v key", async () => {
+    renderAt("/code");
+    await screen.findByRole("region", { name: "Reviews" });
+
+    press("v");
+    const link = screen.getByRole("textbox", { name: "Pull request to review" });
+    fireEvent.change(link, { target: { value: "acme/web#7" } });
+    fireEvent.submit(link);
+
+    expect(await screen.findByText("Review page")).toBeInTheDocument();
+    expect(posts).toEqual([{ path: "/code/reviews", body: { pr: "acme/web#7" } }]);
   });
 });

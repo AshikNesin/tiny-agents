@@ -352,6 +352,25 @@ export const codeReviewDrafts = sqliteTable(
   (t) => [index("code_review_drafts_thread_idx").on(t.threadId, t.sentAt)],
 );
 
+export const codeFindings = sqliteTable(
+  "code_findings",
+  {
+    id: id(),
+    reviewId: text("review_id")
+      .notNull()
+      .references((): AnySQLiteColumn => codeReviews.id, { onDelete: "cascade" }),
+    severity: text("severity").$type<"bug" | "test" | "nit" | "question">().notNull(),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    path: text("path").notNull(),
+    line: integer("line").notNull(),
+    state: text("state").$type<"open" | "added" | "dismissed">().notNull().default("open"),
+    headSha: text("head_sha").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("code_findings_review_idx").on(t.reviewId, t.state)],
+);
+
 export const codeReviews = sqliteTable(
   "code_reviews",
   {
@@ -371,6 +390,8 @@ export const codeReviews = sqliteTable(
     reviewedSha: text("reviewed_sha"),
     worktree: text("worktree"),
     threadId: text("thread_id"),
+    brief: text("brief"),
+    reviewingSince: ms("reviewing_since"),
     archivedAt: ms("archived_at"),
     createdAt: createdAt(),
     updatedAt: ms("updated_at")
@@ -891,6 +912,7 @@ export type RoutineRun = typeof routineRuns.$inferSelect;
 export type LlmCall = typeof llmCalls.$inferSelect;
 export type CodeThreadRow = typeof codeThreads.$inferSelect;
 export type CodeRunRow = typeof codeRuns.$inferSelect;
+export type CodeFindingRow = typeof codeFindings.$inferSelect;
 export type CodeHandoff = typeof codeHandoffs.$inferSelect;
 export type CodeProjectRow = typeof codeProjects.$inferSelect;
 export type CodePullRow = typeof codePullRequests.$inferSelect;

@@ -28,7 +28,6 @@ import { PullPanel } from "./PullPanel";
 import { PullReview } from "./PullReview";
 import { ResizablePane } from "./ResizablePane";
 import { ReviewPanel } from "./ReviewPanel";
-import { ReviewsScreen } from "./ReviewsScreen";
 import { ThreadList } from "./ThreadList";
 import { ThreadView, type ThreadHandle } from "./ThreadView";
 
@@ -143,12 +142,12 @@ export function CodeWorkspace() {
   const [insert, setInsert] = useState<{ text: string; nonce: number } | null>(null);
   const [handle, setHandle] = useState<ThreadHandle | null>(null);
   const [epoch, setEpoch] = useState(0);
+  const [addingReview, setAddingReview] = useState(false);
   useGitHubSetupResult(reloadProjects);
 
   const threadId = rawId ? decodeURIComponent(rawId) : undefined;
   const inSettings = pathname === "/code/settings" || pathname.startsWith("/code/settings/");
   const composing = pathname === "/code/new";
-  const reviewing = pathname === "/code/reviews";
 
   const harnesses = useMemo(
     () => (harnessList ?? []).map((h) => ({ ...h, status: statuses[h.id] ?? h.status })),
@@ -186,13 +185,13 @@ export function CodeWorkspace() {
   const focusFiles = useCallback(
     (which: "name" | "text") => {
       if (!threadId) return;
+      const focus = () =>
+        window.dispatchEvent(new CustomEvent("code:files-focus", { detail: which }));
+      if (openPane === "files") return focus();
       setPane("files");
-      setTimeout(
-        () => window.dispatchEvent(new CustomEvent("code:files-focus", { detail: which })),
-        50,
-      );
+      setTimeout(focus, 50);
     },
-    [threadId, setPane],
+    [threadId, setPane, openPane],
   );
   const confirm = useConfirm();
   const prNumber = row?.pr?.number;
@@ -273,6 +272,16 @@ export function CodeWorkspace() {
         keys: "n",
         label: "New thread",
         run: () => navigate("/code/new"),
+      },
+      {
+        id: "review",
+        group: "Go to",
+        keys: "v",
+        label: "Review a pull request",
+        run: () => {
+          if (!listOpen) toggleUiSidebar("code");
+          setAddingReview(true);
+        },
       },
       {
         id: "list",
@@ -422,6 +431,7 @@ export function CodeWorkspace() {
       nextNeedingYou,
       navigate,
       toggleUiSidebar,
+      listOpen,
       threadId,
       handle,
       project,
@@ -458,7 +468,7 @@ export function CodeWorkspace() {
   if (harnessList.length === 0) return <NotConfigured brand={brand} />;
   if (reviewId) return <PullReview reviewId={reviewId} harnesses={harnesses} rows={rows} />;
 
-  const full = Boolean(threadId) || reviewing || inSettings;
+  const full = Boolean(threadId) || inSettings;
   return (
     <div className="flex h-dvh min-h-0">
       <CodeKeys commands={commands} />
@@ -484,6 +494,8 @@ export function CodeWorkspace() {
           projects={projects}
           activeId={threadId}
           onNew={() => navigate("/code/new")}
+          addingReview={addingReview}
+          onAddingReview={setAddingReview}
         />
       </aside>
 
@@ -502,8 +514,6 @@ export function CodeWorkspace() {
             projects={projects}
             onChange={reloadProjects}
           />
-        ) : reviewing ? (
-          <ReviewsScreen />
         ) : threadId && harness && row ? (
           <ThreadView
             key={`${threadId}:${epoch}`}

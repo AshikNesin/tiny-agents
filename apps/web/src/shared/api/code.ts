@@ -204,6 +204,19 @@ export interface PullReviewView {
   assistant: { instanceId: string; model: string | null } | null;
   archived: boolean;
   updatedAt: string;
+  brief: string | null;
+  reviewing: boolean;
+  findings: FindingView[];
+}
+
+export interface FindingView {
+  id: string;
+  severity: "bug" | "test" | "nit" | "question";
+  title: string;
+  body: string;
+  path: string;
+  line: number;
+  state: "open" | "added" | "dismissed";
 }
 
 export interface PullThreadView {

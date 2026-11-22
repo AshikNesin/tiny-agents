@@ -33,7 +33,6 @@
   "apps/web/src/client/pages/code/PullThreads.tsx": 1,
   "apps/web/src/client/pages/code/ResizablePane.tsx": 1,
   "apps/web/src/client/pages/code/ReviewPanel.tsx": 1,
-  "apps/web/src/client/pages/code/ReviewsScreen.tsx": 2,
   "apps/web/src/client/pages/code/Transcript.tsx": 1,
   "apps/web/src/client/pages/code/YourChanges.tsx": 1,
   "apps/web/src/client/pages/settings/models/AddModel.tsx": 1,

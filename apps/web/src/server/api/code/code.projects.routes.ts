@@ -1,3 +1,4 @@
+import { decideFinding, startAgentReview } from "./code.findings";
 import { createHash } from "node:crypto";
 import { Hono, type Context } from "hono";
 import { z } from "zod";
@@ -18,6 +19,7 @@ import type {
   PushedReview,
   ReviewTerminal,
   WorktreeFile,
+  FindingView,
   FileHit,
   SuggestedChanges,
   ReviewDraft,
@@ -514,6 +516,24 @@ router.post("/code/reviews/:review/ask", async (c) => {
     }),
   );
   return ok(c, await askReview(c.req.param("review"), message, model));
+});
+
+router.post("/code/reviews/:review/agent-review", async (c) =>
+  ok(c, await startAgentReview(c.req.param("review"))),
+);
+
+router.post("/code/reviews/:review/findings/:finding", async (c) => {
+  const decision = await parseBody(
+    c,
+    z.union([
+      z.object({ action: z.literal("add"), body: z.string().max(10_000).optional() }),
+      z.object({ action: z.literal("dismiss") }),
+    ]),
+  );
+  return ok<FindingView[]>(
+    c,
+    await decideFinding(c.req.param("review"), c.req.param("finding"), decision),
+  );
 });
 
 router.post("/code/reviews/:review/comments/to-thread", async (c) =>

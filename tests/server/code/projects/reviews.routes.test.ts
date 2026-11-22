@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { createNamespaceKv } from "@groot/core/kv";
 import { api, createTestApp } from "../../helpers";
-import { authToken, resetAppTables } from "../../fixtures";
+import { authToken, eventually, resetAppTables } from "../../fixtures";
 import { eq } from "drizzle-orm";
 import { codePullRequests, codeThreads, db } from "../../../../apps/web/src/server/db";
 import { installAppForTests } from "../../../../apps/web/src/server/app-root";
@@ -405,6 +405,105 @@ describe("submitting a PR review", () => {
   const open = async () =>
     (await call<PullReviewView>("POST", "/reviews", { pr: "acme/web#7" })).body.data!;
   const comments = (id: string) => `/threads/review%3A${id}/review/drafts?target=github`;
+
+  it("has the agent review: its report becomes a brief and findings, and nothing reaches GitHub", async () => {
+    await newProject();
+    await forkPull([`printf 'export const a = 2;\\n' > src/a.ts`]);
+    const review = (await call<PullReviewView>("POST", "/reviews", { pr: "acme/web#7" })).body
+      .data!;
+    expect([review.brief, review.reviewing, review.findings]).toEqual([null, false, []]);
+
+    const asked = await call<{ threadId: string }>("POST", `/reviews/${review.id}/agent-review`);
+    expect(asked.status).toBe(200);
+    expect(harness.created[0]!.message).toContain("Review this pull request.");
+    expect(harness.created[0]!.message).toContain("```review-report");
+    const during = (await call<PullReviewView>("GET", `/reviews/${review.id}`)).body.data!;
+    expect(during.reviewing).toBe(true);
+    expect((await call("POST", `/reviews/${review.id}/agent-review`)).status).toBe(409);
+
+    const report = {
+      brief: "Changes a to 2. Tests: 3 passed.",
+      findings: [
+        {
+          severity: "bug",
+          title: "a should stay 1",
+          body: "Callers assume 1.",
+          path: "src/a.ts",
+          line: 1,
+        },
+        { severity: "nit", title: "Name it", body: "Give a a name.", path: "src/a.ts", line: 1 },
+      ],
+    };
+    harness.items.set("t1", [
+      { kind: "user", id: "u1", text: "Review this pull request.", attachments: [] },
+      {
+        kind: "assistant",
+        id: "a1",
+        text: `Done.\n\n\`\`\`review-report\n${JSON.stringify(report)}\n\`\`\``,
+      },
+    ]);
+    harness.endTurn("t1");
+    await eventually(async () => {
+      const after = (await call<PullReviewView>("GET", `/reviews/${review.id}`)).body.data!;
+      expect([after.reviewing, after.brief]).toEqual([false, "Changes a to 2. Tests: 3 passed."]);
+      expect(after.findings.map((f) => [f.severity, f.title, f.state])).toEqual([
+        ["bug", "a should stay 1", "open"],
+        ["nit", "Name it", "open"],
+      ]);
+    });
+    expect(github.submitted).toEqual([]);
+    expect(github.comments).toEqual([]);
+  });
+
+  it("adds a finding to the owner's review as a pending comment, in the owner's words, and dismisses another", async () => {
+    await newProject();
+    await forkPull([`printf 'export const a = 2;\\n' > src/a.ts`]);
+    const review = (await call<PullReviewView>("POST", "/reviews", { pr: "acme/web#7" })).body
+      .data!;
+    await call("POST", `/reviews/${review.id}/agent-review`);
+    harness.items.set("t1", [
+      {
+        kind: "assistant",
+        id: "a1",
+        text: `\`\`\`review-report\n${JSON.stringify({
+          brief: "b",
+          findings: [
+            { severity: "bug", title: "One", body: "First body.", path: "src/a.ts", line: 1 },
+            { severity: "nit", title: "Two", body: "Second body.", path: "src/a.ts", line: 1 },
+          ],
+        })}\n\`\`\``,
+      },
+    ]);
+    harness.endTurn("t1");
+    let findings: PullReviewView["findings"] = [];
+    await eventually(async () => {
+      findings = (await call<PullReviewView>("GET", `/reviews/${review.id}`)).body.data!.findings;
+      expect(findings).toHaveLength(2);
+    });
+
+    const added = await call<PullReviewView["findings"]>(
+      "POST",
+      `/reviews/${review.id}/findings/${findings[0]!.id}`,
+      { action: "add", body: "Please keep this at 1." },
+    );
+    await call("POST", `/reviews/${review.id}/findings/${findings[1]!.id}`, { action: "dismiss" });
+
+    expect(added.body.data!.map((f) => f.state)).toEqual(["added", "open"]);
+    expect(github.submitted).toEqual([]);
+    const submitted = await call("POST", `/reviews/${review.id}/submit`, {
+      event: "REQUEST_CHANGES",
+      body: "Two things.",
+    });
+    expect(submitted.status).toBe(200);
+    expect(github.submitted[0]).toMatchObject({
+      event: "REQUEST_CHANGES",
+      comments: [{ path: "src/a.ts", line: 1, body: "Please keep this at 1." }],
+    });
+    expect(
+      (await call("POST", `/reviews/${review.id}/findings/${findings[1]!.id}`, { action: "add" }))
+        .status,
+    ).toBe(404);
+  });
 
   it("posts the pending comments with the verdict at the head the owner read, apart from the assistant's", async () => {
     await newProject();
