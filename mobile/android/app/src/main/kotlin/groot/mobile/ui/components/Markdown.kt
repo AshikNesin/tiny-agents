@@ -38,7 +38,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.toUri
+import androidx.core.net.toUri
 import groot.kit.theme.S
 import groot.mobile.AppContainer
 import groot.mobile.data.parseAppLink
