@@ -33,6 +33,98 @@
             "description": "A silent ping when the server boots in production.",
             "category": "system",
             "defaultEnabled": true
+          },
+          {
+            "event": "approval.requested",
+            "label": "Approval needed",
+            "description": "A bot wants to run a tool that asks first.",
+            "category": "needs_input",
+            "defaultEnabled": true
+          },
+          {
+            "event": "question.asked",
+            "label": "Question asked",
+            "description": "A bot asked you clarifying questions and is waiting.",
+            "category": "needs_input",
+            "defaultEnabled": true
+          },
+          {
+            "event": "credential.requested",
+            "label": "Sign-in needed",
+            "description": "A bot asked you to fill in a login it does not have.",
+            "category": "needs_input",
+            "defaultEnabled": true
+          },
+          {
+            "event": "input.reminder",
+            "label": "Still waiting reminder",
+            "description": "One reminder when an approval or question is still unanswered.",
+            "category": "needs_input",
+            "defaultEnabled": true
+          },
+          {
+            "event": "bot.message",
+            "label": "Bot messages",
+            "description": "A bot messaged you while you were away, after work you didn't start yourself.",
+            "category": "notify",
+            "defaultEnabled": true
+          },
+          {
+            "event": "routine.succeeded",
+            "label": "Routine messages",
+            "description": "A quiet push with what a routine run messaged you. Runs with nothing to say send none.",
+            "category": "notify",
+            "defaultEnabled": true
+          },
+          {
+            "event": "routine.failed",
+            "label": "Routine failed",
+            "description": "A routine failed, was missed or was paused.",
+            "category": "notify",
+            "defaultEnabled": true
+          },
+          {
+            "event": "run.failed",
+            "label": "Reply failed",
+            "description": "A bot's reply ended in a model error while you were away.",
+            "category": "notify",
+            "defaultEnabled": true
+          },
+          {
+            "event": "run.long_done",
+            "label": "Long reply finished",
+            "description": "A long-running reply finished while you were away.",
+            "category": "notify",
+            "defaultEnabled": true
+          },
+          {
+            "event": "shelley.update",
+            "label": "Code updates",
+            "description": "A coding agent's conversation you follow (Shelley, Claude Code) finished, failed or asked for you while you were away.",
+            "category": "notify",
+            "defaultEnabled": true
+          },
+          {
+            "event": "code.autofix",
+            "label": "Auto-fix needs you",
+            "description": "A pull request's Auto-fix stopped for your input, switched itself off at a limit, or a check stalled.",
+            "category": "needs_input",
+            "defaultEnabled": true
+          },
+          {
+            "event": "code.pr",
+            "label": "Pull request updates",
+            "description": "A Code pull request's checks went green or failed (with Auto-fix off), or it merged.",
+            "category": "notify",
+            "defaultEnabled": true
+          },
+          {
+            "event": "vault.alert",
+            "label": "Vault alerts",
+            "description": "A vault value was revealed or an item deleted, or a bot was refused a fill.",
+            "category": "security",
+            "defaultEnabled": true,
+            "locked": true
           }
         ]
       }

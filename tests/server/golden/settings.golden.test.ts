@@ -18,6 +18,8 @@ import { createCodeHub, setCodeHub } from "../../../apps/web/src/server/api/code
 import { authToken, closeAppRuntime, openAppRuntime, resetAppTables } from "../fixtures";
 import { fakeHarness } from "../code/fake-harness";
 import { goldenFlow } from "./recorder";
+import { notificationService } from "@groot/core/notification/notification.service";
+import { NOTIFICATION_EVENTS } from "../../../apps/web/src/server/api/notifications/notifications.events";
 import { useFreshTestDatabase } from "../fixtures/test-db";
 
 const app = createTestApp();
@@ -192,6 +194,7 @@ describe("golden: settings and owner tools", () => {
   });
 
   goldenFlow("notification-settings", setup, async (r) => {
+    notificationService.defineEvents(NOTIFICATION_EVENTS);
     await r.http("settings", "/api/v1/notifications/settings");
     await r.http("status", "/api/v1/notifications/status");
   });
