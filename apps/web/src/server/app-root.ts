@@ -9,6 +9,7 @@ import type { TurnBudget } from "./api/bots/bots.messaging";
 import type { BotChatEvent } from "./api/bots/bots.events";
 import type { SseStream } from "./api/bots/bots.sse";
 import type { ChatTitler } from "./api/bots/chats.title";
+import type { SideCaller } from "./api/bots/side-call";
 import type { AppAuth } from "@tiny-agents/github";
 import type { CodeGitHub } from "./api/code/code.github";
 import type { CodeBranchNamer } from "./api/code/code.naming";
@@ -34,6 +35,7 @@ export interface App {
   codeGitHub?: CodeGitHub;
   codeGitHubApp?: { key: string; auth: AppAuth };
   chatTitler?: ChatTitler;
+  memoryTidier?: { sideCaller: SideCaller };
   codeBranchNamer?: CodeBranchNamer;
   codeNextPrompts?: Map<string, Promise<string | null>>;
   sandboxConnections: Map<string, SandboxConnection>;

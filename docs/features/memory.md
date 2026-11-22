@@ -95,6 +95,25 @@ owner likes tea".
 Returned model errors (not just thrown errors) also preserve the watermark
 and log the model id and error message.
 
+## Weekly tidy
+
+Capture looks at one conversation at a time, so nothing else reviews a bot's
+active memories together. `memories.tidy.ts` does that once a week (the
+`memory-tidy` job, scheduled at boot with `scheduleMemoryTidy`): for each bot
+with memory on, if any memory changed since `bots.memory_tidied_at` and it
+has at least `TIDY_MIN_ACTIVE` active memories, it makes one side-call on the
+`memory_capture` role. The prompt lists the active memories (oldest first,
+short refs) and asks only for clear problems: duplicates or refinements to
+merge, and memories a newer one contradicts or whose time has passed.
+
+The memory ledger's `consolidate` applies the answer in one transaction.
+A merge keeps or adds one active memory and marks the others `superseded` by
+it. A stale memory turns `expired`. Both show on the Memory page and can be
+restored. A plan that would touch more than half the active memories, or an
+answer that is not the expected JSON, changes nothing. Faux mode has no
+side-caller, so it never tidies. Cost: at most one small call per bot per
+week, and only for bots whose memories changed.
+
 ## Chat-side saves and forgets
 
 The `memory` capability also exposes `remember({ text, category, until? })`.

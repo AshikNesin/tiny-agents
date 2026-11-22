@@ -31,9 +31,11 @@ import appLinksRouter from "./api/system/app-links";
 import { guestGuard } from "./api/people/guest.guard";
 import pushRoutes from "./api/notifications/push.routes";
 import { registerRoutineJobs } from "./api/routines/routines.jobs";
+import { registerMemoryTidyJob } from "./api/bots/memories.tidy";
 
 export function registerJobHandlers(): void {
   registerRoutineJobs();
+  registerMemoryTidyJob();
   registerCodeJobs();
 }
 

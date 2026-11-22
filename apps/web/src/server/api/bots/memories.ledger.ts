@@ -53,6 +53,17 @@ export interface MemoryLedger {
   history(statuses: readonly MemoryStatus[], now?: Date): Promise<MemoryRow[]>;
   promptContext(now?: Date): Promise<PromptContext>;
   advanceWatermark(at: Date): Promise<void>;
+  consolidate(
+    merges: readonly ConsolidateMerge[],
+    stale: readonly string[],
+    now?: Date,
+  ): Promise<{ merged: number; staled: number }>;
+}
+
+interface ConsolidateMerge {
+  ids: readonly string[];
+  text: string;
+  category: MemoryCategory;
 }
 
 type Tx = Pick<AppDatabase, "select" | "insert" | "update">;
@@ -306,6 +317,78 @@ export function memoryLedger(botId: string): MemoryLedger {
     setWatermark(db, at);
   }
 
+  async function consolidate(
+    merges: readonly ConsolidateMerge[],
+    stale: readonly string[],
+    now = new Date(),
+  ): Promise<{ merged: number; staled: number }> {
+    return db.transaction((tx) => {
+      expire(tx, now);
+      const existing = tx.select().from(memories).where(ofBot).all();
+      const activeIds = new Set(existing.filter((row) => row.status === "active").map((r) => r.id));
+      const byText = new Map(existing.map((row) => [key(row.text), row] as const));
+      let merged = 0;
+      for (const merge of merges) {
+        const ids = merge.ids.filter((id) => activeIds.has(id));
+        if (ids.length < 2) continue;
+        const text = merge.text.trim();
+        const match = byText.get(key(text));
+        if (match?.status === "deleted") continue;
+        const target =
+          match && (activeIds.has(match.id) || ids.includes(match.id))
+            ? tx
+                .update(memories)
+                .set({ text, category: merge.category })
+                .where(eq(memories.id, match.id))
+                .returning()
+                .get()
+            : match
+              ? tx
+                  .update(memories)
+                  .set({
+                    text,
+                    category: merge.category,
+                    status: "active",
+                    supersededById: null,
+                    supersededAt: null,
+                    createdAt: now,
+                  })
+                  .where(eq(memories.id, match.id))
+                  .returning()
+                  .get()
+              : tx
+                  .insert(memories)
+                  .values({
+                    botId,
+                    text,
+                    category: merge.category,
+                    source: "capture",
+                    status: "active",
+                  })
+                  .returning()
+                  .get();
+        activeIds.add(target.id);
+        byText.set(key(text), target);
+        const replaced = ids.filter((id) => id !== target.id);
+        tx.update(memories)
+          .set({ status: "superseded", supersededById: target.id, supersededAt: now })
+          .where(inArray(memories.id, replaced))
+          .run();
+        for (const id of replaced) activeIds.delete(id);
+        merged += replaced.length;
+      }
+      const staleIds = stale.filter((id) => activeIds.has(id));
+      if (staleIds.length > 0) {
+        tx.update(memories)
+          .set({ status: "expired", until: now })
+          .where(inArray(memories.id, staleIds))
+          .run();
+      }
+      enforceBudget(tx);
+      return { merged, staled: staleIds.length };
+    });
+  }
+
   return {
     add,
     edit,
@@ -315,5 +398,6 @@ export function memoryLedger(botId: string): MemoryLedger {
     history,
     promptContext,
     advanceWatermark,
+    consolidate,
   };
 }
