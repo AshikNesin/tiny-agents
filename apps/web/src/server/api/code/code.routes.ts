@@ -28,7 +28,6 @@ import {
   startProjectThread,
 } from "./code.projects";
 import { titleLater } from "./code.naming";
-import { nextPrompt } from "./code.next-prompt";
 import { codeChanges } from "./code.changes";
 import { guardSides } from "@tiny-agents/git";
 import { codeGitHub } from "./code.github";
@@ -426,13 +425,6 @@ router.post("/code/threads/:id/fork", async (c) => {
   await follow(instance.id, forked.nativeId);
   void hub().refresh(instance.id);
   return ok(c, { threadId: threadIdOf(instance.id, forked.nativeId) }, 201);
-});
-
-router.get("/code/threads/:id/next-prompt", async (c) => {
-  const { instance, nativeId, id } = thread(c);
-  const after = query(c, "after")!;
-  if (c.get("viewer").kind !== "owner") return ok(c, { text: null });
-  return ok(c, { text: await run(() => nextPrompt(instance, nativeId, id, after)) });
 });
 
 router.get("/code/threads/:id/usage", async (c) => {

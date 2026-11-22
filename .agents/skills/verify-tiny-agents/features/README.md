@@ -83,11 +83,7 @@ Sandbox and code
 - [Terminal](./terminal.md) [`--sandbox`]: tabs, typing, re-attach, keys panel, full screen, close.
 - [Computer](./computer.md) [`--sandbox`]: desktop, VNC live view, control, Apps menu, reset.
 - [Browser](./browser.md) [`--sandbox`]: `/browser` page and the chat panel from `/browse N`, desktop and phone.
-- [Code](./code.md) [`--shelley`]: Shelley threads: start, steer, queue, stop, changes, the grouped thread list (fold, New thread per group, Archived footer view), Code settings, bot hand-off.
-- [Code pull requests](./code-pr.md) [`--shelley --fake-github`]: a project thread from start to merge against an in-memory GitHub: Publish, checks, Draft, Auto-merge, review mode, Reviews inbox Add project, Merge and the archived thread after it.
-- [Code multi-select archive](./code-select.md) [`--shelley`]: Select threads, archive or restore many at once, one Undo.
-- [Code extras](./code-extras.md) [`--shelley`]: fork, change directory, worktree, repository groups, chips, completions, uploads, usage, queued actions, recover.
-- [Code comments](./code-comments.md) [`--shelley`]: folded diff context, a line comment under its line, waiting above the composer, sent with the next message.
+- [Code](./code.md) [`--demo-agent --fake-github`]: the Code workspace: status-grouped list, moving by key, a streamed turn, steer, queue, stop, the Changes and Pull request panes, the key list.
 - [A bot's own browser and computer](./bot-profiles.md) [`--sandbox`]: own profile, start, stream, reset, release on delete.
 - [Claude plan](./claude-plan.md): the engine-off state.
 

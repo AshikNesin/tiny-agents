@@ -2461,7 +2461,7 @@ exports[`ChatMessageView, pinned > card: code hand-off > markup 1`] = `
             data-size="sm"
             data-slot="button"
             data-variant="outline"
-            href="/code/shelley%3At1"
+            href="/code/t/shelley%3At1"
           >
             Open in Code
             <svg
@@ -2491,7 +2491,7 @@ exports[`ChatMessageView, pinned > card: code hand-off > outline 1`] = `
   "shelley"
   "Fix the bug"
   "started · /repo"
-  link "Open in Code" [href=/code/shelley%3At1]
+  link "Open in Code" [href=/code/t/shelley%3At1]
     "Open in Code"
     icon lucide-arrow-up-right"
 `;
@@ -4267,7 +4267,7 @@ exports[`ChatMessageView, pinned > read-only (no owner actions) card: code hand-
             data-size="sm"
             data-slot="button"
             data-variant="outline"
-            href="/code/shelley%3At1"
+            href="/code/t/shelley%3At1"
           >
             Open in Code
             <svg
@@ -4297,7 +4297,7 @@ exports[`ChatMessageView, pinned > read-only (no owner actions) card: code hand-
   "shelley"
   "Fix the bug"
   "started · /repo"
-  link "Open in Code" [href=/code/shelley%3At1]
+  link "Open in Code" [href=/code/t/shelley%3At1]
     "Open in Code"
     icon lucide-arrow-up-right"
 `;

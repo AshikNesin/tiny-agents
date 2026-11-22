@@ -94,7 +94,7 @@ describe("selectionRoots", () => {
 });
 
 describe("Threads screen sections", () => {
-  it("sorts a project's threads into Working, Needs you, In review and Done, newest first", () => {
+  it("sorts threads into Needs you, Working, In review and Done, newest first", () => {
     const sections = statusSections([
       row("done-old", { updatedAt: "2026-11-01T00:00:00Z" }),
       row("merged", {
@@ -111,10 +111,21 @@ describe("Threads screen sections", () => {
       row("sub", { parentId: "shelley:running" }),
     ]);
     expect(sections.map((s) => [s.key, s.nodes.map((n) => n.row.nativeId)])).toEqual([
-      ["working", ["running"]],
       ["needs-you", ["blocked"]],
+      ["working", ["running"]],
       ["review", ["review"]],
       ["done", ["merged", "done-old"]],
+    ]);
+  });
+
+  it("a finished turn nobody has read needs you; a working thread does not yet", () => {
+    const sections = statusSections([
+      row("unseen", { unread: true }),
+      row("busy", { unread: true, working: true }),
+    ]);
+    expect(sections.map((s) => [s.key, s.nodes.map((n) => n.row.nativeId)])).toEqual([
+      ["needs-you", ["unseen"]],
+      ["working", ["busy"]],
     ]);
   });
 

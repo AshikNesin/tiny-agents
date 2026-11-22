@@ -39,7 +39,6 @@ export interface App {
   chatTitler?: ChatTitler;
   memoryTidier?: { sideCaller: SideCaller };
   codeBranchNamer?: CodeBranchNamer;
-  codeNextPrompts?: Map<string, Promise<string | null>>;
   sandboxConnections: Map<string, SandboxConnection>;
   sandboxHostKeys?: HostKeyStore;
   claudeWorker?: { connection: SandboxConnection; locator: ClaudeWorkerLocator };

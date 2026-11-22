@@ -22,8 +22,6 @@ import type {
   UsageReport,
 } from "@tiny-agents/code/contracts";
 
-import type { NextPrompt } from "../../../shared/api/code";
-
 export type * from "@tiny-agents/code/contracts";
 export type { CodeListEvent, CodeThreadEvent };
 
@@ -102,8 +100,6 @@ export const codeApi = {
   fork: (id: string, at: string) =>
     apiClient.post<{ threadId: string }>(`${thread(id)}/fork`, { at }),
   usage: (id: string) => apiClient.get<UsageReport>(`${thread(id)}/usage`),
-  nextPrompt: (id: string, after: string) =>
-    apiClient.get<NextPrompt>(`${thread(id)}/next-prompt`, { after }),
 
   models: (instanceId: string) => apiClient.get<ModelOption[]>(`${harness(instanceId)}/models`),
   skills: (instanceId: string, cwd: string, threadId?: string) =>
@@ -169,8 +165,8 @@ export function normalizeThreadId(id: string): string {
   return parsed ? threadIdOf(parsed.instanceId, parsed.nativeId) : id;
 }
 
-export function threadPath(id: string, suffix = ""): string {
-  return `/code/${encodeURIComponent(id)}${suffix}`;
+export function threadPath(id: string): string {
+  return `/code/t/${encodeURIComponent(id)}`;
 }
 
 export function shortPath(path: string | null | undefined): string {

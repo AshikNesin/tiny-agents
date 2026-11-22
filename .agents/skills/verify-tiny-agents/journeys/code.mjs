@@ -1,364 +1,174 @@
-// Feature: code (features/code.md). /code with the Shelley harness on its keyless
-// predictable model (`ta-verify up --shelley`): working-directory validation, a new
-// thread, streamed reply, steer, queue, stop, rename + /code/s/<title>, Changes, the
-// thread list (grouped by repository or folder, a working thread's spinner, unread,
-// folding a group, its New thread, search, the Archived footer view + restore), the
-// Code settings page and a bot hand-off (`/code cwd=<dir> <task>` on the faux model).
-//
-// That Shelley runs on the HOST, so every thread works in a throwaway git repo under
-// data/verify/<run>/work-<stamp>, never the checkout or $HOME. Predictable prompts:
-// `echo: X` answers X, `delay: N` works N seconds, `bash: CMD` runs CMD in the cwd.
-import { execFileSync } from "node:child_process";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
-import path from "node:path";
+// Feature: code (features/code.md). The Code workspace on the demo agent and the fake
+// GitHub (`ta-verify up --demo-agent --fake-github`): the status-grouped list, moving by
+// key, a streamed turn, steer, queue, stop, the Changes and Pull request panes, the key
+// list and the command palette.
 import { journey, expect } from "../scripts/lib.mjs";
 
-// The full load event can wait on a third-party embed; the SPA is usable at DOMContentLoaded.
 const LOADED = { waitUntil: "domcontentloaded" };
 
 await journey(
   "code",
   async ({ page, step, proof, cleanup, api, stamp }) => {
-    const dir = path.join(
-      process.cwd(),
-      "data",
-      "verify",
-      process.env.TA_VERIFY_RUN,
-      `work-${stamp}`,
-    );
-    const short = `…/${process.env.TA_VERIFY_RUN}/work-${stamp}`;
-    const title = `verify-${stamp}`;
-    const composer = page.getByRole("textbox", { name: "Message Shelley" });
-    const transcript = page.getByRole("region", { name: "Messages" });
-    const list = page.getByRole("navigation", { name: "Code threads" });
-    // The list groups threads by repository or folder; this repo's group is named by its basename.
-    const group = list.getByRole("region", { name: `work-${stamp}`, exact: true });
-    const stop = page.getByRole("button", { name: "Stop Shelley" });
-    const threads = async (view) =>
-      (await api.get(`/code/threads${view ? `?view=${view}` : ""}`)).filter((t) => t.cwd === dir);
-    const idOf = () => decodeURIComponent(new URL(page.url()).pathname.split("/").pop());
-    let mainId;
+    let project;
+    const ids = {};
+    const threads = () => api.get("/code/threads");
+    const row = (id) => page.locator(`[data-thread="${id}"]`);
+    const section = (name) =>
+      page.getByRole("navigation", { name: "Threads" }).getByRole("region", { name });
+    const composer = page.getByRole("textbox", { name: "Message Demo agent" });
+    const transcript = page.getByTestId("code-transcript");
+    const working = (id) => threads().then((all) => all.find((t) => t.id === id)?.working);
+    const on = (id) => expect(page).toHaveURL(new RegExp(`/code/t/${encodeURIComponent(id)}$`));
 
-    await step("setup: a throwaway git repo for Shelley to work in", async () => {
-      mkdirSync(dir, { recursive: true });
-      cleanup(() => rmSync(dir, { recursive: true, force: true }));
-      writeFileSync(path.join(dir, "a.txt"), "a\n");
-      const git = (...args) =>
-        execFileSync("git", ["-c", "user.email=v@example.com", "-c", "user.name=verify", ...args], {
-          cwd: dir,
-          stdio: "ignore",
-        });
-      git("init", "-q");
-      git("add", ".");
-      git("commit", "-qm", `init ${stamp}`);
-      // Every thread started in it (UI or bot) is deleted, archived ones too.
-      cleanup(async () => {
-        // The thread list lags a new thread by a few seconds: delete whatever is
-        // listed until nothing in this directory is left.
-        await expect
-          .poll(
-            async () => {
-              const left = [...(await threads()), ...(await threads("archived"))];
-              for (const t of left) await api.delete(`/code/threads/${encodeURIComponent(t.id)}`);
-              return left.length;
-            },
-            { timeout: 30_000, intervals: [2_000] },
-          )
-          .toBe(0);
+    await step("setup: a project and three threads, one of them slow", async () => {
+      project = await api.post("/code/projects", {
+        repo: "acme/web",
+        name: `web-${stamp}`,
+        defaultInstanceId: "demo",
       });
+      cleanup(() => api.delete(`/code/projects/${project.id}`));
+      cleanup(async () => {
+        for (const id of Object.values(ids)) {
+          await api.delete(`/code/threads/${encodeURIComponent(id)}`);
+        }
+      });
+      const start = async (message) =>
+        (await api.post("/code/threads", { instanceId: "demo", projectId: project.id, message }))
+          .threadId;
+      ids.first = await start(`Note the release ${stamp} and commit it`);
+      await expect.poll(() => working(ids.first), { timeout: 30_000 }).toBe(false);
+      ids.second = await start(`Write the changelog ${stamp}`);
+      await expect.poll(() => working(ids.second), { timeout: 30_000 }).toBe(false);
+      ids.slow = await start(`slow: tidy the README ${stamp}`);
     });
 
     await step(
-      "open Code from the sidebar's mode switch: Shelley composer with the predictable model",
+      "the list groups by status: finished turns need you, the slow one works",
       async () => {
-        await page
-          .getByRole("navigation", { name: "Mode" })
-          .getByRole("link", { name: "Code" })
-          .click();
-        await expect(page).toHaveURL(/\/code(\/new)?$/);
-        await expect(composer).toBeVisible({ timeout: 20_000 });
-        await expect(page.getByRole("button", { name: "Model" })).toHaveText(/predictable/);
-        // One harness configured: no harness picker (that needs Claude Code as well).
-        await expect(page.getByTestId("code-harness")).toHaveCount(0);
-        // The list is grouped by repository by default (an option in List options).
-        await page.getByRole("button", { name: "List options" }).click();
-        await expect(
-          page.getByRole("menuitemcheckbox", { name: "Group by repository" }),
-        ).toHaveAttribute("aria-checked", "true");
-        await page.keyboard.press("Escape");
+        await page.goto("/code", LOADED);
+        await expect(section("Needs you").locator(row(ids.first))).toBeVisible({ timeout: 20_000 });
+        await expect(section("Needs you").locator(row(ids.second))).toBeVisible();
+        await expect(section("Working").locator(row(ids.slow))).toBeVisible();
       },
     );
+    await proof("list");
 
-    await step("working directory: a missing path is rejected by the harness", async () => {
-      await page.getByRole("button", { name: "Working directory" }).click();
-      await page.getByRole("combobox").fill(`/nonexistent-${stamp}`);
-      await page.getByRole("combobox").press("Enter");
-      await expect(page.getByRole("alert")).toHaveText(/does not exist/);
-    });
-    await proof("cwd-invalid");
-    await step("working directory: the throwaway repo is accepted", async () => {
-      await page.getByRole("button", { name: "Working directory" }).click();
-      await page.getByRole("combobox").fill(dir);
-      await expect(page.getByRole("option", { name: `Use “${dir}”` })).toBeVisible();
-      await page.getByRole("combobox").press("Enter");
-      await expect(page.getByRole("button", { name: "Working directory" })).toHaveText(short);
-      await expect(page.getByRole("alert")).toHaveCount(0);
-      await expect(page.getByRole("button", { name: "New worktree" })).toBeEnabled(); // a git repo
+    await step("j opens the first thread in the list; reading it moves it to Done", async () => {
+      await page.keyboard.press("Escape");
+      await page.keyboard.press("j");
+      const first = await page
+        .getByRole("navigation", { name: "Threads" })
+        .locator("[data-thread]")
+        .first()
+        .getAttribute("data-thread");
+      await on(first);
+      await expect(transcript.getByText(/^Done\. I noted/)).toBeVisible({ timeout: 20_000 });
+      await expect(section("Done").locator(row(first))).toBeVisible({ timeout: 10_000 });
     });
 
-    await step(
-      "start a thread: its group shows it Working, the composer steers, Stop shows",
-      async () => {
-        await composer.fill("delay: 20");
-        await page.getByRole("button", { name: "Start" }).click();
-        await expect(page).toHaveURL(/\/code\/shelley%3A/, { timeout: 20_000 });
-        mainId = idOf();
-        await expect(stop).toBeVisible({ timeout: 15_000 });
-        await expect(composer).toHaveAttribute("placeholder", /Steer Shelley/);
-        await expect(group).toBeVisible({ timeout: 20_000 });
-        await expect(group.getByRole("status", { name: "Working" })).toBeVisible();
-      },
-    );
-    await step("steer: Enter puts the message into the running turn", async () => {
-      await composer.fill(`echo: steer-${stamp}`);
-      await composer.press("Enter");
-      await expect(transcript.getByText(`echo: steer-${stamp}`)).toBeVisible();
-      // Shelley drops the answer to a steer that a queued message follows within
-      // ~1 s (upstream behaviour, reproduced on its API alone); give it time to land.
-      // 8 s, not less: under load (several runs at once) 4 s still lost the answer.
-      // The 20 s delay keeps the turn running long enough to queue behind it.
-      await page.waitForTimeout(8_000);
+    await step("u jumps to the next thread that needs you", async () => {
+      await page.keyboard.press("u");
+      await expect(page).toHaveURL(/\/code\/t\//);
+      await expect(section("Needs you")).toHaveCount(0, { timeout: 10_000 });
     });
-    await step("queue: Alt+Enter holds a message, listed with Send now / Cancel", async () => {
-      await composer.fill(`echo: queued-${stamp}`);
-      await composer.press("Alt+Enter");
-      const queued = page.getByTestId("code-queued");
-      await expect(queued).toContainText(`queued-${stamp}`);
-      await expect(queued.getByRole("button", { name: "Send now" })).toBeVisible();
-      await expect(queued.getByRole("button", { name: "Cancel queued message" })).toBeVisible();
-    });
-    await proof("working-steer-queue");
-    await step(
-      "the turn ends: delay reply, the steer answered, then the queued one runs",
-      async () => {
-        await expect(transcript.getByText("Delayed for 20 seconds")).toBeVisible({
-          timeout: 30_000,
-        });
-        await expect(transcript.getByText(`steer-${stamp}`, { exact: true })).toBeVisible({
-          timeout: 30_000,
-        });
-        await expect(transcript.getByText(`queued-${stamp}`, { exact: true })).toBeVisible({
-          timeout: 30_000,
-        });
-        await expect(page.getByTestId("code-queued")).toHaveCount(0);
-        await expect(transcript.getByText(/Worked for \d/).first()).toBeVisible();
-        await expect(group.getByRole("status", { name: "Working" })).toHaveCount(0);
-      },
-    );
-    await proof("turn-done");
 
-    await step("a reply streams over the thread's event stream", async () => {
-      const events = page.waitForResponse(
-        (r) => r.url().includes(`/code/threads/${encodeURIComponent(mainId)}/events`),
-        { timeout: 20_000 },
-      );
-      await page.reload(LOADED); // re-subscribes; the stream starts with a snapshot
-      expect((await events).headers()["content-type"]).toMatch(/text\/event-stream/);
-      await expect(transcript.getByText(`queued-${stamp}`, { exact: true })).toBeVisible({
+    await step("open the working thread: its tool call streams", async () => {
+      await row(ids.slow).click();
+      await on(ids.slow);
+      await expect(transcript.getByText("ls", { exact: true }).first()).toBeVisible({
         timeout: 20_000,
       });
-      await composer.fill(`echo: hello-${stamp}`);
-      await composer.press("Enter");
-      await expect(transcript.getByText(`hello-${stamp}`, { exact: true })).toBeVisible({
-        timeout: 30_000,
-      });
+      await expect(page.getByTestId("code-composer-hint")).toHaveText(
+        "Enter steers · Alt+Enter queues · Esc stops",
+      );
     });
 
-    await step("Stop ends a running turn: the turn is cancelled, Send is back", async () => {
-      await composer.fill("delay: 60");
-      await composer.press("Enter");
-      await expect(stop).toBeVisible({ timeout: 15_000 });
-      await stop.click();
-      await expect(transcript.getByText("[Operation cancelled]")).toBeVisible({ timeout: 20_000 });
-      await expect(page.getByRole("button", { name: "Send" })).toBeVisible();
-      await expect
-        .poll(async () => (await threads()).find((t) => t.id === mainId)?.working)
-        .toBe(false);
+    await step("c then Enter steers the running turn; Alt+Enter queues", async () => {
+      await page.keyboard.press("c");
+      await expect(composer).toBeFocused();
+      await page.keyboard.type(`steer-${stamp}`);
+      await page.keyboard.press("Enter");
+      await expect(transcript.getByText(`steer-${stamp}`, { exact: true })).toBeVisible();
+      expect(await working(ids.slow)).toBe(true);
+      await page.keyboard.type(`later-${stamp}`);
+      await page.keyboard.press("Alt+Enter");
+      await expect(page.getByTestId("code-queued")).toContainText(`later-${stamp}`);
+    });
+    await proof("steer-and-queue");
+
+    await step("cancel the queued message, then Escape twice stops the agent", async () => {
+      await page.getByRole("button", { name: "Cancel queued message" }).click();
+      await expect(page.getByTestId("code-queued")).toHaveCount(0);
+      await page.keyboard.press("Escape");
+      await expect(composer).not.toBeFocused();
+      await page.keyboard.press("Escape");
+      await expect.poll(() => working(ids.slow), { timeout: 15_000 }).toBe(false);
+      await expect(transcript.getByText("Stopped.")).toBeVisible();
     });
     await proof("stopped");
 
-    await step("rename from thread actions; /code/s/<title> opens it", async () => {
-      await page.getByRole("button", { name: /: thread actions$/ }).click();
-      await page.getByRole("menuitem", { name: "Rename" }).click();
-      const dialog = page.getByRole("dialog", { name: "Rename thread" });
-      await dialog.getByRole("textbox", { name: "Rename thread" }).fill(title);
-      await dialog.getByRole("button", { name: "Rename" }).click();
-      await expect(dialog).toHaveCount(0);
-      await expect(page.getByTestId("code-title")).toHaveText(title);
-      await expect
-        .poll(async () => (await threads()).find((t) => t.id === mainId)?.title)
-        .toBe(title);
-      await page.goto("/", LOADED);
-      await page.goto(`/code/s/${title}`, LOADED);
-      await expect(page.getByTestId("code-title")).toHaveText(title, { timeout: 20_000 });
-      await expect(transcript.getByText(`hello-${stamp}`, { exact: true })).toBeVisible();
-    });
-
-    await step("Changes shows the uncommitted file Shelley wrote, with its diff", async () => {
-      await composer.fill(`bash: echo changed-${stamp} > b.txt`);
-      await composer.press("Enter");
-      await expect(transcript.getByText("Done.").last()).toBeVisible({ timeout: 30_000 });
-      await page.getByRole("button", { name: "Review panel" }).click();
-      const changes = page.getByTestId("code-changes");
-      await expect(changes).toBeVisible();
-      // One column of diffs: each file under a header with its fold button.
-      await expect(changes.getByRole("button", { name: "Fold b.txt" })).toBeVisible({
-        timeout: 20_000,
-      });
-      await expect(changes.getByText(`changed-${stamp}`)).toBeVisible();
-      expect(
-        execFileSync("git", ["status", "--porcelain"], { cwd: dir, encoding: "utf8" }),
-      ).toContain("b.txt");
+    await step("1 shows the branch's changes beside the thread", async () => {
+      await row(ids.first).click();
+      await on(ids.first);
+      await page.keyboard.press("1");
+      const pane = page.getByTestId("code-pane");
+      await expect(page.getByRole("tab", { name: /^Changes/ })).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
+      await expect(pane.getByText("NOTES.md").first()).toBeVisible({ timeout: 20_000 });
+      await expect(pane.getByText(`Note the release ${stamp}`).first()).toBeVisible();
     });
     await proof("changes");
-    await step("close Changes", async () => {
-      await page.getByRole("button", { name: "Close panel" }).click();
-      await expect(page.getByTestId("code-changes")).toHaveCount(0);
+
+    await step("2 shows the pull request pane: one commit ahead, ready to publish", async () => {
+      await page.keyboard.press("2");
+      const pane = page.getByTestId("code-pane");
+      await expect(pane.getByText(/is 1 commit ahead of main/)).toBeVisible({ timeout: 20_000 });
+      await expect(pane.getByRole("button", { name: /Publish/ })).toBeVisible();
     });
 
-    let otherTitle;
-    await step("a second thread starts in the same directory (remembered)", async () => {
-      // `exact`: each group also has a "New thread in <label>" link.
-      await page.getByRole("link", { name: "New thread", exact: true }).click();
-      // The directory is remembered per harness.
-      await expect(page.getByRole("button", { name: "Working directory" })).toHaveText(short);
-      await composer.fill("delay: 15");
-      await page.getByRole("button", { name: "Start" }).click();
-      await expect(page).toHaveURL(/\/code\/shelley%3A/, { timeout: 20_000 });
-      const otherId = idOf();
-      await expect
-        .poll(async () => (otherTitle = (await threads()).find((t) => t.id === otherId)?.title), {
-          timeout: 20_000,
-        })
-        .toBeTruthy();
-    });
-    await step("it finishes while another thread is open: its row turns unread", async () => {
-      await list.getByRole("link", { name: new RegExp(`^${title}`) }).click();
-      await expect(page.getByTestId("code-title")).toHaveText(title);
-      const row = list.getByRole("listitem").filter({ hasText: otherTitle });
-      await expect(row.getByRole("status", { name: "Working" })).toBeVisible();
-      await expect(row.getByLabel("Unread")).toBeVisible({ timeout: 30_000 });
-      expect((await threads()).find((t) => t.title === otherTitle).unread).toBe(true);
-    });
-    await proof("unread");
-
-    await step("the group folds away and offers a New thread in its folder", async () => {
-      const heading = group.getByRole("button", { name: `work-${stamp}`, exact: true });
-      await expect(heading).toHaveAttribute("aria-expanded", "true");
-      await heading.click();
-      await expect(heading).toHaveAttribute("aria-expanded", "false");
-      await expect(group.getByRole("link", { name: new RegExp(`^${title}`) })).toHaveCount(0);
-      await proof("group-folded");
-      await heading.click();
-      await expect(group.getByRole("link", { name: new RegExp(`^${title}`) })).toBeVisible();
-      const start = group.getByRole("link", { name: `New thread in work-${stamp}`, exact: true });
-      await expect(start).toHaveAttribute("href", `/code/new?cwd=${encodeURIComponent(dir)}`);
-      await start.click();
-      await expect(composer).toBeVisible({ timeout: 20_000 });
-      await expect(page.getByRole("heading", { name: "What should we build?" })).toBeVisible();
-      await expect(page.getByRole("button", { name: "Working directory" })).toHaveText(short);
-      await list.getByRole("link", { name: new RegExp(`^${title}`) }).click();
-      await expect(page.getByTestId("code-title")).toHaveText(title);
-    });
-
-    await step("search threads filters the list by title", async () => {
-      await page.getByRole("button", { name: "Search threads" }).click();
-      await page.getByRole("textbox", { name: "Search threads" }).fill(title);
-      await expect(list.getByRole("link", { name: new RegExp(`^${title}`) })).toBeVisible({
-        timeout: 15_000,
-      });
-      await expect(list.getByRole("listitem").filter({ hasText: otherTitle })).toHaveCount(0);
-      await page.getByRole("textbox", { name: "Search threads" }).press("Escape");
-      await expect(page.getByRole("textbox", { name: "Search threads" })).toHaveCount(0);
-    });
-
-    await step("archive a thread from its row; it moves to Archived; restore it", async () => {
-      await list.getByRole("button", { name: `Archive ${title}` }).click();
-      await expect(list.getByRole("link", { name: new RegExp(`^${title}`) })).toHaveCount(0, {
-        timeout: 15_000,
-      });
-      await expect
-        .poll(async () => (await threads("archived")).some((t) => t.id === mainId))
-        .toBe(true);
-      // Show archived sits in the list's options menu.
-      await page.getByRole("button", { name: "List options" }).click();
-      await page.getByTestId("code-archived-toggle").click();
-      await expect(page.getByTestId("code-archived-back")).toBeVisible();
-      await expect(list.getByRole("link", { name: new RegExp(`^${title}`) })).toBeVisible({
-        timeout: 15_000,
-      });
-      // No New thread in the archived view.
-      await expect(list.getByRole("link", { name: /^New thread in / })).toHaveCount(0);
-      await proof("archived");
-      await list.getByRole("button", { name: `Restore ${title}` }).click();
-      await expect.poll(async () => (await threads()).some((t) => t.id === mainId)).toBe(true);
-      await page.getByRole("button", { name: "Archived threads" }).click();
-      await expect(page.getByTestId("code-archived-back")).toHaveCount(0);
-      await expect(list.getByRole("link", { name: new RegExp(`^${title}`) })).toBeVisible({
-        timeout: 15_000,
-      });
-    });
-
-    await step("the list's footer opens Code settings: Projects and GitHub sections", async () => {
-      await page.getByTestId("code-settings").click();
-      await expect(page).toHaveURL(/\/code\/settings\/projects$/);
-      await expect(page.getByRole("heading", { name: "Projects", exact: true })).toBeVisible();
-      const sections = page.getByRole("navigation", { name: "Settings sections" });
-      await expect(sections.getByRole("link", { name: "Projects" })).toHaveAttribute(
-        "aria-current",
-        "page",
+    await step("backslash hides the pane and brings it back; [ hides the list", async () => {
+      await page.keyboard.press("\\");
+      await expect(page.getByTestId("code-pane")).toHaveCount(0);
+      await page.keyboard.press("\\");
+      await expect(page.getByRole("tab", { name: /^Pull request/ })).toHaveAttribute(
+        "aria-selected",
+        "true",
       );
-      await expect(sections.getByRole("link", { name: "GitHub" })).toBeVisible();
-      await expect(page.getByRole("region", { name: "Add a project" })).toBeVisible();
-      await proof("settings");
-      // The way back to chat is the mode switch at the top of the thread list.
-      await expect(
-        page.getByRole("navigation", { name: "Mode" }).getByRole("link", { name: "Chat" }),
-      ).toBeVisible();
+      await page.keyboard.press("[");
+      await expect(page.getByRole("complementary", { name: "Threads" })).toBeHidden();
+      await page.keyboard.press("[");
+      await expect(page.getByRole("complementary", { name: "Threads" })).toBeVisible();
     });
 
-    // ---- bot hand-off --------------------------------------------------------
-    await step("bot hand-off: /code cwd=<dir> starts a Shelley thread from a chat", async () => {
-      const name = `Verify Coder ${stamp}`;
-      const bot = await api.post("/bots", { name, modelId: "test-model" });
-      cleanup(() => api.delete(`/bots/${bot.id}`));
-      await page.goto(`/chats/${bot.id}`, LOADED);
-      const chat = page.getByPlaceholder(new RegExp(`(?:ask|message) ${name}`, "i"));
-      await chat.fill(`/code cwd=${dir} echo: handoff-${stamp}`);
-      await chat.press("Enter");
-      const log = page.getByRole("region", { name: "Messages" });
-      await expect(log.getByRole("link", { name: "Open in Code" })).toBeVisible({
-        timeout: 60_000,
-      });
-      await expect(log.getByText(/Shelley started a thread/)).toBeVisible({ timeout: 60_000 });
-      // The outcome arrives once, as a relayed "Reply from Shelley".
-      await expect(log.getByText("reply relayed into this chat")).toBeVisible({
-        timeout: 60_000,
-      });
-      await expect(log.getByText(`handoff-${stamp}`, { exact: true }).first()).toBeVisible();
+    await step("? lists the keys; the palette runs the same commands", async () => {
+      await page.keyboard.press("?");
+      const keys = page.getByTestId("code-keys");
+      await expect(keys).toContainText("Next thread that needs you");
+      await expect(keys).toContainText("Stop the agent");
+      await page.keyboard.press("Escape");
+      await expect(keys).toHaveCount(0);
+      await page.keyboard.press("ControlOrMeta+k");
+      const palette = page.getByRole("dialog");
+      await palette.getByRole("combobox").fill("Changes");
+      await palette.getByRole("option", { name: /^Changes/ }).click();
+      await expect(page.getByRole("tab", { name: /^Changes/ })).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
     });
-    await proof("handoff");
-    await step("Open in Code lands on the handed-off thread", async () => {
-      await page
-        .getByRole("region", { name: "Messages" })
-        .getByRole("link", { name: "Open in Code" })
-        .click();
-      await expect(page).toHaveURL(/\/code\/shelley%3A/);
-      await expect(transcript.getByText(`handoff-${stamp}`, { exact: true })).toBeVisible({
-        timeout: 20_000,
-      });
-      expect((await threads()).some((t) => t.preview === `handoff-${stamp}`)).toBe(true);
+    await proof("pane-and-keys");
+
+    await step("an old thread link still opens the thread", async () => {
+      await page.goto(`/code/${encodeURIComponent(ids.second)}/pr`, LOADED);
+      await on(ids.second);
+      await expect(page.getByRole("tab", { name: /^Pull request/ })).toHaveAttribute(
+        "aria-selected",
+        "true",
+        { timeout: 20_000 },
+      );
     });
   },
-  { requires: ["shelley"] },
+  { requires: ["demo-agent", "fake-github"] },
 );

@@ -29,7 +29,7 @@ import { VaultPage } from "./pages/vault/Vault";
 import { TerminalPage } from "./pages/terminal";
 import { ComputerPage } from "./pages/computer";
 import { BrowserPage } from "./pages/browser";
-import { CodePage, OpenReviewLink } from "./pages/code";
+import { CodeWorkspace, LegacyThreadRedirect, OpenReviewLink } from "./pages/code";
 import { AppShell } from "./components/shell/AppShell";
 import { BrandMark } from "./components/shell/BrandMark";
 import { APP_NAV, guestNav } from "./components/shell/nav";
@@ -141,22 +141,21 @@ export const appRoutes: RouteObject[] = [
               { path: "/terminal", element: <TerminalPage /> },
               { path: "/computer", element: <ComputerPage /> },
               { path: "/browser", element: <BrowserPage /> },
-              { path: "/code", element: <CodePage /> },
-              { path: "/code/new", element: <CodePage /> },
-              { path: "/code/threads", element: <CodePage /> },
-              { path: "/code/reviews", element: <CodePage /> },
-              { path: "/code/reviews/:reviewId", element: <CodePage /> },
+              { path: "/code", element: <CodeWorkspace /> },
+              { path: "/code/new", element: <CodeWorkspace /> },
+              { path: "/code/t/:threadId", element: <CodeWorkspace /> },
+              { path: "/code/reviews", element: <CodeWorkspace /> },
+              { path: "/code/reviews/:reviewId", element: <CodeWorkspace /> },
               { path: "/code/review", element: <OpenReviewLink /> },
               { path: "/code/review/:owner/:repo/:number", element: <OpenReviewLink /> },
               { path: "/code/review/:owner/:repo/pull/:number/*", element: <OpenReviewLink /> },
-              { path: "/code/s/:slug", element: <CodePage /> },
-              { path: "/code/settings", element: <CodePage /> },
-              { path: "/code/settings/:section", element: <CodePage /> },
-              { path: "/code/settings/projects/:projectId", element: <CodePage /> },
-              { path: "/code/:conversationId", element: <CodePage /> },
-              { path: "/code/:conversationId/changes", element: <CodePage /> },
-              { path: "/code/:conversationId/pr", element: <CodePage /> },
-              { path: "/code/:conversationId/review", element: <CodePage /> },
+              { path: "/code/settings", element: <CodeWorkspace /> },
+              { path: "/code/settings/:section", element: <CodeWorkspace /> },
+              { path: "/code/settings/projects/:projectId", element: <CodeWorkspace /> },
+              { path: "/code/:conversationId", element: <LegacyThreadRedirect /> },
+              { path: "/code/:conversationId/changes", element: <LegacyThreadRedirect /> },
+              { path: "/code/:conversationId/pr", element: <LegacyThreadRedirect /> },
+              { path: "/code/:conversationId/review", element: <LegacyThreadRedirect /> },
               { path: "/routines", element: <Routines /> },
               { path: "/skills", element: <SkillsPage /> },
               { path: "/skills/:id", element: <SkillsPage /> },

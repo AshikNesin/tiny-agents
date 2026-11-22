@@ -287,51 +287,6 @@ export function ContextRing({
   );
 }
 
-const plural = (n: number, one: string) => `${n} ${n === 1 ? one : `${one}s`}`;
-
-export function useArchiveMany() {
-  const navigate = useNavigate();
-  return useCallback(
-    async (
-      rows: Pick<ThreadSummary, "id" | "title">[],
-      archive: boolean,
-      options: { leave?: boolean } = {},
-    ): Promise<string[]> => {
-      if (rows.length === 0) return [];
-      const settled = await Promise.allSettled(rows.map((row) => codeApi.archive(row.id, archive)));
-      const done: string[] = [];
-      let subagents = 0;
-      settled.forEach((result, i) => {
-        if (result.status !== "fulfilled") return;
-        done.push(rows[i]!.id);
-        subagents += result.value?.moved?.length ?? 0;
-      });
-      const failed = rows.length - done.length;
-      if (failed > 0) {
-        const first = settled.find((r): r is PromiseRejectedResult => r.status === "rejected");
-        toast.error(`Could not ${archive ? "archive" : "restore"} ${plural(failed, "thread")}.`, {
-          description: errorMessage(first?.reason, "Try again."),
-        });
-      }
-      if (done.length === 0) return [];
-      if (archive && options.leave) navigate("/code");
-      const what =
-        plural(done.length, "thread") + (subagents ? ` and ${plural(subagents, "subagent")}` : "");
-      toast.success(archive ? `Archived ${what}` : `Restored ${what}`, {
-        action: {
-          label: "Undo",
-          onClick: () =>
-            void Promise.all(done.map((id) => codeApi.archive(id, !archive))).catch(
-              (error: unknown) => toast.error(errorMessage(error, "Could not undo.")),
-            ),
-        },
-      });
-      return done;
-    },
-    [navigate],
-  );
-}
-
 export function useArchive() {
   const navigate = useNavigate();
   return useCallback(
@@ -368,7 +323,7 @@ export function useArchive() {
   );
 }
 
-export function pullState(loop: string): string | null {
+function pullState(loop: string): string | null {
   switch (loop) {
     case "needs_input":
       return "needs you";

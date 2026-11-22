@@ -7,7 +7,7 @@ import { ConfirmProvider } from "@groot/ui/primitives";
 import { NO_CAPABILITIES } from "@tiny-agents/code/contracts";
 import { useCommandPaletteStore } from "@groot/shell/store/command-palette";
 import { AppSidebar } from "@/components/shell/AppSidebar";
-import { CodePage } from "@/pages/code/CodePage";
+import { CodeWorkspace } from "@/pages/code/Workspace";
 import { useCodeStore } from "@/store/code";
 import { useBotsStore } from "@/store/bots";
 import { useUiStore } from "@/store/ui";
@@ -49,7 +49,7 @@ function renderAt(path: string) {
         <Routes>
           <Route path="/chats/*" element={<AppSidebar />} />
           <Route path="/tasks" element={<AppSidebar />} />
-          <Route path="/code/*" element={<CodePage />} />
+          <Route path="/code/*" element={<CodeWorkspace />} />
         </Routes>
       </MemoryRouter>
     </ConfirmProvider>,

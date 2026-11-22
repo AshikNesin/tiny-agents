@@ -41,7 +41,7 @@ import {
 } from "../../lib/code/comments";
 import { harnessOf } from "../../store/code";
 import type { PullReviewView } from "../../../shared/api/code";
-import { ConversationView } from "./ConversationView";
+import { ThreadView } from "./ThreadView";
 import { DEFAULT, ModelPicker, loadModels } from "./controls";
 import { PendingComments } from "./PendingComments";
 import { AssistantPane } from "./ResizablePane";
@@ -371,14 +371,12 @@ function Assistant({
     );
   }
   return (
-    <ConversationView
+    <ThreadView
       key={threadId}
-      pane
+      header={false}
       id={threadId}
       harness={harness}
       rows={rows}
-      panelOpen={false}
-      onTogglePanel={() => undefined}
       insert={null}
     />
   );

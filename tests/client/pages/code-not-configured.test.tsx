@@ -2,7 +2,7 @@ import React from "react";
 import { render as renderBare, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { CodePage } from "@/pages/code/CodePage";
+import { CodeWorkspace } from "@/pages/code/Workspace";
 import { useCodeStore } from "@/store/code";
 import { AppQueryProvider } from "../query-provider";
 
@@ -23,7 +23,7 @@ describe("Code page without a coding agent", () => {
     render(
       <MemoryRouter initialEntries={["/code"]}>
         <Routes>
-          <Route path="/code" element={<CodePage />} />
+          <Route path="/code" element={<CodeWorkspace />} />
         </Routes>
       </MemoryRouter>,
     );

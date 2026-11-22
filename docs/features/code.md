@@ -111,14 +111,6 @@ folder):
   harness's commands.
 - **+** attaches files (or paste or drop them) and picks skills. Drafts are
   kept per thread.
-- When a turn ends, the empty composer suggests your likely next message
-  as its placeholder, after t3code: **Tab** fills it in (**Use** on touch),
-  **Esc** dismisses it for that turn. It costs one small call on the
-  `chat_title` model role per finished turn, and only for a thread open in
-  a browser: the call sees the thread's title, your last message and the
-  agent's answer, each cut short, never the transcript, and its answer is
-  kept for later asks (`code.next-prompt.ts`). A failed turn, an open
-  approval or no model gives no suggestion.
 
 **Watch.**
 

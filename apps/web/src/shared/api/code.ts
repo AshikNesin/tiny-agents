@@ -176,10 +176,6 @@ export interface CheckpointView {
   createdAt: string;
 }
 
-export interface NextPrompt {
-  text: string | null;
-}
-
 export interface PullReviewView {
   id: string;
   key: string;

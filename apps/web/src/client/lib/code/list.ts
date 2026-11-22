@@ -132,22 +132,23 @@ export function selectionRoots(
 }
 
 export interface StatusSection {
-  key: "working" | "needs-you" | "review" | "done";
+  key: "needs-you" | "working" | "review" | "done";
   label: string;
   nodes: ListNode[];
 }
 
 const SECTIONS: Array<Pick<StatusSection, "key" | "label">> = [
-  { key: "working", label: "Working" },
   { key: "needs-you", label: "Needs you" },
+  { key: "working", label: "Working" },
   { key: "review", label: "In review" },
   { key: "done", label: "Done" },
 ];
 
 function sectionOf(node: ListNode): StatusSection["key"] {
-  if (node.busy) return "working";
   const loop = node.row.pr?.loop;
   if (loop === "needs_input") return "needs-you";
+  if (node.busy) return "working";
+  if (node.unread) return "needs-you";
   if (node.row.pr && loop !== "merged") return "review";
   return "done";
 }
@@ -158,4 +159,8 @@ export function statusSections(rows: ThreadSummary[]): StatusSection[] {
     ...section,
     nodes: nodes.filter((node) => sectionOf(node) === section.key),
   })).filter((section) => section.nodes.length > 0);
+}
+
+export function listOrder(sections: StatusSection[]): string[] {
+  return sections.flatMap((section) => section.nodes.map((node) => node.row.id));
 }

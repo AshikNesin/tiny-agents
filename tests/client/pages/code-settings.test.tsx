@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { ConfirmProvider } from "@groot/ui/primitives";
 import { NO_CAPABILITIES } from "@tiny-agents/code/contracts";
-import { CodePage } from "@/pages/code/CodePage";
+import { CodeWorkspace } from "@/pages/code/Workspace";
 import { useCodeStore } from "@/store/code";
 import { usePeopleStore } from "@/store/people";
 import type { HarnessInfo } from "@/lib/code/api";
@@ -109,7 +109,7 @@ function renderAt(path: string) {
             "/code/settings/projects/:projectId",
             "/code/:conversationId",
           ].map((p) => (
-            <Route key={p} path={p} element={<CodePage />} />
+            <Route key={p} path={p} element={<CodeWorkspace />} />
           ))}
         </Routes>
         <Where />
