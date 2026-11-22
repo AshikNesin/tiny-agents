@@ -38,11 +38,13 @@ describe("migration 0026", () => {
     const before = createAppDb(`file:${file}`, {
       migrationsFolder: migrationsBefore("0026_drop_legacy_columns"),
     });
-    const [bot] = await before
-      .insert(schema.bots)
-      .values({ name: "Coder", modelId: null, conversationId: "101" })
-      .returning();
     const old = sqliteConnection(before);
+    const bot = { id: "b1" };
+    old
+      .prepare(
+        "INSERT INTO bots (id, name, conversation_id, chat_started_at, last_activity_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      )
+      .run(bot.id, "Coder", "101", ...Array<number>(4).fill(1_700_000_000_000));
     old
       .prepare(
         "INSERT INTO shelley_seen (conversation_id, last_seen_sequence_id, updated_at) VALUES (?, ?, ?)",
@@ -53,13 +55,13 @@ describe("migration 0026", () => {
         `INSERT INTO shelley_handoffs (id, bot_id, shelley_conversation_id, slug, task, idempotency_key, status, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run("h1", bot!.id, "cOld", "old", "t", "legacy-1", "running", 1_700_000_000_000);
+      .run("h1", bot.id, "cOld", "old", "t", "legacy-1", "running", 1_700_000_000_000);
     old
       .prepare(
         `INSERT INTO shelley_handoffs (id, bot_id, shelley_conversation_id, slug, task, idempotency_key, status, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run("h2", bot!.id, "cOld", null, "t2", "legacy-2", "lost", 1_700_000_000_000);
+      .run("h2", bot.id, "cOld", null, "t2", "legacy-2", "lost", 1_700_000_000_000);
     old.close();
 
     const after = createAppDb(`file:${file}`, { migrationsFolder: MIGRATIONS });
