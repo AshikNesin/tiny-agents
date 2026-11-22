@@ -258,6 +258,42 @@ describe("PR reviews", () => {
     expect(harness.created[0]!.model).toBe("big-1");
   });
 
+  it("starts the review assistant in YOLO mode when the harness allows it", async () => {
+    const yolo = fakeHarness("fake", {
+      settings: {
+        modelSwitch: false,
+        effortLevels: [],
+        permissionModes: ["default", "bypassPermissions"],
+      },
+    });
+    setCodeHub(createCodeHub({ instances: [yolo], listDebounceMs: 5 }))!.start();
+    await newProject();
+    await forkPull([`printf 'x\\n' > src/x.ts`]);
+    const review = (await call<PullReviewView>("POST", "/reviews", { pr: "acme/web#7" })).body
+      .data!;
+
+    const asked = await call("POST", `/reviews/${review.id}/ask`, { message: "Summarize it" });
+
+    expect(asked.status).toBe(200);
+    expect(yolo.created[0]!.permissionMode).toBe("bypassPermissions");
+  });
+
+  it("falls back to ask mode when the harness cannot bypass permissions", async () => {
+    const ask = fakeHarness("fake", {
+      settings: { modelSwitch: false, effortLevels: [], permissionModes: ["default"] },
+    });
+    setCodeHub(createCodeHub({ instances: [ask], listDebounceMs: 5 }))!.start();
+    await newProject();
+    await forkPull([`printf 'x\\n' > src/x.ts`]);
+    const review = (await call<PullReviewView>("POST", "/reviews", { pr: "acme/web#7" })).body
+      .data!;
+
+    const asked = await call("POST", `/reviews/${review.id}/ask`, { message: "Summarize it" });
+
+    expect(asked.status).toBe(200);
+    expect(ask.created[0]!.permissionMode).toBe("default");
+  });
+
   it("archiving a review removes its worktree and takes it off the list", async () => {
     await newProject();
     await forkPull([`printf 'x\\n' > src/x.ts`]);

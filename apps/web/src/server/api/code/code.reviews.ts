@@ -315,9 +315,11 @@ async function startAssistant(
     files,
   });
   const caps = instance.capabilities();
-  const permissionMode = caps.settings.permissionModes.includes("default")
-    ? ("default" as const)
-    : undefined;
+  const permissionMode = caps.settings.permissionModes.includes("bypassPermissions")
+    ? ("bypassPermissions" as const)
+    : caps.settings.permissionModes.includes("default")
+      ? ("default" as const)
+      : undefined;
   const { nativeId } = await instance.createThread({
     cwd: worktree,
     message: `${card}\n\n${message}`,

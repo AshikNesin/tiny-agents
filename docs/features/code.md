@@ -374,6 +374,9 @@ else's, with the agent's help. Nothing is posted until you submit.
 
 Opening the same PR again reuses its review.
 
+The review assistant runs in **YOLO mode** (never ask) when its harness
+offers `bypassPermissions`; a harness without it falls back to ask mode.
+
 **What opening does.** The app fetches the PR's head (`refs/pull/N/head`,
 so a PR from a fork works) and its base into the project's clone. When a
 Code thread opened the PR and its worktree is at that head, the review
