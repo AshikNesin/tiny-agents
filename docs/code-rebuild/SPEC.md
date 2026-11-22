@@ -124,8 +124,10 @@ auto-merge. The next-message suggestion. The detailed usage report (one
 context and cost figure stays). Bulk select, grouping toggles, links by
 thread title, change directory and Open in Shelley. "Post as suggestions"
 and "Since your review". Threads outside a project leave the list and stay
-in their agent's own storage. The GitHub App and its webhooks; a token or
-`gh` with polling remains.
+in their agent's own storage.
+
+GitHub stays reachable three ways, as today: a token, `gh`, or the GitHub
+App with its webhooks. The owner uses the App on personal projects.
 
 ## Data
 
@@ -143,6 +145,4 @@ the real sandbox and GitHub at milestones the plan names.
 
 ## Accepted by default, worth a second look
 
-- The GitHub App is removed on the assumption that the owner does not use it
-  today.
 - The Android app's Code screens stay broken until their own follow-up.
