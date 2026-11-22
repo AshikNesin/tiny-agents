@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { ConfirmProvider } from "@groot/ui/primitives";
 import { NO_CAPABILITIES } from "@tiny-agents/code/contracts";
-import { CodeWorkspace, LegacyThreadRedirect } from "@/pages/code/Workspace";
+import { CodeWorkspace } from "@/pages/code/Workspace";
 import { useCodeStore } from "@/store/code";
 import { useUiStore } from "@/store/ui";
 import type { HarnessInfo, ThreadSnapshot, ThreadSummary } from "@/lib/code/api";
@@ -106,8 +106,6 @@ const renderAt = (path: string) =>
           <Route path="/code/new" element={<CodeWorkspace />} />
           <Route path="/code/t/:threadId" element={<CodeWorkspace />} />
           <Route path="/code/reviews/:id" element={<p>Review page</p>} />
-          <Route path="/code/:conversationId" element={<LegacyThreadRedirect />} />
-          <Route path="/code/:conversationId/pr" element={<LegacyThreadRedirect />} />
         </Routes>
       </MemoryRouter>
     </ConfirmProvider>,

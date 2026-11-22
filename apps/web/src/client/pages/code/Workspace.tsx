@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Code2, X } from "lucide-react";
 import { toast } from "sonner";
 import { EmptyState, monoClass } from "@groot/ui";
@@ -57,22 +57,6 @@ function useGitHubSetupResult(reloadProjects: () => void) {
 
 function focusComposer() {
   document.querySelector<HTMLTextAreaElement>("#code-thread textarea")?.focus();
-}
-
-export function LegacyThreadRedirect() {
-  const { conversationId } = useParams();
-  const { pathname } = useLocation();
-  const setPane = useUiStore((s) => s.setCodePane);
-  const pane: CodePane | undefined = pathname.endsWith("/pr")
-    ? "pr"
-    : pathname.endsWith("/changes") || pathname.endsWith("/review")
-      ? "changes"
-      : undefined;
-  useEffect(() => {
-    if (pane) setPane(pane);
-  }, [pane, setPane]);
-  if (!conversationId) return <Navigate to="/code" replace />;
-  return <Navigate to={threadPath(decodeURIComponent(conversationId))} replace />;
 }
 
 function PaneHeader({

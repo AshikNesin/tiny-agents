@@ -29,7 +29,7 @@ import { VaultPage } from "./pages/vault/Vault";
 import { TerminalPage } from "./pages/terminal";
 import { ComputerPage } from "./pages/computer";
 import { BrowserPage } from "./pages/browser";
-import { CodeWorkspace, LegacyThreadRedirect, OpenReviewLink } from "./pages/code";
+import { CodeWorkspace, OpenReviewLink } from "./pages/code";
 import { AppShell } from "./components/shell/AppShell";
 import { BrandMark } from "./components/shell/BrandMark";
 import { APP_NAV, guestNav } from "./components/shell/nav";
@@ -152,10 +152,6 @@ export const appRoutes: RouteObject[] = [
               { path: "/code/settings", element: <CodeWorkspace /> },
               { path: "/code/settings/:section", element: <CodeWorkspace /> },
               { path: "/code/settings/projects/:projectId", element: <CodeWorkspace /> },
-              { path: "/code/:conversationId", element: <LegacyThreadRedirect /> },
-              { path: "/code/:conversationId/changes", element: <LegacyThreadRedirect /> },
-              { path: "/code/:conversationId/pr", element: <LegacyThreadRedirect /> },
-              { path: "/code/:conversationId/review", element: <LegacyThreadRedirect /> },
               { path: "/routines", element: <Routines /> },
               { path: "/skills", element: <SkillsPage /> },
               { path: "/skills/:id", element: <SkillsPage /> },
