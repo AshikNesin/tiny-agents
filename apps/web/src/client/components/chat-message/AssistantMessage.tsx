@@ -3,11 +3,17 @@ import { Streamdown } from "streamdown";
 import { markdownComponents } from "../../lib/markdown";
 import type { ChatMessage } from "../../lib/chat-types";
 import { isActive } from "../../lib/tool-call-view";
-import { toolSteps, type ToolLabelCatalog, type ToolLabels } from "../../lib/tool-call-text";
+import {
+  toolSteps,
+  workFold,
+  type ToolLabelCatalog,
+  type ToolLabels,
+} from "../../lib/tool-call-text";
 import {
   TraceCollapsible,
   TraceCollapsibleContent,
   TraceCollapsibleTrigger,
+  TraceDescription,
   TraceLine,
   TraceTitle,
 } from "../ui/trace";
@@ -50,31 +56,52 @@ export function assistantView(
   const streaming = message.status === "streaming";
   const hasNotice =
     message.status === "error" || message.status === "stopped" || message.status === "unanswered";
+  const folded = workFold(message, labels);
+  const work = (
+    <>
+      {message.toolCalls && message.toolCalls.length > 0 && (
+        <div className="mb-2 space-y-1">
+          {toolSteps(message.toolCalls).map((step) =>
+            step.kind === "group" ? (
+              <ToolGroupRow
+                key={`group-${step.calls[0].id}-${step.i}`}
+                calls={step.calls}
+                labels={labels}
+                botName={botName}
+              />
+            ) : (
+              <ToolRow
+                key={`${step.call.id}-${step.i}-${step.call.name}`}
+                call={step.call}
+                labels={labels}
+                botName={botName}
+              />
+            ),
+          )}
+        </div>
+      )}
+      {message.reasoning && <Reasoning text={message.reasoning} running={streaming} />}
+    </>
+  );
   return (
     <Message className="group">
       <div className="min-w-0 flex-1">
-        {message.toolCalls && message.toolCalls.length > 0 && (
-          <div className="mb-2 space-y-1">
-            {toolSteps(message.toolCalls).map((step) =>
-              step.kind === "group" ? (
-                <ToolGroupRow
-                  key={`group-${step.calls[0].id}-${step.i}`}
-                  calls={step.calls}
-                  labels={labels}
-                  botName={botName}
-                />
-              ) : (
-                <ToolRow
-                  key={`${step.call.id}-${step.i}-${step.call.name}`}
-                  call={step.call}
-                  labels={labels}
-                  botName={botName}
-                />
-              ),
-            )}
-          </div>
+        {folded ? (
+          <TraceCollapsible className="mb-2" data-testid="reply-work">
+            <TraceCollapsibleTrigger>
+              <TraceLine>
+                <TraceTitle>{folded.title}</TraceTitle>
+                {folded.failed && (
+                  <TraceDescription className="text-destructive">{folded.failed}</TraceDescription>
+                )}
+                {folded.duration && <TraceDescription>{folded.duration}</TraceDescription>}
+              </TraceLine>
+            </TraceCollapsibleTrigger>
+            <TraceCollapsibleContent className="space-y-1 pt-1">{work}</TraceCollapsibleContent>
+          </TraceCollapsible>
+        ) : (
+          work
         )}
-        {message.reasoning && <Reasoning text={message.reasoning} running={streaming} />}
         {(message.text || (hasNotice && !streaming)) && (
           <MessageEnter
             fresh={isFresh(message)}

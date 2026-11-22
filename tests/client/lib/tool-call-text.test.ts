@@ -19,6 +19,7 @@ import {
   toolLabelCatalog,
   toolSteps,
   vaultApprovalText,
+  workFold,
   type ToolLabelCatalog,
 } from "@/lib/tool-call-text";
 
@@ -277,5 +278,35 @@ describe("folding finished calls", () => {
     expect(groupText([call("web_search"), call("web_search")], labels)).toEqual({
       title: "Searched the web ×2",
     });
+  });
+});
+
+describe("a finished reply's work", () => {
+  const search = call("web_search", { durationMs: 1200 });
+  const open = call("browser_navigate", { durationMs: 800 });
+  const broke = call("browser_navigate", { id: "b2", status: "error", durationMs: 300 });
+
+  it("folds into one line once it is more than one row: what it did, what failed, how long", () => {
+    expect(
+      workFold(
+        { status: "done", toolCalls: [search, open, broke], reasoning: "Plan the search" },
+        labels,
+      ),
+    ).toEqual({
+      title: "Worked: searched the web, opened a page ×2",
+      failed: "· 1 failed",
+      duration: "2.3s",
+    });
+  });
+
+  it("stays open while the bot works, for one row, and around a card you act on", () => {
+    expect(
+      workFold({ status: "streaming", toolCalls: [search, open], reasoning: "" }, labels),
+    ).toBeNull();
+    expect(workFold({ status: "done", toolCalls: [search], reasoning: "" }, labels)).toBeNull();
+    const asks = call("ask_owner", { id: "q", status: "pending", question: { questions: [] } });
+    expect(
+      workFold({ status: "done", toolCalls: [search, asks], reasoning: "x" }, labels),
+    ).toBeNull();
   });
 });
