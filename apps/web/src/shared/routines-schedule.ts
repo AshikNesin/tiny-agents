@@ -8,6 +8,7 @@ export const MIN_INTERVAL_MINUTES = 15;
 export const MAX_INTERVAL_MINUTES = 1440;
 export const MAX_NAME_CHARS = 80;
 export const MAX_PROMPT_CHARS = 20_000;
+export const MAX_PROGRESS_CHARS = 1_500;
 
 export function formatIst(value: Date | string | number): string {
   const date = value instanceof Date ? value : new Date(value);

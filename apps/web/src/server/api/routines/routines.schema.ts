@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { MAX_NAME_CHARS, MAX_PROMPT_CHARS, scheduleSchema } from "./routines.schedule";
+import {
+  MAX_NAME_CHARS,
+  MAX_PROGRESS_CHARS,
+  MAX_PROMPT_CHARS,
+  scheduleSchema,
+} from "./routines.schedule";
 
 export const createRoutineSchema = z.object({
   botId: z.string().min(1, "Bot is required"),
@@ -16,6 +21,7 @@ export const updateRoutineSchema = z
     prompt: z.string().trim().min(1, "Prompt is required").max(MAX_PROMPT_CHARS).optional(),
     schedule: scheduleSchema.optional(),
     enabled: z.boolean().optional(),
+    progress: z.string().max(MAX_PROGRESS_CHARS).nullable().optional(),
   })
   .refine((value) => Object.keys(value).length > 0, { message: "No fields to update" });
 

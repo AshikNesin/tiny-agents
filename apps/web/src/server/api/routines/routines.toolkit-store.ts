@@ -112,6 +112,13 @@ export function createRoutineStore(): RoutineStore {
         throw new Error(reasonOf(error), { cause: error });
       }
     },
+
+    async saveProgress(conversationId, text) {
+      const owner = await conversationOwner(conversationId);
+      if (owner?.kind !== "routine") return false;
+      await service.setProgress(owner.routineId, text);
+      return true;
+    },
   };
 }
 

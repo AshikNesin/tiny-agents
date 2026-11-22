@@ -14,6 +14,7 @@ import {
 } from "./routines.arming";
 import { dispatchOccurrence } from "./routines.jobs";
 import {
+  MAX_PROGRESS_CHARS,
   MAX_ROUTINES,
   describeSchedule,
   isSpentOnce,
@@ -46,6 +47,7 @@ type RoutineRow = {
   blockedStreak: number;
   pausedReason: string | null;
   hookTokenHash: string | null;
+  progress: string | null;
   createdAt: Date;
   updatedAt: Date;
   bot: { id: string; name: string; conversationId: string };
@@ -67,6 +69,7 @@ function toApi(row: RoutineRow): RoutineData {
     blockedStreak: row.blockedStreak,
     pausedReason: row.pausedReason,
     hasHook: row.hookTokenHash !== null,
+    progress: row.progress,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -158,6 +161,7 @@ export async function update(
       ...(input.name !== undefined ? { name: input.name } : {}),
       ...(input.prompt !== undefined ? { prompt: input.prompt } : {}),
       ...(input.schedule !== undefined ? { schedule: input.schedule } : {}),
+      ...(input.progress !== undefined ? { progress: input.progress?.trim() || null } : {}),
       updatedAt: new Date(),
     })
     .where(eq(routines.id, id));
@@ -224,6 +228,14 @@ export async function runNow(id: string): Promise<{ runId: string }> {
     now,
   );
   return { runId: runId ?? "" };
+}
+
+export async function setProgress(id: string, text: string): Promise<void> {
+  const note = text.trim();
+  await db
+    .update(routines)
+    .set({ progress: note ? note.slice(0, MAX_PROGRESS_CHARS) : null })
+    .where(eq(routines.id, id));
 }
 
 export async function listRuns(id: string, limit: number): Promise<RoutineRunData[]> {

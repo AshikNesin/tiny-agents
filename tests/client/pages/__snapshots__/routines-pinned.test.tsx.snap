@@ -3812,6 +3812,30 @@ exports[`Routines page, pinned > the editor for a daily cron > markup 1`] = `
           </div>
         </div>
         <div
+          class="space-y-2"
+        >
+          <label
+            class="flex items-center gap-2 text-sm leading-none font-medium select-none group-data-[disabled=true]:pointer-events-none group-data-[disabled=true]:opacity-50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50"
+            data-slot="label"
+            for="routine-progress"
+          >
+            Progress note
+          </label>
+          <textarea
+            class="flex field-sizing-content min-h-16 w-full rounded-xl border border-input bg-transparent px-3 py-2.5 text-base transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30 dark:disabled:bg-input/80 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40"
+            data-slot="textarea"
+            id="routine-progress"
+            maxlength="1500"
+            placeholder="Empty. A run can keep notes here for the next run."
+            rows="3"
+          />
+          <p
+            class="text-xs text-muted-foreground"
+          >
+            The routine's runs write this with save_routine_progress, and the next run reads it. Clear it to start over.
+          </p>
+        </div>
+        <div
           class="rounded-lg bg-muted/40 px-3 py-3"
         >
           <p
@@ -4122,6 +4146,9 @@ dialog
   combobox "Time (IST)" [aria-expanded=false]
     "08:30"
     icon lucide-chevron-down
+  "Progress note"
+  textbox
+  "The routine's runs write this with save_routine_progress, and the next run reads it. Clear it to start over."
   "Preview"
   "At 08:30"
   list
@@ -6014,6 +6041,30 @@ exports[`Routines page, pinned > the editor for a done once > markup 1`] = `
           </div>
         </div>
         <div
+          class="space-y-2"
+        >
+          <label
+            class="flex items-center gap-2 text-sm leading-none font-medium select-none group-data-[disabled=true]:pointer-events-none group-data-[disabled=true]:opacity-50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50"
+            data-slot="label"
+            for="routine-progress"
+          >
+            Progress note
+          </label>
+          <textarea
+            class="flex field-sizing-content min-h-16 w-full rounded-xl border border-input bg-transparent px-3 py-2.5 text-base transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30 dark:disabled:bg-input/80 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40"
+            data-slot="textarea"
+            id="routine-progress"
+            maxlength="1500"
+            placeholder="Empty. A run can keep notes here for the next run."
+            rows="3"
+          />
+          <p
+            class="text-xs text-muted-foreground"
+          >
+            The routine's runs write this with save_routine_progress, and the next run reads it. Clear it to start over.
+          </p>
+        </div>
+        <div
           class="rounded-lg bg-muted/40 px-3 py-3"
         >
           <p
@@ -6303,6 +6354,9 @@ dialog
     tab "Webhook" [aria-selected=false]
       "Webhook"
   "Read as an IST wall time."
+  "Progress note"
+  textbox
+  "The routine's runs write this with save_routine_progress, and the next run reads it. Clear it to start over."
   "Preview"
   "Pick a time in the future"
   button "Cancel"
@@ -30237,6 +30291,30 @@ exports[`Routines page, pinned > the editor for a weekday cron > markup 1`] = `
           </div>
         </div>
         <div
+          class="space-y-2"
+        >
+          <label
+            class="flex items-center gap-2 text-sm leading-none font-medium select-none group-data-[disabled=true]:pointer-events-none group-data-[disabled=true]:opacity-50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50"
+            data-slot="label"
+            for="routine-progress"
+          >
+            Progress note
+          </label>
+          <textarea
+            class="flex field-sizing-content min-h-16 w-full rounded-xl border border-input bg-transparent px-3 py-2.5 text-base transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30 dark:disabled:bg-input/80 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40"
+            data-slot="textarea"
+            id="routine-progress"
+            maxlength="1500"
+            placeholder="Empty. A run can keep notes here for the next run."
+            rows="3"
+          />
+          <p
+            class="text-xs text-muted-foreground"
+          >
+            The routine's runs write this with save_routine_progress, and the next run reads it. Clear it to start over.
+          </p>
+        </div>
+        <div
           class="rounded-lg bg-muted/40 px-3 py-3"
         >
           <p
@@ -30545,6 +30623,9 @@ dialog
       "Webhook"
   textbox "Cron expression"
   "5-field cron (minute hour day-of-month month day-of-week), read in IST."
+  "Progress note"
+  textbox
+  "The routine's runs write this with save_routine_progress, and the next run reads it. Clear it to start over."
   "Preview"
   "At 09:00, Monday through Friday"
   list
@@ -32507,6 +32588,30 @@ exports[`Routines page, pinned > the editor for a weekly cron > markup 1`] = `
           </div>
         </div>
         <div
+          class="space-y-2"
+        >
+          <label
+            class="flex items-center gap-2 text-sm leading-none font-medium select-none group-data-[disabled=true]:pointer-events-none group-data-[disabled=true]:opacity-50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50"
+            data-slot="label"
+            for="routine-progress"
+          >
+            Progress note
+          </label>
+          <textarea
+            class="flex field-sizing-content min-h-16 w-full rounded-xl border border-input bg-transparent px-3 py-2.5 text-base transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30 dark:disabled:bg-input/80 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40"
+            data-slot="textarea"
+            id="routine-progress"
+            maxlength="1500"
+            placeholder="Empty. A run can keep notes here for the next run."
+            rows="3"
+          />
+          <p
+            class="text-xs text-muted-foreground"
+          >
+            The routine's runs write this with save_routine_progress, and the next run reads it. Clear it to start over.
+          </p>
+        </div>
+        <div
           class="rounded-lg bg-muted/40 px-3 py-3"
         >
           <p
@@ -32799,6 +32904,9 @@ dialog
   combobox "Time (IST)" [aria-expanded=false]
     "17:00"
     icon lucide-chevron-down
+  "Progress note"
+  textbox
+  "The routine's runs write this with save_routine_progress, and the next run reads it. Clear it to start over."
   "Preview"
   button "Cancel"
     "Cancel"
@@ -34686,6 +34794,30 @@ exports[`Routines page, pinned > the editor for an interval > markup 1`] = `
           </div>
         </div>
         <div
+          class="space-y-2"
+        >
+          <label
+            class="flex items-center gap-2 text-sm leading-none font-medium select-none group-data-[disabled=true]:pointer-events-none group-data-[disabled=true]:opacity-50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50"
+            data-slot="label"
+            for="routine-progress"
+          >
+            Progress note
+          </label>
+          <textarea
+            class="flex field-sizing-content min-h-16 w-full rounded-xl border border-input bg-transparent px-3 py-2.5 text-base transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30 dark:disabled:bg-input/80 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40"
+            data-slot="textarea"
+            id="routine-progress"
+            maxlength="1500"
+            placeholder="Empty. A run can keep notes here for the next run."
+            rows="3"
+          />
+          <p
+            class="text-xs text-muted-foreground"
+          >
+            The routine's runs write this with save_routine_progress, and the next run reads it. Clear it to start over.
+          </p>
+        </div>
+        <div
           class="rounded-lg bg-muted/40 px-3 py-3"
         >
           <p
@@ -34994,6 +35126,9 @@ dialog
       "Webhook"
   spinbutton "Interval minutes"
   "Every 45 minutes, 15 to 1440 allowed."
+  "Progress note"
+  textbox
+  "The routine's runs write this with save_routine_progress, and the next run reads it. Clear it to start over."
   "Preview"
   "Every 45 minutes"
   list

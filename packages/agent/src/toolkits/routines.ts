@@ -7,6 +7,7 @@ import { toolIdempotencyKey } from "./tasks";
 
 export const REPORT_ROUTINE_BLOCKED = "report_routine_blocked";
 const MAX_BLOCKED_REASON = 300;
+const MAX_ROUTINE_PROGRESS = 1_500;
 
 export type RoutineSchedule =
   | { kind: "once"; at: string }
@@ -49,6 +50,7 @@ export interface RoutineStore {
   ): Promise<RoutineRecord | undefined>;
   remove(conversationId: number, id: string): Promise<boolean>;
   runNow(conversationId: number, id: string): Promise<{ runId: string }>;
+  saveProgress(conversationId: number, text: string): Promise<boolean>;
 }
 
 const nameSchema = Type.String({ minLength: 1, maxLength: 80 });
@@ -265,6 +267,28 @@ export function createRoutinesToolkit(
     },
   });
 
+  const saveProgress = tool({
+    name: "save_routine_progress",
+    label: "Saved routine progress",
+    askLabel: "save this routine's progress note",
+    summary: "Keep notes for this routine's next run",
+    policy: { allowByDefault: true, unattendedOnly: true },
+    description:
+      "Only in a routine run: replace this routine's progress note, which the next run reads " +
+      "instead of earlier results. Keep what the next run needs and can't look up again: what is " +
+      "done, what is left, values to compare against. Send the whole note; empty clears it.",
+    parameters: Type.Object({
+      note: Type.String({ maxLength: MAX_ROUTINE_PROGRESS }),
+    }),
+    replay: "safe",
+    execute: async (args, api) =>
+      attempt(async () =>
+        (await store.saveProgress(Number(api.conversationId), args.note))
+          ? ok(args.note.trim() ? "Saved for the next run." : "Cleared the progress note.")
+          : fail("Only a routine run has a progress note."),
+      ),
+  });
+
   return defineToolkit({
     id: "routines",
     name: "Routines",
@@ -276,6 +300,7 @@ export function createRoutinesToolkit(
       deleteRoutine,
       runRoutineNow,
       reportBlocked,
+      saveProgress,
     ],
   });
 }

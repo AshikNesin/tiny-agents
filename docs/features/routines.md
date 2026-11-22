@@ -64,6 +64,18 @@ conversation resolve to the bot through `conversationOwner`
 vault items. Memory capture reads only the chat, never a routine's
 conversation.
 
+## A progress note across runs
+
+A routine can keep a short note for its next run (`routines.progress`, at
+most `MAX_PROGRESS_CHARS`), for work that spans runs: a list worked through
+a few items a day, or a value to compare against next time. A run replaces
+it with `save_routine_progress`, a tool shown only in unattended runs
+(`unattendedOnly`) and allowed by default, so chats pay nothing for it. The
+store refuses any conversation that is not a routine run. When a note is
+set, the next run's prompt carries it in place of the three quoted results
+(`composeRoutinePrompt`), so a note costs about what the quotes did. The
+owner reads, edits or clears it as **Progress note** in the routine's editor.
+
 ## Webhook routines
 
 A routine whose schedule is `{ kind: "webhook" }` has no clock. It runs when

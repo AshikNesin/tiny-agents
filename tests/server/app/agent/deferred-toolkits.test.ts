@@ -29,6 +29,7 @@ import {
 import { createMcpCapability } from "../../../../packages/agent/src/mcp";
 import { createQuestionsCapability } from "../../../../packages/agent/src/toolkits/questions";
 import { WaitTracker } from "../../../../packages/agent/src/waiting";
+import { hiddenWhere } from "../../../../packages/agent/src/capabilities";
 import { defineToolkit, tool } from "../../../../packages/agent/src/toolkit";
 
 const ok = (text: string) => async () => ({ output: [{ type: "text" as const, text }] });
@@ -275,7 +276,7 @@ describe("deferred toolkits", () => {
     }
   });
 
-  it("keeps the tools every request carries under 10,500 characters", () => {
+  it("keeps the tools every chat or routine request carries under 10,500 characters", () => {
     const stub = {} as never;
     const direct = [
       createTasksToolkit(stub),
@@ -287,15 +288,22 @@ describe("deferred toolkits", () => {
       createBotsToolkit(stub),
       createQuestionsCapability(new WaitTracker()),
     ];
-    const size = direct
-      .flatMap((toolkit) => toolkit.extension.tools ?? [])
-      .reduce(
-        (sum, t) =>
-          sum +
-          JSON.stringify({ name: t.name, description: t.description, input_schema: t.parameters })
-            .length,
-        0,
-      );
-    expect(size).toBeLessThan(10_500);
+    const carried = (unattended: boolean) =>
+      direct
+        .flatMap((toolkit) => {
+          const shown = new Set(
+            toolkit.tools.filter((info) => !hiddenWhere(info, { unattended })).map((t) => t.name),
+          );
+          return (toolkit.extension.tools ?? []).filter((t) => shown.has(t.name));
+        })
+        .reduce(
+          (sum, t) =>
+            sum +
+            JSON.stringify({ name: t.name, description: t.description, input_schema: t.parameters })
+              .length,
+          0,
+        );
+    expect(carried(false)).toBeLessThan(10_500);
+    expect(carried(true)).toBeLessThan(10_500);
   });
 });

@@ -26,6 +26,7 @@ import {
   describeSchedule,
   formatIst,
   previewFireTimes,
+  MAX_PROGRESS_CHARS,
 } from "../../../shared/routines-schedule";
 import { errorMessage } from "../../lib/errors";
 import {
@@ -114,8 +115,12 @@ export function RoutineEditor({
         prompt: form.prompt.trim(),
         schedule: compiled.schedule,
       };
-      if (routine) await update.mutateAsync({ id: routine.id, input: base });
-      else await create.mutateAsync(base);
+      if (routine) {
+        await update.mutateAsync({
+          id: routine.id,
+          input: { ...base, progress: form.progress.trim() || null },
+        });
+      } else await create.mutateAsync(base);
       toast.success(routine ? "Routine saved" : "Routine created");
       await onSaved();
     } catch (error) {
@@ -177,6 +182,24 @@ export function RoutineEditor({
             </div>
 
             <ScheduleFields form={form} set={set} />
+
+            {routine && (
+              <div className="space-y-2">
+                <Label htmlFor="routine-progress">Progress note</Label>
+                <Textarea
+                  id="routine-progress"
+                  rows={3}
+                  value={form.progress}
+                  maxLength={MAX_PROGRESS_CHARS}
+                  onChange={(e) => set("progress", e.target.value)}
+                  placeholder="Empty. A run can keep notes here for the next run."
+                />
+                <p className="text-xs text-muted-foreground">
+                  The routine's runs write this with save_routine_progress, and the next run reads
+                  it. Clear it to start over.
+                </p>
+              </div>
+            )}
 
             <div className="rounded-lg bg-muted/40 px-3 py-3">
               <p className={cn(metaLabelClass, "mb-1.5")}>Preview</p>

@@ -595,6 +595,7 @@ export const routines = sqliteTable(
     blockedStreak: integer("blocked_streak").notNull().default(0),
     pausedReason: text("paused_reason"),
     hookTokenHash: text("hook_token_hash").unique(),
+    progress: text("progress"),
     ...timestamps,
   },
   (t) => [index("routines_enabled_next_run_at_idx").on(t.enabled, t.nextRunAt)],

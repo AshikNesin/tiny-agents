@@ -6904,6 +6904,31 @@ describe("one declaration per tool (3.2)", () => {
               },
               "replay": "safe",
             },
+            {
+              "description": "Only in a routine run: replace this routine's progress note, which the next run reads instead of earlier results. Keep what the next run needs and can't look up again: what is done, what is left, values to compare against. Send the whole note; empty clears it.",
+              "fields": [
+                "description",
+                "execute",
+                "name",
+                "parameters",
+                "replay",
+              ],
+              "gated": false,
+              "name": "save_routine_progress",
+              "parameters": {
+                "properties": {
+                  "note": {
+                    "maxLength": 1500,
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "note",
+                ],
+                "type": "object",
+              },
+              "replay": "safe",
+            },
           ],
           "wraps": 0,
         },
@@ -6954,6 +6979,14 @@ describe("one declaration per tool (3.2)", () => {
               "readOnly": true,
               "unattendedOnly": true,
             },
+            {
+              "allowByDefault": true,
+              "askLabel": "save this routine's progress note",
+              "description": "Keep notes for this routine's next run",
+              "label": "Saved routine progress",
+              "name": "save_routine_progress",
+              "unattendedOnly": true,
+            },
           ],
         },
         "keyOrder": [
@@ -6964,6 +6997,7 @@ describe("one declaration per tool (3.2)", () => {
           "name,label,askLabel,description",
           "name,label,askLabel,description",
           "name,label,askLabel,description,readOnly,unattendedOnly",
+          "name,label,askLabel,description,allowByDefault,unattendedOnly",
         ],
       }
     `);

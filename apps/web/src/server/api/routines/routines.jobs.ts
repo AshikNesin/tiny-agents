@@ -98,6 +98,7 @@ export async function dispatchOccurrence(
           scheduledFor,
           lateMinutes,
           await recentResults(routine.id, scheduledFor),
+          routine.progress,
         ),
       },
       runtime,
@@ -120,6 +121,7 @@ type DispatchRoutine = {
   name: string;
   prompt: string;
   enabled: boolean;
+  progress: string | null;
   bot: { id: string; name: string };
 };
 
@@ -177,6 +179,7 @@ async function dispatchWebhook(
             scheduledFor,
             undefined,
             await recentResults(routine.id, scheduledFor),
+            routine.progress,
           ) + composeEventsSection(events),
       },
       runtime,
