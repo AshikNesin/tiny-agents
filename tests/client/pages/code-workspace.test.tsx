@@ -61,6 +61,7 @@ const agent: HarnessInfo = {
     workspace: { ...NO_CAPABILITIES.workspace, diffs: true },
   },
   commands: [],
+  ssh: { host: null, user: null, port: null, keyFile: null },
 };
 
 const thread = (nativeId: string, extra: Partial<ThreadSummary> = {}): ThreadSummary => ({

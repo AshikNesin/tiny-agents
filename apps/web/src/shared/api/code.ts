@@ -288,3 +288,10 @@ export interface EditReviewFileBody {
 export interface ReviewTerminal {
   name: string;
 }
+
+export interface EditorSshTarget {
+  host: string | null;
+  user: string | null;
+  port: number | null;
+  keyFile: string | null;
+}

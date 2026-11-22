@@ -67,6 +67,7 @@ to GitHub. The list of keys is the `commands` array in
 | `e` `t`         | Edit the last turn and run it again; run it again     |
 | `1` `2` `3`     | Changes, Pull request, Files                          |
 | `` ` `` `\` `[` | Terminal, work pane, thread list                      |
+| `o`             | Open the worktree in Cursor or Zed                    |
 | `f` `a`         | Fix CI, Address comments                              |
 | `P` `M`         | Publish (or push to) the pull request, merge it       |
 
@@ -187,6 +188,30 @@ inside the worktree.
 `` ` `` opens a terminal drawer under the thread, a shell on the sandbox
 that starts in the thread's worktree (`TerminalDrawer.tsx`, on the same
 terminal service as the Terminal page).
+
+### Open in editor
+
+`o`, or the arrow button at the end of the thread header, opens the thread's
+worktree in **Cursor** or **Zed** over SSH (`OpenInEditor.tsx`; the links
+are built by `apps/web/src/client/lib/code/editor.ts`):
+
+- Zed: `zed://ssh/[user@]host[:port]/path`, from
+  [Zed's remote development docs](https://zed.dev/docs/remote-development).
+- Cursor: `cursor://vscode-remote/ssh-remote+host/path?windowId=_blank`, the
+  VS Code `vscode-remote` link under Cursor's scheme, in a new window.
+
+The dialog prefills the SSH host from `GET /code/status`, which gives each
+harness an `ssh` target (`code.editor.ts`): Shelley's host from
+`SHELLEY_URL`, the other harnesses' from `SANDBOX_HOST`, `SANDBOX_USER` and
+`SANDBOX_PORT`. A loopback host becomes the host the page was opened on, so
+an app on `tiny-agents.exe.xyz` suggests `tiny-agents.exe.xyz`.
+
+When the target needs a port or a key, as the local Docker sandbox
+(`pnpm sandbox:up`) does, the dialog suggests the `tiny-agents-sandbox`
+alias and shows the `~/.ssh/config` entry to add once (host, port, user and
+the absolute `SANDBOX_SSH_KEY_FILE`). Cursor's SSH links take a config alias
+more reliably than a `host:port`. The editor and each harness's host are
+remembered in this browser. The button is hidden on phones.
 
 ### On a phone
 

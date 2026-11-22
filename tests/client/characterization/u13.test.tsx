@@ -17,6 +17,7 @@ const harness = (id: string): HarnessInfo => ({
   status: { state: "connected" },
   capabilities: {} as HarnessInfo["capabilities"],
   commands: [],
+  ssh: { host: null, user: null, port: null, keyFile: null },
 });
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));

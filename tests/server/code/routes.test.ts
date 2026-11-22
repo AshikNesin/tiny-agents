@@ -1,4 +1,13 @@
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vite-plus/test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vite-plus/test";
 import { createShelleyHarness } from "@tiny-agents/code/server";
 import { testHost } from "@tiny-agents/code/testing";
 import { api, createTestApp } from "../helpers";
@@ -100,6 +109,54 @@ describe("Code API", () => {
       ["fake", "Fake"],
     ]);
     expect((await api(app, "/api/v1/code/threads")).status).toBe(401);
+  });
+
+  it("tells the editor which SSH host holds each harness's files", async () => {
+    type Ssh = {
+      host: string | null;
+      user: string | null;
+      port: number | null;
+      keyFile: string | null;
+    };
+    const ssh = async () =>
+      (
+        await get<{ harnesses: Array<{ id: string; ssh: Ssh }> }>("/status")
+      ).body.data?.harnesses.map((h) => [h.id, h.ssh]);
+    try {
+      vi.stubEnv("SHELLEY_URL", "http://127.0.0.1:9000");
+      vi.stubEnv("SANDBOX_HOST", "127.0.0.1");
+      vi.stubEnv("SANDBOX_PORT", "2222");
+      vi.stubEnv("SANDBOX_USER", "exedev");
+      vi.stubEnv("SANDBOX_SSH_KEY_FILE", "data/sandbox/id_ed25519");
+      const local = {
+        host: null,
+        user: "exedev",
+        port: 2222,
+        keyFile: `${process.cwd()}/data/sandbox/id_ed25519`,
+      };
+      expect(await ssh()).toEqual([
+        ["shelley", local],
+        ["fake", local],
+      ]);
+
+      vi.stubEnv("SHELLEY_URL", "http://100.100.200.200:9999");
+      vi.stubEnv("SANDBOX_HOST", "tiny-agents-vm");
+      vi.stubEnv("SANDBOX_PORT", "22");
+      vi.stubEnv("SANDBOX_SSH_KEY_FILE", "");
+      expect(await ssh()).toEqual([
+        ["shelley", { host: "100.100.200.200", user: null, port: null, keyFile: null }],
+        ["fake", { host: "tiny-agents-vm", user: "exedev", port: null, keyFile: null }],
+      ]);
+
+      vi.stubEnv("SHELLEY_URL", "http://localhost:9999");
+      vi.stubEnv("SANDBOX_HOST", "");
+      expect((await ssh())?.[0]).toEqual([
+        "shelley",
+        { host: null, user: null, port: null, keyFile: null },
+      ]);
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it("lists project threads only, under their own ids, with a status", async () => {

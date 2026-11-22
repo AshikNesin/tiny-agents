@@ -10,6 +10,7 @@ import {
   Play,
   Send,
   Square,
+  SquareArrowOutUpRight,
   SquareTerminal,
   X,
 } from "lucide-react";
@@ -44,6 +45,7 @@ import { useCommentStore, useThreadComments } from "../../lib/code/comments";
 import { isDialogOpen, isEditable, useHotkey } from "@groot/ui/hotkeys";
 import { Composer } from "./Composer";
 import { CodeKeys, type CodeCommand } from "./keys";
+import { OpenInEditor } from "./OpenInEditor";
 import { PendingComments } from "./PendingComments";
 import {
   ContextRing,
@@ -94,6 +96,7 @@ function Header({
   pr,
   costUsd,
   onResume,
+  onOpenEditor,
 }: {
   row: ThreadSummary | undefined;
   projectName?: string;
@@ -101,6 +104,7 @@ function Header({
   pr: { number: number; loop: string; url: string } | null;
   costUsd: number;
   onResume?: () => void;
+  onOpenEditor?: () => void;
 }) {
   const place = projectName ?? row?.cwd?.split("/").findLast(Boolean);
   return (
@@ -159,6 +163,18 @@ function Header({
           <PullChip pr={pr} />
           <ExternalLink className="text-muted-foreground size-3" />
         </a>
+      )}
+      {onOpenEditor && (
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="text-muted-foreground hidden md:inline-flex"
+          aria-label="Open in editor"
+          title="Open in editor (o)"
+          onClick={onOpenEditor}
+        >
+          <SquareArrowOutUpRight />
+        </Button>
       )}
     </header>
   );
@@ -451,8 +467,19 @@ export function ThreadView({
       }),
     [run, id, working],
   );
+  const [editorOpen, setEditorOpen] = useState(0);
+  const folder = listRow?.cwd ?? row?.cwd ?? null;
+  const openEditor = useCallback(() => setEditorOpen(Date.now()), []);
   const threadCommands = useMemo<CodeCommand[]>(
     () => [
+      {
+        id: "open-editor",
+        group: "Thread",
+        keys: "o",
+        label: "Open in editor (Cursor or Zed)",
+        enabled: Boolean(folder),
+        run: openEditor,
+      },
       {
         id: "stop",
         group: "Thread",
@@ -491,7 +518,17 @@ export function ThreadView({
         run: compact,
       },
     ],
-    [working, stop, archived, toggleArchive, canRewindLast, canCompact, compact],
+    [
+      folder,
+      openEditor,
+      working,
+      stop,
+      archived,
+      toggleArchive,
+      canRewindLast,
+      canCompact,
+      compact,
+    ],
   );
   useHotkey(
     "escape",
@@ -530,6 +567,16 @@ export function ThreadView({
           pr={pr}
           costUsd={state.costUsd}
           onResume={canResume}
+          onOpenEditor={folder ? openEditor : undefined}
+        />
+      )}
+      {folder && editorOpen > 0 && (
+        <OpenInEditor
+          key={editorOpen}
+          open
+          onOpenChange={(open) => !open && setEditorOpen(0)}
+          harness={harness}
+          path={folder}
         />
       )}
 
