@@ -8,7 +8,7 @@ import {
   onceAtFromIstInput,
 } from "../../../shared/routines-schedule";
 
-export type ScheduleKind = "once" | "daily" | "weekly" | "interval" | "cron";
+export type ScheduleKind = "once" | "daily" | "weekly" | "interval" | "cron" | "webhook";
 
 const TZ = TZ_IST;
 
@@ -49,6 +49,8 @@ export function formFromRoutine(routine: Routine): EditorForm {
   if (schedule.kind === "once") {
     kind = "once";
     onceAt = istInputFromAt(schedule.at) || defaultOnceInput();
+  } else if (schedule.kind === "webhook") {
+    kind = "webhook";
   } else if (schedule.kind === "interval") {
     kind = "interval";
     intervalMinutes = String(schedule.minutes);
@@ -122,6 +124,8 @@ export function compileSchedule(
       }
       return { schedule: { kind: "cron", expr } };
     }
+    case "webhook":
+      return { schedule: { kind: "webhook" } };
   }
 }
 

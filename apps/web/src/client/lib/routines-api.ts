@@ -3,6 +3,7 @@ import type { Deleted } from "../../shared/api/common";
 import type {
   Routine,
   RoutineCreateBody,
+  RoutineHook,
   RoutineRuns,
   RoutineRunStarted,
   RoutineUpdateBody,
@@ -18,6 +19,7 @@ export const routinesApi = {
   pause: (id: string) => apiClient.post<Routine>(`/routines/${id}/pause`),
   resume: (id: string) => apiClient.post<Routine>(`/routines/${id}/resume`),
   runNow: (id: string) => apiClient.post<RoutineRunStarted>(`/routines/${id}/run`),
+  rotateHook: (id: string) => apiClient.post<RoutineHook>(`/routines/${id}/hook`),
   listRuns: (id: string, limit = 20) =>
     apiClient.get<RoutineRuns>(`/routines/${id}/runs`, { limit }),
   recentRuns: (limit = 20) => apiClient.get<RoutineRuns>("/routines/runs/recent", { limit }),

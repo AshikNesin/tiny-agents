@@ -4,6 +4,7 @@ import { ok } from "@groot/core/utils/api-response.utils";
 import type { Deleted } from "../../../shared/api/common";
 import { parseBody, parseQuery, parseStringParam } from "@groot/core/utils/controller.utils";
 import * as routinesService from "./routines.service";
+import { rotateHook } from "./routines.hooks";
 import { createRoutineSchema, listRunsSchema, updateRoutineSchema } from "./routines.schema";
 import { formatIst, safeParseSchedule } from "./routines.schedule";
 import type { RoutineWithPreviewData } from "../../../shared/api/routines";
@@ -56,6 +57,10 @@ router.post("/routines/:id/resume", async (c) =>
 
 router.post("/routines/:id/run", async (c) =>
   ok(c, await routinesService.runNow(parseStringParam(c.req.param("id"), "id"))),
+);
+
+router.post("/routines/:id/hook", async (c) =>
+  ok(c, await rotateHook(parseStringParam(c.req.param("id"), "id"))),
 );
 
 router.get("/routines/:id/runs", async (c) => {

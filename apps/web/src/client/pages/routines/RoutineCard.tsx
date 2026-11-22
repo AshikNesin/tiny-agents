@@ -1,4 +1,4 @@
-import { Pencil, Play, Repeat, RotateCcw, Trash2 } from "lucide-react";
+import { Link2, Pencil, Play, Repeat, RotateCcw, Trash2 } from "lucide-react";
 import { Button } from "@groot/ui/button";
 import { Card } from "@groot/ui/card";
 import { StatusBadge } from "@groot/ui/status-badge";
@@ -16,6 +16,7 @@ export function RoutineCard({
   onRunNow,
   onResume,
   onToggle,
+  onHook,
 }: {
   routine: Routine;
   busy: boolean;
@@ -24,7 +25,9 @@ export function RoutineCard({
   onRunNow: () => void;
   onResume: () => void;
   onToggle: (enabled: boolean) => void;
+  onHook: () => void;
 }) {
+  const webhook = routine.schedule.kind === "webhook";
   const state = routineState(routine);
   const autoPaused = state === "auto_paused";
   const blocked = state === "struggling";
@@ -51,11 +54,15 @@ export function RoutineCard({
                 routine.enabled ? "text-foreground" : "text-muted-foreground",
               )}
             >
-              {routine.enabled && routine.nextRunAt
-                ? `Next run ${formatIst(routine.nextRunAt)}`
-                : routine.done
-                  ? "Done · edit to pick a new time"
-                  : "Paused"}
+              {routine.enabled && webhook
+                ? routine.hasHook
+                  ? "Runs when its webhook URL is called"
+                  : "No webhook URL yet"
+                : routine.enabled && routine.nextRunAt
+                  ? `Next run ${formatIst(routine.nextRunAt)}`
+                  : routine.done
+                    ? "Done · edit to pick a new time"
+                    : "Paused"}
             </p>
           )}
           {blocked && (
@@ -74,7 +81,7 @@ export function RoutineCard({
           aria-label={routine.enabled ? `Pause ${routine.name}` : `Resume ${routine.name}`}
         />
       </div>
-      <div className="flex items-center gap-2 px-4 pb-4">
+      <div className="flex flex-wrap items-center gap-2 px-4 pb-4">
         {autoPaused && (
           <Button variant="outline" size="sm" onClick={onResume} disabled={busy}>
             <RotateCcw className="size-3.5" />
@@ -85,6 +92,12 @@ export function RoutineCard({
           <Play className="size-3.5" />
           Run now
         </Button>
+        {webhook && (
+          <Button variant="outline" size="sm" onClick={onHook} disabled={busy}>
+            <Link2 className="size-3.5" />
+            Webhook URL
+          </Button>
+        )}
         <Button variant="ghost" size="sm" onClick={onEdit}>
           <Pencil className="size-3.5" />
           Edit

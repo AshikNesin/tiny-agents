@@ -4,7 +4,12 @@ import type { RoutineRunStatus } from "../machines/routine-run";
 export type Schedule =
   | { kind: "once"; at: string }
   | { kind: "cron"; expr: string }
-  | { kind: "interval"; minutes: number };
+  | { kind: "interval"; minutes: number }
+  | { kind: "webhook" };
+
+export type ClockSchedule = Exclude<Schedule, { kind: "webhook" }>;
+
+export type RoutineTrigger = "schedule" | "manual" | "webhook";
 
 export interface RoutineData {
   id: string;
@@ -19,6 +24,7 @@ export interface RoutineData {
   done: boolean;
   blockedStreak: number;
   pausedReason: string | null;
+  hasHook: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -33,7 +39,7 @@ export interface RoutineRunData {
   routineId: string;
   scheduledFor: Date;
   status: RoutineRunStatus;
-  trigger: "schedule" | "manual";
+  trigger: RoutineTrigger;
   requestId: string;
   submittedAt: Date | null;
   startedAt: Date | null;
@@ -50,6 +56,14 @@ export type RoutineRun = Jsonified<RoutineRunData> & { routineName?: string; bot
 
 export interface RoutineRuns {
   runs: RoutineRun[];
+}
+
+export interface RoutineHook {
+  url: string;
+}
+
+export interface RoutineHookAccepted {
+  duplicate: boolean;
 }
 
 export interface RoutineRunStarted {

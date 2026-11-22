@@ -64,6 +64,36 @@ conversation resolve to the bot through `conversationOwner`
 vault items. Memory capture reads only the chat, never a routine's
 conversation.
 
+## Webhook routines
+
+A routine whose schedule is `{ kind: "webhook" }` has no clock. It runs when
+its URL gets a POST, with the request body as its input (issue #503). The
+rest is the same as a clock routine: a fresh conversation, the token budget,
+`message_owner`, and the blocked-run pause. The code is
+`apps/web/src/server/api/routines/routines.hooks.ts`.
+
+- **The URL.** **Webhook URL** on the card (`POST /routines/:id/hook`) makes a
+  new secret URL, `/api/v1/routines/hooks/<token>`, and shows it once. Only
+  the token's SHA-256 is stored (`routines.hook_token_hash`), so a new URL
+  stops the old one. A paused routine answers 409, an unknown token 404.
+- **Acknowledge, then work.** The handler stores the delivery as a
+  `routine_events` row, queues a `routine-fire` job with trigger `webhook`,
+  and answers 202. Nothing else runs on the request.
+- **Once per delivery.** The delivery id is the first of the
+  `Idempotency-Key`, `X-GitHub-Delivery`, `X-Delivery-Id` or `X-Request-Id`
+  headers, or else a hash of the body. A repeated id answers 200 with
+  `duplicate: true` and runs nothing.
+- **Data, not instructions.** Each payload is clipped
+  (`HOOK_PAYLOAD_CHARS`) and quoted into the run's prompt in a fenced block,
+  under a line saying it came from outside and is data.
+- **Deliveries batch.** A delivery that arrives while a run is working is not
+  recorded `missed`: it waits. When the run settles (or a restart interrupts
+  it), any waiting deliveries start the next run together, up to
+  `HOOK_EVENTS_PER_RUN`, oldest first.
+- **An hourly cap.** Past `HOOK_RUNS_PER_HOUR` webhook runs in the last hour,
+  deliveries wait for one delayed fire at the moment the window frees, so a
+  noisy sender cannot run up the bill.
+
 ## Nobody is there to ask
 
 A run's conversation is configured `unattended`

@@ -1,6 +1,6 @@
 import { CronExpressionParser } from "cron-parser";
 import cronstrue from "cronstrue";
-import type { Schedule } from "./api/routines";
+import type { ClockSchedule, Schedule } from "./api/routines";
 
 export const TZ_IST = "Asia/Kolkata";
 
@@ -40,7 +40,13 @@ export function describeSchedule(schedule: Schedule): string {
       }
       return `Every ${minutes} minutes`;
     }
+    case "webhook":
+      return "When its webhook URL is called";
   }
+}
+
+export function isClockSchedule(schedule: Schedule): schedule is ClockSchedule {
+  return schedule.kind !== "webhook";
 }
 
 export function isValidCron(expr: string): boolean {
@@ -53,7 +59,7 @@ export function isValidCron(expr: string): boolean {
   }
 }
 
-export function nextOccurrence(schedule: Schedule, from: Date): Date {
+export function nextOccurrence(schedule: ClockSchedule, from: Date): Date {
   switch (schedule.kind) {
     case "once":
       return new Date(schedule.at);
@@ -67,6 +73,7 @@ export function nextOccurrence(schedule: Schedule, from: Date): Date {
 }
 
 export function previewFireTimes(schedule: Schedule, from: Date, count = 3): Date[] {
+  if (!isClockSchedule(schedule)) return [];
   const times: Date[] = [];
   let cursor = from;
   for (let i = 0; i < count; i++) {

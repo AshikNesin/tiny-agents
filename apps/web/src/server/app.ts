@@ -10,6 +10,7 @@ import notificationRoutes from "@groot/core/notification/notification.routes";
 import { jobRoutes } from "@groot/jobs/server/routes";
 import tasksRoutes from "./api/tasks/task.routes";
 import routinesRoutes from "./api/routines/routines.routes";
+import { hookRouter as routineHookRoutes } from "./api/routines/routines.hooks";
 import botsRoutes from "./api/bots/bots.routes";
 import memoriesRoutes from "./api/bots/memories.routes";
 import tracesRoutes from "./api/traces/traces.routes";
@@ -44,6 +45,7 @@ export function createWebApp(options: Omit<CreateAppOptions, "routes"> = {}) {
       app.route("/api/v1/passkey", passkeyRoutes);
       app.route("/api/v1", publicConnectionsRouter);
       app.route("/api/v1", codeWebhookRoutes);
+      app.route("/api/v1", routineHookRoutes);
       app.route("/", appLinksRouter);
 
       const api = new Hono<AppEnv>();

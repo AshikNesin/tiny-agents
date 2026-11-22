@@ -45,6 +45,7 @@ type RoutineRow = {
   conversationId: string | null;
   blockedStreak: number;
   pausedReason: string | null;
+  hookTokenHash: string | null;
   createdAt: Date;
   updatedAt: Date;
   bot: { id: string; name: string; conversationId: string };
@@ -65,6 +66,7 @@ function toApi(row: RoutineRow): RoutineData {
     done: !row.enabled && schedule !== undefined && isSpentOnce(schedule, new Date()),
     blockedStreak: row.blockedStreak,
     pausedReason: row.pausedReason,
+    hasHook: row.hookTokenHash !== null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -257,6 +259,7 @@ export async function recentRuns(limit: number): Promise<RecentRoutineRunData[]>
 }
 
 export function previewFireTimes(schedule: Schedule, from: Date, count = 3): Date[] {
+  if (schedule.kind === "webhook") return [];
   if (schedule.kind === "once") return [nextOccurrence(schedule, from)];
   const times: Date[] = [];
   let cursor = from;

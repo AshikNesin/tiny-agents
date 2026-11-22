@@ -8,11 +8,20 @@ import {
   TZ_IST,
   describeSchedule,
   formatIst,
+  isClockSchedule,
   isValidCron,
   nextOccurrence,
 } from "../../../shared/routines-schedule";
 
-export { TZ_IST, MAX_NAME_CHARS, MAX_PROMPT_CHARS, describeSchedule, formatIst, nextOccurrence };
+export {
+  TZ_IST,
+  MAX_NAME_CHARS,
+  MAX_PROMPT_CHARS,
+  describeSchedule,
+  formatIst,
+  isClockSchedule,
+  nextOccurrence,
+};
 
 export const MAX_ROUTINES = 50;
 
@@ -46,10 +55,13 @@ const cronSchema = z.object({
   expr: cronExpr,
 });
 
+const webhookSchema = z.strictObject({ kind: z.literal("webhook") });
+
 export const scheduleSchema = z.discriminatedUnion("kind", [
   onceSchema,
   cronSchema,
   intervalSchema,
+  webhookSchema,
 ]);
 
 export type Schedule = z.infer<typeof scheduleSchema>;

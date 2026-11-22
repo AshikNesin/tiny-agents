@@ -19,6 +19,7 @@ const SCHEDULE_TABS: { value: ScheduleKind; label: string }[] = [
   { value: "weekly", label: "Weekly" },
   { value: "interval", label: "Interval" },
   { value: "cron", label: "Cron" },
+  { value: "webhook", label: "Webhook" },
 ];
 
 const TIME_OPTIONS: string[] = Array.from(
@@ -107,6 +108,12 @@ export function ScheduleFields({
             {MAX_INTERVAL_MINUTES} allowed.
           </p>
         </div>
+      )}
+      {form.kind === "webhook" && (
+        <p className="text-xs text-muted-foreground">
+          Runs whenever its URL gets a POST, with the body as its input. Save, then use Webhook URL
+          on the routine to get the URL.
+        </p>
       )}
       {form.kind === "cron" && (
         <div className="space-y-1.5">

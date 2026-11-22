@@ -11,7 +11,8 @@ const MAX_BLOCKED_REASON = 300;
 export type RoutineSchedule =
   | { kind: "once"; at: string }
   | { kind: "cron"; expr: string }
-  | { kind: "interval"; minutes: number };
+  | { kind: "interval"; minutes: number }
+  | { kind: "webhook" };
 
 export interface RoutineRecord {
   id: string;

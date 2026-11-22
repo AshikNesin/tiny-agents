@@ -1,9 +1,9 @@
-import { and, asc, desc, eq, inArray, lt, notInArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, lt, notInArray, sql } from "drizzle-orm";
 import { RUN_TOOL_CALL_LIMIT, type AgentRuntime, type FinishedReply } from "@tiny-agents/agent";
 import { conversationRef } from "../bots/bots.conversation";
 import { awaitedSubmissions } from "../bots/bots.awaited";
 import type { ChatRead } from "../bots/bots.settled";
-import { db, bots, routineRuns, routines, type RoutineRun } from "../../db";
+import { db, bots, routineEvents, routineRuns, routines, type RoutineRun } from "../../db";
 import { ROUTINE_RUN_TOKEN_BUDGET } from "../bots/bots.conversation";
 import {
   routineRunMachine,
@@ -13,6 +13,7 @@ import {
 import type { RoutineRunRef } from "../notifications/notifications.events";
 import { announceRun } from "./routines.cards";
 import { clearBlockedStreak, disarmRoutine, recordBlocked } from "./routines.arming";
+import { kickPendingEvents } from "./routines.hooks";
 
 const KEEP_RUNS_PER_ROUTINE = 50;
 const OUTPUT_PREVIEW_CHARS = 2000;
@@ -78,15 +79,19 @@ async function pruneRuns(routineId: string): Promise<void> {
     .orderBy(desc(routineRuns.scheduledFor))
     .limit(KEEP_RUNS_PER_ROUTINE);
   if (keep.length < KEEP_RUNS_PER_ROUTINE) return;
-  await db.delete(routineRuns).where(
-    and(
-      eq(routineRuns.routineId, routineId),
-      notInArray(
-        routineRuns.id,
-        keep.map((run) => run.id),
+  const kept = keep.map((run) => run.id);
+  await db
+    .delete(routineRuns)
+    .where(and(eq(routineRuns.routineId, routineId), notInArray(routineRuns.id, kept)));
+  await db
+    .delete(routineEvents)
+    .where(
+      and(
+        eq(routineEvents.routineId, routineId),
+        isNotNull(routineEvents.runId),
+        notInArray(routineEvents.runId, kept),
       ),
-    ),
-  );
+    );
 }
 
 export async function reserveRunConversation(
@@ -362,6 +367,16 @@ export function createRoutineRunResolver(rt: RoutineRunsRuntime): RoutineRunReso
     conversationId: number,
     reply: FinishedReply,
   ) {
+    await settleReply(ref, run, conversationId, reply);
+    await kickPendingEvents(run.routineId);
+  }
+
+  async function settleReply(
+    ref: RoutineRunRef,
+    run: { routineId: string; ownConversation: boolean },
+    conversationId: number,
+    reply: FinishedReply,
+  ) {
     const routineId = run.routineId;
     const tokens = await runTokens(conversationId, run.ownConversation);
     const spent = tokens !== undefined ? { tokens } : {};
@@ -399,9 +414,10 @@ export function createRoutineRunResolver(rt: RoutineRunsRuntime): RoutineRunReso
     announceRun(ref, { status: "succeeded", output, ...sentOf });
   }
 
-  async function markInterrupted(ref: RoutineRunRef): Promise<void> {
+  async function markInterrupted(ref: RoutineRunRef, routineId: string): Promise<void> {
     await settleRun(ref.runId, "failed", { error: "interrupted" });
     announceRun(ref, { status: "failed", error: "Interrupted by a server restart." });
+    await kickPendingEvents(routineId);
   }
 
   const awaited = awaitedSubmissions(rt, {
@@ -413,7 +429,7 @@ export function createRoutineRunResolver(rt: RoutineRunsRuntime): RoutineRunReso
       }));
     },
     answered: ({ ref, run, conversationId }, reply) => resolveRun(ref, run, conversationId, reply),
-    interrupted: ({ ref }) => markInterrupted(ref),
+    interrupted: ({ ref, run }) => markInterrupted(ref, run.routineId),
   });
 
   return { resolveConversation: awaited.answer, bootSweep: awaited.sweep };
