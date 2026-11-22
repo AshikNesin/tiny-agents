@@ -208,6 +208,16 @@ describe("a guest's approval answers (decideApproval)", () => {
     );
   });
 
+  it("refuses a guest any answer on a save_skill card", async () => {
+    for (const decision of ["approved", "denied"]) {
+      waitingCard("save_skill");
+      expect((await decide({ decision })).body, decision).toEqual(
+        refused("FORBIDDEN", "Only the owner can approve saving skills"),
+      );
+    }
+    expect(spied.decideApproval).not.toHaveBeenCalled();
+  });
+
   it("refuses a guest any answer on a vault card, approving or denying", async () => {
     for (const decision of ["approved", "denied"]) {
       waitingCard("browser_fill_secret", { vault: { handle: "bank", kind: "login" } });

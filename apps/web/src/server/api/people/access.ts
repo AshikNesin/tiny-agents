@@ -75,12 +75,15 @@ export async function requireAttachable(viewer: Viewer, uploadIds: string[]): Pr
 export async function requireApprovalAnswer(
   viewer: Viewer | undefined,
   input: { alwaysAllow?: string; grant?: boolean },
-  waitingCall: () => Promise<{ vault?: unknown } | undefined>,
+  waitingCall: () => Promise<{ vault?: unknown; name?: string } | undefined>,
 ): Promise<void> {
   if (viewer?.kind !== "guest") return;
   if (input.alwaysAllow || input.grant) throw Boom.forbidden("Only the owner can do that");
   const call = await waitingCall();
   if (call?.vault) throw Boom.forbidden("Only the owner can approve vault use");
+  if (call?.name === "save_skill") {
+    throw Boom.forbidden("Only the owner can approve saving skills");
+  }
 }
 
 export function seesConnections(viewer: Viewer): boolean {
