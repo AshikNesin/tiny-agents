@@ -19,7 +19,7 @@ import { toast } from "sonner";
 import { useBotsStore } from "../../store/bots";
 import { modeOf, useUiStore } from "../../store/ui";
 import { useCodeStore } from "../../store/code";
-import { useCodeCommands } from "../../pages/code/keys";
+import { useKeyCommands } from "../keys";
 import { threadPath } from "../../lib/code/api";
 import type { Bot as BotRow } from "../../../shared/api/bots";
 import { BotDialog } from "../BotDialog";
@@ -51,7 +51,7 @@ export function AppShell() {
   const connectCode = useCodeStore((s) => s.connect);
   const disconnectCode = useCodeStore((s) => s.disconnect);
   const codeThreads = useCodeStore((s) => s.threads);
-  const codeCommands = useCodeCommands((s) => s.commands);
+  const codeCommands = useKeyCommands((s) => s.commands);
   const codeConfigured = useCodeStore((s) => (s.harnesses?.length ?? 0) > 0);
   useEffect(() => {
     connectCode();
@@ -121,7 +121,7 @@ export function AppShell() {
       codeCommands.length > 0
         ? [
             {
-              heading: "Code actions",
+              heading: pathname.startsWith("/code") ? "Code actions" : "Chat actions",
               items: codeCommands
                 .filter((command) => command.enabled !== false)
                 .map((command) => ({

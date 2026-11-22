@@ -44,7 +44,7 @@ import { useViewerRole } from "../../store/people";
 import { useCommentStore, useThreadComments } from "../../lib/code/comments";
 import { isDialogOpen, isEditable, useHotkey } from "@groot/ui/hotkeys";
 import { Composer } from "./Composer";
-import { CodeKeys, type CodeCommand } from "./keys";
+import { PageKeys, type KeyCommand } from "../../components/keys";
 import { OpenInEditor } from "./OpenInEditor";
 import { PendingComments } from "./PendingComments";
 import {
@@ -470,7 +470,7 @@ export function ThreadView({
   const [editorOpen, setEditorOpen] = useState(0);
   const folder = listRow?.cwd ?? row?.cwd ?? null;
   const openEditor = useCallback(() => setEditorOpen(Date.now()), []);
-  const threadCommands = useMemo<CodeCommand[]>(
+  const threadCommands = useMemo<KeyCommand[]>(
     () => [
       {
         id: "open-editor",
@@ -558,7 +558,7 @@ export function ThreadView({
 
   return (
     <div className="flex h-full min-h-0 flex-col" id="code-thread" data-working={working}>
-      {commands && <CodeKeys source="thread" commands={threadCommands} />}
+      {commands && <PageKeys source="thread" commands={threadCommands} />}
       {header && (
         <Header
           row={row}

@@ -5,10 +5,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@groot/ui/dial
 import { monoClass } from "@groot/ui";
 import { cn } from "@groot/ui/lib/utils";
 
-export interface CodeCommand {
+export interface KeyCommand {
   id: string;
   label: string;
-  group: "Go to" | "Thread" | "Pane";
+  group: "Go to" | "Thread" | "Pane" | "Chat";
   keys?: string;
   enabled?: boolean;
   run(): void;
@@ -17,14 +17,14 @@ export interface CodeCommand {
 type CommandSource = "page" | "thread";
 
 interface CommandState {
-  sources: Record<CommandSource, CodeCommand[]>;
-  commands: CodeCommand[];
+  sources: Record<CommandSource, KeyCommand[]>;
+  commands: KeyCommand[];
   helpOpen: boolean;
-  set(source: CommandSource, commands: CodeCommand[]): void;
+  set(source: CommandSource, commands: KeyCommand[]): void;
   setHelp(open: boolean): void;
 }
 
-export const useCodeCommands = create<CommandState>((set) => ({
+export const useKeyCommands = create<CommandState>((set) => ({
   sources: { page: [], thread: [] },
   commands: [],
   helpOpen: false,
@@ -46,7 +46,7 @@ function keyOf(event: Pick<KeyboardEvent, "key" | "shiftKey">): string {
   return event.shiftKey ? event.key.toUpperCase() : event.key.toLowerCase();
 }
 
-function KeyBinding({ base, commands }: { base: string; commands: CodeCommand[] }) {
+function KeyBinding({ base, commands }: { base: string; commands: KeyCommand[] }) {
   useHotkey(base, (event) => {
     const pressed = keyOf(event);
     commands.find((command) => command.keys === pressed && command.enabled !== false)?.run();
@@ -54,19 +54,19 @@ function KeyBinding({ base, commands }: { base: string; commands: CodeCommand[] 
   return null;
 }
 
-export function CodeKeys({
+export function PageKeys({
   commands,
   source = "page",
 }: {
-  commands: CodeCommand[];
+  commands: KeyCommand[];
   source?: CommandSource;
 }) {
-  const publish = useCodeCommands((s) => s.set);
+  const publish = useKeyCommands((s) => s.set);
   useEffect(() => {
     publish(source, commands);
     return () => publish(source, []);
   }, [commands, publish, source]);
-  const bases = new Map<string, CodeCommand[]>();
+  const bases = new Map<string, KeyCommand[]>();
   for (const command of commands) {
     if (!command.keys || command.keys === "Escape") continue;
     const base = command.keys.toLowerCase();
@@ -102,10 +102,10 @@ export function Kbd({ keys, className }: { keys: string; className?: string }) {
 }
 
 function KeysDialog() {
-  const open = useCodeCommands((s) => s.helpOpen);
-  const setOpen = useCodeCommands((s) => s.setHelp);
-  const commands = useCodeCommands((s) => s.commands);
-  const groups = ["Go to", "Thread", "Pane"] as const;
+  const open = useKeyCommands((s) => s.helpOpen);
+  const setOpen = useKeyCommands((s) => s.setHelp);
+  const commands = useKeyCommands((s) => s.commands);
+  const groups = ["Go to", "Chat", "Thread", "Pane"] as const;
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="max-w-lg">

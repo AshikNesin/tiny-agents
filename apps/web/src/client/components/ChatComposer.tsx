@@ -67,6 +67,8 @@ function ambiguousMentionHint(names: string[]): string {
 
 export interface ChatComposerHandle {
   stageFiles: (files: FileList | File[]) => void;
+  focus: () => void;
+  setText: (text: string) => void;
 }
 
 interface ChatComposerProps {
@@ -218,7 +220,15 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
     textareaRef.current?.focus({ preventScroll: true });
   };
 
-  useImperativeHandle(ref, () => ({ stageFiles }));
+  useImperativeHandle(ref, () => ({
+    stageFiles,
+    focus: () => textareaRef.current?.focus({ preventScroll: true }),
+    setText: (next: string) => {
+      setDraft((current) => ({ ...current, text: next }));
+      pendingCaret.current = next.length;
+      textareaRef.current?.focus({ preventScroll: true });
+    },
+  }));
 
   const unstage = (item: StagedItem) => unstageUpload(item, staging);
 
