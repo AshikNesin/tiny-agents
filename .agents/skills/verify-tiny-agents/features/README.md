@@ -83,7 +83,7 @@ Sandbox and code
 - [Terminal](./terminal.md) [`--sandbox`]: tabs, typing, re-attach, keys panel, full screen, close.
 - [Computer](./computer.md) [`--sandbox`]: desktop, VNC live view, control, Apps menu, reset.
 - [Browser](./browser.md) [`--sandbox`]: `/browser` page and the chat panel from `/browse N`, desktop and phone.
-- [Code](./code.md) [`--demo-agent --fake-github`]: the Code workspace: status-grouped list, moving by key, a streamed turn, steer, queue, stop, the Changes and Pull request panes, the key list.
+- [Code](./code.md) [`--demo-agent --fake-github --local-sandbox`]: the Code workspace: status-grouped list, moving by key, a streamed turn, steer, queue, stop, the Changes and Pull request panes, the key list.
 - [A bot's own browser and computer](./bot-profiles.md) [`--sandbox`]: own profile, start, stream, reset, release on delete.
 - [Claude plan](./claude-plan.md): the engine-off state.
 

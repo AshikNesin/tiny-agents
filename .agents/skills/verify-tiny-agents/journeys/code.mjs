@@ -144,6 +144,64 @@ await journey(
       await expect(page.getByRole("complementary", { name: "Threads" })).toBeVisible();
     });
 
+    await step(
+      "3 opens Files: p finds a file by name, s searches, an edit saves and shows in Changes",
+      async () => {
+        await page.keyboard.press("p");
+        const files = page.getByTestId("code-files");
+        await expect(files.getByRole("textbox", { name: "Open a file by name" })).toBeFocused();
+        await page.keyboard.type("notes");
+        await page.keyboard.press("Enter");
+        await expect(files.getByText("Editing NOTES.md, saved to the worktree")).toBeVisible({
+          timeout: 20_000,
+        });
+        await page.keyboard.press("Escape");
+        await page.keyboard.press("s");
+        await page.keyboard.type(`release ${stamp}`);
+        await page.keyboard.press("Enter");
+        await expect(files.getByTestId("code-files-list")).toContainText("NOTES.md", {
+          timeout: 20_000,
+        });
+        const saved = await api.put(`/code/threads/${encodeURIComponent(ids.first)}/review/file`, {
+          path: "NOTES.md",
+          original: `- Note the release ${stamp} and commit it\n`,
+          content: `- Note the release ${stamp} and commit it\n- edited by hand ${stamp}\n`,
+        });
+        expect(saved.saved).toBe(true);
+        await page.keyboard.press("Escape");
+        await page.keyboard.press("1");
+        await expect(
+          page.getByTestId("code-pane").getByText(`edited by hand ${stamp}`).first(),
+        ).toBeVisible({ timeout: 20_000 });
+      },
+    );
+    await proof("files");
+
+    await step("backtick opens a terminal in the thread's worktree", async () => {
+      const frames = [];
+      page.on("websocket", (ws) => {
+        if (!ws.url().includes("/api/v1/terminal/ws/")) return;
+        ws.on("framereceived", (f) =>
+          frames.push(typeof f.payload === "string" ? f.payload : f.payload.toString("utf8")),
+        );
+      });
+      await page.keyboard.press("`");
+      const terminal = page.getByTestId("code-terminal");
+      await expect(terminal).toHaveAttribute("data-state", "live", { timeout: 30_000 });
+      await terminal.click();
+      await page.keyboard.type(`echo "t$((6*7))-${stamp}" && git branch --show-current`);
+      await page.keyboard.press("Enter");
+      await expect.poll(() => frames.join(""), { timeout: 20_000 }).toContain(`t42-${stamp}`);
+      expect(frames.join("")).toMatch(/ta\/note-release/);
+      const sessions = (await api.get("/terminal/sessions")).sessions.map((s) => s.name);
+      cleanup(async () => {
+        for (const name of sessions) await api.delete(`/terminal/sessions/${name}?force=1`);
+      });
+      await page.getByRole("button", { name: "Hide the terminal" }).click();
+      await expect(terminal).toHaveCount(0);
+    });
+    await proof("terminal");
+
     await step("? lists the keys; the palette runs the same commands", async () => {
       await page.keyboard.press("?");
       const keys = page.getByTestId("code-keys");
@@ -217,5 +275,5 @@ await journey(
       );
     });
   },
-  { requires: ["demo-agent", "fake-github"] },
+  { requires: ["demo-agent", "fake-github", "local-sandbox"] },
 );

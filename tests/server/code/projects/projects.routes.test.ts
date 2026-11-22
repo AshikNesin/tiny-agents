@@ -864,6 +864,52 @@ describe("the reconcile chain", () => {
   });
 });
 
+describe("the files of a thread's worktree", () => {
+  it("lists tracked and new files, reads one, and finds text across them", async () => {
+    const project = await newProject();
+    const thread = await newThread(project.id);
+    const enc = encodeURIComponent(thread.id);
+    await sh(
+      local,
+      `cd ${thread.worktree} && mkdir -p src && printf 'export const limit = 5;\\n' > src/limit.ts`,
+    );
+
+    const files = (await call<string[]>("GET", `/threads/${enc}/files`)).body.data!;
+    expect(files).toContain("src/limit.ts");
+    expect(files).toContain("README.md");
+    expect(files.some((file) => file.startsWith(".git/"))).toBe(false);
+
+    const read = await call<{ content: string | null }>(
+      "GET",
+      `/threads/${enc}/files/content?path=src/limit.ts`,
+    );
+    expect(read.body.data).toEqual({ path: "src/limit.ts", content: "export const limit = 5;\n" });
+
+    const hits = (await call<unknown[]>("GET", `/threads/${enc}/files/search?q=LIMIT%20=`)).body
+      .data!;
+    expect(hits).toEqual([{ path: "src/limit.ts", line: 1, text: "export const limit = 5;" }]);
+  });
+
+  it("reads nothing outside the worktree and says so for a file it cannot show", async () => {
+    const project = await newProject();
+    const thread = await newThread(project.id);
+    const enc = encodeURIComponent(thread.id);
+    await sh(
+      local,
+      `cd ${thread.worktree} && ln -s /etc/hostname leak && printf '\\0\\1' > blob.bin`,
+    );
+
+    expect((await call("GET", `/threads/${enc}/files/content?path=leak`)).status).toBe(404);
+    expect((await call("GET", `/threads/${enc}/files/content?path=../x`)).status).toBe(400);
+    expect((await call("GET", `/threads/${enc}/files/content?path=.git/config`)).status).toBe(404);
+    expect(
+      (await call<{ content: string | null }>("GET", `/threads/${enc}/files/content?path=blob.bin`))
+        .body.data,
+    ).toEqual({ path: "blob.bin", content: null });
+    expect((await call("GET", `/threads/${enc}/files/search?q=x`)).status).toBe(400);
+  });
+});
+
 describe("editing an earlier turn", () => {
   const ended = { working: false, title: "t", cwd: null, text: "Done.", failed: false, cursor: 1 };
 

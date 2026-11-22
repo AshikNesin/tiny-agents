@@ -17,6 +17,8 @@ import type {
   PullThreadsView,
   PushedReview,
   ReviewTerminal,
+  WorktreeFile,
+  FileHit,
   SuggestedChanges,
   ReviewDraft,
   ReviewFile,
@@ -55,6 +57,7 @@ import {
   sendCommentsToThread,
   submitReview,
   suggestReviewChanges,
+  terminalIn,
 } from "./code.reviews";
 import {
   createProject,
@@ -408,6 +411,35 @@ router.put("/code/threads/:id/review/file", async (c) => {
     );
   }
   return ok(c, { saved: true });
+});
+
+router.get("/code/threads/:id/files", async (c) => {
+  const { worktree, ws } = await threadWorktree(threadParam(c.req.param("id")));
+  return ok<string[]>(c, await ws.listFiles(worktree).catch(saying));
+});
+
+router.get("/code/threads/:id/files/content", async (c) => {
+  const path = safePath(c.req.query("path"));
+  const { worktree, ws } = await threadWorktree(threadParam(c.req.param("id")));
+  const read = await ws.readText(worktree, path).catch(saying);
+  if (read === "outside") throw Boom.notFound(`No file ${path} in this worktree.`);
+  return ok<WorktreeFile>(
+    c,
+    read === "unshowable" ? { path, content: null } : { path, content: read.content },
+  );
+});
+
+router.get("/code/threads/:id/files/search", async (c) => {
+  const query = (c.req.query("q") ?? "").trim();
+  if (query.length < 2 || query.length > 200)
+    throw Boom.badRequest("Search for 2 to 200 characters.");
+  const { worktree, ws } = await threadWorktree(threadParam(c.req.param("id")));
+  return ok<FileHit[]>(c, await ws.search(worktree, query).catch(saying));
+});
+
+router.post("/code/threads/:id/terminal", async (c) => {
+  const { worktree } = await threadWorktree(threadParam(c.req.param("id")));
+  return ok<ReviewTerminal>(c, await terminalIn(worktree));
 });
 
 router.post("/code/threads/:id/review/viewed", async (c) => {

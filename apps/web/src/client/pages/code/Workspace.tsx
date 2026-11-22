@@ -18,7 +18,9 @@ import { harnessOf, useCodeStore } from "../../store/code";
 import { useUiStore, type CodePane } from "../../store/ui";
 import { CodeSettings } from "./CodeSettings";
 import { CodeKeys, Kbd, useCodeCommands, type CodeCommand } from "./keys";
+import { FilesPane } from "./FilesPane";
 import { NewThreadDialog } from "./NewThreadDialog";
+import { TerminalDrawer } from "./TerminalDrawer";
 import { PullPanel } from "./PullPanel";
 import { PullReview } from "./PullReview";
 import { ResizablePane } from "./ResizablePane";
@@ -30,6 +32,7 @@ import { ThreadView, type ThreadHandle } from "./ThreadView";
 const PANES: Array<{ id: CodePane; label: string; keys: string }> = [
   { id: "changes", label: "Changes", keys: "1" },
   { id: "pr", label: "Pull request", keys: "2" },
+  { id: "files", label: "Files", keys: "3" },
 ];
 
 function useGitHubSetupResult(reloadProjects: () => void) {
@@ -131,6 +134,8 @@ export function CodeWorkspace() {
   const pane = useUiStore((s) => s.codePane);
   const setPane = useUiStore((s) => s.setCodePane);
   const setHelp = useCodeCommands((s) => s.setHelp);
+  const terminalOpen = useUiStore((s) => s.codeTerminalOpen);
+  const toggleTerminal = useUiStore((s) => s.toggleCodeTerminal);
   const { projects, reload: reloadProjects } = useProjects();
   const [insert, setInsert] = useState<{ text: string; nonce: number } | null>(null);
   const [handle, setHandle] = useState<ThreadHandle | null>(null);
@@ -160,7 +165,10 @@ export function CodeWorkspace() {
   const project = row?.projectId ? projects?.find((p) => p.id === row.projectId) : undefined;
   const openPane: CodePane | null = threadId && pane && project ? pane : null;
 
-  const changeVersion = useLiveChanges(threadId ?? null, openPane === "changes");
+  const changeVersion = useLiveChanges(
+    threadId ?? null,
+    openPane === "changes" || openPane === "files",
+  );
   const changesKey =
     changeVersion === null
       ? `${row?.working}:${row?.cursor}`
@@ -169,6 +177,17 @@ export function CodeWorkspace() {
   const showPane = useCallback(
     (next: CodePane) => {
       if (threadId) setPane(next);
+    },
+    [threadId, setPane],
+  );
+  const focusFiles = useCallback(
+    (which: "name" | "text") => {
+      if (!threadId) return;
+      setPane("files");
+      setTimeout(
+        () => window.dispatchEvent(new CustomEvent("code:files-focus", { detail: which })),
+        50,
+      );
     },
     [threadId, setPane],
   );
@@ -283,6 +302,38 @@ export function CodeWorkspace() {
         run: () => showPane("pr"),
       },
       {
+        id: "files",
+        group: "Pane",
+        keys: "3",
+        label: "Files",
+        enabled: Boolean(project),
+        run: () => showPane("files"),
+      },
+      {
+        id: "open-file",
+        group: "Pane",
+        keys: "p",
+        label: "Open a file by name",
+        enabled: Boolean(project),
+        run: () => focusFiles("name"),
+      },
+      {
+        id: "search-files",
+        group: "Pane",
+        keys: "s",
+        label: "Search in files",
+        enabled: Boolean(project),
+        run: () => focusFiles("text"),
+      },
+      {
+        id: "terminal",
+        group: "Pane",
+        keys: "`",
+        label: "Show or hide the terminal",
+        enabled: Boolean(project),
+        run: toggleTerminal,
+      },
+      {
         id: "pane",
         group: "Pane",
         keys: "\\",
@@ -304,6 +355,8 @@ export function CodeWorkspace() {
       setPane,
       openPane,
       setHelp,
+      focusFiles,
+      toggleTerminal,
     ],
   );
   useHotkey(
@@ -386,6 +439,15 @@ export function CodeWorkspace() {
             insert={insert}
             onShowChanges={openPane === "changes" ? undefined : () => showPane("changes")}
             onHandle={setHandle}
+            below={
+              terminalOpen && project ? (
+                <TerminalDrawer
+                  threadId={threadId}
+                  place={row.cwd ?? project.name}
+                  onClose={toggleTerminal}
+                />
+              ) : null
+            }
           />
         ) : threadId && (unlisted.loadError || (row && !harness)) ? (
           <EmptyState
@@ -433,6 +495,8 @@ export function CodeWorkspace() {
                   navigate(reviewPath(review.id));
                 }}
               />
+            ) : openPane === "files" ? (
+              <FilesPane threadId={threadId} refreshKey={changesKey} />
             ) : project ? (
               <ReviewPanel
                 threadId={threadId}

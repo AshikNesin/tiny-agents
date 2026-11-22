@@ -15,6 +15,8 @@ import type {
   EditReviewFileBody,
   PushedReview,
   ReviewTerminal,
+  WorktreeFile,
+  FileHit,
   SuggestedChanges,
   ReviewDraft,
   ReviewDraftBody,
@@ -88,6 +90,12 @@ export const projectsApi = {
     apiClient.get<ReviewFileDiff>(`${thread(id)}/review/file`, { path, ...scoped(scope) }),
   editFile: (id: string, body: EditReviewFileBody) =>
     apiClient.put(`${thread(id)}/review/file`, body),
+  files: (id: string) => apiClient.get<string[]>(`${thread(id)}/files`),
+  fileContent: (id: string, path: string) =>
+    apiClient.get<WorktreeFile>(`${thread(id)}/files/content`, { path }),
+  searchFiles: (id: string, q: string) =>
+    apiClient.get<FileHit[]>(`${thread(id)}/files/search`, { q }),
+  terminal: (id: string) => apiClient.post<ReviewTerminal>(`${thread(id)}/terminal`),
   setViewed: (id: string, path: string, hash: string, viewed: boolean) =>
     apiClient.post(`${thread(id)}/review/viewed`, { path, hash, viewed }),
   drafts: (id: string, target?: "github") =>

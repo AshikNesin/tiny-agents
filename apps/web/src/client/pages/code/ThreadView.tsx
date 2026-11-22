@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import {
@@ -312,6 +312,7 @@ export function ThreadView({
   onShowChanges,
   onHandle,
   onReplaced,
+  below,
 }: {
   id: string;
   harness: HarnessInfo;
@@ -324,6 +325,7 @@ export function ThreadView({
   onShowChanges?: () => void;
   onHandle?(handle: ThreadHandle | null): void;
   onReplaced?: () => void;
+  below?: ReactNode;
 }) {
   const state = useCodeThread(id);
   const { thread, working, items, settings } = state;
@@ -539,7 +541,8 @@ export function ThreadView({
         )}
       </div>
 
-      <div className="pb-2">
+      {below}
+      <div className="pb-2 pt-2">
         <div className="mx-auto max-w-3xl space-y-2 px-3">
           {state.error && (
             <p className="text-destructive px-1 text-xs" role="status">

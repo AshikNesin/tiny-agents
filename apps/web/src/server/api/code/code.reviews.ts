@@ -619,6 +619,10 @@ function suggestionsFor(path: string, mine: Hunk[], pull: Hunk[], headLines: str
 
 export async function reviewTerminal(id: string): Promise<ReviewTerminal> {
   const { worktree } = await reviewWorktree(id);
+  return terminalIn(worktree);
+}
+
+export async function terminalIn(worktree: string): Promise<ReviewTerminal> {
   try {
     const tab = await getTerminalService().create(120, 34, {
       typeLine: `cd ${shQuote(worktree)}`,

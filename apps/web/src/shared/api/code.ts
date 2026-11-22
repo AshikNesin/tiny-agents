@@ -30,6 +30,17 @@ export interface ProjectSettings {
   autofix: AutofixProjectSettings;
 }
 
+export interface WorktreeFile {
+  path: string;
+  content: string | null;
+}
+
+export interface FileHit {
+  path: string;
+  line: number;
+  text: string;
+}
+
 export interface ProjectView {
   id: string;
   name: string;

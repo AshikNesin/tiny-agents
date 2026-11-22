@@ -81,6 +81,9 @@ export interface Workspace {
     expected: string,
     content: string,
   ): Promise<"written" | "outside" | "changed">;
+  listFiles(path: string): Promise<string[]>;
+  readText(path: string, file: string): Promise<{ content: string } | "outside" | "unshowable">;
+  search(path: string, query: string): Promise<Array<{ path: string; line: number; text: string }>>;
   discard(path: string, sha: string): Promise<void>;
   hunks(
     path: string,
@@ -97,6 +100,10 @@ export interface Workspace {
 }
 
 type FileContents = Omit<GitFileDiff, "path">;
+
+const MAX_LISTED_FILES = 20_000;
+const MAX_TEXT_BYTES = 2 * 1024 * 1024;
+const MAX_SEARCH_HITS = 200;
 
 const HOOK_NAMES = [
   "applypatch-msg",
@@ -493,6 +500,46 @@ export function createWorkspace(options: WorkspaceOptions): Workspace {
       if (result.exitCode !== 0)
         throw new WorkspaceError(`Could not save ${file}: ${tail(result)}`);
       return "written";
+    },
+    async listFiles(path) {
+      const out = await must(
+        `${git(path)} ls-files -z --cached --others --exclude-standard`,
+        "Could not list the files",
+      );
+      return out.split("\0").filter(Boolean).slice(0, MAX_LISTED_FILES).sort();
+    },
+    async readText(path, file) {
+      const script = [
+        `cd ${q(path)}`,
+        `root=$(pwd -P)`,
+        `real=$(realpath -e -- ${q(file)}) || exit 3`,
+        `case "$real" in "$root"/.git|"$root"/.git/*) exit 3;; "$root"/*) ;; *) exit 3;; esac`,
+        `[ -f "$real" ] || exit 3`,
+        `[ "$(stat -c %s -- "$real")" -le ${MAX_TEXT_BYTES} ] || exit 5`,
+        `if [ -s "$real" ] && ! grep -Iq . "$real"; then exit 5; fi`,
+        `cat -- "$real"`,
+      ].join(" && ");
+      const result = await exec(`bash -c ${q(script)}`, { timeoutMs: 30_000 });
+      if (result.exitCode === 3) return "outside";
+      if (result.exitCode === 5) return "unshowable";
+      if (result.exitCode !== 0)
+        throw new WorkspaceError(`Could not read ${file}: ${tail(result)}`);
+      return { content: result.stdout };
+    },
+    async search(path, query) {
+      const result = await run(
+        `${git(path)} grep -n -I --untracked --fixed-strings --ignore-case --max-count=20 -e ${q(query)}`,
+        30_000,
+      );
+      if (result.exitCode > 1) throw new WorkspaceError(`Could not search: ${tail(result)}`);
+      const hits: Array<{ path: string; line: number; text: string }> = [];
+      for (const row of result.stdout.split("\n")) {
+        const match = /^([^:]+):(\d+):(.*)$/.exec(row);
+        if (!match) continue;
+        hits.push({ path: match[1]!, line: Number(match[2]), text: match[3]!.slice(0, 300) });
+        if (hits.length >= MAX_SEARCH_HITS) break;
+      }
+      return hits;
     },
     async discard(path, sha) {
       if (!/^[0-9a-f]{40}$/.test(sha)) throw new WorkspaceError("Not a commit sha");
