@@ -3,6 +3,7 @@ import { MessageAttachments } from "../Attachments";
 import { OTHER_PILL, USER_PILL } from "../ui/transcript-parts";
 import { Message } from "../ui/message";
 import { useAuthStore } from "@groot/shell/store/auth";
+import { LastTurnButtons } from "./last-turn";
 import { MessageEnter, MessageMeta, isFresh } from "./message-chrome";
 
 export function UserMessage({
@@ -43,7 +44,14 @@ export function UserMessage({
         {failed && (
           <p className={`text-destructive text-xs ${other ? "" : "text-right"}`}>{message.error}</p>
         )}
-        {text && <MessageMeta text={text} at={message.createdAt || undefined} align={align} />}
+        {text && (
+          <MessageMeta
+            text={text}
+            at={message.createdAt || undefined}
+            align={align}
+            actions={<LastTurnButtons messageId={message.id} />}
+          />
+        )}
       </MessageEnter>
     </Message>
   );

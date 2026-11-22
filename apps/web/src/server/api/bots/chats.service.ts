@@ -11,6 +11,7 @@ import {
   reconcileBotConversation,
 } from "./bots.conversation";
 import { openBotChat } from "./bots.chat";
+import { conversationRef } from "./bots.conversation";
 import type { ChatHistoryDTO } from "./bots.schema";
 import { findPastChat, leaveChat } from "./chats.history";
 import { deliverMentions } from "./bots.delivery";
@@ -99,6 +100,33 @@ export async function resetConversation(id: string, rt: BotAgentRuntime = runtim
       }),
     rt,
   );
+  return getBot(id);
+}
+
+export async function rewindChat(id: string, at: string, rt: BotAgentRuntime = runtime()) {
+  const old = await findBotRow(id);
+  const ref = conversationRef(old.conversationId);
+  if (rt.isBusy(ref))
+    throw Boom.conflict("Stop the reply before going back to an earlier message.");
+  const { messages } = await rt.readChat(ref);
+  const index = messages.findIndex((message) => message.id === at && message.role === "user");
+  if (index < 0) throw Boom.notFound("That message is not in this chat.");
+  const before = messages.slice(0, index).findLast((message) => /^e\d+$/.test(message.id));
+  const conversationId = before
+    ? String(await rt.fork(ref, before.id))
+    : await startBotConversation(id, rt);
+  await leaveChat(
+    old,
+    () =>
+      updateBotRow(id, {
+        conversationId,
+        lastReadAt: new Date(),
+        lastActivityAt: new Date(),
+        lastMessagePreview: before ? previewText(before.text) || null : null,
+      }),
+    rt,
+  );
+  await reconcileBotConversation(id, rt);
   return getBot(id);
 }
 

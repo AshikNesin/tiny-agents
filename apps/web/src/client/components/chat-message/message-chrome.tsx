@@ -40,10 +40,12 @@ export function MessageMeta({
   text,
   at,
   align = "start",
+  actions,
 }: {
   text: string;
   at?: number;
   align?: "start" | "end";
+  actions?: ReactNode;
 }) {
   const stamp = at ? messageTime(at) : undefined;
   return (
@@ -55,6 +57,7 @@ export function MessageMeta({
       )}
     >
       <CopyAction text={text} />
+      {actions}
       {stamp && (
         <time
           dateTime={new Date(at!).toISOString()}

@@ -21,6 +21,7 @@ const sendMock = vi.fn().mockResolvedValue(undefined);
 const readMock = vi.fn().mockResolvedValue(undefined);
 const abortMock = vi.fn().mockResolvedValue(undefined);
 const resetMock = vi.fn();
+const rewindMock = vi.fn();
 const withdrawMock = vi.fn().mockResolvedValue(undefined);
 const pastChatsMock = vi.fn().mockResolvedValue([]);
 
@@ -29,6 +30,7 @@ vi.mock("@/lib/bots-api", () => ({
     send: (...args: unknown[]) => sendMock(...args),
     abort: (...args: unknown[]) => abortMock(...args),
     reset: (...args: unknown[]) => resetMock(...args),
+    rewind: (...args: unknown[]) => rewindMock(...args),
     withdraw: (...args: unknown[]) => withdrawMock(...args),
     list: vi.fn().mockResolvedValue([]),
     read: () => readMock(),
@@ -139,6 +141,9 @@ const where = () => screen.getByTestId("where").textContent;
 beforeEach(() => {
   seedStore();
   abortMock.mockClear();
+  sendMock.mockClear();
+  rewindMock.mockReset();
+  rewindMock.mockResolvedValue(HOST);
   localStorage.clear();
 });
 
@@ -197,5 +202,63 @@ describe("past chats", () => {
     renderPane();
     fireEvent.click(screen.getByRole("button", { name: "Past chats" }));
     expect(await screen.findByText("Chat history")).toBeInTheDocument();
+  });
+});
+
+describe("the last turn", () => {
+  const conversation = () =>
+    act(() => {
+      botStream("host").send({
+        type: "snapshot",
+        state: {
+          messages: [
+            { id: "e1", role: "user", text: "Find flights", status: "done", createdAt: 1 },
+            {
+              id: "e2",
+              role: "assistant",
+              text: "Echo: Find flights",
+              status: "done",
+              createdAt: 2,
+            },
+          ],
+          busy: false,
+          queued: [],
+        },
+      });
+    });
+
+  it("t runs it again from before it", async () => {
+    const composer = renderPane();
+    conversation();
+    composer.blur();
+    press("t");
+
+    await waitFor(() => expect(sendMock).toHaveBeenCalled());
+    expect(rewindMock).toHaveBeenCalledWith("host", "e1");
+    expect(sendMock.mock.calls.at(-1)?.[2]).toBe("Find flights");
+  });
+
+  it("e puts it in the composer, and sending goes back to before it with the edit", async () => {
+    const composer = renderPane();
+    conversation();
+    composer.blur();
+    press("e");
+
+    expect(composer.value).toBe("Find flights");
+    expect(screen.getByText(/Editing your last message/)).toBeInTheDocument();
+    fireEvent.change(composer, { target: { value: "Find flights in December" } });
+    fireEvent.keyDown(composer, { key: "Enter" });
+
+    await waitFor(() => expect(sendMock).toHaveBeenCalled());
+    expect(rewindMock).toHaveBeenCalledWith("host", "e1");
+    expect(sendMock.mock.calls.at(-1)?.[2]).toBe("Find flights in December");
+    expect(screen.queryByText(/Editing your last message/)).not.toBeInTheDocument();
+  });
+
+  it("offers Edit and Retry on the last message itself", () => {
+    renderPane();
+    conversation();
+    expect(screen.getByRole("button", { name: "Edit this message" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Run this again" })).toBeInTheDocument();
   });
 });

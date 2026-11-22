@@ -109,6 +109,47 @@ describe("Past chats", () => {
     expect(row?.conversationId).toBe(bot.conversationId);
   });
 
+  it("rewinds to before the last message: the chat forks there, and the original stays as a past chat", async () => {
+    const bot = await createBot();
+    await converse(bot.id, "Find flights to Goa", "Make it December");
+    const before = await chatOf(bot.id);
+    const last = (await rt.readChat(before)).messages.findLast((m) => m.role === "user")!;
+
+    const rewound = await call(`/api/v1/bots/${bot.id}/rewind`, {
+      method: "POST",
+      json: { at: last.id },
+    });
+
+    expect(rewound.status).toBe(200);
+    const after = await chatOf(bot.id);
+    expect(after).not.toBe(before);
+    expect((await rt.readChat(after)).messages.map((m: Msg) => m.text)).toEqual([
+      "Find flights to Goa",
+      "Echo: Find flights to Goa",
+    ]);
+    expect(await listChats(bot.id)).toEqual([
+      expect.objectContaining({ title: "Find flights to Goa", messageCount: 4 }),
+    ]);
+  });
+
+  it("rewinds the first message to an empty chat, and refuses a message the chat does not have", async () => {
+    const bot = await createBot();
+    await converse(bot.id, "Hello");
+    const first = (await rt.readChat(await chatOf(bot.id))).messages[0]!;
+
+    expect(
+      (await call(`/api/v1/bots/${bot.id}/rewind`, { method: "POST", json: { at: "e999" } }))
+        .status,
+    ).toBe(404);
+    const rewound = await call(`/api/v1/bots/${bot.id}/rewind`, {
+      method: "POST",
+      json: { at: first.id },
+    });
+
+    expect(rewound.status).toBe(200);
+    expect((await rt.readChat(await chatOf(bot.id))).messages).toEqual([]);
+  });
+
   it("records nothing for an empty chat", async () => {
     const bot = await createBot();
     await newChat(bot.id);
