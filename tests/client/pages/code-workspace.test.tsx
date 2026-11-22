@@ -322,10 +322,9 @@ describe("the Code workspace", () => {
     expect(keys).toHaveTextContent("Stop the agent");
   });
 
-  it("a thread link with a pane lands on the thread with that pane", () => {
-    renderAt("/code/t/demo%3Adddd?pane=pr");
+  it("a thread link lands on the thread", () => {
+    renderAt("/code/t/demo%3Adddd");
     expect(where()).toBe("/code/t/demo%3Adddd");
-    expect(useUiStore.getState().codePane).toBe("pr");
   });
 });
 

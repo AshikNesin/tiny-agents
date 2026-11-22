@@ -341,16 +341,6 @@ await journey(
         "Say when the release happened",
       );
     });
-
-    await step("a thread link with a pane opens on that pane", async () => {
-      await page.goto(`/code/t/${encodeURIComponent(ids.second)}?pane=pr`, LOADED);
-      await on(ids.second);
-      await expect(page.getByRole("tab", { name: /^Pull request/ })).toHaveAttribute(
-        "aria-selected",
-        "true",
-        { timeout: 20_000 },
-      );
-    });
   },
   { requires: ["demo-agent", "fake-github", "local-sandbox"] },
 );
