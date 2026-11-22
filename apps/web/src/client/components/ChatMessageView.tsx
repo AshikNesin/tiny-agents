@@ -39,6 +39,7 @@ export function ChatMessageView({
         <PeerCard
           peer={peer}
           text={stripPeerEnvelope(message.text)}
+          author={message.author}
           failed={failed}
           error={message.error}
           streaming={message.status === "streaming"}

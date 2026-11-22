@@ -2,37 +2,69 @@ import { Streamdown } from "streamdown";
 import { markdownComponents } from "../../lib/markdown";
 import type { ChatMessage } from "../../lib/chat-types";
 import { BotAvatar } from "../BotAvatar";
-import { TypingIndicator, USER_PILL } from "../ui/transcript-parts";
+import { TypingIndicator, OTHER_PILL, USER_PILL } from "../ui/transcript-parts";
 import { Message } from "../ui/message";
 import { CopyButton } from "./message-chrome";
 
 export function PeerCard({
   peer,
   text,
+  author,
   failed,
   error,
   streaming,
 }: {
   peer: NonNullable<ChatMessage["peer"]>;
   text: string;
+  author?: ChatMessage["author"];
   failed: boolean;
   error?: string;
   streaming: boolean;
 }) {
   if (peer.kind === "mention") {
+    const other = author !== undefined;
     return (
-      <Message align="end" className="group">
-        <div className="flex max-w-[92%] md:max-w-[80%] min-w-0 flex-col items-end gap-1">
-          <p className="text-muted-foreground px-1 text-right text-xs">
-            You · in {peer.hostName}&apos;s chat
+      <Message align={other ? "start" : "end"} className="group" data-author={author?.name}>
+        <div
+          className={
+            other
+              ? "flex max-w-[92%] md:max-w-[80%] min-w-0 flex-col items-start gap-1"
+              : "flex max-w-[92%] md:max-w-[80%] min-w-0 flex-col items-end gap-1"
+          }
+        >
+          <p
+            className={
+              other
+                ? "text-muted-foreground px-1 text-left text-xs"
+                : "text-muted-foreground px-1 text-right text-xs"
+            }
+          >
+            {other ? author!.name : "You"} · in {peer.hostName}&apos;s chat
           </p>
           <div className="flex max-w-full min-w-0 items-center gap-2">
-            <CopyButton text={text} />
-            <div className={USER_PILL}>
-              <p className="whitespace-pre-wrap">{text}</p>
-            </div>
+            {other ? (
+              <>
+                <div className={OTHER_PILL}>
+                  <p className="whitespace-pre-wrap">{text}</p>
+                </div>
+                <CopyButton text={text} />
+              </>
+            ) : (
+              <>
+                <CopyButton text={text} />
+                <div className={USER_PILL}>
+                  <p className="whitespace-pre-wrap">{text}</p>
+                </div>
+              </>
+            )}
           </div>
-          {failed && <p className="text-destructive text-right text-xs">{error}</p>}
+          {failed && (
+            <p
+              className={other ? "text-destructive text-xs" : "text-destructive text-right text-xs"}
+            >
+              {error}
+            </p>
+          )}
         </div>
       </Message>
     );
