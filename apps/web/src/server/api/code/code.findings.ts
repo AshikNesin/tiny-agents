@@ -4,6 +4,7 @@ import { codeFindings, codeReviews, db, type CodeFindingRow } from "../../db";
 import type { FindingView } from "../../../shared/api/code";
 import { parseReviewReport, reviewRequest } from "../../../shared/review-report";
 import type { CodeHub } from "./code.hub";
+import { getProject, withWorkflowInstructions } from "./code.projects";
 import { askReview, reviewComments } from "./code.reviews";
 
 const view = (row: CodeFindingRow): FindingView => ({
@@ -29,7 +30,11 @@ export async function startAgentReview(reviewId: string): Promise<{ threadId: st
   const [review] = await db.select().from(codeReviews).where(eq(codeReviews.id, reviewId));
   if (!review) throw Boom.notFound("No such review");
   if (review.reviewingSince) throw Boom.conflict("The agent is already reviewing this.");
-  const asked = await askReview(reviewId, reviewRequest(review.reviewedSha));
+  const project = await getProject(review.projectId);
+  const asked = await askReview(
+    reviewId,
+    withWorkflowInstructions(reviewRequest(review.reviewedSha), project),
+  );
   await db
     .update(codeReviews)
     .set({ reviewingSince: new Date() })

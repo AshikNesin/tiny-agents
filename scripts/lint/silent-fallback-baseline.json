@@ -53,7 +53,6 @@
   "apps/web/src/server/api/code/code.checkpoints.ts": 1,
   "apps/web/src/server/api/code/code.checks.ts": 1,
   "apps/web/src/server/api/code/code.hub.ts": 1,
-  "apps/web/src/server/api/code/code.naming.ts": 1,
   "apps/web/src/server/api/code/code.passes.ts": 5,
   "apps/web/src/server/api/code/code.projects.ts": 4,
   "apps/web/src/server/api/code/code.pulls.ts": 10,

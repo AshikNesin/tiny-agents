@@ -22,6 +22,7 @@ import {
   onProjectThreadDeleted,
   projectThread,
   startProjectThread,
+  withWorkflowInstructions,
 } from "./code.projects";
 import { codeChanges } from "./code.changes";
 import { codeGitHub } from "./code.github";
@@ -210,7 +211,9 @@ router.post("/code/threads", async (c) => {
   const started = await run(() =>
     startProjectThread(project, instance, {
       ...input,
-      message: issue ? `${input.message}\n\n${issue.text}` : input.message,
+      message: issue
+        ? withWorkflowInstructions(`${input.message}\n\n${issue.text}`, project)
+        : input.message,
     }),
   );
   await startRun(

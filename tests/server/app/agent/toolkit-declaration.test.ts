@@ -3746,11 +3746,6 @@ describe("one declaration per tool (3.2)", () => {
               "name": "code_start",
               "parameters": {
                 "properties": {
-                  "cwd": {
-                    "description": "Absolute working directory (the repo) on the harness's machine",
-                    "maxLength": 1024,
-                    "type": "string",
-                  },
                   "harness": {
                     "description": "Harness id (see the Code section); omit for the default",
                     "pattern": "^[a-z][a-z0-9-]{0,39}$",
@@ -3758,6 +3753,11 @@ describe("one declaration per tool (3.2)", () => {
                   },
                   "model": {
                     "description": "Model id; omit for the harness's default",
+                    "maxLength": 200,
+                    "type": "string",
+                  },
+                  "project": {
+                    "description": "Project to work in, by its name or owner/name (see the Code section); omit when there is only one",
                     "maxLength": 200,
                     "type": "string",
                   },
@@ -3895,13 +3895,13 @@ describe("one declaration per tool (3.2)", () => {
               "name": "shelley_start",
               "parameters": {
                 "properties": {
-                  "cwd": {
-                    "description": "Absolute working directory (the repo) on the harness's machine",
-                    "maxLength": 1024,
-                    "type": "string",
-                  },
                   "model": {
                     "description": "Model id; omit for the harness's default",
+                    "maxLength": 200,
+                    "type": "string",
+                  },
+                  "project": {
+                    "description": "Project to work in, by its name or owner/name (see the Code section); omit when there is only one",
                     "maxLength": 200,
                     "type": "string",
                   },

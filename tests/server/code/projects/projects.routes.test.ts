@@ -720,6 +720,22 @@ describe("Auto-fix", () => {
     expect(github.comments[0]?.body).toContain("report was missing");
   });
 
+  it("adds the project's own instructions to what a workflow asks of the agent", async () => {
+    const thread = await publishedThread({
+      workflowInstructions: "Run pnpm verify before you commit.",
+    });
+    github.pull(1).checks = [failing()];
+    await pr(thread.id);
+
+    const sent = harness.sent.at(-1)!.message;
+    expect(sent).toContain("test");
+    expect(
+      sent.endsWith(
+        "The project's instructions for this work:\nRun pnpm verify before you commit.",
+      ),
+    ).toBe(true);
+  });
+
   it("does not push a pass that touched a CI workflow, and waits for the owner", async () => {
     const thread = await publishedThread();
     const before = await remoteHead(thread.branch);

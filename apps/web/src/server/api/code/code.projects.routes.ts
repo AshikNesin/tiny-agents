@@ -191,6 +191,7 @@ const updateSchema = z.strictObject({
         })
         .optional(),
       protectedPaths: z.array(z.string().trim().min(1).max(300)).max(50).optional(),
+      workflowInstructions: z.string().trim().max(4000).optional(),
       autofix: z
         .strictObject({
           triggers: z

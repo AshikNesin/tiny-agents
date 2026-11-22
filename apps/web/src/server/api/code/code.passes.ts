@@ -7,7 +7,13 @@ import { codePullUpdate } from "../notifications/notifications.events";
 import { APP_MARKER, type AutofixItem } from "./code.autofix";
 import { codeGitHub } from "./code.github";
 import { codeHub } from "./code.hub";
-import { projectSettings, projectThread, repoOf, scriptsFor } from "./code.projects";
+import {
+  projectSettings,
+  projectThread,
+  repoOf,
+  scriptsFor,
+  withWorkflowInstructions,
+} from "./code.projects";
 import {
   claimPass,
   getPull,
@@ -205,10 +211,13 @@ export async function startPass(
     const settings = projectSettings(ctx.project.settings);
     const scripts = await scriptsFor(ctx.project, ws, ctx.thread.worktree!);
     const startSha = await ws.headSha(ctx.thread.worktree!);
-    const message = passMessage(await withLogs(github, ctx.project, items), {
-      check: scripts.check,
-      protectedPaths: settings.protectedPaths,
-    });
+    const message = withWorkflowInstructions(
+      passMessage(await withLogs(github, ctx.project, items), {
+        check: scripts.check,
+        protectedPaths: settings.protectedPaths,
+      }),
+      ctx.project,
+    );
     const startCostUsd = await threadCost(pull.threadId);
     await movePass(pass.id, "running", { startSha, startCostUsd, startedAt: new Date() });
     await ctx.instance.send(ctx.nativeId, { message, queue: true });

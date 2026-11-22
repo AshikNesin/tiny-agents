@@ -176,6 +176,10 @@ export function CodeWorkspace() {
       ? `${row?.working}:${row?.cursor}`
       : `live:${changeVersion}:${row?.working}`;
 
+  useEffect(() => {
+    if (threadId && window.matchMedia("(max-width: 1023px)").matches) setPane(null);
+  }, [threadId, setPane]);
+
   const showPane = useCallback(
     (next: CodePane) => {
       if (threadId) setPane(next);

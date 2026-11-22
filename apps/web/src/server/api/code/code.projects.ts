@@ -39,6 +39,7 @@ const DEFAULT_PROJECT_SETTINGS: ProjectSettings = {
   draftPulls: true,
   branchPrefix: DEFAULT_BRANCH_PREFIX,
   protectedPaths: [".github/workflows/**"],
+  workflowInstructions: "",
   autofix: {
     triggers: { ...DEFAULT_AUTOFIX.triggers },
     trustedBots: [],
@@ -64,12 +65,26 @@ export function projectSettings(raw: string): ProjectSettings {
       (typeof value.branchPrefix === "string" ? cleanBranchPrefix(value.branchPrefix) : null) ??
       d.branchPrefix,
     protectedPaths: Array.isArray(value.protectedPaths) ? value.protectedPaths : d.protectedPaths,
+    workflowInstructions:
+      typeof value.workflowInstructions === "string"
+        ? value.workflowInstructions
+        : d.workflowInstructions,
     autofix: {
       ...d.autofix,
       ...value.autofix,
       triggers: { ...d.autofix.triggers, ...value.autofix?.triggers },
     },
   };
+}
+
+export function withWorkflowInstructions(
+  message: string,
+  project: Pick<CodeProjectRow, "settings">,
+): string {
+  const instructions = projectSettings(project.settings).workflowInstructions.trim();
+  return instructions
+    ? `${message}\n\nThe project's instructions for this work:\n${instructions}`
+    : message;
 }
 
 export const repoOf = (project: Pick<CodeProjectRow, "repoOwner" | "repoName">): RepoRef => ({

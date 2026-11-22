@@ -95,13 +95,6 @@ export async function applyTitle(
   });
 }
 
-export function titleLater(instance: HarnessInstance, nativeId: string, task: string): void {
-  if (!app().codeBranchNamer || typeof instance.rename !== "function") return;
-  void threadNames(task)
-    .then(({ title }) => applyTitle(instance, nativeId, title))
-    .catch(() => undefined);
-}
-
 export async function pullTitle(input: {
   thread: string | null;
   commits: string[];

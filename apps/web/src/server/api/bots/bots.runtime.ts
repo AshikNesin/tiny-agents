@@ -359,10 +359,10 @@ export async function openFauxAgentRuntime(
     }
     const coding = toolResults === 0 ? fauxCodingCall(text) : undefined;
     if (coding) return { ...fauxAssistantMessage(coding), stopReason: "toolUse" as const };
-    const code = /^\/code\s+(?:cwd=(\S+)\s+)?([\s\S]+)/.exec(text);
+    const code = /^\/code\s+(?:project=(\S+)\s+)?([\s\S]+)/.exec(text);
     if (code && toolResults === 0) {
       const call = fauxAssistantMessage(
-        fauxToolCall("code_start", { task: code[2], ...(code[1] ? { cwd: code[1] } : {}) }),
+        fauxToolCall("code_start", { task: code[2], ...(code[1] ? { project: code[1] } : {}) }),
       );
       return { ...call, stopReason: "toolUse" as const };
     }

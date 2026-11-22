@@ -257,6 +257,26 @@ describe("the Code workspace", () => {
     expect(screen.getByTestId("code-pane")).toBeInTheDocument();
   });
 
+  it("on a phone a thread opens on the thread, and the pane waits to be asked for", async () => {
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: query === "(max-width: 1023px)",
+      media: query,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    }));
+    useUiStore.setState({ codePane: "changes" });
+    renderAt(`/code/t/${encodeURIComponent(waiting.id)}`);
+    open(waiting);
+
+    await screen.findByText("web /");
+    expect(screen.queryByTestId("code-pane")).toBeNull();
+    await waitFor(() => {
+      press("1");
+      expect(screen.getByTestId("code-pane")).toBeInTheDocument();
+    });
+    vi.unstubAllGlobals();
+  });
+
   it("the composer says what Enter does while the agent works", () => {
     renderAt("/code/t/demo%3Abb");
     open(running);

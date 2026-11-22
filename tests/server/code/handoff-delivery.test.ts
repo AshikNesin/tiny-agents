@@ -38,10 +38,12 @@ import {
   type SeededBot,
 } from "../fixtures";
 import { fakeHarness, type FakeHarness } from "./fake-harness";
+import { seedProject, type ProjectFixture } from "./projects/project-fixture";
 
 let runtime: AgentRuntime;
 let harness: FakeHarness;
 let hub: CodeHub;
+let fixture: ProjectFixture;
 const stops: Array<() => void> = [];
 
 beforeEach(async () => {
@@ -49,11 +51,13 @@ beforeEach(async () => {
   runtime = await openAppRuntime();
   harness = fakeHarness();
   hub = setCodeHub(createCodeHub({ instances: [harness], listDebounceMs: 5 }))!;
+  fixture = await seedProject("fake");
 });
 
 afterEach(async () => {
   for (const stop of stops.splice(0)) stop();
   setCodeHub(undefined);
+  fixture.cleanup();
   await closeAppRuntime();
   await resetAppTables();
 });
@@ -259,11 +263,10 @@ describe("hand-off follow-ups (C7c: sends wait for their reopen)", () => {
         conversationId: Number(bot.conversationId),
         idempotencyKey: "s1",
         task: "fix login",
-        cwd: "/repo",
         harness: "fake",
       }),
     );
-    return { threadId: handoff.threadId, nativeId: handoff.threadId.slice("fake:".length) };
+    return { threadId: handoff.threadId, nativeId: threadRef(handoff.threadId)!.nativeId };
   }
 
   it("delivers a follow-up whose turn ends before the send returns", async () => {
@@ -403,7 +406,6 @@ describe("hand-off finishes go back to the conversation that asked", () => {
         conversationId: ref,
         idempotencyKey: key,
         task: "fix the flaky test",
-        cwd: "/repo",
         harness: "fake",
       }),
     );

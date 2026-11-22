@@ -4,7 +4,7 @@ import { createShelleyHarness } from "@tiny-agents/code/server";
 import { testHost } from "@tiny-agents/code/testing";
 import { createCodeToolkit } from "../../../packages/agent/src/toolkits/code";
 import { defaultPermission, effectivePermission } from "../../../packages/agent/src/capabilities";
-import { db, bots, codeHandoffs } from "../../../apps/web/src/server/db";
+import { db, bots, codeHandoffs, codeProjects, codeThreads } from "../../../apps/web/src/server/db";
 import { codeStore } from "../../../apps/web/src/server/api/code/code.bots";
 import { threadRef } from "../../../apps/web/src/server/api/code/code.threads";
 import { createCodeHub, setCodeHub } from "../../../apps/web/src/server/api/code/code.hub";
@@ -12,13 +12,17 @@ import { finishHandoffOnce, isFollowed } from "../../../apps/web/src/server/api/
 import { installAppForTests } from "../../../apps/web/src/server/app-root";
 import { eventually, resetAppTables, TEST_MODEL } from "../fixtures";
 import { startFakeShelley, type FakeShelley } from "./shelley/fake-shelley";
+import { seedProject, type ProjectFixture } from "./projects/project-fixture";
+import { runsOf } from "../../../apps/web/src/server/api/code/code.runs";
 import { fakeHarness, type FakeHarness } from "./fake-harness";
 
 let shelley: FakeShelley;
 let fake: FakeHarness;
+let fixture: ProjectFixture;
 
 afterEach(async () => {
   setCodeHub(undefined);
+  fixture.cleanup();
   await shelley.close();
 });
 beforeEach(async () => {
@@ -46,6 +50,7 @@ beforeEach(async () => {
       instances: [createShelleyHarness({ url: shelley.url, host: testHost() }), fake],
     }),
   );
+  fixture = await seedProject("shelley");
   await db.insert(bots).values([
     { name: "Coder", modelId: TEST_MODEL, conversationId: "101" },
     { name: "Other", modelId: TEST_MODEL, conversationId: "202" },
@@ -58,29 +63,33 @@ const ok = <T extends object>(value: T | { error: string }): T => {
 };
 
 describe("code hand-off store", () => {
-  it("starts in Shelley by default, once per tool task, and follows the thread", async () => {
+  it("starts a thread of the project on its own branch, once per tool task, as a bot run", async () => {
     const first = ok(
       await codeStore.start({
         conversationId: 101,
         idempotencyKey: "task-1",
         task: "fix the login test",
-        cwd: "/repo",
       }),
     );
     const replay = await codeStore.start({
       conversationId: 101,
       idempotencyKey: "task-1",
       task: "fix the login test",
-      cwd: "/repo",
     });
     expect(replay).toEqual(first);
     expect(threadRef(first.threadId)).toEqual({ instanceId: "shelley", nativeId: "cNew1" });
     expect(first).toMatchObject({
       harness: "Shelley",
       status: "running",
-      cwd: "/repo",
+      cwd: "acme/web",
       url: `/code/t/${first.threadId}`,
     });
+    const [thread] = await db.select().from(codeThreads).where(eq(codeThreads.id, first.threadId));
+    expect(thread).toMatchObject({ projectId: fixture.project.id, branch: "ta/fix-login-test" });
+    expect(
+      JSON.parse(String(shelley.seen.find((s) => s.url === "/api/conversations/new")?.body)),
+    ).toMatchObject({ cwd: thread!.worktree });
+    expect((await runsOf(first.threadId)).map((run) => run.trigger)).toEqual(["bot"]);
     expect(shelley.seen.filter((s) => s.url === "/api/conversations/new")).toHaveLength(1);
     expect(await isFollowed(first.threadId)).toBe(true);
     expect((await codeStore.list(101)).map((h) => h.threadId)).toEqual([first.threadId]);
@@ -90,26 +99,17 @@ describe("code hand-off store", () => {
     ]);
   });
 
-  it("starts in a named harness in its default permission mode, and needs a cwd when it does", async () => {
-    expect(
-      await codeStore.start({
-        conversationId: 101,
-        idempotencyKey: "task-2",
-        task: "t",
-        harness: "claude-code",
-      }),
-    ).toEqual({ error: "Fake needs a working directory: pass cwd (the repo's path)." });
+  it("starts in a named harness in its default permission mode", async () => {
     const started = ok(
       await codeStore.start({
         conversationId: 101,
         idempotencyKey: "task-3",
         task: "t",
         harness: "claude-code",
-        cwd: "/repo",
       }),
     );
     expect(threadRef(started.threadId)).toEqual({ instanceId: "claude-code", nativeId: "t1" });
-    expect(fake.created[0]).toMatchObject({ cwd: "/repo", permissionMode: "acceptEdits" });
+    expect(fake.created[0]).toMatchObject({ permissionMode: "acceptEdits" });
     expect(
       await codeStore.start({
         conversationId: 101,
@@ -118,6 +118,38 @@ describe("code hand-off store", () => {
         harness: "nope",
       }),
     ).toEqual({ error: 'No harness "nope". Available: shelley, claude-code.' });
+  });
+
+  it("asks which project when there are several, and for one when there is none", async () => {
+    await db.insert(codeProjects).values({
+      ...fixture.project,
+      id: "p-api",
+      name: "api",
+      repoName: "api",
+      checkoutPath: `${fixture.project.checkoutPath}-api`,
+    });
+    const start = (project?: string) =>
+      codeStore.start({
+        conversationId: 101,
+        idempotencyKey: `which-${project}`,
+        task: "tidy the readme",
+        ...(project ? { project } : {}),
+      });
+    expect(await start()).toEqual({ error: "Say which project: web, api." });
+    expect(await start("docs")).toEqual({ error: 'No project "docs". Projects: web, api.' });
+    expect(ok(await start("ACME/web"))).toMatchObject({ cwd: "acme/web", status: "running" });
+    expect(await codeStore.projects()).toEqual([
+      { name: "web", repo: "acme/web" },
+      { name: "api", repo: "acme/api" },
+    ]);
+
+    await db.delete(codeHandoffs);
+    await db.delete(codeThreads);
+    await db.delete(codeProjects);
+    expect(await start("web")).toEqual({
+      error:
+        "There is no project to work in. Ask the owner to add the repository under Code, Settings, Projects.",
+    });
   });
 
   it("adopts an existing thread on send, and re-arms a finished hand-off on follow-up", async () => {
@@ -189,7 +221,6 @@ describe("code hand-off store", () => {
         conversationId: 101,
         idempotencyKey: "task-6",
         task: "t",
-        cwd: "/repo",
       }),
     );
     const status = await codeStore.status({ conversationId: 101, threadId: handoff.threadId });
@@ -247,7 +278,6 @@ describe("a hand-off thread's title", () => {
         idempotencyKey: "titled-1",
         harness: "claude-code",
         task: "The login page redirects to /404 after a password reset. Find out why and fix it.",
-        cwd: "/repo",
       }),
     );
     await eventually(() =>

@@ -94,6 +94,7 @@ const project: NonNullable<ThreadPullsView["project"]> = {
     draftPulls: true,
     branchPrefix: "ta/",
     protectedPaths: [],
+    workflowInstructions: "",
     autofix: {
       triggers: { checks: true, reviews: true, conflicts: true },
       trustedBots: [],

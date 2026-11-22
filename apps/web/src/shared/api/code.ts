@@ -25,6 +25,7 @@ export interface ProjectSettings {
   draftPulls: boolean;
   branchPrefix: string;
   protectedPaths: string[];
+  workflowInstructions: string;
   autofix: AutofixProjectSettings;
 }
 

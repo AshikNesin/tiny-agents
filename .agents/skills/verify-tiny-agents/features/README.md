@@ -5,7 +5,7 @@ This directory is the maintained source for verifying the user-facing behavior o
 ## Baseline preconditions
 
 - A run started with `ta-verify up` (default `http://localhost:3100`), seeded with only the demo user `demo@example.com` / `demo@example.com`.
-- Faux model on (`TINY_AGENTS_FAUX=1`): bots reply `Echo: <message>`, the model picker offers `Test Model (faux)`. Scripted triggers: `/ask` (question cards), `/browse N` (browser tool rounds), `/code [cwd=PATH] task` (coding hand-off), `/improve` and `/improve long` (instruction-change approval), `/newbot NAME` (bot-creation approval).
+- Faux model on (`TINY_AGENTS_FAUX=1`): bots reply `Echo: <message>`, the model picker offers `Test Model (faux)`. Scripted triggers: `/ask` (question cards), `/browse N` (browser tool rounds), `/code [project=NAME] task` (coding hand-off), `/improve` and `/improve long` (instruction-change approval), `/newbot NAME` (bot-creation approval).
 - A random per-run `SECRETS_KEY` and `ADMIN_AUTH_KEY`; no AI provider keys, no Pushover (doctor fails unless push is `not_configured`), nothing from the shell or `.env`.
 - No sandbox unless `--sandbox`, no coding agent unless `--shelley`, demo user present unless `--empty`.
 - `ta-verify doctor --run <id>` exits 0 before the first drive and after any failed drive.
