@@ -19,6 +19,7 @@ await journey(
     const transcript = page.getByTestId("code-transcript");
     const working = (id) => threads().then((all) => all.find((t) => t.id === id)?.working);
     const on = (id) => expect(page).toHaveURL(new RegExp(`/code/t/${encodeURIComponent(id)}$`));
+    const reason = (id) => threads().then((all) => all.find((t) => t.id === id)?.status?.reason);
 
     await step("setup: a project and three threads, one of them slow", async () => {
       project = await api.post("/code/projects", {
@@ -40,6 +41,7 @@ await journey(
       ids.second = await start(`Write the changelog ${stamp}`);
       await expect.poll(() => working(ids.second), { timeout: 30_000 }).toBe(false);
       ids.slow = await start(`slow: tidy the README ${stamp}`);
+      expect(ids.first).not.toContain(":");
     });
 
     await step(
@@ -54,7 +56,7 @@ await journey(
     await proof("list");
 
     await step("j opens the first thread in the list; reading it moves it to Done", async () => {
-      await page.keyboard.press("Escape");
+      await expect(row(ids.first)).toContainText("finished");
       await page.keyboard.press("j");
       const first = await page
         .getByRole("navigation", { name: "Threads" })
@@ -159,6 +161,30 @@ await journey(
       );
     });
     await proof("pane-and-keys");
+
+    await step(
+      "n opens the new thread dialog; Enter starts a thread on its own branch",
+      async () => {
+        await page.keyboard.press("Escape");
+        await page.keyboard.press("n");
+        const dialog = page.getByTestId("code-new-thread");
+        await dialog.getByTestId("code-new-message").fill(`Add a changelog entry ${stamp}`);
+        await page.keyboard.press("Enter");
+        await expect(dialog).toHaveCount(0, { timeout: 30_000 });
+        await expect(page).toHaveURL(/\/code\/t\/[a-z0-9]+$/);
+        ids.dialog = decodeURIComponent(new URL(page.url()).pathname.split("/").pop());
+        await expect(page.getByTestId("code-branch")).toContainText("ta/", { timeout: 20_000 });
+        await expect(transcript.getByText(/^Done\. I noted/)).toBeVisible({ timeout: 30_000 });
+      },
+    );
+
+    await step("a failed turn puts the thread under Needs you as failed", async () => {
+      await expect.poll(() => working(ids.dialog), { timeout: 20_000 }).toBe(false);
+      await composer.fill("fail on purpose");
+      await composer.press("Enter");
+      await expect.poll(() => reason(ids.dialog), { timeout: 20_000 }).toBe("failed");
+    });
+    await proof("new-thread");
 
     await step("an old thread link still opens the thread", async () => {
       await page.goto(`/code/${encodeURIComponent(ids.second)}/pr`, LOADED);

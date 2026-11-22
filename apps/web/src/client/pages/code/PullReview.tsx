@@ -25,12 +25,7 @@ import {
 } from "@groot/ui/dropdown-menu";
 import { Spinner } from "../../components/ui/spinner";
 import { errorMessage } from "../../lib/errors";
-import {
-  instanceOf,
-  type HarnessInfo,
-  type ModelOption,
-  type ThreadSummary,
-} from "../../lib/code/api";
+import { type HarnessInfo, type ModelOption, type ThreadSummary } from "../../lib/code/api";
 import { reviewsApi } from "../../lib/code/projects";
 import { useResource } from "../../queries/resource";
 import {
@@ -360,7 +355,7 @@ function Assistant({
 }) {
   const threadId = review.threadId;
   if (!threadId) return <AskFirst review={review} onStarted={onStarted} />;
-  const harness = harnessOf(harnesses, instanceOf(threadId));
+  const harness = harnessOf(harnesses, review.assistant?.instanceId);
   if (!harness) {
     return (
       <EmptyState

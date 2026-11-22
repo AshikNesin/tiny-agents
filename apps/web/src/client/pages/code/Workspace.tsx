@@ -8,17 +8,17 @@ import { cn } from "@groot/ui/lib/utils";
 import { CommandPaletteTrigger } from "@groot/shell/components/CommandPalette";
 import { useShellConfig } from "@groot/shell/lib/shell-config";
 import { Spinner } from "../../components/ui/spinner";
-import { instanceOf, normalizeThreadId, threadPath } from "../../lib/code/api";
+import { codeApi, threadPath } from "../../lib/code/api";
 import { useThreadCommenting } from "../../lib/code/comments";
 import { listOrder, statusSections } from "../../lib/code/list";
 import { reviewPath, reviewsApi, useProjects } from "../../lib/code/projects";
 import { useLiveChanges } from "../../lib/code/use-live-changes";
+import { useResource } from "../../queries/resource";
 import { harnessOf, useCodeStore } from "../../store/code";
 import { useUiStore, type CodePane } from "../../store/ui";
-import { ChangesPanel } from "./ChangesPanel";
 import { CodeSettings } from "./CodeSettings";
 import { CodeKeys, Kbd, useCodeCommands, type CodeCommand } from "./keys";
-import { NewConversation } from "./NewConversation";
+import { NewThreadDialog } from "./NewThreadDialog";
 import { PullPanel } from "./PullPanel";
 import { PullReview } from "./PullReview";
 import { ResizablePane } from "./ResizablePane";
@@ -67,9 +67,7 @@ export function LegacyThreadRedirect() {
     if (pane) setPane(pane);
   }, [pane, setPane]);
   if (!conversationId) return <Navigate to="/code" replace />;
-  return (
-    <Navigate to={threadPath(normalizeThreadId(decodeURIComponent(conversationId)))} replace />
-  );
+  return <Navigate to={threadPath(decodeURIComponent(conversationId))} replace />;
 }
 
 function PaneHeader({
@@ -122,7 +120,7 @@ function PaneHeader({
 
 export function CodeWorkspace() {
   const { threadId: rawId, section, projectId: settingsProjectId, reviewId } = useParams();
-  const { pathname, search } = useLocation();
+  const { pathname } = useLocation();
   const navigate = useNavigate();
   const { brand } = useShellConfig();
   const harnessList = useCodeStore((s) => s.harnesses);
@@ -135,12 +133,10 @@ export function CodeWorkspace() {
   const setHelp = useCodeCommands((s) => s.setHelp);
   const { projects, reload: reloadProjects } = useProjects();
   const [insert, setInsert] = useState<{ text: string; nonce: number } | null>(null);
-  const [viewCwd, setViewCwd] = useState<string | null>(null);
   const [handle, setHandle] = useState<ThreadHandle | null>(null);
-  const [reviewScope, setReviewScope] = useState<"base" | "harness">("base");
   useGitHubSetupResult(reloadProjects);
 
-  const threadId = rawId ? normalizeThreadId(decodeURIComponent(rawId)) : undefined;
+  const threadId = rawId ? decodeURIComponent(rawId) : undefined;
   const inSettings = pathname === "/code/settings" || pathname.startsWith("/code/settings/");
   const composing = pathname === "/code/new";
   const reviewing = pathname === "/code/reviews";
@@ -151,15 +147,19 @@ export function CodeWorkspace() {
   );
   const listed = useMemo(() => threads?.filter((t) => !t.review) ?? null, [threads]);
   const rows = threads ?? [];
-  const row = rows.find((r) => r.id === threadId);
-  const harness = threadId ? harnessOf(harnesses, instanceOf(threadId)) : undefined;
+  const listedRow = rows.find((r) => r.id === threadId);
+  const unlisted = useResource(
+    ["code", "thread", threadId],
+    async () => (await codeApi.get(threadId!)).thread,
+    "Could not open this thread.",
+    { enabled: Boolean(threadId) && threads !== null && !listedRow },
+  );
+  const row = listedRow ?? unlisted.data ?? undefined;
+  const harness = row ? harnessOf(harnesses, row.instanceId) : undefined;
   const project = row?.projectId ? projects?.find((p) => p.id === row.projectId) : undefined;
-  const cwd = row?.cwd ?? viewCwd;
-  const canDiff = Boolean(project) || Boolean(harness?.capabilities.workspace.diffs && cwd);
-  const openPane: CodePane | null =
-    threadId && pane && (pane === "pr" ? Boolean(project) : canDiff) ? pane : null;
+  const openPane: CodePane | null = threadId && pane && project ? pane : null;
 
-  const changeVersion = useLiveChanges(threadId ?? null, cwd ?? null, openPane === "changes");
+  const changeVersion = useLiveChanges(threadId ?? null, openPane === "changes");
   const changesKey =
     changeVersion === null
       ? `${row?.working}:${row?.cursor}`
@@ -189,8 +189,8 @@ export function CodeWorkspace() {
   );
   const nextNeedingYou = useCallback(() => {
     const needs = statusSections(listed ?? []).find((s) => s.key === "needs-you");
-    const next = needs?.nodes.find((node) => node.row.id !== threadId);
-    if (next) navigate(threadPath(next.row.id));
+    const next = needs?.rows.find((row) => row.id !== threadId);
+    if (next) navigate(threadPath(next.id));
     else toast("Nothing else needs you.");
   }, [listed, threadId, navigate]);
 
@@ -243,11 +243,18 @@ export function CodeWorkspace() {
         run: () => handle?.toggleArchive(),
       },
       {
+        id: "compact",
+        group: "Thread",
+        label: "Compact the context",
+        enabled: Boolean(handle?.compact),
+        run: () => handle?.compact?.(),
+      },
+      {
         id: "changes",
         group: "Pane",
         keys: "1",
         label: "Changes",
-        enabled: canDiff,
+        enabled: Boolean(project),
         run: () => showPane("changes"),
       },
       {
@@ -275,7 +282,6 @@ export function CodeWorkspace() {
       toggleUiSidebar,
       threadId,
       handle,
-      canDiff,
       project,
       showPane,
       setPane,
@@ -304,10 +310,16 @@ export function CodeWorkspace() {
   if (harnessList.length === 0) return <NotConfigured brand={brand} />;
   if (reviewId) return <PullReview reviewId={reviewId} harnesses={harnesses} rows={rows} />;
 
-  const full = Boolean(threadId) || composing || reviewing || inSettings;
+  const full = Boolean(threadId) || reviewing || inSettings;
   return (
     <div className="flex h-dvh min-h-0">
       <CodeKeys commands={commands} />
+      <NewThreadDialog
+        open={composing}
+        onOpenChange={(open) => !open && navigate(threadId ? threadPath(threadId) : "/code")}
+        projects={projects}
+        harnesses={harnesses}
+      />
       <aside
         id="code-sidebar"
         aria-label="Threads"
@@ -323,6 +335,7 @@ export function CodeWorkspace() {
           harnesses={harnesses}
           projects={projects}
           activeId={threadId}
+          onNew={() => navigate("/code/new")}
         />
       </aside>
 
@@ -343,27 +356,40 @@ export function CodeWorkspace() {
           />
         ) : reviewing ? (
           <ReviewsScreen />
-        ) : threadId && harness ? (
+        ) : threadId && harness && row ? (
           <ThreadView
             key={threadId}
             id={threadId}
             harness={harness}
             rows={rows}
             projectName={project?.name}
-            pr={row?.pr ?? null}
+            branch={row.branch}
+            pr={row.pr ?? null}
             insert={insert}
             onShowChanges={openPane === "changes" ? undefined : () => showPane("changes")}
-            onCwd={setViewCwd}
             onHandle={setHandle}
           />
-        ) : threadId ? (
+        ) : threadId && (unlisted.loadError || (row && !harness)) ? (
           <EmptyState
             icon={Code2}
-            title="This coding agent is not connected"
-            description="The thread belongs to a harness this server no longer runs."
+            title="This thread cannot be opened"
+            description={unlisted.loadError ?? "Its coding agent is not connected to this server."}
           />
+        ) : threadId ? (
+          <div className="flex h-full items-center justify-center">
+            <Spinner />
+          </div>
         ) : (
-          <NewConversation key={search} rows={rows} harnesses={harnesses} projects={projects} />
+          <EmptyState
+            icon={Code2}
+            title="No thread open"
+            description={
+              <span className="inline-flex flex-wrap items-center justify-center gap-1.5">
+                <Kbd keys="n" /> starts one, <Kbd keys="j" /> and <Kbd keys="k" /> move through the
+                list, <Kbd keys="?" /> shows every key.
+              </span>
+            }
+          />
         )}
       </main>
 
@@ -389,24 +415,12 @@ export function CodeWorkspace() {
                   navigate(reviewPath(review.id));
                 }}
               />
-            ) : project && reviewScope === "base" ? (
+            ) : project ? (
               <ReviewPanel
                 threadId={threadId}
                 baseBranch={project.baseBranch}
                 refreshKey={changesKey}
                 editable
-                commenting={commenting}
-                onOtherScopes={
-                  harness?.capabilities.workspace.diffs
-                    ? () => setReviewScope("harness")
-                    : undefined
-                }
-              />
-            ) : harness && cwd ? (
-              <ChangesPanel
-                instanceId={harness.id}
-                cwd={cwd}
-                refreshKey={changesKey}
                 commenting={commenting}
               />
             ) : null}

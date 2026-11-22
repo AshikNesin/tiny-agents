@@ -1,14 +1,9 @@
 import { apiClient } from "@groot/shell/lib/api";
-import { LEGACY_INSTANCE_ID, parseThreadId, threadIdOf } from "@tiny-agents/code/contracts";
 import type {
   Capabilities,
   CodeListEvent,
   CodeThreadEvent,
-  DirectoryListing,
   FileMatch,
-  GitDiff,
-  GitFile,
-  GitFileDiff,
   InstanceStatus,
   ModelOption,
   PermissionMode,
@@ -19,7 +14,6 @@ import type {
   ThreadSettings,
   ThreadSnapshot,
   ThreadSummary,
-  UsageReport,
 } from "@tiny-agents/code/contracts";
 
 export type * from "@tiny-agents/code/contracts";
@@ -42,26 +36,17 @@ export const codeApi = {
   status: () => apiClient.get<{ harnesses: HarnessInfo[] }>(`${base}/status`),
   eventsPath: () => `/api/v1${base}/events`,
   threadEventsPath: (id: string) => `/api/v1${thread(id)}/events`,
-  threadChangesPath: (id: string, cwd: string | null) =>
-    `/api/v1${thread(id)}/changes${cwd ? `?cwd=${encodeURIComponent(cwd)}` : ""}`,
+  threadChangesPath: (id: string) => `/api/v1${thread(id)}/changes`,
 
   list: (view: "active" | "archived" = "active") =>
     apiClient.get<ThreadSummary[]>(`${base}/threads`, { view }),
-  search: (q: string, archived = false) =>
-    apiClient.get<ThreadSummary[]>(`${base}/threads/search`, {
-      q,
-      archived: archived ? "true" : undefined,
-    }),
-  byTitle: (title: string) =>
-    apiClient.get<ThreadSummary>(`${base}/threads/by-title/${encodeURIComponent(title)}`),
   get: (id: string) => apiClient.get<ThreadSnapshot>(thread(id)),
   markSeen: (id: string, cursor: number) => apiClient.post(`${thread(id)}/seen`, { cursor }),
 
   create: (input: {
-    instanceId: string;
+    projectId: string;
     message: string;
-    projectId?: string;
-    cwd?: string;
+    instanceId?: string;
     model?: string;
     effort?: string;
     permissionMode?: PermissionMode;
@@ -96,41 +81,12 @@ export const codeApi = {
     apiClient.post<{ moved: string[] }>(`${thread(id)}/archive`, { archived }),
   remove: (id: string) => apiClient.delete(thread(id)),
   rename: (id: string, title: string) => apiClient.post(`${thread(id)}/rename`, { title }),
-  setCwd: (id: string, cwd: string) => apiClient.post(`${thread(id)}/cwd`, { cwd }),
-  fork: (id: string, at: string) =>
-    apiClient.post<{ threadId: string }>(`${thread(id)}/fork`, { at }),
-  usage: (id: string) => apiClient.get<UsageReport>(`${thread(id)}/usage`),
 
   models: (instanceId: string) => apiClient.get<ModelOption[]>(`${harness(instanceId)}/models`),
   skills: (instanceId: string, cwd: string, threadId?: string) =>
     apiClient.get<Skill[]>(`${harness(instanceId)}/skills`, { cwd, threadId }),
   findFiles: (instanceId: string, dir: string, q: string, content?: "only") =>
     apiClient.get<FileMatch[]>(`${harness(instanceId)}/find-files`, { dir, q, content }),
-  directories: (instanceId: string, path?: string) =>
-    apiClient.get<DirectoryListing>(`${harness(instanceId)}/directories`, { path }),
-  validateCwd: (instanceId: string, path: string) =>
-    apiClient.get<{ valid: boolean; error?: string }>(`${harness(instanceId)}/validate-cwd`, {
-      path,
-    }),
-  repos: (instanceId: string) =>
-    apiClient.get<{ repos: Array<{ path: string; name?: string }> }>(
-      `${harness(instanceId)}/repos`,
-    ),
-  createWorktree: (instanceId: string, cwd: string) =>
-    apiClient.post<{ path: string }>(`${harness(instanceId)}/worktrees`, { cwd }),
-  diffs: (instanceId: string, cwd: string) =>
-    apiClient.get<{ diffs: GitDiff[]; gitRoot: string }>(`${harness(instanceId)}/diffs`, {
-      cwd,
-    }),
-  diffFiles: (instanceId: string, diffId: string, cwd: string) =>
-    apiClient.get<GitFile[]>(`${harness(instanceId)}/diffs/${encodeURIComponent(diffId)}/files`, {
-      cwd,
-    }),
-  fileDiff: (instanceId: string, diffId: string, cwd: string, path: string) =>
-    apiClient.get<GitFileDiff>(`${harness(instanceId)}/diffs/${encodeURIComponent(diffId)}/file`, {
-      cwd,
-      path,
-    }),
 
   assetUrl: (instanceId: string, ref: string) =>
     `/api/v1${harness(instanceId)}/asset?ref=${encodeURIComponent(ref)}`,
@@ -155,15 +111,6 @@ export const codeApi = {
     return envelope.data.ref;
   },
 };
-
-export function instanceOf(threadId: string): string {
-  return parseThreadId(threadId, LEGACY_INSTANCE_ID)?.instanceId ?? LEGACY_INSTANCE_ID;
-}
-
-export function normalizeThreadId(id: string): string {
-  const parsed = parseThreadId(id, LEGACY_INSTANCE_ID);
-  return parsed ? threadIdOf(parsed.instanceId, parsed.nativeId) : id;
-}
 
 export function threadPath(id: string): string {
   return `/code/t/${encodeURIComponent(id)}`;

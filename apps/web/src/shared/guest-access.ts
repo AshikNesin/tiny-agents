@@ -43,25 +43,6 @@ export const GUEST_ACCESS: Record<string, GuestFeature> = {
       { methods: ["DELETE"], upload: /^$/, reach: "uploaded" },
     ],
   },
-  code: {
-    page: "/code",
-    api: [
-      {
-        methods: READ,
-        path: /^\/code\/(status|events|threads(\/search|\/by-title\/[^/]+)?|threads\/[^/]+(\/(events|usage|changes))?)$/,
-      },
-      { methods: ["POST"], path: /^\/code\/threads$/ },
-      {
-        methods: ["POST"],
-        path: /^\/code\/threads\/[^/]+\/(seen|messages|interrupt|requests\/[^/]+|recover|queued\/[^/]+\/[^/]+|jobs\/[^/]+\/kill|settings|archive|rename|fork)$/,
-      },
-      { methods: ["DELETE"], path: /^\/code\/threads\/[^/]+$/ },
-      {
-        methods: READ,
-        path: /^\/code\/harnesses\/[^/]+\/(models|skills|asset|diffs(\/[^/]+\/(files|file))?)$/,
-      },
-    ],
-  },
 };
 
 export const BOT_PATH = /^\/bots\/([^/]+)(\/.*)?$/;

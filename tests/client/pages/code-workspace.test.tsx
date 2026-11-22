@@ -25,10 +25,10 @@ vi.mock("@groot/shell/lib/api", async (importOriginal) => {
   return {
     ...original,
     apiClient: Object.assign(Object.create(original.apiClient) as typeof original.apiClient, {
-      get: async () => [],
+      get: async (path: string) => (path === "/code/projects" ? [project] : []),
       post: async (path: string, body: unknown) => {
         posts.push({ path, body });
-        return { status: "accepted" };
+        return path === "/code/threads" ? { threadId: "new1" } : { status: "accepted" };
       },
     }),
   };
@@ -49,6 +49,7 @@ const agent: HarnessInfo = {
 
 const thread = (nativeId: string, extra: Partial<ThreadSummary> = {}): ThreadSummary => ({
   id: `demo:${nativeId}`,
+  projectId: "p1",
   instanceId: "demo",
   kind: "demo",
   nativeId,
@@ -106,10 +107,28 @@ const open = (summary: ThreadSummary) =>
     snapshot: snapshot(summary),
   });
 
-const waiting = thread("a", { unread: true });
-const running = thread("bb", { working: true });
-const reviewed = thread("ccc", { pr: { number: 12, loop: "watching", url: "https://x/12" } });
-const done = thread("dddd");
+const waiting = thread("a", {
+  unread: true,
+  status: { group: "needs-you", reason: "finished" },
+});
+const running = thread("bb", { working: true, status: { group: "working", reason: null } });
+const reviewed = thread("ccc", {
+  pr: { number: 12, loop: "watching", url: "https://x/12" },
+  status: { group: "review", reason: null },
+});
+const done = thread("dddd", { status: { group: "done", reason: null } });
+const project = {
+  id: "p1",
+  name: "web",
+  repo: { owner: "acme", name: "web" },
+  transport: "gh" as const,
+  baseBranch: "main",
+  checkoutPath: "/code/acme--web/checkout",
+  defaultInstanceId: "demo",
+  defaultModel: null,
+  settings: {},
+  createdAt: "2026-11-05T00:00:00Z",
+};
 
 beforeEach(() => {
   posts.length = 0;
@@ -189,12 +208,14 @@ describe("the Code workspace", () => {
     expect(posts.filter((post) => post.path.endsWith("/interrupt"))).toEqual([]);
   });
 
-  it("1 opens the Changes pane and backslash closes it", () => {
+  it("1 opens the Changes pane and backslash closes it", async () => {
     renderAt("/code/t/demo%3Adddd");
     open(done);
     expect(screen.queryByTestId("code-pane")).toBeNull();
-    press("1");
-    expect(screen.getByRole("tab", { name: /Changes/ })).toHaveAttribute("aria-selected", "true");
+    await waitFor(() => {
+      press("1");
+      expect(screen.getByRole("tab", { name: /Changes/ })).toHaveAttribute("aria-selected", "true");
+    });
     press("\\");
     expect(screen.queryByTestId("code-pane")).toBeNull();
     press("\\");
@@ -207,6 +228,28 @@ describe("the Code workspace", () => {
     expect(screen.getByTestId("code-composer-hint")).toHaveTextContent(
       "Enter steers · Alt+Enter queues · Esc stops",
     );
+  });
+
+  it("n opens the new thread dialog; Enter starts the thread in the remembered project", async () => {
+    renderAt("/code");
+    press("n");
+    expect(where()).toBe("/code/new");
+    const box = await screen.findByRole("textbox", { name: "What should the agent do?" });
+    await screen.findByText("web");
+    fireEvent.change(box, { target: { value: "Fix the login callback" } });
+    fireEvent.keyDown(box, { key: "Enter" });
+    await waitFor(() => expect(where()).toBe("/code/t/new1"));
+    expect(posts.find((post) => post.path === "/code/threads")?.body).toMatchObject({
+      projectId: "p1",
+      instanceId: "demo",
+      message: "Fix the login callback",
+    });
+  });
+
+  it("shows the reason a thread needs you beside its title", () => {
+    renderAt("/code");
+    const row = document.querySelector('[data-thread="demo:a"]');
+    expect(row).toHaveTextContent("finished");
   });
 
   it("? lists every key", () => {

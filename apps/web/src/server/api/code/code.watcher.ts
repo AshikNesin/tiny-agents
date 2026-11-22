@@ -1,7 +1,8 @@
 import { logger } from "@groot/core/logger";
 import type { Notification } from "@groot/core/notification/notifier";
 import { sanitizePeerText } from "@tiny-agents/agent";
-import { threadIdOf, type HarnessInstance, type TurnOutcome } from "@tiny-agents/code/server";
+import type { HarnessInstance, TurnOutcome } from "@tiny-agents/code/server";
+import { threadKey } from "./code.threads";
 import { relayText } from "../bots/bots.delivery";
 import { codeUpdate } from "../notifications/notifications.events";
 import type { HandoffFinish } from "./code.bots";
@@ -38,7 +39,7 @@ export function handoffFinishText(
   const body = outcome.text ? `\n\n${sanitizePeerText(outcome.text)}` : "";
   return relayText(
     harness,
-    `${head} [Open in Code](/code/${encodeURIComponent(handoff.threadId)})${body}`,
+    `${head} [Open in Code](/code/t/${encodeURIComponent(handoff.threadId)})${body}`,
   );
 }
 
@@ -95,7 +96,7 @@ export function startCodeWatcher(deps: WatcherDeps): () => void {
 
   async function onTurnEnd(instance: HarnessInstance, nativeId: string, outcome: TurnOutcome) {
     if (outcome.working) return;
-    const id = threadIdOf(instance.id, nativeId);
+    const id = threadKey(instance.id, nativeId);
     const [handoffs, followed] = await Promise.all([runningHandoffs([id]), isFollowed(id)]);
     if (handoffs.length === 0 && !followed) return;
     await deliverFinished(instance, handoffs, outcome);
@@ -149,7 +150,7 @@ export function startCodeWatcher(deps: WatcherDeps): () => void {
     text: string,
     key: string,
   ) {
-    const id = threadIdOf(instance.id, nativeId);
+    const id = threadKey(instance.id, nativeId);
     if (hub.viewers(id) > 0 || !(await isFollowed(id))) return;
     const title = (await hub.list().catch(() => [])).find((t) => t.id === id)?.title ?? nativeId;
     deps.notify(codeUpdate({ id, title, harness: instance.label }, "message", text, key));
@@ -162,7 +163,7 @@ export function startCodeWatcher(deps: WatcherDeps): () => void {
 
   const off = hub.onEvent(({ instance, event }) => {
     if (event.type === "turn_ended") {
-      const id = threadIdOf(instance.id, event.nativeId);
+      const id = threadKey(instance.id, event.nativeId);
       void onTurnEnd(instance, event.nativeId, event.outcome).catch((error: unknown) =>
         logError(error, id, "turn end"),
       );
@@ -172,7 +173,7 @@ export function startCodeWatcher(deps: WatcherDeps): () => void {
         .then(sweep)
         .catch(logSweep);
     } else if (event.type === "attention") {
-      const id = threadIdOf(instance.id, event.nativeId);
+      const id = threadKey(instance.id, event.nativeId);
       void onAttention(instance, event.nativeId, event.text, event.key).catch((error: unknown) =>
         logError(error, id, "attention"),
       );

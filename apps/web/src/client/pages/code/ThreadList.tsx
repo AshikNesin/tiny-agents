@@ -5,7 +5,7 @@ import { cn } from "@groot/ui/lib/utils";
 import { Spinner } from "../../components/ui/spinner";
 import { SidebarTop } from "../../components/shell/ModeSwitch";
 import { codeApi, threadPath, type HarnessInfo, type ThreadSummary } from "../../lib/code/api";
-import { statusSections, type ListNode, type StatusSection } from "../../lib/code/list";
+import { statusSections, type StatusSection } from "../../lib/code/list";
 import type { ProjectView } from "../../../shared/api/code";
 import { useResource } from "../../queries/resource";
 import { PullChip } from "./controls";
@@ -18,27 +18,24 @@ const DOT: Record<StatusSection["key"], string> = {
   done: "bg-muted-foreground/40",
 };
 
-function metaOf(node: ListNode, section: StatusSection["key"]): string {
-  const { row } = node;
-  if (section === "needs-you" && row.pr?.loop === "needs_input") return "needs you";
-  if (section === "working" && row.pr?.loop === "fixing") return "fixing";
+function metaOf(row: ThreadSummary): string {
+  if (row.status?.reason) return row.status.reason;
   if (row.queuedCount) return `${row.queuedCount} queued`;
-  return "";
+  return row.offline ? "offline" : "";
 }
 
 function Row({
-  node,
+  row,
   section,
   active,
   project,
 }: {
-  node: ListNode;
+  row: ThreadSummary;
   section: StatusSection["key"];
   active: boolean;
   project?: string;
 }) {
-  const { row } = node;
-  const meta = metaOf(node, section);
+  const meta = metaOf(row);
   return (
     <Link
       to={threadPath(row.id)}
@@ -53,7 +50,7 @@ function Row({
       )}
     >
       <span className={cn("size-1.5 shrink-0 rounded-full", DOT[section])} aria-hidden />
-      <span className={cn("min-w-0 flex-1 truncate", node.unread && "font-medium")}>
+      <span className={cn("min-w-0 flex-1 truncate", row.unread && "font-medium")}>
         {row.title || "Untitled"}
       </span>
       {meta && <span className="text-muted-foreground shrink-0 text-xs">{meta}</span>}
@@ -101,12 +98,7 @@ function ArchivedRows({ activeId }: { activeId?: string }) {
   return (
     <div className="space-y-px">
       {rows.map((row) => (
-        <Row
-          key={row.id}
-          node={{ row, children: [], busy: false, unread: false }}
-          section="done"
-          active={row.id === activeId}
-        />
+        <Row key={row.id} row={row} section="done" active={row.id === activeId} />
       ))}
     </div>
   );
@@ -117,11 +109,13 @@ export function ThreadList({
   harnesses,
   projects,
   activeId,
+  onNew,
 }: {
   threads: ThreadSummary[] | null;
   harnesses: HarnessInfo[];
   projects?: ProjectView[] | null;
   activeId?: string;
+  onNew(): void;
 }) {
   const sections = useMemo(() => statusSections(threads ?? []), [threads]);
   const projectName = (id?: string | null) =>
@@ -131,15 +125,16 @@ export function ThreadList({
     <div className="flex min-h-0 flex-1 flex-col">
       <SidebarTop />
       <div className="px-2 pb-1">
-        <Link
-          to="/code/new"
+        <button
+          type="button"
+          onClick={onNew}
           data-testid="code-new"
-          className="text-sidebar-foreground hover:bg-sidebar-accent/60 flex h-8 items-center gap-2 rounded-lg px-2 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+          className="text-sidebar-foreground hover:bg-sidebar-accent/60 flex h-8 w-full items-center gap-2 rounded-lg px-2 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
         >
           <Plus className="size-4" />
-          <span className="flex-1">New thread</span>
+          <span className="flex-1 text-left">New thread</span>
           <Kbd keys="n" />
-        </Link>
+        </button>
       </div>
       <nav aria-label="Threads" className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
         {threads === null ? (
@@ -153,13 +148,13 @@ export function ThreadList({
                 {section.label}
               </h2>
               <div className="space-y-px">
-                {section.nodes.map((node) => (
+                {section.rows.map((row) => (
                   <Row
-                    key={node.row.id}
-                    node={node}
+                    key={row.id}
+                    row={row}
                     section={section.key}
-                    active={node.row.id === activeId}
-                    project={projectName(node.row.projectId)}
+                    active={row.id === activeId}
+                    project={projectName(row.projectId)}
                   />
                 ))}
               </div>

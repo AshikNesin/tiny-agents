@@ -32,6 +32,10 @@ export interface ThreadSummary {
   projectId?: string | null;
   pr?: { number: number; loop: string; url: string } | null;
   review?: { id: string; number: number } | null;
+  role?: "work" | "review";
+  branch?: string | null;
+  status?: { group: "needs-you" | "working" | "review" | "done"; reason: string | null };
+  offline?: boolean;
 }
 
 export interface ThreadSettings {

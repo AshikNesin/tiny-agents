@@ -6,6 +6,7 @@ import { createCodeToolkit } from "../../../packages/agent/src/toolkits/code";
 import { defaultPermission, effectivePermission } from "../../../packages/agent/src/capabilities";
 import { db, bots, codeHandoffs } from "../../../apps/web/src/server/db";
 import { codeStore } from "../../../apps/web/src/server/api/code/code.bots";
+import { threadRef } from "../../../apps/web/src/server/api/code/code.threads";
 import { createCodeHub, setCodeHub } from "../../../apps/web/src/server/api/code/code.hub";
 import { finishHandoffOnce, isFollowed } from "../../../apps/web/src/server/api/code/code.store";
 import { installAppForTests } from "../../../apps/web/src/server/app-root";
@@ -73,16 +74,16 @@ describe("code hand-off store", () => {
       cwd: "/repo",
     });
     expect(replay).toEqual(first);
+    expect(threadRef(first.threadId)).toEqual({ instanceId: "shelley", nativeId: "cNew1" });
     expect(first).toMatchObject({
-      threadId: "shelley:cNew1",
       harness: "Shelley",
       status: "running",
       cwd: "/repo",
-      url: "/code/shelley%3AcNew1",
+      url: `/code/t/${first.threadId}`,
     });
     expect(shelley.seen.filter((s) => s.url === "/api/conversations/new")).toHaveLength(1);
-    expect(await isFollowed("shelley:cNew1")).toBe(true);
-    expect((await codeStore.list(101)).map((h) => h.threadId)).toEqual(["shelley:cNew1"]);
+    expect(await isFollowed(first.threadId)).toBe(true);
+    expect((await codeStore.list(101)).map((h) => h.threadId)).toEqual([first.threadId]);
     expect(await codeStore.harnesses()).toEqual([
       { id: "shelley", label: "Shelley", isDefault: true },
       { id: "claude-code", label: "Fake", isDefault: false },
@@ -107,7 +108,7 @@ describe("code hand-off store", () => {
         cwd: "/repo",
       }),
     );
-    expect(started.threadId).toBe("claude-code:t1");
+    expect(threadRef(started.threadId)).toEqual({ instanceId: "claude-code", nativeId: "t1" });
     expect(fake.created[0]).toMatchObject({ cwd: "/repo", permissionMode: "acceptEdits" });
     expect(
       await codeStore.start({
@@ -195,7 +196,7 @@ describe("code hand-off store", () => {
     expect(status).toMatchObject({
       harness: "Shelley",
       working: true,
-      url: `/code/${encodeURIComponent(handoff.threadId)}`,
+      url: `/code/t/${encodeURIComponent(handoff.threadId)}`,
     });
     expect(status?.changedFiles).toEqual([
       { path: "math.js", status: "modified", additions: 4, deletions: 0 },

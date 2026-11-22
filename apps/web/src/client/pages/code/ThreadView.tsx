@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { ArchiveRestore, ArrowLeft, ExternalLink, GitBranch, Play, Send, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button, monoClass } from "@groot/ui";
@@ -17,7 +17,6 @@ import { Spinner } from "../../components/ui/spinner";
 import { errorMessage } from "../../lib/errors";
 import {
   codeApi,
-  threadPath,
   type HarnessInfo,
   type ModelOption,
   type PermissionMode,
@@ -56,6 +55,7 @@ export interface ThreadHandle {
   title: string;
   stop(): void;
   toggleArchive(): void;
+  compact?: () => void;
 }
 
 function useMarkSeen(id: string, cursor: number) {
@@ -217,7 +217,6 @@ export function ThreadView({
   header = true,
   insert,
   onShowChanges,
-  onCwd,
   onHandle,
 }: {
   id: string;
@@ -229,10 +228,8 @@ export function ThreadView({
   header?: boolean;
   insert: { text: string; nonce: number } | null;
   onShowChanges?: () => void;
-  onCwd?(cwd: string | null): void;
   onHandle?(handle: ThreadHandle | null): void;
 }) {
-  const navigate = useNavigate();
   const state = useCodeThread(id);
   const { thread, working, items, settings } = state;
   const caps = harness.capabilities;
@@ -266,20 +263,11 @@ export function ThreadView({
     () => ({
       recovery: caps.turns.recovery,
       recover: (action) => void run(action, () => codeApi.recover(id, action)),
-      ...(caps.threads.fork
-        ? {
-            fork: (at: string) =>
-              void run("fork", async () => {
-                const forked = await codeApi.fork(id, at);
-                navigate(threadPath(forked.threadId));
-              }),
-          }
-        : {}),
       respond: async (requestId, answer) => {
         await codeApi.respond(id, requestId, answer);
       },
     }),
-    [id, navigate, run, caps],
+    [id, run, caps],
   );
   const ctx: TranscriptContext = useMemo(
     () => ({ instanceId: harness.id, rows }),
@@ -290,8 +278,6 @@ export function ThreadView({
 
   const archived = Boolean(row?.archived || listRow?.archived);
   const title = row?.title ?? id;
-  const cwd = row?.cwd ?? null;
-  useEffect(() => onCwd?.(cwd), [cwd, onCwd]);
 
   const stop = useCallback(
     () => void run(`stop ${harness.label}`, () => codeApi.interrupt(id)),
@@ -305,10 +291,26 @@ export function ThreadView({
       ),
     [archive, id, title, archived, reload],
   );
+  const canCompact = caps.turns.compact;
+  const compact = useCallback(
+    () =>
+      void run("compact", async () => {
+        await codeApi.send(id, "/compact", { queue: working });
+        toast.success("Compacting the context");
+      }),
+    [run, id, working],
+  );
   useEffect(() => {
-    onHandle?.({ working, archived, title, stop, toggleArchive });
+    onHandle?.({
+      working,
+      archived,
+      title,
+      stop,
+      toggleArchive,
+      ...(canCompact ? { compact } : {}),
+    });
     return () => onHandle?.(null);
-  }, [onHandle, working, archived, title, stop, toggleArchive]);
+  }, [onHandle, working, archived, title, stop, toggleArchive, canCompact, compact]);
 
   const model = models.find((m) => m.id === (settings?.model || row?.model));
   const canReason = model?.supportsReasoning !== false;
@@ -434,18 +436,6 @@ export function ThreadView({
                     <ContextRing
                       used={state.context.used}
                       max={state.context.max ?? model?.contextWindow}
-                      threadId={id}
-                      usage={caps.extras.usageReport}
-                      hasSubagents={state.children.length > 0}
-                      {...(caps.turns.compact
-                        ? {
-                            onCompact: () =>
-                              void run("compact", async () => {
-                                await codeApi.send(id, "/compact", { queue: working });
-                                toast.success("Compacting the context");
-                              }),
-                          }
-                        : {})}
                     />
                   </>
                 }

@@ -35,6 +35,7 @@ lost.
 | Hand-off      | [`handoff.ts`](../../apps/web/src/shared/machines/handoff.ts)                             | `code_handoffs.status`           | `code.store.ts`               |
 | Auto-fix      | [`autofix.ts`](../../apps/web/src/shared/machines/autofix.ts)                             | `code_pull_requests.loop_status` | `code.pulls.store.ts`         |
 | Auto-fix pass | [`autofix-pass.ts`](../../apps/web/src/shared/machines/autofix-pass.ts)                   | `code_autofix_passes.status`     | `code.pulls.store.ts`         |
+| Code run      | [`run.ts`](../../apps/web/src/shared/machines/run.ts)                                     | `code_runs.status`               | `code.runs.ts`                |
 | Push device   | [`push-subscription.ts`](../../apps/web/src/shared/machines/push-subscription.ts)         | `push_subscriptions.status`      | `push.store.ts`               |
 | Job           | [`packages/jobs/src/lifecycle.ts`](../../packages/jobs/src/lifecycle.ts)                  | `jobs.state`                     | `packages/jobs` (groot-owned) |
 | Routine       | [`routine.ts`](../../apps/web/src/shared/machines/routine.ts) (derived, `routineState()`) | `enabled`, `paused_reason`, …    | `routines.arming.ts`          |

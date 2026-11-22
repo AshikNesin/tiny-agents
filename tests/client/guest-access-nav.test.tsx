@@ -44,7 +44,8 @@ describe("guest access table", () => {
 
   it("opens a listed page and every page beneath it, nothing else", () => {
     expect(isGuestPage("/chats/b1/history/c1")).toBe(true);
-    expect(isGuestPage("/code/abc/changes")).toBe(true);
+    expect(isGuestPage("/code")).toBe(false);
+    expect(isGuestPage("/code/t/abc")).toBe(false);
     expect(isGuestPage("/settings")).toBe(true);
     expect(isGuestPage("/codex")).toBe(false);
     expect(isGuestPage("/vault/new/login")).toBe(false);

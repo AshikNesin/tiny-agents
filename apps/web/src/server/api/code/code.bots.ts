@@ -1,14 +1,8 @@
 import { eq } from "drizzle-orm";
 import type { CodeHandoffRecord, CodeStore } from "@tiny-agents/agent";
 import { Boom } from "@groot/core/errors";
-import {
-  HarnessError,
-  LEGACY_INSTANCE_ID,
-  parseThreadId,
-  threadIdOf,
-  type HarnessInstance,
-  type TurnOutcome,
-} from "@tiny-agents/code/server";
+import { HarnessError, type HarnessInstance, type TurnOutcome } from "@tiny-agents/code/server";
+import { threadKey, threadRef } from "./code.threads";
 import { botMessages, db, type CodeHandoff } from "../../db";
 import { submitToBot } from "../bots/bots.conversation";
 import { createDeliveries, type DeliveryRuntime } from "../bots/bots.delivery";
@@ -33,7 +27,7 @@ import {
 
 const DEFAULT_HANDOFF_HARNESS = "shelley";
 
-const codePath = (threadId: string) => `/code/${encodeURIComponent(threadId)}`;
+const codePath = (threadId: string) => `/code/t/${encodeURIComponent(threadId)}`;
 
 function instances(): HarnessInstance[] {
   return codeHub()?.instances() ?? [];
@@ -42,7 +36,7 @@ function instances(): HarnessInstance[] {
 function labelOf(threadId: string): string {
   const target = codeHub()?.resolve(threadId);
   if (target) return target.instance.label;
-  return parseThreadId(threadId, LEGACY_INSTANCE_ID)?.instanceId ?? threadId;
+  return threadRef(threadId)?.instanceId ?? threadId;
 }
 
 function toRecord(row: ThreadHandoff): CodeHandoffRecord {
@@ -135,9 +129,8 @@ async function startOnce(
     await dropHandoffClaim(input.idempotencyKey);
     throw error;
   }
-  const row = await startedHandoff(input.idempotencyKey, threadIdOf(instance.id, nativeId));
+  const row = await startedHandoff(input.idempotencyKey, await follow(instance.id, nativeId));
   titleLater(instance, nativeId, input.task);
-  await follow(instance.id, nativeId);
   const hub = codeHub();
   void hub?.refresh(instance.id);
   hub?.handedOff(row.threadId);
@@ -219,7 +212,7 @@ export const codeStore: CodeStore = {
     const hub = codeHub();
     const target = hub?.resolve(input.threadId);
     if (!hub || !target) return { error: "not_found" };
-    const threadId = threadIdOf(target.instance.id, target.nativeId);
+    const threadId = threadKey(target.instance.id, target.nativeId);
     return hub.serial(`send:${threadId}`, () => sendArmed(botId, target, threadId, input));
   },
 
@@ -249,7 +242,7 @@ export const codeStore: CodeStore = {
       text: outcome.text,
       failed: outcome.failed,
       ...(changedFiles ? { changedFiles } : {}),
-      url: codePath(threadIdOf(instance.id, nativeId)),
+      url: codePath(threadKey(instance.id, nativeId)),
     };
   },
 

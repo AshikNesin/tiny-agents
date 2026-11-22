@@ -39,11 +39,10 @@ describe("S12: Code threads are not scoped to the bot that started them", () => 
         cwd: "/repo",
       }),
     );
-    expect(started.threadId).toBe("fake:t1");
 
     expect(
       await codeStore.status({ conversationId: INTRUDER_CHAT, threadId: started.threadId }),
-    ).toMatchObject({ harness: "Fake", text: "Done.", url: "/code/fake%3At1" });
+    ).toMatchObject({ harness: "Fake", text: "Done.", url: `/code/t/${started.threadId}` });
 
     expect(
       await codeStore.send({

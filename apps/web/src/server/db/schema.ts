@@ -15,6 +15,7 @@ import { createId } from "@groot/core/utils/id.utils";
 import type { ExtractStatus } from "../../shared/machines/extraction";
 import type { AutofixStatus } from "../../shared/machines/autofix";
 import type { AutofixPassStatus } from "../../shared/machines/autofix-pass";
+import type { RunStatus } from "../../shared/machines/run";
 import type { HandoffStatus } from "../../shared/machines/handoff";
 import type { MemoryStatus } from "../../shared/machines/memory";
 import type { PushSubscriptionStatus } from "../../shared/machines/push-subscription";
@@ -167,6 +168,8 @@ export const codeThreads = sqliteTable(
     baseSha: text("base_sha"),
     worktree: text("worktree"),
     spendLimitUsd: real("spend_limit_usd"),
+    role: text("role").$type<"work" | "review">().notNull().default("work"),
+    attention: text("attention"),
     createdAt: createdAt(),
     updatedAt: ms("updated_at")
       .notNull()
@@ -175,7 +178,31 @@ export const codeThreads = sqliteTable(
   (t) => [
     index("code_threads_instance_idx").on(t.instanceId, t.updatedAt),
     index("code_threads_project_idx").on(t.projectId),
+    uniqueIndex("code_threads_native_idx").on(t.instanceId, t.nativeId),
   ],
+);
+
+export const codeRuns = sqliteTable(
+  "code_runs",
+  {
+    id: id(),
+    threadId: text("thread_id")
+      .notNull()
+      .references((): AnySQLiteColumn => codeThreads.id, { onDelete: "cascade" }),
+    seq: integer("seq").notNull(),
+    trigger: text("trigger").$type<"owner" | "workflow" | "bot">().notNull(),
+    workflow: text("workflow"),
+    event: text("event").notNull().default("{}"),
+    status: text("status").$type<RunStatus>().notNull(),
+    checkpointSeq: integer("checkpoint_seq"),
+    report: text("report"),
+    costUsd: real("cost_usd"),
+    startedAt: ms("started_at")
+      .notNull()
+      .$defaultFn(() => new Date()),
+    endedAt: ms("ended_at"),
+  },
+  (t) => [uniqueIndex("code_runs_seq_idx").on(t.threadId, t.seq)],
 );
 
 export const codeProjects = sqliteTable(
@@ -863,6 +890,7 @@ export type Memory = typeof memories.$inferSelect;
 export type RoutineRun = typeof routineRuns.$inferSelect;
 export type LlmCall = typeof llmCalls.$inferSelect;
 export type CodeThreadRow = typeof codeThreads.$inferSelect;
+export type CodeRunRow = typeof codeRuns.$inferSelect;
 export type CodeHandoff = typeof codeHandoffs.$inferSelect;
 export type CodeProjectRow = typeof codeProjects.$inferSelect;
 export type CodePullRow = typeof codePullRequests.$inferSelect;

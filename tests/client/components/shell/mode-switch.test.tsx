@@ -78,7 +78,7 @@ describe("the Chat/Code mode switch", () => {
   });
 
   it("sits at the top of the Code sidebar with Code current", () => {
-    renderAt("/code/new");
+    renderAt("/code");
     expect(modes().getByRole("link", { name: "Code" })).toHaveAttribute("aria-current", "page");
     expect(modes().getByRole("link", { name: "Chat" })).toHaveAttribute("href", "/chats");
     expect(screen.queryByRole("link", { name: /Back to/ })).toBeNull();
@@ -86,7 +86,7 @@ describe("the Chat/Code mode switch", () => {
 
   it("returns to the page each mode was last on", () => {
     useUiStore.setState({ lastPath: { chat: "/chats/b1", code: "/code/shelley%3Aabc" } });
-    const { unmount } = renderAt("/code/new");
+    const { unmount } = renderAt("/code");
     expect(modes().getByRole("link", { name: "Chat" })).toHaveAttribute("href", "/chats/b1");
     unmount();
     renderAt("/tasks");

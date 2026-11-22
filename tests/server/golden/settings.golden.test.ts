@@ -14,9 +14,7 @@ import { sealJson } from "../../../apps/web/src/server/crypto/secret-box";
 import { sealHeaderSecret } from "../../../apps/web/src/server/api/connections/connection-secrets";
 import { importStoredSecrets } from "../../../apps/web/src/server/api/vault/vault.import";
 import { vaultPolicyDigest } from "../../../apps/web/src/server/api/vault/vault.policy";
-import { createCodeHub, setCodeHub } from "../../../apps/web/src/server/api/code/code.hub";
 import { authToken, closeAppRuntime, openAppRuntime, resetAppTables } from "../fixtures";
-import { fakeHarness } from "../code/fake-harness";
 import { goldenFlow } from "./recorder";
 import { notificationService } from "@groot/core/notification/notification.service";
 import { NOTIFICATION_EVENTS } from "../../../apps/web/src/server/api/notifications/notifications.events";
@@ -197,31 +195,5 @@ describe("golden: settings and owner tools", () => {
     notificationService.defineEvents(NOTIFICATION_EVENTS);
     await r.http("settings", "/api/v1/notifications/settings");
     await r.http("status", "/api/v1/notifications/status");
-  });
-});
-
-describe("golden: the Code page on a fake harness", () => {
-  afterEach(() => setCodeHub(undefined));
-
-  goldenFlow("code", setup, async (r) => {
-    const fake = fakeHarness();
-    const hub = setCodeHub(createCodeHub({ instances: [fake], listDebounceMs: 0 }))!;
-    hub.start();
-    await r.http("status", "/api/v1/code/status");
-    const created = await r.http("start a thread", "/api/v1/code/threads", {
-      method: "POST",
-      json: { instanceId: "fake", message: "Fix the tests", cwd: "/repo" },
-    });
-    await r.http("thread", `/api/v1/code/threads/${created.threadId}`);
-    await r.http("send", `/api/v1/code/threads/${created.threadId}/messages`, {
-      method: "POST",
-      json: { message: "and the lint" },
-    });
-    await r.http("unknown harness", "/api/v1/code/threads", {
-      method: "POST",
-      json: { instanceId: "nope", message: "x" },
-    });
-    await r.http("bad thread id", "/api/v1/code/threads/%2e%2e");
-    r.note("the harness saw", { created: fake.created, sent: fake.sent });
   });
 });

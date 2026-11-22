@@ -11,6 +11,7 @@ import { startSettledPipeline } from "../../../apps/web/src/server/api/bots/bots
 import type { AgentRuntime } from "../../../packages/agent/src/index";
 import type { TurnOutcome } from "@tiny-agents/code/contracts";
 import { codeStore, deliverHandoffFinish } from "../../../apps/web/src/server/api/code/code.bots";
+import { threadRef } from "../../../apps/web/src/server/api/code/code.threads";
 import {
   createCodeHub,
   setCodeHub,
@@ -195,7 +196,7 @@ describe("hand-off starts (C7b: one thread per tool call)", () => {
     release();
     const [a, b] = await Promise.all([first, replay]);
     expect(b).toEqual(a);
-    expect(ok(a).threadId).toBe("fake:t1");
+    expect(threadRef(ok(a).threadId)).toEqual({ instanceId: "fake", nativeId: "t1" });
     expect(await codeStore.start(startInput(bot, "start-1"))).toEqual(a);
     expect(harness.created).toHaveLength(1);
   });
@@ -226,7 +227,9 @@ describe("hand-off starts (C7b: one thread per tool call)", () => {
       "the harness is down",
     );
     harness.createThread = create;
-    expect(ok(await codeStore.start(startInput(bot, "start-3"))).threadId).toBe("fake:t1");
+    expect(
+      threadRef(ok(await codeStore.start(startInput(bot, "start-3"))).threadId)?.nativeId,
+    ).toBe("t1");
   });
 
   it("delivers the finish of a start whose turn ends before its thread is recorded", async () => {
@@ -404,7 +407,7 @@ describe("hand-off finishes go back to the conversation that asked", () => {
         harness: "fake",
       }),
     );
-    return handoff.threadId.slice("fake:".length);
+    return threadRef(handoff.threadId)!.nativeId;
   }
 
   it("delivers a routine run's hand-off into that run's conversation, not the bot's chat", async () => {

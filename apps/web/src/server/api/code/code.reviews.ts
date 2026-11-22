@@ -10,7 +10,6 @@ import {
   type ReviewCommentInput,
 } from "@tiny-agents/github";
 import type { Hunk } from "@tiny-agents/git";
-import { threadIdOf } from "@tiny-agents/code/server";
 import {
   codeProjects,
   codePullRequests,
@@ -307,9 +306,8 @@ async function startAssistant(
     model: model ?? project.defaultModel ?? undefined,
     ...(permissionMode ? { permissionMode } : {}),
   });
-  const threadId = threadIdOf(instance.id, nativeId);
+  const threadId = await follow(instance.id, nativeId);
   await applyTitle(instance, nativeId, `Review #${row.number}: ${row.title}`.slice(0, 80));
-  await follow(instance.id, nativeId);
   await db.update(codeThreads).set({ cwd: worktree }).where(eq(codeThreads.id, threadId));
   await db
     .update(codeReviews)

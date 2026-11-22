@@ -16,7 +16,6 @@ import {
   type PermissionMode,
   type ThreadSummary,
 } from "../../lib/code/api";
-import { UsagePopover } from "./UsagePopover";
 
 const modelsByHarness = new Map<string, Promise<ModelOption[]>>();
 export function loadModels(instanceId: string): Promise<ModelOption[]> {
@@ -225,32 +224,16 @@ export function PermissionPicker({
   );
 }
 
-export function ContextRing({
-  used,
-  max,
-  onCompact,
-  threadId,
-  usage,
-  hasSubagents,
-}: {
-  used: number;
-  max?: number;
-  onCompact?: () => void;
-  threadId?: string;
-  usage: boolean;
-  hasSubagents?: boolean;
-}) {
+export function ContextRing({ used, max }: { used: number; max?: number }) {
   if (!max || !used) return null;
   const ratio = Math.min(1, used / max);
   const pct = Math.round(ratio * 100);
   const r = 6;
   const circumference = 2 * Math.PI * r;
-  const ring = (
-    <button
-      type="button"
-      title={`Context ${used.toLocaleString()} of ${max.toLocaleString()} tokens (${pct}%).${usage ? " Click for usage." : ""}`}
-      aria-label={`Context ${pct}% full${usage ? ". Usage" : ""}`}
-      aria-haspopup={usage ? "dialog" : undefined}
+  return (
+    <span
+      title={`Context ${used.toLocaleString()} of ${max.toLocaleString()} tokens (${pct}%).`}
+      aria-label={`Context ${pct}% full`}
       className={cn(searchSelectTriggerClass, "tabular-nums")}
       data-testid="code-context"
     >
@@ -271,19 +254,7 @@ export function ContextRing({
         />
       </svg>
       <span className="hidden @[20rem]:inline">{pct}%</span>
-    </button>
-  );
-  if (!usage || !threadId) return ring;
-  return (
-    <UsagePopover
-      used={used}
-      max={max}
-      threadId={threadId}
-      hasSubagents={Boolean(hasSubagents)}
-      onCompact={onCompact}
-    >
-      {ring}
-    </UsagePopover>
+    </span>
   );
 }
 

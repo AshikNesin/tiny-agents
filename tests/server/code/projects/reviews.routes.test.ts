@@ -8,6 +8,7 @@ import { eq } from "drizzle-orm";
 import { codePullRequests, codeThreads, db } from "../../../../apps/web/src/server/db";
 import { installAppForTests } from "../../../../apps/web/src/server/app-root";
 import { createCodeHub, setCodeHub } from "../../../../apps/web/src/server/api/code/code.hub";
+import { threadRef } from "../../../../apps/web/src/server/api/code/code.threads";
 import { createWorkspace } from "../../../../apps/web/src/server/api/code/code.workspace";
 import { setTerminalServiceForTests } from "../../../../apps/web/src/server/api/terminal/terminal.instance";
 import type { TerminalService } from "../../../../packages/sandbox/src/terminal/terminal";
@@ -20,7 +21,6 @@ import type {
   ReviewFile,
   ReviewFileDiff,
 } from "../../../../apps/web/src/shared/api/code";
-import type { ThreadSummary } from "../../../../packages/code/src/contracts/index";
 import { fakeHarness, type FakeHarness } from "../fake-harness";
 import { bareRepo, localExec, sh, type LocalExec } from "./local-exec";
 import { fakeGitHub, type FakeGitHub } from "./fake-github";
@@ -216,7 +216,7 @@ describe("PR reviews", () => {
     });
 
     expect(asked.status).toBe(200);
-    expect(asked.body.data!.threadId).toBe("fake:t1");
+    expect(threadRef(asked.body.data!.threadId)).toEqual({ instanceId: "fake", nativeId: "t1" });
     expect(harness.created).toHaveLength(1);
     const start = harness.created[0]!;
     const worktree = join(local.home, "tiny-agents-code/acme--web/reviews/pr-7");
@@ -236,7 +236,7 @@ describe("PR reviews", () => {
       { nativeId: "t1", title: "Review #7: Retry webhooks with backoff" },
     ]);
     const after = (await call<PullReviewView>("GET", `/reviews/${review.id}`)).body.data!;
-    expect(after.threadId).toBe("fake:t1");
+    expect(after.threadId).toBe(asked.body.data!.threadId);
     const waiting = (
       await call<ReviewDraft[]>("GET", `/threads/${encodeURIComponent(review.key)}/review/drafts`)
     ).body.data!;
@@ -257,18 +257,6 @@ describe("PR reviews", () => {
     await call("POST", `/reviews/${review.id}/ask`, { message: "Summarize it", model: "big-1" });
 
     expect(harness.created[0]!.model).toBe("big-1");
-  });
-
-  it("marks the assistant's thread in the list as the review's", async () => {
-    await newProject();
-    await forkPull([`printf 'x\\n' > src/x.ts`]);
-    const review = (await call<PullReviewView>("POST", "/reviews", { pr: "acme/web#7" })).body
-      .data!;
-    await call("POST", `/reviews/${review.id}/ask`, { message: "Summarize it" });
-
-    const threads = (await call<ThreadSummary[]>("GET", "/threads")).body.data!;
-
-    expect(threads.find((t) => t.id === "fake:t1")?.review).toEqual({ id: review.id, number: 7 });
   });
 
   it("archiving a review removes its worktree and takes it off the list", async () => {
