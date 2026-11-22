@@ -23,12 +23,12 @@ runs:
   using: composite
   steps:
     - if: inputs.deps != 'none'
-      uses: pnpm/action-setup@v4
+      uses: pnpm/action-setup@7088e561eb65bb68695d245aa206f005ef30921d # v4.1.0
 
     # Always: every job runs scripts/ci-budget.mjs. Node 24 is in the
     # runner's tool cache, so this takes about a second.
     - id: node
-      uses: actions/setup-node@v5
+      uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
       with:
         node-version: "24"
         cache: ${{ inputs.deps == 'store' && 'pnpm' || '' }}
@@ -42,7 +42,7 @@ runs:
     - name: Restore node_modules
       if: inputs.deps == 'node_modules'
       id: node-modules
-      uses: actions/cache@v4
+      uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4.2.0
       with:
         path: |
           node_modules
@@ -60,7 +60,7 @@ runs:
     - name: Restore CI tools
       if: inputs.tools == 'true'
       id: tools
-      uses: actions/cache@v4
+      uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4.2.0
       with:
         path: ~/.ci-tools
         key: ci-tools-${{ runner.os }}-${{ runner.arch }}-rg-14.1.1-gitleaks-8.30.1
