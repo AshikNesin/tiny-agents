@@ -1,7 +1,7 @@
 import { CodeKeys, useCodeCommands, type CodeCommand } from "./keys";
 import { ReviewFindings, openFindings } from "./ReviewFindings";
 import type { FindingView, ReviewVerdict } from "../../../shared/api/code";
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useEffectEvent, useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -92,15 +92,14 @@ export function PullReview({
   const waiting = useThreadComments(review?.key).length;
 
   const reviewing = review?.reviewing ?? false;
-  const refreshReview = useCallback(
-    () => client.invalidateQueries({ queryKey: ["code", "reviews", "detail", reviewId] }),
-    [client, reviewId],
+  const refreshReview = useEffectEvent(
+    () => void client.invalidateQueries({ queryKey: ["code", "reviews", "detail", reviewId] }),
   );
   useEffect(() => {
     if (!reviewing) return;
-    const timer = setInterval(() => void refreshReview(), 3000);
+    const timer = setInterval(() => refreshReview(), 3000);
     return () => clearInterval(timer);
-  }, [reviewing, refreshReview]);
+  }, [reviewing]);
 
   const open = useMemo(() => (review ? openFindings(review) : []), [review]);
   const current = open.find((finding) => finding.id === focused) ?? open[0];

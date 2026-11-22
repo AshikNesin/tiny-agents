@@ -20,11 +20,14 @@ await journey(
     const working = (id) => threads().then((all) => all.find((t) => t.id === id)?.working);
     const on = (id) => expect(page).toHaveURL(new RegExp(`/code/t/${encodeURIComponent(id)}$`));
     const github = async (path, body) => {
-      const control = `http://127.0.0.1:${Number(new URL(process.env.TA_VERIFY_URL).port) + 3}`;
+      const app = process.env.TA_VERIFY_URL ?? "";
+      if (!URL.canParse(app)) throw new Error(`TA_VERIFY_URL is not a URL: "${app}"`);
+      const control = `http://127.0.0.1:${Number(new URL(app).port) + 3}`;
       const res = await fetch(control + path, {
         method: body === undefined ? "GET" : "POST",
         body: body === undefined ? undefined : JSON.stringify(body),
       });
+      if (!res.ok) throw new Error(`fake GitHub ${path}: HTTP ${res.status} ${await res.text()}`);
       return res.json();
     };
     const reason = (id) => threads().then((all) => all.find((t) => t.id === id)?.status?.reason);

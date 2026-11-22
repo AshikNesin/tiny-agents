@@ -307,8 +307,17 @@ describe("the Code workspace", () => {
     expect(row).toHaveTextContent("finished");
   });
 
-  it("? lists every key", () => {
+  it("? lists the workspace's keys, and a thread's own while one is open", async () => {
     renderAt("/code");
+    press("?", { shiftKey: true });
+    expect(screen.getByTestId("code-keys")).toHaveTextContent("Next thread that needs you");
+    expect(screen.getByTestId("code-keys")).not.toHaveTextContent("Stop the agent");
+  });
+
+  it("? lists a thread's keys beside the workspace's while the thread is open", async () => {
+    renderAt("/code/t/demo%3Adddd");
+    open(done);
+    await screen.findByText("web /");
     press("?", { shiftKey: true });
     const keys = screen.getByTestId("code-keys");
     expect(keys).toHaveTextContent("Next thread that needs you");

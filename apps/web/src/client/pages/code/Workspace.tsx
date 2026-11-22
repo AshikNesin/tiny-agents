@@ -29,7 +29,7 @@ import { PullReview } from "./PullReview";
 import { ResizablePane } from "./ResizablePane";
 import { ReviewPanel } from "./ReviewPanel";
 import { ThreadList } from "./ThreadList";
-import { ThreadView, type ThreadHandle } from "./ThreadView";
+import { ThreadView } from "./ThreadView";
 
 const PANES: Array<{ id: CodePane; label: string; keys: string }> = [
   { id: "changes", label: "Changes", keys: "1" },
@@ -140,7 +140,6 @@ export function CodeWorkspace() {
   const toggleTerminal = useUiStore((s) => s.toggleCodeTerminal);
   const { projects, reload: reloadProjects } = useProjects();
   const [insert, setInsert] = useState<{ text: string; nonce: number } | null>(null);
-  const [handle, setHandle] = useState<ThreadHandle | null>(null);
   const [epoch, setEpoch] = useState(0);
   const [addingReview, setAddingReview] = useState(false);
   useGitHubSetupResult(reloadProjects);
@@ -303,44 +302,6 @@ export function CodeWorkspace() {
         run: focusComposer,
       },
       {
-        id: "stop",
-        group: "Thread",
-        keys: "Escape",
-        label: "Stop the agent",
-        enabled: Boolean(handle?.working),
-        run: () => handle?.stop(),
-      },
-      {
-        id: "archive",
-        group: "Thread",
-        label: handle?.archived ? "Restore this thread" : "Archive this thread",
-        enabled: Boolean(handle),
-        run: () => handle?.toggleArchive(),
-      },
-      {
-        id: "edit",
-        group: "Thread",
-        keys: "e",
-        label: "Edit the last turn and run it again",
-        enabled: Boolean(handle?.editLast),
-        run: () => handle?.editLast?.(),
-      },
-      {
-        id: "retry",
-        group: "Thread",
-        keys: "t",
-        label: "Run the last turn again",
-        enabled: Boolean(handle?.retryLast),
-        run: () => handle?.retryLast?.(),
-      },
-      {
-        id: "compact",
-        group: "Thread",
-        label: "Compact the context",
-        enabled: Boolean(handle?.compact),
-        run: () => handle?.compact?.(),
-      },
-      {
         id: "changes",
         group: "Pane",
         keys: "1",
@@ -437,7 +398,6 @@ export function CodeWorkspace() {
       toggleUiSidebar,
       listOpen,
       threadId,
-      handle,
       project,
       showPane,
       setPane,
@@ -456,10 +416,9 @@ export function CodeWorkspace() {
     () => {
       if (isDialogOpen()) return;
       const active = document.activeElement;
-      if (isEditable(active)) return (active as HTMLElement).blur();
-      if (handle?.working) handle.stop();
+      if (isEditable(active)) (active as HTMLElement).blur();
     },
-    { inFields: true },
+    { inFields: true, enabled: !threadId },
   );
 
   if (harnessList === null) {
@@ -530,7 +489,7 @@ export function CodeWorkspace() {
             pr={row.pr ?? null}
             insert={insert}
             onShowChanges={openPane === "changes" ? undefined : () => showPane("changes")}
-            onHandle={setHandle}
+            commands
             below={
               terminalOpen && project ? (
                 <TerminalDrawer

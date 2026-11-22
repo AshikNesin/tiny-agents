@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import {
   ArchiveRestore,
@@ -41,7 +41,9 @@ import { useCodeThread, type ThreadState } from "../../lib/code/use-thread";
 import { useCodeStore } from "../../store/code";
 import { useViewerRole } from "../../store/people";
 import { useCommentStore, useThreadComments } from "../../lib/code/comments";
+import { isDialogOpen, isEditable, useHotkey } from "@groot/ui/hotkeys";
 import { Composer } from "./Composer";
+import { CodeKeys, type CodeCommand } from "./keys";
 import { PendingComments } from "./PendingComments";
 import {
   ContextRing,
@@ -61,21 +63,12 @@ import {
   type TranscriptContext,
 } from "./Transcript";
 
-export interface ThreadHandle {
-  working: boolean;
-  archived: boolean;
-  title: string;
-  stop(): void;
-  toggleArchive(): void;
-  compact?: () => void;
-  editLast?: () => void;
-  retryLast?: () => void;
-}
-
 function useMarkSeen(id: string, cursor: number) {
   const patchList = useCodeStore((s) => s.patch);
+  const client = useQueryClient();
   const { mutate: markSeen } = useMutation({
     mutationFn: (seen: { id: string; cursor: number }) => codeApi.markSeen(seen.id, seen.cursor),
+    onSuccess: (_done, seen) => client.invalidateQueries({ queryKey: ["code", "thread", seen.id] }),
     ...RESOURCE_MUTATION,
   });
   useEffect(() => {
@@ -310,7 +303,7 @@ export function ThreadView({
   header = true,
   insert,
   onShowChanges,
-  onHandle,
+  commands = false,
   onReplaced,
   below,
 }: {
@@ -323,7 +316,7 @@ export function ThreadView({
   header?: boolean;
   insert: { text: string; nonce: number } | null;
   onShowChanges?: () => void;
-  onHandle?(handle: ThreadHandle | null): void;
+  commands?: boolean;
   onReplaced?: () => void;
   below?: ReactNode;
 }) {
@@ -458,23 +451,58 @@ export function ThreadView({
       }),
     [run, id, working],
   );
-  useEffect(() => {
-    onHandle?.({
-      working,
-      archived,
-      title,
-      stop,
-      toggleArchive,
-      ...(canCompact ? { compact } : {}),
-      ...(canRewindLast
-        ? {
-            editLast: () => rewinds.current.edit(rewinds.current.lastStart!),
-            retryLast: () => rewinds.current.retry(rewinds.current.lastStart!),
-          }
-        : {}),
-    });
-    return () => onHandle?.(null);
-  }, [onHandle, working, archived, title, stop, toggleArchive, canCompact, compact, canRewindLast]);
+  const threadCommands = useMemo<CodeCommand[]>(
+    () => [
+      {
+        id: "stop",
+        group: "Thread",
+        keys: "Escape",
+        label: "Stop the agent",
+        enabled: working,
+        run: stop,
+      },
+      {
+        id: "archive",
+        group: "Thread",
+        label: archived ? "Restore this thread" : "Archive this thread",
+        run: toggleArchive,
+      },
+      {
+        id: "edit",
+        group: "Thread",
+        keys: "e",
+        label: "Edit the last turn and run it again",
+        enabled: canRewindLast,
+        run: () => rewinds.current.edit(rewinds.current.lastStart!),
+      },
+      {
+        id: "retry",
+        group: "Thread",
+        keys: "t",
+        label: "Run the last turn again",
+        enabled: canRewindLast,
+        run: () => rewinds.current.retry(rewinds.current.lastStart!),
+      },
+      {
+        id: "compact",
+        group: "Thread",
+        label: "Compact the context",
+        enabled: canCompact,
+        run: compact,
+      },
+    ],
+    [working, stop, archived, toggleArchive, canRewindLast, canCompact, compact],
+  );
+  useHotkey(
+    "escape",
+    () => {
+      if (isDialogOpen()) return;
+      const active = document.activeElement;
+      if (isEditable(active)) return (active as HTMLElement).blur();
+      if (working) stop();
+    },
+    { inFields: true, enabled: commands },
+  );
 
   const model = models.find((m) => m.id === (settings?.model || row?.model));
   const canReason = model?.supportsReasoning !== false;
@@ -493,6 +521,7 @@ export function ThreadView({
 
   return (
     <div className="flex h-full min-h-0 flex-col" id="code-thread" data-working={working}>
+      {commands && <CodeKeys source="thread" commands={threadCommands} />}
       {header && (
         <Header
           row={row}

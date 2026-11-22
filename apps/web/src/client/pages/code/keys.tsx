@@ -14,17 +14,28 @@ export interface CodeCommand {
   run(): void;
 }
 
+type CommandSource = "page" | "thread";
+
 interface CommandState {
+  sources: Record<CommandSource, CodeCommand[]>;
   commands: CodeCommand[];
   helpOpen: boolean;
-  set(commands: CodeCommand[]): void;
+  set(source: CommandSource, commands: CodeCommand[]): void;
   setHelp(open: boolean): void;
 }
 
 export const useCodeCommands = create<CommandState>((set) => ({
+  sources: { page: [], thread: [] },
   commands: [],
   helpOpen: false,
-  set: (commands) => set(commands.length > 0 ? { commands } : { commands, helpOpen: false }),
+  set: (source, commands) =>
+    set((state) => {
+      const sources = { ...state.sources, [source]: commands };
+      const all = [...sources.page, ...sources.thread];
+      return all.length > 0
+        ? { sources, commands: all }
+        : { sources, commands: all, helpOpen: false };
+    }),
   setHelp: (helpOpen) => set({ helpOpen }),
 }));
 
@@ -43,12 +54,18 @@ function KeyBinding({ base, commands }: { base: string; commands: CodeCommand[] 
   return null;
 }
 
-export function CodeKeys({ commands }: { commands: CodeCommand[] }) {
+export function CodeKeys({
+  commands,
+  source = "page",
+}: {
+  commands: CodeCommand[];
+  source?: CommandSource;
+}) {
   const publish = useCodeCommands((s) => s.set);
   useEffect(() => {
-    publish(commands);
-    return () => publish([]);
-  }, [commands, publish]);
+    publish(source, commands);
+    return () => publish(source, []);
+  }, [commands, publish, source]);
   const bases = new Map<string, CodeCommand[]>();
   for (const command of commands) {
     if (!command.keys || command.keys === "Escape") continue;
@@ -60,7 +77,7 @@ export function CodeKeys({ commands }: { commands: CodeCommand[] }) {
       {[...bases].map(([base, bound]) => (
         <KeyBinding key={base} base={base} commands={bound} />
       ))}
-      <KeysDialog />
+      {source === "page" && <KeysDialog />}
     </>
   );
 }

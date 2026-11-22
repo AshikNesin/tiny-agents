@@ -29,6 +29,8 @@ function Label({ number, title, meta }: { number: number; title: string; meta?: 
   );
 }
 
+const focusOnMount = (input: HTMLInputElement | null) => input?.focus();
+
 function PasteLink({ onOpened }: { onOpened(review: PullReviewView): void }) {
   const [link, setLink] = useState("");
   const [opening, setOpening] = useState(false);
@@ -48,7 +50,7 @@ function PasteLink({ onOpened }: { onOpened(review: PullReviewView): void }) {
   return (
     <form onSubmit={(event) => void open(event)} className="flex items-center gap-1 px-1 pb-1">
       <input
-        autoFocus
+        ref={focusOnMount}
         value={link}
         onChange={(event) => setLink(event.target.value)}
         aria-label="Pull request to review"
@@ -207,9 +209,11 @@ export function OpenReviewLink() {
   const { owner, repo, number } = useParams();
   const [search] = useSearchParams();
   const navigate = useNavigate();
+  const client = useQueryClient();
   const pr = owner && repo && number ? `${owner}/${repo}#${number}` : search.get("pr")?.trim();
   const { mutate: openReview } = useMutation({
     mutationFn: (link: string) => reviewsApi.open(link),
+    onSuccess: () => client.invalidateQueries({ queryKey: REVIEWS_KEY }),
     ...RESOURCE_MUTATION,
   });
   useEffect(() => {

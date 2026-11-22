@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Button } from "@groot/ui";
@@ -72,26 +72,22 @@ export function NewThreadDialog({
   harnesses: HarnessInfo[];
 }) {
   const navigate = useNavigate();
-  const [projectId, setProjectId] = useState<string>("");
+  const [chosenProject, setProjectId] = useState<string>("");
   const [instanceId, setInstanceId] = useState<string>("");
   const [model, setModel] = useState(DEFAULT);
   const [permission, setPermission] = useState<PermissionMode | null>(null);
   const [text, setText] = useState("");
   const [starting, setStarting] = useState(false);
 
+  const remembered = useMemo(() => (open ? lastProject() : null), [open]);
+  const projectId =
+    projects?.find((p) => p.id === chosenProject)?.id ??
+    projects?.find((p) => p.id === remembered)?.id ??
+    projects?.[0]?.id ??
+    "";
   const project = projects?.find((p) => p.id === projectId) ?? null;
   const harness = harnesses.find((h) => h.id === instanceId);
   const models = useModels(harness?.id);
-
-  useEffect(() => {
-    if (!open || !projects?.length) return;
-    const remembered = lastProject();
-    setProjectId((current) =>
-      projects.some((p) => p.id === current)
-        ? current
-        : (projects.find((p) => p.id === remembered)?.id ?? projects[0]!.id),
-    );
-  }, [open, projects]);
 
   useEffect(() => {
     if (!project) return;
