@@ -163,17 +163,41 @@ export function AppSidebar() {
               toggleCommandPalette();
             }}
           />
-          {primaryNav.map((item) => (
-            <NavRow
-              key={item.to}
-              icon={item.icon}
-              label={item.label}
-              rail={rail}
-              to={item.to}
-              active={isActive(item.to)}
-              onClick={closeDrawer}
-            />
-          ))}
+          {rail ? (
+            primaryNav.map((item) => (
+              <NavRow
+                key={item.to}
+                icon={item.icon}
+                label={item.label}
+                rail={rail}
+                to={item.to}
+                active={isActive(item.to)}
+                onClick={closeDrawer}
+              />
+            ))
+          ) : (
+            <div className="flex items-center gap-0.5 pt-0.5" data-testid="sidebar-tools">
+              {primaryNav.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <Link
+                    key={item.to}
+                    to={item.to}
+                    onClick={closeDrawer}
+                    aria-label={item.label}
+                    title={item.label}
+                    aria-current={isActive(item.to) ? "page" : undefined}
+                    className={cn(
+                      "flex h-8 flex-1 items-center justify-center rounded-lg outline-none focus-visible:ring-1 focus-visible:ring-sidebar-ring",
+                      isActive(item.to) ? "bg-sidebar-accent" : "hover:bg-sidebar-accent",
+                    )}
+                  >
+                    <Icon className="text-muted-foreground size-4" />
+                  </Link>
+                );
+              })}
+            </div>
+          )}
         </nav>
 
         <div className={cn("min-h-0 flex-1 overflow-y-auto pt-2", rail && "md:hidden")}>
