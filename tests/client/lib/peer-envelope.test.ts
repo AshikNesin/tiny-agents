@@ -28,8 +28,18 @@ describe("parsePeerEnvelope", () => {
       parsePeerEnvelope("[From the owner, in Engineer's chat] what do you think @Radar"),
     ).toEqual({
       kind: "mention",
+      sender: "the owner",
       hostName: "Engineer",
       text: "what do you think @Radar",
+    });
+  });
+
+  it("parses a guest's mention delivery and names the guest as the sender", () => {
+    expect(parsePeerEnvelope("[From Priya, in Engineer's chat] what do you think?")).toEqual({
+      kind: "mention",
+      sender: "Priya",
+      hostName: "Engineer",
+      text: "what do you think?",
     });
   });
 
