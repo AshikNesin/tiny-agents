@@ -7,6 +7,13 @@ import type { CodeHub } from "./code.hub";
 import { threadWorktree } from "./code.projects";
 import { runsOf, startRun } from "./code.runs";
 
+function parsed(data: string): Record<string, unknown> {
+  const value: unknown = JSON.parse(data);
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
 export interface RewindInput {
   at: string;
   turn: number;
@@ -55,6 +62,12 @@ export async function rewindThread(
   const forked = await forkBefore(nativeId, input.at);
   const replaced = createId();
   db.transaction((tx) => {
+    const ofFork = and(
+      eq(codeThreads.instanceId, instance.id),
+      eq(codeThreads.nativeId, forked.nativeId),
+    );
+    const indexed = tx.select().from(codeThreads).where(ofFork).get();
+    if (indexed) tx.delete(codeThreads).where(ofFork).run();
     tx.update(codeThreads)
       .set({ nativeId: `${nativeId}.replaced.${replaced}` })
       .where(eq(codeThreads.id, threadId))
@@ -66,13 +79,29 @@ export async function rewindThread(
         nativeId,
         projectId: thread.projectId,
         title: `${thread.title} (before the edit)`,
+        cwd: thread.cwd,
+        model: thread.model,
+        effort: thread.effort,
+        permissionMode: thread.permissionMode,
         archived: true,
         followed: true,
-        data: JSON.stringify({ replacedBy: threadId }),
+        data: JSON.stringify({ ...parsed(thread.data), replacedBy: threadId }),
       })
       .run();
     tx.update(codeThreads)
-      .set({ nativeId: forked.nativeId, attention: null, updatedAt: new Date() })
+      .set({
+        nativeId: forked.nativeId,
+        attention: null,
+        updatedAt: new Date(),
+        ...(indexed
+          ? {
+              model: indexed.model,
+              effort: indexed.effort,
+              permissionMode: indexed.permissionMode,
+              data: indexed.data,
+            }
+          : {}),
+      })
       .where(eq(codeThreads.id, threadId))
       .run();
   });
@@ -85,7 +114,7 @@ export async function rewindThread(
 export async function undoRewind(hub: CodeHub, threadId: string, replaced: string): Promise<void> {
   const [kept] = await db.select().from(codeThreads).where(eq(codeThreads.id, replaced));
   const target = hub.resolve(threadId);
-  if (!kept || !target || !kept.data.includes(JSON.stringify(threadId))) {
+  if (!kept || !target || parsed(kept.data).replacedBy !== threadId) {
     throw Boom.notFound("That edit can no longer be undone.");
   }
   const { instance, nativeId } = target;
@@ -98,10 +127,18 @@ export async function undoRewind(hub: CodeHub, threadId: string, replaced: strin
     .orderBy(desc(codeCheckpoints.seq))
     .limit(1);
   if (before) await ws.restore(worktree, before.sha);
+  const { replacedBy: _gone, ...data } = parsed(kept.data);
   db.transaction((tx) => {
     tx.delete(codeThreads).where(eq(codeThreads.id, replaced)).run();
     tx.update(codeThreads)
-      .set({ nativeId: kept.nativeId, updatedAt: new Date() })
+      .set({
+        nativeId: kept.nativeId,
+        model: kept.model,
+        effort: kept.effort,
+        permissionMode: kept.permissionMode,
+        data: JSON.stringify(data),
+        updatedAt: new Date(),
+      })
       .where(eq(codeThreads.id, threadId))
       .run();
   });

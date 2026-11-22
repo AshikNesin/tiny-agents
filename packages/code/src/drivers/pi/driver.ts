@@ -54,6 +54,7 @@ const CAPABILITIES: Capabilities = {
   threads: {
     ...NO_CAPABILITIES.threads,
     fork: true,
+    rewind: true,
     archive: true,
     rename: true,
   },
@@ -599,6 +600,16 @@ export function createPiHarness(options: PiHarnessOptions): HarnessInstance {
       const state = await stateOf(live);
       live.feed.thread(threadNow(live, state, transcriptOf(live, state)));
       events.emit({ type: "threads" });
+    },
+
+    async forkBefore(nativeId, at) {
+      const state = await stateOf(await threadOf(nativeId));
+      const index = state.messages.findIndex((message) => message.id === at);
+      const before = index > 0 ? state.messages[index - 1]?.id : undefined;
+      if (!before) {
+        throw badRequest("The first message of a thread cannot be edited. Start a new thread.");
+      }
+      return this.fork!(nativeId, before);
     },
 
     async fork(nativeId, at) {

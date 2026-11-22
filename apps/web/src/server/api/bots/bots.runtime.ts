@@ -275,7 +275,8 @@ const FAUX_ASK: ToolCall["arguments"] = {
 };
 
 function fauxCodingCall(text: string): ToolCall | undefined {
-  const [, command = "", rest = ""] = /^\/(\w+)\s+([\s\S]+)/.exec(text) ?? [];
+  const [, command = "", rest = ""] =
+    /^\/(bash|sleep|read|find|write|edit)\s+([\s\S]+)/m.exec(text) ?? [];
   const [path = "", body = ""] = rest.split(/\s+([\s\S]*)/);
   switch (command) {
     case "bash":
