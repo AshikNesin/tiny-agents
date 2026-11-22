@@ -116,7 +116,7 @@
   "packages/sandbox/src/vm-stack.ts": 1,
   "packages/shell/src/hooks/useSetupStatus.ts": 1,
   "packages/shell/src/lib/theme.ts": 1,
-  "packages/shell/src/store/auth.ts": 2,
+  "packages/shell/src/store/auth.ts": 1,
   "scripts/demo/faux-director.mjs": 1,
   "scripts/demo/launch/lib/film.js": 1,
   "scripts/demo/launch/tools/snaplib.mjs": 3,

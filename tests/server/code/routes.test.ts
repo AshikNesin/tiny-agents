@@ -334,6 +334,18 @@ describe("Code API", () => {
     expect(calls()).toBe(before);
   });
 
+  it("answers 404 for a thread id that is not valid percent-encoding, like an unknown one", async () => {
+    for (const bad of ["%zz", "%", "%E0%A4%A"]) {
+      expect((await get(`/threads/${bad}`)).status, `GET /threads/${bad}`).toBe(404);
+      expect((await post(`/threads/${bad}/messages`, { message: "hi" })).status).toBe(404);
+      expect((await post(`/threads/${bad}/archive`, { archived: true })).status).toBe(404);
+      expect(
+        (await api(app, `/api/v1/code/threads/${bad}`, { method: "DELETE", token })).status,
+      ).toBe(404);
+    }
+    expect((await get("/threads/shelley:cGone")).status).toBe(404);
+  });
+
   it("archives a Shelley thread with its subagents", async () => {
     shelley.rows.push(
       row("cA"),

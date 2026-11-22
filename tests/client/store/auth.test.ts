@@ -142,11 +142,11 @@ describe("session", () => {
     expect(selectAuthStatus(useAuthStore.getState())).toEqual({ status: "signedIn", user: USER });
   });
 
-  it("signs out locally even when the server call fails", async () => {
+  it("still signs out locally when the server call fails, but reports it", async () => {
     serve({ "/auth/login": ok({ token: "t", user: USER }) });
     await useAuthStore.getState().login(USER.email, "secret");
     serve({ "/auth/logout": { status: 500 } });
-    await expect(useAuthStore.getState().logout()).resolves.toBeUndefined();
+    await expect(useAuthStore.getState().logout()).rejects.toBeInstanceOf(ApiError);
     expect(useAuthStore.getState()).toMatchObject({ user: null, isAuthenticated: false });
   });
 

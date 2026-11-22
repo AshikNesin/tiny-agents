@@ -102,7 +102,11 @@ export const useAuthStore = create<AuthState>((set, get) => {
     logout: async () => {
       try {
         await apiClient.post("/auth/logout");
-      } catch {}
+      } catch (error) {
+        change(null);
+        if (!(error instanceof ApiError) || error.status >= 500) throw error;
+        return;
+      }
       change(null);
     },
 

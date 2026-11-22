@@ -178,6 +178,17 @@ describe("projects", () => {
     expect((await call("POST", "/projects", { repo: "acme/web" })).status).toBe(409);
   });
 
+  it("refuses a thread id that is not valid percent-encoding, as it refuses an empty one", async () => {
+    for (const bad of ["%zz", "%", "%E0%A4%A"]) {
+      const prTab = await call("GET", `/threads/${bad}/pr`);
+      expect(prTab.status, `GET /threads/${bad}/pr`).toBe(400);
+      expect(prTab.body.error?.message).toBe("Invalid thread");
+      expect((await call("GET", `/threads/${bad}/checkpoints`)).status).toBe(400);
+      expect((await call("POST", `/threads/${bad}/publish`, {})).status).toBe(400);
+    }
+    expect((await call("GET", "/threads/never-made/pr")).status).toBe(200);
+  });
+
   it("says what the sandbox is missing", async () => {
     const ws = createWorkspace({
       exec: local.exec,

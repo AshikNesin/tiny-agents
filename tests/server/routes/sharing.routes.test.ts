@@ -10,6 +10,7 @@ import {
   type ConnectionLiveState,
 } from "../../../apps/web/src/server/api/connections/connections.manager";
 import { isSkipReply, type AgentRuntime } from "../../../packages/agent/src/index";
+import { fauxAssistantMessage, fauxText } from "../../../packages/agent/src/testing";
 import { api, createTestApp } from "../helpers";
 import {
   authToken,
@@ -425,6 +426,85 @@ describe("shared bots", () => {
     expect((await kept.asGuest("/api/v1/people/me")).body.data).toEqual({ guest: true });
     expect((await kept.asGuest("/api/v1/people")).status).toBe(403);
   });
+
+  it("refuses a guest a malformed bot or upload id instead of failing, and leaves the owner's answer alone", async () => {
+    const guest = await addGuest();
+    made.push(guest.id);
+    const bot = await createBot("Encoded helper");
+    for (const path of [
+      "/api/v1/bots/%zz",
+      "/api/v1/bots/%zz/stream",
+      "/api/v1/uploads/%E0%A4%A",
+    ]) {
+      const response = await guest.asGuest(path);
+      expect(response.status, path).toBe(403);
+      expect(response.body.error?.message).toBe("Only the owner can do that");
+    }
+    const mine = `/api/v1/bots/${encodeURIComponent(bot.id)}`;
+    expect((await guest.asGuest(mine)).status).toBe(404);
+    await asOwner(`/api/v1/bots/${bot.id}`, { method: "PATCH", json: { guestIds: [guest.id] } });
+    expect((await guest.asGuest(mine)).status).toBe(200);
+    expect((await asOwner("/api/v1/bots/%zz")).status).toBe(404);
+    expect((await asOwner("/api/v1/uploads/%E0%A4%A/content")).status).toBe(400);
+  });
+
+  it("lets a guest withdraw only their own queued message, never the owner's", async () => {
+    const guest = await addGuest("Priya");
+    made.push(guest.id);
+    const bot = await createBot("Shared queue");
+    await asOwner(`/api/v1/bots/${bot.id}`, { method: "PATCH", json: { guestIds: [guest.id] } });
+    await closeAppRuntime();
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const rt = await openAppRuntime({
+      respondWith: async () => {
+        await gate;
+        return fauxAssistantMessage(fauxText("done"));
+      },
+    });
+    const withdraw = (as: typeof asOwner, requestId: string) =>
+      as(`/api/v1/bots/${bot.id}/messages/${requestId}`, { method: "DELETE" });
+    const send = (as: typeof asOwner, requestId: string, text: string) =>
+      as(`/api/v1/bots/${bot.id}/messages`, { method: "POST", json: { requestId, text } });
+
+    try {
+      const withdrawn = vi.spyOn(rt, "withdraw");
+      expect((await send(asOwner, "owner-queue-01", "the owner's first word")).status).toBe(200);
+      await until(async () => {
+        const state = await rt.readChat(Number(bot.conversationId));
+        return state.busy ? state : undefined;
+      }, "the owner's turn to start");
+      expect((await send(asOwner, "owner-queue-02", "the owner's follow-up")).status).toBe(200);
+      expect((await send(guest.asGuest, "guest-queue-01", "the guest's follow-up")).status).toBe(
+        200,
+      );
+      const queued = await rt.readChat(Number(bot.conversationId));
+      expect(queued.queued.map((item) => item.requestId)).toEqual([
+        "owner-queue-02",
+        "guest-queue-01",
+      ]);
+
+      const stolen = await withdraw(guest.asGuest, "owner-queue-02");
+      expect(stolen.status).toBe(403);
+      expect(stolen.body.error?.message).toBe("Only the author can withdraw a message");
+      expect(withdrawn).not.toHaveBeenCalled();
+      expect(
+        (await rt.readChat(Number(bot.conversationId))).queued.map((item) => item.requestId),
+      ).toEqual(["owner-queue-02", "guest-queue-01"]);
+
+      expect((await withdraw(guest.asGuest, "guest-queue-01")).status).toBe(200);
+      expect(withdrawn).toHaveBeenCalledTimes(1);
+      expect(
+        (await rt.readChat(Number(bot.conversationId))).queued.map((item) => item.requestId),
+      ).toEqual(["owner-queue-02"]);
+
+      expect((await withdraw(asOwner, "owner-queue-02")).status).toBe(200);
+      expect((await rt.readChat(Number(bot.conversationId))).queued).toEqual([]);
+    } finally {
+      release();
+      await rt.abort(Number(bot.conversationId));
+    }
+  });
 });
 
 describe("matchGuestRoute", () => {
@@ -453,6 +533,27 @@ describe("matchGuestRoute", () => {
     expect(matchGuestRoute("GET", "/vault")).toBeUndefined();
     expect(matchGuestRoute("GET", "/terminal/sessions")).toBeUndefined();
     expect(matchGuestRoute("GET", "/people")).toBeUndefined();
+  });
+
+  it("decodes a well-formed id and matches nothing when the id is not valid percent-encoding", () => {
+    expect(matchGuestRoute("GET", "/bots/b%20one")).toEqual({ botId: "b one" });
+    expect(matchGuestRoute("GET", "/uploads/u%2F1/content")).toEqual({
+      upload: { id: "u/1", reach: "uploadedOrShared" },
+    });
+    for (const bad of ["%zz", "%", "%E0%A4%A", "%2", "abc%"]) {
+      expect(matchGuestRoute("GET", `/bots/${bad}`), `GET /bots/${bad}`).toBeUndefined();
+      expect(
+        matchGuestRoute("POST", `/bots/${bad}/stream`),
+        `POST /bots/${bad}/stream`,
+      ).toBeUndefined();
+      expect(matchGuestRoute("GET", `/uploads/${bad}`), `GET /uploads/${bad}`).toBeUndefined();
+      expect(
+        matchGuestRoute("GET", `/uploads/${bad}/content`),
+        `GET /uploads/${bad}/content`,
+      ).toBeUndefined();
+    }
+    expect(matchGuestRoute("GET", "/bots")).toEqual({});
+    expect(matchGuestRoute("POST", "/uploads")).toEqual({});
   });
 });
 

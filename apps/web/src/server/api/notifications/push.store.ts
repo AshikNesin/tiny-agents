@@ -63,7 +63,7 @@ export async function registerDevice(userId: number, body: PushDeviceBody): Prom
     lastSeenAt: now,
   };
   const existing = await db.query.pushSubscriptions.findFirst({
-    where: eq(pushSubscriptions.endpoint, body.endpoint),
+    where: and(eq(pushSubscriptions.endpoint, body.endpoint), eq(pushSubscriptions.userId, userId)),
     columns: { id: true },
   });
   let id: string;

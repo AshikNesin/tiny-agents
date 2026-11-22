@@ -147,6 +147,27 @@ describe("push device routes", () => {
     expect(JSON.stringify(list.body.data)).not.toContain("abc:123");
   });
 
+  it("keep another account's registration on the same endpoint out of reach", async () => {
+    const owner2 = await authToken("push-owner2@example.com", 2);
+    const device = phone("https://fcm.googleapis.com/fcm/send/shared:endpoint");
+    const mine = await api<{ id: string }>(app, "/api/v1/notifications/devices", {
+      method: "POST",
+      token: owner,
+      json: device.body,
+    });
+    expect(mine.status).toBe(200);
+
+    const theirs = await api<{ id: string }>(app, "/api/v1/notifications/devices", {
+      method: "POST",
+      token: owner2,
+      json: { ...device.body, label: "Not yours" },
+    });
+    expect(theirs.status).toBe(409);
+    const rows = await db.select().from(pushSubscriptions);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.label).toBe("Pixel 8");
+  });
+
   it("refuse endpoints that aren't https or that reach a private address", async () => {
     const post = (endpoint: string) =>
       api(app, "/api/v1/notifications/devices", {
