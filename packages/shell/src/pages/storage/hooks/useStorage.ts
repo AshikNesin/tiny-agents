@@ -28,34 +28,20 @@ export const storageApi = {
     ),
   rename: (oldPath: string, newPath: string) =>
     apiClient.put<{ newPath: string }>("/storage/files/rename", { oldPath, newPath }),
-  blob: (filePath: string) => apiClient.getBlob("/storage/files/download", { filePath }),
 };
 
 export async function downloadFile(filePath: string, name: string): Promise<void> {
-  const blobUrl = window.URL.createObjectURL(await storageApi.blob(filePath));
   const link = document.createElement("a");
-  link.href = blobUrl;
+  link.href = apiClient.url("/storage/files/download", { filePath });
   link.download = name;
   link.click();
-  window.URL.revokeObjectURL(blobUrl);
-}
-
-function withTextCharset(blob: Blob): Blob {
-  if (!blob.type.startsWith("text/") || /charset=/i.test(blob.type)) return blob;
-  return new Blob([blob], { type: `${blob.type};charset=utf-8` });
 }
 
 export async function viewFile(filePath: string): Promise<void> {
   const win = window.open("", "_blank");
-  try {
-    const blobUrl = window.URL.createObjectURL(withTextCharset(await storageApi.blob(filePath)));
-    if (win) win.location.href = blobUrl;
-    else window.location.href = blobUrl;
-    setTimeout(() => window.URL.revokeObjectURL(blobUrl), 2000);
-  } catch (error) {
-    win?.close();
-    throw error;
-  }
+  const url = apiClient.url("/storage/files/download", { filePath });
+  if (win) win.location.href = url;
+  else window.location.href = url;
 }
 
 export function useStorageFiles(folder: string) {

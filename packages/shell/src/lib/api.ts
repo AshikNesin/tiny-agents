@@ -202,6 +202,10 @@ class ApiClient {
     const response = await this.send("GET", url, { params });
     return response.blob();
   }
+
+  url(path: string, params?: Params): string {
+    return buildUrl(path, params);
+  }
 }
 
 export const apiClient = new ApiClient();

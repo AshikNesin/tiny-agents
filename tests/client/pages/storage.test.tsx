@@ -223,4 +223,39 @@ describe("Storage browser", () => {
     expect(requests.filter((r) => r.startsWith("DELETE"))).toEqual([]);
     expect(objects.has("root.txt")).toBe(true);
   });
+
+  it("views a file through the download endpoint, never a same-origin blob URL", async () => {
+    const user = userEvent.setup();
+    const createObjectURL = vi.spyOn(window.URL, "createObjectURL");
+    const assigned: string[] = [];
+    const hrefDescriptor = Object.getOwnPropertyDescriptor(window.Location.prototype, "href");
+    const locationDescriptor = Object.getOwnPropertyDescriptor(window, "location");
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: {
+        set href(value: string) {
+          assigned.push(value);
+        },
+      },
+    });
+    try {
+      objects.set("evil.html", "<script>alert(1)</script>");
+      renderStorage();
+      await screen.findByText("evil.html", { selector: "td *" });
+
+      await user.click(within(rowOf("evil.html")).getByRole("button", { name: "View evil.html" }));
+
+      expect(assigned).toEqual([
+        `/api/v1/storage/files/download?filePath=${encodeURIComponent("evil.html")}`,
+      ]);
+      expect(createObjectURL).not.toHaveBeenCalled();
+      expect(requests.filter((r) => r.startsWith("GET /storage/files/download"))).toEqual([]);
+    } finally {
+      if (locationDescriptor) Object.defineProperty(window, "location", locationDescriptor);
+      else if (hrefDescriptor) {
+        Object.defineProperty(window.Location.prototype, "href", hrefDescriptor);
+      }
+      createObjectURL.mockRestore();
+    }
+  });
 });
