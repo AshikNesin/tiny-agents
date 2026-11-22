@@ -25,6 +25,7 @@ export interface RoutineData {
   blockedStreak: number;
   pausedReason: string | null;
   hasHook: boolean;
+  progress: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -76,6 +77,7 @@ export interface RoutineUpdateBody {
   prompt?: string;
   schedule?: Schedule;
   enabled?: boolean;
+  progress?: string | null;
 }
 
 export type RoutineCreateBody = RoutineUpdateBody & {

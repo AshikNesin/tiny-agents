@@ -35,6 +35,7 @@ export interface EditorForm {
   weeklyTime: string;
   intervalMinutes: string;
   cronExpr: string;
+  progress: string;
 }
 
 export function formFromRoutine(routine: Routine): EditorForm {
@@ -80,6 +81,7 @@ export function formFromRoutine(routine: Routine): EditorForm {
     weeklyTime,
     intervalMinutes,
     cronExpr,
+    progress: routine.progress ?? "",
   };
 }
 
@@ -141,6 +143,7 @@ export function defaultForm(): EditorForm {
     weeklyTime: DEFAULT_IST_TIME,
     intervalMinutes: "30",
     cronExpr: "",
+    progress: "",
   };
 }
 

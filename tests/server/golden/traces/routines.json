@@ -73,6 +73,7 @@
         "blockedStreak": 0,
         "pausedReason": null,
         "hasHook": false,
+        "progress": null,
         "createdAt": "2026-11-06T06:30:00.000Z",
         "updatedAt": "2026-11-06T06:30:00.000Z",
         "nextFireTimes": [
@@ -108,6 +109,7 @@
           "blockedStreak": 0,
           "pausedReason": null,
           "hasHook": false,
+          "progress": null,
           "createdAt": "2026-11-06T06:30:00.000Z",
           "updatedAt": "2026-11-06T06:30:00.000Z"
         }
@@ -138,6 +140,7 @@
         "blockedStreak": 0,
         "pausedReason": null,
         "hasHook": false,
+        "progress": null,
         "createdAt": "2026-11-06T06:30:00.000Z",
         "updatedAt": "2026-11-06T06:30:00.000Z"
       }
@@ -167,6 +170,7 @@
         "blockedStreak": 0,
         "pausedReason": null,
         "hasHook": false,
+        "progress": null,
         "createdAt": "2026-11-06T06:30:00.000Z",
         "updatedAt": "2026-11-06T06:30:00.000Z"
       }
@@ -196,6 +200,7 @@
         "blockedStreak": 0,
         "pausedReason": null,
         "hasHook": false,
+        "progress": null,
         "createdAt": "2026-11-06T06:30:00.000Z",
         "updatedAt": "2026-11-06T06:30:00.000Z"
       }
@@ -225,6 +230,7 @@
         "blockedStreak": 0,
         "pausedReason": null,
         "hasHook": false,
+        "progress": null,
         "createdAt": "2026-11-06T06:30:00.000Z",
         "updatedAt": "2026-11-06T06:30:00.000Z",
         "nextFireTimes": [
@@ -279,7 +285,7 @@
             "output": "Echo: **Routine \"Morning check\" (scheduled Fri, 06 Nov 2026, 12:00 IST):** Check the weather",
             "error": null,
             "conversationId": "9",
-            "tokens": 2347
+            "tokens": 2453
           }
         ]
       }
@@ -309,6 +315,7 @@
         "blockedStreak": 0,
         "pausedReason": null,
         "hasHook": false,
+        "progress": null,
         "createdAt": "2026-11-06T06:30:00.000Z",
         "updatedAt": "2026-11-06T06:30:00.000Z",
         "nextFireTimes": ["Fri, 06 Nov 2026, 12:01 IST"]
@@ -347,7 +354,7 @@
             "output": "Echo: **Routine \"Soon\" (scheduled Fri, 06 Nov 2026, 12:01 IST) (late by 1m):** Say good morning",
             "error": null,
             "conversationId": "21",
-            "tokens": 2349
+            "tokens": 2455
           }
         ]
       }
@@ -375,7 +382,7 @@
             "output": "Echo: **Routine \"Soon\" (scheduled Fri, 06 Nov 2026, 12:01 IST) (late by 1m):** Say good morning",
             "error": null,
             "conversationId": "21",
-            "tokens": 2349,
+            "tokens": 2455,
             "routineName": "Soon",
             "botName": "Routiner"
           },
@@ -392,7 +399,7 @@
             "output": "Echo: **Routine \"Morning check\" (scheduled Fri, 06 Nov 2026, 12:00 IST):** Check the weather",
             "error": null,
             "conversationId": "9",
-            "tokens": 2347,
+            "tokens": 2453,
             "routineName": "Morning check",
             "botName": "Routiner"
           }
@@ -425,6 +432,7 @@
           "blockedStreak": 0,
           "pausedReason": null,
           "hasHook": false,
+          "progress": null,
           "createdAt": "2026-11-06T06:30:00.000Z",
           "updatedAt": "2026-11-06T06:30:00.000Z"
         },
@@ -445,6 +453,7 @@
           "blockedStreak": 0,
           "pausedReason": null,
           "hasHook": false,
+          "progress": null,
           "createdAt": "2026-11-06T06:30:00.000Z",
           "updatedAt": "2026-11-06T06:32:00.000Z"
         }
@@ -472,6 +481,7 @@
           "blockedStreak": 0,
           "pausedReason": null,
           "hookTokenHash": null,
+          "progress": null,
           "createdAt": "2026-11-06T06:30:00.000Z",
           "updatedAt": "2026-11-06T06:30:00.000Z"
         },
@@ -492,6 +502,7 @@
           "blockedStreak": 0,
           "pausedReason": null,
           "hookTokenHash": null,
+          "progress": null,
           "createdAt": "2026-11-06T06:30:00.000Z",
           "updatedAt": "2026-11-06T06:32:00.000Z"
         }
@@ -510,7 +521,7 @@
           "output": "Echo: **Routine \"Morning check\" (scheduled Fri, 06 Nov 2026, 12:00 IST):** Check the weather",
           "error": null,
           "conversationId": "9",
-          "tokens": 2347
+          "tokens": 2453
         },
         {
           "id": "<id5>",
@@ -525,7 +536,7 @@
           "output": "Echo: **Routine \"Soon\" (scheduled Fri, 06 Nov 2026, 12:01 IST) (late by 1m):** Say good morning",
           "error": null,
           "conversationId": "21",
-          "tokens": 2349
+          "tokens": 2455
         }
       ]
     }

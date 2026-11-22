@@ -72,6 +72,7 @@ const routine = (overrides: Partial<Routine>): Routine => ({
   blockedStreak: 0,
   pausedReason: null,
   hasHook: false,
+  progress: null,
   createdAt: "2026-10-01T00:00:00.000Z",
   updatedAt: "2026-10-01T00:00:00.000Z",
   ...overrides,

@@ -414,6 +414,14 @@
                 "description": "Flag a routine run that can't do its job",
                 "readOnly": true,
                 "unattendedOnly": true
+              },
+              {
+                "name": "save_routine_progress",
+                "label": "Saved routine progress",
+                "askLabel": "save this routine's progress note",
+                "description": "Keep notes for this routine's next run",
+                "allowByDefault": true,
+                "unattendedOnly": true
               }
             ]
           },

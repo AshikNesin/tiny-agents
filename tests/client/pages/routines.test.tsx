@@ -54,6 +54,7 @@ const routine: Routine = {
   blockedStreak: 0,
   pausedReason: null,
   hasHook: false,
+  progress: null,
   createdAt: "2026-10-01T00:00:00.000Z",
   updatedAt: "2026-10-01T00:00:00.000Z",
 };
@@ -165,6 +166,19 @@ describe("Routines page", { timeout: 15_000 }, () => {
     await user.click(screen.getByRole("button", { name: "Create" }));
     await waitFor(() => expect(createMock).toHaveBeenCalled());
     expect(createMock.mock.calls[0]![0]).toMatchObject({ schedule: { kind: "webhook" } });
+  });
+
+  it("editing shows the routine's progress note, and clearing it saves null", async () => {
+    loadPage([{ ...routine, progress: "Done: links 1-5. Next: 6." }], []);
+    const user = userEvent.setup();
+    mount();
+    await user.click(await screen.findByRole("button", { name: /Edit/ }));
+    const note = await screen.findByLabelText("Progress note");
+    expect((note as HTMLTextAreaElement).value).toBe("Done: links 1-5. Next: 6.");
+    await user.clear(note);
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(updateMock).toHaveBeenCalled());
+    expect(updateMock.mock.calls[0]![1]).toMatchObject({ progress: null });
   });
 
   it("shows what a run spent in tokens beside how long it took", async () => {

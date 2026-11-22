@@ -78,6 +78,10 @@ function memoryStore(): MemoryStore {
       if (!rows.has(id)) throw new Error(`No routine with id "${id}".`);
       return { runId: `run-${++n}` };
     },
+    async saveProgress(_conversationId, text) {
+      calls.push(`saveProgress:${text}`);
+      return true;
+    },
   };
 }
 
