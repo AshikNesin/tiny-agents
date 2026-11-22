@@ -112,6 +112,13 @@ the container starts it on every start, as `exedev`, at
 Shelley has no login of its own, so like SSH it is published on `127.0.0.1`
 only. Anyone who can reach that port can run commands as `exedev`.
 
+## Open worktrees in Cursor or Zed
+
+Code's **Open in editor** (`o` in a thread) reaches the container over SSH.
+The first time, the dialog shows a `Host tiny-agents-sandbox` entry with the
+port, user and key; add it to `~/.ssh/config` on this computer, then open.
+See [Open in editor](../features/code.md#open-in-editor).
+
 ## gh and codex
 
 The image also installs two command-line tools, for bots' commands and your

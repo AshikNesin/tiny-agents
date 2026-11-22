@@ -16,6 +16,8 @@ import type {
   ThreadSummary,
 } from "@tiny-agents/code/contracts";
 
+import type { EditorSshTarget } from "../../../shared/api/code";
+
 export type * from "@tiny-agents/code/contracts";
 export type { CodeListEvent, CodeThreadEvent };
 
@@ -26,6 +28,7 @@ export interface HarnessInfo {
   status: InstanceStatus;
   capabilities: Capabilities;
   commands: SlashCommand[];
+  ssh: EditorSshTarget;
 }
 
 const base = "/code";

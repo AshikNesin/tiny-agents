@@ -34,7 +34,7 @@ GROUP_C="tool-permissions yolo self-improve bot-builder auto-review bot-to-bot s
 GROUP_D="skills connections vault models storage jobs jobs-admin"
 # The two scheduled-routine journeys each wait ~2 min for a fire: their own group.
 GROUP_E="vault-passkey routine-schedule workflow-e2e"
-GROUP_SBX="terminal computer browser code claude-plan bot-profiles code-extras code-select bot-delete"
+GROUP_SBX="terminal computer browser code code-open-editor claude-plan bot-profiles code-extras code-select bot-delete"
 # Real Cloudflare AI Gateway keys (env:CLOUDFLARE_*): they skip without them.
 GROUP_KEYS="models-gateway models-gateway-custom"
 GROUP_EMPTY="setup"

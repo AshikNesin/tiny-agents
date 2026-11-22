@@ -25,6 +25,7 @@ import {
   withWorkflowInstructions,
 } from "./code.projects";
 import { codeChanges } from "./code.changes";
+import { editorSshTarget } from "./code.editor";
 import { codeGitHub } from "./code.github";
 import { noteOwnerInput, onThreadArchived } from "./code.pulls";
 import { threadReview } from "./code.review";
@@ -106,6 +107,7 @@ function describe(instance: HarnessInstance) {
     status: instance.status(),
     capabilities: instance.capabilities(),
     commands: instance.commands?.() ?? [],
+    ssh: editorSshTarget(instance.kind),
   };
 }
 

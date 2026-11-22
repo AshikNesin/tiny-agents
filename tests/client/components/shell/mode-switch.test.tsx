@@ -40,6 +40,7 @@ const shelley: HarnessInfo = {
   status: { state: "connected" },
   capabilities: NO_CAPABILITIES,
   commands: [],
+  ssh: { host: null, user: null, port: null, keyFile: null },
 };
 
 function renderAt(path: string) {
