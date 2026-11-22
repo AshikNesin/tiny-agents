@@ -65,3 +65,4 @@ settings.local.json
 
 # Local sandbox mounts (docker/sandbox/compose.override.example.yml)
 /docker/sandbox/compose.override.yml
+.deepsec/
