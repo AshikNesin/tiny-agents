@@ -1,7 +1,18 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { ArchiveRestore, ArrowLeft, ExternalLink, GitBranch, Play, Send, X } from "lucide-react";
+import {
+  ArchiveRestore,
+  ArrowLeft,
+  ExternalLink,
+  GitBranch,
+  Pencil,
+  Play,
+  Send,
+  Square,
+  SquareTerminal,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button, monoClass } from "@groot/ui";
 import { cn } from "@groot/ui/lib/utils";
@@ -17,6 +28,7 @@ import { Spinner } from "../../components/ui/spinner";
 import { errorMessage } from "../../lib/errors";
 import {
   codeApi,
+  threadPath,
   type HarnessInfo,
   type ModelOption,
   type PermissionMode,
@@ -24,7 +36,7 @@ import {
   type ThreadSummary,
 } from "../../lib/code/api";
 import { RESOURCE_MUTATION } from "../../queries/resource";
-import { foldTurns, lastErrorId } from "../../lib/code/transcript";
+import { foldTurns, lastErrorId, turnStarts } from "../../lib/code/transcript";
 import { useCodeThread, type ThreadState } from "../../lib/code/use-thread";
 import { useCodeStore } from "../../store/code";
 import { useViewerRole } from "../../store/people";
@@ -56,6 +68,8 @@ export interface ThreadHandle {
   stop(): void;
   toggleArchive(): void;
   compact?: () => void;
+  editLast?: () => void;
+  retryLast?: () => void;
 }
 
 function useMarkSeen(id: string, cursor: number) {
@@ -157,16 +171,81 @@ function Header({
   );
 }
 
+function Running({
+  id,
+  state,
+  rows,
+  canKill,
+  run,
+}: {
+  id: string;
+  state: ThreadState;
+  rows: ThreadSummary[];
+  canKill: boolean;
+  run(what: string, action: () => Promise<unknown>): Promise<void>;
+}) {
+  const subagents = state.children
+    .map((child) => rows.find((row) => row.id === child.id) ?? child)
+    .filter((child) => child.working);
+  if (state.jobs.length === 0 && subagents.length === 0) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 px-1 text-xs" data-testid="code-running">
+      {state.jobs.map((job) => (
+        <span
+          key={job.id}
+          className="bg-muted flex items-center gap-1.5 rounded-full py-0.5 pr-0.5 pl-2"
+        >
+          <SquareTerminal className="text-muted-foreground size-3" />
+          <span className={cn("max-w-48 truncate", monoClass)}>{job.command}</span>
+          {canKill && (
+            <button
+              type="button"
+              aria-label="Kill job"
+              title="Kill job"
+              className="text-muted-foreground hover:bg-background hover:text-foreground rounded-full p-0.5"
+              onClick={() => void run("kill the job", () => codeApi.killJob(id, job.id))}
+            >
+              <X className="size-3" />
+            </button>
+          )}
+        </span>
+      ))}
+      {subagents.map((child) => (
+        <span
+          key={child.id}
+          className="bg-muted flex items-center gap-1.5 rounded-full py-0.5 pr-0.5 pl-2"
+        >
+          <Spinner className="size-3" />
+          <Link to={threadPath(child.id)} className="max-w-40 truncate hover:underline">
+            {child.title}
+          </Link>
+          <button
+            type="button"
+            aria-label="Stop subagent"
+            title="Stop subagent"
+            className="text-muted-foreground hover:bg-background hover:text-foreground rounded-full p-0.5"
+            onClick={() => void run("stop the subagent", () => codeApi.interrupt(child.id))}
+          >
+            <Square className="size-3" />
+          </button>
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function Queued({
   id,
   state,
   manage,
   run,
+  onEdit,
 }: {
   id: string;
   state: ThreadState;
   manage: boolean;
   run(what: string, action: () => Promise<unknown>): Promise<void>;
+  onEdit(text: string): void;
 }) {
   if (state.queued.length === 0) return null;
   return (
@@ -182,6 +261,20 @@ function Queued({
           <span className="min-w-0 flex-1 truncate">{q.text}</span>
           {manage && (
             <>
+              <Button
+                size="icon-xs"
+                variant="ghost"
+                aria-label="Edit queued message"
+                title="Edit (takes it back into the composer)"
+                onClick={() =>
+                  void run("take it back", async () => {
+                    await codeApi.queued(id, q.id, "cancel");
+                    onEdit(q.text);
+                  })
+                }
+              >
+                <Pencil />
+              </Button>
               <Button
                 size="icon-xs"
                 variant="ghost"
@@ -218,6 +311,7 @@ export function ThreadView({
   insert,
   onShowChanges,
   onHandle,
+  onReplaced,
 }: {
   id: string;
   harness: HarnessInfo;
@@ -229,6 +323,7 @@ export function ThreadView({
   insert: { text: string; nonce: number } | null;
   onShowChanges?: () => void;
   onHandle?(handle: ThreadHandle | null): void;
+  onReplaced?: () => void;
 }) {
   const state = useCodeThread(id);
   const { thread, working, items, settings } = state;
@@ -259,6 +354,58 @@ export function ThreadView({
     }
   }, []);
 
+  const starts = useMemo(() => turnStarts(items), [items]);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [local, setLocal] = useState<{ text: string; nonce: number } | null>(null);
+  const canRewind = caps.threads.rewind && owner && !working;
+
+  const rewind = useCallback(
+    async (startId: string, text: string) => {
+      const turn = starts.findIndex((start) => start.id === startId);
+      if (turn < 0) return;
+      const result = await codeApi.rewind(id, {
+        at: starts[turn]!.at,
+        turn,
+        turns: starts.length,
+        text,
+      });
+      setEditing(null);
+      onReplaced?.();
+      toast.success(
+        result.filesRestored
+          ? "Went back to before that turn, files included"
+          : "Went back to before that turn; the files were left as they are",
+        {
+          action: {
+            label: "Undo",
+            onClick: () =>
+              void codeApi
+                .undoRewind(id, result.replaced)
+                .then(() => onReplaced?.())
+                .catch((error: unknown) => toast.error(errorMessage(error, "Could not undo."))),
+          },
+        },
+      );
+    },
+    [id, starts, onReplaced],
+  );
+  const edit = useCallback(
+    (startId: string) => {
+      const start = starts.find((candidate) => candidate.id === startId);
+      if (!start) return;
+      setEditing(startId);
+      setLocal({ text: start.text, nonce: Date.now() });
+    },
+    [starts],
+  );
+  const retry = useCallback(
+    (startId: string) => {
+      const start = starts.find((candidate) => candidate.id === startId);
+      if (start) void run("run it again", () => rewind(startId, start.text));
+    },
+    [starts, run, rewind],
+  );
+
   const actions: TranscriptActions = useMemo(
     () => ({
       recovery: caps.turns.recovery,
@@ -266,8 +413,11 @@ export function ThreadView({
       respond: async (requestId, answer) => {
         await codeApi.respond(id, requestId, answer);
       },
+      ...(canRewind
+        ? { rewind: { turns: new Set(starts.map((start) => start.id)), edit, retry } }
+        : {}),
     }),
-    [id, run, caps],
+    [id, run, caps, canRewind, starts, edit, retry],
   );
   const ctx: TranscriptContext = useMemo(
     () => ({ instanceId: harness.id, rows }),
@@ -292,6 +442,12 @@ export function ThreadView({
     [archive, id, title, archived, reload],
   );
   const canCompact = caps.turns.compact;
+  const lastStart = starts.at(-1)?.id;
+  const rewinds = useRef({ edit, retry, lastStart });
+  useEffect(() => {
+    rewinds.current = { edit, retry, lastStart };
+  });
+  const canRewindLast = canRewind && Boolean(lastStart);
   const compact = useCallback(
     () =>
       void run("compact", async () => {
@@ -308,9 +464,15 @@ export function ThreadView({
       stop,
       toggleArchive,
       ...(canCompact ? { compact } : {}),
+      ...(canRewindLast
+        ? {
+            editLast: () => rewinds.current.edit(rewinds.current.lastStart!),
+            retryLast: () => rewinds.current.retry(rewinds.current.lastStart!),
+          }
+        : {}),
     });
     return () => onHandle?.(null);
-  }, [onHandle, working, archived, title, stop, toggleArchive, canCompact, compact]);
+  }, [onHandle, working, archived, title, stop, toggleArchive, canCompact, compact, canRewindLast]);
 
   const model = models.find((m) => m.id === (settings?.model || row?.model));
   const canReason = model?.supportsReasoning !== false;
@@ -396,7 +558,27 @@ export function ThreadView({
             </Button>
           ) : (
             <>
-              <Queued id={id} state={state} manage={caps.turns.manageQueue} run={run} />
+              <Running id={id} state={state} rows={rows} canKill={caps.extras.jobs} run={run} />
+              <Queued
+                id={id}
+                state={state}
+                manage={caps.turns.manageQueue}
+                run={run}
+                onEdit={(text) => setLocal({ text, nonce: Date.now() })}
+              />
+              {editing && (
+                <p
+                  className="text-muted-foreground flex items-center gap-2 px-2 text-xs"
+                  data-testid="code-editing"
+                >
+                  <span className="flex-1">
+                    Editing an earlier turn. Sending puts the files back as they were before it.
+                  </span>
+                  <Button size="xs" variant="ghost" onClick={() => setEditing(null)}>
+                    Cancel
+                  </Button>
+                </p>
+              )}
               <PendingComments threadId={id} enabled={owner} onShow={onShowChanges} />
               <Composer
                 draftKey={id}
@@ -404,7 +586,8 @@ export function ThreadView({
                 cwd={row?.cwd}
                 threadId={id}
                 working={working}
-                insert={insert}
+                insert={local && (!insert || local.nonce > insert.nonce) ? local : insert}
+                submitLabel={editing ? "Run again from here" : undefined}
                 onStop={caps.turns.interrupt ? stop : undefined}
                 controls={
                   <>
@@ -440,6 +623,7 @@ export function ThreadView({
                   </>
                 }
                 onSend={async (message, options) => {
+                  if (editing) return rewind(editing, message);
                   const withReview = comments.length > 0;
                   await codeApi.send(id, message, { ...options, withReview });
                   if (withReview) commentsSent(id);

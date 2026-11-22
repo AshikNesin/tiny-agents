@@ -27,6 +27,7 @@ import { codeChanges } from "./code.changes";
 import { codeGitHub } from "./code.github";
 import { noteOwnerInput, onThreadArchived } from "./code.pulls";
 import { threadReview } from "./code.review";
+import { rewindThread, undoRewind } from "./code.rewind";
 import { startRun, stopRun } from "./code.runs";
 import { decorateThreads, setAttention, threadKey, withThreadKeys } from "./code.threads";
 
@@ -345,6 +346,26 @@ router.delete("/code/threads/:id", async (c) => {
   await db.delete(codeThreads).where(eq(codeThreads.id, id));
   void hub().refresh(instance.id);
   return ok(c, { deleted: true });
+});
+
+const rewindSchema = z.object({
+  at: z.string().min(1).max(200),
+  turn: z.number().int().min(0),
+  turns: z.number().int().min(1),
+  text: message,
+});
+
+router.post("/code/threads/:id/rewind", async (c) => {
+  const { id } = thread(c);
+  const body = await parseBody(c, rewindSchema);
+  return ok(c, await run(() => rewindThread(hub(), id, body)));
+});
+
+router.post("/code/threads/:id/rewind/undo", async (c) => {
+  const { id } = thread(c);
+  const { replaced } = await parseBody(c, z.object({ replaced: z.string().min(1).max(64) }));
+  await run(() => undoRewind(hub(), id, replaced));
+  return ok(c, { undone: true });
 });
 
 router.post("/code/threads/:id/rename", async (c) => {

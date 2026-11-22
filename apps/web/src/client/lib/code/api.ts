@@ -80,6 +80,10 @@ export const codeApi = {
   archive: (id: string, archived: boolean) =>
     apiClient.post<{ moved: string[] }>(`${thread(id)}/archive`, { archived }),
   remove: (id: string) => apiClient.delete(thread(id)),
+  rewind: (id: string, body: { at: string; turn: number; turns: number; text: string }) =>
+    apiClient.post<{ filesRestored: boolean; replaced: string }>(`${thread(id)}/rewind`, body),
+  undoRewind: (id: string, replaced: string) =>
+    apiClient.post(`${thread(id)}/rewind/undo`, { replaced }),
   rename: (id: string, title: string) => apiClient.post(`${thread(id)}/rename`, { title }),
 
   models: (instanceId: string) => apiClient.get<ModelOption[]>(`${harness(instanceId)}/models`),

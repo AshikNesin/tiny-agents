@@ -6,7 +6,7 @@ import { eq } from "drizzle-orm";
 import { createNamespaceKv } from "@groot/core/kv";
 import { FIXED_NOW } from "../../../test-clock";
 import { api, createTestApp } from "../../helpers";
-import { authToken, resetAppTables } from "../../fixtures";
+import { authToken, eventually, resetAppTables } from "../../fixtures";
 import { codeAutofixPasses, codeThreads, db, jobs } from "../../../../apps/web/src/server/db";
 import { installAppForTests } from "../../../../apps/web/src/server/app-root";
 import {
@@ -16,6 +16,7 @@ import {
 } from "../../../../apps/web/src/server/api/code/code.hub";
 import { createWorkspace } from "../../../../apps/web/src/server/api/code/code.workspace";
 import { onTurnEnded } from "../../../../apps/web/src/server/api/code/code.pulls";
+import { runsOf } from "../../../../apps/web/src/server/api/code/code.runs";
 import { threadIndex } from "../../../../apps/web/src/server/api/code/code.store";
 import { threadIdOf } from "@tiny-agents/code/server";
 import { NO_CAPABILITIES } from "@tiny-agents/code/contracts";
@@ -860,6 +861,90 @@ describe("the reconcile chain", () => {
     await db.delete(jobs);
     expect(await rearmReconcilers()).toBe(1);
     expect((await pending()).map((j) => j.id)).toEqual([await link()]);
+  });
+});
+
+describe("editing an earlier turn", () => {
+  const ended = { working: false, title: "t", cwd: null, text: "Done.", failed: false, cursor: 1 };
+
+  async function twoTurns() {
+    harness.capabilities = () => ({
+      ...NO_CAPABILITIES,
+      threads: { ...NO_CAPABILITIES.threads, rewind: true },
+    });
+    harness.forkBefore = async (nativeId, at) => ({ nativeId: `${nativeId}-before-${at}` });
+    const project = await newProject();
+    const thread = await newThread(project.id);
+    const enc = encodeURIComponent(thread.id);
+    await sh(local, `cd ${thread.worktree} && printf 'one\\n' > notes.txt`);
+    harness.endTurn(thread.nativeId);
+    await onTurnEnded(thread.id, { ...ended, endedAt: NOW });
+    await call("POST", `/threads/${enc}/messages`, { message: "now the second thing" });
+    await sh(local, `cd ${thread.worktree} && printf 'two\\n' > notes.txt`);
+    harness.endTurn(thread.nativeId);
+    await onTurnEnded(thread.id, { ...ended, endedAt: NOW + 1 });
+    await eventually(async () =>
+      expect((await runsOf(thread.id)).map((run) => run.status)).toEqual(["done", "done"]),
+    );
+    return { thread, enc };
+  }
+
+  it("puts the files back as they were before that turn and continues from the new message", async () => {
+    const { thread, enc } = await twoTurns();
+
+    const rewound = await call<{ filesRestored: boolean; replaced: string }>(
+      "POST",
+      `/threads/${enc}/rewind`,
+      { at: "u2", turn: 1, turns: 2, text: "do the second thing differently" },
+    );
+
+    expect(rewound.status).toBe(200);
+    expect(rewound.body.data!.filesRestored).toBe(true);
+    expect(await sh(local, `cat ${thread.worktree}/notes.txt`)).toBe("one");
+    expect(harness.sent.at(-1)).toEqual({
+      nativeId: `${thread.nativeId}-before-u2`,
+      message: "do the second thing differently",
+      queue: undefined,
+    });
+    const row = (await db.query.codeThreads.findFirst({ where: eq(codeThreads.id, thread.id) }))!;
+    expect([row.nativeId, row.branch, row.worktree]).toEqual([
+      `${thread.nativeId}-before-u2`,
+      thread.branch,
+      thread.worktree,
+    ]);
+    const kept = (await db.query.codeThreads.findFirst({
+      where: eq(codeThreads.id, rewound.body.data!.replaced),
+    }))!;
+    expect([kept.nativeId, kept.archived]).toEqual([thread.nativeId, true]);
+  });
+
+  it("undoes the edit: the old conversation and the files it had come back", async () => {
+    const { thread, enc } = await twoTurns();
+    const rewound = await call<{ replaced: string }>("POST", `/threads/${enc}/rewind`, {
+      at: "u2",
+      turn: 1,
+      turns: 2,
+      text: "differently",
+    });
+
+    const undone = await call("POST", `/threads/${enc}/rewind/undo`, {
+      replaced: rewound.body.data!.replaced,
+    });
+
+    expect(undone.status).toBe(200);
+    expect(await sh(local, `cat ${thread.worktree}/notes.txt`)).toBe("two");
+    const row = (await db.query.codeThreads.findFirst({ where: eq(codeThreads.id, thread.id) }))!;
+    expect(row.nativeId).toBe(thread.nativeId);
+  });
+
+  it("refuses while the agent works, and for an agent that cannot go back", async () => {
+    const { thread, enc } = await twoTurns();
+    const body = { at: "u2", turn: 1, turns: 2, text: "x" };
+    harness.outcomes.set(thread.nativeId, { ...ended, working: true });
+    expect((await call("POST", `/threads/${enc}/rewind`, body)).status).toBe(409);
+    harness.capabilities = () => NO_CAPABILITIES;
+    expect((await call("POST", `/threads/${enc}/rewind`, body)).status).toBe(400);
+    expect(await sh(local, `cat ${thread.worktree}/notes.txt`)).toBe("two");
   });
 });
 

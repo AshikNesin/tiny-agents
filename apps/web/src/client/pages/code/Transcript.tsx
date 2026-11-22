@@ -12,7 +12,7 @@ import {
   Copy,
   GitBranch,
   GitPullRequest,
-  GitFork,
+  Pencil,
   Info,
   ListChecks,
   MessageCircle,
@@ -80,7 +80,7 @@ import { PatchView, diffStats } from "./UnifiedDiff";
 export interface TranscriptActions {
   recovery: RecoveryAction[];
   recover(action: RecoveryAction): void;
-  fork?: (at: string) => void;
+  rewind?: { turns: ReadonlySet<string>; edit(id: string): void; retry(id: string): void };
   respond(requestId: string, answer: RequestAnswer): Promise<void>;
 }
 
@@ -891,16 +891,27 @@ export function TranscriptRow({
             >
               <Copy />
             </Button>
-            {actions.fork && item.forkAt && (
-              <Button
-                size="icon-xs"
-                variant="ghost"
-                onClick={() => actions.fork?.(item.forkAt!)}
-                aria-label="Fork from here"
-                title="Fork from here"
-              >
-                <GitFork />
-              </Button>
+            {actions.rewind?.turns.has(item.id) && (
+              <>
+                <Button
+                  size="icon-xs"
+                  variant="ghost"
+                  onClick={() => actions.rewind?.edit(item.id)}
+                  aria-label="Edit this message and run again"
+                  title="Edit and run again (files go back to before this turn)"
+                >
+                  <Pencil />
+                </Button>
+                <Button
+                  size="icon-xs"
+                  variant="ghost"
+                  onClick={() => actions.rewind?.retry(item.id)}
+                  aria-label="Run this turn again"
+                  title="Run this turn again"
+                >
+                  <RotateCcw />
+                </Button>
+              </>
             )}
           </div>
         </div>

@@ -134,6 +134,7 @@ export function CodeWorkspace() {
   const { projects, reload: reloadProjects } = useProjects();
   const [insert, setInsert] = useState<{ text: string; nonce: number } | null>(null);
   const [handle, setHandle] = useState<ThreadHandle | null>(null);
+  const [epoch, setEpoch] = useState(0);
   useGitHubSetupResult(reloadProjects);
 
   const threadId = rawId ? decodeURIComponent(rawId) : undefined;
@@ -241,6 +242,22 @@ export function CodeWorkspace() {
         label: handle?.archived ? "Restore this thread" : "Archive this thread",
         enabled: Boolean(handle),
         run: () => handle?.toggleArchive(),
+      },
+      {
+        id: "edit",
+        group: "Thread",
+        keys: "e",
+        label: "Edit the last turn and run it again",
+        enabled: Boolean(handle?.editLast),
+        run: () => handle?.editLast?.(),
+      },
+      {
+        id: "retry",
+        group: "Thread",
+        keys: "t",
+        label: "Run the last turn again",
+        enabled: Boolean(handle?.retryLast),
+        run: () => handle?.retryLast?.(),
       },
       {
         id: "compact",
@@ -358,10 +375,11 @@ export function CodeWorkspace() {
           <ReviewsScreen />
         ) : threadId && harness && row ? (
           <ThreadView
-            key={threadId}
+            key={`${threadId}:${epoch}`}
             id={threadId}
             harness={harness}
             rows={rows}
+            onReplaced={() => setEpoch((was) => was + 1)}
             projectName={project?.name}
             branch={row.branch}
             pr={row.pr ?? null}

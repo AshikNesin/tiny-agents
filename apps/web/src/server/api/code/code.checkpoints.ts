@@ -16,7 +16,7 @@ export async function checkpointsOf(threadId: string): Promise<CodeCheckpoint[]>
     .orderBy(desc(codeCheckpoints.seq));
 }
 
-async function takeCheckpoint(
+export async function takeCheckpoint(
   ws: Workspace,
   thread: { id: string; branch: string; worktree: string },
   reason: CheckpointReason,

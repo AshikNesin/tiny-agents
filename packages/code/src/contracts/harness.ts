@@ -42,6 +42,7 @@ export interface HarnessInstance {
   rename?(nativeId: string, title: string): Promise<void>;
   changeCwd?(nativeId: string, cwd: string): Promise<void>;
   fork?(nativeId: string, at: string): Promise<{ nativeId: string }>;
+  forkBefore?(nativeId: string, at: string): Promise<{ nativeId: string }>;
   externalUrl?(thread: ThreadSummary): string | undefined;
 
   send(nativeId: string, input: SendInput): Promise<{ status: "accepted" | "queued" }>;

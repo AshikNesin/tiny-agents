@@ -55,7 +55,7 @@ const CAPABILITIES: Capabilities = {
     recovery: ["retry"],
     compact: false,
   },
-  threads: { ...NO_CAPABILITIES.threads, archive: true, delete: true, rename: true },
+  threads: { ...NO_CAPABILITIES.threads, archive: true, delete: true, rename: true, rewind: true },
   approvals: { tools: true, questions: false },
 };
 
@@ -336,6 +336,29 @@ export function createDemoAgent(): HarnessInstance {
       threads.set(nativeId, thread);
       void startTurn(thread, input.message);
       return { nativeId };
+    },
+    async forkBefore(nativeId, at) {
+      const source = need(nativeId);
+      const cut = source.items.findIndex((item) => item.id === at);
+      if (cut < 0) throw new Error(`No message ${at} in ${nativeId}`);
+      const forkId = `d${++made}`;
+      threads.set(forkId, {
+        summary: {
+          ...source.summary,
+          id: threadIdOf(ID, forkId),
+          nativeId: forkId,
+          working: false,
+          cursor: cut,
+          updatedAt: now(),
+        },
+        items: source.items.slice(0, cut),
+        queued: [],
+        feed: new ThreadFeed(),
+        timers: new Set(),
+        turn: 0,
+      });
+      emit({ type: "threads" });
+      return { nativeId: forkId };
     },
     async archive(nativeId, archived) {
       need(nativeId).summary.archived = archived;

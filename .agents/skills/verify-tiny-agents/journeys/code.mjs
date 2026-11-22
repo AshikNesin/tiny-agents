@@ -178,6 +178,27 @@ await journey(
       },
     );
 
+    await step("t runs the last turn again from the files as they were before it", async () => {
+      await expect.poll(() => working(ids.dialog), { timeout: 20_000 }).toBe(false);
+      await composer.fill(`second note ${stamp}`);
+      await composer.press("Enter");
+      await expect(transcript.getByText(/^Done\. I noted "second note/)).toBeVisible({
+        timeout: 30_000,
+      });
+      await expect.poll(() => working(ids.dialog), { timeout: 20_000 }).toBe(false);
+      await page.keyboard.press("Escape");
+      await page.keyboard.press("t");
+      await expect(page.getByText(/Went back to before that turn, files included/)).toBeVisible({
+        timeout: 20_000,
+      });
+      await expect(transcript.getByText(`second note ${stamp}`, { exact: true })).toHaveCount(1);
+      await expect.poll(() => working(ids.dialog), { timeout: 30_000 }).toBe(false);
+      await page.keyboard.press("1");
+      const notes = page.getByTestId("code-pane").getByText(`second note ${stamp}`);
+      await expect(notes).toHaveCount(1, { timeout: 20_000 });
+    });
+    await proof("rewound");
+
     await step("a failed turn puts the thread under Needs you as failed", async () => {
       await expect.poll(() => working(ids.dialog), { timeout: 20_000 }).toBe(false);
       await composer.fill("fail on purpose");

@@ -128,3 +128,21 @@ export function lastErrorId(items: TranscriptItem[]): string | null {
   }
   return null;
 }
+
+export interface TurnStart {
+  id: string;
+  at: string;
+  text: string;
+}
+
+export function turnStarts(items: TranscriptItem[]): TurnStart[] {
+  const starts: TurnStart[] = [];
+  let open = false;
+  for (const item of items) {
+    if (item.kind === "turn") open = false;
+    if (item.kind !== "user" || open) continue;
+    open = true;
+    starts.push({ id: item.id, at: item.forkAt ?? item.id, text: item.text });
+  }
+  return starts;
+}
