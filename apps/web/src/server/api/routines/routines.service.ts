@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { logger } from "@groot/core/logger";
 import { bots, db, routineRuns, routines } from "../../db";
@@ -24,6 +24,7 @@ import {
 } from "./routines.schedule";
 import type { CreateRoutineDTO, UpdateRoutineDTO } from "./routines.schema";
 import type {
+  MessageRate,
   RecentRoutineRunData,
   RoutineData,
   RoutineRunData,
@@ -53,7 +54,27 @@ type RoutineRow = {
   bot: { id: string; name: string; conversationId: string };
 };
 
-function toApi(row: RoutineRow): RoutineData {
+const RATE_RUNS = 10;
+
+async function messageRates(ids: readonly string[]): Promise<Map<string, MessageRate>> {
+  if (ids.length === 0) return new Map();
+  const rows = await db
+    .select({ routineId: routineRuns.routineId, messages: routineRuns.messages })
+    .from(routineRuns)
+    .where(and(inArray(routineRuns.routineId, [...ids]), isNotNull(routineRuns.messages)))
+    .orderBy(desc(routineRuns.scheduledFor));
+  const rates = new Map<string, MessageRate>();
+  for (const row of rows) {
+    const rate = rates.get(row.routineId) ?? { runs: 0, messaged: 0 };
+    if (rate.runs >= RATE_RUNS) continue;
+    rate.runs += 1;
+    if ((row.messages ?? 0) > 0) rate.messaged += 1;
+    rates.set(row.routineId, rate);
+  }
+  return rates;
+}
+
+function toApi(row: RoutineRow, rate?: MessageRate): RoutineData {
   const schedule = safeParseSchedule(row.schedule);
   return {
     id: row.id,
@@ -70,6 +91,7 @@ function toApi(row: RoutineRow): RoutineData {
     pausedReason: row.pausedReason,
     hasHook: row.hookTokenHash !== null,
     progress: row.progress,
+    messageRate: rate ?? null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -106,11 +128,12 @@ export async function list(): Promise<ReturnType<typeof toApi>[]> {
     with: routineWithBot,
     orderBy: [desc(routines.enabled), asc(routines.nextRunAt), desc(routines.createdAt)],
   });
-  return rows.map((row) => toApi(row));
+  const rates = await messageRates(rows.map((row) => row.id));
+  return rows.map((row) => toApi(row, rates.get(row.id)));
 }
 
 export async function get(id: string): Promise<ReturnType<typeof toApi>> {
-  return toApi(await findRoutine(id));
+  return toApi(await findRoutine(id), (await messageRates([id])).get(id));
 }
 
 function assertFutureOnce(schedule: Schedule): void {

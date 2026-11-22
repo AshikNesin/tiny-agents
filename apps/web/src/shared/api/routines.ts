@@ -26,8 +26,14 @@ export interface RoutineData {
   pausedReason: string | null;
   hasHook: boolean;
   progress: string | null;
+  messageRate: MessageRate | null;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface MessageRate {
+  runs: number;
+  messaged: number;
 }
 
 export type Routine = Jsonified<RoutineData>;
@@ -49,6 +55,7 @@ export interface RoutineRunData {
   error: string | null;
   conversationId: string | null;
   tokens: number | null;
+  messages: number | null;
 }
 
 export type RecentRoutineRunData = RoutineRunData & { routineName: string; botName: string };
