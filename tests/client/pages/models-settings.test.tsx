@@ -51,10 +51,9 @@ const TEMPLATES: ProviderTemplate[] = [
 ];
 
 const ROLES = Object.fromEntries(
-  ["bot_default", "memory_capture", "chat_title", "vision", "classifier"].map((role) => [
-    role,
-    { modelId: null, fallback: true },
-  ]),
+  ["bot_default", "code_default", "memory_capture", "chat_title", "vision", "classifier"].map(
+    (role) => [role, { modelId: null, fallback: true }],
+  ),
 );
 
 const found = (upstreamId: string, name: string) => ({

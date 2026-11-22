@@ -167,6 +167,10 @@
             "modelId": "test-model",
             "fallback": true
           },
+          "code_default": {
+            "modelId": "test-model",
+            "fallback": true
+          },
           "memory_capture": {
             "modelId": "test-model",
             "fallback": true
@@ -200,6 +204,10 @@
             "modelId": "test-model",
             "fallback": true
           },
+          "code_default": {
+            "modelId": "test-model",
+            "fallback": true
+          },
           "memory_capture": {
             "modelId": "test-model",
             "fallback": true
@@ -230,6 +238,10 @@
       "data": {
         "roles": {
           "bot_default": {
+            "modelId": "test-model",
+            "fallback": true
+          },
+          "code_default": {
             "modelId": "test-model",
             "fallback": true
           },

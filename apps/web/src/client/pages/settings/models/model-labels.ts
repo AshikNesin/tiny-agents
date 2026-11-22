@@ -41,6 +41,10 @@ export const ROLE_LABEL: Record<ModelRole, { title: string; description: string 
     title: "New bots",
     description: "Pre-selected in New bot, and used by bots without a model.",
   },
+  code_default: {
+    title: "New Code threads",
+    description: "Where the native coding agent starts. Unset: the New bots model on pi.",
+  },
   memory_capture: {
     title: "Memory capture",
     description: "Unset: the bot's own model on pi, else the default.",
