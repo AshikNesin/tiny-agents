@@ -66,7 +66,7 @@ export function OpenInEditor({
 
   const target = host.trim();
   const url = target ? editorUrl(editor, target, path) : "";
-  const label = EDITORS.find((e) => e.id === editor)!.label;
+  const label = EDITORS.find((e) => e.id === editor)?.label ?? "editor";
   const launch = () => {
     if (!url) return;
     rememberEditor(editor, harness.id, target);
