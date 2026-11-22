@@ -63,6 +63,10 @@ export interface BotMessagingStore {
   own context. Owner @mentions still land in the target's chat.
 - Success: the row exists with `deliveredAt` set and the message was submitted
   into the conversation pinned on the row (the store owns the `submit` call).
+- A chat shared with guests reaches only bots every guest of that chat can
+  open: another bot is refused with `{ delivered: false, reason: "shared" }`,
+  like the other refusals privileged in a shared chat, and the roster lists
+  only those bots. A routine run and the owner's own chat are unlimited.
 - Fire-and-forget: the tool returns immediately; the reply arrives later as a
   new user turn in the sender's conversation (relayed by the app's relay).
 
@@ -98,9 +102,15 @@ module (`bots.awaited.ts`), which Routine runs share.
   the bot ids it resolved into the request: `{ requestId, text, mentions?: string[] }`.
 - For each mention id ≠ host: create a `kind="mention"` row (fromBotId null,
   replyToBotId = host id) and deliver with requestId
-  `mention-{hostRequestId}-{botId}`, text `[From the owner, in {hostName}'s
-  chat] {text}` … the host's own submit gets the text unchanged.
-- Tagged bot sees the same `[From the owner, in {hostName}'s chat] {text}`
+  `mention-{hostRequestId}-{botId}`, text `[From {sender}, in {hostName}'s
+  chat] {text}` … the host's own submit gets the text unchanged. The sender is
+  `the owner`, or the name of the guest who wrote the message: a guest's words
+  are never framed as the owner's, and the entry carries that guest as its
+  `author`.
+- A guest's mention reaches only the bots that guest can open
+  (`openableBots` in `people/access.ts`, the same share the guest guard
+  checks); the others are dropped without an error, as unknown ids are.
+- Tagged bot sees the same `[From {sender}, in {hostName}'s chat] {text}`
   prefix — one mention format everywhere (the model-facing custody line).
 
 ### 4. Agent runtime additions (packages/agent/src/runtime.ts)

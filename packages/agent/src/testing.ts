@@ -12,6 +12,8 @@ import { createNodePhotonImages } from "@earendil-works/pi-durable/images/node";
 export { fauxAssistantMessage, fauxText, fauxThinking, fauxToolCall };
 type FauxReply = ReturnType<typeof fauxAssistantMessage>;
 export { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+export { Server } from "@modelcontextprotocol/sdk/server/index.js";
+export { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 export { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 export { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { AgentRuntime, type AgentRuntimeOptions } from "./runtime";

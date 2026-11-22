@@ -14,7 +14,7 @@ export interface BotMessagingStore {
     sourceKey: string;
   }): Promise<{
     delivered: boolean;
-    reason?: "unknown_bot" | "self" | "loop" | "budget";
+    reason?: "unknown_bot" | "self" | "loop" | "budget" | "shared";
     queued?: boolean;
   }>;
   roster(conversationId: number): Promise<{ name: string; description: string }[]>;
@@ -33,7 +33,9 @@ const noDeliver = (to: string, reason: string): ToolExecutionResult =>
         ? "You have already messaged several bots this turn: finish your turn and let the replies arrive."
         : reason === "loop"
           ? "You have messaged this bot many times in a short window: wait before trying again."
-          : "Do not repeat the call unchanged."),
+          : reason === "shared"
+            ? "This chat is shared with people who cannot see that bot, so you cannot message it from here."
+            : "Do not repeat the call unchanged."),
   );
 
 export function createBotsToolkit(store: BotMessagingStore): Capability {

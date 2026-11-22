@@ -128,4 +128,18 @@ describe("computer VNC bridges", () => {
     const ticket = issueDesktopVncTicket({ userId: 1, profile: "shared" });
     expect(await rawUpgrade(port, `/api/v1/computer/shared/vnc?ticket=${ticket}`)).toBe(404);
   });
+
+  it("caps live tickets per user at ten in each store, and a redeemed one frees its slot", async () => {
+    const first = issueDesktopVncTicket({ userId: 1, profile: "shared" });
+    for (let i = 0; i < 9; i++) issueDesktopVncTicket({ userId: 1, profile: "shared" });
+    expect(() => issueDesktopVncTicket({ userId: 1, profile: "shared" })).toThrow(/Too many/);
+    expect(await rawUpgrade(port, `/api/v1/computer/shared/vnc?ticket=${first}`)).toBe(404);
+    expect(() => issueDesktopVncTicket({ userId: 1, profile: "shared" })).not.toThrow();
+
+    for (let i = 0; i < 10; i++)
+      issueComputerVncTicket({ userId: 1, botId: "b1", profile: "shared" });
+    expect(() => issueComputerVncTicket({ userId: 1, botId: "b1", profile: "shared" })).toThrow(
+      /Too many/,
+    );
+  });
 });

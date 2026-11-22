@@ -165,7 +165,7 @@ export async function mustAsk(
   context: Context,
 ): Promise<boolean> {
   const permissions = await api.snapshot(PermissionsDoc, api.conversationId, context);
-  return permissions !== undefined && !permissions.allow.includes(name);
+  return permissions?.allow.includes(name) !== true;
 }
 
 export async function yoloOf(

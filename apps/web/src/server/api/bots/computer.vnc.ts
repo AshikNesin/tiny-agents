@@ -5,6 +5,7 @@ import { createTicketStore } from "../ws/upgrade";
 
 const BOT_PATH = /^\/api\/v1\/bots\/([^/]+)\/computer\/vnc$/;
 const PAGE_PATH = /^\/api\/v1\/computer\/([^/]+)\/vnc$/;
+const TICKET_RATE_LIMIT = 10;
 
 interface BotTicket {
   userId: number;
@@ -18,8 +19,14 @@ interface PageTicket {
   profile: string;
 }
 
-const botTickets = createTicketStore<BotTicket>();
-const pageTickets = createTicketStore<PageTicket>();
+const botTickets = createTicketStore<BotTicket>({
+  perUserLimit: TICKET_RATE_LIMIT,
+  limitMessage: "Too many VNC tickets requested. Wait a moment.",
+});
+const pageTickets = createTicketStore<PageTicket>({
+  perUserLimit: TICKET_RATE_LIMIT,
+  limitMessage: "Too many VNC tickets requested. Wait a moment.",
+});
 
 export function issueComputerVncTicket(input: BotTicket): string {
   return botTickets.issue(input);

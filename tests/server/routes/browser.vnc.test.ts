@@ -4,6 +4,7 @@ import { Duplex } from "node:stream";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import {
   attachBrowserVnc,
+  issueBrowserPageVncTicket,
   issueVncTicket,
   redeemVncTicket,
   resetVncTicketsForTests,
@@ -160,14 +161,28 @@ describe("VNC tickets", () => {
   });
 
   it("is unguessable and unique", () => {
-    const tickets = new Set(Array.from({ length: 20 }, () => mint()));
-    expect(tickets.size).toBe(20);
+    const tickets = new Set(Array.from({ length: 10 }, () => mint()));
+    expect(tickets.size).toBe(10);
     for (const ticket of tickets) expect(ticket).toMatch(/^[A-Za-z0-9_-]{30,}$/);
   });
 
   it("rejects an unknown ticket", () => {
     expect(redeemVncTicket("nope", BOT)).toBeUndefined();
     expect(redeemVncTicket("", BOT)).toBeUndefined();
+  });
+
+  it("caps live tickets per user at ten in each store, and a redeemed one frees its slot", () => {
+    const first = mint();
+    for (let i = 0; i < 9; i++) mint();
+    expect(() => mint()).toThrow(/Too many/);
+    expect(redeemVncTicket(first, BOT)).toMatchObject({ userId: 1, botId: BOT });
+    expect(() => mint()).not.toThrow();
+
+    for (let i = 0; i < 10; i++)
+      issueBrowserPageVncTicket({ userId: 1, profile: "shared", target: TARGET });
+    expect(() =>
+      issueBrowserPageVncTicket({ userId: 1, profile: "shared", target: TARGET }),
+    ).toThrow(/Too many/);
   });
 });
 

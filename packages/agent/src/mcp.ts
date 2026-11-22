@@ -69,14 +69,18 @@ function toToolInfo(tool: McpTool): McpToolInfo {
   };
 }
 
+export const MCP_LIST_PAGES_MAX = 50;
+export const MCP_LIST_TOOLS_MAX = 500;
+
 async function listAllTools(client: Client): Promise<McpToolInfo[]> {
   const tools: McpToolInfo[] = [];
   let cursor: string | undefined;
-  do {
-    const page = await client.listTools(cursor ? { cursor } : undefined);
-    tools.push(...page.tools.map(toToolInfo));
-    cursor = page.nextCursor;
-  } while (cursor);
+  for (let page = 0; page < MCP_LIST_PAGES_MAX && tools.length < MCP_LIST_TOOLS_MAX; page++) {
+    const listed = await client.listTools(cursor ? { cursor } : undefined);
+    tools.push(...listed.tools.slice(0, MCP_LIST_TOOLS_MAX - tools.length).map(toToolInfo));
+    cursor = listed.nextCursor;
+    if (!cursor) break;
+  }
   return tools;
 }
 
@@ -147,9 +151,24 @@ function clipDescription(text: string): string {
   return text.length <= MCP_DESCRIPTION_MAX ? text : `${text.slice(0, MCP_DESCRIPTION_MAX - 1)}…`;
 }
 
+const MCP_TOOL_NAME_MAX = 64;
+const MCP_NAME_SUFFIX = 7;
+
+function hashName(name: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < name.length; i++) {
+    hash ^= name.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(36).padStart(MCP_NAME_SUFFIX, "0").slice(-MCP_NAME_SUFFIX);
+}
+
 export function mcpToolName(slug: string, tool: string): string {
-  const name = `mcp__${slug}__${tool}`.replace(/[^a-zA-Z0-9_-]/g, "_");
-  return name.length <= 64 ? name : name.slice(0, 64);
+  const full = `mcp__${slug}__${tool}`;
+  const name = full.replace(/[^a-zA-Z0-9_-]/g, "_");
+  if (name.length <= MCP_TOOL_NAME_MAX && name === full) return name;
+  const cut = name.slice(0, MCP_TOOL_NAME_MAX - MCP_NAME_SUFFIX - 1);
+  return `${cut}_${hashName(full)}`;
 }
 
 export interface McpCapabilityOptions {
@@ -200,7 +219,7 @@ export function createMcpCapability(options: McpCapabilityOptions): Capability {
       description,
       parameters: Type.Unsafe<Record<string, unknown>>(schema),
       ...(defer ? { deferred: true } : {}),
-      replay: tool.readOnly || tool.idempotent ? "safe" : "unsafe",
+      replay: "unsafe",
       execute: async (args, _api, context) => {
         try {
           return resultOf(await options.call(tool.name, args, context.abortSignal));
@@ -229,7 +248,6 @@ export function createMcpCapability(options: McpCapabilityOptions): Capability {
       name: mcpToolName(options.slug, tool.name),
       label: tool.title ?? tool.name,
       description: tool.description ?? "",
-      ...(tool.readOnly ? { readOnly: true } : {}),
     })),
     ...(options.setupHint ? { setupHint: options.setupHint } : {}),
   };

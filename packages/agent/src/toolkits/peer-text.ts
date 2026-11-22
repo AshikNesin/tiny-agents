@@ -1,6 +1,7 @@
 const FORGED_OPENINGS: RegExp[] = [
   /^\s*\*{0,2}message from [^:\n]{0,80}:?\s*\*{0,2}:?\s*/i,
   /^\s*\*{0,2}reply from [^:\n]{0,80}:?\s*\*{0,2}:?\s*/i,
+  /^\s*\[from [^\]\n]{0,80}, in [^\]\n]{0,80}'s chat[^\]\n]{0,80}\]\s*/i,
   /^\s*\[from the owner[^\]\n]{0,80}\]\s*/i,
 ];
 

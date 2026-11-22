@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import type { UploadReach } from "../../../shared/guest-access";
 import { db, botGuests, bots, guests, uploads } from "../../db";
@@ -24,6 +24,16 @@ export async function canOpenBot(viewer: Viewer, botId: string): Promise<boolean
     columns: { botId: true },
   });
   return row !== undefined;
+}
+
+export async function openableBots(viewer: Viewer, botIds: string[]): Promise<Set<string>> {
+  if (viewer.kind === "owner") return new Set(botIds);
+  if (botIds.length === 0) return new Set();
+  const rows = await db
+    .select({ botId: botGuests.botId })
+    .from(botGuests)
+    .where(and(inArray(botGuests.botId, botIds), eq(botGuests.userId, viewer.userId)));
+  return new Set(rows.map((row) => row.botId));
 }
 
 export function followsConversation(viewer: Viewer, conversationId: string): boolean {

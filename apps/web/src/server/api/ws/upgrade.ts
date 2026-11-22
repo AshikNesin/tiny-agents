@@ -4,6 +4,7 @@ import type { Duplex } from "node:stream";
 import { Boom } from "@groot/core/errors";
 import { config } from "@groot/core/config";
 import { env } from "@groot/core/env";
+import { logger } from "@groot/core/logger";
 import { holdLiveAccess, type LiveGrant } from "../people/live-access";
 
 export const TICKET_TTL_MS = 60_000;
@@ -110,15 +111,31 @@ export function onUpgrade(
   upgradePatterns.set(httpServer, patterns);
   patterns.push(pattern);
   httpServer.on("upgrade", (req, socket, head) => {
-    const url = new URL(req.url ?? "/", "http://internal");
-    const match = pattern.exec(url.pathname);
-    if (!match) {
-      const ours = upgradePatterns.get(httpServer) ?? [];
-      const foreign = httpServer.listenerCount("upgrade") - ours.length;
-      if (foreign <= 0 && !ours.some((p) => p.test(url.pathname))) socket.destroy();
-      return;
+    let url: URL;
+    try {
+      url = new URL(req.url ?? "/", "http://internal");
+    } catch {
+      return rejectUpgrade(socket, "400 Bad Request");
     }
-    if (!originAllowed(req)) return rejectUpgrade(socket, "403 Forbidden");
-    handle({ req, socket, head, url, params: match.slice(1).map(decodeURIComponent) });
+    try {
+      const match = pattern.exec(url.pathname);
+      if (!match) {
+        const ours = upgradePatterns.get(httpServer) ?? [];
+        const foreign = httpServer.listenerCount("upgrade") - ours.length;
+        if (foreign <= 0 && !ours.some((p) => p.test(url.pathname))) socket.destroy();
+        return;
+      }
+      if (!originAllowed(req)) return rejectUpgrade(socket, "403 Forbidden");
+      let params: string[];
+      try {
+        params = match.slice(1).map(decodeURIComponent);
+      } catch {
+        return rejectUpgrade(socket, "400 Bad Request");
+      }
+      handle({ req, socket, head, url, params });
+    } catch (error) {
+      logger.warn({ err: error, path: url.pathname }, "Upgrade handler failed");
+      rejectUpgrade(socket, "500 Internal Server Error");
+    }
   });
 }

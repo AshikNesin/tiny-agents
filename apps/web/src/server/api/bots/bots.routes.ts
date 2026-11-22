@@ -146,7 +146,7 @@ router.post("/bots/:id/messages", async (c) => {
   const payload = await parseBody(c, sendMessageSchema);
   const viewer = c.get("viewer");
   await requireAttachable(viewer, payload.attachments ?? []);
-  await chatsService.sendMessage(id, payload, undefined, viewer.userId);
+  await chatsService.sendMessage(id, payload, undefined, viewer);
   return ok(c, { submitted: true });
 });
 

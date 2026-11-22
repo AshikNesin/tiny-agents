@@ -3,6 +3,11 @@ import { until } from "../../fixtures/until";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+import type { Context } from "@earendil-works/chord/context";
+import type { JsonObject, ToolExecutionApi } from "@earendil-works/pi-durable";
+import { PermissionsDoc, type Permissions } from "../../../../packages/agent/src/policy";
+import { ToolGate, type GateCall } from "../../../../packages/agent/src/gate";
+import { WaitTracker } from "../../../../packages/agent/src/waiting";
 import { secretRedactor } from "../../../../packages/agent/src/redact";
 import type { ReviewInput, Reviewer } from "../../../../packages/agent/src/reviewer";
 import type { AgentRuntime } from "../../../../packages/agent/src/runtime";
@@ -486,6 +491,78 @@ describe("Tool gate token budget (pi)", () => {
     expect(sent).toEqual([]);
     expect(chat.toolCall("send_email")).toMatchObject({ status: "error" });
   }, 15_000);
+});
+
+describe("Tool gate without a permissions doc", () => {
+  const context = {} as Context;
+  const ran = { output: [{ type: "text" as const, text: "ran" }] };
+
+  function apiWith(permissions: Permissions | undefined) {
+    const memos = new Map<string, JsonObject>();
+    const api = {
+      conversationId: 7,
+      taskId: 3,
+      checkpoint: undefined,
+      snapshot: async (token: unknown) => (token === PermissionsDoc ? permissions : undefined),
+      memo: async (...args: unknown[]) => {
+        const [name, second, third] = args as [string, Context | JsonObject, Context?];
+        if (third === undefined) return memos.get(name);
+        memos.set(name, second as JsonObject);
+        return second;
+      },
+      details: async () => undefined,
+    };
+    return api as unknown as ToolExecutionApi;
+  }
+
+  function call(api: ToolExecutionApi): GateCall {
+    return {
+      name: "read_inbox",
+      args: {},
+      replaySafe: true,
+      hooks: undefined,
+      api,
+      context,
+      answers: "memory",
+      userMessages: async () => [],
+      instructions: async () => undefined,
+    };
+  }
+
+  it("asks the owner instead of running the tool", async () => {
+    const approvals = new WaitTracker();
+    const gate = new ToolGate({ approvals });
+    let executed = false;
+    const settled = gate.run(call(apiWith(undefined)), async () => {
+      executed = true;
+      return ran;
+    });
+    const waiting = await until(() => approvals.tasks(7)[0], "the approval card");
+    expect(executed).toBe(false);
+    await gate.decide(7, waiting, "denied");
+    expect(await settled).toMatchObject({ details: { approval: "denied" } });
+    expect(executed).toBe(false);
+    expect(approvals.count(7)).toBe(0);
+  });
+
+  it("still runs the tool at once when the doc allows it by name", async () => {
+    const gate = new ToolGate({ approvals: new WaitTracker() });
+    const result = await gate.run(call(apiWith({ allow: ["read_inbox"] })), async () => ran);
+    expect(result).toEqual(ran);
+    expect(gate.waiting(7)).toBe(0);
+  });
+
+  it("refuses the tool in a conversation nobody watches", async () => {
+    const gate = new ToolGate({ approvals: new WaitTracker() });
+    let executed = false;
+    const result = await gate.run(call(apiWith({ allow: [], unattended: true })), async () => {
+      executed = true;
+      return ran;
+    });
+    expect(result).toMatchObject({ isError: true, details: { approval: "refused" } });
+    expect(JSON.stringify(result)).toMatch(/nobody is here/);
+    expect(executed).toBe(false);
+  });
 });
 
 describe("Tool gate across restarts (pi)", () => {

@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { logger } from "@groot/core/logger";
 import {
   sanitizePeerText,
@@ -7,6 +7,7 @@ import {
   type FinishedReply,
 } from "@tiny-agents/agent";
 import { db, botMessages, bots } from "../../db";
+import { openableBots, type Viewer } from "../people/access";
 import {
   conversationRef,
   startBotConversation,
@@ -28,6 +29,7 @@ interface DeliveryInput {
   text: string;
   prompt: string;
   peer: NonNullable<ChatMessage["peer"]>;
+  author?: ChatMessage["author"];
   sourceKey?: string;
   conversationId?: string;
 }
@@ -115,7 +117,12 @@ export function createDeliveries(rt: DeliveryRuntime): Deliveries {
     const queued = rt.isBusy(conversationId);
     await submitToBot(
       input.toBotId,
-      { requestId: input.requestId, text: input.prompt, peer: input.peer },
+      {
+        requestId: input.requestId,
+        text: input.prompt,
+        peer: input.peer,
+        ...(input.author ? { author: input.author } : {}),
+      },
       rt,
       ownConversation ? { unattendedConversationId: pinned, unattended: "bot-message" } : undefined,
     );
@@ -208,23 +215,41 @@ export function createDeliveries(rt: DeliveryRuntime): Deliveries {
   return { deliver, answer: awaited.answer, sweep: awaited.sweep };
 }
 
-function mentionText(ownerContext: string, text: string): string {
-  return `${ownerContext} ${text}`;
+function mentionText(sender: string, hostName: string, text: string): string {
+  return `[From ${sender}, in ${hostName}'s chat] ${text}`;
+}
+
+export interface MentionSender {
+  viewer: Viewer;
+  name: string;
+  author?: ChatMessage["author"];
 }
 
 export async function deliverMentions(
   host: Pick<Bot, "id" | "name">,
   input: { requestId: string; text: string; mentions?: string[] },
   rt: DeliveryRuntime,
+  sender: MentionSender,
 ): Promise<void> {
-  const targets = await db
-    .select({ id: bots.id })
-    .from(bots)
-    .where(and(inArray(bots.id, input.mentions ?? []), ne(bots.id, host.id)));
+  const mentioned = (input.mentions ?? []).filter((id) => id !== host.id);
+  const targets = mentioned.length
+    ? await db
+        .select({ id: bots.id })
+        .from(bots)
+        .where(inArray(bots.id, [...new Set(mentioned)]))
+    : [];
   if (targets.length === 0) return;
-  const ownerContext = `[From the owner, in ${host.name}'s chat]`;
+  const openable = await openableBots(
+    sender.viewer,
+    targets.map((target) => target.id),
+  );
+  const reachable = targets.filter((target) => openable.has(target.id));
+  if (reachable.length === 0) return;
+  const text = sanitizePeerText(input.text);
+  const prompt = mentionText(sender.name, host.name, text);
+  const peer: NonNullable<ChatMessage["peer"]> = { kind: "mention", hostName: host.name };
   const deliveries = createDeliveries(rt);
-  for (const target of targets) {
+  for (const target of reachable) {
     try {
       await deliveries.deliver({
         requestId: `mention-${input.requestId}-${target.id}`,
@@ -233,8 +258,9 @@ export async function deliverMentions(
         fromBotId: null,
         replyToBotId: host.id,
         text: input.text,
-        prompt: mentionText(ownerContext, sanitizePeerText(input.text)),
-        peer: { kind: "mention", hostName: host.name },
+        prompt,
+        peer,
+        ...(sender.author ? { author: sender.author } : {}),
       });
     } catch (error) {
       logger.warn({ error, hostId: host.id, targetId: target.id }, "Mention delivery failed");

@@ -14,7 +14,7 @@ import { openBotChat } from "./bots.chat";
 import { conversationRef } from "./bots.conversation";
 import type { ChatHistoryDTO } from "./bots.schema";
 import { findPastChat, leaveChat } from "./chats.history";
-import { deliverMentions } from "./bots.delivery";
+import { deliverMentions, type MentionSender } from "./bots.delivery";
 import { publishBotChatEvent } from "./bots.events";
 import { previewText } from "./bots.list";
 import { requireApprovalAnswer, type Viewer } from "../people/access";
@@ -36,11 +36,11 @@ export async function sendMessage(
     whenBusy?: "steer" | "followUp";
   },
   rt: BotAgentRuntime = runtime(),
-  senderId?: number,
+  viewer: Viewer,
 ) {
   const chat = await openBotChat(id, rt);
-  const shared = senderId !== undefined && chat.row.guests?.length;
-  const author = shared ? await authorOf(senderId) : undefined;
+  const shared = chat.row.guests?.length;
+  const author = shared ? await authorOf(viewer.userId) : undefined;
   const text = author ? authoredText(author.name, input.text) : input.text;
   const { bot, attachments } = await submitToBot(
     id,
@@ -58,7 +58,11 @@ export async function sendMessage(
     lastMessagePreview: previewText(text, attachments),
   });
   if (input.mentions && input.mentions.length > 0) {
-    await deliverMentions(bot, input, rt);
+    const guest = viewer.kind === "guest";
+    const sender: MentionSender = guest
+      ? { viewer, name: author?.name ?? `User ${viewer.userId}`, ...(author ? { author } : {}) }
+      : { viewer, name: "the owner" };
+    await deliverMentions(bot, input, rt, sender);
   }
   await chat.dismissPendingQuestions().catch((error: unknown) => {
     logger.warn({ error, botId: id }, "Failed to dismiss questions after an owner message");

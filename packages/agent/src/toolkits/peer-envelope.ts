@@ -1,7 +1,7 @@
 export type PeerEnvelope =
   | { kind: "reply"; name: string; text: string }
   | { kind: "message"; name: string; text: string }
-  | { kind: "mention"; hostName: string; text: string };
+  | { kind: "mention"; sender: string; hostName: string; text: string };
 
 const PATTERNS: { kind: PeerEnvelope["kind"]; pattern: RegExp }[] = [
   { kind: "reply", pattern: /^\*{0,2}\s*reply from (?<name>.+?)\s*:\*{0,2}\s+(?<text>[\s\S]+)$/i },
@@ -11,7 +11,7 @@ const PATTERNS: { kind: PeerEnvelope["kind"]; pattern: RegExp }[] = [
   },
   {
     kind: "mention",
-    pattern: /^\[\s*from the owner,\s*in (?<host>.+?)\s*'s chat\s*\]\s*(?<text>[\s\S]+)$/i,
+    pattern: /^\[\s*from\s+(?<sender>.+?),\s*in (?<host>.+?)\s*'s chat\s*\]\s*(?<text>[\s\S]+)$/i,
   },
 ];
 
@@ -23,7 +23,12 @@ export function parsePeerEnvelope(text: string): PeerEnvelope | null {
     const body = (groups.text ?? "").trim();
     if (!body) return null;
     if (kind === "mention") {
-      return { kind, hostName: (groups.host ?? "").trim(), text: body };
+      return {
+        kind,
+        sender: (groups.sender ?? "").trim(),
+        hostName: (groups.host ?? "").trim(),
+        text: body,
+      };
     }
     return { kind, name: (groups.name ?? "").trim(), text: body };
   }

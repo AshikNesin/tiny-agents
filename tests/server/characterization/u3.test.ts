@@ -37,10 +37,16 @@ describe("U3: the sidebar preview", () => {
     const bot = await seedBot({ name: "Shared" });
     await db.insert(botGuests).values({ botId: bot.id, userId: guest });
 
-    await sendMessage(bot.id, { requestId: "g1", text: "hello all" }, undefined, guest);
+    await sendMessage(bot.id, { requestId: "g1", text: "hello all" }, undefined, {
+      kind: "guest",
+      userId: guest,
+    });
     expect((await row(bot.id))?.lastMessagePreview).toBe("Gus: hello all");
 
-    await sendMessage(bot.id, { requestId: "o1", text: "hi Gus" }, undefined, owner);
+    await sendMessage(bot.id, { requestId: "o1", text: "hi Gus" }, undefined, {
+      kind: "owner",
+      userId: owner,
+    });
     expect((await row(bot.id))?.lastMessagePreview).toBe("Olga: hi Gus");
     expect(fake.submit.mock.calls.map(([, input]) => input.text)).toEqual([
       "Gus: hello all",

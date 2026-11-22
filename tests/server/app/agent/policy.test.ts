@@ -1,7 +1,13 @@
 import { defineExtension, defineTool } from "@earendil-works/pi-durable";
+import type { Context } from "@earendil-works/chord/context";
 import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
-import { applyPermissions, compilePolicy } from "../../../../packages/agent/src/policy";
+import {
+  applyPermissions,
+  compilePolicy,
+  mustAsk,
+  type Permissions,
+} from "../../../../packages/agent/src/policy";
 import type { Capability, CapabilitySelection } from "../../../../packages/agent/src/capabilities";
 import { createContextTrimExtension } from "../../../../packages/agent/src/context-trim";
 
@@ -124,5 +130,31 @@ describe("compilePolicy", () => {
     expect(doc).toEqual({ allow: ["a"] });
     applyPermissions(doc, { allow: [], review: ["b"], unattended: true });
     expect(doc).toEqual({ allow: [], review: ["b"], unattended: true });
+  });
+});
+
+describe("mustAsk", () => {
+  const apiOf = (permissions: Permissions | undefined) =>
+    ({
+      conversationId: 1,
+      snapshot: async () => permissions,
+    }) as unknown as Parameters<typeof mustAsk>[1];
+  const context = {} as Context;
+
+  it("asks for a tool the permissions doc does not allow, and runs one it does", async () => {
+    const api = apiOf({ allow: ["read_inbox"] });
+    expect(await mustAsk("read_inbox", api, context)).toBe(false);
+    expect(await mustAsk("send_email", api, context)).toBe(true);
+  });
+
+  it("asks for every tool when the conversation has no permissions doc", async () => {
+    const api = apiOf(undefined);
+    expect(await mustAsk("read_inbox", api, context)).toBe(true);
+    expect(await mustAsk("send_email", api, context)).toBe(true);
+  });
+
+  it("asks for every tool when the doc is empty", async () => {
+    const api = apiOf({ allow: [] });
+    expect(await mustAsk("read_inbox", api, context)).toBe(true);
   });
 });
