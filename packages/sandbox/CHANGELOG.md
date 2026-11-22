@@ -1,5 +1,15 @@
 # @tiny-agents/sandbox
 
+## 0.1.2
+
+### Patch Changes
+
+- [#489](https://github.com/AshikNesin/tiny-agents/pull/489) [`c341801`](https://github.com/AshikNesin/tiny-agents/commit/c341801dc6a04579e30cec364f8b608e6552c507) Thanks [@AshikNesin](https://github.com/AshikNesin)! - The sandbox browser sends all of its traffic through a proxy that resolves each name once, refuses private and local answers, and connects to the address it checked, so DNS rebinding can't reach a private host. It runs in the server for the local browser and next to Chrome on the sandbox VM, and covers a page's own requests too. In the live view, a private or tailnet address now opens only when it is in `BROWSER_ALLOWED_PRIVATE_HOSTS`.
+
+- [#480](https://github.com/AshikNesin/tiny-agents/pull/480) [`feab2c2`](https://github.com/AshikNesin/tiny-agents/commit/feab2c2102bcc0022e5ff24cbcb6bd09f43bc6c7) Thanks [@AshikNesin](https://github.com/AshikNesin)! - The local browser's navigation guard refuses a name whose DNS lookup fails or times out, instead of leaving it to the browser, so a name that can't be checked can't reach a private address. An exempt name still goes through.
+
+- [#478](https://github.com/AshikNesin/tiny-agents/pull/478) [`2870261`](https://github.com/AshikNesin/tiny-agents/commit/2870261fd61ba1910258bc72144a0aa24f8155c1) Thanks [@AshikNesin](https://github.com/AshikNesin)! - The live browser and computer routes look the target up before reading the body, so a request bad on both counts is always 404. Upload extraction no longer reads `VITEST`: the runner is a port (`setExtractRunner`) the server test setup sets to in-process. `scripts/` is under the server typecheck and the typecheck coverage guard. The test SSH server types its SFTP stream with ssh2's `SFTPWrapper`, and now sends real SFTP attributes and REALPATH names. The agent's browser-safe `wire` subpath has a path alias like `peer-envelope`'s.
+
 ## 0.1.1
 
 ### Patch Changes

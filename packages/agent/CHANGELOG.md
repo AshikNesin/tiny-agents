@@ -1,5 +1,24 @@
 # @tiny-agents/agent
 
+## 1.2.1
+
+### Patch Changes
+
+- [#485](https://github.com/AshikNesin/tiny-agents/pull/485) [`e385623`](https://github.com/AshikNesin/tiny-agents/commit/e38562379b141964dcc0dded4c9cfb318de69ff2) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Images entering a conversation are fitted to the model's size limits first: tool results through pi-durable's fit-images extension, and photos the owner sends on submit.
+
+- [#488](https://github.com/AshikNesin/tiny-agents/pull/488) [`e041808`](https://github.com/AshikNesin/tiny-agents/commit/e041808c22c965d9fd8c0a0a12ff56079168a1c3) Thanks [@AshikNesin](https://github.com/AshikNesin)! - A tool call waiting on you (an approval card, questions, a sign-in or code sheet) now parks instead of holding a process wait: your answer wakes it through a durable signal, and an expiring card wakes at its deadline. After a restart the waiting counts, badges and pushes are right at once, without re-running the waiting calls.
+
+- [#486](https://github.com/AshikNesin/tiny-agents/pull/486) [`6ca8b3d`](https://github.com/AshikNesin/tiny-agents/commit/6ca8b3d22e898b5f4370c6bc73ad4d5d7b57fcf3) Thanks [@AshikNesin](https://github.com/AshikNesin)! - A bot's message waiting in the queue survives the owner pressing Stop and is answered by the next run, instead of being dropped as unanswered.
+
+- [#483](https://github.com/AshikNesin/tiny-agents/pull/483) [`20f32d8`](https://github.com/AshikNesin/tiny-agents/commit/20f32d8bc1f3b1c3f4cf6fd4899ce6f9092b2cc8) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Runs on pi-durable, pi-ai and chord 1.6.0. Chat streams render from the conversation view instead of the removed event stream, and a reply that a crash or the restart limit cut off says so in words.
+
+- [#478](https://github.com/AshikNesin/tiny-agents/pull/478) [`2870261`](https://github.com/AshikNesin/tiny-agents/commit/2870261fd61ba1910258bc72144a0aa24f8155c1) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Client and server now share one copy of the rules they used to mirror: the question answer limit and the skip-reply marker (`@tiny-agents/agent/wire`), the routine schedule math (`apps/web/src/shared/routines-schedule.ts`) and the login and setup form schemas. Storage folders report `lastModified: null` instead of a 1970 date. `Layout` takes `chrome={false}` to drop its sidebar and mobile bar, and `Form` and `FormField` type their resolver and bound input without casts.
+
+- [#478](https://github.com/AshikNesin/tiny-agents/pull/478) [`2870261`](https://github.com/AshikNesin/tiny-agents/commit/2870261fd61ba1910258bc72144a0aa24f8155c1) Thanks [@AshikNesin](https://github.com/AshikNesin)! - The live browser and computer routes look the target up before reading the body, so a request bad on both counts is always 404. Upload extraction no longer reads `VITEST`: the runner is a port (`setExtractRunner`) the server test setup sets to in-process. `scripts/` is under the server typecheck and the typecheck coverage guard. The test SSH server types its SFTP stream with ssh2's `SFTPWrapper`, and now sends real SFTP attributes and REALPATH names. The agent's browser-safe `wire` subpath has a path alias like `peer-envelope`'s.
+- Updated dependencies [[`c341801`](https://github.com/AshikNesin/tiny-agents/commit/c341801dc6a04579e30cec364f8b608e6552c507), [`feab2c2`](https://github.com/AshikNesin/tiny-agents/commit/feab2c2102bcc0022e5ff24cbcb6bd09f43bc6c7), [`20f32d8`](https://github.com/AshikNesin/tiny-agents/commit/20f32d8bc1f3b1c3f4cf6fd4899ce6f9092b2cc8), [`2870261`](https://github.com/AshikNesin/tiny-agents/commit/2870261fd61ba1910258bc72144a0aa24f8155c1)]:
+  - @tiny-agents/sandbox@0.1.2
+  - @tiny-agents/models@0.1.2
+
 ## 1.2.0
 
 ### Minor Changes
