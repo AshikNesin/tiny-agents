@@ -73,6 +73,7 @@ export const bots = sqliteTable("bots", {
   autoReview: bool("auto_review").notNull().default(false),
   yoloByDefault: bool("yolo_by_default").notNull().default(false),
   memoryCapturedThrough: ms("memory_captured_through"),
+  memoryTidiedAt: ms("memory_tidied_at"),
   pinnedAt: ms("pinned_at"),
   browserProfile: text("browser_profile").$type<"shared" | "own">().notNull().default("shared"),
   ...timestamps,

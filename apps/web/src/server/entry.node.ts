@@ -47,6 +47,7 @@ import {
 import { setChatTitler } from "./api/bots/chats.title";
 import { setCodeBranchNamer } from "./api/code/code.naming";
 import { createSideCaller, type SideCaller } from "./api/bots/side-call";
+import { scheduleMemoryTidy, setMemoryTidier } from "./api/bots/memories.tidy";
 import { attachBrowserVnc } from "./api/bots/browser.vnc";
 import { attachComputerVnc } from "./api/bots/computer.vnc";
 import { closeSandboxConnections } from "./api/bots/sandbox-host";
@@ -248,6 +249,17 @@ async function main(): Promise<void> {
       stopCode = startCode(runtime);
     },
     stop: () => stopCode(),
+  });
+
+  add({
+    name: "memory tidy",
+    needs: ["agent runtime"],
+    start: () => {
+      setMemoryTidier(sideCaller && { sideCaller });
+      void scheduleMemoryTidy().catch((error: unknown) =>
+        logger.warn({ error }, "Scheduling the weekly memory tidy failed"),
+      );
+    },
   });
 
   add({

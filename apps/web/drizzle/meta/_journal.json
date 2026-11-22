@@ -204,6 +204,13 @@
       "when": 1795342826597,
       "tag": "0028_routine_progress",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "6",
+      "when": 1795343130532,
+      "tag": "0029_bot_memory_tidied_at",
+      "breakpoints": true
     }
   ]
 }

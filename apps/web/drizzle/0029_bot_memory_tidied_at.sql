@@ -1,0 +1,1 @@
+ALTER TABLE `bots` ADD `memory_tidied_at` integer;
