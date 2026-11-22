@@ -27,7 +27,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
@@ -294,7 +293,7 @@ private fun ThreadList(
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = S.sm, vertical = S.xs)) {
         for ((index, section) in sections.withIndex()) {
             item(key = "section-${section.group}") {
-                SectionLabel(section.label, Modifier.padding(start = S.md, top = if (index == 0) 0.dp else S.md))
+                SectionLabel(section.label, Modifier.padding(start = S.md).then(if (index > 0) Modifier.padding(top = S.md) else Modifier))
             }
             for (row in section.rows) {
                 item(key = row.id) { ThreadRow(row, section.group, labels[row.instanceId] ?: row.kind, now, onOpen) }
