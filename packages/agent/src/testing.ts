@@ -10,6 +10,7 @@ import {
 import { createNodePhotonImages } from "@earendil-works/pi-durable/images/node";
 
 export { fauxAssistantMessage, fauxText, fauxThinking, fauxToolCall };
+type FauxReply = ReturnType<typeof fauxAssistantMessage>;
 export { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 export { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 export { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -69,7 +70,10 @@ export function fauxModelConfig(
 export interface TestRuntimeOptions extends Partial<AgentRuntimeOptions> {
   storePath: string;
   reply?: (userText: string, systemPrompt: string | undefined) => string;
-  respondWith?: (context: PiContext) => ReturnType<typeof fauxAssistantMessage>;
+  respondWith?: (
+    context: PiContext,
+    request?: { signal?: AbortSignal },
+  ) => FauxReply | Promise<FauxReply>;
   reasoning?: string;
   tokensPerSecond?: number;
 }
@@ -98,8 +102,8 @@ export async function openTestRuntime(options: TestRuntimeOptions): Promise<Agen
     ...(options.tokensPerSecond ? { tokensPerSecond: options.tokensPerSecond } : {}),
   });
   const reply = options.reply ?? ((text: string) => `Echo: ${text}`);
-  const respond = (context: PiContext) => {
-    if (options.respondWith) return options.respondWith(context);
+  const respond = (context: PiContext, request?: { signal?: AbortSignal }) => {
+    if (options.respondWith) return options.respondWith(context, request);
     const system = typeof context.systemPrompt === "string" ? context.systemPrompt : undefined;
     const text = reply(lastUserText(context), system);
     return fauxAssistantMessage(

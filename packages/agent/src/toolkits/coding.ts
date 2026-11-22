@@ -19,7 +19,7 @@ import {
   utf8TextOf,
 } from "./sandbox-io";
 
-export const CODING_TOOLKIT = "coding";
+const CODING_TOOLKIT = "coding";
 
 export type CodingPermissionMode = "default" | "acceptEdits" | "plan" | "bypassPermissions";
 
@@ -230,7 +230,10 @@ export function createCodingToolkit(options: CodingToolkitOptions = {}): Capabil
         const result = await execCapped(
           sandbox(),
           `cd ${shQuote(cwd)} && eval ${shQuote(args.command)}`,
-          { timeoutMs: timeoutSecs * 1000 },
+          {
+            timeoutMs: timeoutSecs * 1000,
+            ...(context.abortSignal ? { signal: context.abortSignal } : {}),
+          },
         );
         const details = { exitCode: result.exitCode };
         if (result.exitCode !== 0) {

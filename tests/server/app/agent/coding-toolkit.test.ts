@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
+import { BACKGROUND_CONTEXT, withAbortSignal, type Context } from "@earendil-works/chord/context";
 import type { Context as PiContext, JsonObject } from "@earendil-works/pi-ai";
 import type { ToolExecutionApi, ToolExecutionResult } from "@earendil-works/pi-durable";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vite-plus/test";
@@ -41,13 +41,10 @@ async function run(
   name: string,
   args: Record<string, unknown>,
   api: ToolExecutionApi = inCwd(),
+  context: Context = BACKGROUND_CONTEXT,
 ) {
   const tool = capability.extension.tools!.find((candidate) => candidate.name === name)!;
-  const result = (await tool.execute(
-    args as never,
-    api,
-    BACKGROUND_CONTEXT,
-  )) as ToolExecutionResult;
+  const result = (await tool.execute(args as never, api, context)) as ToolExecutionResult;
   const text = (result.output ?? [])
     .map((block) => (block.type === "text" ? block.text : ""))
     .join("");
@@ -63,6 +60,7 @@ describe("coding toolkit on the sandbox", () => {
 
   beforeAll(async () => {
     server = await startFakeSandboxServer((command) => {
+      if (command.includes("hang-forever")) return { hang: true };
       const local = command.replaceAll("'/work", `'${server.root}/work`);
       const ran = spawnSync("sh", ["-c", local], {
         encoding: "utf8",
@@ -209,6 +207,28 @@ describe("coding toolkit on the sandbox", () => {
     });
 
     expect(result.text).toBe("it's\nafter");
+  });
+
+  it("stops waiting for a command when the turn is stopped", async () => {
+    const stop = new AbortController();
+    const running = run(
+      toolkit(),
+      "bash",
+      { command: "hang-forever" },
+      inCwd(),
+      withAbortSignal(stop.signal, BACKGROUND_CONTEXT),
+    );
+    await until(
+      () => server.execCalls.some((command) => command.includes("hang-forever")),
+      "the command to start",
+    );
+
+    stop.abort();
+
+    expect(await running).toMatchObject({
+      isError: true,
+      text: "Stopped before the command finished.",
+    });
   });
 
   it("finds files by name under the cwd with ripgrep", async () => {

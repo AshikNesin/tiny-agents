@@ -40,7 +40,7 @@ function combined(result: SandboxExecResult): CommandResult {
 export async function execCapped(
   connection: SandboxConnection,
   command: string,
-  options: { timeoutMs: number; stdin?: string },
+  options: { timeoutMs: number; stdin?: string; signal?: AbortSignal },
   afterTimeout = "",
 ): Promise<CommandResult> {
   try {
