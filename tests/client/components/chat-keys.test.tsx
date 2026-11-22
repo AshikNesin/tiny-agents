@@ -191,3 +191,11 @@ describe("chat keys", () => {
     await waitFor(() => expect(abortMock).toHaveBeenCalledWith("host"));
   });
 });
+
+describe("past chats", () => {
+  it("opens from the header in one click", async () => {
+    renderPane();
+    fireEvent.click(screen.getByRole("button", { name: "Past chats" }));
+    expect(await screen.findByText("Chat history")).toBeInTheDocument();
+  });
+});
