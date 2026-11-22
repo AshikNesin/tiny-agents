@@ -1,5 +1,6 @@
 package groot.mobile
 
+import androidx.compose.ui.text.SpanStyle
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import groot.mobile.data.SessionStore
 import groot.mobile.data.TokenCipher
@@ -12,6 +13,8 @@ import groot.mobile.data.api.TerminalList
 import groot.mobile.data.api.ToolStatus
 import groot.mobile.feature.manage.ScheduleForm
 import groot.mobile.ui.components.MdBlock
+import groot.mobile.ui.components.MdStyle
+import groot.mobile.ui.components.inlineMarkdown
 import groot.mobile.ui.components.parseMarkdown
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -169,5 +172,17 @@ class AppLogicTest {
         assertEquals("1.", (blocks[4] as MdBlock.ListItem).marker)
         assertEquals(listOf(listOf("a", "b"), listOf("1", "2")), (blocks[6] as MdBlock.Table).rows)
         assertEquals(MdBlock.Code("kotlin", "val x = 1\n".trimEnd()), blocks[8].let { it as MdBlock.Code }.let { it.copy(code = it.code.trimEnd()) })
+    }
+
+    @Test
+    fun `inline markdown renders relative and absolute links as tappable`() {
+        val style = MdStyle(SpanStyle(), SpanStyle())
+        val text = "thread [c0mws54j](/code/t/c0mws54j) and [web](https://example.com/x)"
+        val annotated = inlineMarkdown(text, style)
+        val links = annotated.getLinkAnnotations(0, annotated.length)
+        assertEquals(2, links.size)
+        assertTrue(annotated.toString().contains("thread c0mws54j and web"))
+        val plain = inlineMarkdown("plain text [not a link] and (parens)", style)
+        assertEquals(0, plain.getLinkAnnotations(0, plain.length).size)
     }
 }
