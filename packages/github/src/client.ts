@@ -222,6 +222,7 @@ export interface GitHubClient {
   replyToThread(threadId: string, body: string): Promise<{ databaseId: number | null }>;
   resolveThread(threadId: string): Promise<void>;
   comment(repo: RepoRef, number: number, body: string): Promise<{ databaseId: number }>;
+  issue(repo: RepoRef, number: number): Promise<{ title: string; body: string; author: string }>;
   reviewInbox(filter?: InboxFilter): Promise<InboxPull[]>;
   submitReview(
     repo: RepoRef,
@@ -638,6 +639,18 @@ export function createGitHubClient(api: GitHubApi): GitHubClient {
         `mutation($thread: ID!) { resolveReviewThread(input: { threadId: $thread }) { thread { id } } }`,
         { thread: threadId },
       );
+    },
+    async issue(repo, number) {
+      const found = await api.rest<{
+        title?: string;
+        body?: string | null;
+        user?: { login?: string } | null;
+      }>("GET", `${repoPath(repo)}/issues/${number}`);
+      return {
+        title: found.title ?? "",
+        body: found.body ?? "",
+        author: found.user?.login ?? "",
+      };
     },
     async comment(repo, number, body) {
       const created = await api.rest<{ id: number }>(

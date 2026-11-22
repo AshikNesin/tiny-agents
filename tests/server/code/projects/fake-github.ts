@@ -38,6 +38,7 @@ export interface FakeGitHub extends GitHubClient {
   resolved: string[];
   comments: Array<{ number: number; body: string }>;
   inbox: InboxPull[];
+  issues: Map<number, { title: string; body: string; author: string }>;
   inboxFilter: InboxFilter | undefined;
   submitted: Array<{ number: number } & Parameters<GitHubClient["submitReview"]>[2]>;
   merged: Array<{ number: number; method: string }>;
@@ -63,6 +64,7 @@ export function fakeGitHub(local: LocalExec, bare: string, login = "ashik"): Fak
     comments: [],
     submitted: [],
     inbox: [],
+    issues: new Map(),
     inboxFilter: undefined,
     merged: [],
     logs: new Map(),
@@ -148,6 +150,11 @@ export function fakeGitHub(local: LocalExec, bare: string, login = "ashik"): Fak
     },
     async resolveThread(threadId) {
       gh.resolved.push(threadId);
+    },
+    async issue(_repo, number) {
+      const found = gh.issues.get(number);
+      if (!found) throw new GitHubError(`Issue #${number} not found`, 404);
+      return found;
     },
     async comment(_repo, number, body) {
       gh.comments.push({ number, body });

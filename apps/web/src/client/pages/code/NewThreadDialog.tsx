@@ -133,7 +133,8 @@ export function NewThreadDialog({
         <DialogHeader>
           <DialogTitle>New thread</DialogTitle>
           <DialogDescription>
-            The agent works on its own branch of the project, in its own worktree.
+            The agent works on its own branch of the project, in its own worktree. Paste a link to
+            one of the project's issues to have it fixed.
           </DialogDescription>
         </DialogHeader>
         {projects && projects.length === 0 ? (
