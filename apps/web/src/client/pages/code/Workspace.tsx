@@ -5,13 +5,16 @@ import { toast } from "sonner";
 import { EmptyState, monoClass } from "@groot/ui";
 import { isDialogOpen, isEditable, useHotkey } from "@groot/ui/hotkeys";
 import { cn } from "@groot/ui/lib/utils";
+import { useConfirm } from "@groot/ui/primitives";
 import { CommandPaletteTrigger } from "@groot/shell/components/CommandPalette";
 import { useShellConfig } from "@groot/shell/lib/shell-config";
 import { Spinner } from "../../components/ui/spinner";
 import { codeApi, threadPath } from "../../lib/code/api";
 import { useThreadCommenting } from "../../lib/code/comments";
 import { listOrder, statusSections } from "../../lib/code/list";
-import { reviewPath, reviewsApi, useProjects } from "../../lib/code/projects";
+import { projectsApi, reviewPath, reviewsApi, useProjects } from "../../lib/code/projects";
+import { errorMessage } from "../../lib/errors";
+import type { WorkflowName } from "../../../shared/code-status";
 import { useLiveChanges } from "../../lib/code/use-live-changes";
 import { useResource } from "../../queries/resource";
 import { harnessOf, useCodeStore } from "../../store/code";
@@ -191,6 +194,45 @@ export function CodeWorkspace() {
     },
     [threadId, setPane],
   );
+  const confirm = useConfirm();
+  const prNumber = row?.pr?.number;
+  const runWorkflow = useCallback(
+    (name: WorkflowName) => {
+      if (!threadId) return;
+      void projectsApi
+        .runWorkflow(threadId, name)
+        .then((result) =>
+          result.started
+            ? toast.success("Started. The agent works in this thread.")
+            : toast.message(result.reason ?? "Nothing to do."),
+        )
+        .catch((error: unknown) => toast.error(errorMessage(error, "Could not start it.")));
+    },
+    [threadId],
+  );
+  const publish = useCallback(() => {
+    if (!threadId) return;
+    setPane("pr");
+    void projectsApi
+      .publish(threadId)
+      .then(() => toast.success("Pushed to GitHub"))
+      .catch((error: unknown) => toast.error(errorMessage(error, "Could not publish.")));
+  }, [threadId, setPane]);
+  const merge = useCallback(() => {
+    if (!threadId || !prNumber) return;
+    setPane("pr");
+    void confirm({
+      title: `Merge pull request #${prNumber}?`,
+      description: "It merges on GitHub with the repository's default method.",
+      confirmLabel: "Merge",
+    }).then((yes) => {
+      if (!yes) return;
+      void projectsApi
+        .merge(threadId, "squash")
+        .then(() => toast.success(`Merged #${prNumber}`))
+        .catch((error: unknown) => toast.error(errorMessage(error, "Could not merge.")));
+    });
+  }, [threadId, prNumber, setPane, confirm]);
   const commenting = useThreadCommenting(threadId, (text) => {
     setInsert({ text, nonce: Date.now() });
     if (window.matchMedia("(max-width: 1023px)").matches) setPane(null);
@@ -302,6 +344,38 @@ export function CodeWorkspace() {
         run: () => showPane("pr"),
       },
       {
+        id: "fix-ci",
+        group: "Thread",
+        keys: "f",
+        label: "Fix CI: the agent fixes the failing checks",
+        enabled: Boolean(row?.pr),
+        run: () => runWorkflow("fix_ci"),
+      },
+      {
+        id: "address-comments",
+        group: "Thread",
+        keys: "a",
+        label: "Address comments: the agent answers the review",
+        enabled: Boolean(row?.pr),
+        run: () => runWorkflow("address_comments"),
+      },
+      {
+        id: "publish",
+        group: "Thread",
+        keys: "P",
+        label: row?.pr ? "Push new commits to the pull request" : "Publish a pull request",
+        enabled: Boolean(project),
+        run: publish,
+      },
+      {
+        id: "merge",
+        group: "Thread",
+        keys: "M",
+        label: "Merge the pull request",
+        enabled: Boolean(row?.pr),
+        run: merge,
+      },
+      {
         id: "files",
         group: "Pane",
         keys: "3",
@@ -357,6 +431,10 @@ export function CodeWorkspace() {
       setHelp,
       focusFiles,
       toggleTerminal,
+      row?.pr,
+      runWorkflow,
+      publish,
+      merge,
     ],
   );
   useHotkey(

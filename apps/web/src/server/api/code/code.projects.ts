@@ -46,8 +46,6 @@ const DEFAULT_PROJECT_SETTINGS: ProjectSettings = {
     noOwnerLimit: DEFAULT_AUTOFIX.noOwnerLimit,
     passMinutes: DEFAULT_AUTOFIX.passMinutes,
     onByDefault: false,
-    finalCheck: false,
-    autoMergeByDefault: false,
   },
 };
 

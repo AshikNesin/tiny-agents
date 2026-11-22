@@ -15,7 +15,7 @@ async function openRunOf(threadId: string): Promise<CodeRunRow | undefined> {
     .select()
     .from(codeRuns)
     .where(and(eq(codeRuns.threadId, threadId), inArray(codeRuns.status, OPEN)))
-    .orderBy(desc(codeRuns.seq))
+    .orderBy(codeRuns.seq)
     .limit(1);
   return row;
 }
@@ -42,7 +42,7 @@ async function latestCheckpoint(threadId: string): Promise<number | null> {
 
 export async function startRun(threadId: string, input: RunTrigger): Promise<CodeRunRow> {
   const open = await openRunOf(threadId);
-  if (open) return open;
+  if (open && input.trigger !== "workflow") return open;
   const [row] = await db
     .insert(codeRuns)
     .values({

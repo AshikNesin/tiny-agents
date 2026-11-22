@@ -1,3 +1,4 @@
+import type { WorkflowName } from "../../../shared/code-status";
 import { apiClient } from "@groot/shell/lib/api";
 import { useResource } from "../../queries/resource";
 import type {
@@ -64,14 +65,10 @@ export const projectsApi = {
   unlink: (id: string) => apiClient.post<ThreadPullsView>(`${thread(id)}/pr/unlink`),
   autofix: (id: string, enabled: boolean) =>
     apiClient.post<ThreadPullsView>(`${thread(id)}/pr/autofix`, { enabled }),
-  fix: (id: string) =>
+  runWorkflow: (id: string, name: WorkflowName) =>
     apiClient.post<{ started: boolean; reason?: string; view: ThreadPullsView }>(
-      `${thread(id)}/pr/fix`,
+      `${thread(id)}/workflows/${name}`,
     ),
-  autoMerge: (id: string, enabled: boolean) =>
-    apiClient.post<ThreadPullsView>(`${thread(id)}/pr/automerge`, { enabled }),
-  spendLimit: (id: string, limitUsd: number | null) =>
-    apiClient.post<ThreadPullsView>(`${thread(id)}/spend-limit`, { limitUsd }),
   checkpoints: (id: string) => apiClient.get<CheckpointView[]>(`${thread(id)}/checkpoints`),
   revert: (id: string, cp: string) =>
     apiClient.post<{ reverted: boolean }>(

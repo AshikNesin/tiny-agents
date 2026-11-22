@@ -1,3 +1,4 @@
+import { WORKFLOW_KINDS, type WorkflowName } from "../../../shared/code-status";
 import { eq, inArray } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { logger } from "@groot/core/logger";
@@ -11,7 +12,7 @@ import {
   type PullSnapshot,
 } from "@tiny-agents/github";
 import type { TurnOutcome } from "@tiny-agents/code/server";
-import { codeThreads, db, jobs, type CodePullRow } from "../../db";
+import { db, jobs, type CodePullRow } from "../../db";
 import type { PullView, ThreadPullsView } from "../../../shared/api/code";
 import { codePullUpdate, type CodePullKind } from "../notifications/notifications.events";
 import {
@@ -85,7 +86,6 @@ function autofixSettings(raw: string): AutofixSettings {
     hourlyLimit: s.hourlyLimit,
     noOwnerLimit: s.noOwnerLimit,
     passMinutes: s.passMinutes,
-    finalCheck: s.finalCheck,
   };
 }
 
@@ -175,7 +175,6 @@ export async function publish(
     headRef: thread.branch,
     baseRef: project.baseBranch,
     autofix: projectSettings(project.settings).autofix.onByDefault,
-    autoMerge: projectSettings(project.settings).autofix.autoMergeByDefault,
   });
   await reconcileNow(row.id);
   await armReconcile(row.id, 60_000);
@@ -234,7 +233,6 @@ async function linkByBranch(threadId: string): Promise<CodePullRow | undefined> 
     headRef: found.thread.branch,
     baseRef: found.project.baseBranch,
     autofix: projectSettings(found.project.settings).autofix.onByDefault,
-    autoMerge: projectSettings(found.project.settings).autofix.autoMergeByDefault,
   });
   await reconcileNow(row.id);
   await armReconcile(row.id, 60_000);
@@ -313,7 +311,10 @@ export async function editPull(
   await reconcileNow(open.id);
 }
 
-export async function manualPass(threadId: string): Promise<{ started: boolean; reason?: string }> {
+export async function manualPass(
+  threadId: string,
+  workflow: WorkflowName,
+): Promise<{ started: boolean; reason?: string }> {
   const context = await openPullContext(threadId);
   const { project, open } = context;
   if (await runningPass(open.id)) return { started: false, reason: "A pass is already running." };
@@ -330,15 +331,21 @@ export async function manualPass(threadId: string): Promise<{ started: boolean; 
         checks: true,
         reviews: true,
         conflicts: true,
-        mergeQueue: true,
       },
     },
   });
-  if (items.length === 0) return { started: false, reason: "Nothing is failing or open." };
-  const hash = stateHash(snapshot.headSha, [`manual:${Date.now()}`, ...items.map((i) => i.id)]);
-  const pass = await startPass(row, "manual", items, hash);
+  const wanted = items.filter((item) => WORKFLOW_KINDS[workflow].includes(item.kind));
+  if (wanted.length === 0) return { started: false, reason: NOTHING_TO_DO[workflow] };
+  const hash = stateHash(snapshot.headSha, [`manual:${Date.now()}`, ...wanted.map((i) => i.id)]);
+  const pass = await startPass(row, "manual", wanted, hash);
   return pass ? { started: true } : { started: false, reason: "The pass could not start." };
 }
+
+const NOTHING_TO_DO: Record<WorkflowName, string> = {
+  fix_ci: "No check is failing.",
+  address_comments: "No review comment is waiting.",
+  resolve_conflicts: "The branch has no conflict with its base.",
+};
 
 async function reconcileNow(pullId: string): Promise<number | null> {
   const hub = codeHub();
@@ -399,7 +406,6 @@ async function reconcile(pullId: string, now = Date.now()): Promise<number | nul
   }
 
   const ownerLogin = await ownerLoginOf(project, github);
-  const spend = await threadSpend(pull.threadId, found.thread.spendLimitUsd);
   let lastPushAt: number | null = null;
   for (let step = 0; step < 3; step += 1) {
     const passes = await passesOf(pull.id);
@@ -419,7 +425,6 @@ async function reconcile(pullId: string, now = Date.now()): Promise<number | nul
       ownerLogin,
       settings,
       now,
-      spend,
     });
     if (pull.loopStatus === "green" && decision.kind !== "none" && decision.kind !== "green") {
       await moveLoop(pull.id, "watching", { headSha: snapshot.headSha });
@@ -474,7 +479,6 @@ async function reconcile(pullId: string, now = Date.now()): Promise<number | nul
     break;
   }
   const latest = (await getPull(pull.id)) ?? pull;
-  await applyAutoMerge(latest, snapshot, github);
   return nextLookMs(snapshot, latest.loopStatus, lastPushAt, now, settings.stallHours);
 }
 
@@ -553,59 +557,6 @@ export async function rearmReconcilers(): Promise<number> {
   return armed;
 }
 
-async function threadSpend(
-  threadId: string,
-  limitUsd: number | null,
-): Promise<{ usd: number | null; limitUsd: number | null }> {
-  if (limitUsd === null) return { usd: null, limitUsd: null };
-  const target = codeHub()?.resolve(threadId);
-  const snapshot = await target?.instance.getThread(target.nativeId).catch(() => undefined);
-  return {
-    usd: snapshot && snapshot.costUsd > 0 ? snapshot.costUsd : null,
-    limitUsd,
-  };
-}
-
-function autoMergeMethod(snapshot: PullSnapshot): MergeMethod | undefined {
-  return (["squash", "merge", "rebase"] as const).find((m) => snapshot.mergeMethods.includes(m));
-}
-
-async function applyAutoMerge(
-  pull: CodePullRow,
-  snapshot: PullSnapshot,
-  github: GitHubClient,
-): Promise<void> {
-  if (!pull.autoMerge || snapshot.state !== "open" || snapshot.autoMerge) return;
-  if (pull.loopStatus === "fixing" || (await runningPass(pull.id))) return;
-  const method = autoMergeMethod(snapshot);
-  if (!method) return;
-  try {
-    if (snapshot.draft) await github.markReady(snapshot.id);
-    await github.enableAutoMerge(snapshot.id, method);
-  } catch (error) {
-    logger.warn({ error, pull: pull.id }, "Code: could not turn on auto-merge");
-  }
-}
-
-export async function setAutoMerge(threadId: string, enabled: boolean): Promise<void> {
-  const { open, github } = await openPullContext(threadId);
-  await updatePull(open.id, { autoMerge: enabled });
-  if (!enabled) {
-    const snapshot = cachedSnapshot(open);
-    if (snapshot?.autoMerge) {
-      await (await github()).disableAutoMerge(snapshot.id).catch((error: unknown) => {
-        throw Boom.conflict(`GitHub kept auto-merge on: ${githubMessage(error)}`);
-      });
-    }
-  }
-  await reconcileNow(open.id);
-}
-
-export async function setSpendLimit(threadId: string, limitUsd: number | null): Promise<void> {
-  await requireProjectThread(threadId);
-  await db.update(codeThreads).set({ spendLimitUsd: limitUsd }).where(eq(codeThreads.id, threadId));
-}
-
 export async function onTurnEnded(threadId: string, outcome: TurnOutcome): Promise<void> {
   if (outcome.working) return;
   await checkpointTurn(threadId).catch((error: unknown) =>
@@ -646,7 +597,6 @@ async function pullView(
     baseRef: row.baseRef,
     syncedAt: row.syncedAt?.toISOString() ?? null,
     autofix: row.autofix,
-    autoMerge: row.autoMerge,
     loop: { status: row.loopStatus, reason: row.loopReason },
     snapshot,
     stalled: snapshot
@@ -692,7 +642,6 @@ export async function threadPulls(threadId: string, fresh = true): Promise<Threa
       active: null,
       earlier: [],
       ahead: null,
-      spend: { usd: null, limitUsd: null },
     };
   }
   const { project, thread } = found;
@@ -729,9 +678,5 @@ export async function threadPulls(threadId: string, fresh = true): Promise<Threa
         state: r.state,
       })),
     ahead,
-    spend: await threadSpend(threadId, thread.spendLimitUsd ?? 0).then((s) => ({
-      usd: s.usd,
-      limitUsd: thread.spendLimitUsd,
-    })),
   };
 }

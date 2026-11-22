@@ -15,6 +15,20 @@ export interface ThreadFacts {
   pull: { loop: string; number: number } | null;
 }
 
+export type WorkflowName = "fix_ci" | "address_comments" | "resolve_conflicts";
+
+export const WORKFLOW_KINDS: Record<WorkflowName, readonly string[]> = {
+  fix_ci: ["check"],
+  address_comments: ["review", "thread"],
+  resolve_conflicts: ["conflict"],
+};
+
+export function workflowOf(kinds: readonly string[]): WorkflowName {
+  if (kinds.includes("conflict")) return "resolve_conflicts";
+  if (kinds.includes("check")) return "fix_ci";
+  return "address_comments";
+}
+
 const WORKFLOW_LABEL: Record<string, string> = {
   fix_ci: "Fix CI",
   address_comments: "Address comments",

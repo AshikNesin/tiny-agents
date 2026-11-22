@@ -694,12 +694,6 @@ function PullRequestGroups({ project, update }: { project: ProjectView; update: 
           checked={settings.archiveOnMerge}
           onChange={(archiveOnMerge) => update({ settings: { archiveOnMerge } })}
         />
-        <SwitchRow
-          label="Auto-merge new PRs"
-          description="GitHub merges once branch protection allows it."
-          checked={autofix.autoMergeByDefault}
-          onChange={(v) => update({ settings: { autofix: { autoMergeByDefault: v } } })}
-        />
       </SettingsGroup>
 
       <SettingsGroup
@@ -726,17 +720,6 @@ function PullRequestGroups({ project, update }: { project: ProjectView; update: 
           label="Fix merge conflicts"
           checked={autofix.triggers.conflicts}
           onChange={(conflicts) => update({ settings: { autofix: { triggers: { conflicts } } } })}
-        />
-        <SwitchRow
-          label="Fix when removed from the merge queue"
-          checked={autofix.triggers.mergeQueue}
-          onChange={(mergeQueue) => update({ settings: { autofix: { triggers: { mergeQueue } } } })}
-        />
-        <SwitchRow
-          label="A final check when checks go green"
-          description="One more pass that reviews the whole change."
-          checked={autofix.finalCheck}
-          onChange={(finalCheck) => update({ settings: { autofix: { finalCheck } } })}
         />
         <SettingsRow
           label="Trusted review bots"

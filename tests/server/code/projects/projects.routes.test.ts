@@ -671,6 +671,11 @@ describe("Auto-fix", () => {
 
     const view = await pr(thread.id);
     expect(view.active?.loop.status).toBe("fixing");
+    expect((await runsOf(thread.id)).at(-1)).toMatchObject({
+      trigger: "workflow",
+      workflow: "fix_ci",
+      status: "running",
+    });
     const sent = harness.sent.at(-1)!;
     expect(sent.queue).toBe(true);
     expect(sent.message).toContain("----- BEGIN UNTRUSTED PR DATA -----");
@@ -1074,108 +1079,6 @@ describe("the Thread-Id trailer and per-turn checkpoints", () => {
   });
 });
 
-describe("phase 6 on a published PR", () => {
-  async function published(settings: Record<string, unknown> = {}) {
-    const project = await newProject();
-    await call("PATCH", `/projects/${project.id}`, {
-      settings: { archiveOnMerge: false, ...settings },
-    });
-    const thread = await newThread(project.id);
-    await commit(thread.worktree, "src/login.ts");
-    await call("POST", `/threads/${encodeURIComponent(thread.id)}/publish`, {});
-    await call("POST", `/threads/${encodeURIComponent(thread.id)}/pr/autofix`, {
-      enabled: true,
-    });
-    return { project, thread, enc: encodeURIComponent(thread.id) };
-  }
-  const green = () => ({
-    name: "test",
-    state: "success" as const,
-    startedAt: minutesAgo(10),
-    completedAt: minutesAgo(5),
-    url: null,
-    jobId: null,
-  });
-
-  it("pauses Auto-fix when the thread reached its spend limit", async () => {
-    const { thread, enc } = await published();
-    const real = harness.getThread.bind(harness);
-    harness.getThread = async (id) => ({ ...(await real(id)), costUsd: 6.5 });
-    await call("POST", `/threads/${enc}/spend-limit`, { limitUsd: 5 });
-    github.pull(1).checks = [{ ...green(), state: "failure" }];
-
-    const view = await pr(thread.id);
-    expect(view.spend).toEqual({ usd: 6.5, limitUsd: 5 });
-    expect(view.active?.loop).toEqual({
-      status: "paused",
-      reason: "The thread's spend limit is reached ($6.50 of $5.00). Raise it to go on.",
-    });
-  });
-
-  it("turns on GitHub's auto-merge, marking the draft ready first, and off again", async () => {
-    const { thread, enc } = await published();
-    github.pull(1).checks = [green()];
-    await call("POST", `/threads/${enc}/pr/automerge`, { enabled: true });
-    expect(github.autoMergeCalls).toEqual([
-      { pullId: "PR_1", action: "ready" },
-      { pullId: "PR_1", action: "enable", method: "squash" },
-    ]);
-    expect((await pr(thread.id)).active?.autoMerge).toBe(true);
-    await call("POST", `/threads/${enc}/pr/automerge`, { enabled: false });
-    expect(github.autoMergeCalls.at(-1)).toEqual({
-      pullId: "PR_1",
-      action: "disable",
-    });
-    expect(github.pull(1).autoMerge).toBe(false);
-  });
-
-  it("runs a final check when green, and settles green when it changes nothing", async () => {
-    const { thread } = await published({ autofix: { finalCheck: true } });
-    harness.outcomes.set(thread.nativeId, {
-      working: true,
-      title: "t",
-      cwd: null,
-      text: "",
-      failed: false,
-      cursor: 1,
-    });
-    github.pull(1).checks = [green()];
-    expect((await pr(thread.id)).active?.loop.status).toBe("fixing");
-    expect(harness.sent.at(-1)?.message).toContain("Auto-fix final check");
-
-    const outcome = {
-      working: false,
-      title: "t",
-      cwd: null,
-      text: "Nothing to change.",
-      failed: false,
-      endedAt: NOW,
-      cursor: 2,
-    };
-    harness.outcomes.set(thread.nativeId, outcome);
-    await onTurnEnded(thread.id, outcome);
-    const view = await pr(thread.id);
-    expect(view.active?.passes.map((p) => [p.trigger, p.outcome])).toEqual([["final", "clean"]]);
-    expect(view.active?.loop.status).toBe("green");
-  });
-
-  it("starts a pass when the merge queue removes the PR", async () => {
-    const { thread } = await published();
-    github.pull(1).checks = [green()];
-    github.pull(1).queueRemovals = [
-      {
-        id: "Q1",
-        at: minutesAgo(5),
-        reason: "The merge group's checks failed",
-      },
-    ];
-    await pr(thread.id);
-    const sent = harness.sent.at(-1)!;
-    expect(sent.message).toContain("### queue:Q1");
-    expect(sent.message).toContain("The merge group's checks failed");
-  });
-});
-
 describe("the GitHub App", () => {
   const sign = (body: string) =>
     `sha256=${createHmac("sha256", SECRET).update(body).digest("hex")}`;
@@ -1329,12 +1232,12 @@ describe("the GitHub App", () => {
     expect((await pr(thread.id)).active?.ignored).toEqual(["T_11"]);
     const fix = await call<{ started: boolean; reason?: string }>(
       "POST",
-      `/threads/${encodeURIComponent(thread.id)}/pr/fix`,
+      `/threads/${encodeURIComponent(thread.id)}/workflows/address_comments`,
       {},
     );
     expect(fix.body.data).toMatchObject({
       started: false,
-      reason: "Nothing is failing or open.",
+      reason: "No review comment is waiting.",
     });
   });
 

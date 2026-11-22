@@ -11,9 +11,7 @@ interface ProjectScripts {
 }
 
 interface AutofixProjectSettings {
-  triggers: { checks: boolean; reviews: boolean; conflicts: boolean; mergeQueue: boolean };
-  finalCheck: boolean;
-  autoMergeByDefault: boolean;
+  triggers: { checks: boolean; reviews: boolean; conflicts: boolean };
   trustedBots: string[];
   hourlyLimit: number;
   noOwnerLimit: number;
@@ -109,7 +107,6 @@ export interface PullView {
   baseRef: string;
   syncedAt: string | null;
   autofix: boolean;
-  autoMerge: boolean;
   loop: { status: AutofixStatus; reason: string | null };
   snapshot: PullSnapshot | null;
   stalled: string[];
@@ -138,7 +135,6 @@ export interface ThreadPullsView {
   active: PullView | null;
   earlier: Array<{ number: number; url: string; title: string; state: PullView["state"] }>;
   ahead: number | null;
-  spend: { usd: number | null; limitUsd: number | null };
 }
 
 export interface ReviewFile {

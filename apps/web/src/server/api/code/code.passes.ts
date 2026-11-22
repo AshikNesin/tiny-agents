@@ -16,8 +16,10 @@ import {
   recordAppComment,
   updatePull,
 } from "./code.pulls.store";
+import { startRun } from "./code.runs";
+import { workflowOf } from "../../../shared/code-status";
 import { matchesGlob, WorkspaceError } from "./code.workspace";
-import { FINAL_HEAD, PASS_HEAD } from "../../../shared/code-messages";
+import { PASS_HEAD } from "../../../shared/code-messages";
 
 const REPORT_FENCE = "autofix-report";
 const LOG_TAIL_CHARS = 3000;
@@ -60,16 +62,6 @@ function passMessage(
   items: Array<AutofixItem & { log?: string }>,
   context: { check?: string; protectedPaths: string[] },
 ): string {
-  if (items.length > 0 && items.every((item) => item.kind === "final")) {
-    return [
-      `${FINAL_HEAD} The pull request's checks are green and no review is open.`,
-      "Read the whole change against the base branch once more, as a careful reviewer would: leftover debug code, missing tests for what changed, unhandled edge cases, docs that no longer match.",
-      "If something needs changing, change it, run the project's check" +
-        (context.check ? ` (\`${context.check}\`)` : "") +
-        ", and commit. Do not push. If nothing needs changing, say so and make no commit.",
-      `Do not edit ${context.protectedPaths.join(", ") || "CI workflow files"}.`,
-    ].join("\n");
-  }
   const material = items
     .map((item) => {
       const where = item.path ? ` (${item.path}${item.line ? `:${item.line}` : ""})` : "";
@@ -220,6 +212,11 @@ export async function startPass(
     const startCostUsd = await threadCost(pull.threadId);
     await movePass(pass.id, "running", { startSha, startCostUsd, startedAt: new Date() });
     await ctx.instance.send(ctx.nativeId, { message, queue: true });
+    await startRun(pull.threadId, {
+      trigger: "workflow",
+      workflow: workflowOf(items.map((item) => item.kind)),
+      event: { trigger, items: items.map((item) => item.id) },
+    });
     return { ...pass, status: "running", startSha, startCostUsd };
   } catch (error) {
     await stop(pass, pull, "send_failed", error instanceof Error ? error.message : String(error));

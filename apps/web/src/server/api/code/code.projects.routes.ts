@@ -74,9 +74,7 @@ import {
   mergePull,
   setPullDraft,
   publish,
-  setAutoMerge,
   setAutofix,
-  setSpendLimit,
   threadPulls,
   unlinkPull,
 } from "./code.pulls";
@@ -198,7 +196,6 @@ const updateSchema = z.strictObject({
               checks: z.boolean().optional(),
               reviews: z.boolean().optional(),
               conflicts: z.boolean().optional(),
-              mergeQueue: z.boolean().optional(),
             })
             .optional(),
           trustedBots: z.array(z.string().trim().min(1).max(100)).max(30).optional(),
@@ -206,8 +203,6 @@ const updateSchema = z.strictObject({
           noOwnerLimit: z.number().int().min(1).max(50).optional(),
           passMinutes: z.number().int().min(5).max(120).optional(),
           onByDefault: z.boolean().optional(),
-          finalCheck: z.boolean().optional(),
-          autoMergeByDefault: z.boolean().optional(),
         })
         .optional(),
     })
@@ -268,27 +263,14 @@ router.post("/code/threads/:id/pr/autofix", async (c) => {
   return ok<ThreadPullsView>(c, await threadPulls(id, false));
 });
 
-router.post("/code/threads/:id/pr/fix", async (c) => {
+const workflowName = z.enum(["fix_ci", "address_comments", "resolve_conflicts"]);
+
+router.post("/code/threads/:id/workflows/:name", async (c) => {
   const id = threadParam(c.req.param("id"));
-  const result = await manualPass(id);
+  const name = workflowName.safeParse(c.req.param("name"));
+  if (!name.success) throw Boom.notFound("No such workflow");
+  const result = await manualPass(id, name.data);
   return ok(c, { ...result, view: await threadPulls(id, false) });
-});
-
-router.post("/code/threads/:id/pr/automerge", async (c) => {
-  const id = threadParam(c.req.param("id"));
-  const { enabled } = await parseBody(c, z.object({ enabled: z.boolean() }));
-  await setAutoMerge(id, enabled);
-  return ok<ThreadPullsView>(c, await threadPulls(id, false));
-});
-
-router.post("/code/threads/:id/spend-limit", async (c) => {
-  const id = threadParam(c.req.param("id"));
-  const { limitUsd } = await parseBody(
-    c,
-    z.object({ limitUsd: z.number().min(0.01).max(10_000).nullable() }),
-  );
-  await setSpendLimit(id, limitUsd);
-  return ok<ThreadPullsView>(c, await threadPulls(id, false));
 });
 
 const checkpointView = (row: CodeCheckpoint): CheckpointView => ({

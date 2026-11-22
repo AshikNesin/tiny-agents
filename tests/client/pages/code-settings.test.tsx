@@ -59,9 +59,7 @@ const project: ProjectView = {
     branchPrefix: "ta/",
     protectedPaths: [".github/workflows/**"],
     autofix: {
-      triggers: { checks: true, reviews: true, conflicts: true, mergeQueue: true },
-      finalCheck: false,
-      autoMergeByDefault: false,
+      triggers: { checks: true, reviews: true, conflicts: true },
       trustedBots: ["coderabbitai[bot]"],
       hourlyLimit: 6,
       noOwnerLimit: 10,
