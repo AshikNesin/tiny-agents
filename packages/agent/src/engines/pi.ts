@@ -78,6 +78,7 @@ export class PiEngine implements AgentEngine {
           kind: CHAT_USER_ENTRY,
           data: toJson({
             requestId: input.requestId,
+            sentAt: Date.now(),
             ...(input.peer ? { peer: input.peer } : {}),
             ...(input.author ? { author: { id: input.author.id, name: input.author.name } } : {}),
             ...(input.attachments?.length

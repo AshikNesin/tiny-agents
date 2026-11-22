@@ -5,6 +5,7 @@ import {
   type Conversation,
   type ConversationId,
   type Cursor,
+  type EntryId,
   type EntryRecord,
   type Harness,
   type TaskGraphWatch,
@@ -87,6 +88,26 @@ export class ConversationStore {
         applyPermissions(await tx.doc(PermissionsDoc, ref as ConversationId), compiled.permissions);
       }
     }, ctx);
+  }
+
+  async fork(ref: ConversationRef, at: number): Promise<ConversationRef> {
+    const conversation = await this.conversation(ref);
+    const forked = await conversation.fork(
+      at as EntryId,
+      { ownership: { kind: "ownerless" } },
+      ctx,
+    );
+    return Number(forked.id);
+  }
+
+  async compact(ref: ConversationRef, instructions?: string): Promise<void> {
+    const conversation = await this.conversation(ref);
+    await conversation.compact(instructions, ctx);
+  }
+
+  async continueReply(ref: ConversationRef): Promise<void> {
+    const conversation = await this.conversation(ref);
+    await conversation.submit({ type: "continue" }, ctx);
   }
 
   async usedTokens(ref: ConversationRef): Promise<number> {

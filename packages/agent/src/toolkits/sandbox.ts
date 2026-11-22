@@ -1,5 +1,4 @@
 import { Type } from "typebox";
-import type { ToolExecutionResult } from "@earendil-works/pi-durable";
 import type { GateHooks } from "../approvals";
 import type { Capability } from "../capabilities";
 import { defineToolkit, tool } from "../toolkit";
@@ -13,13 +12,15 @@ import {
   parseEgressList,
   type EgressEntry,
 } from "./sandbox-egress";
+import { exitSentinel, shQuote, type SandboxConnection } from "@tiny-agents/sandbox";
 import {
-  exitSentinel,
-  SandboxTimeoutError,
-  shQuote,
-  type SandboxConnection,
-  type SandboxExecResult,
-} from "@tiny-agents/sandbox";
+  errorText as message,
+  execCapped,
+  fail,
+  sandboxOrThrow,
+  utf8TextOf,
+  type CommandResult,
+} from "./sandbox-io";
 import {
   safeMessage,
   vaultUseAllFromSink,
@@ -28,11 +29,6 @@ import {
   type IntendedUses,
 } from "./vault";
 
-interface CommandResult {
-  output: string;
-  exitCode: number;
-}
-
 export interface SandboxToolkitOptions {
   connection?: SandboxConnection;
   defaultTimeoutSecs?: number;
@@ -40,50 +36,21 @@ export interface SandboxToolkitOptions {
   egressAllowlist?: string;
 }
 
-const fail = (text: string): ToolExecutionResult => ({
-  output: [{ type: "text", text }],
-  isError: true,
-});
-
-const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
-
-const OUTPUT_BYTES = 60_000;
-const OUTPUT_CHARS = 30_000;
-
-function combined(result: SandboxExecResult): CommandResult {
-  const text = (
-    result.stdout.toString("utf8") + (result.stderr ? `\n${result.stderr}` : "")
-  ).trimEnd();
-  return {
-    output: text.length > OUTPUT_CHARS ? text.slice(0, OUTPUT_CHARS) + "\n… (truncated)" : text,
-    exitCode: result.exitCode,
-  };
-}
-
 export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capability {
   const connection = options.connection;
 
-  const sandbox = (): SandboxConnection => {
-    if (!connection) throw new Error("Sandbox is not configured: set SANDBOX_HOST on the server.");
-    return connection;
-  };
+  const sandbox = () => sandboxOrThrow(connection);
 
   const exec = async (
     command: string,
     execOptions: { timeoutMs: number; stdin?: string },
-  ): Promise<CommandResult> => {
-    try {
-      return combined(await sandbox().exec(command, { ...execOptions, maxBytes: OUTPUT_BYTES }));
-    } catch (error) {
-      if (error instanceof SandboxTimeoutError) {
-        throw new Error(
-          `Command timed out after ${Math.round(execOptions.timeoutMs / 1000)}s. Rerun with detached:true if it must keep running.`,
-          { cause: error },
-        );
-      }
-      throw error;
-    }
-  };
+  ): Promise<CommandResult> =>
+    execCapped(
+      sandbox(),
+      command,
+      execOptions,
+      " Rerun with detached:true if it must keep running.",
+    );
 
   const egress = parseEgressList(options.egressAllowlist ?? "");
   const broker = options.vault;
@@ -293,9 +260,9 @@ export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capab
           output: [
             {
               type: "text",
-              text: looksUtf8(trimPartialRune(file.bytes))
-                ? file.bytes.toString("utf8")
-                : `[binary file, ${file.size} bytes] — inspect with run_command (file, hexdump -C | head)`,
+              text:
+                utf8TextOf(file) ??
+                `[binary file, ${file.size} bytes] — inspect with run_command (file, hexdump -C | head)`,
             },
           ],
           details: { truncated: file.truncated },
@@ -341,19 +308,4 @@ export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capab
           ? undefined
           : "Set SANDBOX_HOST to enable the sandbox.",
   });
-}
-
-function trimPartialRune(buffer: Buffer): Buffer {
-  for (let drop = 0; drop < 4 && buffer.length - drop > 0; drop++) {
-    const last = buffer[buffer.length - 1 - drop];
-    const need = last < 0x80 ? 0 : last < 0xe0 ? 1 : last < 0xf0 ? 2 : 3;
-    if (need === 0) return buffer.subarray(0, buffer.length - drop);
-    const start = buffer.length - 1 - drop - (need - 1);
-    if (start >= 0 && buffer[start] >= 0xc0) return buffer.subarray(0, start);
-  }
-  return buffer;
-}
-
-function looksUtf8(buffer: Buffer): boolean {
-  return !buffer.toString("utf8").includes("\uFFFD");
 }

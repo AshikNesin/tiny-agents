@@ -2,6 +2,7 @@ import { approvalOf } from "./approvals";
 import { credentialsOf } from "./credentials";
 import { secretRedactor } from "./redact";
 import { takeoverOf } from "@tiny-agents/sandbox/computer";
+import { codingResultOf } from "./toolkits/coding";
 import { questionsOf } from "./toolkits/questions";
 import type { ChatToolCall, ChatToolStatus } from "./types";
 
@@ -41,6 +42,7 @@ export function finishedToolRow(outcome: ToolOutcome): ToolCallRow {
   const credentials = credentialsOf(details);
   const takeover = takeoverOf(approved?.result ?? details);
   const limit = limitOf(details);
+  const coding = codingResultOf(approved?.result ?? details);
   const waitedMs = approved?.waitedMs;
   return {
     status: finishedStatus(outcome, diagnostics),
@@ -63,6 +65,7 @@ export function finishedToolRow(outcome: ToolOutcome): ToolCallRow {
     ...(credentials ? { credentials } : {}),
     ...(takeover ? { takeover } : {}),
     ...(limit ? { limit } : {}),
+    ...coding,
   };
 }
 
