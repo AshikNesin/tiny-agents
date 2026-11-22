@@ -231,7 +231,6 @@ fun Markdown(
     if (selectable) SelectionContainer { content() } else content()
 }
 
-/** Opens inline Markdown links: same-server paths go to the matching screen in-app, everything else to the browser. */
 private fun openMdLink(container: AppContainer, context: Context, link: String) {
     val serverUrl = container.session.serverUrl
     val url = if (link.startsWith("/") && serverUrl != null) serverUrl + link else link

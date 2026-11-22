@@ -51,7 +51,7 @@ class AppLinksTest {
     fun `a Code push opens the thread it is about`() {
         assertEquals(AppLink.Screen("code/thread/c0mwz1abc"), parseAppLink("$server/code/t/c0mwz1abc", server))
         assertEquals(AppLink.Screen("code"), parseAppLink("$server/code", server))
-        assertNull(parseAppLink("$server/code/claude-code%3Aabc-123", server), "Legacy /code/<id> links are no longer routed")
+        assertNull("Legacy /code/<id> links are no longer routed", parseAppLink("$server/code/claude-code%3Aabc-123", server))
     }
 
     @Test

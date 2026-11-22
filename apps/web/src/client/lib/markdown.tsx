@@ -25,8 +25,6 @@ function MarkdownParagraph({ node: _node, children, ...props }: ParagraphProps) 
   return <p {...props}>{children}</p>;
 }
 
-// Same-app paths (e.g. `/code/t/<id>` from a coding harness) navigate client-side;
-// anything else stays a plain anchor so Streamdown's external-link handling applies.
 type AnchorProps = ComponentProps<"a"> & { node?: unknown };
 
 function MarkdownAnchor({ node: _node, href, children, ...props }: AnchorProps) {
