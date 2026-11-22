@@ -4,7 +4,7 @@ import { Card } from "@groot/ui/card";
 import { StatusBadge } from "@groot/ui/status-badge";
 import { cn } from "@groot/ui/lib/utils";
 import { Switch } from "../../components/ui/switch";
-import type { Routine } from "../../../shared/api/routines";
+import type { MessageRate, Routine } from "../../../shared/api/routines";
 import { formatIst } from "../../../shared/routines-schedule";
 import { ROUTINE_NEEDS_ATTENTION, routineState } from "../../../shared/machines/routine";
 
@@ -65,6 +65,7 @@ export function RoutineCard({
                     : "Paused"}
             </p>
           )}
+          {routine.messageRate && <MessageRateLine rate={routine.messageRate} />}
           {blocked && (
             <p className="mt-1 text-xs text-warning">
               {routine.blockedStreak === 1
@@ -114,5 +115,23 @@ export function RoutineCard({
         </Button>
       </div>
     </Card>
+  );
+}
+
+const NOISY_AFTER_RUNS = 5;
+
+function MessageRateLine({ rate }: { rate: MessageRate }) {
+  const noisy = rate.runs >= NOISY_AFTER_RUNS && rate.messaged === rate.runs;
+  const runs = rate.runs === 1 ? "the last run" : `${rate.messaged} of the last ${rate.runs} runs`;
+  return (
+    <p className={cn("mt-1 text-xs", noisy ? "text-warning" : "text-muted-foreground")}>
+      {rate.runs === 1
+        ? rate.messaged === 1
+          ? "Messaged you in the last run"
+          : "Stayed quiet in the last run"
+        : `Messaged you in ${runs}`}
+      {noisy &&
+        ". It messages you every run: tell it in the prompt to stay quiet when nothing is new."}
+    </p>
   );
 }

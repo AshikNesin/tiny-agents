@@ -75,6 +75,7 @@
         "pausedReason": null,
         "hasHook": false,
         "progress": null,
+        "messageRate": null,
         "createdAt": "2026-11-06T06:30:00.000Z",
         "updatedAt": "2026-11-06T06:30:00.000Z",
         "nextFireTimes": [
@@ -111,6 +112,7 @@
           "pausedReason": null,
           "hasHook": false,
           "progress": null,
+          "messageRate": null,
           "createdAt": "2026-11-06T06:30:00.000Z",
           "updatedAt": "2026-11-06T06:30:00.000Z"
         }
@@ -142,6 +144,7 @@
         "pausedReason": null,
         "hasHook": false,
         "progress": null,
+        "messageRate": null,
         "createdAt": "2026-11-06T06:30:00.000Z",
         "updatedAt": "2026-11-06T06:30:00.000Z"
       }
@@ -172,6 +175,7 @@
         "pausedReason": null,
         "hasHook": false,
         "progress": null,
+        "messageRate": null,
         "createdAt": "2026-11-06T06:30:00.000Z",
         "updatedAt": "2026-11-06T06:30:00.000Z"
       }
@@ -202,6 +206,7 @@
         "pausedReason": null,
         "hasHook": false,
         "progress": null,
+        "messageRate": null,
         "createdAt": "2026-11-06T06:30:00.000Z",
         "updatedAt": "2026-11-06T06:30:00.000Z"
       }
@@ -232,6 +237,7 @@
         "pausedReason": null,
         "hasHook": false,
         "progress": null,
+        "messageRate": null,
         "createdAt": "2026-11-06T06:30:00.000Z",
         "updatedAt": "2026-11-06T06:30:00.000Z",
         "nextFireTimes": [
@@ -286,7 +292,8 @@
             "output": "Echo: **Routine \"Morning check\" (scheduled Fri, 06 Nov 2026, 12:00 IST):** Check the weather",
             "error": null,
             "conversationId": "9",
-            "tokens": 2453
+            "tokens": 2453,
+            "messages": 0
           }
         ]
       }
@@ -317,6 +324,7 @@
         "pausedReason": null,
         "hasHook": false,
         "progress": null,
+        "messageRate": null,
         "createdAt": "2026-11-06T06:30:00.000Z",
         "updatedAt": "2026-11-06T06:30:00.000Z",
         "nextFireTimes": ["Fri, 06 Nov 2026, 12:01 IST"]
@@ -355,7 +363,8 @@
             "output": "Echo: **Routine \"Soon\" (scheduled Fri, 06 Nov 2026, 12:01 IST) (late by 1m):** Say good morning",
             "error": null,
             "conversationId": "21",
-            "tokens": 2455
+            "tokens": 2455,
+            "messages": 0
           }
         ]
       }
@@ -384,6 +393,7 @@
             "error": null,
             "conversationId": "21",
             "tokens": 2455,
+            "messages": 0,
             "routineName": "Soon",
             "botName": "Routiner"
           },
@@ -401,6 +411,7 @@
             "error": null,
             "conversationId": "9",
             "tokens": 2453,
+            "messages": 0,
             "routineName": "Morning check",
             "botName": "Routiner"
           }
@@ -434,6 +445,10 @@
           "pausedReason": null,
           "hasHook": false,
           "progress": null,
+          "messageRate": {
+            "runs": 1,
+            "messaged": 0
+          },
           "createdAt": "2026-11-06T06:30:00.000Z",
           "updatedAt": "2026-11-06T06:30:00.000Z"
         },
@@ -455,6 +470,10 @@
           "pausedReason": null,
           "hasHook": false,
           "progress": null,
+          "messageRate": {
+            "runs": 1,
+            "messaged": 0
+          },
           "createdAt": "2026-11-06T06:30:00.000Z",
           "updatedAt": "2026-11-06T06:32:00.000Z"
         }
@@ -522,7 +541,8 @@
           "output": "Echo: **Routine \"Morning check\" (scheduled Fri, 06 Nov 2026, 12:00 IST):** Check the weather",
           "error": null,
           "conversationId": "9",
-          "tokens": 2453
+          "tokens": 2453,
+          "messages": 0
         },
         {
           "id": "<id5>",
@@ -537,7 +557,8 @@
           "output": "Echo: **Routine \"Soon\" (scheduled Fri, 06 Nov 2026, 12:01 IST) (late by 1m):** Say good morning",
           "error": null,
           "conversationId": "21",
-          "tokens": 2455
+          "tokens": 2455,
+          "messages": 0
         }
       ]
     }

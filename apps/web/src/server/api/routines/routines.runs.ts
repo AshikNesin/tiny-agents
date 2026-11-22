@@ -279,7 +279,7 @@ export function refusalReason(tools: string[], askOnly: ReadonlySet<string>): st
 async function settleRun(
   id: string,
   status: SettledRoutineRunStatus,
-  data: Partial<Pick<RoutineRun, "error" | "output" | "tokens">>,
+  data: Partial<Pick<RoutineRun, "error" | "output" | "tokens" | "messages">>,
 ): Promise<void> {
   const from: RoutineRunStatus[] = routineRunMachine.sourcesOf(status);
   const updated = await db
@@ -379,7 +379,10 @@ export function createRoutineRunResolver(rt: RoutineRunsRuntime): RoutineRunReso
   ) {
     const routineId = run.routineId;
     const tokens = await runTokens(conversationId, run.ownConversation);
-    const spent = tokens !== undefined ? { tokens } : {};
+    const spent = {
+      ...(tokens !== undefined ? { tokens } : {}),
+      messages: reply.sent?.length ?? 0,
+    };
     const sentOf = reply.sent ? { sent: reply.sent } : {};
     if (reply.error !== undefined) {
       const error = preview(

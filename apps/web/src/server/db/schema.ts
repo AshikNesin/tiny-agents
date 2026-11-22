@@ -654,6 +654,7 @@ export const routineRuns = sqliteTable(
     error: text("error"),
     conversationId: text("conversation_id"),
     tokens: integer("tokens"),
+    messages: integer("messages"),
   },
   (t) => [
     unique("routine_runs_routine_id_scheduled_for_unique").on(t.routineId, t.scheduledFor),

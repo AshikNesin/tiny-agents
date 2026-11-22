@@ -55,6 +55,7 @@ const routine: Routine = {
   pausedReason: null,
   hasHook: false,
   progress: null,
+  messageRate: null,
   createdAt: "2026-10-01T00:00:00.000Z",
   updatedAt: "2026-10-01T00:00:00.000Z",
 };
@@ -75,6 +76,7 @@ const run: RoutineRun = {
   error: null,
   conversationId: null,
   tokens: null,
+  messages: null,
 };
 
 function loadPage(routines: Routine[] = [routine], runs: RoutineRun[] = [run]) {
@@ -179,6 +181,23 @@ describe("Routines page", { timeout: 15_000 }, () => {
     await user.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(updateMock).toHaveBeenCalled());
     expect(updateMock.mock.calls[0]![1]).toMatchObject({ progress: null });
+  });
+
+  it("says how often a routine messaged you, and flags one that messages every run", async () => {
+    loadPage(
+      [
+        { ...routine, messageRate: { runs: 10, messaged: 3 } },
+        { ...routine, id: "r2", name: "loud", messageRate: { runs: 6, messaged: 6 } },
+      ],
+      [],
+    );
+    mount();
+    expect(await screen.findByText("Messaged you in 3 of the last 10 runs")).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Messaged you in 6 of the last 6 runs. It messages you every run: tell it in the prompt to stay quiet when nothing is new.",
+      ),
+    ).toBeTruthy();
   });
 
   it("shows what a run spent in tokens beside how long it took", async () => {

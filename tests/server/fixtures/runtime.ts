@@ -152,6 +152,7 @@ function createScript(): Script {
     text: reply.text,
     status: reply.error !== undefined ? "error" : "done",
     ...(reply.error !== undefined ? { error: reply.error } : {}),
+    ...(reply.sent?.length ? { sent: reply.sent } : {}),
     toolCalls: [
       ...(reply.refused ?? []).map((name) => ({
         id: "",

@@ -140,6 +140,16 @@ to later runs, but the owner is told only what the run sends with
 "tells me when something changed" stays silent until it does. The run
 guidance says so; the sent texts reach the watcher as `FinishedReply.sent`.
 
+## How often a routine messages you
+
+Each settled run stores how many `message_owner` messages it sent
+(`routine_runs.messages`). The Routines page shows, per routine, how many of
+its last 10 such runs messaged you (`messageRate`, computed in
+`routines.service.ts`). A routine that messaged you in every one of at least
+5 runs gets a hint to tell it, in its prompt, to stay quiet when nothing is
+new. Nothing here calls a model. Runs from before the column count as
+neither.
+
 ## Results show as quiet lines in the chat
 
 The routine runs step of the settled pipeline (`routineRunsStep`,

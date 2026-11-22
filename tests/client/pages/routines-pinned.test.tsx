@@ -73,6 +73,7 @@ const routine = (overrides: Partial<Routine>): Routine => ({
   pausedReason: null,
   hasHook: false,
   progress: null,
+  messageRate: null,
   createdAt: "2026-10-01T00:00:00.000Z",
   updatedAt: "2026-10-01T00:00:00.000Z",
   ...overrides,
@@ -144,6 +145,7 @@ const run = (overrides: Partial<RoutineRun>): RoutineRun => ({
   error: null,
   conversationId: null,
   tokens: null,
+  messages: null,
   ...overrides,
 });
 
