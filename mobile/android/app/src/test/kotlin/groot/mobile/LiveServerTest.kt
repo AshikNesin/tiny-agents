@@ -4,6 +4,10 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import groot.mobile.data.BotsStore
 import groot.mobile.data.Notices
 import groot.mobile.data.api.ApiClient
+import groot.mobile.data.api.jsonOf
+import groot.mobile.data.api.CodeThreadSummary
+import groot.mobile.data.api.CodeProject
+import groot.mobile.data.api.CodeApi
 import groot.mobile.data.api.ApiException
 import groot.mobile.data.api.ApiSession
 import groot.mobile.data.api.BotDraft
@@ -14,6 +18,10 @@ import groot.mobile.data.api.OwnerAnswer
 import groot.mobile.data.api.Schedule
 import groot.mobile.data.api.TinyAgentsApi
 import groot.mobile.data.api.ToolStatus
+import groot.mobile.data.code.CodeWorkflow
+import groot.mobile.data.code.codeStatusSections
+import groot.mobile.data.code.codeWorkflows
+import groot.mobile.data.code.lastTurn
 import groot.mobile.data.chat.ChatSession
 import groot.mobile.data.chat.ChatStore
 import groot.mobile.data.chat.OwnerSubmission
@@ -307,5 +315,80 @@ class LiveServerTest {
         assertNotNull(api.liveProfiles("browser"))
         assertNotNull(api.liveProfiles("computer"))
         assertTrue(api.terminalTabs().status in setOf("ready", "unconfigured", "unreachable", "tmux-missing"))
+    }
+
+    @Test
+    fun `Code on the phone runs a project thread, its changes, a workflow and a rewind`() = runBlocking {
+        assumeTrue("TINY_AGENTS_CODE is not set", System.getenv("TINY_AGENTS_CODE") == "1")
+        val client = ApiClient(session)
+        val code = CodeApi(client)
+        val project = CodeProject.from(
+            client.postObject("/code/projects", jsonOf("repo" to "acme/web", "name" to "android-$stamp", "defaultInstanceId" to "demo")),
+        )
+        try {
+            assertTrue(code.projects().any { it.id == project.id })
+            val threadId = code.create(project.id, "demo", "Note the phone check $stamp and commit it")
+            assertFalse("a thread owns its own id", threadId.contains(':'))
+
+            suspend fun row(): CodeThreadSummary? = code.threads().firstOrNull { it.id == threadId }
+            suspend fun idle(): CodeThreadSummary = withTimeout(60_000) {
+                var current = row()
+                while (current == null || current.working) {
+                    kotlinx.coroutines.delay(500)
+                    current = row()
+                }
+                current
+            }
+            val finished = idle()
+            assertEquals(project.id, finished.projectId)
+            assertTrue(finished.branch.orEmpty().isNotEmpty())
+            assertEquals("Needs you", codeStatusSections(listOf(finished)).single().label)
+
+            val snapshot = code.snapshot(threadId)
+            assertEquals("demo", snapshot.thread.instanceId)
+            assertTrue(code.harnesses().first { it.id == snapshot.thread.instanceId }.capabilities.rewind)
+            assertTrue(code.reviewFiles(threadId).any { it.path == "NOTES.md" })
+
+            val published = code.publish(threadId)
+            val pr = published.active
+            assertNotNull("publishing opens a pull request", pr)
+            pr!!
+            val control = "http://127.0.0.1:${java.net.URI(url!!).port + 3}"
+            val failing = """{"checks":[{"name":"test","state":"failure","required":true,"url":"https://ci.example/1","jobId":1,"summary":"Expected 1, received 2"}]}"""
+            val connection = java.net.URI("$control/pulls/${pr.number}").toURL().openConnection() as java.net.HttpURLConnection
+            connection.requestMethod = "POST"
+            connection.doOutput = true
+            connection.outputStream.use { it.write(failing.toByteArray()) }
+            assertEquals(200, connection.responseCode)
+
+            val withCheck = code.pulls(threadId).active!!
+            assertEquals(listOf(CodeWorkflow.FixCi), codeWorkflows(withCheck))
+            val started = code.runWorkflow(threadId, CodeWorkflow.FixCi.wire)
+            assertTrue(started.reason ?: "", started.started)
+            idle()
+
+            val review = code.openReview(pr.url)
+            code.agentReview(review.id)
+            val reviewed = withTimeout(60_000) {
+                var current = code.review(review.id)
+                while (current.reviewing || current.brief == null) {
+                    kotlinx.coroutines.delay(500)
+                    current = code.review(review.id)
+                }
+                current
+            }
+            assertTrue(reviewed.openFindings.isNotEmpty())
+            val left = code.decideFinding(review.id, reviewed.openFindings.first().id, add = true)
+            assertEquals("added", left.first { it.id == reviewed.openFindings.first().id }.state)
+            assertEquals(1, code.githubDrafts(review.key).size)
+            code.archiveReview(review.id)
+
+            val point = lastTurn(code.snapshot(threadId).items)
+            assertNotNull("a finished thread has a last turn to run again", point)
+            code.rewind(threadId, point!!)
+            assertEquals("the thread keeps its id", threadId, idle().id)
+        } finally {
+            runCatching { client.delete("/code/projects/${project.id}") }
+        }
     }
 }

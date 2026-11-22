@@ -398,23 +398,24 @@ private val sampleHarness = CodeHarness(
     null,
     CodeCapabilities(
         interrupt = true, steer = true, queue = true, manageQueue = true, recovery = listOf("retry"), archive = true, delete = true,
-        rename = true, modelSwitch = true, effortLevels = listOf("low", "medium", "high"),
-        permissionModes = listOf("default", "acceptEdits", "plan", "bypassPermissions"), diffs = true, requiresCwd = true,
+        rename = true, rewind = true, modelSwitch = true, effortLevels = listOf("low", "medium", "high"),
+        permissionModes = listOf("default", "acceptEdits", "plan", "bypassPermissions"),
     ),
 )
 
-private fun codeThreadJson(id: String, title: String, minutesAgo: Int, working: Boolean = false, parent: String? = null, unread: Boolean = false, pr: String = "null") =
+private fun codeThreadJson(id: String, title: String, minutesAgo: Int, working: Boolean = false, group: String = "done", reason: String? = null, unread: Boolean = false, pr: String = "null") =
     """{"id":"$id","instanceId":"claude-code","kind":"claude-code","nativeId":"$id","title":"$title","cwd":"/home/ashik/tiny-agents",
-       "model":"claude-opus","parentId":${parent?.let { "\"$it\"" } ?: "null"},"createdAt":"2026-11-16T09:00:00Z",
+       "model":"claude-opus","parentId":null,"createdAt":"2026-11-16T09:00:00Z","branch":"ta/${id}",
+       "status":{"group":"$group","reason":${reason?.let { "\"$it\"" } ?: "null"}},
        "updatedAt":"${java.time.Instant.ofEpochMilli(FIXED_NOW - minutesAgo * 60_000L)}","working":$working,"archived":false,"cursor":9,
-       "unread":$unread,"projectId":${if (pr == "null") "null" else "\"p1\""},"pr":$pr}"""
+       "unread":$unread,"projectId":"p1","pr":$pr}"""
 
 private fun sampleCodeList(): CodeListState {
     val threads = listOf(
-        codeThreadJson("t1", "Android: Code screens", 2, working = true, pr = """{"number":306,"loop":"fixing"}"""),
-        codeThreadJson("t1a", "Explore the web Code page", 3, working = true, parent = "t1"),
-        codeThreadJson("t2", "Fix flaky routine test", 45, unread = true),
-        codeThreadJson("t3", "Sandbox: bump Chrome", 300, pr = """{"number":301,"loop":"green"}"""),
+        codeThreadJson("t1", "Android: Code screens", 2, working = true, group = "working", reason = "Fix CI", pr = """{"number":306,"loop":"fixing"}"""),
+        codeThreadJson("t2", "Fix flaky routine test", 45, group = "needs-you", reason = "finished", unread = true),
+        codeThreadJson("t3", "Sandbox: bump Chrome", 300, group = "review", reason = "checks pass", pr = """{"number":301,"loop":"green"}"""),
+        codeThreadJson("t4", "Explore the web Code page", 900),
     ).map { CodeThreadSummary.from(JSONObject(it)) }
     return CodeListState(loading = false, harnesses = listOf(sampleHarness), states = mapOf("claude-code" to "connected"), threads = threads, connected = true)
 }

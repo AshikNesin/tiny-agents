@@ -15,14 +15,15 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import groot.kit.theme.S
 import groot.mobile.AppContainer
 import groot.mobile.data.api.CodeHarness
 import groot.mobile.data.api.CodeModel
 import groot.mobile.data.api.CodeProject
 import groot.mobile.data.api.PermissionModes
-import groot.mobile.data.code.recentDirectories
-import groot.mobile.data.code.shortPath
+import groot.mobile.feature.chat.openLink
+import groot.mobile.ui.components.EmptyState
 import groot.mobile.ui.brand.AppIcons
 import groot.mobile.ui.components.AppIcon
 import groot.mobile.ui.components.Chip
@@ -38,20 +39,28 @@ import groot.mobile.ui.components.rememberResource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
-data class NewThreadOptions(val harnesses: List<CodeHarness>, val projects: List<CodeProject>, val recent: List<String>)
+data class NewThreadOptions(val harnesses: List<CodeHarness>, val projects: List<CodeProject>)
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun NewCodeThreadRoute(container: AppContainer, onStarted: (String) -> Unit, onBack: () -> Unit) {
     val options = rememberResource("code-new") {
-        val harnesses = container.code.harnesses()
-        val projects = runCatching { container.code.projects() }.getOrDefault(emptyList())
-        val recent = runCatching { recentDirectories(container.code.threads()) }.getOrDefault(emptyList())
-        NewThreadOptions(harnesses, projects, recent)
+        NewThreadOptions(container.code.harnesses(), container.code.projects())
     }
+    val context = LocalContext.current
     ScreenScaffold(title = "New thread", onBack = onBack) {
         LoadableContent(options) { loaded ->
-            NewThreadForm(container, loaded, onStarted)
+            if (loaded.projects.isEmpty()) {
+                EmptyState(
+                    "Add a project first",
+                    icon = AppIcons.Code,
+                    body = "A thread works on its own branch of a project. Add the repository in the web app under Code, Settings, Projects.",
+                    actionLabel = "Open in the web app",
+                    onAction = { openLink(context, container.session.serverUrl, "/code/settings/projects") },
+                )
+            } else {
+                NewThreadForm(container, loaded, onStarted)
+            }
         }
     }
 }
@@ -60,13 +69,13 @@ fun NewCodeThreadRoute(container: AppContainer, onStarted: (String) -> Unit, onB
 @Composable
 private fun NewThreadForm(container: AppContainer, options: NewThreadOptions, onStarted: (String) -> Unit) {
     val ready = options.harnesses.filter { it.connected }.ifEmpty { options.harnesses }
-    var harnessId by rememberSaveable { mutableStateOf(ready.firstOrNull()?.id) }
-    var projectId by rememberSaveable { mutableStateOf<String?>(null) }
-    var cwd by rememberSaveable { mutableStateOf(options.recent.firstOrNull().orEmpty()) }
+    fun preferredHarness(project: CodeProject?) =
+        project?.defaultInstanceId?.takeIf { id -> options.harnesses.any { it.id == id } } ?: ready.firstOrNull()?.id
+    var projectId by rememberSaveable { mutableStateOf(options.projects.first().id) }
+    var harnessId by rememberSaveable { mutableStateOf(preferredHarness(options.projects.first())) }
     var model by rememberSaveable { mutableStateOf<String?>(null) }
     var mode by rememberSaveable { mutableStateOf<String?>(null) }
     var message by rememberSaveable { mutableStateOf("") }
-    var cwdError by remember { mutableStateOf<String?>(null) }
     var starting by remember { mutableStateOf(false) }
     var pickModel by remember { mutableStateOf(false) }
     var models by remember { mutableStateOf<List<CodeModel>>(emptyList()) }
@@ -84,56 +93,30 @@ private fun NewThreadForm(container: AppContainer, options: NewThreadOptions, on
         }
     }
 
-    val needsCwd = projectId == null && caps?.requiresCwd == true
-    val canStart = harness != null && message.isNotBlank() && (!needsCwd || cwd.isNotBlank()) && !starting
+    val canStart = harness != null && message.isNotBlank() && !starting
 
     ScreenColumn(Modifier.imePadding()) {
+        SectionLabel("Project")
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(S.sm), verticalArrangement = Arrangement.spacedBy(S.sm)) {
+            for (project in options.projects) {
+                Chip(project.name, selected = project.id == projectId, onClick = {
+                    projectId = project.id
+                    harnessId = preferredHarness(project)
+                })
+            }
+        }
+        options.projects.firstOrNull { it.id == projectId }?.let {
+            Text(
+                "${it.repo}: a new worktree on its own branch from ${it.baseBranch}. Paste an issue link to have it fixed.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         if (options.harnesses.size > 1) {
-            SectionLabel("Harness")
+            SectionLabel("Agent")
             FlowRow(horizontalArrangement = Arrangement.spacedBy(S.sm), verticalArrangement = Arrangement.spacedBy(S.sm)) {
                 for (option in options.harnesses) {
                     Chip(option.label, selected = option.id == harnessId, enabled = option.connected, onClick = { harnessId = option.id })
-                }
-            }
-        }
-        if (options.projects.isNotEmpty()) {
-            SectionLabel("Project")
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(S.sm), verticalArrangement = Arrangement.spacedBy(S.sm)) {
-                Chip("None", selected = projectId == null, onClick = { projectId = null })
-                for (project in options.projects) {
-                    Chip(project.name, selected = project.id == projectId, onClick = {
-                        projectId = project.id
-                        project.defaultInstanceId?.takeIf { id -> options.harnesses.any { it.id == id } }?.let { harnessId = it }
-                    })
-                }
-            }
-            options.projects.firstOrNull { it.id == projectId }?.let {
-                Text(
-                    "${it.repo}: a new worktree on its own branch from ${it.baseBranch}.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-        if (projectId == null) {
-            Field(
-                cwd,
-                {
-                    cwd = it
-                    cwdError = null
-                },
-                label = "Working directory",
-                placeholder = "/home/me/project",
-                monospace = true,
-                isError = cwdError != null,
-                supporting = cwdError ?: if (needsCwd) "Required for ${harness?.label}." else null,
-            )
-            if (options.recent.isNotEmpty()) {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(S.sm), verticalArrangement = Arrangement.spacedBy(S.sm)) {
-                    for (dir in options.recent) Chip(shortPath(dir), selected = dir == cwd, onClick = {
-                        cwd = dir
-                        cwdError = null
-                    })
                 }
             }
         }
@@ -154,18 +137,10 @@ private fun NewThreadForm(container: AppContainer, options: NewThreadOptions, on
             starting = true
             scope.launch {
                 try {
-                    if (projectId == null && cwd.isNotBlank()) {
-                        val problem = container.code.checkCwd(instanceId, cwd.trim())
-                        if (problem != null) {
-                            cwdError = problem
-                            return@launch
-                        }
-                    }
                     val id = container.code.create(
+                        projectId = projectId,
                         instanceId = instanceId,
                         message = message.trim(),
-                        projectId = projectId,
-                        cwd = cwd.trim().takeIf { projectId == null && it.isNotEmpty() },
                         model = model,
                         permissionMode = mode,
                     )

@@ -37,6 +37,11 @@ import groot.mobile.AppContainer
 import groot.mobile.data.api.ChangedFile
 import groot.mobile.data.api.PullConversation
 import groot.mobile.data.api.CodeReview
+import androidx.compose.ui.text.font.FontWeight
+import groot.mobile.feature.chat.TypingDots
+import groot.mobile.ui.components.SectionLabel
+import groot.mobile.ui.components.ScreenColumn
+import groot.mobile.data.api.ReviewFinding
 import groot.mobile.data.api.ReviewDraft
 import groot.mobile.data.api.ReviewVerdict
 import groot.mobile.data.api.canSubmitReview
@@ -65,7 +70,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-enum class ReviewTab(val label: String) { Files("Files"), Conversations("Conversations") }
+enum class ReviewTab(val label: String) { Files("Files"), Agent("Agent"), Conversations("Conversations") }
 
 data class ReviewState(
     val review: CodeReview? = null,
@@ -89,6 +94,7 @@ class ReviewViewModel(private val container: AppContainer, private val reviewId:
             attempt("Could not open the review.", fatal = true) {
                 val review = api.review(reviewId)
                 _state.update { it.copy(review = review, sinceReview = review.hasNewCommits) }
+                if (review.reviewing) pollWhileReviewing()
                 reload()
             }
         }
@@ -111,6 +117,35 @@ class ReviewViewModel(private val container: AppContainer, private val reviewId:
     }
 
     fun setTab(tab: ReviewTab) = _state.update { it.copy(tab = tab) }
+
+    private var polling: kotlinx.coroutines.Job? = null
+
+    private fun pollWhileReviewing() {
+        if (polling?.isActive == true) return
+        polling = viewModelScope.launch {
+            while (_state.value.review?.reviewing == true) {
+                kotlinx.coroutines.delay(REVIEW_POLL_MS)
+                val next = runCatching { api.review(reviewId) }.getOrNull() ?: continue
+                _state.update { it.copy(review = next) }
+            }
+        }
+    }
+
+    fun runAgentReview() = launch("Could not start the review.") {
+        api.agentReview(reviewId)
+        _state.update { it.copy(review = api.review(reviewId)) }
+        pollWhileReviewing()
+    }
+
+    fun decide(finding: ReviewFinding, add: Boolean) = launch("Could not do that.") {
+        val review = _state.value.review ?: return@launch
+        val findings = api.decideFinding(reviewId, finding.id, add)
+        _state.update { it.copy(review = it.review?.copy(findings = findings)) }
+        if (add) {
+            _state.update { it.copy(drafts = api.githubDrafts(review.key)) }
+            container.notices.show("Added to your review. It is not posted yet.")
+        }
+    }
 
     fun setSinceReview(since: Boolean) {
         if (since == _state.value.sinceReview) return
@@ -245,7 +280,11 @@ fun ReviewRoute(container: AppContainer, reviewId: String, onBack: () -> Unit) {
                     horizontalArrangement = Arrangement.spacedBy(S.sm),
                 ) {
                     for (tab in ReviewTab.entries) {
-                        val count = if (tab == ReviewTab.Conversations) state.conversations?.count { !it.resolved }?.takeIf { it > 0 } else null
+                        val count = when (tab) {
+                            ReviewTab.Conversations -> state.conversations?.count { !it.resolved }?.takeIf { it > 0 }
+                            ReviewTab.Agent -> review.openFindings.size.takeIf { it > 0 }
+                            ReviewTab.Files -> null
+                        }
                         Chip(listOfNotNull(tab.label, count?.toString()).joinToString(" "), selected = state.tab == tab, onClick = { viewModel.setTab(tab) })
                     }
                     if (state.tab == ReviewTab.Files && review.reviewedSha != null) {
@@ -256,6 +295,7 @@ fun ReviewRoute(container: AppContainer, reviewId: String, onBack: () -> Unit) {
                     when (state.tab) {
                         ReviewTab.Files -> ReviewFiles(state, viewModel, onComment = { path, line -> commenting = path to line })
                         ReviewTab.Conversations -> Conversations(state.conversations, onReply = viewModel::reply, onResolve = viewModel::resolve)
+                        ReviewTab.Agent -> AgentReview(review, state.busy, onRun = viewModel::runAgentReview, onDecide = viewModel::decide)
                     }
                 }
                 Box(Modifier.fillMaxWidth().padding(S.md).navigationBarsPadding(), contentAlignment = Alignment.Center) {
@@ -431,3 +471,57 @@ private fun SubmitSheet(
         )
     }
 }
+
+@Composable
+private fun AgentReview(review: CodeReview, busy: Boolean, onRun: () -> Unit, onDecide: (ReviewFinding, Boolean) -> Unit) {
+    ScreenColumn {
+        when {
+            review.reviewing -> Row(horizontalArrangement = Arrangement.spacedBy(S.sm), verticalAlignment = Alignment.CenterVertically) {
+                TypingDots()
+                Text("The agent is reading the change.", style = MaterialTheme.typography.bodyMedium)
+            }
+            else -> SecondaryButton(
+                if (review.brief == null) "Review with the agent" else "Review again",
+                onClick = onRun,
+                icon = AppIcons.Sparkle,
+                enabled = !busy,
+            )
+        }
+        review.brief?.let { brief ->
+            SectionLabel("Brief")
+            Text(brief, style = MaterialTheme.typography.bodyMedium)
+        }
+        if (review.brief != null && !review.reviewing) {
+            val open = review.openFindings
+            SectionLabel(if (open.isEmpty()) "No open findings" else "Findings · ${open.size} open")
+            for (finding in open) {
+                AppCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(S.sm)) {
+                        Text(
+                            "${finding.severity} · ${finding.path.substringAfterLast('/')}:${finding.line}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (finding.severity == "bug") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(finding.title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+                        if (finding.body.isNotBlank()) Text(finding.body, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Row(horizontalArrangement = Arrangement.spacedBy(S.sm)) {
+                            PrimaryButton("Add to my review", onClick = { onDecide(finding, true) }, icon = AppIcons.Check, enabled = !busy)
+                            SecondaryButton("Dismiss", onClick = { onDecide(finding, false) }, enabled = !busy)
+                        }
+                    }
+                }
+            }
+            val settled = review.findings.filter { it.state != "open" }
+            for (finding in settled) {
+                Text(
+                    "${finding.title}: ${if (finding.state == "added") "in your review" else "dismissed"}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Hint("Nothing is posted until you submit your review.")
+        }
+    }
+}
+
+private const val REVIEW_POLL_MS = 3_000L

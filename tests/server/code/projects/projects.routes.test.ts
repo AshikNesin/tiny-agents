@@ -182,6 +182,19 @@ describe("projects", () => {
     expect(JSON.stringify(res.body)).toContain("The sandbox has no gh");
   });
 
+  it("gives a thread's own snapshot its project and branch, as the list has them", async () => {
+    const project = await newProject();
+    const thread = await newThread(project.id);
+
+    const res = await call<{ thread: { projectId: string | null; branch: string | null } }>(
+      "GET",
+      `/threads/${encodeURIComponent(thread.id)}`,
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.data!.thread).toMatchObject({ projectId: project.id, branch: thread.branch });
+  });
+
   it("starts a thread in its own worktree on a new branch, telling the agent not to push", async () => {
     const project = await newProject();
     const thread = await newThread(project.id);

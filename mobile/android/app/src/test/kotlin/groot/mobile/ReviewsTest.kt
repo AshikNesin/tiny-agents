@@ -34,6 +34,29 @@ class ReviewsTest {
     }
 
     @Test
+    fun `the agent's review brings a brief and the findings still open`() {
+        val review = CodeReview.from(
+            JSONObject(
+                """{"id":"r1","key":"review:r1","number":7,"headSha":"bbb","reviewedSha":null,"reviewing":false,
+                "brief":"Adds NOTES.md. Read it first.",
+                "findings":[
+                  {"id":"f1","severity":"nit","title":"No date","body":"Say when.","path":"NOTES.md","line":1,"state":"open"},
+                  {"id":"f2","severity":"bug","title":"Wrong file","body":"Use the changelog.","path":"NOTES.md","line":2,"state":"added"},
+                  {"id":"f3","severity":"question","title":"Unclear","body":"","path":"a.ts","line":3,"state":"open"}]}""",
+            ),
+        )
+        assertEquals("Adds NOTES.md. Read it first.", review.brief)
+        assertFalse(review.reviewing)
+        assertEquals(listOf("f1", "f3"), review.openFindings.map { it.id })
+        assertEquals("a.ts:3", review.findings.last().let { "${it.path}:${it.line}" })
+
+        val waiting = CodeReview.from(JSONObject("""{"id":"r2","key":"review:r2","number":8,"headSha":"b","reviewing":true}"""))
+        assertTrue(waiting.reviewing)
+        assertEquals(null, waiting.brief)
+        assertTrue(waiting.findings.isEmpty())
+    }
+
+    @Test
     fun `a review with commits after the one you read has new commits`() {
         val read = CodeReview.from(JSONObject("""{"id":"r1","key":"review:r1","number":7,"headSha":"bbb","reviewedSha":"aaa","updatedAt":"2026-11-21T10:00:00Z"}"""))
         val fresh = CodeReview.from(JSONObject("""{"id":"r2","key":"review:r2","number":8,"headSha":"bbb","reviewedSha":null}"""))

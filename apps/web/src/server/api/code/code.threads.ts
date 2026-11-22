@@ -219,11 +219,20 @@ export async function decorateThreads(rows: ThreadSummary[]): Promise<ThreadSumm
   return out;
 }
 
-const keyOfSummary = (thread: ThreadSummary): ThreadSummary => ({
-  ...thread,
-  id: threadKey(thread.instanceId, thread.nativeId),
-  parentId: thread.parentId ? appId(thread.parentId) : null,
-});
+function keyOfSummary(thread: ThreadSummary): ThreadSummary {
+  const id = threadKey(thread.instanceId, thread.nativeId);
+  const project = db
+    .select({ projectId: codeThreads.projectId, branch: codeThreads.branch })
+    .from(codeThreads)
+    .where(eq(codeThreads.id, id))
+    .get();
+  return {
+    ...thread,
+    id,
+    parentId: thread.parentId ? appId(thread.parentId) : null,
+    ...(project?.projectId ? { projectId: project.projectId, branch: project.branch } : {}),
+  };
+}
 
 function appId(harnessThreadId: string): string {
   const parsed = parseThreadId(harnessThreadId, LEGACY_INSTANCE_ID);

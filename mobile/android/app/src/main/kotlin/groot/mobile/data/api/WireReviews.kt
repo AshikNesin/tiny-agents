@@ -2,6 +2,28 @@ package groot.mobile.data.api
 
 import org.json.JSONObject
 
+data class ReviewFinding(
+    val id: String,
+    val severity: String,
+    val title: String,
+    val body: String,
+    val path: String,
+    val line: Int,
+    val state: String,
+) {
+    companion object {
+        fun from(json: JSONObject) = ReviewFinding(
+            id = json.string("id"),
+            severity = json.string("severity"),
+            title = json.string("title"),
+            body = json.string("body"),
+            path = json.string("path"),
+            line = json.int("line"),
+            state = json.string("state"),
+        )
+    }
+}
+
 data class CodeReview(
     val id: String,
     val key: String,
@@ -16,8 +38,13 @@ data class CodeReview(
     val mine: Boolean,
     val reviewedSha: String?,
     val updatedAt: Long,
+    val brief: String? = null,
+    val reviewing: Boolean = false,
+    val findings: List<ReviewFinding> = emptyList(),
 ) {
     val hasNewCommits: Boolean get() = reviewedSha != null && reviewedSha != headSha
+
+    val openFindings: List<ReviewFinding> get() = findings.filter { it.state == "open" }
 
     companion object {
         fun from(json: JSONObject) = CodeReview(
@@ -34,6 +61,9 @@ data class CodeReview(
             mine = json.bool("mine"),
             reviewedSha = json.stringOrNull("reviewedSha"),
             updatedAt = json.instant("updatedAt"),
+            brief = json.stringOrNull("brief"),
+            reviewing = json.bool("reviewing"),
+            findings = json.arr("findings").mapObjects(ReviewFinding::from),
         )
     }
 }

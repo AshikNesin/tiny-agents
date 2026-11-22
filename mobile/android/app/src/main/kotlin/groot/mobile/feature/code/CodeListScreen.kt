@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -28,7 +27,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
@@ -41,14 +40,12 @@ import groot.mobile.data.api.CodeHarness
 import groot.mobile.data.api.CodeListEvent
 import groot.mobile.data.api.CodeThreadSummary
 import groot.mobile.data.api.SseSignal
-import groot.mobile.data.code.CodeListNode
-import groot.mobile.data.code.buildCodeSections
-import groot.mobile.data.code.shortPath
+import groot.mobile.data.code.CodeStatusSection
+import groot.mobile.data.code.codeStatusSections
 import groot.mobile.feature.chat.TypingDots
 import groot.mobile.ui.brand.Accents
 import groot.mobile.ui.brand.AppIcons
 import groot.mobile.ui.brand.Dims
-import groot.mobile.ui.components.AppIcon
 import groot.mobile.ui.components.Chip
 import groot.mobile.ui.components.EmptyState
 import groot.mobile.ui.components.IconBtn
@@ -234,16 +231,15 @@ fun CodeListScreen(
                             archived == null -> LoadingBox()
                             archived.isEmpty() -> EmptyState("Nothing archived", icon = AppIcons.Code)
                             else -> ThreadList(
-                                buildCodeSections(archived, state.harnessFilter).let { it.working + it.recent },
-                                emptyList(),
+                                listOf(CodeStatusSection("archived", "Archived", archived.filter { state.harnessFilter == null || it.instanceId == state.harnessFilter }.sortedByDescending { it.updatedAt })),
                                 labels,
                                 now,
                                 onOpen,
                             )
                         }
                     } else {
-                        val sections = buildCodeSections(state.threads, state.harnessFilter)
-                        if (sections.working.isEmpty() && sections.recent.isEmpty()) {
+                        val sections = codeStatusSections(state.threads.filter { state.harnessFilter == null || it.instanceId == state.harnessFilter })
+                        if (sections.isEmpty()) {
                             EmptyState(
                                 "No threads yet",
                                 icon = AppIcons.Code,
@@ -252,7 +248,7 @@ fun CodeListScreen(
                                 onAction = onNew,
                             )
                         } else {
-                            ThreadList(sections.recent, sections.working, labels, now, onOpen)
+                            ThreadList(sections, labels, now, onOpen)
                         }
                     }
                 }
@@ -290,46 +286,35 @@ private fun HarnessProblem(harness: CodeHarness, state: String) {
 
 @Composable
 private fun ThreadList(
-    recent: List<CodeListNode>,
-    working: List<CodeListNode>,
+    sections: List<CodeStatusSection>,
     labels: Map<String, String>,
     now: () -> Long,
     onOpen: (String) -> Unit,
 ) {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = S.sm, vertical = S.xs)) {
-        if (working.isNotEmpty()) {
-            item(key = "working") { SectionLabel("Working now", Modifier.padding(start = S.md)) }
-            nodes(working, 0, labels, now, onOpen)
-        }
-        if (recent.isNotEmpty()) {
-            if (working.isNotEmpty()) item(key = "recent") { SectionLabel("Recent", Modifier.padding(start = S.md, top = S.md)) }
-            nodes(recent, 0, labels, now, onOpen)
+        for ((index, section) in sections.withIndex()) {
+            item(key = "section-${section.group}") {
+                SectionLabel(section.label, Modifier.padding(start = S.md, top = if (index == 0) 0.dp else S.md))
+            }
+            for (row in section.rows) {
+                item(key = row.id) { ThreadRow(row, section.group, labels[row.instanceId] ?: row.kind, now, onOpen) }
+            }
         }
         item(key = "end") { Spacer(Modifier.height(S.xl)) }
     }
 }
 
-private fun LazyListScope.nodes(nodes: List<CodeListNode>, depth: Int, labels: Map<String, String>, now: () -> Long, onOpen: (String) -> Unit) {
-    for (node in nodes) {
-        item(key = node.row.id) { ThreadRow(node, depth, labels[node.row.instanceId] ?: node.row.kind, now, onOpen) }
-        if (depth < MAX_INDENT) nodes(node.children, depth + 1, labels, now, onOpen)
-    }
-}
-
 @Composable
-private fun ThreadRow(node: CodeListNode, depth: Int, harness: String, now: () -> Long, onOpen: (String) -> Unit) {
-    val row = node.row
+private fun ThreadRow(row: CodeThreadSummary, group: String, harness: String, now: () -> Long, onOpen: (String) -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
-            .padding(start = indent(depth))
             .clip(RoundedCornerShape(Dims.fieldRadius))
             .clickable(role = Role.Button, onClick = { onOpen(row.id) })
             .padding(horizontal = S.md, vertical = S.sm),
         horizontalArrangement = Arrangement.spacedBy(S.md),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (depth > 0) AppIcon(AppIcons.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, size = Dims.iconSmall)
         Column(Modifier.weight(1f)) {
             Text(
                 row.title.ifBlank { "Untitled" },
@@ -339,11 +324,11 @@ private fun ThreadRow(node: CodeListNode, depth: Int, harness: String, now: () -
                 overflow = TextOverflow.Ellipsis,
             )
             val details = listOfNotNull(
+                row.statusReason,
                 harness,
-                shortPath(row.repoRoot ?: row.cwd).takeIf { it.isNotEmpty() },
+                row.branch,
                 row.pr?.let { "PR #${it.number}" + loopNote(it.loop) },
                 row.queuedCount.takeIf { it > 0 }?.let { "$it queued" },
-                "Interrupted".takeIf { row.turnInterrupted },
             )
             Text(
                 details.joinToString(" · "),
@@ -354,14 +339,14 @@ private fun ThreadRow(node: CodeListNode, depth: Int, harness: String, now: () -
             )
         }
         Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(S.xs)) {
-            if (node.busy) {
+            if (row.working) {
                 TypingDots(Modifier.height(S.lg))
             } else {
                 Text(relativeTime(row.updatedAt, now()), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                if (node.unread) {
-                    StatusDot(MaterialTheme.colorScheme.primary)
-                } else {
-                    Spacer(Modifier.height(Dims.dot))
+                when {
+                    group == "needs-you" -> StatusDot(Accents.warning)
+                    row.unread -> StatusDot(MaterialTheme.colorScheme.primary)
+                    else -> Spacer(Modifier.height(Dims.dot))
                 }
             }
         }
@@ -376,8 +361,3 @@ internal fun loopNote(loop: String): String = when (loop) {
     "merged" -> ", merged"
     else -> ""
 }
-
-@Composable
-private fun indent(depth: Int): Dp = S.lg * depth.coerceAtMost(MAX_INDENT)
-
-private const val MAX_INDENT = 3

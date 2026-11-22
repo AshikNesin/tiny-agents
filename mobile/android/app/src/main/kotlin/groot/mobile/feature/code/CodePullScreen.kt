@@ -30,7 +30,8 @@ import groot.mobile.AppContainer
 import groot.mobile.data.api.PullCheck
 import groot.mobile.data.api.PullView
 import groot.mobile.data.api.ThreadPulls
-import groot.mobile.data.code.formatUsd
+import groot.mobile.data.code.CodeWorkflow
+import groot.mobile.data.code.codeWorkflows
 import groot.mobile.feature.chat.openLink
 import groot.mobile.ui.brand.Accents
 import groot.mobile.ui.brand.AppIcons
@@ -90,11 +91,16 @@ fun CodePullRoute(container: AppContainer, threadId: String, onBack: () -> Unit)
                         Reviews(pr)
                         AutofixCard(
                             pr = pr,
-                            spend = view.spendUsd,
-                            limit = view.limitUsd,
                             onAutofix = { enabled -> act("Could not change Auto-fix.") { api.setAutofix(threadId, enabled) } },
-                            onAutoMerge = { enabled -> act("Could not change auto-merge.") { api.setAutoMerge(threadId, enabled) } },
-                            onFix = { act("Could not start a fix pass.") { api.fixNow(threadId) } },
+                            onWorkflow = { workflow ->
+                                resource.act("Could not start ${workflow.label}.") {
+                                    val result = api.runWorkflow(threadId, workflow.wire)
+                                    result.view?.let { latest = it }
+                                    container.notices.show(
+                                        if (result.started) "${workflow.label} started. The agent works in this thread." else result.reason ?: "Nothing to do.",
+                                    )
+                                }
+                            },
                         )
                         if (pr.mergeMethods.isNotEmpty()) {
                             SectionLabel("Merge")
@@ -240,27 +246,22 @@ private fun Reviews(pr: PullView) {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun AutofixCard(
     pr: PullView,
-    spend: Double?,
-    limit: Double?,
     onAutofix: (Boolean) -> Unit,
-    onAutoMerge: (Boolean) -> Unit,
-    onFix: () -> Unit,
+    onWorkflow: (CodeWorkflow) -> Unit,
 ) {
     AppCard {
         Column(verticalArrangement = Arrangement.spacedBy(S.md)) {
             Toggle("Auto-fix", loopText(pr), pr.autofix, onAutofix)
-            Toggle("Auto-merge", "Turn on GitHub's auto-merge once nothing is left to fix.", pr.autoMerge, onAutoMerge)
-            if (spend != null) {
-                Text(
-                    "Spent ${formatUsd(spend)}" + (limit?.let { " of a ${formatUsd(it)} limit" } ?: ""),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            val workflows = codeWorkflows(pr)
+            if (pr.loopStatus != "fixing" && workflows.isNotEmpty()) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(S.sm), verticalArrangement = Arrangement.spacedBy(S.sm)) {
+                    for (workflow in workflows) SecondaryButton(workflow.label, onClick = { onWorkflow(workflow) }, icon = AppIcons.Zap)
+                }
             }
-            if (pr.loopStatus != "fixing") SecondaryButton("Fix now", onClick = onFix, icon = AppIcons.Zap)
             for (pass in pr.passes.take(MAX_PASSES)) {
                 Text(
                     "${relativeTime(pass.createdAt)}: ${pass.trigger}, ${pass.outcome ?: pass.status}" + (pass.detail?.let { ". $it" } ?: ""),

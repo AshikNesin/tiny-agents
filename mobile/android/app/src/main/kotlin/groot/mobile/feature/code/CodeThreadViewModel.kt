@@ -10,6 +10,8 @@ import groot.mobile.data.api.CodeModel
 import groot.mobile.data.api.CodeThreadEvent
 import groot.mobile.data.api.SseSignal
 import groot.mobile.data.code.CodeThreadState
+import groot.mobile.data.code.RewindPoint
+import groot.mobile.data.code.lastTurn
 import groot.mobile.data.code.reduceCodeThread
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -18,9 +20,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.delay
-import groot.mobile.data.ViewerRole
-import groot.mobile.data.code.answeredRow
 
 class CodeThreadViewModel(private val container: AppContainer, val threadId: String) : ViewModel() {
     private val api = container.code
@@ -43,18 +42,18 @@ class CodeThreadViewModel(private val container: AppContainer, val threadId: Str
     private val _closed = MutableStateFlow(false)
     val closed: StateFlow<Boolean> = _closed.asStateFlow()
 
-    private val _suggestion = MutableStateFlow<String?>(null)
-    val suggestion: StateFlow<String?> = _suggestion.asStateFlow()
-    private var suggestedAfter: String? = null
-    private val dismissed = mutableSetOf<String>()
-    private var suggesting: Job? = null
+    private val _editing = MutableStateFlow<RewindPoint?>(null)
+    val editing: StateFlow<RewindPoint?> = _editing.asStateFlow()
 
     private var stream: Job? = null
     private var seenCursor = -1
 
-    init {
+    private var harnessFor: String? = null
+
+    private fun loadHarness(instanceId: String) {
+        if (instanceId.isEmpty() || instanceId == harnessFor) return
+        harnessFor = instanceId
         viewModelScope.launch {
-            val instanceId = instanceOf(threadId)
             val harness = runCatching { api.harnesses().firstOrNull { it.id == instanceId } }.getOrNull()
             _harness.value = harness
             if (harness?.capabilities?.modelSwitch == true) {
@@ -72,8 +71,8 @@ class CodeThreadViewModel(private val container: AppContainer, val threadId: Str
                     SseSignal.Drop -> _connected.value = false
                     is SseSignal.Event -> CodeThreadEvent.from(signal.json)?.let { event ->
                         _state.update { reduceCodeThread(it, event) }
+                        _state.value.thread?.instanceId?.let(::loadHarness)
                         markSeen()
-                        suggestNext()
                     }
                 }
             }
@@ -93,38 +92,48 @@ class CodeThreadViewModel(private val container: AppContainer, val threadId: Str
         viewModelScope.launch { runCatching { api.markSeen(threadId, now.cursor) } }
     }
 
-    private fun suggestNext() {
-        val now = _state.value
-        val after = if (now.loaded && !now.working && container.bots.state.value.role == ViewerRole.Owner) answeredRow(now.items) else null
-        if (after == suggestedAfter) return
-        suggestedAfter = after
-        suggesting?.cancel()
-        _suggestion.value = null
-        if (after == null || after in dismissed) return
-        suggesting = viewModelScope.launch {
-            delay(SUGGEST_SETTLE_MS)
-            _suggestion.value = runCatching { api.nextPrompt(threadId, after) }.getOrNull()
-        }
-    }
-
-    fun dismissSuggestion() {
-        suggestedAfter?.let(dismissed::add)
-        _suggestion.value = null
-    }
-
-    fun useSuggestion() {
-        val text = _suggestion.value ?: return
-        _draft.value = text
-        dismissSuggestion()
-    }
-
     fun setDraft(text: String) {
         _draft.value = text
+    }
+
+    val lastTurn: RewindPoint? get() = if (_harness.value?.capabilities?.rewind == true) lastTurn(_state.value.items) else null
+
+    fun retryLast() {
+        val point = lastTurn ?: return
+        rewind(point)
+    }
+
+    fun editLast() {
+        val point = lastTurn ?: return
+        _editing.value = point
+        _draft.value = point.text
+    }
+
+    fun cancelEdit() {
+        _editing.value = null
+        _draft.value = ""
+    }
+
+    private fun rewind(point: RewindPoint) = act("Could not go back to that turn.") {
+        val filesRestored = api.rewind(threadId, point)
+        _editing.value = null
+        container.notices.show(
+            if (filesRestored) "Went back to before that turn, files included." else "Went back to before that turn; the files were left as they are.",
+        )
+        hide()
+        _state.value = CodeThreadState()
+        seenCursor = -1
+        show()
     }
 
     fun send(queue: Boolean = false) {
         val text = _draft.value.trim()
         if (text.isEmpty()) return
+        _editing.value?.let { point ->
+            _draft.value = ""
+            rewind(point.copy(text = text))
+            return
+        }
         _draft.value = ""
         act("Could not send the message.", onFailure = { if (_draft.value.isEmpty()) _draft.value = text }) {
             val status = api.send(threadId, text, queue = queue && _state.value.working)
@@ -188,10 +197,3 @@ class CodeThreadViewModel(private val container: AppContainer, val threadId: Str
         fun factory(container: AppContainer, threadId: String) = viewModelFactory { initializer { CodeThreadViewModel(container, threadId) } }
     }
 }
-
-fun instanceOf(threadId: String): String {
-    val at = threadId.indexOf(':')
-    return if (at <= 0) "shelley" else threadId.substring(0, at)
-}
-
-private const val SUGGEST_SETTLE_MS = 600L

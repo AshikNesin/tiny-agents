@@ -9,7 +9,6 @@ import groot.mobile.data.chat.insertMention
 import groot.mobile.data.chat.mentionMatches
 import groot.mobile.data.chat.resolveMentions
 import groot.mobile.data.chat.trackPickedMentions
-import groot.mobile.data.code.answeredRow
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -58,13 +57,5 @@ class MentionsTest {
         val moved = trackPickedMentions("@Writer ", "Hi @Writer ", picked)
         assertEquals(3, moved.single().start)
         assertEquals(emptyList<Any>(), trackPickedMentions("@Writer ", "@Wrter ", picked))
-    }
-
-    @Test
-    fun `a Code thread suggests a next prompt only after a finished reply`() {
-        assertEquals("t1", answeredRow(listOf(TranscriptItem.User("u1", "hi", emptyList()), TranscriptItem.Turn("t1", 1000, null))))
-        assertEquals("a1", answeredRow(listOf(TranscriptItem.Assistant("a1", "done"))))
-        assertNull(answeredRow(listOf(TranscriptItem.User("u1", "hi", emptyList()))))
-        assertNull(answeredRow(emptyList()))
     }
 }
