@@ -59,17 +59,17 @@ to GitHub. The list of keys is the `commands` array in
 `apps/web/src/client/pages/code/Workspace.tsx` (the workspace) and in
 `PullReview.tsx` (a PR review); `keys.tsx` binds them. The ones used most:
 
-| Key             | What it does                                          |
-| --------------- | ----------------------------------------------------- |
-| `j` `k` `u`     | Next thread, previous thread, next one that needs you |
-| `n` `v`         | New thread, review a pull request                     |
-| `c` `Esc`       | Write to the agent; leave the composer, then stop     |
-| `e` `t`         | Edit the last turn and run it again; run it again     |
-| `1` `2` `3`     | Changes, Pull request, Files                          |
-| `` ` `` `\` `[` | Terminal, work pane, thread list                      |
-| `o`             | Open the worktree in Cursor or Zed                    |
-| `f` `a`         | Fix CI, Address comments                              |
-| `P` `M`         | Publish (or push to) the pull request, merge it       |
+| Key             | What it does                                           |
+| --------------- | ------------------------------------------------------ |
+| `j` `k` `u`     | Next thread, previous thread, next one that needs you  |
+| `n` `v`         | New thread, review a pull request                      |
+| `c` `Esc`       | Write to the agent; leave the composer, then stop      |
+| `e` `t`         | Edit the last turn and run it again; run it again      |
+| `1` `2` `3`     | Changes, Pull request, Files                           |
+| `` ` `` `\` `[` | Terminal, work pane, thread list                       |
+| `o`             | Open the worktree in Cursor or Zed                     |
+| `f` `a`         | Fix CI, Address comments                               |
+| `P` `M`         | Create the PR (or push to it), committing first; merge |
 
 ### The thread list
 
@@ -295,13 +295,32 @@ that started it (a 10-minute, single-use state plus an httpOnly cookie).
 The **Pull request** tab (`PullPanel.tsx`, `PullChecks.tsx`,
 `PullComments.tsx`).
 
-**Publish (`P`).** Pushes the branch (never forced, hooks off) and opens a
-draft PR, or a ready one when the project's **Open new PRs as drafts** is
-off, with the commits as its body and a short title. With a PR open, it
-pushes new commits. **Link pull request** links an existing one, and a PR
-the agent opened for the branch is linked on its own. When nothing is ahead
-but the agent changed files, the tab says they are not committed yet, and
-**Ask to commit** puts that request in the composer.
+**One action at a time.** The tab leads with the step the branch needs
+(`pullStage` in `lib/code/pull-stage.ts`):
+
+- **Nothing to publish yet** until the agent changes files.
+- **Create PR (`P`)** with an optional title (written from the commits if
+  empty). When the agent left files uncommitted, it reads **Commit and create
+  PR**: the app commits them, titled after the thread, then pushes (never
+  forced, hooks off) and opens a draft PR, or a ready one when the project's
+  **Open new PRs as drafts** is off.
+- **An open PR** (below). When files changed since the last push, **Commit and
+  push** sends them.
+- **Merged into main on this machine:** the agent merged the branch into the
+  checkout's base branch without pushing. **Push main** pushes it,
+  fast-forward only (`POST /code/threads/:id/push-base`); **Create PR
+  instead** opens a pull request from the branch.
+- **In main on GitHub:** the work reached the base branch without a pull
+  request, or its PR merged. **Archive thread** ends the thread. After a
+  squash-merged PR only commits made since count, so Create PR does not come
+  back.
+
+**Link an existing PR** is in the tab's menu; a PR the agent opened for the
+branch is linked on its own.
+
+**Next steps.** When a turn ends, the thread shows the same states as
+buttons above the composer (`NextSteps.tsx`): Create PR and Review changes,
+Commit and push or Merge on an open PR, Push main, and Archive.
 
 **The tab.** The PR's number, state, title and `branch → base`, then:
 
