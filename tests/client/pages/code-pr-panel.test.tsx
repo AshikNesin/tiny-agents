@@ -37,6 +37,8 @@ let earlier: ThreadPullsView["earlier"] = [];
 let autofix = false;
 let ignored: string[] = [];
 const published: unknown[] = [];
+let yolo: NonNullable<ThreadPullsView["active"]>["yolo"] = null;
+const yoloCalls: unknown[] = [];
 
 vi.mock("@groot/shell/lib/api", async (importOriginal) => {
   const original = await importOriginal<typeof import("@groot/shell/lib/api")>();
@@ -73,6 +75,14 @@ vi.mock("@groot/shell/lib/api", async (importOriginal) => {
           landed = "github";
           return view(checkState);
         }
+        if (path === "/code/threads/shelley%3At1/pr/yolo") {
+          yoloCalls.push(body);
+          yolo = {
+            method: (body as unknown as { method: "squash" }).method,
+            waiting: "Waiting for Tests to finish.",
+          };
+          return view(checkState);
+        }
         if (path === "/code/threads/shelley%3At1/publish") {
           published.push(body);
           return view(checkState);
@@ -80,6 +90,12 @@ vi.mock("@groot/shell/lib/api", async (importOriginal) => {
         if (path !== "/code/threads/shelley%3At1/pr/draft") throw new Error(`unexpected ${path}`);
         readied.push(body.draft);
         draft = body.draft;
+        return view(checkState);
+      },
+      delete: async (path: string) => {
+        if (path !== "/code/threads/shelley%3At1/pr/yolo") throw new Error(`unexpected ${path}`);
+        yoloCalls.push("off");
+        yolo = null;
         return view(checkState);
       },
       patch: async (path: string, change: { body?: string }) => {
@@ -142,6 +158,7 @@ function view(state: CheckState): ThreadPullsView {
           syncedAt: null,
           autofix,
           loop: { status: autofix ? "watching" : "off", reason: null },
+          yolo,
           stalled: [],
           ignored,
           passes: [],
@@ -205,6 +222,8 @@ beforeEach(() => {
   earlier = [];
   autofix = false;
   ignored = [];
+  yolo = null;
+  yoloCalls.length = 0;
   visibility = "visible";
   vi.spyOn(document, "visibilityState", "get").mockImplementation(() => visibility);
   vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "setTimeout", "clearTimeout"] });
@@ -336,6 +355,25 @@ describe("getting it merged", () => {
     await wait(0);
     expect(screen.getByRole("button", { name: "Merge" })).toBeEnabled();
     expect(screen.queryByText(/Merge opens once/)).toBeNull();
+  });
+
+  it("YOLO Merge arms an unattended merge, says what it waits for, and can be called off", async () => {
+    checkState = "failure";
+    panel();
+    await wait(0);
+    expect(screen.getByRole("button", { name: "Merge" })).toBeDisabled();
+    act(() => screen.getByRole("button", { name: /YOLO Merge/ }).click());
+    await wait(0);
+    expect(yoloCalls).toEqual([{ method: "squash" }]);
+    const armed = screen.getByRole("status", { name: "YOLO Merge" });
+    expect(armed).toHaveTextContent(
+      "Merges #12 by itself once it can. Waiting for Tests to finish.",
+    );
+    expect(screen.queryByRole("button", { name: /YOLO Merge/ })).toBeNull();
+    act(() => screen.getByRole("button", { name: "Call off" }).click());
+    await wait(0);
+    expect(yoloCalls).toEqual([{ method: "squash" }, "off"]);
+    expect(screen.getByRole("button", { name: /YOLO Merge/ })).toBeEnabled();
   });
 
   it("commits what the agent left and creates the PR in one step", async () => {

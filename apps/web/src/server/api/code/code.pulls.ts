@@ -31,6 +31,7 @@ import { codeGitHub } from "./code.github";
 import { codeHub } from "./code.hub";
 import { pullTitle } from "./code.naming";
 import { finishPass, startPass, timeOutPass } from "./code.passes";
+import { yoloWaiting } from "./code.yolo";
 import {
   onProjectThreadArchived,
   projectSettings,
@@ -316,6 +317,68 @@ export async function mergePull(threadId: string, method: MergeMethod): Promise<
   await reconcileNow(open.id);
 }
 
+const YOLO_LOOK_MS = 30_000;
+
+export async function armYoloMerge(threadId: string, method: MergeMethod): Promise<void> {
+  const { project, open, repo, github } = await openPullContext(threadId);
+  const snapshot = await (await github()).snapshot(repo, open.number);
+  if (!snapshot.mergeMethods.includes(method)) {
+    throw Boom.conflict(`${repo.owner}/${repo.name} does not allow ${method} merges.`);
+  }
+  await updatePull(open.id, { yoloMethod: method, yoloWaiting: null });
+  logger.info({ pull: open.id, project: project.id, method }, "Code: YOLO Merge armed");
+  await reconcileNow(open.id);
+  await armReconcile(open.id, YOLO_LOOK_MS);
+}
+
+export async function cancelYoloMerge(threadId: string): Promise<void> {
+  const { open } = await openPullContext(threadId);
+  await updatePull(open.id, { yoloMethod: null, yoloWaiting: null });
+}
+
+function keepWaitingWhenAThreadWillNotResolve(error: unknown, threadId: string) {
+  logger.warn({ error, threadId }, "Code: YOLO Merge could not resolve a review thread");
+}
+
+async function yoloStep(
+  pull: CodePullRow,
+  snapshot: PullSnapshot,
+  github: GitHubClient,
+  repo: ReturnType<typeof repoOf>,
+): Promise<"merged" | "waiting"> {
+  const method = pull.yoloMethod!;
+  for (const thread of snapshot.threads.filter((t) => !t.resolved)) {
+    await github
+      .resolveThread(thread.id)
+      .catch((error: unknown) => keepWaitingWhenAThreadWillNotResolve(error, thread.id));
+  }
+  let draft = snapshot.draft;
+  if (draft) {
+    try {
+      await github.markReady(snapshot.id);
+      draft = false;
+    } catch (error) {
+      logger.warn({ error, pull: pull.id }, "Code: YOLO Merge could not mark the PR ready");
+    }
+  }
+  const waiting = draft
+    ? "Waiting for the draft to be marked ready."
+    : yoloWaiting(snapshot, method);
+  if (waiting) {
+    await updatePull(pull.id, { yoloWaiting: waiting });
+    return "waiting";
+  }
+  try {
+    await github.merge(repo, pull.number, method);
+  } catch (error) {
+    await updatePull(pull.id, { yoloWaiting: `Waiting: GitHub said ${githubMessage(error)}` });
+    return "waiting";
+  }
+  await updatePull(pull.id, { yoloMethod: null, yoloWaiting: null });
+  notify(pull, "merged");
+  return "merged";
+}
+
 export async function setPullDraft(threadId: string, draft: boolean): Promise<void> {
   const context = await openPullContext(threadId);
   const { open } = context;
@@ -405,6 +468,13 @@ async function reconcile(pullId: string, now = Date.now()): Promise<number | nul
   let pull = await cacheSnapshot(pullId, snapshot);
   if (!pull) return null;
   const settings = autofixSettings(project.settings);
+
+  if (snapshot.state === "open" && pull.yoloMethod) {
+    if ((await yoloStep(pull, snapshot, github, repoOf(project))) === "merged") {
+      return reconcile(pullId, now);
+    }
+    pull = (await getPull(pull.id)) ?? pull;
+  }
 
   if (snapshot.state === "merged") {
     await moveLoop(pull.id, "merged");
@@ -514,7 +584,8 @@ async function reconcile(pullId: string, now = Date.now()): Promise<number | nul
     break;
   }
   const latest = (await getPull(pull.id)) ?? pull;
-  return nextLookMs(snapshot, latest.loopStatus, lastPushAt, now, settings.stallHours);
+  const next = nextLookMs(snapshot, latest.loopStatus, lastPushAt, now, settings.stallHours);
+  return latest.yoloMethod && next !== null ? Math.min(next, YOLO_LOOK_MS) : next;
 }
 
 async function archiveThread(threadId: string): Promise<void> {
@@ -637,6 +708,7 @@ async function pullView(
     syncedAt: row.syncedAt?.toISOString() ?? null,
     autofix: row.autofix,
     loop: { status: row.loopStatus, reason: row.loopReason },
+    yolo: row.yoloMethod ? { method: row.yoloMethod, waiting: row.yoloWaiting } : null,
     snapshot,
     stalled: snapshot
       ? stalledChecks(snapshot, Date.now(), settings.stallHours).map((c) => c.name)

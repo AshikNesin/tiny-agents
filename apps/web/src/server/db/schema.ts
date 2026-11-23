@@ -253,6 +253,8 @@ export const codePullRequests = sqliteTable(
     ownerInputAt: ms("owner_input_at"),
     pendingJobId: text("pending_job_id"),
     stalledNotifiedSha: text("stalled_notified_sha"),
+    yoloMethod: text("yolo_method").$type<"merge" | "squash" | "rebase">(),
+    yoloWaiting: text("yolo_waiting"),
     createdAt: createdAt(),
   },
   (t) => [

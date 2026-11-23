@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Code2, X } from "lucide-react";
+import { ArrowLeft, Code2, Maximize2, Minimize2, X } from "lucide-react";
 import { toast } from "sonner";
 import { EmptyState, monoClass } from "@groot/ui";
 import { isDialogOpen, isEditable, useHotkey } from "@groot/ui/hotkeys";
@@ -21,7 +21,7 @@ import { harnessOf, useCodeStore } from "../../store/code";
 import { useUiStore, type CodePane } from "../../store/ui";
 import { CodeSettings } from "./CodeSettings";
 import { PageKeys, Kbd, useKeyCommands, type KeyCommand } from "../../components/keys";
-import { FilesPane } from "./FilesPane";
+import { FilesPane, type FilesFocus } from "./FilesPane";
 import { NewThreadDialog } from "./NewThreadDialog";
 import { TerminalPane } from "./TerminalPane";
 import { CodeCommandMenu } from "./CodeCommandMenu";
@@ -66,14 +66,19 @@ function focusComposer() {
 function PaneHeader({
   pane,
   hasPull,
+  wide,
   onPane,
+  onWide,
   onClose,
 }: {
   pane: CodePane;
   hasPull: boolean;
+  wide: boolean;
   onPane(pane: CodePane): void;
+  onWide(): void;
   onClose(): void;
 }) {
+  const WideIcon = wide ? Minimize2 : Maximize2;
   return (
     <div className="border-border flex h-11 shrink-0 items-center gap-1 border-b px-2">
       <div role="tablist" aria-label="Work pane" className="flex min-w-0 flex-1 items-center gap-1">
@@ -97,6 +102,17 @@ function PaneHeader({
           </button>
         ))}
       </div>
+      <button
+        type="button"
+        onClick={onWide}
+        aria-label={wide ? "Restore the work pane" : "Widen the work pane"}
+        title={wide ? "Restore the work pane" : "Widen the work pane over the thread"}
+        aria-pressed={wide}
+        className="text-muted-foreground hover:bg-muted hover:text-foreground hidden h-7 items-center gap-1.5 rounded-lg px-1.5 outline-none focus-visible:ring-2 focus-visible:ring-ring/50 lg:flex"
+      >
+        <WideIcon className="size-3.5" />
+        <Kbd keys="z" />
+      </button>
       <button
         type="button"
         onClick={onClose}
@@ -123,6 +139,8 @@ export function CodeWorkspace() {
   const toggleUiSidebar = useUiStore((s) => s.toggleSidebar);
   const pane = useUiStore((s) => s.codePane);
   const setPane = useUiStore((s) => s.setCodePane);
+  const paneWide = useUiStore((s) => s.codePaneWide);
+  const toggleWide = useUiStore((s) => s.toggleCodePaneWide);
   const setHelp = useKeyCommands((s) => s.setHelp);
   const [menuOpen, setMenuOpen] = useState(false);
   const { projects, reload: reloadProjects } = useProjects();
@@ -152,6 +170,7 @@ export function CodeWorkspace() {
   const harness = row ? harnessOf(harnesses, row.instanceId) : undefined;
   const project = row?.projectId ? projects?.find((p) => p.id === row.projectId) : undefined;
   const openPane: CodePane | null = threadId && pane && project ? pane : null;
+  const wide = Boolean(openPane) && paneWide;
 
   const changeVersion = useLiveChanges(
     threadId ?? null,
@@ -173,16 +192,15 @@ export function CodeWorkspace() {
     [threadId, setPane],
   );
   const openThread = useCallback((id: string) => navigate(threadPath(id)), [navigate]);
+  const [filesFocus, setFilesFocus] = useState<FilesFocus | null>(null);
+  const clearFilesFocus = useCallback(() => setFilesFocus(null), []);
   const focusFiles = useCallback(
     (which: "name" | "text") => {
       if (!threadId) return;
-      const focus = () =>
-        window.dispatchEvent(new CustomEvent("code:files-focus", { detail: which }));
-      if (openPane === "files") return focus();
       setPane("files");
-      setTimeout(focus, 50);
+      setFilesFocus({ which, at: Date.now() });
     },
-    [threadId, setPane, openPane],
+    [threadId, setPane],
   );
   const confirm = useConfirm();
   const prNumber = row?.pr?.number;
@@ -391,6 +409,14 @@ export function CodeWorkspace() {
         run: () => setPane(openPane === "terminal" ? null : "terminal"),
       },
       {
+        id: "wide",
+        group: "Pane",
+        keys: "z",
+        label: "Widen the work pane over the thread, or put it back",
+        enabled: Boolean(openPane),
+        run: toggleWide,
+      },
+      {
         id: "pane",
         group: "Pane",
         keys: "\\",
@@ -418,6 +444,7 @@ export function CodeWorkspace() {
       showPane,
       setPane,
       openPane,
+      toggleWide,
       setHelp,
       focusFiles,
       row?.pr,
@@ -466,6 +493,7 @@ export function CodeWorkspace() {
       <aside
         id="code-sidebar"
         aria-label="Threads"
+        hidden={wide || undefined}
         data-state={listOpen ? "open" : "closed"}
         className={cn(
           "bg-sidebar text-sidebar-foreground border-sidebar-border w-full shrink-0 flex-col lg:w-64 lg:border-r-[0.5px]",
@@ -486,6 +514,7 @@ export function CodeWorkspace() {
       </aside>
 
       <main
+        hidden={wide || undefined}
         className={cn(
           "relative min-w-0 flex-1 flex-col",
           openPane && "lg:min-w-90",
@@ -555,10 +584,12 @@ export function CodeWorkspace() {
       </main>
 
       {openPane && threadId && (
-        <ResizablePane>
+        <ResizablePane wide={wide}>
           <PaneHeader
             pane={openPane}
             hasPull={Boolean(project)}
+            wide={wide}
+            onWide={toggleWide}
             onPane={showPane}
             onClose={() => setPane(null)}
           />
@@ -578,7 +609,12 @@ export function CodeWorkspace() {
                 onArchive={archive}
               />
             ) : openPane === "files" ? (
-              <FilesPane threadId={threadId} refreshKey={changesKey} />
+              <FilesPane
+                threadId={threadId}
+                refreshKey={changesKey}
+                focus={filesFocus}
+                onFocused={clearFilesFocus}
+              />
             ) : openPane === "terminal" && project ? (
               <TerminalPane threadId={threadId} place={row?.cwd ?? project.name} />
             ) : project ? (

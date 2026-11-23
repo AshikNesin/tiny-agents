@@ -11,7 +11,7 @@ The owner's coding workspace at `/code`: threads grouped by status on the left, 
 - `code-pane` `1` Changes (the branch against its base), `2` Pull request, `\` hides or shows the pane, `[` the list.
 - `code-new` `n` opens the new thread dialog; `Enter` starts the thread in its own worktree and branch.
 - `code-rewind` `t` runs the last turn again and `e` edits it first: the files go back to how they were before that turn, with Undo.
-- `code-files` `3` Files: `p` opens a file by name, `s` searches the worktree, the editor saves with `⌘S`.
+- `code-files` `3` Files: the worktree as a folder tree with changed files marked; `p` filters it by name, `s` searches inside the files, a file opens beside the tree and saves with `⌘S`. `z` widens the work pane over the thread.
 - `code-terminal` `4` (or `` ` ``) opens the work pane's Terminal tab, a shell in the thread's worktree.
 - `code-commands` `:` opens the Code command menu: the page's commands and its threads.
 - `code-keys` `?` lists every key; the command palette's `Code actions` group (`Chat actions` on the chat page) runs them.
@@ -38,7 +38,7 @@ Preconditions:
 - **Stop.** Cancel the queued message, `Escape` (leaves the composer), `Escape` again: `GET /api/v1/code/threads` reports the thread idle and the transcript ends with `Stopped.`.
 - **Panes.** `1`: the Changes tab is selected and shows `NOTES.md` with the committed line. `2`: `is 1 commit ahead of main` and a Publish button. `\` and `[` hide and restore the pane and the list.
 - **Keys.** `?` lists the keys; ⌘K → `Changes` selects the Changes tab.
-- **Files and terminal.** `p`, type `notes`, wait for the list, `Enter`: the editor opens `NOTES.md`. `s` searches the worktree. `` ` `` opens the Terminal tab; wait for the prompt before typing. `:` → `Files` selects the Files tab.
+- **Files and terminal.** `p`, type `notes`, click `NOTES.md` in the tree: the editor opens it beside the tree. `s` searches the worktree. `` ` `` opens the Terminal tab; wait for the prompt before typing. `:` → `Files` selects the Files tab.
 - **Rewind.** `n` starts a thread from the dialog; `t` runs its last turn again from the files as they were. A message with `fail` ends the turn with an error and the row reads `failed`.
 - **Review.** Publish the first thread, set the fake pull request's author through the fake GitHub's control server (the app's port + 3: `POST /pulls/<n>`, `POST /inbox`), then `/code`: the row under `Reviews` opens the review. `r`: the brief reads `Adds NOTES.md` and two findings show. `y`, then `d`: none stay open. `Shift+X`: the dialog is on `Request changes` with a summary; Submit, and `GET /state` on the control server lists the review under `submitted` with the added finding as its comment.
 - **Open in editor.** Launch with `--local-sandbox` too, so the demo agent's SSH target has a port. The arrow button at the end of the thread header (or `o`) opens `code-open-editor` on Cursor with host `tiny-agents-sandbox` and the `~/.ssh/config` entry. Pick Zed, type a plain host: the entry goes and Copy link gives `zed://ssh/<host>/<worktree>`. Open in Zed, then a fresh tab: the dialog reopens on Zed with that host. Headless Chromium stops taking input in the tab that tried the `zed://` link, so check in a new tab. Proof: `ta-verify drive $S/journeys/code-open-editor.mjs` → `sandbox-config`, `zed`.

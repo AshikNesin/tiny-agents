@@ -75,6 +75,8 @@ import {
   linkPull,
   manualPass,
   mergePull,
+  armYoloMerge,
+  cancelYoloMerge,
   setPullDraft,
   publish,
   pushBase,
@@ -331,6 +333,22 @@ router.post("/code/threads/:id/pr/merge", async (c) => {
     z.object({ method: z.enum(["merge", "squash", "rebase"]) }),
   );
   await mergePull(id, method);
+  return ok<ThreadPullsView>(c, await threadPulls(id, false));
+});
+
+router.post("/code/threads/:id/pr/yolo", async (c) => {
+  const id = threadParam(c.req.param("id"));
+  const { method } = await parseBody(
+    c,
+    z.object({ method: z.enum(["merge", "squash", "rebase"]) }),
+  );
+  await armYoloMerge(id, method);
+  return ok<ThreadPullsView>(c, await threadPulls(id, false));
+});
+
+router.delete("/code/threads/:id/pr/yolo", async (c) => {
+  const id = threadParam(c.req.param("id"));
+  await cancelYoloMerge(id);
   return ok<ThreadPullsView>(c, await threadPulls(id, false));
 });
 

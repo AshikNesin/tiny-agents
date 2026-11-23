@@ -86,6 +86,17 @@ describe("useHotkey", () => {
     input.remove();
   });
 
+  it("keeps a bare key out of a text field inside a shadow root, like the Files tree's filter", () => {
+    const { handler } = bindHotkey("n");
+    const host = document.createElement("div");
+    document.body.append(host);
+    const input = document.createElement("input");
+    host.attachShadow({ mode: "open" }).append(input);
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "n", bubbles: true, composed: true }));
+    expect(handler).not.toHaveBeenCalled();
+    host.remove();
+  });
+
   it("lets only the most recently bound of two global hotkeys answer", () => {
     const first = bindHotkey("mod+j");
     const second = bindHotkey("mod+j");

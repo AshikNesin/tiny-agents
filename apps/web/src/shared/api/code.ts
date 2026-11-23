@@ -109,6 +109,7 @@ export interface PullView {
   syncedAt: string | null;
   autofix: boolean;
   loop: { status: AutofixStatus; reason: string | null };
+  yolo: { method: MergeMethod; waiting: string | null } | null;
   snapshot: PullSnapshot | null;
   stalled: string[];
   ignored: string[];
