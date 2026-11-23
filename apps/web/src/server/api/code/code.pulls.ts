@@ -115,7 +115,7 @@ function pullBody(commits: Array<{ sha: string; subject: string }>): string {
 
 export async function publish(
   threadId: string,
-  input: { title?: string; body?: string } = {},
+  input: { title?: string; body?: string; commit?: boolean } = {},
 ): Promise<CodePullRow> {
   const { thread, project } = await requireProjectThread(threadId);
   if (!thread.worktree || !thread.branch) {
@@ -124,6 +124,22 @@ export async function publish(
   const services = codeGitHub();
   const ws = await services.workspace(project);
   const repo = repoOf(project);
+  if (input.commit && (await ws.uncommitted(thread.worktree)).length > 0) {
+    const login = await (
+      await services.client(project)
+    )
+      .viewer()
+      .then((viewer) => viewer.login)
+      .catch(() => "tiny-agents");
+    await ws
+      .commitAll(thread.worktree, thread.title?.trim() || `Changes on ${thread.branch}`, {
+        name: login,
+        email: `${login}@users.noreply.github.com`,
+      })
+      .catch((error: unknown) => {
+        throw Boom.conflict(githubMessage(error));
+      });
+  }
   const commits = await ws.commitsAhead(thread.worktree, project.baseBranch);
   const open = await openPullOf(threadId);
   if (commits.length === 0 && !open) {
@@ -639,6 +655,8 @@ function passItems(raw: string): Array<{ id: string; title: string }> {
   }
 }
 
+const countUnknownWhenGitFails = (): null => null;
+
 export async function threadPulls(threadId: string, fresh = true): Promise<ThreadPullsView> {
   const found = await projectThread(threadId);
   if (!found) {
@@ -648,6 +666,7 @@ export async function threadPulls(threadId: string, fresh = true): Promise<Threa
       active: null,
       earlier: [],
       ahead: null,
+      uncommitted: null,
     };
   }
   const { project, thread } = found;
@@ -659,12 +678,20 @@ export async function threadPulls(threadId: string, fresh = true): Promise<Threa
   const rows = await pullsOf(threadId);
   const active = rows.find((r) => r.state === "open") ?? null;
   let ahead: number | null = null;
+  let uncommitted: number | null = null;
   if (thread.worktree) {
-    ahead = await codeGitHub()
-      .workspace(project)
-      .then((ws) => ws.commitsAhead(thread.worktree!, project.baseBranch))
-      .then((c) => c.length)
-      .catch(() => null);
+    const worktree = thread.worktree;
+    const ws = await codeGitHub().workspace(project);
+    [ahead, uncommitted] = await Promise.all([
+      ws
+        .commitsAhead(worktree, project.baseBranch)
+        .then((c) => c.length)
+        .catch(countUnknownWhenGitFails),
+      ws
+        .uncommitted(worktree)
+        .then((files) => files.length)
+        .catch(countUnknownWhenGitFails),
+    ]);
   }
   const ownerLogin = await codeGitHub()
     .client(project)
@@ -684,5 +711,6 @@ export async function threadPulls(threadId: string, fresh = true): Promise<Threa
         state: r.state,
       })),
     ahead,
+    uncommitted,
   };
 }

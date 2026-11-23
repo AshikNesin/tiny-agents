@@ -29,6 +29,7 @@ let draft = false;
 const readied: boolean[] = [];
 let noPull = false;
 let ahead: number | null = 1;
+let uncommitted: number | null = 0;
 let changed: string[] = [];
 let earlier: ThreadPullsView["earlier"] = [];
 let autofix = false;
@@ -112,6 +113,7 @@ function view(state: CheckState): ThreadPullsView {
     project,
     branch: "ta/fix-1a2b",
     ahead,
+    uncommitted,
     earlier,
     active: noPull
       ? null

@@ -246,6 +246,7 @@ router.post("/code/threads/:id/publish", async (c) => {
     z.object({
       title: z.string().trim().max(250).optional(),
       body: z.string().max(60_000).optional(),
+      commit: z.boolean().optional(),
     }),
   );
   await publish(id, body);

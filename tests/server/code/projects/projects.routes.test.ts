@@ -433,6 +433,30 @@ describe("publish and the PR tab", () => {
     expect(second.body.data?.active?.number).toBe(2);
   });
 
+  it("commits what the agent left uncommitted, then opens the PR, when asked to", async () => {
+    const project = await newProject();
+    const thread = await newThread(project.id);
+    const enc = encodeURIComponent(thread.id);
+    await sh(local, `cd ${thread.worktree} && printf 'fixed\\n' > src/login.ts`);
+
+    const before = await pr(thread.id);
+    expect([before.ahead, before.uncommitted]).toEqual([0, 1]);
+    expect((await call("POST", `/threads/${enc}/publish`, {})).status).toBe(400);
+
+    const published = await call<ThreadPullsView>("POST", `/threads/${enc}/publish`, {
+      commit: true,
+    });
+
+    expect(published.status).toBe(201);
+    expect(published.body.data).toMatchObject({ ahead: 1, uncommitted: 0, active: { number: 1 } });
+    const row = await db.query.codeThreads.findFirst({ where: eq(codeThreads.id, thread.id) });
+    expect(row?.title).toBeTruthy();
+    expect(await sh(local, `git -C ${thread.worktree} log -1 --format=%s`)).toBe(row!.title);
+    expect(await remoteHead(thread.branch)).toBe(
+      await sh(local, `git -C ${thread.worktree} rev-parse HEAD`),
+    );
+  });
+
   it("tells open Code pages when a thread's PR opens or merges, so the header shows it", async () => {
     const project = await newProject();
     const thread = await newThread(project.id);
