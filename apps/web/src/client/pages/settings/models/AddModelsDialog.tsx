@@ -479,7 +479,9 @@ function AddModelsForm({ templates, template, onDone }: FormProps) {
 
   const check = () =>
     busyWith(async () => {
-      const { models } = await discover.mutateAsync(connectionOf(draft));
+      const found = await run(() => discover.mutateAsync(connectionOf(draft)));
+      if (!found) return;
+      const { models } = found;
       setFound(models);
       setChosen(new Set(aggregator ? [] : models.map((m) => m.upstreamId)));
       if (models.length === 0) {
@@ -523,11 +525,14 @@ function AddModelsForm({ templates, template, onDone }: FormProps) {
     );
   const test = () =>
     busyWith(async () => {
-      const result = await testModel.mutateAsync({
-        ...connectionOf(draft),
-        upstreamId: single.upstreamId.trim(),
-        image: single.imageInput === "yes",
-      });
+      const result = await run(() =>
+        testModel.mutateAsync({
+          ...connectionOf(draft),
+          upstreamId: single.upstreamId.trim(),
+          image: single.imageInput === "yes",
+        }),
+      );
+      if (!result) return;
       setTested(result.ok ? `Works (${result.latencyMs} ms)` : null);
       if (result.ok) toast.success(`The model answered in ${result.latencyMs} ms`);
       else toast.error(result.error ?? "The model didn't answer");

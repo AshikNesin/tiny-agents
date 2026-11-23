@@ -51,6 +51,7 @@ const api = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/vault-api", () => ({
   apiError: (_error: unknown, fallback: string) => fallback,
+  hasStepUp: () => true,
   vaultApi: api,
 }));
 

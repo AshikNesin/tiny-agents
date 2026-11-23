@@ -1,7 +1,16 @@
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { eq } from "drizzle-orm";
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vite-plus/test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vite-plus/test";
 import { generateToken } from "@groot/core/utils/jwt.utils";
 import { hashPassword } from "@groot/core/utils/password.utils";
 import {
@@ -21,10 +30,15 @@ import {
   clearStatusCache,
   forgetAppCredential,
 } from "../../../apps/web/src/server/api/vault/vault.service";
-import { clearStepUpsForTests } from "../../../apps/web/src/server/api/vault/vault.stepup";
+import {
+  clearStepUpsForTests,
+  issueStepUp,
+} from "../../../apps/web/src/server/api/vault/vault.stepup";
 import {
   bindModelRuntime,
   FAUX_PROVIDER_ID,
+  reloadModels,
+  vaultCredentials,
 } from "../../../apps/web/src/server/api/models/models.config";
 import { api, createTestApp } from "../helpers";
 import { closeAppRuntime, openAppRuntime } from "../fixtures";
@@ -36,6 +50,25 @@ let server: Server;
 let endpoint: string;
 let seen: { path: string; auth?: string }[] = [];
 let listed = ["model-a", "model-b"];
+let completions: { method: string; model: string }[] = [];
+
+const SSE_CHUNKS = [
+  {
+    id: "chatcmpl-1",
+    object: "chat.completion.chunk",
+    created: 1,
+    model: "model-a",
+    choices: [{ index: 0, delta: { role: "assistant", content: "OK" }, finish_reason: null }],
+  },
+  {
+    id: "chatcmpl-1",
+    object: "chat.completion.chunk",
+    created: 1,
+    model: "model-a",
+    choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+    usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+  },
+];
 
 beforeAll(async () => {
   server = createServer((req, res) => {
@@ -56,6 +89,33 @@ beforeAll(async () => {
       res.writeHead(302, { location: "http://169.254.169.254/" }).end();
       return;
     }
+    if (req.url === "/redirect/chat/completions") {
+      res.writeHead(302, { location: "/v1/chat/completions" }).end();
+      return;
+    }
+    if (req.url === "/metadata-redirect/chat/completions") {
+      res.writeHead(302, { location: "http://169.254.169.254/latest/meta-data/" }).end();
+      return;
+    }
+    if (req.url === "/v1/chat/completions") {
+      if (req.method !== "POST") {
+        res.writeHead(405).end();
+        return;
+      }
+      const chunks: Buffer[] = [];
+      req.on("data", (chunk: Buffer) => chunks.push(chunk));
+      req.on("end", () => {
+        completions.push({
+          method: req.method ?? "",
+          model: String(JSON.parse(Buffer.concat(chunks).toString("utf8")).model),
+        });
+        res.writeHead(200, { "content-type": "text/event-stream" });
+        for (const chunk of SSE_CHUNKS) res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+        res.write("data: [DONE]\n\n");
+        res.end();
+      });
+      return;
+    }
     res.writeHead(404).end();
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -66,9 +126,10 @@ afterAll(() => new Promise<void>((resolve) => server.close(() => resolve())));
 
 const app = createTestApp();
 let token: string;
+let user: { id: number; email: string };
 
 beforeAll(async () => {
-  const [user] = await db
+  const [row] = await db
     .insert(users)
     .values({
       email: "models-owner@example.com",
@@ -76,7 +137,8 @@ beforeAll(async () => {
       name: "O",
     })
     .returning();
-  token = await generateToken({ userId: user!.id, email: user!.email });
+  user = { id: row!.id, email: row!.email };
+  token = await generateToken({ userId: user.id, email: user.email });
 });
 
 beforeEach(async () => {
@@ -120,9 +182,7 @@ function call(
 }
 
 async function stepUp(): Promise<string> {
-  const response = await call("/vault/step-up", { method: "POST", json: { password: PASSWORD } });
-  expect(response.status).toBe(200);
-  return response.body.data.token as string;
+  return issueStepUp(user.id).token;
 }
 
 const connection = {
@@ -155,6 +215,7 @@ describe("models routes", () => {
   it("discovers without saving, then creates an account with step-up", async () => {
     const found = await call("/models/discover", {
       method: "POST",
+      stepUp: await stepUp(),
       json: { ...connection, baseUrl: endpoint },
     });
     expect(found.status).toBe(200);
@@ -182,6 +243,7 @@ describe("models routes", () => {
   it("connects a Claude plan with no models until Claude Code can list them", async () => {
     const found = await call("/models/discover", {
       method: "POST",
+      stepUp: await stepUp(),
       json: { kind: "claude-plan", allowPrivateNetwork: false },
     });
     expect(found.status).toBe(200);
@@ -257,12 +319,14 @@ describe("models routes", () => {
   it("refuses a private endpoint unless the account opts in, and an http one for a public host", async () => {
     const privateOne = await call("/models/discover", {
       method: "POST",
+      stepUp: await stepUp(),
       json: { ...connection, baseUrl: endpoint, allowPrivateNetwork: false },
     });
     expect(privateOne.status).toBe(400);
     expect(seen).toEqual([]);
     const plainHttp = await call("/models/discover", {
       method: "POST",
+      stepUp: await stepUp(),
       json: { ...connection, baseUrl: "http://example.com/v1", allowPrivateNetwork: false },
     });
     expect(plainHttp.status).toBe(400);
@@ -272,21 +336,148 @@ describe("models routes", () => {
   it("never follows a redirect", async () => {
     const response = await call("/models/discover", {
       method: "POST",
+      stepUp: await stepUp(),
       json: { ...connection, baseUrl: endpoint.replace("/v1", "/redirect") },
     });
     expect(response.status).toBe(400);
     expect(response.body.error?.message).toMatch(/redirect/);
   });
 
+  it("needs step-up to probe an endpoint with discover or test", async () => {
+    const found = await call("/models/discover", {
+      method: "POST",
+      json: { ...connection, baseUrl: endpoint },
+    });
+    expect(found.status).toBe(403);
+    expect(found.body.error?.details).toEqual({ code: "step_up_required" });
+    const tested = await call("/models/test", {
+      method: "POST",
+      json: { ...connection, baseUrl: endpoint, upstreamId: "model-a" },
+    });
+    expect(tested.status).toBe(403);
+    expect(tested.body.error?.details).toEqual({ code: "step_up_required" });
+    expect(seen).toEqual([]);
+  });
+
+  it("refuses a completion redirected to a private address unless the account allows one", async () => {
+    const calls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        calls.push(url);
+        if (url.endsWith("/chat/completions")) {
+          return new Response(null, {
+            status: 302,
+            headers: { location: "http://169.254.169.254/latest/meta-data/" },
+          });
+        }
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }),
+    );
+    const refused = await call("/models/test", {
+      method: "POST",
+      stepUp: await stepUp(),
+      json: {
+        kind: "openai-chat",
+        apiKey: SENTINEL,
+        baseUrl: "https://203.0.113.9/v1",
+        upstreamId: "model-a",
+        allowPrivateNetwork: false,
+      },
+    });
+    expect(refused.status).toBe(200);
+    expect(refused.body.data.ok).toBe(false);
+    expect(refused.body.data.error).toMatch(/private/);
+    expect(calls).toEqual(["https://203.0.113.9/v1/chat/completions"]);
+    calls.length = 0;
+
+    const allowed = await call("/models/test", {
+      method: "POST",
+      stepUp: await stepUp(),
+      json: {
+        kind: "openai-chat",
+        apiKey: SENTINEL,
+        baseUrl: "https://203.0.113.9/v1",
+        upstreamId: "model-a",
+        allowPrivateNetwork: true,
+      },
+    });
+    expect(allowed.status).toBe(200);
+    expect(calls).toEqual([
+      "https://203.0.113.9/v1/chat/completions",
+      "http://169.254.169.254/latest/meta-data/",
+    ]);
+    vi.unstubAllGlobals();
+  }, 30_000);
+
+  it("refuses a saved model's completion redirected to a private address, honoring the account's flag", async () => {
+    bindModelRuntime(undefined);
+    await closeAppRuntime();
+    bindModelRuntime(await openAppRuntime({ credentials: vaultCredentials }));
+    const calls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        calls.push(url);
+        if (url.endsWith("/chat/completions")) {
+          return new Response(null, {
+            status: 302,
+            headers: { location: "http://169.254.169.254/latest/meta-data/" },
+          });
+        }
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }),
+    );
+    const created = (
+      await createAccount(await stepUp(), {
+        baseUrl: "https://203.0.113.9/v1",
+        allowPrivateNetwork: false,
+        discovery: "manual",
+        models: ["model-a"],
+      })
+    ).body.data;
+    const refused = await call("/models/test", {
+      method: "POST",
+      stepUp: await stepUp(),
+      json: { modelId: created.models[0].id },
+    });
+    expect(refused.status).toBe(200);
+    expect(refused.body.data.ok).toBe(false);
+    expect(refused.body.data.error).toMatch(/private/);
+    expect(calls).toEqual(["https://203.0.113.9/v1/chat/completions"]);
+
+    await db
+      .update(providers)
+      .set({ allowPrivateNetwork: true })
+      .where(eq(providers.id, created.id));
+    await reloadModels();
+    calls.length = 0;
+    const allowed = await call("/models/test", {
+      method: "POST",
+      stepUp: await stepUp(),
+      json: { modelId: created.models[0].id },
+    });
+    expect(allowed.status).toBe(200);
+    expect(calls).toEqual([
+      "https://203.0.113.9/v1/chat/completions",
+      "http://169.254.169.254/latest/meta-data/",
+    ]);
+    vi.unstubAllGlobals();
+  }, 30_000);
+
   it("says when the endpoint refuses the key, and refuses a Claude.ai token outright", async () => {
     const rejected = await call("/models/discover", {
       method: "POST",
+      stepUp: await stepUp(),
       json: { ...connection, baseUrl: endpoint, apiKey: "sk-wrong" },
     });
     expect(rejected.status).toBe(400);
     expect(rejected.body.error?.code).toBe("key_rejected");
     const oauth = await call("/models/discover", {
       method: "POST",
+      stepUp: await stepUp(),
       json: { ...connection, baseUrl: endpoint, apiKey: "sk-ant-oat01-abc" },
     });
     expect(oauth.status).toBe(400);
@@ -508,6 +699,7 @@ describe("models routes", () => {
   it("rejects unknown fields", async () => {
     const response = await call("/models/discover", {
       method: "POST",
+      stepUp: await stepUp(),
       json: { ...connection, baseUrl: endpoint, extra: true },
     });
     expect(response.status).toBe(400);

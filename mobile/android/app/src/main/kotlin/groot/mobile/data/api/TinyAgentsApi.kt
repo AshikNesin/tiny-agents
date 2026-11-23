@@ -416,8 +416,12 @@ class TinyAgentsApi(private val client: ApiClient) {
     suspend fun credentialRequest(taskId: Int): CredentialRequestView =
         CredentialRequestView.from(client.getObject("/vault/requests/$taskId"))
 
-    suspend fun submitCredentials(taskId: Int, values: Map<String, String>, save: Boolean) {
-        client.post("/vault/requests/$taskId/submit", jsonOf("values" to values, "save" to save))
+    suspend fun submitCredentials(taskId: Int, values: Map<String, String>, save: Boolean, stepUp: String?) {
+        client.post(
+            "/vault/requests/$taskId/submit",
+            jsonOf("values" to values, "save" to save),
+            stepUp?.let { stepUpHeader(it) } ?: emptyMap(),
+        )
     }
 
     suspend fun cancelCredentialRequest(taskId: Int) {

@@ -14,7 +14,13 @@ import {
 import { botConnections, connections, db, type Connection } from "../../db";
 import { reconcileBotConversation } from "../bots/bots.conversation";
 import { connectionCapabilityId, connectionTools, parseTools } from "../bots/bot-toolkits";
-import { connectionForState, createOAuthProvider, readOAuthState } from "./oauth";
+import {
+  clearOAuthState,
+  connectionForState,
+  createOAuthProvider,
+  readOAuthState,
+  stateStillCurrent,
+} from "./oauth";
 import { SecretLockedError } from "../../crypto/secret-box";
 import { ownHeaderHandle } from "./connection-secrets";
 import { resolveConnectionSecret } from "../vault/vault.service";
@@ -288,14 +294,18 @@ export class ConnectionManager {
     return live.connection.call(tool, args, signal);
   }
 
-  async authorize(id: string): Promise<string | undefined> {
+  async authorize(id: string, initiator?: number): Promise<string | undefined> {
     const row = await findConnection(id);
     if (!row || row.authType !== "oauth") return undefined;
     const live = this.#entry(id);
     live.authorizationUrl = undefined;
-    const provider = createOAuthProvider(id, (url) => {
-      live.authorizationUrl = url.href;
-    });
+    const provider = createOAuthProvider(
+      id,
+      (url) => {
+        live.authorizationUrl = url.href;
+      },
+      initiator,
+    );
     const result = await mcpAuth(provider, { serverUrl: row.url });
     if (result === "AUTHORIZED") {
       await this.connect(id);
@@ -304,15 +314,26 @@ export class ConnectionManager {
     return live.authorizationUrl;
   }
 
-  async finishAuthorization(state: string, code: string): Promise<string> {
+  async finishAuthorization(state: string, code: string, viewer?: number): Promise<string> {
     const id = await connectionForState(state);
     if (!id) throw new Error("Unknown or expired sign-in");
-    const row = await findConnection(id);
-    if (!row) throw Boom.notFound("Record not found");
-    const provider = createOAuthProvider(id, () => undefined);
-    await mcpAuth(provider, { serverUrl: row.url, authorizationCode: code });
-    await this.rowChanged(id);
-    return id;
+    const stored = await readOAuthState(id);
+    try {
+      if (!stateStillCurrent(stored.issuedAt)) throw new Error("Unknown or expired sign-in");
+      if (stored.userId !== undefined && viewer !== undefined && stored.userId !== viewer) {
+        throw new Error("This sign-in was started by someone else");
+      }
+      const row = await findConnection(id);
+      if (!row) throw Boom.notFound("Record not found");
+      const provider = createOAuthProvider(id, () => undefined);
+      await mcpAuth(provider, { serverUrl: row.url, authorizationCode: code });
+      await this.rowChanged(id);
+      return id;
+    } finally {
+      await clearOAuthState(id).catch((error) =>
+        logger.warn({ error, connection: id }, "Failed to clear the OAuth state after use"),
+      );
+    }
   }
 
   async hasTokens(id: string): Promise<boolean> {

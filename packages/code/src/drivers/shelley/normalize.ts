@@ -108,6 +108,14 @@ function fileAsset(path: string): AssetRef {
   return { ref: `file:${path}`, name: basename(path), image: isImageFile(path) };
 }
 
+function decodePathPart(raw: string): string {
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+
 export function assetFromUrl(url: string): AssetRef | undefined {
   const image = /\/api\/message\/([A-Za-z0-9_-]+)\/image\/(-?\d+)\/(-?\d+)/.exec(url);
   if (image) {
@@ -115,14 +123,14 @@ export function assetFromUrl(url: string): AssetRef | undefined {
   }
   const read = /\/api\/read\?path=([^&]+)/.exec(url);
   if (read) {
-    const path = decodeURIComponent(read[1]!);
+    const path = decodePathPart(read[1]!);
     return { ...fileAsset(path), image: true };
   }
   return undefined;
 }
 
 export function assetPath(ref: string): string | undefined {
-  const image = /^img:([A-Za-z0-9_-]+):(-?\d{1,4}):(-?\d{1,4})$/.exec(ref);
+  const image = /^img:([A-Za-z0-9_-]+):(-?\d+):(-?\d+)$/.exec(ref);
   if (image) return `/message/${image[1]}/image/${image[2]}/${image[3]}`;
   if (ref.startsWith("file:/")) {
     const path = ref.slice(5);

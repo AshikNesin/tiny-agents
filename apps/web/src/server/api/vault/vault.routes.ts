@@ -22,7 +22,7 @@ import {
   submitCredentialsSchema,
   updateItemSchema,
 } from "./vault.schema";
-import { issueStepUp, requireStepUp, verifyPassword } from "./vault.stepup";
+import { issueStepUp, assertStepUp, requireStepUp, verifyPassword } from "./vault.stepup";
 
 export const vaultNoStore: Middleware = async (c, next) => {
   await next();
@@ -109,7 +109,9 @@ router.get("/vault/requests/:taskId", async (c) => {
 
 router.post("/vault/requests/:taskId/submit", async (c) => {
   const taskId = taskParam(c);
-  return ok(c, await requests.submitRequest(taskId, await parseBody(c, submitCredentialsSchema)));
+  const body = await parseBody(c, submitCredentialsSchema);
+  if (body.save) assertStepUp(c);
+  return ok(c, await requests.submitRequest(taskId, body));
 });
 
 router.post("/vault/requests/:taskId/cancel", async (c) => {

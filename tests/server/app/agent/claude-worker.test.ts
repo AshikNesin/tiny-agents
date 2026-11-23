@@ -440,6 +440,54 @@ describe("tool proxy, caps, eviction", () => {
     release.splice(0).forEach((fn) => fn());
     await running;
   });
+  it("fails queued turns when the process factory dies, instead of replaying them to the next process", async () => {
+    const delivered: string[] = [];
+    let attempts = 0;
+    const factory: QueryFactory = async (ctx) => {
+      attempts += 1;
+      if (attempts === 1) throw new Error("claude binary missing");
+      for await (const turn of ctx.turns) {
+        delivered.push(turn.turnId);
+        ctx.publish({ type: "turn_end", turnId: turn.turnId, stopReason: "end_turn" });
+      }
+    };
+    const book = new SessionBook(factory, DEFAULT_TIMINGS);
+    const open = { sessionId: "s", model: "claude-sonnet-4-6", tools: [] as const };
+
+    await expect(book.runTurn(open, { turnId: "t1", text: "first" }, 0)).rejects.toThrow(
+      /claude binary missing/,
+    );
+    expect(book.runningTurns).toBe(0);
+
+    const session = await book.runTurn(open, { turnId: "t2", text: "second" }, 1);
+    expect(session.alive).toBe(true);
+    expect(delivered).toEqual(["t2"]);
+  });
+
+  it("fails a turn whose factory throws before the process starts, instead of replaying it", async () => {
+    const delivered: string[] = [];
+    let attempts = 0;
+    const factory: QueryFactory = (ctx) => {
+      attempts += 1;
+      if (attempts === 1) throw new Error("claude binary missing");
+      return (async () => {
+        for await (const turn of ctx.turns) {
+          delivered.push(turn.turnId);
+          ctx.publish({ type: "turn_end", turnId: turn.turnId, stopReason: "end_turn" });
+        }
+      })();
+    };
+    const book = new SessionBook(factory, DEFAULT_TIMINGS);
+    const open = { sessionId: "s", model: "claude-sonnet-4-6", tools: [] as const };
+
+    await expect(book.runTurn(open, { turnId: "t1", text: "first" }, 0)).rejects.toThrow(
+      /claude binary missing/,
+    );
+
+    const session = await book.runTurn(open, { turnId: "t2", text: "second" }, 1);
+    expect(session.alive).toBe(true);
+    expect(delivered).toEqual(["t2"]);
+  });
 });
 
 describe("SDK lockdown", () => {

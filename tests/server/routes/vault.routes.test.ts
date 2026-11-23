@@ -28,7 +28,10 @@ import {
   resolveConnectionSecret,
   resolveProviderSecret,
 } from "../../../apps/web/src/server/api/vault/vault.service";
-import { clearStepUpsForTests } from "../../../apps/web/src/server/api/vault/vault.stepup";
+import {
+  clearStepUpsForTests,
+  issueStepUp,
+} from "../../../apps/web/src/server/api/vault/vault.stepup";
 import {
   submitRequest,
   cancelRequest,
@@ -48,6 +51,7 @@ import {
 import { WindowMismatchError } from "../../../packages/sandbox/src/computer-sessions";
 import { secretRedactor } from "../../../packages/agent/src/redact";
 import type { CredentialRequest } from "../../../packages/agent/src/credentials";
+import { useTestRuntime } from "../fixtures";
 import { api, createTestApp, type TestApp } from "../helpers";
 
 const CANARY = "canary-pw-7Hq2Zx";
@@ -59,6 +63,7 @@ async function dumpValues(): Promise<string> {
 
 const app: TestApp = createTestApp();
 let token: string;
+let ownerUserId: number;
 
 beforeAll(async () => {
   const [user] = await db
@@ -69,6 +74,7 @@ beforeAll(async () => {
       name: "Owner",
     })
     .returning();
+  ownerUserId = user!.id;
   token = await generateToken({ userId: user!.id, email: user!.email });
 });
 
@@ -889,5 +895,69 @@ describe("credential request submit", () => {
     const runtime = fakeRuntime();
     await expect(cancelRequest(7, runtime as never)).resolves.toEqual({ cancelled: true });
     expect(runtime.settleCredentialRequest).toHaveBeenCalledWith(7, { status: "cancelled" });
+  });
+
+  describe("step-up on the save path", () => {
+    afterEach(() => {
+      useTestRuntime(undefined);
+    });
+
+    const install = (request: CredentialRequest = requestDoc) => {
+      const runtime = fakeRuntime(request);
+      useTestRuntime(runtime as never);
+      return runtime;
+    };
+
+    const stepUpToken = () => issueStepUp(ownerUserId).token;
+
+    it("refuses a saving submit without step-up, filling nothing", async () => {
+      const runtime = install();
+      const refused = await vault("/requests/7/submit", {
+        method: "POST",
+        json: { values: { email: "ana@example.com", password: CANARY }, save: true },
+      });
+      expect(refused.status).toBe(403);
+      expect(refused.body.error?.details).toEqual({ code: "step_up_required" });
+      expect(fills).toEqual([]);
+      expect(await db.query.vaultItems.findFirst()).toBeUndefined();
+      expect(runtime.settleCredentialRequest).not.toHaveBeenCalled();
+    });
+
+    it("fills and saves the vault when the owner confirmed", async () => {
+      const runtime = install();
+      const submitted = await vault("/requests/7/submit", {
+        method: "POST",
+        stepUp: stepUpToken(),
+        json: { values: { email: "ana@example.com", password: CANARY }, save: true },
+      });
+      expect(submitted.status).toBe(200);
+      expect(submitted.body.data).toEqual({
+        filled: ["email", "password"],
+        savedHandle: "hi-nesin-io",
+        saveFailed: false,
+      });
+      const saved = await db.query.vaultItems.findFirst({
+        where: eq(vaultItems.handle, "hi-nesin-io"),
+      });
+      expect(saved).toMatchObject({ kind: "login", username: "ana@example.com" });
+      expect(runtime.settleCredentialRequest).toHaveBeenCalled();
+      await assertNoCanary();
+    });
+
+    it("fills a submit that saves nothing, without step-up", async () => {
+      install();
+      const submitted = await vault("/requests/7/submit", {
+        method: "POST",
+        json: { values: { email: "a@b.c", password: CANARY }, save: false },
+      });
+      expect(submitted.status).toBe(200);
+      expect(submitted.body.data).toEqual({
+        filled: ["email", "password"],
+        savedHandle: null,
+        saveFailed: false,
+      });
+      expect(fills).toHaveLength(1);
+      expect(await db.query.vaultItems.findFirst()).toBeUndefined();
+    });
   });
 });

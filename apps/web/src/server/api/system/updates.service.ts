@@ -6,8 +6,9 @@ import {
 import { app } from "../../app-root";
 
 export interface SupervisorChannel {
-  send(message: ServerMessage): void;
+  send(message: ServerMessage): boolean;
   onMessage(listener: (message: unknown) => void): () => void;
+  onDisconnect(listener: () => void): () => void;
 }
 
 export const SUPERVISED_ENV = "TINY_AGENTS_SUPERVISED";
@@ -17,11 +18,25 @@ export function processChannel(supervised: boolean): SupervisorChannel | undefin
   process.channel?.unref();
   return {
     send: (message) => {
-      if (process.connected) process.send?.(message);
+      if (!process.connected) return false;
+      try {
+        return process.send?.(message) ?? false;
+      } catch {
+        return false;
+      }
     },
     onMessage: (listener) => {
       process.on("message", listener);
       return () => process.off("message", listener);
+    },
+    onDisconnect: (listener) => {
+      const gone = () => listener();
+      process.on("disconnect", gone);
+      process.on("error", gone);
+      return () => {
+        process.off("disconnect", gone);
+        process.off("error", gone);
+      };
     },
   };
 }
@@ -31,8 +46,16 @@ export function startUpdates(next: SupervisorChannel | undefined): () => void {
   const root = app();
   root.updatesChannel = next;
   if (!next) return stopUpdates;
-  root.updatesUnlisten = next.onMessage((message) => {
+  root.updatesUnlisten = () => {
+    unlistenMessage();
+    unlistenDisconnect();
+  };
+  const unlistenMessage = next.onMessage((message) => {
     if (isSupervisorMessage(message)) root.updateStatus = message.status;
+  });
+  const unlistenDisconnect = next.onDisconnect(() => {
+    if (app().updatesChannel !== next) return;
+    stopUpdates();
   });
   next.send({ type: "server-ready" });
   return stopUpdates;
@@ -52,13 +75,18 @@ export function updateView(): UpdateView {
 }
 
 export function requestCheck(): boolean {
-  const channel = app().updatesChannel;
-  channel?.send({ type: "update-check" });
-  return channel !== undefined;
+  return deliver({ type: "update-check" });
 }
 
 export function requestApply(): boolean {
+  return deliver({ type: "update-apply" });
+}
+
+function deliver(message: ServerMessage): boolean {
   const channel = app().updatesChannel;
-  channel?.send({ type: "update-apply" });
-  return channel !== undefined;
+  if (!channel || !channel.send(message)) {
+    stopUpdates();
+    return false;
+  }
+  return true;
 }

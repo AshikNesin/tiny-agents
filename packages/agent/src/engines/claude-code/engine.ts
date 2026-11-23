@@ -622,6 +622,7 @@ export class ClaudeCodeEngine implements AgentEngine {
             answers: "memory",
             userMessages: () => this.userMessages(ref),
             instructions: async () => session.system || undefined,
+            run: async () => `${ref}:${live.turnId}`,
           },
           async (inner) => {
             row(liveToolRow({ status: "running", taskId }));
