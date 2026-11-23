@@ -50,11 +50,13 @@ bots have no `code_*` tools.
 
 ## The workspace
 
-Three columns: the thread list, the open thread, and a work pane. A terminal
-opens as a drawer under the thread. `Workspace.tsx` owns the layout.
+Three columns: the thread list, the open thread, and a work pane with four
+tabs: Changes, Pull request, Files and Terminal. `Workspace.tsx` owns the
+layout.
 
-Every action has a key. `?` lists them, and the command palette (⌘K) runs
-the same commands by name. Plain letters act in the app; Shift letters post
+Every action has a key. `?` lists them. `:` opens the Code command menu
+(`CodeCommandMenu.tsx`): this page's commands and its threads, nothing from
+the rest of the app. The command palette (⌘K) also runs them by name. Plain letters act in the app; Shift letters post
 to GitHub. The list of keys is the `commands` array in
 `apps/web/src/client/pages/code/Workspace.tsx` (the workspace) and in
 `PullReview.tsx` (a PR review); `keys.tsx` binds them. The ones used most:
@@ -65,8 +67,9 @@ to GitHub. The list of keys is the `commands` array in
 | `n` `v`         | New thread, review a pull request                      |
 | `c` `Esc`       | Write to the agent; leave the composer, then stop      |
 | `e` `t`         | Edit the last turn and run it again; run it again      |
-| `1` `2` `3`     | Changes, Pull request, Files                           |
-| `` ` `` `\` `[` | Terminal, work pane, thread list                       |
+| `1` `2` `3` `4` | Changes, Pull request, Files, Terminal                 |
+| `` ` `` `\` `[` | Show or hide the terminal, work pane, thread list      |
+| `:` `?`         | Run a command or jump to a thread; list the keys       |
 | `o`             | Open the worktree in Cursor or Zed                     |
 | `f` `a`         | Fix CI, Address comments                               |
 | `P` `M`         | Create the PR (or push to it), committing first; merge |
@@ -185,9 +188,10 @@ inside the worktree.
 
 ### The terminal
 
-`` ` `` opens a terminal drawer under the thread, a shell on the sandbox
-that starts in the thread's worktree (`TerminalDrawer.tsx`, on the same
-terminal service as the Terminal page).
+The work pane's Terminal tab (`4`, or `` ` `` to show and hide it) is a shell
+on the sandbox that starts in the thread's worktree (`TerminalPane.tsx`, on
+the same terminal service as the Terminal page). Switching tabs keeps the
+session; coming back reattaches to it.
 
 ### Open in editor
 
@@ -315,8 +319,10 @@ The **Pull request** tab (`PullPanel.tsx`, `PullChecks.tsx`,
   squash-merged PR only commits made since count, so Create PR does not come
   back.
 
-**Link an existing PR** is in the tab's menu; a PR the agent opened for the
-branch is linked on its own.
+An open PR for the thread's branch, or for the branch its worktree has
+checked out, links on its own when a turn ends or the tab opens
+(`linkByBranch` in `code.pulls.ts`). **Link an existing PR**, in the tab's
+menu, is for a PR from some other branch.
 
 **Next steps.** When a turn ends, the thread shows the same states as
 buttons above the composer (`NextSteps.tsx`): Create PR and Review changes,

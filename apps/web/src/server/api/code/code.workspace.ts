@@ -66,6 +66,7 @@ export interface Workspace {
   branchTaken(checkout: string, branch: string): Promise<boolean>;
   removeWorktree(checkout: string, path: string): Promise<void>;
   headSha(path: string): Promise<string>;
+  currentBranch(path: string): Promise<string | null>;
   uncommitted(path: string): Promise<string[]>;
   files(path: string, from: string, to?: string): Promise<Array<GitFile & { hash: string }>>;
   file(path: string, file: string, from: string, to?: string): Promise<FileContents>;
@@ -394,6 +395,12 @@ export function createWorkspace(options: WorkspaceOptions): Workspace {
     },
     async headSha(path) {
       return (await must(`${git(path)} rev-parse HEAD`, "Could not read HEAD")).trim();
+    },
+    async currentBranch(path) {
+      const name = (
+        await must(`${git(path)} rev-parse --abbrev-ref HEAD`, "Could not read the branch")
+      ).trim();
+      return name && name !== "HEAD" ? name : null;
     },
     async uncommitted(path) {
       const out = await must(

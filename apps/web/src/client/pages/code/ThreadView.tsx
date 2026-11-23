@@ -321,7 +321,6 @@ export function ThreadView({
   onShowChanges,
   commands = false,
   onReplaced,
-  below,
   nextSteps,
 }: {
   id: string;
@@ -335,7 +334,6 @@ export function ThreadView({
   onShowChanges?: () => void;
   commands?: boolean;
   onReplaced?: () => void;
-  below?: ReactNode;
   nextSteps?: ReactNode;
 }) {
   const state = useCodeThread(id);
@@ -619,7 +617,6 @@ export function ThreadView({
         )}
       </div>
 
-      {below}
       <div className="pb-2 pt-2">
         <div className="mx-auto max-w-3xl space-y-2 px-3">
           {state.error && (

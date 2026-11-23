@@ -23,7 +23,8 @@ import { CodeSettings } from "./CodeSettings";
 import { PageKeys, Kbd, useKeyCommands, type KeyCommand } from "../../components/keys";
 import { FilesPane } from "./FilesPane";
 import { NewThreadDialog } from "./NewThreadDialog";
-import { TerminalDrawer } from "./TerminalDrawer";
+import { TerminalPane } from "./TerminalPane";
+import { CodeCommandMenu } from "./CodeCommandMenu";
 import { PullPanel } from "./PullPanel";
 import { useArchive } from "./controls";
 import { NextSteps } from "./NextSteps";
@@ -37,6 +38,7 @@ const PANES: Array<{ id: CodePane; label: string; keys: string }> = [
   { id: "changes", label: "Changes", keys: "1" },
   { id: "pr", label: "Pull request", keys: "2" },
   { id: "files", label: "Files", keys: "3" },
+  { id: "terminal", label: "Terminal", keys: "4" },
 ];
 
 function useGitHubSetupResult(reloadProjects: () => void) {
@@ -122,8 +124,7 @@ export function CodeWorkspace() {
   const pane = useUiStore((s) => s.codePane);
   const setPane = useUiStore((s) => s.setCodePane);
   const setHelp = useKeyCommands((s) => s.setHelp);
-  const terminalOpen = useUiStore((s) => s.codeTerminalOpen);
-  const toggleTerminal = useUiStore((s) => s.toggleCodeTerminal);
+  const [menuOpen, setMenuOpen] = useState(false);
   const { projects, reload: reloadProjects } = useProjects();
   const [insert, setInsert] = useState<{ text: string; nonce: number } | null>(null);
   const [epoch, setEpoch] = useState(0);
@@ -171,6 +172,7 @@ export function CodeWorkspace() {
     },
     [threadId, setPane],
   );
+  const openThread = useCallback((id: string) => navigate(threadPath(id)), [navigate]);
   const focusFiles = useCallback(
     (which: "name" | "text") => {
       if (!threadId) return;
@@ -375,10 +377,18 @@ export function CodeWorkspace() {
       {
         id: "terminal",
         group: "Pane",
+        keys: "4",
+        label: "Terminal",
+        enabled: Boolean(project),
+        run: () => showPane("terminal"),
+      },
+      {
+        id: "terminal-toggle",
+        group: "Pane",
         keys: "`",
         label: "Show or hide the terminal",
         enabled: Boolean(project),
-        run: toggleTerminal,
+        run: () => setPane(openPane === "terminal" ? null : "terminal"),
       },
       {
         id: "pane",
@@ -389,6 +399,13 @@ export function CodeWorkspace() {
         run: () => setPane(openPane ? null : (useUiStore.getState().lastCodePane ?? "changes")),
       },
       { id: "keys", group: "Go to", keys: "?", label: "Show the keys", run: () => setHelp(true) },
+      {
+        id: "commands",
+        group: "Go to",
+        keys: ":",
+        label: "Run a command",
+        run: () => setMenuOpen(true),
+      },
     ],
     [
       move,
@@ -403,7 +420,6 @@ export function CodeWorkspace() {
       openPane,
       setHelp,
       focusFiles,
-      toggleTerminal,
       row?.pr,
       runWorkflow,
       publish,
@@ -434,6 +450,13 @@ export function CodeWorkspace() {
   return (
     <div className="flex h-dvh min-h-0">
       <PageKeys commands={commands} />
+      <CodeCommandMenu
+        open={menuOpen}
+        onOpenChange={setMenuOpen}
+        commands={commands}
+        threads={listed ?? []}
+        onThread={openThread}
+      />
       <NewThreadDialog
         open={composing}
         onOpenChange={(open) => !open && navigate(threadId ? threadPath(threadId) : "/code")}
@@ -458,6 +481,7 @@ export function CodeWorkspace() {
           onNew={() => navigate("/code/new")}
           addingReview={addingReview}
           onAddingReview={setAddingReview}
+          onCommands={() => setMenuOpen(true)}
         />
       </aside>
 
@@ -505,15 +529,6 @@ export function CodeWorkspace() {
                 />
               ) : undefined
             }
-            below={
-              terminalOpen && project ? (
-                <TerminalDrawer
-                  threadId={threadId}
-                  place={row.cwd ?? project.name}
-                  onClose={toggleTerminal}
-                />
-              ) : null
-            }
           />
         ) : threadId && (unlisted.loadError || (row && !harness)) ? (
           <EmptyState
@@ -532,7 +547,7 @@ export function CodeWorkspace() {
             description={
               <span className="inline-flex flex-wrap items-center justify-center gap-1.5">
                 <Kbd keys="n" /> starts one, <Kbd keys="j" /> and <Kbd keys="k" /> move through the
-                list, <Kbd keys="?" /> shows every key.
+                list, <Kbd keys=":" /> runs a command, <Kbd keys="?" /> shows every key.
               </span>
             }
           />
@@ -564,6 +579,8 @@ export function CodeWorkspace() {
               />
             ) : openPane === "files" ? (
               <FilesPane threadId={threadId} refreshKey={changesKey} />
+            ) : openPane === "terminal" && project ? (
+              <TerminalPane threadId={threadId} place={row?.cwd ?? project.name} />
             ) : project ? (
               <ReviewPanel
                 threadId={threadId}

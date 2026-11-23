@@ -12,7 +12,7 @@ import {
   type PullSnapshot,
 } from "@tiny-agents/github";
 import type { TurnOutcome } from "@tiny-agents/code/server";
-import { db, jobs, type CodePullRow } from "../../db";
+import { db, jobs, type CodePullRow, type CodeProjectRow, type CodeThreadRow } from "../../db";
 import type { PullView, ThreadPullsView } from "../../../shared/api/code";
 import { codePullUpdate, type CodePullKind } from "../notifications/notifications.events";
 import {
@@ -234,25 +234,42 @@ export async function unlinkPull(threadId: string): Promise<void> {
   await deletePull(open.id);
 }
 
+async function branchesOf(thread: CodeThreadRow, project: CodeProjectRow): Promise<string[]> {
+  const current = thread.worktree
+    ? await (
+        await codeGitHub().workspace(project)
+      )
+        .currentBranch(thread.worktree)
+        .catch(countUnknownWhenGitFails)
+    : null;
+  return [...new Set([current, thread.branch])].filter(
+    (name): name is string => Boolean(name) && name !== project.baseBranch,
+  );
+}
+
 async function linkByBranch(threadId: string): Promise<CodePullRow | undefined> {
   const found = await projectThread(threadId);
-  if (!found?.thread.branch || (await openPullOf(threadId))) return undefined;
-  const github = await codeGitHub().client(found.project);
-  const pr = await github.openPullForBranch(repoOf(found.project), found.thread.branch);
-  if (!pr || (await findPull(found.project.id, pr.number))) return undefined;
-  const row = await insertPull({
-    threadId,
-    projectId: found.project.id,
-    number: pr.number,
-    url: pr.url,
-    title: "",
-    headRef: found.thread.branch,
-    baseRef: found.project.baseBranch,
-    autofix: projectSettings(found.project.settings).autofix.onByDefault,
-  });
-  await reconcileNow(row.id);
-  await armReconcile(row.id, 60_000);
-  return row;
+  if (!found || (await openPullOf(threadId))) return undefined;
+  const { project, thread } = found;
+  const github = await codeGitHub().client(project);
+  for (const branch of await branchesOf(thread, project)) {
+    const pr = await github.openPullForBranch(repoOf(project), branch);
+    if (!pr || (await findPull(project.id, pr.number))) continue;
+    const row = await insertPull({
+      threadId,
+      projectId: project.id,
+      number: pr.number,
+      url: pr.url,
+      title: "",
+      headRef: branch,
+      baseRef: project.baseBranch,
+      autofix: projectSettings(project.settings).autofix.onByDefault,
+    });
+    await reconcileNow(row.id);
+    await armReconcile(row.id, 60_000);
+    return row;
+  }
+  return undefined;
 }
 
 export async function setAutofix(threadId: string, enabled: boolean): Promise<void> {

@@ -614,6 +614,29 @@ describe("publish and the PR tab", () => {
 
     expect((await pr(thread.id)).active?.number).toBe(1);
   });
+
+  it("links a PR the agent opened from a branch it switched the worktree to", async () => {
+    const project = await newProject();
+    const thread = await newThread(project.id);
+    await sh(local, `git -C ${thread.worktree} checkout --quiet -b fix/avatars`);
+    await commit(thread.worktree, "a.txt");
+    await sh(local, `git -C ${thread.worktree} push --quiet ${bare} HEAD:refs/heads/fix/avatars`);
+    await github.createPull(
+      { owner: "acme", name: "web" },
+      {
+        head: "fix/avatars",
+        base: "main",
+        title: "By agent",
+        body: "",
+        draft: false,
+      },
+    );
+
+    expect((await pr(thread.id)).active).toMatchObject({
+      number: 1,
+      headRef: "fix/avatars",
+    });
+  });
 });
 
 describe("a check's log excerpt", () => {

@@ -192,7 +192,7 @@ await journey(
     );
     await proof("files");
 
-    await step("backtick opens a terminal in the thread's worktree", async () => {
+    await step("backtick opens the Terminal tab in the thread's worktree", async () => {
       const frames = [];
       page.on("websocket", (ws) => {
         if (!ws.url().includes("/api/v1/terminal/ws/")) return;
@@ -213,7 +213,11 @@ await journey(
       cleanup(async () => {
         for (const name of sessions) await api.delete(`/terminal/sessions/${name}?force=1`);
       });
-      await page.getByRole("button", { name: "Hide the terminal" }).click();
+      await expect(page.getByRole("tab", { name: /^Terminal/ })).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
+      await page.getByTestId("code-pane-changes").click();
       await expect(terminal).toHaveCount(0);
     });
     await proof("terminal");
@@ -230,6 +234,14 @@ await journey(
       await palette.getByRole("combobox").fill("Changes");
       await palette.getByRole("option", { name: /^Changes/ }).click();
       await expect(page.getByRole("tab", { name: /^Changes/ })).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
+      await page.keyboard.press(":");
+      const menu = page.getByRole("dialog", { name: "Commands" });
+      await menu.getByRole("combobox").fill("Files");
+      await menu.getByRole("option", { name: /^Files/ }).click();
+      await expect(page.getByRole("tab", { name: /^Files/ })).toHaveAttribute(
         "aria-selected",
         "true",
       );
