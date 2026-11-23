@@ -18,7 +18,7 @@ function readCodeSidebar(): boolean {
 
 const CODE_PANE_KEY = "tiny-agents:code-pane";
 
-export type CodePane = "changes" | "pr" | "files";
+export type CodePane = "changes" | "pr" | "files" | "terminal";
 
 const storageIsBlockedInPrivateWindows = (): void => undefined;
 
@@ -26,7 +26,7 @@ function readCodePane(): CodePane | null {
   try {
     const saved = localStorage.getItem(CODE_PANE_KEY);
     if (saved === "closed") return null;
-    return saved === "pr" || saved === "files" ? saved : "changes";
+    return saved === "pr" || saved === "files" || saved === "terminal" ? saved : "changes";
   } catch {
     return "changes";
   }
@@ -56,8 +56,6 @@ interface UiState {
   codePane: CodePane | null;
   lastCodePane: CodePane;
   setCodePane: (pane: CodePane | null) => void;
-  codeTerminalOpen: boolean;
-  toggleCodeTerminal: () => void;
   codeTerminals: Record<string, string>;
   setCodeTerminal: (threadId: string, name: string | null) => void;
   mobileOpen: boolean;
@@ -113,8 +111,6 @@ export const useUiStore = create<UiState>((set) => ({
     }
     set(codePane ? { codePane, lastCodePane: codePane } : { codePane });
   },
-  codeTerminalOpen: false,
-  toggleCodeTerminal: () => set((state) => ({ codeTerminalOpen: !state.codeTerminalOpen })),
   codeTerminals: {},
   setCodeTerminal: (threadId, name) =>
     set((state) => {

@@ -50,26 +50,29 @@ bots have no `code_*` tools.
 
 ## The workspace
 
-Three columns: the thread list, the open thread, and a work pane. A terminal
-opens as a drawer under the thread. `Workspace.tsx` owns the layout.
+Three columns: the thread list, the open thread, and a work pane with four
+tabs: Changes, Pull request, Files and Terminal. `Workspace.tsx` owns the
+layout.
 
-Every action has a key. `?` lists them, and the command palette (⌘K) runs
-the same commands by name. Plain letters act in the app; Shift letters post
+Every action has a key. `?` lists them. `:` opens the Code command menu
+(`CodeCommandMenu.tsx`): this page's commands and its threads, nothing from
+the rest of the app. The command palette (⌘K) also runs them by name. Plain letters act in the app; Shift letters post
 to GitHub. The list of keys is the `commands` array in
 `apps/web/src/client/pages/code/Workspace.tsx` (the workspace) and in
 `PullReview.tsx` (a PR review); `keys.tsx` binds them. The ones used most:
 
-| Key             | What it does                                          |
-| --------------- | ----------------------------------------------------- |
-| `j` `k` `u`     | Next thread, previous thread, next one that needs you |
-| `n` `v`         | New thread, review a pull request                     |
-| `c` `Esc`       | Write to the agent; leave the composer, then stop     |
-| `e` `t`         | Edit the last turn and run it again; run it again     |
-| `1` `2` `3`     | Changes, Pull request, Files                          |
-| `` ` `` `\` `[` | Terminal, work pane, thread list                      |
-| `o`             | Open the worktree in Cursor or Zed                    |
-| `f` `a`         | Fix CI, Address comments                              |
-| `P` `M`         | Publish (or push to) the pull request, merge it       |
+| Key             | What it does                                           |
+| --------------- | ------------------------------------------------------ |
+| `j` `k` `u`     | Next thread, previous thread, next one that needs you  |
+| `n` `v`         | New thread, review a pull request                      |
+| `c` `Esc`       | Write to the agent; leave the composer, then stop      |
+| `e` `t`         | Edit the last turn and run it again; run it again      |
+| `1` `2` `3` `4` | Changes, Pull request, Files, Terminal                 |
+| `` ` `` `\` `[` | Show or hide the terminal, work pane, thread list      |
+| `:` `?`         | Run a command or jump to a thread; list the keys       |
+| `o`             | Open the worktree in Cursor or Zed                     |
+| `f` `a`         | Fix CI, Address comments                               |
+| `P` `M`         | Create the PR (or push to it), committing first; merge |
 
 ### The thread list
 
@@ -185,9 +188,10 @@ inside the worktree.
 
 ### The terminal
 
-`` ` `` opens a terminal drawer under the thread, a shell on the sandbox
-that starts in the thread's worktree (`TerminalDrawer.tsx`, on the same
-terminal service as the Terminal page).
+The work pane's Terminal tab (`4`, or `` ` `` to show and hide it) is a shell
+on the sandbox that starts in the thread's worktree (`TerminalPane.tsx`, on
+the same terminal service as the Terminal page). Switching tabs keeps the
+session; coming back reattaches to it.
 
 ### Open in editor
 
@@ -295,13 +299,34 @@ that started it (a 10-minute, single-use state plus an httpOnly cookie).
 The **Pull request** tab (`PullPanel.tsx`, `PullChecks.tsx`,
 `PullComments.tsx`).
 
-**Publish (`P`).** Pushes the branch (never forced, hooks off) and opens a
-draft PR, or a ready one when the project's **Open new PRs as drafts** is
-off, with the commits as its body and a short title. With a PR open, it
-pushes new commits. **Link pull request** links an existing one, and a PR
-the agent opened for the branch is linked on its own. When nothing is ahead
-but the agent changed files, the tab says they are not committed yet, and
-**Ask to commit** puts that request in the composer.
+**One action at a time.** The tab leads with the step the branch needs
+(`pullStage` in `lib/code/pull-stage.ts`):
+
+- **Nothing to publish yet** until the agent changes files.
+- **Create PR (`P`)** with an optional title (written from the commits if
+  empty). When the agent left files uncommitted, it reads **Commit and create
+  PR**: the app commits them, titled after the thread, then pushes (never
+  forced, hooks off) and opens a draft PR, or a ready one when the project's
+  **Open new PRs as drafts** is off.
+- **An open PR** (below). When files changed since the last push, **Commit and
+  push** sends them.
+- **Merged into main on this machine:** the agent merged the branch into the
+  checkout's base branch without pushing. **Push main** pushes it,
+  fast-forward only (`POST /code/threads/:id/push-base`); **Create PR
+  instead** opens a pull request from the branch.
+- **In main on GitHub:** the work reached the base branch without a pull
+  request, or its PR merged. **Archive thread** ends the thread. After a
+  squash-merged PR only commits made since count, so Create PR does not come
+  back.
+
+An open PR for the thread's branch, or for the branch its worktree has
+checked out, links on its own when a turn ends or the tab opens
+(`linkByBranch` in `code.pulls.ts`). **Link an existing PR**, in the tab's
+menu, is for a PR from some other branch.
+
+**Next steps.** When a turn ends, the thread shows the same states as
+buttons above the composer (`NextSteps.tsx`): Create PR and Review changes,
+Commit and push or Merge on an open PR, Push main, and Archive.
 
 **The tab.** The PR's number, state, title and `branch → base`, then:
 

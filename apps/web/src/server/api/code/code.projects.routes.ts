@@ -77,6 +77,7 @@ import {
   mergePull,
   setPullDraft,
   publish,
+  pushBase,
   setAutofix,
   threadPulls,
   unlinkPull,
@@ -246,10 +247,17 @@ router.post("/code/threads/:id/publish", async (c) => {
     z.object({
       title: z.string().trim().max(250).optional(),
       body: z.string().max(60_000).optional(),
+      commit: z.boolean().optional(),
     }),
   );
   await publish(id, body);
   return ok<ThreadPullsView>(c, await threadPulls(id, false), 201);
+});
+
+router.post("/code/threads/:id/push-base", async (c) => {
+  const id = threadParam(c.req.param("id"));
+  await pushBase(id);
+  return ok<ThreadPullsView>(c, await threadPulls(id, false));
 });
 
 router.post("/code/threads/:id/pr/link", async (c) => {

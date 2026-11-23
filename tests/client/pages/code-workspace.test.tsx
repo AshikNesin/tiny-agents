@@ -1,5 +1,12 @@
 import React from "react";
-import { act, fireEvent, render as renderBare, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render as renderBare,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { ConfirmProvider } from "@groot/ui/primitives";
@@ -321,6 +328,40 @@ describe("the Code workspace", () => {
     const keys = screen.getByTestId("code-keys");
     expect(keys).toHaveTextContent("Next thread that needs you");
     expect(keys).toHaveTextContent("Stop the agent");
+  });
+
+  it("4 opens the terminal as the work pane's fourth tab, after Files", async () => {
+    renderAt("/code/t/demo%3Adddd");
+    open(done);
+    await screen.findByText("web /");
+    press("4");
+    const tabs = screen.getAllByRole("tab").map((tab) => tab.textContent);
+    expect(tabs).toEqual(["Changes1", "Pull request2", "Files3", "Terminal4"]);
+    expect(screen.getByRole("tab", { name: /Terminal/ })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByTestId("code-pane")).toContainElement(screen.getByTestId("code-terminal"));
+  });
+
+  it(": opens a menu of the page's commands; picking one runs it", async () => {
+    renderAt("/code/t/demo%3Adddd");
+    open(done);
+    await screen.findByText("web /");
+    press(":", { shiftKey: true });
+    const menu = await screen.findByRole("dialog", { name: "Commands" });
+    expect(menu).toHaveTextContent("Pull request");
+    fireEvent.click(within(menu).getByText("Files"));
+    await waitFor(() =>
+      expect(screen.getByRole("tab", { name: /Files/ })).toHaveAttribute("aria-selected", "true"),
+    );
+  });
+
+  it(": jumps to a thread by its title", async () => {
+    renderAt("/code/t/demo%3Adddd");
+    open(done);
+    await screen.findByText("web /");
+    press(":", { shiftKey: true });
+    const menu = await screen.findByRole("dialog", { name: "Commands" });
+    fireEvent.click(within(menu).getByText("Thread a"));
+    await waitFor(() => expect(where()).toBe("/code/t/demo%3Aa"));
   });
 
   it("a thread link lands on the thread", () => {

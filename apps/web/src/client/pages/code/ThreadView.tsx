@@ -321,7 +321,7 @@ export function ThreadView({
   onShowChanges,
   commands = false,
   onReplaced,
-  below,
+  nextSteps,
 }: {
   id: string;
   harness: HarnessInfo;
@@ -334,7 +334,7 @@ export function ThreadView({
   onShowChanges?: () => void;
   commands?: boolean;
   onReplaced?: () => void;
-  below?: ReactNode;
+  nextSteps?: ReactNode;
 }) {
   const state = useCodeThread(id);
   const { thread, working, items, settings } = state;
@@ -617,7 +617,6 @@ export function ThreadView({
         )}
       </div>
 
-      {below}
       <div className="pb-2 pt-2">
         <div className="mx-auto max-w-3xl space-y-2 px-3">
           {state.error && (
@@ -658,6 +657,7 @@ export function ThreadView({
                   </Button>
                 </p>
               )}
+              {!working && !editing && items.length > 0 && nextSteps}
               <PendingComments threadId={id} enabled={owner} onShow={onShowChanges} />
               <Composer
                 draftKey={id}

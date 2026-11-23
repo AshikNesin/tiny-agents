@@ -134,11 +134,12 @@ await journey(
     });
     await proof("changes");
 
-    await step("2 shows the pull request pane: one commit ahead, ready to publish", async () => {
+    await step("2 shows the pull request pane: one commit ready for a PR", async () => {
       await page.keyboard.press("2");
       const pane = page.getByTestId("code-pane");
-      await expect(pane.getByText(/is 1 commit ahead of main/)).toBeVisible({ timeout: 20_000 });
-      await expect(pane.getByRole("button", { name: /Publish/ })).toBeVisible();
+      await expect(pane.getByText(/Ready for a pull request/)).toBeVisible({ timeout: 20_000 });
+      await expect(pane.getByText(/1 commit on/)).toBeVisible();
+      await expect(pane.getByTestId("code-publish")).toContainText("Create draft PR");
     });
 
     await step("backslash hides the pane and brings it back; [ hides the list", async () => {
@@ -191,7 +192,7 @@ await journey(
     );
     await proof("files");
 
-    await step("backtick opens a terminal in the thread's worktree", async () => {
+    await step("backtick opens the Terminal tab in the thread's worktree", async () => {
       const frames = [];
       page.on("websocket", (ws) => {
         if (!ws.url().includes("/api/v1/terminal/ws/")) return;
@@ -212,7 +213,11 @@ await journey(
       cleanup(async () => {
         for (const name of sessions) await api.delete(`/terminal/sessions/${name}?force=1`);
       });
-      await page.getByRole("button", { name: "Hide the terminal" }).click();
+      await expect(page.getByRole("tab", { name: /^Terminal/ })).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
+      await page.getByTestId("code-pane-changes").click();
       await expect(terminal).toHaveCount(0);
     });
     await proof("terminal");
@@ -229,6 +234,14 @@ await journey(
       await palette.getByRole("combobox").fill("Changes");
       await palette.getByRole("option", { name: /^Changes/ }).click();
       await expect(page.getByRole("tab", { name: /^Changes/ })).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
+      await page.keyboard.press(":");
+      const menu = page.getByRole("dialog", { name: "Commands" });
+      await menu.getByRole("combobox").fill("Files");
+      await menu.getByRole("option", { name: /^Files/ }).click();
+      await expect(page.getByRole("tab", { name: /^Files/ })).toHaveAttribute(
         "aria-selected",
         "true",
       );
@@ -341,6 +354,38 @@ await journey(
         "Say when the release happened",
       );
     });
+
+    await step(
+      "a finished turn offers Commit and create PR; once the PR merges, Archive leads",
+      async () => {
+        await api.patch(`/code/projects/${project.id}`, { settings: { archiveOnMerge: false } });
+        await page.goto(`/code/t/${encodeURIComponent(ids.second)}`, LOADED);
+        const next = page.getByTestId("code-next-steps");
+        const create = next.getByRole("button", { name: /create PR/i });
+        await expect(create).toBeVisible({ timeout: 20_000 });
+        await create.click();
+        const prNumber = async () => (await threads()).find((t) => t.id === ids.second)?.pr?.number;
+        await expect.poll(prNumber, { timeout: 30_000 }).toBeTruthy();
+        const number = await prNumber();
+        await expect(next.getByRole("button", { name: `PR #${number}` })).toBeVisible({
+          timeout: 20_000,
+        });
+        await github(`/pulls/${number}`, { state: "merged" });
+        await page.keyboard.press("2");
+        await page
+          .getByTestId("code-pane")
+          .getByRole("button", { name: "Refresh" })
+          .first()
+          .click();
+        await expect(page.getByTestId("code-archive-merged")).toBeVisible({ timeout: 30_000 });
+        const archive = next.getByRole("button", { name: "Archive" });
+        await expect(archive).toBeVisible({ timeout: 30_000 });
+        await archive.click();
+        await expect(page).toHaveURL(/\/code$/, { timeout: 20_000 });
+        expect((await threads()).some((t) => t.id === ids.second)).toBe(false);
+      },
+    );
+    await proof("next-steps");
   },
   { requires: ["demo-agent", "fake-github", "local-sandbox"] },
 );

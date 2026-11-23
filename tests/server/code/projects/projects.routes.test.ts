@@ -433,6 +433,71 @@ describe("publish and the PR tab", () => {
     expect(second.body.data?.active?.number).toBe(2);
   });
 
+  it("commits what the agent left uncommitted, then opens the PR, when asked to", async () => {
+    const project = await newProject();
+    const thread = await newThread(project.id);
+    const enc = encodeURIComponent(thread.id);
+    await sh(local, `cd ${thread.worktree} && printf 'fixed\\n' > src/login.ts`);
+
+    const before = await pr(thread.id);
+    expect([before.ahead, before.uncommitted]).toEqual([0, 1]);
+    expect((await call("POST", `/threads/${enc}/publish`, {})).status).toBe(400);
+
+    const published = await call<ThreadPullsView>("POST", `/threads/${enc}/publish`, {
+      commit: true,
+    });
+
+    expect(published.status).toBe(201);
+    expect(published.body.data).toMatchObject({ ahead: 1, uncommitted: 0, active: { number: 1 } });
+    const row = await db.query.codeThreads.findFirst({ where: eq(codeThreads.id, thread.id) });
+    expect(row?.title).toBeTruthy();
+    expect(await sh(local, `git -C ${thread.worktree} log -1 --format=%s`)).toBe(row!.title);
+    expect(await remoteHead(thread.branch)).toBe(
+      await sh(local, `git -C ${thread.worktree} rev-parse HEAD`),
+    );
+  });
+
+  it("once its PR is squash-merged, counts only commits made after it, so Create PR does not come back", async () => {
+    const project = await newProject();
+    await call("PATCH", `/projects/${project.id}`, { settings: { archiveOnMerge: false } });
+    const thread = await newThread(project.id);
+    await commit(thread.worktree, "src/login.ts");
+    await call("POST", `/threads/${encodeURIComponent(thread.id)}/publish`, {});
+
+    github.pull(1).state = "merged";
+
+    const merged = await pr(thread.id);
+    expect([merged.active, merged.ahead]).toEqual([null, 0]);
+    await commit(thread.worktree, "src/follow-up.ts");
+    expect((await pr(thread.id)).ahead).toBe(1);
+  });
+
+  it("sees work merged into the machine's main, pushes main on request, and then sees it on GitHub", async () => {
+    const project = await newProject();
+    const thread = await newThread(project.id);
+    const enc = encodeURIComponent(thread.id);
+    await commit(thread.worktree, "src/login.ts");
+    const head = await sh(local, `git -C ${thread.worktree} rev-parse HEAD`);
+    await sh(local, `git -C ${project.checkoutPath} update-ref refs/heads/main ${head}`);
+
+    expect((await pr(thread.id)).landed).toBe("local");
+
+    const pushed = await call<ThreadPullsView>("POST", `/threads/${enc}/push-base`, {});
+
+    expect(pushed.status).toBe(200);
+    expect(await remoteHead("main")).toBe(head);
+    expect(pushed.body.data).toMatchObject({ landed: "github", ahead: 0, active: null });
+  });
+
+  it("sees work an agent pushed straight to main on GitHub", async () => {
+    const project = await newProject();
+    const thread = await newThread(project.id);
+    await commit(thread.worktree, "src/login.ts");
+    await sh(local, `git -C ${thread.worktree} push --quiet ${bare} HEAD:refs/heads/main`);
+
+    expect(await pr(thread.id)).toMatchObject({ landed: "github", ahead: 0 });
+  });
+
   it("tells open Code pages when a thread's PR opens or merges, so the header shows it", async () => {
     const project = await newProject();
     const thread = await newThread(project.id);
@@ -548,6 +613,29 @@ describe("publish and the PR tab", () => {
     );
 
     expect((await pr(thread.id)).active?.number).toBe(1);
+  });
+
+  it("links a PR the agent opened from a branch it switched the worktree to", async () => {
+    const project = await newProject();
+    const thread = await newThread(project.id);
+    await sh(local, `git -C ${thread.worktree} checkout --quiet -b fix/avatars`);
+    await commit(thread.worktree, "a.txt");
+    await sh(local, `git -C ${thread.worktree} push --quiet ${bare} HEAD:refs/heads/fix/avatars`);
+    await github.createPull(
+      { owner: "acme", name: "web" },
+      {
+        head: "fix/avatars",
+        base: "main",
+        title: "By agent",
+        body: "",
+        draft: false,
+      },
+    );
+
+    expect((await pr(thread.id)).active).toMatchObject({
+      number: 1,
+      headRef: "fix/avatars",
+    });
   });
 });
 

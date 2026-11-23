@@ -29,10 +29,14 @@ let draft = false;
 const readied: boolean[] = [];
 let noPull = false;
 let ahead: number | null = 1;
+let uncommitted: number | null = 0;
+let landed: ThreadPullsView["landed"] = null;
+const pushedBase: string[] = [];
 let changed: string[] = [];
 let earlier: ThreadPullsView["earlier"] = [];
 let autofix = false;
 let ignored: string[] = [];
+const published: unknown[] = [];
 
 vi.mock("@groot/shell/lib/api", async (importOriginal) => {
   const original = await importOriginal<typeof import("@groot/shell/lib/api")>();
@@ -64,6 +68,15 @@ vi.mock("@groot/shell/lib/api", async (importOriginal) => {
         return view(checkState);
       },
       post: async (path: string, body: { draft: boolean }) => {
+        if (path === "/code/threads/shelley%3At1/push-base") {
+          pushedBase.push(path);
+          landed = "github";
+          return view(checkState);
+        }
+        if (path === "/code/threads/shelley%3At1/publish") {
+          published.push(body);
+          return view(checkState);
+        }
         if (path !== "/code/threads/shelley%3At1/pr/draft") throw new Error(`unexpected ${path}`);
         readied.push(body.draft);
         draft = body.draft;
@@ -112,6 +125,8 @@ function view(state: CheckState): ThreadPullsView {
     project,
     branch: "ta/fix-1a2b",
     ahead,
+    uncommitted,
+    landed,
     earlier,
     active: noPull
       ? null
@@ -182,6 +197,10 @@ beforeEach(() => {
   readied.length = 0;
   noPull = false;
   ahead = 1;
+  uncommitted = 0;
+  landed = null;
+  pushedBase.length = 0;
+  published.length = 0;
   changed = [];
   earlier = [];
   autofix = false;
@@ -319,19 +338,61 @@ describe("getting it merged", () => {
     expect(screen.queryByText(/Merge opens once/)).toBeNull();
   });
 
-  it("says the changes are not committed yet, and asks the agent to commit them", async () => {
+  it("commits what the agent left and creates the PR in one step", async () => {
     noPull = true;
     ahead = 0;
-    changed = ["src/a.ts", "src/b.ts"];
-    const attached: string[] = [];
+    uncommitted = 2;
+    panel();
+    await wait(0);
+    expect(screen.getByText(/2 uncommitted files on/)).toBeInTheDocument();
+    const create = screen.getByTestId("code-publish");
+    expect(create).toHaveTextContent("Commit and create draft PR");
+    fireEvent.change(screen.getByRole("textbox", { name: "Pull request title" }), {
+      target: { value: "Fix the login redirect" },
+    });
+    await act(async () => {
+      fireEvent.click(create);
+    });
+    expect(published).toEqual([{ title: "Fix the login redirect", commit: true }]);
+  });
+
+  it("says there is nothing to publish yet, and keeps Link an existing PR in the menu", async () => {
+    noPull = true;
+    ahead = 0;
+    panel();
+    await wait(0);
+    expect(screen.getByText(/Nothing to publish yet/)).toBeInTheDocument();
+    expect(screen.queryByTestId("code-publish")).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "Pull request number" })).toBeNull();
+  });
+
+  it("when the agent merged into the machine's main, pushes main, then says the work is in main", async () => {
+    noPull = true;
+    ahead = 1;
+    landed = "local";
+    panel();
+    await wait(0);
+    expect(screen.getByText("Merged into main on this machine.")).toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Push main" }));
+    });
+    expect(pushedBase).toHaveLength(1);
+    expect(screen.getByText("In main on GitHub.")).toBeInTheDocument();
+  });
+
+  it("offers Archive thread once the PR merged and nothing new is on the branch", async () => {
+    noPull = true;
+    ahead = 0;
+    earlier = [
+      { number: 9, url: "https://github.com/acme/web/pull/9", title: "Fix", state: "merged" },
+    ];
+    const onArchive = vi.fn();
     render(
-      <PullPanel threadId="shelley:t1" refreshKey="k" onAttach={(text) => attached.push(text)} />,
+      <PullPanel threadId="shelley:t1" refreshKey="k" onAttach={() => {}} onArchive={onArchive} />,
     );
     await wait(0);
-    expect(screen.getByText("2 changed files are not committed yet.")).toBeInTheDocument();
-    expect(screen.getByTestId("code-publish")).toBeDisabled();
-    act(() => screen.getByRole("button", { name: "Ask to commit" }).click());
-    expect(attached).toEqual(["Commit your changes on this branch."]);
+    act(() => screen.getByRole("button", { name: "Archive thread" }).click());
+    expect(onArchive).toHaveBeenCalledOnce();
   });
 });
 
@@ -352,7 +413,8 @@ describe("only what can act shows (#384)", () => {
     panel();
     await wait(0);
     expect(screen.queryByText("Pull request")).toBeNull();
-    expect(screen.getByText(/is 1 commit ahead of main/)).toBeInTheDocument();
+    expect(screen.getByText(/Ready for a pull request/)).toBeInTheDocument();
+    expect(screen.getByText(/1 commit on/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Refresh" })).toBeInTheDocument();
   });
 });

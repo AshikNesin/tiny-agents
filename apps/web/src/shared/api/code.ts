@@ -136,6 +136,8 @@ export interface ThreadPullsView {
   active: PullView | null;
   earlier: Array<{ number: number; url: string; title: string; state: PullView["state"] }>;
   ahead: number | null;
+  uncommitted: number | null;
+  landed: "github" | "local" | null;
 }
 
 export interface ReviewFile {
