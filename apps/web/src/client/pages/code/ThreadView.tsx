@@ -322,6 +322,7 @@ export function ThreadView({
   commands = false,
   onReplaced,
   below,
+  nextSteps,
 }: {
   id: string;
   harness: HarnessInfo;
@@ -335,6 +336,7 @@ export function ThreadView({
   commands?: boolean;
   onReplaced?: () => void;
   below?: ReactNode;
+  nextSteps?: ReactNode;
 }) {
   const state = useCodeThread(id);
   const { thread, working, items, settings } = state;
@@ -658,6 +660,7 @@ export function ThreadView({
                   </Button>
                 </p>
               )}
+              {!working && !editing && items.length > 0 && nextSteps}
               <PendingComments threadId={id} enabled={owner} onShow={onShowChanges} />
               <Composer
                 draftKey={id}

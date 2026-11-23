@@ -26,6 +26,7 @@ import { NewThreadDialog } from "./NewThreadDialog";
 import { TerminalDrawer } from "./TerminalDrawer";
 import { PullPanel } from "./PullPanel";
 import { useArchive } from "./controls";
+import { NextSteps } from "./NextSteps";
 import { PullReview } from "./PullReview";
 import { ResizablePane } from "./ResizablePane";
 import { ReviewPanel } from "./ReviewPanel";
@@ -480,6 +481,21 @@ export function CodeWorkspace() {
             insert={insert}
             onShowChanges={openPane === "changes" ? undefined : () => showPane("changes")}
             commands
+            nextSteps={
+              project ? (
+                <NextSteps
+                  threadId={threadId}
+                  refreshKey={`${row?.working}:${row?.cursor}:${row?.pr?.loop}`}
+                  onStep={(step) => {
+                    if (step === "create-pr" || step === "push") publish();
+                    else if (step === "merge") merge();
+                    else if (step === "archive") archive();
+                    else if (step === "review") showPane("changes");
+                    else showPane("pr");
+                  }}
+                />
+              ) : undefined
+            }
             below={
               terminalOpen && project ? (
                 <TerminalDrawer
