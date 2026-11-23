@@ -160,7 +160,13 @@ export async function updatePull(
   set: Partial<
     Pick<
       CodePullRow,
-      "autofix" | "passesWithoutOwner" | "ownerInputAt" | "pendingJobId" | "stalledNotifiedSha"
+      | "autofix"
+      | "passesWithoutOwner"
+      | "ownerInputAt"
+      | "pendingJobId"
+      | "stalledNotifiedSha"
+      | "yoloMethod"
+      | "yoloWaiting"
     >
   >,
 ): Promise<void> {

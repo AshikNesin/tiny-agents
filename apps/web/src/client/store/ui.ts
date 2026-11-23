@@ -32,6 +32,16 @@ function readCodePane(): CodePane | null {
   }
 }
 
+const CODE_PANE_WIDE_KEY = "tiny-agents:code-pane-wide";
+
+function readCodePaneWide(): boolean {
+  try {
+    return localStorage.getItem(CODE_PANE_WIDE_KEY) === "wide";
+  } catch {
+    return false;
+  }
+}
+
 function readCollapsed(): boolean {
   try {
     return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "true";
@@ -56,6 +66,8 @@ interface UiState {
   codePane: CodePane | null;
   lastCodePane: CodePane;
   setCodePane: (pane: CodePane | null) => void;
+  codePaneWide: boolean;
+  toggleCodePaneWide: () => void;
   codeTerminals: Record<string, string>;
   setCodeTerminal: (threadId: string, name: string | null) => void;
   mobileOpen: boolean;
@@ -110,6 +122,16 @@ export const useUiStore = create<UiState>((set) => ({
       storageIsBlockedInPrivateWindows();
     }
     set(codePane ? { codePane, lastCodePane: codePane } : { codePane });
+  },
+  codePaneWide: readCodePaneWide(),
+  toggleCodePaneWide: () => {
+    const wide = !useUiStore.getState().codePaneWide;
+    try {
+      localStorage.setItem(CODE_PANE_WIDE_KEY, wide ? "wide" : "normal");
+    } catch {
+      storageIsBlockedInPrivateWindows();
+    }
+    set({ codePaneWide: wide });
   },
   codeTerminals: {},
   setCodeTerminal: (threadId, name) =>

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { Button, Textarea, monoClass } from "@groot/ui";
 import { cn } from "@groot/ui/lib/utils";
@@ -24,8 +24,10 @@ export function LightEditor({
   content,
   onSave,
   onCancel,
+  title,
 }: {
   path: string;
+  title?: ReactNode;
   content: string;
   onSave(text: string): Promise<void>;
   onCancel(): void;
@@ -77,9 +79,11 @@ export function LightEditor({
       }}
     >
       <div className="border-border flex h-9 items-center gap-1.5 border-b px-2 text-xs">
-        <span className="text-muted-foreground min-w-0 flex-1 truncate">
-          Editing {path}, saved to the worktree
-        </span>
+        {title ?? (
+          <span className="text-muted-foreground min-w-0 flex-1 truncate">
+            Editing {path}, saved to the worktree
+          </span>
+        )}
         <Button size="xs" variant="ghost" onClick={onCancel} disabled={saving}>
           Cancel
         </Button>

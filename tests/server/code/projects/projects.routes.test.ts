@@ -843,6 +843,77 @@ describe("Auto-fix", () => {
     expect((await pr(thread.id)).active?.loop.status).toBe("watching");
   });
 
+  const openThread = (id: string) => ({
+    id,
+    path: "src/login.ts",
+    line: 1,
+    resolved: false,
+    outdated: false,
+    comments: [
+      {
+        id: `C_${id}`,
+        databaseId: 1,
+        author: { login: "carol", type: "user" as const, association: "COLLABORATOR" },
+        body: "Nit: rename this",
+        createdAt: minutesAgo(3),
+      },
+    ],
+  });
+
+  it("YOLO Merge resolves the open comments, waits for the checks, then merges by itself", async () => {
+    const thread = await publishedThread();
+    const p = github.pull(1);
+    p.threads = [openThread("T_1"), { ...openThread("T_2"), resolved: true }];
+    p.checks = [{ ...failing(), state: "pending", completedAt: null }];
+
+    const armed = await call<ThreadPullsView>(
+      "POST",
+      `/threads/${encodeURIComponent(thread.id)}/pr/yolo`,
+      { method: "squash" },
+    );
+    expect(armed.status).toBe(200);
+    expect(armed.body.data?.active?.yolo).toEqual({
+      method: "squash",
+      waiting: "Waiting for test to finish.",
+    });
+    expect(github.resolved).toEqual(["T_1"]);
+    expect(p.draft).toBe(false);
+    expect(github.merged).toEqual([]);
+
+    p.threads = [{ ...openThread("T_1"), resolved: true }, openThread("T_3")];
+    p.checks = [{ ...failing(), state: "success" }];
+    const after = await pr(thread.id);
+    expect(github.resolved).toEqual(["T_1", "T_3"]);
+    expect(github.merged).toEqual([{ number: 1, method: "squash" }]);
+    expect(after.active).toBeNull();
+    expect(after.earlier[0]?.state).toBe("merged");
+  });
+
+  it("YOLO Merge keeps waiting while a check fails, and stops when cancelled", async () => {
+    const thread = await publishedThread();
+    const p = github.pull(1);
+    p.checks = [failing()];
+    const at = `/threads/${encodeURIComponent(thread.id)}/pr/yolo`;
+    await call("POST", at, { method: "merge" });
+    expect((await pr(thread.id)).active?.yolo?.waiting).toBe("Waiting for test to pass.");
+    expect(github.merged).toEqual([]);
+
+    const cancelled = await call<ThreadPullsView>("DELETE", at);
+    expect(cancelled.body.data?.active?.yolo).toBeNull();
+    p.checks = [{ ...failing(), state: "success" }];
+    await pr(thread.id);
+    expect(github.merged).toEqual([]);
+  });
+
+  it("YOLO Merge refuses a method the repository does not allow", async () => {
+    const thread = await publishedThread();
+    const refused = await call("POST", `/threads/${encodeURIComponent(thread.id)}/pr/yolo`, {
+      method: "rebase",
+    });
+    expect(refused.status).toBe(409);
+    expect(refused.body.error?.message).toBe("acme/web does not allow rebase merges.");
+  });
+
   it("posts one summary and resolves nothing when the report is missing", async () => {
     const thread = await publishedThread();
     github.pull(1).checks = [failing()];

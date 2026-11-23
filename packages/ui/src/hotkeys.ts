@@ -205,7 +205,7 @@ function pickBinding(hits: Binding[]): Binding | undefined {
 
 function onKeyDown(e: KeyboardEvent) {
   if (e.repeat || e.defaultPrevented) return;
-  const inField = isEditable(e.target);
+  const inField = isEditable(e.composedPath?.()[0] ?? e.target);
   const hits = bindings.filter((b) => matchesShortcut(e, b.parsed) && (!inField || b.inFields()));
   if (hits.length === 0) return;
   const winner = pickBinding(hits);

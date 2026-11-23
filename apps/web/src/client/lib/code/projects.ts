@@ -82,6 +82,9 @@ export const projectsApi = {
     apiClient.post<ThreadPullsView>(`${thread(id)}/pr/draft`, { draft }),
   merge: (id: string, method: MergeMethod) =>
     apiClient.post<ThreadPullsView>(`${thread(id)}/pr/merge`, { method }),
+  yoloMerge: (id: string, method: MergeMethod) =>
+    apiClient.post<ThreadPullsView>(`${thread(id)}/pr/yolo`, { method }),
+  callOffYoloMerge: (id: string) => apiClient.delete<ThreadPullsView>(`${thread(id)}/pr/yolo`),
 
   reviewFiles: (id: string, scope = "base") =>
     apiClient.get<ReviewFile[]>(`${thread(id)}/review/files`, scoped(scope)),

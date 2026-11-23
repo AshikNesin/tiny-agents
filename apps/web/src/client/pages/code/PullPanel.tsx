@@ -16,6 +16,7 @@ import {
   Upload,
   Wrench,
   X,
+  Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Streamdown } from "streamdown";
@@ -418,6 +419,13 @@ export function PullPanel({
                 })
               }
               onMerge={(method) => void act("merge", () => projectsApi.merge(threadId, method))}
+              onYolo={(method) =>
+                void act("arm YOLO Merge", () =>
+                  method
+                    ? projectsApi.yoloMerge(threadId, method)
+                    : projectsApi.callOffYoloMerge(threadId),
+                )
+              }
               onDraft={(draft) =>
                 void act(draft ? "convert it to a draft" : "mark it ready", () =>
                   projectsApi.setDraft(threadId, draft),
@@ -494,6 +502,7 @@ function ActivePull({
   onAutofix,
   onFix,
   onMerge,
+  onYolo,
   onDraft,
   onAttachAll,
   onAttach,
@@ -504,6 +513,7 @@ function ActivePull({
   onAutofix(enabled: boolean): void;
   onFix(workflow: WorkflowName): void;
   onMerge(method: MergeMethod): void;
+  onYolo(method: MergeMethod | null): void;
   onDraft(draft: boolean): void;
   onAttachAll(): void;
   onAttach(text: string): void;
@@ -522,9 +532,28 @@ function ActivePull({
           ? "Merge opens once the conflict is resolved."
           : null;
 
+  const yoloMethod: MergeMethod | undefined = methods.includes("squash") ? "squash" : methods[0];
+
   return (
     <>
       <PullChecks threadId={threadId} pr={pr} busy={busy} onFix={() => onFix("fix_ci")} />
+
+      {pr.yolo && pr.state === "open" && (
+        <div
+          role="status"
+          aria-label="YOLO Merge"
+          className="border-warning/40 bg-warning/10 flex items-center gap-3 rounded-xl border px-3 py-2.5"
+        >
+          <Zap className="text-warning size-4 shrink-0" aria-hidden />
+          <p className="min-w-0 flex-1 text-sm">
+            <span className="font-medium">YOLO Merge is on.</span> Merges #{pr.number} by itself
+            once it can.{pr.yolo.waiting ? ` ${pr.yolo.waiting}` : ""}
+          </p>
+          <Button size="sm" variant="outline" onClick={() => onYolo(null)} disabled={busy !== null}>
+            Call off
+          </Button>
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-2">
         {pr.state === "open" && methods.length > 0 && (
@@ -551,6 +580,19 @@ function ActivePull({
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
+        )}
+        {pr.state === "open" && !pr.yolo && yoloMethod && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => onYolo(yoloMethod)}
+            disabled={busy !== null}
+            title="Resolves every open comment, waits for the checks, then merges by itself"
+            data-testid="code-yolo-merge"
+          >
+            {busy === "arm YOLO Merge" ? <Spinner /> : <Zap />}
+            YOLO Merge
+          </Button>
         )}
         {pr.state === "open" && !pr.draft && mergeBlocked && (
           <span className="text-muted-foreground self-center text-xs">{mergeBlocked}</span>

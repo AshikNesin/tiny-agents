@@ -74,9 +74,11 @@ function useStoredWidth(key: string) {
 export function ResizablePane({
   children,
   className,
+  wide = false,
 }: {
   children: ReactNode;
   className?: string;
+  wide?: boolean;
 }) {
   const [width, setWidth] = useStoredWidth(REVIEW_PANEL.key);
   const panelRef = useRef<HTMLElement>(null);
@@ -86,7 +88,7 @@ export function ResizablePane({
         limits={REVIEW_PANEL}
         label="Resize review panel"
         controls="code-review-panel"
-        className="lg:block"
+        className={wide ? "" : "lg:block"}
         panelRef={panelRef}
         width={width}
         onWidth={setWidth}
@@ -95,12 +97,19 @@ export function ResizablePane({
         ref={panelRef}
         id="code-review-panel"
         aria-label="Review panel"
+        data-wide={wide || undefined}
         className={cn(
           "flex w-full min-w-0 flex-col",
-          width === null ? "lg:w-[48%] lg:max-w-3xl" : "lg:w-(--review-width) lg:min-w-80",
+          wide
+            ? "flex-1"
+            : width === null
+              ? "lg:w-[48%] lg:max-w-3xl"
+              : "lg:w-(--review-width) lg:min-w-80",
           className,
         )}
-        style={width === null ? undefined : ({ "--review-width": `${width}px` } as CSSProperties)}
+        style={
+          wide || width === null ? undefined : ({ "--review-width": `${width}px` } as CSSProperties)
+        }
       >
         {children}
       </section>

@@ -341,6 +341,26 @@ describe("the Code workspace", () => {
     expect(screen.getByTestId("code-pane")).toContainElement(screen.getByTestId("code-terminal"));
   });
 
+  it("z widens the work pane over the thread list and the thread, and z again puts it back", async () => {
+    renderAt("/code/t/demo%3Adddd");
+    open(done);
+    await screen.findByText("web /");
+    press("3");
+    const thread = document.querySelector("main")!;
+    const list = document.querySelector("#code-sidebar")!;
+    expect(thread).not.toHaveAttribute("hidden");
+    press("z");
+    expect(thread).toHaveAttribute("hidden");
+    expect(list).toHaveAttribute("hidden");
+    expect(screen.getByRole("button", { name: "Restore the work pane" })).toBeInTheDocument();
+    press("z");
+    expect(thread).not.toHaveAttribute("hidden");
+    fireEvent.click(screen.getByRole("button", { name: "Widen the work pane" }));
+    expect(thread).toHaveAttribute("hidden");
+    press("\\");
+    expect(thread).not.toHaveAttribute("hidden");
+  });
+
   it(": opens a menu of the page's commands; picking one runs it", async () => {
     renderAt("/code/t/demo%3Adddd");
     open(done);

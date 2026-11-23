@@ -69,6 +69,7 @@ to GitHub. The list of keys is the `commands` array in
 | `e` `t`         | Edit the last turn and run it again; run it again      |
 | `1` `2` `3` `4` | Changes, Pull request, Files, Terminal                 |
 | `` ` `` `\` `[` | Show or hide the terminal, work pane, thread list      |
+| `z`             | Widen the work pane over the thread, and back          |
 | `:` `?`         | Run a command or jump to a thread; list the keys       |
 | `o`             | Open the worktree in Cursor or Zed                     |
 | `f` `a`         | Fix CI, Address comments                               |
@@ -159,7 +160,8 @@ archived thread offers **Unarchive to continue** in place of the composer.
 
 Three tabs beside the thread, drawn by `ReviewPanel.tsx`, `PullPanel.tsx`
 and `FilesPane.tsx`. `\` hides and shows the pane. Drag the divider to
-resize it.
+resize it. `z`, or the widen button in the pane's tab row, lays the pane over
+the thread list and the thread so it fills the page; `z` again puts it back.
 
 **Changes (`1`).** The branch, its base and how many commits it is ahead,
 then everything since the merge base with the base branch, committed or not,
@@ -180,8 +182,12 @@ by @pierre/diffs, with a file tree behind **Files**.
 
 **Pull request (`2`).** See Pull requests below.
 
-**Files (`3`).** The worktree's files. `p` opens a file by name and `s`
-searches the text. A file opens in the light editor (@pierre/diffs' code
+**Files (`3`).** The worktree as a folder tree (@pierre/trees) with file
+icons, the agent's changed files marked and their folders open. `p` filters
+the tree by name; `s` searches inside the files, and its hits, grouped by
+file, take the tree's place until cleared. A file opens beside the tree, with
+its path, whether the branch changed it, and a copy button, in the light
+editor (@pierre/diffs' code
 editor, `LightEditor.tsx`); ⌘S saves. A save is refused when the file
 changed since it was opened, and for anything that is not a regular file
 inside the worktree.
@@ -340,6 +346,13 @@ Commit and push or Merge on an open PR, Push main, and Archive.
 - **Merge (`M`)** with the repository's methods, once checks pass and there
   is no conflict. **Resolve conflicts** shows when the branch no longer
   merges.
+- **YOLO Merge** merges without you. It resolves every open review thread,
+  marks a draft ready, then waits until no check is pending or failing and
+  GitHub can merge the branch, and squash-merges (or the repository's only
+  method). Threads opened while it waits are resolved too. It looks every
+  30 seconds, and the tab says what it waits for; **Call off** stops it.
+  `armYoloMerge` and `yoloStep` in `code.pulls.ts`, the waiting rule in
+  `code.yolo.ts`.
 - The **Auto-fix** and **Draft** switches, the pass history, the
   description (**Edit** saves it to GitHub), **Review** (opens a PR review
   of it) and **Unlink**. After a PR merges, the next Publish opens a new

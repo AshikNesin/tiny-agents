@@ -161,16 +161,17 @@ await journey(
       async () => {
         await page.keyboard.press("p");
         const files = page.getByTestId("code-files");
-        await expect(files.getByRole("textbox", { name: "Open a file by name" })).toBeFocused();
+        const tree = files.locator("file-tree-container");
+        await expect(tree.getByRole("textbox")).toBeFocused({ timeout: 20_000 });
         await page.keyboard.type("notes");
-        await expect(files.getByTestId("code-files-list")).toContainText("NOTES.md", {
-          timeout: 20_000,
-        });
-        await page.keyboard.press("Enter");
-        await expect(files.getByText("Editing NOTES.md, saved to the worktree")).toBeVisible({
+        await tree.locator('[data-item-path="NOTES.md"]').click({ timeout: 20_000 });
+        await expect(files.getByTestId("code-file-path")).toHaveText("NOTES.md", {
           timeout: 20_000,
         });
         await page.keyboard.press("Escape");
+        await page.keyboard.press("z");
+        await expect(page.getByRole("button", { name: "Restore the work pane" })).toBeVisible();
+        await page.keyboard.press("z");
         await page.keyboard.press("s");
         await page.keyboard.type(`release ${stamp}`);
         await page.keyboard.press("Enter");
