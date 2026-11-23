@@ -13,7 +13,9 @@ export interface Failure {
   problem: string;
 }
 
-const EXACT_PIN = /^[\w@/.-]+@\d+[^\s,]*$/;
+const EXACT_PIN = /^[\w@/.-]+@\d+\.\d+\.\d+(-[\w.-]+)?$/;
+
+const isComment = (line: string) => /^\s*#/.test(line);
 
 export function evaluatePolicy(yaml: string): Failure[] {
   const failures: Failure[] = [];
@@ -38,8 +40,10 @@ export function evaluatePolicy(yaml: string): Failure[] {
   const excludeStart = lines.findIndex((line) => line.startsWith("trustPolicyExclude:"));
   if (excludeStart !== -1) {
     for (const line of lines.slice(excludeStart + 1)) {
-      const item = /^\s+-\s*(.+)$/.exec(line)?.[1];
-      if (!item) break;
+      if (line.trim() !== "" && !/^[\s-]/.test(line)) break;
+      if (line.trim() === "[]" || isComment(line)) continue;
+      const item = /^\s*-\s*(.+)$/.exec(line)?.[1];
+      if (!item) continue;
       const pin = item.replace(/["']/g, "").trim();
       if (!EXACT_PIN.test(pin)) {
         failures.push({

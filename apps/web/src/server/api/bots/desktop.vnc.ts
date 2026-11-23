@@ -9,6 +9,7 @@ import { isOriginAllowed, onUpgrade, rejectUpgrade, type TicketStore } from "../
 const MAX_VIEWERS_PER_BOT = 4;
 const PING_INTERVAL_MS = 30_000;
 const MAX_BUFFERED_BYTES = 4 * 1024 * 1024;
+const MAX_FRAME_BYTES = 16 * 1024 * 1024;
 
 export interface VncTarget {
   openStream(): Promise<Duplex>;
@@ -29,7 +30,7 @@ export function attachVncBridge<T extends LiveGrant>(
   httpServer: Server,
   options: VncBridgeOptions<T>,
 ): { close(): void } {
-  const wss = new WebSocketServer({ noServer: true });
+  const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_FRAME_BYTES });
   const originAllowed = options.isOriginAllowed ?? isOriginAllowed;
   const viewers = new Map<string, number>();
 

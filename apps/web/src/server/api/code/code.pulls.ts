@@ -321,6 +321,7 @@ export async function manualPass(
   const github = await context.github();
   const snapshot = await github.snapshot(context.repo, open.number);
   const row = await cacheSnapshot(open.id, snapshot);
+  if (!row) throw Boom.notFound("The thread's pull request was unlinked.");
   const items = actionableItems({
     snapshot,
     appCommentIds: await appCommentIds(open.id),
@@ -369,6 +370,7 @@ async function reconcile(pullId: string, now = Date.now()): Promise<number | nul
     return 5 * 60_000;
   }
   let pull = await cacheSnapshot(pullId, snapshot);
+  if (!pull) return null;
   const settings = autofixSettings(project.settings);
 
   if (snapshot.state === "merged") {
@@ -512,25 +514,29 @@ export async function armReconcile(
   delayMs: number,
   expected?: string | null,
 ): Promise<string | undefined> {
-  const runAt = new Date(Date.now() + delayMs);
-  const jobId = await addJob(RECONCILE_JOB, { pullId }, { runAt, retryLimit: 1 });
-  if (await setPendingJob(pullId, jobId, expected)) {
-    if (expected === undefined) {
-      const rows = await db
-        .select()
-        .from(jobs)
-        .where(inArray(jobs.state, ["created"]));
-      for (const job of rows) {
-        const data = job.data as { pullId?: string } | null;
-        if (job.id !== jobId && job.name === RECONCILE_JOB && data?.pullId === pullId) {
-          await cancelJob(job.id).catch(() => undefined);
+  const work = async (): Promise<string | undefined> => {
+    const runAt = new Date(Date.now() + delayMs);
+    const jobId = await addJob(RECONCILE_JOB, { pullId }, { runAt, retryLimit: 1 });
+    if (await setPendingJob(pullId, jobId, expected)) {
+      if (expected === undefined) {
+        const rows = await db
+          .select()
+          .from(jobs)
+          .where(inArray(jobs.state, ["created"]));
+        for (const job of rows) {
+          const data = job.data as { pullId?: string } | null;
+          if (job.id !== jobId && job.name === RECONCILE_JOB && data?.pullId === pullId) {
+            await cancelJob(job.id).catch(() => undefined);
+          }
         }
       }
+      return jobId;
     }
-    return jobId;
-  }
-  await cancelJob(jobId).catch(() => undefined);
-  return undefined;
+    await cancelJob(jobId).catch(() => undefined);
+    return undefined;
+  };
+  const hub = codeHub();
+  return hub ? hub.serial(`code-pr-arm:${pullId}`, work) : work();
 }
 
 export function registerCodeJobs(): void {

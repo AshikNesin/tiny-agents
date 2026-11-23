@@ -358,7 +358,10 @@ UI.
 - **Keys.** Each purpose (`vault-local`, `connection`) gets its own AES-256-GCM
   key, derived from `SECRETS_KEY` with HKDF-SHA256. Every write uses a fresh
   IV. Values are stored as `v2:<kid>:<iv>:<tag>:<ciphertext>`, where `kid`
-  fingerprints the key.
+  fingerprints the key. `SECRETS_KEY` must hold at least 32 bytes of key
+  material (counted after base64 or hex decoding) to seal; a shorter one keeps
+  reading what it sealed before the floor, but new writes are refused with the
+  reason, and `pnpm secrets:rotate` moves to a longer one.
 - **Binding.** The purpose, the record (the item's id, or the connection row)
   and the field are the AAD. A value copied to another item, row or column
   does not decrypt. A local item's AAD also carries the digest of its policy

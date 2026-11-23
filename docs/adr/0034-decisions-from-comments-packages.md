@@ -60,10 +60,12 @@ Login against an unknown email still verifies against a well-formed dummy
 hash, so response time does not reveal which emails have accounts. The admin
 key check hashes both sides before comparing so the comparison is constant
 time whatever the lengths (`admin-auth.middleware.ts`). Passwords use PBKDF2
-at 100,000 iterations because Workers cap PBKDF2 there and budget about
-10 ms of CPU per request on the free plan. Accounts created before the move
+at 600,000 iterations; the Workers CPU cap that kept it at 100,000 does not
+apply (tiny-agents runs on Node only). Accounts created before the move
 to groot 3.0 still hold bcrypt hashes: `verifyPassword` accepts them and
-login re-hashes them to PBKDF2 the first time the password is used.
+login re-hashes them to PBKDF2 the first time the password is used. Hashes at
+an older iteration count stay valid the same way, and the next login
+re-hashes them at the current count.
 
 `parseEnv` treats an empty variable as unset, because hosting platforms set
 unused variables to `""`.

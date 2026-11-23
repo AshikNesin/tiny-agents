@@ -19,6 +19,7 @@ const EXTRACT_LIMITS = {
   maxSheets: 20,
   maxCells: 200_000,
   maxPartBytes: 64 * 1024 * 1024,
+  maxTotalPartBytes: 128 * 1024 * 1024,
   maxEntries: 10_000,
   maxArchiveBytes: 1024 * 1024 * 1024,
   maxRatio: 100,
@@ -326,6 +327,7 @@ const office = {
   maxSheets: EXTRACT_LIMITS.maxSheets,
   maxCells: EXTRACT_LIMITS.maxCells,
   maxPartBytes: EXTRACT_LIMITS.maxPartBytes,
+  maxTotalPartBytes: EXTRACT_LIMITS.maxTotalPartBytes,
 };
 const archive = {
   maxEntries: EXTRACT_LIMITS.maxEntries,

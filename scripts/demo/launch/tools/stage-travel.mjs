@@ -41,6 +41,14 @@ const alive = (pid) => {
   }
 };
 
+const owns = (pid, marker) => {
+  try {
+    return readFileSync(`/proc/${pid}/cmdline`, "utf8").includes(marker);
+  } catch {
+    return false;
+  }
+};
+
 async function answers(port) {
   try {
     await fetch(`http://localhost:${port}/`, { signal: AbortSignal.timeout(1500) });
@@ -50,8 +58,9 @@ async function answers(port) {
   }
 }
 
-async function stopGroup(pid) {
+async function stopGroup(pid, marker) {
   if (!pid || !alive(pid)) return;
+  if (!owns(pid, marker)) return log(`pid ${pid} is not ours; not killing it`);
   try {
     process.kill(-pid, "SIGTERM");
   } catch {}
@@ -67,8 +76,8 @@ async function down() {
   if (existsSync(RUN_FILE)) {
     const run = JSON.parse(readFileSync(RUN_FILE, "utf8"));
     log(`stopping the previous instance (process group ${run.pid})`);
-    await stopGroup(run.pid);
-    await stopGroup(run.flightsPid);
+    await stopGroup(run.pid, "travel-register.mjs");
+    await stopGroup(run.flightsPid, "travel-flights.mjs");
     for (let i = 0; i < 50 && (await answers(PORT)); i++) await sleep(100);
   }
   try {
@@ -78,10 +87,17 @@ async function down() {
   rmSync(`/home/${VM_USER}/data`, { recursive: true, force: true });
   rmSync(`/home/${VM_USER}/.config`, { recursive: true, force: true });
   rmSync(`/home/${VM_USER}/.cache`, { recursive: true, force: true });
+  teardownVm();
 }
 
 const sh = (cmd) =>
   execFileSync("bash", ["-c", cmd], { stdio: ["ignore", "pipe", "inherit"] }).toString();
+
+function teardownVm() {
+  sh(`rm -f /etc/sudoers.d/${VM_USER} || true`);
+  sh(`kill $(cat /run/sshd-travel.pid 2>/dev/null) 2>/dev/null || true`);
+  sh(`userdel -r ${VM_USER} 2>/dev/null || true`);
+}
 
 function setupVm() {
   for (const bin of [
@@ -99,7 +115,7 @@ function setupVm() {
   mkdirSync(VM, { recursive: true });
   if (!sh(`id -u ${VM_USER} 2>/dev/null || true`).trim()) sh(`useradd -m -s /bin/bash ${VM_USER}`);
   sh(
-    `passwd -d ${VM_USER} >/dev/null; echo "${VM_USER} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/${VM_USER}; chmod 440 /etc/sudoers.d/${VM_USER}`,
+    `passwd -l ${VM_USER} >/dev/null; echo "${VM_USER} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/${VM_USER}; chmod 440 /etc/sudoers.d/${VM_USER}`,
   );
   if (!existsSync(path.join(VM, "id_ed25519")))
     sh(`ssh-keygen -q -t ed25519 -N "" -f ${VM}/id_ed25519`);

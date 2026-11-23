@@ -215,7 +215,7 @@ optional TTL; app settings and passkey challenges use it. See [KV](../features/k
 | Protected | everything else under `/api/v1`                                                | JWT in the `token` httpOnly cookie or `Authorization: Bearer …` (`requireSession`)     |
 | Admin     | `POST` / `GET /api/v1/auth/users`                                              | `X-Admin-Auth-Key` equal to `ADMIN_AUTH_KEY` (`adminAuthMiddleware`)                   |
 
-Passwords are PBKDF2-SHA256 (100,000 iterations through WebCrypto); tokens are
+Passwords are PBKDF2-SHA256 (600,000 iterations through WebCrypto); tokens are
 HS256 via jose, valid for `config.auth.jwtExpiresIn` (30 days).
 
 The session is one module, `@groot/core/session`

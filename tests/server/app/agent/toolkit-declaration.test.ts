@@ -7861,7 +7861,7 @@ describe("one declaration per tool (3.2)", () => {
                 },
                 "type": "object",
               },
-              "replay": "safe",
+              "replay": "unsafe",
             },
           ],
           "wraps": 0,

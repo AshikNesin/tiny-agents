@@ -70,9 +70,11 @@ export async function create(data: CreateSkillDTO): Promise<SkillData> {
       source: data.source,
       sourceUrl: data.sourceUrl ?? null,
     })
+    .onConflictDoNothing({ target: skills.name })
     .returning({ id: skills.id });
-  if (data.botIds) await setBots(row!.id, data.botIds);
-  return get(row!.id);
+  if (!row) throw Boom.conflict(`A skill named "${data.name}" exists`);
+  if (data.botIds) await setBots(row.id, data.botIds);
+  return get(row.id);
 }
 
 export async function update(id: string, data: UpdateSkillDTO): Promise<SkillData> {

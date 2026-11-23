@@ -8,9 +8,15 @@ export interface RfbViewOnlyFilter {
 
 const FORWARD = new Set([0, 2, 3, 150, 248]);
 
+const MAX_MESSAGE_BYTES = 8 * 1024 * 1024;
+
 function messageLength(buf: Buffer): number | undefined {
   const type = buf[0]!;
   const need = (n: number) => (buf.length >= n ? n : undefined);
+  const clamp = (length: number): number | undefined => {
+    if (length > MAX_MESSAGE_BYTES) throw new RfbViewOnlyError("That RFB message is too long.");
+    return need(length);
+  };
   switch (type) {
     case 0:
       return need(20);
@@ -26,16 +32,17 @@ function messageLength(buf: Buffer): number | undefined {
       if (buf.length < 8) return undefined;
       const raw = buf.readUInt32BE(4);
       const length = raw >= 0x8000_0000 ? 0x1_0000_0000 - raw : raw;
+      if (length > MAX_MESSAGE_BYTES) throw new RfbViewOnlyError("That RFB message is too long.");
       return need(8 + length);
     }
     case 150:
       return need(10);
     case 248:
-      return buf.length < 9 ? undefined : need(9 + buf[8]!);
+      return buf.length < 9 ? undefined : clamp(9 + buf[8]!);
     case 250:
       return need(4);
     case 251:
-      return buf.length < 7 ? undefined : need(8 + 16 * buf[6]!);
+      return buf.length < 7 ? undefined : clamp(8 + 16 * buf[6]!);
     case 255:
       if (buf.length < 2) return undefined;
       if (buf[1] !== 0) throw new RfbViewOnlyError(`Unknown QEMU message ${buf[1]}`);

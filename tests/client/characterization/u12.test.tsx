@@ -56,13 +56,28 @@ describe("U12: who the shell thinks is signed in", () => {
     expect(router.state.location.pathname).toBe("/chats");
   });
 
-  it("takes a failed /people/me as the owner", async () => {
+  it("keeps a failed /people/me from opening an owner page, and recovers on the next load", async () => {
     vi.spyOn(peopleApi, "me").mockRejectedValue(new Error("network down"));
     usePeopleStore.setState({ role: null });
     renderAt("/vault");
     await act(() => usePeopleStore.getState().load());
 
-    expect(usePeopleStore.getState().role).toBe("owner");
-    expect(screen.getByText("Vault page (owner only)")).toBeInTheDocument();
+    expect(usePeopleStore.getState().role).toBeNull();
+    expect(screen.queryByText("Vault page (owner only)")).not.toBeInTheDocument();
+    expect(screen.queryByText("Chats page")).not.toBeInTheDocument();
+
+    vi.mocked(peopleApi.me).mockResolvedValue({ guest: false });
+    await act(() => usePeopleStore.getState().load());
+    expect(await screen.findByText("Vault page (owner only)")).toBeInTheDocument();
+  });
+
+  it("still opens a guest page for a viewer whose /people/me failed", async () => {
+    vi.spyOn(peopleApi, "me").mockRejectedValue(new Error("network down"));
+    usePeopleStore.setState({ role: null });
+    renderAt("/chats");
+    await act(() => usePeopleStore.getState().load());
+
+    expect(screen.getByText("Chats page")).toBeInTheDocument();
+    expect(usePeopleStore.getState().role).toBeNull();
   });
 });

@@ -161,4 +161,35 @@ describe("1Password Connect backend", () => {
     await admin.remove!(id);
     expect(connect.items.has(id)).toBe(false);
   });
+
+  it("keeps only the newest created-item grace entries once the cache is full", async () => {
+    const admin = createConnectBackend({
+      host: connect.url,
+      vaultId: "vault-agents",
+      token: "admin-token",
+      writable: true,
+      createdLimit: 2,
+    });
+    const first = await admin.create!({
+      kind: "login",
+      title: "First",
+      values: { username: "u", password: "p" },
+    });
+    const second = await admin.create!({
+      kind: "login",
+      title: "Second",
+      values: { username: "u", password: "p" },
+    });
+    const third = await admin.create!({
+      kind: "login",
+      title: "Third",
+      values: { username: "u", password: "p" },
+    });
+    connect.items.delete(first);
+    connect.items.delete(second);
+    connect.items.delete(third);
+    await expect(admin.describe(first)).rejects.toMatchObject({ code: "not_found" });
+    await expect(admin.describe(second)).resolves.toMatchObject({ title: "Second" });
+    await expect(admin.describe(third)).resolves.toMatchObject({ title: "Third" });
+  }, 15_000);
 });

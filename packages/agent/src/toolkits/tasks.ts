@@ -119,7 +119,14 @@ export function createTasksToolkit(store: TaskStore): Capability {
     parameters: Type.Object({ status: Type.Optional(statusSchema) }),
     replay: "safe",
     execute: async (args) => {
-      const tasks = await store.list(args.status ? { status: args.status } : undefined);
+      const tasks = args.status
+        ? await store.list({ status: args.status })
+        : (
+            await Promise.all([
+              store.list({ status: "todo" }),
+              store.list({ status: "in_progress" }),
+            ])
+          ).flat();
       return ok(tasks.length === 0 ? "No tasks." : tasks.map(present).join("\n"));
     },
   });

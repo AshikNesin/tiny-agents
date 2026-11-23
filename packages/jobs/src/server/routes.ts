@@ -61,8 +61,8 @@ jobRoutes.get("/:jobId", async (c) => {
 });
 
 jobRoutes.get("/:jobId/logs", async (c) => {
-  const { afterId } = parseQuery(c, getLogsQuerySchema);
-  return ok(c, await queries.getJobLogs({ jobId: jobIdParam(c), afterId }));
+  const { afterId, limit } = parseQuery(c, getLogsQuerySchema);
+  return ok(c, await queries.getJobLogs({ jobId: jobIdParam(c), afterId, limit }));
 });
 
 jobRoutes.delete("/:jobId", async (c) => {

@@ -100,7 +100,12 @@ function safePath(raw: string | undefined): string {
 }
 
 const threadParam = (raw: string | undefined) => {
-  const id = decodeURIComponent(raw ?? "");
+  let id: string;
+  try {
+    id = decodeURIComponent(raw ?? "");
+  } catch {
+    throw Boom.badRequest("Invalid thread");
+  }
   if (!id || id.length > 300) throw Boom.badRequest("Invalid thread");
   return id;
 };

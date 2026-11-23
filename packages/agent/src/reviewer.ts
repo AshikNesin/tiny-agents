@@ -59,12 +59,16 @@ const REVIEW_THRESHOLDS = {
 const REVIEW_TIMEOUT_MS = 3_000;
 const MAX_INSTRUCTIONS = 4_000;
 const MAX_OWNER_MESSAGE = 2_000;
-const MAX_ARGS = 8_000;
+export const MAX_ARGS = 8_000;
 const OWNER_MESSAGES = 5;
 export const REVIEW_ENTRY_LOOKBACK = 50;
 
 function clip(text: string, max: number): string {
   return text.length > max ? `${text.slice(0, max)}…` : text;
+}
+
+function scrubClip(text: string, max: number): string {
+  return clip(secretRedactor.scrub(text), max);
 }
 
 export function reviewState(input: ReviewInput): JsonObject {
@@ -75,11 +79,9 @@ export function reviewState(input: ReviewInput): JsonObject {
     args = "{}";
   }
   return {
-    bot_instructions: secretRedactor.scrub(clip(input.instructions ?? "", MAX_INSTRUCTIONS)),
-    owner_messages: input.ownerMessages.map((m) =>
-      secretRedactor.scrub(clip(m, MAX_OWNER_MESSAGE)),
-    ),
-    pending_action: { tool: input.tool, arguments: secretRedactor.scrub(clip(args, MAX_ARGS)) },
+    bot_instructions: scrubClip(input.instructions ?? "", MAX_INSTRUCTIONS),
+    owner_messages: input.ownerMessages.map((m) => scrubClip(m, MAX_OWNER_MESSAGE)),
+    pending_action: { tool: input.tool, arguments: scrubClip(args, MAX_ARGS) },
   };
 }
 

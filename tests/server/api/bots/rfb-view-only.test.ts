@@ -77,6 +77,29 @@ describe("createRfbViewOnlyFilter", () => {
       RfbViewOnlyError,
     );
   });
+
+  it("refuses a clipboard message that claims more than the relay cap", () => {
+    const filter = createRfbViewOnlyFilter();
+    filter.push(HANDSHAKE);
+    const header = Buffer.alloc(8);
+    header[0] = 6;
+    header.writeUInt32BE(0x7f_ff_ff_f0, 4);
+    expect(() => filter.push(header)).toThrow(RfbViewOnlyError);
+  });
+
+  it("still frames a large clipboard that stays under the cap, in pieces", () => {
+    const filter = createRfbViewOnlyFilter();
+    filter.push(HANDSHAKE);
+    const length = 1_000_000;
+    const message = Buffer.alloc(8 + length, 0x41);
+    message[0] = 6;
+    message.writeUInt32BE(length, 4);
+    const out: Buffer[] = [];
+    for (let at = 0; at < message.length; at += 64 * 1024) {
+      out.push(filter.push(message.subarray(at, at + 64 * 1024)));
+    }
+    expect(Buffer.concat(out).length).toBe(0);
+  });
 });
 
 describe("createRfbInputWatch", () => {

@@ -39,8 +39,41 @@ describe("pnpm policy guard", () => {
     }
   });
 
-  it("accepts a different exact pin", () => {
-    expect(evaluatePolicy(INTACT.replace("- semver@6.3.1", "- semver@6.3.2"))).toEqual([]);
+  it("rejects version ranges an exact pin must not cover", () => {
+    for (const exclude of [
+      "- semver@6.*",
+      "- semver@6||7",
+      "- semver@>=6",
+      "- semver@~6.3.0",
+      "- semver@6",
+      '- "semver@6.x"',
+    ]) {
+      const out = evaluatePolicy(INTACT.replace("- semver@6.3.1", exclude));
+      expect(out, exclude).toHaveLength(1);
+      expect(out[0].key).toBe("trustPolicyExclude");
+    }
+  });
+
+  it("accepts a scoped exact pin with a prerelease", () => {
+    expect(evaluatePolicy(INTACT.replace("- semver@6.3.1", '- "@pierre/theme@2.0.0"'))).toEqual([]);
+    expect(evaluatePolicy(INTACT.replace("- semver@6.3.1", "- pkg@1.2.3-beta.1"))).toEqual([]);
+  });
+
+  it("validates every exclusion past interleaved comments", () => {
+    const commented = [
+      ...INTACT.split("\n"),
+      "  # a reviewed exclusion note",
+      "  - semver@6.3.1",
+      "  # another note",
+      "  - semver@6.*",
+    ].join("\n");
+    const out = evaluatePolicy(commented);
+    expect(out).toEqual([
+      {
+        key: "trustPolicyExclude",
+        problem: '"semver@6.*" is not an exact name@version pin',
+      },
+    ]);
   });
 
   it("ignores the policy description in comments", () => {

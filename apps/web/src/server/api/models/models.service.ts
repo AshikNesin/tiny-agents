@@ -621,8 +621,14 @@ export async function updateConnection(
       checkedAt: found ? new Date() : row.checkedAt,
       version: row.version + 1,
     })
-    .where(eq(providers.id, id))
+    .where(and(eq(providers.id, id), eq(providers.version, row.version)))
     .returning();
+  if (!updated) {
+    if (item) await removeKey(item.id);
+    const gone = await db.query.providers.findFirst({ where: eq(providers.id, id) });
+    if (!gone) throw Boom.notFound("No such provider account");
+    throw new HttpError(412, "The account changed meanwhile. Reload and try again.");
+  }
   if (item && row.credentialItemId) await removeKey(row.credentialItemId);
   if (found) await markListed(id, found);
   await reloadModels();

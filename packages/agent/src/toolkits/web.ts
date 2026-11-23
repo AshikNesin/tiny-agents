@@ -216,6 +216,12 @@ export function createWebToolkit(options: WebToolkitOptions): Capability {
   }
 
   const broker = options.vault;
+
+  function vaultSchemeProblem(url: URL): string | undefined {
+    if (url.protocol !== "http:") return undefined;
+    return `Vault credentials can't be sent over plain http: ${url.host} is not an https URL.`;
+  }
+
   const httpRequest = broker
     ? tool({
         name: "http_request",
@@ -269,6 +275,10 @@ export function createWebToolkit(options: WebToolkitOptions): Capability {
               return fail(`The ${name} header can't be set; pass a vault handle as auth instead.`);
             }
             headers[name] = value;
+          }
+          if (args.auth) {
+            const schemeProblem = vaultSchemeProblem(url);
+            if (schemeProblem) return fail(schemeProblem);
           }
           const send = (auth?: { name: string; value: string }) =>
             requestFollowingRedirects(target, args.method ?? "GET", headers, args.body, auth);
@@ -324,6 +334,10 @@ export function createWebToolkit(options: WebToolkitOptions): Capability {
     let currentBody = body;
     for (let hop = 0; ; hop++) {
       const sameHost = url.host === start.url.host;
+      if (auth && sameHost) {
+        const schemeProblem = vaultSchemeProblem(url);
+        if (schemeProblem) throw httpError(schemeProblem);
+      }
       const response = await sendPinned(url, addresses, {
         method: currentMethod,
         headers: { ...headers, ...(auth && sameHost ? { [auth.name]: auth.value } : {}) },

@@ -449,10 +449,6 @@ describe("shared bots", () => {
   });
 
   it("lets a guest withdraw only their own queued message, never the owner's", async () => {
-    const guest = await addGuest("Priya");
-    made.push(guest.id);
-    const bot = await createBot("Shared queue");
-    await asOwner(`/api/v1/bots/${bot.id}`, { method: "PATCH", json: { guestIds: [guest.id] } });
     await closeAppRuntime();
     let release: () => void = () => undefined;
     const gate = new Promise<void>((resolve) => (release = resolve));
@@ -462,10 +458,21 @@ describe("shared bots", () => {
         return fauxAssistantMessage(fauxText("done"));
       },
     });
+    const guest = await addGuest("Priya");
+    made.push(guest.id);
+    const bot = await createBot("Shared queue");
+    await asOwner(`/api/v1/bots/${bot.id}`, { method: "PATCH", json: { guestIds: [guest.id] } });
     const withdraw = (as: typeof asOwner, requestId: string) =>
       as(`/api/v1/bots/${bot.id}/messages/${requestId}`, { method: "DELETE" });
     const send = (as: typeof asOwner, requestId: string, text: string) =>
       as(`/api/v1/bots/${bot.id}/messages`, { method: "POST", json: { requestId, text } });
+    const queued = async () =>
+      (await rt.readChat(Number(bot.conversationId))).queued.map((item) => item.requestId);
+    const settles = () =>
+      until(async () => {
+        const state = await rt.readChat(Number(bot.conversationId));
+        return state.busy ? undefined : state;
+      }, "the owner's turn to finish");
 
     try {
       const withdrawn = vi.spyOn(rt, "withdraw");
@@ -478,31 +485,23 @@ describe("shared bots", () => {
       expect((await send(guest.asGuest, "guest-queue-01", "the guest's follow-up")).status).toBe(
         200,
       );
-      const queued = await rt.readChat(Number(bot.conversationId));
-      expect(queued.queued.map((item) => item.requestId)).toEqual([
-        "owner-queue-02",
-        "guest-queue-01",
-      ]);
+      expect(await queued()).toEqual(["owner-queue-02", "guest-queue-01"]);
 
       const stolen = await withdraw(guest.asGuest, "owner-queue-02");
       expect(stolen.status).toBe(403);
       expect(stolen.body.error?.message).toBe("Only the author can withdraw a message");
       expect(withdrawn).not.toHaveBeenCalled();
-      expect(
-        (await rt.readChat(Number(bot.conversationId))).queued.map((item) => item.requestId),
-      ).toEqual(["owner-queue-02", "guest-queue-01"]);
+      expect(await queued()).toEqual(["owner-queue-02", "guest-queue-01"]);
 
       expect((await withdraw(guest.asGuest, "guest-queue-01")).status).toBe(200);
       expect(withdrawn).toHaveBeenCalledTimes(1);
-      expect(
-        (await rt.readChat(Number(bot.conversationId))).queued.map((item) => item.requestId),
-      ).toEqual(["owner-queue-02"]);
+      expect(await queued()).toEqual(["owner-queue-02"]);
 
       expect((await withdraw(asOwner, "owner-queue-02")).status).toBe(200);
-      expect((await rt.readChat(Number(bot.conversationId))).queued).toEqual([]);
+      expect(await queued()).toEqual([]);
     } finally {
       release();
-      await rt.abort(Number(bot.conversationId));
+      await settles();
     }
   });
 });

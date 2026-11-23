@@ -94,7 +94,8 @@ const ascii = (bytes: Uint8Array, offset: number, length: number) =>
 
 function isPortableExecutable(bytes: Uint8Array): boolean {
   if (!startsWith(bytes, [0x4d, 0x5a]) || bytes.length < 0x40) return false;
-  const offset = bytes[0x3c] | (bytes[0x3d] << 8) | (bytes[0x3e] << 16) | (bytes[0x3f] << 24);
+  const offset =
+    (bytes[0x3c] | (bytes[0x3d] << 8) | (bytes[0x3e] << 16) | (bytes[0x3f] << 24)) >>> 0;
   return offset > 0 && startsWith(bytes, [0x50, 0x45, 0x00, 0x00], offset);
 }
 

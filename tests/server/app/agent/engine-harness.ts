@@ -335,6 +335,7 @@ function fakeClaudeWorker(): FakeClaudeWorker {
     resolve: async () => ({ url: "ws://fake-worker", token: WORKER_KEY }),
     prepare: () => undefined,
     account: async () => ({ state: "ready", loggedIn: true, subscription: true }),
+    invalidate: () => undefined,
     close: () => undefined,
   };
 

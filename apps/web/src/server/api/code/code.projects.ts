@@ -217,8 +217,33 @@ export async function updateProject(
 }
 
 export async function deleteProject(id: string): Promise<void> {
-  await getProject(id);
-  await db.update(codeThreads).set({ projectId: null }).where(eq(codeThreads.projectId, id));
+  const project = await getProject(id);
+  const threads = await db.select().from(codeThreads).where(eq(codeThreads.projectId, id));
+  const reviews = await db.select().from(codeReviews).where(eq(codeReviews.projectId, id));
+  const taken = new Set(
+    [...threads, ...reviews].map((row) => row.worktree).filter((path): path is string => !!path),
+  );
+  await codeGitHub()
+    .workspace(project)
+    .then(async (ws) => {
+      for (const path of taken) {
+        await ws
+          .removeWorktree(project.checkoutPath, path)
+          .catch((error: unknown) =>
+            logger.warn(
+              { error, projectId: id, worktree: path },
+              "Code: could not remove a worktree",
+            ),
+          );
+      }
+    })
+    .catch((error: unknown) =>
+      logger.warn({ error, projectId: id }, "Code: could not reach the workspace"),
+    );
+  await db
+    .update(codeThreads)
+    .set({ projectId: null, worktree: null })
+    .where(eq(codeThreads.projectId, id));
   await db.delete(codeProjects).where(eq(codeProjects.id, id));
 }
 

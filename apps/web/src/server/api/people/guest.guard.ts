@@ -22,16 +22,27 @@ interface GuestRoute {
   upload?: { id: string; reach: UploadReach };
 }
 
+function decodeId(raw: string | undefined): string | undefined {
+  if (raw === undefined) return undefined;
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return undefined;
+  }
+}
+
 export function matchGuestRoute(method: string, path: string): GuestRoute | undefined {
   const bot = BOT_PATH.exec(path);
+  const botId = bot ? decodeId(bot[1]) : undefined;
   const upload = UPLOAD_PATH.exec(path);
+  const uploadId = upload ? decodeId(upload[1]) : undefined;
   for (const rule of GUEST_API) {
     if (rule.methods !== "*" && !rule.methods.includes(method)) continue;
     if ("bot" in rule) {
-      if (bot && rule.bot.test(bot[2] ?? "")) return { botId: decodeURIComponent(bot[1]) };
+      if (bot && botId !== undefined && rule.bot.test(bot[2] ?? "")) return { botId };
     } else if ("upload" in rule) {
-      if (upload && rule.upload.test(upload[2] ?? "")) {
-        return { upload: { id: decodeURIComponent(upload[1]), reach: rule.reach } };
+      if (upload && uploadId !== undefined && rule.upload.test(upload[2] ?? "")) {
+        return { upload: { id: uploadId, reach: rule.reach } };
       }
     } else if (!bot && !upload && rule.path.test(path)) {
       return {};

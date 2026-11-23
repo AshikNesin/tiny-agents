@@ -55,6 +55,7 @@ export function CredentialRequestForm({
         IDENTIFIERS.has(field.autocomplete ?? "")),
   );
   const missing = request.fields.some((field) => field.required && !values[field.key]?.trim());
+  const canContinue = !busy && !missing && !moved;
   const botName = request.bot?.name ?? "A bot";
 
   const submit = async () => {
@@ -105,7 +106,7 @@ export function CredentialRequestForm({
         className="space-y-4"
         onSubmit={(event) => {
           event.preventDefault();
-          if (!missing) void submit();
+          if (canContinue) void submit();
         }}
       >
         {request.fields.map((field) => {
@@ -171,7 +172,7 @@ export function CredentialRequestForm({
         </p>
 
         <div className="flex flex-col gap-2">
-          <Button type="submit" disabled={busy || missing || moved}>
+          <Button type="submit" disabled={!canContinue}>
             Continue
           </Button>
           <Button type="button" variant="ghost" disabled={busy} onClick={() => void cancel()}>

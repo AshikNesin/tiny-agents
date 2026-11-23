@@ -64,6 +64,7 @@ export interface ClaudeCodeHarnessOptions {
   status?: () => InstanceStatus;
   timings?: Partial<ConnectionTimings>;
   models?: () => ModelOption[];
+  liveLimit?: number;
 }
 
 export type ClaudeCodeHarness = HarnessInstance;
@@ -115,6 +116,7 @@ const DEFAULT_COMMANDS: SlashCommand[] = [
 ];
 
 const MAX_TURN_RECORDS = 500;
+const LIVE_LIMIT = 2_000;
 
 interface TurnRecord extends ClaudeEntry {
   type: "result";
@@ -191,6 +193,7 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
   );
   const runtimes = new Map<string, Promise<Runtime | undefined>>();
   const loaded = new Map<string, Runtime>();
+  const liveLimit = options.liveLimit ?? LIVE_LIMIT;
   let catalog: CodingCatalog | undefined;
   let started = false;
 
@@ -280,6 +283,14 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
     return runtime;
   }
 
+  function forgetRuntime(nativeId: string): void {
+    runtimes.delete(nativeId);
+    const runtime = loaded.get(nativeId);
+    if (!runtime) return;
+    loaded.delete(nativeId);
+    client.untrack(nativeId);
+  }
+
   function withRuntime(nativeId: string, fn: (runtime: Runtime) => unknown): Promise<void> {
     return ensureRuntime(nativeId).then((runtime) => {
       if (!runtime) return;
@@ -332,6 +343,16 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
 
   async function reload(runtime: Runtime): Promise<void> {
     await runtime.loading?.catch(() => undefined);
+    runtime.history = undefined;
+    runtime.live = [];
+    runtime.liveIndex.clear();
+    if (runtime.feed.size === 0) return;
+    await loadHistory(runtime);
+    runtime.feed.snapshot(snapshotOf(runtime));
+  }
+
+  async function trimLive(runtime: Runtime): Promise<void> {
+    if (runtime.live.length <= liveLimit) return;
     runtime.history = undefined;
     runtime.live = [];
     runtime.liveIndex.clear();
@@ -498,6 +519,7 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
           if (entry.uuid) runtime.liveIndex.set(entry.uuid, runtime.live.length);
           runtime.live.push(entry);
         }
+        await trimLive(runtime);
         emitItems(runtime);
         if (entry.type === "assistant") {
           runtime.feed.partial(NO_PARTIAL);
@@ -810,6 +832,7 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
           .catch((error: unknown) =>
             log.warn("claude-code close failed", { nativeId, error: String(error) }),
           );
+        if (runtime.feed.size === 0 && !runtime.working) forgetRuntime(nativeId);
       }
       events.emit({ type: "threads" });
       return { moved: [nativeId] };

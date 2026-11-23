@@ -128,29 +128,31 @@ export async function verifyRegistration({
   if (!credential?.id) throw Boom.badRequest("Missing credential ID in registration info");
   if (!credential.publicKey) throw Boom.badRequest("Missing public key in registration info");
 
-  const [existing] = await db
-    .select({ id: passkeys.id })
-    .from(passkeys)
-    .where(eq(passkeys.credentialId, credential.id))
-    .limit(1);
-  if (existing) throw Boom.conflict("This passkey is already registered");
-
   const name =
     credentialName || generateDeviceName(response.authenticatorAttachment, credential.transports);
 
-  const [passkey] = await db
-    .insert(passkeys)
-    .values({
-      userId,
-      credentialId: credential.id,
-      publicKey: Buffer.from(credential.publicKey),
-      counter: credential.counter ?? 0,
-      deviceType: credentialDeviceType ?? null,
-      backedUp: Boolean(credentialBackedUp),
-      transports: credential.transports ?? [],
-      credentialName: name,
-    })
-    .returning();
+  let passkey: Passkey | undefined;
+  try {
+    const inserted = await db
+      .insert(passkeys)
+      .values({
+        userId,
+        credentialId: credential.id,
+        publicKey: Buffer.from(credential.publicKey),
+        counter: credential.counter ?? 0,
+        deviceType: credentialDeviceType ?? null,
+        backedUp: Boolean(credentialBackedUp),
+        transports: credential.transports ?? [],
+        credentialName: name,
+      })
+      .returning();
+    passkey = inserted[0];
+  } catch (error) {
+    if (/UNIQUE constraint failed/.test(error instanceof Error ? error.message : String(error))) {
+      throw Boom.conflict("This passkey is already registered");
+    }
+    throw error;
+  }
 
   logger.info({ userId, passkeyId: passkey!.id, credentialName: name }, "Passkey registered");
   return toSummary(passkey!, await countPasskeys(userId));
@@ -265,12 +267,12 @@ export async function updatePasskeyName({
   userId: number;
   credentialName: string;
 }): Promise<PasskeySummary> {
-  await findOwnedPasskey(userId, passkeyId);
   const [updated] = await db
     .update(passkeys)
     .set({ credentialName })
-    .where(eq(passkeys.id, passkeyId))
+    .where(and(eq(passkeys.id, passkeyId), eq(passkeys.userId, userId)))
     .returning();
+  if (!updated) throw Boom.notFound("Passkey not found");
   logger.info({ userId, passkeyId, credentialName }, "Passkey renamed");
-  return toSummary(updated!, await countPasskeys(userId));
+  return toSummary(updated, await countPasskeys(userId));
 }

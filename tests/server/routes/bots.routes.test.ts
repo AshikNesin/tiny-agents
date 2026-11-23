@@ -592,12 +592,22 @@ describe("Bots API routes", () => {
     const answered = await post({ answers });
     expect(answered.status).toBe(200);
     expect(answered.body.data).toEqual({ answered: true });
-    expect(agentRuntime.answerQuestions).toHaveBeenLastCalledWith(conv(bot), 7, answers);
+    expect(agentRuntime.answerQuestions).toHaveBeenLastCalledWith(
+      conv(bot),
+      7,
+      answers,
+      expect.objectContaining({ answeredBy: undefined }),
+    );
     agentRuntime.answerQuestions.mockResolvedValueOnce(undefined);
     const dismissed = await post({ dismissed: true });
     expect(dismissed.status).toBe(200);
     expect(dismissed.body.data).toEqual({ dismissed: true });
-    expect(agentRuntime.answerQuestions).toHaveBeenLastCalledWith(conv(bot), 7, null);
+    expect(agentRuntime.answerQuestions).toHaveBeenLastCalledWith(
+      conv(bot),
+      7,
+      null,
+      expect.objectContaining({ answeredBy: undefined }),
+    );
 
     agentRuntime.answerQuestions.mockClear();
     for (const body of [
@@ -618,6 +628,36 @@ describe("Bots API routes", () => {
       new InvalidAnswersError("Expected 3 answer(s), got 2"),
     );
     expect((await post({ answers })).status).toBe(400);
+  });
+
+  it("attributes a guest's answers to the guest, not the owner", async () => {
+    const bot = await createBot();
+    const guestEmail = `guest-${Date.now()}@example.com`;
+    const guest = await call("/api/v1/people", {
+      method: "POST",
+      json: { name: "Priya", email: guestEmail, password: "secret-pass" },
+    });
+    expect(guest.status).toBe(201);
+    const shared = await call(`/api/v1/bots/${bot.id}`, {
+      method: "PATCH",
+      json: { guestIds: [guest.body.data.id] },
+    });
+    expect(shared.status).toBe(200);
+
+    const guestToken = await authToken(guestEmail, guest.body.data.id);
+    agentRuntime.answerQuestions.mockResolvedValue(undefined);
+    const answered = await api(app, `/api/v1/bots/${bot.id}/questions/7`, {
+      method: "POST",
+      json: { answers: [{ selected: ["Postgres"] }] },
+      token: guestToken,
+    });
+    expect(answered.status).toBe(200);
+    expect(agentRuntime.answerQuestions).toHaveBeenLastCalledWith(
+      conv(bot),
+      7,
+      [{ selected: ["Postgres"] }],
+      { answeredBy: "Priya (guest)" },
+    );
   });
 
   it("an owner message dismisses the questions the bot is waiting on", async () => {

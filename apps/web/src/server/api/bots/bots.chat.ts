@@ -70,7 +70,11 @@ export interface BotChat {
     options?: { grant?: boolean },
   ): Promise<void>;
   setYolo(on: boolean, ownerId: number): ReturnType<AgentRuntime["setYolo"]>;
-  answerQuestions(taskId: number, answers: OwnerAnswer[] | null): Promise<void>;
+  answerQuestions(
+    taskId: number,
+    answers: OwnerAnswer[] | null,
+    answeredBy?: string,
+  ): Promise<void>;
   dismissPendingQuestions(): Promise<void>;
 }
 
@@ -101,8 +105,8 @@ export async function openBotChat(id: string, rt: BotChatRuntime): Promise<BotCh
           : rt.decideApproval(ref, taskId, decision),
       ),
     setYolo: (on, ownerId) => rt.setYolo(ref, on, ownerId),
-    answerQuestions: (taskId, answers) =>
-      onOwnerWait(() => rt.answerQuestions(ref, taskId, answers)),
+    answerQuestions: (taskId, answers, answeredBy) =>
+      onOwnerWait(() => rt.answerQuestions(ref, taskId, answers, { answeredBy })),
     async dismissPendingQuestions() {
       if (rt.pendingQuestions(ref) > 0) await rt.dismissQuestions(ref);
     },

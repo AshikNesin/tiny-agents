@@ -19,7 +19,7 @@ export interface SecretBinding {
 
 export class SecretLockedError extends Error {
   constructor(
-    readonly reason: "no_key" | "key_mismatch" | "unreadable",
+    readonly reason: "no_key" | "key_mismatch" | "unreadable" | "weak_key",
     message: string,
   ) {
     super(message);
@@ -29,6 +29,7 @@ export class SecretLockedError extends Error {
 
 const VERSION = "v2";
 const SALT = Buffer.from("tiny-agents/secret-box");
+const MIN_KEY_BYTES = 32;
 
 interface DerivedKey {
   key: Buffer;
@@ -36,6 +37,29 @@ interface DerivedKey {
 }
 
 const derived = new Map<string, DerivedKey>();
+
+function keyMaterialBytes(value: string): number {
+  const hex = /^[0-9a-f]+$/i.exec(value);
+  if (hex && value.length % 2 === 0) return value.length / 2;
+  const decoded = Buffer.from(value, "base64");
+  const canonical = value.replaceAll("-", "+").replaceAll("_", "/").replace(/=+$/, "");
+  return decoded.toString("base64").replace(/=+$/, "") === canonical
+    ? decoded.length
+    : Buffer.byteLength(value, "utf8");
+}
+
+export function secretKeyProblem(value: string | undefined): string | undefined {
+  if (value === undefined || value.trim() === "") return undefined;
+  const key = value.trim();
+  const bytes = keyMaterialBytes(key);
+  if (bytes < MIN_KEY_BYTES) {
+    return (
+      `SECRETS_KEY is too short: it holds ${bytes} bytes of key material, ` +
+      `at least 32 are required. Use a long random string, e.g. openssl rand -base64 32.`
+    );
+  }
+  return undefined;
+}
 
 function derive(ikm: string, purpose: SecretPurpose): DerivedKey {
   const cacheKey = `${purpose}\0${ikm}`;
@@ -79,6 +103,8 @@ function aad(binding: SecretBinding): Buffer {
 
 export function seal(plain: string, binding: SecretBinding): string {
   const { key, kid } = currentKey(binding.purpose);
+  const problem = secretKeyProblem(appEnv().SECRETS_KEY);
+  if (problem) throw new SecretLockedError("weak_key", problem);
   const iv = randomBytes(12);
   const cipher = createCipheriv("aes-256-gcm", key, iv);
   cipher.setAAD(aad(binding));

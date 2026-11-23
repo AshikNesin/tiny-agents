@@ -198,7 +198,7 @@ describe("Q4 import: vault values from the KV store", () => {
   });
 
   it("moves an entry another SECRETS_KEY sealed, and says it doesn't open", async () => {
-    process.env.SECRETS_KEY = "an-older-key";
+    process.env.SECRETS_KEY = "6LJDB8RD3uIpxXzOvQ9JWWcWZj7TXp38mo3trJmLbhJ1";
     await seedOldItem(IDS.loose, ITEM("Loose", { password: "x" }), "");
     process.env.SECRETS_KEY = KEY;
 
@@ -210,7 +210,7 @@ describe("Q4 import: vault values from the KV store", () => {
         reason: "The secret was stored under a different SECRETS_KEY. Re-enter it.",
       },
     ]);
-    process.env.SECRETS_KEY_PREVIOUS = "an-older-key";
+    process.env.SECRETS_KEY_PREVIOUS = "6LJDB8RD3uIpxXzOvQ9JWWcWZj7TXp38mo3trJmLbhJ1";
     try {
       expect((await local.resolve(IDS.loose, "password")).reveal()).toBe("x");
     } finally {
@@ -279,7 +279,7 @@ describe("Q4 import: connection header values become vault items", () => {
       moved: [],
       failed: [{ id: "conn-a", reason: "SECRETS_KEY is not set" }],
     });
-    process.env.SECRETS_KEY = "another-key";
+    process.env.SECRETS_KEY = "vavQw07A37phGCqS1gfu8tOxq0Lwf5neZifd9EeNozK7PB4";
     expect(importConnectionSecrets().failed).toEqual([
       {
         id: "conn-a",

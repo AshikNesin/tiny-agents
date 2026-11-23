@@ -59,8 +59,22 @@ export const TERMINAL_SETTINGS: readonly string[] = [
 
 const chain = (commands: readonly string[]): string => commands.join(" \\; ");
 
+const MAX_COLS = 500;
+const MAX_ROWS = 300;
+
+function dimension(value: number, name: "cols" | "rows", max: number): number {
+  if (!Number.isInteger(value)) throw new Error(`${name} must be a whole number`);
+  if (value < 2 || value > max) throw new Error(`${name} must be between 2 and ${max}`);
+  return value;
+}
+
 export function newSessionCommand(name: SessionName, cols: number, rows: number): string {
-  return tmux(chain([`new-session -d -s ${name} -x ${cols} -y ${rows}`, ...TERMINAL_SETTINGS]));
+  return tmux(
+    chain([
+      `new-session -d -s ${name} -x ${dimension(cols, "cols", MAX_COLS)} -y ${dimension(rows, "rows", MAX_ROWS)}`,
+      ...TERMINAL_SETTINGS,
+    ]),
+  );
 }
 
 export function typeLineCommand(name: SessionName, line: string): string {

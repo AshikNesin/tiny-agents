@@ -15,7 +15,7 @@ export const usePeopleStore = create<PeopleState>((set) => ({
       const { guest } = await peopleApi.me();
       set({ role: guest ? "guest" : "owner" });
     } catch {
-      set({ role: "owner" });
+      set({ role: null });
     }
   },
 }));

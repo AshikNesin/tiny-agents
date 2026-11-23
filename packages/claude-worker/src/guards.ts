@@ -7,6 +7,8 @@ export const FORBIDDEN_OVERRIDE_KEYS = [
   "ANTHROPIC_FOUNDRY_API_KEY",
 ] as const;
 
+const WORKER_ONLY_ENV_KEYS = ["CLAUDE_WORKER_TOKEN", "CLAUDE_WORKER_PORT"] as const;
+
 export const FORBIDDEN_BACKEND_FLAGS = [
   "CLAUDE_CODE_USE_BEDROCK",
   "CLAUDE_CODE_USE_VERTEX",
@@ -50,6 +52,7 @@ export function workerProcessEnv(
   for (const [key, value] of Object.entries(env)) {
     if (value === undefined) continue;
     if ((FORBIDDEN_OVERRIDE_KEYS as readonly string[]).includes(key)) continue;
+    if ((WORKER_ONLY_ENV_KEYS as readonly string[]).includes(key)) continue;
     output[key] = value;
   }
   delete output.ANTHROPIC_BASE_URL;

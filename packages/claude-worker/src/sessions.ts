@@ -332,11 +332,12 @@ export class SessionBook {
   }
 
   sweep(now: number): void {
-    for (const session of this.sessions.values()) {
+    for (const [id, session] of this.sessions) {
       if (session.running) continue;
       const idle = now - session.lastUsed >= this.timings.idleEvictMs;
       const aged = now - session.createdAt >= this.timings.maxSessionAgeMs;
       if (session.alive && (idle || aged)) session.recycle();
+      if (!session.alive && idle) this.sessions.delete(id);
     }
   }
 

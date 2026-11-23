@@ -29,7 +29,15 @@ export function createKvStore(namespace = ""): KvStore {
         .limit(1);
       if (!row) return undefined;
       if (row.expiresAt && row.expiresAt.getTime() <= Date.now()) {
-        await db.delete(kvTable).where(eq(kvTable.key, full(key)));
+        await db
+          .delete(kvTable)
+          .where(
+            and(
+              eq(kvTable.key, full(key)),
+              eq(kvTable.value, row.value),
+              eq(kvTable.expiresAt, row.expiresAt),
+            ),
+          );
         return undefined;
       }
       return JSON.parse(row.value) as T;

@@ -2,6 +2,7 @@ import { createMiddleware } from "hono/factory";
 import { runWithRequestContext } from "../context";
 import { logger } from "../logger";
 import { clientIp } from "../utils/controller.utils";
+import { redactSecretPath } from "../utils/redact-path";
 import type { AppEnv } from "../types";
 
 export const requestLoggerMiddleware = createMiddleware<AppEnv>(async (c, next) => {
@@ -16,10 +17,11 @@ export const requestLoggerMiddleware = createMiddleware<AppEnv>(async (c, next) 
     waitUntil = undefined;
   }
 
+  const path = redactSecretPath(c.req.path);
   const log = logger.child({
     reqId: requestId,
     method: c.req.method,
-    url: c.req.path,
+    url: path,
     userAgent: c.req.header("user-agent"),
     ip: clientIp(c),
   });
@@ -34,7 +36,7 @@ export const requestLoggerMiddleware = createMiddleware<AppEnv>(async (c, next) 
     const level = status >= 500 ? "error" : status >= 400 ? "warn" : "info";
     log[level](
       { statusCode: status, duration: `${duration}ms` },
-      `${c.req.method} ${c.req.path} → ${status} in ${duration}ms`,
+      `${c.req.method} ${path} → ${status} in ${duration}ms`,
     );
   });
 });

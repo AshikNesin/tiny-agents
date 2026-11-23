@@ -90,10 +90,34 @@ export interface ConfinedCommandOptions {
   allow: readonly EgressEntry[];
   secretEnv?: readonly string[];
   timeoutSecs: number;
+  detached?: boolean;
 }
 
 export function confinedCommand(options: ConfinedCommandOptions): string {
   return bashScript(confinedScript(options));
+}
+
+function launchArgs(options: ConfinedCommandOptions): string[] {
+  const head = options.detached
+    ? [
+        "sudo -n systemd-run --collect --unit=ta-detach-$$ \\",
+        '  --uid="$(id -u)" --gid="$(id -g)" --working-directory="$HOME" \\',
+      ]
+    : [
+        "sudo -n systemd-run --quiet --wait --pipe --collect \\",
+        '  --uid="$(id -u)" --gid="$(id -g)" --working-directory="$HOME" \\',
+      ];
+  return [
+    ...head,
+    '  -E HOME="$HOME" -E USER="$(id -un)" -E PATH="$PATH" -E LANG=C.UTF-8 \\',
+    "  -p NoNewPrivileges=yes -p PrivateDevices=yes -p IPAddressDeny=any \\",
+    '  ${TA_ALLOW:+-p "IPAddressAllow=$TA_ALLOW"} \\',
+    '  -p "RestrictAddressFamilies=AF_INET AF_INET6" \\',
+    ...(options.detached ? [] : ['  -p "BindReadOnlyPaths=$TA_HOSTS:/etc/hosts" \\']),
+    ...(options.detached
+      ? []
+      : [`  -p RuntimeMaxSec=${Math.max(1, Math.ceil(options.timeoutSecs))} \\`]),
+  ];
 }
 
 export function confinedScript(options: ConfinedCommandOptions): string {
@@ -105,31 +129,26 @@ export function confinedScript(options: ConfinedCommandOptions): string {
   const script = [
     `command -v systemd-run >/dev/null 2>&1 || ${exitWith(CONFINE_UNAVAILABLE, "Confined commands need systemd on the sandbox VM.")}`,
     `sudo -n true 2>/dev/null || ${exitWith(CONFINE_UNAVAILABLE, "Confined commands need passwordless sudo on the sandbox VM.")}`,
-    'TA_HOSTS="$(mktemp)"',
-    "printf '127.0.0.1 localhost\\n::1 localhost\\n' > \"$TA_HOSTS\"",
+    ...(options.detached ? [] : ['TA_HOSTS="$(mktemp)"']),
+    ...(options.detached
+      ? []
+      : ["printf '127.0.0.1 localhost\\n::1 localhost\\n' > \"$TA_HOSTS\""]),
     `TA_ALLOW=${shQuote(cidrs.join(" "))}`,
     ...(hosts.length > 0
       ? [
           `for TA_H in ${hosts.map(shQuote).join(" ")}; do`,
           "  for TA_IP in $(getent ahosts \"$TA_H\" | awk '{print $1}' | sort -u); do",
           '    TA_ALLOW="$TA_ALLOW $TA_IP"',
-          '    printf \'%s %s\\n\' "$TA_IP" "$TA_H" >> "$TA_HOSTS"',
+          ...(options.detached ? [] : ['    printf \'%s %s\\n\' "$TA_IP" "$TA_H" >> "$TA_HOSTS"']),
           "  done",
           "done",
         ]
       : []),
-    'chmod 644 "$TA_HOSTS"',
-    "sudo -n systemd-run --quiet --wait --pipe --collect \\",
-    '  --uid="$(id -u)" --gid="$(id -g)" --working-directory="$HOME" \\',
-    '  -E HOME="$HOME" -E USER="$(id -un)" -E PATH="$PATH" -E LANG=C.UTF-8 \\',
-    "  -p NoNewPrivileges=yes -p PrivateDevices=yes -p IPAddressDeny=any \\",
-    '  ${TA_ALLOW:+-p "IPAddressAllow=$TA_ALLOW"} \\',
-    '  -p "RestrictAddressFamilies=AF_INET AF_INET6" \\',
-    '  -p "BindReadOnlyPaths=$TA_HOSTS:/etc/hosts" \\',
-    `  -p RuntimeMaxSec=${Math.max(1, Math.ceil(options.timeoutSecs))} \\`,
+    ...(options.detached ? [] : ['chmod 644 "$TA_HOSTS"']),
+    ...launchArgs(options),
     `  -- sh -c ${shQuote(inner)}`,
     "TA_CODE=$?",
-    'rm -f "$TA_HOSTS"',
+    ...(options.detached ? [] : ['rm -f "$TA_HOSTS"']),
     'exit "$TA_CODE"',
   ];
   return script.join("\n");

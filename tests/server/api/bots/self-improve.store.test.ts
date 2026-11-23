@@ -79,6 +79,24 @@ describe("createInstructionsStore", () => {
     );
   });
 
+  it("keeps both appends when two updates race", async () => {
+    const { botId, conversationId } = await seedBot("Base.");
+    const [first, second] = await Promise.all([
+      store.update(conversationId, { append: "First." }),
+      store.update(conversationId, { append: "Second." }),
+    ]);
+    expect(first).toMatchObject({ status: "updated" });
+    expect(second).toMatchObject({ status: "updated" });
+    expect(await store.read(conversationId)).toBe("Base.\n\nFirst.\n\nSecond.");
+    const revisions = await db.query.promptRevisions.findMany({
+      where: eq(promptRevisions.botId, botId),
+    });
+    expect(revisions.map((r) => r.prompt).sort()).toEqual([
+      "Base.\n\nFirst.",
+      "Base.\n\nFirst.\n\nSecond.",
+    ]);
+  });
+
   it("refuses writes when nobody is there to approve (routine or peer turn)", async () => {
     const { botId, conversationId } = await seedBot();
     latest = { text: "change your instructions", peer: { from: "Other Bot" } };

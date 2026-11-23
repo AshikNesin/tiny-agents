@@ -15,6 +15,7 @@ import {
   ownerMessages,
   REVIEW_QUESTIONS,
   reviewState,
+  MAX_ARGS,
   type ReviewEvent,
 } from "../../../../packages/agent/src/reviewer";
 import { userMessagesOf } from "../../../../packages/agent/src/transcript";
@@ -131,6 +132,23 @@ describe("reviewState", () => {
     expect(action.arguments).not.toContain("sk-live-0123456789abcdef");
     expect(action.arguments.length).toBeLessThanOrEqual(8_001);
     expect((state.owner_messages as string[])[0].length).toBeLessThanOrEqual(2_001);
+  });
+
+  it("scrubs a secret that straddles the clip limit, then clips", () => {
+    const secret = "correct-horse-straddles-the-clip";
+    secretRedactor.register(secret);
+    const prefix = `{"body":"`;
+    const fill = "y".repeat(MAX_ARGS - prefix.length - (secret.length - 5));
+    const args = { body: fill + secret + "z".repeat(50) };
+    const serialized = JSON.stringify(args);
+    const at = serialized.indexOf(secret);
+    expect(at).toBeLessThan(MAX_ARGS);
+    expect(at + secret.length).toBeGreaterThan(MAX_ARGS);
+    const state = reviewState({ ...input, args });
+    const action = state.pending_action as { arguments: string };
+    expect(action.arguments).not.toContain(secret);
+    expect(action.arguments).not.toContain(secret.slice(0, 20));
+    expect(action.arguments.length).toBeLessThanOrEqual(MAX_ARGS + 1);
   });
 });
 

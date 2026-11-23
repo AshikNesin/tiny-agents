@@ -220,12 +220,25 @@ describe("attachments toolkit", () => {
   });
 
   it("refuses regexes that could backtrack forever", async () => {
+    for (const query of ["(a+)+$", "(a|aa)+$", "(a|a)*b", "((a|a)*)*b", "(a?)+$"]) {
+      const result = await run(capability, "search_attachment", {
+        uploadId: "u-pdf",
+        query,
+        regex: true,
+      });
+      expect(result, query).toMatchObject({ isError: true });
+      expect(result.text, query).toMatch(/not allowed|unsafe/);
+    }
+  });
+
+  it("still accepts a benign alternation", async () => {
     const result = await run(capability, "search_attachment", {
       uploadId: "u-pdf",
-      query: "(a+)+$",
+      query: "^(a|b)c$",
       regex: true,
     });
-    expect(result).toMatchObject({ isError: true, text: "Nested quantifiers are not allowed." });
+    expect(result.isError).toBe(false);
+    expect(result.text).toContain("No matches");
   });
 });
 

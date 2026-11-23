@@ -21,6 +21,7 @@ import {
   type EngineSubmission,
 } from "../../engine";
 import { ranToResult, ToolGate } from "../../gate";
+import { secretRedactor } from "../../redact";
 import { finishedToolRow, liveToolRow, type ToolCallRow } from "../../tool-call-row";
 import { gateUserMessages, windowChat } from "../../transcript";
 import type {
@@ -550,6 +551,7 @@ export class ClaudeCodeEngine implements AgentEngine {
       onEvent: (message) => this.onWorker(message),
       onTool: (call) => this.onTool(call),
       onConnected: (rebooted) => this.onConnected(rebooted),
+      onUnauthorized: () => this.locator().invalidate(),
     });
     return this.client;
   }
@@ -639,7 +641,7 @@ export class ClaudeCodeEngine implements AgentEngine {
       );
       return { content, ...(result.isError ? { isError: true } : {}) };
     } catch (error) {
-      return failed(error instanceof Error ? error.message : String(error));
+      return failed(secretRedactor.scrub(error instanceof Error ? error.message : String(error)));
     }
   }
 

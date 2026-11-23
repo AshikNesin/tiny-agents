@@ -211,6 +211,14 @@ async function nextStep(
   return [];
 }
 
+function frameOriginOf(frame: Frame): string | undefined {
+  try {
+    return new URL(frame.url()).origin;
+  } catch {
+    return undefined;
+  }
+}
+
 async function fillPass(
   page: Page,
   fill: SecretFill,
@@ -233,10 +241,11 @@ async function fillPass(
         .evaluate(fillInPage, args(true), { timeout: ACTION_TIMEOUT_MS })
         .catch(() => "missing" as const);
     } else {
-      const frames: Frame[] = [
-        page.mainFrame(),
-        ...page.frames().filter((f) => f !== page.mainFrame()),
-      ];
+      const subframes = page
+        .frames()
+        .filter((f) => f !== page.mainFrame())
+        .filter((frame) => allowed.includes(frameOriginOf(frame) ?? ""));
+      const frames: Frame[] = [page.mainFrame(), ...subframes];
       for (const [index, frame] of frames.entries()) {
         const found: FillResult = await frame
           .evaluate(fillInPage, args(false))

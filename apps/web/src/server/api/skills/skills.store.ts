@@ -58,19 +58,16 @@ export const skillStore: SkillStore = {
         .where(eq(skills.id, mine.id));
       return { created: false };
     }
-    const taken = await db.query.skills.findFirst({
-      where: eq(skills.name, input.name),
-      columns: { id: true },
-    });
-    if (taken) {
+    const [skill] = await db
+      .insert(skills)
+      .values({ name: input.name, description: input.description, body: input.body, source: "bot" })
+      .onConflictDoNothing({ target: skills.name })
+      .returning({ id: skills.id });
+    if (!skill) {
       throw new Error(
         `A skill named "${input.name}" already exists and is not assigned to you. Pick another name, or ask the owner to assign it.`,
       );
     }
-    const [skill] = await db
-      .insert(skills)
-      .values({ name: input.name, description: input.description, body: input.body, source: "bot" })
-      .returning({ id: skills.id });
     if (botId) {
       await db
         .insert(botSkills)

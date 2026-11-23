@@ -35,6 +35,7 @@ const QuestionsDoc = defineDoc<{
   status: "pending" | "answered" | "dismissed";
   questions: JsonValue[];
   answers: JsonValue[];
+  answeredBy?: string;
 }>({
   kind: "tiny.questions",
   version: 1,
@@ -99,6 +100,7 @@ export async function recordAnswers(
   conversation: number,
   taskId: number,
   answers: readonly OwnerAnswer[] | null,
+  answeredBy?: string,
 ): Promise<void> {
   const id = taskId as TaskId;
   const notPending = () => new QuestionNotPendingError(taskId);
@@ -108,6 +110,7 @@ export async function recordAnswers(
   await wakeOwnerWait(tx, QuestionsDoc, id);
   if (answers) {
     doc.answers = checkAnswers(storedQuestions(doc), answers).map(toJson);
+    doc.answeredBy = answeredBy;
     doc.status = "answered";
   } else {
     doc.status = "dismissed";
@@ -193,14 +196,19 @@ function checkAnswers(questions: readonly OwnerQuestion[], answers: readonly Own
   });
 }
 
-function formatAnswers(questions: readonly OwnerQuestion[], answers: readonly OwnerAnswer[]) {
+function formatAnswers(
+  questions: readonly OwnerQuestion[],
+  answers: readonly OwnerAnswer[],
+  answeredBy: string | undefined,
+) {
   const lines = questions.map((question, index) => {
     const { selected, text } = answers[index];
     const parts = [...selected];
     if (text) parts.push(selected.length > 0 ? `Other: ${text}` : text);
     return `Q: ${question.question}\nA: ${parts.length > 0 ? parts.join("; ") : "(skipped)"}`;
   });
-  return `The owner answered your questions:\n\n${lines.join("\n\n")}`;
+  const who = answeredBy ?? "The owner";
+  return `${who} answered your questions:\n\n${lines.join("\n\n")}`;
 }
 
 const DISMISSED =
@@ -248,7 +256,7 @@ export function createQuestionsCapability(tracker: WaitTracker): Capability {
       }
       const answers = parseStored("tiny.questions.answers", doc.answers, ownerAnswers);
       return {
-        output: [{ type: "text", text: formatAnswers(questions, answers) }],
+        output: [{ type: "text", text: formatAnswers(questions, answers, doc.answeredBy) }],
         details: { question: "answered", questions: toJson(questions), answers: toJson(answers) },
       };
     },

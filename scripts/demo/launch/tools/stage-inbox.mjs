@@ -75,6 +75,14 @@ const alive = (pid) => {
   }
 };
 
+const ours = (pid) => {
+  try {
+    return readFileSync(`/proc/${pid}/cmdline`, "utf8").includes("inbox-register.mjs");
+  } catch {
+    return false;
+  }
+};
+
 async function answers(port) {
   try {
     await fetch(`http://localhost:${port}/`, { signal: AbortSignal.timeout(1500) });
@@ -88,11 +96,14 @@ async function down() {
   if (existsSync(RUN_FILE)) {
     const { pid } = JSON.parse(readFileSync(RUN_FILE, "utf8"));
     if (alive(pid)) {
-      log(`stopping the previous instance (process group ${pid})`);
-      process.kill(-pid, "SIGTERM");
-      for (let i = 0; i < 150 && alive(pid); i++) await sleep(100);
-      if (alive(pid)) process.kill(-pid, "SIGKILL");
-      for (let i = 0; i < 50 && (await answers(PORT)); i++) await sleep(100);
+      if (!ours(pid)) log(`pid ${pid} is not our server; not killing it`);
+      else {
+        log(`stopping the previous instance (process group ${pid})`);
+        process.kill(-pid, "SIGTERM");
+        for (let i = 0; i < 150 && alive(pid); i++) await sleep(100);
+        if (alive(pid)) process.kill(-pid, "SIGKILL");
+        for (let i = 0; i < 50 && (await answers(PORT)); i++) await sleep(100);
+      }
     }
   }
   rmSync(STATE, { recursive: true, force: true });

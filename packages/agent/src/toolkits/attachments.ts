@@ -2,8 +2,9 @@ import { createHash } from "node:crypto";
 import { Type } from "typebox";
 import type { ToolExecutionResult } from "@earendil-works/pi-durable";
 import type { Capability } from "../capabilities";
-import { shQuote, type SandboxConnection } from "@tiny-agents/sandbox";
 import { defineToolkit, tool } from "../toolkit";
+import { ambiguousAlternation } from "./attachments-regex";
+import { shQuote, type SandboxConnection } from "@tiny-agents/sandbox";
 
 export type AttachmentStatus = "none" | "pending" | "ready" | "failed" | "unsupported";
 
@@ -169,6 +170,7 @@ function clip(text: string): { text: string; clipped: boolean } {
 function safePattern(source: string): RegExp | string {
   if (source.length > 200) return "Patterns are limited to 200 characters.";
   if (/\([^)]*[+*}][^)]*\)\s*[+*{]/.test(source)) return "Nested quantifiers are not allowed.";
+  if (ambiguousAlternation(source)) return "Ambiguous alternation is not allowed.";
   try {
     return new RegExp(source, "i");
   } catch (error) {

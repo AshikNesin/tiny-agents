@@ -1,10 +1,27 @@
+import { pbkdf2Sync, randomBytes } from "node:crypto";
 import { describe, expect, it } from "vite-plus/test";
-import { hashPassword, needsRehash, verifyPassword } from "@groot/core/utils/password.utils";
+import {
+  dummyPasswordHash,
+  hashPassword,
+  needsRehash,
+  verifyPassword,
+} from "@groot/core/utils/password.utils";
+
+function hashAt(password: string, iterations: number): string {
+  const salt = randomBytes(16);
+  const hash = pbkdf2Sync(password, salt, iterations, 32, "sha256");
+  return [
+    "pbkdf2-sha256",
+    String(iterations),
+    salt.toString("base64url"),
+    hash.toString("base64url"),
+  ].join("$");
+}
 
 describe("password hashing", () => {
   it("round-trips and rejects wrong passwords", async () => {
     const hash = await hashPassword("s3cret!");
-    expect(hash.startsWith("pbkdf2-sha256$100000$")).toBe(true);
+    expect(hash.startsWith("pbkdf2-sha256$600000$")).toBe(true);
     expect(await verifyPassword("s3cret!", hash)).toBe(true);
     expect(await verifyPassword("S3cret!", hash)).toBe(false);
   });
@@ -25,5 +42,18 @@ describe("password hashing", () => {
   it("flags hashes with a different iteration count", async () => {
     expect(needsRehash(await hashPassword("x"))).toBe(false);
     expect(needsRehash("pbkdf2-sha256$1000$AAAA$BBBB")).toBe(true);
+  });
+
+  it("flags the previous 100,000-iteration format for rehashing but still verifies it", async () => {
+    const old = hashAt("legacy-count", 100_000);
+    expect(await verifyPassword("legacy-count", old)).toBe(true);
+    expect(await verifyPassword("nope", old)).toBe(false);
+    expect(needsRehash(old)).toBe(true);
+    expect(needsRehash(await hashPassword("legacy-count"))).toBe(false);
+  });
+
+  it("keeps the unknown-email dummy hash at the current work factor, so timing reveals no account", async () => {
+    const [, iterations] = dummyPasswordHash().split("$");
+    expect(Number(iterations)).toBe(Number((await hashPassword("x")).split("$")[1]));
   });
 });

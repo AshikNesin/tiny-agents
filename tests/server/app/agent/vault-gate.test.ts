@@ -481,7 +481,7 @@ describe("the vault use sequence", () => {
       label: "github token, npm token",
       kind: "api_key",
       tool: "run_command",
-      target: `${"x".repeat(2000)}…`,
+      target: command,
       env: ["GH", "NPM"],
       grantable: false,
     });
@@ -490,6 +490,17 @@ describe("the vault use sequence", () => {
       ["github", "denied", undefined],
       ["npm", "denied", undefined],
     ]);
+  });
+
+  it("shows the whole command run_command accepts, so what is approved is what runs", async () => {
+    const { broker } = sequenceBroker([keyItem("github")]);
+    const command = "y".repeat(20_000);
+    const hooks = vaultGatePlan(broker, true, async () => commandUse("github", command));
+    const plan = await hooks.plan(undefined as never, fakeApi(), context, false);
+    const vault = plan.details?.vault as { target: string; grantable: boolean };
+    expect(vault.target).toBe(command);
+    expect(vault.target).toHaveLength(20_000);
+    expect(vault.grantable).toBe(false);
   });
 
   it("fails a malformed vault:use memo naming its key, and audits nothing", async () => {

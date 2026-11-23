@@ -65,7 +65,7 @@ interface PendingCapture {
 
 export interface MemoryCapture {
   onSettled: SettledStep;
-  stop(): void;
+  stop(): Promise<void>;
 }
 
 export function createMemoryCapture(deps: {
@@ -76,28 +76,35 @@ export function createMemoryCapture(deps: {
   const quietMs = deps.quietMs ?? MEMORY_QUIET_MS;
   const turnLimit = deps.turnLimit ?? MEMORY_TURN_LIMIT;
   const pending = new Map<number, PendingCapture>();
-  const inflight = new Set<number>();
+  const running = new Set<number>();
+  const inflight = new Set<Promise<void>>();
   const missed = new Set<number>();
+  let stopped = false;
 
   const run = (conversationId: number) => {
-    if (inflight.has(conversationId)) {
+    if (stopped) return;
+    if (running.has(conversationId)) {
       missed.add(conversationId);
       return;
     }
-    inflight.add(conversationId);
-    void deps
+    running.add(conversationId);
+    const attempt = deps
       .captureNow(conversationId)
       .catch((error: unknown) => logger.error({ error }, "Memory capture failed"))
       .finally(() => {
-        inflight.delete(conversationId);
+        running.delete(conversationId);
+        inflight.delete(attempt);
+        if (stopped) return;
         if (missed.delete(conversationId)) {
           const turns = pending.get(conversationId)?.turns ?? 1;
           arm(conversationId, turns, { waitAnyway: true });
         }
       });
+    inflight.add(attempt);
   };
 
   const arm = (conversationId: number, turns: number, options: { waitAnyway?: boolean } = {}) => {
+    if (stopped) return;
     const state = pending.get(conversationId) ?? { timer: null, turns: 0 };
     state.turns = turns;
     if (state.timer) clearTimeout(state.timer);
@@ -110,6 +117,7 @@ export function createMemoryCapture(deps: {
       pending.delete(conversationId);
       run(conversationId);
     }, quietMs);
+    state.timer.unref?.();
     pending.set(conversationId, state);
   };
 
@@ -122,9 +130,12 @@ export function createMemoryCapture(deps: {
         arm(conversationId, (pending.get(conversationId)?.turns ?? 0) + 1);
       },
     },
-    stop() {
+    async stop() {
+      stopped = true;
       for (const state of pending.values()) if (state.timer) clearTimeout(state.timer);
       pending.clear();
+      missed.clear();
+      await Promise.all([...inflight]);
     },
   };
 }

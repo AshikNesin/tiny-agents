@@ -260,6 +260,29 @@ describe("vault routes", () => {
       card: { brand: "Amex", last4: "0005", expiry: "12/2030" },
     });
   });
+
+  it("refuses a new item when SECRETS_KEY is too weak to seal it, naming the variable", async () => {
+    const key = process.env.SECRETS_KEY!;
+    process.env.SECRETS_KEY = "the-old-short-key";
+    try {
+      const refused = await vault("/items", {
+        method: "POST",
+        stepUp: await stepUp(),
+        json: {
+          kind: "login",
+          title: "Weak",
+          urls: ["https://weak.example.com"],
+          values: { username: "u", password: "p" },
+          policy: { handle: "weak" },
+        },
+      });
+      expect(refused.status).toBe(502);
+      expect(refused.body.error?.message).toContain("SECRETS_KEY");
+      expect(refused.body.error?.message).toContain("32");
+    } finally {
+      process.env.SECRETS_KEY = key;
+    }
+  });
 });
 
 describe("vault policy", () => {

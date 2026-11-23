@@ -88,7 +88,7 @@ async function startServer(sdk: FakeSdk, dir: string, limits: Partial<CodingLimi
 
 async function setup(
   brain: Brain,
-  options: { limits?: Partial<CodingLimits>; host?: HarnessHost } = {},
+  options: { limits?: Partial<CodingLimits>; host?: HarnessHost; liveLimit?: number } = {},
 ): Promise<Setup> {
   const sdk = new FakeSdk(brain);
   const dir = await mkdtemp(path.join(tmpdir(), "claude-code-"));
@@ -98,6 +98,7 @@ async function setup(
     host,
     resolveWorker: async () => ({ url: server.url, token: TOKEN }),
     timings: { reconnectMinMs: 10, reconnectMaxMs: 40, requestTimeoutMs: 5_000 },
+    ...(options.liveLimit !== undefined ? { liveLimit: options.liveLimit } : {}),
   });
   const events: InstanceEvent[] = [];
   harness.subscribe((event) => events.push(event));
@@ -596,6 +597,43 @@ describe("Claude Code harness", () => {
     expect((await harness.outcome(nativeId)).failed).toBe(true);
   });
 
+  it("caps the live event buffer, keeping the newest entries without losing the transcript's turns", async () => {
+    const { harness, sdk, dir, events } = await setup(manual);
+    const { nativeId } = await harness.createThread({ message: "many turns", cwd: dir });
+    const query = await queryOf(sdk);
+    await query.nextInput();
+    for (let i = 0; i < 12; i++) {
+      query.emit(text(query, `answer ${i}`));
+      query.emit(result(query, { totalCost: 0.01, text: `answer ${i}` }));
+    }
+    await waitTurnEnds(events, 12);
+    const snapshot = await harness.getThread(nativeId);
+    expect(snapshot.items.filter((item) => item.kind === "assistant").length).toBeGreaterThan(0);
+    expect(snapshot.items.at(-1)?.kind).toBe("turn");
+  });
+
+  it("reloads the transcript when the live buffer is capped, losing nothing the page shows", async () => {
+    const { harness, sdk, dir, events } = await setup(manual, { liveLimit: 4 });
+    const { nativeId } = await harness.createThread({ message: "long haul", cwd: dir });
+    const query = await queryOf(sdk);
+    await query.nextInput();
+    const watch = collect();
+    cleanups.push(harness.watchThread(nativeId, watch.listener));
+    await watch.next((event) => event.type === "snapshot");
+    const historyReads = vi.spyOn(sdk, "getSessionMessages");
+    for (let i = 0; i < 8; i++) {
+      query.emit(text(query, `answer ${i}`));
+      query.emit(result(query, { totalCost: 0.01, text: `answer ${i}` }));
+    }
+    await waitTurnEnds(events, 8);
+    expect(historyReads.mock.calls.length).toBeGreaterThanOrEqual(1);
+    const snapshot = await harness.getThread(nativeId);
+    expect(kinds(snapshot.items)).toEqual(
+      expect.arrayContaining(["assistant:answer 0", "assistant:answer 7"]),
+    );
+    historyReads.mockRestore();
+  });
+
   it("reads the same transcript back after an app restart, and resumes after a worker restart", async () => {
     const setupResult = await setup(echo);
     const { harness, sdk, dir, events, host } = setupResult;
@@ -729,6 +767,17 @@ describe("Claude Code harness", () => {
     await waitTurnEnds(events, 2);
     expect(sdk.queries[0]!.closed).toBe(true);
     expect(sdk.queries).toHaveLength(2);
+  });
+
+  it("forgets an archived thread's runtime, and reads it back from the index on demand", async () => {
+    const { harness, dir, events } = await setup(echo);
+    const { nativeId } = await harness.createThread({ message: "keep me", cwd: dir });
+    await waitTurnEnds(events, 1);
+    const before = await harness.getThread(nativeId);
+    await harness.archive!(nativeId, true);
+    expect((await harness.listThreads("archived")).map((t) => t.nativeId)).toEqual([nativeId]);
+    const after = await harness.getThread(nativeId);
+    expect(after.items).toEqual(before.items);
   });
 
   it("refuses a cwd that does not exist and needs one", async () => {

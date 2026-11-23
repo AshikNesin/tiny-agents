@@ -42,6 +42,7 @@ export interface ClaudeWorkerLocator {
   resolve(): Promise<ClaudeWorkerTarget>;
   prepare(): void;
   account(): Promise<ClaudeAccountStatus>;
+  invalidate(): void;
   close(): void;
 }
 
@@ -55,6 +56,7 @@ export const noWorkerLocator: ClaudeWorkerLocator = {
     ),
   prepare: () => {},
   account: async () => ({ state: "unconfigured" }),
+  invalidate: () => {},
   close: () => {},
 };
 
@@ -197,6 +199,11 @@ export function createSandboxClaudeWorker(options: SandboxWorkerOptions): Claude
     prepare() {
       void ensure().catch(() => {});
     },
+    invalidate() {
+      script = undefined;
+      ensured = undefined;
+      lastError = undefined;
+    },
     async account() {
       if (installing) return { state: "installing" };
       if (!ensured) this.prepare();
@@ -239,6 +246,7 @@ export function createSandboxClaudeWorker(options: SandboxWorkerOptions): Claude
       server?.close();
       server = undefined;
       local = undefined;
+      this.invalidate();
     },
   };
 }

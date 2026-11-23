@@ -66,6 +66,18 @@ describe("command builders", () => {
     );
   });
 
+  it("refuses geometry that is not plain integers before it reaches the shell", () => {
+    expect(() => newSessionCommand(name(1), "80; rm -rf /" as never, 24)).toThrow(
+      "cols must be a whole number",
+    );
+    expect(() => newSessionCommand(name(1), 80, "24 && curl evil" as never)).toThrow(
+      "rows must be a whole number",
+    );
+    expect(() => newSessionCommand(name(1), 80.5, 24)).toThrow("cols must be a whole number");
+    expect(() => newSessionCommand(name(1), 0, 24)).toThrow("cols must be between 2 and 500");
+    expect(() => newSessionCommand(name(1), 80, 9999)).toThrow("rows must be between 2 and 300");
+  });
+
   it("re-applies the settings on attach and never detaches other viewers", () => {
     const command = attachCommand(name(5));
     expect(command).toBe(

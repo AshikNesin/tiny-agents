@@ -246,6 +246,19 @@ describe("browser toolkit", () => {
     expect(back.text.split("\n")[0]).toBe("back to https://example.com/a · Earlier page");
   });
 
+  it("forgets the oldest conversation's page baseline once the cache is full", async () => {
+    const { transport } = fakeTransport();
+    const tk = toolkit({ transport, profilesDir: "/tmp/ta-test-profiles", baselineLimit: 2 });
+    await run(tk, "browser_snapshot", {}, "1");
+    await run(tk, "browser_snapshot", {}, "2");
+    await run(tk, "browser_snapshot", {}, "3");
+    const evicted = await run(tk, "browser_click", { ref: "e3" }, "1");
+    expect(evicted.text).toContain("Page:");
+    expect(evicted.text).not.toContain("No change on the page.");
+    const kept = await run(tk, "browser_click", { ref: "e3" }, "3");
+    expect(kept.text).toContain("No change on the page.");
+  });
+
   it("shows a new page's snapshot after navigating, then only what an action changed", async () => {
     const { transport, setSnapshot } = fakeTransport();
     const tk = toolkit({ transport, profilesDir: "/tmp/ta-test-profiles" });

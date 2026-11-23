@@ -27,6 +27,7 @@ export interface ClaudeWorkerClientOptions {
   onEvent: (message: WorkerMessage) => void;
   onTool: (call: ToolUseCall) => Promise<ToolResultPayload>;
   onConnected?: (rebooted: boolean) => void;
+  onUnauthorized?: () => void;
   timings?: Partial<ConnectionTimings>;
   connect?: (url: string, token: string) => WebSocketLike;
   clock?: WorkerClock;
@@ -43,6 +44,7 @@ export class ClaudeWorkerClient {
       sessions: { event: "event", resume: "resume", join: "now" },
       onMessage: (frame) => this.onMessage(frame),
       ...(options.onConnected ? { onConnected: options.onConnected } : {}),
+      ...(options.onUnauthorized ? { onUnauthorized: options.onUnauthorized } : {}),
       ...(options.timings ? { timings: options.timings } : {}),
       ...(connect ? { socket: (target) => connect(target.url, target.token) } : {}),
       ...(options.clock ? { clock: options.clock } : {}),

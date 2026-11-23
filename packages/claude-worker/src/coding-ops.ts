@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { randomBytes } from "node:crypto";
+import { workerProcessEnv } from "./guards";
 import { mkdir, readdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
@@ -99,7 +100,12 @@ function git(cwd: string, args: string[], maxBuffer = 32 * 1024 * 1024): Promise
         encoding: "utf8",
         maxBuffer,
         timeout: 20_000,
-        env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GIT_OPTIONAL_LOCKS: "0", LC_ALL: "C" },
+        env: {
+          ...workerProcessEnv(process.env),
+          GIT_TERMINAL_PROMPT: "0",
+          GIT_OPTIONAL_LOCKS: "0",
+          LC_ALL: "C",
+        },
       },
       (error, stdout, stderr) => {
         if (error) {
@@ -153,7 +159,12 @@ function runGit(cwd: string, args: string[]): Promise<GitRunResult> {
         encoding: "utf8",
         maxBuffer: 32 * 1024 * 1024,
         timeout: 20_000,
-        env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GIT_OPTIONAL_LOCKS: "0", LC_ALL: "C" },
+        env: {
+          ...workerProcessEnv(process.env),
+          GIT_TERMINAL_PROMPT: "0",
+          GIT_OPTIONAL_LOCKS: "0",
+          LC_ALL: "C",
+        },
       },
       (error, stdout, stderr) => {
         const code = (error as { code?: unknown } | null)?.code;
@@ -394,6 +405,13 @@ async function upload(
   data: string,
   ctx: CodingOpsContext,
 ): Promise<{ ref: string; name: string }> {
+  const maxChars = Math.ceil((ctx.limits.maxUploadBytes * 4) / 3) + 4;
+  if (data.length > maxChars) {
+    throw new CodingError(
+      "too_large",
+      `Files over ${Math.round(ctx.limits.maxUploadBytes / 1024 / 1024)} MB cannot be attached.`,
+    );
+  }
   const bytes = Buffer.from(data, "base64");
   if (bytes.length > ctx.limits.maxUploadBytes) {
     throw new CodingError(

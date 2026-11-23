@@ -116,6 +116,35 @@ describe("weekly memory tidy", () => {
     expect((await rowsOf(botId)).every((row) => row.status === "active")).toBe(true);
   });
 
+  it("applies nothing when a memory changes during the model call", async () => {
+    const botId = await seedMemories();
+    const snapshot = await memoryLedger(botId).active();
+    const edited = snapshot[0]!;
+    const sideCaller = {
+      complete: vi.fn<SideCaller["complete"]>(async () => {
+        vi.setSystemTime(new Date(Date.parse(FIXED_NOW) + 60_000));
+        await memoryLedger(botId).edit(edited.id, { text: "The owner prefers Rust now." });
+        return JSON.stringify({
+          merge: [
+            {
+              refs: ["m1", "m2"],
+              text: "The owner prefers TypeScript over JavaScript for new projects.",
+              category: "preference",
+            },
+          ],
+          stale: ["m5"],
+        });
+      }),
+    };
+    expect(await tidyBotMemories(botId, sideCaller)).toBeUndefined();
+    const rows = await rowsOf(botId);
+    expect(rows.every((row) => row.status === "active")).toBe(true);
+    expect(rows.find((row) => row.id === edited.id)).toMatchObject({
+      text: "The owner prefers Rust now.",
+      status: "active",
+    });
+  });
+
   it("the weekly pass tidies every bot with memory on, and nothing without a model", async () => {
     const on = await seedMemories();
     const off = await seedMemories();

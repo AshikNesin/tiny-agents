@@ -9,7 +9,7 @@ pinClockWhileLoadingAndBeforeEachTest();
 boundWaitsByTestTimeout();
 
 process.env.NODE_ENV = "test";
-process.env.SECRETS_KEY ??= "test-only-secrets-key-not-for-production";
+process.env.SECRETS_KEY ??= "dGVzdC1vbmx5LXNlY3JldHMta2V5LW5vdC1mb3ItcHJvZHVjdGlvbg";
 
 const seedModels = async () => {
   const { seedFauxModels } = await import("../../apps/web/src/server/api/models/models.config");

@@ -18,7 +18,7 @@ export interface RateLimitOptions {
 let unnamed = 0;
 
 let processStore: RateLimitStore | undefined;
-function storeFor(c: AppContext): RateLimitStore {
+export function rateLimitStoreFor(c: AppContext): RateLimitStore {
   const store = c.get("rateLimitStore");
   if (store) return store;
   processStore ??= memoryRateLimitStore();
@@ -32,7 +32,12 @@ export function rateLimit(options: RateLimitOptions) {
   return createMiddleware<AppEnv>(async (c, next) => {
     const { windowMs, max } = options.window();
     const key = rateLimitKey(clientIp(c));
-    const result = await storeFor(c).hit(key, { name, windowMs, max, binding: options.binding });
+    const result = await rateLimitStoreFor(c).hit(key, {
+      name,
+      windowMs,
+      max,
+      binding: options.binding,
+    });
 
     const resetSeconds =
       result.resetAt === undefined

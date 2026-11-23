@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { until } from "../../fixtures/until";
 import { WebSocket } from "ws";
+import { Type } from "typebox";
+import { defineExtension, defineTool } from "@earendil-works/pi-durable";
+import type { Capability } from "../../../../packages/agent/src/capabilities";
+import { secretRedactor } from "../../../../packages/agent/src/redact";
 import {
   ClaudeWorkerClient,
   type WebSocketLike,
@@ -10,7 +14,7 @@ import {
   WORKER_RESTARTED,
 } from "../../../../packages/agent/src/engines/claude-code/engine";
 import type { ChatMessage } from "../../../../packages/agent/src/types";
-import { awaitingApproval, mailCapability, openEngine, watch } from "./engine-harness";
+import { awaitingApproval, mailCapability, openEngine, watch, VAULT_VALUE } from "./engine-harness";
 import {
   DEFAULT_TIMINGS,
   OverrideRefusal,
@@ -18,6 +22,7 @@ import {
   SessionLimitError,
   ToolProxy,
   assertNoOverrides,
+  buildCodingSdkOptions,
   buildSdkOptions,
   conflictingOverrides,
   createClaudeWorkerServer,
@@ -126,6 +131,61 @@ describe("protocol and guards", () => {
     expect(env.ANTHROPIC_BASE_URL).toBeUndefined();
     expect(env.CLAUDE_CODE_MAX_RETRIES).toBe("0");
     expect("ANTHROPIC_BASE_URL" in env).toBe(false);
+  });
+
+  it("keeps the worker's own auth token out of every subprocess environment", async () => {
+    const base = {
+      PATH: "/usr/bin",
+      HOME: "/tmp/worker",
+      CLAUDE_WORKER_TOKEN: TOKEN,
+      CLAUDE_WORKER_PORT: "8765",
+    };
+    const seen: SdkQueryOptions["env"][] = [];
+    const sdk: ClaudeSdkModule = {
+      query: (args) => {
+        seen.push(args.options.env);
+        return (async function* () {})();
+      },
+      tool: (name) => ({ name }),
+      createSdkMcpServer: (opts) => ({ name: opts.name }),
+    };
+    const factory = createSdkQueryFactory(sdk, base);
+    await factory({
+      model: "claude-sonnet-4-6",
+      tools: [],
+      signal: new AbortController().signal,
+      turns: (async function* () {})(),
+      publish: () => undefined,
+      callTool: async () => ({ content: "" }),
+      setClaudeSessionId: () => undefined,
+    });
+    expect(seen).toHaveLength(1);
+    expect(seen[0]!.CLAUDE_WORKER_TOKEN).toBeUndefined();
+    expect("CLAUDE_WORKER_TOKEN" in seen[0]!).toBe(false);
+    expect(seen[0]!.PATH).toBe("/usr/bin");
+
+    const coding = buildCodingSdkOptions({
+      cwd: "/tmp/worker",
+      env: base,
+      canUseTool: async () => ({ behavior: "allow", updatedInput: {} }),
+    });
+    expect(coding.env.CLAUDE_WORKER_TOKEN).toBeUndefined();
+    expect("CLAUDE_WORKER_TOKEN" in coding.env).toBe(false);
+
+    const server = await createClaudeWorkerServer({
+      token: TOKEN,
+      query: createSdkQueryFactory(sdk, base),
+      authStatus: subscribed,
+      env: base,
+      timings: fastTimings,
+      port: 0,
+    });
+    servers.push(server);
+    const { client, connects } = botClient(server.url, {
+      onTool: () => new Promise(() => undefined),
+    });
+    client.track("1");
+    await vi.waitFor(() => expect(connects).toEqual([false]));
   });
 
   it("pauses on rejected limits, credits_required, and isUsingOverage when present", () => {
@@ -799,5 +859,52 @@ describe("bot engine on a worker restart", () => {
       return message?.status === "done" ? message : undefined;
     }, "the next reply");
     expect(again.text).toBe("Echo: again");
+  }, 15_000);
+});
+
+describe("a tool that throws on the Claude plan engine", () => {
+  const runtimes: { close: () => Promise<void> }[] = [];
+  afterEach(async () => {
+    await Promise.allSettled(runtimes.splice(0).map((runtime) => runtime.close()));
+    secretRedactor.clear();
+  });
+
+  function throwingCapability(secret: string): Capability {
+    const boom = defineTool({
+      name: "read_token",
+      description: "Read the deploy token",
+      parameters: Type.Object({}),
+      replay: "safe",
+      execute: async () => {
+        throw new Error(`deploy failed: token=${secret}`);
+      },
+    });
+    return {
+      id: "mail",
+      kind: "toolkit",
+      name: "Mail",
+      description: "Email",
+      extension: defineExtension({ name: "mail", tools: [boom] }),
+      tools: [{ name: "read_token", label: "Read token", description: "Token", readOnly: true }],
+    };
+  }
+
+  it("scrubs a thrown tool error before the model reads it", async () => {
+    secretRedactor.register(VAULT_VALUE);
+    const engine = await openEngine("claude-code", {
+      capabilities: [throwingCapability(VAULT_VALUE)],
+    });
+    runtimes.push(engine.runtime);
+    const ref = await engine.runtime.createConversation({
+      modelId: engine.modelId,
+      systemPrompt: "Be brief.",
+      capabilities: { enabled: ["mail"], permissions: {} },
+    });
+    const chat = await watch(engine.runtime, ref);
+    await engine.send(ref, { requestId: "r1", text: "read_token" });
+    expect(await until(() => chat.results()[0], "the reply")).toBe("deploy failed: token=[vault]");
+    expect(JSON.stringify(engine.worker.results)).not.toContain(VAULT_VALUE);
+    expect(JSON.stringify(chat.state())).not.toContain(VAULT_VALUE);
+    await chat.stop();
   }, 15_000);
 });

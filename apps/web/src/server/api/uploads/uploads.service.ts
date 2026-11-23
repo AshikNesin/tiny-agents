@@ -227,14 +227,12 @@ export async function deleteUpload(id: string): Promise<void> {
   const row = await findUpload(id);
   if (!row) throw Boom.notFound("Unknown upload");
   cancelExtraction(id);
-  await db.delete(uploads).where(eq(uploads.id, id));
-  forgetContent(id);
   const keys = [
     row.storageKey,
     ...(row.modelKey ? [row.modelKey] : []),
     ...(row.kind === "file" ? [extractKey(id)] : []),
   ];
-  try {
-    await storageService.deleteFiles({ filePaths: keys });
-  } catch {}
+  await storageService.deleteFiles({ filePaths: keys });
+  await db.delete(uploads).where(eq(uploads.id, id));
+  forgetContent(id);
 }

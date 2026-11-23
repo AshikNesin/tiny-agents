@@ -1,4 +1,4 @@
-import { unzipSync } from "fflate";
+import { Unzip, UnzipInflate } from "fflate";
 import type { AttachmentSheet } from "@tiny-agents/agent";
 import { local, xmlEvents } from "./uploads.xml";
 
@@ -6,6 +6,7 @@ export interface OfficeLimits {
   maxSheets: number;
   maxCells: number;
   maxPartBytes: number;
+  maxTotalPartBytes: number;
 }
 
 export interface DocumentText {
@@ -19,16 +20,49 @@ export interface Slide {
   notes: string;
 }
 
+const FEED_BYTES = 64 * 1024;
+
 function readParts(
   bytes: Uint8Array,
   wanted: (name: string) => boolean,
-  maxPartBytes: number,
+  limits: Pick<OfficeLimits, "maxPartBytes" | "maxTotalPartBytes">,
 ): Map<string, string> {
-  const files = unzipSync(bytes, {
-    filter: (file) => wanted(file.name) && file.originalSize <= maxPartBytes,
-  });
+  const { maxPartBytes, maxTotalPartBytes } = limits;
   const decoder = new TextDecoder();
-  return new Map(Object.entries(files).map(([name, data]) => [name, decoder.decode(data)]));
+  const collected = new Map<string, Uint8Array[]>();
+  let inflated = 0;
+  const unzip = new Unzip();
+  unzip.register(UnzipInflate);
+  unzip.onfile = (file) => {
+    if (file.name.endsWith("/") || !wanted(file.name)) return;
+    const chunks: Uint8Array[] = [];
+    collected.set(file.name, chunks);
+    let part = 0;
+    file.ondata = (error, chunk) => {
+      if (error) throw error;
+      if (part + chunk.length > maxPartBytes || inflated + chunk.length > maxTotalPartBytes)
+        throw new Error("The file's parts expand past the reading limit.");
+      part += chunk.length;
+      inflated += chunk.length;
+      chunks.push(chunk);
+    };
+    file.start();
+  };
+  for (let at = 0; at < bytes.length; at += FEED_BYTES) {
+    const end = Math.min(at + FEED_BYTES, bytes.length);
+    unzip.push(bytes.subarray(at, end), end === bytes.length);
+  }
+  return new Map(
+    [...collected].map(([name, chunks]) => {
+      const all = new Uint8Array(chunks.reduce((total, chunk) => total + chunk.length, 0));
+      let at = 0;
+      for (const chunk of chunks) {
+        all.set(chunk, at);
+        at += chunk.length;
+      }
+      return [name, decoder.decode(all)] as const;
+    }),
+  );
 }
 
 function relationships(xml: string | undefined, base: string): Map<string, string> {
@@ -71,7 +105,7 @@ function markdownTable(rows: string[][]): string {
 }
 
 export function docxToMarkdown(bytes: Uint8Array, limits: OfficeLimits): DocumentText {
-  const parts = readParts(bytes, (name) => name === "word/document.xml", limits.maxPartBytes);
+  const parts = readParts(bytes, (name) => name === "word/document.xml", limits);
   const xml = parts.get("word/document.xml");
   if (!xml) throw new Error("The document body is missing or too large.");
   const blocks: string[] = [];
@@ -145,7 +179,7 @@ export function xlsxSheets(bytes: Uint8Array, limits: OfficeLimits): AttachmentS
       name === "xl/_rels/workbook.xml.rels" ||
       name === "xl/sharedStrings.xml" ||
       /^xl\/worksheets\/[^/]+\.xml$/.test(name),
-    limits.maxPartBytes,
+    limits,
   );
   const workbook = parts.get("xl/workbook.xml");
   if (!workbook) throw new Error("The workbook is missing or too large.");
@@ -286,7 +320,7 @@ export function pptxSlides(bytes: Uint8Array, limits: OfficeLimits): Slide[] {
       name === "ppt/_rels/presentation.xml.rels" ||
       /^ppt\/slides\/(_rels\/)?[^/]+\.xml(\.rels)?$/.test(name) ||
       /^ppt\/notesSlides\/[^/]+\.xml$/.test(name),
-    limits.maxPartBytes,
+    limits,
   );
   const presentation = parts.get("ppt/presentation.xml");
   if (!presentation) throw new Error("The presentation is missing or too large.");
@@ -309,9 +343,7 @@ export function pptxSlides(bytes: Uint8Array, limits: OfficeLimits): Slide[] {
 }
 
 function odfContent(bytes: Uint8Array, limits: OfficeLimits): string {
-  const content = readParts(bytes, (name) => name === "content.xml", limits.maxPartBytes).get(
-    "content.xml",
-  );
+  const content = readParts(bytes, (name) => name === "content.xml", limits).get("content.xml");
   if (!content) throw new Error("The document content is missing or too large.");
   return content;
 }

@@ -87,6 +87,11 @@ export class CodingWorkerClient {
     this.connection?.track(sessionId);
   }
 
+  untrack(sessionId: string): void {
+    this.tracked.delete(sessionId);
+    this.connection?.untrack(sessionId);
+  }
+
   request<T>(body: RequestBody, timeoutMs?: number): Promise<T> {
     if (!this.connection) {
       return Promise.reject(new Error("Claude Code is not connected (the harness is stopped)."));

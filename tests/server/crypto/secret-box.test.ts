@@ -2,10 +2,12 @@ import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { eq } from "drizzle-orm";
 import { connections, db, vaultValues } from "../../../apps/web/src/server/db";
 import {
+  hasSecretsKey,
   needsReseal,
   open,
   seal,
   SecretLockedError,
+  secretKeyProblem,
   type SecretBinding,
 } from "../../../apps/web/src/server/crypto/secret-box";
 import {
@@ -20,6 +22,8 @@ import {
 import { useFreshTestDatabase } from "../fixtures/test-db";
 
 const KEY = process.env.SECRETS_KEY!;
+const VECTOR_KEY = "k4VectorLongKey3W9tZQbGe7Yd2Rm5Tu8Hi1OxPv6Cj4Nf";
+const ROTATION_KEY = "Xfrp6IDmk82w_uq-1-nk63YauElKDQ8D3G8h6lzhTZw-";
 const binding: SecretBinding = { purpose: "connection", record: "c1", field: "secret_enc" };
 
 afterEach(() => {
@@ -37,6 +41,14 @@ function lockReason(fn: () => unknown): string | undefined {
   return undefined;
 }
 
+function bindingFor(
+  purpose: SecretBinding["purpose"],
+  record: string,
+  field: string,
+): SecretBinding {
+  return { purpose, record, field };
+}
+
 describe("SecretBox", () => {
   it("round-trips a value and never stores it in the clear", () => {
     const stored = seal("sk-sentinel", binding);
@@ -47,6 +59,61 @@ describe("SecretBox", () => {
 
   it("uses a fresh IV per write", () => {
     expect(seal("x", binding)).not.toBe(seal("x", binding));
+  });
+
+  it("derives the same key as before the entropy floor, so stored ciphertexts stay readable", () => {
+    process.env.SECRETS_KEY = VECTOR_KEY;
+    const vaultLocal = bindingFor("vault-local", "compat-vector", "item");
+    const storedBefore =
+      "v2:ZbyVAWmX65T:CFYhm1cqddzJZQh1:yYe6moiucXIFNIQeif2l-w:984KLPNXMZHj-mFVilUl7S0";
+    expect(open(storedBefore, vaultLocal)).toBe("compat-plain-text");
+    expect(seal("compat-plain-text", vaultLocal).split(":")[1]).toBe("ZbyVAWmX65T");
+    const connection = bindingFor("connection", "compat-conn", "secret_enc");
+    expect(
+      open(
+        "v2:HawuXqo715-:dBFYvDRzQcgXDRee:Tnh1YeYM20xI9vUfmZB6sA:1vARupz72SBiapBiKjuqmWQ",
+        connection,
+      ),
+    ).toBe("compat-conn-value");
+    expect(seal("compat-conn-value", connection).split(":")[1]).toBe("HawuXqo715-");
+  });
+
+  it("refuses to seal under a SECRETS_KEY with less than 32 bytes of key material, naming the variable", () => {
+    process.env.SECRETS_KEY = "the-old-short-key";
+    expect(lockReason(() => seal("x", binding))).toBe("weak_key");
+    try {
+      seal("x", binding);
+      expect.unreachable("seal must refuse a short key");
+    } catch (error) {
+      expect((error as Error).message).toContain("SECRETS_KEY");
+      expect((error as Error).message).toContain("32");
+    }
+    expect(hasSecretsKey()).toBe(true);
+  });
+
+  it("still opens ciphertexts a weaker key sealed, so an operator tightening the key keeps their data", () => {
+    const weakKeySealed =
+      "v2:E0qcadoQqQo:kgETVQQFAvlP0I0o:I-IpFbv8adBvZFXABTyLBw:Uige3dPl6hsky34wxxonbQE";
+    process.env.SECRETS_KEY = "the-old-short-key";
+    expect(open(weakKeySealed, bindingFor("vault-local", "compat-vector", "item"))).toBe(
+      "compat-plain-text",
+    );
+  });
+
+  it("counts a hex or base64 key by its decoded bytes, not its characters", () => {
+    process.env.SECRETS_KEY = "0f".repeat(31);
+    expect(lockReason(() => seal("x", binding))).toBe("weak_key");
+    process.env.SECRETS_KEY = "0f".repeat(16);
+    expect(lockReason(() => seal("x", binding))).toBe("weak_key");
+    process.env.SECRETS_KEY = VECTOR_KEY;
+    expect(lockReason(() => seal("x", binding))).toBeUndefined();
+  });
+
+  it("names the problem with a short key", () => {
+    expect(secretKeyProblem("short")).toContain("SECRETS_KEY");
+    expect(secretKeyProblem("short")).toContain("32");
+    expect(secretKeyProblem("0f".repeat(32))).toBeUndefined();
+    expect(secretKeyProblem(undefined)).toBeUndefined();
   });
 
   it("refuses a value moved to another record, field, purpose or policy", () => {
@@ -76,7 +143,7 @@ describe("SecretBox", () => {
 
   it("opens values under SECRETS_KEY_PREVIOUS and flags them for rotation", () => {
     const stored = seal("sk-sentinel", binding);
-    process.env.SECRETS_KEY = "the-new-key";
+    process.env.SECRETS_KEY = ROTATION_KEY;
     process.env.SECRETS_KEY_PREVIOUS = KEY;
     expect(open(stored, binding)).toBe("sk-sentinel");
     expect(needsReseal(stored, "connection")).toBe(true);
@@ -103,7 +170,7 @@ describe("secrets:rotate", () => {
       .set({ oauthEnc: sealOAuthState(row!.id, { verifier: "h-1" }) })
       .where(eq(connections.id, row!.id));
 
-    process.env.SECRETS_KEY = "the-new-key";
+    process.env.SECRETS_KEY = ROTATION_KEY;
     process.env.SECRETS_KEY_PREVIOUS = KEY;
     expect(resealLocalItems()).toEqual({ resealed: 1, skipped: [] });
     expect(await resealConnectionSecrets()).toBe(1);
@@ -120,7 +187,7 @@ describe("secrets:rotate", () => {
     const good = await backend.create!({ kind: "api_key", title: "G", values: { value: "g" } });
     const bad = await backend.create!({ kind: "api_key", title: "B", values: { value: "b" } });
     await db.update(vaultValues).set({ policy: "edited" }).where(eq(vaultValues.id, bad));
-    process.env.SECRETS_KEY = "the-new-key";
+    process.env.SECRETS_KEY = ROTATION_KEY;
     process.env.SECRETS_KEY_PREVIOUS = KEY;
     const report = resealLocalItems();
     expect(report.resealed).toBe(1);

@@ -1,4 +1,5 @@
-import { sqliteTable, integer, text, index } from "drizzle-orm/sqlite-core";
+import { sqliteTable, integer, text, index, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { sql } from "drizzle-orm";
 import type { JobState } from "../lifecycle";
 
 export const jobs = sqliteTable(
@@ -27,6 +28,9 @@ export const jobs = sqliteTable(
     index("jobs_state_completed_at_idx").on(table.state, table.completedAt),
     index("jobs_name_idx").on(table.name),
     index("jobs_created_at_idx").on(table.createdAt),
+    uniqueIndex("jobs_singleton_active_idx")
+      .on(table.name, table.singletonKey)
+      .where(sql`state in ('created', 'active') and singleton_key is not null`),
   ],
 );
 

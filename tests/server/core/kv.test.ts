@@ -69,6 +69,15 @@ describe("kv", () => {
     expect(await kv.get("keep")).toBe("forever");
   });
 
+  it("keeps an entry that was refreshed while a stale read was expiring it", async () => {
+    await kv.set("refresh-race", "stale", 1);
+    vi.setSystemTime(Date.now() + 5);
+    const stale = kv.get("refresh-race");
+    await kv.set("refresh-race", "fresh", 60_000);
+    expect(await stale).toBeUndefined();
+    expect(await kv.get("refresh-race")).toBe("fresh");
+  });
+
   it("takes a live entry exactly once, even under concurrent takes", async () => {
     await kv.set("once", { code: 7 });
     const results = await Promise.all([kv.take("once"), kv.take("once")]);

@@ -160,6 +160,21 @@ describe("approval cards", () => {
     });
   });
 
+  it("shows a command as long as run_command accepts, without clipping it", () => {
+    const long = "printf x; ".repeat(2_000);
+    expect(long).toHaveLength(20_000);
+    const vault = {
+      handle: "h",
+      label: "Key",
+      kind: "api_key" as const,
+      tool: "run_command",
+      target: long,
+      grantable: false,
+      env: ["TOKEN"],
+    };
+    expect(vaultApprovalText(call("run_command", { vault }), "Bot").command).toBe(long);
+  });
+
   it("asks for credentials on the origin's host", () => {
     const credentials = {
       status: "pending" as const,

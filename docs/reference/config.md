@@ -58,6 +58,7 @@ gives you type checking and completion for `DeepPartial<AppConfig>`.
 | `rateLimits.auth`           | 20 requests / 15 min per IP                         | tiny-agents: `AUTH_RATE_LIMIT_MAX` (max only)  |
 | `rateLimits.storage`        | 100 requests / 15 min per IP                        |                                                |
 | `rateLimits.upload`         | 50 requests / 15 min per IP                         |                                                |
+| `rateLimits.adminKey`       | 10 failed keys / 15 min per IP                      |                                                |
 | `sentry.dsn`                | `""` — both entries start Sentry only when set      | `SENTRY_DSN`                                   |
 | `sentry.release`            | unset                                               | `SENTRY_RELEASE`                               |
 

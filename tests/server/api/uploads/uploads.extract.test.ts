@@ -7,6 +7,10 @@ import {
   paginate,
   parseDelimited,
 } from "../../../../apps/web/src/server/api/uploads/uploads.extract";
+import {
+  docxToMarkdown,
+  xlsxSheets,
+} from "../../../../apps/web/src/server/api/uploads/uploads.office";
 import { listTgz, listZip } from "../../../../apps/web/src/server/api/uploads/uploads.archive";
 import {
   decodeText,
@@ -40,6 +44,18 @@ describe("sniffFile", () => {
     pe.set(strToU8("PE\0\0"), 64);
     expect(() => sniffFile(pe, "pdf")).toThrow(SniffError);
     expect(() => sniffFile(strToU8("\x7fELF..."), "txt")).toThrow("Executable");
+  });
+
+  it("refuses a PE whose e_lfanew reads as a negative offset", () => {
+    const pe = new Uint8Array(0x80000100);
+    pe.set(strToU8("MZ"), 0);
+    const offset = 0x80000040;
+    pe[0x3c] = offset & 0xff;
+    pe[0x3d] = (offset >>> 8) & 0xff;
+    pe[0x3e] = (offset >>> 16) & 0xff;
+    pe[0x3f] = (offset >>> 24) & 0xff;
+    pe.set(strToU8("PE\0\0"), offset);
+    expect(() => sniffFile(pe, "pdf")).toThrow("Executable");
   });
 
   it("refuses bytes that disagree with the extension", () => {
@@ -242,5 +258,65 @@ describe("extract", () => {
     const { pages } = paginate(`${"a".repeat(40_000)}\nshort`, 16_000);
     expect(pages.every((page) => page.text.length <= 16_000)).toBe(true);
     expect(pages.at(-1)?.text.endsWith("short")).toBe(true);
+  });
+
+  it("reads an honest document within the part budget", () => {
+    const limits = {
+      maxSheets: 20,
+      maxCells: 200_000,
+      maxPartBytes: 1024 * 1024,
+      maxTotalPartBytes: 128 * 1024 * 1024,
+    };
+    const { markdown } = docxToMarkdown(docx(para("hello")), limits);
+    expect(markdown).toBe("hello");
+  });
+
+  it("rejects a zip that lies about its uncompressed size", () => {
+    const limits = {
+      maxSheets: 20,
+      maxCells: 200_000,
+      maxPartBytes: 256 * 1024,
+      maxTotalPartBytes: 128 * 1024 * 1024,
+    };
+    const honest = zipSync({ "word/document.xml": strToU8(`${"a".repeat(1024 * 1024)}END`) });
+    const view = new DataView(honest.buffer, honest.byteOffset, honest.byteLength);
+    let central = -1;
+    for (let i = 0; i < honest.length - 46; i++)
+      if (view.getUint32(i, true) === 0x02014b50) central = i;
+    expect(central).toBeGreaterThan(0);
+    const lying = new Uint8Array(honest);
+    const patched = new DataView(lying.buffer);
+    patched.setUint32(22, 1, true);
+    patched.setUint32(central + 24, 1, true);
+    expect(() => docxToMarkdown(lying, limits)).toThrow(/past the reading limit/i);
+  });
+
+  it("caps the total inflated bytes across every part of one workbook", () => {
+    const limits = {
+      maxSheets: 20,
+      maxCells: 200_000,
+      maxPartBytes: 512 * 1024,
+      maxTotalPartBytes: 700 * 1024,
+    };
+    const sheet = `<worksheet><sheetData><row><c><v>${"9".repeat(256 * 1024)}</v></c></row></sheetData></worksheet>`;
+    const book = zipSync({
+      "xl/workbook.xml": strToU8("<workbook/>"),
+      "xl/worksheets/sheet1.xml": strToU8(sheet),
+      "xl/worksheets/sheet2.xml": strToU8(sheet),
+      "xl/worksheets/sheet3.xml": strToU8(sheet),
+    });
+    expect(() => xlsxSheets(book, limits)).toThrow(/past the reading limit/i);
+  });
+
+  it("stops a highly compressible part at the observed byte cap", () => {
+    const limits = {
+      maxSheets: 20,
+      maxCells: 200_000,
+      maxPartBytes: 256 * 1024,
+      maxTotalPartBytes: 128 * 1024 * 1024,
+    };
+    const bomb = zipSync({ "word/document.xml": strToU8(`${"B".repeat(8 * 1024 * 1024)}END`) });
+    expect(bomb.length).toBeLessThan(1024 * 1024);
+    expect(() => docxToMarkdown(bomb, limits)).toThrow(/past the reading limit/i);
   });
 });

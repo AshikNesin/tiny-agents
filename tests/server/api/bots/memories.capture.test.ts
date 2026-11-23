@@ -166,7 +166,7 @@ describe("captureWindow", () => {
     expect(window.lines).toEqual(["Owner: 你好", `Scout: ${"x".repeat(500)}`]);
   });
 
-  it("caps a long window to its newest lines but still ends at the newest owner turn", () => {
+  it("caps a long window to its oldest lines and leaves the skipped ones below the watermark", () => {
     const messages = Array.from({ length: 200 }, (_, i) => ({
       role: "user",
       text: `Turn ${String(i).padStart(3, "0")} ${"y".repeat(500)}`,
@@ -175,10 +175,11 @@ describe("captureWindow", () => {
     const window = captureWindow(messages, null, "Scout");
     const size = window.lines.reduce((sum, line) => sum + line.length + 1, 0);
     expect(size).toBeLessThanOrEqual(24_000);
-    expect(window.lines.at(-1)).toContain("Turn 199");
-    expect(window.lines.join("\n")).not.toContain("Turn 000");
-    expect(window.turns).toBe(window.lines.length);
-    expect(window.through?.getTime()).toBe(200);
+    expect(window.lines[0]).toContain("Turn 000");
+    expect(window.lines.at(-1)).toContain("Turn 045");
+    expect(window.lines.join("\n")).not.toContain("Turn 199");
+    expect(window.turns).toBe(46);
+    expect(window.through?.getTime()).toBe(46);
   });
 });
 
@@ -338,6 +339,37 @@ describe("captureConversation", () => {
     await captureConversation(conversationId, deps);
     expect(caller.complete).toHaveBeenCalledTimes(3);
     expect((await findBot(botId))?.memoryCapturedThrough?.getTime()).toBe(messages[0]!.createdAt);
+  });
+
+  it("captures the skipped oldest turns on the next run after the cap", async () => {
+    const { botId, conversationId } = await seedBot();
+    const seen: string[] = [];
+    const messages = Array.from({ length: 200 }, (_, i) => ({
+      role: "user",
+      text: `Turn ${String(i).padStart(3, "0")} ${"y".repeat(500)}`,
+      createdAt: i + 1,
+    }));
+    const deps = {
+      sideCaller: {
+        complete: vi.fn<SideCaller["complete"]>(async (request) => {
+          seen.push(request.system);
+          return "[]";
+        }),
+      },
+      readTranscript: async () => messages,
+    };
+    await captureConversation(conversationId, deps);
+    expect((await findBot(botId))?.memoryCapturedThrough?.getTime()).toBeLessThan(200);
+    let runs = 0;
+    while ((await findBot(botId))?.memoryCapturedThrough?.getTime() !== 200 && runs < 20) {
+      runs += 1;
+      await captureConversation(conversationId, deps);
+    }
+    expect(seen.length).toBeGreaterThan(1);
+    const everything = seen.join("\n---\n");
+    expect(everything).toContain("Turn 000");
+    expect(everything).toContain("Turn 199");
+    expect((await findBot(botId))?.memoryCapturedThrough?.getTime()).toBe(200);
   });
 
   it("skips peer-only windows", async () => {
@@ -562,5 +594,43 @@ describe("memory capture debounce (a settled step)", () => {
     await capture.onSettled.run(settled(9));
     expect(captureNow).toHaveBeenCalledWith(9);
     capture.stop();
+  });
+
+  it("stops mid-flight: an in-flight capture is awaited, and nothing runs after", async () => {
+    vi.useFakeTimers();
+    let release: (() => void) | undefined;
+    const captureNow = vi
+      .fn()
+      .mockImplementation(() => new Promise<void>((resolve) => (release = resolve)));
+    const capture = createMemoryCapture({
+      captureNow,
+      quietMs: 100,
+      turnLimit: 3,
+    });
+    await capture.onSettled.run(settled(5));
+    await vi.advanceTimersByTimeAsync(100);
+    expect(captureNow).toHaveBeenCalledTimes(1);
+
+    const stopped = capture.stop();
+    await capture.onSettled.run(settled(5));
+    release!();
+    await stopped;
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(captureNow).toHaveBeenCalledTimes(1);
+  });
+
+  it("drops a capture that settled while stopped, and does not re-arm after one completes", async () => {
+    vi.useFakeTimers();
+    const gates: Array<() => void> = [];
+    const captureNow = vi.fn(() => new Promise<void>((resolve) => gates.push(resolve)));
+    const capture = createMemoryCapture({ captureNow, quietMs: 100, turnLimit: 10 });
+    await capture.onSettled.run(settled(11));
+    await vi.advanceTimersByTimeAsync(100);
+    await capture.onSettled.run(settled(11));
+    const stopped = capture.stop();
+    gates[0]!();
+    await stopped;
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(captureNow).toHaveBeenCalledTimes(1);
   });
 });

@@ -84,9 +84,18 @@ export async function abortReply(id: string, rt: BotAgentRuntime = runtime()) {
 export async function withdrawMessage(
   id: string,
   input: { requestId: string },
+  viewer: Viewer,
   rt: BotAgentRuntime = runtime(),
 ) {
-  return (await openBotChat(id, rt)).withdraw(input.requestId);
+  const chat = await openBotChat(id, rt);
+  if (viewer.kind === "guest") {
+    const { queued } = await chat.read();
+    const mine = queued.some(
+      (item) => item.requestId === input.requestId && item.author?.id === viewer.userId,
+    );
+    if (!mine) throw Boom.forbidden("Only the author can withdraw a message");
+  }
+  return chat.withdraw(input.requestId);
 }
 
 export async function resetConversation(id: string, rt: BotAgentRuntime = runtime()) {
@@ -222,6 +231,12 @@ export async function answerQuestions(
   id: string,
   input: { taskId: number; answers: OwnerAnswer[] | null },
   rt: BotAgentRuntime = runtime(),
+  viewer?: Viewer,
 ) {
-  await (await openBotChat(id, rt)).answerQuestions(input.taskId, input.answers);
+  const chat = await openBotChat(id, rt);
+  const answeredBy =
+    viewer?.kind === "guest" && chat.row.guests?.length
+      ? `${(await authorOf(viewer.userId)).name} (guest)`
+      : undefined;
+  await chat.answerQuestions(input.taskId, input.answers, answeredBy);
 }

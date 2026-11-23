@@ -24,12 +24,14 @@ export interface ConnectOptions {
   writable: boolean;
   fetch?: typeof fetch;
   timeoutMs?: number;
+  createdLimit?: number;
 }
 
 const GUARD_TTL_MS = 6 * 60 * 60_000;
 const EXPIRY_WARNING_MS = 14 * 86_400_000;
 const SYNC_RETRY_DELAYS_MS = [250, 750, 1500];
 const CREATED_GRACE_MS = 10 * 60_000;
+const CREATED_LIMIT = 512;
 
 function tokenExpiresAt(token: string): Date | undefined {
   const payload = token.split(".")[1];
@@ -170,6 +172,18 @@ export function createConnectBackend(options: ConnectOptions): VaultBackend {
     }`;
 
   const created = new Map<string, { at: number; summary: BackendItemSummary }>();
+  const createdLimit = options.createdLimit ?? CREATED_LIMIT;
+  const sweepCreated = (now: number) => {
+    for (const [id, entry] of created) {
+      if (now - entry.at < CREATED_GRACE_MS) continue;
+      created.delete(id);
+    }
+    while (created.size > createdLimit) {
+      const oldest = created.keys().next().value;
+      if (oldest === undefined) break;
+      created.delete(oldest);
+    }
+  };
 
   async function getItem(externalId: string): Promise<{ item: ConnectItem; vaultId: string }> {
     const vaultId = await ready();
@@ -214,7 +228,10 @@ export function createConnectBackend(options: ConnectOptions): VaultBackend {
       } catch (error) {
         const fresh = created.get(externalId);
         const notFound = error instanceof BackendError && error.code === "not_found";
-        if (notFound && fresh && Date.now() - fresh.at < CREATED_GRACE_MS) return fresh.summary;
+        const now = Date.now();
+        if (fresh && now - fresh.at >= CREATED_GRACE_MS) sweepCreated(now);
+        const still = created.get(externalId);
+        if (notFound && still && now - still.at < CREATED_GRACE_MS) return still.summary;
         throw error;
       }
     },
@@ -242,7 +259,14 @@ export function createConnectBackend(options: ConnectOptions): VaultBackend {
         "save the item",
       );
       if (!item.id) throw new BackendError("failed", "1Password did not return the new item.");
+      sweepCreated(Date.now());
+      created.delete(item.id);
       created.set(item.id, { at: Date.now(), summary: summarize(item) });
+      while (created.size > createdLimit) {
+        const oldest = created.keys().next().value;
+        if (oldest === undefined) break;
+        created.delete(oldest);
+      }
       return item.id;
     };
     backend.update = async (externalId, draft) => {

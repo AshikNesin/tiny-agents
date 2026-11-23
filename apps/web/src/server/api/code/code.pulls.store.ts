@@ -1,4 +1,5 @@
 import { and, desc, eq, inArray, isNull, ne } from "drizzle-orm";
+import { Boom } from "@groot/core/errors";
 import type { PullSnapshot } from "@tiny-agents/github";
 import {
   codeAutofixPasses,
@@ -67,9 +68,16 @@ export async function insertPull(input: LinkInput): Promise<CodePullRow> {
       loopChangedAt: new Date(),
       ownerInputAt: new Date(),
     })
+    .onConflictDoNothing()
     .returning();
-  listChanged();
-  return row!;
+  if (row) {
+    listChanged();
+    return row;
+  }
+  const existing =
+    (await openPullOf(input.threadId)) ?? (await findPull(input.projectId, input.number));
+  if (existing) return existing;
+  throw Boom.conflict("The pull request is already linked. Reload the thread.");
 }
 
 export async function deletePull(id: string): Promise<void> {
@@ -77,28 +85,36 @@ export async function deletePull(id: string): Promise<void> {
   listChanged();
 }
 
-export async function cacheSnapshot(id: string, snapshot: PullSnapshot): Promise<CodePullRow> {
-  const [before] = await db
-    .select({ state: codePullRequests.state })
-    .from(codePullRequests)
-    .where(eq(codePullRequests.id, id));
+export async function cacheSnapshot(
+  id: string,
+  snapshot: PullSnapshot,
+): Promise<CodePullRow | undefined> {
+  const set = {
+    state: snapshot.state,
+    draft: snapshot.draft,
+    title: snapshot.title,
+    headRef: snapshot.headRef,
+    headSha: snapshot.headSha,
+    baseRef: snapshot.baseRef,
+    url: snapshot.url,
+    snapshot: JSON.stringify(snapshot),
+    syncedAt: new Date(),
+  };
+  const [moved] = await db
+    .update(codePullRequests)
+    .set(set)
+    .where(and(eq(codePullRequests.id, id), ne(codePullRequests.state, snapshot.state)))
+    .returning();
+  if (moved) {
+    listChanged();
+    return moved;
+  }
   const [row] = await db
     .update(codePullRequests)
-    .set({
-      state: snapshot.state,
-      draft: snapshot.draft,
-      title: snapshot.title,
-      headRef: snapshot.headRef,
-      headSha: snapshot.headSha,
-      baseRef: snapshot.baseRef,
-      url: snapshot.url,
-      snapshot: JSON.stringify(snapshot),
-      syncedAt: new Date(),
-    })
+    .set(set)
     .where(eq(codePullRequests.id, id))
     .returning();
-  if (before?.state !== snapshot.state) listChanged();
-  return row!;
+  return row;
 }
 
 export function cachedSnapshot(row: CodePullRow): PullSnapshot | null {

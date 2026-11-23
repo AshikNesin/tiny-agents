@@ -20,7 +20,7 @@ import {
   type CodingLimits,
   type QueryFactory,
 } from "../../../../packages/claude-worker/src/index";
-import { mimeTypeOf } from "../../../../packages/claude-worker/src/coding-ops";
+import { mimeTypeOf, runCodingOp } from "../../../../packages/claude-worker/src/coding-ops";
 import { FakeSdk, echo, manual, type Brain } from "../../code/claude-code/fake-sdk";
 import { normalizeEntries } from "../../../../packages/code/src/drivers/claude-code/normalize";
 
@@ -160,6 +160,30 @@ describe("coding protocol", () => {
       }),
     ).toMatchObject({ maxLiveProcesses: 5, maxRunningTurns: 4 });
     expect(codingLimitsFromEnv({ CLAUDE_WORKER_CODING_MAX_TURNS: "zero" }).maxRunningTurns).toBe(2);
+  });
+
+  it("rejects an oversized upload before decoding it", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "upload-cap-"));
+    cleanups.push(() => rm(dir, { recursive: true, force: true }));
+    const big = Buffer.alloc(4 * 1024 * 1024, 65).toString("base64");
+    const attempts: string[] = [];
+    const decoded = vi
+      .spyOn(Buffer, "from")
+      .mockImplementation((value: Parameters<typeof Buffer.from>[0], encoding?: BufferEncoding) => {
+        attempts.push(`${String(typeof value)}:${String(encoding)}`);
+        return Buffer.from(String(value).length.toString());
+      });
+    try {
+      await expect(
+        runCodingOp(
+          { op: "upload", filename: "big.bin", data: big },
+          { limits: { maxUploadBytes: 1024, maxAssetBytes: 1024 }, uploadsDir: dir },
+        ),
+      ).rejects.toMatchObject({ code: "too_large" });
+    } finally {
+      decoded.mockRestore();
+    }
+    expect(attempts).toEqual([]);
   });
 
   it("builds SDK options with Claude Code's tools and settings, and no overrides", () => {

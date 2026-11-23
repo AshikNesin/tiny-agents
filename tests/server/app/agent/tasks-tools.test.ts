@@ -2,9 +2,12 @@ import type { JsonObject } from "@earendil-works/pi-ai";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
+import type { ToolExecutionApi, ToolExecutionResult } from "@earendil-works/pi-durable";
 import { describe, expect, it } from "vite-plus/test";
 import {
   createTasksExtension,
+  createTasksToolkit,
   type TaskRecord,
   type TaskStore,
 } from "../../../../packages/agent/src/toolkits/tasks";
@@ -118,6 +121,31 @@ function reduce(events: ChatEvent[]): ChatState | undefined {
 }
 
 describe("task tools (durable chat turns)", () => {
+  it("list_tasks defaults to open tasks and still renders every status on request", async () => {
+    const store = memoryStore();
+    const open = await store.create({ idempotencyKey: "k-open", title: "Open" });
+    await store.create({ idempotencyKey: "k-open2", title: "Second" });
+    await store.update((await store.create({ idempotencyKey: "k-done", title: "Done" })).id, {
+      status: "done",
+    });
+    const capability = createTasksToolkit(store);
+    const tool = capability.extension.tools!.find((t) => t.name === "list_tasks")!;
+    const runList = async (args: Record<string, unknown>) => {
+      const result = (await tool.execute(
+        args as never,
+        { conversationId: 1 } as unknown as ToolExecutionApi,
+        BACKGROUND_CONTEXT,
+      )) as ToolExecutionResult;
+      return (result.output ?? []).map((b) => (b.type === "text" ? b.text : "")).join("");
+    };
+    const def = await runList({});
+    expect(def).toContain("Open");
+    expect(def).toContain("Second");
+    expect(def).not.toContain("Done");
+    expect(await runList({ status: "done" })).toContain("Done");
+    expect(await runList({ status: "todo" })).toContain(open.title);
+  });
+
   it("create_task reaches the store and the tool result flows back to the model", async () => {
     const store = memoryStore();
     const { state } = await settled(store, [
@@ -140,7 +168,8 @@ describe("task tools (durable chat turns)", () => {
       fauxAssistantMessage([fauxToolCall("list_tasks", {})]),
       fauxAssistantMessage([fauxText("You have one open task")]),
     ]);
-    expect(store.calls).toContain("list:open");
+    expect(store.calls).toContain("list:todo");
+    expect(store.calls).toContain("list:in_progress");
     expect(state.messages.some((m) => m.text.includes("one open task"))).toBe(true);
   }, 15_000);
 

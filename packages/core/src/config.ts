@@ -23,7 +23,12 @@ export interface AppConfig {
   };
   logging: { level: LogLevel };
   passkey: { rpName: string; rpId: string; origin: string };
-  rateLimits: { auth: RateLimitWindow; storage: RateLimitWindow; upload: RateLimitWindow };
+  rateLimits: {
+    auth: RateLimitWindow;
+    storage: RateLimitWindow;
+    upload: RateLimitWindow;
+    adminKey: RateLimitWindow;
+  };
   sentry: { dsn: string; release?: string };
 }
 
@@ -66,6 +71,7 @@ export function defaultConfig(e: Env): AppConfig {
       auth: { windowMs: fifteenMinutes, max: 20 },
       storage: { windowMs: fifteenMinutes, max: 100 },
       upload: { windowMs: fifteenMinutes, max: 50 },
+      adminKey: { windowMs: fifteenMinutes, max: 10 },
     },
     sentry: { dsn: e.SENTRY_DSN ?? "", release: e.SENTRY_RELEASE },
   };

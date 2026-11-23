@@ -223,6 +223,31 @@ describe("MCP connections (header auth, streamable http)", () => {
     await call(app, path, 200, { method: "DELETE" });
   });
 
+  it("refuses a header secret when SECRETS_KEY is too weak to seal it, naming the variable", async () => {
+    const app = buildApp();
+    const key = process.env.SECRETS_KEY!;
+    process.env.SECRETS_KEY = "the-old-short-key";
+    try {
+      const refused = await api(app, "/api/v1/connections", {
+        method: "POST",
+        token,
+        headers: { "X-Vault-Step-Up": issueStepUp(1).token },
+        json: {
+          name: "Weak",
+          url: mcpServer.url,
+          authType: "header",
+          headerName: "x-api-key",
+          secret: "s",
+        },
+      });
+      expect(refused.status).toBe(400);
+      expect(refused.body.error?.message).toContain("SECRETS_KEY");
+      expect(refused.body.error?.message).toContain("32");
+    } finally {
+      process.env.SECRETS_KEY = key;
+    }
+  });
+
   it("drops the stored header secret when the URL moves to another host (S4)", async () => {
     const app = buildApp();
     const { data } = await call(app, "/api/v1/connections", 201, {

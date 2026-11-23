@@ -116,6 +116,70 @@ describe("the confinement script", () => {
       env: { PATH: path, HOME: tmpdir() },
     });
 
+  it("launches a detached command as its own unit that outlives the wrapper", () => {
+    const marker = `ta-detach-audit-${process.pid}`;
+    const detachBin = mkdtempSync(join(tmpdir(), "ta-egress-detach-"));
+    for (const tool of [
+      "bash",
+      "sh",
+      "mktemp",
+      "getent",
+      "awk",
+      "sort",
+      "chmod",
+      "rm",
+      "id",
+      "printf",
+      "true",
+      "sleep",
+      "setsid",
+      "nohup",
+    ]) {
+      const real = spawnSync("bash", ["-c", `type -P ${tool}`], { encoding: "utf8" }).stdout.trim();
+      expect(real, `${tool} must exist for the detached-run check`).toMatch(/^\//);
+      symlinkSync(real, join(detachBin, tool));
+    }
+    symlinkSync(join(bin, "sudo"), join(detachBin, "sudo"));
+    writeFileSync(
+      join(detachBin, "systemd-run"),
+      [
+        "#!/bin/bash",
+        `printf '%s\\n' "$@" > ${JSON.stringify(argsFile)}`,
+        'while [ $# -gt 0 ] && [ "$1" != -- ]; do shift; done',
+        "shift",
+        `setsid nohup "$@" >/dev/null 2>&1 &`,
+        'echo "Running as unit: ta-detach-$$.service"',
+      ].join("\n"),
+    );
+    chmodSync(join(detachBin, "systemd-run"), 0o755);
+    const script = confinedScript({
+      command: `sleep 5 # ${marker}`,
+      allow: [{ host: "registry.npmjs.org" }],
+      timeoutSecs: 10,
+      detached: true,
+    });
+    expect(() => execFileSync("bash", ["-n", "-c", script])).not.toThrow();
+    try {
+      const result = runScript(script, "", detachBin);
+      expect(result.status).toBe(0);
+      expect(result.stdout).toContain("Running as unit: ta-detach-");
+      const args = readFileSync(argsFile, "utf8");
+      expect(args).toContain("--unit=ta-detach-");
+      expect(args).not.toContain("--wait");
+      expect(args).not.toContain("--pipe");
+      expect(args).not.toContain("RuntimeMaxSec");
+      expect(args).toContain("IPAddressDeny=any");
+      expect(args).toContain("NoNewPrivileges=yes");
+      const alive = spawnSync("bash", ["-c", `pgrep -f ${JSON.stringify(marker)}`], {
+        encoding: "utf8",
+      });
+      expect(alive.stdout.trim()).toMatch(/^\d+$/);
+    } finally {
+      spawnSync("bash", ["-c", `pkill -f ${JSON.stringify(marker)}`]);
+      rmSync(detachBin, { recursive: true, force: true });
+    }
+  });
+
   it("is valid bash", () => {
     const script = confinedScript({
       command: "gh api user",
@@ -307,6 +371,25 @@ async function open(
 }
 
 describe("run_command with vault secrets", () => {
+  it("shows the whole command on the approval the owner answers, then runs it", async () => {
+    const { broker } = fakeBroker();
+    const vm = fakeVm(() => ({ output: "ok", exitCode: 0 }));
+    const command = ("gh api user " + "echo xyzw; ".repeat(2_000)).slice(0, 20_000);
+    expect(command).toHaveLength(20_000);
+    const { runtime, ref, events } = await open(
+      { command, secrets: [{ handle: "github", env: "GITHUB_TOKEN" }] },
+      vm,
+      { broker },
+    );
+    const waiting = await until(
+      () => (lastCall(events)?.status === "awaiting_approval" ? lastCall(events) : undefined),
+      "approval",
+    );
+    expect(waiting.vault?.target).toBe(command);
+    await runtime.decideApproval(ref, waiting.taskId!, "approved");
+    expect(await until(() => result(events), "result")).toBe("ok");
+  }, 20_000);
+
   it("asks every time, then runs confined with the value only on stdin", async () => {
     const { broker, recorded } = fakeBroker();
     const vm = fakeVm((_command, stdin) => ({ output: `token=${stdin?.trim()}`, exitCode: 0 }));

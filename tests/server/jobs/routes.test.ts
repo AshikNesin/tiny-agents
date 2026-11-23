@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it } from "vite-plus/test";
-import { jobRunner, registerJobHandler, runTick } from "@groot/jobs/server";
+import {
+  addJob,
+  createJobLogger,
+  flushJobLogs,
+  jobRunner,
+  registerJobHandler,
+  runTick,
+} from "@groot/jobs/server";
 import { api, createTestApp, signIn } from "../helpers";
 
 const app = createTestApp();
@@ -64,6 +71,33 @@ describe("jobs API", () => {
         })
       ).status,
     ).toBe(400);
+    const ids = () => Array.from({ length: 101 }, (v, i) => `job-${i}`);
+    expect(
+      (
+        await api(app, "/api/v1/jobs/bulk-rerun", {
+          method: "POST",
+          json: { jobIds: ids() },
+          token,
+        })
+      ).status,
+    ).toBe(400);
+    for (const options of [
+      { retryLimit: 101 },
+      { retryDelaySeconds: 86_401 },
+      { priority: 2_147_483_648 },
+      { priority: -2_147_483_649 },
+      { delaySeconds: 2_147_483_648 },
+    ]) {
+      expect(
+        (
+          await api(app, "/api/v1/jobs", {
+            method: "POST",
+            json: { jobName: "report", options },
+            token,
+          })
+        ).status,
+      ).toBe(400);
+    }
   });
 
   it("creates, lists, inspects and acts on jobs", async () => {
@@ -143,6 +177,31 @@ describe("jobs API", () => {
 
     expect((await api(app, `/api/v1/jobs/${jobId}`, { method: "DELETE", token })).status).toBe(200);
     expect((await api(app, `/api/v1/jobs/${jobId}`, { token })).status).toBe(404);
+  });
+
+  it("caps how many logs one request returns", async () => {
+    const jobId = await addJob("report", {});
+    const log = createJobLogger({ jobId, jobName: "report" });
+    for (let i = 0; i < 6; i += 1) log.info({ i }, `line ${i}`);
+    await flushJobLogs();
+    const all = await api<Array<{ id: number; message: string }>>(
+      app,
+      `/api/v1/jobs/${jobId}/logs`,
+      {
+        token,
+      },
+    );
+    expect(all.body.data).toHaveLength(6);
+    const windowed = await api<Array<{ message: string }>>(
+      app,
+      `/api/v1/jobs/${jobId}/logs?limit=2&afterId=${all.body.data![0]!.id}`,
+      { token },
+    );
+    expect(windowed.status).toBe(200);
+    expect(windowed.body.data?.map((l) => l.message)).toEqual(["line 1", "line 2"]);
+    expect((await api(app, `/api/v1/jobs/${jobId}/logs?limit=0`, { token })).status).toBe(400);
+    expect((await api(app, `/api/v1/jobs/${jobId}/logs?limit=501`, { token })).status).toBe(400);
+    await api(app, `/api/v1/jobs/${jobId}`, { method: "DELETE", token });
   });
 
   it("manages schedules", async () => {

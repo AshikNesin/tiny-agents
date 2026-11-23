@@ -54,7 +54,7 @@ export interface IntendedUses {
   card?: JsonObject;
 }
 
-const CARD_TARGET_CHARS = 2000;
+const CARD_TARGET_CHARS = 20_000;
 
 const vaultUse = z.object({
   handle: z.string(),

@@ -124,6 +124,17 @@ describe("self-improve capability", () => {
     expect(applied[0]).toEqual({ instructions: "You are a pirate." });
   });
 
+  it("marks update_instructions replay-unsafe so a resumed call reports interrupted instead of re-appending", () => {
+    const capability = createSelfImproveCapability({
+      read: async () => "",
+      update: async () => ({ status: "updated" }),
+    });
+    expect(capability.extension.tools![0]).toMatchObject({
+      name: "update_instructions",
+      replay: "unsafe",
+    });
+  });
+
   it("reports unattended refusals to the model", async () => {
     const store: InstructionsStore = {
       read: async () => PROMPT,

@@ -67,13 +67,21 @@ export async function revertTo(
   checkpointId: string,
 ): Promise<CodeCheckpoint | undefined> {
   const { worktree, branch, ws } = await threadWorktree(threadId);
-  const target = codeHub()?.resolve(threadId);
-  const outcome = await target?.instance.outcome(target.nativeId).catch(() => undefined);
-  if (outcome?.working) throw Boom.conflict("Stop the agent before reverting its files.");
   const checkpoint = (await checkpointsOf(threadId)).find((c) => c.id === checkpointId);
   if (!checkpoint) throw Boom.notFound("No such checkpoint");
   const thread = { id: threadId, branch, worktree };
-  const before = await takeCheckpoint(ws, thread, "before_revert");
-  await ws.restore(thread.worktree, checkpoint.sha);
-  return before;
+  const working = async () => {
+    const target = codeHub()?.resolve(threadId);
+    const outcome = await target?.instance.outcome(target.nativeId).catch(() => undefined);
+    return outcome?.working === true;
+  };
+  const work = async (): Promise<CodeCheckpoint | undefined> => {
+    if (await working()) throw Boom.conflict("Stop the agent before reverting its files.");
+    const before = await takeCheckpoint(ws, thread, "before_revert");
+    if (await working()) throw Boom.conflict("Stop the agent before reverting its files.");
+    await ws.restore(thread.worktree, checkpoint.sha);
+    return before;
+  };
+  const hub = codeHub();
+  return hub ? hub.serial(`send:${threadId}`, work) : work();
 }

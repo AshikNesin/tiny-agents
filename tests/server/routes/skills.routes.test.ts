@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { eq } from "drizzle-orm";
 import { skillStore } from "../../../apps/web/src/server/api/skills/skills.store";
+import * as skillsService from "../../../apps/web/src/server/api/skills/skills.service";
 import { parseGitHubUrl } from "../../../apps/web/src/server/api/skills/skills.parse";
 import { bots, db, skills } from "../../../apps/web/src/server/db";
 import { api, createTestApp } from "../helpers";
@@ -141,6 +143,39 @@ describe("Skills API", () => {
     expect(parseGitHubUrl("https://github.com/a/b")).toEqual({ owner: "a", repo: "b", dir: "" });
   });
 
+  it("answers the friendly 409, not a raw SqliteError, when two creates of one name race", async () => {
+    const [a, b] = await Promise.allSettled([
+      skillsService.create({
+        name: "racer",
+        description: "racer 1",
+        body: "",
+        files: [],
+        source: "manual",
+      }),
+      skillsService.create({
+        name: "racer",
+        description: "racer 2",
+        body: "",
+        files: [],
+        source: "manual",
+      }),
+    ]);
+    expect(a.status).toBe("fulfilled");
+    if (b.status !== "rejected") throw new Error("the racing create should have lost");
+    expect(b.reason).toMatchObject({ output: { statusCode: 409 } });
+    expect(b.reason.message).toMatch(/A skill named "racer" exists/);
+    expect(await db.select().from(skills).where(eq(skills.name, "racer"))).toHaveLength(1);
+
+    const app = buildApp();
+    const raced = await api(app, "/api/v1/skills", {
+      method: "POST",
+      json: { name: "racer", description: "late" },
+      token,
+    });
+    expect(raced.status).toBe(409);
+    expect(raced.body.error?.message).toMatch(/A skill named "racer" exists/);
+  });
+
   it("updates, reassigns and deletes skills; bots save their own through the adapter", async () => {
     const app = buildApp();
     const bot = await seedBot("901");
@@ -197,5 +232,19 @@ describe("Skills API", () => {
       await skillStore.save(910, { name: "deploy", description: "Deploy", body: "v2" }),
     ).toEqual({ created: false });
     expect((await skillStore.get(910, "deploy"))?.body).toBe("v2");
+  });
+
+  it("saves one skill when two conversations race on a new name", async () => {
+    await seedBot("920");
+    await seedBot("921");
+    const saves = await Promise.allSettled([
+      skillStore.save(920, { name: "shared-note", description: "d1", body: "b1" }),
+      skillStore.save(921, { name: "shared-note", description: "d2", body: "b2" }),
+    ]);
+    expect(saves.filter((r) => r.status === "fulfilled" && r.value.created)).toHaveLength(1);
+    const rejected = saves.find((r) => r.status === "rejected");
+    if (!rejected) throw new Error("one of the racing saves should have lost");
+    expect(String(rejected.reason)).toMatch(/already exists and is not assigned to you/);
+    expect(await db.select().from(skills).where(eq(skills.name, "shared-note"))).toHaveLength(1);
   });
 });

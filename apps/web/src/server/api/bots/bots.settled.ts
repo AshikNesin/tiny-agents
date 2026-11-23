@@ -99,6 +99,6 @@ export function startSettledPipeline(
 
   return () => {
     unsubscribe();
-    memoryCapture?.stop();
+    void memoryCapture?.stop();
   };
 }

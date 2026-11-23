@@ -188,6 +188,31 @@ describe("the sandbox worker locator", () => {
     }
   });
 
+  it("re-ensures the worker and picks up a new token after invalidate()", async () => {
+    fakeInstall();
+    const port = await freePort();
+    const locator = createSandboxClaudeWorker({
+      connection: fakeSandbox(),
+      script: async () => FAKE_WORKER,
+      port,
+    });
+    try {
+      const first = await locator.resolve();
+      run(stopWorkerCommand());
+      rmSync(join(dir, "token"));
+      await new Promise((r) => setTimeout(r, 300));
+      expect((await locator.resolve()).token).toBe(first.token);
+
+      locator.invalidate();
+      const second = await locator.resolve();
+      expect(second.token).not.toBe(first.token);
+      const local = Number(new URL(second.url).port);
+      expect(await echo(local, "fresh")).toBe("fresh");
+    } finally {
+      locator.close();
+    }
+  });
+
   it("reports the Claude login the CLI prints, never more", async () => {
     fakeInstall('{"loggedIn":false}');
     const port = await freePort();
@@ -220,6 +245,7 @@ describe("the engine's worker choice", () => {
     resolve: async () => ({ url: "ws://127.0.0.1:1", token: "t" }),
     prepare: () => {},
     account: async () => ({ state: "installing" as const }),
+    invalidate: () => {},
     close: () => {},
   };
 

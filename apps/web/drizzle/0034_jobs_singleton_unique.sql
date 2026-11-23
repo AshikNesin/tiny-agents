@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX `jobs_singleton_active_idx` ON `jobs` (`name`,`singleton_key`) WHERE state in ('created', 'active') and singleton_key is not null;

@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
-import { storageService } from "@groot/core/storage";
+import { getStorage, setStorageAdapter, storageService } from "@groot/core/storage";
 import { db, uploads } from "../../../../apps/web/src/server/db";
 import {
   cancelExtraction,
@@ -131,6 +131,28 @@ describe("extraction owns extractStatus", () => {
     await extractionIdle();
     expect((await rowOf(row.id))?.extractStatus).toBe("ready");
     expect((await ensureExtracting((await rowOf(row.id))!)).extractStatus).toBe("ready");
+  });
+
+  it("a failed storage delete keeps the row so the blobs are not orphaned", async () => {
+    const row = await seedFile("ready");
+    const real = getStorage();
+    const failing = {
+      ...real,
+      async delete() {
+        throw new Error("disk on fire");
+      },
+    };
+    try {
+      setStorageAdapter(failing);
+      await expect(deleteUpload(row.id)).rejects.toThrow("disk on fire");
+    } finally {
+      setStorageAdapter(real);
+    }
+    expect(await rowOf(row.id)).toBeDefined();
+    await storageService.downloadFile({ filePath: row.storageKey });
+    await deleteUpload(row.id);
+    expect(await rowOf(row.id)).toBeUndefined();
+    await expect(storageService.downloadFile({ filePath: row.storageKey })).rejects.toThrow();
   });
 });
 

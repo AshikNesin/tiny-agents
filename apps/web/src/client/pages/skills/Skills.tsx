@@ -32,7 +32,8 @@ function SkillsList() {
     const q = query.trim().toLowerCase();
     if (!q) return skills;
     return skills.filter(
-      (skill) => skill.name.includes(q) || skill.description.toLowerCase().includes(q),
+      (skill) =>
+        skill.name.toLowerCase().includes(q) || skill.description.toLowerCase().includes(q),
     );
   }, [skills, query]);
 

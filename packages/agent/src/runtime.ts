@@ -561,9 +561,13 @@ export class AgentRuntime {
     ref: ConversationRef,
     taskId: number,
     answers: OwnerAnswer[] | null,
+    options: { answeredBy?: string } = {},
   ): Promise<void> {
     try {
-      await this.#store.harness.commit((tx) => recordAnswers(tx, ref, taskId, answers), ctx);
+      await this.#store.harness.commit(
+        (tx) => recordAnswers(tx, ref, taskId, answers, options.answeredBy),
+        ctx,
+      );
     } catch (error) {
       questionNotPending(error, taskId);
     }

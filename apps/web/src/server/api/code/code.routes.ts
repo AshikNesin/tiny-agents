@@ -65,9 +65,17 @@ function harness(c: AppContext): HarnessInstance {
 }
 
 function thread(c: AppContext): { instance: HarnessInstance; nativeId: string; id: string } {
-  const target = hub().resolve(decodeURIComponent(c.req.param("id") ?? ""));
+  const target = hub().resolve(decodedThreadId(c));
   if (!target) throw Boom.notFound("No harness serves this thread");
   return { ...target, id: threadKey(target.instance.id, target.nativeId) };
+}
+
+function decodedThreadId(c: AppContext): string {
+  try {
+    return decodeURIComponent(c.req.param("id") ?? "");
+  } catch {
+    return "";
+  }
 }
 
 function need<K extends keyof HarnessInstance>(

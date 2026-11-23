@@ -124,6 +124,27 @@ describe("sandbox toolkit (unit, in-memory connection)", () => {
     expect(result.text).toContain("4242");
   });
 
+  it("keeps a confined detached command running as its own unit past the call", async () => {
+    const connection = fakeSandboxConnection({
+      exec: (c) => ({
+        stdout: c.includes("ta-detach-")
+          ? "Running as unit: ta-detach-4242.service"
+          : `ran: ${c.slice(0, 20)}`,
+      }),
+    });
+    const sandbox = createSandboxToolkit({ connection, egressAllowlist: "registry.npmjs.org" });
+    const result = await run(sandbox, "run_command", { command: "npm run build", detached: true });
+    expect(result.isError).toBeUndefined();
+    const sent = connection.execs[0]!.command;
+    expect(sent).toContain("--unit=ta-detach-");
+    expect(sent).not.toContain("--wait");
+    expect(sent).not.toContain("--pipe");
+    expect(sent).not.toContain("RuntimeMaxSec");
+    expect(sent).not.toContain("setsid nohup");
+    expect(sent).toContain("npm run build");
+    expect(result.text).toContain("ta-detach-");
+  });
+
   it("describes a binary file instead of corrupting it", async () => {
     const files = new Map([
       ["/blob.bin", Buffer.from([0xff, 0xfe, 0x00, 0x81])],

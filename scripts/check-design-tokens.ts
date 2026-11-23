@@ -2,8 +2,9 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const ROOT = new URL("..", import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL("../", import.meta.url));
 
 const UI_ROOTS = ["packages/*/src", "packages/*/vendor", "apps/*/src/client"];
 const SRC_DIRS = [...new Set(UI_ROOTS.flatMap((root) => expandRoot(root)))].sort();

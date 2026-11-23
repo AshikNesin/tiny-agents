@@ -1,8 +1,14 @@
 import { describe, expect, it } from "vite-plus/test";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
+import { createHash, generateKeyPairSync, randomBytes } from "node:crypto";
+import { isoCBOR } from "@simplewebauthn/server/helpers";
+import type { RegistrationResponseJSON } from "@simplewebauthn/server";
 import { api, createTestApp, signIn } from "../helpers";
 import { createSoftPasskey } from "../fixtures/passkey";
 import { db, passkeys } from "@groot/core/database";
+import { memoryRateLimitStore } from "@groot/core/rate-limit/store";
+import * as passkeyService from "@groot/core/passkey/passkey.service";
+import { guests } from "../../../apps/web/src/server/db";
 
 const app = createTestApp();
 
@@ -30,6 +36,62 @@ function clientData(challenge: string): string {
   return Buffer.from(
     JSON.stringify({ type: "webauthn.get", challenge, origin: "http://localhost:3000" }),
   ).toString("base64url");
+}
+
+function registrationResponse(
+  challenge: string,
+  credentialId: Uint8Array = randomBytes(16),
+): RegistrationResponseJSON {
+  const { publicKey } = generateKeyPairSync("ec", { namedCurve: "P-256" });
+  const jwk = publicKey.export({ format: "jwk" });
+  const coseKey = isoCBOR.encode(
+    new Map<number, number | Uint8Array>([
+      [1, 2],
+      [3, -7],
+      [-1, 1],
+      [-2, new Uint8Array(Buffer.from(jwk.x!, "base64url"))],
+      [-3, new Uint8Array(Buffer.from(jwk.y!, "base64url"))],
+    ]),
+  );
+  const credId = Buffer.from(credentialId);
+  const authData = Buffer.concat([
+    createHash("sha256").update("localhost").digest(),
+    Buffer.from([0x45]),
+    Buffer.alloc(4),
+    Buffer.alloc(16),
+    Buffer.from([0, credId.length]),
+    credId,
+    coseKey,
+  ]);
+  const attestationObject = Buffer.from(
+    isoCBOR.encode(
+      new Map<string, Uint8Array | string | Map<number, Uint8Array>>([
+        ["fmt", "none"],
+        ["attStmt", new Map()],
+        ["authData", new Uint8Array(authData)],
+      ]),
+    ),
+  );
+  const clientDataJSON = Buffer.from(
+    JSON.stringify({
+      type: "webauthn.create",
+      challenge,
+      origin: "http://localhost:3000",
+      crossOrigin: false,
+    }),
+  );
+  const id = credId.toString("base64url");
+  return {
+    id,
+    rawId: id,
+    type: "public-key",
+    response: {
+      clientDataJSON: clientDataJSON.toString("base64url"),
+      attestationObject: attestationObject.toString("base64url"),
+      transports: ["internal"],
+    },
+    clientExtensionResults: {},
+  };
 }
 
 describe("passkey API", () => {
@@ -276,5 +338,181 @@ describe("passkey API", () => {
         })
       ).status,
     ).toBe(404);
+  });
+
+  it("lets a guest manage only their own passkeys, never the owner's", async () => {
+    const fresh = createTestApp({ rateLimitStore: memoryRateLimitStore() });
+    const owner = await signIn(fresh, { email: "passkey-owner@example.com" });
+    const ownerPasskey = await createSoftPasskey(owner.user.id);
+    const guest = await signIn(fresh, { email: "passkey-guest@example.com" });
+    await db.insert(guests).values({ userId: guest.user.id });
+    const [ownerRow] = await db
+      .select({ id: passkeys.id })
+      .from(passkeys)
+      .where(eq(passkeys.credentialId, ownerPasskey.credentialId));
+
+    const asGuest = <T = unknown>(path: string, init: { method?: string; json?: unknown } = {}) =>
+      api<T>(fresh, path, { ...init, token: guest.token });
+    expect((await asGuest("/api/v1/people/me")).body.data).toEqual({ guest: true });
+    expect((await asGuest("/api/v1/passkey/list")).body.data).toEqual([]);
+    expect((await asGuest(`/api/v1/passkey/${ownerRow!.id}`, { method: "DELETE" })).status).toBe(
+      404,
+    );
+    expect(
+      (
+        await asGuest(`/api/v1/passkey/${ownerRow!.id}`, {
+          method: "PATCH",
+          json: { credentialName: "mine" },
+        })
+      ).status,
+    ).toBe(404);
+    expect(await db.select().from(passkeys).where(eq(passkeys.userId, owner.user.id))).toHaveLength(
+      1,
+    );
+
+    const options = await asGuest<{ challenge: string }>("/api/v1/passkey/register/options", {
+      method: "POST",
+    });
+    expect(options.status).toBe(200);
+    const registered = await asGuest("/api/v1/passkey/register/verify", {
+      method: "POST",
+      json: {
+        response: {
+          id: "guest-cred",
+          rawId: "guest-cred",
+          type: "public-key",
+          response: {
+            clientDataJSON: clientData(options.body.data!.challenge),
+            attestationObject: "AA",
+          },
+          clientExtensionResults: {},
+        },
+      },
+    });
+    expect(registered.status).toBe(400);
+    await storePasskey(guest.user.id, {
+      transports: ["internal"],
+      deviceType: "singleDevice",
+      credentialName: "Guest phone",
+    });
+    expect(
+      (await asGuest<PasskeyRow[]>("/api/v1/passkey/list")).body.data?.map(
+        (row) => row.credentialName,
+      ),
+    ).toEqual(["Guest phone"]);
+    expect(
+      (await api(fresh, "/api/v1/passkey/list", { token: owner.token })).body.data,
+    ).toHaveLength(1);
+  });
+
+  it("answers the same login options whether or not the email has an account", async () => {
+    const fresh = createTestApp({ rateLimitStore: memoryRateLimitStore() });
+    const { user } = await signIn(fresh);
+    await createSoftPasskey(user.id);
+    const options = (email: string) =>
+      api<Record<string, unknown>>(fresh, "/api/v1/passkey/login/options", {
+        method: "POST",
+        json: { email },
+      });
+    const known = await options(user.email);
+    const unknown = await options("nobody-here@example.com");
+    for (const response of [known, unknown]) {
+      expect(response.status).toBe(200);
+      expect(Object.keys(response.body.data!).toSorted()).toEqual([
+        "allowCredentials",
+        "challenge",
+        "rpId",
+        "timeout",
+        "userVerification",
+      ]);
+      expect(response.body.error).toBeUndefined();
+    }
+    expect(known.body.data!.allowCredentials).toHaveLength(1);
+    expect(unknown.body.data!.allowCredentials).toEqual([]);
+    expect(unknown.body.data!.timeout).toBe(known.body.data!.timeout);
+    expect(unknown.body.data!.rpId).toBe(known.body.data!.rpId);
+    expect(unknown.body.data!.userVerification).toBe(known.body.data!.userVerification);
+  });
+
+  it("registers a passkey and says 409, not 500, when the same credential races through", async () => {
+    const { token, user } = await signIn(app);
+    const options = await api<{ challenge: string }>(app, "/api/v1/passkey/register/options", {
+      method: "POST",
+      token,
+    });
+    expect(options.status).toBe(200);
+    const challenge = options.body.data!.challenge;
+    const credentialId = randomBytes(16);
+
+    const first = await api<{ id: number; credentialName: string }>(
+      app,
+      "/api/v1/passkey/register/verify",
+      {
+        method: "POST",
+        json: { response: registrationResponse(challenge, credentialId) },
+        token,
+      },
+    );
+    expect(first.status).toBe(200);
+    expect(first.body.data).toMatchObject({ credentialName: "Security key" });
+
+    const secondOptions = await api<{ challenge: string }>(
+      app,
+      "/api/v1/passkey/register/options",
+      { method: "POST", token },
+    );
+    const second = await api(app, "/api/v1/passkey/register/verify", {
+      method: "POST",
+      json: {
+        response: registrationResponse(secondOptions.body.data!.challenge, credentialId),
+        credentialName: "Second",
+      },
+      token,
+    });
+    expect(second.status).toBe(409);
+    expect(second.body.error?.message).toMatch(/already registered/);
+    expect(
+      await db
+        .select()
+        .from(passkeys)
+        .where(eq(passkeys.credentialId, credentialId.toString("base64url"))),
+    ).toHaveLength(1);
+
+    const racingCredential = randomBytes(16);
+    const racedA = await passkeyService.generateRegistrationOptions({ userId: user.id });
+    const racedB = await passkeyService.generateRegistrationOptions({ userId: user.id });
+    const [won, lost] = await Promise.allSettled([
+      passkeyService.verifyRegistration({
+        userId: user.id,
+        response: registrationResponse(racedA.challenge, racingCredential),
+      }),
+      passkeyService.verifyRegistration({
+        userId: user.id,
+        response: registrationResponse(racedB.challenge, racingCredential),
+      }),
+    ]);
+    expect(won.status).toBe("fulfilled");
+    if (lost.status !== "rejected") throw new Error("the racing registration should have lost");
+    expect(lost.reason).toMatchObject({ output: { statusCode: 409 } });
+  });
+
+  it("says 404, not 500, when a rename loses its race with a delete", async () => {
+    const { user } = await signIn(app);
+    const device = { transports: ["internal"], deviceType: "singleDevice" };
+    await storePasskey(user.id, { ...device, credentialName: "A" });
+    await storePasskey(user.id, { ...device, credentialName: "B" });
+    const [row] = await db
+      .select({ id: passkeys.id })
+      .from(passkeys)
+      .where(and(eq(passkeys.userId, user.id), eq(passkeys.credentialName, "A")));
+
+    const renaming = passkeyService.updatePasskeyName({
+      passkeyId: row!.id,
+      userId: user.id,
+      credentialName: "Renamed",
+    });
+    await db.delete(passkeys).where(eq(passkeys.id, row!.id));
+    await expect(renaming).resolves.toMatchObject({ id: row!.id, credentialName: "Renamed" });
+    expect(await db.select().from(passkeys).where(eq(passkeys.id, row!.id))).toHaveLength(0);
   });
 });

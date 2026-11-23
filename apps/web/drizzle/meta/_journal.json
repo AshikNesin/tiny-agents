@@ -239,6 +239,13 @@
       "when": 1795364413335,
       "tag": "0033_code_drop_unused_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "6",
+      "when": 1795386016131,
+      "tag": "0034_jobs_singleton_unique",
+      "breakpoints": true
     }
   ]
 }

@@ -182,14 +182,26 @@ export function createSandboxToolkit(options: SandboxToolkitOptions = {}): Capab
       const args = raw as RunArgs;
       const timeoutSecs = args.timeout_secs ?? options.defaultTimeoutSecs ?? 120;
       const timeoutMs = timeoutSecs * 1000;
-      const detach = (command: string) =>
+      const detached = (command: string) =>
         `setsid nohup sh -c ${shQuote(command)} > /tmp/ta-detached-$$.log 2>&1 < /dev/null & printf '%s' "$!"`;
-      const shaped = args.detached ? detach(args.command) : args.command;
-      const run = (allow: EgressEntry[] | undefined, secretEnv?: string[], stdin?: string) =>
-        exec(allow ? confinedCommand({ command: shaped, allow, secretEnv, timeoutSecs }) : shaped, {
-          timeoutMs,
-          ...(stdin !== undefined ? { stdin } : {}),
-        });
+      const run = (allow: EgressEntry[] | undefined, secretEnv?: string[], stdin?: string) => {
+        const shaped = args.detached && !allow ? detached(args.command) : args.command;
+        return exec(
+          allow
+            ? confinedCommand({
+                command: shaped,
+                allow,
+                secretEnv,
+                timeoutSecs,
+                detached: args.detached,
+              })
+            : shaped,
+          {
+            timeoutMs,
+            ...(stdin !== undefined ? { stdin } : {}),
+          },
+        );
+      };
       try {
         let result: CommandResult;
         if (args.secrets?.length) {

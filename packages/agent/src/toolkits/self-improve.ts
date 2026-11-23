@@ -48,7 +48,7 @@ export function createSelfImproveCapability(store: InstructionsStore): Capabilit
         }),
       ),
     }),
-    replay: "safe",
+    replay: "unsafe",
     execute: async (args, api) => {
       const result = await store.update(Number(api.conversationId), args);
       if (result.status !== "updated") {

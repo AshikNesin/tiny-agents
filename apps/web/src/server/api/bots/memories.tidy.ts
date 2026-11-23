@@ -79,6 +79,20 @@ async function markTidied(botId: string, at: Date): Promise<void> {
   await db.update(bots).set({ memoryTidiedAt: at }).where(eq(bots.id, botId));
 }
 
+async function changedDuringCall(
+  botId: string,
+  planned: readonly string[],
+  revisions: ReadonlyMap<string, number>,
+): Promise<boolean> {
+  const rows = await db
+    .select({ id: memories.id, updatedAt: memories.updatedAt })
+    .from(memories)
+    .where(eq(memories.botId, botId));
+  return rows.some(
+    (row) => planned.includes(row.id) && row.updatedAt.getTime() !== revisions.get(row.id),
+  );
+}
+
 export async function tidyBotMemories(
   botId: string,
   sideCaller: SideCaller,
@@ -127,6 +141,21 @@ export async function tidyBotMemories(
       "Memory tidy wanted to change over half the memories; skipped",
     );
     await markTidied(bot.id, new Date());
+    return undefined;
+  }
+  const planned = [...merged, ...stale];
+  if (
+    planned.length > 0 &&
+    (await changedDuringCall(
+      bot.id,
+      planned,
+      new Map(rows.map((row) => [row.id, row.updatedAt.getTime()])),
+    ))
+  ) {
+    logger.warn(
+      { botId: bot.id },
+      "Memory tidy skipped its plan; a memory changed during the model call",
+    );
     return undefined;
   }
   const result = await ledger.consolidate(

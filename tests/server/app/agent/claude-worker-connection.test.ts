@@ -330,6 +330,23 @@ describe("worker connection: the socket", () => {
     expect(connection.detail).toBeUndefined();
   });
 
+  it("tells the owner the token was refused on a 401, so it can drop the cached one", async () => {
+    const worker = fakeWorker();
+    worker.refuseWith(401);
+    const refusals: number[] = [];
+    const { after } = open(worker, {
+      onUnauthorized: () => refusals.push(worker.sockets.length),
+    });
+    await settle();
+    expect(refusals).toHaveLength(1);
+    worker.refuseWith(502);
+    await after(1_000);
+    expect(refusals).toHaveLength(1);
+    worker.refuseWith(401);
+    await after(2_000);
+    expect(refusals).toHaveLength(2);
+  });
+
   it("gives up on a worker that never greets", async () => {
     const worker = fakeWorker({ greet: false });
     const { connection, after } = open(worker);
@@ -394,6 +411,19 @@ describe("worker connection: handshake and reboot", () => {
 });
 
 describe("worker connection: resume", () => {
+  it("stops resuming a session once it is untracked", async () => {
+    const worker = fakeWorker();
+    const { connection, after, resumes } = open(worker);
+    connection.track("s1");
+    connection.track("s2");
+    await settle();
+    expect(resumes.map(([id]) => id)).toEqual(["s1", "s2"]);
+    connection.untrack("s1");
+    worker.drop();
+    await after(1_000);
+    expect(resumes.map(([id]) => id)).toEqual(["s1", "s2", "s2"]);
+  });
+
   it("delivers each event once, in order, across a dropped socket", async () => {
     const worker = fakeWorker();
     const { connection, after, payloads } = open(worker);

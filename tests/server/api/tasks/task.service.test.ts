@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { eq } from "drizzle-orm";
+import { db, tasks } from "../../../../apps/web/src/server/db";
 import * as service from "../../../../apps/web/src/server/api/tasks/task.service";
 import { taskStore } from "../../../../apps/web/src/server/api/tasks/task.store";
 import { resetAppTables } from "../../fixtures";
@@ -13,6 +15,16 @@ describe("tasks module", () => {
     expect(again.id).toBe(first.id);
     expect(await service.listTasks()).toHaveLength(1);
     expect((await service.findTask(first.id))?.title).toBe("Ship it");
+  });
+
+  it("returns the same task when two creates race on one source key", async () => {
+    const [a, b] = await Promise.all([
+      service.createTask({ title: "Race A", sourceKey: "race-key" }),
+      service.createTask({ title: "Race B", sourceKey: "race-key" }),
+    ]);
+    expect(b.id).toBe(a.id);
+    const rows = await db.select().from(tasks).where(eq(tasks.sourceKey, "race-key"));
+    expect(rows).toHaveLength(1);
   });
 
   it("gives done its completion time and reopening clears it, whichever side writes", async () => {

@@ -290,11 +290,20 @@ const alive = (pid) => {
   }
 };
 
+const ours = (pid) => {
+  try {
+    return readFileSync(`/proc/${pid}/cmdline`, "utf8").includes("montage-faux.mjs");
+  } catch {
+    return false;
+  }
+};
+
 async function stopOurs() {
   const file = path.join(STATE, "run.json");
   if (!existsSync(file)) return;
   const { pgid } = JSON.parse(readFileSync(file, "utf8"));
   if (pgid && alive(pgid)) {
+    if (!ours(pgid)) return log(`pid ${pgid} is not our server; not killing it`);
     log(`stopping our instance (process group ${pgid})`);
     try {
       process.kill(-pgid, "SIGTERM");

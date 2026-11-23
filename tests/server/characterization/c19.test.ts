@@ -25,7 +25,7 @@ afterEach(() => {
 });
 
 describe("C19: the Claude worker's books", () => {
-  it("keep every bot session, its event log and its tool results after the process is evicted", async () => {
+  it("drops a dead session's event log and tool results once it has been idle past the sweep", async () => {
     const factory: QueryFactory = async (ctx) => {
       for await (const turn of ctx.turns) {
         ctx.publish({ type: "turn_end", turnId: turn.turnId, stopReason: "end_turn" });
@@ -33,6 +33,7 @@ describe("C19: the Claude worker's books", () => {
     };
     const book = new SessionBook(factory, { ...DEFAULT_TIMINGS, idleEvictMs: 1_000 });
     const ids = ["s1", "s2", "s3"];
+    const held = new Map<string, ReturnType<typeof book.get>>();
     for (const [index, id] of ids.entries()) {
       const session = await book.runTurn(
         { sessionId: id, model: "claude-sonnet-4-6", tools: [] },
@@ -40,17 +41,57 @@ describe("C19: the Claude worker's books", () => {
         index * 5_000,
       );
       expect(session.settleTool(`toolu_${id}`, { content: "done" })).toBe(true);
+      held.set(id, session);
     }
 
     book.sweep(60 * 60_000);
     expect(book.liveProcesses()).toBe(0);
 
-    for (const id of ids) {
-      const session = book.get(id);
-      expect(session?.alive).toBe(false);
-      expect(session?.log.replay(0).length).toBeGreaterThan(0);
-      expect(book.settle(id, `toolu_${id}`, { content: "again" })).toBe(false);
-    }
+    expect(held.get("s1")?.alive).toBe(false);
+    expect(book.get("s1")).toBeUndefined();
+    expect(book.get("s2")).toBeUndefined();
+    expect(book.get("s3")).toBeUndefined();
+    expect(book.settle("s3", "toolu_s3", { content: "again" })).toBe(false);
+    const revived = book.open(
+      { sessionId: "s1", model: "claude-sonnet-4-6", tools: [] },
+      60 * 60_000,
+    );
+    expect(revived).not.toBe(held.get("s1"));
+  });
+
+  it("keeps a busy session through the sweep, and a live one that is still inside the idle window", async () => {
+    const gates = new Map<string, () => void>();
+    const factory: QueryFactory = async (ctx) => {
+      for await (const turn of ctx.turns) {
+        ctx.publish({ type: "text", turnId: turn.turnId, text: "working" });
+        await new Promise<void>((resolve) => gates.set(turn.turnId, resolve));
+        ctx.publish({ type: "turn_end", turnId: turn.turnId, stopReason: "end_turn" });
+      }
+    };
+    const book = new SessionBook(factory, {
+      ...DEFAULT_TIMINGS,
+      idleEvictMs: 1_000,
+      maxRunningTurns: 2,
+    });
+    const open = { sessionId: "s", model: "claude-sonnet-4-6", tools: [] as const };
+    const running = book.runTurn(open, { turnId: "t1", text: "go" }, 0);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    const idle = book.runTurn(
+      { ...open, sessionId: "resting" },
+      { turnId: "t2", text: "go" },
+      1_200,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    gates.get("t2")!();
+    await idle;
+    book.sweep(1_500);
+    expect(book.get("s")).toBeDefined();
+    expect(book.get("resting")).toBeDefined();
+    gates.get("t1")!();
+    await running;
+    book.sweep(3_000);
+    expect(book.get("s")).toBeUndefined();
+    expect(book.get("resting")).toBeUndefined();
   });
 
   it("keep every coding session after it is closed", () => {

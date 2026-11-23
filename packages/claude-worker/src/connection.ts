@@ -61,6 +61,7 @@ export interface WorkerConnectionOptions {
   onMessage(frame: WorkerFrame): void;
   onConnected?(rebooted: boolean, hello: unknown): void;
   onState?(state: WorkerConnectionState, detail: string | undefined): void;
+  onUnauthorized?: () => void;
   onResume?(sessionId: string, result: ResumeResult): void;
   onError?(message: string): void;
   timings?: Partial<ConnectionTimings>;
@@ -74,6 +75,7 @@ export interface WorkerConnection {
   send(message: object): boolean;
   request<T = unknown>(body: { type: string }, options?: { timeoutMs?: number }): Promise<T>;
   track(sessionId: string): void;
+  untrack(sessionId: string): void;
   close(): void;
 }
 
@@ -217,6 +219,10 @@ class Connection implements WorkerConnection {
     this.resume(sessionId);
   }
 
+  untrack(sessionId: string): void {
+    this.cursors.delete(sessionId);
+  }
+
   close(): void {
     if (this.closed) return;
     this.closed = true;
@@ -266,6 +272,7 @@ class Connection implements WorkerConnection {
     socket.on("unexpected-response", (_request: unknown, response: unknown) => {
       if (!current()) return;
       const status = (response as { statusCode?: number } | undefined)?.statusCode;
+      if (status === 401) this.options.onUnauthorized?.();
       this.failure ??=
         status === 401
           ? "The Claude worker refused the token."

@@ -6,6 +6,7 @@ import { getBreadcrumbs, logger } from "../logger";
 import { getRequestContext } from "../context";
 import { isSessionInvalid } from "../session";
 import { fail } from "../utils/api-response.utils";
+import { redactSecretPath } from "../utils/redact-path";
 import type { AppEnv } from "../types";
 
 export const errorHandler: ErrorHandler<AppEnv> = (error, c) => {
@@ -13,7 +14,8 @@ export const errorHandler: ErrorHandler<AppEnv> = (error, c) => {
   const context = getRequestContext();
   const duration = context ? `${Date.now() - context.startTime}ms` : undefined;
   const http = toHttpError(error);
-  const endpoint = `${c.req.method} ${c.req.path}`;
+  const path = redactSecretPath(c.req.path);
+  const endpoint = `${c.req.method} ${path}`;
   const operational = http?.isOperational ?? false;
 
   const errorContext = {
@@ -25,7 +27,7 @@ export const errorHandler: ErrorHandler<AppEnv> = (error, c) => {
       ...(operational ? {} : { stack: error.stack }),
       isOperational: operational,
     },
-    request: { method: c.req.method, path: c.req.path, userAgent: c.req.header("user-agent") },
+    request: { method: c.req.method, path, userAgent: c.req.header("user-agent") },
     performance: duration ? { requestDuration: duration } : undefined,
     breadcrumbs: getBreadcrumbs(),
   };
@@ -56,9 +58,10 @@ export const errorHandler: ErrorHandler<AppEnv> = (error, c) => {
 };
 
 export const notFoundHandler: NotFoundHandler<AppEnv> = (c) => {
+  const path = redactSecretPath(c.req.path);
   (c.get("logger") ?? logger).warn(
-    { type: "not_found_error", method: c.req.method, path: c.req.path },
-    `Route not found: ${c.req.method} ${c.req.path}`,
+    { type: "not_found_error", method: c.req.method, path },
+    `Route not found: ${c.req.method} ${path}`,
   );
   return fail(
     c,

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { SecretValue, type VaultKind } from "@tiny-agents/agent";
 import { logger } from "@groot/core/logger";
+import { appEnv } from "../../../env";
 import { db, vaultItems, vaultValues, type VaultValue } from "../../../db";
 import {
   hasSecretsKey,
@@ -9,6 +10,7 @@ import {
   openJson,
   SecretLockedError,
   sealJson,
+  secretKeyProblem,
   type SecretBinding,
 } from "../../../crypto/secret-box";
 import { parseTotp, totpCode } from "../vault.totp";
@@ -84,6 +86,8 @@ function openRow(row: VaultValue, links: PolicyColumns[]): StoredItem {
 
 function requireKey(): void {
   if (!hasSecretsKey()) throw new BackendError("unconfigured", "SECRETS_KEY is not set.");
+  const problem = secretKeyProblem(appEnv().SECRETS_KEY);
+  if (problem) throw new BackendError("unconfigured", problem);
 }
 
 function rowOf(tx: DbTx, id: string): VaultValue {

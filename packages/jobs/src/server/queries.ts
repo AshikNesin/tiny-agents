@@ -4,6 +4,7 @@ import { Boom } from "@groot/core/errors";
 import { JOB_STATES, VALID_JOB_STATES, isValidJobState, type JobState } from "../lifecycle";
 import { jobs, jobLogs, jobSchedules, type JobLog, type JobSchedule } from "./schema";
 import { deleteJobsWhere } from "./transitions";
+import { MAX_JOB_LOGS } from "./validation";
 import { getRegisteredHandlers } from "./worker";
 import type { GetJobsOptions, JobQueryResponse, JobStats } from "./types";
 
@@ -76,12 +77,17 @@ export async function getScheduledJobs(): Promise<JobSchedule[]> {
   return db.select().from(jobSchedules).orderBy(asc(jobSchedules.name));
 }
 
-export async function getJobLogs(options: { jobId: string; afterId?: number }): Promise<JobLog[]> {
+export async function getJobLogs(options: {
+  jobId: string;
+  afterId?: number;
+  limit?: number;
+}): Promise<JobLog[]> {
   const filters = [eq(jobLogs.jobId, options.jobId)];
   if (options.afterId) filters.push(gt(jobLogs.id, options.afterId));
   return db
     .select()
     .from(jobLogs)
     .where(and(...filters))
-    .orderBy(asc(jobLogs.id));
+    .orderBy(asc(jobLogs.id))
+    .limit(options.limit ?? MAX_JOB_LOGS);
 }

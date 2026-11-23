@@ -8,9 +8,13 @@ import {
 } from "./encoding.utils";
 
 const ALGORITHM = "pbkdf2-sha256";
-const ITERATIONS = 100_000;
+const ITERATIONS = 600_000;
 const SALT_BYTES = 16;
 const KEY_BITS = 256;
+
+export function dummyPasswordHash(): string {
+  return `${ALGORITHM}$${ITERATIONS}$${"A".repeat(22)}$${"A".repeat(43)}`;
+}
 
 async function derive(password: string, salt: Bytes, iterations: number): Promise<Bytes> {
   const key = await crypto.subtle.importKey("raw", utf8Encode(password), "PBKDF2", false, [

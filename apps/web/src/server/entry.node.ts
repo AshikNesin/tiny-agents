@@ -9,6 +9,7 @@ import { bootstrap } from "@groot/core/bootstrap";
 import { env } from "@groot/core/env";
 import { config } from "@groot/core/config";
 import { logger, scrubValue } from "@groot/core/logger";
+import { redactSecretPath } from "@groot/core/utils/redact-path";
 import { markShuttingDown } from "@groot/core/app";
 import { memoryRateLimitStore } from "@groot/core/rate-limit/store";
 import { peerClientAddress } from "@groot/core/utils/client-ip";
@@ -85,6 +86,7 @@ if (config.sentry.dsn) {
     integrations: [Sentry.zodErrorsIntegration()],
     beforeSend(event) {
       if (event.request?.url?.includes("/vault/")) delete event.request.data;
+      if (event.request?.url) event.request.url = redactSecretPath(event.request.url);
       return scrubValue(event);
     },
     beforeBreadcrumb: (breadcrumb) => scrubValue(breadcrumb),

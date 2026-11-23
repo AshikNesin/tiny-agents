@@ -51,12 +51,6 @@ export async function findTask(id: string): Promise<TaskRow | undefined> {
 }
 
 export async function createTask(input: NewTask): Promise<TaskRow> {
-  if (input.sourceKey) {
-    const existing = await db.query.tasks.findFirst({
-      where: eq(tasks.sourceKey, input.sourceKey),
-    });
-    if (existing) return toRow(existing);
-  }
   const status = input.status ?? "todo";
   const [row] = await db
     .insert(tasks)
@@ -69,8 +63,16 @@ export async function createTask(input: NewTask): Promise<TaskRow> {
       completedAt: status === "done" ? new Date() : null,
       ...(input.sourceKey ? { sourceKey: input.sourceKey } : {}),
     })
+    .onConflictDoNothing(input.sourceKey ? { target: tasks.sourceKey } : undefined)
     .returning();
-  return toRow(row!);
+  if (row) return toRow(row);
+  if (input.sourceKey) {
+    const existing = await db.query.tasks.findFirst({
+      where: eq(tasks.sourceKey, input.sourceKey),
+    });
+    if (existing) return toRow(existing);
+  }
+  throw new Error("The task could not be created");
 }
 
 function completedAtOnMoveTo(status: TaskStatus) {

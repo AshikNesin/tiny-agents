@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { configureLogger, getLoggerSettings, type LogRecord } from "@groot/core/logger";
 import type { FinishedReply } from "@tiny-agents/agent";
 import {
   bots,
@@ -185,6 +186,41 @@ describe("webhook routines", () => {
     });
     expect((await deliver(app, path, "{}")).status).toBe(404);
     expect(await db.$count(routineEvents)).toBe(0);
+  });
+
+  it("never writes the hook token to the request log, on any hook route's outcome", async () => {
+    const { path } = await seedWebhookRoutine(app);
+    const token = path.split("/").pop()!;
+    const original = { ...getLoggerSettings() };
+    const records: LogRecord[] = [];
+    configureLogger({ level: "trace", write: (_level, _line, record) => records.push(record) });
+    try {
+      expect((await deliver(app, path, "{}")).status).toBe(202);
+      expect((await app.request(path, { method: "GET" })).status).toBe(401);
+      expect((await deliver(app, "/api/v1/routines/hooks/unknown-token", "{}")).status).toBe(404);
+      expect((await deliver(app, path, "x".repeat(300_000))).status).toBe(413);
+      expect(records.length).toBeGreaterThan(0);
+      for (const record of records) {
+        expect(JSON.stringify(record)).not.toContain(token);
+        expect(JSON.stringify(record)).not.toContain("unknown-token");
+      }
+      const requestLogs = records.filter((record) => record.statusCode !== undefined);
+      expect(requestLogs).toHaveLength(4);
+      for (const record of requestLogs) {
+        expect(record.url).toBe("/api/v1/routines/hooks/[redacted]");
+        expect(record.msg).toContain("/api/v1/routines/hooks/[redacted]");
+        expect(record.msg).not.toContain(token);
+      }
+      const operational = records.filter((record) => record.type === "application_error");
+      expect(operational.length).toBeGreaterThanOrEqual(2);
+      for (const record of operational) {
+        expect((record.request as { path?: string }).path).toBe(
+          "/api/v1/routines/hooks/[redacted]",
+        );
+      }
+    } finally {
+      configureLogger(original);
+    }
   });
 
   it("only a webhook routine gets a URL", async () => {

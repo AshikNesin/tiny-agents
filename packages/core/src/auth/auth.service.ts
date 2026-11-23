@@ -2,12 +2,17 @@ import { eq } from "drizzle-orm";
 import { db, users, type User } from "../database";
 import { Boom } from "../errors";
 import { issueSession } from "../session/token";
-import { hashPassword, needsRehash, verifyPassword } from "../utils/password.utils";
+import {
+  dummyPasswordHash,
+  hashPassword,
+  needsRehash,
+  verifyPassword,
+} from "../utils/password.utils";
 import type { CreateUserDTO, LoginDTO, SignInResponse } from "./auth.schema";
 
 export type PublicUser = Pick<User, "id" | "email" | "name" | "createdAt">;
 
-const DUMMY_HASH = `pbkdf2-sha256$100000$${"A".repeat(22)}$${"A".repeat(43)}`;
+const DUMMY_HASH = dummyPasswordHash();
 
 const publicColumns = {
   id: users.id,

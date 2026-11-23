@@ -39,9 +39,12 @@ export interface BrowserToolkitOptions extends BrowserSessionsOptions {
   resolveTarget?: (conversationId: number) => BrowserTarget | Promise<BrowserTarget>;
   vault?: VaultBroker;
   ownerWaits?: WaitTracker;
+  baselineLimit?: number;
 }
 
 const READ_LIMIT = 20_000;
+
+const BASELINE_LIMIT = 512;
 
 const landed = (head: string, url: string, title?: string) =>
   `${head}${url}${title ? ` · ${title}` : ""}`;
@@ -71,9 +74,19 @@ export function createBrowserToolkit(options: BrowserToolkitOptions = {}): Capab
   const describe = describeBrowserError;
 
   const baselines = new Map<string, { url: string; tree: string }>();
+  const baselineLimit = options.baselineLimit ?? BASELINE_LIMIT;
   const baselineKey = async (conversationId: number) => {
     const target = await targetOf(conversationId);
     return `${target.profile}\u0000${target.tab}`;
+  };
+  const rememberBaseline = (key: string, value: { url: string; tree: string }) => {
+    baselines.delete(key);
+    baselines.set(key, value);
+    while (baselines.size > baselineLimit) {
+      const oldest = baselines.keys().next().value;
+      if (oldest === undefined) break;
+      baselines.delete(oldest);
+    }
   };
 
   async function pageAfter(conversationId: number, session: BrowserSession, hide?: string) {
@@ -86,7 +99,7 @@ export function createBrowserToolkit(options: BrowserToolkitOptions = {}): Capab
     const key = await baselineKey(conversationId);
     const url = session.url();
     const before = baselines.get(key);
-    baselines.set(key, { url, tree });
+    rememberBaseline(key, { url, tree });
     const say = (text: string) => (hide ? text.replaceAll(hide, "[typed text]") : text);
     if (!before || before.url !== url) {
       const head = pageWindow(
@@ -183,7 +196,7 @@ export function createBrowserToolkit(options: BrowserToolkitOptions = {}): Capab
             const tree = await s.session.snapshot(args.ref);
             if (!args.ref) {
               const key = await baselineKey(Number(api.conversationId));
-              baselines.set(key, { url: s.session.url(), tree });
+              rememberBaseline(key, { url: s.session.url(), tree });
             }
             if (args.query) {
               const found = filterSnapshot(tree, args.query);

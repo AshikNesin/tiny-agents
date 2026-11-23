@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vite-plus/test";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@groot/core/database";
 import { config } from "@groot/core/config";
 import {
@@ -115,6 +115,21 @@ describe("queue + tick", () => {
     await runTick();
     const third = await addJob("single", { a: 3 }, { singletonKey: "k" });
     expect(third).not.toBe(first);
+  });
+
+  it("enqueues one job when two callers race on the same singleton key", async () => {
+    registerJobHandler("single", () => undefined);
+    const [a, b] = await Promise.all([
+      addJob("single", { a: 1 }, { singletonKey: "race" }),
+      addJob("single", { a: 2 }, { singletonKey: "race" }),
+    ]);
+    expect(b).toBe(a);
+    const rows = await db
+      .select()
+      .from(jobs)
+      .where(and(eq(jobs.name, "single"), eq(jobs.singletonKey, "race")));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ singletonKey: "race", state: "created" });
   });
 
   it("rejects an empty job name; route words are fine as names", async () => {

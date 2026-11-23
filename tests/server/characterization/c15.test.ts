@@ -109,47 +109,48 @@ async function interruptAndResume(options: {
 }
 
 describe("C15: interrupted tool calls on resume", () => {
-  it("re-runs update_instructions: an append applies twice", { timeout: 30_000 }, async () => {
-    const death = dieOnce();
-    const real = createInstructionsStore(() => ({
-      readChat: async () => ({ messages: [{ role: "user", text: "do it" }] }) as never,
-    }));
-    const capability = () =>
-      createSelfImproveCapability({
-        read: real.read,
-        update: async (id, input) => {
-          const result = await real.update(id, input);
-          await death.after();
-          return result;
+  it(
+    "reports update_instructions as interrupted: an append never applies twice",
+    { timeout: 30_000 },
+    async () => {
+      const death = dieOnce();
+      const real = createInstructionsStore(() => ({
+        readChat: async () => ({ messages: [{ role: "user", text: "do it" }] }) as never,
+      }));
+      const capability = () =>
+        createSelfImproveCapability({
+          read: real.read,
+          update: async (id, input) => {
+            const result = await real.update(id, input);
+            await death.after();
+            return result;
+          },
+        });
+      expect(capability().extension.tools?.[0]).toMatchObject({
+        name: "update_instructions",
+        replay: "unsafe",
+      });
+
+      let botId = "";
+      const result = await interruptAndResume({
+        capability,
+        tool: "update_instructions",
+        args: { append: "Sign off with a haiku." },
+        death,
+        conversationId: async (ref) => {
+          botId = (await seedBot({ conversationId: String(ref), systemPrompt: "Be kind." })).id;
         },
       });
-    expect(capability().extension.tools?.[0]).toMatchObject({
-      name: "update_instructions",
-      replay: "safe",
-    });
-
-    let botId = "";
-    const result = await interruptAndResume({
-      capability,
-      tool: "update_instructions",
-      args: { append: "Sign off with a haiku." },
-      death,
-      conversationId: async (ref) => {
-        botId = (await seedBot({ conversationId: String(ref), systemPrompt: "Be kind." })).id;
-      },
-    });
-    expect(death.effects()).toBe(2);
-    const bot = await db.query.bots.findFirst({ where: eq(bots.id, botId) });
-    expect(bot?.systemPrompt).toBe("Be kind.\n\nSign off with a haiku.\n\nSign off with a haiku.");
-    const revisions = await db.query.promptRevisions.findMany({
-      where: eq(promptRevisions.botId, botId),
-    });
-    expect(revisions.map((r) => r.prompt)).toEqual([
-      "Be kind.\n\nSign off with a haiku.",
-      "Be kind.\n\nSign off with a haiku.\n\nSign off with a haiku.",
-    ]);
-    expect(result).toContain("Instructions updated.");
-  });
+      expect(death.effects()).toBe(1);
+      const bot = await db.query.bots.findFirst({ where: eq(bots.id, botId) });
+      expect(bot?.systemPrompt).toBe("Be kind.\n\nSign off with a haiku.");
+      const revisions = await db.query.promptRevisions.findMany({
+        where: eq(promptRevisions.botId, botId),
+      });
+      expect(revisions.map((r) => r.prompt)).toEqual(["Be kind.\n\nSign off with a haiku."]);
+      expect(result).toContain("was interrupted by a restart");
+    },
+  );
 
   it(
     "re-runs run_routine_now: a second manual run is dispatched",

@@ -153,7 +153,7 @@ router.post("/bots/:id/messages", async (c) => {
 router.delete("/bots/:id/messages/:requestId", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
   const requestId = parseStringParam(c.req.param("requestId"), "requestId");
-  return ok(c, await chatsService.withdrawMessage(id, { requestId }));
+  return ok(c, await chatsService.withdrawMessage(id, { requestId }, c.get("viewer")));
 });
 
 router.post("/bots/:id/abort", async (c) => {
@@ -216,7 +216,12 @@ router.post("/bots/:id/questions/:taskId", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
   const taskId = parseTaskId(c.req.param("taskId"));
   const payload = await parseBody(c, answerQuestionsSchema);
-  await chatsService.answerQuestions(id, { taskId, answers: payload.answers ?? null });
+  await chatsService.answerQuestions(
+    id,
+    { taskId, answers: payload.answers ?? null },
+    undefined,
+    c.get("viewer"),
+  );
   return ok(c, payload.answers ? { answered: true } : { dismissed: true });
 });
 

@@ -37,7 +37,7 @@ export function captureWindow(
   botName: string,
 ): CaptureWindow {
   const since = watermark ? watermark.getTime() : 0;
-  const entries: { line: string; ownerBytes?: number }[] = [];
+  const entries: { line: string; at: number; ownerBytes?: number }[] = [];
   let latestOwnerAt = since;
   let ownerExchange = false;
   for (const m of messages) {
@@ -49,29 +49,35 @@ export function captureWindow(
     if (m.role === "user") {
       entries.push({
         line: `Owner: ${text}`,
+        at: m.createdAt,
         ownerBytes: Buffer.byteLength(text, "utf8"),
       });
       latestOwnerAt = Math.max(latestOwnerAt, m.createdAt);
     } else if (m.role === "assistant" && m.status !== "error") {
       entries.push({
         line: `${botName}: ${text.slice(0, ASSISTANT_CONTEXT_CHARS)}`,
+        at: m.createdAt,
       });
     }
   }
   const owned = entries.some((entry) => entry.ownerBytes !== undefined);
   const kept: typeof entries = [];
   let size = 0;
-  for (let i = entries.length - 1; i >= 0; i--) {
-    size += entries[i].line.length + 1;
-    if (size > MEMORY_CAPTURE_CHAR_CAP && kept.length > 0) break;
-    kept.unshift(entries[i]);
+  let capped = false;
+  for (const entry of entries) {
+    size += entry.line.length + 1;
+    if (size > MEMORY_CAPTURE_CHAR_CAP && kept.length > 0) {
+      capped = true;
+      break;
+    }
+    kept.push(entry);
   }
   const owner = kept.filter((entry) => entry.ownerBytes !== undefined);
   return {
     lines: kept.map((entry) => entry.line),
     turns: owner.length,
     ownerBytes: owner.reduce((sum, entry) => sum + (entry.ownerBytes ?? 0), 0),
-    through: owned ? new Date(latestOwnerAt) : null,
+    through: owned ? new Date(capped ? kept[kept.length - 1].at : latestOwnerAt) : null,
   };
 }
 

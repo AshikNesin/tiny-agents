@@ -27,7 +27,8 @@ import type {
 } from "../../../shared/api/connections";
 import { parseDisabledTools, parseTools } from "../bots/bot-toolkits";
 import { createId } from "@groot/core/utils/id.utils";
-import { hasSecretsKey } from "../../crypto/secret-box";
+import { appEnv } from "../../env";
+import { hasSecretsKey, secretKeyProblem } from "../../crypto/secret-box";
 import { deleteOwnHeaderSecret, sealOAuthState, writeOwnHeaderSecret } from "./connection-secrets";
 import { vaultItemsChanged } from "../vault/vault.admin.service";
 import type {
@@ -91,6 +92,8 @@ function requireSecretsKey(): void {
   if (!hasSecretsKey()) {
     throw Boom.badRequest("Set SECRETS_KEY on the server before adding a connection with auth.");
   }
+  const problem = secretKeyProblem(appEnv().SECRETS_KEY);
+  if (problem) throw Boom.badRequest(problem);
 }
 
 async function uniqueSlug(name: string): Promise<string> {

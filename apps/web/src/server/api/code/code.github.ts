@@ -49,6 +49,26 @@ interface GitHubSettings {
 
 const settingsKv = () => createNamespaceKv("CODE_GITHUB");
 
+function createSerialLock() {
+  let tail: Promise<unknown> = Promise.resolve();
+  return async <T>(work: () => Promise<T>): Promise<T> => {
+    const previous = tail;
+    let settled!: () => void;
+    const done = new Promise<void>((resolve) => {
+      settled = resolve;
+    });
+    tail = done;
+    await previous;
+    try {
+      return await work();
+    } finally {
+      settled();
+    }
+  };
+}
+
+const settingsWrites = createSerialLock();
+
 async function githubSettings(): Promise<GitHubSettings> {
   return (await settingsKv().get<GitHubSettings>("settings")) ?? {};
 }
@@ -190,27 +210,29 @@ export async function githubStatus(): Promise<GitHubStatusView> {
 }
 
 export async function setGitHubToken(token: string | null): Promise<void> {
-  const kv = settingsKv();
-  const before = await githubSettings();
-  if (token) {
-    const row = await createAppCredential({
-      handle: `code-github-${randomBytes(3).toString("hex")}`,
-      label: "Code: GitHub token",
-      value: token,
-      hosts: ["api.github.com", "github.com"],
-      inject: { as: "header", name: "Authorization", format: "Bearer {value}" },
-      tools: ["github"],
-    });
-    await kv.set("settings", { ...before, tokenHandle: row.handle });
-  } else {
-    await kv.set("settings", { ...before, tokenHandle: undefined });
-  }
-  if (before.tokenHandle) {
-    const old = await db.query.vaultItems.findFirst({
-      where: eq(vaultItems.handle, before.tokenHandle),
-    });
-    if (old) await deleteItemRow(old, { purge: true });
-  }
+  await settingsWrites(async () => {
+    const kv = settingsKv();
+    const before = await githubSettings();
+    if (token) {
+      const row = await createAppCredential({
+        handle: `code-github-${randomBytes(3).toString("hex")}`,
+        label: "Code: GitHub token",
+        value: token,
+        hosts: ["api.github.com", "github.com"],
+        inject: { as: "header", name: "Authorization", format: "Bearer {value}" },
+        tools: ["github"],
+      });
+      await kv.set("settings", { ...before, tokenHandle: row.handle });
+    } else {
+      await kv.set("settings", { ...before, tokenHandle: undefined });
+    }
+    if (before.tokenHandle) {
+      const old = await db.query.vaultItems.findFirst({
+        where: eq(vaultItems.handle, before.tokenHandle),
+      });
+      if (old) await deleteItemRow(old, { purge: true });
+    }
+  });
 }
 
 async function setGitHubApp(
@@ -222,42 +244,52 @@ async function setGitHubApp(
     webhookSecret: string | null;
   } | null,
 ): Promise<void> {
-  const kv = settingsKv();
-  const before = await githubSettings();
-  if (input) {
-    const suffix = randomBytes(3).toString("hex");
-    const store = (name: string, label: string, value: string) =>
-      createAppCredential({
-        handle: `code-github-app-${name}-${suffix}`,
-        label,
-        value,
-        hosts: ["api.github.com", "github.com"],
-        inject: { as: "header", name: "Authorization", format: "Bearer {value}" },
-        tools: ["github"],
+  await settingsWrites(async () => {
+    const kv = settingsKv();
+    const before = await githubSettings();
+    if (input) {
+      const suffix = randomBytes(3).toString("hex");
+      const store = (name: string, label: string, value: string) =>
+        createAppCredential({
+          handle: `code-github-app-${name}-${suffix}`,
+          label,
+          value,
+          hosts: ["api.github.com", "github.com"],
+          inject: { as: "header", name: "Authorization", format: "Bearer {value}" },
+          tools: ["github"],
+        });
+      const key = await store(
+        "key",
+        `Code: GitHub App ${input.name} private key`,
+        input.privateKey,
+      );
+      const secret = input.webhookSecret
+        ? await store(
+            "webhook",
+            `Code: GitHub App ${input.name} webhook secret`,
+            input.webhookSecret,
+          )
+        : null;
+      await kv.set("settings", {
+        ...before,
+        app: {
+          appId: input.appId,
+          slug: input.slug,
+          name: input.name,
+          keyHandle: key.handle,
+          webhookSecretHandle: secret?.handle ?? null,
+        },
       });
-    const key = await store("key", `Code: GitHub App ${input.name} private key`, input.privateKey);
-    const secret = input.webhookSecret
-      ? await store("webhook", `Code: GitHub App ${input.name} webhook secret`, input.webhookSecret)
-      : null;
-    await kv.set("settings", {
-      ...before,
-      app: {
-        appId: input.appId,
-        slug: input.slug,
-        name: input.name,
-        keyHandle: key.handle,
-        webhookSecretHandle: secret?.handle ?? null,
-      },
-    });
-  } else {
-    await kv.set("settings", { ...before, app: undefined });
-  }
-  app().codeGitHubApp = undefined;
-  for (const handle of [before.app?.keyHandle, before.app?.webhookSecretHandle]) {
-    if (!handle) continue;
-    const old = await db.query.vaultItems.findFirst({ where: eq(vaultItems.handle, handle) });
-    if (old) await deleteItemRow(old, { purge: true });
-  }
+    } else {
+      await kv.set("settings", { ...before, app: undefined });
+    }
+    app().codeGitHubApp = undefined;
+    for (const handle of [before.app?.keyHandle, before.app?.webhookSecretHandle]) {
+      if (!handle) continue;
+      const old = await db.query.vaultItems.findFirst({ where: eq(vaultItems.handle, handle) });
+      if (old) await deleteItemRow(old, { purge: true });
+    }
+  });
 }
 
 export async function disconnectGitHubApp(): Promise<void> {
