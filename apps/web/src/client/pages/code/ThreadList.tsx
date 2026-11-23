@@ -1,14 +1,33 @@
-import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { ChevronRight, CircleAlert, Plus, Settings } from "lucide-react";
+import { useMemo, useState, type ReactNode } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import {
+  Archive,
+  ArchiveRestore,
+  ChevronRight,
+  CircleAlert,
+  GitPullRequest,
+  Plus,
+  Settings,
+  Trash2,
+} from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@groot/ui/lib/utils";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@groot/ui/context-menu";
+import { useConfirm } from "@groot/ui/primitives";
+import { errorMessage } from "../../lib/errors";
 import { Spinner } from "../../components/ui/spinner";
 import { SidebarTop } from "../../components/shell/ModeSwitch";
 import { codeApi, threadPath, type HarnessInfo, type ThreadSummary } from "../../lib/code/api";
 import { statusSections, type StatusSection } from "../../lib/code/list";
 import type { ProjectView } from "../../../shared/api/code";
 import { useResource } from "../../queries/resource";
-import { PullChip } from "./controls";
+import { PullChip, useArchive } from "./controls";
 import { Kbd, useKeyCommands } from "../../components/keys";
 import { ReviewList } from "./ReviewList";
 
@@ -25,50 +44,120 @@ function metaOf(row: ThreadSummary): string {
   return row.offline ? "offline" : "";
 }
 
+function ThreadMenu({
+  row,
+  active,
+  harness,
+  children,
+}: {
+  row: ThreadSummary;
+  active: boolean;
+  harness?: HarnessInfo;
+  children: ReactNode;
+}) {
+  const navigate = useNavigate();
+  const confirm = useConfirm();
+  const archive = useArchive();
+  const can = harness?.capabilities.threads;
+  const title = row.title || "Untitled";
+  const remove = async () => {
+    const yes = await confirm({
+      title: `Delete “${title}”?`,
+      description: "The thread and its transcript are deleted for good. Its branch stays.",
+      confirmLabel: "Delete",
+      destructive: true,
+    });
+    if (!yes) return;
+    try {
+      await codeApi.remove(row.id);
+      if (active) navigate("/code");
+      toast.success(`Deleted “${title}”`);
+    } catch (error) {
+      toast.error(errorMessage(error, "Could not delete it."));
+    }
+  };
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
+      <ContextMenuContent>
+        {row.pr && (
+          <ContextMenuItem asChild>
+            <a href={row.pr.url} target="_blank" rel="noreferrer">
+              <GitPullRequest />
+              Open PR #{row.pr.number}
+            </a>
+          </ContextMenuItem>
+        )}
+        {can?.archive && (
+          <ContextMenuItem
+            onSelect={() => void archive(row, !row.archived, { leave: active && !row.archived })}
+          >
+            {row.archived ? <ArchiveRestore /> : <Archive />}
+            {row.archived ? "Unarchive" : "Archive"}
+          </ContextMenuItem>
+        )}
+        {can?.delete && (
+          <>
+            {(row.pr || can.archive) && <ContextMenuSeparator />}
+            <ContextMenuItem variant="destructive" onSelect={() => void remove()}>
+              <Trash2 />
+              Delete
+            </ContextMenuItem>
+          </>
+        )}
+      </ContextMenuContent>
+    </ContextMenu>
+  );
+}
+
 function Row({
   row,
   section,
   active,
   project,
+  harness,
 }: {
   row: ThreadSummary;
   section: StatusSection["key"];
   active: boolean;
   project?: string;
+  harness?: HarnessInfo;
 }) {
   const meta = metaOf(row);
   return (
-    <Link
-      to={threadPath(row.id)}
-      aria-current={active ? "page" : undefined}
-      data-testid="code-thread-row"
-      data-thread={row.id}
-      className={cn(
-        "group flex h-8 items-center gap-2 rounded-lg px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
-        active
-          ? "bg-sidebar-accent text-sidebar-accent-foreground"
-          : "text-sidebar-foreground hover:bg-sidebar-accent/60",
-      )}
-    >
-      <span className={cn("size-1.5 shrink-0 rounded-full", DOT[section])} aria-hidden />
-      <span className={cn("min-w-0 flex-1 truncate", row.unread && "font-medium")}>
-        {row.title || "Untitled"}
-      </span>
-      {meta && <span className="text-muted-foreground shrink-0 text-xs">{meta}</span>}
-      {row.pr ? (
-        <PullChip pr={row.pr} />
-      ) : (
-        project && (
-          <span className="text-muted-foreground/70 max-w-20 shrink-0 truncate text-xs">
-            {project}
-          </span>
-        )
-      )}
-    </Link>
+    <ThreadMenu row={row} active={active} harness={harness}>
+      <Link
+        to={threadPath(row.id)}
+        aria-current={active ? "page" : undefined}
+        data-testid="code-thread-row"
+        data-thread={row.id}
+        className={cn(
+          "group flex h-8 items-center gap-2 rounded-lg px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+          active
+            ? "bg-sidebar-accent text-sidebar-accent-foreground"
+            : "text-sidebar-foreground hover:bg-sidebar-accent/60",
+        )}
+      >
+        <span className={cn("size-1.5 shrink-0 rounded-full", DOT[section])} aria-hidden />
+        <span className={cn("min-w-0 flex-1 truncate", row.unread && "font-medium")}>
+          {row.title || "Untitled"}
+        </span>
+        {meta && <span className="text-muted-foreground shrink-0 text-xs">{meta}</span>}
+        {row.pr ? (
+          <PullChip pr={row.pr} />
+        ) : (
+          project && (
+            <span className="text-muted-foreground/70 max-w-20 shrink-0 truncate text-xs">
+              {project}
+            </span>
+          )
+        )}
+      </Link>
+    </ThreadMenu>
   );
 }
 
-function Archived({ activeId }: { activeId?: string }) {
+function Archived({ activeId, harnesses }: { activeId?: string; harnesses: HarnessInfo[] }) {
   const [open, setOpen] = useState(false);
   return (
     <section className="pt-1">
@@ -82,12 +171,12 @@ function Archived({ activeId }: { activeId?: string }) {
         <ChevronRight className={cn("size-3 transition-transform", open && "rotate-90")} />
         Archived
       </button>
-      {open && <ArchivedRows activeId={activeId} />}
+      {open && <ArchivedRows activeId={activeId} harnesses={harnesses} />}
     </section>
   );
 }
 
-function ArchivedRows({ activeId }: { activeId?: string }) {
+function ArchivedRows({ activeId, harnesses }: { activeId?: string; harnesses: HarnessInfo[] }) {
   const { data } = useResource(
     ["code", "threads", "archived"],
     () => codeApi.list("archived"),
@@ -99,7 +188,13 @@ function ArchivedRows({ activeId }: { activeId?: string }) {
   return (
     <div className="space-y-px">
       {rows.map((row) => (
-        <Row key={row.id} row={row} section="done" active={row.id === activeId} />
+        <Row
+          key={row.id}
+          row={row}
+          section="done"
+          active={row.id === activeId}
+          harness={harnesses.find((h) => h.id === row.instanceId)}
+        />
       ))}
     </div>
   );
@@ -163,6 +258,7 @@ export function ThreadList({
                     section={section.key}
                     active={row.id === activeId}
                     project={projectName(row.projectId)}
+                    harness={harnesses.find((h) => h.id === row.instanceId)}
                   />
                 ))}
               </div>
@@ -170,7 +266,7 @@ export function ThreadList({
           ))
         )}
         <ReviewList activeId={activeId} adding={addingReview} onAdding={onAddingReview} />
-        <Archived activeId={activeId} />
+        <Archived activeId={activeId} harnesses={harnesses} />
       </nav>
       {offline.map((h) => (
         <p

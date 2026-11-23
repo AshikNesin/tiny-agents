@@ -87,6 +87,11 @@ need you first:
 - **In review:** it has an open pull request.
 - **Done:** everything else, a merged pull request included.
 
+Right-click a row for **Open PR** (when it has one), **Archive** (or
+**Unarchive** under Archived) and **Delete**, which asks first. Archive and
+Delete show only when the thread's harness can do them (`ThreadMenu` in
+`ThreadList.tsx`).
+
 The status is worked out from facts, never stored: `threadStatus` in
 `apps/web/src/shared/code-status.ts`. Reading a finished thread moves it on.
 With several projects, a row without a pull request names its project.

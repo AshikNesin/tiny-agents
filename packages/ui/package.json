@@ -15,6 +15,7 @@
     "./command-menu": "./src/command-menu.tsx",
     "./dialog": "./src/dialog.tsx",
     "./display": "./src/display.tsx",
+    "./context-menu": "./src/context-menu.tsx",
     "./dropdown-menu": "./src/dropdown-menu.tsx",
     "./empty-state": "./src/empty-state.tsx",
     "./form": "./src/form.tsx",

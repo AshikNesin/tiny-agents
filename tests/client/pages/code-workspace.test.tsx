@@ -33,6 +33,7 @@ vi.mock("sonner", () => ({
 vi.mock("@/lib/sse", async () => (await import("../fakes/sse")).sseModule);
 
 const posts = vi.hoisted(() => [] as Array<{ path: string; body: unknown }>);
+const deletes = vi.hoisted(() => [] as string[]);
 const asked = vi.hoisted(() => [] as unknown[]);
 const openReviews = vi.hoisted(() => [] as unknown[]);
 vi.mock("@groot/shell/lib/api", async (importOriginal) => {
@@ -48,6 +49,10 @@ vi.mock("@groot/shell/lib/api", async (importOriginal) => {
             : path === "/code/reviews"
               ? openReviews
               : [],
+      delete: async (path: string) => {
+        deletes.push(path);
+        return { deleted: true };
+      },
       post: async (path: string, body: unknown) => {
         posts.push({ path, body });
         if (path === "/code/reviews") return { id: "rv9" };
@@ -65,6 +70,7 @@ const agent: HarnessInfo = {
   capabilities: {
     ...NO_CAPABILITIES,
     turns: { ...NO_CAPABILITIES.turns, interrupt: true, steer: true, queue: true },
+    threads: { ...NO_CAPABILITIES.threads, archive: true, delete: true },
     workspace: { ...NO_CAPABILITIES.workspace, diffs: true },
   },
   commands: [],
@@ -171,6 +177,7 @@ const pull = (number: number, over: Record<string, unknown> = {}) => ({
 
 beforeEach(() => {
   posts.length = 0;
+  deletes.length = 0;
   asked.length = 0;
   openReviews.length = 0;
   useUiStore.setState({ codeSidebarOpen: true, codePane: null, lastCodePane: "changes" });
@@ -382,6 +389,35 @@ describe("the Code workspace", () => {
     const menu = await screen.findByRole("dialog", { name: "Commands" });
     fireEvent.click(within(menu).getByText("Thread a"));
     await waitFor(() => expect(where()).toBe("/code/t/demo%3Aa"));
+  });
+
+  it("right-clicking a thread offers Open PR, Archive and Delete", async () => {
+    renderAt("/code");
+    fireEvent.contextMenu(document.querySelector('[data-thread="demo:ccc"]')!);
+    const menu = await screen.findByRole("menu");
+    expect(
+      within(menu)
+        .getAllByRole("menuitem")
+        .map((item) => item.textContent),
+    ).toEqual(["Open PR #12", "Archive", "Delete"]);
+    expect(within(menu).getByRole("menuitem", { name: "Open PR #12" })).toHaveAttribute(
+      "href",
+      "https://x/12",
+    );
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "Archive" }));
+    await waitFor(() =>
+      expect(posts).toContainEqual({
+        path: "/code/threads/demo%3Accc/archive",
+        body: { archived: true },
+      }),
+    );
+
+    fireEvent.contextMenu(document.querySelector('[data-thread="demo:a"]')!);
+    const second = await screen.findByRole("menu");
+    expect(within(second).queryByRole("menuitem", { name: /Open PR/ })).toBeNull();
+    fireEvent.click(within(second).getByRole("menuitem", { name: "Delete" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(deletes).toEqual(["/code/threads/demo%3Aa"]));
   });
 
   it("a thread link lands on the thread", () => {

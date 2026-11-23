@@ -16,6 +16,7 @@ import { Command, CommandInput } from "@groot/ui/command";
 import { CommandMenu, CommandMenuDialog, type CommandMenuItemData } from "@groot/ui/command-menu";
 import { Dialog, DialogContent } from "@groot/ui/dialog";
 import { DataField, DataFields } from "@groot/ui/display";
+import { ContextMenu, ContextMenuTrigger } from "@groot/ui/context-menu";
 import { DropdownMenu, DropdownMenuTrigger } from "@groot/ui/dropdown-menu";
 import { EmptyState, ErrorState } from "@groot/ui/empty-state";
 import { Form, Field } from "@groot/ui/form";
@@ -146,6 +147,8 @@ const checks = {
     Checkbox,
     Command,
     CommandInput,
+    ContextMenu,
+    ContextMenuTrigger,
     CommandMenu,
     CommandMenuDialog,
     Dialog,
