@@ -83,7 +83,7 @@ export function ModeSwitch({
         icon={MessageSquare}
         label="Chat"
         current={mode === "chat"}
-        to={mode === "chat" ? pathname : lastPath.chat}
+        to={pathname.startsWith("/chats") ? pathname : lastPath.chat}
         dot={mode !== "chat" && chatWaiting > 0}
         onNavigate={onNavigate}
       />

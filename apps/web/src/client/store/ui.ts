@@ -75,6 +75,9 @@ export const useUiStore = create<UiState>((set) => ({
   rememberPath: (pathname, search = "") => {
     if (pathname === "/settings" || pathname.startsWith("/settings/")) return;
     const mode = modeOf(pathname);
+    const isModeLanding =
+      mode === "chat" ? pathname.startsWith("/chats") : pathname.startsWith("/code");
+    if (!isModeLanding) return;
     set((state) =>
       state.lastPath[mode] === pathname + search
         ? state
