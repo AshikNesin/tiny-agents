@@ -104,10 +104,15 @@ export const vaultApi = {
     } satisfies VaultRevealBody),
   request: (taskId: number) => apiClient.get<CredentialRequestView>(`/vault/requests/${taskId}`),
   submitRequest: (taskId: number, values: Record<string, string>, save: boolean) =>
-    apiClient.post<CredentialSubmitted>(`/vault/requests/${taskId}/submit`, {
-      values,
-      save,
-    } satisfies CredentialSubmitBody),
+    save
+      ? stepped<CredentialSubmitted>("post", `/vault/requests/${taskId}/submit`, {
+          values,
+          save,
+        } satisfies CredentialSubmitBody)
+      : apiClient.post<CredentialSubmitted>(`/vault/requests/${taskId}/submit`, {
+          values,
+          save,
+        } satisfies CredentialSubmitBody),
   cancelRequest: (taskId: number) =>
     apiClient.post<CredentialCancelled>(`/vault/requests/${taskId}/cancel`),
 };

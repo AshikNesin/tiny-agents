@@ -11,6 +11,7 @@ import {
 import { type OwnerActions, showComputerPanel, useOwnerDecision } from "../../lib/owner-actions";
 import { useCredentialRequest } from "../../queries/vault";
 import { CredentialRequestForm } from "../vault/CredentialRequestForm";
+import { StepUpProvider } from "../vault/StepUp";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "../ui/item";
 
 export function ApprovalCard({
@@ -154,7 +155,9 @@ export function CredentialRequestCard({
         </ItemTitle>
         <ItemDescription>{call.credentials.purpose}</ItemDescription>
         {request ? (
-          <CredentialRequestForm taskId={call.taskId} request={request} />
+          <StepUpProvider>
+            <CredentialRequestForm taskId={call.taskId} request={request} />
+          </StepUpProvider>
         ) : (
           <ItemDescription>{loadError ?? "Loading…"}</ItemDescription>
         )}

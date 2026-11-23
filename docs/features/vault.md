@@ -177,7 +177,8 @@ manager can fill them), a **Securely save to vault** switch, **Continue** and
 chat. On submit the server re-checks the page's origin, fills over CDP
 (submitting a sign-in's email step to reach its password step), optionally
 saves a login
-or card (**never a one-time code or a security code**), audits the keys
+or card (**never a one-time code or a security code** — and a save needs the
+step-up token the other vault writes ask for), audits the keys
 filled and resumes the bot with `{status, filled_fields, saved_item_handle?}`.
 Typed values exist only in that request's memory.
 
@@ -208,7 +209,7 @@ are never logged, and Sentry drops the bodies of vault requests.
 | `DELETE /api/v1/vault/items/:handle`         | yes     | Unlink; `?purge=true` deletes it in the backend too    |
 | `POST /api/v1/vault/items/:handle/reveal`    | yes     | `{field, purpose: reveal \| copy}` → one value         |
 | `GET /api/v1/vault/requests/:taskId`         | —       | A pending credential request (metadata)                |
-| `POST /api/v1/vault/requests/:taskId/submit` | —       | `{values, save}`: fill, optionally save, resume        |
+| `POST /api/v1/vault/requests/:taskId/submit` | on save | `{values, save}`: fill, optionally save, resume        |
 | `POST /api/v1/vault/requests/:taskId/cancel` | —       | Cancel the request                                     |
 
 ## Redaction

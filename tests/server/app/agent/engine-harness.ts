@@ -259,9 +259,34 @@ function fakeClaudeWorker(): FakeClaudeWorker {
     if (boot !== started) return;
     publish(sessionId, { type: "session", claudeSessionId: `claude-${sessionId}` });
     const request = toolRequest(message.text);
+    const yieldToTimers = () => new Promise((resolve) => setTimeout(resolve, 0));
     if (message.text === SILENT) {
     } else if (!request) {
       publish(sessionId, { type: "text", turnId, text: `Echo: ${message.text}` });
+    } else if (
+      message.text === `${request.tool} forever` ||
+      message.text === `${request.tool} stuck`
+    ) {
+      const wrapUp = message.text === `${request.tool} forever`;
+      for (let made = 0; made < 400; made++) {
+        const toolUseId = `toolu_${++nextTool}`;
+        const result = new Promise<string>((resolve) => waiting.set(toolUseId, resolve));
+        publish(sessionId, {
+          type: "tool_use",
+          turnId,
+          toolUseId,
+          name: request.tool,
+          input: request.args,
+        });
+        const content = await result;
+        await yieldToTimers();
+        if (wrapUp ? content.includes("did not run") : content.includes("This reply has ended.")) {
+          break;
+        }
+      }
+      if (wrapUp) {
+        publish(sessionId, { type: "text", turnId, text: "Stopped: too many steps." });
+      }
     } else {
       const toolUseId = `toolu_${++nextTool}`;
       const result = new Promise<string>((resolve) => waiting.set(toolUseId, resolve));

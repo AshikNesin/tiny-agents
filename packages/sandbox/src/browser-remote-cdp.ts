@@ -1,4 +1,4 @@
-import { createServer, type Server } from "node:net";
+import { createServer, type Server, type Socket } from "node:net";
 import type { Duplex } from "node:stream";
 import type { BrowserContext, CDPSession, Page } from "playwright-core";
 import { chromium } from "playwright-core";
@@ -35,28 +35,92 @@ async function withTimeout<T>(work: Promise<T>, ms: number, what: string): Promi
   }
 }
 
-export function createForwardingServer(openChannel: () => Promise<Duplex>): Server {
+export interface ForwardingAuth {
+  header: string;
+  token: string;
+}
+
+const HEADER_SCAN_LIMIT = 8192;
+const FORBIDDEN = "HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Length: 0\r\n\r\n";
+
+function constantTimeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+function randomForwarderToken(): string {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function offeredToken(head: string, header: string): string | undefined {
+  const wanted = header.toLowerCase();
+  for (const line of head.split("\r\n")) {
+    const at = line.indexOf(":");
+    if (at === -1 || line.slice(0, at).trim().toLowerCase() !== wanted) continue;
+    return line.slice(at + 1).trim();
+  }
+  return undefined;
+}
+
+export function createForwardingServer(
+  openChannel: () => Promise<Duplex>,
+  auth?: ForwardingAuth,
+): Server {
   const server = createServer();
   server.on("connection", (socket) => {
     const early: Buffer[] = [];
-    const onEarly = (d: Buffer) => early.push(d);
-    socket.on("data", onEarly);
-    openChannel()
-      .then((channel) => {
-        socket.removeListener("data", onEarly);
-        for (const d of early) channel.write(d);
-        socket.pipe(channel);
-        channel.pipe(socket);
-        const done = () => {
-          socket.destroy();
-          channel.destroy();
-        };
-        socket.on("close", done);
-        channel.on("close", done);
-      })
-      .catch(() => socket.destroy());
+    const onData = (d: Buffer) => early.push(d);
+    socket.on("data", onData);
+    const admit = () => {
+      openChannel()
+        .then((channel) => {
+          socket.removeListener("data", onData);
+          socket.removeListener("data", scan);
+          for (const d of early) channel.write(d);
+          socket.pipe(channel);
+          channel.pipe(socket);
+          const done = () => {
+            socket.destroy();
+            channel.destroy();
+          };
+          socket.on("close", done);
+          channel.on("close", done);
+        })
+        .catch(() => socket.destroy());
+    };
+    const scan = () => {
+      const head = Buffer.concat(early);
+      const end = head.indexOf("\r\n\r\n");
+      if (end === -1) {
+        if (head.length > HEADER_SCAN_LIMIT) refuse(socket, onData, scan);
+        return;
+      }
+      const offered = offeredToken(head.subarray(0, end).toString("latin1"), auth!.header);
+      if (offered === undefined || !constantTimeEqual(offered, auth!.token)) {
+        refuse(socket, onData, scan);
+        return;
+      }
+      socket.removeListener("data", scan);
+      admit();
+    };
+    if (!auth) {
+      admit();
+      return;
+    }
+    socket.on("data", scan);
+    socket.once("close", () => socket.removeListener("data", scan));
   });
   return server;
+}
+
+function refuse(socket: Socket, onData: (d: Buffer) => void, scan: () => void): void {
+  socket.removeListener("data", onData);
+  socket.removeListener("data", scan);
+  socket.end(FORBIDDEN, () => socket.destroy());
 }
 
 export function createWindowResizer(
@@ -110,9 +174,12 @@ export function createWindowResizer(
   };
 }
 
-async function fetchJsonVersion(localPort: number): Promise<{ webSocketDebuggerUrl?: string }> {
+async function fetchJsonVersion(
+  localPort: number,
+  token: string,
+): Promise<{ webSocketDebuggerUrl?: string }> {
   const response = await fetch(`http://127.0.0.1:${localPort}/json/version`, {
-    headers: { Host: `127.0.0.1:${localPort}` },
+    headers: { Host: `127.0.0.1:${localPort}`, "x-cdp-token": token },
   });
   if (!response.ok) throw new Error(`Chromium /json/version: HTTP ${response.status}`);
   return (await response.json()) as { webSocketDebuggerUrl?: string };
@@ -174,7 +241,11 @@ export function createRemoteCdpTransport(options: RemoteCdpTransportOptions): Br
     };
 
     try {
-      const fwd = createForwardingServer(() => openChannel(launched.cdpPort));
+      const token = randomForwarderToken();
+      const fwd = createForwardingServer(() => openChannel(launched.cdpPort), {
+        header: "x-cdp-token",
+        token,
+      });
       server = fwd;
       const localPort = await new Promise<number>((resolve, reject) => {
         fwd.once("error", reject);
@@ -185,10 +256,12 @@ export function createRemoteCdpTransport(options: RemoteCdpTransportOptions): Br
         });
       });
 
-      const version = await fetchJsonVersion(localPort);
+      const version = await fetchJsonVersion(localPort, token);
       const wsUrl = version.webSocketDebuggerUrl?.replace(/:(\d+)\//, `:${localPort}/`);
       if (!wsUrl) throw new Error("Chromium on the VM did not report a debugger URL");
-      const browser = await chromium.connectOverCDP(wsUrl);
+      const browser = await chromium.connectOverCDP(wsUrl, {
+        headers: { "x-cdp-token": token },
+      });
       const context = browser.contexts()[0] ?? (await browser.newContext());
       const page: Page = context.pages()[0] ?? (await context.newPage());
 

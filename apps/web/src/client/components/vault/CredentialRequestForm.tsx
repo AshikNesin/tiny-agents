@@ -9,6 +9,7 @@ import { monoClass } from "@groot/ui/typography";
 import type { CredentialRequestView } from "../../../shared/api/vault";
 import { apiError } from "../../lib/vault-api";
 import { useVaultMutations } from "../../queries/vault";
+import { useStepUp } from "./StepUp";
 import { Switch } from "../ui/switch";
 import { SecretInput } from "./SecretInput";
 
@@ -38,6 +39,7 @@ export function CredentialRequestForm({
   onSettled?: () => void;
 }) {
   const mutations = useVaultMutations();
+  const { run: runWithStepUp } = useStepUp();
   const [values, setValues] = useState<Record<string, string>>({});
   const [save, setSave] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -60,12 +62,18 @@ export function CredentialRequestForm({
 
   const submit = async () => {
     setBusy(true);
+    const sending = save && canSave;
     try {
-      const result = await mutations.submitRequest.mutateAsync({
-        taskId,
-        values,
-        save: save && canSave,
-      });
+      const result = await (sending
+        ? runWithStepUp(() =>
+            mutations.submitRequest.mutateAsync({
+              taskId,
+              values,
+              save: sending,
+            }),
+          )
+        : mutations.submitRequest.mutateAsync({ taskId, values, save: false }));
+      if (!result) return;
       setValues({});
       toast.success(
         result.savedHandle ? `Filled and saved as ${result.savedHandle}` : "Filled into the page",

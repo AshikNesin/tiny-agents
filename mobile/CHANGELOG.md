@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.14.3
+
+### Patch Changes
+
+- Filling a bot's sign-in form with **Save to the vault** on now asks for your password first (the
+  same confirmation the Vault page uses), because saving can update a stored login. Filling without
+  saving is unchanged.
+
 ## 0.14.1
 
 ### Patch Changes

@@ -17,6 +17,7 @@ import { SandboxTimeoutError } from "../../../../packages/sandbox/src/ssh/connec
 import { fakeSandboxConnection } from "./sandbox-connection-fake";
 
 describe("CDP forwarder", () => {
+  const TOKEN = "cdp-token-0123456789abcdef";
   const cleanups: (() => void)[] = [];
   afterEach(() => {
     for (const cleanup of cleanups.splice(0)) cleanup();
@@ -34,10 +35,13 @@ describe("CDP forwarder", () => {
       socket.pipe(socket);
     });
     const echoPort = await listen(echo);
-    const forwarder = createForwardingServer(async () => {
-      await new Promise((resolve) => setTimeout(resolve, dialMs));
-      return net.connect(echoPort, "127.0.0.1");
-    });
+    const forwarder = createForwardingServer(
+      async () => {
+        await new Promise((resolve) => setTimeout(resolve, dialMs));
+        return net.connect(echoPort, "127.0.0.1");
+      },
+      { header: "x-cdp-token", token: TOKEN },
+    );
     const port = await listen(forwarder);
     cleanups.push(() => {
       forwarder.close();
@@ -62,12 +66,47 @@ describe("CDP forwarder", () => {
     return socket;
   };
 
+  const refused = (socket: net.Socket) =>
+    nextData(socket).then((first) => {
+      expect(first).toContain("403");
+      return closed(socket);
+    });
+
+  it("answers 403 and closes a client that presents no token or a wrong one", async () => {
+    const { port, vmSide } = await forwarderToEcho(0);
+
+    const none = connect(port);
+    none.write("GET /json/version HTTP/1.1\r\n\r\n");
+    await refused(none);
+
+    const wrong = connect(port);
+    wrong.write(`GET /json/version HTTP/1.1\r\nX-Cdp-Token: ${"x".repeat(TOKEN.length)}\r\n\r\n`);
+    await refused(wrong);
+
+    expect(vmSide).toEqual([]);
+  });
+
+  it("waits for the end of the header block before it judges a token that arrives split", async () => {
+    const { port, vmSide } = await forwarderToEcho(0);
+    const client = connect(port);
+    client.write("GET /json/version HTTP/1.1\r\nX-Cdp-Token: ");
+    client.write(TOKEN);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(vmSide).toEqual([]);
+    client.write("\r\n\r\nping");
+    expect(await nextData(client)).toContain("ping");
+    expect(vmSide).toHaveLength(1);
+    client.destroy();
+  });
+
   it("replays what the client wrote before the channel was open, then carries both ways", async () => {
     const { port } = await forwarderToEcho(60);
     const client = connect(port);
 
-    client.write("GET /json/version HTTP/1.1\r\n\r\n");
-    expect(await nextData(client)).toBe("GET /json/version HTTP/1.1\r\n\r\n");
+    client.write(`X-Cdp-Token: ${TOKEN}\r\nGET /json/version HTTP/1.1\r\n\r\n`);
+    expect(await nextData(client)).toBe(
+      `X-Cdp-Token: ${TOKEN}\r\nGET /json/version HTTP/1.1\r\n\r\n`,
+    );
     client.write("later");
     expect(await nextData(client)).toBe("later");
   });
@@ -75,12 +114,14 @@ describe("CDP forwarder", () => {
   it("closes the client when the VM side closes, and the VM side when the client does", async () => {
     const { port, vmSide } = await forwarderToEcho(0);
     const first = connect(port);
+    first.write(`X-Cdp-Token: ${TOKEN}\r\nGET / HTTP/1.1\r\n\r\n`);
     first.write("a");
     await nextData(first);
     vmSide[0]!.destroy();
     await closed(first);
 
     const second = connect(port);
+    second.write(`X-Cdp-Token: ${TOKEN}\r\nGET / HTTP/1.1\r\n\r\n`);
     second.write("b");
     await nextData(second);
     second.destroy();
@@ -88,21 +129,27 @@ describe("CDP forwarder", () => {
   });
 
   it("drops a client whose channel could not be opened", async () => {
-    const forwarder = createForwardingServer(async () => {
-      throw new Error("no route to the VM");
-    });
+    const forwarder = createForwardingServer(
+      async () => {
+        throw new Error("no route to the VM");
+      },
+      { header: "x-cdp-token", token: TOKEN },
+    );
     const port = await listen(forwarder);
     cleanups.push(() => forwarder.close());
 
     const client = connect(port);
-    client.write("hello");
+    client.write(`X-Cdp-Token: ${TOKEN}\r\nGET / HTTP/1.1\r\n\r\nhello`);
     await closed(client);
   });
 
   it("is a plain TCP server: an HTTP server would cut idle CDP websockets after 60 s", () => {
-    const forwarder = createForwardingServer(async () => {
-      throw new Error("not dialed by this test");
-    });
+    const forwarder = createForwardingServer(
+      async () => {
+        throw new Error("not dialed by this test");
+      },
+      { header: "x-cdp-token", token: TOKEN },
+    );
     expect(forwarder).toBeInstanceOf(net.Server);
     expect(forwarder).not.toBeInstanceOf(HttpServer);
   });

@@ -35,12 +35,29 @@ const REQUEST: CredentialRequestView = {
   liveOrigin: "https://www.amazon.in",
 };
 
-const api = vi.hoisted(() => ({ submitRequest: vi.fn(), cancelRequest: vi.fn() }));
-vi.mock("@/lib/vault-api", () => ({ apiError: (_e: unknown, f: string) => f }));
+const api = vi.hoisted(() => ({
+  submitRequest: vi.fn(),
+  cancelRequest: vi.fn(),
+  gateRuns: { count: 0 },
+}));
+vi.mock("@/lib/vault-api", () => ({
+  apiError: (_e: unknown, f: string) => f,
+  hasStepUp: () => false,
+  StepUpRequiredError: class extends Error {},
+  vaultApi: { submitRequest: api.submitRequest, cancelRequest: api.cancelRequest },
+}));
 vi.mock("@/queries/vault", () => ({
   useVaultMutations: () => ({
     submitRequest: { mutateAsync: api.submitRequest },
     cancelRequest: { mutateAsync: api.cancelRequest },
+  }),
+}));
+vi.mock("@/components/vault/StepUp", () => ({
+  useStepUp: () => ({
+    run: (work: () => Promise<unknown>) => {
+      api.gateRuns.count++;
+      return work();
+    },
   }),
 }));
 
@@ -74,5 +91,35 @@ describe("credential request form gating", () => {
     fireEvent.submit(screen.getByRole("button", { name: "Continue" }).closest("form")!);
     await waitFor(() => expect(screen.getByText(/Nothing will be filled there/)).toBeTruthy());
     expect(api.submitRequest).not.toHaveBeenCalled();
+  });
+
+  it("sends a saving submit through step-up, and one that saves nothing straight", async () => {
+    api.submitRequest.mockResolvedValue({ filled: ["email", "password"], savedHandle: null });
+    api.gateRuns.count = 0;
+    mount(REQUEST);
+    fireEvent.change(await screen.findByLabelText("Email*"), {
+      target: { value: "ana@example.com" },
+    });
+    fireEvent.change(screen.getByLabelText("Password*"), { target: { value: "pw" } });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await waitFor(() => expect(api.submitRequest).toHaveBeenCalledTimes(1));
+    expect(api.submitRequest).toHaveBeenCalledWith({
+      taskId: 7,
+      values: { email: "ana@example.com", password: "pw" },
+      save: true,
+    });
+    expect(api.gateRuns.count).toBe(1);
+
+    fireEvent.change(screen.getByLabelText("Email*"), { target: { value: "ana@example.com" } });
+    fireEvent.change(screen.getByLabelText("Password*"), { target: { value: "pw" } });
+    fireEvent.click(screen.getByRole("switch", { name: "Save to vault" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await waitFor(() => expect(api.submitRequest).toHaveBeenCalledTimes(2));
+    expect(api.submitRequest).toHaveBeenLastCalledWith({
+      taskId: 7,
+      values: { email: "ana@example.com", password: "pw" },
+      save: false,
+    });
+    expect(api.gateRuns.count).toBe(1);
   });
 });
