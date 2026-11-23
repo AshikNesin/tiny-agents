@@ -9,6 +9,7 @@ export {
 export type { PtySize, PtyStream } from "./ssh/pty-stream";
 export {
   createMemoryHostKeyStore,
+  DEFAULT_SSH_USER,
   SandboxTimeoutError,
   type HostKeyStore,
   type SshEndpoint,

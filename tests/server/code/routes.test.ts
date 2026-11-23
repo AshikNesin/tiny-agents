@@ -1,3 +1,4 @@
+import { userInfo } from "node:os";
 import {
   afterAll,
   afterEach,
@@ -144,7 +145,7 @@ describe("Code API", () => {
       vi.stubEnv("SANDBOX_PORT", "22");
       vi.stubEnv("SANDBOX_SSH_KEY_FILE", "");
       expect(await ssh()).toEqual([
-        ["shelley", { host: "100.100.200.200", user: null, port: null, keyFile: null }],
+        ["shelley", { host: "100.100.200.200", user: "exedev", port: null, keyFile: null }],
         ["fake", { host: "tiny-agents-vm", user: "exedev", port: null, keyFile: null }],
       ]);
 
@@ -152,7 +153,14 @@ describe("Code API", () => {
       vi.stubEnv("SANDBOX_HOST", "");
       expect((await ssh())?.[0]).toEqual([
         "shelley",
-        { host: null, user: null, port: null, keyFile: null },
+        { host: null, user: userInfo().username, port: null, keyFile: null },
+      ]);
+
+      vi.stubEnv("SANDBOX_HOST", "tiny-agents-vm");
+      vi.stubEnv("SANDBOX_USER", "");
+      expect((await ssh())?.[1]).toEqual([
+        "fake",
+        { host: "tiny-agents-vm", user: "exedev", port: null, keyFile: null },
       ]);
     } finally {
       vi.unstubAllEnvs();

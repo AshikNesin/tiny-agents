@@ -229,8 +229,12 @@ are built by `apps/web/src/client/lib/code/editor.ts`):
 The dialog prefills the SSH host from `GET /code/status`, which gives each
 harness an `ssh` target (`code.editor.ts`): Shelley's host from
 `SHELLEY_URL`, the other harnesses' from `SANDBOX_HOST`, `SANDBOX_USER` and
-`SANDBOX_PORT`. A loopback host becomes the host the page was opened on, so
-an app on `tiny-agents.exe.xyz` suggests `tiny-agents.exe.xyz`.
+`SANDBOX_PORT`. The user is `SANDBOX_USER`, else `exedev` (the sandbox
+connection's default), or the app's own OS user when the files live beside
+the app. A loopback host becomes the host the page was opened on, so an app
+on `tiny-agents.exe.xyz` suggests `tiny-agents.exe.xyz`; a page on
+`localhost` suggests `127.0.0.1`, because macOS resolves `localhost` to
+`::1` first and the local sandbox publishes its port on IPv4 only.
 
 When the target needs a port or a key, as the local Docker sandbox
 (`pnpm sandbox:up`) does, the dialog suggests the `tiny-agents-sandbox`

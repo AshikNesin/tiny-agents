@@ -117,6 +117,9 @@ only. Anyone who can reach that port can run commands as `exedev`.
 Code's **Open in editor** (`o` in a thread) reaches the container over SSH.
 The first time, the dialog shows a `Host tiny-agents-sandbox` entry with the
 port, user and key; add it to `~/.ssh/config` on this computer, then open.
+Its `HostName` is `127.0.0.1`, not `localhost`: on a Mac, `localhost` tries
+`::1` first, where the container's port isn't published, and SSH fails with
+"Connection closed by ::1 port 2222".
 See [Open in editor](../features/code.md#open-in-editor).
 
 ## gh and codex
