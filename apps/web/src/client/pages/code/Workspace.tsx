@@ -509,7 +509,6 @@ export function CodeWorkspace() {
           onNew={() => navigate("/code/new")}
           addingReview={addingReview}
           onAddingReview={setAddingReview}
-          onCommands={() => setMenuOpen(true)}
         />
       </aside>
 
@@ -614,6 +613,7 @@ export function CodeWorkspace() {
                 refreshKey={changesKey}
                 focus={filesFocus}
                 onFocused={clearFilesFocus}
+                editor={harness && row?.cwd ? { harness, folder: row.cwd } : undefined}
               />
             ) : openPane === "terminal" && project ? (
               <TerminalPane threadId={threadId} place={row?.cwd ?? project.name} />
