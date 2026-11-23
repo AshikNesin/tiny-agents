@@ -77,6 +77,12 @@ OAuth state that no longer opens (the pre-v2 `v1` format, or another key) puts
 the connection in `needs_auth` ("Sign in again"), and signing in replaces it;
 with no `SECRETS_KEY` at all it stays in `error`.
 
+The public callback that finishes a sign-in authorizes by the `state`
+parameter, which is single-use, cleared on any completion attempt (success or
+failure), expired after ten minutes, and stamped with the owner who started
+the sign-in: a callback carrying a session that isn't that owner's is refused,
+and the route is rate-limited like the auth endpoints.
+
 Before Q4 the header value itself was sealed in `secret_enc`. The first start
 on Q4 moves each one into the connection's own item, checks it and clears
 `secret_enc` (`apps/web/src/server/api/vault/vault.import.ts`). One that can't

@@ -115,3 +115,32 @@ export function checkResolvesPublic(url: string, allowPrivateNetwork: boolean): 
     guardedLookup(false)(host, { all: true }, (error) => (error ? reject(error) : resolve()));
   });
 }
+
+const MAX_REDIRECTS = 5;
+
+export async function guardedFetch(
+  input: RequestInfo | URL,
+  init: RequestInit,
+  options: OutboundOptions,
+): Promise<Response> {
+  let url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+  let method = init.method ?? "GET";
+  let body = init.body;
+  for (let hop = 0; ; hop++) {
+    await checkResolvesPublic(url, options.allowPrivateNetwork);
+    const response = await fetch(url, { ...init, method, body, redirect: "manual" });
+    if (response.status < 300 || response.status >= 400) return response;
+    const location = response.headers.get("location");
+    if (!location || hop >= MAX_REDIRECTS) {
+      throw new OutboundRefusedError(`The endpoint redirected (HTTP ${response.status}).`);
+    }
+    url = new URL(location, url).toString();
+    if (
+      response.status === 303 ||
+      (response.status <= 302 && method !== "GET" && method !== "HEAD")
+    ) {
+      method = "GET";
+      body = undefined;
+    }
+  }
+}

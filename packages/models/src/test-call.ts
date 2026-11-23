@@ -1,4 +1,10 @@
-import type { Api, ClassifierApi, ClassifierModel, Model } from "@earendil-works/pi-ai";
+import type {
+  Api,
+  ClassifierApi,
+  ClassifierModel,
+  FetchFunction,
+  Model,
+} from "@earendil-works/pi-ai";
 import { createModels } from "@earendil-works/pi-ai/models";
 import type { CredentialResolver, ModelConfig } from "./config";
 import { buildProviders } from "./kinds";
@@ -15,7 +21,7 @@ export interface TestResult {
 export async function testModelCall(
   models: { completeSimple: ReturnType<typeof createModels>["completeSimple"] },
   model: Model<Api>,
-  options: { image?: boolean; timeoutMs?: number } = {},
+  options: { image?: boolean; timeoutMs?: number; fetch?: FetchFunction } = {},
 ): Promise<TestResult> {
   const started = Date.now();
   const signal = AbortSignal.timeout(options.timeoutMs ?? 15_000);
@@ -37,7 +43,7 @@ export async function testModelCall(
           },
         ],
       },
-      { maxTokens: 16, signal },
+      { maxTokens: 16, signal, ...(options.fetch ? { fetch: options.fetch } : {}) },
     );
     const latencyMs = Date.now() - started;
     if (reply.stopReason === "error" || reply.stopReason === "aborted") {
@@ -105,7 +111,7 @@ export function testUnsavedModel(
   credentials: CredentialResolver,
   providerId: string,
   upstreamId: string,
-  options: { image?: boolean } = {},
+  options: { image?: boolean; fetch?: FetchFunction } = {},
 ): Promise<TestResult> {
   const models = createModels();
   for (const provider of buildProviders(config, credentials)) models.setProvider(provider);

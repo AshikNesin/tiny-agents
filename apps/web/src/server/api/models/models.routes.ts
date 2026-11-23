@@ -39,7 +39,7 @@ function ifMatch(c: AppContext): number | undefined {
 
 router.get("/models/providers", async (c) => ok(c, await service.listAccounts()));
 
-router.post("/models/discover", async (c) =>
+router.post("/models/discover", requireStepUp, async (c) =>
   ok(c, await service.discover(await parseBody(c, discoverSchema))),
 );
 
@@ -70,7 +70,7 @@ router.post("/models/providers/:id/models", async (c) =>
   ok(c, await service.addModel(idParam(c), await parseBody(c, addModelSchema)), 201),
 );
 
-router.post("/models/test", async (c) =>
+router.post("/models/test", requireStepUp, async (c) =>
   ok(c, await service.testModel(await parseBody(c, testSchema))),
 );
 

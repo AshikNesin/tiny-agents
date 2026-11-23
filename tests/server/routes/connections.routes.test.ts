@@ -3,7 +3,7 @@ import { fakeCatalog, useTestRuntime } from "../fixtures";
 import type { AddressInfo } from "node:net";
 import { getRequestListener } from "@hono/node-server";
 import { Hono } from "hono";
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vite-plus/test";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { z } from "zod";
 import {
   botConnections,
@@ -23,6 +23,8 @@ import {
 import { api, createTestApp, type TestApp } from "../helpers";
 import { authToken, until } from "../fixtures";
 import { issueStepUp } from "../../../apps/web/src/server/api/vault/vault.stepup";
+import { readOAuthState } from "../../../apps/web/src/server/api/connections/oauth";
+import { FIXED_NOW } from "../../test-clock";
 
 let token: string;
 beforeAll(async () => {
@@ -962,6 +964,105 @@ describe("MCP OAuth (fake authorization server)", () => {
       expect(await manager.finishAuthorization(state, "fresh-code")).toBe(row.id);
       expect(await manager.hasTokens(row.id)).toBe(true);
     } finally {
+      await manager.close();
+      setConnectionManagerForTests(undefined);
+      await fake.close();
+      await db.delete(connections);
+    }
+  }, 30_000);
+});
+
+describe("MCP OAuth callback guard", () => {
+  it("completes once, then refuses a replay of the same state", async () => {
+    await db.delete(botConnections);
+    await db.delete(connections);
+    const fake = await startFakeOAuth();
+    const { manager } = await startOAuthManager();
+    try {
+      const row = (
+        await db
+          .insert(connections)
+          .values({ name: "Once", slug: "once", url: fake.url, authType: "oauth" })
+          .returning()
+      )[0]!;
+      const consent = await manager.authorize(row.id);
+      const state = decodeURIComponent(new URL(consent!).searchParams.get("state")!);
+      const app = buildApp();
+      const query = new URLSearchParams({ code: "code-1", state });
+      const first = await app.request(`/api/v1/connections/oauth/callback?${query}`);
+      expect(first.status).toBe(200);
+      expect(await manager.hasTokens(row.id)).toBe(true);
+
+      const replay = await app.request(
+        `/api/v1/connections/oauth/callback?${new URLSearchParams({ code: "code-2", state })}`,
+      );
+      expect(replay.status).toBe(200);
+      const text = await replay.text();
+      expect(text).toContain("error");
+      expect(text).not.toContain(`"id"`);
+      expect((await readOAuthState(row.id)).state).toBeUndefined();
+      expect((await readOAuthState(row.id)).userId).toBeUndefined();
+    } finally {
+      await manager.close();
+      setConnectionManagerForTests(undefined);
+      await fake.close();
+      await db.delete(connections);
+    }
+  }, 30_000);
+
+  it("refuses a state bound to another user's session", async () => {
+    await db.delete(botConnections);
+    await db.delete(connections);
+    const fake = await startFakeOAuth();
+    const { manager } = await startOAuthManager();
+    try {
+      const row = (
+        await db
+          .insert(connections)
+          .values({ name: "Bound", slug: "bound", url: fake.url, authType: "oauth" })
+          .returning()
+      )[0]!;
+      const consent = await manager.authorize(row.id, 1);
+      const state = decodeURIComponent(new URL(consent!).searchParams.get("state")!);
+      const app = buildApp();
+      const query = new URLSearchParams({ code: "code-1", state });
+      const stranger = await app.request(`/api/v1/connections/oauth/callback?${query}`, {
+        headers: { authorization: `Bearer ${await authToken("stranger@example.com", 2)}` },
+      });
+      expect(stranger.status).toBe(200);
+      expect(await stranger.text()).toContain("error");
+      expect(await manager.hasTokens(row.id)).toBe(false);
+    } finally {
+      await manager.close();
+      setConnectionManagerForTests(undefined);
+      await fake.close();
+      await db.delete(connections);
+    }
+  }, 30_000);
+
+  it("refuses a state older than ten minutes", async () => {
+    await db.delete(botConnections);
+    await db.delete(connections);
+    const fake = await startFakeOAuth();
+    const { manager } = await startOAuthManager();
+    try {
+      const row = (
+        await db
+          .insert(connections)
+          .values({ name: "Stale", slug: "stale", url: fake.url, authType: "oauth" })
+          .returning()
+      )[0]!;
+      const consent = await manager.authorize(row.id);
+      const state = decodeURIComponent(new URL(consent!).searchParams.get("state")!);
+      vi.setSystemTime(Date.now() + 11 * 60_000);
+      const app = buildApp();
+      const query = new URLSearchParams({ code: "code-1", state });
+      const stale = await app.request(`/api/v1/connections/oauth/callback?${query}`);
+      expect(stale.status).toBe(200);
+      expect(await stale.text()).toContain("expired");
+      expect(await manager.hasTokens(row.id)).toBe(false);
+    } finally {
+      vi.setSystemTime(Date.parse(FIXED_NOW));
       await manager.close();
       setConnectionManagerForTests(undefined);
       await fake.close();

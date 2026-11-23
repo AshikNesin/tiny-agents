@@ -17,6 +17,8 @@ export interface OAuthState {
   tokens?: OAuthTokens;
   verifier?: string;
   state?: string;
+  issuedAt?: number;
+  userId?: number;
 }
 
 function appOrigin(): string {
@@ -103,9 +105,20 @@ export async function connectionForState(state: string): Promise<string | undefi
   return undefined;
 }
 
+const OAUTH_STATE_TTL_MS = 10 * 60_000;
+
+export function stateStillCurrent(issuedAt: number | undefined, now = Date.now()): boolean {
+  return issuedAt !== undefined && now - issuedAt <= OAUTH_STATE_TTL_MS;
+}
+
+export async function clearOAuthState(connectionId: string): Promise<void> {
+  await writeOAuthState(connectionId, (s) => ({ ...s, state: undefined, issuedAt: undefined }));
+}
+
 export function createOAuthProvider(
   connectionId: string,
   onAuthorizationUrl: (url: URL) => void,
+  initiator?: number,
 ): OAuthClientProvider {
   const metadataUrl = clientMetadataUrl();
   return {
@@ -118,7 +131,12 @@ export function createOAuthProvider(
     },
     async state() {
       const state = randomBytes(16).toString("base64url");
-      await writeOAuthState(connectionId, (s) => ({ ...s, state }));
+      await writeOAuthState(connectionId, (s) => ({
+        ...s,
+        state,
+        issuedAt: Date.now(),
+        ...(initiator === undefined ? {} : { userId: initiator }),
+      }));
       return state;
     },
     async clientInformation() {

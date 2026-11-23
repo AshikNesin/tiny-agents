@@ -136,7 +136,8 @@ export function AccountCard({
 
   const test = async (model: AccountModel) => {
     try {
-      const result = await discovery.test.mutateAsync({ modelId: model.id });
+      const result = await run(() => discovery.test.mutateAsync({ modelId: model.id }));
+      if (!result) return;
       if (result.ok) toast.success(`${model.name} answered in ${result.latencyMs} ms`);
       else toast.error(result.error ?? `${model.name} didn't answer`);
     } catch (error) {

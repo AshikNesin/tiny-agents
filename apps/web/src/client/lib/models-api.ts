@@ -22,7 +22,7 @@ import { stepped } from "./vault-api";
 export const modelsApi = {
   accounts: () => apiClient.get<AccountList>("/models/providers"),
   discover: (connection: ModelEndpoint) =>
-    apiClient.post<DiscoveredModels>("/models/discover", connection),
+    stepped<DiscoveredModels>("post", "/models/discover", connection),
   create: (input: AccountCreateBody) => stepped<Account>("post", "/models/providers", input),
   patch: (account: Account, input: AccountPatchBody) =>
     apiClient.request<Account>("patch", `/models/providers/${account.id}`, {
@@ -48,7 +48,7 @@ export const modelsApi = {
       `/models/${id}${moveTo ? `?moveTo=${encodeURIComponent(moveTo)}` : ""}`,
       { emptyOk: true },
     ),
-  test: (input: ModelTestBody) => apiClient.post<ModelTestResult>("/models/test", input),
+  test: (input: ModelTestBody) => stepped<ModelTestResult>("post", "/models/test", input),
   roles: () => apiClient.get<RolesResponse>("/models/roles"),
   setRoles: (input: RolesBody) =>
     apiClient.request<RolesResponse>("put", "/models/roles", { body: input }),

@@ -320,12 +320,12 @@ export async function callTool(
   }
 }
 
-export async function authorize(id: string): Promise<ConnectionAuthorization> {
+export async function authorize(id: string, initiator: number): Promise<ConnectionAuthorization> {
   const connection = await get(id);
   if (connection.authType !== "oauth") throw Boom.badRequest("This connection doesn't use sign-in");
   requireSecretsKey();
   try {
-    const authorizationUrl = await getConnectionManager().authorize(id);
+    const authorizationUrl = await getConnectionManager().authorize(id, initiator);
     return authorizationUrl ? { authorizationUrl } : {};
   } catch (error) {
     throw Boom.badRequest(

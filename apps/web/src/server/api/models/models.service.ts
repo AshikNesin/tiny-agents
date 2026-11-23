@@ -37,6 +37,7 @@ import { providerHost, reloadModels, vaultCredentials } from "./models.config";
 import {
   checkBaseUrl,
   checkResolvesPublic,
+  guardedFetch,
   guardedGet,
   OutboundRefusedError,
 } from "./models.fetch";
@@ -1033,7 +1034,11 @@ export async function testModel(input: TestDTO): Promise<TestResult> {
     { resolve: async (id) => (id === "gateway" ? gatewayKey : input.apiKey) },
     "test",
     input.upstreamId,
-    { image: input.image },
+    {
+      image: input.image,
+      fetch: (input2, init) =>
+        guardedFetch(input2, init ?? {}, { allowPrivateNetwork: input.allowPrivateNetwork }),
+    },
   );
   return redacted(result, input.upstreamId);
 }

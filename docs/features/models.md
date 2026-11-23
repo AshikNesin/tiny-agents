@@ -134,7 +134,7 @@ again. Changes reach open pickers through `models.changed` on `/events`.
 | Route                                         | Step-up | Purpose                                                    |
 | --------------------------------------------- | ------- | ---------------------------------------------------------- |
 | `GET /api/v1/models/providers`                |         | Accounts, their models and key hints; templates            |
-| `POST /api/v1/models/discover`                |         | List an endpoint's models without saving                   |
+| `POST /api/v1/models/discover`                | yes     | List an endpoint's models without saving                   |
 | `POST /api/v1/models/providers`               | yes     | Create an account (discovers again, stores the key)        |
 | `PATCH /api/v1/models/providers/:id`          |         | Name, enabled, Claude plan fallback; `If-Match: <version>` |
 | `PUT /api/v1/models/providers/:id/connection` | yes     | Endpoint, key, private network                             |
@@ -143,7 +143,7 @@ again. Changes reach open pickers through `models.changed` on `/events`.
 | `DELETE /api/v1/models/providers/:id`         | yes     | 409 `in_use` unless `?moveTo=<modelId>`                    |
 | `POST /api/v1/models/providers/:id/models`    |         | Add a model by id                                          |
 | `PATCH` / `DELETE /api/v1/models/:id`         |         | Name, enabled, overrides / delete (same in-use rule)       |
-| `POST /api/v1/models/test`                    |         | One 16-token completion, saved model or unsaved account    |
+| `POST /api/v1/models/test`                    | yes     | One 16-token completion, saved model or unsaved account    |
 | `GET` / `PUT /api/v1/models/roles`            |         | Roles and whether each is the fallback                     |
 
 Bodies are strict (unknown fields are refused) and capped at 64 KB. No
@@ -155,9 +155,11 @@ Discovery goes through one guarded GET (`models.fetch.ts`): https only (http
 only for an account that allows a private endpoint), no credentials, query or
 fragment in the endpoint, the address checked after DNS when the socket
 connects (private addresses refused unless allowed), no redirects, 15 s and
-4 MB per request, at most 50 pages and 5,000 models. Test resolves the host
-the same way before its call. Inference itself goes through pi-ai's clients,
-so the endpoint is checked when it is saved, not on each request.
+4 MB per request, at most 50 pages and 5,000 models. An unsaved test call passes pi-ai's client
+a guarded fetch of its own: each redirect hop is resolved and checked against
+the private-address ban before it is followed, so an endpoint that redirects
+to a private address is refused unless the account allows one. Saved accounts
+are checked when the endpoint is stored.
 
 ### Account limits
 

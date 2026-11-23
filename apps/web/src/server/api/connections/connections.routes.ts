@@ -4,6 +4,9 @@ import { ok } from "@groot/core/utils/api-response.utils";
 import type { Deleted } from "../../../shared/api/common";
 import { parseBody, parseStringParam } from "@groot/core/utils/controller.utils";
 import { logger } from "@groot/core/logger";
+import { verifySessionToken } from "@groot/core/session";
+import { readSessionToken } from "@groot/core/session/cookie";
+import { authRateLimiter } from "@groot/core/middlewares/rate-limit.middleware";
 import * as connectionsService from "./connections.service";
 import { getConnectionManager } from "./connections.manager";
 import { clientMetadata, clientMetadataUrl } from "./oauth";
@@ -27,15 +30,26 @@ function singleQuery(c: AppContext, name: string): string | undefined {
   return values?.length === 1 ? values[0] : undefined;
 }
 
-publicConnectionsRouter.get("/connections/oauth/callback", async (c) => {
+async function callbackViewer(c: AppContext): Promise<number | undefined> {
+  const token = readSessionToken(c);
+  if (!token) return undefined;
+  try {
+    return (await verifySessionToken(token)).userId;
+  } catch {
+    return undefined;
+  }
+}
+
+publicConnectionsRouter.get("/connections/oauth/callback", authRateLimiter, async (c) => {
   const code = singleQuery(c, "code");
   const state = singleQuery(c, "state");
   const denied = singleQuery(c, "error");
+  const viewer = await callbackViewer(c);
   let id: string | undefined;
   let error = denied;
   if (!error && code && state) {
     try {
-      id = await getConnectionManager().finishAuthorization(state, code);
+      id = await getConnectionManager().finishAuthorization(state, code, viewer);
     } catch (cause) {
       logger.warn({ error: cause }, "MCP OAuth callback failed");
       error = cause instanceof Error ? cause.message : "Sign-in failed";
@@ -89,7 +103,11 @@ router.post("/connections/:id/reconnect", async (c) => {
 });
 
 router.post("/connections/:id/authorize", async (c) => {
-  return ok(c, await connectionsService.authorize(parseStringParam(c.req.param("id"), "id")));
+  const userId = c.get("user")!.userId;
+  return ok(
+    c,
+    await connectionsService.authorize(parseStringParam(c.req.param("id"), "id"), userId),
+  );
 });
 
 router.get("/connections/:id/tools/:tool", async (c) => {
