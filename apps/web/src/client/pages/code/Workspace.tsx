@@ -25,6 +25,7 @@ import { FilesPane } from "./FilesPane";
 import { NewThreadDialog } from "./NewThreadDialog";
 import { TerminalDrawer } from "./TerminalDrawer";
 import { PullPanel } from "./PullPanel";
+import { useArchive } from "./controls";
 import { PullReview } from "./PullReview";
 import { ResizablePane } from "./ResizablePane";
 import { ReviewPanel } from "./ReviewPanel";
@@ -200,10 +201,15 @@ export function CodeWorkspace() {
     if (!threadId) return;
     setPane("pr");
     void projectsApi
-      .publish(threadId)
+      .publish(threadId, { commit: true })
       .then(() => toast.success("Pushed to GitHub"))
       .catch((error: unknown) => toast.error(errorMessage(error, "Could not publish.")));
   }, [threadId, setPane]);
+  const archiveThread = useArchive();
+  const archive = useCallback(() => {
+    if (!threadId) return;
+    void archiveThread({ id: threadId, title: row?.title ?? "" }, true, { leave: true });
+  }, [threadId, row?.title, archiveThread]);
   const merge = useCallback(() => {
     if (!threadId || !prNumber) return;
     setPane("pr");
@@ -529,6 +535,7 @@ export function CodeWorkspace() {
                   const review = await reviewsApi.open(url);
                   navigate(reviewPath(review.id));
                 }}
+                onArchive={archive}
               />
             ) : openPane === "files" ? (
               <FilesPane threadId={threadId} refreshKey={changesKey} />
