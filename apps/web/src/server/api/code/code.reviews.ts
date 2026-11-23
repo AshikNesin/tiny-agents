@@ -19,6 +19,7 @@ import {
   codeThreads,
   db,
   type CodeProjectRow,
+  type CodeReviewRow,
   codeFindings,
 } from "../../db";
 import { shQuote } from "@tiny-agents/sandbox";
@@ -43,13 +44,12 @@ import { getTerminalService } from "../terminal/terminal.instance";
 import { reviewCard } from "../../../shared/code-messages";
 import { codeGitHub } from "./code.github";
 import { codeHub } from "./code.hub";
+import { app } from "../../app-root";
 import { applyTitle } from "./code.naming";
 import { repoOf } from "./code.projects";
 import { threadReview, type DraftInput } from "./code.review";
 import { follow } from "./code.store";
 import { saying, type Workspace } from "./code.workspace";
-
-type CodeReviewRow = typeof codeReviews.$inferSelect;
 
 const KEY_PREFIX = "review:";
 
@@ -68,7 +68,7 @@ function parsePullRef(input: string): { repo: RepoRef; number: number } | undefi
   return number > 0 ? { repo: { owner: match[1]!, name: match[2]! }, number } : undefined;
 }
 
-const reviewPath = (project: CodeProjectRow, number: number) =>
+export const reviewPath = (project: CodeProjectRow, number: number) =>
   `${project.checkoutPath.replace(/\/checkout$/, "")}/reviews/pr-${number}`;
 
 function lastReviewed(pr: PullSnapshot, login: string): string | null {
@@ -177,6 +177,13 @@ async function projectFor(repo: RepoRef): Promise<CodeProjectRow> {
 }
 
 export async function openReview(input: string): Promise<PullReviewView> {
+  const { row, project } = await checkOutPull(input);
+  return reviewView(row, project);
+}
+
+async function checkOutPull(
+  input: string,
+): Promise<{ row: CodeReviewRow; project: CodeProjectRow }> {
   const ref = parsePullRef(input);
   if (!ref) throw Boom.badRequest("Give a pull request as its GitHub URL or owner/name#123.");
   const project = await projectFor(ref.repo);
@@ -232,7 +239,7 @@ export async function openReview(input: string): Promise<PullReviewView> {
     .values({ projectId: project.id, number: pr.number, ...values })
     .onConflictDoUpdate({ target: [codeReviews.projectId, codeReviews.number], set: values })
     .returning();
-  return reviewView(row!, project);
+  return { row: row!, project };
 }
 
 export async function listReviews(): Promise<PullReviewView[]> {
@@ -260,15 +267,27 @@ export async function getReview(id: string): Promise<PullReviewView> {
   return reviewView(row, project);
 }
 
-function worktreeOf(row: CodeReviewRow): string {
-  if (!row.worktree) throw Boom.notFound("This review is archived. Open the PR again.");
-  return row.worktree;
+async function checkedOut(row: CodeReviewRow): Promise<CodeReviewRow & { worktree: string }> {
+  if (row.worktree) return { ...row, worktree: row.worktree };
+  if (row.archivedAt) throw Boom.notFound("This review is archived. Open the PR again.");
+  const checkouts = app().reviewCheckouts;
+  let pending = checkouts.get(row.id);
+  if (!pending) {
+    pending = checkOutPull(row.url)
+      .then((fresh) => fresh.row)
+      .finally(() => checkouts.delete(row.id));
+    checkouts.set(row.id, pending);
+  }
+  const fresh = await pending;
+  if (!fresh.worktree) throw Boom.notFound("This review is archived. Open the PR again.");
+  return { ...fresh, worktree: fresh.worktree };
 }
 
 export async function reviewWorktree(id: string) {
-  const { row, project } = await findReview(id);
-  const worktree = worktreeOf(row);
-  return { row, project, worktree, ws: await codeGitHub().workspace(project) };
+  const found = await findReview(id);
+  const row = await checkedOut(found.row);
+  const { project } = found;
+  return { row, project, worktree: row.worktree, ws: await codeGitHub().workspace(project) };
 }
 
 export async function askReview(
@@ -279,8 +298,10 @@ export async function askReview(
   const hub = codeHub();
   if (!hub) throw Boom.notFound("No coding agent is connected.");
   return hub.serial(reviewKey(id), async () => {
-    const { row, project } = await findReview(id);
-    const worktree = worktreeOf(row);
+    const found = await findReview(id);
+    const row = await checkedOut(found.row);
+    const { project } = found;
+    const { worktree } = row;
     const known = row.threadId ? hub.resolve(row.threadId) : undefined;
     const { result } = await threadReview(reviewKey(id)).send(async (comments) => {
       const message = comments ? `${comments}\n\n---\n\n${question}` : question;

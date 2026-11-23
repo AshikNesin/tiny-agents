@@ -915,6 +915,7 @@ export type CodeRunRow = typeof codeRuns.$inferSelect;
 export type CodeFindingRow = typeof codeFindings.$inferSelect;
 export type CodeHandoff = typeof codeHandoffs.$inferSelect;
 export type CodeProjectRow = typeof codeProjects.$inferSelect;
+export type CodeReviewRow = typeof codeReviews.$inferSelect;
 export type CodePullRow = typeof codePullRequests.$inferSelect;
 export type CodeAutofixPass = typeof codeAutofixPasses.$inferSelect;
 export type CodeReviewDraft = typeof codeReviewDrafts.$inferSelect;
