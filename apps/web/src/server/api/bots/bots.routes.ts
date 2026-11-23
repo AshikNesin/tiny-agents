@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import type { AppEnv } from "@groot/core/types";
 import { ok } from "@groot/core/utils/api-response.utils";
 import { parseBody, parseQuery, parseStringParam } from "@groot/core/utils/controller.utils";
+import { z } from "zod";
 import { Boom } from "@groot/core/errors";
 import { getAgentRuntime } from "./bots.runtime";
 import { getConnectionManager } from "../connections/connections.manager";
@@ -164,6 +165,12 @@ router.post("/bots/:id/abort", async (c) => {
 router.post("/bots/:id/reset", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
   return ok(c, await chatsService.resetConversation(id));
+});
+
+router.post("/bots/:id/rewind", async (c) => {
+  const id = parseStringParam(c.req.param("id"), "id");
+  const { at } = await parseBody(c, z.object({ at: z.string().trim().min(1).max(64) }));
+  return ok(c, await chatsService.rewindChat(id, at));
 });
 
 router.get("/bots/:id/chats", async (c) => {

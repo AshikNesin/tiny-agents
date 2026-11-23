@@ -1,4 +1,4 @@
-import { CodeKeys, useCodeCommands, type CodeCommand } from "./keys";
+import { PageKeys, useKeyCommands, type KeyCommand } from "../../components/keys";
 import { ReviewFindings, openFindings } from "./ReviewFindings";
 import type { FindingView, ReviewVerdict } from "../../../shared/api/code";
 import { useCallback, useEffect, useEffectEvent, useMemo, useState, type FormEvent } from "react";
@@ -138,8 +138,8 @@ export function PullReview({
     },
     [review, refreshReview, loadComments],
   );
-  const setHelp = useCodeCommands((s) => s.setHelp);
-  const commands = useMemo<CodeCommand[]>(
+  const setHelp = useKeyCommands((s) => s.setHelp);
+  const commands = useMemo<KeyCommand[]>(
     () => [
       {
         id: "agent-review",
@@ -258,7 +258,7 @@ export function PullReview({
 
   return (
     <div className="flex h-dvh min-h-0 flex-col" data-testid="code-pull-review">
-      <CodeKeys commands={commands} />
+      <PageKeys commands={commands} />
       <header className="border-border flex h-12 shrink-0 items-center gap-1 border-b px-2 sm:px-3">
         <Button asChild variant="ghost" size="icon-sm" className="shrink-0">
           <Link to="/code" aria-label="Back to the thread list" title="Back to the thread list">

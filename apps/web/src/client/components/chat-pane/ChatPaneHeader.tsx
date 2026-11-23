@@ -1,4 +1,4 @@
-import { Globe, Menu, MonitorPlay, SquarePen, Users } from "lucide-react";
+import { Globe, History, Menu, MonitorPlay, SquarePen, Users } from "lucide-react";
 import { Button } from "@groot/ui/button";
 import type { Bot } from "../../../shared/api/bots";
 import { BotAvatar } from "../BotAvatar";
@@ -104,10 +104,22 @@ export function ChatPaneHeader({
             variant="ghost"
             size="icon-sm"
             className="text-muted-foreground hover:text-foreground"
+            onClick={() => onMenuViewChange("history")}
+            aria-label="Past chats"
+            title="Past chats (h)"
+          >
+            <History className="size-4" />
+          </Button>
+        )}
+        {!guest && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="text-muted-foreground hover:text-foreground"
             onClick={onNewChat}
             disabled={!canReset}
             aria-label="Start a new chat"
-            title={`New chat (${NEW_CHAT_SHORTCUT})`}
+            title={`New chat (n or ${NEW_CHAT_SHORTCUT})`}
           >
             <SquarePen className="size-4" />
           </Button>

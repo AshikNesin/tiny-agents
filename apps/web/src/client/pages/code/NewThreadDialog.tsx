@@ -21,7 +21,7 @@ import {
 } from "../../lib/code/api";
 import type { ProjectView } from "../../../shared/api/code";
 import { DEFAULT, ModelPicker, PermissionPicker, composerPermission, loadModels } from "./controls";
-import { Kbd } from "./keys";
+import { Kbd } from "../../components/keys";
 
 const PROJECT_KEY = "tiny-agents:code-project";
 

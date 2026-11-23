@@ -9,7 +9,7 @@ import { DEFAULT_FONT_SIZE } from "../../lib/xterm";
 import type { TerminalConnectionState } from "../../lib/terminal-ws";
 import { TerminalView } from "../terminal/TerminalView";
 import { useUiStore } from "../../store/ui";
-import { Kbd } from "./keys";
+import { Kbd } from "../../components/keys";
 
 export function TerminalDrawer({
   threadId,

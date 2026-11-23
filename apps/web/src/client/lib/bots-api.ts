@@ -97,6 +97,7 @@ export const botsApi = {
   deleteUpload: (uploadId: string) => apiClient.delete<Deleted>(`/uploads/${uploadId}`),
   abort: (id: string) => apiClient.post(`/bots/${id}/abort`),
   reset: (id: string) => apiClient.post<Bot>(`/bots/${id}/reset`),
+  rewind: (id: string, at: string) => apiClient.post<Bot>(`/bots/${id}/rewind`, { at }),
   pastChats: (id: string) => apiClient.get<PastChatList>(`/bots/${id}/chats`).then((r) => r.chats),
   pastChat: (id: string, chatId: string) =>
     apiClient.get<PastChatView>(`/bots/${id}/chats/${chatId}`),

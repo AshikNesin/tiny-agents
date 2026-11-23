@@ -262,3 +262,15 @@ export function groupText(
     ...(duration > 0 ? { duration: formatDuration(duration) } : {}),
   };
 }
+
+export function workFold(
+  message: { status: string; toolCalls?: ChatToolCall[]; reasoning?: string },
+  labels: ToolLabelCatalog,
+): { title: string; failed?: string; duration?: string } | null {
+  if (message.status === "streaming") return null;
+  const calls = message.toolCalls ?? [];
+  if (calls.length === 0 || calls.some((call) => !viewOf(call).foldable)) return null;
+  if (toolSteps(calls).length + (message.reasoning ? 1 : 0) < 2) return null;
+  const text = groupText(calls, labels);
+  return { ...text, title: `Worked: ${text.title.charAt(0).toLowerCase()}${text.title.slice(1)}` };
+}

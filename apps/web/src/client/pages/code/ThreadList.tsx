@@ -9,7 +9,7 @@ import { statusSections, type StatusSection } from "../../lib/code/list";
 import type { ProjectView } from "../../../shared/api/code";
 import { useResource } from "../../queries/resource";
 import { PullChip } from "./controls";
-import { Kbd } from "./keys";
+import { Kbd } from "../../components/keys";
 import { ReviewList } from "./ReviewList";
 
 const DOT: Record<StatusSection["key"], string> = {

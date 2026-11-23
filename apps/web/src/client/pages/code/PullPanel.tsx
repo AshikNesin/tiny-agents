@@ -1,5 +1,5 @@
 import type { WorkflowName } from "../../../shared/code-status";
-import { Kbd } from "./keys";
+import { Kbd } from "../../components/keys";
 import { useCallback, useState } from "react";
 import {
   ExternalLink,

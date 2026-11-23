@@ -6,7 +6,7 @@ import { cn } from "@groot/ui/lib/utils";
 import { Spinner } from "../../components/ui/spinner";
 import { projectsApi } from "../../lib/code/projects";
 import { useResource } from "../../queries/resource";
-import { Kbd } from "./keys";
+import { Kbd } from "../../components/keys";
 import { LightEditor } from "./LightEditor";
 
 const SHOWN = 200;

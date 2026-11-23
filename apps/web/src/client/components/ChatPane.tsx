@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { isDialogOpen, isEditable, useHotkey } from "@groot/ui/hotkeys";
 import { toast } from "sonner";
 import type { Bot } from "../../shared/api/bots";
 import type { CatalogModel } from "../../shared/api/models";
@@ -23,6 +25,11 @@ import { DropOverlay, useFileDrop } from "./chat-pane/file-drop";
 import { useLiveViews } from "./chat-pane/live-views";
 import { QueuedMessages } from "./chat-pane/QueuedMessages";
 import { useHistoryMenu } from "./chat-pane/use-history-menu";
+import { PageKeys, useKeyCommands, type KeyCommand } from "./keys";
+import { groupBots } from "../lib/bot-groups";
+import { lastTurn, type LastTurn } from "../lib/last-turn";
+import { LastTurnContext } from "./chat-message/last-turn";
+import { EditingBanner } from "./chat-pane/ChatPaneNotices";
 
 interface ChatPaneProps {
   bot: Bot;
@@ -72,14 +79,157 @@ function ChatPaneBody({ bot, models, canAnswer, onEditBot }: ChatPaneProps) {
 
   const live = useLiveViews(bot, messages);
 
+  const [editing, setEditing] = useState<LastTurn | null>(null);
+  const turn = owner && !busy ? lastTurn(messages) : null;
+  const rewindTo = async (at: string) => adoptBot(await botsApi.rewind(bot.id, at));
+
+  const send = async (submission: OwnerSubmission) => {
+    scroller.scrollToEnd({ behavior: "auto" });
+    if (editing) {
+      try {
+        await rewindTo(editing.at);
+      } catch (error) {
+        toast.error(errorMessage(error, "Could not go back to that message"));
+        return "restored" as const;
+      }
+      setEditing(null);
+    }
+    return chat.send(submission);
+  };
+
+  const retryLast = () => {
+    if (!turn) return;
+    void rewindTo(turn.at)
+      .then(() => chat.send({ body: turn.text, attachments: [], mentions: [], whenBusy: "steer" }))
+      .catch((error: unknown) => toast.error(errorMessage(error, "Could not run it again")));
+  };
+  const editLast = () => {
+    if (!turn) return;
+    setEditing(turn);
+    composerRef.current?.setText(turn.text);
+  };
+  const cancelEdit = () => {
+    setEditing(null);
+    composerRef.current?.setText("");
+  };
+  const lastTurnActions = useMemo(
+    () => (turn ? { at: turn.at, edit: editLast, retry: retryLast } : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the actions read the latest turn when run
+    [turn?.at, turn?.text],
+  );
+
+  const navigate = useNavigate();
+  const bots = useBotsStore((s) => s.bots);
+  const toggleSidebar = useUiStore((s) => s.toggleSidebar);
+  const setHelp = useKeyCommands((s) => s.setHelp);
+  const order = useMemo(() => {
+    const { needsYou, working, pinned, recent } = groupBots(bots);
+    return [...needsYou, ...working, ...pinned, ...recent];
+  }, [bots]);
+  const commands = useMemo<KeyCommand[]>(() => {
+    const go = (step: 1 | -1) => {
+      const at = order.findIndex((entry) => entry.id === bot.id);
+      const next = order[at + step];
+      if (next) navigate(`/chats/${next.id}`);
+    };
+    const nextNeedingYou = () => {
+      const next = order.find(
+        (entry) => entry.id !== bot.id && entry.approvals + entry.questions > 0,
+      );
+      if (next) navigate(`/chats/${next.id}`);
+      else toast("No other bot needs you.");
+    };
+    return [
+      { id: "next", group: "Go to", keys: "j", label: "Next bot", run: () => go(1) },
+      { id: "prev", group: "Go to", keys: "k", label: "Previous bot", run: () => go(-1) },
+      {
+        id: "needs",
+        group: "Go to",
+        keys: "u",
+        label: "Next bot that needs you",
+        run: nextNeedingYou,
+      },
+      {
+        id: "list",
+        group: "Go to",
+        keys: "[",
+        label: "Show or hide the sidebar",
+        run: () => toggleSidebar("chat"),
+      },
+      {
+        id: "compose",
+        group: "Chat",
+        keys: "c",
+        label: "Write to the bot",
+        run: () => composerRef.current?.focus(),
+      },
+      {
+        id: "history",
+        group: "Chat",
+        keys: "h",
+        label: "Past chats",
+        enabled: owner,
+        run: () => setMenuView("history"),
+      },
+      {
+        id: "new-chat",
+        group: "Chat",
+        keys: "n",
+        label: "Start a new chat",
+        enabled: canReset,
+        run: () => setConfirmReset(true),
+      },
+      {
+        id: "edit",
+        group: "Chat",
+        keys: "e",
+        label: "Edit your last message",
+        enabled: lastTurnActions !== null,
+        run: () => lastTurnActions?.edit(),
+      },
+      {
+        id: "retry",
+        group: "Chat",
+        keys: "t",
+        label: "Run your last message again",
+        enabled: lastTurnActions !== null,
+        run: () => lastTurnActions?.retry(),
+      },
+      {
+        id: "stop",
+        group: "Chat",
+        keys: "Escape",
+        label: "Stop the reply",
+        enabled: busy,
+        run: () => void chat.stop(),
+      },
+      { id: "keys", group: "Go to", keys: "?", label: "Show the keys", run: () => setHelp(true) },
+    ];
+  }, [
+    order,
+    bot.id,
+    navigate,
+    toggleSidebar,
+    owner,
+    setMenuView,
+    canReset,
+    busy,
+    chat,
+    setHelp,
+    lastTurnActions,
+  ]);
+  useHotkey(
+    "escape",
+    () => {
+      if (isDialogOpen() || isEditable(document.activeElement)) return;
+      if (busy) void chat.stop();
+    },
+    { inFields: false },
+  );
+
   const defaultModel = useBotsStore((s) => s.defaultModel);
   const model = models.find((m) => m.id === (bot.modelId ?? defaultModel));
   const composerEnabled = canAnswer && model !== undefined;
-
-  const send = (submission: OwnerSubmission) => {
-    scroller.scrollToEnd({ behavior: "auto" });
-    return chat.send(submission);
-  };
 
   const { dragging, dropHandlers } = useFileDrop(composerEnabled, composerRef);
 
@@ -109,6 +259,7 @@ function ChatPaneBody({ bot, models, canAnswer, onEditBot }: ChatPaneProps) {
 
   return (
     <div className="flex h-full min-h-0 flex-col md:flex-row">
+      <PageKeys commands={commands} />
       <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col" {...dropHandlers}>
         {dragging && <DropOverlay />}
         <ChatPaneHeader
@@ -129,13 +280,17 @@ function ChatPaneBody({ bot, models, canAnswer, onEditBot }: ChatPaneProps) {
           <ModelWarning anyEnabled={providers?.some((provider) => provider.enabled)} />
         )}
 
-        <ChatSessionTranscript bot={bot} chat={chat} mode={LIVE_CHAT} />
+        <LastTurnContext.Provider value={lastTurnActions}>
+          <ChatSessionTranscript bot={bot} chat={chat} mode={LIVE_CHAT} />
+        </LastTurnContext.Provider>
 
         {held.length > 0 && (
           <QueuedMessages held={held} onWithdraw={(requestId) => void chat.withdraw(requestId)} />
         )}
 
         {yolo && <YoloBanner guest={!owner} onTurnOff={() => void setYolo(false)} />}
+
+        {editing && <EditingBanner onCancel={cancelEdit} />}
 
         <ChatComposer
           ref={composerRef}

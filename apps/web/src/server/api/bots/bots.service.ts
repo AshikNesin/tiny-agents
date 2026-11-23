@@ -44,6 +44,7 @@ export type BotAgentRuntime = Pick<
   | "answerQuestions"
   | "dismissQuestions"
   | "isBusy"
+  | "fork"
 >;
 
 function runtime(): BotAgentRuntime {

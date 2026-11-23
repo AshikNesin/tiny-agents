@@ -3,18 +3,24 @@ import type { BotListEntry } from "../../shared/api/bots";
 export const RECENT_FOLD_LIMIT = 8;
 
 export interface BotGroups {
+  needsYou: BotListEntry[];
+  working: BotListEntry[];
   pinned: BotListEntry[];
   recent: BotListEntry[];
 }
 
+const newestFirst = (a: BotListEntry, b: BotListEntry) =>
+  b.lastActivityAt.localeCompare(a.lastActivityAt);
+
 export function groupBots(bots: BotListEntry[]): BotGroups {
-  const pinned = bots
+  const needsYou = bots.filter((bot) => bot.approvals + bot.questions > 0).sort(newestFirst);
+  const working = bots.filter((bot) => bot.replying && !needsYou.includes(bot)).sort(newestFirst);
+  const rest = bots.filter((bot) => !needsYou.includes(bot) && !working.includes(bot));
+  const pinned = rest
     .filter((bot) => bot.pinnedAt !== null)
     .sort((a, b) => (a.pinnedAt ?? "").localeCompare(b.pinnedAt ?? ""));
-  const recent = bots
-    .filter((bot) => bot.pinnedAt === null)
-    .sort((a, b) => b.lastActivityAt.localeCompare(a.lastActivityAt));
-  return { pinned, recent };
+  const recent = rest.filter((bot) => bot.pinnedAt === null).sort(newestFirst);
+  return { needsYou, working, pinned, recent };
 }
 
 export function visibleRecent(

@@ -20,7 +20,7 @@ import { useResource } from "../../queries/resource";
 import { harnessOf, useCodeStore } from "../../store/code";
 import { useUiStore, type CodePane } from "../../store/ui";
 import { CodeSettings } from "./CodeSettings";
-import { CodeKeys, Kbd, useCodeCommands, type CodeCommand } from "./keys";
+import { PageKeys, Kbd, useKeyCommands, type KeyCommand } from "../../components/keys";
 import { FilesPane } from "./FilesPane";
 import { NewThreadDialog } from "./NewThreadDialog";
 import { TerminalDrawer } from "./TerminalDrawer";
@@ -119,7 +119,7 @@ export function CodeWorkspace() {
   const toggleUiSidebar = useUiStore((s) => s.toggleSidebar);
   const pane = useUiStore((s) => s.codePane);
   const setPane = useUiStore((s) => s.setCodePane);
-  const setHelp = useCodeCommands((s) => s.setHelp);
+  const setHelp = useKeyCommands((s) => s.setHelp);
   const terminalOpen = useUiStore((s) => s.codeTerminalOpen);
   const toggleTerminal = useUiStore((s) => s.toggleCodeTerminal);
   const { projects, reload: reloadProjects } = useProjects();
@@ -242,7 +242,7 @@ export function CodeWorkspace() {
     else toast("Nothing else needs you.");
   }, [listed, threadId, navigate]);
 
-  const commands = useMemo<CodeCommand[]>(
+  const commands = useMemo<KeyCommand[]>(
     () => [
       { id: "next", group: "Go to", keys: "j", label: "Next thread", run: () => move(1) },
       { id: "prev", group: "Go to", keys: "k", label: "Previous thread", run: () => move(-1) },
@@ -418,7 +418,7 @@ export function CodeWorkspace() {
   const full = Boolean(threadId) || inSettings;
   return (
     <div className="flex h-dvh min-h-0">
-      <CodeKeys commands={commands} />
+      <PageKeys commands={commands} />
       <NewThreadDialog
         open={composing}
         onOpenChange={(open) => !open && navigate(threadId ? threadPath(threadId) : "/code")}

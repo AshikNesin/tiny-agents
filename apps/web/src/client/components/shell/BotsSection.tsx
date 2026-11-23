@@ -146,7 +146,8 @@ export function BotsSection({ bots, activeId, onNavigate = () => {} }: BotsSecti
   const openCreateBot = useUiStore((s) => s.openCreateBot);
   const role = useViewerRole();
   const [expanded, setExpanded] = useState(false);
-  const { pinned, recent } = useMemo(() => groupBots(bots), [bots]);
+  const { needsYou, working, pinned, recent } = useMemo(() => groupBots(bots), [bots]);
+  const above = needsYou.length + working.length + pinned.length;
   const shown = visibleRecent(recent, expanded, activeId);
   const hidden = recent.length - shown.length;
   const foldable = recent.length > shown.length || (expanded && recent.length > 8);
@@ -173,6 +174,28 @@ export function BotsSection({ bots, activeId, onNavigate = () => {} }: BotsSecti
         </p>
       )}
 
+      {needsYou.length > 0 && (
+        <>
+          <GroupLabel>Needs you</GroupLabel>
+          <ul className="space-y-0.5" aria-label="Needs you">
+            {needsYou.map((bot) => (
+              <BotRow key={bot.id} bot={bot} active={bot.id === activeId} onNavigate={onNavigate} />
+            ))}
+          </ul>
+        </>
+      )}
+
+      {working.length > 0 && (
+        <>
+          <GroupLabel>Working</GroupLabel>
+          <ul className="space-y-0.5" aria-label="Working">
+            {working.map((bot) => (
+              <BotRow key={bot.id} bot={bot} active={bot.id === activeId} onNavigate={onNavigate} />
+            ))}
+          </ul>
+        </>
+      )}
+
       {pinned.length > 0 && (
         <>
           <GroupLabel>Pinned</GroupLabel>
@@ -186,7 +209,7 @@ export function BotsSection({ bots, activeId, onNavigate = () => {} }: BotsSecti
 
       {recent.length > 0 && (
         <>
-          {pinned.length > 0 && <GroupLabel>Recent</GroupLabel>}
+          {above > 0 && <GroupLabel>Recent</GroupLabel>}
           <ul className="space-y-0.5">
             {shown.map((bot) => (
               <BotRow key={bot.id} bot={bot} active={bot.id === activeId} onNavigate={onNavigate} />

@@ -28,6 +28,22 @@ function bot(id: string, overrides: Partial<BotListEntry> = {}): BotListEntry {
 }
 
 describe("groupBots", () => {
+  it("puts bots waiting on you first, then the ones replying, each only once", () => {
+    const groups = groupBots([
+      bot("quiet", { lastActivityAt: "2026-01-05T00:00:00.000Z" }),
+      bot("asks", { questions: 1, lastActivityAt: "2026-01-01T00:00:00.000Z" }),
+      bot("pinned-approval", { approvals: 2, pinnedAt: "2026-01-01T00:00:00.000Z" }),
+      bot("busy", { replying: true }),
+      bot("busy-and-asks", { replying: true, approvals: 1 }),
+      bot("pinned", { pinnedAt: "2026-01-02T00:00:00.000Z" }),
+    ]);
+
+    expect(groups.needsYou.map((b) => b.id)).toEqual(["asks", "pinned-approval", "busy-and-asks"]);
+    expect(groups.working.map((b) => b.id)).toEqual(["busy"]);
+    expect(groups.pinned.map((b) => b.id)).toEqual(["pinned"]);
+    expect(groups.recent.map((b) => b.id)).toEqual(["quiet"]);
+  });
+
   it("orders pinned bots by pin time and the rest by recent activity", () => {
     const { pinned, recent } = groupBots([
       bot("a", { lastActivityAt: "2026-01-01T00:00:00.000Z" }),

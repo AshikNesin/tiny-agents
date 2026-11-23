@@ -13,7 +13,7 @@ The owner's coding workspace at `/code`: threads grouped by status on the left, 
 - `code-rewind` `t` runs the last turn again and `e` edits it first: the files go back to how they were before that turn, with Undo.
 - `code-files` `3` Files: `p` opens a file by name, `s` searches the worktree, the editor saves with `⌘S`.
 - `code-terminal` `` ` `` opens a terminal in the thread's worktree, under the thread.
-- `code-keys` `?` lists every key; the command palette's `Code actions` group runs them.
+- `code-keys` `?` lists every key; the command palette's `Code actions` group (`Chat actions` on the chat page) runs them.
 - `code-legacy-links` a link from before the rebuild (`/code/<thread id>`, with `/changes` or `/pr`) lands on `/code/t/<thread id>` with that pane.
 - `code-review-row` a pull request that waits for your review is a row under `Reviews` in the list; a click checks it out and opens `/code/reviews/<id>`. `v` takes a pasted link.
 - `code-agent-review` `r` has the agent review the pull request: a brief and findings. `y` adds a finding to your review as a pending comment, `d` dismisses it. `Shift+A` and `Shift+X` open Submit review on Approve or Request changes.

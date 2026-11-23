@@ -6,7 +6,7 @@
  * surface once settled.
  */
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { ChatMessageView } from "@/components/ChatMessageView";
 import type { ChatMessage } from "@/lib/chat-types";
@@ -102,5 +102,59 @@ describe("ChatMessageView reply card", () => {
     const card = document.querySelector('[data-slot="reply-card"]');
     expect(card).not.toBeNull();
     expect(card).toHaveTextContent("boom");
+  });
+});
+
+describe("a finished reply's work", () => {
+  const calls = [
+    {
+      id: "t1",
+      name: "list_routines",
+      args: {},
+      status: "done" as const,
+      output: "[]",
+      durationMs: 1200,
+    },
+    {
+      id: "t2",
+      name: "list_tasks",
+      args: {},
+      status: "error" as const,
+      output: "boom",
+      durationMs: 300,
+    },
+  ];
+
+  it("folds into one line above the answer, and opens to show each step", () => {
+    render(
+      <ChatMessageView
+        message={msg({
+          text: "Two routines.",
+          reasoning: "Check routines, then tasks",
+          toolCalls: calls,
+        })}
+        {...base}
+      />,
+    );
+
+    const work = screen.getByTestId("reply-work");
+    expect(work).toHaveTextContent("Worked: list routines, list tasks");
+    expect(work).toHaveTextContent("1 failed");
+    expect(screen.getByText("Two routines.")).toBeInTheDocument();
+    expect(screen.queryByText("Reasoning")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Worked: list routines, list tasks"));
+    expect(screen.getByText("Reasoning")).toBeInTheDocument();
+  });
+
+  it("stays unfolded while the bot is still working", () => {
+    render(
+      <ChatMessageView
+        message={msg({ status: "streaming", reasoning: "Check routines", toolCalls: calls })}
+        {...base}
+      />,
+    );
+    expect(screen.queryByTestId("reply-work")).not.toBeInTheDocument();
+    expect(screen.getByText("Thinking…")).toBeInTheDocument();
   });
 });

@@ -3,7 +3,7 @@ import { Button, monoClass } from "@groot/ui";
 import { cn } from "@groot/ui/lib/utils";
 import { Spinner } from "../../components/ui/spinner";
 import type { FindingView, PullReviewView } from "../../../shared/api/code";
-import { Kbd } from "./keys";
+import { Kbd } from "../../components/keys";
 
 const SEVERITY: Record<FindingView["severity"], string> = {
   bug: "text-destructive",

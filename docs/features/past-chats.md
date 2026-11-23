@@ -4,7 +4,8 @@
 is not lost: it becomes a **past chat** that the owner can read, continue or
 delete from the bot menu (click the bot's name in the chat header) →
 **Chat history**, a second page of the same menu. The sidebar row's ⋯ menu
-also has a **Chat history** item, which opens that page.
+also has a **Chat history** item, which opens that page, and so do the
+header's **Past chats** button and the `h` key.
 
 ## What is stored
 
