@@ -51,6 +51,29 @@ await journey("code-open-editor", async ({ page, step, proof, cleanup, api, stam
     await expect(dialog).toBeVisible();
   });
 
+  await step(
+    "the Files tab has Open in editor at its top; the sidebar foot has no key hints",
+    async () => {
+      await page.keyboard.press("Escape");
+      await expect(dialog).toHaveCount(0);
+      await page
+        .getByRole("tablist", { name: "Work pane" })
+        .getByRole("tab", { name: "Files" })
+        .click();
+      const files = page.getByTestId("code-files");
+      await expect(files).toBeVisible();
+      await expect(page.getByTestId("code-commands")).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Show the keys" })).toHaveCount(0);
+    },
+  );
+  await proof("files-tab");
+
+  await step("the Files tab's button opens the same dialog", async () => {
+    await page.getByTestId("code-files").getByRole("button", { name: "Open in editor" }).click();
+    await expect(dialog).toBeVisible();
+  });
+  await proof("files-tab-dialog");
+
   await step("pick Zed and a plain host; Copy link gives Zed's SSH link", async () => {
     await dialog.getByRole("radio", { name: "Zed" }).click();
     await host.fill("tiny-agents.exe.xyz");

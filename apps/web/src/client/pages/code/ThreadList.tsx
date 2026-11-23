@@ -28,7 +28,7 @@ import { statusSections, type StatusSection } from "../../lib/code/list";
 import type { ProjectView } from "../../../shared/api/code";
 import { useResource } from "../../queries/resource";
 import { PullChip, useArchive } from "./controls";
-import { Kbd, useKeyCommands } from "../../components/keys";
+import { Kbd } from "../../components/keys";
 import { ReviewList } from "./ReviewList";
 
 const DOT: Record<StatusSection["key"], string> = {
@@ -208,7 +208,6 @@ export function ThreadList({
   onNew,
   addingReview,
   onAddingReview,
-  onCommands,
 }: {
   threads: ThreadSummary[] | null;
   harnesses: HarnessInfo[];
@@ -217,9 +216,7 @@ export function ThreadList({
   onNew(): void;
   addingReview: boolean;
   onAddingReview(open: boolean): void;
-  onCommands(): void;
 }) {
-  const setHelp = useKeyCommands((s) => s.setHelp);
   const sections = useMemo(() => statusSections(threads ?? []), [threads]);
   const projectName = (id?: string | null) =>
     (projects?.length ?? 0) > 1 ? projects?.find((p) => p.id === id)?.name : undefined;
@@ -298,26 +295,6 @@ export function ThreadList({
           <Settings className="size-4" />
           Settings
         </Link>
-        <span className="flex-1" />
-        <button
-          type="button"
-          onClick={() => setHelp(true)}
-          title="Show the keys"
-          aria-label="Show the keys"
-          className="text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground flex h-8 items-center gap-1.5 rounded-lg px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-        >
-          <Kbd keys="?" />
-        </button>
-        <button
-          type="button"
-          onClick={onCommands}
-          title="Run a command or jump to a thread"
-          data-testid="code-commands"
-          className="text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground flex h-8 items-center gap-1.5 rounded-lg px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-        >
-          <Kbd keys=":" />
-          Commands
-        </button>
       </div>
     </div>
   );

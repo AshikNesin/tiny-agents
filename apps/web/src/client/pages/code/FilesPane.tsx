@@ -1,16 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Copy, Search, X } from "lucide-react";
+import { Copy, Search, SquareArrowOutUpRight, X } from "lucide-react";
 import { toast } from "sonner";
 import { FileTree, useFileTree } from "@pierre/trees/react";
 import type { GitStatusEntry } from "@pierre/trees";
-import { monoClass } from "@groot/ui";
+import { Button, monoClass } from "@groot/ui";
 import { cn } from "@groot/ui/lib/utils";
 import { Spinner } from "../../components/ui/spinner";
+import type { HarnessInfo } from "../../lib/code/api";
 import { projectsApi } from "../../lib/code/projects";
 import { useResource } from "../../queries/resource";
 import { Kbd } from "../../components/keys";
 import type { FileHit, ReviewFile } from "../../../shared/api/code";
 import { LightEditor } from "./LightEditor";
+import { OpenInEditor } from "./OpenInEditor";
 import { TREE_STYLE } from "./tree-style";
 
 const TREE_CSS = `
@@ -237,12 +239,15 @@ export function FilesPane({
   refreshKey,
   focus = null,
   onFocused = noFocusToClear,
+  editor,
 }: {
   threadId: string;
   refreshKey: unknown;
   focus?: FilesFocus | null;
   onFocused?(): void;
+  editor?: { harness: HarnessInfo; folder: string };
 }) {
+  const [editorOpen, setEditorOpen] = useState(false);
   const [text, setText] = useState("");
   const [searched, setSearched] = useState("");
   const [open, setOpen] = useState<string | null>(null);
@@ -286,6 +291,28 @@ export function FilesPane({
 
   return (
     <div className="@container flex h-full min-h-0 flex-col" data-testid="code-files">
+      {editor && (
+        <div className="border-border hidden h-9 shrink-0 items-center justify-end border-b px-2 md:flex">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-muted-foreground h-7 text-xs"
+            title="Open in editor (o)"
+            onClick={() => setEditorOpen(true)}
+          >
+            <SquareArrowOutUpRight />
+            Open in editor
+          </Button>
+          {editorOpen && (
+            <OpenInEditor
+              open
+              onOpenChange={setEditorOpen}
+              harness={editor.harness}
+              path={editor.folder}
+            />
+          )}
+        </div>
+      )}
       <div className="flex min-h-0 flex-1 flex-col @lg:flex-row">
         <div className="border-border flex h-[40%] min-h-0 shrink-0 flex-col border-b @lg:h-auto @lg:w-56 @lg:border-r @lg:border-b-0 @3xl:w-72">
           <form
