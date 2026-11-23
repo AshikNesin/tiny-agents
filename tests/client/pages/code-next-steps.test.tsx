@@ -32,6 +32,7 @@ function show(next: Partial<ThreadPullsView>) {
     earlier: [],
     ahead: 0,
     uncommitted: 0,
+    landed: null,
     ...next,
   };
   const onStep = vi.fn();

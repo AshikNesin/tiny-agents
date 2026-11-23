@@ -457,6 +457,47 @@ describe("publish and the PR tab", () => {
     );
   });
 
+  it("once its PR is squash-merged, counts only commits made after it, so Create PR does not come back", async () => {
+    const project = await newProject();
+    await call("PATCH", `/projects/${project.id}`, { settings: { archiveOnMerge: false } });
+    const thread = await newThread(project.id);
+    await commit(thread.worktree, "src/login.ts");
+    await call("POST", `/threads/${encodeURIComponent(thread.id)}/publish`, {});
+
+    github.pull(1).state = "merged";
+
+    const merged = await pr(thread.id);
+    expect([merged.active, merged.ahead]).toEqual([null, 0]);
+    await commit(thread.worktree, "src/follow-up.ts");
+    expect((await pr(thread.id)).ahead).toBe(1);
+  });
+
+  it("sees work merged into the machine's main, pushes main on request, and then sees it on GitHub", async () => {
+    const project = await newProject();
+    const thread = await newThread(project.id);
+    const enc = encodeURIComponent(thread.id);
+    await commit(thread.worktree, "src/login.ts");
+    const head = await sh(local, `git -C ${thread.worktree} rev-parse HEAD`);
+    await sh(local, `git -C ${project.checkoutPath} update-ref refs/heads/main ${head}`);
+
+    expect((await pr(thread.id)).landed).toBe("local");
+
+    const pushed = await call<ThreadPullsView>("POST", `/threads/${enc}/push-base`, {});
+
+    expect(pushed.status).toBe(200);
+    expect(await remoteHead("main")).toBe(head);
+    expect(pushed.body.data).toMatchObject({ landed: "github", ahead: 0, active: null });
+  });
+
+  it("sees work an agent pushed straight to main on GitHub", async () => {
+    const project = await newProject();
+    const thread = await newThread(project.id);
+    await commit(thread.worktree, "src/login.ts");
+    await sh(local, `git -C ${thread.worktree} push --quiet ${bare} HEAD:refs/heads/main`);
+
+    expect(await pr(thread.id)).toMatchObject({ landed: "github", ahead: 0 });
+  });
+
   it("tells open Code pages when a thread's PR opens or merges, so the header shows it", async () => {
     const project = await newProject();
     const thread = await newThread(project.id);

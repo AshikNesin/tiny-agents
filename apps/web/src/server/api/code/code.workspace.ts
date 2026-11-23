@@ -71,6 +71,9 @@ export interface Workspace {
   file(path: string, file: string, from: string, to?: string): Promise<FileContents>;
   changeStamp(path: string): Promise<string>;
   commitsAhead(path: string, base: string): Promise<Array<{ sha: string; subject: string }>>;
+  commitsSince(path: string, sha: string): Promise<number>;
+  landedIn(path: string, base: string): Promise<"github" | "local" | null>;
+  pushBase(path: string, repo: RepoRef, base: string): Promise<void>;
   changedPaths(path: string, from: string, to: string): Promise<string[]>;
   syncToRemote(path: string, repo: RepoRef, branch: string): Promise<void>;
   push(path: string, repo: RepoRef, branch: string): Promise<string>;
@@ -424,6 +427,40 @@ export function createWorkspace(options: WorkspaceOptions): Workspace {
           const [sha, ...rest] = line.split("\t");
           return { sha: sha!, subject: rest.join("\t") };
         });
+    },
+    async commitsSince(path, sha) {
+      const out = await must(
+        `${git(path)} rev-list --count ${q(`${sha}..HEAD`)}`,
+        "Could not count commits",
+      );
+      return Number(out.trim()) || 0;
+    },
+    async landedIn(path, base) {
+      const fetched = await authed(
+        `-C ${q(path)} fetch --quiet origin ${q(`+refs/heads/${base}:refs/remotes/origin/${base}`)}`,
+      );
+      if (fetched.exitCode !== 0) {
+        throw new WorkspaceError(`Could not fetch ${base}: ${tail(fetched)}`);
+      }
+      const within = async (ref: string) =>
+        (await run(`${git(path)} merge-base --is-ancestor HEAD ${q(ref)}`)).exitCode === 0;
+      if (await within(`refs/remotes/origin/${base}`)) return "github";
+      if (await within(`refs/heads/${base}`)) return "local";
+      return null;
+    },
+    async pushBase(path, repo, base) {
+      const result = await authed(
+        `-C ${q(path)} -c core.hooksPath=/dev/null push --quiet --no-verify ${q(remote(repo))} ${q(`refs/heads/${base}:refs/heads/${base}`)}`,
+      );
+      if (result.exitCode !== 0) {
+        const rejected = /rejected|non-fast-forward|fetch first/i.test(result.stderr);
+        throw new WorkspaceError(
+          rejected
+            ? `GitHub rejected the push: ${base} moved there. The app never force-pushes.`
+            : `Could not push ${base}: ${tail(result)}`,
+          rejected ? "rejected" : "failed",
+        );
+      }
     },
     async changedPaths(path, from, to) {
       const out = await must(

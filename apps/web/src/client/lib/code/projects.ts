@@ -61,6 +61,7 @@ export const projectsApi = {
     apiClient.get<CheckLogView>(`${thread(id)}/pr/checks/${jobId}/log`),
   publish: (id: string, body: { title?: string; body?: string; commit?: boolean } = {}) =>
     apiClient.post<ThreadPullsView>(`${thread(id)}/publish`, body),
+  pushBase: (id: string) => apiClient.post<ThreadPullsView>(`${thread(id)}/push-base`),
   link: (id: string, number: number) =>
     apiClient.post<ThreadPullsView>(`${thread(id)}/pr/link`, { number }),
   unlink: (id: string) => apiClient.post<ThreadPullsView>(`${thread(id)}/pr/unlink`),

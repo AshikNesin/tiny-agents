@@ -7,6 +7,7 @@ import { useThreadPulls } from "../../lib/code/use-thread-pulls";
 const ICON: Record<NextStepId, typeof Archive> = {
   "create-pr": Upload,
   push: Upload,
+  "push-main": Upload,
   merge: GitMerge,
   review: Eye,
   "open-pr": GitPullRequest,

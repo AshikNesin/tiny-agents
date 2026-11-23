@@ -77,6 +77,7 @@ import {
   mergePull,
   setPullDraft,
   publish,
+  pushBase,
   setAutofix,
   threadPulls,
   unlinkPull,
@@ -251,6 +252,12 @@ router.post("/code/threads/:id/publish", async (c) => {
   );
   await publish(id, body);
   return ok<ThreadPullsView>(c, await threadPulls(id, false), 201);
+});
+
+router.post("/code/threads/:id/push-base", async (c) => {
+  const id = threadParam(c.req.param("id"));
+  await pushBase(id);
+  return ok<ThreadPullsView>(c, await threadPulls(id, false));
 });
 
 router.post("/code/threads/:id/pr/link", async (c) => {

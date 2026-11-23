@@ -656,6 +656,18 @@ function passItems(raw: string): Array<{ id: string; title: string }> {
 }
 
 const countUnknownWhenGitFails = (): null => null;
+const landingUnknownWhenGitFails = (): null => null;
+
+export async function pushBase(threadId: string): Promise<void> {
+  const { thread, project } = await requireProjectThread(threadId);
+  if (!thread.worktree) throw Boom.badRequest("The thread has no worktree; unarchive it first.");
+  const ws = await codeGitHub().workspace(project);
+  await ws
+    .pushBase(thread.worktree, repoOf(project), project.baseBranch)
+    .catch((error: unknown) => {
+      throw Boom.conflict(githubMessage(error));
+    });
+}
 
 export async function threadPulls(threadId: string, fresh = true): Promise<ThreadPullsView> {
   const found = await projectThread(threadId);
@@ -667,6 +679,7 @@ export async function threadPulls(threadId: string, fresh = true): Promise<Threa
       earlier: [],
       ahead: null,
       uncommitted: null,
+      landed: null,
     };
   }
   const { project, thread } = found;
@@ -679,6 +692,7 @@ export async function threadPulls(threadId: string, fresh = true): Promise<Threa
   const active = rows.find((r) => r.state === "open") ?? null;
   let ahead: number | null = null;
   let uncommitted: number | null = null;
+  let landed: ThreadPullsView["landed"] = null;
   if (thread.worktree) {
     const worktree = thread.worktree;
     const ws = await codeGitHub().workspace(project);
@@ -692,6 +706,17 @@ export async function threadPulls(threadId: string, fresh = true): Promise<Threa
         .then((files) => files.length)
         .catch(countUnknownWhenGitFails),
     ]);
+    const head = await ws.headSha(worktree).catch(countUnknownWhenGitFails);
+    const lastMerged = active ? undefined : rows.find((r) => r.state === "merged");
+    const worked = Boolean(head && thread.baseSha && head !== thread.baseSha);
+    if (!active && worked && ahead === 0) landed = "github";
+    else if (!active && worked && !lastMerged && ahead !== null) {
+      landed = await ws.landedIn(worktree, project.baseBranch).catch(landingUnknownWhenGitFails);
+    }
+    if (landed === "github") ahead = 0;
+    else if (lastMerged?.headSha && ahead !== null) {
+      ahead = await ws.commitsSince(worktree, lastMerged.headSha).catch(countUnknownWhenGitFails);
+    }
   }
   const ownerLogin = await codeGitHub()
     .client(project)
@@ -712,5 +737,6 @@ export async function threadPulls(threadId: string, fresh = true): Promise<Threa
       })),
     ahead,
     uncommitted,
+    landed,
   };
 }

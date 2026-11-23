@@ -5,7 +5,9 @@ export type PullStage =
   | { kind: "nothing" }
   | { kind: "create"; commits: number; uncommitted: number }
   | { kind: "open"; number: number; uncommitted: number; ready: boolean }
-  | { kind: "merged"; number: number; url: string; title: string };
+  | { kind: "merged"; number: number; url: string; title: string }
+  | { kind: "landed" }
+  | { kind: "local"; base: string };
 
 const SETTLED = new Set(["success", "neutral", "skipped"]);
 
@@ -22,6 +24,10 @@ export function pullStage(view: ThreadPullsView): PullStage {
       snapshot.checks.every((check) => SETTLED.has(check.state));
     return { kind: "open", number: pr.number, uncommitted, ready };
   }
+  if (uncommitted === 0 && view.landed === "github") return { kind: "landed" };
+  if (uncommitted === 0 && view.landed === "local") {
+    return { kind: "local", base: view.project.baseBranch };
+  }
   if (commits > 0 || uncommitted > 0) return { kind: "create", commits, uncommitted };
   const last = view.earlier[0];
   if (last?.state === "merged") {
@@ -30,7 +36,14 @@ export function pullStage(view: ThreadPullsView): PullStage {
   return { kind: "nothing" };
 }
 
-export type NextStepId = "create-pr" | "review" | "push" | "merge" | "open-pr" | "archive";
+export type NextStepId =
+  | "create-pr"
+  | "review"
+  | "push"
+  | "push-main"
+  | "merge"
+  | "open-pr"
+  | "archive";
 
 export interface NextStep {
   id: NextStepId;
@@ -65,6 +78,13 @@ export function nextSteps(stage: PullStage): NextStep[] {
       return [pr, ARCHIVE];
     }
     case "merged":
+    case "landed":
       return [{ ...ARCHIVE, primary: true }];
+    case "local":
+      return [
+        { id: "push-main", label: `Push ${stage.base}`, primary: true },
+        { id: "create-pr", label: "Create PR instead" },
+        ARCHIVE,
+      ];
   }
 }

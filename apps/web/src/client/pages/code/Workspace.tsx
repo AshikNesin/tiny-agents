@@ -206,6 +206,14 @@ export function CodeWorkspace() {
       .then(() => toast.success("Pushed to GitHub"))
       .catch((error: unknown) => toast.error(errorMessage(error, "Could not publish.")));
   }, [threadId, setPane]);
+  const pushBase = useCallback(() => {
+    if (!threadId) return;
+    setPane("pr");
+    void projectsApi
+      .pushBase(threadId)
+      .then(() => toast.success("Pushed to GitHub"))
+      .catch((error: unknown) => toast.error(errorMessage(error, "Could not push.")));
+  }, [threadId, setPane]);
   const archiveThread = useArchive();
   const archive = useCallback(() => {
     if (!threadId) return;
@@ -490,6 +498,7 @@ export function CodeWorkspace() {
                     if (step === "create-pr" || step === "push") publish();
                     else if (step === "merge") merge();
                     else if (step === "archive") archive();
+                    else if (step === "push-main") pushBase();
                     else if (step === "review") showPane("changes");
                     else showPane("pr");
                   }}

@@ -134,11 +134,12 @@ await journey(
     });
     await proof("changes");
 
-    await step("2 shows the pull request pane: one commit ahead, ready to publish", async () => {
+    await step("2 shows the pull request pane: one commit ready for a PR", async () => {
       await page.keyboard.press("2");
       const pane = page.getByTestId("code-pane");
-      await expect(pane.getByText(/is 1 commit ahead of main/)).toBeVisible({ timeout: 20_000 });
-      await expect(pane.getByRole("button", { name: /Publish/ })).toBeVisible();
+      await expect(pane.getByText(/Ready for a pull request/)).toBeVisible({ timeout: 20_000 });
+      await expect(pane.getByText(/1 commit on/)).toBeVisible();
+      await expect(pane.getByTestId("code-publish")).toContainText("Create draft PR");
     });
 
     await step("backslash hides the pane and brings it back; [ hides the list", async () => {
@@ -341,6 +342,41 @@ await journey(
         "Say when the release happened",
       );
     });
+
+    await step(
+      "a finished turn offers Commit and create PR; once the PR merges, Archive leads",
+      async () => {
+        await api.patch(`/code/projects/${project.id}`, { settings: { archiveOnMerge: false } });
+        await page.goto(`/code/t/${encodeURIComponent(ids.second)}`, LOADED);
+        const next = page.getByTestId("code-next-steps");
+        const create = next.getByRole("button", { name: /create PR/i });
+        await expect(create).toBeVisible({ timeout: 20_000 });
+        await create.click();
+        await expect
+          .poll(async () => (await threads()).find((t) => t.id === ids.second)?.pr?.number, {
+            timeout: 30_000,
+          })
+          .toBeTruthy();
+        const number = (await threads()).find((t) => t.id === ids.second).pr.number;
+        await expect(next.getByRole("button", { name: `PR #${number}` })).toBeVisible({
+          timeout: 20_000,
+        });
+        await github(`/pulls/${number}`, { state: "merged" });
+        await page.keyboard.press("2");
+        await page
+          .getByTestId("code-pane")
+          .getByRole("button", { name: "Refresh" })
+          .first()
+          .click();
+        await expect(page.getByTestId("code-archive-merged")).toBeVisible({ timeout: 30_000 });
+        const archive = next.getByRole("button", { name: "Archive" });
+        await expect(archive).toBeVisible({ timeout: 30_000 });
+        await archive.click();
+        await expect(page).toHaveURL(/\/code$/, { timeout: 20_000 });
+        expect((await threads()).some((t) => t.id === ids.second)).toBe(false);
+      },
+    );
+    await proof("next-steps");
   },
   { requires: ["demo-agent", "fake-github", "local-sandbox"] },
 );

@@ -30,6 +30,8 @@ const readied: boolean[] = [];
 let noPull = false;
 let ahead: number | null = 1;
 let uncommitted: number | null = 0;
+let landed: ThreadPullsView["landed"] = null;
+const pushedBase: string[] = [];
 let changed: string[] = [];
 let earlier: ThreadPullsView["earlier"] = [];
 let autofix = false;
@@ -66,6 +68,11 @@ vi.mock("@groot/shell/lib/api", async (importOriginal) => {
         return view(checkState);
       },
       post: async (path: string, body: { draft: boolean }) => {
+        if (path === "/code/threads/shelley%3At1/push-base") {
+          pushedBase.push(path);
+          landed = "github";
+          return view(checkState);
+        }
         if (path === "/code/threads/shelley%3At1/publish") {
           published.push(body);
           return view(checkState);
@@ -119,6 +126,7 @@ function view(state: CheckState): ThreadPullsView {
     branch: "ta/fix-1a2b",
     ahead,
     uncommitted,
+    landed,
     earlier,
     active: noPull
       ? null
@@ -190,6 +198,8 @@ beforeEach(() => {
   noPull = false;
   ahead = 1;
   uncommitted = 0;
+  landed = null;
+  pushedBase.length = 0;
   published.length = 0;
   changed = [];
   earlier = [];
@@ -354,6 +364,20 @@ describe("getting it merged", () => {
     expect(screen.getByText(/Nothing to publish yet/)).toBeInTheDocument();
     expect(screen.queryByTestId("code-publish")).toBeNull();
     expect(screen.queryByRole("textbox", { name: "Pull request number" })).toBeNull();
+  });
+
+  it("when the agent merged into the machine's main, pushes main, then says the work is in main", async () => {
+    noPull = true;
+    ahead = 1;
+    landed = "local";
+    panel();
+    await wait(0);
+    expect(screen.getByText("Merged into main on this machine.")).toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Push main" }));
+    });
+    expect(pushedBase).toHaveLength(1);
+    expect(screen.getByText("In main on GitHub.")).toBeInTheDocument();
   });
 
   it("offers Archive thread once the PR merged and nothing new is on the branch", async () => {

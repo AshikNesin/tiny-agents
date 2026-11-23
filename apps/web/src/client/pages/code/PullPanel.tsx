@@ -258,6 +258,59 @@ export function PullPanel({
               </Button>
             )}
           </section>
+        ) : stage?.kind === "landed" ? (
+          <section className="space-y-3" aria-label="In main">
+            <div className="flex items-center gap-2">
+              <GitMerge className="text-primary size-4 shrink-0" aria-hidden />
+              <p className="min-w-0 flex-1">
+                <span className="font-medium">In {view.project.baseBranch} on GitHub.</span>{" "}
+                <span className="text-muted-foreground">
+                  The work on <span className={monoClass}>{view.branch}</span> reached{" "}
+                  {view.project.baseBranch} without a pull request. The work is done.
+                </span>
+              </p>
+              <RefreshButton onClick={reload} />
+            </div>
+            {onArchive && (
+              <Button onClick={onArchive} data-testid="code-archive-merged">
+                <Archive />
+                Archive thread
+              </Button>
+            )}
+          </section>
+        ) : stage?.kind === "local" ? (
+          <section className="space-y-3" aria-label="Merged on this machine">
+            <div className="flex items-center gap-2">
+              <GitMerge className="text-muted-foreground size-4 shrink-0" aria-hidden />
+              <p className="min-w-0 flex-1">
+                <span className="font-medium">Merged into {stage.base} on this machine.</span>{" "}
+                <span className="text-muted-foreground">
+                  GitHub does not have it yet. Push {stage.base} to finish, or open a pull request
+                  instead.
+                </span>
+              </p>
+              <RefreshButton onClick={reload} />
+              {moreMenu}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                onClick={() => void act(`push ${stage.base}`, () => projectsApi.pushBase(threadId))}
+                disabled={busy !== null}
+                data-testid="code-push-base"
+              >
+                {busy === `push ${stage.base}` ? <Spinner /> : <Upload />}
+                Push {stage.base}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => void act("create the PR", () => projectsApi.publish(threadId))}
+                disabled={busy !== null}
+              >
+                Create PR instead
+              </Button>
+            </div>
+            {linking && linkForm}
+          </section>
         ) : stage?.kind === "nothing" ? (
           <section className="space-y-3" aria-label="Nothing to publish">
             <div className="flex items-center gap-2">

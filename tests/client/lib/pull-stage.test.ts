@@ -10,6 +10,7 @@ const view = (over: Partial<ThreadPullsView>): ThreadPullsView => ({
   earlier: [],
   ahead: 0,
   uncommitted: 0,
+  landed: null,
   ...over,
 });
 const pull = (checks: string[], mergeable = "mergeable", draft = false) =>
@@ -74,6 +75,17 @@ describe("where a thread's branch stands", () => {
   });
 });
 
+describe("work that reached main without a PR", () => {
+  it("is done once it is in main on GitHub, unless there is new work", () => {
+    expect(pullStage(view({ landed: "github" }))).toEqual({ kind: "landed" });
+    expect(pullStage(view({ landed: "github", uncommitted: 1 }))).toMatchObject({ kind: "create" });
+  });
+
+  it("asks to push main when the agent merged into the machine's main", () => {
+    expect(pullStage(view({ landed: "local", ahead: 1 }))).toEqual({ kind: "local", base: "main" });
+  });
+});
+
 describe("next steps after a finished turn", () => {
   const ids = (stage: Parameters<typeof nextSteps>[0]) => nextSteps(stage).map((step) => step.id);
 
@@ -102,6 +114,13 @@ describe("next steps after a finished turn", () => {
       primary: true,
     });
     expect(ids({ kind: "nothing" })).toEqual(["archive"]);
+    expect(ids({ kind: "landed" })).toEqual(["archive"]);
+    expect(nextSteps({ kind: "landed" })[0]).toMatchObject({ primary: true });
+    expect(ids({ kind: "local", base: "main" })).toEqual(["push-main", "create-pr", "archive"]);
+    expect(nextSteps({ kind: "local", base: "main" })[0]).toMatchObject({
+      label: "Push main",
+      primary: true,
+    });
     expect(ids({ kind: "none" })).toEqual([]);
   });
 });
