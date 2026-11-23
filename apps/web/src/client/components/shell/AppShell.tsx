@@ -4,6 +4,7 @@ import {
   Bot,
   Code2,
   LogOut,
+  Menu,
   MessageSquare,
   Monitor,
   Moon,
@@ -12,6 +13,7 @@ import {
   Sun,
 } from "lucide-react";
 import { Layout } from "@groot/shell/components/Layout";
+import { Button } from "@groot/ui/button";
 import type { CommandGroupEntry } from "@groot/shell/components/CommandPalette";
 import { useAuthStore } from "@groot/shell/store/auth";
 import { useTheme } from "@groot/shell/lib/theme";
@@ -245,6 +247,18 @@ export function AppShell() {
     <div className="bg-background flex h-dvh overflow-hidden">
       {!fullPage && <AppSidebar />}
       <div className="h-dvh min-w-0 flex-1 overflow-y-auto">
+        {!inChats && !fullPage && (
+          <div className="flex h-12 items-center px-2 pt-1 md:hidden">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setMobileOpen(true)}
+              aria-label="Open menu"
+            >
+              <Menu className="size-4" />
+            </Button>
+          </div>
+        )}
         <Layout
           chrome={false}
           commandGroups={commandGroups}

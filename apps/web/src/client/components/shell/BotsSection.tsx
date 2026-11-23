@@ -104,7 +104,7 @@ function BotRow({
             <button
               type="button"
               aria-label={`${bot.name} actions`}
-              className="text-muted-foreground hover:bg-sidebar-accent absolute top-1.5 right-1.5 flex size-6 items-center justify-center rounded-lg opacity-0 group-focus-within/row:opacity-100 group-hover/row:opacity-100 data-[state=open]:opacity-100"
+              className="text-muted-foreground hover:bg-sidebar-accent focus-visible:ring-sidebar-ring absolute top-1.5 right-1.5 flex size-6 items-center justify-center rounded-lg opacity-0 outline-none group-focus-within/row:opacity-100 group-hover/row:opacity-100 focus-visible:ring-1 data-[state=open]:opacity-100"
             >
               <MoreHorizontal className="size-4" />
             </button>
