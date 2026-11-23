@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { ChevronRight, Plus, Settings, TriangleAlert } from "lucide-react";
+import { ChevronRight, CircleAlert, Plus, Settings } from "lucide-react";
 import { cn } from "@groot/ui/lib/utils";
 import { Spinner } from "../../components/ui/spinner";
 import { SidebarTop } from "../../components/shell/ModeSwitch";
@@ -174,22 +174,19 @@ export function ThreadList({
           key={h.id}
           role="status"
           data-testid="code-connection"
-          className={cn(
-            "border-sidebar-border flex items-center gap-2 border-t px-4 py-1.5 text-xs",
-            h.status.state === "reconnecting" ? "text-warning" : "text-muted-foreground",
-          )}
+          className="border-sidebar-border text-muted-foreground flex items-center gap-2 border-t px-4 py-1.5 text-xs"
         >
           {h.status.state === "connecting" ? (
             <Spinner className="size-3.5 shrink-0" />
           ) : (
-            <TriangleAlert className="size-3.5 shrink-0" />
+            <CircleAlert className="size-3.5 shrink-0 opacity-70" />
           )}
           <span className="min-w-0 truncate" title={h.status.detail}>
-            {h.status.state === "reconnecting"
-              ? `${h.label} unreachable, retrying…`
-              : h.status.state === "connecting"
-                ? `Connecting to ${h.label}…`
-                : `${h.label}: ${h.status.detail ?? "not ready"}`}
+            {h.status.state === "connecting"
+              ? `Connecting to ${h.label}…`
+              : h.status.state === "reconnecting"
+                ? `${h.label} is offline, retrying…`
+                : `${h.label} is not connected`}
           </span>
         </p>
       ))}
