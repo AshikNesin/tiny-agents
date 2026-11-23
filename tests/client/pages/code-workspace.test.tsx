@@ -56,6 +56,10 @@ vi.mock("@groot/shell/lib/api", async (importOriginal) => {
       post: async (path: string, body: unknown) => {
         posts.push({ path, body });
         if (path === "/code/reviews") return { id: "rv9" };
+        if (path.endsWith("/suggest")) {
+          const typed = (body as { typed?: string }).typed;
+          return { suggestion: typed ? `${typed} the tests first` : "Get it merged to main" };
+        }
         return path === "/code/threads" ? { threadId: "new1" } : { status: "accepted" };
       },
     }),
@@ -418,6 +422,43 @@ describe("the Code workspace", () => {
     fireEvent.click(within(second).getByRole("menuitem", { name: "Delete" }));
     fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
     await waitFor(() => expect(deletes).toEqual(["/code/threads/demo%3Aa"]));
+  });
+
+  it("suggests the next message after a turn, Tab takes it, and typing asks for a completion", async () => {
+    renderAt("/code/t/demo%3Adddd");
+    streamAt(`/api/v1/code/threads/${encodeURIComponent(done.id)}/events`).send({
+      type: "snapshot",
+      snapshot: {
+        ...snapshot(done),
+        items: [
+          { kind: "user", id: "u1", text: "Add a thread menu", attachments: [] },
+          { kind: "assistant", id: "a1", text: "Pushed. Want me to open the PR and merge it?" },
+        ],
+      },
+    });
+    const ghost = await screen.findByTestId("code-composer-suggestion");
+    expect(ghost).toHaveTextContent("Get it merged to main");
+    const suggested = posts.find((post) => post.path.endsWith("/suggest"));
+    expect(suggested?.body).toEqual({
+      user: "Add a thread menu",
+      agent: "Pushed. Want me to open the PR and merge it?",
+    });
+
+    const box = screen.getByTestId("code-composer");
+    fireEvent.change(box, { target: { value: "Get it" } });
+    expect(screen.getByTestId("code-composer-suggestion")).toHaveTextContent(/^merged to main/);
+    fireEvent.keyDown(box, { key: "Tab" });
+    expect(box).toHaveValue("Get it merged to main");
+
+    fireEvent.change(box, { target: { value: "run" } });
+    await waitFor(
+      () =>
+        expect(screen.getByTestId("code-composer-suggestion")).toHaveTextContent(
+          /^the tests first/,
+        ),
+      { timeout: 3000 },
+    );
+    expect(posts.filter((post) => post.path.endsWith("/suggest"))).toHaveLength(2);
   });
 
   it("a thread link lands on the thread", () => {
