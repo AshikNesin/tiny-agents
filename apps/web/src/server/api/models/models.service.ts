@@ -927,6 +927,19 @@ function explained(error: string, upstreamId?: string): string {
   return error;
 }
 
+async function accountAllowsPrivateNetwork(providerId: string): Promise<boolean> {
+  const row = await db.query.providers.findFirst({
+    where: eq(providers.id, providerId),
+    columns: { allowPrivateNetwork: true },
+  });
+  if (row) return row.allowPrivateNetwork;
+  const via = await db.query.providers.findFirst({
+    where: eq(providers.id, providerId.split(":")[0] ?? providerId),
+    columns: { allowPrivateNetwork: true },
+  });
+  return via?.allowPrivateNetwork ?? false;
+}
+
 export async function testModel(input: TestDTO): Promise<TestResult> {
   if ("modelId" in input) {
     const rt = getAgentRuntime();
@@ -966,7 +979,13 @@ export async function testModel(input: TestDTO): Promise<TestResult> {
         error: `The model can't run (${model.unavailableReason ?? "missing"}).`,
       };
     }
-    return redacted(await testModelCall(rt.models, pi), model.upstreamId);
+    const allowPrivateNetwork = await accountAllowsPrivateNetwork(pi.provider);
+    return redacted(
+      await testModelCall(rt.models, pi, {
+        fetch: (input2, init) => guardedFetch(input2, init ?? {}, { allowPrivateNetwork }),
+      }),
+      model.upstreamId,
+    );
   }
   refuseClaudeToken(input.apiKey);
   if (input.kind === "claude-plan")

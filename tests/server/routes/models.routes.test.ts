@@ -37,6 +37,8 @@ import {
 import {
   bindModelRuntime,
   FAUX_PROVIDER_ID,
+  reloadModels,
+  vaultCredentials,
 } from "../../../apps/web/src/server/api/models/models.config";
 import { api, createTestApp } from "../helpers";
 import { closeAppRuntime, openAppRuntime } from "../fixtures";
@@ -410,6 +412,9 @@ describe("models routes", () => {
   }, 30_000);
 
   it("refuses a saved model's completion redirected to a private address, honoring the account's flag", async () => {
+    bindModelRuntime(undefined);
+    await closeAppRuntime();
+    bindModelRuntime(await openAppRuntime({ credentials: vaultCredentials }));
     const calls: string[] = [];
     vi.stubGlobal(
       "fetch",
@@ -428,6 +433,7 @@ describe("models routes", () => {
     const created = (
       await createAccount(await stepUp(), {
         baseUrl: "https://203.0.113.9/v1",
+        allowPrivateNetwork: false,
         discovery: "manual",
         models: ["model-a"],
       })
@@ -446,6 +452,7 @@ describe("models routes", () => {
       .update(providers)
       .set({ allowPrivateNetwork: true })
       .where(eq(providers.id, created.id));
+    await reloadModels();
     calls.length = 0;
     const allowed = await call("/models/test", {
       method: "POST",
