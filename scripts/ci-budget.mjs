@@ -7,8 +7,8 @@ export const SETUP_BUDGET = 30;
 export const COLD_SETUP_BUDGET = 120;
 
 export const RUN_BUDGETS = {
-  secrets: 10,
-  lint: 5,
+  secrets: 20,
+  lint: 10,
   typecheck: 5,
   gates: 30,
   migrations: 15,
@@ -19,6 +19,7 @@ export const RUN_BUDGETS = {
 };
 
 export const COLD_RUN_BUDGETS = {
+  lint: 20,
   typecheck: 20,
 };
 

@@ -98,11 +98,11 @@ function WorktreeTree({
       if (path && !path.endsWith("/")) onOpenRef.current(path);
     },
   });
-  const shown = useRef(paths.join("\n"));
+  const shown = useRef(paths);
   useEffect(() => {
-    const next = paths.join("\n");
-    if (next === shown.current) return;
-    shown.current = next;
+    const was = shown.current;
+    if (was.length === paths.length && was.every((path, at) => path === paths[at])) return;
+    shown.current = paths;
     model.resetPaths(paths, { initialExpandedPaths: foldersOf(status.map((s) => s.path)) });
   }, [model, paths, status]);
   useEffect(() => {
