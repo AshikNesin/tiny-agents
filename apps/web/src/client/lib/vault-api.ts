@@ -118,7 +118,7 @@ export const vaultApi = {
 };
 
 export const BACKEND_LABEL: Record<VaultBackendName, string> = {
-  onepassword: "1Password",
+  onepassword: "1Password", // gitleaks:allow
   local: "Local",
 };
 
