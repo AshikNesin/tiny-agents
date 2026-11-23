@@ -1,3 +1,4 @@
+import { suggestNext } from "./code.suggest";
 import { Hono } from "hono";
 import { z } from "zod";
 import type { AppContext, AppEnv } from "@groot/core/types";
@@ -380,6 +381,19 @@ router.post("/code/threads/:id/settings", async (c) => {
     c,
     await run(() => need(instance, "updateSettings", "change settings")(nativeId, change)),
   );
+});
+
+router.post("/code/threads/:id/suggest", async (c) => {
+  const { id } = thread(c);
+  const input = await parseBody(
+    c,
+    z.object({
+      user: z.string().max(20_000),
+      agent: z.string().max(100_000),
+      typed: z.string().max(2_000).optional(),
+    }),
+  );
+  return ok(c, { suggestion: await suggestNext(id, input) });
 });
 
 router.post("/code/threads/:id/archive", async (c) => {

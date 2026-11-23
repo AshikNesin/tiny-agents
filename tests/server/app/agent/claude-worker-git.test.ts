@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, expect, it } from "vite-plus/test";
+import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
 import { runCodingOp } from "../../../../packages/claude-worker/src/coding-ops";
 
 const ctx = { limits: { maxUploadBytes: 1024, maxAssetBytes: 1024 } };
@@ -23,6 +23,7 @@ const git = (...args: string[]) =>
   });
 
 beforeEach(() => {
+  vi.stubEnv("ANTHROPIC_BASE_URL", "");
   repo = mkdtempSync(path.join(tmpdir(), "ta-worker-git-"));
   git("init", "--quiet", "-b", "main");
   writeFileSync(path.join(repo, "README.md"), "hello\n");
@@ -30,7 +31,17 @@ beforeEach(() => {
   git("commit", "--quiet", "-m", "init");
 });
 
-afterEach(() => rmSync(repo, { recursive: true, force: true }));
+afterEach(() => {
+  rmSync(repo, { recursive: true, force: true });
+  vi.unstubAllEnvs();
+});
+
+it("says a refused auth override is refused, not that the folder is not a repository", async () => {
+  vi.stubEnv("ANTHROPIC_BASE_URL", "https://relay.example.com");
+  await expect(runCodingOp({ op: "git_files", cwd: repo, diffId: "working" }, ctx)).rejects.toThrow(
+    "Claude Code worker refuses auth or backend overrides: ANTHROPIC_BASE_URL",
+  );
+});
 
 it("says a binary or oversized working file cannot be shown instead of sending it", async () => {
   writeFileSync(path.join(repo, "logo.png"), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 1, 2]));

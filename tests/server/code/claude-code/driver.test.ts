@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import {
   DEFAULT_CODING_LIMITS,
   DEFAULT_TIMINGS,
@@ -46,8 +46,13 @@ import { describeTurnOutcomeRule, type TurnCase } from "../turn-outcome-conforma
 const TOKEN = Buffer.alloc(32, 9).toString("base64");
 const cleanups: Array<() => Promise<void> | void> = [];
 
+beforeEach(() => {
+  vi.stubEnv("ANTHROPIC_BASE_URL", "");
+});
+
 afterEach(async () => {
   for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
+  vi.unstubAllEnvs();
 });
 
 const timings: Timings = {

@@ -124,7 +124,8 @@ function git(cwd: string, args: string[], maxBuffer = 32 * 1024 * 1024): Promise
 async function repoRoot(dir: string): Promise<string> {
   try {
     return (await git(dir, ["rev-parse", "--show-toplevel"])).trim();
-  } catch {
+  } catch (error) {
+    if (!(error instanceof CodingError)) throw error;
     throw new CodingError("not_a_repo", `Not a git repository: ${dir}`);
   }
 }

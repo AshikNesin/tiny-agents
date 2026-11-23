@@ -158,6 +158,17 @@ runs it again as it was. Both are a **rewind** (`code.rewind.ts`):
 Only a harness with the `threads.rewind` capability offers this: Native
 today. The agent must be stopped first.
 
+**Suggested next message.** After a turn, the composer shows what you
+will likely say next in grey (for example "get it merged to main"); `Tab`
+takes it. While you type a single line, it offers the rest of the line the
+same way. One small call to the cheap title model (role `chat_title`) per
+finished turn, and one per pause in typing only when the line no longer
+matches the last suggestion. The prompt holds just the last user message
+(300 characters) and the end of the agent's reply (900 characters), the
+reply is capped at one short line, and answers are cached per turn
+(`code.suggest.ts`, `use-next-message.ts`). With no model set up it shows
+nothing.
+
 **Archive.** The command palette archives or restores the open thread. An
 archived thread offers **Unarchive to continue** in place of the composer.
 

@@ -39,6 +39,7 @@ export interface App {
   chatTitler?: ChatTitler;
   memoryTidier?: { sideCaller: SideCaller };
   codeBranchNamer?: CodeBranchNamer;
+  codeSuggestions: Map<string, string | null>;
   sandboxConnections: Map<string, SandboxConnection>;
   sandboxHostKeys?: HostKeyStore;
   claudeWorker?: { connection: SandboxConnection; locator: ClaudeWorkerLocator };
@@ -75,6 +76,7 @@ function emptyApp(): App {
   return {
     runtime: undefined,
     runtimeReady: false,
+    codeSuggestions: new Map(),
     sandboxConnections: new Map(),
     ownerWaits: new WaitTracker(),
     botMessagingStores: new WeakMap(),
