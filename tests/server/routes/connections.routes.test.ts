@@ -25,6 +25,7 @@ import { authToken, until } from "../fixtures";
 import { issueStepUp } from "../../../apps/web/src/server/api/vault/vault.stepup";
 import { readOAuthState } from "../../../apps/web/src/server/api/connections/oauth";
 import { FIXED_NOW } from "../../test-clock";
+import { memoryRateLimitStore } from "@groot/core/rate-limit/store";
 
 let token: string;
 beforeAll(async () => {
@@ -1063,6 +1064,31 @@ describe("MCP OAuth callback guard", () => {
       expect(await manager.hasTokens(row.id)).toBe(false);
     } finally {
       vi.setSystemTime(Date.parse(FIXED_NOW));
+      await manager.close();
+      setConnectionManagerForTests(undefined);
+      await fake.close();
+      await db.delete(connections);
+    }
+  }, 30_000);
+
+  it("rate-limits the public callback", async () => {
+    await db.delete(botConnections);
+    await db.delete(connections);
+    const fake = await startFakeOAuth();
+    const { manager } = await startOAuthManager();
+    try {
+      const app = createTestApp({ rateLimitStore: memoryRateLimitStore() });
+      const statuses: number[] = [];
+      for (let i = 0; i < 22; i++) {
+        const response = await app.request(
+          `/api/v1/connections/oauth/callback?${new URLSearchParams({ code: "x", state: "none" })}`,
+        );
+        statuses.push(response.status);
+      }
+      expect(statuses.slice(0, 20)).toEqual(Array.from({ length: 20 }, () => 200));
+      expect(statuses.slice(20)).toEqual([429, 429]);
+      expect(await manager.hasTokens("none")).toBe(false);
+    } finally {
       await manager.close();
       setConnectionManagerForTests(undefined);
       await fake.close();
